@@ -519,7 +519,8 @@ SCANS: tuple[ScanSpec, ...] = (
     # The owner's condition exclusions (.assess/config.toml [checks], #910); the level reads them.
     _spec("owner_exclusions", cs.owner_exclusions),
     # Monorepo units (#862): the shallowest build-manifest folders, a workspace root's
-    # declared members in its place, or the [[units]] of .assess/config.toml. Core-only.
+    # declared members in its place, or the [[units]] of .assess/config.toml. The headless
+    # runner reports it under --units (signals.UNIT_SCANS, #866).
     _spec("units", cs.units),
     # Headless runs pre-record every offer as skipped; never inferred from stdin.
     _spec("offers_block", cs.offers_blocks, spread=("interactive", "offers")),
@@ -647,7 +648,8 @@ SCANS = (*SCANS, pinned_reads(_spec("level", cs.level), LEVEL_READS))
 # pastes it verbatim and the badge and log entry carry its summary.
 SCANS = (*SCANS, _spec("headline", cs.headline))
 # Monorepo unit readings (lib/unit_readings.py, #863): the scoped and override scans again
-# for each unit of the units block, every condition tagged unit or inherited. Core-only.
+# for each unit of the units block, every condition tagged unit or inherited. The headless
+# runner reports it under --units (signals.UNIT_SCANS, #866).
 # core_scans.unit_readings splits its arguments by position, so the manifest reads are pinned.
 SCANS = (*SCANS, pinned_reads(_spec("unit_readings", cs.unit_readings),
                               (*UNIT_OWN_READS, *UNIT_EXTERNAL_READS)))

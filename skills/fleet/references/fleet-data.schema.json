@@ -758,6 +758,116 @@
                 "type": "null"
               }
             ]
+          },
+          "unit_rows": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "step": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "next_step": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "next_blocker": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "gate": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string"
+                            },
+                            "disposition": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "disposition",
+                            "gate",
+                            "state"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tag": {
+                            "type": "string"
+                          },
+                          "met": {
+                            "type": "integer"
+                          },
+                          "measured": {
+                            "type": "integer"
+                          },
+                          "verified": {
+                            "type": "integer"
+                          },
+                          "not_measured": {
+                            "type": "integer"
+                          },
+                          "hazards": {
+                            "type": "integer"
+                          },
+                          "declined": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "declined",
+                          "hazards",
+                          "measured",
+                          "met",
+                          "not_measured",
+                          "tag",
+                          "verified"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "next_blocker",
+                    "next_step",
+                    "step",
+                    "tags"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -774,6 +884,7 @@
           "step",
           "tags",
           "tally",
+          "unit_rows",
           "units",
           "web_url"
         ],

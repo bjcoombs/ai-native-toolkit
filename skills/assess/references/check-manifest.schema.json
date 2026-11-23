@@ -68,7 +68,8 @@
         "token",
         "reason",
         "id",
-        "drop"
+        "drop",
+        "hashed_path"
       ]
     },
     "evidence": {

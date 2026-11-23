@@ -86,8 +86,11 @@ def test_full_run_leaves_the_target_untouched_and_validates(fixture_repo, tmp_pa
     # A wrong Path(__file__).parents[N] reads ``unknown`` without raising (#917).
     assert stamp["plugin_version"] == json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))["version"]
     assert stamp["plugin_version"] != "unknown"
-    # Every known scan but the platform-only ones, absent without --platform (#779).
-    assert set(doc["scans"]) == set(signals.known_scans()) - set(signals.PLATFORM_ONLY_SCANS)
+    # Every known scan but the platform-only ones, absent without --platform (#779), and the
+    # unit scans, absent without --units (#866).
+    assert set(doc["scans"]) == (set(signals.known_scans()) - set(signals.PLATFORM_ONLY_SCANS)
+                                 - set(signals.UNIT_SCANS))
+    assert stamp["scope"] is None
     assert "delivery" not in doc["scans"] and "review_reality" in doc["scans"]
 
 
@@ -449,7 +452,7 @@ def test_schema_rejects_an_unavailable_block_without_a_reason():
     doc = {
         "signals_schema_version": 1,
         "stamp": {"toolkit_commit": None, "plugin_version": "x", "scan_date": "2026-01-01",
-                  "window": "6mo", "target_head": None, "target_dirty": None},
+                  "window": "6mo", "target_head": None, "target_dirty": None, "scope": None},
         "scans": {"agent_ops": {"available": False}},
     }
     with pytest.raises(jsonschema.ValidationError):
@@ -464,7 +467,7 @@ def test_schema_names_every_known_scan_and_rejects_others():
     doc = {
         "signals_schema_version": 1,
         "stamp": {"toolkit_commit": None, "plugin_version": "x", "scan_date": "2026-01-01",
-                  "window": "6mo", "target_head": None, "target_dirty": None},
+                  "window": "6mo", "target_head": None, "target_dirty": None, "scope": None},
         "scans": {"no_such_scan": {}},
     }
     with pytest.raises(jsonschema.ValidationError, match="no_such_scan"):

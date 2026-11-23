@@ -17,17 +17,30 @@ Blocks ``assess_core.py`` assembles through its own table entries are listed as
 Exit codes:
     0  document written
     2  usage error: unknown scan name, bad --window, --out inside the target,
-       a target or --ghsync-root that is not a directory, or an unreadable or invalid
+       a target or --ghsync-root that is not a directory, a --scope that is missing or
+       outside the target, --scope with --units, or an unreadable or invalid
        --fleet-config (the message names the key)
 
 Run:
     uv run assess_signals.py <repo> --out FILE.json [--scans a,b,c] [--window 6mo]
         [--counts-only [--hash-paths | --hash-salt VALUE]] [--fleet-config FILE] [--platform]
-        [--ghsync-root DIR]
+        [--ghsync-root DIR] [--scope PATH | --units]
 
 ``--ghsync-root DIR`` names the ghsync root holding the target: GitLab
 ``include: project:`` and ``component:`` files are then read from the clones
 under it (``lib/ci_includes.py``, #766). ``fleet.py`` passes its ROOT.
+
+``--scope PATH`` (#866) measures one folder of the target, as ``assess_core --scope``
+does: the scans that read the scope (suppressions, the doc graph and staleness, structure,
+size, the coverage gate) read that folder, and the repository-wide ones (CI, review,
+agent settings, the root instruction file) read the whole checkout. The stamp records
+the folder as ``scope``; counts-only output drops it, or hashes it under ``--hash-paths``.
+
+``--units`` (#866) adds the monorepo unit scans (``lib/signals.py`` ``UNIT_SCANS``): the
+``units`` block and ``unit_readings``, each unit's own readings of the scoped scans with
+every condition tagged ``unit`` or ``inherited``. ``fleet.py --monorepo-units`` passes it, and the
+fleet computes each unit's Step from them. Counts-only output drops each unit's folder, or
+hashes it under ``--hash-paths``.
 """
 # /// script
 # requires-python = ">=3.11"
@@ -45,6 +58,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import secrets
 import sys
 import tempfile
 from pathlib import Path
@@ -60,9 +74,11 @@ from lib.counts_only import (  # noqa: E402
     add_cli_arguments,
     counts_only_scans,
     hash_options,
+    hash_value,
     validate_cli_args,
 )
 from lib.fleet_config import FleetConfig, FleetConfigError, load_fleet_config  # noqa: E402
+from lib.run_scope import resolve_scope  # noqa: E402
 from lib.signals import (  # noqa: E402
     DEFAULT_WINDOW,
     UnknownScanError,
@@ -105,6 +121,17 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
              "project: and component: files are read from the clones under it (lib/ci_includes.py). "
              "Without it only local: includes resolve.",
     )
+    unit = parser.add_mutually_exclusive_group()
+    unit.add_argument(
+        "--scope", metavar="PATH",
+        help="Measure one folder of the target (relative to it, or absolute under it), as "
+             "assess_core --scope does; repository-wide scans still read the whole checkout.",
+    )
+    unit.add_argument(
+        "--units", action="store_true",
+        help="Add the monorepo unit scans (units, unit_readings): each unit's own readings of "
+             "the scoped scans. One scoped pass per unit.",
+    )
     add_cli_arguments(parser)
     parsed = parser.parse_args(argv)
     validate_cli_args(parser, parsed)
@@ -139,6 +166,13 @@ def main(argv: list[str] | None = None) -> int:
         if not ghsync_root.is_dir():
             print(f"error: --ghsync-root {args.ghsync_root} is not a directory", file=sys.stderr)
             return 2
+    scope: Path | None = None
+    if args.scope is not None:
+        try:
+            scope = resolve_scope(repo_root, Path(args.scope))[0]
+        except ValueError as e:
+            print(f"error: --scope {args.scope}: {e}", file=sys.stderr)
+            return 2
     requested = None
     if args.scans is not None:
         requested = [name.strip() for name in args.scans.split(",") if name.strip()]
@@ -156,13 +190,19 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     warn_missing_packages()  # a no-uv run: say how to install what the layer blocks need
     document = build_document(repo_root, requested, args.window, fleet_config=fleet_config,
-                              platform=args.platform, ghsync_root=ghsync_root)
+                              platform=args.platform, ghsync_root=ghsync_root,
+                              scope=scope, units=args.units)
     if args.counts_only:
         # Content-free mode: free text, identities and the target's commit
         # are dropped; references/counts-only.md lists what each block keeps.
         hash_paths, salt = hash_options(args)
+        if hash_paths and salt is None:
+            salt = secrets.token_hex(16)  # one salt for the scans and the stamp's scope
         document["scans"] = counts_only_scans(document["scans"], hash_paths=hash_paths, salt=salt)
         document["stamp"]["target_head"] = None
+        stamped = document["stamp"]["scope"]
+        # the scope folder, like a unit's: never in clear, hashed under --hash-paths
+        document["stamp"]["scope"] = hash_value(stamped, salt) if stamped and salt else None
     _write_atomically(out, json.dumps(document, indent=2, default=str) + "\n")
     return 0
 

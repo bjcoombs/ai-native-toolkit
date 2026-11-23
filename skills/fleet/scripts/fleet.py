@@ -59,6 +59,12 @@ records ``platform`` (true only when a platform read ran: ``--scans`` selecting 
 platform scan stamps false), and runs with and without it do not compare. With
 ``--delete-after`` a clone is deleted only after its platform read.
 
+``--monorepo-units`` (#866) scans each repository by monorepo unit: every child gets
+``assess_signals.py --units``, and ``fleet-data.json`` gives each repository its
+``unit_rows`` (``lib/fleet/fleet_data_units.py``), one Step, next blocking gate and per-tag
+tally per unit. A unit is named only by its folder's hash under ``--hash-paths``. It costs
+one scoped pass per unit.
+
 GitLab includes (#766): every scan of a ROOT run gets ``--ghsync-root ROOT``, so a
 repository's ``include: project:`` / ``component:`` files are read from the clones
 in the same root (``lib/ci_includes.py``) and ``ci_checks`` and ``review_automation``
@@ -287,6 +293,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                         help="Seconds one repository may take before it is marked failed (default: %(default)s).")
     parser.add_argument("--full", action="store_true",
                         help="Keep full signal blocks (free text included) instead of counts-only.")
+    parser.add_argument("--monorepo-units", action="store_true",
+                        help="Scan each repository by monorepo unit too (assess_signals --units): "
+                             "fleet-data.json gains unit rows. One scoped pass per unit.")
     parser.add_argument("--hash-paths", action="store_true",
                         help="Hash repo-relative paths and repository ids under one salt drawn for this run "
                              "(hashes join within the run; reruns are not byte-identical).")
@@ -718,7 +727,7 @@ def main(argv: list[str] | None = None) -> int:
         hash_salt=hash_salt,
         window=args.window, scans=args.scans, timeout=args.timeout,
         log_dir=out_dir / LOGS_DIR, active_since=window_start(window, today),
-        ghsync_root=include_root(args),
+        ghsync_root=include_root(args), units=args.monorepo_units,
     )
     try:  # before any scan, so --delete-after never removes a clone whose results cannot land
         out_dir.mkdir(parents=True, exist_ok=True)

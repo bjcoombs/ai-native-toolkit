@@ -28,6 +28,14 @@ supplies the blocks the core builds from setup state a headless run lacks
 state, the run header, the serialised blocks) run only when a reported scan
 reads one of them; the publish step that writes the wiki is never called.
 
+**Scope and units** (#866). ``build_document(scope=...)`` (``--scope``) gives the scans
+that read ``scope`` one folder of the checkout, as ``assess_core --scope`` does, and the
+stamp records it (``scope``, repository-relative; None for the whole checkout). The
+monorepo unit scans ``UNIT_SCANS`` (``units``, ``unit_readings``) are the core's entries the
+runner still reports: ``signal_scans`` appends them after the headless entries, whose
+blocks the unit pass reads, and they run only when named or with ``units=True``
+(``--units``), since the unit pass costs one scoped run per unit.
+
 The headless, signals-only run behind `assess_signals.py` (issue #545). `collect` runs
 the selected registry scans, plus the registry keys they read, through `run_scans` with
 inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
@@ -144,6 +152,14 @@ HEADLESS_SCANS: tuple[ScanSpec, ...] = (*LAYER_SCANS, *STATIC_SCANS)
 # The modules that hold the core's own table entries (#557).
 CORE_MODULES = frozenset({"lib.core_scans", "lib.run_setup"})
 
+# The monorepo unit scans the runner reports although their entries are the core's (#866):
+# the units (``lib.unit_discovery``, #862) and each unit's own readings
+# (``lib.unit_readings``, #863), which run the scoped scans again per unit. Opt-in
+# (``--units``, ``select_scans(units=True)``) or named in ``--scans``: the unit pass costs one
+# scoped run per unit. Each unit's Step is not reported, as the repository's is not: a fleet
+# run computes both from the row with its own model (``lib.fleet.fleet_data_units``).
+UNIT_SCANS: tuple[str, ...] = ("units", "unit_readings")
+
 
 def _published(spec: ScanSpec) -> set[str]:
     return set(spec.spread) if spec.spread else {spec.key}
@@ -159,6 +175,8 @@ def signal_scans(
     entry that publishes one of those names is dropped, and so is every entry
     that reads a dropped key, transitively; they are core entries the runner
     never reports. The headless entries go last, at their declared stage.
+    The ``UNIT_SCANS`` entries the rule drops (the unit pass reads blocks the headless
+    entries publish under the same names) go after them, reading the headless blocks.
     """
     names = {spec.key for spec in headless}
     dropped = {spec.key for spec in specs if _published(spec) & names}
@@ -168,7 +186,8 @@ def signal_scans(
             dropped.add(spec.key)
             continue
         kept.append(spec)
-    return (*kept, *headless)
+    units = [spec for spec in specs if spec.key in UNIT_SCANS and spec.key in dropped]
+    return (*kept, *headless, *units)
 
 
 SIGNAL_SCANS = signal_scans()
@@ -240,7 +259,10 @@ class UnknownScanError(ValueError):
 
 
 def _reported(spec: ScanSpec) -> bool:
-    """A registered scan the runner reports: published, single-key, not the core's own."""
+    """A registered scan the runner reports: published, single-key, not the core's own
+    (the ``UNIT_SCANS`` excepted)."""
+    if spec.key in UNIT_SCANS:
+        return True
     return not spec.private and not spec.spread and spec.fn.__module__ not in CORE_MODULES
 
 
@@ -268,18 +290,21 @@ def with_companions(names: Iterable[str]) -> list[str]:
     return out
 
 
-def select_scans(requested: Sequence[str] | None, specs: Sequence[ScanSpec] = SIGNAL_SCANS) -> list[str]:
+def select_scans(requested: Sequence[str] | None, specs: Sequence[ScanSpec] = SIGNAL_SCANS,
+                 units: bool = False) -> list[str]:
     """The requested names in table order, or every known name when None.
 
-    Raises ``UnknownScanError`` naming every unknown entry.
+    The ``UNIT_SCANS`` run only when named or with ``units`` (``--units``), which adds them
+    to any selection. Raises ``UnknownScanError`` naming every unknown entry.
     """
     known = known_scans(specs)
+    extra = set(UNIT_SCANS) if units else set()
     if requested is None:
-        return known
+        return [name for name in known if name not in UNIT_SCANS or name in extra]
     unknown = [name for name in requested if name not in known]
     if unknown:
         raise UnknownScanError(unknown)
-    wanted = set(with_companions(requested))
+    wanted = set(with_companions(requested)) | extra
     return [name for name in known if name in wanted]
 
 
@@ -294,10 +319,13 @@ def parse_window(window: str) -> str:
 
 def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
                  fleet_config: FleetConfig | None = None,
-                 ghsync_root: Path | None = None) -> dict[str, Any]:
+                 ghsync_root: Path | None = None, scope: Path | None = None) -> dict[str, Any]:
     """The registry's ``PROVIDED_INPUTS``, built the way ``assess_core`` builds them.
 
-    ``scope`` is None: a headless run measures the whole checkout.
+    ``scope`` is ``--scope`` resolved to an absolute folder under ``repo_root``
+    (``run_scope.resolve_scope``), or None for the whole checkout (#866). The scans that
+    read ``scope`` measure that folder; every other scan reads the whole repository, as
+    ``assess_core --scope`` does.
     ``history_window`` carries ``--window`` for history-reading scans
     (``ai_usage``, #547). ``fleet_config`` is the ``--fleet-config`` file merged
     with the target's ``.assess/config.toml`` sections (``lib/fleet_config.py``, #706).
@@ -309,11 +337,11 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
     instruction_files = grade_instruction_files(repo_root)[0]
     return {
         "repo_root": repo_root,
-        "requested_scope": None,
+        "requested_scope": scope,
         "run_date": datetime.now(timezone.utc).date().isoformat(),
         "non_interactive": True,
         "instruction_files": instruction_files,
-        "scope": None,
+        "scope": scope,
         "excludes": load_excludes(repo_root),
         "history_window": window,
         "fleet_config": repo_fleet_config(repo_root, fleet_config),
@@ -348,7 +376,7 @@ def _unavailable(reason: str) -> JsonDict:
 def collect(
     repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     window: str = DEFAULT_WINDOW, fleet_config: FleetConfig | None = None, platform: bool = False,
-    ghsync_root: Path | None = None,
+    ghsync_root: Path | None = None, scope: Path | None = None,
 ) -> dict[str, JsonDict]:
     """Run the selected scans (and what they read); one block per name.
 
@@ -356,7 +384,7 @@ def collect(
     a listed scan reads, runs its network ``fn``. Offline, a ``PLATFORM_ONLY_SCANS``
     name gets no block at all.
     """
-    inputs = build_inputs(repo_root, window, fleet_config, ghsync_root)
+    inputs = build_inputs(repo_root, window, fleet_config, ghsync_root, scope)
     needed = _with_dependencies(selected, specs, inputs)
     online = _with_dependencies(PLATFORM_SCANS, specs, inputs) if platform else set()
     ctx: dict[str, Any] = {}
@@ -416,8 +444,10 @@ def toolkit_commit(toolkit_root: Path = TOOLKIT_ROOT) -> str | None:
     return _git(toolkit_root, "rev-parse", "HEAD")
 
 
-def build_stamp(repo_root: Path, window: str, toolkit_root: Path = TOOLKIT_ROOT) -> SignalsStamp:
-    """Toolkit commit, plugin version, scan date, window and the target's HEAD."""
+def build_stamp(repo_root: Path, window: str, toolkit_root: Path = TOOLKIT_ROOT,
+                scope: Path | None = None) -> SignalsStamp:
+    """Toolkit commit, plugin version, scan date, window, the target's HEAD and the scope
+    (repository-relative, posix; None for the whole checkout)."""
     head = git_commit_info(repo_root) if is_repo_root(repo_root) else {}
     available = bool(head.get("available"))
     return {
@@ -427,6 +457,7 @@ def build_stamp(repo_root: Path, window: str, toolkit_root: Path = TOOLKIT_ROOT)
         "window": window,
         "target_head": head.get("head_sha") if available else None,
         "target_dirty": bool(head.get("dirty")) if available else None,
+        "scope": scope.relative_to(repo_root).as_posix() if scope is not None else None,
     }
 
 
@@ -454,7 +485,7 @@ def build_document(
     repo_root: Path, requested: Sequence[str] | None = None, window: str = DEFAULT_WINDOW,
     toolkit_root: Path = TOOLKIT_ROOT, specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     fleet_config: FleetConfig | None = None, platform: bool = False,
-    ghsync_root: Path | None = None,
+    ghsync_root: Path | None = None, scope: Path | None = None, units: bool = False,
 ) -> SignalsDocument:
     """The whole signals document. Raises ``UnknownScanError`` or ``ValueError`` on bad arguments.
 
@@ -463,12 +494,12 @@ def build_document(
     for the run (a fleet caller scans checkouts it controls), and the stamp
     describes that checkout. A checkout that moves mid-run is not detected.
     """
-    selected = select_scans(requested, specs)
+    selected = select_scans(requested, specs, units)
     window = parse_window(window)
     with read_only_git():
         return {
             "signals_schema_version": SIGNALS_SCHEMA_VERSION,
-            "stamp": build_stamp(repo_root, window, toolkit_root),
+            "stamp": build_stamp(repo_root, window, toolkit_root, scope),
             "scans": collect(repo_root, selected, specs, window, fleet_config, platform,
-                             ghsync_root),
+                             ghsync_root, scope),
         }

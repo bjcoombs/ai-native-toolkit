@@ -86,6 +86,19 @@ mistaken for a whole-repo score. The report should name the scope in its
 heading too. `run-context.json` carries `scope` (repo-relative) and `scope_slug`
 for any consumer; both are `null` on a whole-repo run.
 
+## Headless and fleet runs
+
+`assess_signals.py --scope <path>` runs the headless signals against one folder, as
+`/assess <path>` does: the scans that read the scope read that folder, and repository-wide
+scans read the whole checkout. The document's stamp records the folder as `scope`;
+counts-only output drops it, or writes its salted hash under `--hash-paths`.
+
+`assess_signals.py --units` adds the `units` and `unit_readings` blocks below, one scoped
+pass per unit. It does not combine with `--scope`. `fleet.py --monorepo-units` passes it to
+every repository and writes each unit's Step, next blocking gate and per-tag tally to
+`fleet-data.json` (`unit_rows`). In counts-only output a unit's folder is dropped, or
+written as its salted hash under `--hash-paths`, so a fleet file never names a unit.
+
 ## Units in a whole-repo run
 
 A whole-repo run also reads each monorepo unit (the `units` block). `run-context.json`

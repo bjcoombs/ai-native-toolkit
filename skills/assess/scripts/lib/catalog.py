@@ -29,7 +29,7 @@ named key, so a later field (the #939 ``why``) is an added key, never a restruct
 - ``scans``: one entry per scan name the headless runner accepts
   (``signals.known_scans()``, the ``assess_signals.py --scans`` list): the collector that
   builds it, what it reads, whether it needs the network, how a headless or fleet run
-  reports it, its counts-only privacy class, the rows, conditions and findings that use
+  reports it (``units_only``: the ``signals.UNIT_SCANS``, #866), its counts-only privacy class, the rows, conditions and findings that use
   it, its unknown reasons, and the input class and grade of each signal it feeds. A scan
   no criterion reads has the grade ``unclassified``: classifying every collector is
   #789 step 6.
@@ -75,7 +75,7 @@ from lib import manifest_whys as mw
 from lib.level_signals import INPUT_GRADES, counts_toward_level, load_default_levels
 from lib.levels import Criterion, MaturityModel, Scalar, condition_id
 from lib.levels_fields import DEFAULT_POLARITY, TRUTH_TAGS
-from lib.signals import NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS, known_scans
+from lib.signals import NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS, UNIT_SCANS, known_scans
 
 CATALOG_VERSION = 1
 GRADE_ORDER = ("config_only", "declared", "measured", "verified")
@@ -87,7 +87,7 @@ SOURCES = ("skills/assess/checks/core.toml", "skills/assess/checks/core/*.toml",
            "skills/assess/scripts/lib/level_signals.py", "skills/assess/scripts/lib/signals.py",
            "skills/assess/scripts/lib/scan_registry.py")
 
-Headless = Literal["registered", "headless_variant", "unregistered", "platform_only"]
+Headless = Literal["registered", "headless_variant", "unregistered", "platform_only", "units_only"]
 
 # Plain words for each maturity-model operator.
 OP_WORDS = {"eq": "is", "ne": "is not", "lt": "is below", "lte": "is at most",
@@ -335,6 +335,8 @@ def _rows(model: MaturityModel, signals: Mapping[str, cm.SignalEntry],
 def _headless(name: str, collector: cm.CollectorEntry) -> Headless:
     if name in PLATFORM_ONLY_SCANS:
         return "platform_only"
+    if name in UNIT_SCANS:
+        return "units_only"
     status = collector.get("headless", {}).get(name)
     if status == "registered":
         return "registered"

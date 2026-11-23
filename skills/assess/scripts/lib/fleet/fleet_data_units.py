@@ -1,0 +1,82 @@
+"""The monorepo unit rows of ``fleet-data.json``: each repository's units, one row each (issue #866, parent #800).
+
+A fleet run with ``--monorepo-units`` passes ``assess_signals.py --units``, so each scanned row carries
+the ``unit_readings`` block (``lib.unit_readings``, #863): every unit's own readings of the
+scoped scans. ``unit_rows`` turns that block into the rows a repository expands into on the
+fleet page, under the run's own maturity model, as ``level.json`` and the repository's Step
+fields are computed from the row (``lib.fleet.fleet_level.repo_level``):
+
+- ``key``: the unit's folder. The scan writes it in clear only in ``--full`` output;
+  counts-only drops it, and ``--hash-paths`` replaces it with its salted hash, the join key
+  of a unit across runs (class ``hashed_path``). So ``key`` is null in plain counts-only;
+- ``step``: the unit's Step, from ``lib.unit_levels.unit_result`` (the unit's readings
+  overlaid on the row's scans, the repository's owner exclusions applied), the function
+  ``/assess`` runs for its ``unit_levels`` block, so one commit gives one Step in both;
+- ``next_step``: the Step above, null at the top Step or under a model with no Steps;
+- ``next_blocker``: the first gate of that Step that does not hold, as tokens (``gate``,
+  ``state``, ``disposition``, as ``gate_blockers`` writes them, #945), null when no gate
+  blocks it;
+- ``tags``: the unit's per-tag tally, the headline strip (``lib.headline.tag_cells``) over the
+  unit's level result, the shape of the repository's ``tags`` (#1073).
+
+No row carries a tally or an "N of M" figure: the unit Steps, their next blockers and the
+per-tag counts are the comparison inside one repository (#800 decision 3). ``unit_rows`` is
+null when the repository was not measured by unit: a failed scan, a run without a model or
+without ``--monorepo-units``, or an unavailable ``unit_readings`` block. Null is not measured, never
+an empty list; a measured repository with no unit lists none.
+
+Every value is a Step, a count, a token or the unit's hashed folder, so a counts-only file
+names no unit (``FLEET_DATA_RULES``). Tests: ``tests/test_fleet_data_units.py``.
+"""
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any, TypedDict
+
+from lib.fleet.fleet_data_steps import GateBlocker
+from lib.headline import tag_cells
+from lib.level_result_types import LevelResult, TagCell
+from lib.levels import MaturityModel
+from lib.unit_levels import unit_result
+
+READINGS = "unit_readings"
+
+
+class UnitRow(TypedDict):
+    """One monorepo unit of a repository (#866)."""
+
+    key: str | None  # the unit's folder: clear in --full, hashed under --hash-paths, else None
+    step: int | None  # None: the model defines no Steps
+    next_step: int | None  # the Step above; None at the top Step
+    next_blocker: GateBlocker | None  # the first gate of next_step that does not hold
+    tags: list[TagCell]  # the headline's per-tag strip over the unit's result
+
+
+def next_blocker(result: LevelResult) -> GateBlocker | None:
+    """The first gate of the result's next Step that does not hold, as tokens."""
+    nxt = result["next_step"]
+    for b in nxt["blockers"] if nxt is not None else []:
+        if b["kind"] == "gate":
+            return {"gate": b.get("gate", ""), "state": b.get("state", ""),
+                    "disposition": b.get("disposition")}
+    return None
+
+
+def unit_row(reading: Mapping[str, Any], scans: Mapping[str, Any], model: MaturityModel) -> UnitRow:
+    """One unit's row: its reading overlaid on the repository's scans (see the module docstring)."""
+    result = unit_result(reading, scans, model)
+    path = reading.get("path")
+    nxt = result["next_step"]
+    return {"key": path if isinstance(path, str) else None, "step": result["step"],
+            "next_step": nxt["step"] if nxt is not None else None,
+            "next_blocker": next_blocker(result), "tags": tag_cells(result, model)}
+
+
+def unit_rows(model: MaturityModel | None, scans: Mapping[str, Any] | None) -> list[UnitRow] | None:
+    """A repository's unit rows from its scans; None when it was not measured by unit."""
+    block = (scans or {}).get(READINGS)
+    if model is None or not isinstance(block, Mapping) or block.get("available") is not True:
+        return None
+    units = block.get("units")
+    return [unit_row(u, scans or {}, model) for u in units if isinstance(u, Mapping)] \
+        if isinstance(units, list) else None

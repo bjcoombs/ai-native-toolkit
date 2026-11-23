@@ -306,6 +306,20 @@ Why the signals named here matter:
 
 - `coverage_gate.enforced_meets_minimum` feeds `layer-6-coverage.1:coverage_gate.enforced_meets_minimum`: An enforced floor turns the job red when a change takes coverage below it, so tests an agent removes or skips show in CI instead of passing quietly.
 
+### `units`: Monorepo units
+
+One score for a monorepo describes none of its services. Naming each unit lets every one be scored on its own, so one service's gaps are not hidden behind another's practices.
+
+The repository's units: the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped.
+
+- Collector: `core.units`, reading `repo_root`, `excludes`.
+- Network: no.
+- Headless: only with assess_signals --units or fleet --monorepo-units; left out otherwise.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `units.aggregators.ecosystem` token, `units.aggregators.path` drop, `units.skipped.path` drop, `units.skipped.problem` token, `units.source` token, `units.unit_count_reason` token, `units.units.ecosystem` token, `units.units.name` drop, `units.units.origin` token, `units.units.path` hashed_path, `units.units.workspace` drop, `units.unreadable_manifests` drop.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
+
 ### `instruction_claims`: Instruction claims
 
 An agent trusts its instruction file without checking it. This checks each claim that a script runs in CI, a version is pinned or a count holds, and names the line of each that no longer does.
@@ -703,6 +717,20 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
 - Counts-only: numbers, booleans and nulls kept; strings by field: `owner_exclusions.disclosures` drop, `owner_exclusions.exclusions.excluded_at` token, `owner_exclusions.exclusions.excluded_by` drop, `owner_exclusions.exclusions.id` token, `owner_exclusions.exclusions.kind` token, `owner_exclusions.exclusions.reason` drop, `owner_exclusions.exclusions.source` token, `owner_exclusions.exclusions.version` token, `owner_exclusions.skipped.id` drop, `owner_exclusions.skipped.problem` token.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
+
+### `unit_readings`: Monorepo unit readings
+
+A unit inherits root CI and review but not the root's suppressions, stale docs or structure. Reading those per unit, with each condition labelled, shows which change lifts which unit.
+
+Each unit's own readings of the scope-sensitive scans (suppressions, doc staleness, structure, size, its own coverage gate or instruction file), with every condition tagged unit or inherited.
+
+- Collector: `core.unit_readings`, reading `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes`.
+- Network: no.
+- Headless: only with assess_signals --units or fleet --monorepo-units; left out otherwise.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `unit_readings.unit_blocks` token, `unit_readings.unit_count_reason` token, `unit_readings.units.conditions.id` token, `unit_readings.units.conditions.origin` token, `unit_readings.units.path` hashed_path.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.

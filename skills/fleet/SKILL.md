@@ -98,6 +98,7 @@ two agent systems it is `unknown`.
 | `--scans a,b` | Only these scans (default: all), plus what they read. `review_reality` also brings `review_automation` and `review_evidence`, the Layer 7 level 1 signal. |
 | `--timeout S` | Seconds one repository may take before its row is marked failed (default 600). |
 | `--full` | Keep the full signal blocks, free text included. Default is counts-only. |
+| `--monorepo-units` | Scan each repository by monorepo unit too (`assess_signals.py --units`): each repository in `fleet-data.json` gains `unit_rows`, one Step, next blocking gate and per-tag tally per unit. A unit is named only by its folder's hash under `--hash-paths`. One scoped pass per unit, so it adds scan time on a large monorepo. See [Unit rows](references/fleet-data.md#unit-rows). |
 | `--hash-paths` | Counts-only paths and repository ids hashed under one salt drawn for this run: hashes join within the run, but reruns are not byte-identical. See [Hashed runs](references/repos.md#hashed-runs). |
 | `--hash-salt VALUE` | Hash paths and repository ids under this salt; reruns stay byte-identical and join across runs. |
 | `--delete-after` | Delete each clone once it is scanned, to keep disk use flat over a large estate. With `--platform` no clone is deleted until the whole offline scan is done, so peak disk use is the whole estate. Narrow and fail-closed; see [`--delete-after`](#--delete-after). |
