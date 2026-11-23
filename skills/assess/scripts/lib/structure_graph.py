@@ -76,6 +76,19 @@ that run's allow-list, derived from `NO_SOURCE_FILES`, `INVALID_IMPORT_GRAPH`,
 `LANGUAGE_BY_EXTENSION` and `REASON_SENTENCE_CODES`.
 `structure_drift.py` builds its module map and communities from the same selected graph
 (`import_graph.select_graph`, `import_digraph`).
+The package map's data (#942, `package_graph`): `packages` lists each package of the
+measured graph with its non-blank lines of code (`loc`, the sum over its modules) and
+module count, largest first, capped at `MAX_PACKAGES` with `package_count` the total;
+`package_edges` lists per ordered package pair (`from`, `to`) the cross-package import
+edges (`imports`) and how many reach past the target's front door (`bypass`), among the
+kept packages, heaviest first (ties by `from`, `to`), capped at `MAX_PACKAGE_EDGES` with
+`package_edge_count` the number of pairs among the kept packages before that cap.
+`bypass` counts a burrow exactly as A3 does, so below both caps the bypass total equals
+`burrow_edge_count`, the uncapped number of burrowing edges
+(`internal_burrow_edges` lists at most `MAX_BURROW_EDGES` of them). Above either cap,
+some cross-package imports are left out of the list: `cross_package_edges` minus the
+`imports` total counts them. Package ids are `path` class under counts-only. The lists
+are empty, and the counts 0, on an unavailable block.
 Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py` (the Python golden),
 `tests/test_level_signals.py`, `tests/test_headless_layers.py` (a full signals run and a
 counts-only one).
@@ -128,6 +141,10 @@ NO_IMPORT_EDGES = "no_import_edges"
 MAX_FOOTPRINTS = 200
 MAX_BURROW_EDGES = 100
 MAX_SCCS = 50
+# The package map (#942) draws the top packages by lines of code; the block keeps this many.
+MAX_PACKAGES = 200
+# ...and at most this many package pairs, the heaviest by import count (#942).
+MAX_PACKAGE_EDGES = 400
 
 
 class Footprint(TypedDict):
@@ -157,6 +174,20 @@ class BreakupCandidate(TypedDict):
     modularity_q: float
 
 
+class PackageRow(TypedDict):
+    """A package of the measured graph (#942): its lines of code and module count."""
+
+    id: str
+    loc: int
+    modules: int
+
+
+# ``from`` is a keyword, so the functional form.
+PackageEdge = TypedDict("PackageEdge", {"from": str, "to": str, "imports": int, "bypass": int})
+PackageEdge.__doc__ = """Cross-package imports from one package to another (#942); ``bypass`` counts
+the ones that reach past the target's front door (A3 burrows)."""
+
+
 class StructureBlock(TypedDict):
     """``run-context.json`` ``structure``: :meth:`StructureGraphResult.as_dict`."""
 
@@ -171,10 +202,15 @@ class StructureBlock(TypedDict):
     front_door_ratio: float | None
     cross_package_edges: int
     internal_burrow_edges: list[BurrowEdge]
+    burrow_edge_count: int
     breakup_candidates: list[BreakupCandidate]
     module_count: int
     edge_count: int
     name_collisions: list[NameCollision]
+    packages: list[PackageRow]
+    package_count: int
+    package_edges: list[PackageEdge]
+    package_edge_count: int
 
 
 @dataclass
@@ -202,6 +238,8 @@ class StructureGraphResult:
     # A3: the burrowing edges (imports that reach into another package's
     # internals instead of its public API).
     internal_burrow_edges: list[BurrowEdge] = field(default_factory=list)
+    # A3: every burrowing edge, before the MAX_BURROW_EDGES cap on the list above (#942).
+    burrow_edge_count: int = 0
     # A4: packages proposed for splitting, with their clusters as cut-lines.
     breakup_candidates: list[BreakupCandidate] = field(default_factory=list)
     module_count: int = 0
@@ -209,6 +247,13 @@ class StructureGraphResult:
     # Package names held by more than one discovered package; each copy is
     # graphed under its repo-relative path instead of one silently winning.
     name_collisions: list[NameCollision] = field(default_factory=list)
+    # The package map's data (#942): packages by lines of code (capped at
+    # MAX_PACKAGES; package_count is the total) and the cross-package import
+    # pairs among the kept packages.
+    packages: list[PackageRow] = field(default_factory=list)
+    package_count: int = 0
+    package_edges: list[PackageEdge] = field(default_factory=list)
+    package_edge_count: int = 0
 
     def as_dict(self) -> StructureBlock:
         return {
@@ -224,10 +269,15 @@ class StructureGraphResult:
                 None if self.front_door_ratio is None else round(self.front_door_ratio, 4)),
             "cross_package_edges": self.cross_package_edges,
             "internal_burrow_edges": self.internal_burrow_edges,
+            "burrow_edge_count": self.burrow_edge_count,
             "breakup_candidates": self.breakup_candidates,
             "module_count": self.module_count,
             "edge_count": self.edge_count,
             "name_collisions": self.name_collisions,
+            "packages": self.packages,
+            "package_count": self.package_count,
+            "package_edges": self.package_edges,
+            "package_edge_count": self.package_edge_count,
         }
 
 
@@ -375,6 +425,42 @@ def count_cross_package_edges(graph: nx.DiGraph, package_of: Mapping[str, str]) 
     return sum(1 for a, b in graph.edges() if package_of[a] != package_of[b])
 
 
+def package_graph(
+    graph: nx.DiGraph, mg: ModuleGraph, sizes: Mapping[str, int],
+) -> tuple[list[PackageRow], list[PackageEdge]]:
+    """The package map's data (#942): every package with its lines of code and module
+    count, largest first (ties by id), and per ordered package pair the cross-package
+    import edges and how many of them bypass the target's front door, heaviest first
+    (most imports; ties by ``from`` then ``to``).
+
+    ``bypass`` is counted exactly as ``compute_front_door_ratio`` counts a burrow, so
+    the bypass total equals ``burrow_edge_count`` (the list ``internal_burrow_edges`` is
+    capped at ``MAX_BURROW_EDGES``).
+    """
+    members: dict[str, list[str]] = {pkg: [] for pkg in mg.packages}
+    for module in mg.modules:
+        members.setdefault(mg.package_of[module], []).append(module)
+    packages: list[PackageRow] = [
+        {"id": pkg, "loc": sum(sizes.get(m, 0) for m in mods), "modules": len(mods)}
+        for pkg, mods in members.items()
+    ]
+    packages.sort(key=lambda p: (-p["loc"], p["id"]))
+    pairs: dict[tuple[str, str], list[int]] = {}
+    for importer, imported in graph.edges():
+        source, target = mg.package_of[importer], mg.package_of[imported]
+        if source == target:
+            continue
+        counts = pairs.setdefault((source, target), [0, 0])
+        counts[0] += 1
+        counts[1] += imported not in mg.front_doors
+    edges: list[PackageEdge] = [
+        {"from": source, "to": target, "imports": n, "bypass": bypass}
+        for (source, target), (n, bypass) in pairs.items()
+    ]
+    edges.sort(key=lambda e: (-e["imports"], e["from"], e["to"]))
+    return packages, edges
+
+
 # --------------------------------------------------------------------------
 # A4 -- breakup candidates
 # --------------------------------------------------------------------------
@@ -504,6 +590,9 @@ def analyze_structure(
         graph, mg.front_doors, mg.package_of,
     )
     cross_package_edges = count_cross_package_edges(graph, mg.package_of)
+    packages, package_edges = package_graph(graph, mg, sizes)
+    kept = {p["id"] for p in packages[:MAX_PACKAGES]}
+    kept_edges = [e for e in package_edges if e["from"] in kept and e["to"] in kept]
 
     return StructureGraphResult(
         available=True,
@@ -516,8 +605,13 @@ def analyze_structure(
         front_door_ratio=front_door_ratio if cross_package_edges else None,
         cross_package_edges=cross_package_edges,
         internal_burrow_edges=burrow_edges[:MAX_BURROW_EDGES],
+        burrow_edge_count=len(burrow_edges),
         breakup_candidates=_all_breakup_candidates(graph, mg),
         module_count=graph.number_of_nodes(),
         edge_count=graph.number_of_edges(),
         name_collisions=mg.name_collisions,
+        packages=packages[:MAX_PACKAGES],
+        package_count=len(packages),
+        package_edges=kept_edges[:MAX_PACKAGE_EDGES],
+        package_edge_count=len(kept_edges),
     )

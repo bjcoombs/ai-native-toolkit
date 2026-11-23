@@ -5,8 +5,8 @@
 id = "core.headline"
 kind = "collector"
 title = "Deterministic headline"
-summary = "The Step with its next unlock and 'Verified practices: N of M measured', worded from the level block; the report pastes it and the badge and log entry carry its summary."
-issues = [747]
+summary = "The Step with its next unlock, 'Practices in place: N of M measured, V verified' and the per-tag strip, worded from the level block; the report pastes it and the badge and log entry carry its summary."
+issues = [747, 844]
 callable = "lib.core_scans:headline"
 publishes = ["headline"]
 reads = ["level"]
@@ -14,10 +14,11 @@ stage = "post_offers"
 shapes = [
   { path = "headline", type = "lib.level_result_types:Headline" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "headline.levels_version" = "token"
   "headline.lines" = "drop"
   "headline.markdown" = "drop"
   "headline.summary" = "drop"
   "headline.reason" = "token"
+  "headline.tags.tag" = "token"

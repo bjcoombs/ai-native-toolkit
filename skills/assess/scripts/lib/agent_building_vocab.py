@@ -220,7 +220,8 @@ ENDPOINT_PATTERNS: tuple[tuple[str, PackageKind, re.Pattern[str]], ...] = (
 # A call to the host's issues API.
 ISSUE_API_PATTERNS: tuple[tuple[tuple[str, ...], re.Pattern[str]], ...] = tuple(
     (hosts, re.compile(p)) for hosts, p in (
-        # python-gitlab; Octokit, githubkit: the client verbs, not any attribute named issues.
+        # python-gitlab; Octokit, githubkit: .issues. followed by a client verb. Known limit: any
+        # object's issues attribute with such a verb also matches (a Django project.issues manager calling get).
         (("gitlab", "github"),
          r"[.]issues[.](?:list\w*|get|create\w*|update|lock|add_?[Ll]abels|list_?[Cc]omments)[(]"),
         (("gitlab", "github"), r"\bIssues[.]\w+[(]"),              # gitbeaker, go-gitlab; go-github

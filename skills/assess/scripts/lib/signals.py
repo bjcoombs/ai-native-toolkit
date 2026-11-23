@@ -196,8 +196,9 @@ PLATFORM_SCANS: tuple[str, ...] = ("review_reality", "delivery", "review_evidenc
 # The PLATFORM_SCANS blocks that exist only on the platform (#779): without
 # ``--platform`` the document leaves them out (absent, never a ``network``
 # placeholder), so a row read without the platform carries no figure, not even
-# an unavailable one. ``review_reality`` keeps its offline ``network`` block and
-# ``review_evidence`` is offline itself, so neither is listed.
+# an unavailable one. ``review_reality`` runs its offline read (``no_remote``, or
+# ``network`` for a remote only the platform reads) and ``review_evidence`` is
+# offline itself, so neither is listed.
 PLATFORM_ONLY_SCANS: tuple[str, ...] = ("delivery",)
 
 

@@ -22,7 +22,7 @@ There's a second half, and it's the same ethic pointed the other way. When a con
 
 The headline pieces are five **skills**:
 
-- **`/assess`** - score any codebase's readiness for AI agent contributors against a 9-layer (0-8) contract model (navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, AI project management), with a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Generates a report + the two SVGs and opens a PR in the target repo.
+- **`/assess`** - score any codebase's readiness for AI agent contributors against a 9-layer (0-8) contract model (navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, AI project management), with a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Generates a report with its SVGs (the two maps and an evidence waffle) and opens a PR in the target repo.
 - **`/huddle`** - structured multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board). See it in action: a [narrated visual explainer](https://bjcoombs.github.io/ai-native-toolkit/huddle-explainer/visualization.html), and the [repeatable pipeline](./docs/huddle-explainer/README.md) used to build it.
 - **`/deslop`** - detect and remove the telltale signs of AI writing (puffery, the rule of three, "not X but Y", filler diction, chatbot leakage, fabricated citations). Runs as a silent quality gate while writing, or as an explicit audit/edit pass. Derived from Wikipedia's "Signs of AI writing".
 - **`/skill-forge`** - harden a skill (draft or existing) through judge-panel refinement rounds until it clears a strict 3-tier promotion gate. A prove-and-promote quality gate that runs after authoring, built on the same team-lead pattern as `/huddle` - and proven by forging itself.
@@ -121,13 +121,13 @@ The 9 layers (0-8) fall into three dependency-ordered bands: **read-side** (can 
 
 The Layer 0 navigability model - treating the docs as a link graph an agent must traverse - adapts the **"Lint"** health-check from [Andrej Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (hubs, orphans, connectivity, an `index.md` catalog and `log.md`), making its *structural* checks deterministic. The semantic ones it also lists stay out of the deterministic core: contradictions between pages are what [`/doc-contradictions`](skills/doc-contradictions/SKILL.md) looks for, and concepts lacking a page are not checked.
 
-The report's headline leads with the **Step**: how much agent autonomy the repo's contracts support, on the adoption ladder from [Boris Cherny's *Steps of AI Adoption*](https://www.threads.com/@boris_cherny/post/Da4CkQnEea-) (July 2026) - 1 Assisted, 2 Supervised agent PRs, 3 Unattended agent PRs, 4 Autonomous loops - with the one change that unlocks the next Step, then "Verified practices: N of M measured" with the maturity-model version. Both are computed deterministically from the commit, never by the model. The Steps work because Cherny's per-step guardrails are these layers seen from the org side (self-verification loops = L5/L6, automated review = L7, agent instructions = L0, encoded permissions/routines = L8): the Step bounds how far up his ladder a team can safely operate this repo, without claiming anything about how the team actually works. Layer 8's `agent_ops` signals (committed permission allowlists, hooks, sandbox rules, routine definitions) score the repo-observable subset of those guardrails.
+The report's headline leads with the **Step**: how much agent autonomy the repo's contracts support, on the adoption ladder from [Boris Cherny's *Steps of AI Adoption*](https://www.threads.com/@boris_cherny/post/Da4CkQnEea-) (July 2026) - 1 Assisted, 2 Supervised agent PRs, 3 Unattended agent PRs, 4 Autonomous loops - with the one change that unlocks the next Step, then "Practices in place: N of M measured, V verified" with the maturity-model version, then a strip of the same counts per truth tag. All three are computed deterministically from the commit, never by the model. The Steps work because Cherny's per-step guardrails are these layers seen from the org side (self-verification loops = L5/L6, automated review = L7, agent instructions = L0, encoded permissions/routines = L8): the Step bounds how far up his ladder a team can safely operate this repo, without claiming anything about how the team actually works. Layer 8's `agent_ops` signals (committed permission allowlists, hooks, sandbox rules, routine definitions) score the repo-observable subset of those guardrails.
 
 **Traditional tooling, applied to an AI-era question.** The assessment itself runs on conventional static analysis - `lizard`/`scc`, git history, and graph metrics over the docs and code - not the model. The LLM only writes the prose around the numbers. So a full run is fast and spends almost no model tokens, and the structural findings are reproducible run-to-run.
 
 A codebase can hold Step 4 and still be on fire (strong contracts, legacy debt) or Step 1 with a calm treemap (small codebase, no enforcement needed yet). The headline tells you whether the system will catch the next class of pain before it lands; the SVG tells you where today's pain already is. The report's **Top 3 Actions** table names specific files, always - "improve code quality" is the failure mode `/assess` exists to prevent; "Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current p95 ccn is 23; immediate offenders: `internal/import/parser.go` (ccn 67)" is what makes the report actionable.
 
-**The compounding payoff.** Contracts are front-loaded - types, lint rules, architecture tests, agent instructions all take time to write. The payoff compounds: every new service, feature, and contributor inherits the contracts that already exist. Skip them and you lose 15-45 minutes per AI session to convention drift, rework, and false signals - forever. Run `/assess` periodically to ratchet the verified practices upward; each layer you add closes a recurring cost.
+**The compounding payoff.** Contracts are front-loaded - types, lint rules, architecture tests, agent instructions all take time to write. The payoff compounds: every new service, feature, and contributor inherits the contracts that already exist. Skip them and you lose 15-45 minutes per AI session to convention drift, rework, and false signals - forever. Run `/assess` periodically to ratchet the practices in place upward; each layer you add closes a recurring cost.
 
 A stats sidecar (`complexity-stats.json`) accompanies the report with percentiles and ranked file lists that feed the treemap and the report's hotspot callouts.
 
@@ -164,7 +164,7 @@ steps:
       config: .assess/config.toml   # optional; warn-only defaults without it
 ```
 
-Two badges come with it - GitHub's native status badge for the gate workflow, and a live AI-readiness badge served from the committed `.assess/badge.json` via shields.io (written by every assess run: the Step and the verified tally, e.g. `Step 3 · 4 of 4 measured`):
+Two badges come with it - GitHub's native status badge for the gate workflow, and a live AI-readiness badge served from the committed `.assess/badge.json` via shields.io (written by every assess run: the Step and the tally, e.g. `Step 3 · 4 in place of 4 measured`):
 
 ```markdown
 [![Assess Gate](https://github.com/<owner>/<repo>/actions/workflows/assess-gate.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/assess-gate.yml)
@@ -274,7 +274,7 @@ Runs against the current directory (or pass a path). Produces:
 - `.assess/review-strip.svg` - one tick per recently merged change: approved, reviewed or merged without review, in merge order
 - `.assess/complexity-stats.json` - percentiles and ranked file lists that feed the report
 
-After writing, the skill asks whether to open a PR in the target repo with the report and both SVGs.
+After writing, the skill asks whether to open a PR in the target repo with the report and its SVGs.
 
 ### Run a huddle on a hard decision
 

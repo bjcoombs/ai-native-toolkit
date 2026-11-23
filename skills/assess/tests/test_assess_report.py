@@ -621,7 +621,7 @@ def test_main_stdout_is_utf8_under_a_cp1252_console(tmp_path: Path,
     raw = io.BytesIO()
     console = io.TextIOWrapper(raw, encoding="cp1252", newline="\r\n")
     monkeypatch.setattr("sys.stdout", console)
-    monkeypatch.setattr("assess_report.render_report", lambda _ctx, _name: "Step 3 \u00b7 next\n")
+    monkeypatch.setattr("assess_report.render_report", lambda _ctx, _name, _dir=None: "Step 3 \u00b7 next\n")
     assert main([str(tmp_path), "--stdout"]) == 0
     console.flush()
     assert raw.getvalue() == "Step 3 \u00b7 next\n".encode("utf-8")

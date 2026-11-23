@@ -382,6 +382,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `structure.internal_burrow_edges.imported` | path (hashed when hashing is on) |
 | `structure.name_collisions.name` | path (hashed when hashing is on) |
 | `structure.name_collisions.paths` | path (hashed when hashing is on) |
+| `structure.packages.id` | path (hashed when hashing is on) |
+| `structure.package_edges.from` | path (hashed when hashing is on) |
+| `structure.package_edges.to` | path (hashed when hashing is on) |
 | `behaviour.reason` | dropped |
 | `behaviour.static_modularity_projection` | dropped |
 | `behaviour.static_history_disagreement.finding` | token |
@@ -787,6 +790,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `headline.markdown` | dropped |
 | `headline.summary` | dropped |
 | `headline.reason` | token |
+| `headline.tags.tag` | token |
 
 ## fleet-data.json (the fleet skill)
 
