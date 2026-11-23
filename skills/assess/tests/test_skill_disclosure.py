@@ -183,7 +183,20 @@ def test_excluded_and_out_of_scope_files_are_left_out(tmp_path: Path) -> None:
     _skill(tmp_path, "body\n", folder="two")
     assert [f["path"] for f in sd.scan_skill_disclosure(tmp_path, excludes=({"two"}, []))["files"]] == [
         ".claude/skills/one/SKILL.md"]
-    assert sd.scan_skill_disclosure(tmp_path / "elsewhere")["files"] == []
+    assert sd.scan_skill_disclosure(tmp_path, scope=tmp_path / "elsewhere")["files"] == []
+
+
+def test_a_skill_folder_scope_reads_that_skill(tmp_path: Path) -> None:
+    # The unit pass scopes a skill unit to its folder, which holds no .claude/ or plugin manifest.
+    _skill(tmp_path, "body\n", folder="one")
+    _skill(tmp_path, "body\n", folder="two")
+    scoped = sd.scan_skill_disclosure(tmp_path, scope=tmp_path / ".claude" / "skills" / "two")
+    assert [f["path"] for f in scoped["files"]] == [".claude/skills/two/SKILL.md"]
+
+
+def test_a_plugin_skill_folder_scope_reads_that_skill() -> None:
+    scoped = sd.scan_skill_disclosure(REPO_ROOT, scope=REPO_ROOT / "skills" / "ghreport")
+    assert [f["path"] for f in scoped["files"]] == ["skills/ghreport/SKILL.md"]
 
 
 def test_this_repository_reads_the_breaks_the_issue_names() -> None:

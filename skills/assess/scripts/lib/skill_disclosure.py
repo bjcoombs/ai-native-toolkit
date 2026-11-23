@@ -59,7 +59,9 @@ Block (``skill_disclosure`` in run-context.json)::
                 "breaks": [rule, ...]}],
      "files_considered": int, "files_breaking": int}
 
-``files`` is sorted by path. A file that cannot be read is left out, so ``files_considered``
+With ``scope`` (a ``--scope`` folder, or a skill unit's folder in the unit pass), the files are
+the repository's, kept when they sit under it: discovery starts at the repository root, since a
+skill folder holds no plugin manifest or ``.claude/`` of its own. ``files`` is sorted by path. A file that cannot be read is left out, so ``files_considered``
 counts the files listed. With no skill or agent file the list is empty and
 ``files_considered`` is 0, which the condition reads as not measured, never as met.
 
@@ -310,8 +312,13 @@ def scan_skill_disclosure(
 ) -> SkillDisclosureBlock:
     """Build the ``skill_disclosure`` block (see the module doc)."""
     repo = repo_root.resolve()
+    folder = scope.resolve() if scope is not None else repo
     files: list[SkillFile] = []
-    for path, kind in skill_and_agent_files(repo, scope, excludes):  # excludes already applied
+    # The repository's files, then those under the scope: a skill folder holds no plugin
+    # manifest or .claude/ of its own, so discovery from the scope would find nothing there.
+    for path, kind in skill_and_agent_files(repo, None, excludes):  # excludes already applied
+        if not path.resolve().is_relative_to(folder):
+            continue
         rel = path.relative_to(repo)
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
