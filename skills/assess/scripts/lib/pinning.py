@@ -101,7 +101,8 @@ _SWIFT_RESOLVED = re.compile(
 _REQUIREMENTS = re.compile(r"^requirements[\w.-]*\.txt$")
 _PUBLISH_NONE = re.compile(r"""^publish_to:\s*["']?none["']?\s*(?:#.*)?$""", re.MULTILINE)
 _SWIFT_LIBRARY = re.compile(r"\.library\s*\(")
-# An executable *product*: `.executableTarget(` alone also backs a library's build-tool plugin.
+# An executable *product*. A `.library(` package whose only executable is an `.executableTarget(`
+# (often a build-tool plugin's tool) reads as a library, as the spec on issue #1025 states.
 _SWIFT_EXECUTABLE = re.compile(r"\.executable\s*\(")
 _SWIFT_DEPENDENCY = re.compile(r"\.package\s*\(")
 # A string literal is matched first and kept, so `"**/*IT.class"` never opens a comment.
