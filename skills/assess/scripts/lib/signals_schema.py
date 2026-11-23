@@ -47,7 +47,7 @@ from typing import Any, Union, get_args, get_origin, get_type_hints, is_typeddic
 if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from lib.check_manifest import core_manifest, reason_codes  # noqa: E402
+from lib.manifest.check_manifest import core_manifest, reason_codes  # noqa: E402
 from lib.run_context_types import JsonDict, SignalsDocument  # noqa: E402
 from lib.scan_block_schemas import BLOCK_SCHEMAS  # noqa: E402
 from lib.scan_registry import ScanSpec  # noqa: E402

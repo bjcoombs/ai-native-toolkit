@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from lib import check_manifest as cm
+import lib.manifest.check_manifest as cm
 from lib import core_scans as cs
 from lib import run_setup as rs
 from lib import unit_readings as ur
