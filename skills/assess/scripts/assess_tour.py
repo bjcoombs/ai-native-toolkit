@@ -1,8 +1,10 @@
 """The guided first run of /assess (``/assess --tour``, #1102): a sample repository, its report, one fix.
 
-The sample is ``tally``, a tiny Python expense ledger shipped as a test fixture
-(``tests/fixtures/tour_sample/``: the files under ``repo/``, the history in
-``history.toml`` and the one fix in ``fix.patch``). It is deliberately imperfect: it has an
+The sample is ``tally``, a tiny Python expense ledger. It ships as one data file,
+``tour/sample.toml`` (#1149): each file's content, the history and the fix commit's date and
+message, with the one fix in ``tour/fix.patch`` beside it. One TOML file keeps the sample
+out of this repository's own scans (no scan reads a TOML string as code, docs, instructions
+or CI) and lets the standalone ZIP ship it whole. It is deliberately imperfect: it has an
 instruction file (``AGENTS.md``) and a CI workflow, but the workflow runs ``pytest || true``,
 so a failing test never fails the build. It lands on Step 2 (an agent pull request needs a
 person to review it) with one blocking gate, ``ci_runs_tests``. The fix deletes the
@@ -10,14 +12,14 @@ person to review it) with one blocking gate, ``ci_runs_tests``. The fix deletes 
 
 Subcommands, each printing one JSON line:
 
-- ``build DEST [--fixed]`` replays ``history.toml`` into a new git repository at ``DEST``
+- ``build DEST [--fixed]`` writes the files and replays the commits of ``sample.toml`` into a new git repository at ``DEST``
   (fixed author and dates, so the same SHAs every build); ``--fixed`` also commits the fix.
 - ``run DEST`` runs the deterministic core headless on ``DEST``, dated by its HEAD commit
   rather than the clock, and writes ``DEST/.assess/deterministic-report.md``. It prints the
   Step, the next Step's blocking gates and the report path.
 - ``fix DEST`` commits the fix: the newcomer's own edit when the tree has one, else
   ``fix.patch`` applied with ``git apply``; ``already_fixed`` when HEAD has it. The commit
-  takes the fixed date and message from ``history.toml``.
+  takes the fixed date and message from ``sample.toml``.
 - ``report --out PATH [--fixed]`` builds and runs in a temporary directory and copies the
   report to ``PATH``: the one command CI needs for the sample report.
 
@@ -52,7 +54,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import assess_core  # noqa: E402
 import assess_report  # noqa: E402
 
-SAMPLE_DIR = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "tour_sample"
+SAMPLE_DIR = Path(__file__).resolve().parent.parent / "tour"
+SAMPLE_FILE = "sample.toml"
 REPORT_NAME = "deterministic-report.md"
 
 
@@ -67,10 +70,16 @@ class TourFix(TypedDict):
     message: str
 
 
+class TourFile(TypedDict):
+    path: str
+    content: str
+
+
 class TourHistory(TypedDict):
     author: str
     commits: list[TourCommit]
     fix: TourFix
+    file: list[TourFile]
 
 
 class TourResult(TypedDict):
@@ -83,7 +92,7 @@ class TourResult(TypedDict):
 
 def load_history(sample: Path = SAMPLE_DIR) -> TourHistory:
     """The sample's history: its author, its commits in order and the fix commit."""
-    with (sample / "history.toml").open("rb") as fh:
+    with (sample / SAMPLE_FILE).open("rb") as fh:
         return cast(TourHistory, tomllib.load(fh))
 
 
@@ -107,11 +116,15 @@ def _git(repo: Path, env: dict[str, str], *args: str) -> str:
     return done.stdout
 
 
-def _copy_lf(src: Path, dest: Path) -> None:
-    """Copy a text file with LF endings, whatever the checkout did to it on Windows."""
+def _write_lf(text: str, dest: Path) -> None:
+    """Write a sample file as UTF-8 with LF endings, whatever the checkout did on Windows."""
     dest.parent.mkdir(parents=True, exist_ok=True)
-    text = src.read_text(encoding="utf-8").replace("\r\n", "\n")
-    dest.write_bytes(text.encode("utf-8"))
+    dest.write_bytes(text.replace("\r\n", "\n").encode("utf-8"))
+
+
+def sample_files(history: TourHistory) -> dict[str, str]:
+    """Each sample file's content, by its path in the built repository."""
+    return {entry["path"]: entry["content"] for entry in history["file"]}
 
 
 def build(dest: Path, *, fixed: bool = False, sample: Path = SAMPLE_DIR) -> Path:
@@ -120,12 +133,13 @@ def build(dest: Path, *, fixed: bool = False, sample: Path = SAMPLE_DIR) -> Path
         raise ValueError(f"{dest} is not empty; pick a new directory")
     dest.mkdir(parents=True, exist_ok=True)
     history = load_history(sample)
+    files = sample_files(history)
     env = _git_env(history["author"], history["commits"][0]["date"])
     _git(dest, env, "init", "-q", "-b", "main")
     for commit in history["commits"]:
         env = _git_env(history["author"], commit["date"])
         for rel in commit["paths"]:
-            _copy_lf(sample / "repo" / rel, dest / rel)
+            _write_lf(files[rel], dest / rel)
         _git(dest, env, "add", "--", *commit["paths"])
         _git(dest, env, "commit", "-q", "-m", commit["message"])
     if fixed:
@@ -138,7 +152,7 @@ def require_sample(repo: Path, history: TourHistory) -> None:
 
     The tour commits, so a wrong path (an empty shell variable reads as the current
     directory) must never reach the user's own repository. A sample's root commit has the
-    first message and the author of ``history.toml``, and ``repo`` is its top level.
+    first message and the author of ``sample.toml``, and ``repo`` is its top level.
     """
     env = _git_env(history["author"], history["commits"][0]["date"])
     done = subprocess.run(
@@ -176,12 +190,13 @@ def _code_lines(text: str) -> list[str]:
 def _fixed_lines(sample: Path, env: dict[str, str], patch: str, paths: list[str]) -> dict[str, list[str]] | None:
     """Each patched file in its fixed state, as ``_code_lines``, or None if the patch fails.
 
-    The fixed state is the sample's own copy (``repo/<path>``) with ``fix.patch`` applied in a
-    scratch directory, so it does not depend on what the newcomer's HEAD holds.
+    The fixed state is the sample's own copy (its ``sample.toml`` content) with ``fix.patch``
+    applied in a scratch directory, so it does not depend on what the newcomer's HEAD holds.
     """
+    files = sample_files(load_history(sample))
     with tempfile.TemporaryDirectory(prefix="assess-tour-fix-") as tmp:
         for rel in paths:
-            _copy_lf(sample / "repo" / rel, Path(tmp) / rel)
+            _write_lf(files[rel], Path(tmp) / rel)
         if not _git_apply(["git", "apply", "-"], patch, env, cwd=tmp):
             return None
         return {rel: _code_lines((Path(tmp) / rel).read_text(encoding="utf-8")) for rel in paths}
@@ -229,7 +244,7 @@ def fix(repo: Path, *, sample: Path = SAMPLE_DIR) -> str:
     the patch names raises ``ValueError`` with its diff; edits to other files stay out.
     ``already_fixed``: HEAD already has the fix, by the same comparison, so nothing was
     committed. The commit takes
-    the fixed date and message from ``history.toml`` either way, and holds only the files
+    the fixed date and message from ``sample.toml`` either way, and holds only the files
     ``fix.patch`` names. ``repo`` must be a tour sample (``require_sample``).
     """
     history = load_history(sample)
@@ -300,9 +315,9 @@ def main(argv: list[str] | None = None) -> int:
     p_report.add_argument("--out", type=Path, required=True)
     p_report.add_argument("--fixed", action="store_true", help="Report on the sample with the fix.")
     args = parser.parse_args(argv)
-    if not (SAMPLE_DIR / "history.toml").is_file():
-        print(f"error: the tour's sample is not installed here ({SAMPLE_DIR.as_posix()}); "
-              "the tour needs the full plugin, not the standalone skill", file=sys.stderr)
+    if not (SAMPLE_DIR / SAMPLE_FILE).is_file():
+        print(f"error: the tour's sample is missing ({(SAMPLE_DIR / SAMPLE_FILE).as_posix()}); "
+              "the skill's install is incomplete", file=sys.stderr)
         return 2
     try:
         if args.command == "build":

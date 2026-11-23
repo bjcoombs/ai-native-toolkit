@@ -366,11 +366,11 @@ def unit_levels(readings: Any, *blocks: Any) -> UnitLevelsBlock:
     return unit_levels_block(readings, *blocks)
 
 
-def unit_rollup(levels: Any) -> UnitRollUpBlock:
+def unit_rollup(levels: Any, units_block: Any = None) -> UnitRollUpBlock:
     """The repository roll-up over the units and the unit-unlock ranking (#865): the lowest
-    unit's Step, "N of M measured units" at the next Step, and the changes ranked by the
-    units they lift. Core-only."""
-    return unit_rollup_block(levels)
+    unit's Step, "N of M measured units" at the next Step, the changes ranked by the
+    units they lift, and the siblings that hold each unit's next gate (#1155). Core-only."""
+    return unit_rollup_block(levels, units_block=units_block)
 
 
 def offers_blocks(non_interactive: bool) -> dict[str, Any]:
@@ -405,8 +405,9 @@ def headline(level_block: Any, since_block: Any) -> Headline:
     return summarised(run_context_headline(level_block), level_block, since_block, default_model())
 
 
-def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path, superseded: Any) -> SinceLastRun:
+def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path, superseded: Any,
+                   instruction_placement: Any) -> SinceLastRun:
     """The run context's ``since_last_run`` block (#1083): actions closed, gates gained or
     lost and the next blocker, against the run-context the previous run left (or, for a run
     that supersedes a same-day run on the same commit, against that run's own baseline)."""
-    return since_last_run_block(level_block, assess_dir, repo_root, superseded)
+    return since_last_run_block(level_block, assess_dir, repo_root, superseded, instruction_placement)

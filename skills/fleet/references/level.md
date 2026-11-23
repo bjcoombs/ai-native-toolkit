@@ -32,6 +32,12 @@ is never counted, and never holds a gate, and the result lists it under `exclude
 `--scans` subset without `owner_exclusions` applies none. Fleet-wide exclusions through
 `--fleet-config` wait on the method stamp (#952).
 
-`/assess` writes the same result for the same commit as the `level` block of its
+The fleet's exit rule (#1086, [`demotions.json`](condition-effect.md#output-demotionsjson)) applies
+to this run's results: a demoted condition keeps its state, carries
+`disposition: "demoted_by_exit_rule"`, and is listed, never counted. A gate condition is never
+demoted, so no Step moves. `/assess` never applies a demotion, so its `level` block for the same
+commit can count a condition `level.json` lists.
+
+Apart from demotions, `/assess` writes the same result for the same commit as the `level` block of its
 run context, from the same function. The file has no date or path in it, so a rerun over
 the same commits writes identical bytes. Schema: `references/level.schema.json`.

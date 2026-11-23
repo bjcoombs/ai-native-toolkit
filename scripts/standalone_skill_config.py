@@ -14,6 +14,8 @@ Each entry in SKILLS maps a skill name to:
   bundle_files           — optional dict mapping ZIP-relative dest paths → source
                            paths (relative to repo root). Markdown files have their
                            YAML frontmatter stripped during bundling.
+  generated_files        — optional dict mapping ZIP-relative dest paths → text the
+                           build writes there (assess: plugin-version.json, #1166).
 """
 
 import json
@@ -57,9 +59,24 @@ SKILLS: dict[str, dict[str, Any]] = {
             + VERSION_SUFFIX
         ),
         "source_dir": "skills/assess",
+        # The standalone copy has no .claude-plugin/plugin.json, so the build writes the
+        # version beside the skill for lib/plugin_version.py to read (#1166).
+        "generated_files": {"plugin-version.json": json.dumps({"version": VERSION}) + "\n"},
         # changes/ holds the release-time version notes (#1011), not skill content.
         "exclude_dirs": {"tests", "__pycache__", ".pytest_cache", ".venv", "changes"},
         "replacements": {
+            # /assess --tour (#1102, #1149): the sample ships in tour/, so the tour runs from
+            # the ZIP too. The arguments line drops the Claude Code-only $ARGUMENTS.
+            "tour-arguments": (
+                "**`--tour` (the guided first run):** when the request asks for the tour, skip "
+                "every step below. Do not assess the current repository. Follow "
+                "`references/tour.md` (relative to this skill dir) instead: it builds a small "
+                "sample repository in a temporary directory, walks the report one section at a "
+                "time, has the newcomer make one fix and re-runs so they see the Step move."
+            ),
+            "tour-build": 'uv run scripts/assess_tour.py build "$(mktemp -d)/tally"',
+            "tour-run": 'uv run scripts/assess_tour.py run "<sample>"',
+            "tour-fix": 'uv run scripts/assess_tour.py fix "<sample>"',
             "uv-treemap": (
                 'uv run scripts/complexity-treemap.py "$REPO_ROOT" '
                 '-o "$REPO_ROOT/.assess/complexity-heatmap.svg" '

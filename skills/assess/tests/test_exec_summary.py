@@ -17,7 +17,7 @@ import pytest
 
 from lib.assess_diagrams_ladder import STEP_MEANING
 from lib.exec_summary import GATE_TASK, STEP_GATES_URL, call_to_action, since_line, summarised, summary_lines
-from lib.headline import GATE_CHANGE, as_headline, headline
+from lib.headline import GATE_CHANGE, GLOSSARY_URL, as_headline, headline
 from lib.level_tally import default_model
 from test_headline import SCRIPTS, _level, _run, ci2  # noqa: F401 - ci2 is a fixture
 
@@ -44,6 +44,19 @@ def _summary(step: int, since: Any = None) -> dict[str, Any]:
     return dict(summarised(headline(level, default_model()), level, since, default_model()))
 
 
+def _linked(first: str) -> str:
+    """Summary line 1 as the markdown carries it: its leading "Step" links the glossary (#1102)."""
+    assert first.startswith("Step "), first
+    return f"[Step]({GLOSSARY_URL}#step){first[4:]}"
+
+
+def test_the_markdown_links_step_once_and_the_lines_stay_plain() -> None:
+    h = _summary(2)
+    assert h["summary_markdown"].count("](") == 2  # the Step link and the call to action
+    assert h["summary_markdown"].startswith(f"[Step]({GLOSSARY_URL}#step) 2 of 4: ")
+    assert all("](" not in line for line in h["summary_lines"])
+
+
 def _plain_checks(text: str) -> None:
     assert "layer" not in text.lower(), text
     assert not CONDITION_ID.search(text), text
@@ -60,10 +73,11 @@ def test_steps_one_to_three_name_the_step_the_next_task_and_what_it_allows(step:
     assert h["summary_lines"] == [
         f"Step {step} of 4: {STEP_MEANING[step]}.",
         f"Next: {task}. Then you reach Step {step + 1}: {STEP_MEANING[step + 1]}.",
-        "Since last run: 2 actions closed; now in place: CI runs the tests.",
+        "Since last run: 2 actions closed; now in place: CI turns red when a check breaks.",
     ]
     assert h["call_to_action"] == f"**Start here:** [{task[:1].upper()}{task[1:]}]({STEP_GATES_URL})."
-    assert h["summary_markdown"] == "\n\n".join([*h["summary_lines"], h["call_to_action"]])
+    assert h["summary_markdown"] == "\n\n".join([_linked(h["summary_lines"][0]), *h["summary_lines"][1:],
+                                                  h["call_to_action"]])
     for line in h["summary_lines"]:
         _plain_checks(line)
 
@@ -73,7 +87,7 @@ def test_the_top_step_says_every_gate_holds_and_has_no_call_to_action() -> None:
     assert h["summary_lines"][:2] == [f"Step 4 of 4: {STEP_MEANING[4]}.",
                                       "Next: every gate holds; keep them in place to stay at Step 4."]
     assert h["call_to_action"] == ""
-    assert h["summary_markdown"] == "\n\n".join(h["summary_lines"])
+    assert h["summary_markdown"] == "\n\n".join([_linked(h["summary_lines"][0]), *h["summary_lines"][1:]])
     for line in h["summary_lines"]:
         _plain_checks(line)
 
@@ -99,7 +113,7 @@ def test_since_last_run_words_each_part_and_says_which_part_is_not_known() -> No
     assert since_line({**KNOWN, "closed_count": 1, "gates_gained": [], "gates_lost": ["coverage_gate"]}) == \
         f"Since last run: 1 action closed; no longer in place: {GATE_CHANGE['coverage_gate']}."
     assert since_line({**KNOWN, "closed_count": None}) == \
-        "Since last run: now in place: CI runs the tests; closed actions not known."
+        "Since last run: now in place: CI turns red when a check breaks; closed actions not known."
     assert since_line({**KNOWN, "gates_gained": None, "gates_lost": None}) == \
         "Since last run: 2 actions closed; gate changes not known."
 
@@ -107,7 +121,7 @@ def test_since_last_run_words_each_part_and_says_which_part_is_not_known() -> No
 def test_a_gate_not_measured_or_excluded_carries_the_headline_note() -> None:
     level = _at(2, state="not_measured", reason="needs_full_run")
     lines = summary_lines(level, KNOWN, default_model())  # type: ignore[arg-type]
-    assert lines[1].startswith("Next: make CI run the tests (not measured here: needs a full run). Then")
+    assert lines[1].startswith("Next: make CI turn red when a check breaks (not measured here: needs a full run). Then")
     assert call_to_action(level).endswith("(not measured here: needs a full run).")  # type: ignore[arg-type]
     excluded = _at(2, disposition="excluded_by_owner", exclusion_kind="not_applicable")
     assert "(excluded by owner: not applicable;" in summary_lines(excluded, KNOWN, default_model())[1]  # type: ignore[arg-type]
@@ -118,8 +132,8 @@ def test_two_blocking_gates_are_both_tasks_and_the_call_to_action_names_the_firs
         {"kind": "gate", "gate": "ci_runs_tests", "condition": "x.1", "state": "unmet"},
         {"kind": "gate", "gate": "own_gate", "condition": "y.1", "state": "unmet"}]})
     lines = summary_lines(level, KNOWN, default_model())  # type: ignore[arg-type]
-    assert lines[1].startswith("Next: make CI run the tests and make the own_gate gate hold. Then you reach Step 4")
-    assert "[Make CI run the tests]" in call_to_action(level)  # type: ignore[arg-type]
+    assert lines[1].startswith("Next: make CI turn red when a check breaks and make the own_gate gate hold. Then you reach Step 4")
+    assert "[Make CI turn red when a check breaks]" in call_to_action(level)  # type: ignore[arg-type]
 
 
 def test_an_unavailable_headline_or_a_model_without_steps_keeps_the_fields_empty() -> None:

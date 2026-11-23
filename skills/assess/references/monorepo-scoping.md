@@ -115,7 +115,7 @@ only in other units is theirs: a unit without its own reads none.
 the unit's own readings in place. Inherited conditions count toward the unit's tally and
 Step gates; `inherited` lists the met ones, which the report labels "inherited from root".
 `unit_rollup` rolls the units up for the repository: the lowest unit's Step plus "N of M
-measured units" at the next Step, never a mean and never a unit named. An unmeasured unit
+measured units" at the next Step, never a mean, and its counts name no unit. An unmeasured unit
 counts toward the units, never as Step 1. `unlocks` ranks the Step gates that hold units
 back by the units one change moves to their next Step. A change at the root to a
 condition every held unit inherits counts once and ranks first on a tie; a unit-local
@@ -127,6 +127,19 @@ Units: Step 1 (lowest unit) · 0 of 3 measured units at Step 2
 
 Next unlock across units: an instruction file an agent reads is committed, once at the root, moves 3 units to their next Step
 ```
+
+`learn_from` (#1155) names, for each unit held back by a gate it can change (unmet, not
+excluded by the owner), up to three sibling units that already hold that gate, the same
+ecosystem and kind first, then by folder. A sibling holds a gate only when every
+condition the gate covers is met: not measured never counts as held. Each such unit gets
+a line after the roll-up lines:
+
+```text
+packages/web: CI runs the tests. Learn from: packages/api
+```
+
+The lines are dropped in counts-only output. The structured entry keeps the gate and the
+number of holders; the unit folders are written only hashed, under `--hash-paths`.
 
 ## Skills and plugin components as units
 

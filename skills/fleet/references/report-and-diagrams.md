@@ -20,7 +20,11 @@ each shared template's lift, and **Recent progress**: the units that reached a n
 since the previous comparable run, read from this run's `level_up` achievements. Recent
 progress is display only: it comes from the run history and never feeds a level or
 `fleet-data.json`. On the first kept run it says the run is the starting line; under
-`--no-history` or `--full` it says the run is not kept in the history. Without `--levels`
+`--no-history` or `--full` it says the run is not kept in the history. **Learn from**
+(#1155) closes the section: per repository, and per monorepo unit, whose next gate another
+one already holds, the change and up to three that hold it (`learn_from` in
+`fleet-data.json`), at most 20 lines. Plain counts-only output names no one there, so the
+block says it is not shown; under `--hash-paths` the names are hashed ids. Without `--levels`
 the section is left out. Logic: `lib/fleet/fleet_opportunities_section.py`.
 Every `## ` section opens with a line that starts `In place:` and says what this run already
 has (what is measured, reached or earned) before the section's question and any next step;

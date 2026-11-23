@@ -44,6 +44,11 @@ direction           cause                              signal shown
 ``not_measured``    Not measured under the new rules   the re-scored cell's
 ==================  =================================  ==============================
 
+A row new to the model has no stored cell to compare, so it gets no Recount line; its
+re-scored unknowns still count as rule-caused (``rule_unknowns``). ``from_version`` is the
+entry's stamped maturity-model version, or None when it stamped none (a run without
+``--levels``); a line then has no "(was ...)" clause.
+
 Recount lines are display-only: they never feed the replay, so they never move a streak,
 a level reached or a best share. On the next run the newest earlier entry is at the current
 version, so no Recount appears; no state is stored.
@@ -63,6 +68,8 @@ function. `SIGNAL_ALIASES` (old path to new, pure renames only: #783's
 (`aliased`). `recount` lists every (repository, team row) whose
 stored and re-scored cells differ, each attributed to the rules (`direction` `down`, `up`,
 `now_measured`, `not_measured`) with a one-template `text`; display-only, never replayed.
+A row new to the model has no stored cell, so no line; `from_version` is None when the entry
+stamped no version (#860).
 `rule_unknowns` names the cells the re-score made unknown (stored known, a new row, or now unknown on another signal), which the replay keeps neutral
 (`fleet_achievements.unknown_move`). Tests: `tests/test_fleet_rescore.py`.
 """
@@ -120,7 +127,7 @@ class RecountLine(TypedDict):
 
 
 class Recount(TypedDict):
-    from_version: str  # the earlier entry's maturity-model version
+    from_version: str | None  # the earlier entry's maturity-model version; None when it stamped none
     to_version: str  # this run's
     run: str  # the earlier entry re-scored
     lines: list[RecountLine]
@@ -202,11 +209,13 @@ def _shown(level: int | None) -> str:
     return "unknown" if level is None else str(level)
 
 
-def recount(stored: FleetData, rescored: FleetData, model: MaturityModel, run: str, from_version: str) -> Recount:
+def recount(stored: FleetData, rescored: FleetData, model: MaturityModel, run: str,
+            from_version: str | None) -> Recount:
     """Every (repository, team row) whose cell the rule change alone moved, as display-only lines."""
     titles = {row["id"]: row["title"] for row in model["rows"]}
     order = {row["id"]: i for i, row in enumerate(model["rows"])}
     before = {repo["key"]: {c["row"]: c for c in repo["rows"]} for repo in stored["repos"]}
+    was = "" if from_version is None else f" (was {from_version})"
     lines: list[RecountLine] = []
     for repo in sorted(rescored["repos"], key=lambda r: r["key"]):
         for after in sorted(repo["rows"], key=lambda c: order.get(c["row"], len(order))):
@@ -218,8 +227,8 @@ def recount(stored: FleetData, rescored: FleetData, model: MaturityModel, run: s
             cause = CAUSES[direction]
             said = f"{cause}: {code(signal)}." if signal else f"{cause}."
             line = (f"{code(repo['key'])} {text(titles.get(after['row'], after['row']))}: level "
-                    f"{_shown(_level(old))} -> {_shown(_level(after))} under maturity model {model['version']} "
-                    f"(was {from_version}). {said} The repository did not change.")
+                    f"{_shown(_level(old))} -> {_shown(_level(after))} under maturity model {model['version']}"
+                    f"{was}. {said} The repository did not change.")
             lines.append({"repo": repo["key"], "row": after["row"], "from_status": old["status"],
                           "from_level": old["level"], "to_status": after["status"], "to_level": after["level"],
                           "direction": direction, "attributed_to": RULES, "cause": cause, "signal": signal,

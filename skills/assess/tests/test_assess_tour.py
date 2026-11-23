@@ -1,6 +1,6 @@
 """The /assess guided tour (#1102): the sample repository, its one fix and its report.
 
-The sample (``tests/fixtures/tour_sample/``) must land on Step 2 with one gate blocking
+The sample (``tour/sample.toml``) must land on Step 2 with one gate blocking
 Step 3, ``ci_runs_tests``; the tour's fix must move it to Step 3 and no further; and the same
 build must give the same report byte for byte, so the cold-reader test in CI reads one text.
 """
@@ -34,7 +34,7 @@ def test_sample_lands_on_step_2_with_one_gate_next(walked: dict[str, object]) ->
     assert (before["step"], before["next_step"], before["next_gates"]) == (2, 3, ["ci_runs_tests"])
     report = walked["before_report"]
     assert isinstance(report, str)
-    assert "Step 2 of 4:" in report
+    assert "#step) 2 of 4:" in report  # "Step" links the glossary (#1102)
     # The gate's task wording belongs to lib/exec_summary.py (#1142 rewords it); pin only the line.
     assert "\nNext: " in report
     assert "First run." in report
@@ -47,7 +47,7 @@ def test_the_fix_moves_the_step_by_exactly_one(walked: dict[str, object]) -> Non
     assert (after["step"], after["next_step"], after["next_gates"]) == (3, 4, ["coverage_gate"])
     report = walked["after_report"]
     assert isinstance(report, str)
-    assert "Step 3 of 4:" in report
+    assert "#step) 3 of 4:" in report
     # The re-run credits the gate the fix closed.
     assert "- Gates gained: CI runs tests" in report
 
@@ -105,14 +105,14 @@ def test_report_writes_the_sample_report_to_a_known_path(tmp_path: Path) -> None
     fixed = tmp_path / "fixed.md"
     result = assess_tour.report(fixed, fixed=True)
     assert result["step"] == 3
-    assert "Step 3 of 4:" in fixed.read_text(encoding="utf-8")
+    assert "#step) 3 of 4:" in fixed.read_text(encoding="utf-8")
 
 
 def test_a_missing_sample_is_reported(monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
                                       capsys: pytest.CaptureFixture[str]) -> None:
     monkeypatch.setattr(assess_tour, "SAMPLE_DIR", tmp_path / "absent")
     assert assess_tour.main(["report", "--out", str(tmp_path / "r.md")]) == 2
-    assert "not installed" in capsys.readouterr().err
+    assert "sample is missing" in capsys.readouterr().err
 
 
 def test_a_repository_that_is_not_a_sample_is_refused(tmp_path: Path) -> None:
