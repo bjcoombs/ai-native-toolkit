@@ -34,7 +34,8 @@ def test_sample_lands_on_step_2_with_one_gate_next(walked: dict[str, object]) ->
     report = walked["before_report"]
     assert isinstance(report, str)
     assert "Step 2 of 4:" in report
-    assert "Next: make CI run the tests." in report
+    # The gate's task wording belongs to lib/exec_summary.py (#1142 rewords it); pin only the line.
+    assert "\nNext: " in report
     assert "First run." in report
 
 
