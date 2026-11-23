@@ -38,7 +38,8 @@ change, nor one that compares the index or commits (`_working_tree`: `--cached`,
 it reads null, never false). `job_ids(lines)`
 numbers the jobs: each top-level key (a GitLab job) and each key at the first indent
 under a top-level `jobs:` (GitHub). `line_commands(line)` is the per-line command reader
-`ci_checks` shares. `line_compiler_gate` and `line_dotnet_build` are per-line tests over
+`ci_checks` and `ci_lines` share; it reads each segment past its compound-command lead
+(`lib.ci_compound`, #1061). `line_compiler_gate` and `line_dotnet_build` are per-line tests over
 `lint_vocabulary.compiler_gate` and `dotnet_build`. `dotnet_props(root, tracked)` reads
 the committed `Directory.Build.props` files, then the `*.csproj` files, by path through
 `command_index.read_config`, and returns two booleans: `TreatWarningsAsErrors` true, and
@@ -57,6 +58,7 @@ from pathlib import Path, PurePosixPath
 from typing import Literal
 
 from lib.check_command import is_format_rewrite
+from lib.ci_compound import compound_core
 from lib.ci_masking import unmasked_lines
 from lib.command_index import ci_line_text, read_config
 from lib.command_resolver import Command, command_words, extract_commands
@@ -66,8 +68,9 @@ GateBasis = Literal["analysers_in_build", "compiler_gate_only"]
 
 
 def line_commands(line: str) -> list[Command]:
-    """The commands of one CI line, read on its own (a trailing ``\\`` dropped)."""
-    text = ci_line_text(line).removesuffix("\\").strip()
+    """The commands of one CI line, read on its own (a trailing ``\\`` dropped), each from the
+    command a compound-command lead runs (``if ! pytest``, ``{ pytest``, ``(pytest)``; #1061)."""
+    text = compound_core(ci_line_text(line).removesuffix("\\").strip())
     return extract_commands(f"```bash\n{text}\n```\n") if text else []
 
 
@@ -196,7 +199,7 @@ def rewrite_gated(text: str) -> frozenset[int]:
         and not any(i <= k <= j and jobs[k] == jobs[i] for k in staged) for j in diffs))
 
 
-# A YAML list item with no key (``- msbuild``), as ``ci_checks._BARE_ITEM`` reads it.
+# A YAML list item with no key (``- msbuild``), as ``ci_lines._BARE_ITEM`` reads it.
 _BARE_ITEM = re.compile(r"^\s*-\s+(?![\w.-]+:(?:\s|$))")
 
 

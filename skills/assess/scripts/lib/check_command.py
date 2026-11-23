@@ -119,7 +119,7 @@ def _check_target(words: list[str], names: frozenset[str] | None = None,
             module = words[words.index("-m") + 1:words.index("-m") + 2]
             return bool(module) and module[0] in programs
         return bool(pos) and is_check_name(PurePosixPath(pos[0]).name, names)
-    if head in ("bash", "sh", "zsh", "source"):   # bash -e x.sh: the shell's own flags (#955)
+    if head in ("bash", "sh", "dash", "zsh", "source"):   # bash -e x.sh: the shell's own flags (#955)
         args = shell_args(words)
         return args is not None and bool(args) and is_check_name(PurePosixPath(args[0]).name, names)
     if head.startswith("./") and head not in RUNNERS:
@@ -443,7 +443,7 @@ _DOCKER_RUN_FLAGS = frozenset({
     "--security-opt", "--tmpfs", "--volumes-from", "--cidfile", "--log-driver", "--log-opt",
 })
 # A program named alone as a bare YAML list item (``- rspec``, ``- make`` under ``needs:``)
-# is a value unless its parent key is a script key (``lib.ci_checks._lone_check``).
+# is a value unless its parent key is a script key (``lib.ci_lines._lone_check``).
 BARE_RUN_PROGRAMS = ALWAYS_CHECK | TEST_PROGRAMS | TARGET_RUNNERS
 _TARGET_FLAGS = frozenset({
     "-C", "-f", "--file", "--makefile", "--directory", "--dir", "-d", "--taskfile",
@@ -637,7 +637,7 @@ def _script_verdict(words: list[str]) -> bool | None:
     """A committed script whose body is not read (``./scripts/foo.sh``, ``bash ci/x.sh``)."""
     head = words[0]
     path = head
-    if head in ("bash", "sh", "zsh", "source"):   # a sourced script is unread too (#1033)
+    if head in ("bash", "sh", "dash", "zsh", "source"):   # a sourced script is unread too (#1033)
         pos = shell_args(words)
         if not pos:
             return False   # bash -c '...' is read by _outer_wrapper; no script at all

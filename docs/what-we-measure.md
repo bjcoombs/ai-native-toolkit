@@ -310,12 +310,12 @@ Why the signals named here matter:
 
 One score for a monorepo describes none of its services. Naming each unit lets every one be scored on its own, so one service's gaps are not hidden behind another's practices.
 
-The repository's units: the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped.
+The repository's units: each skill folder (a SKILL.md) and a plugin's agents/ and commands/, then the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped.
 
 - Collector: `core.units`, reading `repo_root`, `excludes`.
 - Network: no.
 - Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `units.aggregators.ecosystem` token, `units.aggregators.path` drop, `units.skipped.path` drop, `units.skipped.problem` token, `units.source` token, `units.unit_count_reason` token, `units.units.ecosystem` token, `units.units.name` drop, `units.units.origin` token, `units.units.path` hashed_path, `units.units.workspace` drop, `units.unreadable_manifests` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `units.aggregators.ecosystem` token, `units.aggregators.path` drop, `units.skipped.path` drop, `units.skipped.problem` token, `units.source` token, `units.unit_count_reason` token, `units.units.ecosystem` token, `units.units.kind` token, `units.units.name` drop, `units.units.origin` token, `units.units.path` hashed_path, `units.units.workspace` drop, `units.unreadable_manifests` drop.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.

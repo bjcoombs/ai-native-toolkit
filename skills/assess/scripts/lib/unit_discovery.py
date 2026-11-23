@@ -64,7 +64,21 @@ manifest's path) and its folder is still a candidate, as if the broken file
 declared no workspace. The count stays known. A workspace member shallower than its
 workspace (``deep/ws`` listing ``../../lib``) is visited first as a plain candidate;
 when the workspace later lists it, its leaf skip moves to ``unreadable_manifests``.
-A repository with no build manifest has no units (``unit_count`` 0).
+A repository with no build manifest and no skill or plugin component has no units
+(``unit_count`` 0).
+
+**Skill and plugin-component units (#1098).** Before the manifest walk,
+``lib.unit_components`` finds each folder holding a ``SKILL.md`` (kind ``skill``) and each
+plugin root's ``agents/`` and ``commands/`` (kinds ``agents``, ``commands``), shallowest
+first. They are units of origin ``component``, claimed before any manifest: a manifest
+inside one is part of it (a skill with a ``pyproject.toml`` is one ``skill`` unit with the
+manifest's ecosystem) and is listed in ``skipped`` as ``claimed`` (unless it is test data), and a
+manifest folder above them is a unit of the source files no
+component or nested manifest owns. A root ``SKILL.md`` claims nothing (maintainer decision on
+#1098): the packages and skills below it stay units, and ``.`` is a ``skill`` unit of the
+files none of them owns (the root package unit re-kinded when there is one), so a monorepo
+that adds a usage skill keeps its per-package readings. A repository that is only a skill is
+one unit. Every other unit is of kind ``package``.
 
 **Declared units.** ``[[units]]`` in ``.assess/config.toml`` replaces discovery::
 
@@ -74,11 +88,12 @@ A repository with no build manifest has no units (``unit_count`` 0).
 
 An entry is skipped, with a ``PROBLEMS`` code and a warning on stderr, when it
 is not a table, has no usable path, names a folder with no tracked file, or
-repeats a path. Declared units are used when at least one entry is valid;
+repeats a path. A declared folder holding a ``SKILL.md`` is of kind ``skill``, any other
+``package``. Declared units are used when at least one entry is valid;
 otherwise discovery runs and the skipped entries are still listed.
 
 Counts-only output drops every path and name (``checks/core/units.toml``): it
-keeps the counts, the origin and ecosystem tokens and the skip codes. A unit's folder
+keeps the counts, the kind, origin and ecosystem tokens and the skip codes. A unit's folder
 alone survives as its salted hash under ``--hash-paths`` (class ``hashed_path``, #866),
 the join key of a fleet unit row. Pure apart
 from reading the file list and the manifests.
@@ -98,9 +113,11 @@ from typing import Any, Literal, NamedTuple, TypedDict
 from lib.assess_config import _clean_rel, is_user_excluded, load_config
 from lib.command_index import repo_files
 from lib.docs.doc_graph import CODE_EXTENSIONS, EXCLUDE_DIRS
+from lib.path_classes import is_production
+from lib.unit_components import SKILL_FILE, Kind, discover_components
 
 Ecosystem = Literal["cargo", "pnpm", "npm", "go", "uv", "gradle", "maven", "python"]
-Origin = Literal["manifest", "workspace_member", "config"]
+Origin = Literal["manifest", "workspace_member", "config", "component"]
 
 # Build manifests that make a folder a unit candidate, with the ecosystem a plain
 # (non-workspace) unit is labelled by: the first present in this order.
@@ -133,9 +150,10 @@ _GLOB_CHARS = frozenset("*?[")
 
 
 class UnitEntry(TypedDict):
-    """One unit: its folder, how it was found, and its workspace when it is a member."""
+    """One unit: its folder, kind, how it was found, and its workspace when it is a member."""
 
     path: str
+    kind: Kind  # package (a build manifest), skill, agents or commands (lib.unit_components)
     origin: Origin
     ecosystem: Ecosystem | None  # None for a declared unit
     workspace: str | None  # the aggregator folder of a workspace member
@@ -465,8 +483,10 @@ class _Discovery(NamedTuple):
 class _Walk:
     """The discovery state over one file list; ``discover_units`` drives it."""
 
-    def __init__(self, repo_root: Path, files: list[str]) -> None:
+    def __init__(self, repo_root: Path, files: list[str], components: Iterable[str] = ()) -> None:
         self.root = repo_root
+        component_dirs = frozenset(components)
+        self.components = component_dirs  # units already: a workspace listing one adds nothing
         self.dirs = frozenset(p for rel in files for p in _parents(rel))
         by_dir: dict[str, set[str]] = {}
         for rel in files:
@@ -478,15 +498,18 @@ class _Walk:
                    and posixpath.basename(rel) not in MANIFEST_NAMES]
         self.source_dirs = frozenset(p for rel in sources for p in _parents(rel))
         # the manifest folder nearest each source file: a folder claiming nothing owns these
-        self.owning = frozenset(next(p for p in _parents(rel) if p in self.manifest_dirs or p == ".")
+        # (a component folder owns its files, so a manifest folder above it is no unit of them)
+        self.owning = frozenset(next(p for p in _parents(rel)
+                                     if p in self.manifest_dirs or p in component_dirs or p == ".")
                                 for rel in sources)
         self.found = _Discovery([], [], [], [])
-        self.claimed: list[str] = []  # unit folders: nothing below one is a new candidate
+        # unit folders: nothing below one is a new candidate (component units are claimed first)
+        self.claimed: list[str] = list(component_dirs)
         self.visited: set[str] = set()  # handled candidates (a nested aggregator claims nothing)
         self.leaves: dict[str, list[str]] = {}  # folder -> its manifests skipped as unparseable_leaf
 
     def _unit(self, path: str, origin: Origin, eco: Ecosystem | None, workspace: str | None) -> None:
-        self.found.units.append({"path": path, "origin": origin, "ecosystem": eco,
+        self.found.units.append({"path": path, "kind": "package", "origin": origin, "ecosystem": eco,
                                  "workspace": workspace, "name": None})
 
     def _skip(self, path: str, problem: str) -> None:
@@ -567,6 +590,10 @@ class _Walk:
                            "manifest_only")
         for ws, members, _, _ in expanded:
             for member in members:
+                # a member that is a component, or sits in one, is that component's: its unit,
+                # or a claim discover_units already lists
+                if any(_is_under(member, c) for c in self.components):
+                    continue
                 if member in self.leaves:
                     # a member shallower than its workspace was read as a leaf first
                     self.unleaf(member)
@@ -577,21 +604,56 @@ class _Walk:
                     self.visit(member, "workspace_member", folder, ws.ecosystem)
 
 
+def _root_skill(found: _Discovery, names: frozenset[str] | None) -> None:
+    """Make ``.`` the root skill's unit: the root package unit re-kinded, or a new unit of the
+    files no package or nested skill owns (a skipped root reads as that unit, not a skip)."""
+    root = next((u for u in found.units if u["path"] == "."), None)
+    if root is not None:
+        root["kind"] = "skill"
+        return
+    found.skipped[:] = [s for s in found.skipped if s["path"] != "."]
+    found.units.append({"path": ".", "kind": "skill", "origin": "component",
+                        "ecosystem": _ecosystem(names) if names else None,
+                        "workspace": None, "name": None})
+
+
 def discover_units(repo_root: Path, files: Iterable[str]) -> _Discovery:
     """The units of ``files`` (repo-relative POSIX paths) by the rules in the module docstring."""
-    walk = _Walk(repo_root, list(files))
+    files = list(files)
+    components = discover_components(files, frozenset(p for rel in files for p in _parents(rel)))
+    # a root skill claims nothing: it is the unit of the residue no package or skill owns
+    claiming = [c for c in components.units if c.path != "."]
+    walk = _Walk(repo_root, files, (c.path for c in claiming))
+    for comp in claiming:
+        names = walk.manifest_dirs.get(comp.path)
+        walk.found.units.append({"path": comp.path, "kind": comp.kind, "origin": "component",
+                                 "ecosystem": _ecosystem(names) if names else None,
+                                 "workspace": None, "name": None})
+    walk.found.skipped.extend({"path": path, "problem": "claimed"} for path in components.claimed)
+    # a build-manifest folder inside a component is part of it, listed so the claim is visible
+    # (a package inside a skill); test data below it is not listed
+    walk.found.skipped.extend(
+        {"path": folder, "problem": "claimed"} for folder in sorted(walk.manifest_dirs)
+        if folder not in components.claimed
+        and any(c.path != folder and _is_under(folder, c.path) for c in claiming)
+        and is_production(posixpath.join(folder, sorted(walk.manifest_dirs[folder])[0])))
     depth = {d: (0 if d == "." else d.count("/") + 1) for d in walk.manifest_dirs}
     for folder in sorted(walk.manifest_dirs, key=lambda d: (depth[d], d)):
         if folder not in walk.visited and not any(_is_under(folder, c) for c in walk.claimed):
             walk.visit(folder, "manifest", None)
     found = walk.found
+    if len(claiming) < len(components.units):
+        _root_skill(found, walk.manifest_dirs.get("."))
     found.units.sort(key=lambda u: u["path"])
     found.unreadable.sort()
     return found
 
 
-def declared_units(config: Mapping[str, Any], dirs: frozenset[str]) -> tuple[list[UnitEntry], list[SkippedUnit]]:
-    """``[[units]]`` entries of a parsed ``.assess/config.toml``, and those skipped with why."""
+def declared_units(config: Mapping[str, Any], dirs: frozenset[str],
+                   skill_dirs: frozenset[str] = frozenset()) -> tuple[list[UnitEntry], list[SkippedUnit]]:
+    """``[[units]]`` entries of a parsed ``.assess/config.toml``, and those skipped with why.
+
+    A declared folder holding a ``SKILL.md`` (``skill_dirs``) is of kind ``skill``, else ``package``."""
     if SECTION not in config:
         return [], []
     raw = config[SECTION]
@@ -614,7 +676,8 @@ def declared_units(config: Mapping[str, Any], dirs: frozenset[str]) -> tuple[lis
         else:
             seen.add(path)
             name = entry.get("name")
-            units.append({"path": path, "origin": "config", "ecosystem": None, "workspace": None,
+            units.append({"path": path, "kind": "skill" if path in skill_dirs else "package",
+                          "origin": "config", "ecosystem": None, "workspace": None,
                           "name": name.strip() if isinstance(name, str) and name.strip() else None})
     return units, skipped
 
@@ -623,7 +686,9 @@ def scan_units(repo_root: Path, excludes: tuple[set[str], list[str]] | None = No
     """The run context's ``units`` block: declared ``[[units]]`` when any is valid, else discovered."""
     files = _kept_files(repo_root, excludes)
     dirs = frozenset(p for rel in files for p in _parents(rel))
-    declared, declared_skips = declared_units(load_config(repo_root), dirs)
+    skill_dirs = frozenset(posixpath.dirname(rel) or "." for rel in files
+                           if posixpath.basename(rel) == SKILL_FILE)
+    declared, declared_skips = declared_units(load_config(repo_root), dirs, skill_dirs)
     for skip in declared_skips:
         print(f"warning: .assess/config.toml [[units]] entry skipped ({skip['problem']}): "
               f"{skip['path'] or '(no path)'}", file=sys.stderr)
