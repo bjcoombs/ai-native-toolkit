@@ -66,6 +66,7 @@ from lib.level_tally import LEVEL_READS, run_context_level
 from lib.liveness_scan import scan_liveness
 from lib.owner_exclusions import owner_exclusions_block
 from lib.unit_discovery import UnitsBlock, scan_units
+from lib.unit_levels import UnitLevelsBlock, unit_levels as unit_levels_block
 from lib.unit_readings import UnitReadingsBlock, read_units, split_reads
 from lib.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.promissory_markers import scan_promissory_markers
@@ -350,6 +351,12 @@ def unit_readings(units_block: Any, nested: Any, *repo_wide: Any) -> UnitReading
     Core-only, like ``units``."""
     blocks, external = split_reads(repo_wide)
     return read_units(units_block, nested, *external, repo_blocks=blocks)
+
+
+def unit_levels(readings: Any, *blocks: Any) -> UnitLevelsBlock:
+    """Each unit's Step, tally and not-measured count, inherited conditions labelled (#864):
+    the ``unit_readings`` block, then ``level_tally.LEVEL_READS`` in order. Core-only."""
+    return unit_levels_block(readings, *blocks)
 
 
 def offers_blocks(non_interactive: bool) -> dict[str, Any]:

@@ -93,5 +93,12 @@ A whole-repo run also reads each monorepo unit (the `units` block). `run-context
 from each unit (suppressions, doc staleness, import structure, file size, and the unit's
 own coverage gate or instruction file), and tags every maturity-model condition
 `unit` or `inherited`. A condition the unit does not read on its own, such as root CI or
-review, is inherited from the root. The per-unit Step and the roll-up come later (#864,
-#865); until then, report the units only as the run context lists them.
+review, is inherited from the root. A coverage gate or nested instruction file that sits
+only in other units is theirs: a unit without its own reads none.
+
+`unit_levels` holds each unit's Step, its next Step and what blocks it, and its tally
+(practices met, measured, not measured and verified), from the same maturity model with
+the unit's own readings in place. Inherited conditions count toward the unit's tally and
+Step gates; `inherited` lists the met ones, which the report labels "inherited from root".
+The roll-up across units comes later (#865); until then, report each unit's Step as the
+run context lists it.
