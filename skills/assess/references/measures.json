@@ -315,7 +315,7 @@
               "text": "Cross-package imports: is above 0",
               "title": "Packages import one another",
               "fix": "Nothing to change on its own: this is met once one package imports another.",
-              "why": "A guard for the next condition: with no import between packages, the front-door share reads 1.0 by default and says nothing about how packages are entered.",
+              "why": "A guard for the next condition: with no import between packages, the front-door share reads null by default and says nothing about how packages are entered.",
               "why_source": "",
               "input_class": "head_structure",
               "grade": "measured",
@@ -5155,7 +5155,8 @@
         "level",
         "assess_dir",
         "repo_root",
-        "superseded"
+        "superseded",
+        "instruction_placement"
       ],
       "network": false,
       "private": false

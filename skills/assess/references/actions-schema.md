@@ -95,7 +95,7 @@ Where several prior entries share a directive, the one sharing a file wins outri
 | `characterize_first` | Understand/contract the code before changing it - the risk is acting blind on an unpinned seam or complexity. | `hidden_coupling`, `unexplained_complexity`, `untrusted_hotspot`, `orphaned_understanding`, `override_contradicts_signals` |
 | `verify_then_retire` | A self-description that may be lying - verify whether it is still true, then delete / ticket / escalate. Never trust it as-is. | `lying_map`, `self_referential_tests`, `unactioned_intent`, `candidate_dead_weight` |
 | `refactor_safe` | A bounded island safe to restructure in isolation. | `refactor_boundary`, `accretion_ratchet` |
-| `remove` | Take a practice away because it costs more than it pays, keeping every gate in place (#1084). Advice and credit only: the number of practices is never scored. | `instruction_always_on` (a removal proposal from `gap_actions`, not a keyhole finding) |
+| `remove` | Take a practice away because it costs more than it pays, keeping every gate in place (#1084). Advice and credit only: the number of practices is never scored. Once done, the pruning ledger credits it in "since last run" ("Pruned: ..., saved N always-on lines", the measured drop) after two runs on new commits with the file unflagged and no gate lost. | `instruction_always_on` (a removal proposal from `gap_actions`, not a keyhole finding) |
 
 An action whose `finding` is absent or unrecognised defaults to `characterize_first` - the conservative "understand before you touch it" posture.
 

@@ -1,6 +1,6 @@
 """The /assess guided tour (#1102): the sample repository, its one fix and its report.
 
-The sample (``tests/fixtures/tour_sample/``) must land on Step 2 with one gate blocking
+The sample (``tour/sample.toml``) must land on Step 2 with one gate blocking
 Step 3, ``ci_runs_tests``; the tour's fix must move it to Step 3 and no further; and the same
 build must give the same report byte for byte, so the cold-reader test in CI reads one text.
 """
@@ -112,7 +112,7 @@ def test_a_missing_sample_is_reported(monkeypatch: pytest.MonkeyPatch, tmp_path:
                                       capsys: pytest.CaptureFixture[str]) -> None:
     monkeypatch.setattr(assess_tour, "SAMPLE_DIR", tmp_path / "absent")
     assert assess_tour.main(["report", "--out", str(tmp_path / "r.md")]) == 2
-    assert "not installed" in capsys.readouterr().err
+    assert "sample is missing" in capsys.readouterr().err
 
 
 def test_a_repository_that_is_not_a_sample_is_refused(tmp_path: Path) -> None:

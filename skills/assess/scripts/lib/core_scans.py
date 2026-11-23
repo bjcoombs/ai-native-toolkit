@@ -415,11 +415,12 @@ def headline(level_block: Any, since_block: Any, choice: ModelChoice | None) -> 
     return run_headline(level_block, since_block, choice)
 
 
-def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path, superseded: Any) -> SinceLastRun:
+def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path, superseded: Any,
+                   instruction_placement: Any) -> SinceLastRun:
     """The run context's ``since_last_run`` block (#1083): actions closed, gates gained or
     lost and the next blocker, against the run-context the previous run left (or, for a run
     that supersedes a same-day run on the same commit, against that run's own baseline)."""
-    block = since_last_run_block(level_block, assess_dir, repo_root, superseded)
+    block = since_last_run_block(level_block, assess_dir, repo_root, superseded, instruction_placement)
     # A gate is never compared across maturity models (#1150): a profile run after a default one
     # says the model changed instead.
     return across_models(block, level_block, previous_levels_version(assess_dir, superseded))

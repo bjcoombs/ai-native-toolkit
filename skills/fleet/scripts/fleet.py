@@ -194,6 +194,7 @@ from lib.fleet.condition_effect import (  # noqa: E402
     history_runs as effect_history,
     write_condition_effect,
 )
+from lib.fleet.condition_demotion import DEMOTIONS_FILE, decide, with_demotions, write_demotions  # noqa: E402
 from lib.measured_appendix import measured_section  # noqa: E402
 from lib.fleet.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data  # noqa: E402
 from lib.fleet.fleet_targets import TargetSpec, TargetsError, check_units, load_targets, resolve  # noqa: E402
@@ -528,22 +529,34 @@ def _keep_and_compare(out_dir: Path, entry: Path | None, later: FleetRun,
 
 
 def _condition_effect(out_dir: Path, maturity_model: MaturityModel | None, stamp: FleetStamp,
-                      rows: list[FleetRow], org_dir: Path | None, entry: Path | None) -> None:
-    """``OUT/condition_effect.json`` (lib/fleet/condition_effect.py, #1086): each condition's
-    outcome effect over the comparable history and this run. Only with ``--levels``; a stale
-    copy is removed without it. Never raises: the estimate never fails a completed run."""
-    path = out_dir / CONDITION_EFFECT_FILE
+                      rows: list[FleetRow], org_dir: Path | None, entry: Path | None) -> list[str]:
+    """``OUT/condition_effect.json`` (lib/fleet/condition_effect.py) and the exit rule's
+    ``OUT/demotions.json`` (lib/fleet/condition_demotion.py), #1086: each condition's outcome
+    effect over the comparable history and this run, and the conditions it demotes, which the
+    returned ids apply to this run's level results. Only with ``--levels``; stale copies are
+    removed without it. Never raises: on a failure nothing is demoted and the run completes."""
+    paths = (out_dir / CONDITION_EFFECT_FILE, out_dir / DEMOTIONS_FILE)
     try:
-        if maturity_model is None:
+        for path in paths:
             path.unlink(missing_ok=True)
-            return
+        if maturity_model is None:
+            return []
         repos = frozenset(row["repo"] for row in rows)
         earlier = [] if org_dir is None or entry is None else effect_history(org_dir, stamp, repos)
-        write_condition_effect(out_dir, build_condition_effect(
-            maturity_model, [*earlier, EffectRun(stamp["scan_date"], rows)]))
+        effects = build_condition_effect(maturity_model, [*earlier, EffectRun(stamp["scan_date"], rows)])
+        write_condition_effect(out_dir, effects)
+        demotions = decide(maturity_model, effects, stamp["scan_date"])
+        write_demotions(out_dir, demotions)
+        if demotions["demoted"]:
+            print(f"fleet: exit rule: {len(demotions['demoted'])} condition(s) demoted to informational: "
+                  f"{', '.join(demotions['demoted'])}", file=sys.stderr)
+        return demotions["demoted"]
     except Exception as e:  # noqa: BLE001 - informational, never fails a completed run
-        path.unlink(missing_ok=True)  # never leave an earlier run's estimate beside this run's results
-        print(f"fleet: {CONDITION_EFFECT_FILE} not written ({type(e).__name__})", file=sys.stderr)
+        for path in paths:  # never leave an earlier run's files beside this run's results
+            path.unlink(missing_ok=True)
+        print(f"fleet: {CONDITION_EFFECT_FILE} and {DEMOTIONS_FILE} not written ({type(e).__name__}); "
+              "no demotions applied", file=sys.stderr)
+        return []
 
 
 def _trend_history(org_dir: Path | None, entry: Path | None, stamp: FleetStamp,
@@ -816,9 +829,11 @@ def main(argv: list[str] | None = None) -> int:
         fleet_config=fleet_config, platform=platform_ran, coverage=coverage,
     )
     write_stamp(out_dir, stamp)
+    demoted = _condition_effect(out_dir, maturity_model, stamp, public, org_dir, entry)
+    if maturity_model is not None and demoted:  # every result below reads the same demotions (#1086)
+        maturity_model = with_demotions(maturity_model, demoted)
     write_fleet_levels(out_dir, public, maturity_model, toolkit_commit=stamp["toolkit_commit"],
                        plugin_version=stamp["plugin_version"])
-    _condition_effect(out_dir, maturity_model, stamp, public, org_dir, entry)
     data = _write_fleet_data(out_dir, stamp, rows, maturity_model, trees, args.full, hash_salt, units, codeowners,
                              {repo: f.web_url for repo, f in facts.items()})
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, public, groups, row_signals(data)), earlier)

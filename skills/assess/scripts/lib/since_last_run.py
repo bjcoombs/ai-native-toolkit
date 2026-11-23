@@ -35,13 +35,20 @@ this run's publish step overwrites any of them:
   ``None`` when the previous run has no level result or one that lacks a gate's
   condition (an older model), so the rest of the block still reads.
 
+The **pruning ledger** (``lib/pruning_ledger.py``, #1084) runs here too: each done removal
+action in the committed ``actions.json`` is tracked in ``pruning``, stored in ``prior-level.json``
+beside the baseline (``pruning_record``), and ``pruned`` lists the removals this run credits
+("Pruned: ..."), counted once per measured commit against the commit that wrote the stored
+ledger, so a superseding run never adds a second hold.
+
 ``next_blocker`` is the first gate blocking this run's next Step (``None`` at the top Step,
 or when this run's level result is unavailable, which the line says rather than claiming
 every gate is held). A shallow clone, or a git that cannot answer an ancestry check, reads
 the closed actions as unknown (``shallow_clone``, ``ancestry_unknown``), never as zero.
 ``lines`` and ``markdown`` word the block (``GATE_NOUN`` names each gate, as the badge
 does); counts-only output keeps the counts, ids and shas and drops the action text and the
-lines. ``since_last_run(level, assess_dir, repo_root, superseded)`` is the ``since_last_run`` scan
+lines. ``since_last_run(level, assess_dir, repo_root, superseded, instruction_placement)`` is the
+``since_last_run`` scan
 (``core_scans.since_last_run``). Shape: ``SinceLastRun`` in
 ``run_context_types_since.py``. Tests: ``tests/test_since_last_run.py``.
 """
@@ -57,7 +64,8 @@ from typing import Any
 from lib.headline import GATE_NOUN
 from lib.level_tally import default_model, gate_blockers
 from lib.levels import StepDef
-from lib.prior_level import Baseline, load_baseline
+from lib.prior_level import Baseline, PruningEntry, load_baseline, load_pruning
+from lib.pruning_ledger import ledger_lines, removal, update_ledger
 from lib.reviewed_findings import action_entries
 from lib.run_context_types_since import ClosedAction, SinceLastRun
 
@@ -238,6 +246,7 @@ def _words(block: SinceLastRun, has_steps: bool, level_known: bool) -> list[str]
                              "so they were not checked")
         lines += [_gates_line("gained", block["gates_gained"], block["closed_reason"]),
                   _gates_line("lost", block["gates_lost"], block["closed_reason"])]
+    lines += ledger_lines(block["pruning"], block["pruned"])
     if block["next_blocker"] is not None:
         lines.append(f"Next blocker: {_noun(block['next_blocker'])}")
     else:
@@ -289,10 +298,45 @@ def _baseline(assess_dir: Path, superseded: Any) -> tuple[bool, str | None, Mapp
     return (False, None, data, None) if isinstance(data, Mapping) else (False, "previous_unreadable", None, None)
 
 
-def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: Any = None) -> SinceLastRun:
+def _done_removals(repo_root: Path) -> list[PruningEntry] | None:
+    """The done removal actions in the committed ``actions.json`` whose commit is on HEAD's
+    history; None (unknown) when ``actions.json`` is not committed or not readable, the clone is
+    shallow, or git cannot answer, so the ledger is left as it was rather than read as emptied."""
+    entries, _ = _committed_actions(repo_root)
+    if entries is None or _shallow(repo_root):
+        return None
+    out: list[PruningEntry] = []
+    for e in entries:
+        found = removal(e)
+        if found is None:
+            continue
+        on_head = _ancestor(repo_root, found["completed_sha"], "HEAD") if is_commit(repo_root, found["completed_sha"]) else 1
+        if on_head not in (0, 1):
+            return None
+        if on_head == 0:
+            out.append(found)
+    return out
+
+
+def pruning_record(ctx: Mapping[str, Any]) -> list[PruningEntry] | None:
+    """The pruning ledger to store in ``prior-level.json`` beside the baseline (#1084): this run's,
+    or, when the scan degraded, the stored one (``ctx["prior_level"]``), so credit is never lost
+    and a removal never credited twice."""
+    block = ctx.get("since_last_run")
+    found = block.get("pruning") if isinstance(block, Mapping) else None
+    if isinstance(found, list):
+        return found
+    prior = ctx.get("prior_level")
+    kept = prior.get("pruning") if isinstance(prior, Mapping) else None
+    return kept if isinstance(kept, list) else None
+
+
+def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: Any = None,
+                   instruction_placement: Any = None) -> SinceLastRun:
     """The ``since_last_run`` block for this run's ``level`` block (see the module docstring)."""
     steps = default_model().get("steps", [])
     first, unknown, prev, inherited = _baseline(assess_dir, superseded)
+    held_before: list[str] | None = None  # the gates held at the previous run, for the ledger
     if inherited is not None:
         previous_commit, run_id = inherited.get("previous_commit"), inherited.get("previous_run_id")
         gained, lost = inherited.get("gates_gained"), inherited.get("gates_lost")
@@ -300,6 +344,7 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
         previous_commit, run_id = prev.get("head_sha"), prev.get("run_id")
         now = _held(steps, level)
         then = [g for g in prev["held_gates"] if isinstance(g, str)]
+        held_before = then
         gained, lost = ((None, None) if now is None
                         else ([g for g in now if g not in then], [g for g in then if g not in now]))
     else:
@@ -307,6 +352,7 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
         previous_commit = commit.get("head_sha") if isinstance(commit, Mapping) else None
         run_id = (prev or {}).get("run_id")
         gained, lost = gate_changes(steps, level, (prev or {}).get("level")) if prev else (None, None)
+        held_before = _held(steps, (prev or {}).get("level"))
     previous_commit = previous_commit if isinstance(previous_commit, str) and previous_commit else None
     closed: list[ClosedAction] | None = None
     unresolved: int | None = None
@@ -328,6 +374,16 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
     else:
         closed, unresolved = found
     current = level if isinstance(level, Mapping) else {}
+    head = _git(repo_root, "rev-parse", "HEAD")
+    head_sha = head.stdout.strip() if head is not None and head.returncode == 0 else None
+    # a hold counts once per measured commit: compare with the commit that wrote the stored
+    # ledger (the committed baseline), not the "since" baseline a superseding run inherits
+    stored = load_baseline(assess_dir)
+    ledger_commit = stored["head_sha"] if stored is not None else previous_commit
+    pruning, pruned = update_ledger(load_pruning(assess_dir), _done_removals(repo_root), instruction_placement,
+                                    held_now=_held(steps, level), held_before=held_before, head_sha=head_sha,
+                                    new_commit=head_sha is not None and head_sha != ledger_commit,
+                                    repo_root=repo_root)
     block: SinceLastRun = {
         "available": True, "first_run": first,
         "previous_run_id": run_id if isinstance(run_id, str) else None,
@@ -335,7 +391,8 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
         "closed_count": None if closed is None else len(closed), "unresolved": unresolved,
         "gates_gained": gained if isinstance(gained, list) else None,
         "gates_lost": lost if isinstance(lost, list) else None,
-        "next_blocker": _next_blocker(current), "lines": [], "markdown": ""}
+        "next_blocker": _next_blocker(current), "pruned": pruned, "pruning": pruning,
+        "lines": [], "markdown": ""}
     known = isinstance(level, Mapping) and isinstance(level.get("conditions"), list)
     block["lines"] = _words(block, bool(steps), known)
     block["markdown"] = _markdown(block["lines"])
