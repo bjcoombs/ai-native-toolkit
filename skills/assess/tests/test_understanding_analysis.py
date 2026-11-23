@@ -19,7 +19,7 @@ import subprocess
 from pathlib import Path
 
 from lib.change_coupling import authorship_analysis
-from lib.understanding_analysis import analyze_understanding
+from lib.keyhole.understanding_analysis import analyze_understanding
 
 
 # --- git fixture helpers (local, for full control of author/committer/date) --

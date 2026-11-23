@@ -22,7 +22,7 @@ import pytest
 
 import assess_core
 from lib import core_scans
-from lib.keyhole_signals import FINDING_ORDER
+from lib.keyhole.keyhole_signals import FINDING_ORDER
 from lib.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.run_scope import resolve_scope
 

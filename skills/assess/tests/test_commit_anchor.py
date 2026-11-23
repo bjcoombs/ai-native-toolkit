@@ -21,7 +21,7 @@ from lib.commit_anchor import head_commit_epoch
 from lib.git_churn import commit_epochs_by_file, git_churn_scores
 from lib.history_window import anchored_since
 from lib.instruction_files import _file_freshness_days
-from lib.understanding_analysis import _days_since_last_human_commit
+from lib.keyhole.understanding_analysis import _days_since_last_human_commit
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 HEAD_AT = datetime(2020, 1, 15, 12, tzinfo=timezone.utc)

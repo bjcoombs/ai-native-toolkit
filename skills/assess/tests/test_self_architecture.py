@@ -14,12 +14,15 @@ module in `lib/` asserts none imports an orchestrator. The forbidden set is
 *derived* from disk - every `.py` directly under `scripts/` (not in `lib/`) - so
 a newly added orchestrator is forbidden automatically, with no edit here.
 
-Pure stdlib (`ast`, `pathlib`); no import side effects, so it is safe and fast.
+Pure stdlib (`ast`, `pathlib`, `subprocess`); no import side effects. The #917 shim
+check also loads each script shim by its old file path in a child interpreter.
 """
 from __future__ import annotations
 
 import ast
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 # tests/ -> assess/ ; the deterministic core and its orchestrators live under scripts/.
@@ -46,6 +49,10 @@ def __getattr__(name: str) -> Any:
 FACADE_PACKAGES = {"test_pressure"}
 SHIM_DOC = re.compile(r"Moved to ``(lib(?:\.\w+)+)``")
 REMOVAL_RELEASE = "4.0.0"
+# A shim whose target runs as a script puts ``scripts/`` on ``sys.path`` before it
+# imports ``lib``, so ``python scripts/lib/<stem>.py`` (where Python puts ``lib/``
+# first instead) still runs until the shim goes in 4.0.0. Only that line is allowed.
+SHIM_BOOTSTRAP = "sys.path.insert(0, str(Path(__file__).resolve().parents[1]))"
 
 
 def _orchestrator_modules() -> set[str]:
@@ -107,7 +114,7 @@ def _import_binds(node: ast.stmt, target: str) -> set[str] | None:
     """The names a top-level shim import binds to ``target``, or None when the
     statement imports anything else. ``sys``, ``runpy`` and ``from __future__ import
     annotations`` (a compiler directive, as in a package ``__init__.py``) bind no alias."""
-    if ast.unparse(node) == "from __future__ import annotations":
+    if ast.unparse(node) in {"from __future__ import annotations", "from pathlib import Path"}:
         return set()
     if isinstance(node, ast.Import):
         if all(a.name in {"sys", "runpy"} and a.asname is None for a in node.names):
@@ -132,7 +139,9 @@ def _shim_problems(path: Path, tree: ast.Module) -> list[str]:
     to that module at top level (the normal import path), and at most one
     ``__main__`` branch whose whole body is
     ``runpy.run_module(target, run_name="__main__")``. That branch is required
-    when the new module has a ``__main__`` block."""
+    when the new module has a ``__main__`` block, and so is ``SHIM_BOOTSTRAP``
+    before the new module's import (with ``pathlib.Path`` imported), which no
+    other shim may hold."""
     rel = path.relative_to(LIB_DIR.parent).as_posix()
     doc = ast.get_docstring(tree) or ""
     found = SHIM_DOC.search(doc)
@@ -154,22 +163,34 @@ def _shim_problems(path: Path, tree: ast.Module) -> list[str]:
             aliases |= bound
     top_alias = [n for n in body if _sets_sys_modules(n)]
     guards = [n for n in body if _is_main_guard(n)]
-    if len(imports) + len(top_alias) + len(guards) != len(body) or len(guards) > 1:
+    bootstraps = [n for n in body if ast.unparse(n) == SHIM_BOOTSTRAP]
+    if (len(imports) + len(top_alias) + len(guards) + len(bootstraps) != len(body)
+            or len(guards) > 1 or len(bootstraps) > 1):
         problems.append(f"{rel}: a shim holds no code beyond the alias and the __main__ branch")
     # The alias reads sys and the branch calls runpy: each name is imported, and
     # every import comes first, or the shim raises NameError instead of aliasing.
+    # The bootstrap, when present, sits among the imports, just before the new module's.
     imported = {a.name for n in imports if isinstance(n, ast.Import) for a in n.names}
-    needed = {"sys"} | ({"runpy"} if guards else set())
-    if needed - imported or body[:len(imports)] != imports:
+    imported |= {a.name for n in imports if isinstance(n, ast.ImportFrom) for a in n.names}
+    needed = {"sys"} | ({"runpy"} if guards else set()) | ({"Path"} if bootstraps else set())
+    head = body[:len(imports) + len(bootstraps)]
+    if needed - imported or [n for n in head if n not in bootstraps] != imports:
         problems.append(f"{rel}: a shim imports {', '.join(sorted(needed))} before it uses them")
+    for boot in bootstraps:
+        after = body[body.index(boot) + 1:]
+        if not any(_import_binds(n, target) for n in after if isinstance(n, (ast.Import, ast.ImportFrom))):
+            problems.append(f"{rel}: the sys.path bootstrap must come before the import of {target}")
     nested_alias = [n for n in ast.walk(tree) if isinstance(n, ast.stmt) and _sets_sys_modules(n)
                     and n not in top_alias]
     if not top_alias or nested_alias or any(ast.unparse(n.value) not in aliases for n in top_alias):
         problems.append(f"{rel}: sys.modules[__name__] is not set to the imported {target} at top level")
     if any(guard.orelse or [ast.dump(s) for s in guard.body] != [_runpy_call(target)] for guard in guards):
         problems.append(f"{rel}: the __main__ branch must be exactly runpy.run_module({target!r}, run_name=\"__main__\")")
-    if any(_is_main_guard(n) for n in _parse(new).body) and not guards:
+    runs_as_script = any(_is_main_guard(n) for n in _parse(new).body)
+    if runs_as_script and not guards:
         problems.append(f"{rel}: {target} runs as a script, so its shim needs a runpy __main__ branch")
+    if runs_as_script != bool(bootstraps):
+        problems.append(f"{rel}: a shim holds `{SHIM_BOOTSTRAP}` exactly when {target} runs as a script")
     return problems
 
 
@@ -236,6 +257,23 @@ def test_core_does_not_import_orchestrators() -> None:
     structure += [p for module in _lib_modules()
                   if _is_shim(tree := _parse(module)) for p in _shim_problems(module, tree)]
     assert not structure, "lib subpackage rules (#917) broken:\n  " + "\n  ".join(structure)
+
+    # A script shim still loads by its old file path until 4.0.0: run as
+    # ``python scripts/lib/<stem>.py``, Python puts lib/ first on sys.path, not
+    # scripts/, and the bootstrap adds scripts/ back. Each shim is loaded by path
+    # from lib/ (not as __main__, because the fleet schema scripts rewrite the
+    # published schemas), and the two keyhole scripts also answer --help.
+    script_shims = sorted(m for m in LIB_DIR.glob("*.py") if _is_shim(tree := _parse(m))
+                          and any(ast.unparse(n) == SHIM_BOOTSTRAP for n in tree.body))
+    assert len(script_shims) >= 8, script_shims
+    for shim in script_shims:
+        load = subprocess.run([sys.executable, "-c", f"import runpy; runpy.run_path({shim.name!r})"],
+                              cwd=LIB_DIR, capture_output=True, encoding="utf-8", errors="replace", check=False)
+        assert load.returncode == 0, f"{shim.name} does not load by path: {load.stderr[-400:]}"
+    for stem in ("promissory_markers", "accretion_ratchet"):
+        run = subprocess.run([sys.executable, str(LIB_DIR / f"{stem}.py"), "--help"],
+                             capture_output=True, encoding="utf-8", errors="replace", check=False)
+        assert run.returncode == 0 and "usage" in run.stdout.lower(), f"{stem}.py --help: {run.stderr[-400:]}"
 
 
 # A summary line is one sentence: it ends a sentence (optionally followed by a

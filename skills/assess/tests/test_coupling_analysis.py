@@ -10,7 +10,7 @@ out in each test so the contract is explicit.
 """
 from __future__ import annotations
 
-from lib.coupling_analysis import (
+from lib.keyhole.coupling_analysis import (
     DEFAULT_HIGH_CONTAINMENT,
     DEFAULT_LOW_CONTAINMENT,
     detect_hidden_coupling,

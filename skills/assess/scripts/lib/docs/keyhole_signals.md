@@ -1,6 +1,6 @@
-# `lib/keyhole_signals.py`
+# `lib/keyhole/keyhole_signals.py`
 
-The full reference for `skills/assess/scripts/lib/keyhole_signals.py`, whose module docstring holds the summary.
+The full reference for `skills/assess/scripts/lib/keyhole/keyhole_signals.py`, whose module docstring holds the summary.
 
 (co-change hotspot)
 Integration barrier between the individual signal modules and `assess_core`. Derives
