@@ -1,4 +1,4 @@
-"""Tests for GitLab protected-branch reads: lib/gitlab_cli.branch_protection,
+"""Tests for GitLab protected-branch reads: lib/hosting/gitlab_cli.branch_protection,
 the GitLab path of lib/hosting/config_drift.py, and the "all protected branches"
 approval rules of lib/hosting/review_reality.py.
 
