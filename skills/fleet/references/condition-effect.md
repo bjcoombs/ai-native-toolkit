@@ -46,7 +46,8 @@ The record lists each condition that has a `review` date in the maturity model, 
 | `not_due` | The review date is after this run's scan date. |
 | `gate_exempt` | A Step gate reads the condition. It is never demoted, so a demotion never moves a Step. |
 | `insufficient_evidence` | A measure the prediction names is low confidence or has no interval. Thin evidence demotes nothing. |
-| `effect_detected` | A measure the prediction names has an interval that excludes 0. |
+| `effect_detected` | A measure the prediction names has an interval that excludes 0 on the predicted side (either side for `none`). |
+| `contrary_effect` | An interval excludes 0 on the side a `lower_*` prediction rules out: repositories that meet the condition have the higher share. It is an effect, so the condition is not demoted, and the status flags the prediction for review. |
 | `demoted` | Every measure the prediction names has enough repositories on each side and an interval that includes 0. |
 
 The measures each prediction names: `lower_revert` reads `revert_share`, `lower_rework` reads `rework_share`, and `none` reads both. A condition with no review date is not listed and is never demoted. No condition in the default model has a review date yet.

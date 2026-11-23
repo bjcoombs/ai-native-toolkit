@@ -153,6 +153,7 @@ def _effects(model: Any, met: list[float], unmet: list[float]) -> ce.ConditionEf
 
 NO_EFFECT = ([0.1, 0.3] * 5, [0.15, 0.25] * 5)
 EFFECT = ([0.0, 0.02] * 5, [0.4, 0.42] * 5)
+CONTRARY = (EFFECT[1], EFFECT[0])  # the repositories that meet the condition revert more
 
 
 def _decide(practice: dict[str, Any], samples: tuple[list[float], list[float]] = NO_EFFECT,
@@ -165,6 +166,8 @@ def _decide(practice: dict[str, Any], samples: tuple[list[float], list[float]] =
     (_level("lower_revert", FUTURE), NO_EFFECT, "not_due"),
     (_level("lower_revert", PAST), NO_EFFECT, "demoted"),
     (_level("lower_revert", PAST), EFFECT, "effect_detected"),
+    (_level("lower_revert", PAST), CONTRARY, "contrary_effect"),
+    (_level("none", PAST), CONTRARY, "effect_detected"),
     (_level("lower_rework", PAST), NO_EFFECT, "demoted"),
     (_level("none", PAST), NO_EFFECT, "demoted"),
     (_level("lower_revert", PAST), ([0.1, 0.3] * 4, [0.15, 0.25] * 5), "insufficient_evidence"),

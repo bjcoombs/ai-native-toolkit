@@ -544,7 +544,8 @@ def _condition_effect(out_dir: Path, maturity_model: MaturityModel | None, stamp
     except Exception as e:  # noqa: BLE001 - informational, never fails a completed run
         for path in paths:  # never leave an earlier run's files beside this run's results
             path.unlink(missing_ok=True)
-        print(f"fleet: {CONDITION_EFFECT_FILE} not written ({type(e).__name__})", file=sys.stderr)
+        print(f"fleet: {CONDITION_EFFECT_FILE} and {DEMOTIONS_FILE} not written ({type(e).__name__}); "
+              "no demotions applied", file=sys.stderr)
         return []
 
 
