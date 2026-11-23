@@ -12,6 +12,15 @@ snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
   hotspots whose complexity/churn increased. This needs a prior snapshot and a
   reliable diff; on a first run or an unreliable diff it is skipped, never
   fired - a freshly-cloned repo never trips a regression gate on its first PR.
+- **Gate loss** (cross-run, #1152): with ``fail_on_gate_loss = true`` (or the
+  ``--fail-on-gate-loss`` flag, which the GitLab template passes), fail when a
+  Step gate the committed baseline held no longer holds: the run-context's
+  ``since_last_run.gates_lost``, read against ``.assess/prior-level.json``. A
+  Step needs its gates and nothing else, so a lost Step is always a lost gate.
+  On a first run, or when the gate changes are not known (``gates_lost`` is
+  null), nothing fires. Only a gate that now reads ``unmet`` can fail: one that
+  could not be read this run (``not_measured``) is a warn line, never a loss.
+  Without the opt-in a lost gate is a warn line only.
 
 A third, explanatory part: when the committed ``.assess/findings.json`` (read
 from disk, or the prior the run recorded before rewriting it) was
@@ -21,6 +30,10 @@ appeared and cleared by path against that snapshot (which also reflect any code
 changed since it was committed), and prints the re-freeze command, or, when
 this run's toolkit is older than the snapshot's, the pin to raise instead. It explains
 the other checks' results and never fails the gate by itself.
+
+``--summary`` prints the executive summary that opens the report
+(``headline.summary_lines``, ``lib/exec_summary.py``) above the verdict, so a CI
+log shows the Step, the next gate and what changed since the last run.
 
 The defaults are warn-only: with no config, every finding is reported but
 nothing fails, so adopting the emitted workflow never blocks a pipeline by
@@ -34,7 +47,7 @@ Exit codes:
     2  usage error (no repo_root argument)
 
 Run:
-    uv run assess_gate.py <repo_root> [--config <path>]
+    uv run assess_gate.py <repo_root> [--config <path>] [--fail-on-gate-loss] [--summary]
 """
 # /// script
 # requires-python = ">=3.11"
@@ -49,6 +62,7 @@ from typing import Any, NotRequired, TypedDict, cast
 # scripts/ is on sys.path (pyproject pythonpath); lib is a package under it.
 from lib.assess_config import GateConfig, load_gate_config, load_gate_config_file
 from lib.findings_snapshot import committed_prior, method_change
+from lib.level_tally import default_model, gate_blockers
 from lib.reviewed_findings import open_findings
 from lib.run_context_types import DerivedFinding, JsonDict, MethodChange
 
@@ -77,6 +91,11 @@ class GateVerdict(TypedDict):
     # Set when the committed findings snapshot was written by another finding
     # method version: the findings moved because the method did.
     method_change: NotRequired[MethodChange | None]
+    # Step gates the committed baseline held that this run does not, when the
+    # loss was not opted into failing (#1152): reported, never failing.
+    gates_lost_warning: NotRequired[list[str]]
+    # Gates the baseline held that this run could not read: unknown, never a loss.
+    gates_unread_warning: NotRequired[list[str]]
 
 
 def _findings_by_name(ctx: JsonDict) -> dict[str, JsonDict]:
@@ -189,6 +208,61 @@ def check_diff_regression(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
     }]
 
 
+def lost_gates(ctx: JsonDict) -> list[str]:
+    """The Step gates the committed baseline held that this run does not.
+
+    ``since_last_run.gates_lost`` in Step order; empty on a first run, when the
+    block is degraded, or when the gate changes are not known (null), so an
+    unknown never reads as a loss.
+    """
+    since = ctx.get("since_last_run")
+    if not isinstance(since, dict) or since.get("available") is False:
+        return []
+    lost = since.get("gates_lost")
+    if not isinstance(lost, list):
+        return []
+    return [g for g in lost if isinstance(g, str)]
+
+
+def gate_states(ctx: JsonDict) -> dict[str, str]:
+    """Each gate that does not hold in this run, by id, with its condition state
+    (``unmet``, ``not_measured``, ...), from the ``level`` block's conditions; empty
+    when the level result is unavailable."""
+    level = ctx.get("level")
+    conditions = level.get("conditions") if isinstance(level, dict) else None
+    if not isinstance(conditions, list):
+        return {}
+    steps = default_model().get("steps", [])
+    try:
+        blockers = gate_blockers(steps, conditions)
+    except KeyError:  # a level block from another model lacks a gate's condition
+        return {}
+    return {b["gate"]: b["state"] for b in blockers if "gate" in b and "state" in b}
+
+
+def split_lost_gates(ctx: JsonDict) -> tuple[list[str], list[str]]:
+    """(lost and now unmet, lost and now not measured). Only a measured loss can
+    fail the gate: a gate that no longer reads (an unresolved CI include, an
+    unavailable level result) is unknown, never a loss."""
+    states = gate_states(ctx)
+    unmet: list[str] = []
+    unread: list[str] = []
+    for g in lost_gates(ctx):
+        (unmet if states.get(g) == "unmet" else unread).append(g)
+    return unmet, unread
+
+
+def check_gate_loss(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
+    """Return a gate-loss breach when ``fail_on_gate_loss`` is set and a gate the
+    baseline held now reads unmet."""
+    if not gate.get("fail_on_gate_loss"):
+        return []
+    unmet, _ = split_lost_gates(ctx)
+    if not unmet:
+        return []
+    return [{"metric": "gates_lost", "count": len(unmet), "paths": unmet}]
+
+
 def evaluate(ctx: JsonDict, gate: GateConfig) -> GateVerdict:
     """Run every check and return a structured verdict.
 
@@ -201,9 +275,10 @@ def evaluate(ctx: JsonDict, gate: GateConfig) -> GateVerdict:
         check_complexity_threshold(ctx, gate)
         + check_containment_threshold(ctx, gate)
         + check_diff_regression(ctx, gate)
+        + check_gate_loss(ctx, gate)
     )
     blocking = bool(failures or threshold_breaches)
-    return {
+    verdict: GateVerdict = {
         "enabled": gate.get("enabled", True),
         "failed": blocking and gate.get("enabled", True),
         "failures": failures,
@@ -219,6 +294,12 @@ def evaluate(ctx: JsonDict, gate: GateConfig) -> GateVerdict:
         # it states why the findings below moved.
         "method_change": method_change(ctx),
     }
+    unmet, unread = split_lost_gates(ctx)
+    if unmet and not gate.get("fail_on_gate_loss"):
+        verdict["gates_lost_warning"] = unmet
+    if unread:
+        verdict["gates_unread_warning"] = unread
+    return verdict
 
 
 def format_verdict(verdict: GateVerdict) -> str:
@@ -234,6 +315,11 @@ def format_verdict(verdict: GateVerdict) -> str:
                 f"  FAIL regression: {breach['count']} hotspot(s) worsened since "
                 f"the prior snapshot ({sample})"
             )
+        elif breach["metric"] == "gates_lost":
+            lines.append(
+                f"  FAIL gate lost: {', '.join(breach['paths'])} held at the "
+                "committed baseline and no longer holds"
+            )
         else:
             lines.append(
                 f"  FAIL threshold: {breach['metric']} = {breach['value']} "
@@ -245,7 +331,20 @@ def format_verdict(verdict: GateVerdict) -> str:
     for w in verdict["warnings"]:
         sample = ", ".join(w["paths"])
         lines.append(f"  warn finding: {w['finding']} x{w['count']} ({sample})")
-    if not verdict["failures"] and not verdict["threshold_breaches"] and not verdict["warnings"]:
+    lost = verdict.get("gates_lost_warning")
+    if lost:
+        lines.append(
+            f"  warn gate lost: {', '.join(lost)} held at the committed baseline "
+            "and no longer holds (set fail_on_gate_loss to fail on it)"
+        )
+    unread = verdict.get("gates_unread_warning")
+    if unread:
+        lines.append(
+            f"  warn gate not measured: {', '.join(unread)} held at the committed "
+            "baseline and could not be read this run, so it is not counted as lost"
+        )
+    if (not verdict["failures"] and not verdict["threshold_breaches"]
+            and not verdict["warnings"] and not lost and not unread):
         lines.append("  no findings fired - clean snapshot")
     disclosure = _format_exclusion_disclosure(verdict.get("excluded_by_config"))
     if disclosure:
@@ -354,12 +453,23 @@ def load_context(repo_root: Path) -> dict[str, Any]:
     return ctx
 
 
+def format_summary(ctx: JsonDict) -> str:
+    """The executive summary that opens the report, one line each, or ``""``
+    when the headline has none (an unavailable level result)."""
+    headline = ctx.get("headline")
+    raw = headline.get("summary_lines") if isinstance(headline, dict) else None
+    lines = [ln for ln in raw if isinstance(ln, str)] if isinstance(raw, list) else []
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     # --config points the gate at a config file outside the conventional
     # .assess/config.toml. Consume both the flag and its value so the value
     # isn't mistaken for the positional repo root.
     config_path: str | None = None
+    fail_on_gate_loss = "--fail-on-gate-loss" in args
+    summary = "--summary" in args
     positional: list[str] = []
     i = 0
     while i < len(args):
@@ -375,7 +485,8 @@ def main(argv: list[str] | None = None) -> int:
         positional.append(arg)
         i += 1
     if not positional:
-        print("Usage: assess_gate.py <repo_root> [--config <path>]", file=sys.stderr)
+        print("Usage: assess_gate.py <repo_root> [--config <path>] "
+              "[--fail-on-gate-loss] [--summary]", file=sys.stderr)
         return 2
     repo_root = Path(positional[0]).resolve()
     try:
@@ -399,11 +510,15 @@ def main(argv: list[str] | None = None) -> int:
         if config_path is not None
         else load_gate_config(repo_root)
     )
+    if fail_on_gate_loss:
+        gate["fail_on_gate_loss"] = True
     # Compare against the committed findings.json, not only the prior the
     # pipeline recorded: the gate may run on a snapshot edited or checked out
     # after the last pipeline run (#661).
     ctx["prior_findings_snapshot"] = committed_prior(ctx, repo_root)
     verdict = evaluate(ctx, gate)
+    if summary and format_summary(ctx):
+        print(format_summary(ctx) + "\n")
     print(format_verdict(verdict))
     return 1 if verdict["failed"] else 0
 

@@ -208,6 +208,22 @@ Two badges come with it - GitHub's native status badge for the gate workflow, an
 
 Warn-only by default: the only thing that can fail a PR is what `.assess/config.toml` opts into (`fail_on` findings, complexity floors, `fail_on_regression`). Because the version rides a `uses:` pin on an immutable release tag, **Dependabot and Renovate detect new toolkit releases and open upgrade PRs automatically** - add a `.github/dependabot.yml` with the `github-actions` ecosystem and the gate keeps itself current. The `/assess` end-of-run "freeze into CI" offer emits this workflow, with actions pinned to commit SHAs and the toolkit pinned to the newest published tag.
 
+### Use in GitLab CI
+
+The same gate runs on GitLab merge request pipelines. Add these three lines to your `.gitlab-ci.yml`:
+
+```yaml
+include:
+  - remote: https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v3.0.0/templates/assess-gate.yml
+    inputs: { config: .assess/config.toml }
+```
+
+The job runs the same headless gate as the GitHub Action, on merge request pipelines only, and writes the summary that opens the report to the job log. It also fails the merge request when a Step gate your committed baseline held no longer holds, such as CI no longer running the tests. The baseline is `.assess/prior-level.json`, written by every `/assess` run, so commit your `.assess/` directory first. Set the `fail_on_gate_loss: false` input to report a lost gate without failing. A gate the job could not read is reported, never counted as lost.
+
+To post the summary as a merge request note too, add a project access token with `api` scope as a masked CI/CD variable named `ASSESS_GATE_TOKEN`. Without it the job tries `CI_JOB_TOKEN`, which most GitLab versions don't allow to post notes, so the summary stays in the job log and the job carries on.
+
+The other inputs are `mr_note`, `toolkit_ref` (keep it equal to the tag in the include line), `toolkit_url` (for a mirror on a self-hosted GitLab), `image` and `stage`. The file follows the CI/CD component layout (`templates/assess-gate.yml` with `spec: inputs`), so a team that mirrors this repository onto its GitLab can include it as a component instead: `component: $CI_SERVER_FQDN/<group>/ai-native-toolkit/assess-gate@<version>`.
+
 > **Portability split.** The framework pieces (`/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`, `/ghsync`, `/ghreport`, `/fleet`, `/doc-contradictions`, `/6hats`, `/understand` and their agents) are portable and work in any Claude Code session (`/fleet`'s `ROOT` mode reads the `<repo>-main` + `worktree/` layout that `/ghsync` creates). The workflow commands (`/tm`, `/issues`, `/fix-pr`, `/fix-develop`) bake in one author's daily setup: a `<repo>-main/` + `worktree/` layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. See [Adapting](#adapting-for-your-workflow) before relying on them in a different setup.
 
 ## Install
