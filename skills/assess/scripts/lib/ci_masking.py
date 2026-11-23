@@ -181,7 +181,8 @@ from lib.ci_exempt import (
 from lib.ci_statements import (
     _capture_targets, _checked_later, _join, _pick, _same_line_keep, split_statements)
 from lib.ci_unsure import (
-    group_call_unsure, opaque_flags, or_arm_unsure, piped_calls, uncalled_functions, until_break_flags)
+    condition_raises, group_call_unsure, opaque_flags, or_arm_unsure, piped_calls, uncalled_functions,
+    until_break_flags)
 from lib.command_index import ci_line_text
 
 __all__ = ["IndentTree", "parse_lines", "split_statements", "strip_comment", "unmasked_lines"]
@@ -608,6 +609,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     conditions = condition_flags(body)
     readable = run_shell is not None and bash   # the #1008 forms: a GitHub bash or sh body
     until = until_break_flags(body) if readable else [False] * len(refs)
+    raises = condition_raises(body) if readable else [None] * len(refs)   # polarity (#1061)
     in_group = group_call_unsure(body, conditions) if readable else set()
     uncalled, named = uncalled_functions(body) if readable else (set(), set())   # #1061
     grouped_pipes = {**piped_groups(body), **piped_calls(body, before)} if readable else {}   # #1061
@@ -632,12 +634,13 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
                     else exempt_segments(statement, pipes[idx]))
             if drop:
                 exempt[(first, k)] = drop
-        elif readable and code[idx] and not (state[idx] or off[idx] or reraised or own):
+        elif readable and code[idx] and not (state[idx] or off[idx] or own or (
+                reraised if raises[idx] is None else raises[idx])):
             statement = raw[first][k]
             whole = frozenset(range(len(statement)))
             # A ``{ }`` group or a compound body passes an exempt failure on; a subshell
             # or a function returns it (``lib.ci_unsure.opaque_flags``).
-            maybe = (whole if idx in in_group or idx in named or conditions[idx] or until[idx]
+            maybe = (whole if idx in in_group or idx in named or conditions[idx] or until[idx] or raises[idx] is False
                      else exempt_segments(statement, True) if (later_code or later_exit) and not opaque[idx]
                      else frozenset())
             if maybe:

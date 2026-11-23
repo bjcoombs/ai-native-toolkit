@@ -63,6 +63,13 @@ ROWS = [
     ("f() { pytest; }; f", CREDIT, CREDIT, CREDIT),
     ("for d in sub; do pytest $d; done", CREDIT, CREDIT, CREDIT),
     ("if pytest; then echo ok; fi", MAY, MAY, MAY),
+    # A re-raise counts only on the path a failing check takes (#1061 review).
+    ("if ! pytest; then echo bad; else exit 1; fi", MAY, MAY, MAY),
+    ("if pytest; then exit 1; fi", MAY, MAY, MAY),
+    ("while pytest; do exit 1; done", MAY, MAY, MAY),
+    ("until ! pytest; do exit 1; done", MAY, MAY, MAY),
+    ("while ! pytest; do exit 1; done", CREDIT, CREDIT, CREDIT),
+    ("if pytest; then :; else exit 1; fi; echo next", CREDIT, CREDIT, CREDIT),
     ("while pytest; do break; done", MAY, MAY, MAY),
     ("until pytest; do break; done", MAY, MAY, MAY),
     ("{ pytest; echo done; } && echo ok", MAY, MAY, MAY),
@@ -389,3 +396,15 @@ def test_a_stray_expansion_brace_closes_no_group() -> None:
     from lib.ci_unsure import _groups
     statements = [s for line in ["f() {", "pytest", "}", "f", "echo ${A}"] for s in split_statements(line)]
     assert _groups(statements) == [(0, 2, "f")]
+
+
+@pytest.mark.parametrize(("body", "expected"), [
+    ("if ! pytest; then\n  echo bad\nelse\n  exit 1\nfi", MAY),
+    ("if pytest; then\n  exit 1\nfi", MAY),
+    ("while pytest; do\n  exit 1\ndone", MAY),
+    ("if ! pytest; then\n  exit 1\nfi", CREDIT),
+    ("if pytest; then\n  :\nelse\n  exit 1\nfi", CREDIT),
+    ("if pytest; then\n  echo ok\nfi\nexit 1", CREDIT),   # a re-raise after the compound
+])
+def test_a_condition_re_raise_counts_on_the_failure_path(tmp_path: Path, body: str, expected: tuple[object, str]) -> None:
+    assert _enforced(tmp_path, _block(body)) == expected

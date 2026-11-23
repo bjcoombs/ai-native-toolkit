@@ -21,8 +21,10 @@ step may still pass, depending on what runs after it. They read null with the re
 - In a GitHub ``run:`` body with errexit on and bash grammar (``ci_masking``'s backward
   walk; a later top-level ``exit 0`` masks these instead, #936):
   - an ``if`` / ``elif`` / ``while`` condition (``if pytest; then echo ok; fi`` exits 0),
-    unless that statement or a later one re-raises a status (``if ! pytest; then exit 1;
-    fi`` and ``if pytest; then :; else exit 1; fi`` stay credited);
+    unless that statement or the path a failing check takes re-raises a status
+    (``condition_raises``, #1061): ``if ! pytest; then exit 1; fi`` and ``if pytest; then :;
+    else exit 1; fi`` stay credited, while ``if pytest; then exit 1; fi``, ``while pytest; do
+    exit 1; done`` and ``until ! pytest; do exit 1; done`` read null;
   - an ``until`` condition whose loop body holds a ``break`` (``until_break_flags``:
     ``until pytest; do break; done`` exits 0); without one the loop runs until the check
     passes and stays credited;
@@ -211,6 +213,56 @@ def until_break_flags(statements: list[Statement]) -> list[bool]:
             depth += sum(w in ("do",) for w in words) - sum(w == "done" for w in words)
             if j > i and depth <= 0:
                 break
+    return out
+
+
+_OPENERS = frozenset({"if", "while", "until", "for", "case", "select"})
+_CLOSERS = frozenset({"fi", "done", "esac"})
+
+
+def _lead(statement: Statement) -> list[str]:
+    """The first segment's words past ``then`` / ``do`` / ``else``: what the statement runs."""
+    words = statement[0][1].split() if statement else []
+    while words[:1] in (["then"], ["do"], ["else"]):
+        words = words[1:]
+    return words
+
+
+def condition_raises(statements: list[Statement]) -> list[bool | None]:
+    """Per statement that opens an ``if`` / ``elif`` / ``while`` condition, or a negated
+    ``until`` one: does a failing check reach a re-raise (#1061)? Only the path the failure
+    takes counts: the ``else`` arm of ``if pytest``, the ``then`` arm of ``if ! pytest``, the
+    body of ``while ! pytest``, and any statement after the compound command ends. So ``if
+    pytest; then exit 1; fi`` and ``while pytest; do exit 1; done`` do not, and ``if ! pytest;
+    then exit 1; fi`` does. None for any other statement, or a compound not closed in the body
+    (the caller's own rule applies)."""
+    out: list[bool | None] = [None] * len(statements)
+    for i, statement in enumerate(statements):
+        words = statement[0][1].split() if statement else []
+        head, negated = (words[0] if words else ""), words[1:2] == ["!"]
+        if head not in ("if", "elif", "while", "until") or (head == "until" and not negated):
+            continue
+        then = other = end = None
+        depth = 1
+        for j in range(i + 1, len(statements)):
+            first = statements[j][0][1].split()[:1] if statements[j] else []
+            if first and first[0] in _CLOSERS:
+                depth -= 1
+                if depth == 0:
+                    end = j
+                    break
+            elif depth == 1 and first in (["then"], ["do"]) and then is None:
+                then = j
+            elif depth == 1 and first in (["else"], ["elif"]) and other is None:
+                other = j
+            depth += sum(w in _OPENERS for w in _lead(statements[j])[:1])
+        if end is None or then is None:
+            continue
+        if head in ("if", "elif"):
+            arm = range(then, other if other is not None else end) if negated else range(other or end, end)
+        else:   # while ! pytest runs its body on a failure; while pytest and until ! pytest leave
+            arm = range(then, end) if head == "while" and negated else range(0)
+        out[i] = any(_reraises(statements[j]) for j in (*arm, *range(end + 1, len(statements))))
     return out
 
 
