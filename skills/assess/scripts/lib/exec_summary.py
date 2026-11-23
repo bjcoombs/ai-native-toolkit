@@ -34,7 +34,7 @@ the fields empty. Under counts-only the three fields are dropped. Tests:
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 from lib.assess_diagrams_ladder import meaning
 from lib.headline import GATE_CHANGE, gate_note
@@ -137,7 +137,7 @@ def summarised(block: Headline, level: Any, since: Any, model: MaturityModel) ->
     headline is unavailable or ``level`` is not a level result."""
     if block.get("available") is not True or not isinstance(level, dict) or "tally" not in level:
         return block
-    result: LevelResult = level  # type: ignore[assignment]
+    result = cast(LevelResult, level)  # narrowed by the tally check above
     lines = summary_lines(result, since, model)
     action = call_to_action(result)
     markdown = "\n\n".join([*lines, action] if action else lines)
