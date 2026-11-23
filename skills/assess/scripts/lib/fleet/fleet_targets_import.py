@@ -52,7 +52,7 @@ import tomllib
 from collections.abc import Mapping, Sequence
 from typing import NamedTuple
 
-from lib.counts_only import is_hashed
+from lib.counts_only.content_free import is_hashed
 from lib.fleet.fleet_achievements import REPO_VIEW
 from lib.fleet.fleet_data import FleetData
 from lib.fleet.fleet_publish import MAX_ID, PublishError, decode_doc_id, doc_id

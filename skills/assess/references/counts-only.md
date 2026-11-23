@@ -1,13 +1,13 @@
 # Counts-only output: fields kept per block
 
 Generated from each collector's `privacy` table in `checks/core.toml` and
-the global rules in `scripts/lib/counts_only_rules.py` (in the assess skill)
-by `lib.counts_only.render_doc`; `test_counts_only.py` fails when this file
+the global rules in `scripts/lib/counts_only/counts_only_rules.py` (in the assess skill)
+by `lib.counts_only.content_free.render_doc`; `test_counts_only.py` fails when this file
 and the table disagree. Each section below is one collector. Regenerate with:
 
 ```bash
 # from the assess skill directory
-uv run python -c "import sys; sys.path.insert(0, 'scripts'); from lib.counts_only import render_doc; print(render_doc(), end='')" > references/counts-only.md
+uv run python -c "import sys; sys.path.insert(0, 'scripts'); from lib.counts_only.content_free import render_doc; print(render_doc(), end='')" > references/counts-only.md
 ```
 
 `assess_core.py --counts-only` writes `run-context.counts-only.json` beside
@@ -929,6 +929,7 @@ kept as written. A string
 | `repos.gate_blockers.state` | token |
 | `repos.gate_blockers.disposition` | token |
 | `repos.tags.tag` | token |
+| `tag_profile.tag` | token |
 | `views.units.tags.cells.tag` | token |
 | `repos.unit_rows.key` | path, dropped unless hashing is on (then hashed) |
 | `repos.unit_rows.next_blocker.gate` | token |

@@ -13,7 +13,7 @@ from conftest import skip_without_posix_shell
 
 import lib.hosting.gitlab_ci_lint as gitlab_ci_lint
 from lib.ci_checks import scan_ci_checks
-from lib.counts_only import counts_only_scans
+from lib.counts_only.content_free import counts_only_scans
 from lib.merged_ci import NOT_NEEDED, NOT_READ, MergedCi, as_merged
 from lib.review_automation import scan_review_automation
 from lib.signals import collect

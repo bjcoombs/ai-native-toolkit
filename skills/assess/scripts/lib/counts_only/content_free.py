@@ -6,7 +6,7 @@ scan of someone else's repository is meant to leave the machine it ran on,
 ``counts_only`` keeps the derived values and drops the rest:
 
 - every number, boolean and null is kept;
-- a string is kept only when ``lib.counts_only_rules`` classifies its field
+- a string is kept only when ``lib.counts_only.counts_only_rules`` classifies its field
   as a path, a short token (kind, grade, band, date, version) or a reason
   code (the code of an unavailable block's reason, never its sentence);
 - every other string is dropped, and a dropped list of strings becomes its
@@ -57,7 +57,7 @@ from collections.abc import Mapping
 from functools import cache
 from typing import Any
 
-from lib.counts_only_rules import (
+from lib.counts_only.counts_only_rules import (
     DROP,
     EXTRA_FIELD_NAMES,
     FLEET_DATA_RULES,
@@ -75,9 +75,9 @@ from lib.counts_only_rules import (
     FieldClass,
     classify,
 )
-from lib.counts_only_schema import typed_field_names
-from lib.reason_codes import reason_code as reason_code
-from lib.reason_codes import reason_token as reason_token
+from lib.counts_only.counts_only_schema import typed_field_names
+from lib.counts_only.reason_codes import reason_code as reason_code
+from lib.counts_only.reason_codes import reason_token as reason_token
 from lib.run_context_types import JsonDict
 
 # The longest path kept; a longer "path" is more likely prose than a file.
@@ -312,14 +312,14 @@ def render_doc() -> str:
         "# Counts-only output: fields kept per block",
         "",
         "Generated from each collector's `privacy` table in `checks/core.toml` and",
-        "the global rules in `scripts/lib/counts_only_rules.py` (in the assess skill)",
-        "by `lib.counts_only.render_doc`; `test_counts_only.py` fails when this file",
+        "the global rules in `scripts/lib/counts_only/counts_only_rules.py` (in the assess skill)",
+        "by `lib.counts_only.content_free.render_doc`; `test_counts_only.py` fails when this file",
         "and the table disagree. Each section below is one collector. Regenerate with:",
         "",
         "```bash",
         "# from the assess skill directory",
         "uv run python -c \"import sys; sys.path.insert(0, 'scripts');"
-        " from lib.counts_only import render_doc; print(render_doc(), end='')\""
+        " from lib.counts_only.content_free import render_doc; print(render_doc(), end='')\""
         " > references/counts-only.md",
         "```",
         "",

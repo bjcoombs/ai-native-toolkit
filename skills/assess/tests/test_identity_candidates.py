@@ -22,7 +22,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import identity_candidates as cli  # noqa: E402
 from lib.agent_identity import AGENT, DEPENDENCY_BOT, OTHER, AuthorMatcher, ConfirmedIdentities  # noqa: E402
-from lib.counts_only import counts_only_scans  # noqa: E402
+from lib.counts_only.content_free import counts_only_scans  # noqa: E402
 from lib.fleet_config import (  # noqa: E402
     FleetConfigError,
     config_sha256,

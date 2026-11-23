@@ -100,6 +100,15 @@ malformed tally, as not measured, never as zero (`lib/fleet/fleet_data_tags.py`
 the stored scans. Tag names come from the fixed truth-tag list and every other field is a
 count, so the tally names no repository, path or owner.
 
+**Tag profile.** `tag_profile` (#940, `lib/fleet/fleet_tag_profile.py`) is one row per truth
+tag, every tag in the catalog's order, read from those per-repository tallies (never a second
+tally): `conditions` and `countable` (the model's conditions with the tag, and those the tally
+can count by grade), `repos` (repositories with a per-tag tally), `measured` (those with a
+measured condition on the tag), and `median`, `p25` and `p75`, the measured repositories'
+share met (`met` over `measured`) with linear interpolation, 4 places; all three are `null`
+when no repository is measured on the tag, never 0. `tag_profile` is `null` without
+`--levels`; a document written before it has none. The fleet's `tag-profile.svg` draws it.
+
 ### Unit rows
 
 A run with `--monorepo-units` (#866) scans each repository by monorepo unit, and each
@@ -139,7 +148,7 @@ names and owners (`owner_count` stays). With `--hash-paths` or `--hash-salt`, ev
 and repository key, and every reference to one, is hashed (`h:` plus 16 hex digits) and no
 name, owner or web URL is written: the file names no repository, group or host. Hashes
 join across runs only under one `--hash-salt`. The rules are `FLEET_DATA_RULES` in
-`lib/counts_only_rules.py`. Its repository keys are the hashed ids every other output
+`lib/counts_only/counts_only_rules.py`. Its repository keys are the hashed ids every other output
 file writes ([Hashed runs](repos.md#hashed-runs)), so a `fleet-data.json` repository joins its
 `repos.jsonl` row; `achievements.json`, built from it, carries the same keys. GitHub team slugs from a `ghreport` fragment's `teams` list
 appear only as unit keys, so they are hashed with them.

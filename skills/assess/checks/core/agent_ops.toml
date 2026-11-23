@@ -13,7 +13,7 @@ stage = "read_side"
 headless = { agent_ops = "registered" }
 whys.agent_ops = "Committed allowlists, hooks, sandbox rules and routines make an agent's limits and repeated work the same on every clone, and reviewable like code."
 shapes = [
-  { path = "agent_ops", type = "lib.block_shapes:AgentOpsBlock" },
+  { path = "agent_ops", type = "lib.counts_only.block_shapes:AgentOpsBlock" },
 ]
 revision = 1
 

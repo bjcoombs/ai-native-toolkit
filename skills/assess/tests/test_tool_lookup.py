@@ -12,7 +12,7 @@ import pytest
 
 from lib import headless_layers as hl
 import lib.keyhole.promissory_markers as pm
-from lib.counts_only import reason_code
+from lib.counts_only.content_free import reason_code
 from lib.tool_lookup import (
     RG_MISSING_REASON,
     find_rg,

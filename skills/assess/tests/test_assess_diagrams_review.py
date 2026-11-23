@@ -21,7 +21,7 @@ from assess_diagrams_review_fixture import CTX, DOC_STALENESS, DOCS, FIXTURES, R
 from assess_report import render_report
 from lib import assess_diagrams as ad
 from lib import assess_diagrams_review as rd
-from lib.counts_only import counts_only
+from lib.counts_only.content_free import counts_only
 from lib.docs.doc_complexity_join import is_stale
 from lib.hosting.review_reality import summarize
 from lib.vocabulary import IN_PLACE, banned_hits

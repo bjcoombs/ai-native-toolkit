@@ -18,7 +18,7 @@ from lib.agent_consistency import (
     thresholds,
 )
 from lib.agent_systems import SYSTEMS, aider_read_files, match_system_file, might_match
-from lib.counts_only import counts_only_scans
+from lib.counts_only.content_free import counts_only_scans
 from lib.instruction_files import nested_instruction_surface
 from lib.levels import evaluate_row
 from lib.level_signals import load_default_levels
