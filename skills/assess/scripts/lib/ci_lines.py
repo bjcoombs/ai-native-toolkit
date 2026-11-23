@@ -9,11 +9,11 @@ key). The line tests are ``_line_runs_check`` (``check_command.is_check_command`
 ``is_lint_command``), ``_line_runs_lint`` (``is_lint_run`` or a ``uses:`` step of a known
 lint action, ``lint_action`` over ``LINT_ACTIONS``), ``_line_may_lint`` (``may_lint`` or a
 ``MAY_LINT_ACTIONS`` step) and ``_line_may_check`` (``may_check``: a target whose recipe is
-not read); ``_skipped_check`` flags a Maven run with its tests skipped (#799).
+not read); ``_skipped_check`` flags a Maven or Gradle run with its tests skipped (#799, #1046).
 
 Inward-only imports: ``lib.check_command``, ``lib.ci_lint_gates``, ``lib.ci_scripts``,
 ``lib.command_flags``, ``lib.command_index``, ``lib.command_resolver``,
-``lib.lint_vocabulary`` and ``lib.named_check``; never ``lib.ci_checks`` or an orchestrator.
+``lib.lint_vocabulary``, ``lib.named_check`` and ``lib.runner_args``; never ``lib.ci_checks`` or an orchestrator.
 Tests: ``tests/test_ci_checks.py``, ``tests/test_ci_false_credit.py``.
 """
 from __future__ import annotations
@@ -32,6 +32,7 @@ from lib.command_index import ci_line_text
 from lib.command_resolver import command_words
 from lib.lint_vocabulary import dotnet_build
 from lib.named_check import setup_ci_target, sourced_env, unread_ci_target
+from lib.runner_args import gradle_skips_tests
 
 
 # A YAML list item with no key (``- mypy``), as opposed to ``- run: ...``.
@@ -126,9 +127,11 @@ def _line_may_check(line: str, *, script_item: bool = True) -> bool:
 
 
 def _skips_tests(text: str) -> bool:
-    """``mvn -DskipTests verify``: a check reading that rests on skipped tests, so the
-    line may check (``check_target``), never credit (#799; ``command_flags.maven_skips_tests``)."""
-    return maven_skips_tests(command_words(text))
+    """``mvn -DskipTests verify``, ``./gradlew check -x test``: a check reading that rests on
+    skipped tests, so the line may check (``check_target``), never credit (#799, #1046;
+    ``command_flags.maven_skips_tests``, ``runner_args.gradle_skips_tests``)."""
+    words = command_words(text)
+    return maven_skips_tests(words) or gradle_skips_tests(words)
 
 
 def _skipped_check(line: str, *, script_item: bool = True) -> bool:

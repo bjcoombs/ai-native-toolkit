@@ -3,7 +3,7 @@
 ``lib.check_command`` reads these words for ``is_lint_command`` and ``is_lint_run``; this
 module holds the vocabulary so that file stays under the size ratchet. All of it reads the
 words of one command (``lib.command_resolver.command_words``) and nothing else: pure, no
-file or network access.
+file or network access. Gradle's arguments are read by ``lib.runner_args``.
 
 - ``ANALYSER_PROGRAMS``: linters and static analysers that check in any mode (``phpstan``,
   ``psalm``, ``phpcs``, ``detekt``, ``swiftlint``, ``clang-tidy``, ``cppcheck``), matched by
@@ -28,8 +28,8 @@ file or network access.
   Roslyn analysers a committed project file configures (``analysers_in_build``).
 
 The lint, analyser and formatter-check words of .NET, Gradle, PHP, Elixir, Dart, Swift
-and C++ (issue #926), split from `check_command.py` for the size ratchet; it imports no
-other lib module. `program_name(word)` is the basename with a `.phar`, `.exe` or numeric
+and C++ (issue #926), split from `check_command.py` for the size ratchet; it imports only
+`lib.runner_args` (the shared Gradle parser, #1046). `program_name(word)` is the basename with a `.phar`, `.exe` or numeric
 version suffix dropped (`vendor/bin/phpstan`, `clang-tidy-18`). `ANALYSER_PROGRAMS`
 (`phpstan`, `psalm`, `phpcs`, `detekt`, `swiftlint`, `clang-tidy`, `cppcheck`) lint in any
 mode. `formatter_mode(words)` is `check` for a formatter's check mode (`pint --test`,
@@ -64,6 +64,8 @@ from __future__ import annotations
 import re
 from pathlib import PurePosixPath
 from typing import Literal
+
+from lib.runner_args import gradle_tasks as shared_gradle_tasks
 
 ANALYSER_PROGRAMS = frozenset({
     "phpstan", "psalm", "phpcs", "detekt", "swiftlint", "clang-tidy", "cppcheck",
@@ -127,11 +129,6 @@ def formatter_mode(words: list[str]) -> FormatMode | None:
     return None
 
 
-# Gradle flags that take the next word as a value (``-x lint`` excludes the task).
-_GRADLE_VALUED = frozenset({
-    "-x", "--exclude-task", "-p", "--project-dir", "-b", "--build-file", "-c", "--settings-file",
-    "-I", "--init-script", "-g", "--gradle-user-home", "--include-build", "-D", "-P",
-})
 _GRADLE_LINT = re.compile(
     r"^(?!\w*(?:Fix|Format|Baseline|Apply|GenerateConfig))"
     r"(?:lint\w*|ktlint\w*Check|detekt\w*|spotless\w*Check|checkstyle\w*)$")
@@ -139,17 +136,10 @@ _GRADLE = frozenset({"gradle", "gradlew"})
 
 
 def gradle_tasks(args: list[str]) -> list[str]:
-    """The tasks a Gradle command runs, each without its ``:project:`` prefix."""
-    tasks: list[str] = []
-    skip = False
-    for word in args:
-        if skip:
-            skip = False
-        elif word.startswith("-"):
-            skip = word in _GRADLE_VALUED
-        else:
-            tasks.append(word.rsplit(":", 1)[-1])
-    return tasks
+    """The tasks a Gradle command runs, each without its ``:project:`` prefix, none that
+    ``-x`` names (``lib.runner_args.gradle_tasks``, the one Gradle parser, #1046)."""
+    tasks, excluded = shared_gradle_tasks(args)
+    return [t for t in tasks if t not in excluded]
 
 
 def subcommand_lint(words: list[str]) -> bool:

@@ -12,7 +12,7 @@ stage = "post_offers"
 headless = { instruction_claims = "registered" }
 whys.instruction_claims = "An agent trusts its instruction file without checking it. This checks each claim that a script runs in CI, a version is pinned or a count holds, and names the line of each that no longer does."
 shapes = [
-  { path = "instruction_claims", type = "lib.block_shapes:InstructionClaimsBlock" },
+  { path = "instruction_claims", type = "lib.counts_only.block_shapes:InstructionClaimsBlock" },
 ]
 revision = 1
   [entries.privacy]

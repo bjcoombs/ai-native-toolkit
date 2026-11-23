@@ -1,7 +1,7 @@
 """Hashed repository and group ids in every fleet output file (issue #909, parent #740).
 
 Under ``--hash-paths`` or ``--hash-salt`` the fleet run hashes each repository and group id once,
-at the output boundary, with ``lib.counts_only.hash_value`` under the run's salt
+at the output boundary, with ``lib.counts_only.content_free.hash_value`` under the run's salt
 (``h:`` plus 16 hex digits). The ids are the same ones ``fleet-data.json`` already writes
 as repository keys, so ``repos.jsonl``, ``groups.jsonl``, ``level.json``,
 ``doc_freshness.jsonl``, ``agent_clusters.json``, the run history entry, ``compare.json``,
@@ -42,7 +42,7 @@ from __future__ import annotations
 import copy
 from collections.abc import Iterable, Sequence
 
-from lib.counts_only import hash_value
+from lib.counts_only.content_free import hash_value
 from lib.fleet.runner import FleetRow
 from lib.fleet.fleet_doc_freshness import FreshnessRow
 from lib.fleet.fleet_groups import GroupRow, RowLevel

@@ -12,7 +12,7 @@ import jsonschema
 import pytest
 
 import lib.fleet.runner as fleet
-from lib.counts_only import hash_value, is_hashed
+from lib.counts_only.content_free import hash_value, is_hashed
 from lib.fleet.runner import ScanOptions, Target
 from lib.fleet.fleet_data import Privacy
 from lib.fleet.fleet_hashed import public_freshness, public_groups, public_ids, public_rows

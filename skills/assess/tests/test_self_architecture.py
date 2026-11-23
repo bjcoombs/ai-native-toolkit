@@ -270,6 +270,19 @@ def test_core_does_not_import_orchestrators() -> None:
         load = subprocess.run([sys.executable, "-c", f"import runpy; runpy.run_path({shim.name!r})"],
                               cwd=LIB_DIR, capture_output=True, encoding="utf-8", errors="replace", check=False)
         assert load.returncode == 0, f"{shim.name} does not load by path: {load.stderr[-400:]}"
+    # Each package forward (decision 1) is lazy, and every public name of the moved
+    # module reads through it as the same object, so ``import lib.<pkg>`` keeps the
+    # old module's attributes until 4.0.0. A fresh interpreter, so no earlier import
+    # hides an eager one.
+    for package, target in FORWARDS.items():
+        code = (f"import importlib, sys; import lib.{package} as p; "
+                f"assert {target!r} not in sys.modules, 'imported eagerly'; "
+                f"t = importlib.import_module({target!r}); "
+                "bad = [n for n in dir(t) if not n.startswith('_') and getattr(p, n) is not getattr(t, n)]; "
+                "assert not bad, bad")
+        forward = subprocess.run([sys.executable, "-c", code], cwd=SCRIPTS_DIR, capture_output=True,
+                                 encoding="utf-8", errors="replace", check=False)
+        assert forward.returncode == 0, f"lib.{package} forward: {forward.stderr[-400:]}"
     for stem in ("promissory_markers", "accretion_ratchet"):
         run = subprocess.run([sys.executable, str(LIB_DIR / f"{stem}.py"), "--help"],
                              capture_output=True, encoding="utf-8", errors="replace", check=False)

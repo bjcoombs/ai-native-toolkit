@@ -88,7 +88,7 @@ def test_as_prior_level_keeps_a_valid_value_only() -> None:
 
 
 def test_counts_only_keeps_every_count_and_token() -> None:
-    from lib.counts_only import counts_only
+    from lib.counts_only.content_free import counts_only
 
     prior = build_prior_level(_level())
     assert counts_only({"prior_level": prior})["prior_level"] == prior  # fails if a field is dropped
@@ -182,3 +182,23 @@ def test_a_run_over_an_unreadable_earlier_file_says_so_and_replaces_it(repo: Pat
     strip = (repo / ".assess" / "tag-profile.svg").read_text(encoding="utf-8")
     assert "record could not be read" in strip and 'data-mark="prior"' not in strip
     assert load_prior_level(repo / ".assess") == build_prior_level(ctx["level"])
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
+def test_a_symlink_in_the_file_place_is_replaced_never_written_through(tmp_path: Path) -> None:
+    outside = tmp_path / "outside.json"
+    outside.write_text("keep", encoding="utf-8")
+    assess = tmp_path / "assess"
+    assess.mkdir()
+    (assess / PRIOR_LEVEL_FILE).symlink_to(outside)
+    path = write_prior_level(assess, _level())
+    assert path is not None and not path.is_symlink()
+    assert outside.read_text(encoding="utf-8") == "keep"
+    assert load_prior_level(assess) == build_prior_level(_level())
+
+
+def test_a_file_that_cannot_be_written_is_named_and_skipped(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    missing = tmp_path / "no-such-dir"
+    assert write_prior_level(missing, _level()) is None
+    assert f"{PRIOR_LEVEL_FILE} not written" in capsys.readouterr().err

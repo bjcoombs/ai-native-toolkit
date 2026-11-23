@@ -19,7 +19,7 @@ import pytest
 
 import lib.level_tally as lt
 from lib import level_signals
-from lib.counts_only import counts_only
+from lib.counts_only.content_free import counts_only
 from lib.fleet.runner import STATUS_FAILED, STATUS_OK
 from lib.hosting.merged_sample import UNSUPPORTED_HOST_REASON
 from lib.fleet.fleet_level import LEVEL_FILE, fleet_levels, write_fleet_levels

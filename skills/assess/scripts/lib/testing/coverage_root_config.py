@@ -50,9 +50,11 @@ its test paths name another package.
 
 Only runs on ordinary triggers count (``lib.ci_triggers``): a ``workflow_dispatch`` or
 ``schedule``-only run is skipped, and one whose triggers are not settled reads unresolved.
+Runs are read with the repository's pdm scripts (``CiRuns.pdm_scripts``, #1046), so ``pdm run
+pytest`` with a ``pytest`` script is the script, not pytest.
 
 Inward-only imports: stdlib, ``lib.testing.coverage_activation``, ``lib.testing.coverage_ci``, ``lib.command_index``,
-``lib.docs.doc_graph`` and ``lib.assess_config``; never ``lib.testing.coverage_gate`` (which calls it)
+``lib.docs.doc_graph``, ``lib.assess_config`` and ``lib.runner_args``; never ``lib.testing.coverage_gate`` (which calls it)
 or an orchestrator. Tests: ``tests/test_coverage_root_config.py``.
 """
 from __future__ import annotations
@@ -65,6 +67,7 @@ from pathlib import Path, PurePosixPath
 from lib.assess_config import is_user_excluded
 from lib.command_index import CI_CONFIG_FILES, ci_line_text, read_config
 from lib.testing.coverage_activation import Activation, read_activation
+from lib.runner_args import pdm_scripts_set
 from lib.testing.coverage_ci import CiRuns, Run, runs_tool
 from lib.docs.doc_graph import is_excluded_path
 
@@ -327,8 +330,9 @@ def _coverage_runs(ci: CiRuns, activation: Activation) -> Iterator[tuple[Run, bo
     for run in ci.runs:
         if run.trigger == "not_ordinary":
             continue   # a dispatch- or schedule-only run gates no change
-        state = runs_tool(run.words, "coverage.py", pytest_cov=on, pytest_off=off,
-                          activation=activation)
+        with pdm_scripts_set(ci.pdm_scripts):   # pdm run pytest with a pytest script (#1046)
+            state = runs_tool(run.words, "coverage.py", pytest_cov=on, pytest_off=off,
+                              activation=activation)
         if state is not False:
             yield run, (None if run.trigger == "unknown" else state)
 

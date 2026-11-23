@@ -27,6 +27,11 @@ from svg_cascade import overridden_text_attributes
 SVG_NS = "{http://www.w3.org/2000/svg}"
 
 
+def _quad(diagrams: list[fd.Diagram]) -> fd.Diagram:
+    """The quadrant entry, by file: the tag profile strip (#940) now leads the list."""
+    return next(d for d in diagrams if d["file"] == fq.FILE)
+
+
 def _levels() -> MaturityModel:
     return load_levels(FIXTURES / "levels.toml")
 
@@ -88,7 +93,7 @@ def test_repo_points_measure_commits_and_mean_share_of_top_level():
 
 
 def test_unknown_repositories_are_named_on_the_hatched_strip_not_plotted():
-    text = fd.build_diagrams(_levels(), _repos(), WINDOW)[0]["svg"]
+    text = _quad(fd.build_diagrams(_levels(), _repos(), WINDOW))["svg"]
     assert text is not None
     assert "mobile/android (level and activity unknown)" in text
     assert "mobile/watch (activity" in text
@@ -142,7 +147,7 @@ def test_quadrant_labels_never_overlap_each_other_points_or_captions():
 
 
 def test_a_label_that_fits_nowhere_is_named_under_the_plot():
-    text = fd.build_diagrams(_levels(), _repos(), WINDOW)[0]["svg"]
+    text = _quad(fd.build_diagrams(_levels(), _repos(), WINDOW))["svg"]
     assert text is not None
     _, _, _, labels = fq.layout(fq.repo_points(_levels(), _repos()))
     assert None in labels
@@ -213,7 +218,7 @@ def test_a_fleet_pinned_only_by_variables_still_draws_pins_unknown():
 
 
 def test_counts_only_keeps_ref_variable():
-    from lib.counts_only import counts_only_scans
+    from lib.counts_only.content_free import counts_only_scans
     entry = {"kind": "gitlab_project", "source": "s", "id": "gitlab_project:x", "ref": None,
              "ref_variable": True, "path": ".gitlab-ci.yml", "line": 1, "tracked": True}
     block = {"available": True, "ci_includes": [entry], "marketplaces": [],
@@ -223,7 +228,7 @@ def test_counts_only_keeps_ref_variable():
 
 
 def test_counts_only_keeps_a_token_ref_and_drops_a_slash_ref_to_pin_unknown():
-    from lib.counts_only import counts_only_scans
+    from lib.counts_only.content_free import counts_only_scans
     block = {"available": True, "ci_includes": [{"kind": "gitlab_project", "source": "s",
                                                  "id": "gitlab_project:x", "ref": "release/1.2",
                                                  "path": ".gitlab-ci.yml", "line": 1, "tracked": True}],
@@ -242,8 +247,8 @@ def test_a_raising_renderer_is_a_skip_line_naming_the_error(monkeypatch):
         raise ValueError("render bug")
     monkeypatch.setattr(fq, "render_quadrant", bug)
     diagrams = fd.build_diagrams(_levels(), _repos(), WINDOW)
-    assert diagrams[0]["skipped"] == "skipped: the renderer raised ValueError."
-    assert diagrams[1]["svg"] is not None  # the other diagram is still drawn
+    assert _quad(diagrams)["skipped"] == "skipped: the renderer raised ValueError."
+    assert next(d for d in diagrams if d["file"] == ftm.FILE)["svg"] is not None  # the others still draw
     assert "Not drawn: skipped: the renderer raised ValueError." in fd.report_markdown(diagrams)
 
 
@@ -304,10 +309,10 @@ def test_item_parts_names_the_kind():
 
 def test_skipped_diagrams_say_why_in_the_report():
     no_levels = fd.build_diagrams(None, _repos(), WINDOW)
-    assert no_levels[0]["svg"] is None
-    assert "no maturity model" in (no_levels[0]["skipped"] or "")
+    assert _quad(no_levels)["svg"] is None
+    assert "no maturity model" in (_quad(no_levels)["skipped"] or "")
     org_only: MaturityModel = {**_levels(), "rows": [r for r in _levels()["rows"] if r["scope"] == "org"]}
-    assert "no team rows" in (fd.build_diagrams(org_only, _repos(), WINDOW)[0]["skipped"] or "")
+    assert "no team rows" in (_quad(fd.build_diagrams(org_only, _repos(), WINDOW))["skipped"] or "")
     empty = fd.build_diagrams(_levels(), [], WINDOW)
     by_file = {d["file"]: d["skipped"] for d in empty}
     assert by_file["quadrant.svg"] == by_file["shared-tooling.svg"] == "skipped: no repositories in the run."

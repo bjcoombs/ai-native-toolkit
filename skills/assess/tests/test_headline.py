@@ -282,7 +282,7 @@ def test_log_readiness_line_is_rewritten_and_rechained(ci2: Path):
 
 def test_counts_only_keeps_the_headline_numbers_and_drops_its_text():
     """#770's lesson: fail when a numeric headline field is dropped from counts-only output."""
-    from lib.counts_only import counts_only
+    from lib.counts_only.content_free import counts_only
 
     head = headline(_level(), default_model())
     kept = counts_only({"headline": head})["headline"]
@@ -375,7 +375,7 @@ def test_no_tagged_condition_gives_no_strip_line():
 
 
 def test_counts_only_keeps_the_strip_numbers_and_tag_tokens():
-    from lib.counts_only import counts_only
+    from lib.counts_only.content_free import counts_only
 
     head = headline(_tagged_level(), _tagged_model())  # type: ignore[arg-type]
     kept = counts_only({"headline": head})["headline"]

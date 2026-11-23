@@ -1,4 +1,4 @@
-"""Tests for lib.counts_only: the content-free run-context mode (issue #546)."""
+"""Tests for lib.counts_only.content_free: the content-free run-context mode (issue #546)."""
 from __future__ import annotations
 
 import argparse
@@ -14,7 +14,7 @@ import pytest
 
 import assess_core
 import golden
-from lib.counts_only import (
+from lib.counts_only.content_free import (
     COUNTS_ONLY_FILE,
     HASH_PREFIX,
     add_cli_arguments,
@@ -24,7 +24,7 @@ from lib.counts_only import (
     unclassified_strings,
     validate_cli_args,
 )
-from lib.counts_only_rules import (
+from lib.counts_only.counts_only_rules import (
     FLAT_RULES,
     IDENTIFIER_KEYED_MAPS,
     PATH,
@@ -35,7 +35,7 @@ from lib.counts_only_rules import (
     classify,
 )
 import lib.run_context_types as rct
-from lib.counts_only_schema import (
+from lib.counts_only.counts_only_schema import (
     reached_typeddicts,
     typed_identifier_maps,
     typed_string_fields,

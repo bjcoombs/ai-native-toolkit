@@ -1,6 +1,6 @@
 """The typed shapes of the blocks a default criterion reads match what their builders write (#793).
 
-``lib.block_shapes`` gives ``agent_ops``, ``coverage_gate``, ``instruction_claims``,
+``lib.counts_only.block_shapes`` gives ``agent_ops``, ``coverage_gate``, ``instruction_claims``,
 ``promissory_markers``, ``review_reality`` and ``structure_drift`` a root in
 ``counts_only_schema.ROOTS``, so ``level_signals.team_path_ok`` walks every segment
 of a ``--levels`` path under them. A shape that names a key its builder does not
@@ -20,11 +20,11 @@ from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 import pytest
 
-from lib import block_shapes as bs
+import lib.counts_only.block_shapes as bs
 from lib.agents.agent_ops import scan_agent_ops
 from lib.context_blocks import _structure_drift_block
-from lib.counts_only_schema import ROOTS
-from lib.counts_only import HASH_PREFIX, counts_only
+from lib.counts_only.counts_only_schema import ROOTS
+from lib.counts_only.content_free import HASH_PREFIX, counts_only
 from lib.testing.coverage_gate import detect_coverage_gate
 from lib.headless_layers import structure_drift as headless_structure_drift
 from lib.instruction_claims import scan_instruction_claims

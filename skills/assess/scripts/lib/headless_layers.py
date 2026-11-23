@@ -61,7 +61,7 @@ from typing import Any, TypedDict
 from lib.assess_config import is_user_excluded
 from lib.class_sizes import loc_by_class, percentile
 from lib.context_blocks import no_ownership_map, structure_drift_tier_0
-from lib.counts_only_rules import REASON_SENTENCE_CODES
+from lib.counts_only.counts_only_rules import REASON_SENTENCE_CODES
 from lib.docs.doc_graph import is_excluded_path
 from lib.complexity.generated_files import generated_reason, matches_generated_name
 from lib.git_churn import tracked_files

@@ -10,7 +10,7 @@ The strip draws from data only: the run context's ``level.tags`` (``lib/level_ta
 tally) and ``prior_level`` (``lib/prior_level.py``, read before this run wrote its own). One
 row per truth tag, every tag of ``TRUTH_TAGS`` in that fixed order, so two profiles always
 compare row for row. Each row's label is the tag title and its condition count
-(``Supply chain · 1``), and its ``<title>`` hover text is the tag's ``why`` from the check
+(``Supply chain · 1 condition``), and its ``<title>`` hover text is the tag's ``why`` from the check
 manifest (``lib.manifest.manifest_whys.tag_why``, #939). A row reads one of (``row_state``):
 
 - ``share``: a dot on a shared 0 to 100 percent scale at ``met`` of ``measured``, with the
@@ -49,6 +49,7 @@ import lib.fleet.fleet_svg as svg
 from lib.assess_diagrams import wrap
 from lib.headline import reason_word
 from lib.level_result_types import TagRow
+from lib.level_tags import conditions_label
 from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
 from lib.prior_level import as_prior_level, same_model
 from lib.run_context_types_diagrams import AssessDiagram
@@ -118,8 +119,8 @@ def dashed_text(row: TagRow) -> str:
 
 
 def row_label(row: TagRow) -> str:
-    """The tag title and its condition count: ``Supply chain · 1``."""
-    return f"{TRUTH_TAG_TITLES[row['tag']]} · {row['conditions']}"
+    """The tag title and its condition count: ``Supply chain · 1 condition``."""
+    return f"{TRUTH_TAG_TITLES[row['tag']]} · {conditions_label(row['conditions'])}"
 
 
 def tag_rows_of(level: Mapping[str, Any]) -> list[TagRow] | None:
