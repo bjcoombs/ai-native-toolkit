@@ -48,7 +48,8 @@ per-repository tallies, with the repositories measured; null stats when none is 
   failed repository.
 
 **Unit rows** (#866, ``lib/fleet/fleet_data_units.py``): a repository scanned with
-``--monorepo-units`` carries ``unit_rows``, one per monorepo unit: its Step, the Step above, the
+``--monorepo-units`` carries ``unit_rows``, one per monorepo unit: its kind (``skill``, ``agents``,
+``commands`` or ``package``, #1098), its Step, the Step above, the
 first gate of that Step that does not hold, and its per-tag tally, so the page can expand
 the repository into its units. The unit's folder is written in ``--full`` only, or as its
 salted hash under ``--hash-paths``; null in plain counts-only. ``unit_rows`` is null for a
@@ -451,7 +452,8 @@ def public_unit_rows(rows: list[UnitRow] | None, privacy: Privacy) -> list[UnitR
             "gate": privacy.text("repos.unit_rows.next_blocker.gate", b["gate"]) or "",
             "state": privacy.text("repos.unit_rows.next_blocker.state", b["state"]) or "",
             "disposition": privacy.text("repos.unit_rows.next_blocker.disposition", b["disposition"])}
-        out.append({**row, "key": privacy.text("repos.unit_rows.key", row["key"]), "next_blocker": blocker,
+        out.append({**row, "key": privacy.text("repos.unit_rows.key", row["key"]),
+                    "kind": row["kind"], "next_blocker": blocker,
                     "tags": [{**c, "tag": privacy.text("repos.unit_rows.tags.tag", c["tag"]) or ""}
                              for c in row["tags"]]})
     return out

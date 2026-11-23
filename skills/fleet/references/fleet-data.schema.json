@@ -753,6 +753,21 @@
                         "null"
                       ]
                     },
+                    "kind": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "package",
+                            "skill",
+                            "agents",
+                            "commands"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "step": {
                       "type": [
                         "integer",
@@ -837,6 +852,7 @@
                   },
                   "required": [
                     "key",
+                    "kind",
                     "next_blocker",
                     "next_step",
                     "step",

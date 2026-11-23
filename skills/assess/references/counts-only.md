@@ -502,6 +502,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `units.source` | token |
 | `units.unit_count_reason` | token |
 | `units.units.path` | path, dropped unless hashing is on (then hashed) |
+| `units.units.kind` | token |
 | `units.units.origin` | token |
 | `units.units.ecosystem` | token |
 | `units.units.workspace` | dropped |
@@ -834,6 +835,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `unit_readings.unit_count_reason` | token |
 | `unit_readings.unit_blocks` | token |
 | `unit_readings.units.path` | path, dropped unless hashing is on (then hashed) |
+| `unit_readings.units.kind` | token |
 | `unit_readings.units.conditions.id` | token |
 | `unit_readings.units.conditions.origin` | token |
 
