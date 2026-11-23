@@ -217,6 +217,23 @@ def test_rework_reads_only_lines_inside_the_scope(tmp_path: Path) -> None:
     assert scoped["agent_commits"] == 1 and scoped["reworked_commits"] == 0
 
 
+def test_a_rename_into_the_scope_is_not_rework(tmp_path: Path) -> None:
+    r = _init(tmp_path)
+    body = "".join(f"line {i}\n" for i in range(20))
+    _commit(r, "a/f.txt", body, T0 + DAY)
+    (r / "b").mkdir()
+    _git(r, "mv", "a/f.txt", "b/f.txt", at=T0 + 2 * DAY)
+    (r / "b/f.txt").write_text(body + "agent\n", encoding="utf-8")
+    _git(r, "add", "b/f.txt", at=T0 + 2 * DAY)
+    _git(r, "commit", "-q", "-m", f"move\n\nCo-authored-by: {CLAUDE}", at=T0 + 2 * DAY)
+    _commit(r, "b/f.txt", "touched\n" + body + "agent\n", T0 + 3 * DAY)
+    _commit(r, "pad.txt", "pad\n", T0 + (REWORK_DAYS + 5) * DAY)
+    for scope in (None, r / "b", Path("b")):
+        block = _ok(scan_agent_outcome(r, scope, None))
+        assert block["rework_sampled_commits"] == 1
+        assert block["reworked_commits"] == 0, scope
+
+
 def test_rework_sample_is_the_newest_observed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(agent_outcome, "REWORK_SAMPLE", 1)
     r = _init(tmp_path)

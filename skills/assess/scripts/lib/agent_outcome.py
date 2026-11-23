@@ -244,14 +244,29 @@ def _reverted(repo_root: Path, agents: list[HistoryCommit],
     return by_message, by_restore
 
 
+def _scope_prefix(repo_root: Path, scope: Path | None) -> str:
+    """The scope as a repo-relative POSIX prefix; empty for the whole repository."""
+    if scope is None:
+        return ""
+    if scope.is_absolute():
+        try:
+            scope = scope.resolve().relative_to(repo_root.resolve())
+        except ValueError:
+            return ""
+    rel = scope.as_posix().strip("/")
+    return "" if rel in ("", ".") else rel
+
+
 def _added_lines(repo_root: Path, sha: str, scope: Path | None = None) -> dict[str, int]:
     """Lines the commit added under ``scope``, per path it leaves; binary files left out.
 
     Renames are detected (``-M``), so a pure ``git mv`` adds no line and a rename with
     an edit adds only the edited lines, under the new path: ``git blame`` follows the
     rename back and credits the moved lines to their first commit."""
-    out = _git(repo_root, "show", "--numstat", "-z", "-M", "--format=", sha,
-               "--", str(scope) if scope is not None else ".")
+    # No pathspec: one would limit the diff before -M, so a file renamed into the scope
+    # would read as a whole-file addition. The scope filters the new paths instead.
+    out = _git(repo_root, "show", "--numstat", "-z", "-M", "--format=", sha)
+    prefix = _scope_prefix(repo_root, scope)
     fields = out.lstrip("\n").split("\0")
     added: dict[str, int] = {}
     i = 0
@@ -265,6 +280,8 @@ def _added_lines(repo_root: Path, sha: str, scope: Path | None = None) -> dict[s
         if not path:  # a rename: the old path, then the new one, follow
             path = fields[i + 1] if i + 1 < len(fields) else ""
             i += 2
+        if prefix and not (path == prefix or path.startswith(prefix + "/")):
+            continue
         if path and cols[0].isdigit() and int(cols[0]) > 0:
             added[path] = int(cols[0])
     return added
