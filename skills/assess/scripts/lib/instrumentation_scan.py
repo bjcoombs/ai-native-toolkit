@@ -16,9 +16,11 @@ evidence behind them, each kind a token:
   from an import or call line (``CODE_RULES``): Python ``logging.getLogger``, Go
   ``log/slog``, ``java.util.logging``, ``org.slf4j``, ``android.util.Log``, Apple
   ``OSLog``, Erlang/Elixir ``:telemetry.execute`` and
-  ``ActiveSupport::Notifications.instrument``. Once a rule has matched, files
-  only it could match are not read again, so a large repository is read until
-  each language has its first hit.
+  ``ActiveSupport::Notifications.instrument``. Only the first ``HEAD_BYTES`` of
+  each file are read, where imports and module-level loggers sit, so a large
+  repository with no match costs a bounded read per file rather than its whole
+  tree; a call made only deeper in a file is not seen. Once a rule has matched,
+  files only it could match are not read again.
 - ``config``: a committed collector or scrape config (``prometheus.yml``,
   ``otel-collector-config.yaml``).
 
@@ -115,11 +117,23 @@ CODE_RULES: tuple[CodeRule, ...] = (
 )
 # Files larger than this are not read for code rules (generated or data files).
 MAX_CODE_BYTES = 512 * 1024
+# Code rules read only this much of each file: the import block and module-level
+# logger set-up are at the top.
+HEAD_BYTES = 16 * 1024
 
 
 def _read(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return ""
+
+
+def _read_head(path: Path) -> str:
+    """The first ``HEAD_BYTES`` of a file as text, empty when it cannot be read."""
+    try:
+        with path.open("rb") as handle:
+            return handle.read(HEAD_BYTES).decode("utf-8", errors="ignore")
     except OSError:
         return ""
 
@@ -175,7 +189,7 @@ def detect_instrumented(repo_root: Path,
                 continue
         except OSError:
             continue
-        text = _read(path)
+        text = _read_head(path)
         for rule in rules:
             if rule.pattern.search(text):
                 labels.add(rule.label)

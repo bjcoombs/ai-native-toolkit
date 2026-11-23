@@ -196,13 +196,13 @@ def test_a_rule_that_matched_stops_reading_its_files(tmp_path: Path,
     for n in range(5):
         _write(tmp_path, f"app/m{n}.py", "import logging\nlog = logging.getLogger(__name__)\n")
     reads: list[Path] = []
-    real = inst._read
+    real = inst._read_head
 
     def counting(path: Path) -> str:
         reads.append(path)
         return real(path)
 
-    monkeypatch.setattr(inst, "_read", counting)
+    monkeypatch.setattr(inst, "_read_head", counting)
     assert _detect(tmp_path) == (["Python logging"], ["code"])
     assert len(reads) == 1
 
@@ -212,3 +212,36 @@ def test_an_oversized_source_file_is_not_read(tmp_path: Path,
     _write(tmp_path, "app/big.py", "import logging\nlog = logging.getLogger(__name__)\n")
     monkeypatch.setattr(inst, "MAX_CODE_BYTES", 4)
     assert _detect(tmp_path) == ([], [])
+
+
+def test_a_logger_within_the_head_is_found(tmp_path: Path) -> None:
+    body = "x = 1\n" * ((inst.HEAD_BYTES - 200) // 6)
+    _write(tmp_path, "app/late.py", body + "log = logging.getLogger(__name__)\n")
+    assert _detect(tmp_path) == (["Python logging"], ["code"])
+
+
+def test_a_logger_past_the_head_is_not_read(tmp_path: Path) -> None:
+    body = "x = 1\n" * (inst.HEAD_BYTES // 6 + 10)
+    _write(tmp_path, "app/late.py", body + "log = logging.getLogger(__name__)\n")
+    assert _detect(tmp_path) == ([], [])
+
+
+def test_bytes_read_on_a_large_no_match_tree_are_bounded(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A tree with no match is read at most HEAD_BYTES per file, counted not timed."""
+    filler = "x = 1\n" * (100 * 1024 // 6)
+    for n in range(30):
+        _write(tmp_path, f"pkg/m{n}.py", filler)
+        _write(tmp_path, f"cmd/m{n}.go", "package main\n" + filler)
+    read_bytes: list[int] = []
+    real = inst._read_head
+
+    def counting(path: Path) -> str:
+        text = real(path)
+        read_bytes.append(len(text.encode("utf-8")))
+        return text
+
+    monkeypatch.setattr(inst, "_read_head", counting)
+    assert _detect(tmp_path) == ([], [])
+    assert len(read_bytes) == 60
+    assert sum(read_bytes) <= 60 * inst.HEAD_BYTES
