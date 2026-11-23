@@ -23,7 +23,7 @@ import pytest
 import assess_core
 from lib import core_scans
 from lib.keyhole.keyhole_signals import FINDING_ORDER
-from lib.mutation_refresh import recorded_excludes, refresh_mutation_findings
+from lib.testing.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.run_scope import resolve_scope
 
 _PRODUCTS = (
@@ -381,7 +381,7 @@ def test_archive_hotspot_kept_out_of_attention() -> None:
 def test_recompute_failure_keeps_ctx_untouched(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    import lib.mutation_refresh as mr
+    import lib.testing.mutation_refresh as mr
 
     def boom(*a: Any, **k: Any) -> dict:
         raise RuntimeError("ranking exploded")

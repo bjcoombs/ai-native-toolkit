@@ -13,7 +13,7 @@ owner we compute, per module:
     conservative agent/human classification stays defined one way.)
   - **intent source** (B4) - is there an externalised spec/doc stating what the
     code *should* do? Computed from doc presence (any doc whose directory is an
-    ancestor of the module), a looser test than the ``lib.doc_ownership`` rule
+    ancestor of the module), a looser test than the ``lib.docs.doc_ownership`` rule
     ``doc_staleness`` and the C-signal join share. Presence, not freshness: a stale
     doc still externalises intent (its *staleness* is signal C's lying-map
     finding, not this one's).
@@ -138,7 +138,7 @@ def _doc_dirs(doc_staleness: JsonDict) -> list[tuple[str, ...]]:
 def _has_intent_source(code_path: str, doc_dirs: list[tuple[str, ...]]) -> bool:
     """True if any doc's directory is an ancestor of ``code_path``.
 
-    A presence test, not the ownership rule (``lib.doc_ownership``): any doc
+    A presence test, not the ownership rule (``lib.docs.doc_ownership``): any doc
     covers code in its own directory and below. A repo-root doc (``()``)
     therefore covers everything - intentionally; the orphaned-understanding finding is
     deliberately conservative (it should fire only when there is *no* externalised

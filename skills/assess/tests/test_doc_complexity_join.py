@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from pathlib import Path, PurePosixPath
 
-from lib.doc_complexity_join import (
+from lib.docs.doc_complexity_join import (
     MIN_HIGH_CCN,
     STALENESS_RATIO_THRESHOLD,
     analyze_doc_complexity_join,

@@ -1,4 +1,4 @@
-"""Tests for lib/doc_claims.py - claims across the doc set, and between documents.
+"""Tests for lib/docs/doc_claims.py - claims across the doc set, and between documents.
 
 The instruction-claim kinds (enforcement, pin, count) run over ``docs/``,
 ``skills/*/references/`` and ``skills/*/SKILL.md``; the cross-document kind
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.doc_claims import doc_claim_files, find_contradictions, scan_doc_claims
+from lib.docs.doc_claims import doc_claim_files, find_contradictions, scan_doc_claims
 from lib.instruction_claims import extract_claims, scan_instruction_claims
 
 PIN_311 = "# Setup\n\nPython 3.11 is pinned in `.python-version`.\n"
@@ -302,7 +302,7 @@ def test_a_skill_doc_falls_back_to_the_root_when_only_that_exists(tmp_path: Path
 
 
 def test_a_doc_outside_skills_is_not_rebased(tmp_path: Path) -> None:
-    from lib.doc_claims import rebase_skill_claims
+    from lib.docs.doc_claims import rebase_skill_claims
 
     claims = extract_claims("Keep 3 suites in `tests/*.sql`.\n")
     assert rebase_skill_claims(tmp_path, "docs/a.md", claims) == claims
@@ -329,7 +329,7 @@ def test_different_paths_and_enforcement_claims_never_contradict(tmp_path: Path)
 
 
 def test_contradiction_list_is_capped_but_the_total_is_not(tmp_path: Path) -> None:
-    from lib import doc_claims
+    import lib.docs.doc_claims as doc_claims
 
     a = "\n\n".join(f"Keep 10 suites in `t{i}/*.sql`." for i in range(30))
     b = "\n\n".join(f"Keep 90 suites in `t{i}/*.sql`." for i in range(30))

@@ -10,7 +10,7 @@ publishes = ["mutation_not_run_cap"]
 reads = ["test_pressure"]
 stage = "read_side"
 shapes = [
-  { path = "mutation_not_run_cap", type = "lib.mutation_cap:MutationNotRunCap" },
+  { path = "mutation_not_run_cap", type = "lib.testing.mutation_cap:MutationNotRunCap" },
 ]
 revision = 1
   [entries.privacy]

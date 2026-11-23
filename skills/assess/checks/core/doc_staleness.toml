@@ -17,7 +17,7 @@ headless_variants = [
   { block = "doc_staleness", callable = "lib.headless_static:doc_staleness", reads = ["repo_root", "doc_graph", "excludes"], stage = "read_side" },
 ]
 shapes = [
-  { path = "doc_staleness", type = "lib.doc_staleness:DocStalenessBlock" },
+  { path = "doc_staleness", type = "lib.docs.doc_staleness:DocStalenessBlock" },
 ]
 revision = 1
   [entries.privacy]

@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
-from lib.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_excluded_path
+from lib.docs.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_excluded_path
 from lib.run_context_types import (
     DeadCodeBlock,
     DeadCodeCandidate,

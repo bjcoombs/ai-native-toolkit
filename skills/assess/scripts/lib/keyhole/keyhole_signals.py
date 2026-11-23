@@ -36,7 +36,7 @@ from lib.change_coupling import (
 )
 from lib.keyhole.coupling_analysis import (
     StaticModularity, detect_hidden_coupling, find_refactor_boundaries)
-from lib.doc_complexity_join import _extract_file_ccn, _high_ccn_threshold, analyze_doc_complexity_join
+from lib.docs.doc_complexity_join import _extract_file_ccn, _high_ccn_threshold, analyze_doc_complexity_join
 from lib.graph.import_graph import is_graph_source
 from lib.keyhole.liveness_scan import STATIC_REACHABILITY_CAVEAT
 from lib.reviewed_findings import mark_reviewed, open_findings, render_reviewed_markdown
@@ -46,11 +46,11 @@ from lib.run_context_types import (
     KeyholeSummary, PrescribedAction, RuntimeBlock, UnderstandingBlock,
 )
 from lib.keyhole.structure_drift import detect_grouping_disagreement
-from lib.sibling_tests import find_colocated_test, is_test_path
+from lib.testing.sibling_tests import find_colocated_test, is_test_path
 from lib.keyhole.understanding_analysis import analyze_understanding
-from lib.untrusted_hotspot import DEFAULT_SURVIVOR_DENSITY_THRESHOLD as DEFAULT_SURVIVOR_DENSITY_THRESHOLD
-from lib.untrusted_hotspot import find_untrusted_hotspots as find_untrusted_hotspots
-from lib.untrusted_hotspot import untrusted_hotspot_paths
+from lib.testing.untrusted_hotspot import DEFAULT_SURVIVOR_DENSITY_THRESHOLD as DEFAULT_SURVIVOR_DENSITY_THRESHOLD
+from lib.testing.untrusted_hotspot import find_untrusted_hotspots as find_untrusted_hotspots
+from lib.testing.untrusted_hotspot import untrusted_hotspot_paths
 
 # Caps so a pathological repo can't bloat run-context.json. The treemap and
 # liveness blocks already cap their own lists; these bound the new ones.
@@ -708,7 +708,7 @@ def build_attention_list(
 def _find_sibling_test(repo_root: Path, rel_path: str) -> Path | None:
     """Return the co-located test file for a source path, or ``None``.
 
-    Uses ``lib.sibling_tests.find_colocated_test``, the co-location layer of
+    Uses ``lib.testing.sibling_tests.find_colocated_test``, the co-location layer of
     the resolver the hotspot page and ``test_focus`` read, so the three share one
     idiom list. E2 stops at co-location by definition (test and code co-located
     AND co-committed); a mirrored ``tests/`` tree is out of its scope. A file that
@@ -1403,7 +1403,7 @@ def finding_products(
     """The attention list and report products derived from ``findings``.
 
     Shared by ``integrate`` and the opt-in mutation refresh
-    (``lib.mutation_refresh``), so a refreshed finding set ranks and renders
+    (``lib.testing.mutation_refresh``), so a refreshed finding set ranks and renders
     exactly as the default run's does. A path under archive/, archived/ or
     attic/ never ranks in attention (so never becomes a prescribed action);
     ``archived_finding_paths`` carries those out for the `excluded_as_archive`

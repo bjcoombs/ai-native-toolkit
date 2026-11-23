@@ -116,7 +116,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 from typing import Any, NamedTuple
 
-from lib.doc_graph import is_excluded_path
+from lib.docs.doc_graph import is_excluded_path
 from lib.evidence_check import is_referenced_in
 
 # Where CI is configured. The enforcement check needs at least one to exist.

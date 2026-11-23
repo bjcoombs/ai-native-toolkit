@@ -97,7 +97,7 @@ _NEEDLE_KINDS = frozenset({"referenced_in", "not_referenced_in", "file_contains"
 _GIT_DIR = ".git"
 # Directories the recursive walk does not enter. .assess/ holds this tool's own
 # previous output, which quotes repository paths in prose; reading it as
-# evidence would let one run's report decide the next (lib/doc_graph.py and
+# evidence would let one run's report decide the next (lib/docs/doc_graph.py and
 # lib/graph/structure_graph.py exclude it for the same reason). Only the walk skips
 # these: a path that names .assess/ directly is still searched.
 _SKIP_DIRS = frozenset({_GIT_DIR, ".assess"})

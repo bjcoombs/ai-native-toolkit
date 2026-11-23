@@ -39,9 +39,9 @@ from lib.agent_instructions_grader import (
     grade_instructions,
     scan_sensitive_content,
 )
-from lib.doc_graph import is_repo_file
+from lib.docs.doc_graph import is_repo_file
 from lib.instruction_content import build_repo_context
-from lib.doc_staleness import content_clock
+from lib.docs.doc_staleness import content_clock
 from lib.git_churn import ContentClock, tracked_files
 from lib.instruction_discovery import discover_nested_instructions
 from lib.instruction_placement import detect_skills_dir, skill_texts

@@ -99,10 +99,10 @@ from lib.claude_config import scan_claude_config
 from lib.hosting.config_drift import scan_config_drift
 from lib.degrade import safe as safe  # re-exported: callers import it from here
 from lib.degrade import unavailable
-from lib.coverage_gate import detect_coverage_gate
+from lib.testing.coverage_gate import detect_coverage_gate
 from lib.hosting.delivery import scan_delivery
 from lib.external_ci import no_external_ci, read_external_ci
-from lib.doc_claims import scan_doc_claims
+from lib.docs.doc_claims import scan_doc_claims
 from lib.gate_cost import estimate_gate_cost
 from lib.hosting.gitlab_notes import gitlab_note_facts
 from lib.instruction_claims import scan_instruction_claims
