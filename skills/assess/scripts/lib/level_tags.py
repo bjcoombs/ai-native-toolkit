@@ -13,7 +13,8 @@ and ``measured`` are copied from ``tag_cells``, never counted a second time; ``c
 is the number of the model's conditions with the tag (0 for a tag no condition carries yet,
 such as ``contracts``), ``countable`` those the tally can count by grade (``measured`` or
 ``verified``, not a hazard; ``COUNTABLE_GRADES`` is ``level_tally.COUNTED_GRADES``), ``set_aside``
-the countable ones the owner excluded (``not_applicable``) or that were declined, and
+the countable ones the owner excluded, or that require one the owner excluded (both read
+``not_applicable``), or that were declined, and
 ``not_measured`` lists each condition with the
 tag that was not measured, with its reason code (``{id, reason}``, as the result's own
 ``not_measured``), and ``countable_not_measured`` the countable ones among them: a countable

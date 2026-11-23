@@ -16,6 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow, write_rows  # noqa: E402
 from lib.fleet.fleet_compare import Comparison, FleetRun, compare  # noqa: E402
 from lib.fleet.fleet_diagrams import build_diagrams, report_markdown  # noqa: E402
+from lib.fleet.fleet_data import level_results, tag_fields  # noqa: E402
+from lib.fleet.fleet_tag_profile import tag_profile  # noqa: E402
 from lib.fleet.fleet_groups import roll_up  # noqa: E402
 from lib.fleet.fleet_stamp import build_stamp  # noqa: E402
 from lib.fleet.fleet_view import read_repos  # noqa: E402
@@ -119,7 +121,10 @@ def build(out: Path) -> None:
 def goldens(out: Path) -> dict[str, str]:
     """The golden renders of the run in ``out``: ``expected-<file>`` -> text."""
     levels, repos = load_levels(out / "levels.toml"), read_repos(out)
-    diagrams = build_diagrams(levels, repos, WINDOW, comparison=comparison(levels, repos))
+    # the per-tag roll-up as fleet-data.json writes it (#940), from the same level results
+    results = level_results(levels, repos)
+    profile = tag_profile(levels, tag_fields(levels, results).values())
+    diagrams = build_diagrams(levels, repos, WINDOW, comparison=comparison(levels, repos), tag_profile=profile)
     files = {f"expected-{d['file']}": d["svg"] for d in diagrams if d["svg"] is not None}
     return {**files, "expected-report.md": report_markdown(diagrams)}
 

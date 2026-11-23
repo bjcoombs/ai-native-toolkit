@@ -31,7 +31,10 @@ each gate holds back (a Step reads its gates only, #1083).
 headline's per-tag strip (#844) over the same level result, so it equals the ``tags`` of the
 repository's own headline; null when not measured. Each unit carries a ``tags`` roll-up:
 "N of M measured" and each tag's counts summed over its measured repositories. Tag names
-come from the fixed truth-tag list and the rest are counts.
+come from the fixed truth-tag list and the rest are counts. The document carries
+``tag_profile`` (#940, ``lib/fleet/fleet_tag_profile.py``): per truth tag the median and the
+25th and 75th percentiles of the measured repositories' share met, read from those same
+per-repository tallies, with the repositories measured; null stats when none is measured.
 
 **Per-repository cell** (one per ``team`` row): ``status`` and ``level`` as
 ``lib.levels.evaluate_row`` gives them, plus the criterion that explains it:
@@ -92,7 +95,7 @@ import os
 import tempfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import NamedTuple, TypedDict
+from typing import NamedTuple, NotRequired, TypedDict
 
 from lib.counts_only import hash_value, is_hashed
 from lib.counts_only_rules import DROP, HASHED_PATH, ID, PATH, TOKEN, TOKEN_RE, classify_fleet_data
@@ -108,6 +111,7 @@ from lib.fleet.fleet_data_steps import (
 )
 from lib.fleet.fleet_data_tags import TagRollUp, repo_tags, tag_roll_up
 from lib.fleet.fleet_data_units import UnitRow, unit_rows
+from lib.fleet.fleet_tag_profile import FleetTagRow, tag_profile
 from lib.fleet.fleet_groups import repo_signals
 from lib.fleet.fleet_level import repo_level
 from lib.fleet.fleet_maturity import SCOPE
@@ -236,6 +240,9 @@ class FleetData(TypedDict):
     views: list[View]
     repos: list[DataRepo]
     opportunities: Opportunities | None
+    # #940: the fleet's per-tag roll-up (lib/fleet/fleet_tag_profile.py); None without a model.
+    # NotRequired: a stored entry written before it reads as not measured, never as zeros.
+    tag_profile: NotRequired[list[FleetTagRow] | None]
 
 
 class Privacy(NamedTuple):
@@ -490,6 +497,7 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
         "views": [build_view(tree, team_rows, cells, privacy, steps, repo_step, repo_tag) for tree in trees],
         "repos": sorted(repos, key=lambda r: r["key"]),
         "opportunities": build_opportunities(maturity_model, rows, privacy.key),
+        "tag_profile": tag_profile(maturity_model, repo_tag.values()),
     }
 
 

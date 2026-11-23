@@ -2,6 +2,14 @@
 
 Drawn from this run's output with no model call; unknown is hatched and named, never drawn as zero.
 
+## Practices in place by truth tag, across the fleet
+
+In place: 0 of the 8 truth tags measured on at least one repository, each shown with the median share met.
+
+Which truth tags hold across the estate, and how far apart are the repositories on each?
+
+[![Practices in place by truth tag, across the fleet](./tag-profile.svg)](./tag-profile.svg)
+
 ## Activity and maturity
 
 In place: 14 repositories with a measured level, 9 of them at or above half the top level.

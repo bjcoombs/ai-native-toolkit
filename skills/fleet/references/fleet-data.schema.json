@@ -1036,6 +1036,65 @@
           "type": "null"
         }
       ]
+    },
+    "tag_profile": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tag": {
+                "type": "string"
+              },
+              "conditions": {
+                "type": "integer"
+              },
+              "countable": {
+                "type": "integer"
+              },
+              "repos": {
+                "type": "integer"
+              },
+              "measured": {
+                "type": "integer"
+              },
+              "median": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "p25": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "p75": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "conditions",
+              "countable",
+              "measured",
+              "median",
+              "p25",
+              "p75",
+              "repos",
+              "tag"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [
