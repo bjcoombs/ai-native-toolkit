@@ -143,6 +143,8 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `prior_level.baseline.run_id` | token |
 | `prior_level.baseline.head_sha` | token |
 | `prior_level.baseline.held_gates` | token |
+| `prior_level.pruning.path` | path (hashed when hashing is on) |
+| `prior_level.pruning.completed_sha` | token |
 
 ## doc_graph
 
@@ -854,6 +856,10 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `since_last_run.markdown` | dropped |
 | `since_last_run.reason` | token |
 | `since_last_run.closed_reason` | token |
+| `since_last_run.pruned.path` | path (hashed when hashing is on) |
+| `since_last_run.pruned.completed_sha` | token |
+| `since_last_run.pruning.path` | path (hashed when hashing is on) |
+| `since_last_run.pruning.completed_sha` | token |
 
 ## unit_readings
 

@@ -26,7 +26,9 @@ commit it measured and the Step gates it held (``since_last_run.baseline_record`
 committed while ``run-context.json`` is gitignored, so this is the baseline "since last run"
 reads first: a fresh clone or a CI checkout has it. ``load_baseline`` returns it, or None when
 the file has none (a version-1 file, which this reader still accepts, a run with no commit,
-or a malformed baseline, which is dropped while the tags still read).
+or a malformed baseline, which is dropped while the tags still read). ``pruning`` (#1084)
+holds the pruning ledger's removals beside it (``PruningEntry``, ``load_pruning``), so the
+hold count survives a fresh clone too; a malformed ledger is dropped the same way.
 
 Every value is a tag token, a condition id, a reason code, a version token, a count, a
 commit sha (``baseline.head_sha``), a run id token or a gate id, so the file and the run context's ``prior_level`` name no path, repository or person.
@@ -59,6 +61,17 @@ class Baseline(TypedDict):
     held_gates: list[str]  # the Step gate ids this run held, in Step order
 
 
+class PruningEntry(TypedDict):
+    """One removal the pruning ledger tracks (``lib/pruning_ledger.py``, #1084)."""
+
+    path: str  # the instruction file the removal trimmed
+    completed_sha: str  # the commit that closed the removal action
+    cost_before: int  # the always-on lines when the removal was proposed
+    runs_held: int  # runs on new commits with the file unflagged and every gate held, in a row
+    credited: bool  # credited once runs_held reached HOLD_RUNS
+    saved: int | None  # the measured drop in always-on lines, set when credited
+
+
 class PriorLevel(TypedDict):
     """``prior-level.json`` and the run context's ``prior_level`` (#940)."""
 
@@ -66,6 +79,7 @@ class PriorLevel(TypedDict):
     levels_version: str  # the maturity-model version the tags were counted under
     tags: list[TagRow]  # the level block's tags, in TRUTH_TAGS order
     baseline: NotRequired[Baseline]  # version 2 (#1122); absent with no measured commit
+    pruning: NotRequired[list[PruningEntry]]  # the pruning ledger's removals (#1084)
 
 
 class PriorLevelUnread(TypedDict):
@@ -86,7 +100,8 @@ class PriorLevelBlock(PriorLevel, total=False):
     reason: str  # a fixed token, never text from a file
 
 
-def build_prior_level(level: Any, baseline: Baseline | None = None) -> PriorLevel | None:
+def build_prior_level(level: Any, baseline: Baseline | None = None,
+                      pruning: list[PruningEntry] | None = None) -> PriorLevel | None:
     """The file's content for one ``level`` block and the run's ``baseline``; None when the
     block has no ``tags``."""
     if not isinstance(level, Mapping) or not _valid_tags(level.get("tags")):
@@ -97,7 +112,17 @@ def build_prior_level(level: Any, baseline: Baseline | None = None) -> PriorLeve
                        "tags": cast(list[TagRow], level["tags"])}
     if baseline is not None and _valid_baseline(baseline):
         out["baseline"] = baseline
+    if pruning and _valid_pruning(pruning):
+        out["pruning"] = pruning
     return out
+
+
+def _valid_pruning(value: Any) -> bool:
+    return isinstance(value, list) and all(
+        isinstance(e, Mapping) and isinstance(e.get("path"), str) and isinstance(e.get("completed_sha"), str)
+        and type(e.get("cost_before")) is int and type(e.get("runs_held")) is int and e["runs_held"] >= 0
+        and isinstance(e.get("credited"), bool) and (e.get("saved") is None or type(e.get("saved")) is int)
+        for e in value)
 
 
 def _valid_baseline(value: Any) -> bool:
@@ -139,7 +164,16 @@ def as_prior_level(value: Any) -> PriorLevel | None:
     out = dict(value)
     if "baseline" in out and not _valid_baseline(out["baseline"]):
         del out["baseline"]  # a malformed baseline is dropped alone: the tags still draw
+    if "pruning" in out and not _valid_pruning(out["pruning"]):
+        del out["pruning"]  # so is a malformed ledger
     return cast(PriorLevel, out)
+
+
+def load_pruning(assess_dir: Path) -> list[PruningEntry]:
+    """The pruning ledger in the earlier run's ``prior-level.json``; none when absent (#1084)."""
+    prior = load_prior_level(assess_dir)
+    found = prior.get("pruning") if isinstance(prior, Mapping) else None
+    return cast(list[PruningEntry], found) if isinstance(found, list) else []
 
 
 def load_baseline(assess_dir: Path) -> Baseline | None:
@@ -162,14 +196,15 @@ def load_prior_level(assess_dir: Path) -> PriorLevel | PriorLevelUnread | None:
     return prior if prior is not None else {**UNREADABLE}
 
 
-def write_prior_level(assess_dir: Path, level: Any, baseline: Baseline | None = None) -> Path | None:
+def write_prior_level(assess_dir: Path, level: Any, baseline: Baseline | None = None,
+                      pruning: list[PruningEntry] | None = None) -> Path | None:
     """Write this run's ``prior-level.json`` (sorted keys, LF); remove a stale one when the
     level block has no tags. A symlink in the file's place is removed, never written through,
     and a file that cannot be written (``OSError``) is named on stderr and skipped, as
     ``assess_diagrams.write_diagrams`` does: the record never stops a run. Returns the path
     written, or None."""
     path = assess_dir / PRIOR_LEVEL_FILE
-    content = build_prior_level(level, baseline)
+    content = build_prior_level(level, baseline, pruning)
     try:
         if path.is_symlink() or content is None:
             path.unlink(missing_ok=True)

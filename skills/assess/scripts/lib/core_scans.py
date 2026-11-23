@@ -403,8 +403,9 @@ def headline(level_block: Any) -> Headline:
     return run_context_headline(level_block)
 
 
-def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path, superseded: Any) -> SinceLastRun:
+def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path, superseded: Any,
+                   instruction_placement: Any) -> SinceLastRun:
     """The run context's ``since_last_run`` block (#1083): actions closed, gates gained or
     lost and the next blocker, against the run-context the previous run left (or, for a run
     that supersedes a same-day run on the same commit, against that run's own baseline)."""
-    return since_last_run_block(level_block, assess_dir, repo_root, superseded)
+    return since_last_run_block(level_block, assess_dir, repo_root, superseded, instruction_placement)

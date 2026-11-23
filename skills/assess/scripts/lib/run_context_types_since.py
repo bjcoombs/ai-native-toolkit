@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import NotRequired, TypedDict
 
+from lib.prior_level import PruningEntry
+
 
 class ClosedAction(TypedDict):
     """An action marked done in ``actions.json`` whose commit landed after the previous run."""
@@ -31,6 +33,8 @@ class SinceLastRun(TypedDict):
     gates_gained: list[str] | None  # gate ids, in Step order; None: the previous run has no level
     gates_lost: list[str] | None
     next_blocker: str | None  # the first gate blocking the next Step; None at the top Step
+    pruned: list[PruningEntry]  # removals the pruning ledger credited this run (#1084)
+    pruning: list[PruningEntry]  # every removal the ledger tracks, stored in prior-level.json
     lines: list[str]  # the section's lines, for the report and the log.md entry
     markdown: str  # the lines as Markdown bullets
     reason: NotRequired[str]  # why the block is unavailable
