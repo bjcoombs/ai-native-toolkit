@@ -254,6 +254,10 @@ def _baseline(assess_dir: Path, superseded: Any) -> tuple[bool, str | None, Mapp
                                                          Mapping[str, Any] | None]:
     """``(first_run, why the previous state is unknown, previous context, inherited block)``.
 
+    Read order: the superseded run's own block (below), then the committed baseline in
+    ``prior-level.json`` (#1122, returned as ``{run_id, head_sha, held_gates}``), then
+    ``run-context.json``, then ``log.md``.
+
     No ``run-context.json`` is a first run only when ``log.md`` records no earlier run either:
     the context is often gitignored, so a fresh clone or a CI checkout has the log and not the
     context, and that is an unknown previous state (``previous_state_missing``), never a first

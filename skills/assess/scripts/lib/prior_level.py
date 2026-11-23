@@ -25,7 +25,8 @@ Version 2 (#1122) adds ``baseline``: ``{run_id, head_sha, held_gates}``, the run
 commit it measured and the Step gates it held (``since_last_run.baseline_record``). The file is
 committed while ``run-context.json`` is gitignored, so this is the baseline "since last run"
 reads first: a fresh clone or a CI checkout has it. ``load_baseline`` returns it, or None when
-the file has none (a version-1 file, which this reader still accepts, or a run with no commit).
+the file has none (a version-1 file, which this reader still accepts, a run with no commit,
+or a malformed baseline, which is dropped while the tags still read).
 
 Every value is a tag token, a condition id, a reason code, a version token or a count, so
 the file and the run context's ``prior_level`` name no path, repository or person.
@@ -135,9 +136,10 @@ def as_prior_level(value: Any) -> PriorLevel | None:
         return None
     if not isinstance(value.get("levels_version"), str) or not _valid_tags(value.get("tags")):
         return None
-    if "baseline" in value and not _valid_baseline(value["baseline"]):
-        return None
-    return cast(PriorLevel, dict(value))
+    out = dict(value)
+    if "baseline" in out and not _valid_baseline(out["baseline"]):
+        del out["baseline"]  # a malformed baseline is dropped alone: the tags still draw
+    return cast(PriorLevel, out)
 
 
 def load_baseline(assess_dir: Path) -> Baseline | None:

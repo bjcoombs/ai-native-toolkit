@@ -207,14 +207,16 @@ def test_a_file_that_cannot_be_written_is_named_and_skipped(
 
 def test_version_2_adds_the_committed_baseline_and_version_1_still_reads(tmp_path: Path) -> None:
     """#1122: the baseline sits beside the tags; a version-1 file still loads, without one."""
-    from lib.prior_level import load_baseline
+    from lib.prior_level import Baseline, load_baseline
     level = _level()
-    baseline = {"run_id": "r1", "head_sha": "a" * 40, "held_gates": ["instructions"]}
-    write_prior_level(tmp_path, level, baseline)  # type: ignore[arg-type]
+    baseline: Baseline = {"run_id": "r1", "head_sha": "a" * 40, "held_gates": ["instructions"]}
+    write_prior_level(tmp_path, level, baseline)
     assert load_baseline(tmp_path) == baseline
     (tmp_path / PRIOR_LEVEL_FILE).write_text(json.dumps(
         {"prior_level_version": 1, "levels_version": level["levels_version"], "tags": level["tags"]}), encoding="utf-8")
     assert load_prior_level(tmp_path) is not None and load_baseline(tmp_path) is None
     (tmp_path / PRIOR_LEVEL_FILE).write_text(json.dumps(
         {"prior_level_version": 2, "levels_version": "m", "tags": [], "baseline": {"head_sha": 7}}), encoding="utf-8")
-    assert load_prior_level(tmp_path) == {"available": False, "reason": "unreadable"}
+    # a malformed baseline is dropped alone; the tags still read
+    assert load_prior_level(tmp_path) == {"prior_level_version": 2, "levels_version": "m", "tags": []}
+    assert load_baseline(tmp_path) is None
