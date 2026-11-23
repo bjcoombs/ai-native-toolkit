@@ -16,7 +16,9 @@ build`` runs ``build``; ``make -j build`` also runs ``build``, with unlimited jo
 ``make_runs_no_recipe(words)`` is a make run whose recipes cannot fail it: a dry run (``-n``,
 ``--dry-run``, ``--just-print``, ``--recon``, ``-t`` / ``--touch``, ``-q`` / ``--question``,
 alone or in a cluster such as ``-kn``) or ``-i`` / ``--ignore-errors``; ``-k`` still exits 2,
-so it is not one. Each rule
+so it is not one. A cluster is read left to right up to the first letter that takes a value
+(``C``, ``f``, ``I``, ``o``, ``W``, ``E``, ``N``, or ``j`` / ``l`` before digits), so ``-Ctests``,
+``-Iinclude`` and ``-kCtests`` run the target. Each rule
 was checked against bash 3.2 and 5.3, dash and GNU make. Tests: ``tests/test_check_command.py``.
 """
 from __future__ import annotations
@@ -87,9 +89,26 @@ def make_runs_no_recipe(words: list[str]) -> bool:
     exits 0 with a failing recipe (or, for ``-q``, without running one), so no check gates."""
     if words[:1] not in (["make"], ["gmake"]):
         return False
-    return any(w in _MAKE_NO_RECIPE or (w[:1] == "-" and w[1:2] != "-" and w[1:].isalpha()
-                                        and bool(set(w[1:]) & _MAKE_NO_RECIPE_SHORT))
+    return any(w in _MAKE_NO_RECIPE or _cluster_letters(w) & _MAKE_NO_RECIPE_SHORT
                for w in make_args(words[1:]))
+
+
+# Short make options whose value may be attached (``-Ctests``, ``-Iinclude``, ``-otarget``);
+# ``-j`` / ``-l`` take attached digits (``-j4``).
+_MAKE_VALUE_LETTERS = frozenset("CfIoWEN")
+
+
+def _cluster_letters(word: str) -> set[str]:
+    """The option letters of one short cluster, left to right up to the first that takes a
+    value: ``-kn`` -> k, n; ``-Ctests`` -> C (``tests`` is its value); ``-j4n`` -> j."""
+    if word[:1] != "-" or word[1:2] in ("-", ""):
+        return set()
+    letters: set[str] = set()
+    for k, letter in enumerate(word[1:], start=1):
+        letters.add(letter)
+        if letter in _MAKE_VALUE_LETTERS or (letter in "jl" and word[k + 1:k + 2].isdigit()):
+            break
+    return letters
 
 
 def make_args(args: list[str]) -> list[str]:
