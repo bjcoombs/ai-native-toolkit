@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.assess_config import is_user_excluded
-from lib.stats_diff import StatsDiff
+from lib.complexity.stats_diff import StatsDiff
 from lib.wiki_writer import (
     last_log_entry_is_unfinalized_run,
     retire_excluded_hotspots,

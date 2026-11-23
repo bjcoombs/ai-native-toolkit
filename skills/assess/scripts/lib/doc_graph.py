@@ -847,10 +847,10 @@ def _detect_working_notes_trees(
     headline graph (link and reference edges) restricted to those docs: each doc's in-degree and the docs its inbound
     edges come from, so the classifier can tell one index holding the links
     from a wiki whose links are spread out. The verdict is
-    ``lib.raw_source.classify_working_notes_trees``; ``force`` / ``ignore``
+    ``lib.complexity.raw_source.classify_working_notes_trees``; ``force`` / ``ignore``
     are the config overrides, passed through.
     """
-    from lib.raw_source import classify_working_notes_trees
+    from lib.complexity.raw_source import classify_working_notes_trees
 
     signals: dict[str, DocSignal] = {}
     for r in sorted(doc_rels):
@@ -868,11 +868,11 @@ def _detect_raw_trees(
 
     Assembles the per-doc graph signals (in/out degree from the final graph plus
     the machine-extraction fingerprint count) and delegates the threshold-based
-    verdict to ``lib.raw_source.classify_raw_trees``. ``base_hubs`` and the
+    verdict to ``lib.complexity.raw_source.classify_raw_trees``. ``base_hubs`` and the
     README/MOC entries are passed as entry points so a doc reachable through a
     dynamic navigation surface is never counted toward a subtree's isolation.
     """
-    from lib.raw_source import classify_raw_trees
+    from lib.complexity.raw_source import classify_raw_trees
 
     in_deg = dict(graph.in_degree())
     out_deg = dict(graph.out_degree())

@@ -84,7 +84,7 @@ from lib.run_context_types import (
 )
 from lib.layer_grades import LayerGradesBlock
 from lib.level_result_types import Headline, LevelResult, OwnerExclusionsBlock
-from lib.scc_coverage import UnreliableCcnRow
+from lib.complexity.scc_coverage import UnreliableCcnRow
 from lib.review_automation import ReviewAutomationBlock, ReviewEvidenceBlock
 from lib.shared_tooling import SharedToolingBlock
 from lib.unit_discovery import UnitsBlock

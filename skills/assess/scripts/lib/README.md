@@ -162,6 +162,11 @@ run as `python scripts/lib/<stem>.py` does not have `lib` on `sys.path`; run the
   and `agent_instructions_grader` wait for the `instructions` group, so all four stay at the
   root. Files: `__init__.py`, `agent_building.py`, `agent_building_vocab.py`,
   `agent_environment.py`, `agent_harness.py`, `agent_manifests.py`, `agent_ops.py`.
+- **`complexity/`**: the complexity treemap renderer, `scc` coverage, the Dart scanner and
+  the stats sidecar (its rows, cross-run diff and diff reliability), plus the generated- and
+  raw-source exclusions they apply. Files: `__init__.py`, `dart_complexity.py`,
+  `diff_reliability.py`, `generated_files.py`, `raw_source.py`, `scc_coverage.py`,
+  `stats_diff.py`, `stats_rows.py`, `treemap_render.py`.
 - **`fleet/`**: the `/fleet` runner, roll-ups, run history, published fleet schemas and
   diagrams. `lib/fleet.py` became `fleet/runner.py`, because the package now holds that
   name; until 4.0.0 the package `__init__.py` forwards each runner name (`lib.fleet.FleetRow`)
