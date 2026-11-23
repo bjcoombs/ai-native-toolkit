@@ -62,7 +62,7 @@ def test_an_unrecognised_target_reads_null(text: str) -> None:
     "make format", "turbo run build", "npm run build", "npm run build:prod", "pnpm build",
     "yarn install", "yarn", "npm run", "./scripts/install.sh", "./scripts/deploy.sh",
     "./configure", "./gradlew assemble", "docker run img echo hi", "docker build .",
-    "bash -c 'foo'", "/usr/bin/foo", "./gradlew assembleDebug", "xcodebuild build -scheme App",
+    "bash -c 'make build'", "/usr/bin/foo", "./gradlew assembleDebug", "xcodebuild build -scheme App",
     "xcodebuild -scheme test build", "flutter build apk", "dart compile exe bin/x.dart",
     "php artisan migrate",
     # #926: a package-manager head running a target runner reads as that runner.

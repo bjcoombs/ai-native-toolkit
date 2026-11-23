@@ -4,8 +4,10 @@ from __future__ import annotations
 import pytest
 
 from lib.check_command import (
-    is_check_command, is_check_name, is_lint_command, is_lint_run, may_lint)
+    check_verdict, is_check_command, is_check_name, is_lint_command, is_lint_run, may_lint)
 from lib.ci_scripts import script_path
+from lib.command_flags import make_args, shell_args, shell_string
+from lib.command_resolver import command_words
 
 
 @pytest.mark.parametrize(("text", "expected"), [
@@ -72,8 +74,8 @@ def test_may_lint(text: str, expected: bool) -> None:
     ("hatch fmt --check", True, False),
     ("hatch fmt", False, False),            # rewrites the files: no failing check
     ("hatch run ruff check .", True, False),
-    ("hatch run lint", False, True),        # a script: like tox -e, its recipe is not read
-    ("hatch run lint:all", False, True),
+    ("hatch run lint", True, True),         # #955: the name trust of make lint
+    ("hatch run lint:all", True, True),     # the lint environment's all script
     ("hatch run test:cov", False, True),
     ("hatch -e lint run check", False, True),
     ("hatch run pytest -q", False, False),  # a direct test run
@@ -158,3 +160,61 @@ def test_script_path_names_the_committed_file_a_command_runs(text: str,
     """#937: the repository file a command runs as a script, or None when it runs none
     (or a path the tree cannot settle)."""
     assert script_path(text) == expected
+
+
+# --- #955: shell, make and hatch parsing --------------------------------------------------
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    # the issue's table
+    ("sh -e ./ci/run.sh", None), ("bash -e scripts/test.sh", True),   # -e takes no value
+    ('bash -c "make test"', True),                                      # the -c string is read
+    ("bash --norc ./ci.sh", None), ("bash --norc ./test.sh", True),  # --norc is not -c
+    ("make -j 4 build", False), ("make -j 4 test", True),            # -j takes the number
+    # the rest of each rule
+    ("bash -o pipefail scripts/test.sh", True), ("bash -eo pipefail scripts/test.sh", True),
+    ("bash --rcfile x ./test.sh", True), ("bash -lc 'pytest -q'", True), ("sh -c 'make build'", False),
+    ('bash -c "echo hi"', False), ("bash -c 'foo'", None),   # an unknown program, as uv run foo ('bash -c "make deps && make test"', None),
+    ("bash -c 'pytest || true'", None), ('bash -c "pytest > out.log"', None),
+    ('bash -c "$(cat cmd)"', None), ("bash -c 'pytest `which x`'", None),
+    ('bash -c "unterminated', None), ("bash -c ''", None),
+    ("make -j build", False), ("make -l 2.5 test", True), ("make -o foo build", False),
+    ("make -W foo test", True), ("make -j 4", None),
+])
+def test_shell_and_make_options_are_read_per_program(text: str, expected: bool | None) -> None:
+    assert check_verdict(text) is expected
+
+
+@pytest.mark.parametrize(("text", "path"), [
+    ("bash --rcfile x ./test.sh", "test.sh"), ("bash --init-file x scripts/test.sh", "scripts/test.sh"),
+    ("bash -e ./ci.sh", "ci.sh"), ("bash --norc ./ci.sh", "ci.sh"),
+])
+def test_script_path_skips_a_shell_options_value(text: str, path: str) -> None:
+    assert script_path(text) == path
+
+
+def test_the_shell_and_make_helpers() -> None:
+    assert shell_args(command_words("bash -e -o pipefail x.sh a")) == ["x.sh", "a"]
+    assert shell_args(command_words("bash -ec 'make test'")) is None
+    assert shell_args(command_words("bash -- x.sh")) == ["x.sh"]
+    assert shell_string(command_words("bash -c 'make test' name")) == ["make", "test"]
+    assert make_args(["-j", "4", "-l", "2", "-o", "f", "-j", "build"]) == ["-j", "build"]
+
+
+@pytest.mark.parametrize("text", ["hatch run lint", "hatch run lint:style", "hatch run typecheck"])
+def test_hatch_run_has_the_name_trust_of_make(text: str) -> None:
+    """``hatch run lint`` reads as ``make lint`` does: a lint command and a lint run (#955)."""
+    assert is_lint_command(text) or text.endswith("typecheck")
+    assert is_lint_run(text)
+
+
+@pytest.mark.parametrize("text", ["hatch run foo", "hatch run build", "hatch run test:cov"])
+def test_other_hatch_scripts_are_not_lint_runs(text: str) -> None:
+    assert not is_lint_run(text)
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("bash -c 'ruff check .'", True), ('bash -c "make lint"', True), ("bash -c 'make build'", False),
+])
+def test_a_shell_string_is_read_for_lint_too(text: str, expected: bool) -> None:
+    assert is_lint_run(text) is expected
