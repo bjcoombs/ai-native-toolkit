@@ -134,8 +134,10 @@ In a skills or plugin repository, such as a marketplace of many skills, each ski
 unit. Each folder holding a `SKILL.md` is a unit of kind `skill`, and a plugin root's
 `agents/` and `commands/` folders (beside its `.claude-plugin/plugin.json`) are units of
 kind `agents` and `commands`. The shallowest folder wins, so a `SKILL.md` inside a skill
-is part of that skill. A `SKILL.md` under a fixture, test, example or vendored folder is
-test data and never a unit. A skill with its own `pyproject.toml` or `package.json` is one
+is part of that skill. A `SKILL.md` below a fixture, test, example or vendored folder is
+test data and never a unit, and one below a hidden folder (`.github/skills/`,
+`.agents/skills/`) is agent configuration, not a product. Only the folders above a skill
+are read this way, so `skills/spec/` is a skill. A skill with its own `pyproject.toml` or `package.json` is one
 unit, and a package inside a skill, or below a root `SKILL.md`, is listed as `claimed`. A package above the skills is a unit of the source files no
 skill holds, and no unit when the skills hold all of them.
 

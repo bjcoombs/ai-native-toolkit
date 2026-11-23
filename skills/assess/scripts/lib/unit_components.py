@@ -15,9 +15,13 @@ which seldom has a manifest. This module finds those folders from the tracked fi
   attributed to a skill: no file ties an agent to the skill that uses it, so the folder is
   one unit. One inside a skill folder is part of that skill instead.
 
-Only production paths are candidates (``lib.path_classes``): a ``SKILL.md`` or plugin
-manifest under a fixture, test, example, vendored or generated folder
-(``pkg/tests/fixtures/sample/SKILL.md``) is test data, not a unit, wherever it sits.
+A candidate's own folder name is never classified (``skills/spec`` and ``skills/demo`` are
+skills), only the folders above it, and a candidate is left out when one of them is:
+
+- test data (``lib.path_classes``): a fixture, test, example, vendored or generated folder
+  (``pkg/tests/fixtures/sample/SKILL.md``), wherever it sits;
+- hidden, a name starting with ``.``: ``.github/skills/``, ``.agents/skills/`` and
+  ``.claude/skills/`` hold an app repository's agent configuration, not its products.
 
 A component folder that also holds a build manifest (``skills/assess`` with its
 ``pyproject.toml``) is one unit of kind ``skill`` with the manifest's ecosystem. A build
@@ -63,20 +67,28 @@ def _depth(folder: str) -> tuple[int, str]:
     return (0 if folder == "." else folder.count("/") + 1, folder)
 
 
+def _eligible(folder: str) -> bool:
+    """True when no folder above ``folder`` is test data or hidden (its own name is not read)."""
+    parent = posixpath.dirname(folder) if folder != "." else ""
+    if any(part.startswith(".") for part in parent.split("/") if part):
+        return False
+    return is_production(posixpath.join(parent, SKILL_FILE))
+
+
 def discover_components(files: Iterable[str], dirs: frozenset[str]) -> Components:
     """The skill and plugin-component folders of ``files`` (repo-relative POSIX paths, already
     filtered by the run's excludes); ``dirs`` is every folder holding a tracked file."""
     candidates: dict[str, Kind] = {}
-    files = [rel for rel in files if is_production(rel)]
+    files = list(files)
     for rel in files:
-        if posixpath.basename(rel) == SKILL_FILE:
+        if posixpath.basename(rel) == SKILL_FILE and _eligible(posixpath.dirname(rel) or "."):
             candidates[posixpath.dirname(rel) or "."] = "skill"
     for rel in files:
         if rel == PLUGIN_MANIFEST or rel.endswith("/" + PLUGIN_MANIFEST):
             root = rel[: -len(PLUGIN_MANIFEST)].rstrip("/") or "."
             for name, kind in PLUGIN_COMPONENTS:
                 folder = name if root == "." else f"{root}/{name}"
-                if folder in dirs:
+                if folder in dirs and _eligible(folder):  # the plugin root is read too
                     candidates.setdefault(folder, kind)
     units: list[Component] = []
     claimed: list[str] = []

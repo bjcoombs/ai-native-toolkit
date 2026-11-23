@@ -97,6 +97,22 @@ def test_a_root_skill_over_packages_lists_every_package_it_claims(tmp_path: Path
     assert _skipped(block) == {"svc-a": "claimed", "svc-b": "claimed"}  # type: ignore[arg-type]
 
 
+def test_a_skill_folder_named_like_test_data_is_still_a_skill(tmp_path: Path) -> None:
+    names = ["spec", "demo", "e2e", "examples", "test"]
+    block = scan_units(_write(tmp_path, {f"skills/{n}/SKILL.md": f"# {n}\n" for n in names}))
+    assert _paths(block) == sorted(f"skills/{n}" for n in names)  # type: ignore[arg-type]
+
+
+def test_hidden_agent_configuration_skills_are_no_units(tmp_path: Path) -> None:
+    files = {"package.json": '{"name": "app", "workspaces": ["apps/*"]}\n',
+             "apps/web/package.json": '{"name": "web"}\n', "apps/web/index.ts": "1\n",
+             ".github/skills/release/SKILL.md": "# release\n",
+             ".agents/skills/lint/SKILL.md": "# lint\n",
+             ".agents/.claude-plugin/plugin.json": "{}\n", ".agents/agents/a.md": "# a\n"}
+    block = scan_units(_write(tmp_path, files))
+    assert _kinds(block) == {"apps/web": ("package", "npm", "workspace_member")}  # type: ignore[arg-type]
+
+
 def test_a_skill_fixture_inside_a_package_is_no_unit(tmp_path: Path) -> None:
     files = {"pkg/pyproject.toml": '[project]\nname = "pkg"\n', "pkg/src/m.py": "x = 1\n",
              "pkg/tests/fixtures/sample/SKILL.md": "# sample\n",
