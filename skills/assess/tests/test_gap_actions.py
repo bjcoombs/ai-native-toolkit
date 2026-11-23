@@ -157,3 +157,10 @@ def test_counts_only_keeps_a_removals_cost_mode_and_finding_and_drops_its_words(
     assert (kept["finding"], kept["mode"], kept["signal"]) == ("instruction_always_on", "remove", "instruction_placement")
     assert (kept["cost"]["metric"], kept["cost"]["value"]) == ("always_on_lines", 312)
     assert "action" not in kept and "why" not in kept
+
+
+def test_action_mode_values_close_over_every_mode_finalize_writes() -> None:
+    from lib.gap_actions import ACTION_MODE_VALUES, REMOVAL_FINDING, action_mode
+    from lib.keyhole.keyhole_signals import FINDING_MODES
+    assert {action_mode(f) for f in [*FINDING_MODES, REMOVAL_FINDING, None]} <= ACTION_MODE_VALUES
+    assert "remove" in ACTION_MODE_VALUES

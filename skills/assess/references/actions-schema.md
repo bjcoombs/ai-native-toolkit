@@ -49,7 +49,7 @@
 | `claimed_by` | string \| null | Identifier of the executor that claimed the action; `null` while unclaimed. |
 | `cost` | object, optional | A removal's measured cost, `{metric, path, value}` (`metric` `always_on_lines`: the instruction lines every session loads), copied from the `gap_actions` proposal. Carried through verbatim. |
 | `completed_sha` | string \| null | The commit SHA that satisfied `done_when`; `null` until done. The next run credits the action under "Closed since last run" when this commit landed after the commit the previous run measured (`lib/since_last_run.py`, #1083); commit `.assess/actions.json` for it to count; an uncommitted file reads "not known", never 0. |
-| `mode` | enum | Deterministic execution posture, derived from `finding`: `characterize_first` \| `verify_then_retire` \| `refactor_safe`. See below. |
+| `mode` | enum | Deterministic execution posture, derived from `finding`: `characterize_first` \| `verify_then_retire` \| `refactor_safe` \| `remove`. See below. |
 
 ### Recommended (passed through when the LLM supplies them)
 

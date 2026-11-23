@@ -58,7 +58,7 @@ from __future__ import annotations
 from typing import NotRequired, TypedDict
 
 from lib.instruction_placement import ALWAYS_ON_FLAG_LINES
-from lib.keyhole.keyhole_signals import is_archive_path, mode_for_finding
+from lib.keyhole.keyhole_signals import FINDING_MODE_VALUES, is_archive_path, mode_for_finding
 from lib.run_context_types import JsonDict
 
 
@@ -89,6 +89,8 @@ class GapAction(TypedDict):
 REMOVAL_FINDING = "instruction_always_on"
 REMOVE_MODE = "remove"
 REMOVAL_MODES = {REMOVAL_FINDING: REMOVE_MODE}
+# Every mode finalize can write: the keyhole modes plus ``remove``.
+ACTION_MODE_VALUES = FINDING_MODE_VALUES | {REMOVE_MODE}
 
 # Reachability floor for the doc_graph gap. Below half, most of the docs cannot
 # be reached by following links from README / AGENTS.md / an index page, so an
