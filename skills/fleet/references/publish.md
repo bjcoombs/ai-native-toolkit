@@ -18,7 +18,11 @@ step (#949) sends the batches.
 The unit and repository entries copy every field of the bundle. A field the bundle gains,
 such as #945's `gate_blockers`, is published without a change to the projection.
 `update` merges nested objects, so a run writes only its own `history.<runId>`.
-Republishing a run writes the same value again and changes nothing. `update` requires the
+Republishing a run writes the same value again and changes nothing. A run id is immutable
+once published. A merge cannot remove a field, so a corrected run cannot replace the entry
+it already holds. When the caller passes what the run id holds now (`previous`), a
+republish whose `runs` document or any `history.<runId>` entry differs is refused, and the
+error names the documents. Publish a corrected run under a new run id. `update` requires the
 document to exist, so the caller passes the documents already stored, and a new one is
 written with `set` and the same body.
 
@@ -27,14 +31,20 @@ written with `set` and the same body.
 written as `~` plus two hex digits per UTF-8 byte: `ownership/grp/sub` becomes
 `ownership~2Fgrp~2Fsub`. A hashed key (`h:` plus 16 hex digits) is unchanged. The run id is
 encoded the same way as a `history` key, so a same-day run `2026-11-20.2` is keyed
-`2026-11-20~2E2`. `decode_doc_id` reverses the encoding.
+`2026-11-20~2E2`. `decode_doc_id` reverses the encoding. A key that encodes to more than 200 characters
+refuses the whole publish. Only an unhashed key can be that long.
 
 ### Access rules
 
-The artifact's `db` capability declares exactly these rules (`access_rules()`):
+The artifact's `db` capability declares exactly these rules (`access_rules()`). The root
+rule (path `""`) means no viewer writes documents outside the collections below. Each such
+document would count against the document cap. The root rule also covers each viewer's
+`data/users/` subtree, so a page that keeps per-viewer state there needs its own
+`data/users/{self}` rule.
 
 | Path | Read | Write |
 |---|---|---|
+| `""` (root) | `view` | `owner` |
 | `runs` | `view` | `owner` |
 | `units` | `view` | `owner` |
 | `repos` | `view` | `owner` |
@@ -53,9 +63,9 @@ names each pattern that failed.
 
 | Limit | Value | Source |
 |---|---|---|
-| Bytes per document | 262,144 (256 KiB) | #692's database layout; the db capability's type definitions, runtime contract 0.2.96 |
+| Bytes per document | 262,144 (256 KiB) | #692's database layout and the db capability's type definitions |
 | Nesting levels per document | 32 | The db capability's type definitions |
-| Documents per artifact | 25,000 | #692; the db capability's type definitions |
+| Documents per artifact | 5,000 | The db capability's type definitions, runtime contract 0.2.47. Contract 0.2.96 and #692 state 25,000. The smaller cap is the default, so a plan that fits under it fits under either. A publisher pinned to a contract that states more passes its own `Limits`. |
 | Writes per `batch` call | 50 | The `ArtifactData` tool's `batch` action |
 | Body per `batch` call | 1 MiB | The `ArtifactData` tool's `batch` action |
 
@@ -67,7 +77,8 @@ says whether that count is within one artifact's limit. Sharding (#950) reads bo
 
 For a stored document, the guard adds the whole stored size to this run's entry. A
 republished run is therefore counted twice, which overstates the size and never
-understates it. A synthetic hashed 10,000-repository fleet comes to 10,005 documents. Its
+understates it. A synthetic hashed 10,000-repository fleet comes to 10,005 documents. That is over the
+5,000 cap, so it is planned as shards (#950). Its
 largest is the `runs` document, at about 211 KB, which is over the 80% warning: the
 opportunity lists name every repository they lift.
 

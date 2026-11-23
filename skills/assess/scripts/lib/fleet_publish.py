@@ -14,7 +14,9 @@ calls the network; the ``/fleet`` publish step (#949) sends the batches.
   repository object without its ``key``. Every field of the bundle is copied generically, so
   a field the bundle gains (#945's ``gate_blockers``) is published with no change here. The
   database's ``update`` merges nested objects recursively, so a run touches only its own
-  ``history.<runId>``; republishing it writes the same value again. ``update`` requires the
+  ``history.<runId>``; republishing it writes the same value again. A run id is immutable once
+  published: a merge cannot remove a field, so a republish whose entry differs from the stored
+  one (``previous``) is refused with ``RepublishConflict``. ``update`` requires the
   document to exist, so ``stored`` (below) decides the op: ``update`` for a document already
   stored, ``set`` (the same body) for a new one.
 - ``targets``: never written here; Contributors write it from the page (#948 reads it back).
@@ -41,7 +43,8 @@ counted twice, which overstates and never understates). At ``WARN_SHARE`` (80%) 
 per-document limit the document is listed in ``warnings``; above the limit, or deeper than
 the depth limit, ``DocumentTooLarge`` names it. The document count after the publish (the
 stored documents plus the new ones) is reported against the per-artifact limit with
-``fits``, for #950's sharding; the count is not refused here.
+``fits``, for #950's sharding; the count is not refused here. A key that encodes to more
+than 200 characters (possible only without hashing) refuses the whole publish.
 
 **Batches**: writes are ordered ``runs``, ``units``, ``repos``, each by doc id, and cut
 greedily into batches of at most ``Limits.batch_writes`` writes and ``Limits.batch_bytes``
@@ -50,8 +53,10 @@ of body. The same bundle, run id and ``stored`` give byte-identical ``dumps_plan
 Writes carry no ``if_version``: the ``ArtifactData`` tool refuses a write to an existing
 document without one, so the publisher reads the versions and pins each write (#949).
 
-``access_rules`` is the ``db`` capability's rules manifest: read ``view`` on every
-collection; ``runs``, ``units`` and ``repos`` write ``owner``; ``targets`` write ``interact``.
+``access_rules`` is the ``db`` capability's rules manifest: a root rule (``path`` ``""``) of
+read ``view`` and write ``owner``, so no viewer writes documents outside the collections
+(each would count against the document cap), then ``runs``, ``units`` and ``repos`` read
+``view`` and write ``owner``, and ``targets`` read ``view`` and write ``interact``.
 
 Reference for the fleet's readers: ``skills/fleet/references/publish.md``.
 """
@@ -82,11 +87,14 @@ class Limits(NamedTuple):
 
 # Sources: #692's "Artifact database layout" (the layout #705's proposal adopts) states
 # 25,000 documents per artifact and 256 KB per document; the db capability's type
-# definitions (runtime contract 0.2.96, ``db.d.ts``) state "at most 256 KiB serialized and 32
-# levels deep" and "at most 25,000 documents in total", so 256 KB is read as 256 KiB. The
+# definitions (``db.d.ts``) state "at most 256 KiB serialized and 32 levels deep", so 256 KB
+# is read as 256 KiB. The document cap depends on the runtime contract: ``db.d.ts`` at 0.2.47
+# states "at most 5,000 documents in total" and at 0.2.96 "at most 25,000", and a create over
+# it rejects ``quota_exceeded``. ``documents`` is the smaller, 5,000, so a plan that fits fits
+# under either; a publisher pinned to a contract stating more passes its own ``Limits``. The
 # ``ArtifactData`` tool's ``batch`` action takes "up to 50" writes, each document addressed at
 # most once, in a body of "at most 1 MiB".
-LIMITS: Final = Limits(document_bytes=256 * 1024, documents=25_000, depth=32,
+LIMITS: Final = Limits(document_bytes=256 * 1024, documents=5_000, depth=32,
                        batch_writes=50, batch_bytes=1024 * 1024)
 WARN_SHARE: Final = 0.8
 
@@ -99,6 +107,7 @@ class AccessRule(TypedDict):
 
 # #705's proposal, "Access rules": read view; runs, units and repos write owner; targets write interact.
 ACCESS_RULES: Final[tuple[AccessRule, ...]] = (
+    {"path": "", "read": "view", "write": "owner"},  # db.d.ts: the root is a rule path ("")
     {"path": RUNS, "read": "view", "write": "owner"},
     {"path": UNITS, "read": "view", "write": "owner"},
     {"path": REPOS, "read": "view", "write": "owner"},
@@ -132,6 +141,10 @@ class PrivacyError(PublishError):
 
 
 class DocumentTooLarge(PublishError):
+    pass
+
+
+class RepublishConflict(PublishError):
     pass
 
 
@@ -318,15 +331,41 @@ def batches(writes: list[Write], limits: Limits = LIMITS) -> list[list[Write]]:
     return out
 
 
+def check_republish(writes: list[Write], previous: Mapping[str, object]) -> None:
+    """Refuse when this run id already holds something else: a merge cannot remove a field.
+
+    ``previous`` maps ``"<collection>/<doc id>"`` to what the run already holds there: the
+    ``runs`` document, or a unit's or repository's ``history.<runId>`` entry."""
+    changed = []
+    for write in writes:
+        name = f"{write['collection']}/{write['doc_id']}"
+        if name not in previous:
+            continue
+        new: object = write["data"]
+        if write["collection"] != RUNS:
+            history = write["data"][HISTORY]
+            assert isinstance(history, dict)
+            new = next(iter(history.values()))
+        if _encoded(new) != _encoded(previous[name]):
+            changed.append(name)
+    if changed:
+        shown = ", ".join(changed[:5]) + (f" and {len(changed) - 5} more" if len(changed) > 5 else "")
+        raise RepublishConflict(f"run {writes[0]['doc_id']} is already published with other content "
+                                f"in {shown}; a published run id is immutable, so publish under a new one")
+
+
 def project(bundle: FleetData, run_id: str, *, stored: Mapping[str, int] | None = None,
-            limits: Limits = LIMITS) -> PublishPlan:
+            previous: Mapping[str, object] | None = None, limits: Limits = LIMITS) -> PublishPlan:
     """The publish plan for one run.
 
     ``run_id`` is the run's history entry name (``scan_date``, or ``<scan_date>.<n>`` for a
     later same-day run). ``stored`` maps ``"<collection>/<doc id>"`` to the encoded size of
-    each document already in the database (empty for a first publish)."""
+    each document already in the database (empty for a first publish). ``previous`` holds
+    what this run id already holds in each document (``check_republish``); ``limits``
+    defaults to ``LIMITS``, the smallest caps any runtime contract states."""
     stored = stored or {}
     writes = _writes(bundle, run_id, stored)
+    check_republish(writes, previous or {})
     return {"run_id": run_id, "batches": batches(writes, limits), "size": size_report(writes, stored, limits)}
 
 

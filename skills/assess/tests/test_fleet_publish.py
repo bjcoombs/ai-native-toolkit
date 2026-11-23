@@ -172,6 +172,7 @@ def test_a_same_day_run_id_keys_history_without_a_dot() -> None:
 
 def test_the_manifest_matches_the_access_rules_exactly() -> None:
     assert fp.access_rules() == {"db": {"rules": [
+        {"path": "", "read": "view", "write": "owner"},
         {"path": "runs", "read": "view", "write": "owner"},
         {"path": "units", "read": "view", "write": "owner"},
         {"path": "repos", "read": "view", "write": "owner"},
@@ -180,7 +181,7 @@ def test_the_manifest_matches_the_access_rules_exactly() -> None:
 
 
 def test_limits_carry_their_stated_values() -> None:
-    assert fp.LIMITS == fp.Limits(document_bytes=262_144, documents=25_000, depth=32,
+    assert fp.LIMITS == fp.Limits(document_bytes=262_144, documents=5_000, depth=32,
                                   batch_writes=50, batch_bytes=1_048_576)
     assert fp.WARN_SHARE == 0.8
 
@@ -202,7 +203,9 @@ def _synthetic(repos: int) -> fd.FleetData:
 def test_a_ten_thousand_repository_bundle_reports_its_count_and_peak() -> None:
     plan = fp.project(_synthetic(10_000), RUN_1)
     size = plan["size"]
-    assert size["documents"] == 1 + 4 + 10_000 and size["fits"]
+    assert size["documents"] == 1 + 4 + 10_000 and not size["fits"]  # over the 5,000 cap: #950 shards
+    larger = fp.LIMITS._replace(documents=25_000)  # a contract stating the larger cap
+    assert fp.project(_synthetic(10_000), RUN_1, limits=larger)["size"]["fits"]
     # every repository key in the opportunity list lands in the runs document: the peak
     assert size["peak"]["document"] == f"runs/{RUN_1}"
     assert 200_000 < size["peak"]["bytes"] < fp.LIMITS.document_bytes
@@ -258,3 +261,28 @@ def test_batches_cut_on_count_and_on_body_size() -> None:
     tight = fp.LIMITS._replace(batch_bytes=one * 3)
     cut = fp.batches(writes[1:], tight)
     assert all(len(b) <= 3 for b in cut) and [w for b in cut for w in b] == writes[1:]
+
+
+def _previous(db: FakeDb, run_key: str) -> dict[str, object]:
+    return {name: (doc if name.startswith("runs/") else doc["history"][run_key])
+            for name, doc in db.docs.items() if name.startswith("runs/" + run_key) or run_key in doc.get("history", {})}
+
+
+def test_a_republish_with_the_same_content_passes_and_a_changed_one_is_refused() -> None:
+    db = FakeDb()
+    _publish(db, _bundle(), RUN_1)
+    previous = _previous(db, RUN_1)
+    assert len(previous) == 1 + 4 + 4
+    fp.project(_bundle(), RUN_1, stored=db.stored(), previous=previous)  # the same run again
+    changed = _bundle()
+    changed["repos"][0]["reason"] = "scan_error"
+    with pytest.raises(fp.RepublishConflict, match="repos/.* a published run id is immutable"):
+        fp.project(changed, RUN_1, stored=db.stored(), previous=previous)
+    fp.project(changed, RUN_2, stored=db.stored(), previous=_previous(db, RUN_2))  # a new run id is fine
+    many = _bundle()
+    for repo in many["repos"]:
+        repo["active"] = not repo["active"]
+    many["run"]["window"] = "3mo"
+    many["views"][0]["units"][0]["kind"] = "division"
+    with pytest.raises(fp.RepublishConflict, match="and 1 more"):
+        fp.project(many, RUN_1, stored=db.stored(), previous=previous)
