@@ -93,12 +93,9 @@ Two optional additions feed the verified tally and the Steps (``lib/level_tally.
   credit needs CI running tests). The row's own level ignores it.
 - ``[[steps]]``: the autonomy Steps, numbered 1..K. Each has a ``name`` and
   ``gates``, each ``{ id, row, level }``: the gate holds when that row's
-  conditions up to ``level`` are met. Step 1 has no gates; each later Step keeps
-  every gate of the one below (gates accumulate) and adds at least one, since gates
-  are all that tell two Steps apart. A Step needs its gates and
-  nothing else, so adding a condition to the model never moves a Step (#1083).
-  The ``threshold`` key of earlier models (a count of met conditions) is refused at
-  load with a message naming its removal, never silently ignored.
+  conditions up to ``level`` are met. Step 1 has no gates; each later Step keeps every
+  gate of the one below and adds one. A Step needs its gates and nothing else, so a new
+  condition never moves a Step (#1083); an old ``threshold`` key is refused by name.
 
 Four condition fields come from ``lib/levels_fields.py`` (#843), which documents
 them: ``truth`` (required, multi-valued tags, with the legacy layer alias for a model
@@ -528,8 +525,7 @@ def _parse_steps(raw: Any, rows: list[Row]) -> list[StepDef]:
         if not isinstance(entry, dict):
             raise LevelsError(f"{where}: must be a table")
         if REMOVED_STEP_KEY in entry:
-            raise LevelsError(f"{where}: 'threshold' was removed (issue #1083): a Step needs its gates "
-                              "only, so delete the key")
+            raise LevelsError(f"{where}: 'threshold' was removed (issue #1083): a Step needs its gates only")
         _check_keys(entry, _STEP_KEYS, where)
         number, gates = _whole(entry.get("step")), entry.get("gates", [])
         if number != index + 1 or number is None:
