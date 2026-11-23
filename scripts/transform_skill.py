@@ -172,6 +172,17 @@ def strip_frontmatter(text: str) -> str:
     return text[m.end():].lstrip("\n")
 
 
+def _write_generated(target_root: Path, generated_files: dict[str, str]) -> None:
+    """Write each generated file's text under *target_root*, refusing a path outside it."""
+    for rel_dest, text in generated_files.items():
+        dest_path = PurePosixPath(rel_dest)
+        if dest_path.is_absolute() or ".." in dest_path.parts or Path(rel_dest).anchor:
+            raise ValueError(f"generated_files dest must be a relative path within the skill root (got {rel_dest!r})")
+        dest = target_root / dest_path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(text.replace("\r\n", "\n").encode("utf-8"))
+
+
 def build_standalone_skill_zip(  # noqa: C901  # marker-transform + zip assembly; ccn 17, ratchet target
     skill_source_dir: Path,
     out_zip: Path,
@@ -180,6 +191,7 @@ def build_standalone_skill_zip(  # noqa: C901  # marker-transform + zip assembly
     replacements: dict[str, str],
     exclude_dirs: frozenset[str] = frozenset({"tests"}),
     bundle_files: dict[str, Path] | None = None,
+    generated_files: dict[str, str] | None = None,
 ) -> list[str]:
     """
     Transform *skill_source_dir* and write a standalone ZIP to *out_zip*.
@@ -195,6 +207,11 @@ def build_standalone_skill_zip(  # noqa: C901  # marker-transform + zip assembly
     the ZIP) to source ``Path`` objects somewhere on disk. Markdown bundled
     files have their YAML frontmatter stripped so the body reads as plain
     methodology rather than Claude-Code-agent metadata.
+
+    ``generated_files`` maps destination paths (relative to the skill root inside
+    the ZIP) to text the build writes there, UTF-8 with LF endings, after the
+    source tree and ``bundle_files`` (so it wins over a same-named source file).
+    The assess skill's ``plugin-version.json`` is one (#1166).
     """
     effective_excludes = exclude_dirs | REQUIRED_EXCLUDES
     staging = out_zip.parent / f"_staging_{standalone_name}"
@@ -245,6 +262,8 @@ def build_standalone_skill_zip(  # noqa: C901  # marker-transform + zip assembly
                 dest.write_text(_transform_md(body, replacements), "utf-8", newline="\n")
             else:
                 shutil.copy2(src_path, dest)
+
+    _write_generated(target_root, generated_files or {})
 
     skill_md = target_root / "SKILL.md"
     if skill_md.exists():
