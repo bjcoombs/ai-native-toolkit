@@ -196,7 +196,7 @@ def rewrite_gated(text: str) -> frozenset[int]:
         and not any(i <= k <= j and jobs[k] == jobs[i] for k in staged) for j in diffs))
 
 
-# A YAML list item with no key (``- msbuild``), as ``ci_checks._BARE_ITEM`` reads it.
+# A YAML list item with no key (``- msbuild``), as ``ci_lines._BARE_ITEM`` reads it.
 _BARE_ITEM = re.compile(r"^\s*-\s+(?![\w.-]+:(?:\s|$))")
 
 

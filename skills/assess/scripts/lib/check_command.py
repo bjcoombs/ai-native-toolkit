@@ -443,7 +443,7 @@ _DOCKER_RUN_FLAGS = frozenset({
     "--security-opt", "--tmpfs", "--volumes-from", "--cidfile", "--log-driver", "--log-opt",
 })
 # A program named alone as a bare YAML list item (``- rspec``, ``- make`` under ``needs:``)
-# is a value unless its parent key is a script key (``lib.ci_checks._lone_check``).
+# is a value unless its parent key is a script key (``lib.ci_lines._lone_check``).
 BARE_RUN_PROGRAMS = ALWAYS_CHECK | TEST_PROGRAMS | TARGET_RUNNERS
 _TARGET_FLAGS = frozenset({
     "-C", "-f", "--file", "--makefile", "--directory", "--dir", "-d", "--taskfile",

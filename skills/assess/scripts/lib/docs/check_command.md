@@ -72,7 +72,7 @@ A target runner asked for `--version` or its list (`task --list`, `rake -T`) is 
 `may_lint` reads the direct runners (`dotnet test`, `mix test`, `hatch test`, `ctest`,
 `bundle exec rspec`) as tests only; `bazel test`, `turbo`, `nx` and `task` targets may
 lint. `BARE_RUN_PROGRAMS` is the set a lone bare YAML item is a value for
-(`ci_checks._lone_check`). Other ecosystems (issue #926): `LINT_PROGRAMS` takes the
+(`ci_lines._lone_check`). Other ecosystems (issue #926): `LINT_PROGRAMS` takes the
 analysers of `lint_vocabulary.ANALYSER_PROGRAMS`, and `is_lint_command` and `is_lint_run`
 also accept `lint_vocabulary.ecosystem_lint` (a formatter in its check mode, `mix credo`,
 `dart analyze`, a Gradle lint task). `_plain_wrapper` reads `xargs [flags] <program>` and
