@@ -242,7 +242,7 @@ def _command_groups(lines: list[str], unmasked: list[str], texts: list[str] | No
                 continue
             if paragraph:
                 out.append((range(paragraph[0], paragraph[-1] + 1),
-                            _folded_text(lines, unmasked, paragraph, which)))
+                            _folded_text(lines, unmasked if which == 0 else texts, paragraph, which)))
                 paragraph = []
         i = j
     return out
@@ -252,8 +252,10 @@ def _folded_text(lines: list[str], unmasked: list[str], paragraph: list[int], wh
     """One folded paragraph as the shell runs it, masked as one line: a line blanked by
     its step or body (``continue-on-error``, ``set +e``) drops the paragraph, and the
     joined text is masked by #775's same-line rules, so a ``|| true`` on a continuation
-    line masks the head it follows."""
-    if any(not unmasked[n].strip() for n in paragraph):
+    line masks the head it follows. With ``which`` 1, ``unmasked`` is the unsure lines
+    (#1008), and a paragraph holding none reads nothing."""
+    blank = any(not unmasked[n].strip() for n in paragraph)
+    if blank if which == 0 else not any(unmasked[n].strip() for n in paragraph):
         return ""
     joined = " ".join(lines[n].strip() for n in paragraph)
     return ci_line_text(mask_lines(f"run: {joined}")[which][0])

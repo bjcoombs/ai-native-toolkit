@@ -38,6 +38,7 @@ MAY_PASS = [
     "pytest || echo failed",
     "pytest || echo failed; echo next",
     "(pytest || echo failed)",
+    "ruff check . --exit-zero && pytest || echo x",
 ]
 
 # Passes or fails on what the later statement finds (``x`` present or not).
@@ -63,6 +64,15 @@ CREDITED = [
     "pytest || exit $?",
     "pytest || { echo failed; exit 1; }",
     "pytest || (echo failed; exit 1)",
+    "pytest || exit",
+    "(cd $(dirname x) && pytest && echo ok); echo next",
+    "if [ -n x ]; then pytest && echo ok; else echo no; fi",
+]
+
+# Multi-line block bodies, read as a ``run: |`` step.
+CREDITED_BLOCKS = [
+    "pytest || {\n  echo failed\n  exit 1\n}",
+    "(\n  V=$(cat v)\n  pytest && echo ok\n)\necho next",
 ]
 
 
@@ -99,6 +109,17 @@ def test_a_block_body_reads_the_same(run: str) -> None:
     assert _reads(text) == (False, True)
 
 
+@pytest.mark.parametrize("run", CREDITED_BLOCKS)
+def test_a_block_body_that_reaches_the_step_stays_credited(run: str) -> None:
+    body = "".join(f"          {line}\n" for line in run.splitlines())
+    text = f"on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n      - run: |\n{body}"
+    assert _reads(text) == (True, False)
+
+
+def test_a_github_expression_holds_no_operator() -> None:
+    assert _reads(_step("pytest -n ${{ matrix.workers || 'auto' }}", "default")) == (True, False)
+
+
 def test_a_gitlab_or_arm_that_can_pass_is_not_measured() -> None:
     assert mask_lines("test:\n  script:\n    - pytest || echo failed\n")[1][2] == "pytest"
 
@@ -128,6 +149,22 @@ def test_ci_checks_reads_check_may_pass(tmp_path: Path, run: str,
         assert got[2:] == expected[2:]
 
 
+@pytest.mark.parametrize(("run", "basis"), [
+    ("make foo || echo failed", "check_target"),
+    ("./ci.sh || echo failed", "script_not_found"),
+])
+def test_a_target_or_missing_script_that_may_pass_stays_null(tmp_path: Path, run: str,
+                                                             basis: str) -> None:
+    block = scan_ci_checks(_repo(tmp_path, {".github/workflows/ci.yml": _step(run, "default")}))
+    assert (block["enforced_check_runs"], block["enforced_basis"]) == (None, basis)
+
+
+def test_a_lint_target_that_may_pass_stays_null(tmp_path: Path) -> None:
+    block = scan_ci_checks(_repo(tmp_path, {".github/workflows/ci.yml": _step("make check || echo x",
+                                                                                "default")}))
+    assert (block["lint_runs"], block["lint_basis"]) == (None, "check_target")
+
+
 def test_an_enforced_check_elsewhere_still_wins(tmp_path: Path) -> None:
     files = {".github/workflows/ci.yml": _step("pytest || echo failed", "default"),
              ".github/workflows/lint.yml": _step("pytest", "default")}
@@ -151,10 +188,12 @@ def _shells() -> list[list[str]]:
 
 
 @pytest.mark.skipif(sys.platform == "win32" or not shutil.which("bash"), reason="needs a POSIX bash")
-@pytest.mark.parametrize(("run", "status"), [*((r, 0) for r in MAY_PASS), *((r, 1) for r in CREDITED)])
+@pytest.mark.parametrize(("run", "status"), [*((r, 0) for r in MAY_PASS),
+                                             *((r, 1) for r in CREDITED + CREDITED_BLOCKS)])
 def test_the_table_matches_real_shells(tmp_path: Path, run: str, status: int) -> None:
     (tmp_path / "bin").mkdir()
     (tmp_path / "sub").mkdir()
+    (tmp_path / "v").write_text("1\n", encoding="utf-8")
     stub = tmp_path / "bin" / "pytest"
     stub.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
     stub.chmod(0o755)
@@ -179,3 +218,10 @@ def test_a_folded_run_that_may_pass_reads_check_may_pass(tmp_path: Path) -> None
             "          pytest\n          || echo failed\n")
     block = scan_ci_checks(_repo(tmp_path, {".github/workflows/ci.yml": text}))
     assert (block["enforced_check_runs"], block["enforced_basis"]) == (None, "check_may_pass")
+
+
+def test_a_folded_coverage_run_that_may_pass_reads_check_may_pass(tmp_path: Path) -> None:
+    text = ("on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n      - run: >-\n"
+            "          pytest --cov --cov-fail-under=80\n          || echo failed\n")
+    block = detect_coverage_gate(_repo(tmp_path, {".github/workflows/ci.yml": text}))
+    assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (None, "check_may_pass")

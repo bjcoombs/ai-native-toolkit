@@ -624,7 +624,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
 
 
 # A statement that only closes a compound command runs nothing after the one before it.
-_ENDS = frozenset({"fi", "done", "esac", "}"})
+_ENDS = frozenset({"fi", "done", "esac", "}", "else", "elif"})
 Segments = dict[tuple[int, int], frozenset[int]]
 
 

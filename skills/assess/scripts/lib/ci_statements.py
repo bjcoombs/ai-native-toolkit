@@ -44,7 +44,9 @@ _NOT_CAPTURED = re.compile(r"^(?:/dev/null|\$\{?GITHUB_STEP_SUMMARY\}?)$")
 def split_statements(text: str) -> list[list[tuple[str, str]]]:
     """Top-level ``;`` statements, each as ``(operator before, segment)`` pairs.
 
-    Quotes, ``$(...)`` and backticks hold no operator; a shell comment ends the text.
+    Quotes, ``$(...)``, backticks and a GitHub ``${{ ... }}`` expression (expanded before
+    the shell runs, #1008: ``${{ matrix.n || 'auto' }}``) hold no operator; a shell comment
+    ends the text.
     """
     statements: list[list[tuple[str, str]]] = []
     current: list[tuple[str, str]] = []
@@ -63,6 +65,10 @@ def split_statements(text: str) -> list[list[tuple[str, str]]]:
             quote = "" if ch == quote else quote
         elif ch in "'\"`":
             quote = ch
+        elif text.startswith("${{", i) and (end := text.find("}}", i + 3)) >= 0:
+            buf.append(text[i:end + 2])
+            i = end + 2
+            continue
         elif text.startswith("$(", i):
             depth += 1
             buf.append("$(")

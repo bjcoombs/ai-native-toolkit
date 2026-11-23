@@ -55,9 +55,10 @@ def _enforced_state(ordinary: int, unknown: int, may_check: Tally, *, elsewhere:
         return None, "unknown_trigger"
     if may_pass:   # a check whose failure the step may hide (#1008)
         return None, "check_may_pass"
-    if missing[0] or missing[1]:
+    # A target or missing script on a may-pass line (``make foo || echo x``) stays null too.
+    if missing[0] or missing[1] or missing[4]:
         return None, "script_not_found"
-    if may_check[0] or may_check[1]:
+    if may_check[0] or may_check[1] or may_check[4]:
         return None, "check_target"
     if unread:
         return None, "unread_ci_system"
@@ -82,9 +83,9 @@ def _lint_state(lint: Tally, may: Tally, *, elsewhere: bool, partial: bool, unre
         return None, "unknown_trigger"
     if may_pass:
         return None, "check_may_pass"
-    if missing[0] or missing[1]:
+    if missing[0] or missing[1] or missing[4]:
         return None, "script_not_found"
-    if may[0] or may[1]:
+    if may[0] or may[1] or may[4]:
         return None, "check_target"
     if unread:
         return None, "unread_ci_system"

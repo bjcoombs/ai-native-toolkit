@@ -11,8 +11,10 @@ step may still pass, depending on what runs after it. They read null with the re
 - A ``||`` arm that can pass (``or_arm_unsure``, every shell body, GitLab's included):
   ``pytest || echo failed`` exits 0. The segments before the ``||`` (back to the start
   of its ``( )`` group) read null. A no-op arm masks them instead (``|| true``), and a
-  failing arm keeps them credited: ``|| false``, ``|| exit 1``, ``|| exit $?``,
-  ``|| return 1`` or an arm group holding one (``|| { echo failed; exit 1; }``).
+  failing arm keeps them credited: ``|| false``, ``|| exit 1``, ``|| exit $?``, a bare
+  ``|| exit`` (it exits with the check's status), ``|| return 1`` or an arm group holding
+  one (``|| { echo failed; exit 1; }``). An arm group that runs on past its line (``|| {``
+  then the body on the lines below) is not read, so the check stays credited as before.
 - In a GitHub ``run:`` body with errexit on and bash grammar (``ci_masking``'s backward
   walk; a later top-level ``exit 0`` masks these instead, #936):
   - an ``if`` / ``elif`` / ``while`` condition (``if pytest; then echo ok; fi`` exits 0),
@@ -31,6 +33,14 @@ step may still pass, depending on what runs after it. They read null with the re
     ok`` exit 0. ``{ pytest; }; echo next`` and a plain call ``f`` stay credited (both
     exit 1).
 
+Conservative nulls (known limits): a ``{ }`` group or function called before ``&&`` reads
+null even where its last command is the check and nothing follows (``{ pytest; } && echo
+ok`` exits 1); a call or closer that re-raises (``f || exit 1``) stays credited. Not read:
+a non-last pipeline member without pipefail, a check before ``&&`` inside a subshell or
+function with a later statement there (both stay credited), and a formatter gate whose
+``git diff --exit-code`` has a fallback that can pass (``lib.ci_lint_gates`` reads it as
+no gate, false, not null).
+
 Inward-only imports: stdlib, ``lib.ci_statements`` and ``lib.ci_exempt``; never
 ``lib.ci_masking`` (which calls it) or an orchestrator.
 Tests: ``tests/test_ci_may_pass.py``.
@@ -42,10 +52,11 @@ import re
 from lib.ci_exempt import Statement, exempt_segments, unquoted
 from lib.ci_statements import _NOOPS, or_arms
 
-# A status that fails the step: ``false``, or ``exit`` / ``return`` with a non-zero
-# literal, a variable or ``$?``.
+# A status that fails the step: ``false``, ``exit`` / ``return`` with a non-zero literal,
+# a variable or ``$?``, or a bare ``exit`` (it exits with the failing check's status).
 _FAILS = re.compile(
-    r"(?:^|[\s;{(])(?:false|(?:exit|return)\s+(?:[1-9]\d*|\"?\$(?:\?|\{?\w+\}?)\"?))(?=$|[\s;})])")
+    r"(?:^|[\s;{(])(?:false|(?:exit|return)\s+(?:[1-9]\d*|\"?\$(?:\?|\{?\w+\}?)\"?)"
+    r"|exit(?=\s*(?:$|[;})])))(?=$|[\s;})])")
 _FUNCTION = re.compile(r"^(?:function\s+([\w-]+)(?:\s*\(\))?|([\w-]+)\s*\(\))\s*\{?\s*$")
 
 
@@ -57,10 +68,13 @@ def or_arm_unsure(statement: Statement, tail: str = "") -> set[int]:
     for span, arm in or_arms(statement):
         if arm in _NOOPS:
             continue
-        rest = " ".join(seg for _, seg in statement[span.stop - 1:])
+        rest = unquoted(" ".join(seg for _, seg in statement[span.stop - 1:]))
         if statement[span.stop - 1][1].lstrip().startswith(("{", "(")):
-            rest += " " + tail
-        if not _FAILS.search(unquoted(rest)):
+            rest = unquoted(rest + " " + tail)
+            bare = rest.replace("$(", "")
+            if bare.count("{") > bare.count("}") or bare.count("(") > bare.count(")"):
+                continue   # the arm group runs on past this line: not read, as before #1008
+        if not _FAILS.search(rest):
             out.update(range(span.start, span.stop - 1))
     return out
 
@@ -94,7 +108,8 @@ def group_call_unsure(statements: list[Statement], conditions: list[bool]) -> se
             continue
         closer = statements[end]
         brace = next((k for k, (_, seg) in enumerate(closer) if seg.lstrip().startswith("}")), None)
-        if brace is not None and (brace in exempt_segments(closer, True) or conditions[start]):
+        if (brace is not None and not _reraises(closer)
+                and (brace in exempt_segments(closer, True) or conditions[start])):
             out.update(range(start, end + 1))
     for i, statement in enumerate(statements):
         exempt = exempt_segments(statement, True)
@@ -103,7 +118,8 @@ def group_call_unsure(statements: list[Statement], conditions: list[bool]) -> se
             while words and words[0] in ("!", "if", "elif", "while", "until", "then", "do"):
                 words = words[1:]
             body = functions.get(words[0]) if words else None
-            if body is not None and i not in body and (k in exempt or conditions[i]):
+            if (body is not None and i not in body and not _reraises(statement)
+                    and (k in exempt or conditions[i])):
                 out.update(body)
     return out
 
@@ -120,8 +136,8 @@ def opaque_flags(statements: list[Statement]) -> list[bool]:
     depth = 0
     for i, statement in enumerate(statements):
         text = unquoted(" ".join(seg for _, seg in statement)).replace("$(", "\0")
-        opens = text.count("(") - text.count("\0")
-        closes = text.count(")")
+        opens = text.count("(")
+        closes = text.count(")") - text.count("\0")
         out[i] = out[i] or depth > 0 or opens > 0
         depth = max(0, depth + opens - closes)
     return out
@@ -143,6 +159,11 @@ def _groups(statements: list[Statement]) -> list[tuple[int, int, str]]:
             out.append((start, i, name))
             depth = 0
     return out
+
+
+def _reraises(statement: Statement) -> bool:
+    """``f || exit 1``, ``{ ...; } || exit 1``: the call's failure still fails the step."""
+    return bool(_FAILS.search(unquoted(" ".join(seg for _, seg in statement))))
 
 
 def _head(statement: Statement) -> str:
