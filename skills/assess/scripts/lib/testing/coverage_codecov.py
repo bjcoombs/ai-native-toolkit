@@ -20,8 +20,9 @@ How a status counts toward Layer 6 level 1 (maintainer-approved, #882):
 - The status is server-side: it gates a merge only when branch protection requires it,
   which this read does not see. So a Codecov gate never reads as run by CI:
   ``lib.testing.coverage_ci`` reads it null with ``enforced_basis`` ``status_check_unconfirmed``
-  (``STATUS_UNCONFIRMED``). A Codecov status alone therefore never makes Layer 6 level 1
-  true or false: it reads not measured.
+  (``STATUS_UNCONFIRMED``); a patch status is skipped there (``is_patch``), so it never
+  turns a known false (an unrun ``fail_under``) into null. A Codecov status alone
+  therefore never makes Layer 6 level 1 true or false: it reads not measured.
 
 Not gates: ``informational: true`` (the status never fails), ``off`` / ``false`` on the
 status, on ``project`` / ``patch`` or on ``coverage.status``. A YAML anchor on a status
@@ -187,14 +188,15 @@ def codecov_statuses(root: Path, excludes: Excludes = (set(), [])) -> list[Statu
     return _statuses(rel, text.splitlines())
 
 
-def _patch(gate: Mapping[str, object]) -> bool:
+def is_patch(gate: Mapping[str, object]) -> bool:
+    """A Codecov patch status: it bounds changed lines, never total coverage."""
     return gate["tool"] == TOOL and gate["metric"] == "patch"
 
 
 def meets_percent(gate: Mapping[str, object]) -> object:
     """The percentage of total coverage a gate holds: its ``threshold_percent``, or None
     for a Codecov patch status, which bounds changed lines only."""
-    return None if _patch(gate) else gate["threshold_percent"]
+    return None if is_patch(gate) else gate["threshold_percent"]
 
 
 def codecov_reason(gates: Sequence[G], counted: Callable[[G], bool]) -> str | None:
@@ -204,4 +206,4 @@ def codecov_reason(gates: Sequence[G], counted: Callable[[G], bool]) -> str | No
     unread = [g for g in gates if counted(g) and meets_percent(g) is None]
     if not unread or not all(g["tool"] == TOOL for g in unread):
         return None
-    return PATCH_ONLY if all(_patch(g) for g in unread) else CODECOV_UNMEASURED
+    return PATCH_ONLY if all(is_patch(g) for g in unread) else CODECOV_UNMEASURED

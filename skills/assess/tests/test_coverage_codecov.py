@@ -283,3 +283,28 @@ def test_monorepo_units_inherit_the_repository_codecov_reading(tmp_path: Path) -
     assert ur._coverage_own("svc/b", scoped, {"coverage_gate": repo, "members": members}) is None
     assert scoped["threshold_meets_minimum"] is None
     assert scoped["unmeasured_reason"] == CODECOV_UNMEASURED
+
+
+PATCH_95 = "    patch:\n      default:\n        target: 95%\n"
+UNRUN_FLOOR = "[tool.coverage.report]\nfail_under = 80\n"
+
+
+def test_a_patch_status_never_nulls_an_unrun_floor(tmp_path: Path) -> None:
+    root = _write(tmp_path, {"pyproject.toml": UNRUN_FLOOR, CI: WORKFLOW.replace(
+        "pytest --cov --cov-fail-under={n}", "echo hi")})
+    assert (detect_coverage_gate(root)["enforced_meets_minimum"],
+            detect_coverage_gate(root)["enforced_basis"]) == (False, "not_run_in_ci")
+    _write(root, {"codecov.yml": "coverage:\n  status:\n" + PATCH_95})
+    block = detect_coverage_gate(root)
+    assert block["threshold_meets_minimum"] is True
+    assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (False, "not_run_in_ci")
+
+
+def test_a_project_status_beside_a_patch_status_and_an_unrun_floor_reads_unconfirmed(
+        tmp_path: Path) -> None:
+    root = _write(tmp_path, {
+        "pyproject.toml": UNRUN_FLOOR,
+        CI: WORKFLOW.replace("pytest --cov --cov-fail-under={n}", "echo hi"),
+        "codecov.yml": _project("80%") + PATCH_95})
+    block = detect_coverage_gate(root)
+    assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (None, STATUS_UNCONFIRMED)
