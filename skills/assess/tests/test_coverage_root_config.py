@@ -136,6 +136,9 @@ def test_the_whole_repo_run_is_unchanged(tmp_path: Path) -> None:
     ("      - name: cd into nothing\n        run: pytest --cov\n", True),
     ("      - run: pytest\n", None),
     ("      - run: cd pkg && pytest --cov\n      - run: coverage xml\n", True),
+    ("      - run: |\n          (cd docs && make html)\n          pytest --cov\n", None),
+    ("      - run: (cd docs && make html) && pytest --cov\n", None),
+    ("      - run: (cd pkg && pytest --cov)\n", False),
 ])
 def test_where_ci_runs_coverage_decides(tmp_path: Path, steps: str, applies: bool | None) -> None:
     assert _applies(_repo(tmp_path, steps)) is applies
@@ -154,6 +157,10 @@ def test_a_defaults_working_directory_is_unresolved(tmp_path: Path) -> None:
     ("lint:\n  script:\n    - cd pkg\ntest:\n  script:\n    - pytest --cov\n", True),
     ("default:\n  before_script: [cd pkg]\ntest:\n  script:\n    - pytest --cov\n", None),
     ("before_script:\n- cd pkg\ntest:\n  script:\n    - pytest --cov\n", None),
+    (".base:\n  before_script: [cd pkg]\ntest:\n  extends: .base\n  script:\n"
+     "    - pytest --cov\n", None),
+    (".base: &base\n  before_script: [cd pkg]\ntest:\n  <<: *base\n  script:\n"
+     "    - pytest --cov\n", None),
     ("default:\n  image: python\nbefore_script:\n  - pip install .\n"
      "test:\n  script:\n    - pytest --cov\n", True),
 ])

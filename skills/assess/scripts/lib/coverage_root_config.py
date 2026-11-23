@@ -21,8 +21,9 @@ runs, from GitHub workflows and ``.gitlab-ci.yml``:
 - the working directory is the repository root, unless the step's
   ``working-directory:`` or a ``cd`` / ``pushd`` earlier in the same step (GitLab: the
   same job, whose script lines share one shell), or on the command's own line before it,
-  moves it. A GitLab ``cd`` in an inherited ``before_script`` (top level, or under
-  ``default:``) leaves it unresolved. Literal relative paths are resolved (``cd pkg``, ``cd ../..``); anything
+  moves it. A ``cd`` in a ``(...)`` subshell that closes before the command, a GitLab
+  ``cd`` in an inherited ``before_script`` (top level, or under ``default:``), and a
+  GitLab job with ``extends:`` or a ``<<:`` merge key leave it unresolved. Literal relative paths are resolved (``cd pkg``, ``cd ../..``); anything
   else (``$VAR``, ``~``, an absolute path, ``cd -``, ``popd``, a ``defaults:``
   ``working-directory`` anywhere in the file) leaves it unresolved.
 - ``--rcfile`` / ``--cov-config`` names the config instead, resolved against that
@@ -196,7 +197,10 @@ def _cwd(run: Run, lines: Sequence[str], gitlab: bool) -> Cwd:
     row = run.span[0]
     step = _step_lines(lines, row, gitlab)
     cwd: Cwd = PurePosixPath()
-    if gitlab and _inherited_cd(lines):
+    # GitLab: a ``before_script`` inherited from the top level, ``default:``, an
+    # ``extends:`` template or a ``<<:`` merge key may move the job; not followed.
+    if gitlab and (_inherited_cd(lines) or any(
+            lines[r].strip().startswith(("extends:", "<<:")) for r in step)):
         return None
     if not gitlab:
         if _defaults_workdir(lines):
@@ -212,8 +216,23 @@ def _cwd(run: Run, lines: Sequence[str], gitlab: bool) -> Cwd:
             at = text.find(run.words[0])
             text = text[:at] if at >= 0 else text
         for match in _CD_RE.finditer(text):
-            cwd = None if match.group(1) == "popd" else _move(cwd, match.group(2))
+            if match.group(1) == "popd" or _in_closed_group(text, match.start(1)):
+                return None   # a subshell ``(cd docs && make)`` does not move the run
+            cwd = _move(cwd, match.group(2))
     return cwd
+
+
+def _in_closed_group(text: str, at: int) -> bool:
+    """``text[at]`` sits inside a ``(...)`` group that closes within ``text``: the run,
+    which is not before it in that text, is outside the group."""
+    depth = text[:at].count("(") - text[:at].count(")")
+    if depth <= 0:
+        return False
+    for char in text[at:]:
+        depth += {"(": 1, ")": -1}.get(char, 0)
+        if depth == 0:
+            return True
+    return False
 
 
 def _named_config(words: Sequence[str]) -> str | None:
