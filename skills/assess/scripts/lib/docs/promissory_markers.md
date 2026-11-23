@@ -44,10 +44,17 @@ two cannot drift) is never stale and is counted in each family row's `justified`
 deadline can go stale too. The `unactioned_intent` action states the
 `stale_touches_threshold` it applied. Honours the shared excludes and the
 generated-file filter (codegen `ignore_for_file` boilerplate is not debt), sets
-aside every file `lib.path_classes.path_class` reads as a fixture (`fixtures/`,
-`testdata/`, `resources/test/`, `mdtest/`, `snapshots/` ... at any depth: a linter's
-fixtures are deliberate samples, #824) and reports `fixture_files_excluded`, the
-distinct fixture files that held a candidate marker line in scope, and
+aside unambiguous fixture files (`is_marker_fixture`, #824: a linter's fixtures are
+deliberate samples) and reports `fixture_files_excluded`, the distinct fixture files
+in scope that held a candidate marker line, counted before the family filters. A
+fixture file sits under `testdata/`, `test_data/`, `test-data/`, `__fixtures__/`,
+`__snapshots__/`, `mdtest/` or a `resources/test/` root at any depth, or under
+`fixture/`, `fixtures/` or `snapshots/` below a test directory (`lib.path_classes.TEST_DIRS`:
+`tests/fixtures/`, `spec/fixtures/`). It is stricter than `lib.path_classes`, which
+reads every `fixtures/` and `snapshots/` directory as a fixture: a production tree
+(`core/snapshots/`, a `packages/fixtures` package, a shipped pytest plugin's
+`fixtures/` module) keeps its markers. On a scoped run the path is read relative to
+the scope root, so a unit's own name never makes its files fixtures. The scan also
 degrades aging to `aging_reliable: False` on degenerate history (same verdict as
 `git_churn`). The `rg` binary comes from `tool_lookup.find_rg`, resolved once per
 scan; when none runs the scan is unavailable with `tool_lookup.RG_MISSING_REASON`.

@@ -17,8 +17,8 @@ CLI (standalone use)::
 
 Ages each marker by survived touches (commits to its file since the marker
 landed), separates tracked and justified markers from bare ones, drops marker
-text that is data, and sets aside fixture files (`lib.path_classes`, #824),
-reporting their count as `fixture_files_excluded`.
+text that is data, and sets aside unambiguous fixture files (`is_marker_fixture`,
+#824), reporting how many held a candidate marker line as `fixture_files_excluded`.
 Full reference: lib/docs/promissory_markers.md. New ecosystem marker syntaxes need a
 fixture in `tests/test_promissory_markers.py` - absence is a silent miss.
 """
@@ -41,7 +41,7 @@ try:
     from lib.agent_identity import identity_is_agent as _identity_is_agent
     from lib.git_churn import churn_is_degenerate
     from lib.keyhole.python_regions import PyRegions, load_regions
-    from lib.path_classes import path_class
+    from lib.path_classes import TEST_DIRS
     from lib.tool_lookup import RG_MISSING_REASON, find_rg
 except ImportError:  # standalone CLI: script dir is lib/keyhole/, put scripts/ on path
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -49,7 +49,7 @@ except ImportError:  # standalone CLI: script dir is lib/keyhole/, put scripts/ 
     from lib.agent_identity import identity_is_agent as _identity_is_agent
     from lib.git_churn import churn_is_degenerate
     from lib.keyhole.python_regions import PyRegions, load_regions
-    from lib.path_classes import path_class
+    from lib.path_classes import TEST_DIRS
     from lib.tool_lookup import RG_MISSING_REASON, find_rg
 
 # Default: a marker is stale once this many commits to its file landed after it.
@@ -263,7 +263,8 @@ class MarkerScan:
     stale_touches_threshold: int = STALE_TOUCHES_DEFAULT
     markers: list[Marker] = field(default_factory=list)
     aging_reliable: bool = True  # False when history is too thin to age markers
-    fixture_files_excluded: int = 0  # fixture files set aside (path_class, #824)
+    # Distinct fixture files with a candidate marker line, before the family filters.
+    fixture_files_excluded: int = 0
 
     def is_stale(self, m: Marker) -> bool:
         """Stale = survived at least the threshold of edits, unless justified.
@@ -358,13 +359,41 @@ def _extra_globs(
     return globs
 
 
+# Fixture directories no production tree is named after (#824), and the ones a
+# real package can be named after, which count as fixtures only under a test root.
+_FIXTURE_DIRS = frozenset({
+    "testdata", "test_data", "test-data", "__fixtures__", "__snapshots__", "mdtest",
+})
+_TEST_ONLY_FIXTURE_DIRS = frozenset({"fixture", "fixtures", "snapshots"})
+
+
+def is_marker_fixture(rel: str) -> bool:
+    """True for a path under an unambiguous fixture directory (#824).
+
+    Stricter than ``lib.path_classes``: ``fixtures/`` and ``snapshots/`` count
+    only below a ``TEST_DIRS`` segment, so ``core/snapshots/`` or a
+    ``packages/fixtures`` package stays production code. Under ``resources/test``
+    (the JVM and Rust test-data root) everything is a fixture.
+    """
+    dirs = tuple(part.lower() for part in rel.split("/")[:-1])
+    if any(d in _FIXTURE_DIRS for d in dirs):
+        return True
+    if any(dirs[i:i + 2] == ("resources", "test") for i in range(len(dirs) - 1)):
+        return True
+    return any(
+        d in _TEST_ONLY_FIXTURE_DIRS and any(t in TEST_DIRS for t in dirs[:i])
+        for i, d in enumerate(dirs)
+    )
+
+
 def _detect(
     repo_root: Path, extra_globs: list[str], rg: str = "rg",
-    fixtures: set[str] | None = None,
+    fixtures: set[str] | None = None, scope_rel: str = "",
 ) -> list[Marker]:
     """Stage 1: one rg pass per family, comment-context filtered.
 
-    A hit in a fixture file is set aside before any filter reads it; its path
+    A hit in a fixture file (read relative to ``scope_rel``, so a unit's own
+    name never makes it one) is set aside before any filter reads it; its path
     goes into ``fixtures`` when one is passed.
     """
     markers: list[Marker] = []
@@ -380,7 +409,7 @@ def _detect(
                 continue
             path, line_s, text = parts
             path = path.removeprefix("./")
-            if path_class(path) == "fixture":
+            if is_marker_fixture(path.removeprefix(scope_rel)):
                 if fixtures is not None:
                     fixtures.add(path)
                 continue
@@ -669,9 +698,10 @@ def scan_promissory_markers(
 
     try:
         fixtures: set[str] = set()
+        rel = scope.resolve().relative_to(repo_root.resolve()).as_posix() if scope else "."
         markers = _detect(
             repo_root, _extra_globs(extra_exclude_dirs, extra_exclude_patterns), rg,
-            fixtures,
+            fixtures, "" if rel == "." else rel + "/",
         )
         if scope is not None:
             scope_abs = scope.resolve()

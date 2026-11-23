@@ -2,11 +2,12 @@
 
 A linter's fixtures are deliberate ``noqa`` and ``# type: ignore`` samples, and a
 test-data tree is input to a test, not code anyone promised to fix. The scan
-sets aside every file ``lib.path_classes.path_class`` reads as ``fixture`` (at
-any depth: ``fixtures/``, ``__fixtures__/``, ``testdata/``, ``resources/test/``,
-``mdtest/``, ``snapshots/``) and reports how many such files it set aside in
-``fixture_files_excluded``. Test files, examples and source whose own name only
-looks fixture-like still count, so a repository never reads a false 0.
+sets aside the unambiguous fixture trees (``testdata/``, ``__fixtures__/``,
+``__snapshots__/``, ``mdtest/``, ``resources/test/`` at any depth, and
+``fixtures/`` or ``snapshots/`` below a test directory) and reports how many
+such files it set aside in ``fixture_files_excluded``. Test files, examples and
+production trees that only look fixture-like (``core/snapshots/``, a
+``packages/fixtures`` package) still count, so a repository never reads a false 0.
 Fixture strings below carry marker text on purpose.
 """
 from __future__ import annotations
@@ -18,7 +19,11 @@ from pathlib import Path
 import pytest
 
 from lib.counts_only import counts_only
-from lib.keyhole.promissory_markers import MarkerScan, scan_promissory_markers
+from lib.keyhole.promissory_markers import (
+    MarkerScan,
+    is_marker_fixture,
+    scan_promissory_markers,
+)
 
 _ENV = {
     "GIT_AUTHOR_NAME": "Dev One", "GIT_AUTHOR_EMAIL": "dev@example.com",
@@ -72,15 +77,17 @@ def test_linter_fixture_noqa_is_not_a_suppression(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("fixture_path", [
-    "tests/fixtures/a.py",                     # the #486 exclusion, now via the classifier
-    "pkg/fixtures/a.py",
+    "tests/fixtures/a.py",                     # the #486 exclusion
+    "crates/ruff_linter/resources/test/fixtures/ruff/RUF100_0.py",
+    "crates/ty/resources/mdtest/suppression/a.py",
+    "pkg/testdata/a.py",
+    "spec/fixtures/a.py",
+    "tests/__snapshots__/a.py",
     "web/__fixtures__/a.py",
-    "internal/parser/testdata/a.py",
     "crates/ruff/resources/test/a.py",
-    "crates/ruff/resources/mdtest/suppression/a.py",
     "ui/__snapshots__/a.py",
-    "crates/x/snapshots/a.py",
-    "Fixtures/a.py",                           # directory segments compare case-insensitively
+    "tests/unit/snapshots/a.py",
+    "Tests/Fixtures/a.py",                     # directory segments compare case-insensitively
 ])
 def test_every_fixture_form_is_set_aside(tmp_path: Path, fixture_path: str) -> None:
     repo = _repo(tmp_path, {
@@ -102,6 +109,14 @@ def test_every_fixture_form_is_set_aside(tmp_path: Path, fixture_path: str) -> N
     "tests/test_x.py",                         # a test file is a test, not a fixture
     "tests/conftest.py",
     "examples/a.py",
+    # production trees named like fixtures (#1121 review): not under a test root
+    "core/snapshots/overlay/overlay.go",
+    "src/snapshots/service.py",
+    "src/pytest_plugin/fixtures/__init__.py",
+    "lib/fixture/loader.rb",
+    "src/fixture/mod.rs",
+    "packages/fixtures/src/index.ts",
+    "pkg/fixtures/a.py",
 ])
 def test_fixture_like_source_still_counts(tmp_path: Path, source_path: str) -> None:
     repo = _repo(tmp_path, {source_path: NOQA})
@@ -132,18 +147,36 @@ def test_a_stale_fixture_noqa_never_reads_stale(tmp_path: Path) -> None:
 
 def test_excluded_count_follows_the_scope(tmp_path: Path) -> None:
     repo = _repo(tmp_path, {
-        "a/fixtures/one.py": NOQA,
-        "a/fixtures/two.py": NOQA,
+        "a/testdata/one.py": NOQA,
+        "a/testdata/two.py": NOQA,
         "a/src.py": NOQA,
-        "b/fixtures/three.py": NOQA,
+        "b/testdata/three.py": NOQA,
     })
     summary = _scan(repo, scope=repo / "a").summary()
     assert summary["fixture_files_excluded"] == 2
     assert summary["families"]["suppression"]["total"] == 1
 
 
+def test_a_scoped_unit_named_fixtures_counts_its_own_markers(tmp_path: Path) -> None:
+    """The unit's own name is outside the path the classifier reads."""
+    repo = _repo(tmp_path, {
+        "packages/fixtures/src/index.ts": "const x = 1; // eslint-disable-line\n// TODO: real\n",
+        "packages/fixtures/tests/fixtures/sample.ts": "// eslint-disable-line\n",
+    })
+    summary = _scan(repo, scope=repo / "packages" / "fixtures").summary()
+    assert summary["total_markers"] == 2
+    assert summary["fixture_files_excluded"] == 1
+
+
+def test_is_marker_fixture_reads_only_directories() -> None:
+    assert is_marker_fixture("tests/fixtures/a.py")
+    assert not is_marker_fixture("tests/fixtures.py")
+    assert not is_marker_fixture("fixtures/a.py")
+    assert not is_marker_fixture("testdata")
+
+
 def test_a_fixture_file_counts_once_however_many_markers(tmp_path: Path) -> None:
-    repo = _repo(tmp_path, {"fixtures/a.py": "# TODO one\n" + NOQA * 3})
+    repo = _repo(tmp_path, {"tests/fixtures/a.py": "# TODO one\n" + NOQA * 3})
     assert _scan(repo).summary()["fixture_files_excluded"] == 1
 
 
