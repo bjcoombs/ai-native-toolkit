@@ -32,7 +32,9 @@ remotes) logged in.
   AI-review app name there is a hint that is neither review nor a human comment
   until `[identities]` confirms it (#883). Such a note leaves AI review (and a human
   comment it precedes) undecided, and a name-only change author such as `copilot`
-  leaves `agent_authored_share` undecided, so the share reads null;
+  leaves `agent_authored_share` undecided, so the share reads null; a hinted note
+  before a merge request's first human comment nulls `first_human_comment_hours_p50` /
+  `_p90` (the human comment still counts in `human_commented_share`);
   `unconfirmed_ai_accounts` counts the distinct accounts behind those nulls (a number,
   never a name). A figure
   is null when the notes leave it undecided after 3 pages (300 notes) on any

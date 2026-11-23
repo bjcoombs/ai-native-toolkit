@@ -204,6 +204,23 @@ def test_a_gitlab_change_reviewed_only_by_a_hint_nulls_the_share_and_is_counted(
     assert block["unconfirmed_ai_accounts"] == 0
 
 
+def test_a_hint_before_the_first_human_nulls_the_comment_percentiles() -> None:
+    def notes(classifier: NoteClassifier) -> tuple[NoteFacts, ...]:
+        late = {**_note("bob"), "created_at": "2026-09-01T12:00:00Z"}
+        return (note_facts([_note("coderabbitai"), late], "ann", classifier, True),
+                note_facts([_note("carol")], "ann", classifier, True))
+    block = _gitlab_scan(notes(NoteClassifier()), ("ann", "ann"))
+    assert block["first_human_comment_hours_p50"] is None
+    assert block["first_human_comment_hours_p90"] is None
+    assert block["human_commented_share"] == 1.0  # both changes had a human comment
+    config = '[identities]\nagents = ["coderabbitai"]\n'
+    confirmed = classifier_from_config(parse_fleet_config(config))
+    block = _gitlab_scan(notes(confirmed), ("ann", "ann"), config)
+    assert block["first_human_comment_hours_p50"] is not None
+    assert block["first_human_comment_hours_p90"] is not None
+    assert block["unconfirmed_ai_accounts"] == 0
+
+
 def test_a_hinted_change_author_nulls_the_agent_authored_share() -> None:
     plain = note_facts([], "ann", NoteClassifier(), True)
     block = _gitlab_scan((plain, plain), ("openhands-agent", "ann"))

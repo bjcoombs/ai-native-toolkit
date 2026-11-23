@@ -87,7 +87,9 @@ sampled accounts that are name-only AI hints awaiting confirmation: hinted chang
 authors, and on GitLab the hinted note authors ``gitlab_notes`` saw (a username in
 ``AI_REVIEWERS`` or an ``AGENT_HINT_RULES`` login; a note by one leaves AI review, and
 a human comment it precedes, undecided). A non-zero count is why a share above reads
-None; confirming the accounts in ``[identities]`` decides them. A count, never a name.
+None, as do ``first_human_comment_hours_p50/p90`` when a hinted note came before a
+merge request's first human comment (the share still counts that comment); confirming the
+accounts in ``[identities]`` decides them. A count, never a name.
 
 Privacy: counts, shares and durations only; no title, login or comment text.
 
@@ -99,7 +101,8 @@ approved_share, self_merged_share, agent_authored_share, sample_page_size,
 unconfirmed_ai_accounts}`
 (`sample_page_size`: the sample's `page_size`, a count, #995; `unconfirmed_ai_accounts`:
 distinct sampled name-only AI hints awaiting confirmation, #883, whose presence nulls the
-share they would decide). Hours rounded to 0.01; percentiles are
+share they would decide, and the first-human-comment percentiles when one precedes a
+merge request's first human comment). Hours rounded to 0.01; percentiles are
 nearest-rank. `approved_share` and `self_merged_share` are copied from
 `review_reality` (null when it is unavailable). First human comment (GitHub): the
 earliest comment or review by an account that is not the author, not
@@ -344,8 +347,11 @@ def gitlab_delivery(sample: MergedSample, review: Any, notes: NoteFactsOrReason 
     commented: int | None = None
     if all(f.human_comment is not None for f in notes):
         commented = sum(bool(f.human_comment) for f in notes)
-        comment = [h for h in (_hours(mr.get("created_at"), f.first_human_comment_at)
-                               for mr, f in zip(mrs, notes) if f.human_comment) if h is not None]
+        # A human comment whose time an unconfirmed AI hint left undecided (#883) would
+        # shrink the set the percentiles read, so they are None, never a partial answer.
+        if not any(f.human_comment and f.first_human_comment_at is None for f in notes):
+            comment = [h for h in (_hours(mr.get("created_at"), f.first_human_comment_at)
+                                   for mr, f in zip(mrs, notes) if f.human_comment) if h is not None]
     ai = None if any(f.ai_review is None for f in notes) else sum(bool(f.ai_review) for f in notes)
     return _block(len(mrs), merge, comment, commented, ai, review)
 
