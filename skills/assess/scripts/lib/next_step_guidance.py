@@ -416,10 +416,10 @@ _WORDING: dict[str, Wording] = {
     "agent_consistency.conflicts": _agents_agree,
     "agent_consistency.unlinked": _agents_linked,
     "skill_disclosure.files_breaking": _none_left(
-        "In each `SKILL.md` or agent definition the report names, fix the rule it breaks: move "
-        "detail only some tasks need into `references/` files linked from `SKILL.md`, keep the "
-        "`description` to 1024 characters, and link each reference from `SKILL.md` to a file "
-        "that exists.",
+        "In each `SKILL.md` or agent definition the report names, fix the rule it breaks: give "
+        "each a `name` and a `description` of at most 1024 characters, move detail only some "
+        "tasks need into `references/` files linked from `SKILL.md`, and link each reference "
+        "from `SKILL.md` to a file that exists.",
         "Every `SKILL.md` and agent definition has a body of 500 lines or fewer, about 5000 tokens "
         "(20,000 characters) or fewer, a `name` and a `description` of 1024 characters or fewer, "
         "and every `references/` link resolves straight from it."),
