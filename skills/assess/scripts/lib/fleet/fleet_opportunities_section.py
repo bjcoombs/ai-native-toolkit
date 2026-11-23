@@ -13,7 +13,11 @@ an `In place:` line first, then the biggest lift, the shared templates and the d
 recent progress (this run's `level_up` achievements, from the history; otherwise a
 nothing-new line, a starting-line line on a kept first run (`fleet_achievements.BASELINE_NOTE`),
 or the achievements note when the run is not kept). None when `opportunities` is null. Names are listed in key
-order, at most `PER_LIST` per line. Tests: `tests/test_fleet_opportunities.py`.
+order, at most `PER_LIST` per line. Then "Learn from" (#1155): per repository, and per
+monorepo unit, whose next gate a sibling already holds, the gate's change and up to three
+siblings (`learn_from` in `fleet-data.json`, `lib.fleet.fleet_learn_from`), at most `PER_LIST`
+lines. Plain counts-only output writes no `learn_from`, so the block names no one there and
+says so. Tests: `tests/test_fleet_opportunities.py`, `tests/test_learn_from.py`.
 """
 from __future__ import annotations
 
@@ -24,6 +28,7 @@ from lib.fleet.fleet_data import FleetData
 from lib.fleet.fleet_next_steps import code, text
 from lib.fleet.fleet_opportunities import PER_LIST, TITLE, Opportunities
 from lib.fleet.fleet_tooling_map import KINDS
+from lib.headline import GATE_CHANGE
 from lib.vocabulary import IN_PLACE
 
 INTRO = ("Computed from this run's data with no model call. Each line is a change and what it "
@@ -89,6 +94,32 @@ def _progress(doc: Achievements | None) -> list[str]:
     return lines
 
 
+def _change(gate: str) -> str:
+    return GATE_CHANGE.get(gate, f"the {gate} gate holds")
+
+
+def _learn(data: FleetData) -> list[str]:
+    """The "Learn from" lines (#1155): who already holds each next gate."""
+    lines = ["**Learn from.**", ""]
+    if data["run"]["counts_only"] and not data["run"]["paths_hashed"]:
+        return lines + ["Not shown: counts-only output names no repository or unit to learn from."]
+    found: list[str] = []
+    for repo in data["repos"]:
+        nxt = repo["next_step"]
+        gates = [b["gate"] for b in (nxt["blockers"] if nxt is not None else []) if b["kind"] == "gate"]
+        if repo["learn_from"] and gates:
+            found.append(f"- {code(repo['key'])}: {_change(gates[0])}. "
+                         f"Learn from: {', '.join(code(n) for n in repo['learn_from'])}.")
+        for row in repo["unit_rows"] or []:
+            if row["learn_from"] and row["next_blocker"] and row["key"]:
+                found.append(f"- {code(repo['key'])} unit {code(row['key'])}: {_change(row['next_blocker']['gate'])}. "
+                             f"Learn from: {', '.join(code(n) for n in row['learn_from'])}.")
+    if not found:
+        return lines + ["No repository or unit has a next gate that another one already holds this run."]
+    more = len(found) - PER_LIST
+    return lines + found[:PER_LIST] + ([f"- And {more} more in `fleet-data.json`."] if more > 0 else [])
+
+
 def opportunities_section(data: FleetData, doc: Achievements | None) -> str | None:
     """The section as Markdown ending in a blank line; None without opportunities (no model)."""
     opps = data.get("opportunities")
@@ -96,5 +127,5 @@ def opportunities_section(data: FleetData, doc: Achievements | None) -> str | No
         return None
     titles = {row["id"]: row["title"] for row in data["model"]}
     lines = [f"## {TITLE}", "", _in_place(opps, titles), "", INTRO, "", *_lift(opps), "",
-             *_templates(opps), "", *_progress(doc), ""]
+             *_templates(opps), "", *_progress(doc), "", *_learn(data), ""]
     return "\n".join(lines)

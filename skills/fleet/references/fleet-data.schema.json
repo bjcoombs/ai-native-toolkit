@@ -886,6 +886,19 @@
                 "type": "null"
               }
             ]
+          },
+          "learn_from": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -893,6 +906,7 @@
           "exclusions",
           "gate_blockers",
           "key",
+          "learn_from",
           "next_step",
           "owner_count",
           "owners",

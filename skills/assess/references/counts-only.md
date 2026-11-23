@@ -954,3 +954,4 @@ kept as written, as is a criterion's `why` (`repos.rows.why`,
 | `repos.unit_rows.tags.tag` | token |
 | `repos.unit_rows.kind` | token |
 | `repos.unit_rows.learn_from` | path, dropped unless hashing is on (then hashed) |
+| `repos.learn_from` | path, dropped unless hashing is on (then hashed) |

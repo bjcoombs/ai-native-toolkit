@@ -257,8 +257,9 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
     # #1098: the unit's kind token (package, skill, agents, commands); the publish check read it
     # as unruled, so a bundle with unit kinds was refused until #1155 named it
     "repos.unit_rows.kind": TOKEN,
-    # #1155: the sibling units that hold the next gate, written like the unit's own key
+    # #1155: the sibling units (and repositories) that hold the next gate, never in plain counts-only
     "repos.unit_rows.learn_from": HASHED_PATH,
+    "repos.learn_from": HASHED_PATH,
 }
 
 

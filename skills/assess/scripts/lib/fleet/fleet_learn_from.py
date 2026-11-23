@@ -1,10 +1,17 @@
 """The sibling units that already hold a unit's next gate: the "Learn from" line (#1155).
 
-A unit's next Step is held back by its first blocking gate. Another unit of the same
-repository that already holds that gate has solved the same problem, so naming it points a
-team at a working example rather than a generic instruction. Both the ``/assess`` monorepo
-roll-up (``lib.unit_rollup``) and the fleet unit rows (``lib.fleet.fleet_data_units``) call
-this module over results they already hold; it computes no Step.
+A unit's next Step is held back by its first blocking gate. Another unit that already
+holds that gate has solved the same problem, so naming it points a team at a working
+example rather than a generic instruction. The callers pass results they already hold; this
+module computes no Step:
+
+- the ``/assess`` monorepo roll-up (``lib.unit_rollup``): the units of one repository;
+- the fleet unit rows (``lib.fleet.fleet_data_units``): the units of one repository;
+- the fleet repositories (``repo_learn_from``, from ``lib.fleet.fleet_data``): every measured
+  repository of the run. A repository has no ecosystem or kind in ``fleet-data.json``, so
+  its siblings are listed by key;
+- ``report.md``'s Opportunities section (``lib.fleet.fleet_opportunities_section``) renders
+  both fleet lists as written in ``fleet-data.json``, so it carries the file's privacy.
 
 - **Which gate.** The unit's first blocking gate of its next Step, and only when it reads
   ``unmet`` with no owner disposition. A gate that is not measured, or one the owner
@@ -93,6 +100,21 @@ def learn_from(me: Sibling, gate: NextGate, siblings: Sequence[Sibling]) -> tupl
 def line(names: Sequence[str]) -> str:
     """The user-facing line: ``Learn from: <unit>, <unit>``."""
     return f"{LABEL}: {', '.join(names)}"
+
+
+def repo_learn_from(results: Mapping[str, Any], model: MaturityModel | None) -> dict[str, list[str]]:
+    """Per repository id, the measured repositories of the run that hold its next gate;
+    ``results`` maps each id to its level result (None when not measured)."""
+    if model is None:
+        return {}
+    measured = {repo: r for repo, r in results.items() if isinstance(r, Mapping)}
+    siblings = [Sibling(repo, None, None, condition_states(r.get("conditions") or []))
+                for repo, r in sorted(measured.items())]
+    out: dict[str, list[str]] = {}
+    for me in siblings:
+        gate = next_gate(measured[me.name].get("next_step"), model)
+        out[me.name] = learn_from(me, gate, siblings)[0] if gate is not None else []
+    return out
 
 
 def ecosystems(units_block: Any) -> dict[str, str]:

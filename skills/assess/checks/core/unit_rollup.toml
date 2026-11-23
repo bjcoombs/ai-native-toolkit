@@ -14,7 +14,7 @@ stage = "post_offers"
 shapes = [
   { path = "unit_rollup", type = "lib.unit_rollup:UnitRollUpBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "unit_rollup.unit_count_reason" = "token"
   "unit_rollup.unlocks.gate" = "token"

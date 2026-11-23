@@ -39,7 +39,8 @@ untouched, so a single-unit repository reads exactly as before.
 - ``lines`` and ``markdown``: the roll-up line ("Units: Step 1 (lowest unit) · 2 of 3
   measured units at Step 2") and, when a change lifts a unit, the next-unlock line naming
   the top-ranked change, then one line per ``learn_from`` entry ("apps/web: CI runs the
-  tests. Learn from: apps/api"). Empty for fewer than two units, so a single-unit
+  tests. Learn from: apps/api"), the first ``LEARN_LINES`` of them and a count of the rest,
+  so a large workspace keeps a short roll-up. Empty for fewer than two units, so a single-unit
   repository's report is unchanged.
 
 The roll-up counts name no unit (#800 decision 3); only the ``learn_from`` entries and their
@@ -187,11 +188,16 @@ def learn_from_entries(units: Sequence[Mapping[str, Any]], units_block: Any,
     return out
 
 
+LEARN_LINES = 5  # "Learn from" lines under the headline; the block lists every entry
+
+
 def _learn_lines(entries: Sequence[UnitLearnFrom]) -> list[str]:
     out: list[str] = []
-    for e in entries:
+    for e in entries[:LEARN_LINES]:
         change = GATE_CHANGE.get(e["gate"], f"the {e['gate']} gate holds")
         out.append(f"{e['unit']}: {change}. {line(e['names'])}")
+    if len(entries) > LEARN_LINES:
+        out.append(f"{len(entries) - LEARN_LINES} more units have a sibling unit that holds their next gate")
     return out
 
 

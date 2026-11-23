@@ -13,11 +13,12 @@ import json
 from typing import Any
 
 import lib.fleet.fleet_data as fd
-from fleet_data_fixture import SALT
+from fleet_data_fixture import SALT, build
 from lib import unit_rollup as ur
 from lib.counts_only.content_free import counts_only, hash_value
 from lib.fleet.fleet_data_units import unit_rows
 from lib.fleet.fleet_learn_from import MAX_NAMES, NextGate, Sibling, holds, learn_from, line, next_gate
+from lib.fleet.fleet_opportunities_section import opportunities_section
 from lib.fleet.fleet_publish import check_strings
 from lib.level_tally import default_model
 
@@ -152,3 +153,41 @@ def test_fleet_rows_name_the_siblings_only_in_full_or_hashed() -> None:
     assert check_strings([{"unit_rows": full}], "repos", hashed=True) == [
         "repos.unit_rows.key: written only hashed, under --hash-paths",
         "repos.unit_rows.learn_from: written only hashed, under --hash-paths"]
+
+
+def test_the_rollup_shows_five_lines_and_counts_the_rest() -> None:
+    units = [_unit("holder", "met")] + [_unit(f"pkg-{n}", "unmet") for n in range(7)]
+    block = ur.unit_rollup({**_levels(), "unit_count": 8, "units": units})
+    assert len(block["learn_from"]) == 7  # the block lists every entry
+    learn = [x for x in block["lines"] if "Learn from:" in x]
+    assert len(learn) == ur.LEARN_LINES == 5
+    assert block["lines"][-1] == "2 more units have a sibling unit that holds their next gate"
+
+
+# --- fleet repositories and report.md ---------------------------------------------------
+
+def test_a_repository_learns_from_the_fleet_repositories_that_hold_its_gate() -> None:
+    full = {r["key"]: r for r in build(fd.Privacy(full=True))["repos"]}
+    # proj2 is held back by ci; proj3 runs ci (its own next gate, docs, is not measured)
+    assert full["grp/sub/proj2"]["learn_from"] == ["grp/other/proj3"]
+    assert full["grp/other/proj3"]["learn_from"] == []  # not measured: nothing to learn
+    assert full["grp/sub/proj1"]["learn_from"] == []  # excluded by the owner
+    assert full["grp/proj4"]["learn_from"] is None  # failed: not measured
+    plain = build(fd.Privacy())
+    assert all(r["learn_from"] is None for r in plain["repos"])
+    hashed = {r["key"]: r for r in build(fd.Privacy(salt=SALT))["repos"]}
+    assert hashed[hash_value("grp/sub/proj2", SALT)]["learn_from"] == [hash_value("grp/other/proj3", SALT)]
+    assert check_strings(build(fd.Privacy(salt=SALT))["repos"], "repos", hashed=True) == []
+    assert check_strings(plain["repos"], "repos", hashed=False) == []
+
+
+def test_report_lists_who_to_learn_from_only_where_names_are_written() -> None:
+    section = opportunities_section(build(fd.Privacy(full=True)), None) or ""
+    assert "**Learn from.**" in section
+    assert "- `grp/sub/proj2`: the ci gate holds. Learn from: `grp/other/proj3`." in section
+    assert "- `grp/sub/proj2` unit `apps/web`: the docs gate holds. Learn from: `apps/api`." in section
+    plain = opportunities_section(build(fd.Privacy()), None) or ""
+    assert "Not shown: counts-only output names no repository or unit to learn from." in plain
+    assert "apps/" not in plain
+    hashed = opportunities_section(build(fd.Privacy(salt=SALT)), None) or ""
+    assert f"Learn from: `{hash_value('apps/api', SALT)}`" in hashed and "apps/" not in hashed

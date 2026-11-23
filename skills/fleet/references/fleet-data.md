@@ -91,7 +91,12 @@ gate of the model's `[[steps]]` that does not hold, once per gate id in Step ord
 tokens only: `gate` (the gate id), `state` (the blocking condition's state) and
 `disposition` (`excluded_by_owner`, else `null`); empty when every gate holds or the
 repository is not measured. A Step target above the repository's next Step reads
-its missing gates from it. `tags` (#1073) is the per-tag strip of the repository's own
+its missing gates from it. `learn_from` (#1155) lists up to three measured repositories of the run that
+already hold the first gate of the repository's `next_step`, by key, so a team can learn
+from one that has solved the same problem: in clear under `--full`, hashed under
+`--hash-paths` or `--hash-salt`, `null` in plain counts-only output and for a repository not
+measured; empty when no repository holds the gate or the gate is not one to change (not
+measured or excluded by the owner). `tags` (#1073) is the per-tag strip of the repository's own
 headline for the same level result: one cell per truth tag a condition carries, in the
 catalog's tag order, with `tag`, `met`, `measured` and `verified` (counted like the tally)
 and `not_measured`, `hazards` and `declined` (the NOT MEASURED, HAZARD and DECLINED counts).
