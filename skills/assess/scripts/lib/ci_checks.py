@@ -311,7 +311,7 @@ Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture ta
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Sequence
 from functools import partial
 from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
@@ -322,6 +322,9 @@ from lib.check_command import (
 from lib.ci_includes import IncludeRecord, Resolution, resolve_includes
 from lib.ci_lint_gates import (
     line_commands, line_compiler_gate, line_dotnet_build, lint_gate, rewrite_gated)
+from lib.ci_check_state import (
+    EnforcedBasis as EnforcedBasis, External as External, LintBasis as LintBasis, Tally,
+    _enforced_state, _lint_state, _max, _sum)
 from lib.ci_masking import unmasked_lines
 from lib.named_check import (
     instruction_words, named_count, setup_ci_target, sourced_env, unread_ci_target)
@@ -368,16 +371,7 @@ def merged_partial(text: str, resolution: Resolution | None, merged_text: str | 
 CiChecksBasis = Literal["check_command", "merged_config", "included_jobs",
                         "merged_config_partial", "unread_ci_system", "external_ci",
                         "external_ci_marker", "no_check_command", "no_ci"]
-EnforcedBasis = Literal[
-    "enforced_check", "included_jobs", "unknown_trigger", "script_not_found", "check_target",
-    "unread_ci_system", "external_ci", "external_ci_marker", "not_enforced", "no_check_command",
-    "no_ci"]
-LintBasis = Literal["lint_command", "included_jobs", "merged_config_partial", "unknown_trigger",
-                    "script_not_found", "check_target", "unread_ci_system", "external_ci",
-                    "external_ci_marker", "analysers_in_build", "compiler_gate_only",
-                    "not_enforced", "no_lint_command", "no_ci"]
-# Off-repository CI, in precedence order (#928): platform evidence, then the Prow marker.
-External = Literal["external_ci", "external_ci_marker"] | None
+
 # The offline Prow marker (#928): a root OWNERS_ALIASES with no CI file of any kind.
 PROW_MARKER = "OWNERS_ALIASES"
 
@@ -586,7 +580,6 @@ def enforced_check_commands(text: str) -> tuple[int, int]:
     return enforced, max(total - enforced, 0)
 
 
-Tally = tuple[int, int, int, int]
 
 
 def _is_lint_test(test: LineTest) -> bool:
@@ -730,65 +723,3 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
             "masked_check_commands": masked, "off_trigger_check_commands": off,
             "lint_runs": lint_runs, "lint_basis": lint_basis,
             "unread_ci_files": unread}
-
-
-def _sum(tallies: Iterable[Tally]) -> Tally:
-    a = b = c = d = 0
-    for t in tallies:
-        a, b, c, d = a + t[0], b + t[1], c + t[2], d + t[3]
-    return a, b, c, d
-
-
-def _max(x: Tally, y: Tally) -> Tally:
-    return max(x[0], y[0]), max(x[1], y[1]), max(x[2], y[2]), max(x[3], y[3])
-
-
-def _enforced_state(ordinary: int, unknown: int, may_check: Tally, *, elsewhere: bool,
-                    unread: bool, any_check: bool, has_files: bool,
-                    external: External = None,
-                    missing: Tally = (0, 0, 0, 0)) -> tuple[bool | None, EnforcedBasis]:
-    """``enforced_check_runs`` and ``enforced_basis`` (#775); unknown beats wrong, so an
-    unread CI system (#787) or an unmasked target whose recipe is not read (#920) reads
-    null ahead of a masked or off-trigger check."""
-    if ordinary:
-        return True, "enforced_check"
-    if elsewhere:
-        return None, "included_jobs"
-    if unknown:
-        return None, "unknown_trigger"
-    if missing[0] or missing[1]:
-        return None, "script_not_found"
-    if may_check[0] or may_check[1]:
-        return None, "check_target"
-    if unread:
-        return None, "unread_ci_system"
-    if external:
-        return None, external  # off-repository CI (#928): never credit, never false
-    if any_check:
-        return False, "not_enforced"
-    return False, "no_check_command" if has_files else "no_ci"
-
-
-def _lint_state(lint: Tally, may: Tally, *, elsewhere: bool, partial: bool, unread: bool,
-                has_files: bool, external: External = None,
-                missing: Tally = (0, 0, 0, 0)) -> tuple[bool | None, LintBasis]:
-    """``lint_runs`` and ``lint_basis`` from the lint and may-lint tallies (#782); an unread
-    CI system (#787) reads null ahead of the false cases, as for ``enforced_check_runs``."""
-    ordinary, unknown, off, masked = lint
-    if ordinary:
-        return True, "lint_command"
-    if elsewhere:
-        return None, "merged_config_partial" if partial else "included_jobs"
-    if unknown:
-        return None, "unknown_trigger"
-    if missing[0] or missing[1]:
-        return None, "script_not_found"
-    if may[0] or may[1]:
-        return None, "check_target"
-    if unread:
-        return None, "unread_ci_system"
-    if external:
-        return None, external
-    if not has_files:
-        return False, "no_ci"
-    return False, "not_enforced" if off or masked else "no_lint_command"
