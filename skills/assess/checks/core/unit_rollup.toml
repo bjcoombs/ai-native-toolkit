@@ -9,7 +9,7 @@ summary = "The lowest unit's Step plus 'N of M measured units' at the next Step,
 issues = [800, 865]
 callable = "lib.core_scans:unit_rollup"
 publishes = ["unit_rollup"]
-reads = ["unit_levels"]
+reads = ["unit_levels", "maturity_model"]
 stage = "post_offers"
 shapes = [
   { path = "unit_rollup", type = "lib.unit_rollup:UnitRollUpBlock" },

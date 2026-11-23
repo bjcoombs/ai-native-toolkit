@@ -59,7 +59,7 @@ from lib.level_tally import run_exclusions
 from lib.levels import LevelsError, MaturityModel, PathValidator, load_levels
 from lib.signal_grades import DEFAULT_LEVELS
 
-__all__ = ["PROFILES_DIR", "READY_WORDS", "ModelChoice", "ProfileError", "add_model_arguments",
+__all__ = ["CUSTOM_MODEL_LINE", "PROFILES_DIR", "READY_WORDS", "ModelChoice", "ProfileError", "add_model_arguments",
            "chosen_model", "model_lines", "non_default_ids", "profile_names", "profile_path", "resolve",
            "run_level", "single_repo_choice"]
 
@@ -72,6 +72,9 @@ READY_WORDS = {"handover": ("Ready for handover", "Not ready for handover"),
 _READY_DEFAULT = ("Every practice met", "Not every practice met")
 
 ModelKind = Literal["default", "profile", "file"]
+
+# How the summary's first line opens for a custom --levels model (lib/model_change.custom_run).
+CUSTOM_MODEL_LINE = "Maturity model: model: "
 
 
 class ProfileError(ValueError):
@@ -213,9 +216,10 @@ def model_lines(level: LevelResult, choice: ModelChoice | None) -> list[str]:
     """The summary lines naming a non-default model and whether it holds; ``[]`` for the default."""
     if choice is None or choice.kind == "default":
         return []
-    named = f"profile {choice.name}" if choice.kind == "profile" else f"model: {choice.name}, a custom file"
+    first = (f"Maturity model: profile {choice.name}, not the default." if choice.kind == "profile"
+             else f"{CUSTOM_MODEL_LINE}{choice.name}, a custom file, not the default.")
     foreign = non_default_ids(choice.model)
-    lines = [f"Maturity model: {named}, not the default.", _readiness(level, choice, set(foreign))]
+    lines = [first, _readiness(level, choice, set(foreign))]
     if foreign:
         lines.append(f"Not in the default model: {'; '.join(_practice(c, choice.model) for c in foreign)}.")
     return lines

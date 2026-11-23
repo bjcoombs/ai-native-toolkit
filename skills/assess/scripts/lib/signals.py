@@ -340,6 +340,7 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
     (``ai_usage``, #547). ``fleet_config`` is the ``--fleet-config`` file merged
     with the target's ``.assess/config.toml`` sections (``lib/fleet_config.py``, #706).
     ``ghsync_root`` is ``--ghsync-root``, the root GitLab includes resolve against (#766).
+    ``maturity_model`` is None: no headless scan evaluates a maturity model (#1150).
     Besides the ``build_run_context`` arguments, it supplies the setup values
     ``instruction_files``, ``scope``, ``excludes``, ``history_window``,
     ``fleet_config`` and ``ghsync_root`` itself; the table never recomputes a name the runner provides.
@@ -350,6 +351,7 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
         "requested_scope": scope,
         "run_date": datetime.now(timezone.utc).date().isoformat(),
         "non_interactive": True,
+        "maturity_model": None,  # the headless runner reports no level (/fleet --levels scores the rows)
         "instruction_files": instruction_files,
         "scope": scope,
         "excludes": load_excludes(repo_root),

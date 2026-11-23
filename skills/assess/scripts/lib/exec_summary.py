@@ -16,7 +16,8 @@ it cannot import the Step sentences without an import cycle):
      the top Step: ``Next: every gate holds; keep them in place to stay at Step N.``
   3. ``Since last run: ...`` from the ``since_last_run`` block: the actions closed, the
      gates now in place and those no longer in place (``headline.GATE_CHANGE`` words), each
-     part "not known" when the block says so, ``Since last run: not known.`` when nothing is
+     part "not known" when the block says so, "model changed (default → handover); gates
+     not compared" when the previous run used another model (``lib/model_change.py``), ``Since last run: not known.`` when nothing is
      known or the block is absent or degraded, and ``First run.`` on a first run.
 
   A run under a profile or a ``--levels`` model (#1150) opens with the lines
@@ -45,6 +46,7 @@ from lib.assess_diagrams_ladder import meaning
 from lib.headline import GATE_CHANGE, gate_note, headline
 from lib.level_result_types import Blocker, Headline, LevelResult
 from lib.levels import MaturityModel
+from lib.model_change import model_changed_line
 from lib.profiles import ModelChoice, chosen_model, model_lines
 
 __all__ = ["GATE_TASK", "STEP_GATES_URL", "call_to_action", "run_headline", "since_line", "summarised",
@@ -91,6 +93,7 @@ def since_line(since: Any) -> str:
         return "First run."
     closed = since.get("closed_count")
     gained, lost = since.get("gates_gained"), since.get("gates_lost")
+    changed = model_changed_line(since)
     parts: list[str] = []
     if isinstance(closed, int):
         parts.append("no actions closed" if closed == 0 else
@@ -102,11 +105,13 @@ def since_line(since: Any) -> str:
             parts.append(f"no longer in place: {_gate_words(lost)}")
         if not gained and not lost:
             parts.append("nothing gained or lost")
+    elif changed is not None:
+        parts.append(changed[:1].lower() + changed[1:].replace(" since last run", ""))
     if not parts:
         return "Since last run: not known."
     if not isinstance(closed, int):
         parts.append("closed actions not known")
-    elif not (isinstance(gained, list) and isinstance(lost, list)):
+    elif not (isinstance(gained, list) and isinstance(lost, list)) and changed is None:
         parts.append("gate changes not known")
     return f"Since last run: {'; '.join(parts)}."
 

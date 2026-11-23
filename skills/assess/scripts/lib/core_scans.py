@@ -68,6 +68,7 @@ from lib.level_result_types import LevelResult, OwnerExclusionsBlock
 from lib.level_tally import LEVEL_READS
 from lib.keyhole.liveness_scan import scan_liveness
 from lib.owner_exclusions import owner_exclusions_block
+from lib.model_change import across_models, previous_levels_version, units_label
 from lib.profiles import ModelChoice, run_level
 from lib.unit_discovery import UnitsBlock, scan_units
 from lib.unit_levels import UnitLevelsBlock, unit_levels as unit_levels_block
@@ -367,11 +368,12 @@ def unit_levels(readings: Any, *blocks: Any) -> UnitLevelsBlock:
     return unit_levels_block(readings, *blocks)
 
 
-def unit_rollup(levels: Any) -> UnitRollUpBlock:
+def unit_rollup(levels: Any, choice: ModelChoice | None) -> UnitRollUpBlock:
     """The repository roll-up over the units and the unit-unlock ranking (#865): the lowest
     unit's Step, "N of M measured units" at the next Step, and the changes ranked by the
-    units they lift. Core-only."""
-    return unit_rollup_block(levels)
+    units they lift. Core-only. The units are read on the default model, so under a
+    profile or ``--levels`` model the line says so (#1150)."""
+    return units_label(unit_rollup_block(levels), choice)
 
 
 def offers_blocks(non_interactive: bool) -> dict[str, Any]:
@@ -417,4 +419,7 @@ def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path, supersed
     """The run context's ``since_last_run`` block (#1083): actions closed, gates gained or
     lost and the next blocker, against the run-context the previous run left (or, for a run
     that supersedes a same-day run on the same commit, against that run's own baseline)."""
-    return since_last_run_block(level_block, assess_dir, repo_root, superseded)
+    block = since_last_run_block(level_block, assess_dir, repo_root, superseded)
+    # A gate is never compared across maturity models (#1150): a profile run after a default one
+    # says the model changed instead.
+    return across_models(block, level_block, previous_levels_version(assess_dir, superseded))
