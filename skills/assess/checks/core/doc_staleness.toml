@@ -24,6 +24,7 @@ revision = 1
   "doc_staleness.churn_window" = "drop"
   "doc_staleness.docs.subject_method" = "token"
   "doc_staleness.docs.subject_roots" = "path"
+  "doc_staleness.docs.subject_match" = "token"
   "doc_staleness.docs.subject_paths" = "path"
   "doc_staleness.docs.base_doc_dir" = "path"
   "doc_staleness.docs.confidence" = "token"

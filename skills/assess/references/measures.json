@@ -3018,6 +3018,7 @@
           "doc_staleness.docs.provenance.generated_by": "drop",
           "doc_staleness.docs.provenance.method": "token",
           "doc_staleness.docs.provenance.sources": "path",
+          "doc_staleness.docs.subject_match": "token",
           "doc_staleness.docs.subject_method": "token",
           "doc_staleness.docs.subject_paths": "path",
           "doc_staleness.docs.subject_roots": "path",

@@ -167,6 +167,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `doc_staleness.churn_window` | dropped |
 | `doc_staleness.docs.subject_method` | token |
 | `doc_staleness.docs.subject_roots` | path (hashed when hashing is on) |
+| `doc_staleness.docs.subject_match` | token |
 | `doc_staleness.docs.subject_paths` | path (hashed when hashing is on) |
 | `doc_staleness.docs.base_doc_dir` | path (hashed when hashing is on) |
 | `doc_staleness.docs.confidence` | token |
@@ -190,6 +191,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 |---|---|
 | `stale_hubs.subject_method` | token |
 | `stale_hubs.subject_roots` | path (hashed when hashing is on) |
+| `stale_hubs.subject_match` | token |
 | `stale_hubs.subject_paths` | path (hashed when hashing is on) |
 | `stale_hubs.base_doc_dir` | path (hashed when hashing is on) |
 | `stale_hubs.confidence` | token |
