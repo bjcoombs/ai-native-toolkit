@@ -171,7 +171,7 @@
   /* Showcase */
   .figure-row { display: grid; gap: 1.25rem; }
   @media (min-width: 48rem) { .figure-row { grid-template-columns: 1fr 1fr; } }
-  .figure-row + .figure-row, .delta + .figure-row { margin-top: clamp(3rem, 6vw, 4.5rem); }
+  .figure-row + .figure-row, .delta + .figure-row, .howto + .figure-row { margin-top: clamp(3rem, 6vw, 4.5rem); }
   .row-title { font-size: var(--step-1); font-weight: 600; grid-column: 1 / -1; }
   .row-title + p { grid-column: 1 / -1; color: var(--muted); max-width: var(--measure); margin-top: -0.5rem; }
   figure { margin: 0; }
@@ -287,7 +287,7 @@
       <dl class="legend" data-kind="skill" data-standalone="true">
         <div>
           <dt>/assess</dt>
-          <dd>Scores a codebase's readiness for AI contributors against a 0-8 layered contract model, with a complexity hotspot treemap and a doc-navigability graph. Writes a report with the Top 3 Actions, naming files.</dd>
+          <dd>Measures a codebase's readiness for AI contributors as a list of conditions, each one practice with file:line evidence and truth tags naming what it keeps honest. The headline is the autonomy Step the repo supports, from 1 Assisted to 4 Autonomous loops, each Step past the first held by a named gate, then "Practices in place: N of M measured, V verified", where a condition the run could not see never counts as 0. Draws a complexity hotspot treemap, a doc-navigability graph, an evidence waffle, a package map, a doc-drift map and a review strip. Writes a report with the Top 3 Actions, naming files.</dd>
         </div>
         <div>
           <dt>/huddle</dt>
@@ -400,6 +400,46 @@
             <li><strong>Size is estimated tokens</strong> (about chars/4, the context-window unit). Lines of code are in the tooltip.</li>
             <li><strong>Hue is cyclomatic complexity</strong>, red for high. <strong>Saturation is recent git churn</strong>, vivid for active.</li>
             <li>The vivid-red blocks are what an agent or a person is most likely to break next week. Both views use the colour-blind-safe OrRd ramp, with no red-green.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="figure-row">
+        <h3 class="row-title">Four more views of one run: llama.cpp</h3>
+        <p>One run of the current toolkit against the public <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a> repo at commit <code>1f8baae</code> (22 November 2026). Its headline is Step 3, Unattended agent PRs, with "Practices in place: 6 of 14 measured, 3 verified" and one condition not measured.</p>
+        <figure>
+          <a class="plate" href="./example-waffle.svg"><img src="./example-waffle.svg" width="680" height="574" loading="lazy" decoding="async" alt="Evidence waffle for llama.cpp: 24 conditions, one square each, grouped by maturity-model row; 3 met and verified, 3 met and measured, 4 met but only listed from config, 13 not met yet, 1 not measured."></a>
+          <figcaption><b>Evidence waffle.</b> 6 counted conditions met (3 verified, 3 measured), 4 listed, 13 not met, 1 not measured.</figcaption>
+        </figure>
+        <figure>
+          <a class="plate" href="./example-package-map.svg"><img src="./example-package-map.svg" width="729" height="734" loading="lazy" decoding="async" alt="Package map for llama.cpp's TypeScript import graph: the 20 largest of 77 packages as a matrix of row-imports-column cells; 106 cross-package imports, 84 of them through a front door."></a>
+          <figcaption><b>Package map.</b> 77 TypeScript packages, 106 cross-package imports, 84 through a front door.</figcaption>
+        </figure>
+        <figure>
+          <a class="plate" href="./example-doc-drift.svg"><img src="./example-doc-drift.svg" width="720" height="762" loading="lazy" decoding="async" alt="Doc-drift map for llama.cpp: the 15 docs furthest behind their code, of 82 mapped to code of their own; gguf-py/README.md leads with 435 commits to its code per edit of the doc."></a>
+          <figcaption><b>Doc-drift map.</b> 38 of 82 mapped docs behind their code; <code>gguf-py/README.md</code> at 435.</figcaption>
+        </figure>
+        <figure>
+          <a class="plate" href="./example-review-strip.svg"><img src="./example-review-strip.svg" width="680" height="264" loading="lazy" decoding="async" alt="Review strip for llama.cpp: 30 sampled merged pull requests, oldest first; 28 approved by someone other than the author, 2 reviewed but not approved, none merged without review, 5 with review-bot output."></a>
+          <figcaption><b>Review strip.</b> 28 of 30 merges approved, 2 reviewed, none unreviewed, 5 with review-bot output.</figcaption>
+        </figure>
+      </div>
+
+      <div class="howto">
+        <div>
+          <h3>Reading the waffle and the package map</h3>
+          <ul>
+            <li><strong>One square per condition</strong>, one row per maturity-model row. Dark teal is verified by a run or the platform, mid teal measured from the code or its history, pale teal listed from config and never counted, grey not met yet, counted or listed: here 8 of the 13 grey squares count, so 6 met plus 8 make the "of 14". A hatched square was not measured, its reason in the key. The verified and measured squares are the N in "Practices in place".</li>
+            <li><strong>Row imports from column</strong>, darker for more imports, with a lines-of-code bar per package. A corner mark flags imports that reach past the target package's front door.</li>
+            <li>The import graph builders read Python, Go, and TypeScript or JavaScript, so on llama.cpp, whose C and C++ they cannot read, the map shows the TypeScript web UI.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Reading the doc drift and the review strip</h3>
+          <ul>
+            <li><strong>Bar length is drift:</strong> commits to the doc's code per edit of the doc, since the doc last changed. An amber bar is behind its code, past the dashed line at 2 or with a newer declared source, so it is the first doc to reread before an agent leans on it.</li>
+            <li><strong>One tick per sampled merged change</strong>, oldest first: approved, reviewed, or merged without review. A dot marks review-bot output.</li>
+            <li>A run of unreviewed ticks shows a stretch that a single share would hide.</li>
           </ul>
         </div>
       </div>
