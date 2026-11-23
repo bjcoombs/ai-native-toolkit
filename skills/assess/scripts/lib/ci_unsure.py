@@ -203,18 +203,17 @@ def group_call_unsure(statements: list[Statement], conditions: list[bool]) -> se
 
 
 def uncalled_functions(statements: list[Statement]) -> set[int]:
-    """The statements of each function body that no statement outside it calls (#1061):
-    ``f() { pytest; }`` alone defines ``f`` and runs nothing, so its check cannot fail the step."""
+    """The statements of each function body that no statement outside it names (#1061):
+    ``f() { pytest; }`` alone defines ``f`` and runs nothing, so its check cannot fail the step.
+    Any whole-word mention outside the body counts as a call (``time f``, ``retry 3 f``,
+    ``out=$(f)``, a ``case`` arm), so a call this reader cannot place never masks the body."""
     bodies = {name: range(start, end + 1) for start, end, name in _groups(statements) if name}
-    called: set[str] = set()
-    for i, statement in enumerate(statements):
-        for _, seg in statement:
-            words = seg.split()
-            while words and words[0] in ("!", "if", "elif", "while", "until", "then", "do", "else", "{"):
-                words = words[1:]
-            if words and words[0] in bodies and i not in bodies[words[0]]:
-                called.add(words[0])
-    return {i for name, body in bodies.items() if name not in called for i in body}
+    out: set[int] = set()
+    for name, body in bodies.items():
+        word = re.compile(r"(?<![\w.-])" + re.escape(name) + r"(?![\w.-])")
+        if not any(word.search(_join(statement)) for i, statement in enumerate(statements) if i not in body):
+            out.update(body)
+    return out
 
 
 def opaque_flags(statements: list[Statement]) -> list[bool]:

@@ -89,7 +89,8 @@ parser (the core has no YAML dependency). Only literal values count.
 - A pipe without pipefail (#1061). In a GitHub bash or sh ``run:`` body with pipefail off
   (the default ``bash -e {0}``, ``shell: sh``, no ``set -o pipefail`` before it), every
   pipeline member but the last is masked (``ci_exempt.piped_members``): the pipeline takes
-  the last command's status, so ``pytest | tee log`` exits 0 on a failing check. When the
+  the last command's status, so ``pytest | tee log`` exits 0 on a failing check. A capture
+  (above: a later line of the job names the file and exits non-zero) stays credited. When the
   statement or a later one reads ``PIPESTATUS`` or a later one re-raises a status (``pytest
   | tee log; exit ${PIPESTATUS[0]}``, a capture checked later), it reads null instead. With
   pipefail on (``shell: bash``, a custom ``-o pipefail``) it stays credited; GitLab runs its
@@ -170,7 +171,8 @@ from dataclasses import dataclass
 
 from lib.ci_exempt import (
     condition_flags, exempt_segments, pipefail_after, piped_members, shell_pipefail, unquoted)
-from lib.ci_statements import _join, _pick, _same_line_keep, split_statements
+from lib.ci_statements import (
+    _capture_targets, _checked_later, _join, _pick, _same_line_keep, split_statements)
 from lib.ci_unsure import (
     group_call_unsure, opaque_flags, or_arm_unsure, uncalled_functions, until_break_flags)
 from lib.command_index import ci_line_text
@@ -556,6 +558,7 @@ Parsed = dict[int, list[list[tuple[str, str]]]]
 
 def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, texts: dict[int, str],
                     run_shell: tuple[bool, bool, bool] | None,
+                    captured: frozenset[tuple[int, int]] = frozenset(),
                     ) -> tuple[list[tuple[int, int]], Segments, Segments]:
     """The statements of one script body masked by ``set +e`` or by a later top-level ``exit 0``,
     and the segments a later ``exit 0`` masks in a body with errexit on.
@@ -629,7 +632,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
                      else frozenset())
             if maybe:
                 unsure[(first, k)] = maybe
-        if readable and code[idx] and not (pipes[idx] or state[idx] or off[idx]):
+        if readable and code[idx] and not (pipes[idx] or state[idx] or off[idx]) and (first, k) not in captured:
             # pytest | tee log without pipefail: tee's status is the pipeline's (#1061). A later
             # re-raise or PIPESTATUS read may carry the check's status out, so that reads null.
             piped = piped_members(raw[first][k])
@@ -692,6 +695,7 @@ def mask_lines(text: str) -> tuple[list[str], list[str]]:
     kept: dict[tuple[int, int], list[int]] = {}
     unsure: Segments = {}
     bodies: dict[int, list[tuple[int, int]]] = {}
+    captured: set[tuple[int, int]] = set()   # output a later line of the job checks (a capture)
     for span in spans:
         first = span[0]
         statements = parsed[first]
@@ -699,7 +703,11 @@ def mask_lines(text: str) -> tuple[list[str], list[str]]:
             masked[first] = set(range(len(statements)))
             continue
         for k, statement in enumerate(statements):
-            keep = _same_line_keep(statement, lambda: [lines[j] for j in tree.job(first) if j > span[-1]])
+            later = [lines[j] for j in tree.job(first) if j > span[-1]]
+            keep = _same_line_keep(statement, lambda: later)
+            targets = _capture_targets(statement)
+            if targets and _checked_later(targets, later):
+                captured.add((first, k))
             arm = or_arm_unsure(statement, " ; ".join(_join(s) for s in statements[k + 1:]))
             if arm:
                 unsure[(first, k)] = frozenset(arm)
@@ -710,7 +718,7 @@ def mask_lines(text: str) -> tuple[list[str], list[str]]:
     for body, refs in bodies.items():
         run_shell = run_errexit(tree, body) if tree.lines[body].key == "run" else None
         texts = {first: _joined(lines, span_at[first]) for first in dict.fromkeys(f for f, _ in refs)}
-        whole, exempt, body_unsure = _masked_in_body(refs, parsed, raw, texts, run_shell)
+        whole, exempt, body_unsure = _masked_in_body(refs, parsed, raw, texts, run_shell, frozenset(captured))
         for first, k in whole:
             masked.setdefault(first, set()).add(k)
         for (first, k), skip in exempt.items():

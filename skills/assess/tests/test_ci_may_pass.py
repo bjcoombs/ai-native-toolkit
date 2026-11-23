@@ -264,3 +264,16 @@ _CREDIT = (True, "enforced_check")
 def test_end_to_end_readings(tmp_path: Path, text: str, expected: tuple[object, str]) -> None:
     block = scan_ci_checks(_repo(tmp_path, {".github/workflows/ci.yml": text}))
     assert (block["enforced_check_runs"], block["enforced_basis"]) == expected
+
+
+@pytest.mark.parametrize("run", MAY_PASS)
+def test_the_may_pass_table_reads_check_may_pass_end_to_end(tmp_path: Path, run: str) -> None:
+    """The scan reads each masking-table row too, not only ``mask_lines`` (#1061)."""
+    block = scan_ci_checks(_repo(tmp_path, {".github/workflows/ci.yml": _step(run, "default")}))
+    assert (block["enforced_check_runs"], block["enforced_basis"]) == (None, "check_may_pass")
+
+
+@pytest.mark.parametrize("run", [r for r in CREDITED if "[ -d sub ]" not in r])
+def test_the_credited_table_reads_credit_end_to_end(tmp_path: Path, run: str) -> None:
+    block = scan_ci_checks(_repo(tmp_path, {".github/workflows/ci.yml": _step(run, "default")}))
+    assert (block["enforced_check_runs"], block["enforced_basis"]) == (True, "enforced_check")

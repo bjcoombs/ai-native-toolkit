@@ -228,3 +228,54 @@ def test_compound_core_keeps_operators_and_drops_empty_leads() -> None:
 ])
 def test_piped_members(line: str, piped: set[int]) -> None:
     assert piped_members(split_statements(line)[0]) == piped
+
+
+@pytest.mark.parametrize("first", ["yarn lint | tee out.txt || true", "yarn lint | tee out.txt"])
+def test_a_piped_capture_a_later_step_checks_stays_credited(tmp_path: Path, first: str) -> None:
+    """The capture rule (#775): a later step greps the captured file and exits non-zero."""
+    text = (_step(first, "default") + "      - run: grep -q error out.txt && exit 1\n")
+    block = scan_ci_checks(_repo(tmp_path, {".github/workflows/ci.yml": text,
+                                            "package.json": '{"scripts": {"lint": "eslint ."}}'}))
+    assert (block["enforced_check_runs"], block["lint_runs"]) == (True, True)
+
+
+def test_a_piped_check_nothing_reads_back_is_masked(tmp_path: Path) -> None:
+    text = _step("pytest | tee out.txt", "default") + "      - run: echo hi\n"
+    assert _enforced(tmp_path, text) == MASKED
+
+
+@pytest.mark.parametrize("call", [
+    "run_tests", "time run_tests", "retry 3 run_tests", "X=1 run_tests", "out=$(run_tests)",
+    "case x in x) run_tests;; esac",
+])
+def test_a_function_named_outside_its_body_is_called(tmp_path: Path, call: str) -> None:
+    assert _enforced(tmp_path, _block(f"run_tests() {{\n  pytest\n}}\n{call}")) == CREDIT
+
+
+@pytest.mark.parametrize(("run", "shell", "expected"), [
+    ("(ruff check .)", "default", (True, "lint_command")),
+    ("ruff check . | tee log", "default", (False, "not_enforced")),
+    ("ruff check . | tee log", "bash", (True, "lint_command")),
+    ("ruff check . || echo false", "default", (None, "check_may_pass")),
+    ("if ! ruff check .; then exit 1; fi", "default", (True, "lint_command")),
+])
+def test_the_lint_reading_follows_the_same_rules(tmp_path: Path, run: str, shell: str,
+                                                 expected: tuple[object, str]) -> None:
+    block = scan_ci_checks(_repo(tmp_path, {".github/workflows/ci.yml": _step(run, shell)}))
+    assert (block["lint_runs"], block["lint_basis"]) == expected
+
+
+@pytest.mark.parametrize(("run", "files"), [
+    ("{shell} scripts/foo.sh", {"scripts/foo.sh": "echo hi\n"}),
+    ("{shell} test.sh", {}),
+    ("{shell} scripts/lint.sh", {"scripts/lint.sh": "ruff check .\n"}),
+])
+def test_dash_reads_a_named_or_missing_script_as_sh_does(tmp_path: Path, run: str, files: dict[str, str]) -> None:
+    def reading(shell: str, root: Path) -> tuple[object, ...]:
+        block = scan_ci_checks(_repo(root, {".github/workflows/ci.yml": _step(run.format(shell=shell), "default"),
+                                            **files}))
+        return (block["test_or_lint_configured"], block["basis"], block["enforced_check_runs"],
+                block["enforced_basis"], block["lint_runs"], block["lint_basis"])
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    assert reading("dash", tmp_path / "a") == reading("sh", tmp_path / "b")
