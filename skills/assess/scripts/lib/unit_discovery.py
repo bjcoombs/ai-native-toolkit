@@ -516,6 +516,8 @@ class _Walk:
         self.visited.add(folder)
         names = self.manifest_dirs.get(folder, frozenset())
         declared, broken = _workspaces(self.root, folder, names)
+        # A member shallower than its workspace (``deep/ws`` listing ``../../lib``) is
+        # visited first with origin "manifest", so a broken manifest there reads as a leaf.
         if broken and (folder == "." or origin == "workspace_member" or declared
                        or any(posixpath.basename(b) in WORKSPACE_ONLY for b in broken)):
             # the members are unknown: an aggregator of unknown size, claimed whole
