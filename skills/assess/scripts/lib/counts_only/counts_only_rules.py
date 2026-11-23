@@ -156,6 +156,7 @@ EXTRA_FIELD_NAMES: Final = frozenset({
     "aging_reliable", "families", "stale_by_file", "stale_touches_threshold",
     "todo_bare", "todo_linked", "total_markers", "total_stale",
     "stale_agent_introduced", "agent_introduced", "justified", "linked", "stale",
+    "fixture_files_excluded",
     "family", "text", "commit", "survived_touches", "severity",
     # structure_drift tier 1, test_focus, instruction files
     "tier_1", "allowlist_pairs_count", "seam_allowlist_applied", "matched_patterns",

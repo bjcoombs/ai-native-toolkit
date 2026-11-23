@@ -154,6 +154,7 @@ class PromissoryMarkersBlock(TypedDict):
     total_markers: int
     total_stale: int
     stale_agent_introduced: int
+    fixture_files_excluded: int
     stale_by_file: dict[str, StaleMarkerFile]
     top_offenders: list[MarkerOffender]
 
