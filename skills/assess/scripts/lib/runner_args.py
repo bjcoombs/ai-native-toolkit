@@ -31,10 +31,13 @@ as ``(words, is_script)``, or None for another command (``pdm install``):
   command runs only a script (pdm exits 2 with "Command not found" otherwise), so with the
   scripts read and no ``X`` among them it runs nothing (``[]``).
 - ``poe X``: always the task ``X`` (poe runs no program by name).
+- With no ``pyproject.toml`` tracked (``NO_PYPROJECT``), ``pdm run X`` and ``poe X`` read as
+  ``SCRIPT``: ``pdm run test`` falls back to the shell's ``test`` and ``poe test`` fails.
 
 The scripts come from every tracked ``pyproject.toml`` under ``reads_pdm_scripts`` (a decorator on
-a scan whose first argument is the repository root: ``ci_checks.scan_ci_checks``,
-``coverage_gate.detect_coverage_gate``). Outside one (an instruction file) they are not read,
+a scan whose first argument is the repository root: ``ci_checks.scan_ci_checks``) or
+``pdm_scripts_set`` (``coverage_ci`` and ``coverage_root_config`` set ``CiRuns.pdm_scripts``
+where they classify the coverage gate's runs). Outside one (an instruction file) they are not read,
 and ``pdm X`` is read as a script by name. Inward-only imports: stdlib,
 ``lib.command_flags`` and ``lib.command_index``; never ``lib.check_command`` or an orchestrator.
 Tests: ``tests/test_runner_args.py``.
@@ -44,7 +47,7 @@ from __future__ import annotations
 import functools
 import tomllib
 from collections.abc import Callable, Iterator, Sequence
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from contextvars import ContextVar
 from pathlib import Path, PurePosixPath
 from typing import ParamSpec, TypeVar
@@ -168,6 +171,9 @@ PDM_COMMANDS = frozenset({
 # ``pytest`` script, ``poe ruff``): its recipe is unread, so neither the program nor the name
 # credits it. ``<`` never starts a shell word.
 SCRIPT = "<script>"
+# The script names when no ``pyproject.toml`` is tracked: ``pdm run test`` falls back to the
+# shell's ``test`` and ``poe test`` fails, so a run there reads ``SCRIPT`` (null), never credit.
+NO_PYPROJECT: frozenset[str] = frozenset({SCRIPT})
 # Runner options that take the next word (``pdm run -p sub lint``, ``poe -C sub lint``).
 _RUNNER_VALUED = frozenset({"-p", "--project", "-C", "--directory", "--root", "-e",
                             "--executor", "--venv"})
@@ -187,15 +193,18 @@ def script_run(words: Sequence[str]) -> tuple[list[str], bool] | None:
     docstring); None for another command."""
     head = PurePosixPath(words[0]).name if words else ""
     rest = _after_flags(words[1:])
+    scripts = _PDM_SCRIPTS.get()
+    unread = scripts is NO_PYPROJECT   # no project: what runs is not settled (null)
     if head == "poe":
-        return rest, True
+        return ([SCRIPT] if unread and rest else rest), True
     if head == "hatch":
         return (_after_flags(rest[1:]), False) if rest[:1] == ["run"] else None
     if head != "pdm" or (rest[:1] and rest[0] in PDM_COMMANDS):
         return None
-    scripts = _PDM_SCRIPTS.get()
     if rest[:1] == ["run"]:
         rest = _after_flags(rest[1:])
+        if unread and rest:
+            return [SCRIPT], True
         return rest, bool(rest) and scripts is not None and rest[0] in scripts
     if scripts is not None and rest[:1] and rest[0] not in scripts:
         return [], True   # pdm pytest with no pytest script: "Command not found", exit 2
@@ -205,11 +214,13 @@ def script_run(words: Sequence[str]) -> tuple[list[str], bool] | None:
 def pdm_scripts(root: Path) -> frozenset[str] | None:
     """The ``[tool.pdm.scripts]`` names of every tracked ``pyproject.toml`` (``_``, the shared
     options, is none), so a project in a subdirectory (``cd backend && pdm cov``) counts too;
-    empty with none, None when one cannot be parsed (unknown, never "no such script")."""
+    empty with none, ``NO_PYPROJECT`` when no ``pyproject.toml`` is tracked at all, None when
+    one cannot be parsed (unknown, never "no such script")."""
     names: set[str] = set()
-    for rel in sorted(repo_files(root)):
-        if PurePosixPath(rel).name != "pyproject.toml":
-            continue
+    projects = [rel for rel in sorted(repo_files(root)) if PurePosixPath(rel).name == "pyproject.toml"]
+    if not projects:
+        return NO_PYPROJECT
+    for rel in projects:
         text = read_config(root, rel)
         if "pdm" not in text:
             continue
@@ -224,13 +235,18 @@ def pdm_scripts(root: Path) -> frozenset[str] | None:
 
 
 @contextmanager
-def pdm_scripts_of(root: Path) -> Iterator[None]:
-    """Read ``root``'s pdm scripts for ``script_run`` inside the block."""
-    token = _PDM_SCRIPTS.set(pdm_scripts(root))
+def pdm_scripts_set(names: frozenset[str] | None) -> Iterator[None]:
+    """Give ``script_run`` these pdm script names (None: not read) inside the block."""
+    token = _PDM_SCRIPTS.set(names)
     try:
         yield
     finally:
         _PDM_SCRIPTS.reset(token)
+
+
+def pdm_scripts_of(root: Path) -> AbstractContextManager[None]:
+    """Read ``root``'s pdm scripts for ``script_run`` inside the block."""
+    return pdm_scripts_set(pdm_scripts(root))
 
 
 P = ParamSpec("P")

@@ -75,7 +75,6 @@ from lib.testing.coverage_ci import NO_RUNS, CiRuns, EnforcedBasis, enforced_mee
 from lib.testing.coverage_codecov import codecov_reason, codecov_statuses, is_patch, meets_percent
 from lib.testing.coverage_root_config import ROOT_UNRESOLVED, root_config, root_config_applies
 from lib.docs.doc_graph import is_excluded_path
-from lib.runner_args import reads_pdm_scripts
 
 # The user's ``--exclude`` / config.toml excludes: (directory names, basename globs).
 Excludes = tuple[set[str], list[str]]
@@ -731,7 +730,6 @@ def _root_floor(root: Path, scope: Path | None, excludes: Excludes
     return gates, lines, root_config_applies(root, config, ci), ci
 
 
-@reads_pdm_scripts   # pdm run pytest with a pytest script runs the script (#1046)
 def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
                          excludes: Excludes | None = None) -> CoverageGateBlock:
     """Return the ``coverage_gate`` run-context block for ``repo_root``.

@@ -24,7 +24,7 @@ from lib.check_command import check_verdict, is_lint_run, may_check, may_lint
 from lib.ci_checks import scan_ci_checks
 from lib.lint_vocabulary import gradle_tasks as lint_gradle_tasks
 from lib.runner_args import (
-    SCRIPT, gradle_dry_run, gradle_run, gradle_skips_tests, gradle_tasks, pdm_scripts,
+    NO_PYPROJECT, SCRIPT, gradle_dry_run, gradle_run, gradle_skips_tests, gradle_tasks, pdm_scripts,
     pdm_scripts_of, reads_pdm_scripts, runs_no_task, script_run)
 from lib.testing.coverage_gate import detect_coverage_gate
 
@@ -165,6 +165,8 @@ def test_pdm_scripts_reads_every_tracked_pyproject(tmp_path: Path) -> None:
 
 
 def test_pdm_scripts_absent_and_unreadable(tmp_path: Path) -> None:
+    assert pdm_scripts(tmp_path) is NO_PYPROJECT
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n", encoding="utf-8")
     assert pdm_scripts(tmp_path) == frozenset()
     (tmp_path / "pyproject.toml").write_text("[tool.pdm.scripts\n", encoding="utf-8")
     assert pdm_scripts(tmp_path) is None
@@ -223,7 +225,15 @@ def test_pdm_and_poe_read_through(line: str, check: bool | None, lint: bool, may
 
 
 def test_issue_pdm_run_ruff_credits_a_lint_run(tmp_path: Path) -> None:
-    assert _scan(tmp_path, "pdm run ruff check .")[2:] == (True, "lint_command")
+    project = {"pyproject.toml": "[project]\nname = 'x'\n"}
+    assert _scan(tmp_path, "pdm run ruff check .", extra=project)[2:] == (True, "lint_command")
+
+
+@pytest.mark.parametrize("line", ["pdm run test", "poe test", "pdm run ruff check ."])
+def test_no_pyproject_reads_null_never_credit(tmp_path: Path, line: str) -> None:
+    """No project: ``pdm run test`` falls back to the shell's ``test`` and ``poe test`` fails."""
+    runs, basis, lint, _ = _scan(tmp_path, line)
+    assert (runs, basis) == (None, "check_target") and lint is not True
 
 
 @pytest.mark.parametrize(("line", "expected"), [
