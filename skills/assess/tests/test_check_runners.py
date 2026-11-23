@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from lib.check_command import check_verdict, is_check_command, is_lint_command, is_lint_run, may_lint
-from lib.agent_environment import scan_agent_environment
+from lib.agents.agent_environment import scan_agent_environment
 from lib.ci_checks import scan_ci_checks
 
 _ISSUE_RUNNERS = [

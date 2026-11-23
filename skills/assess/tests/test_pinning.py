@@ -12,7 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.agent_environment import scan_agent_environment  # noqa: E402
+from lib.agents.agent_environment import scan_agent_environment  # noqa: E402
 from lib.counts_only import counts_only_scans  # noqa: E402
 from lib.level_tally import default_model, level_result  # noqa: E402
 

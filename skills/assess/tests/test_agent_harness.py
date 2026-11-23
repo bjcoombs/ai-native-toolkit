@@ -1,4 +1,4 @@
-"""Tests for lib/agent_harness.py - the committed agent surface that runs code.
+"""Tests for lib/agents/agent_harness.py - the committed agent surface that runs code.
 
 The planted fixture carries one instance of every finding kind and must yield
 exactly those findings; the clean fixture carries the same features configured
@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from assess_core import build_and_publish_run
-from lib.agent_harness import _on_block, _safe_url, scan_agent_harness
+from lib.agents.agent_harness import _on_block, _safe_url, scan_agent_harness
 
 ZWSP, RLO, BOM = chr(0x200B), chr(0x202E), chr(0xFEFF)
 REPO_ROOT = Path(__file__).resolve().parents[3]

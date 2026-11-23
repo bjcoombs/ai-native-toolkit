@@ -33,9 +33,9 @@ import typing
 from collections.abc import Iterator
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
-from lib.agent_building import AgentBuildingBlock
-from lib.agent_environment import AgentEnvironmentBlock
-from lib.agent_harness import AgentHarnessBlock
+from lib.agents.agent_building import AgentBuildingBlock
+from lib.agents.agent_environment import AgentEnvironmentBlock
+from lib.agents.agent_harness import AgentHarnessBlock
 from lib.agent_instructions_grader import SensitiveFinding
 from lib.ci_checks import CiChecksBlock
 from lib.ai_usage import AiUsageBlock

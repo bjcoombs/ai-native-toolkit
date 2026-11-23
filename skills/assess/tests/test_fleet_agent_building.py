@@ -5,7 +5,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from lib.agent_building import scan_agent_building
+from lib.agents.agent_building import scan_agent_building
 from lib.counts_only import counts_only_scans
 from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
 from lib.fleet.fleet_agent_building import (
