@@ -11,6 +11,7 @@ callable = "lib.coverage_gate:detect_coverage_gate"
 publishes = ["coverage_gate"]
 reads = ["repo_root", "scope", "excludes"]
 stage = "read_side"
+unit_scope = "override"
 headless = { coverage_gate = "registered" }
 whys.coverage_gate = "It finds the coverage threshold the repository sets and whether CI enforces it, which is the line that keeps tests from thinning out under a run of changes."
 shapes = [

@@ -105,6 +105,7 @@ fragments = [
   "guardrails",
   "level",
   "headline",
+  "unit_readings",
 ]
 
 # The why of each truth tag (lib/levels_fields.py TRUTH_TAGS, #939): one table per tag,

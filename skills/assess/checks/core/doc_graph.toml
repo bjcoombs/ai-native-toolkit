@@ -9,6 +9,7 @@ callable = "lib.core_scans:doc_graph"
 publishes = ["doc_graph"]
 reads = ["repo_root", "excludes", "scope", "working_notes"]
 stage = "setup"
+unit_scope = "scoped"
 headless = { doc_graph = "headless_variant" }
 whys.doc_graph = "An agent finds docs by following links from README, AGENTS.md or an index; a doc no link reaches is one it will not read."
 headless_variants = [

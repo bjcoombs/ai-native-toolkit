@@ -289,6 +289,13 @@
           "default": false,
           "description": "Listed in signals.PLATFORM_ONLY_SCANS: absent without --platform"
         },
+        "unit_scope": {
+          "enum": [
+            "scoped",
+            "override"
+          ],
+          "description": "How a monorepo unit reads the collector's blocks (lib/unit_readings.py): scoped runs it again per unit; override inherits the repository-wide reading unless the unit holds its own evidence; absent is repo-wide"
+        },
         "headless": {
           "type": "object",
           "additionalProperties": {

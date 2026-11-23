@@ -85,3 +85,13 @@ carries a `_Scope: \`services/api\`_` line, so a committed artifact is never
 mistaken for a whole-repo score. The report should name the scope in its
 heading too. `run-context.json` carries `scope` (repo-relative) and `scope_slug`
 for any consumer; both are `null` on a whole-repo run.
+
+## Units in a whole-repo run
+
+A whole-repo run also reads each monorepo unit (the `units` block). `run-context.json`
+`unit_readings` holds, per unit, the readings of the scans that see a different tree
+from each unit (suppressions, doc staleness, import structure, file size, and the unit's
+own coverage gate or instruction file), and tags every maturity-model condition
+`unit` or `inherited`. A condition the unit does not read on its own, such as root CI or
+review, is inherited from the root. The per-unit Step and the roll-up come later (#864,
+#865); until then, report the units only as the run context lists them.

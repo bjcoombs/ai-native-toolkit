@@ -9,6 +9,7 @@ callable = "lib.core_scans:promissory_block"
 publishes = ["promissory_markers"]
 reads = ["promissory"]
 stage = "read_side"
+unit_scope = "scoped"
 headless = { promissory_markers = "headless_variant" }
 whys.promissory_markers = "TODOs, suppressions and disabled tests that survive many edits are promises nobody kept; an agent cannot tell from the code whether one is still meant."
 headless_variants = [
