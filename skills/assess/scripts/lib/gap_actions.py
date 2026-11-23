@@ -18,15 +18,17 @@ signal before it is filled from judgement:
 - ``doc_graph``: fewer than ``REACHABILITY_FLOOR`` of the docs are reachable
   from the entry points. Names the unreachable docs.
 
-Each entry is ``{signal, action, paths}``, where ``signal`` is the run-context
-block the gap was read from. The root-instructions entry, when present, comes
+Each entry is ``{signal, action, paths, why}``, where ``signal`` is the run-context
+block the gap was read from and ``why`` is that scan's why from the check manifest
+(``lib.manifest_whys.scan_whys``, #939): static text, the same in every run. The root-instructions entry, when present, comes
 first, then coverage.
 A lint complexity-rule gap is deliberately absent: the core has no detector for
 it, and the layer scorer owns that check.
 
 Builds the run-context `gap_actions` list: Top 3 candidates for the slots
 `prescribed_actions` leaves free, read from blocks `assess_core` already holds. Each
-entry is `{signal, action, paths}`. A `layer_grades` entry (issue #821) fires when
+entry is `{signal, action, paths, why}`; `why` is the check manifest's why of the scan
+`signal` names (#939). A `layer_grades` entry (issue #821) fires when
 `layer_grades.instruction_presence` is `nested_only`: its action is to add a root
 instruction file (`AGENTS.md` or `CLAUDE.md`) that names the check command, and it names
 up to five nested files (`MAX_NESTED_PATHS`); it comes first. The registry runs the
@@ -51,11 +53,12 @@ from lib.run_context_types import JsonDict
 
 
 class GapAction(TypedDict):
-    """A Top 3 candidate read from a measured gap: ``{signal, action, paths}``."""
+    """A Top 3 candidate read from a measured gap: ``{signal, action, paths, why}``."""
 
     signal: str
     action: str
     paths: list[str]
+    why: str  # the manifest why of the scan ``signal`` names (#939)
 
 # Reachability floor for the doc_graph gap. Below half, most of the docs cannot
 # be reached by following links from README / AGENTS.md / an index page, so an
@@ -97,7 +100,7 @@ def _coverage_gap(
             "and read it for the top hotspots first: no report was found, so how "
             "well the tests cover the riskiest files is unmeasured."
         ),
-        "paths": paths,
+        "paths": paths, "why": "",
     }
 
 
@@ -120,7 +123,7 @@ def _root_instructions_gap(layer_grades: JsonDict, nested: JsonDict) -> GapActio
             "the only instruction files are nested, so they load only when an agent "
             "works in their directory, and a session that starts at the root reads none."
         ),
-        "paths": paths[:MAX_NESTED_PATHS],
+        "paths": paths[:MAX_NESTED_PATHS], "why": "",
     }
 
 
@@ -141,7 +144,7 @@ def _reachability_gap(doc_graph: JsonDict) -> GapAction | None:
             f"them: only {pct:.0%} of the docs are reachable from the entry "
             f"points, below the {REACHABILITY_FLOOR:.0%} floor."
         ),
-        "paths": unreachable[:MAX_UNREACHABLE_PATHS],
+        "paths": unreachable[:MAX_UNREACHABLE_PATHS], "why": "",
     }
 
 
@@ -159,4 +162,10 @@ def build_gap_actions(
         _coverage_gap(coverage_report or {}, top_hotspots or [], archetype or {}),
         _reachability_gap(doc_graph or {}),
     ]
-    return [g for g in gaps if g is not None]
+    from lib.check_manifest import core_manifest  # lazy: the manifest loads once
+    from lib.manifest_whys import scan_whys
+    whys = scan_whys(core_manifest())
+    out = [g for g in gaps if g is not None]
+    for g in out:
+        g["why"] = whys.get(g["signal"], "")
+    return out

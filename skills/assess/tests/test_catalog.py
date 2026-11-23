@@ -29,7 +29,7 @@ from lib.scan_registry import SCANS
 from lib.signals import known_scans
 
 SCAN_FIELDS = {"name", "title", "summary", "collector", "reads", "network", "platform", "headless",
-               "privacy", "used_by", "unknown_reasons", "evidence", "grades"}
+               "privacy", "used_by", "unknown_reasons", "evidence", "grades", "why", "why_source"}
 
 
 def _manifest_data() -> dict[str, Any]:
@@ -310,7 +310,8 @@ def test_markdown_tag_section_opens_on_its_own_line_and_degrades_honestly() -> N
     text = render_markdown(build_catalog())
     contracts = _section(text, "### Contracts").strip().splitlines()
     assert contracts[0] == "### Contracts" and contracts[1] == ""
-    assert contracts[2] == "Tag `contracts`. No condition carries this tag yet."
+    assert contracts[2].startswith("That generated output and its source agree")  # the tag's why
+    assert contracts[4] == "Tag `contracts`. No condition carries this tag yet."
     assert "No condition is guarded yet. No criterion compares two signals yet." in text
     model = load_default_levels()
     model.pop("steps")
@@ -322,3 +323,56 @@ def test_markdown_tag_section_opens_on_its_own_line_and_degrades_honestly() -> N
     assert "The model defines no Steps" in bare and "No two tags share a condition yet." in bare
     assert "No condition requires another yet. No condition is guarded yet." in bare
     assert "| Step gate |" in bare and "Also carries this tag" not in bare
+
+
+def _scan_section(text: str, name: str) -> str:
+    """A scan's section: from its ``### `name`: title`` heading to the next heading."""
+    start = text.index(f"\n### `{name}`: ")
+    end = text.find("\n#", start + 1)
+    return text[start:end if end >= 0 else len(text)]
+
+
+def test_every_entry_carries_its_manifest_why() -> None:
+    # #939: criteria, scans, findings and tags carry why and why_source; signals carry none.
+    from lib import manifest_whys as mw
+    catalog, m = build_catalog(), cm.load_manifest()
+    whys = mw.condition_whys(m)
+    crits = [c for r in catalog["rows"] for lv in r["levels"] for c in lv["criteria"]]
+    assert crits and all(c["why"] == whys[c["key"]] for c in crits)
+    assert all(s["why"] for s in catalog["scans"]) and all(f["why"] for f in catalog["findings"])
+    assert [t["why"] for t in catalog["tags"]] == [mw.tag_why(m, t)["why"] for t in TRUTH_TAGS]
+    assert all("why" not in s for s in catalog["signals"])
+    structure = next(s for s in catalog["scans"] if s["name"] == "structure")
+    assert structure["why_source"] == "https://doi.org/10.1103/PhysRevE.70.066111"
+
+
+def test_markdown_renders_each_why() -> None:
+    text = render_markdown(build_catalog())
+    assert any(h == "Why it matters" for h, _ in CONDITION_COLUMNS)
+    assert "| Finding | Reads | Why it matters |" in text
+    delivery = _scan_section(text, "delivery")
+    assert "Run plumbing" in delivery and "exempt: plumbing" not in text
+    ci = _scan_section(text, "ci_checks")
+    assert "It reads whether CI runs tests or linters on ordinary changes" in ci
+
+
+def test_a_section_naming_a_signal_holds_every_condition_it_feeds() -> None:
+    # observability.rung feeds two conditions; its scan section names it, so both whys show.
+    text = render_markdown(build_catalog())
+    observability = _scan_section(text, "observability")
+    assert "Telemetry in the code is what any view of the running system is built on." in observability
+    assert "When an agent can query logs or metrics itself" in observability
+    assert "Why the signals named here matter:" in observability
+
+
+def test_a_version_1_manifest_renders_without_whys() -> None:
+    from lib import manifest_whys as mw
+    data = _manifest_data()
+    data["manifest_version"] = 1
+    data.pop("tags")
+    for e in data["entries"]:
+        for key in ("why", "why_source", "whys", "why_sources"):
+            e.pop(key, None)
+    text = render_markdown(build_catalog(manifest=cm.parse_manifest(data)))
+    assert "Why the signals named here matter" not in text and "Run plumbing" not in text
+    assert mw.PLUMBING not in text and "| - | Supportive" not in text

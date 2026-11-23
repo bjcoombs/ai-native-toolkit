@@ -124,8 +124,11 @@ def test_the_import_guard_sees_every_import_form() -> None:
 def test_signal_grades_reaches_only_the_manifest_loader() -> None:
     """The tally engine reads signal_grades without importing a scanner (#744, #953)."""
     assert _lib_imports("signal_grades") == {"lib.check_manifest"}
-    assert _lib_imports("check_manifest") == {"lib.check_validation"}
-    assert _lib_imports("check_validation") == set()
+    assert _lib_imports("check_manifest") == {"lib.check_validation", "lib.manifest_whys"}
+    # The why rules (#939) reach only stdlib-only leaf modules, so the closure stays bounded.
+    assert _lib_imports("manifest_whys") == {"lib.check_validation", "lib.levels_fields", "lib.vocabulary"}
+    for leaf in ("check_validation", "levels_fields", "vocabulary"):
+        assert _lib_imports(leaf) == set(), leaf
 
 
 def test_level_reads_are_pinned_to_the_tally_order() -> None:

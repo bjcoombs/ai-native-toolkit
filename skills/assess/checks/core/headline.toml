@@ -20,5 +20,6 @@ revision = 2
   "headline.lines" = "drop"
   "headline.markdown" = "drop"
   "headline.summary" = "drop"
+  "headline.next_why" = "drop"
   "headline.reason" = "token"
   "headline.tags.tag" = "token"

@@ -14,6 +14,7 @@ reads = ["repo_root", "instruction_files", "agent_harness", "excludes"]
 stage = "post_offers"
 network = true
 headless = { agent_environment = "registered" }
+whys.agent_environment = "It reads what an agent needs to work like CI does: the check command its instructions name, the committed setup and a lockfile for each dependency manifest."
 shapes = [
   { path = "agent_environment", type = "lib.agent_environment:AgentEnvironmentBlock" },
 ]
@@ -68,6 +69,7 @@ id = "core.cond.layer-0-instructions.2.named_total"
 kind = "condition"
 title = "An instruction file names a check command"
 key = "layer-0-instructions.2:agent_environment.check.named_total"
+why = "An agent can confirm its change only if it knows which command checks it. A named command that resolves saves it guessing, and running the wrong check or none."
 fix = "Name the command that checks a change (for example make check) in your instruction file."
 
 [[entries]]
@@ -75,4 +77,5 @@ id = "core.cond.layer-5-ci.2.unlocked_total"
 kind = "condition"
 title = "Every dependency manifest has its lockfile"
 key = "layer-5-ci.2:agent_environment.pinning.unlocked_total"
+why = "A committed lockfile means an agent installs the dependency versions CI tested, so a local test result matches CI's."
 fix = "Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests. A Gradle version catalog or NuGet central package management pins direct versions only: turn on dependency locking."

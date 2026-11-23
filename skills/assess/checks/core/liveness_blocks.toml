@@ -13,6 +13,8 @@ spread = true
 degrade = false
 gate_reason = "serialiser"
 headless = { dead_code = "unregistered", observability = "headless_variant" }
+whys.dead_code = "Code nothing in the repository calls still costs an agent reading time and can be kept alive by mistake; candidates are listed for a person to check, since callers outside the repository are not visible."
+whys.observability = "It reads how far the repository gives an agent a view of the running system: telemetry emitted, a runbook that says where it lives, and a path the agent can query."
 headless_variants = [
   { block = "observability", callable = "lib.headless_static:observability", reads = ["repo_root", "excludes"], stage = "read_side" },
 ]
@@ -51,6 +53,7 @@ id = "core.cond.layer-1-liveness.1.rung"
 kind = "condition"
 title = "Some runtime telemetry is committed"
 key = "layer-1-liveness.1:observability.rung"
+why = "Telemetry in the code is what any view of the running system is built on. Without it, there is nothing for an agent or a person to read when checking how a change behaves in use."
 fix = "Add a telemetry dependency, a runbook or an OBSERVABILITY.md so an agent can see the system run."
 
 [[entries]]
@@ -58,6 +61,7 @@ id = "core.cond.layer-1-liveness.2.rung"
 kind = "condition"
 title = "Runtime telemetry reaches rung 3"
 key = "layer-1-liveness.2:observability.rung"
+why = "When an agent can query logs or metrics itself, it can check a change against the running system instead of handing that back to a person."
 fix = "Give agents a way to read logs or metrics, such as a logs or metrics MCP server or skill."
 
 [[entries]]
@@ -65,6 +69,7 @@ id = "core.finding.candidate_dead_weight"
 kind = "finding"
 title = "Candidate dead weight"
 name = "candidate_dead_weight"
+why = "Code nothing in the repository calls costs an agent reading time and can be maintained by mistake; it needs a person to confirm no outside caller uses it."
 order = 8
 action = "verify liveness, then delete if dead"
 mode = "verify_then_retire"

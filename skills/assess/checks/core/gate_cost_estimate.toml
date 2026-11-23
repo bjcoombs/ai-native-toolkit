@@ -11,6 +11,7 @@ reads = ["repo_root"]
 stage = "read_side"
 network = true
 headless = { gate_cost_estimate = "registered" }
+whys.gate_cost_estimate = "exempt: plumbing"
 revision = 1
   [entries.privacy]
   "gate_cost_estimate.reason" = "drop"
