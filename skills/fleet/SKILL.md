@@ -295,8 +295,9 @@ Each page holds (every heading opening with an `In place:` line, as in [`report.
 - for each row below its top level, the unmet criteria of the next level, one
   numbered step per criterion, so a team can take or leave each on its own.
   A step leads with the change and a "done when" a maintainer can check in the
-  repository or its platform settings; the signal expression follows as an
-  optional re-run check. A team row lists the repositories holding the group
+  repository or its platform settings, with a "Why" line from the check
+  manifest between the two when the criterion has one; the signal expression
+  follows as an optional re-run check. A team row lists the repositories holding the group
   back, each with its current value, and apart from them the repositories that
   could not be measured; an org row names the settings scope it applies to;
 - for an `unknown` row, the signals that were not measured, in how many

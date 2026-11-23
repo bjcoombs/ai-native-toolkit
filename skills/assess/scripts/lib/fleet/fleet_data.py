@@ -47,6 +47,13 @@ per-repository tallies, with the repositories measured; null stats when none is 
   (``reason``: ``unavailable``, ``type_mismatch``), or ``not_scanned`` for a
   failed repository.
 
+Beside ``signal`` the cell carries ``why`` (#1128): the check manifest's why for that
+criterion at its level (``lib.fleet.fleet_why.criterion_why``, the text the level result's
+conditions carry), so a fleet view explains a step without reading the checks TOML. Null
+when there is no ``signal`` or the manifest has no entry for it (a caller's own model),
+never invented. It is the toolkit's own text, never a repository's, so counts-only keeps
+it (``FLEET_DATA_KEPT``).
+
 **Unit rows** (#866, ``lib/fleet/fleet_data_units.py``): a repository scanned with
 ``--monorepo-units`` carries ``unit_rows``, one per monorepo unit: its kind (``skill``, ``agents``,
 ``commands`` or ``package``, #1098), its Step, the Step above, the
@@ -69,7 +76,7 @@ with hashing, the same ``--hash-salt``) give the same bytes.
 #704 and #705 build on it). `build_fleet_data` joins the run stamp, the maturity model rows,
 the unit trees and the repository rows. `repo_cells` evaluates each `team` row per
 repository (`levels.evaluate_row`) with the criterion behind the level (`signal`, `value`,
-or `reason` when unknown; `not_scanned` for a failed row). `row_roll_up` gives each unit,
+or `reason` when unknown; `not_scanned` for a failed row) and its manifest `why` (#1128). `row_roll_up` gives each unit,
 per team row, `measured` of `repos` and `lowest_level`, the lowest known level below it. Version 2 (#772) holds no average and names no
 repository: no `mean_share`, `weakest` or `overall`. `org` rows stay in `groups.jsonl`.
 `Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
@@ -115,6 +122,7 @@ from lib.fleet.fleet_data_units import UnitRow, unit_rows
 from lib.fleet.fleet_tag_profile import FleetTagRow, tag_profile
 from lib.fleet.fleet_groups import repo_signals
 from lib.fleet.fleet_level import repo_level
+from lib.fleet.fleet_why import criterion_why
 from lib.fleet.fleet_maturity import SCOPE
 from lib.fleet.fleet_opportunities import Opportunities, build_opportunities
 from lib.fleet.fleet_stamp import FleetStamp, RepositoryCounts
@@ -189,6 +197,7 @@ class Cell(TypedDict):
     signal: str | None  # the criterion behind the level; None at the top level or not scanned
     value: Value
     reason: str | None  # unknown cells only
+    why: str | None  # the check manifest's why for ``signal`` at its level (#1128); None when none
 
 
 class DataRepo(TypedDict):
@@ -288,19 +297,21 @@ def _scalar(value: object) -> Value:
     return value if value is None or isinstance(value, (bool, int, float, str)) else None
 
 
-def _explain(row: Row, ev: Evaluation) -> tuple[str | None, Value, str | None]:
-    """``(signal, value, reason)`` behind an evaluation (see the module docstring)."""
+def _explain(row: Row, ev: Evaluation) -> tuple[str | None, Value, str | None, str | None]:
+    """``(signal, value, reason, why)`` behind an evaluation (see the module docstring)."""
     if ev["level"] is not None:
         nxt = next((lv for lv in ev["levels"] if lv["level"] == ev["level"] + 1), None)
         if nxt is None or not nxt["unmet"]:
-            return None, None, None
+            return None, None, None, None
         outcome = next((o for o in nxt["unmet"] if o["status"] == "unmet"), nxt["unmet"][0])
-        return outcome["signal"], _scalar(outcome["actual"]), None
+        return (outcome["signal"], _scalar(outcome["actual"]), None,
+                criterion_why(row, nxt["level"], outcome["signal"]))
     for level in ev["levels"]:
         for outcome in level["unmet"]:
             if outcome["status"] == "unknown":
-                return outcome["signal"], None, outcome["reason"] or "unavailable"
-    return None, None, "unavailable"  # pragma: no cover - unknown always has an unknown criterion
+                return (outcome["signal"], None, outcome["reason"] or "unavailable",
+                        criterion_why(row, level["level"], outcome["signal"]))
+    return None, None, "unavailable", None  # pragma: no cover - unknown always has an unknown criterion
 
 
 def repo_cells(rows: Sequence[Row], repo: FleetRow) -> list[Cell]:
@@ -310,12 +321,12 @@ def repo_cells(rows: Sequence[Row], repo: FleetRow) -> list[Cell]:
         top = len(row["levels"])
         if repo["status"] != STATUS_OK:
             cells.append({"row": row["id"], "status": "unknown", "level": None, "top_level": top,
-                          "signal": None, "value": None, "reason": NOT_SCANNED})
+                          "signal": None, "value": None, "reason": NOT_SCANNED, "why": None})
             continue
         ev = evaluate_row(row, repo_signals(repo))
-        signal, value, reason = _explain(row, ev)
+        signal, value, reason, why = _explain(row, ev)
         cells.append({"row": row["id"], "status": ev["status"], "level": ev["level"], "top_level": top,
-                      "signal": signal, "value": value, "reason": reason})
+                      "signal": signal, "value": value, "reason": reason, "why": why})
     return cells
 
 
