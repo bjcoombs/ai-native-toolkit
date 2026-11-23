@@ -37,7 +37,7 @@ def _unit(path: str, step: int | None, blockers: list[dict[str, Any]] | None = N
     """A hand-built ``unit_levels`` unit: ``conditions`` maps an id to (state, origin)."""
     conds = [{"id": cid, "state": st, "counted": True, "origin": origin}
              for cid, (st, origin) in (conditions or {}).items()]
-    nxt = {"step": step + 1, "threshold": 0, "blockers": blockers} if blockers is not None and step else None
+    nxt = {"step": step + 1, "blockers": blockers} if blockers is not None and step else None
     return {"path": path, "step": step, "next_step": nxt,
             "tally": {"met": 0, "measured": 0, "not_measured": 0, "verified": 0},
             "conditions": conds, "inherited": []}
@@ -47,8 +47,6 @@ def _gate(gate: str, cid: str, state: str = "unmet", **extra: Any) -> dict[str, 
     return {"kind": "gate", "gate": gate, "condition": cid, "state": state, **extra}
 
 
-def _short(threshold: int, met: int) -> dict[str, Any]:
-    return {"kind": "threshold", "threshold": threshold, "met": met}
 
 
 def _block(*units: dict[str, Any], count: int | None = None) -> dict[str, Any]:
@@ -65,13 +63,15 @@ def _no_instructions(path: str, origin: str = "inherited") -> dict[str, Any]:
 
 def test_the_fixture_rolls_up_to_the_lowest_unit(run: dict[str, Any]) -> None:
     block = run["unit_rollup"]
-    steps = [u["step"] for u in run["unit_levels"]["units"]]  # billing 3, search 2, web 2
+    # Steps read gates only (#1083): every unit holds the instructions and CI gates, so all
+    # three sit at Step 3 whatever their tallies, and none holds the coverage gate of Step 4
+    steps = [u["step"] for u in run["unit_levels"]["units"]]
     assert block["available"] is True
     assert block["unit_count"] == 3 and block["units"] == 3 and block["measured"] == 3
-    assert block["lowest_step"] == min(steps) == 2
-    assert block["next_step"] == 3
-    assert block["at_next_step"] == sum(s >= 3 for s in steps) == 1
-    assert block["lines"][0] == "Units: Step 2 (lowest unit) · 1 of 3 measured units at Step 3"
+    assert block["lowest_step"] == min(steps) == 3
+    assert block["next_step"] == 4
+    assert block["at_next_step"] == sum(s >= 4 for s in steps) == 0
+    assert block["lines"][0] == "Units: Step 3 (lowest unit) · 0 of 3 measured units at Step 4"
     assert list(run).index("unit_rollup") > list(run).index("unit_levels")
 
 
@@ -133,19 +133,17 @@ def test_repo_wide_wins_a_tie_on_units_lifted() -> None:
     assert [e["scope"] for e in block["unlocks"]] == ["repo_wide", "unit"]
 
 
-def test_a_gate_is_not_the_last_blocker_beside_another_gate_or_a_shortfall() -> None:
+def test_a_gate_is_not_the_last_blocker_beside_another_gate() -> None:
     two_gates = _unit("a", 2, [_gate("instructions", INSTR), _gate("ci_runs_tests", CI)],
                       {INSTR: ("unmet", "inherited"), CI: ("unmet", "inherited")})
-    short = _unit("b", 1, [_gate("instructions", INSTR), _short(3, 0)], {INSTR: ("unmet", "inherited")})
-    block = ur.unit_rollup(_block(two_gates, short))
+    block = ur.unit_rollup(_block(two_gates, two_gates))
     assert all(e["lifted"] == 0 and e["lift_per_change"] == 0 for e in block["unlocks"])
     assert len(block["lines"]) == 1  # no change lifts a unit: no next-unlock line
 
 
-def test_the_gate_condition_counts_toward_the_threshold_it_closes() -> None:
-    # Step 2 needs 1 met; the instruction condition itself is counted, so meeting it is enough
-    unit = _unit("a", 1, [_gate("instructions", INSTR), _short(1, 0)], {INSTR: ("unmet", "inherited")})
-    block = ur.unit_rollup(_block(unit, _no_instructions("b")))
+def test_a_lone_gate_lifts_its_unit_whatever_the_tally() -> None:
+    """#1083: a Step reads its gates only, so the last gate's change lifts the unit."""
+    block = ur.unit_rollup(_block(_no_instructions("a"), _no_instructions("b")))
     assert block["unlocks"][0]["lifted"] == 2
 
 

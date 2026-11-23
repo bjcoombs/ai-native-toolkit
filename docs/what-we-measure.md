@@ -163,14 +163,14 @@ How many conditions each pair of tags shares. The diagonal is the tag's own coun
 
 ### Step gates
 
-The autonomy Steps in order. A Step needs its threshold of met, counted conditions and every gate, whatever the gate's grade; gates accumulate, so each Step keeps the gates below it.
+The autonomy Steps in order. A Step needs every gate, whatever the gate's grade, and nothing else: no count of conditions moves a Step. Gates accumulate, so each Step keeps the gates below it.
 
-| Step | Name | Threshold | New gates | Gate covers | Tags |
-|---|---|---|---|---|---|
-| 1 | Assisted | 0 | - | - | - |
-| 2 | Supervised agent PRs | 1 | `instructions` | `layer-0-instructions.1` | `agent_context` |
-| 3 | Unattended agent PRs | 3 | `ci_runs_tests` | `layer-5-ci.1` | `behaviour` |
-| 4 | Autonomous loops | 5 | `coverage_gate` | `layer-6-coverage.1` | `behaviour` |
+| Step | Name | New gates | Gate covers | Tags |
+|---|---|---|---|---|
+| 1 | Assisted | - | - | - |
+| 2 | Supervised agent PRs | `instructions` | `layer-0-instructions.1` | `agent_context` |
+| 3 | Unattended agent PRs | `ci_runs_tests` | `layer-5-ci.1` | `behaviour` |
+| 4 | Autonomous loops | `coverage_gate` | `layer-6-coverage.1` | `behaviour` |
 
 ### Requires, guard and equality links
 

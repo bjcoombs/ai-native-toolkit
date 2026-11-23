@@ -150,9 +150,9 @@ body { margin: 0; }
     <div class="card summary" aria-label="Example report headline">
       <div><b>Step 2</b> · Supervised agent PRs · contracts in place</div>
       <div><b>Next:</b> Step 3 · Unattended agent PRs unlocks when CI runs the tests</div>
-      <div><b>Practices in place:</b> 4 of 9 measured, 2 verified</div>
+      <div><b>Catalogue coverage:</b> 4 of 9 measured, 2 verified</div>
     </div>
-    <p class="note">Shortened example for a repository at Step 2. In plain words: an agent can open pull requests, a person reviews each one, and making CI run the tests is the next step up.</p>
+    <p class="note">Shortened example for a repository at Step 2. In plain words: an agent can open pull requests, a person reviews each one, and making CI run the tests is the next step up. The coverage line says how much of the catalogue the run could read; it is not a progress score.</p>
   </section>
 
   <section>
@@ -164,7 +164,7 @@ body { margin: 0; }
 
   <section>
     <h2>Why gates, not a score</h2>
-    <p>A score rewards collecting practices, and more is not always safer. A Step needs its gates and enough practices in place, and the gates come first: collecting more practices never lets you skip one.</p>
+    <p>A score rewards collecting practices, and more is not always safer. A Step needs its gates and nothing else, so collecting more practices never moves a Step and never lets you skip a gate.</p>
   </section>
 
   <section>
@@ -190,7 +190,7 @@ body { margin: 0; }
     <dl class="terms">
       <dt>Step</dt><dd>How much you can trust an agent here, from 1 (it helps) to 4 (it runs loops on its own).</dd>
       <dt>Gate</dt><dd>The one guarantee that must hold before the next Step is safe.</dd>
-      <dt>Practice</dt><dd>One checkable thing a healthy repository does, such as committing agent instructions or reviewing every merge. The headline counts practices.</dd>
+      <dt>Practice</dt><dd>One checkable thing a healthy repository does, such as committing agent instructions or reviewing every merge. The coverage line counts how many the run could check.</dd>
       <dt>Level</dt><dd>Within an area, level 1 is the basic practice and level 2 the stronger one.</dd>
     </dl>
   </section>
