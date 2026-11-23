@@ -55,7 +55,8 @@ Re-scores a stored run under the current maturity model and builds the Recount (
 cells from `fleet_data.repo_cells` (values through `Privacy().value`) and each unit's row
 roll-ups (`row_roll_up`) over the stored placements (a version 1 entry's `mean_share` and
 `overall` are dropped, #772), with the Step fields and the per-tag tally (`tag_fields`,
-`fleet_data_tags.tag_roll_up`, #1073) rebuilt too; None when a stored key does not join under the run's key
+`fleet_data_tags.tag_roll_up`, #1073) and the fleet tag profile (`fleet_tag_profile.tag_profile`,
+#940) rebuilt too; None when a stored key does not join under the run's key
 function. `SIGNAL_ALIASES` (old path to new, pure renames only: #783's
 `ci_checks.test_or_lint_runs` to `ci_checks.test_or_lint_configured` and
 `coverage_gate.enforced` to `coverage_gate.configured`) is applied to the scans first
@@ -89,6 +90,7 @@ from lib.fleet.fleet_data import (
 )
 from lib.fleet.fleet_data_steps import RepoSteps, step_roll_up
 from lib.fleet.fleet_data_tags import tag_roll_up
+from lib.fleet.fleet_tag_profile import tag_profile
 from lib.level_result_types import TagCell
 from lib.fleet.fleet_maturity import SCOPE
 from lib.fleet.fleet_next_steps import code, text
@@ -175,7 +177,7 @@ def rescore(data: FleetData, rows: Sequence[FleetRow], model: MaturityModel,
                                          "step": step, "tags": tag_roll_up([tags[k] for k in mine])}))
         views.append({"view": view["view"], "units": units})
     return {**data, "run": {**data["run"], "levels_version": model["version"]}, "model": model_rows(model),
-            "views": views, "repos": repos}
+            "views": views, "repos": repos, "tag_profile": tag_profile(model, [tags[r["key"]] for r in repos])}
 
 
 # --- the Recount ---------------------------------------------------------------
