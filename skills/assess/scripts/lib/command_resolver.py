@@ -32,7 +32,7 @@ script or ``[tool.*]`` table, a file), uvx, tox (``-e`` environments), nox
 (``-s`` sessions), pytest and ``python -m pytest`` (pytest configured, path
 arguments exist), ``python X.py``, go (any ``go.mod``), cargo (``Cargo.toml``,
 aliases), mvn / ``./mvnw`` (``pom.xml``), gradle / ``./gradlew`` (a Gradle
-build file), ``bash X.sh``, ``source X.sh`` / ``. X.sh`` (#1033) and ``./X`` (the file exists). A command whose
+build file), ``bash X.sh`` and ``./X`` (the file exists). A command whose
 runner is not modelled resolves when a CI configuration line runs it
 verbatim; otherwise it is ``external`` when its program is in
 ``EXTERNAL_TOOLS`` and ``unknown`` when not. Inline code still has to start
@@ -170,8 +170,10 @@ def _tokens(segment: str) -> list[str]:
 
 
 def command_words(text: str) -> list[str]:
-    """Public form of the tokeniser ``resolve`` uses, for callers that classify commands."""
-    return _tokens(text)
+    """Public form of the tokeniser ``resolve`` uses, for callers that classify commands.
+    The ``.`` builtin reads as ``source`` (#1033): ``. ./test.sh`` is ``source ./test.sh``."""
+    words = _tokens(text)
+    return ["source", *words[1:]] if words[:1] == ["."] else words
 
 
 def _cd_target(words: list[str], cwd: str) -> str | None:
@@ -740,7 +742,7 @@ RUNNERS: dict[str, _Resolver] = {
     "pytest": _pytest, "py.test": _pytest, "python": _python, "python3": _python,
     "go": _go, "cargo": _cargo,
     "mvn": _maven, "./mvnw": _maven, "gradle": _gradle, "./gradlew": _gradle,
-    "bash": _shell, "sh": _shell, "zsh": _shell, "source": _shell, ".": _shell,
+    "bash": _shell, "sh": _shell, "zsh": _shell, "source": _shell,
 }
 
 

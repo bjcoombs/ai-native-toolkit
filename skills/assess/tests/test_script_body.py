@@ -37,8 +37,13 @@ CASES: list[tuple[str, str, bool]] = [
     ("./x.sh", SH + "set -e\npytest -q tests/ > out.log 2>&1\n", True),
     ("bash -e x.sh", SH + "pytest\necho done\n", True),      # errexit from the shell's flags
     ("sh -e x.sh", SH + "pytest\necho done\n", True),
-    (". ./x.sh", SH + "set -e\npytest\necho done\n", True),
     (". ./x.sh", SH + "pytest\n", True),
+    (". ./x.sh", SH + "pytest || exit 1\necho done\n", True),
+    # a sourced body's own set -e is not trusted: bash ignores it in an exempt position
+    (". ./x.sh", SH + "set -e\npytest\necho done\n", False),
+    ("./x.sh", SH + "[ -n \"$STRICT\" ] && set -e\npytest\necho done\n", False),
+    ("./x.sh", SH + "set -e\necho \"Usage:\npytest\n\"\n", False),       # pytest is quoted text
+    ("./x.sh", "#!/usr/bin/make -f\npytest\n", False),                    # not a shell
     ("./x.sh", SH + "pytest\necho done\n", False),           # errexit off, not last
     ("./x.sh", SH + "pytest || true\n", False),
     ("./x.sh", SH + "set -e\npytest || true\n", False),
@@ -58,15 +63,17 @@ CASES: list[tuple[str, str, bool]] = [
 ]
 # Bodies that must not fail the step when pytest fails: the reader is right to skip them.
 MASKED = [SH + "pytest\necho done\n", SH + "pytest || true\n", SH + "set -e\npytest | tee log\n",
-          SH + "pytest\nexit 0\n", SH + "set -e\n! pytest\n"]
+          SH + "pytest\nexit 0\n", SH + "set -e\n! pytest\n",
+          SH + "[ -n \"$STRICT\" ] && set -e\npytest\necho done\n", SH + "set -e\necho \"Usage:\npytest\n\"\n"]
 
 
 def _read(invocation: str, body: str) -> bool:
     words = invocation.split()
     form = "sourced" if words[0] in (".", "source") else "shell" if words[0] in ("bash", "sh") else "executed"
     flags = [w for w in words[1:] if w.startswith("-")]
-    errexit, pipefail = start_state(form, body, flags)
-    return body_runs(body, errexit=errexit, pipefail=pipefail, test=is_check_command)
+    state = start_state(form, body, flags)
+    return state is not None and body_runs(body, errexit=state[0], pipefail=state[1],
+                                           test=is_check_command, sourced=form == "sourced")
 
 
 @pytest.mark.parametrize(("invocation", "body", "credited"), CASES)
@@ -76,9 +83,9 @@ def test_the_reader_credits_only_an_enforced_check(invocation: str, body: str, c
 
 @pytest.mark.parametrize(("line", "expected"), [
     ("#!/bin/bash -e", (True, False)), ("#!/usr/bin/env -S bash -eo pipefail", (True, True)),
-    ("#!/bin/sh", (False, False)), ("#!/usr/bin/python3 -e", (False, False)), ("pytest", (False, False)),
+    ("#!/bin/sh", (False, False)), ("#!/usr/bin/python3 -e", None), ("pytest", (False, False)),
 ])
-def test_an_executed_script_starts_from_its_shebang(line: str, expected: tuple[bool, bool]) -> None:
+def test_an_executed_script_starts_from_its_shebang(line: str, expected: tuple[bool, bool] | None) -> None:
     assert start_state("executed", line + "\n", []) == expected
 
 
@@ -130,6 +137,15 @@ def test_a_masked_body_passes_in_a_real_shell(tmp_path: Path, body: str) -> None
         assert _run(shell, tmp_path, "./x.sh", body) == 0, (shell, body)
 
 
+def test_a_sourced_set_e_is_ignored_in_an_exempt_position(tmp_path: Path) -> None:
+    """Why a sourced body's own ``set -e`` is not trusted: from ``. ./x.sh && echo ok``, bash
+    runs past the failing check and the step passes."""
+    skip_without_posix_shell()
+    body = SH + "set -e\npytest\necho done\n"
+    for shell in [s for s in _shells() if "bash" in s[0]]:
+        assert _run(shell, tmp_path, ". ./x.sh && echo ok", body) == 0, shell
+
+
 def _repo(root: Path, run: str, files: dict[str, str]) -> Path:
     wf = root / ".github/workflows/ci.yml"
     wf.parent.mkdir(parents=True)
@@ -158,6 +174,8 @@ def _repo(root: Path, run: str, files: dict[str, str]) -> Path:
     ("./scripts/deploy-ci.sh", {"scripts/deploy-ci.sh": SH + "echo deploy\n"}, (False, "no_check_command")),
     # only the exact tracked path is read: a suffix match is presence, not a body
     ("cd svc && ./ci.sh", {"svc/ci.sh": SH + "pytest\n"}, (None, "check_target")),
+    # ... and not when another tracked path ends in it (the line may run svc/ci.sh)
+    ("cd svc && ./ci.sh", {"ci.sh": SH + "pytest\n", "svc/ci.sh": SH + "echo\n"}, (None, "check_target")),
     # masked on the CI line: the body does not lift it
     ("./ci.sh || true", {"ci.sh": SH + "set -e\npytest\n"}, (False, "not_enforced")),
 ])
@@ -165,6 +183,12 @@ def test_ci_reads_a_committed_body(tmp_path: Path, run: str, files: dict[str, st
                                    expected: tuple[bool | None, str]) -> None:
     block = scan_ci_checks(_repo(tmp_path, run, files))
     assert (block["enforced_check_runs"], block["enforced_basis"]) == expected
+
+
+def test_a_credited_body_is_a_configured_check(tmp_path: Path) -> None:
+    block = scan_ci_checks(_repo(tmp_path, "./ci.sh", {"ci.sh": SH + "pytest\n"}))
+    assert (block["enforced_check_runs"], block["test_or_lint_configured"], block["basis"]) == (
+        True, True, "check_command")
 
 
 def test_layer_three_reads_a_lint_body(tmp_path: Path) -> None:

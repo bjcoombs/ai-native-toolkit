@@ -23,9 +23,14 @@ reading with it (``lib.ci_scripts.ScriptTree``), so a name rule's True or null s
 
 ``start_state(form, body)`` gives the errexit and pipefail a script starts with:
 ``executed`` (``./x``, ``bin/x``) follows the shebang's flags (``#!/bin/bash -e``,
-``#!/usr/bin/env -S bash -eo pipefail``), ``shell`` (``bash x``, ``sh -e x``) follows the
-command's own flags, and ``sourced`` (``. x``, ``source x``) starts with both off, because it
-inherits the step shell, which a single line does not show. Each rule was checked against
+``#!/usr/bin/env -S bash -eo pipefail``; a shebang naming no shell, ``#!/usr/bin/make -f``,
+is not read at all), ``shell`` (``bash x``, ``sh -e x``) follows the command's own flags, and
+``sourced`` (``. x``, ``source x``) starts with both off, because it inherits the step shell,
+which a single line does not show. A sourced body is read with ``sourced=True``: its own
+``set -e`` is not trusted, because bash ignores errexit in a file sourced from an exempt
+position (``. ./x.sh && echo ok``), so only the last-statement and ``|| exit N`` rules credit
+it. A line that leaves a quote open, and a ``set`` inside a compound statement
+(``[ -n "$STRICT" ] && set -e``), make the body unread. Each rule was checked against
 bash 5 under ``bash -e``, ``bash -eo pipefail`` and ``sh -e`` (``tests/test_script_body.py``
 runs the fixtures under a real shell where one is available).
 """
@@ -61,7 +66,27 @@ def _errexit_after(segment: str, current: bool) -> bool:
 def _unmodelled(line: str) -> bool:
     words = line.split()
     return (line.endswith("\\") or "<<" in line or bool(_FUNCTION.match(line))
-            or any(w in _UNMODELLED for w in words[:1]) or line.startswith(("(", "{")))
+            or any(w in _UNMODELLED for w in words[:1]) or line.startswith(("(", "{"))
+            or _open_quote(line))
+
+
+def _open_quote(line: str) -> bool:
+    """A quote this line leaves open (``echo "Usage:``): the next lines are its text."""
+    quote = ""
+    i = 0
+    while i < len(line):
+        ch = line[i]
+        if ch == "\\" and quote != "'":
+            i += 2
+            continue
+        if quote:
+            quote = "" if ch == quote else quote
+        elif ch in "'\"`":
+            quote = ch
+        elif ch == "#" and (i == 0 or line[i - 1].isspace()):
+            break
+        i += 1
+    return bool(quote)
 
 
 def _reraised(statement: list[tuple[str, str]], k: int) -> bool:
@@ -72,7 +97,8 @@ def _reraised(statement: list[tuple[str, str]], k: int) -> bool:
     return len(words) == 2 and words[0] == "exit" and words[1] != "0"
 
 
-def body_runs(text: str, *, errexit: bool, pipefail: bool, test: Callable[[str], bool]) -> bool:
+def body_runs(text: str, *, errexit: bool, pipefail: bool, test: Callable[[str], bool],
+              sourced: bool = False) -> bool:
     """True when ``text`` provably fails on a failing ``test`` command (module docstring)."""
     statements = []
     for raw in text.splitlines():
@@ -83,8 +109,9 @@ def body_runs(text: str, *, errexit: bool, pipefail: bool, test: Callable[[str],
             return False
         for statement in split_statements(line):
             if any(op == "&" for op, _ in statement) or any(
-                    _unmodelled(seg) for _, seg in statement[1:]):
-                return False
+                    _unmodelled(seg) for _, seg in statement[1:]) or (
+                    len(statement) > 1 and any(seg.split()[:1] == ["set"] for _, seg in statement)):
+                return False   # [ -n "$CI" ] && set -e: errexit is not known after it
             statements.append(statement)
     credited = False
     for n, statement in enumerate(statements):
@@ -96,14 +123,15 @@ def body_runs(text: str, *, errexit: bool, pipefail: bool, test: Callable[[str],
             if test(seg) and (_reraised(statement, k) or k not in exempt and (
                     errexit or (last and k == len(statement) - 1))):
                 credited = True
-            errexit = _errexit_after(seg, errexit)
+            errexit = errexit if sourced else _errexit_after(seg, errexit)
         pipefail = pipefail_after(statement, pipefail)
     return credited
 
 
-def start_state(form: str, body: str, flags: list[str]) -> tuple[bool, bool]:
-    """``(errexit, pipefail)`` a script starts with (module docstring). ``flags`` are the
-    shell's own flags for the ``shell`` form; the shebang's are read for ``executed``."""
+def start_state(form: str, body: str, flags: list[str]) -> tuple[bool, bool] | None:
+    """``(errexit, pipefail)`` a script starts with (module docstring), or None for an
+    executed file whose shebang names no shell (``#!/usr/bin/make -f``): not a shell body.
+    ``flags`` are the shell's own flags for the ``shell`` form; the shebang's for ``executed``."""
     if form == "sourced":
         return False, False
     if form == "executed":
@@ -114,7 +142,7 @@ def start_state(form: str, body: str, flags: list[str]) -> tuple[bool, bool]:
         names = [w.rsplit("/", 1)[-1] for w in words]
         shell = next((i for i, n in enumerate(names) if n in _SHELLS), None)
         if shell is None:
-            return False, False
+            return None
         flags = words[shell + 1:]   # #!/usr/bin/env -S bash -eo pipefail -> -eo pipefail
     text = " ".join(flags)
     errexit = _errexit_after("set " + text, False)

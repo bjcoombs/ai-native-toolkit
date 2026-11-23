@@ -66,12 +66,12 @@ too. None (`may_check(text)`) for a target whose recipe is not read: any other t
 of a target runner, its default target (a bare `make`), a `hatch run` script that is not
 check-named, a package script (`npm run foo`, `pnpm foo`, `yarn foo`), a committed script
 (`./scripts/foo.sh`, `bash ci/foo.sh`, `bin/foo`; only a `./` or `bin/` head, a `.sh`
-file or a path passed to `bash`/`sh`/`zsh`/`source`/`.` (#1033), read by file name so `./ci/deploy.sh` is
+file or a path passed to `bash`/`sh`/`zsh`/`source` (`.` too, #1033), read by file name so `./ci/deploy.sh` is
 false), and a container's default command or an unknown
 program behind any wrapper (`docker compose run app`, `docker run img some-tool`, `uv run foo`,
 `poetry run foo`, `pipx run foo`, `uvx foo`, `npx foo`, `pnpm exec foo`, `yarn dlx foo`).
 Names whose first word is in `SETUP_TARGETS` (`install`, `deps`, `build`, `deploy`,
-`format`, `release`, `docs`, `configure`, `env`, `activate`, ...; `.env` too) stay false, as do installs, `bash -c`,
+`format`, `release`, `docs`, `configure`, ...) stay false, as do installs, `bash -c`,
 absolute paths and a container running a plain program (`echo`) or a modelled runner.
 A target runner asked for `--version` or its list (`task --list`, `rake -T`) is false.
 `may_lint` reads the direct runners (`dotnet test`, `mix test`, `hatch test`, `ctest`,
@@ -200,7 +200,7 @@ def _check_target(words: list[str], names: frozenset[str] | None = None,
             module = words[words.index("-m") + 1:words.index("-m") + 2]
             return bool(module) and module[0] in programs
         return bool(pos) and is_check_name(PurePosixPath(pos[0]).name, names)
-    if head in ("bash", "sh", "zsh", "source", "."):
+    if head in ("bash", "sh", "zsh", "source"):
         return bool(pos) and is_check_name(PurePosixPath(pos[0]).name, names)
     if head.startswith("./") and head not in RUNNERS:
         return is_check_name(PurePosixPath(head).name, names)
@@ -504,7 +504,7 @@ SETUP_TARGETS = frozenset({
     "install", "deps", "dependencies", "setup", "bootstrap", "clean", "help", "init",
     "build", "compile", "deploy", "release", "publish", "docs", "format", "fmt", "prepare",
     "start", "serve", "dev", "watch", "configure", "generate", "codegen", "package", "dist",
-    "upload", "migrate", "version", "env", "envrc", "environment", "activate",
+    "upload", "migrate", "version",
 })
 # Programs a wrapper may run that are known not to be a check (``docker run img echo hi``).
 _PLAIN_PROGRAMS = frozenset({"echo", "true", "printf", "cat", "ls", "env", "sleep", "exit"})
@@ -662,7 +662,7 @@ def _targets(head: str, args: list[str]) -> list[str]:
 def _setup_name(name: str) -> bool:
     """A target, script or file named for setup or a build (``install``, ``build:prod``,
     ``scripts/deploy.sh``): its first word is in ``SETUP_TARGETS``."""
-    stem = PurePosixPath(name).name.lower().removesuffix(".sh").lstrip(".")   # .env (#1033)
+    stem = PurePosixPath(name).name.lower().removesuffix(".sh")
     return re.split(r"[:_.-]", stem)[0] in SETUP_TARGETS
 
 
@@ -695,7 +695,7 @@ def _script_verdict(words: list[str]) -> bool | None:
     """A committed script whose body is not read (``./scripts/foo.sh``, ``bash ci/x.sh``)."""
     head = words[0]
     path = head
-    if head in ("bash", "sh", "zsh", "source", "."):   # a sourced script is unread too (#1033)
+    if head in ("bash", "sh", "zsh", "source"):   # a sourced script is unread too (#1033)
         if any(w.startswith("-") and "c" in w[1:] for w in words[1:]):
             return False   # bash -c '...': the program is a string, read elsewhere
         pos = _positionals(words[1:])

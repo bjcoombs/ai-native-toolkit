@@ -71,7 +71,7 @@ def script_path(text: str) -> str | None:
     if not words:
         return None
     head = words[0]
-    if head in ("bash", "sh", "zsh", "source", "."):
+    if head in ("bash", "sh", "zsh", "source"):   # . reads as source (command_words)
         i, flags = 1, []
         while i < len(words) and words[i][:1] in ("-", "+"):
             flags.append(words[i])
@@ -112,8 +112,9 @@ class ScriptTree:
         """Whether the script ``text`` runs, at its exact tracked path, provably fails on a
         failing ``test`` command (``lib.script_body``); false when its body is not read."""
         path = script_path(text)
-        if path is None or path not in self._tracked:
-            return False
+        if path is None or path not in self._tracked or any(
+                rel.endswith("/" + path) for rel in self._tracked):
+            return False   # cd svc && ./ci.sh may run svc/ci.sh: only an unambiguous path is read
         try:
             with (self._root / path).open("rb") as handle:
                 raw = handle.read(_MAX_BODY + 1)
@@ -123,9 +124,10 @@ class ScriptTree:
             return False
         body = raw.decode("utf-8", errors="replace")
         words = command_words(text)
-        form = "sourced" if words[0] in ("source", ".") else "shell" if words[0] in _SHELL_HEADS else "executed"
-        errexit, pipefail = start_state(form, body, _flags(words) if form == "shell" else [])
-        return body_runs(body, errexit=errexit, pipefail=pipefail, test=test)
+        form = "sourced" if words[0] == "source" else "shell" if words[0] in _SHELL_HEADS else "executed"
+        state = start_state(form, body, _flags(words) if form == "shell" else [])
+        return state is not None and body_runs(body, errexit=state[0], pipefail=state[1], test=test,
+                                               sourced=form == "sourced")
 
 
 def script_runs(text: str, present: Present | None, test: Callable[[str], bool]) -> bool:

@@ -30,6 +30,8 @@ never reads its body (``echo deploy`` was credited before #951).
 a part of the name is in ``check_command.SETUP_TARGETS``. It runs no check, so it is never
 an ``unread_ci_target`` and ``lib.ci_checks._line_may_check`` reads it false, as it reads
 ``make deploy``; the instruction side (``is_named_check``, ``may_lint_named``) is unchanged.
+``sourced_env(text)`` is a sourced environment file (``. venv/bin/activate``, ``source .env``,
+``. ./env.sh``): ``_line_may_check`` reads it false too, since it runs no check.
 Pure, like ``lib.check_command``. Tests: ``tests/test_ci_target_word.py``,
 ``tests/test_dot_source.py``.
 """
@@ -96,16 +98,61 @@ def unread_ci_target(text: str) -> bool:
 
 
 def setup_ci_target(text: str) -> bool:
-    """Every target word of ``text`` (past its head, or a script head; flags, ``VAR=x`` and
-    ``run`` skipped) holds both ``ci`` and a setup or build word: ``make deploy-ci``,
-    ``npm run build:ci``, ``./scripts/ci-deploy.sh``. ``make foo deploy-ci`` is not one."""
+    """A target runner, package script or committed script whose every target names both
+    ``ci`` and a setup or build word (``make deploy-ci``, ``npm run build:ci``,
+    ``./scripts/ci-deploy.sh``), and that the CI vocabulary does not already read as a
+    check: ``pytest tests/test_ci_deploy.py``, ``make foo deploy-ci``, ``make -C ci-build``
+    and ``docker run ci-build-image`` are not one."""
+    names = _targets(command_words(text))
+    return bool(names) and all(_setup_ci_name(w) for w in names) and _ci_verdict(text) is not True
+
+
+def sourced_env(text: str) -> bool:
+    """A sourced file that sets up the shell rather than running anything (#1033):
+    ``. venv/bin/activate``, ``source .env``, ``. ./env.sh``, ``source scripts/vars.sh``."""
     words = command_words(text)
-    names = words[1:] + [w for w in words[:1] if "/" in w]
-    names = [w for w in names if not w.startswith("-") and "=" not in w and w not in _RUN_WORDS]
-    return bool(names) and all(_setup_ci_name(w) for w in names)   # make foo deploy-ci stays null
+    if words[:1] != ["source"] or len(words) < 2:
+        return False
+    name = PurePosixPath(words[1]).name.lower()
+    stem = re.split(r"[:_.-]", name.lstrip(".").removesuffix(".sh").removesuffix(".bash"))[0]
+    return name.endswith(".env") or stem in _ENV_WORDS
 
 
-_RUN_WORDS = frozenset({"run", "run-script", "task", "exec"})
+_ENV_WORDS = frozenset({"env", "envrc", "environment", "activate", "vars", "variables", "profile"})
+_TARGET_HEADS = frozenset({"make", "gmake", "just", "task", "rake", "npm", "pnpm", "yarn", "bun"})
+_RUN_WORDS = frozenset({"run", "run-script"})
+_VALUED = frozenset({"-C", "-f", "--file", "--makefile", "--directory", "--dir", "--cwd",
+                     "--prefix", "-w", "--workspace", "--filter", "-F"})
+
+
+def _targets(words: list[str]) -> list[str]:
+    """The targets a target runner or package manager is asked for, or a script's own path."""
+    if not words:
+        return []
+    if words[0] in ("bash", "sh", "zsh", "source"):
+        pos = [w for w in words[1:] if not w.startswith("-")]
+        return pos[:1]
+    if words[0] not in _TARGET_HEADS:
+        return words[:1] if words[0].startswith(("./", "bin/")) or words[0].endswith(".sh") else []
+    out: list[str] = []
+    skip = False
+    for word in words[1:]:
+        if skip:
+            skip = False
+        elif word.startswith("-"):
+            skip = word in _VALUED
+        elif "=" not in word and word not in _RUN_WORDS:
+            out.append(word)
+    return out
+
+
+def _ci_verdict(text: str) -> bool | None:
+    """``check_verdict`` under the CI vocabulary, whatever vocabulary the caller runs under."""
+    token = CHECK_NAMES.set(CHECK_WORDS)
+    try:
+        return check_verdict(text)
+    finally:
+        CHECK_NAMES.reset(token)
 
 
 def _setup_ci_name(word: str) -> bool:
