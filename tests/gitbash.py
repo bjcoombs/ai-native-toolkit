@@ -13,10 +13,11 @@ Linux unchanged and cover what differs on Windows:
   environment a test builds from scratch. It is empty off Windows.
 - Tests join PATH entries with `os.pathsep`, which is `;` on Windows.
 - `rmtree` clears the read-only bit git sets on object files, which Windows
-  will not delete otherwise.
+  will not delete otherwise. It passes `onexc=` on Python 3.12 and later,
+  where `onerror=` is deprecated.
 
-The scripts themselves pass `--binary` to jq under Git Bash, since a native
-jq.exe writes CRLF line endings.
+The scripts themselves pass `--binary` to jq under Git Bash when the jq on
+PATH accepts it, since a native jq.exe writes CRLF line endings.
 """
 import os
 import shutil
@@ -54,4 +55,7 @@ def rmtree(path: Path) -> None:
         os.chmod(target, stat.S_IWRITE)
         func(target)
 
-    shutil.rmtree(path, onerror=_retry)
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_retry)  # onerror is deprecated from 3.12 (#861)
+    else:
+        shutil.rmtree(path, onerror=_retry)
