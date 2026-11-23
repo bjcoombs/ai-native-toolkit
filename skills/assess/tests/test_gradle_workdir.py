@@ -85,12 +85,28 @@ NULL = (None, "indirect_run")
     (f"cd app && ../gradlew {TASK} && cd ../lib && ../gradlew {TASK}",
      ROOTED | {"lib/build.gradle": GATE}, CREDIT),
     (f"bash -c \"cd app && ../gradlew {TASK}\"", ROOTED | {"lib/build.gradle": GATE}, CREDIT),
+    # Two different Gradle program words on one line: each run is cut at its own word.
+    (f"cd lib && gradle {TASK} && cd ../app && ../gradlew {TASK}",
+     ROOTED | {"lib/build.gradle": GATE}, CREDIT),
+    (f"cd lib && gradle check && cd ../app && ../gradlew {TASK}",
+     ROOTED | {"lib/build.gradle": GATE}, NULL),
     # A subshell cd that closes before the run leaves it unresolved: today's reading.
     (f"(cd app) && ./gradlew {TASK}", ROOTED | {"lib/build.gradle": GATE}, CREDIT),
 ])
 def test_working_directory_selects_the_project(
         tmp_path: Path, line: str, files: dict[str, str], expected: tuple[bool | None, str]) -> None:
     assert _gate(tmp_path, line, files) == expected
+
+
+def test_p_under_a_defaults_working_directory_reads_unsure(tmp_path: Path) -> None:
+    """``defaults: run: working-directory:`` leaves the directory unresolved, so ``-p app``
+    names a project this cannot place: null, never credit (claude-review on #1175)."""
+    text = ("on: pull_request\ndefaults:\n  run:\n    working-directory: android\n"
+            "jobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n"
+            f"      - run: ./gradlew -p app {TASK}\n")
+    repo = _repo(tmp_path, {".github/workflows/ci.yml": text, **ROOTED, "app/build.gradle": GATE})
+    block = detect_coverage_gate(repo)
+    assert (block["enforced_meets_minimum"], block["enforced_basis"]) == NULL
 
 
 @pytest.mark.parametrize(("workdir", "gate", "expected"), [
@@ -132,12 +148,15 @@ def test_gradle_root_from_the_working_directory(
     (TASK, "app", "app/build.gradle", True),
     (TASK, "app", "app/x/build.gradle", True),
     (TASK, "app", "application/build.gradle", None),
+    # A -p in an unresolved directory cannot be placed: null for any gate.
     (f"-p app {TASK}", None, "lib/build.gradle", None),
-    (f"-p app {TASK}", None, "app/build.gradle", True),
+    (f"-p app {TASK}", None, "app/build.gradle", None),
+    (f"-p app {TASK}", "", "app/build.gradle", True),
     (f"-p .. {TASK}", "app", "lib/build.gradle", True),
     (f"-p ../.. {TASK}", "app", "lib/build.gradle", None),
-    (f"-p /abs {TASK}", None, "lib/build.gradle", None),
+    (f"-p /abs {TASK}", "", "lib/build.gradle", None),
     (f"-c other.gradle {TASK}", None, "lib/build.gradle", True),
+    (f"-p android :app:{TASK}", None, "android/app/build.gradle", True),
     (f":app:{TASK}", "android", "android/app/build.gradle", True),
     (f":app:{TASK}", "", "app/build.gradle", True),
     ("check", "app", "lib/build.gradle", False),

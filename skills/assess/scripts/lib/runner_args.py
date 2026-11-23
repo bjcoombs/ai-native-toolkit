@@ -35,8 +35,9 @@ Gradle:
   known working directory ``cwd`` (``""`` the root; ``cd`` / ``working-directory:``, read by
   ``lib.testing.ci_workdir``) joined with ``-p`` / ``--project-dir``. An unqualified task
   runs in the start's project and its subprojects: a gate outside them, or
-  any gate with an unreadable ``-p`` (``$DIR``, absolute, above the root), reads None; with
-  the start unknown it runs in every project (True).
+  any gate with an unreadable ``-p`` (``$DIR``, absolute, above the root) or a ``-p`` in an
+  unresolved directory, reads None; with no ``-p`` and the directory unresolved it runs in
+  every project (True). A project path still reads ``-p`` from the root there (#1126).
 
 Script runners (``script_run(words)``): what ``hatch run``, ``pdm [run]`` and ``poe`` run,
 as ``(words, is_script)``, or None for another command (``pdm install``):
@@ -155,13 +156,15 @@ def gradle_runs_in(args: Sequence[str], names: frozenset[str], build_file: str |
     layout); False when none is named. ``cwd`` is the CI line's working directory (``""``
     the repository root, None unknown). ``build_file`` None: any named task."""
     start, replaced, unread = _gradle_start(args, cwd)
+    # A -p in an unresolved directory names a project this cannot place: null, never credit.
+    adrift = unread or (cwd is None and start is not None)
     named = False
     for task in gradle_task_paths(args):
         if task.rsplit(":", 1)[-1] not in names:
             continue
         project = gradle_project(task)
         if build_file is None or (project is None and _in_start(
-                posixpath.dirname(build_file), start, unread)):
+                posixpath.dirname(build_file), start, adrift)):
             return True
         if (project is not None and not replaced and not unread
                 and posixpath.basename(build_file) in _GRADLE_BUILD_FILES
