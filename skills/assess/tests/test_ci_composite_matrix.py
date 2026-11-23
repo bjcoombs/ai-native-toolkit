@@ -9,6 +9,7 @@ import pytest
 
 from lib.ci_checks import scan_ci_checks
 from lib.ci_composite import inline_composites
+from lib.ci_matrix import expand_matrix
 
 
 def _git(root: Path, *args: str) -> None:
@@ -176,7 +177,7 @@ def test_an_unexpandable_matrix_command_reads_null(tmp_path: Path) -> None:
 def test_a_masked_unexpandable_matrix_command_reads_false(tmp_path: Path) -> None:
     steps = "      - run: ${{ matrix.cmd }}\n        continue-on-error: true\n"
     reading = _scan(tmp_path, _wf(steps, job="    strategy:\n      matrix:\n        cmd: ${{ x }}\n"))
-    assert reading[1:] == (False, "no_check_command", False, "no_lint_command")
+    assert reading == (None, False, "no_check_command", False, "no_lint_command")
 
 
 def test_each_matrix_value_is_masked_on_its_own(tmp_path: Path) -> None:
@@ -227,3 +228,42 @@ def test_a_forwarding_composite_called_with_echo_earns_nothing(tmp_path: Path) -
     common = "runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: ${{ inputs.run }}\n"
     steps = "      - uses: ./.github/actions/check\n        with:\n          run: echo hi\n"
     assert _scan(tmp_path, _wf(steps) | {_ACT: common}) == _NONE
+
+
+@pytest.mark.parametrize(("call", "action"), [
+    ("      -   uses: ./.github/actions/check\n          continue-on-error: true\n", _action("pytest")),
+    (_CALL + "        continue-on-error: true\n",
+     "runs:\n  using: composite\n  steps:\n    -   shell: bash\n        run: pytest\n"),
+    ("      -   uses: ./.github/actions/check\n          if: false\n",
+     "runs:\n  using: composite\n  steps:\n  - shell: bash\n    run: pytest\n"),
+])
+def test_caller_masking_lands_in_the_copy_whatever_the_dash_gap(
+        tmp_path: Path, call: str, action: str) -> None:
+    assert _scan(tmp_path, _wf(call) | {_ACT: action})[:3] == (True, False, "not_enforced")
+
+
+def test_an_oversized_matrix_reads_null_without_building_it(tmp_path: Path) -> None:
+    axes = "".join(f"        a{i}: [x, y]\n" for i in range(32))
+    job = f"    strategy:\n      matrix:\n{axes}        cmd: [pytest]\n"
+    assert _scan(tmp_path, _wf("      - run: ${{ matrix.cmd }}\n", job=job))[:3] == (
+        None, None, "check_target")
+
+
+def test_an_unknown_line_stays_unknown_in_each_matrix_copy() -> None:
+    text = ("jobs:\n  t:\n    strategy:\n      matrix:\n        cmd: [a, b]\n    steps:\n"
+            "      - run: |\n          ${{ matrix.cmd }}\n          ${{ inputs.x }}\n")
+    out = expand_matrix(text, frozenset({8}))
+    assert [out.text.splitlines()[i] for i in sorted(out.unknown)] == ["          ${{ inputs.x }}"] * 2
+
+
+def test_a_forwarded_run_the_caller_omits_takes_the_default(tmp_path: Path) -> None:
+    action = ("inputs:\n  run:\n    default: pytest\nruns:\n  using: composite\n  steps:\n"
+              "    - shell: bash\n      run: ${{ inputs.run }}\n")
+    assert _scan(tmp_path, _wf(_CALL) | {_ACT: action})[:3] == (True, True, "enforced_check")
+    passed = _CALL + "        with:\n          run: echo hi\n"
+    assert _scan(tmp_path / "b", _wf(passed) | {_ACT: action})[:3] == (False, False, "no_check_command")
+
+
+def test_an_unexpandable_github_script_input_is_not_unknown(tmp_path: Path) -> None:
+    steps = "      - uses: actions/github-script@v7\n        with:\n          script: ${{ matrix.s }}\n"
+    assert _scan(tmp_path, _wf(steps))[1:3] == (False, "no_check_command")

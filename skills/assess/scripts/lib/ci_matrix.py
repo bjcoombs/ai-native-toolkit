@@ -24,7 +24,9 @@ masking (``continue-on-error``, ``|| true``, the step's ``shell:``), as each mat
   a non-scalar, a key no combination sets, ``${{ matrix.cfg.cmd }}`` or any other matrix
   expression), the step stays as it was and its run-value line indexes come back in
   ``unknown``. ``lib.ci_checks`` reads them as a command it cannot settle: ``check_target``
-  (null) for the three CI signals when no other line settles them, false when masked.
+  (null) for the three CI signals when no other line settles them. Masked, the step reads
+  false for ``enforced_check_runs`` and ``lint_runs``; ``test_or_lint_configured`` stays null.
+  A matrix of more than ``MAX_COMBOS`` (256) combinations is not built and reads unknown.
 - **Consumed axes.** A block-list axis whose values a copy now runs has its ``- value``
   lines blanked, so ``- ruff check .`` under ``matrix:`` is not counted again outside the
   step, where the step's masking cannot reach it.
@@ -40,6 +42,8 @@ import itertools
 import re
 from typing import NamedTuple
 
+import math
+
 from lib.ci_action_inputs import INPUT_KEYS
 from lib.ci_masking import IndentTree, parse_lines
 
@@ -50,6 +54,8 @@ _QUOTED_RUN = re.compile(r"""^(\s*(?:-\s+)?[\w.-]+:\s+)(["'])(.*\$\{\{\s*matrix\
 _KEY_ONLY = re.compile(r"^\s*matrix\.([\w-]+)\s*$")
 
 Combo = dict[str, str]
+# The most combinations read before the product is built: GitHub caps a matrix at 256 jobs.
+MAX_COMBOS = 256
 
 
 class Expanded(NamedTuple):
@@ -164,6 +170,8 @@ def _matrix(tree: IndentTree, job: int) -> _Matrix:
         if values is None:
             return _Matrix(None, {})
         axes[name], items[name] = values, lines
+    if math.prod(len(v) for v in axes.values()) + len(extra["include"]) > MAX_COMBOS:
+        return _Matrix(None, {})
     return _Matrix(_combine(axes, extra["exclude"], extra["include"]), items)
 
 
@@ -252,7 +260,8 @@ def expand_matrix(text: str, unknown_in: frozenset[int] = frozenset()) -> Expand
     while i < len(lines):
         if i in replace:
             end, copies = replace[i]
-            for copy in copies:
+            for copy in copies:   # an unknown line (a composite input) stays unknown in each copy
+                found.update(len(out) + r for r in range(end - i) if i + r in unknown)
                 out.extend(copy)
             i = end
             continue

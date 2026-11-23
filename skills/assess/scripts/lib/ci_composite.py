@@ -14,15 +14,17 @@ whose ``action.yml`` runs ``ruff check .`` and ``pytest`` used to read as no com
   line is, so a committed script's body can still upgrade it.
 - **Masking and triggers.** Each copy is the whole step item, re-indented, so its own
   ``shell:`` (pipefail, errexit) and ``continue-on-error`` apply. The calling step's
-  ``continue-on-error`` and ``if:`` lines are added to every copy, so ``continue-on-error:
+  ``continue-on-error`` and ``if:`` lines are added to every copy at the copy's own key
+  column (whatever each file's dash-to-key gap), so ``continue-on-error:
   true`` or ``if: false`` on the caller masks them all. The copies sit in the calling job and
   workflow, so the caller's triggers and job keys apply.
 - **Inputs.** ``${{ inputs.<name> }}`` in a copied ``run:`` value is replaced by the
   caller's literal ``with:`` scalar for that name, else, only when the caller's ``with:``
   omits the name, the action's literal ``inputs.<name>.default``. One left in command position (no value, a block or
   ``${{ }}`` value) makes that line unknown. A whole ``run: ${{ inputs.run }}`` (or
-  ``script`` / ``command``) is left as it is: ``lib.ci_action_inputs`` already reads the
-  caller's ``with:`` value for it (#799), so it is not counted twice.
+  ``script`` / ``command``) the caller passes is left as it is: ``lib.ci_action_inputs``
+  already reads the caller's ``with:`` value for it (#799), so it is not counted twice; one
+  the caller omits takes the default like any other input.
 - **Unknown, never 0.** A step of the action that ``uses:`` another local action is not
   followed: it is copied with its ``uses:`` line in ``unknown``. ``inline_composites``
   returns ``(text, unknown)`` (``lib.ci_matrix.Expanded``); ``lib.ci_checks`` reads the
@@ -37,7 +39,7 @@ from __future__ import annotations
 import re
 from typing import NamedTuple
 
-from lib.ci_action_inputs import INPUT_KEYS, ReadLocal, _local_paths
+from lib.ci_action_inputs import INPUT_KEYS, ReadLocal, local_action_paths
 from lib.ci_continuations import join_continued
 from lib.ci_masking import IndentTree, parse_lines
 from lib.ci_matrix import CMD_EXPR, Expanded, scalar
@@ -50,6 +52,7 @@ _FORWARD = re.compile(r"""^["']?\$\{\{\s*inputs\.([\w-]+)\s*\}\}["']?$""")
 
 class _Step(NamedTuple):
     dash: int                  # the step's dash indent in the action
+    gap: int                   # its key column less its dash indent (``-   run:`` is 4)
     lines: list[str]
     body: frozenset[int]       # run-value lines, relative to the step
     nested: bool               # a step that uses another local action: not followed
@@ -101,14 +104,15 @@ def _run_steps(action: str) -> tuple[list[_Step], dict[str, str]]:
             continue
         start, end = item[0], max(tree.subtree(k).stop for k in item)
         body = frozenset(j - start for j in tree.subtree(run)) if run is not None else frozenset()
-        out.append(_Step(tree.lines[start].indent, lines[start:end], body, nested))
+        dash = tree.lines[start].indent
+        out.append(_Step(dash, tree.lines[start].level - dash, lines[start:end], body, nested))
     return out, _defaults(tree)
 
 
 def _read_action(uses: str, read_local: ReadLocal) -> str | None:
     if not uses.startswith("./") or uses.endswith((".yml", ".yaml")):
         return None
-    for rel in _local_paths(uses):
+    for rel in local_action_paths(uses):
         text = read_local(rel)
         if text is not None:
             return text
@@ -121,12 +125,13 @@ def _value(line: str) -> str:
     return stripped.split(":", 1)[1].strip() if stripped.startswith("run:") else stripped
 
 
-def _settle(line: str, given: dict[str, str]) -> tuple[str, bool]:
+def _settle(line: str, given: dict[str, str], supplied: frozenset[str]) -> tuple[str, bool]:
     """``(line, unknown)``: ``${{ inputs.<name> }}`` replaced by its literal caller or default
     value; unknown when one left in command position cannot be. A whole ``run:`` of a
-    ``run`` / ``script`` / ``command`` input is left to ``lib.ci_action_inputs``."""
+    ``run`` / ``script`` / ``command`` input the caller ``supplied`` is left to
+    ``lib.ci_action_inputs``, which reads the caller's ``with:`` line."""
     forward = _FORWARD.match(_value(line))
-    if forward and forward.group(1) in INPUT_KEYS:
+    if forward and forward.group(1) in INPUT_KEYS and forward.group(1) in supplied:
         return line, False
     line = _INPUT_REF.sub(lambda m: given.get(m.group(1), m.group(0)), line)
     left = (m.group(1) for m in CMD_EXPR.finditer(_value(line)))
@@ -156,8 +161,9 @@ def inline_composites(text: str, read_local: ReadLocal) -> Expanded:
         steps, defaults = _run_steps(action)
         item = tree.siblings[tree.mapping_of[i]]
         # A caller's value replaces the default whatever it is: a non-literal one stays unknown.
-        given = {k: v for k, v in (defaults | _with_values(tree, item)).items() if v is not None}
-        indent, level = tree.lines[item[0]].indent, tree.lines[item[0]].level
+        passed = _with_values(tree, item)
+        given = {k: v for k, v in (defaults | passed).items() if v is not None}
+        indent = tree.lines[item[0]].indent
         caller = [lines[k].strip().removeprefix("- ") for k in item if tree.lines[k].key in _CALLER_KEYS]
         copied: list[tuple[str, bool]] = []
         for step in steps:
@@ -166,10 +172,10 @@ def inline_composites(text: str, read_local: ReadLocal) -> Expanded:
                 if step.nested:
                     copied.append((shifted, "uses:" in raw))
                 elif j in step.body:
-                    copied.append(_settle(shifted, given))
+                    copied.append(_settle(shifted, given, frozenset(passed)))
                 else:
                     copied.append((shifted, False))
-            copied += [(" " * level + key, False) for key in caller]
+            copied += [(" " * (indent + step.gap) + key, False) for key in caller]
         if copied:
             after.setdefault(max(tree.subtree(k).stop for k in item) - 1, []).extend(copied)
     out: list[str] = []

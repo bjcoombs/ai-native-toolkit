@@ -561,7 +561,9 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
                 for rel in files if rel not in CI_CONFIG_FILES}   # #923
     inputs = {rel: (Inputs(read_config(root, rel), frozenset()) if rel in CI_CONFIG_FILES
                     else read_inputs(followed[rel].text, reader)) for rel in files}
-    unexpanded = {rel: f.unknown for rel, f in followed.items()}
+    # An unknown line read_inputs blanked (a github-script script:) is not shell: drop it.
+    unexpanded = {rel: frozenset(i for i in f.unknown if inputs[rel].text.splitlines()[i].strip())
+                  for rel, f in followed.items()}
     texts = {rel: inputs[rel].text for rel in files}
     for rel in files:
         text = texts[rel]
