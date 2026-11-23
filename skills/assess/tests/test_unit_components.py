@@ -113,6 +113,23 @@ def test_hidden_agent_configuration_skills_are_no_units(tmp_path: Path) -> None:
     assert _kinds(block) == {"apps/web": ("package", "npm", "workspace_member")}  # type: ignore[arg-type]
 
 
+def test_a_claim_is_listed_once(tmp_path: Path) -> None:
+    files = {"skills/a/SKILL.md": "# a\n", "skills/a/sub/SKILL.md": "# sub\n",
+             "skills/a/sub/pyproject.toml": '[project]\nname = "sub"\n', "skills/a/sub/m.py": "1\n"}
+    block = scan_units(_write(tmp_path, files))
+    assert block["skipped"] == [{"path": "skills/a/sub", "problem": "claimed"}]
+
+
+def test_a_workspace_member_that_is_a_skill_is_a_unit_not_a_skip(tmp_path: Path) -> None:
+    files = {"package.json": '{"name": "root"}\n', "pnpm-workspace.yaml": "packages:\n  - skills/*\n",
+             "skills/a/SKILL.md": "# a\n", "skills/a/package.json": '{"name": "a"}\n',
+             "skills/a/index.js": "1\n", "skills/b/package.json": '{"name": "b"}\n', "skills/b/index.js": "1\n"}
+    block = scan_units(_write(tmp_path, files))
+    assert _kinds(block) == {"skills/a": ("skill", "npm", "component"),  # type: ignore[arg-type]
+                             "skills/b": ("package", "pnpm", "workspace_member")}
+    assert "skills/a" not in _skipped(block)  # type: ignore[arg-type]
+
+
 def test_a_skill_fixture_inside_a_package_is_no_unit(tmp_path: Path) -> None:
     files = {"pkg/pyproject.toml": '[project]\nname = "pkg"\n', "pkg/src/m.py": "x = 1\n",
              "pkg/tests/fixtures/sample/SKILL.md": "# sample\n",

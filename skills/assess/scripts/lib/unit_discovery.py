@@ -481,6 +481,7 @@ class _Walk:
     def __init__(self, repo_root: Path, files: list[str], components: Iterable[str] = ()) -> None:
         self.root = repo_root
         component_dirs = frozenset(components)
+        self.components = component_dirs  # units already: a workspace listing one adds nothing
         self.dirs = frozenset(p for rel in files for p in _parents(rel))
         by_dir: dict[str, set[str]] = {}
         for rel in files:
@@ -584,6 +585,8 @@ class _Walk:
                            "manifest_only")
         for ws, members, _, _ in expanded:
             for member in members:
+                if member in self.components:  # a skill a workspace lists is that skill's unit
+                    continue
                 if member in self.leaves:
                     # a member shallower than its workspace was read as a leaf first
                     self.unleaf(member)
@@ -609,7 +612,8 @@ def discover_units(repo_root: Path, files: Iterable[str]) -> _Discovery:
     # (a root SKILL.md over a monorepo's packages); test data below it is not listed
     walk.found.skipped.extend(
         {"path": folder, "problem": "claimed"} for folder in sorted(walk.manifest_dirs)
-        if any(c.path != folder and _is_under(folder, c.path) for c in components.units)
+        if folder not in components.claimed
+        and any(c.path != folder and _is_under(folder, c.path) for c in components.units)
         and is_production(posixpath.join(folder, sorted(walk.manifest_dirs[folder])[0])))
     depth = {d: (0 if d == "." else d.count("/") + 1) for d in walk.manifest_dirs}
     for folder in sorted(walk.manifest_dirs, key=lambda d: (depth[d], d)):
