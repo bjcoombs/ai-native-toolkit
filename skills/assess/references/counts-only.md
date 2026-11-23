@@ -44,7 +44,8 @@ so a path or name before the colon is never kept; an empty reason is dropped.
 Not filtered: the wiki pages, hotspot pages, badge and report the run
 also writes stay in the target repository's `.assess/` directory and
 carry full text. Only `run-context.counts-only.json` (and an
-`assess_signals.py --counts-only` document) is content-free.
+`assess_signals.py --counts-only` document) is content-free, with the
+`doc-drift.counts-only.svg` and `review-strip.counts-only.svg` drawn from it.
 
 ## Path-keyed maps
 
@@ -319,6 +320,8 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | Field | Kept as |
 |---|---|
 | `review_reality.reason` | dropped |
+| `review_reality.sequence` | token |
+| `review_reality.bot_sequence` | token |
 
 ## delivery
 

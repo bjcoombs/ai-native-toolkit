@@ -87,10 +87,48 @@ jobs:
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
 
       # The promissory-marker scan and the fleet golden run shell out to rg.
+      # community.chocolatey.org returns 503/504 at times, so choco gets three
+      # tries with a short backoff. If all three fail, the same version comes
+      # from the BurntSushi/ripgrep GitHub release (the zip the Chocolatey
+      # package itself unpacks), checked against RG_SHA256 before it is used.
+      # RG_SHA256 was computed from the release asset and matches the release's
+      # published .sha256 asset. A version bump changes both env values. The
+      # step fails only when both paths fail, or when rg is not RG_VERSION.
       - name: Install ripgrep
+        shell: pwsh
+        env:
+          RG_VERSION: "15.2.0"
+          RG_SHA256: "71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5"
         run: |
-          choco install ripgrep -y --no-progress
-          rg --version
+          $installed = $false
+          foreach ($attempt in 1..3) {
+            choco install ripgrep --version $env:RG_VERSION -y --no-progress
+            if ($LASTEXITCODE -eq 0) { $installed = $true; break }
+            Write-Host "choco install ripgrep failed (attempt $attempt of 3, exit $LASTEXITCODE)"
+            if ($attempt -lt 3) { Start-Sleep -Seconds (15 * $attempt) }
+          }
+          if (-not $installed) {
+            Write-Host "Falling back to the ripgrep $env:RG_VERSION GitHub release"
+            $name = "ripgrep-$env:RG_VERSION-x86_64-pc-windows-msvc"
+            $url = "https://github.com/BurntSushi/ripgrep/releases/download/$env:RG_VERSION/$name.zip"
+            $zip = Join-Path $env:RUNNER_TEMP "$name.zip"
+            Invoke-WebRequest -Uri $url -OutFile $zip -MaximumRetryCount 3 -RetryIntervalSec 10
+            $hash = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($hash -ne $env:RG_SHA256) {
+              Write-Host "::error::$name.zip SHA256 is $hash, expected $env:RG_SHA256"
+              exit 1
+            }
+            Expand-Archive -Path $zip -DestinationPath $env:RUNNER_TEMP -Force
+            $dir = Join-Path $env:RUNNER_TEMP $name
+            Add-Content -Path $env:GITHUB_PATH -Value $dir
+            $env:PATH = "$dir;$env:PATH"
+          }
+          $version = (rg --version | Select-Object -First 1)
+          Write-Host $version
+          if ($version -notmatch "^ripgrep $([regex]::Escape($env:RG_VERSION))(\s|$)") {
+            Write-Host "::error::expected ripgrep $env:RG_VERSION, got: $version"
+            exit 1
+          }
 
       # `shell: bash` on windows-latest is Git Bash. Git Bash does not ship jq;
       # the runner image usually does. The smoke fixtures and the eval

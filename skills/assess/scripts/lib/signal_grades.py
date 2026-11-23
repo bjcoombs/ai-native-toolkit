@@ -1,20 +1,25 @@
 """The producer input class and grade of every default maturity-model signal (#783).
 
-Pure data with no imports from ``lib``, so the tally engine (``lib/level_tally.py``)
-and the run context's ``level`` entry can read it without reaching the scanners.
+Data whose one ``lib`` import is the check-manifest loader, so the tally engine
+(``lib/level_tally.py``) and the run context's ``level`` entry can read it without
+reaching the scanners. ``SIGNAL_INPUTS`` is generated at import from each signal entry's
+``evidence`` in ``checks/core/`` (#953).
 ``lib.level_signals`` re-exports every name and documents the classes and rulings.
 
 The classification data `level_signals.py` documents and re-exports: `InputClass`, `Grade`,
 `INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES`, `EMPTY_DENOMINATORS` (signal
 to its set's count and the code when that count is 0, read by `levels.py`: `no_scored_files`,
-`no_manifests`) and the `DEFAULT_LEVELS` path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
+`no_manifests`) and the `DEFAULT_LEVELS` path, importing only `lib.check_manifest` (which imports only
+`lib.check_validation`), so `level_tally.py` and the run context's `level` entry read them
 without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
-`tests/test_level_tally.py`.
+`tests/test_level_tally.py`, `tests/test_manifest_tables.py`.
 """
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
+
+from lib.check_manifest import core_manifest, signal_inputs
 
 DEFAULT_LEVELS = Path(__file__).resolve().parents[2] / "levels" / "default.toml"
 
@@ -33,36 +38,10 @@ INPUT_GRADES: dict[InputClass, Grade] = {
 }
 LISTED_GRADES: frozenset[str] = frozenset({"config_only", "declared"})
 
-# One entry per exact signal path; a new criterion signal needs its own line.
-SIGNAL_INPUTS: dict[str, InputClass] = {
-    "layer_grades.instruction_file_present": "head_text",
-    "agent_environment.check.named_total": "head_text",
-    "agent_environment.pinning.unlocked_total": "head_text",
-    "instruction_claims.failed": "head_structure",
-    "nested_instructions.budget.claude_code.lines": "head_structure",
-    "observability.rung": "head_text",
-    "structure.modularity_q": "head_structure",
-    "structure.cross_package_edges": "head_structure",
-    "structure.front_door_ratio": "head_structure",
-    "promissory_markers.families.suppression.stale": "git_history",
-    "promissory_markers.aging_reliable": "git_history",
-    "structure_drift.tier_0.boundary_patterns": "config_text",
-    "stats_summary.loc.p95": "head_structure",
-    "ci_checks.enforced_check_runs": "ci_executed",
-    "ci_checks.lint_runs": "ci_executed",
-    "coverage_gate.enforced_meets_minimum": "ci_executed",
-    "test_pressure.mutation_run": "execution_artifact",
-    "review_evidence.present": "head_text",
-    "review_reality.reviewed_share": "platform",
-    "review_reality.approved_share": "platform",
-    "agent_ops.summary.permissions_encoded": "config_text",
-    "agent_ops.summary.hooks_present": "config_text",
-    "agent_ops.summary.routines_present": "config_text",
-    "doc_staleness.summary.stale_pct": "git_history",
-    "guardrails.stated_pct": "head_structure",
-    "agent_consistency.conflicts": "head_structure",
-    "agent_consistency.unlinked": "head_structure",
-}
+# Signal path -> its producer input class: each signal entry's `evidence` in
+# checks/core/ (#953), validated against `InputClass` by the loader.
+SIGNAL_INPUTS: dict[str, InputClass] = cast(
+    "dict[str, InputClass]", signal_inputs(core_manifest()))
 
 
 # Signal -> (the value meaning "could not be measured", the tally's reason code).

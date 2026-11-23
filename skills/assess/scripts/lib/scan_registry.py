@@ -9,6 +9,11 @@ table, so the degrade wrapper applies by construction and adding a scan does
 not edit ``build_run_context``. The shape follows ``_DEAD_CODE_TOOLS`` in
 ``liveness_scan``: spec entries plus a single driving loop.
 
+Each entry names its key and callable (plus any spread keys and offline callable) in code;
+``spec_from_manifest`` reads the rest - ``reads``, ``stage``, ``degrade``, ``gate_reason``,
+``label``, ``private``, ``network`` - from the key's collector entry in
+``checks/core/<key>.toml`` (#953), so a scan's inputs change with no Python edit.
+
 The table is validated when this module is imported. A duplicate key, an unknown
 stage, a read of a name that neither the core provides nor an earlier scan
 produces, a read of a key produced at a later stage, a callable that cannot take
@@ -79,6 +84,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Any
 
+from lib import check_manifest as cm
 from lib import core_scans as cs
 from lib import run_setup as rs
 from lib.agent_building import scan_agent_building
@@ -320,6 +326,47 @@ _BAD_SCOPE = "an invalid --scope is a usage error the CLI reports with exit code
 _SELF_DEGRADING = "degrades internally to an explicit unavailable result; a raise here is a bug"
 _SERIALISER = "copies fields out of an earlier result that already carries its own degrade"
 GATE_REASONS = frozenset({_SETUP, _BAD_SCOPE, _SELF_DEGRADING, _SERIALISER})
+# The manifest's ``gate_reason`` token -> the reason text (``check_manifest.GATE_REASONS``).
+GATE_REASON_TEXT = {"setup": _SETUP, "bad_scope": _BAD_SCOPE,
+                    "self_degrading": _SELF_DEGRADING, "serialiser": _SERIALISER}
+
+
+def spec_from_manifest(manifest: cm.CheckManifest, key: str, fn: Callable[..., Any], *,
+                       spread: tuple[str, ...] = (),
+                       offline_fn: Callable[..., Any] | None = None) -> ScanSpec:
+    """The ``ScanSpec`` for ``key``, its metadata read from the key's collector entry (#953).
+
+    ``reads``, ``stage``, ``degrade``, ``gate_reason``, ``label``, ``private`` and
+    ``network`` come from the manifest; the callables, the spread keys and the table order
+    stay in code. A key with no collector entry, or a spread that disagrees with the
+    entry's ``spread`` flag, raises ``ScanRegistryError``.
+    """
+    entry = next((c for c in cm.collectors(manifest) if cm.scan_key(c) == key), None)
+    if entry is None:
+        raise ScanRegistryError(f"scan {key!r} has no collector entry in the check manifest")
+    if bool(spread) != entry.get("spread", False):
+        raise ScanRegistryError(f"scan {key!r}: spread keys disagree with the manifest's spread flag")
+    gate = entry.get("gate_reason")
+    return ScanSpec(key, fn, tuple(entry["reads"]), entry["stage"],
+                    degrade=entry.get("degrade", True),
+                    gate_reason="" if gate is None else GATE_REASON_TEXT[gate],
+                    label=entry.get("label", ""), private=entry.get("private", False),
+                    spread=spread, network=entry.get("network", False), offline_fn=offline_fn)
+
+
+def pinned_reads(spec: ScanSpec, reads: tuple[str, ...]) -> ScanSpec:
+    """``spec`` unchanged when its manifest ``reads`` are exactly ``reads``, in order; else
+    ``ScanRegistryError``. For a callable that zips its arguments with a code tuple."""
+    if spec.reads != reads:
+        raise ScanRegistryError(f"scan {spec.key!r}: the manifest reads {list(spec.reads)}, "
+                                f"but its callable zips them with {list(reads)}")
+    return spec
+
+
+def _spec(key: str, fn: Callable[..., Any], *, spread: tuple[str, ...] = (),
+          offline_fn: Callable[..., Any] | None = None) -> ScanSpec:
+    """``spec_from_manifest`` over the core manifest: one table entry."""
+    return spec_from_manifest(cm.core_manifest(), key, fn, spread=spread, offline_fn=offline_fn)
 
 KEYHOLE_KEYS = (
     "structure", "behaviour", "documentation", "understanding", "runtime",
@@ -332,279 +379,189 @@ SCANS: tuple[ScanSpec, ...] = (
     # -- STAGE_SETUP: the run's own state, then the run header ---------------
     # Every value a later entry or the publish step needs: a failure here
     # stops the run, as it did before these steps moved into the table.
-    ScanSpec("run_scope", rs.run_scope, ("repo_root", "requested_scope"), STAGE_SETUP,
-             private=True, degrade=False, gate_reason=_BAD_SCOPE),
-    ScanSpec("scope", rs.scope_root, ("run_scope",), STAGE_SETUP, private=True,
-             degrade=False, gate_reason=_SETUP),
-    ScanSpec("assess_dir", rs.run_assess_dir, ("repo_root", "run_scope"), STAGE_SETUP,
-             private=True, degrade=False, gate_reason=_SETUP),
+    _spec("run_scope", rs.run_scope),
+    _spec("scope", rs.scope_root),
+    _spec("assess_dir", rs.run_assess_dir),
     # Minted once and stamped on every artifact of this run, so finalize can
     # prove the finalize-input it later consumes matches this run-context.
-    ScanSpec("run_id", rs.new_run_id, (), STAGE_SETUP, private=True,
-             degrade=False, gate_reason=_SETUP),
-    ScanSpec("current", rs.current_stats, ("assess_dir",), STAGE_SETUP, private=True,
-             degrade=False, gate_reason=_SETUP),
-    ScanSpec("prior", rs.prior_stats, ("assess_dir",), STAGE_SETUP, private=True,
-             degrade=False, gate_reason=_SETUP),
-    ScanSpec("excluded_as_generated", rs.generated_paths, ("current",), STAGE_SETUP,
-             private=True, degrade=False, gate_reason=_SETUP),
-    ScanSpec("diff", rs.stats_diff, ("prior", "current", "excluded_as_generated"), STAGE_SETUP,
-             private=True, degrade=False, gate_reason=_SETUP),
-    ScanSpec("instruction_grading", rs.instruction_grading, ("repo_root",), STAGE_SETUP,
-             private=True, degrade=False, gate_reason=_SETUP),
-    ScanSpec("instruction_files", rs.graded_instruction_files, ("instruction_grading",),
-             STAGE_SETUP, private=True, degrade=False, gate_reason=_SETUP),
+    _spec("run_id", rs.new_run_id),
+    _spec("current", rs.current_stats),
+    _spec("prior", rs.prior_stats),
+    _spec("excluded_as_generated", rs.generated_paths),
+    _spec("diff", rs.stats_diff),
+    _spec("instruction_grading", rs.instruction_grading),
+    _spec("instruction_files", rs.graded_instruction_files),
     # Historical path -> current path from git's rename detection, built once:
     # it re-keys the first-flagged map and folds co-change history in keyhole.
-    ScanSpec("rename_map", rs.rename_map, ("repo_root",), STAGE_SETUP, private=True,
-             degrade=False, gate_reason=_SETUP),
-    ScanSpec("first_flagged", rs.first_flagged, ("assess_dir", "rename_map"), STAGE_SETUP,
-             private=True, degrade=False, gate_reason=_SETUP),
+    _spec("rename_map", rs.rename_map),
+    _spec("first_flagged", rs.first_flagged),
     # `.assess/config.toml` excludes, loaded once and read by every scan.
-    ScanSpec("excludes", rs.config_excludes, ("repo_root",), STAGE_SETUP, private=True,
-             degrade=False, gate_reason=_SETUP),
+    _spec("excludes", rs.config_excludes),
     # The git-history window a history-reading scan honours: the stats
     # sidecar's churn window in the `<n>d|w|mo|y` grammar, or None for all
     # history. The headless signals run provides `--window` instead.
-    ScanSpec("history_window", rs.history_window, ("current",), STAGE_SETUP, private=True,
-             degrade=False, gate_reason=_SETUP),
+    _spec("history_window", rs.history_window),
     # The fleet settings sections (#706): the repository's own `.assess/config.toml`
     # sections here; the headless signals run provides them merged with `--fleet-config`.
-    ScanSpec("fleet_config", rs.fleet_config, ("repo_root",), STAGE_SETUP, private=True,
-             degrade=False, gate_reason=_SELF_DEGRADING),
+    _spec("fleet_config", rs.fleet_config),
     # The ghsync root GitLab includes resolve against (#766, lib/ci_includes.py):
     # None here; the headless signals run provides `--ghsync-root`.
-    ScanSpec("ghsync_root", rs.ghsync_root, ("repo_root",), STAGE_SETUP, private=True,
-             degrade=False, gate_reason=_SETUP),
-    ScanSpec("measured_commit", rs.measured_commit, ("repo_root",), STAGE_SETUP, private=True,
-             degrade=False, gate_reason=_SETUP),
-    ScanSpec("superseded", rs.superseded_run, ("assess_dir", "run_date", "measured_commit"),
-             STAGE_SETUP, private=True, degrade=False, gate_reason=_SETUP),
+    _spec("ghsync_root", rs.ghsync_root),
+    _spec("measured_commit", rs.measured_commit),
+    _spec("superseded", rs.superseded_run),
     # Files first flagged only by a never-finalized run and now excluded (#356).
-    ScanSpec(
-        "unfinalized", rs.unfinalized_exclusions,
-        ("assess_dir", "superseded", "first_flagged", "current", "diff", "excludes"),
-        STAGE_SETUP, private=True, degrade=False, gate_reason=_SETUP,
-    ),
+    _spec("unfinalized", rs.unfinalized_exclusions),
     # Promissory markers, scanned here because the hotspot pages carry each
     # file's marker debt; published later as promissory_markers.
-    ScanSpec("promissory", cs.promissory_scan, ("repo_root", "excludes", "scope"), STAGE_SETUP,
-             private=True, label="promissory_markers"),
+    _spec("promissory", cs.promissory_scan),
     # Accretion ratchet over every file: never raises (it degrades to
     # available=False itself) and returns a dataclass, not a dict.
-    ScanSpec("accretion_scan", cs.accretion_scan, ("repo_root",), STAGE_SETUP, private=True,
-             degrade=False, gate_reason=_SELF_DEGRADING),
-    ScanSpec("accretion_by_file", cs.accretion_by_file, ("accretion_scan",), STAGE_SETUP,
-             private=True, degrade=False, gate_reason=_SETUP),
+    _spec("accretion_scan", cs.accretion_scan),
+    _spec("accretion_by_file", cs.accretion_by_file),
     # One repository test index, shared by test_focus and the hotspot pages.
-    ScanSpec("hot_test_index", cs.hot_test_index, ("repo_root", "current"), STAGE_SETUP,
-             private=True, degrade=False, gate_reason=_SETUP),
+    _spec("hot_test_index", cs.hot_test_index),
     # The first 25 run-context keys; the four wiki keys are filled after the
     # wiki is written (lib/run_publish.py).
-    ScanSpec(
-        "run_header", rs.run_header,
-        ("run_id", "run_date", "run_scope", "measured_commit", "current", "prior",
-         "instruction_grading", "diff", "unfinalized"),
-        STAGE_SETUP, degrade=False, gate_reason=_SETUP, spread=rs.RUN_HEADER_KEYS,
-    ),
-    ScanSpec("working_notes", cs.working_notes, ("repo_root",), STAGE_SETUP, private=True,
-             degrade=False, gate_reason=_SELF_DEGRADING),
+    _spec("run_header", rs.run_header, spread=rs.RUN_HEADER_KEYS),
+    _spec("working_notes", cs.working_notes),
     # Layer 0 navigability: the doc graph.
-    ScanSpec("doc_graph", cs.doc_graph, ("repo_root", "excludes", "scope", "working_notes"),
-             STAGE_SETUP),
+    _spec("doc_graph", cs.doc_graph),
     # -- STAGE_READ_SIDE ------------------------------------------------------
     # Doc staleness: each doc's last content change against its code subject's
     # churn, following renames (#425), over the doc graph's doc->code edges.
-    ScanSpec("doc_staleness", cs.doc_staleness, ("repo_root", "doc_graph", "excludes", "scope"),
-             STAGE_READ_SIDE),
-    ScanSpec("stale_hubs", cs.stale_hubs, ("doc_graph", "doc_staleness"), STAGE_READ_SIDE),
+    _spec("doc_staleness", cs.doc_staleness),
+    _spec("stale_hubs", cs.stale_hubs),
     # Degenerate git history (every file ~1 commit): churn-derived findings are
     # discounted. Read off the doc-staleness block, its single source of truth.
-    ScanSpec("churn_degenerate", cs.churn_degenerate, ("doc_staleness",), STAGE_READ_SIDE),
+    _spec("churn_degenerate", cs.churn_degenerate),
     # The doc x complexity join (Signal C), read by the keyhole documentation
     # block. A failed join degrades that block, not the run.
-    ScanSpec("doc_join", cs.doc_join, ("current", "doc_staleness", "repo_root"),
-             STAGE_READ_SIDE, private=True, label="documentation"),
+    _spec("doc_join", cs.doc_join),
     # Instruction-surface integrity (Layer 0): uncommitted instruction files,
     # broken instruction references, and redacted sensitive content (#56).
-    ScanSpec("untracked_instruction_files", cs.untracked_instruction_files,
-             ("instruction_grading",), STAGE_READ_SIDE),
-    ScanSpec("broken_instruction_refs", cs.instruction_refs,
-             ("doc_graph", "instruction_grading"), STAGE_READ_SIDE),
-    ScanSpec("sensitive_instruction_content", cs.sensitive_instruction_content,
-             ("instruction_grading",), STAGE_READ_SIDE),
+    _spec("untracked_instruction_files", cs.untracked_instruction_files),
+    _spec("broken_instruction_refs", cs.instruction_refs),
+    _spec("sensitive_instruction_content", cs.sensitive_instruction_content),
     # Software repo or knowledge base (#224); a knowledge base marks L2-L7 N/A.
-    ScanSpec("archetype", cs.archetype, ("repo_root",), STAGE_READ_SIDE),
+    _spec("archetype", cs.archetype),
     # Instruction files above the repo root that reach no fresh clone (#57).
-    ScanSpec("ancestor_instruction_files", cs.ancestor_instructions, ("repo_root",),
-             STAGE_READ_SIDE),
+    _spec("ancestor_instruction_files", cs.ancestor_instructions),
     # Progressive disclosure: skills factoring and oversized instruction files.
-    ScanSpec("skills", cs.skills_blocks, ("instruction_grading",), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_SERIALISER,
-             spread=("skills_present", "skills_count", "skill_files")),
-    ScanSpec("instruction_file_size", cs.instruction_sizes, ("instruction_files",),
-             STAGE_READ_SIDE),
+    _spec("skills", cs.skills_blocks, spread=("skills_present", "skills_count", "skill_files")),
+    _spec("instruction_file_size", cs.instruction_sizes),
     # Layer 1 liveness. A failed scan yields explicit unavailable blocks, never
     # "no observability"; capability keys appear only when a language is found.
-    ScanSpec("liveness", cs.liveness_scan, ("repo_root", "excludes", "scope"), STAGE_READ_SIDE,
-             private=True),
-    ScanSpec("liveness_blocks", cs.liveness_blocks, ("liveness",), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_SERIALISER,
-             spread=("dead_code", "observability", "capability_offers", "language_capabilities")),
-    ScanSpec("structure_scan", cs.structure_scan, ("repo_root", "excludes", "scope"),
-             STAGE_READ_SIDE, private=True, label="structure"),
+    _spec("liveness", cs.liveness_scan),
+    _spec("liveness_blocks", cs.liveness_blocks,
+          spread=("dead_code", "observability", "capability_offers", "language_capabilities")),
+    _spec("structure_scan", cs.structure_scan),
     # Line coverage from a report the project already generated; /assess never
     # runs the suite. None when absent or malformed.
-    ScanSpec("coverage_data", cs.coverage_data, ("repo_root",), STAGE_READ_SIDE, private=True,
-             degrade=False, gate_reason=_SELF_DEGRADING),
-    ScanSpec("coverage_report", cs.coverage_report, ("repo_root", "coverage_data"),
-             STAGE_READ_SIDE),
+    _spec("coverage_data", cs.coverage_data),
+    _spec("coverage_report", cs.coverage_report),
     # Layer 1 write-side truth pressure, read-only (the mutation pass is off).
-    ScanSpec("test_pressure_scan", cs.test_pressure_scan,
-             ("repo_root", "current", "coverage_data"), STAGE_READ_SIDE,
-             private=True, label="test_pressure"),
+    _spec("test_pressure_scan", cs.test_pressure_scan),
     # normalize_test_pressure turns a failed scan into the block's own
     # unavailable shape (null mutation_config_present, empty heuristic
     # buckets), which its readers rely on; the bare marker would drop those.
-    ScanSpec("test_pressure", cs.test_pressure_block, ("test_pressure_scan",), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_SELF_DEGRADING),
+    _spec("test_pressure", cs.test_pressure_block),
     # Layer 6 cap while the mutation tier has not run; assess_finalize enforces it.
-    ScanSpec("mutation_not_run_cap", cs.mutation_cap, ("test_pressure",), STAGE_READ_SIDE),
-    ScanSpec("test_focus", cs.test_focus,
-             ("repo_root", "current", "coverage_data", "test_pressure", "hot_test_index"),
-             STAGE_READ_SIDE),
-    ScanSpec("promissory_markers", cs.promissory_block, ("promissory",), STAGE_READ_SIDE),
+    _spec("mutation_not_run_cap", cs.mutation_cap),
+    _spec("test_focus", cs.test_focus),
+    _spec("promissory_markers", cs.promissory_block),
     # Agent-operations guardrails (permission allowlists, hooks, sandbox rules,
     # routine definitions): Layer 8 workflow-maturity evidence. Tracked-only
     # credit - an uncommitted settings file reaches no clone. Deliberately
     # excludes .claude/agents/ and .claude/skills/ (Layer 0's evidence) so the
     # two layers never double-count the same artifact.
-    ScanSpec("agent_ops", scan_agent_ops, ("repo_root",), STAGE_READ_SIDE),
+    _spec("agent_ops", scan_agent_ops),
     # Configuration drift (Layer 5 lying signal): tracked ruleset and
     # branch-protection snapshots diffed against the live GitHub setting via
     # `gh`. Optional: no remote, no `gh`, no auth or a refused read degrades to
     # available: false with the reason, never a clean result.
-    ScanSpec("config_drift", scan_config_drift, ("repo_root",), STAGE_READ_SIDE, network=True),
+    _spec("config_drift", scan_config_drift),
     # The shared sample of merged changes (#715): up to 30 merged in the run
     # window, newest merge first. Private; review_reality and delivery read it,
     # so one listing serves both and they describe the same changes. Offline it reads
     # the remote only: no_remote with none, else network (#908).
-    ScanSpec("merged_sample", merged_sample, ("repo_root", "history_window", "run_date"),
-             STAGE_READ_SIDE, private=True, network=True, offline_fn=offline_merged_sample),
+    _spec("merged_sample", merged_sample, offline_fn=offline_merged_sample),
     # Every sampled GitLab merge request's notes, read once, kept as facts (#716).
-    ScanSpec("gitlab_note_facts", gitlab_note_facts, ("merged_sample", "fleet_config"),
-             STAGE_READ_SIDE, private=True, network=True),
+    _spec("gitlab_note_facts", gitlab_note_facts),
     # Offline the sample is a reason, which the block passes through (#908).
-    ScanSpec("review_reality", review_reality_from_sample, ("merged_sample", "gitlab_note_facts"),
-             STAGE_READ_SIDE, network=True, offline_fn=review_reality_from_sample),
+    _spec("review_reality", review_reality_from_sample, offline_fn=review_reality_from_sample),
     # Delivery figures (#715): time to merge, first human comment, AI review;
     # review_reality's approved and self-merged shares are copied, not recomputed.
-    ScanSpec("delivery", scan_delivery,
-             ("merged_sample", "review_reality", "fleet_config", "gitlab_note_facts"),
-             STAGE_READ_SIDE, network=True),
-    ScanSpec("gate_cost_estimate", estimate_gate_cost, ("repo_root",), STAGE_READ_SIDE, network=True),
+    _spec("delivery", scan_delivery),
+    _spec("gate_cost_estimate", estimate_gate_cost),
     # Layer 6: is a coverage threshold *configured*, not just measured? Each gate
     # names its file, line and threshold as written; none found reads
     # configured: false, never inferred from coverage_report. A scoped run reads
     # the scope plus the root CI and task-runner files (issue #488).
-    ScanSpec(
-        "coverage_gate", detect_coverage_gate,
-        ("repo_root", "scope", "excludes"), STAGE_READ_SIDE,
-    ),
+    _spec("coverage_gate", detect_coverage_gate),
     # Accretion filtered to files already in the top complexity/size band.
-    ScanSpec("accretion_ratchet", cs.accretion_ratchet, ("accretion_scan", "current"),
-             STAGE_READ_SIDE),
+    _spec("accretion_ratchet", cs.accretion_ratchet),
     # Keyhole readiness: structure, behaviour, documentation, understanding and
     # runtime blocks, derived findings, attention and the report products.
     # integrate() wraps each block in its own catch-all.
-    ScanSpec(
-        "keyhole", cs.keyhole,
-        ("repo_root", "current", "doc_staleness", "liveness_blocks", "structure_scan",
-         "test_pressure", "promissory", "accretion_ratchet", "archetype", "excludes", "scope",
-         "rename_map", "doc_join"),
-        STAGE_READ_SIDE, private=True, degrade=False, gate_reason=_SELF_DEGRADING,
-    ),
-    ScanSpec("keyhole_blocks", cs.keyhole_blocks, ("keyhole",), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_SERIALISER, spread=KEYHOLE_KEYS),
-    ScanSpec("exclusion_disclosures", cs.exclusion_disclosures, ("keyhole", "excludes"),
-             STAGE_READ_SIDE, degrade=False, gate_reason=_SERIALISER,
-             spread=("excluded_by_config", "excluded_as_archive", "pruned_finding_paths")),
-    ScanSpec("excluded_generated", cs.generated_exclusions, ("current",), STAGE_READ_SIDE),
+    _spec("keyhole", cs.keyhole),
+    _spec("keyhole_blocks", cs.keyhole_blocks, spread=KEYHOLE_KEYS),
+    _spec("exclusion_disclosures", cs.exclusion_disclosures,
+          spread=("excluded_by_config", "excluded_as_archive", "pruned_finding_paths")),
+    _spec("excluded_generated", cs.generated_exclusions),
     # Declared ownership map vs where the code lives; omitted with no map.
-    ScanSpec("structure_drift_block", cs.structure_drift, ("repo_root", "keyhole"),
-             STAGE_READ_SIDE, degrade=False, gate_reason=_SELF_DEGRADING,
-             spread=("structure_drift",)),
+    _spec("structure_drift_block", cs.structure_drift, spread=("structure_drift",)),
     # "unknown" when the manifest cannot be read: a string, as decline reads it.
-    ScanSpec("plugin_version", rs.read_plugin_version, (), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_SELF_DEGRADING),
+    _spec("plugin_version", rs.read_plugin_version),
     # Active permanent declines of the optional tools (.assess/.no-<tool>).
-    ScanSpec("decline", cs.decline_blocks, ("assess_dir", "plugin_version"), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_SERIALISER,
-             spread=("decline_markers", "reoffer_mutation", "decline_disclosures")),
+    _spec("decline", cs.decline_blocks,
+          spread=("decline_markers", "reoffer_mutation", "decline_disclosures")),
     # The owner's condition exclusions (.assess/config.toml [checks], #910); the level reads them.
-    ScanSpec("owner_exclusions", cs.owner_exclusions, ("repo_root",), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_SELF_DEGRADING),
+    _spec("owner_exclusions", cs.owner_exclusions),
     # Monorepo units (#862): the shallowest build-manifest folders, a workspace root's
     # declared members in its place, or the [[units]] of .assess/config.toml. Core-only.
-    ScanSpec("units", cs.units, ("repo_root", "excludes"), STAGE_READ_SIDE),
+    _spec("units", cs.units),
     # Headless runs pre-record every offer as skipped; never inferred from stdin.
-    ScanSpec("offers_block", cs.offers_blocks, ("non_interactive",), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_SERIALISER, spread=("interactive", "offers")),
-    ScanSpec("uninstall_instructions_path", cs.uninstall_instructions_path, (), STAGE_READ_SIDE),
+    _spec("offers_block", cs.offers_blocks, spread=("interactive", "offers")),
+    _spec("uninstall_instructions_path", cs.uninstall_instructions_path),
     # -- STAGE_FINAL: last key of run-context.json ----------------------------
-    ScanSpec("anomalies", cs.anomalies, ("run_header",), STAGE_FINAL),
+    _spec("anomalies", cs.anomalies),
     # -- STAGE_POST_OFFERS ----------------------------------------------------
     # Checkable claims in the graded instruction files ("`x.sh` is enforced in
     # CI", "Node 20.11.0 is pinned in `.nvmrc`"), verified against the repo; a
     # failed claim is a Layer 0 lying signal. Zeros when none.
-    ScanSpec(
-        "instruction_claims", scan_instruction_claims,
-        ("repo_root", "instruction_files"), STAGE_POST_OFFERS,
-    ),
+    _spec("instruction_claims", scan_instruction_claims),
     # Claude Code configuration (Layer 0): legacy command files and skill,
     # command and agent frontmatter the runtime silently ignores, checked
     # against the documented field sets pinned in lib/claude_config_fields.py.
     # available: false when the run root has no .claude/ and no plugin
     # manifest. Last in the table so every earlier key keeps its position.
-    ScanSpec(
-        "claude_config", scan_claude_config,
-        ("repo_root", "scope", "excludes"), STAGE_POST_OFFERS,
-    ),
+    _spec("claude_config", scan_claude_config),
     # Nested and path-scoped instruction files (Layer 0, issue #511): nested
     # CLAUDE.md / AGENTS.md / GEMINI.md, .claude/rules, Copilot and Cursor
     # rules, each graded with its scope; the always-loaded budget per tool;
     # and dead scope globs, ignored .cursor .md files, a CLAUDE.md shadowing a
     # different AGENTS.md, and nested files that repeat their parent.
-    ScanSpec(
-        "nested_instructions", nested_instruction_surface,
-        ("repo_root", "excludes"), STAGE_POST_OFFERS,
-    ),
+    _spec("nested_instructions", nested_instruction_surface),
     # Committed agent harness (informational): what the repo's agent config
     # runs on every session (settings and frontmatter hooks, env, apiKeyHelper,
     # .mcp.json, .cursor/hooks.json) and the settings that expose a secret or
     # widen it (tracked settings.local.json or .env, broad Bash allow, hidden
     # Unicode, credential mounts, comment-triggered deploys). Issue #513.
-    ScanSpec(
-        "agent_harness", scan_agent_harness,
-        ("repo_root", "scope", "excludes"), STAGE_POST_OFFERS,
-    ),
+    _spec("agent_harness", scan_agent_harness),
     # Agent working environment (Layer 5, issue #514): committed setup
     # (copilot-setup-steps.yml, devcontainer, Cursor environment, SessionStart
     # hook, setup script or target), the check command a graded instruction file
     # names, lockfiles per manifest, the Layer 5 Partial cap, and the optional
     # `gh` CI-duration probe. Reads agent_harness for the SessionStart hooks.
     # Headless runs call it with the probe off (ci_duration reports not_probed).
-    ScanSpec(
-        "agent_environment", scan_agent_environment,
-        ("repo_root", "instruction_files", "agent_harness", "excludes"), STAGE_POST_OFFERS,
-        network=True, offline_fn=partial(scan_agent_environment, probe_ci=False),
-    ),
+    _spec("agent_environment", scan_agent_environment,
+          offline_fn=partial(scan_agent_environment, probe_ci=False)),
     # Shared tooling (issue #566): the shared CI sources a pipeline includes
     # (GitLab `include: project:` / `include: component:`, GitHub reusable
     # workflows) and the agent marketplaces the repository hosts or names
     # (`.claude-plugin/marketplace.json`, `extraKnownMarketplaces`), each with a
     # stable id so a fleet roll-up counts distinct sources. Offline file reads.
-    ScanSpec("shared_tooling", scan_shared_tooling, ("repo_root",), STAGE_POST_OFFERS),
+    _spec("shared_tooling", scan_shared_tooling),
     # AI review committed in CI (issue #696): a GitHub workflow step running a
     # pinned review action, a GitLab review component or include (pinned, or
     # listed in [review] ai_review_components), or an AI review app's config
@@ -613,13 +570,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # GitLab's merged CI configuration (#796, lib/gitlab_ci_lint.py): the CI lint API,
     # asked only where an include did not resolve offline. Private, held in memory;
     # review_automation and ci_checks read it. Offline it reads nothing.
-    ScanSpec("gitlab_merged_ci", read_merged_ci, ("repo_root", "ghsync_root"), STAGE_POST_OFFERS,
-             private=True, network=True, offline_fn=no_merged_ci),
-    ScanSpec("review_automation", scan_review_automation,
-             ("repo_root", "fleet_config", "ghsync_root", "gitlab_merged_ci"),
-             STAGE_POST_OFFERS),
-    ScanSpec("review_evidence", review_evidence, ("review_automation", "review_reality"),
-             STAGE_POST_OFFERS),
+    _spec("gitlab_merged_ci", read_merged_ci, offline_fn=no_merged_ci),
+    _spec("review_automation", scan_review_automation),
+    _spec("review_evidence", review_evidence),
     # CI checks (issue #698): whether a GitHub Actions or GitLab CI line runs a
     # test or lint command (check_command.is_check_command); null when no
     # check is found but a CI file pulls jobs this run cannot read (an unresolved
@@ -632,87 +585,70 @@ SCANS: tuple[ScanSpec, ...] = (
     # Offline itself; under --platform it also reads external_ci (#928, lib/external_ci.py):
     # the check runs and statuses of the sampled merged pull requests, at most two GETs each.
     # Private, two counts in memory; offline it reads nothing.
-    ScanSpec("external_ci", read_external_ci, ("merged_sample",), STAGE_POST_OFFERS,
-             private=True, network=True, offline_fn=no_external_ci),
-    ScanSpec("ci_checks", scan_ci_checks,
-             ("repo_root", "ghsync_root", "gitlab_merged_ci", "external_ci"), STAGE_POST_OFFERS),
+    _spec("external_ci", read_external_ci, offline_fn=no_external_ci),
+    _spec("ci_checks", scan_ci_checks),
     # Agent building (issue #689): what the repository builds with agents, an
     # inventory and not scored - agent SDKs and frameworks in manifests, agent
     # configuration, a counts-only tool-call loop / MCP server heuristic and the
     # issue-tracker plus Git-host API-client pairing, reduced to one class. The
     # fleet roll-up counts classes per group and clusters similar builders.
-    ScanSpec("agent_building", scan_agent_building, ("repo_root",), STAGE_POST_OFFERS),
+    _spec("agent_building", scan_agent_building),
     # Deterministic layer grades (issue #620): instructions_grade republished as
     # a block, so a maturity model can name it in a headless or full run, with
     # the three-way instruction presence (root, nested_only, none; issue #821)
     # read from the root grading and the nested block.
-    ScanSpec("layer_grades", scan_layer_grades, ("instruction_grading", "nested_instructions"),
-             STAGE_POST_OFFERS),
+    _spec("layer_grades", scan_layer_grades),
     # Top 3 candidates read from measured gaps. Post-offers since #821: the
     # root-instructions gap reads layer_grades.
-    ScanSpec("gap_actions", cs.gap_actions,
-             ("coverage_report", "doc_graph", "current", "archetype", "layer_grades",
-              "nested_instructions"),
-             STAGE_POST_OFFERS),
+    _spec("gap_actions", cs.gap_actions),
     # Instruction placement (Layer 0, issue #559): each instruction file split on
     # its headings, every section classified always-on or fetch-on-need, and the
     # sections to move named with line ranges and a suggested home; agent and
     # SKILL.md files over 200 lines reported separately. Advice; the grader
     # scores instruction files on the same split (#560). Reads
     # nested_instructions for the nested files.
-    ScanSpec(
-        "instruction_placement", scan_instruction_placement,
-        ("repo_root", "instruction_files", "nested_instructions", "scope", "excludes"),
-        STAGE_POST_OFFERS,
-    ),
+    _spec("instruction_placement", scan_instruction_placement),
     # Cross-agent instruction consistency (issue #768): whether the root
     # instruction files of every agent system present (Claude Code, AGENTS.md,
     # Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue,
     # Zed; lib/agent_systems.py) name the same check commands and thresholds,
     # and whether each links to one canonical file. Feeds the agent-consistency row.
-    ScanSpec("agent_consistency", scan_agent_consistency, ("repo_root", "excludes"),
-             STAGE_POST_OFFERS),
+    _spec("agent_consistency", scan_agent_consistency),
     # AI-assisted change share (issue #547): commits in the churn window with an
     # AI-assistant Co-authored-by trailer, as counts and a share. A lower bound
     # on agent use, never an estimate; merge commits and automation bots
     # excluded. Since #695 also the commits an agent identity authored (pinned
     # defaults plus the [ai_usage] rules of `fleet_config`). Matcher: lib.agent_identity.
-    ScanSpec(
-        "ai_usage", scan_ai_usage, ("repo_root", "scope", "history_window", "fleet_config"),
-        STAGE_POST_OFFERS,
-    ),
+    _spec("ai_usage", scan_ai_usage),
     # Checkable claims across the doc set (issue #491): the instruction_claims
     # kinds run over docs/ (minus the historical design records),
     # skills/*/references/ and skills/*/SKILL.md, plus the cross-document kind
     # - two files pinning different versions in one file or counting one glob
     # differently, citing every site. Layer 0 lying-signal evidence.
-    ScanSpec(
-        "doc_claims", scan_doc_claims,
-        ("repo_root", "instruction_files", "scope", "excludes"), STAGE_POST_OFFERS,
-    ),
+    _spec("doc_claims", scan_doc_claims),
     # Guardrails stated (issue #767): the gates the repository configures (ruff or
     # flake8 complexity limit, the coverage_gate floor, pre-commit hooks, mypy
     # strict), each checked against the graded instruction files; an unstated gate
     # carries a ready one-line snippet. stated_pct feeds the guardrails-stated row.
-    ScanSpec(
-        "guardrails", scan_guardrails,
-        ("repo_root", "instruction_files", "coverage_gate", "excludes"), STAGE_POST_OFFERS,
-    ),
+    _spec("guardrails", scan_guardrails),
 )
 
 
 # The verified tally and the autonomy Step (lib/level_tally.py, #744): the
 # default maturity model over the finished run context. Core-only: the
 # headless runner never reports it; /fleet computes the same from each row.
-SCANS = (*SCANS, ScanSpec("level", cs.level, LEVEL_READS, STAGE_POST_OFFERS))
+# core_scans.level zips its blocks with LEVEL_READS, so checks/core/level.toml must list
+# exactly those reads in that order: checked here, at import, on every run.
+SCANS = (*SCANS, pinned_reads(_spec("level", cs.level), LEVEL_READS))
 # The deterministic headline (lib/headline.py, #747): the Step, its next unlock and
 # "Verified practices: N of M measured", worded from the level block. The report
 # pastes it verbatim and the badge and log entry carry its summary.
-SCANS = (*SCANS, ScanSpec("headline", cs.headline, ("level",), STAGE_POST_OFFERS))
+SCANS = (*SCANS, _spec("headline", cs.headline))
 # Monorepo unit readings (lib/unit_readings.py, #863): the scoped and override scans again
 # for each unit of the units block, every condition tagged unit or inherited. Core-only.
-SCANS = (*SCANS, ScanSpec("unit_readings", cs.unit_readings,
-                          (*UNIT_OWN_READS, *UNIT_EXTERNAL_READS), STAGE_POST_OFFERS))
+# core_scans.unit_readings splits its arguments by position, so the manifest reads are pinned.
+SCANS = (*SCANS, pinned_reads(_spec("unit_readings", cs.unit_readings),
+                              (*UNIT_OWN_READS, *UNIT_EXTERNAL_READS)))
 
 validate(SCANS)
 

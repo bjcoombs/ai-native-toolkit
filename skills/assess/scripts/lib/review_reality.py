@@ -20,7 +20,18 @@ Block (``review_reality`` in run-context.json)::
      "review_required": bool | None,      # ruleset pull_request rule or classic protection,
                                           # each with required_approving_review_count >= 1
      "hollow_required_review": bool | None,  # review_required and reviewed_share < 0.2
-     "required_approval_bypassed": bool | None}  # review_required and approved_share < 0.2
+     "required_approval_bypassed": bool | None,  # review_required and approved_share < 0.2
+     "sequence": [str],      # one token per sampled change, oldest merge first (#943)
+     "bot_sequence": [str]}  # "bot", "none" or "unknown" per change, same order
+
+``sequence`` reads each change with the predicates behind the shares: ``approved``
+(counted by ``approved_share``), ``reviewed`` (counted by ``reviewed_share`` but not
+approved), ``unreviewed`` (neither) or ``unknown`` (GitLab only: a merge request whose
+notes decide nothing, the one that makes ``reviewed_share`` None). The sample lists the
+newest merge first, so both lists are the sample reversed. ``bot_sequence`` marks a
+change carrying review-bot output: on GitHub a comment by a bot (it never counts as
+review, so a bot-only change reads ``unreviewed``), on GitLab an AI-review note (it
+counts as review there). Tokens only: no number, title, author or reviewer.
 
 The two flags answer different questions. ``hollow_required_review``: did anyone
 other than the author look at the change at all (an advisory bot's review
@@ -81,7 +92,7 @@ unwindowed, so figures shift with the window); `scan_review_reality(repo_root,
 history_window=None, run_date=None)` draws the sample itself. It
 emits `review_reality: {available, merged_count, oldest_merged_days_ago,
 reviewed_share, approved_share, bot_review_share, self_merged_share,
-review_required, hollow_required_review, required_approval_bypassed}`.
+review_required, hollow_required_review, required_approval_bypassed, sequence, bot_sequence}` (the two token lists, oldest merge first, feed the review strip in `lib/assess_diagrams_review.py`, #943).
 `reviewed_share` counts a review in any state by any account other than the
 author; `approved_share` counts only `APPROVED` ones;
 `bot_review_share` counts a comment by a bot other than `github-actions` (nothing
@@ -144,6 +155,26 @@ HOLLOW_THRESHOLD = 0.2
 # Fewer merged pull requests than this are too few to call a rule bypassed:
 # both flags are null below it.
 MIN_SAMPLE = 5
+
+# ``sequence`` tokens (#943), in the order the review strip's key lists them.
+APPROVED, REVIEWED, UNREVIEWED, UNKNOWN = "approved", "reviewed", "unreviewed", "unknown"
+SEQUENCE_STATES = (APPROVED, REVIEWED, UNREVIEWED, UNKNOWN)
+# ``bot_sequence`` tokens.
+BOT, NO_BOT = "bot", "none"
+
+
+def change_state(approved: bool, reviewed: bool | None) -> str:
+    """One change's ``sequence`` token from the two share predicates."""
+    if approved:
+        return APPROVED
+    if reviewed is None:
+        return UNKNOWN
+    return REVIEWED if reviewed else UNREVIEWED
+
+
+def bot_token(verdict: bool | None) -> str:
+    """One change's ``bot_sequence`` token."""
+    return UNKNOWN if verdict is None else BOT if verdict else NO_BOT
 
 
 def _share(count: int, total: int) -> float | None:
@@ -268,8 +299,9 @@ def summarize(prs: list[dict[str, Any]], required: bool | None,
     bots = bots or BotClassifier()
     now = now or datetime.now(timezone.utc)
     total = len(prs)
-    reviewed = sum(_reviewed_by_other(pr) for pr in prs)
-    approved = sum(_reviewed_by_other(pr, approving=True) for pr in prs)
+    reviewed_flags = [_reviewed_by_other(pr) for pr in prs]
+    approved_flags = [_reviewed_by_other(pr, approving=True) for pr in prs]
+    reviewed, approved = sum(reviewed_flags), sum(approved_flags)
     self_merged = sum(_self_merged(pr) for pr in prs)
     verdicts = [_has_bot_comment(pr, bots) for pr in prs]
     bot_share = None if None in verdicts else _share(sum(bool(v) for v in verdicts), total)
@@ -287,6 +319,8 @@ def summarize(prs: list[dict[str, Any]], required: bool | None,
         "review_required": required,
         "hollow_required_review": _flag(required, reviewed_share, total),
         "required_approval_bypassed": _flag(required, approved_share, total),
+        "sequence": [change_state(a, r) for a, r in zip(approved_flags, reviewed_flags)][::-1],
+        "bot_sequence": [bot_token(v) for v in verdicts][::-1],
     }
 
 
@@ -389,6 +423,7 @@ def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, A
     facts: Sequence[NoteFacts | None] = (
         notes if notes is not None and len(notes) == len(mrs) else [None] * len(mrs))
     reviewed: list[bool | None] = []
+    approved_flags: list[bool] = []
     try:
         approved = self_merged = 0
         ages: list[int] = []
@@ -401,6 +436,7 @@ def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, A
             approvals = glab_api(project, f"projects/{enc}/merge_requests/{iid}/approvals")
             by_other = _approved_by_other(approvals, author)
             approved += by_other
+            approved_flags.append(by_other)
             fact = facts[len(reviewed)] if len(reviewed) < len(facts) else None
             reviewed.append(_any_of(by_other, fact.human_comment, fact.ai_review)
                             if fact is not None else (True if by_other else None))
@@ -430,6 +466,8 @@ def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, A
         "review_required": required,
         "hollow_required_review": hollow,
         "required_approval_bypassed": bypassed,
+        "sequence": [change_state(a, r) for a, r in zip(approved_flags, reviewed)][::-1],
+        "bot_sequence": [bot_token(v) for v in bots][::-1],
     }
 
 
