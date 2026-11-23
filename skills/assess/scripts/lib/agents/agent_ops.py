@@ -30,6 +30,17 @@ rule (an uncommitted settings file reaches no clone). Deliberately excludes
 `.claude/agents/` and `.claude/skills/` - those are Layer 0's evidence - so the
 two layers never double-count. Pure stdlib JSON/filesystem reads plus
 `git_churn.tracked_files`.
+
+Central guardrails (#1153): managed settings override every repository's, so
+`permissions_encoded` also reads true when a managed source on the machine running
+the check lists a permission entry (`lib.agents.managed_settings`, kept as the
+`managed` sub-block; `permissions_source` says which). When the repository has none
+and a managed source exists but cannot be read, it reads null with
+`permissions_encoded_reason: managed_settings_unreadable`, so the tally reports the
+condition not measured, never unmet. With no managed source on the machine the
+repository reading stands. A settings file's `permissions.defaultMode` (auto mode
+included) is recorded as `default_mode`, information only: it never fails the
+practice, and deny rules apply in every mode.
 """
 from __future__ import annotations
 
@@ -37,6 +48,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from lib.agents.managed_settings import managed_permissions, read_managed_settings
 from lib.git_churn import is_tracked, tracked_files
 
 # Candidate settings files, repo-root-relative. Order is the report order.
@@ -52,6 +64,13 @@ _ROUTINE_DIRS = (
 )
 
 _HOOKS_DIR = ".claude/hooks"
+
+# permissions.defaultMode values Claude Code documents
+# (https://code.claude.com/docs/en/permission-modes); any other string reads "other".
+_DEFAULT_MODES = frozenset({
+    "default", "manual", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions",
+})
+UNREADABLE_MANAGED = "managed_settings_unreadable"
 
 
 def _count_list(value: Any) -> int:
@@ -87,6 +106,9 @@ def _scan_settings_file(
         entry["allow_count"] = _count_list(permissions.get("allow"))
         entry["deny_count"] = _count_list(permissions.get("deny"))
         entry["ask_count"] = _count_list(permissions.get("ask"))
+        mode = permissions.get("defaultMode")
+        if isinstance(mode, str):
+            entry["default_mode"] = mode if mode in _DEFAULT_MODES else "other"
     hooks = data.get("hooks")
     if isinstance(hooks, dict):
         entry["hook_events"] = len(hooks)
@@ -127,7 +149,10 @@ def scan_agent_ops(repo_root: Path) -> dict[str, Any]:
     **tracked** evidence:
 
     - ``permissions_encoded``: a tracked settings file carries at least one
-      permission ``allow`` / ``deny`` / ``ask`` entry.
+      permission ``allow`` / ``deny`` / ``ask`` entry (``permissions_source``
+      ``repository``), or a managed source does (``managed``); null with
+      ``permissions_encoded_reason`` ``managed_settings_unreadable`` when neither does and
+      a managed source could not be read, since a central rule may sit there.
     - ``hooks_present``: a tracked settings file configures hook events, or
       ``.claude/hooks/`` holds at least one tracked script.
     - ``routines_present``: a routine dir holds at least one tracked file.
@@ -143,8 +168,9 @@ def scan_agent_ops(repo_root: Path) -> dict[str, Any]:
     hooks_dir = _scan_dir(repo_root, _HOOKS_DIR, tracked)
     routine_dirs = [_scan_dir(repo_root, rel, tracked) for rel in _ROUTINE_DIRS]
 
+    managed = read_managed_settings()
     tracked_settings = [s for s in settings if s["tracked"]]
-    permissions_encoded = any(
+    in_repo = any(
         s["allow_count"] + s["deny_count"] + s["ask_count"] > 0
         for s in tracked_settings
     )
@@ -154,14 +180,25 @@ def scan_agent_ops(repo_root: Path) -> dict[str, Any]:
     )
     routines_present = any(d["tracked_count"] > 0 for d in routine_dirs)
 
+    summary: dict[str, Any] = {
+        "permissions_encoded": in_repo,
+        "hooks_present": hooks_present,
+        "routines_present": routines_present,
+    }
+    if in_repo:
+        summary["permissions_source"] = "repository"
+    elif managed_permissions(managed):
+        summary["permissions_encoded"] = True
+        summary["permissions_source"] = "managed"
+    elif managed["state"] == "unreadable":
+        summary["permissions_encoded"] = None
+        summary["permissions_encoded_reason"] = UNREADABLE_MANAGED
+
     return {
         "available": True,
         "settings": settings,
         "hooks_dir": hooks_dir,
         "routine_dirs": routine_dirs,
-        "summary": {
-            "permissions_encoded": permissions_encoded,
-            "hooks_present": hooks_present,
-            "routines_present": routines_present,
-        },
+        "managed": managed,
+        "summary": summary,
     }

@@ -51,6 +51,7 @@ class AgentOpsSettingsFile(TypedDict):
     ask_count: int
     hook_events: int
     sandbox_configured: bool
+    default_mode: NotRequired[str]  # information only (#1153): never fails the practice
 
 
 class AgentOpsDir(TypedDict):
@@ -62,12 +63,36 @@ class AgentOpsDir(TypedDict):
     tracked_count: int
 
 
-class AgentOpsSummary(TypedDict):
-    """The three booleans the maturity model reads; each is true only on tracked evidence."""
+class ManagedSource(TypedDict):
+    """One managed settings source that exists on the machine, by kind token; counts only."""
 
-    permissions_encoded: bool
+    kind: str
+    parse_ok: bool
+    allow_count: int
+    deny_count: int
+    ask_count: int
+    hook_events: int
+
+
+class ManagedSettingsBlock(TypedDict):
+    """``agent_ops.managed``: the machine's managed settings (``lib.agents.managed_settings``)."""
+
+    state: str
+    sources: list[ManagedSource]
+    reason: NotRequired[str]
+
+
+class AgentOpsSummary(TypedDict):
+    """The three signals the maturity model reads. ``permissions_encoded`` is true on tracked
+    repository evidence or a managed source's permission entry, and null with
+    ``permissions_encoded_reason`` when neither holds and a managed source could not be read (#1153);
+    the other two are true only on tracked evidence."""
+
+    permissions_encoded: bool | None
     hooks_present: bool
     routines_present: bool
+    permissions_source: NotRequired[str]  # "repository" or "managed", when encoded
+    permissions_encoded_reason: NotRequired[str]  # the not-measured code, when null
 
 
 class AgentOpsBlock(TypedDict):
@@ -77,6 +102,7 @@ class AgentOpsBlock(TypedDict):
     settings: list[AgentOpsSettingsFile]
     hooks_dir: AgentOpsDir
     routine_dirs: list[AgentOpsDir]
+    managed: ManagedSettingsBlock
     summary: AgentOpsSummary
 
 
