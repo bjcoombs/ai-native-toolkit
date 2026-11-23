@@ -569,10 +569,13 @@ def _render_loc_split(loc: dict[str, Any]) -> str:
     return f"; code {_fmt(loc['max_code'])}, data {_fmt(loc['max_data'])}"
 
 
-def render_report(ctx: dict[str, Any], repo_name: str) -> str:
+def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None = None) -> str:
     """Render the full deterministic Markdown report from a run-context dict.
 
-    Pure: takes the loaded context and the repo name, returns the report string.
+    Takes the loaded context and the repo name, returns the report string. Pure when
+    ``assess_dir`` is None; with it (the CLI passes ``<repo>/.assess``), it checks each
+    drawn diagram's file on disk and says ``Not drawn:`` for one that is not there
+    instead of linking it.
     ``Template.substitute`` is strict - a missing key raises, which surfaces a
     template/data drift at the seam rather than silently emitting ``$placeholder``.
     """
@@ -598,7 +601,7 @@ def render_report(ctx: dict[str, Any], repo_name: str) -> str:
         plugin_version=ctx.get("plugin_version", "unknown"),
         commit_note=_render_commit_note(ctx),
         headline=as_headline(ctx.get("headline"))["markdown"],
-        diagrams_section=diagrams_section(build_all(ctx)),
+        diagrams_section=diagrams_section(build_all(ctx), assess_dir),
         files_scored=_fmt(stats.get("files_scored", 0)),
         loc_total=_fmt(loc.get("total")),
         loc_p95=_fmt(loc.get("p95")),
@@ -658,7 +661,7 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 0
-    report = render_report(ctx, repo_root.name)
+    report = render_report(ctx, repo_root.name, repo_root / ".assess")
     if to_stdout:
         # UTF-8 and LF whatever the console: the report holds "·" and other
         # non-ASCII text, which cp1252 on Windows would garble or refuse, and

@@ -451,7 +451,7 @@ Lists the gates the repository configures (a ruff or flake8 complexity limit, th
 - Collector: `core.keyhole_blocks`, reading `keyhole`.
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `structure.breakup_candidates.clusters` path, `structure.breakup_candidates.package` path, `structure.footprints.module` path, `structure.internal_burrow_edges.imported` path, `structure.internal_burrow_edges.importer` path, `structure.language` token, `structure.modularity_reason` token, `structure.name_collisions.name` path, `structure.name_collisions.paths` path, `structure.reason` reason, `structure.sccs` path.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `structure.breakup_candidates.clusters` path, `structure.breakup_candidates.package` path, `structure.footprints.module` path, `structure.internal_burrow_edges.imported` path, `structure.internal_burrow_edges.importer` path, `structure.language` token, `structure.modularity_reason` token, `structure.name_collisions.name` path, `structure.name_collisions.paths` path, `structure.package_edges.from` path, `structure.package_edges.to` path, `structure.packages.id` path, `structure.reason` reason, `structure.sccs` path.
 - Used by: row `layer-2-design`.
 - Evidence: `structure.modularity_q` head_structure (measured), `structure.cross_package_edges` head_structure (measured), `structure.front_door_ratio` head_structure (measured).
 - Not measured when:

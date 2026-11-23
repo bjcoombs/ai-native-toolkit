@@ -22,7 +22,7 @@ There's a second half, and it's the same ethic pointed the other way. When a con
 
 The headline pieces are five **skills**:
 
-- **`/assess`** - score any codebase's readiness for AI agent contributors against a 9-layer (0-8) contract model (navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, AI project management), with a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Generates a report + the two SVGs and opens a PR in the target repo.
+- **`/assess`** - score any codebase's readiness for AI agent contributors against a 9-layer (0-8) contract model (navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, AI project management), with a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Generates a report with its SVGs (the two maps and an evidence waffle) and opens a PR in the target repo.
 - **`/huddle`** - structured multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board). See it in action: a [narrated visual explainer](https://bjcoombs.github.io/ai-native-toolkit/huddle-explainer/visualization.html), and the [repeatable pipeline](./docs/huddle-explainer/README.md) used to build it.
 - **`/deslop`** - detect and remove the telltale signs of AI writing (puffery, the rule of three, "not X but Y", filler diction, chatbot leakage, fabricated citations). Runs as a silent quality gate while writing, or as an explicit audit/edit pass. Derived from Wikipedia's "Signs of AI writing".
 - **`/skill-forge`** - harden a skill (draft or existing) through judge-panel refinement rounds until it clears a strict 3-tier promotion gate. A prove-and-promote quality gate that runs after authoring, built on the same team-lead pattern as `/huddle` - and proven by forging itself.
@@ -274,7 +274,7 @@ Runs against the current directory (or pass a path). Produces:
 - `.assess/review-strip.svg` - one tick per recently merged change: approved, reviewed or merged without review, in merge order
 - `.assess/complexity-stats.json` - percentiles and ranked file lists that feed the report
 
-After writing, the skill asks whether to open a PR in the target repo with the report and both SVGs.
+After writing, the skill asks whether to open a PR in the target repo with the report and its SVGs.
 
 ### Run a huddle on a hard decision
 
