@@ -60,7 +60,7 @@ baseline and earns nothing:
   target Step to at or above it (``lib/fleet_step_targets.py``), measured against the
   latest earlier run with the same measured set (``same_set``), not only the run before,
   so a member's failed scan in between never loses the hit; ``previous_run`` names that
-  run. It reads Steps, not
+  run. A target credited after that run is not credited again (one crossing, one hit). It reads Steps, not
   rows, so it never moves a streak. Evidence: ``from_step``, ``to_step`` and
   ``target_step``; ``row`` is null.
 
@@ -386,10 +386,13 @@ class _Replay:
         self.reached: dict[tuple[str, str, str], int] = {}
         self.streak: dict[SubjectKey, int] = {}
         self.steps: dict[SubjectKey, list[tuple[str, StepState]]] = {}  # each run's Step state, oldest first
+        self.order: dict[str, int] = {}  # run id -> position in the replay
+        self.hit_at: dict[tuple[SubjectKey, Target], str] = {}  # the run each target was last credited
         self.out: list[Achievement] = []
 
     def see(self, run: str, subs: Mapping[SubjectKey, Subject]) -> None:
         """Record a run's known levels as held (any run, clean or not) and its Step states."""
+        self.order.setdefault(run, len(self.order))
         for key, sub in subs.items():
             self.steps.setdefault(key, []).append((run, sub.step))
         for sub in subs.values():
@@ -445,14 +448,19 @@ class _Replay:
 
     def _targets(self, run: str, key: SubjectKey, sub: Subject) -> None:
         """``target_hit`` against the latest earlier run with the same measured set (``same_set``),
-        so a member's failed scan on the run before the crossing never loses the hit."""
+        so a member's failed scan on the run before the crossing never loses the hit. A target
+        already credited after that run is not credited again: one crossing, one hit."""
         mine = [t for t in sorted(self.targets, key=target_order) if (t.view, t.unit) == (sub.view, sub.key)]
         earlier = same_set(self.steps.get(key, []), sub.step) if mine else None
         if earlier is None:
             return
         previous, then = earlier
         for target in mine:
+            credited = self.hit_at.get((key, target))
+            if credited is not None and self.order[credited] > self.order[previous]:
+                continue
             if hit(target, then, sub.step):
+                self.hit_at[(key, target)] = run
                 self._earn(TARGET_HIT, sub, run, previous, _evidence(
                     from_step=then.lowest, to_step=sub.step.lowest, target_step=target.step))
 

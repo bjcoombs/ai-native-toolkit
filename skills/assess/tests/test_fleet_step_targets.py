@@ -140,6 +140,21 @@ def test_a_failed_scan_before_the_crossing_never_loses_the_hit(history: list[tup
     assert hit["previous_run"] == compared and hit["evidence"]["from_step"] == 2
 
 
+def test_one_crossing_is_credited_once_when_a_member_returns_after_the_others_crossed() -> None:
+    """a crosses alone while b's scan fails; b's return compares with the last run measuring
+    both, but the crossing was already credited after it, so there is no second hit."""
+    history: list[tuple[str, Spec]] = [
+        ("2026-11-01", {**BASE, "grp/sub/a": (1, False)}),  # {a, b} at Step 2
+        ("2026-11-08", {**BASE, "grp/sub/a": (1, False), "grp/sub/b": (-1, True)}),  # {a} at Step 2
+        ("2026-11-15", {**BASE, "grp/sub/b": (-1, True)}),  # {a} at Step 3: the crossing
+        ("2026-11-22", {**BASE, "grp/sub/b": (1, True)}),  # {a, b} at Step 3
+    ]
+    assert _hits(_build(history)) == [("2026-11-15", TEAM[1], 3)]
+    # a real drop and recovery after the credited hit is a new crossing
+    again = [*history, ("2026-11-29", {**BASE, "grp/sub/b": (1, False)}), ("2026-12-06", HISTORY[3][1])]
+    assert _hits(_build(again)) == [("2026-11-15", TEAM[1], 3), ("2026-12-06", TEAM[1], 3)]
+
+
 def test_the_hit_fires_once_and_not_again_after_a_later_gap() -> None:
     gap = [*HISTORY[:3], ("2026-11-22", {**BASE, "grp/sub/b": (-1, True)}), ("2026-11-29", HISTORY[3][1])]
     assert _hits(_build(gap)) == [("2026-11-15", TEAM[1], 3)]
@@ -166,7 +181,7 @@ def test_the_report_names_the_missing_gates_and_the_threshold() -> None:
         in credit_section(_build(HISTORY[:2]), MODEL)
     assert "- `ownership/grp/sub`, Step 3: met (Step 3, 2 of 2 measured)." in credit_section(_build(), MODEL)
     four = _build(model=MODEL4, specs=[TargetSpec("ownership", "grp/sub", 4)])
-    assert "2 below the threshold of 1 verified practices" in credit_section(four, MODEL4)
+    assert "2 below the threshold of 1 practice in place" in credit_section(four, MODEL4)
 
 
 def test_two_runs_give_identical_bytes() -> None:

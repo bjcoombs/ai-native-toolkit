@@ -143,7 +143,8 @@ def _target(t: TargetProgress) -> str:
     if gates:
         parts.append(f"gates to go: {gates}")
     if t["below_threshold"]:
-        parts.append(f"{t['below_threshold']} below the threshold of {t['threshold']} verified practices")
+        practices = "practice" if t["threshold"] == 1 else "practices"
+        parts.append(f"{t['below_threshold']} below the threshold of {t['threshold']} {practices} in place")
     return f"- {where}: " + "; ".join(parts) + "."
 
 
