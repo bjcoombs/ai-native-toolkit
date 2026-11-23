@@ -153,9 +153,12 @@ moved yet. A moved module keeps its filename.
 
 Each old path `lib/<stem>.py` is a shim until 4.0.0: it sets `sys.modules[__name__]` to the
 moved module, so the old and new dotted paths name one module object, and a module that runs
-as a script gets a `runpy` `__main__` branch. A shim cannot be run by path, because a script
-run as `python scripts/lib/<stem>.py` does not have `lib` on `sys.path`; run the moved file
-(`python scripts/lib/<pkg>/<stem>.py`) instead. New code imports the new path.
+as a script gets a `runpy` `__main__` branch. Run as `python scripts/lib/<stem>.py`, Python
+puts `lib/` first on `sys.path`, not `scripts/`, so such a shim first inserts `scripts/`
+(`Path(__file__).resolve().parents[1]`) and the old path keeps running. Running a shim as
+`__main__` imports the moved module before `runpy` runs it, so Python prints a
+`RuntimeWarning`; the moved file (`python scripts/lib/<pkg>/<stem>.py`) runs without it.
+New code imports the new path.
 
 - **`agents/`**: what a repository builds with agents and how an agent runs in it, the
   Layer 8 inputs. `agent_identity` is shared core, and `agent_consistency`, `agent_systems`
