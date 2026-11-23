@@ -1,4 +1,4 @@
-"""The fragment layout of a check manifest (lib/check_manifest.py, #982).
+"""The fragment layout of a check manifest (lib/manifest/check_manifest.py, #982).
 
 A root manifest that lists ``fragments`` loads one ``<root stem>/<name>.toml`` per
 collector and merges them, by kind and in the listed order, into the same document a
@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
-from lib import check_manifest as cm
-from lib.check_validation import ValidationError
+import lib.manifest.check_manifest as cm
+from lib.manifest.check_validation import ValidationError
 
 ROOT = ('manifest_version = 1\nowner = "core"\nfragments = [{names}]\n')
 SCAN_A = '''[[entries]]

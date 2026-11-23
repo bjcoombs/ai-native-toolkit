@@ -1,5 +1,5 @@
-"""The strict check-manifest loader and its structured errors (lib/check_manifest.py,
-lib/check_validation.py; #792).
+"""The strict check-manifest loader and its structured errors (lib/manifest/check_manifest.py,
+lib/manifest/check_validation.py; #792).
 
 The Levenshtein and closest-match tables are ported with the code from
 meridianhub/meridian ``services/control-plane/internal/validator/manifest_validator_test.go``
@@ -13,8 +13,8 @@ from typing import Any
 
 import pytest
 
-from lib import check_manifest as cm
-from lib.check_validation import closest, errors_only, finding, format_error, levenshtein
+import lib.manifest.check_manifest as cm
+from lib.manifest.check_validation import closest, errors_only, finding, format_error, levenshtein
 
 
 @pytest.mark.parametrize(("a", "b", "want"), [

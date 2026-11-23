@@ -9,7 +9,7 @@ from typing import Any, cast
 
 import pytest
 
-from lib import check_manifest as cm
+import lib.manifest.check_manifest as cm
 from lib import scan_registry as sr
 from lib.level_tally import LEVEL_READS
 from lib.signal_grades import INPUT_GRADES, SIGNAL_INPUTS
@@ -114,7 +114,7 @@ def _lib_imports(module: str) -> set[str]:
 
 
 def test_the_import_guard_sees_every_import_form() -> None:
-    assert _imported("from lib.check_manifest import core_manifest") == {"lib.check_manifest"}
+    assert _imported("from lib.manifest.check_manifest import core_manifest") == {"lib.manifest.check_manifest"}
     assert _imported("import lib.core_scans") == {"lib.core_scans"}
     assert _imported("from lib import core_scans") == {"lib.core_scans"}
     assert _imported("from . import core_scans") == {"lib.core_scans"}
@@ -123,11 +123,11 @@ def test_the_import_guard_sees_every_import_form() -> None:
 
 def test_signal_grades_reaches_only_the_manifest_loader() -> None:
     """The tally engine reads signal_grades without importing a scanner (#744, #953)."""
-    assert _lib_imports("signal_grades") == {"lib.check_manifest"}
-    assert _lib_imports("check_manifest") == {"lib.check_validation", "lib.manifest_whys"}
+    assert _lib_imports("signal_grades") == {"lib.manifest.check_manifest"}
+    assert _lib_imports("manifest/check_manifest") == {"lib.manifest.check_validation", "lib.manifest_whys"}
     # The why rules (#939) reach only stdlib-only leaf modules, so the closure stays bounded.
-    assert _lib_imports("manifest_whys") == {"lib.check_validation", "lib.levels_fields", "lib.vocabulary"}
-    for leaf in ("check_validation", "levels_fields", "vocabulary"):
+    assert _lib_imports("manifest_whys") == {"lib.manifest.check_validation", "lib.levels_fields", "lib.vocabulary"}
+    for leaf in ("manifest/check_validation", "levels_fields", "vocabulary"):
         assert _lib_imports(leaf) == set(), leaf
 
 

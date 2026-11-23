@@ -27,7 +27,7 @@ from typing import Any, Union, cast, get_args, get_origin, get_type_hints, is_ty
 import jsonschema
 import pytest
 
-from lib import check_manifest as cm
+import lib.manifest.check_manifest as cm
 from lib import scan_registry as sr
 from lib import signals as sg
 from lib import coupling_analysis as ca

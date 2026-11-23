@@ -1,7 +1,7 @@
 """The ``why`` of every check manifest entry: the rules ``check_manifest`` applies at load (#939).
 
 A why says, in one or two sentences, what a check protects for an agent working in the
-repository. ``lib.check_manifest`` calls :func:`why_errors` on every parsed manifest; the
+repository. ``lib.manifest.check_manifest`` calls :func:`why_errors` on every parsed manifest; the
 catalog, the level result, the headline and the gap actions read whys through the accessors
 here (:func:`why_of`, :func:`scan_why`, :func:`tag_why`, :func:`condition_whys`, :func:`scan_whys`), which
 return ``""`` where a version 1 manifest declares none.
@@ -42,7 +42,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any, NotRequired, TypedDict
 
-from lib.check_validation import ValidationError, finding
+from lib.manifest.check_validation import ValidationError, finding
 from lib.levels_fields import TRUTH_TAGS
 from lib.vocabulary import banned_hits, prose
 
