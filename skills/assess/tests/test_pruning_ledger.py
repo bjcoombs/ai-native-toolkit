@@ -165,3 +165,35 @@ def test_a_file_trimmed_in_two_rounds_is_credited_once_for_the_whole_drop() -> N
     # the folded round is never added again
     later, credited = step(entries, [first, second], _placement(False, 60), "c4")
     assert (later, credited) == (entries, [])
+
+
+def _round(sha: str, value: int) -> PruningEntry:
+    found = removal({**_done(value), "completed_sha": sha})
+    assert found is not None
+    return found
+
+
+def _step(prior: list[PruningEntry], removals: list[PruningEntry], placement: Any,
+          head: str) -> tuple[list[PruningEntry], list[PruningEntry]]:
+    return update_ledger(prior, removals, placement, held_now=GATES, held_before=GATES, head_sha=head,
+                         new_commit=True, repo_root=ROOT)
+
+
+def test_a_folded_round_no_longer_done_unfolds_the_entry() -> None:
+    """Review of #1183: a reopened round must not keep its starting size in the credit."""
+    a, b = _round("1" * 40, 261), _round("2" * 40, 150)
+    entries, _ = _step([], [a], _placement(True, 150), "c1")
+    entries, _ = _step(entries, [a, b], _placement(False, 60), "c2")
+    assert entries[0]["merged"] == ["1" * 40]
+    entries, _ = _step(entries, [b], _placement(False, 60), "c3")  # round one reopened
+    assert [(e["completed_sha"], e["cost_before"], e.get("merged", [])) for e in entries] == [("2" * 40, 150, [])]
+
+
+def test_a_file_that_regrows_between_rounds_is_measured_from_the_first_start() -> None:
+    """Review of #1183: 261 -> 150 (flagged), regrows to 300, then 300 -> 60: credit 201, not 240."""
+    a, c = _round("1" * 40, 261), _round("3" * 40, 300)
+    entries, _ = _step([], [a], _placement(True, 150), "c1")
+    entries, _ = _step(entries, [a, c], _placement(False, 60), "c2")
+    assert (entries[0]["completed_sha"], entries[0]["cost_before"]) == ("3" * 40, 261)
+    _, credited = _step(entries, [a, c], _placement(False, 60), "c3")
+    assert [e["saved"] for e in credited] == [201]
