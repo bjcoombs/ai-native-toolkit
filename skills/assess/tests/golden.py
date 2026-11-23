@@ -98,7 +98,7 @@ _REPORT_MEASURED_COMMIT_RE = re.compile(
 )
 # The headline's tally line ends with the maturity-model version (#747), which moves
 # with every default.toml edit; it is provenance, like the plugin version.
-_REPORT_MODEL_VERSION_RE = re.compile(r"^((?:Verified practices|Practices in place): .* · model )\S+$", re.MULTILINE)
+_REPORT_MODEL_VERSION_RE = re.compile(r"^((?:Verified practices|Practices in place|Catalogue coverage): .* · model )\S+$", re.MULTILINE)
 
 
 def normalize_report(text: str) -> str:

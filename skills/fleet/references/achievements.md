@@ -69,14 +69,13 @@ criterion most of them share (`signal`), those `repos`, how many more must reach
 level for the subject to move (`needed`), and the `change` and `done_when` in the team
 next-steps pages' wording. `targets` gives each Step target's progress this run: `view`,
 `unit`, `step` (the target), `lowest_step` (null when no repository is measured),
-`measured` of `repos`, `distance` (Steps to go, 0 when met, null when not measured), the
-target Step's `threshold`, `held` (measured repositories below the target Step),
-`below_threshold` (of those, the ones whose met tally is below the threshold) and
+`measured` of `repos`, `distance` (Steps to go, 0 when met, null when not measured),
+`held` (measured repositories below the target Step) and
 `missing_gates`: each gate of the target Step that holds back at least one measured
 repository, in model order, with `gate`, `row`, `level`, `held` and, of those,
 `not_measured` and `excluded` (the owner excluded the gate's condition). The counts are
-repositories; a repository's own practices to go are `threshold` less its `tally.met` in
-`fleet-data.json`. The gates come from each repository's `gate_blockers`, so a repository
+repositories. A Step reads its gates only (#1083), so the missing gates are all a
+repository needs to reach it. The gates come from each repository's `gate_blockers`, so a repository
 two Steps below the target shows every gate it is missing, not only its next Step's.
 
 **Recount.** `recount` is set on the first run under a new maturity-model version,
@@ -121,8 +120,7 @@ reads them back into this file before the next run ([targets read-back](publish.
 **Report.** `report.md` opens with "What changed and who earned it", before the
 diagrams: this run's achievements by kind (up to 20 lines each), then each unit's nearest
 level-up (the row needing the fewest repositories), then each Step target: met, or the
-unit's lowest Step, the gates to go with the repositories each holds back, and how many
-repositories are below the threshold. On the first
+unit's lowest Step and the gates to go with the repositories each holds back. On the first
 run under a new maturity-model version a `### Recount` subsection follows "Earned this
 run": the Recount lines, raised moves first (up to 20). Every line is
 credit or a next step. With `--no-diagrams` there is no report; `achievements.json` is

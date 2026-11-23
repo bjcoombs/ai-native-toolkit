@@ -61,8 +61,7 @@ as 0) and `lowest_level`, the lowest level a measured repository holds on the ro
 `repos` (repositories with a Step; a failed one counts in `repos` only, never as Step 1),
 `lowest_step` (the lowest Step a measured repository holds, `null` when none is), and
 `next_step` for the Step above it (`null` at the top Step or when none is measured): `step`,
-`threshold`, `held` (measured repositories below it), `below_threshold` (of those, the ones
-whose met tally is below the threshold) and `gates`, every gate of that Step in model order
+`held` (measured repositories below it) and `gates`, every gate of that Step in model order
 with `held` (repositories it holds back) and, of those, `not_measured` and `excluded` (the
 owner excluded the gate's condition, so the Step stays unreached). Each unit also has a `tags`
 roll-up (#1073): `measured` of `repos` (repositories with a per-tag tally; a failed one counts in

@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from lib.coverage_ci import read_ci_runs
-from lib.coverage_gate import detect_coverage_gate
-from lib.coverage_root_config import ROOT_UNRESOLVED, root_config, root_config_applies
+from lib.testing.coverage_ci import read_ci_runs
+from lib.testing.coverage_gate import detect_coverage_gate
+from lib.testing.coverage_root_config import ROOT_UNRESOLVED, root_config, root_config_applies
 
 ROOT_FLOOR = "[project]\nname = 'root'\n\n[tool.coverage.report]\nfail_under = 85\n"
 CI = ".github/workflows/ci.yml"

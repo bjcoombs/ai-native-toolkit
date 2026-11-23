@@ -50,7 +50,7 @@ from lib.action_conditions import condition_errors
 from lib.headline import as_headline
 from lib.evidence_check import check_evidence, describe
 from lib.keyhole.keyhole_signals import mode_for_finding
-from lib.mutation_cap import layer6_cap_violation
+from lib.testing.mutation_cap import layer6_cap_violation
 from lib.reviewed_findings import action_entries, carried_completed, reopened_status
 from lib.run_context_types import ActionLifecycle, FinalizeInput, JsonDict
 from lib.wiki_writer import (
@@ -545,7 +545,7 @@ def _validate_hotspot_actions(data: FinalizeInput, ctx: JsonDict) -> None:
 def _validate_layer6_cap(data: FinalizeInput, ctx: JsonDict) -> None:
     """Layer 6 cannot exceed Partial without complete mutation evidence.
 
-    The rule lives in ``lib.mutation_cap.layer6_cap_violation``: Present is
+    The rule lives in ``lib.testing.mutation_cap.layer6_cap_violation``: Present is
     refused when mutation did not run, or ran with every group stopped at the
     budget. A legacy input carrying no ``layer_scores`` is exempt.
     """

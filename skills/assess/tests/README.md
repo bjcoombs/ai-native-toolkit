@@ -112,8 +112,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_review_reality_gitlab.py` | `lib/hosting/gitlab_cli.py` + the GitLab path of `lib/hosting/review_reality.py` - provider detection, `glab` refusal mapping, merged merge request approvals |
 | `test_gitlab_protected_branches.py` | `lib/hosting/gitlab_cli.branch_protection` + the GitLab paths of `lib/hosting/config_drift.py` and `lib/hosting/review_reality.py` - wildcard protected-branch matching, 403/404 as unavailable, GitLab protected-branch snapshots, rules scoped to all protected branches |
 | `test_context_blocks.py` | `lib/context_blocks.py` - keyhole, stale-hub, liveness, coverage-report, accretion, structure-drift and exclusion/pruning blocks in run-context |
-| `test_coverage_gate.py` | `lib/coverage_gate.py` - configured coverage-threshold detector |
-| `test_coverage_report.py` | `lib/coverage_report.py` - coverage-report parser |
+| `test_coverage_gate.py` | `lib/testing/coverage_gate.py` - configured coverage-threshold detector |
+| `test_coverage_report.py` | `lib/testing/coverage_report.py` - coverage-report parser |
 | `test_dart_capabilities.py` | `lib/keyhole/dart_capabilities.py` - Dart linting and liveness capability entries |
 | `test_dart_complexity.py` | `lib/complexity/dart_complexity.py` - the approximate Dart per-function scanner |
 | `test_decline_markers.py` | `lib/decline_markers.py` - decline-marker provenance and re-offer on a major bump |
@@ -133,8 +133,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_instruction_globs.py` | `lib/instruction_globs.py` - scope frontmatter parsing and glob matching |
 | `test_interactivity.py` | `lib/interactivity.py` - the non-interactive consent contract |
 | `test_jvm_capabilities.py` | `lib/keyhole/jvm_capabilities.py` - the capability-driven JVM offer flow |
-| `test_mutation_cap.py` | `lib/mutation_cap.py` - the `test_pressure` block shape and the Layer 6 mutation-not-run cap |
-| `test_mutation_cap_partial.py` | `lib/mutation_cap.py` - the Layer 6 cap holds at Partial, and finalize refuses Present, when every mutmut 3 group with records stopped at the time budget (`partial`) |
+| `test_mutation_cap.py` | `lib/testing/mutation_cap.py` - the `test_pressure` block shape and the Layer 6 mutation-not-run cap |
+| `test_mutation_cap_partial.py` | `lib/testing/mutation_cap.py` - the Layer 6 cap holds at Partial, and finalize refuses Present, when every mutmut 3 group with records stopped at the time budget (`partial`) |
 | `test_mutation_refresh.py` | `scripts/assess_core.py --opt-in-mutation` - the opt-in pass rebuilds every block derived from `test_pressure` (E1 `untrusted_hotspot`, attention, findings markdown, summary, prescribed actions, badge), not only the block and the cap |
 | `test_mutmut3.py` | `lib/test_pressure/mutmut3.py` - the mutmut 3 adapter and the mutmut version probe |
 | `test_mutmut3_layout.py` | `lib/test_pressure/mutmut3.py` - the pass across package layouts: grouping by package root, the package's own config against a generated one, files read outside the package, several packages in one focus set (mutmut faked) |
@@ -150,10 +150,10 @@ Every `test_*.py` file in this directory has a row below.
 | `test_platform_argv_contract.py` | every `PLATFORM_SCANS` scan through recording `gh`/`glab` stubs: each argv names its target (`--repo`, `repos/<slug>`, `users/<login>`, `--hostname`), as the argv-keyed response cache needs |
 | `test_run_wiki.py` | `lib/run_wiki.py` - hotspot pages, `index.md` rows and graduation records for one run |
 | `test_scan_registry.py` | `lib/scan_registry.py` - the declared scan table and the loop that runs it |
-| `test_sibling_tests.py` | `lib/sibling_tests.py` - the one sibling-test resolver |
-| `test_import_credit.py` | `lib/import_credit.py` - the import tier of the sibling-test probe |
+| `test_sibling_tests.py` | `lib/testing/sibling_tests.py` - the one sibling-test resolver |
+| `test_import_credit.py` | `lib/testing/import_credit.py` - the import tier of the sibling-test probe |
 | `test_structure_drift.py` | `lib/keyhole/structure_drift.py` - Tier 0 path-existence structure-drift signal |
-| `test_test_focus.py` | `lib/test_focus.py` - `compute_test_focus` and mutation scope |
+| `test_test_focus.py` | `lib/testing/test_focus.py` - `compute_test_focus` and mutation scope |
 | `test_vault_queries.py` | `lib/vault_queries.py` - vault-native navigation query parser |
 | `test_wiki_state.py` | `lib/wiki_state.py` - first-flagged dates and their rekeying through the rename map |
 | `test_run_setup.py` | `lib/run_setup.py` + `lib/core_scans.py` + `lib/run_publish.py` - the setup-stage scan adapters and the publish step |

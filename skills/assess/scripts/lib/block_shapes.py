@@ -13,7 +13,7 @@ names it. Every block may also degrade to ``{"available": false, "reason"}``, wh
 ``team_path_ok`` accepts for any block.
 
 - ``agent_ops`` (``lib.agents.agent_ops.scan_agent_ops``)
-- ``coverage_gate`` (``lib.coverage_gate.detect_coverage_gate``)
+- ``coverage_gate`` (``lib.testing.coverage_gate.detect_coverage_gate``)
 - ``instruction_claims`` (``lib.instruction_claims.scan_instruction_claims``)
 - ``promissory_markers`` (``lib.keyhole.promissory_markers.MarkerScan.summary``)
 - ``review_reality`` (``lib.hosting.review_reality.summarize`` and its GitLab twin)
@@ -34,7 +34,7 @@ from __future__ import annotations
 from typing import NotRequired, TypedDict
 
 # Defined beside its builder (the return type of detect_coverage_gate); re-exported here.
-from lib.coverage_gate import CoverageGateBlock as CoverageGateBlock
+from lib.testing.coverage_gate import CoverageGateBlock as CoverageGateBlock
 from lib.keyhole.structure_drift import EmptyOwnershipPattern
 
 

@@ -124,8 +124,11 @@ def _check_target(words: list[str], names: frozenset[str] | None = None,
         return args is not None and bool(args) and is_check_name(PurePosixPath(args[0]).name, names)
     if head.startswith("./") and head not in RUNNERS:
         return is_check_name(PurePosixPath(head).name, names)
-    # make, just, go, cargo, mvn, gradle: the first target or goal names the work.
-    return bool(pos) and is_check_name(pos[0], names)
+    # make, just, go, cargo, mvn, gradle: the first target or goal names the work. A shell
+    # expansion (``mvn ${MVN_ARGS} verify``) is not read as one: it is unknown, the next word
+    # is the goal (#799).
+    goals = [w for w in pos if not w.startswith("$")]
+    return bool(goals) and is_check_name(goals[0], names)
 
 
 def is_check_command(text: str) -> bool:
@@ -543,11 +546,22 @@ _XARGS_FLAGS = frozenset({
 })
 
 
+# xvfb-run and timeout flags that take the next word (``xvfb-run -s "-screen 0 1x1x24"``).
+_XVFB_FLAGS = frozenset({"-s", "--server-args", "-n", "--server-num", "-f", "--auth-file",
+                         "-e", "--error-file", "-p", "--xauth-protocol", "-w", "--wait"})
+_TIMEOUT_FLAGS = frozenset({"-s", "--signal", "-k", "--kill-after"})
+
+
 def _plain_wrapper(words: list[str]) -> list[str] | None:
-    """The program ``xargs [flags]`` or ``dotnet tool run`` runs (#926): ``xargs clang-format-21
-    -i`` -> ``clang-format-21 -i``; None for any other command or no program."""
+    """The program ``xargs [flags]``, ``dotnet tool run``, ``xvfb-run [flags]`` or ``timeout
+    [flags] DURATION`` runs (#926, #799): ``xargs clang-format-21 -i`` -> ``clang-format-21 -i``,
+    ``xvfb-run -a npm test`` -> ``npm test``; None for any other command or no program."""
     if words[0] == "xargs":
         return _drop_leading_flags(words[1:], _XARGS_FLAGS) or None
+    if words[0] == "xvfb-run":
+        return _drop_leading_flags(words[1:], _XVFB_FLAGS) or None
+    if words[0] == "timeout":
+        return _drop_leading_flags(words[1:], _TIMEOUT_FLAGS)[1:] or None
     if words[:3] == ["dotnet", "tool", "run"]:
         return words[3:] or None
     return None

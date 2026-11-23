@@ -18,7 +18,7 @@ import pytest
 
 from lib.ci_checks import scan_ci_checks
 from lib.ci_masking import mask_lines
-from lib.coverage_gate import detect_coverage_gate
+from lib.testing.coverage_gate import detect_coverage_gate
 
 SHELLS = {"default": "", "bash": "        shell: bash\n", "sh": "        shell: sh\n"}
 

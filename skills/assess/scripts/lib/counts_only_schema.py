@@ -59,7 +59,7 @@ from lib.gap_actions import GapAction
 from lib.guardrails import GuardrailsBlock
 from lib.instruction_placement import InstructionPlacementBlock
 from lib.keyhole.liveness_scan import ObservabilityBlock
-from lib.mutation_cap import MutationNotRunCap
+from lib.testing.mutation_cap import MutationNotRunCap
 from lib.run_context_types_size import LocByClass
 from lib.run_context_types import (
     AttentionRow,

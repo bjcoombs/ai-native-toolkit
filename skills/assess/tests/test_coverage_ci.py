@@ -1,4 +1,4 @@
-"""Tests for lib/coverage_ci.py: the Step 4 coverage gate needs a CI run (issue #921).
+"""Tests for lib/testing/coverage_ci.py: the Step 4 coverage gate needs a CI run (issue #921).
 
 ``coverage_gate.enforced_meets_minimum`` is ``threshold_meets_minimum`` with an
 enforced CI line that runs the gate required, by #775's masking and trigger
@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from lib.coverage_ci import _command_groups, _word_lists, runs_tool
-from lib.coverage_gate import detect_coverage_gate
+from lib.testing.coverage_ci import _command_groups, _word_lists, runs_tool
+from lib.testing.coverage_gate import detect_coverage_gate
 
 PYPROJECT_80 = "[project]\nname = 'x'\n\n[tool.coverage.report]\nfail_under = 80\n"
 CLAUDE = {"CLAUDE.md": "# Guide\n\nRun `pytest` before pushing.\n"}

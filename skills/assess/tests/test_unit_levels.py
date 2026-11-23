@@ -68,7 +68,9 @@ def test_each_unit_reads_its_own_scoped_conditions(run: dict[str, Any]) -> None:
     assert state["services/billing"]["doc-freshness.1"] == "met"
     assert state["services/search"]["doc-freshness.1"] == "not_measured"
     assert billing["tally"]["met"] > search["tally"]["met"]
-    assert billing["step"] > search["step"]
+    # #1083: a Step reads its gates only, and both units hold the same gates (billing's own
+    # instruction file, search's inherited one), so the larger tally moves no Step
+    assert billing["step"] == search["step"]
 
 
 def test_a_sibling_units_coverage_gate_is_not_inherited(run: dict[str, Any]) -> None:

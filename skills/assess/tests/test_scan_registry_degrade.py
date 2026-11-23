@@ -58,8 +58,8 @@ def test_a_raising_entry_degrades_and_every_reader_accepts_the_marker(key, tmp_p
     from assess_report import render_report
     from lib.assess_config import load_gate_config
     from lib.counts_only import counts_only, unclassified_strings
-    from lib.mutation_cap import layer6_cap_violation
-    from lib.test_focus import mutation_scope
+    from lib.testing.mutation_cap import layer6_cap_violation
+    from lib.testing.test_focus import mutation_scope
 
     monkeypatch.setattr(reg, "SCANS", _raising_table(key))
     repo = _minimal_repo(tmp_path)

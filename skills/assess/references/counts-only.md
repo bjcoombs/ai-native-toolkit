@@ -49,7 +49,8 @@ carry full text. Only `run-context.counts-only.json` (and an
 `review-strip.counts-only.svg` drawn from it. Like the JSON, those copies keep
 path-class values (package ids, doc paths) in clear under `--counts-only` alone;
 only `--hash-paths` or `--hash-salt` hashes them, so share them from a hashed run.
-The evidence waffle has no copy: it names only maturity-model rows and counts.
+The Step ladder and the evidence waffle have no copy: they name only the model's Steps,
+gates and rows, and counts.
 
 ## Path-keyed maps
 
