@@ -21,7 +21,8 @@ from pathlib import Path
 
 
 import lib.test_pressure as tp
-from lib import doc_graph, structure_graph
+import lib.graph.structure_graph as structure_graph
+from lib import doc_graph
 from lib.test_pressure import mutation, mutmut3
 from lib.test_pressure import run_bounded_mutation, scan_test_pressure
 

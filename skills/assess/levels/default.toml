@@ -246,8 +246,15 @@
 # tally and no Step.
 #
 # Changing a criterion changes results: bump "version" with every edit.
+#
+# default-2026.11.23 (3.0.0 release): three changes since default-2026.11.22.
+# - the Layer 0 instructions comment changed with #821; the criterion did not.
+# - every condition gains "truth" (#843); no criterion, grade or Step changes.
+# - layer-5-ci.2 reads not measured (no_manifests) on a repository with no
+#   dependency manifest, where it read met (#927, the empty-set rule). The
+#   criteria text is unchanged; the Layer 5 comment names the rule.
 
-version = "default-2026.11.22"
+version = "default-2026.11.23"
 
 [[rows]]
 id = "layer-0-instructions"

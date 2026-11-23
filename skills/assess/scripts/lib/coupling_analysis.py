@@ -1,6 +1,6 @@
 """B3 static-vs-historical disagreement: the A x B cross for the /assess core.
 
-The static lens (``lib.structure_graph``, A2/A3) reads the import graph and asks
+The static lens (``lib.graph.structure_graph``, A2/A3) reads the import graph and asks
 "does this *look* modular?"; the historical lens (``lib.change_coupling``, B1/B2)
 reads the commit log and asks "does it *behave* modularly -- do edits stay
 contained?". Each is blind to what the other sees. Where they **disagree** is
@@ -35,7 +35,7 @@ JSON-serialisable (paths as strings, plain dict/list/number/None).
 **Static-modularity input shape.** ``static_modularity`` maps a directory path
 (matching the keys of ``containment_by_dir``) to a metrics dict
 ``{'modularity_q': float | None, 'front_door_ratio': float | None}``. Because
-``lib.structure_graph`` currently emits repo-level ``modularity_q`` /
+``lib.graph.structure_graph`` currently emits repo-level ``modularity_q`` /
 ``front_door_ratio``, the caller (task #5) is responsible for projecting those
 onto the directories it cares about; this module only consumes the per-directory
 view. ``None`` for the whole argument means "no static graph at all" -> the

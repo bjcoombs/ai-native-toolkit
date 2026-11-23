@@ -17,7 +17,7 @@ whys.coverage_gate = "It finds the coverage threshold the repository sets and wh
 shapes = [
   { path = "coverage_gate", type = "lib.coverage_gate:CoverageGateBlock" },
 ]
-revision = 3
+revision = 4
 unknown_reasons = [
   { code = "go_rust_gate_form_not_read", carried_in = "unmeasured_reason", means = "The repository holds a go.mod or Cargo.toml with no coverage gate found for it, and no gate of at least 50 percent for another language (a low Python gate beside go.mod is not unmet): its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read.", next_step = "Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines." },
 ]

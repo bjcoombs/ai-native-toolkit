@@ -727,7 +727,7 @@ def _gradle(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
 
 
 def _shell(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
-    pos = _positionals(words[1:], frozenset({"-o"}))
+    pos = _positionals(words[1:], frozenset({"-o", "-O", "--rcfile", "--init-file"}))   # #955
     # ``-c`` alone or combined (``bash -lc``, ``sh -ec``): the program is a string, not a file.
     if any(w.startswith("-") and not w.startswith("--") and "c" in w[1:] for w in words[1:]) or not pos:
         return _UNKNOWN_RUNNER

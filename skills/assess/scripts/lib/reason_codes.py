@@ -11,7 +11,7 @@ Tests: `tests/test_counts_only.py`, `tests/test_level_tally.py`.
 from __future__ import annotations
 
 from lib.counts_only_rules import REASON_SENTENCE_CODES, TOKEN_RE
-from lib.import_graph import STRUCTURE_REASON_CODES
+from lib.graph.import_graph import STRUCTURE_REASON_CODES
 
 # The other leading codes a ``REASON`` field keeps: ``structure_drift``'s marker,
 # which the full run writes as the headless runner does (#908).

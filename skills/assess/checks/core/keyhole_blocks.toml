@@ -37,7 +37,7 @@ shapes = [
   { path = "attention", type = "lib.run_context_types:AttentionRow" },
   { path = "prescribed_actions", type = "lib.run_context_types:PrescribedAction" },
   { path = "keyhole_summary", type = "lib.run_context_types:KeyholeSummary" },
-  { path = "structure", type = "lib.structure_graph:StructureBlock" },
+  { path = "structure", type = "lib.graph.structure_graph:StructureBlock" },
 ]
 # 2: attention, prescribed_actions and keyhole_summary leave out a path a done
 # review in the committed actions.json clears (#721).

@@ -99,7 +99,7 @@ from lib.ownership_parser import (
     parse_codeowners,
 )
 from lib.git_churn import tracked_files
-from lib.import_graph import ModuleGraph, select_graph
+from lib.graph.import_graph import ModuleGraph, select_graph
 from lib.run_context_types import CoChangePair, JsonDict
 
 
@@ -769,7 +769,7 @@ def _compute_communities(repo_root: Path, mg: ModuleGraph | None = None) -> list
     empty.
     """
     try:
-        from lib.structure_graph import (
+        from lib.graph.structure_graph import (
             _NETWORKX_AVAILABLE,
             _detect_communities,
             import_digraph,

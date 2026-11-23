@@ -86,3 +86,17 @@ target runner is read as that runner). Tests: `tests/test_check_command.py`,
 `tests/test_check_runners.py` (#920), `tests/test_lint_vocabulary.py` (#926),
 `tests/test_agent_environment.py` (`test_is_check_command`), `tests/test_ci_checks.py`
 (`test_lint_runs_per_command`).
+
+Shell, make and hatch parsing (issue #955, `lib.command_flags`). A shell's own flags are
+read per program: `-e` takes no value, so `sh -e ./ci/run.sh` and `bash -e scripts/test.sh`
+run their script; `-o` / `+o` / `-O`, a cluster ending in `o` (`-eo pipefail`),
+`--rcfile` and `--init-file` take one; only a single-dash cluster holding `c` is `-c`, so
+`bash --norc ./ci.sh` runs `ci.sh`. `bash -c "<cmd>"` is read by `_outer_wrapper` as the
+command its string runs when that is one plain command (`bash -c "make test"` is `make
+test`); a list, pipeline, redirection or substitution in the string, or a string that cannot
+be split, reads null (`check_target`), because the masking of `lib.ci_masking` cannot see
+inside the quotes. make's option values are dropped before its targets are read
+(`make -j 4 build` is `build`, false). `hatch run <name>` has the name trust of `make
+<name>`: `hatch run lint` is a lint command and a lint run, as `make lint` is.
+`_js_lint` reads the package managers only; `is_lint_run` reads `npx` / `bunx` by the
+program they run before it.

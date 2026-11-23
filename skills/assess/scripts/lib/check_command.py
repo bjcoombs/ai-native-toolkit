@@ -18,6 +18,7 @@ import shlex
 from contextvars import ContextVar
 from pathlib import PurePosixPath
 
+from lib.command_flags import SHELLS, make_args, make_runs_no_recipe, shell_args, shell_string
 from lib.command_resolver import RUNNERS, command_words
 from lib.lint_vocabulary import (
     ANALYSER_PROGRAMS, ecosystem_lint, formatter_mode, program_name, runs_no_analysis)
@@ -99,7 +100,8 @@ def _js_check(head: str, pos: list[str], names: frozenset[str] | None) -> bool:
 def _check_target(words: list[str], names: frozenset[str] | None = None,
                   programs: frozenset[str] = ALWAYS_CHECK) -> bool:
     """Whether the program, subcommand or target a command runs is a check."""
-    head, pos = words[0], _positionals(words[1:])
+    head = words[0]
+    pos = _positionals(make_args(words[1:]) if head in ("make", "gmake") else words[1:])   # -j 4 (#955)
     if head in programs:
         return True
     if head in ("uv", "poetry", "uvx"):
@@ -117,8 +119,9 @@ def _check_target(words: list[str], names: frozenset[str] | None = None,
             module = words[words.index("-m") + 1:words.index("-m") + 2]
             return bool(module) and module[0] in programs
         return bool(pos) and is_check_name(PurePosixPath(pos[0]).name, names)
-    if head in ("bash", "sh", "zsh", "source"):
-        return bool(pos) and is_check_name(PurePosixPath(pos[0]).name, names)
+    if head in ("bash", "sh", "zsh", "source"):   # bash -e x.sh: the shell's own flags (#955)
+        args = shell_args(words)
+        return args is not None and bool(args) and is_check_name(PurePosixPath(args[0]).name, names)
     if head.startswith("./") and head not in RUNNERS:
         return is_check_name(PurePosixPath(head).name, names)
     # make, just, go, cargo, mvn, gradle: the first target or goal names the work.
@@ -152,12 +155,15 @@ def is_lint_command(text: str) -> bool:
 def _lint_words(words: list[str]) -> bool:
     """``is_lint_command`` on words, reading a wrapper by the program it runs (#920)."""
     head = words[0]
-    if _no_analysis(words):   # swiftlint --fix, phpcs --config-set: no lint run (#926)
+    if _no_analysis(words) or make_runs_no_recipe(words):   # swiftlint --fix, make -n lint (#926, #955)
         return False
     if (head in RUNNERS or head.startswith("./") or head in LINT_PROGRAMS) and _check_target(
             words, LINT_WORDS, LINT_PROGRAMS) or _task_target(words, LINT_WORDS) or ecosystem_lint(words):
         return True
-    program = _wrapped(words) or _hatch_run(words)
+    hatch = _hatch_run(words)
+    if hatch and is_check_name(hatch[0], LINT_WORDS):   # hatch run lint, as make lint (#955)
+        return True
+    program = _wrapped(words) or hatch
     return program is not None and bool(program) and _lint_words(program)
 
 
@@ -286,15 +292,14 @@ def _lint_target(words: list[str]) -> bool:
 
 
 def _js_lint(head: str, pos: list[str]) -> bool:
-    """A package-manager or ``npx`` command that runs a linter or a lint script.
+    """A package-manager command (``npm``, ``pnpm``, ``yarn``, ``bun``) that runs a lint script;
+    ``is_lint_run`` reads ``npx`` / ``bunx`` by the program they run before it gets here.
 
     ``_js_check`` credits ``npm test`` and ``npx jest`` whatever the names, which is
     right for a check but not for a lint run.
     """
     if not pos:
         return False
-    if head in ("npx", "bunx"):
-        return is_check_name(pos[0], _RUN_WORDS)
     if pos[0] in ("run", "run-script"):
         return len(pos) > 1 and is_check_name(pos[1], _RUN_WORDS)
     if head == "npm" or pos[0] in _PM_INSTALL or pos[0] in _PM_TEST:
@@ -337,7 +342,7 @@ def is_lint_run(text: str) -> bool:
         return is_lint_run(shlex.join(outer))
     # ``type-check`` / ``type_check`` is one word here, not a ``check`` target.
     words = [_TYPE_CHECK.sub("typecheck", w) for w in command_words(text)]
-    if not words or is_info_invocation(text):
+    if not words or is_info_invocation(text) or make_runs_no_recipe(words):
         return False
     if _no_analysis(words):   # swiftlint --fix rewrites, phpstan --generate-baseline (#926)
         return False
@@ -350,8 +355,9 @@ def is_lint_run(text: str) -> bool:
     if words[0] in ("npm", "pnpm", "yarn", "bun"):
         return _js_lint(words[0], _positionals(words[1:]))
     hatch = _hatch_run(words)
-    if hatch is not None:   # hatch run ruff check .: a linter program; a script name may lint
-        return bool(hatch) and hatch[0] in _RUN_PROGRAMS
+    if hatch is not None:   # hatch run ruff check ., hatch run lint (a lint-named script, #955)
+        return bool(hatch) and (hatch[0] in _RUN_PROGRAMS or is_check_name(
+            _TYPE_CHECK.sub("typecheck", hatch[0]), _RUN_WORDS))
     return _hatch_fmt_check(words) or _lint_target(words) or _task_target(words, _RUN_WORDS)
 
 
@@ -466,10 +472,13 @@ _RUNNER_INFO_FLAGS = _INFO_FLAGS | {"-h", "--list", "--list-all", "-T", "--tasks
 
 
 def _outer_wrapper(words: list[str]) -> list[str] | None:
-    """The command ``docker compose run|exec <service>`` or ``bundle exec`` runs, ``[]`` when
-    a compose service runs its default command, None for any other command."""
+    """The command ``docker compose run|exec <service>``, ``bundle exec`` or ``bash -c "<cmd>"``
+    runs, ``[]`` when a compose service runs its default command or a ``-c`` string is not one
+    plain command, None for any other command."""
     if not words:
         return None
+    if words[0] in SHELLS and shell_args(words) is None:
+        return shell_string(words)
     if words[:2] == ["docker", "compose"]:
         words = ["docker-compose", *words[2:]]
     if words[0] == "bundle":
@@ -570,6 +579,8 @@ def _targets(head: str, args: list[str]) -> list[str]:
             # project:target[:configuration]
             return [pos[1].split(":")[1] if ":" in pos[1] else pos[1]] if len(pos) > 1 else []
         return [pos[0].rsplit(":", 1)[-1]] if pos else []   # nx test app, nx affected:test
+    if head in ("make", "gmake"):   # make -j 4 build: the job count is no target (#955)
+        args = make_args(args)
     pos = [w for w in _positionals(args, _TARGET_FLAGS) if "=" not in w]
     if head == "turbo":
         return pos[1:] if pos[:1] == ["run"] else pos[:1]
@@ -613,11 +624,9 @@ def _script_verdict(words: list[str]) -> bool | None:
     head = words[0]
     path = head
     if head in ("bash", "sh", "zsh", "source"):   # a sourced script is unread too (#1033)
-        if any(w.startswith("-") and "c" in w[1:] for w in words[1:]):
-            return False   # bash -c '...': the program is a string, read elsewhere
-        pos = _positionals(words[1:])
+        pos = shell_args(words)
         if not pos:
-            return False
+            return False   # bash -c '...' is read by _outer_wrapper; no script at all
         path = pos[0]
     elif head in RUNNERS:
         return False   # ./gradlew, ./mvnw: modelled runners
@@ -651,6 +660,8 @@ def _toolchain_test(words: list[str]) -> bool | None:
 def _check_verdict(words: list[str]) -> bool | None:
     """Whether a command runs a check: True, False, or None for a target whose recipe is not read."""
     head = words[0]
+    if make_runs_no_recipe(words):   # make -n test, make -i test: exits 0 whatever the recipe does
+        return False
     if (head in RUNNERS or head.startswith("./")) and _check_target(words):
         return True
     if PurePosixPath(head).name in TEST_PROGRAMS:
@@ -662,7 +673,7 @@ def _check_verdict(words: list[str]) -> bool | None:
         return None
     container = words[0] in ("docker", "docker-compose")
     compose = _outer_wrapper(words)
-    if compose == [] and container:   # the image's or service's default command is not read
+    if compose == [] and (container or head in SHELLS):   # a default command, or bash -c "a && b"
         return None
     program = _wrapped(words)
     if program is not None:

@@ -408,7 +408,7 @@ def test_lint_runs_states(tmp_path: Path, files: dict[str, str], lint: bool | No
     ("make check || true", False),              # a masked check target cannot fail the job either
     ("make build", False),
     ("hatch fmt --check", True),
-    ("hatch run lint", None),
+    ("hatch run lint", True),                  # #955: the name trust of make lint
     ("hatch run pytest", False),
     ("pyright", True),
     ("npx tsc --noEmit", True),
