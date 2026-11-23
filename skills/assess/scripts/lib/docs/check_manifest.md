@@ -62,8 +62,10 @@ The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` an
   under its blocks), `privacy` (its counts-only patterns and classes, from which
   `counts_only_rules.RULES` is generated; a pattern is classified by one collector only;
   `archived_finding_paths` sits with the private `keyhole` collector that produces it),
-  `unknown_reasons` (`code`, `carried_in` `reason`, `basis` or `unmeasured_reason`, an
-  optional `block` naming the published block whose reason carries it, `means`,
+  `unknown_reasons` (`code`, `carried_in` `reason`, `basis`, `enforced_basis` or
+  `unmeasured_reason` (a code carried in `enforced_basis` is a `ci_checks.enforced_basis`
+  token, #1031), an optional `block` naming the published block whose reason carries it,
+  `means`,
   `next_step`; a trailing `<name>` in a code stands for a family, as in
   `no_import_graph_<language>`),
   `revision` (starts at 1; bumped when a published value changes meaning, #774, as
