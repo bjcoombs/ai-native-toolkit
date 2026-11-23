@@ -411,8 +411,8 @@ The lead runs smart-merge via the pr-review-merge skill (Smart Merge section): d
 bot CRs, verify the five auto-merge criteria, handle UNSTABLE/UNKNOWN, merge in hot-file order.
 
 **When the base branch has a merge queue, the lead enqueues and the queue merges.** Enqueue with
-`gh pr merge $PR --match-head-commit <head sha>` (no strategy flag, never `--admin`, which skips the
-queue) or the GraphQL `enqueuePullRequest` mutation, in hot-file order. The queue tests the base plus
+`gh pr merge $PR --match-head-commit <head sha>` (no strategy flag, never `--admin`, which either merges
+past the queue as a ruleset bypass actor or is refused) or the GraphQL `enqueuePullRequest` mutation, in hot-file order. The queue tests the base plus
 every PR ahead plus this one on the required checks and merges only when they pass, so it replaces the
 lead's manual re-check of a hot PR (main plus the PR, the full suite and `make regen` run by hand before
 merging): a semantic conflict between two individually green PRs now fails the second one's group, and

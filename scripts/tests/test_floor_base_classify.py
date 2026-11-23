@@ -255,11 +255,11 @@ def test_the_anchor_accepts_a_clean_change_beside_the_step(tmp_path):
         ("        id: filter\n", "        id: filter\n        continue-on-error: true\n"),
         ("        id: filter\n", "        id: filter\n        shell: sh\n"),
         # #1088: the merge-group branch widened to other events
-        ('[ "${EVENT_NAME}" = "merge_group" ]', '[ "${EVENT_NAME}" != "push" ]'),
+        ('[ "${EVENT_NAME}" != "merge_group" ]', '[ "${EVENT_NAME}" = "push" ]'),
         # ...or keyed on a value a pull request controls
         ("EVENT_NAME: ${{ github.event_name }}", "EVENT_NAME: ${{ github.head_ref }}"),
         # ...or answering true-for-false inside the queue on a pull request
-        ("        run: |\n          if [", "        run: |\n          EVENT_NAME=merge_group\n          if ["),
+        ("        run: |\n          [", "        run: |\n          EVENT_NAME=merge_group\n          ["),
         # a comment in the run block, which bash reads after a continuation
         (
             "          BASE_COPY=",

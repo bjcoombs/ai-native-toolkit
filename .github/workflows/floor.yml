@@ -457,11 +457,7 @@ jobs:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_ACTOR: ${{ github.actor }}
         run: |
-          if [ "${EVENT_NAME}" = "merge_group" ]; then
-            echo "Merge group: not classified. The sign-off and the canaries ran on the pull request, and the queue admits only a pull request whose floor enforcement passed on its head."
-            printf 'run_canaries=false\nfloor_core_changed=false\n' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          [ "${EVENT_NAME}" != "merge_group" ] || { printf 'run_canaries=false\nfloor_core_changed=false\n' >> "$GITHUB_OUTPUT"; exit 0; }
           BASE_SHA="$(git merge-base "origin/${BASE_REF}" HEAD)"
           BASE_COPY="${RUNNER_TEMP}/floor_check_base.py"
           if ! git show "${BASE_SHA}:scripts/floor_check.py" > "${BASE_COPY}" \
