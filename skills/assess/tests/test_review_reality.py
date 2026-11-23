@@ -110,6 +110,7 @@ def test_review_reality_unreviewed_required_review_is_hollow(world) -> None:
         "approved_share": 0.0, "bot_review_share": 0.0, "self_merged_share": 1.0,
         "review_required": True, "hollow_required_review": True,
         "required_approval_bypassed": True,
+        "sequence": ["unreviewed"] * 10, "bot_sequence": ["none"] * 10,
     }
     # The ruleset already said yes: the protection read is skipped.
     assert not any("/protection" in c for c in world.calls())
@@ -312,3 +313,29 @@ def test_no_cached_record_carries_a_body(world, tmp_path, monkeypatch) -> None:
         except json.JSONDecodeError:
             continue  # ``gh auth status`` prints text, not JSON
         assert "body" not in _keys(doc)
+
+
+def test_review_reality_sequence_is_merge_order_and_matches_the_shares(world) -> None:
+    """One token per change, oldest merge first, from the predicates behind the shares
+    (#943): a bot comment alone reads unreviewed, with its own marker."""
+    _require_by_ruleset(world)
+    bot = {"login": "reviewbot", "is_bot": True, "type": "Bot"}
+    day = "2026-09-{:02d}T00:00:00Z".format
+    prs = [
+        _pr(0, reviews=[REVIEWER], merged_at=day(5)),  # newest
+        _pr(1, reviews=[REVIEWER], state="COMMENTED", merged_at=day(4)),
+        _pr(2, comments=[bot], merged_at=day(3)),  # a bot comment only
+        _pr(3, merged_at=day(2)),
+        _pr(4, reviews=[REVIEWER], comments=[bot], merged_at=day(1)),  # oldest
+    ]
+    world.serve("prs.json", prs)
+    block = scan_review_reality(world.root)
+    assert block["sequence"] == ["approved", "unreviewed", "unreviewed", "reviewed", "approved"]
+    assert block["bot_sequence"] == ["bot", "none", "bot", "none", "none"]
+    total = block["merged_count"]
+    assert round(block["sequence"].count("approved") / total, 3) == block["approved_share"]
+    reviewed = sum(t in ("approved", "reviewed") for t in block["sequence"])
+    assert round(reviewed / total, 3) == block["reviewed_share"]
+    assert block["bot_review_share"] == 0.4  # the marker never changes a share
+    text = json.dumps(block)
+    assert "SECRET" not in text and "bob" not in text.lower() and "reviewbot" not in text
