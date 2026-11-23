@@ -1,0 +1,31 @@
+# Check manifest fragment: the since-last-run collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.since_last_run"
+kind = "collector"
+title = "Since last run"
+summary = "Actions closed since the previous run with their commits (actions.json completed_sha at HEAD), the Step gates gained or lost, and the next blocking gate; the report and the log.md entry open with it."
+issues = [1083]
+callable = "lib.core_scans:since_last_run"
+publishes = ["since_last_run"]
+reads = ["level", "assess_dir", "repo_root", "superseded"]
+stage = "post_offers"
+shapes = [
+  { path = "since_last_run", type = "lib.run_context_types_since:SinceLastRun" },
+]
+revision = 1
+  [entries.privacy]
+  "since_last_run.previous_run_id" = "token"
+  "since_last_run.previous_commit" = "token"
+  "since_last_run.closed.action" = "drop"
+  "since_last_run.closed.condition" = "token"
+  "since_last_run.closed.finding" = "token"
+  "since_last_run.closed.completed_sha" = "token"
+  "since_last_run.gates_gained" = "token"
+  "since_last_run.gates_lost" = "token"
+  "since_last_run.next_blocker" = "token"
+  "since_last_run.lines" = "drop"
+  "since_last_run.markdown" = "drop"
+  "since_last_run.reason" = "token"
+  "since_last_run.closed_reason" = "token"
