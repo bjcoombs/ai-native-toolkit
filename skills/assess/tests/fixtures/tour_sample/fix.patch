@@ -1,0 +1,9 @@
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -14,5 +14,4 @@ jobs:
+         with:
+           python-version: "3.12"
+       - run: pip install -e . pytest
+-      # Keeps the build green while the report test is flaky.
+-      - run: pytest || true
++      - run: pytest

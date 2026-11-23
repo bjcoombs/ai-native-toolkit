@@ -29,3 +29,7 @@ skills/assess/tests/fixtures/fleet_heatmap/expected*.svg linguist-generated
 skills/assess/tests/fixtures/fleet_golden/repos.jsonl linguist-generated
 skills/assess/tests/fixtures/fleet_next_steps/expected/** linguist-generated
 skills/assess/tests/fixtures/golden/decomposition-parity-report.md linguist-generated
+
+# The /assess tour's sample repository and fix (#1102): LF in every checkout, so the sample's
+# commits, and so its report, are the same on Windows.
+skills/assess/tests/fixtures/tour_sample/** text eol=lf
