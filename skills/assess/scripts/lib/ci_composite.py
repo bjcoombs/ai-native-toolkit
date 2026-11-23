@@ -18,8 +18,8 @@ whose ``action.yml`` runs ``ruff check .`` and ``pytest`` used to read as no com
   true`` or ``if: false`` on the caller masks them all. The copies sit in the calling job and
   workflow, so the caller's triggers and job keys apply.
 - **Inputs.** ``${{ inputs.<name> }}`` in a copied ``run:`` value is replaced by the
-  caller's literal ``with:`` scalar for that name, else the action's literal
-  ``inputs.<name>.default``. One left in command position (no value, a block or
+  caller's literal ``with:`` scalar for that name, else, only when the caller's ``with:``
+  omits the name, the action's literal ``inputs.<name>.default``. One left in command position (no value, a block or
   ``${{ }}`` value) makes that line unknown. A whole ``run: ${{ inputs.run }}`` (or
   ``script`` / ``command``) is left as it is: ``lib.ci_action_inputs`` already reads the
   caller's ``with:`` value for it (#799), so it is not counted twice.
@@ -133,17 +133,10 @@ def _settle(line: str, given: dict[str, str]) -> tuple[str, bool]:
     return line, any(_INPUT_ONLY.match(inner) or "inputs" in inner for inner in left)
 
 
-def _with_values(tree: IndentTree, item: list[int]) -> dict[str, str]:
-    """The caller step's literal ``with:`` scalars."""
-    out: dict[str, str] = {}
-    for k in item:
-        if tree.lines[k].key != "with":
-            continue
-        for c in tree.children(k):
-            value = scalar(tree.lines[c].value)
-            if value is not None:
-                out[tree.lines[c].key] = value
-    return out
+def _with_values(tree: IndentTree, item: list[int]) -> dict[str, str | None]:
+    """The caller step's ``with:`` keys: a literal scalar, or None for any other value."""
+    return {tree.lines[c].key: scalar(tree.lines[c].value)
+            for k in item if tree.lines[k].key == "with" for c in tree.children(k)}
 
 
 def inline_composites(text: str, read_local: ReadLocal) -> Expanded:
@@ -162,7 +155,8 @@ def inline_composites(text: str, read_local: ReadLocal) -> Expanded:
             continue
         steps, defaults = _run_steps(action)
         item = tree.siblings[tree.mapping_of[i]]
-        given = defaults | _with_values(tree, item)
+        # A caller's value replaces the default whatever it is: a non-literal one stays unknown.
+        given = {k: v for k, v in (defaults | _with_values(tree, item)).items() if v is not None}
         indent, level = tree.lines[item[0]].indent, tree.lines[item[0]].level
         caller = [lines[k].strip().removeprefix("- ") for k in item if tree.lines[k].key in _CALLER_KEYS]
         copied: list[tuple[str, bool]] = []

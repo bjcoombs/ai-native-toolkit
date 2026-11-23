@@ -123,6 +123,8 @@ _INPUT = ("inputs:\n  cmd:\n    required: false\nruns:\n  using: composite\n  st
     ("        with:\n          cmd: ${{ matrix.c }}\n", _INPUT, (None, None, "check_target")),
     ("        with:\n          cmd: ${{ env.CMD }}\n", _INPUT, (None, None, "check_target")),
     ("", _INPUT.replace("required: false", "default: pytest"), (True, True, "enforced_check")),
+    ("        with:\n          cmd: ${{ matrix.c }}\n", _INPUT.replace("required: false", "default: pytest"),
+     (None, None, "check_target")),   # the caller's value replaces the default
     ("        with:\n          cmd: echo hi\n", _INPUT.replace("run: ${{ inputs.cmd }}", "run: echo ${{ inputs.cmd }}"),
      (False, False, "no_check_command")),
 ])
