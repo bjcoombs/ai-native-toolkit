@@ -27,11 +27,16 @@ Gradle:
   plugin applied in a tracked ``*.gradle[.kts]`` (under ``reads_pdm_scripts``), else None;
   False for a dry run or ``-x check``.
 - ``gradle_task_paths(args)`` keeps each run task's project path, and
-  ``gradle_runs_in(args, names, build_file)`` (#1126) matches it to a build file's
+  ``gradle_runs_in(args, names, build_file, cwd)`` (#1126) matches it to a build file's
   directory under the Gradle root, the nearest tracked ``settings.gradle[.kts]`` at or above
-  the ``-p`` start or the gate (``:app:x`` is ``android/app/build.gradle`` beside
-  ``android/settings.gradle``; ``:x`` the root build file): True on a match or an
-  unqualified task, None on a mismatch, a root-file gate or ``-b`` / ``-c``.
+  the start, else the gate (``:app:x`` is ``android/app/build.gradle`` beside
+  ``android/settings.gradle``; ``:x`` the root build file): True on a match, None on a
+  mismatch, a root-file gate or ``-b`` / ``-c``. The start (#1162, #1163) is the CI line's
+  known working directory ``cwd`` (``""`` the root; ``cd`` / ``working-directory:``, read by
+  ``lib.testing.ci_workdir``) joined with ``-p`` / ``--project-dir``. An unqualified task
+  runs in the start's project and its subprojects under the same root: a gate elsewhere, or
+  any gate with an unreadable ``-p`` (``$DIR``, absolute, above the root), reads None; with
+  the start unknown it runs in every project (True).
 
 Script runners (``script_run(words)``): what ``hatch run``, ``pdm [run]`` and ``poe`` run,
 as ``(words, is_script)``, or None for another command (``pdm install``):
@@ -51,7 +56,8 @@ a scan whose first argument is the repository root: ``ci_checks.scan_ci_checks``
 where they classify the coverage gate's runs). Outside one (an instruction file) they are not read,
 and ``pdm X`` is read as a script by name. Inward-only imports: stdlib,
 ``lib.command_flags`` and ``lib.command_index``; never ``lib.check_command`` or an orchestrator.
-Tests: ``tests/test_runner_args.py``, ``tests/test_gradle_tasks.py``.
+Tests: ``tests/test_runner_args.py``, ``tests/test_gradle_tasks.py``,
+``tests/test_gradle_workdir.py``.
 """
 from __future__ import annotations
 
@@ -139,34 +145,41 @@ def gradle_project(task: str) -> str | None:
     return "/".join(part for part in task.split(":")[:-1] if part)
 
 
-def gradle_runs_in(args: Sequence[str], names: frozenset[str],
-                   build_file: str | None) -> bool | None:
-    """Does a run task named in ``names`` run in ``build_file``'s project (#1126)? True for
-    an unqualified one (every project) or a project path naming ``build_file``'s directory
-    (``_in_project``); None when only a path to another or unmatched project names one (a
-    ``settings.gradle`` ``projectDir`` can move a project, a root build file can configure
-    subprojects, ``-b`` / ``-c`` replace the layout); False when none is named.
-    ``build_file`` None: any named task."""
-    start, replaced = _gradle_start(args)
+def gradle_runs_in(args: Sequence[str], names: frozenset[str], build_file: str | None,
+                   cwd: str | None = None) -> bool | None:
+    """Does a run task named in ``names`` run in ``build_file``'s project (#1126, #1162)?
+    True for a project path naming ``build_file``'s directory (``_in_project``), or an
+    unqualified one that runs there (``_in_start``); None when only a task in another or
+    unmatched project names one (a ``settings.gradle`` ``projectDir`` can move a project, a
+    root build file or ``allprojects {}`` can configure others, ``-b`` / ``-c`` replace the
+    layout); False when none is named. ``cwd`` is the CI line's working directory (``""``
+    the repository root, None unknown). ``build_file`` None: any named task."""
+    start, replaced, unread = _gradle_start(args, cwd)
     named = False
     for task in gradle_task_paths(args):
         if task.rsplit(":", 1)[-1] not in names:
             continue
         project = gradle_project(task)
-        if project is None or build_file is None:
+        if build_file is None or (project is None and _in_start(
+                posixpath.dirname(build_file), start, unread)):
             return True
-        if (not replaced and posixpath.basename(build_file) in _GRADLE_BUILD_FILES
+        if (project is not None and not replaced and not unread
+                and posixpath.basename(build_file) in _GRADLE_BUILD_FILES
                 and _in_project(project, posixpath.dirname(build_file), start)):
             return True
         named = True
     return None if named else False
 
 
-def _gradle_start(args: Sequence[str]) -> tuple[str | None, bool]:
-    """``(the -p / --project-dir directory, normalised, or None, whether the layout is
-    unread)``: ``-b`` / ``-c``, or a ``-p`` value that is a shell expansion."""
-    start: str | None = None
-    replaced = False
+def _gradle_start(args: Sequence[str], cwd: str | None = None
+                  ) -> tuple[str | None, bool, bool]:
+    """``(the directory Gradle starts in, or None when unknown; whether ``-b`` / ``-c``
+    replace the layout; whether ``-p`` is unreadable)``. The start is the ``-p`` /
+    ``--project-dir`` directory joined onto ``cwd`` (``-p`` alone when ``cwd`` is unknown),
+    else ``cwd``, normalised (``""`` the repository root). A ``-p`` value that is a shell
+    expansion, absolute, or above the root is unreadable."""
+    start = cwd
+    replaced = unread = False
     words = iter(args)
     for word in words:
         head, eq, value = word.partition("=") if word.startswith("--") else (word[:2], "", word[2:])
@@ -174,18 +187,35 @@ def _gradle_start(args: Sequence[str]) -> tuple[str | None, bool]:
             replaced = True
         elif head in ("-p", "--project-dir"):
             value = value if eq or value else next(words, "")
-            replaced = replaced or not value or value.startswith(("$", "/", "~"))
-            start = posixpath.normpath(value) if value else None
-            start = "" if start == "." else start
-    return start, replaced
+            joined = posixpath.normpath(posixpath.join(cwd or "", value)) if value else ""
+            unread = (unread or not value or value.startswith(("$", "/", "~"))
+                      or joined.startswith(".."))
+            start = None if not value else ("" if joined == "." else joined)
+    return start, replaced, unread
+
+
+def _in_start(gate_dir: str, start: str | None, unread: bool) -> bool:
+    """An unqualified task runs in the start directory's project and its subprojects
+    (#1162): ``gate_dir`` at or under ``start``, and under the same Gradle root when the
+    roots are read (``android/`` with its own ``settings.gradle`` is another build). An
+    unknown start keeps the reading before #1162: every project."""
+    if unread:
+        return False
+    if start is None:
+        return True
+    if start and gate_dir != start and not gate_dir.startswith(start + "/"):
+        return False
+    roots = _GRADLE_ROOTS.get()
+    root = None if roots is None else _nearest(start, roots)
+    return root is None or _nearest(gate_dir, roots or frozenset()) == root
 
 
 def _in_project(project: str, gate_dir: str, start: str | None) -> bool:
     """``:a:b`` is ``a/b`` under the Gradle root: the nearest directory holding a tracked
-    ``settings.gradle[.kts]`` at or above the start (``-p``), else above the gate's own
-    directory (a CI line's ``cd`` is not resolved, so the gate's build is taken as the one
-    run: ``cd android && ./gradlew :app:x`` is ``android/app``). With no root read, the
-    gate's directory is ``project`` or ends with ``/project``."""
+    ``settings.gradle[.kts]`` at or above the start (``-p`` and the CI line's working
+    directory, ``_gradle_start``), else, with the start unknown, above the gate's own
+    directory (the gate's build is taken as the one run). With no root read, the gate's
+    directory is ``project`` or ends with ``/project`` (under the start, when known)."""
     roots = _GRADLE_ROOTS.get()
     base = gate_dir if start is None else start
     root = None if roots is None else _nearest(base, roots)
