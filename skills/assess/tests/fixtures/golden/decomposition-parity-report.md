@@ -14,11 +14,11 @@ By tag: behaviour 0 of 2 (NOT MEASURED: 1) · docs 0 of 0 (NOT MEASURED: 2) · s
 
 ## Where you are on the Steps
 
-In place: Step 1 of 4, Assisted: an agent can read and help with your code.
+In place: Step 2 of 4, Supervised agent PRs: an agent opens pull requests, a person reviews each one.
 
 [![Where you are on the Steps](./step-ladder.svg)](./step-ladder.svg)
 
-Step 2, Supervised agent PRs, opens when more practices are in place.
+Step 3, Unattended agent PRs, opens when CI runs the tests.
 
 ## Evidence behind the Step
 

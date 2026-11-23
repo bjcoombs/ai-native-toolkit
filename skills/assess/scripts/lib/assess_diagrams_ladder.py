@@ -25,9 +25,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import lib.fleet.fleet_svg as svg
-from lib.headline import GATE_CHANGE, _gate_change, _gate_gain
+from lib.headline import GATE_CHANGE, _gate_change
 from lib.level_result_types import LevelResult
-from lib.levels import MaturityModel, StepDef, StepGate
+from lib.levels import StepDef, StepGate
 from lib.vocabulary import IN_PLACE
 
 LADDER_FILE = "step-ladder.svg"
@@ -153,19 +153,14 @@ def ladder_caption(level: LevelResult, steps: Sequence[StepDef]) -> str:
     headline's Next line reads them, or that the top Step is held.
 
     Each blocking gate is worded by ``headline._gate_change`` (``GATE_CHANGE``, plus why a
-    not-measured or owner-excluded gate is open); a count shortfall left once the gates
-    hold (``headline._gate_gain``: a counted gate condition adds to the tally) adds "more
-    practices are in place", so the caption and the headline name the same unlock."""
+    not-measured or owner-excluded gate is open). A Step reads its gates only (#1083), so
+    the caption names gates and never a count, and it names the same unlock as the
+    headline."""
     nxt = level["next_step"]
     if nxt is None:
         return "This is the top Step; it holds while its gates hold."
     gates = [b for b in nxt["blockers"] if b["kind"] == "gate"]
     changes = [_gate_change(b) for b in gates]
-    model: MaturityModel = {"version": level["levels_version"], "rows": [], "steps": list(steps)}
-    gain, _ = _gate_gain(level, model, nxt["step"], gates)
-    if any(b.get("threshold", 0) - b.get("met", 0) - gain > 0
-           for b in nxt["blockers"] if b["kind"] == "threshold"):
-        changes.append("more practices are in place")
     unlock = " and ".join(changes) if changes else "its gates hold"
     return f"Step {nxt['step']}, {_name(steps, nxt['step'])}, opens when {unlock}."
 
