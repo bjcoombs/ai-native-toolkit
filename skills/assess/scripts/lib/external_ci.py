@@ -7,7 +7,7 @@ check, and ``ci_checks`` would read false. Under ``--platform`` this module
 reads the checks GitHub recorded on recently merged pull requests instead.
 
 It is the private ``network`` registry spec ``external_ci``. It reads the
-shared ``merged_sample`` (``lib/merged_sample.py``, up to ``SAMPLE_CAP``
+shared ``merged_sample`` (``lib/hosting/merged_sample.py``, up to ``SAMPLE_CAP``
 merged pull requests in the run window). The headless runner calls it only
 under ``--platform``, because ``ci_checks`` reads it and is in
 ``signals.PLATFORM_SCANS``; offline it calls :func:`no_external_ci`, which
@@ -65,8 +65,8 @@ from __future__ import annotations
 from typing import Any
 
 from lib.external_ci_rules import NOT_READ, ExternalCi, known_app, known_context
-from lib.gh_cli import GhUnavailable, gh_json
-from lib.merged_sample import MergedSample
+from lib.hosting.gh_cli import GhUnavailable, gh_json
+from lib.hosting.merged_sample import MergedSample
 
 # Reads per sampled pull request: check runs, then commit statuses.
 CALLS_PER_CHANGE = 2

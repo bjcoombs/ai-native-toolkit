@@ -88,3 +88,33 @@ from a file that previously carried it (base-vs-head removal detection). So a
 retro that guts the instructions while leaving the marker comment intact still
 goes red, and a marked file that moves is followed to its new path rather than
 read as a deletion.
+
+## The merge queue
+
+`main` may merge through GitHub's merge queue, which tests a temporary branch
+holding `main` plus the queued pull requests ahead of a pull request plus that
+pull request (a merge group), and merges only when every required check passes
+on it. GitHub documents the queue for organization-owned repositories and this
+one is user-owned, the same limit that descoped the floor.yml path lock, so
+whether a queue can exist here is settled only when its ruleset is created.
+Until one exists, the `merge_group` triggers never fire and nothing below
+applies. The floor's behaviour in a merge group:
+
+- **`floor enforcement` runs on every merge group.** Marker removal is judged
+  against the group's base commit, so it covers every pull request in the
+  group at once, and the four clauses are checked on the group's head.
+- **`floor self-anchor` runs on every merge group,** reading the live branch
+  protection and the `floor-signoff` environment as it does on a pull request.
+- **The sign-off is a pull-request gate.** The path filter does not classify a
+  merge group (both of its answers are false), so no deployment review is
+  requested inside the queue and the canary suite does not run there. A
+  floor-core pull request still cannot reach the queue unapproved: the queue
+  admits only a pull request whose required checks passed on its head, and
+  `floor enforcement` on that head is red until the maintainer approves the
+  review (clause iii). A push to a queued pull request removes it from the
+  queue, so the approved head is the head that merges. Only a bypass actor of
+  the queue's ruleset can merge past the queue, and with `enforce_admins` on,
+  branch protection still requires `floor enforcement` of that actor too.
+- **A workflow that stops triggering on merge groups fails closed.** Its
+  required context never reports on the group, and the queue removes the pull
+  request when the check timeout expires; nothing merges.

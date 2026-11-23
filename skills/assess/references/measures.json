@@ -2119,6 +2119,12 @@
           "carried_in": "enforced_basis"
         },
         {
+          "code": "check_may_pass",
+          "means": "In enforced_basis and lint_basis: the check's exit status may not reach its job: a || fallback that can pass (pytest || echo failed), an if or while condition, an until loop that breaks, a check before && with more of the step after it, or a { } group or function called that way.",
+          "next_step": "Let the check's exit status reach the step: run it on its own line, or end the fallback with exit 1 (pytest || { echo failed; exit 1; }).",
+          "carried_in": "enforced_basis"
+        },
+        {
           "code": "script_not_found",
           "means": "In enforced_basis and lint_basis: the only CI line that would settle the signal runs a committed script (./ci.sh, bash scripts/test.sh, ./scripts/lint.sh) that no tracked file matches, so it is not credited; an earlier step may still create it.",
           "next_step": "Commit the script the CI step runs, or call the test or lint command in its own CI step (pytest, ruff check .), so the scan can read it.",
@@ -5062,7 +5068,7 @@
       "collector": "core.ci_checks",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "included_jobs, merged_config_partial: an include may run it; unknown_trigger: unsettled; script_not_found: not committed; check_target: a target may; unread_ci_system: unparsed CI may; external_ci, external_ci_marker: CI elsewhere; analysers_in_build: .NET analysers; compiler_gate_only: -Werror"
+      "null_means": "included_jobs, merged_config_partial: an include may; unknown_trigger: unsettled; check_may_pass: may pass; script_not_found: not committed; check_target: a target may; unread_ci_system: unparsed CI; external_ci(_marker): CI elsewhere; analysers_in_build: .NET analysers; compiler_gate_only: -Werror"
     },
     {
       "path": "promissory_markers.families.suppression.stale",
@@ -5107,7 +5113,7 @@
       "collector": "core.ci_checks",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "included_jobs: in an included file; unknown_trigger: triggers unsettled; script_not_found: its script is not committed; check_target: a target may run it; unread_ci_system: an unparsed CI system may; external_ci: merged changes carry external checks; external_ci_marker: a root Prow OWNERS_ALIASES"
+      "null_means": "included_jobs: in an included file; unknown_trigger: triggers unsettled; check_may_pass: may pass; script_not_found: script not committed; check_target: a target may; unread_ci_system: an unparsed CI system may; external_ci: external checks on merges; external_ci_marker: a root Prow OWNERS_ALIASES"
     },
     {
       "path": "agent_environment.pinning.unlocked_total",
@@ -5125,7 +5131,7 @@
       "collector": "core.coverage_gate",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "threshold_not_read: the threshold is unknown; unknown_trigger: the run's triggers are not settled; indirect_run: a CI target or script (make test, tox) may run it; included_jobs: it may be in an included file; unread_ci_system: it may run in an unparsed CI system"
+      "null_means": "threshold_not_read: the threshold is unknown; unknown_trigger: the run's triggers are unsettled; check_may_pass: may not fail its job; indirect_run: a CI target or script (make test, tox) may run it; included_jobs: it may be in an included file; unread_ci_system: an unparsed CI system may run it"
     },
     {
       "path": "test_pressure.mutation_run",

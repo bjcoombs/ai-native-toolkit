@@ -1,5 +1,5 @@
-"""Tests for the GitLab provider seam (lib/gitlab_cli.py) and its first
-consumer, the GitLab path of lib/review_reality.py.
+"""Tests for the GitLab provider seam (lib/hosting/gitlab_cli.py) and its first
+consumer, the GitLab path of lib/hosting/review_reality.py.
 
 `glab` and `gh` are shell stubs in a private bin directory that is the whole
 PATH (with symlinks to the few real tools the stubs and git need), so no real
@@ -24,16 +24,16 @@ from conftest import skip_without_posix_shell
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib import gitlab_cli  # noqa: E402
-from lib.gh_cli import GhUnavailable  # noqa: E402
-from lib.gitlab_cli import (  # noqa: E402
+import lib.hosting.gitlab_cli as gitlab_cli  # noqa: E402
+from lib.hosting.gh_cli import GhUnavailable  # noqa: E402
+from lib.hosting.gitlab_cli import (  # noqa: E402
     GitlabProject, glab_api, normalize_host, open_gitlab, parse_remote,
 )
 from lib.fleet_config import parse_fleet_config  # noqa: E402
-from lib.platform_cli import CACHE_ENV  # noqa: E402
-from lib.review_reality import scan_review_reality  # noqa: E402
-from lib import merged_sample as merged_sample_module  # noqa: E402
-from lib.merged_sample import merged_sample  # noqa: E402
+from lib.hosting.platform_cli import CACHE_ENV  # noqa: E402
+from lib.hosting.review_reality import scan_review_reality  # noqa: E402
+import lib.hosting.merged_sample as merged_sample_module  # noqa: E402
+from lib.hosting.merged_sample import merged_sample  # noqa: E402
 from lib.reason_codes import reason_code  # noqa: E402
 
 FAKE_GLAB = """#!/bin/sh
@@ -58,7 +58,7 @@ exit 1
 
 PROJECT = "grp/sub/app"
 ENC = "grp%2Fsub%2Fapp"
-# The shared sample's listing (lib/merged_sample.py) with no window: newest updated first.
+# The shared sample's listing (lib/hosting/merged_sample.py) with no window: newest updated first.
 MRS = f"projects/{ENC}/merge_requests?state=merged&order_by=updated_at&sort=desc&per_page=20&page=1"
 
 ALICE = {"username": "Alice"}
@@ -588,7 +588,7 @@ def test_gitlab_notes_not_a_list_is_unavailable(world: World) -> None:
 def test_gitlab_delivery_and_review_reality_share_one_notes_read(world: World) -> None:
     from datetime import datetime, timedelta, timezone
 
-    from lib.merged_sample import sample_since
+    from lib.hosting.merged_sample import sample_since
     from lib.signals import collect
 
     now = datetime.now(timezone.utc).replace(microsecond=0)

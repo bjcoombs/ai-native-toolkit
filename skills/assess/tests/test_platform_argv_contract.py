@@ -1,6 +1,6 @@
 """Every ``--platform`` read names its target in argv (from #737's review, issue #715).
 
-``lib/platform_cli.py`` caches a response under its argv alone, with no working
+``lib/hosting/platform_cli.py`` caches a response under its argv alone, with no working
 directory, so a call that relies on the cwd's git remote would be answered from
 another repository's cache entry. This runs every scan in ``PLATFORM_SCANS``
 through the headless runner with recording ``gh`` and ``glab`` stubs, once for

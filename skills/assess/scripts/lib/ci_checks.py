@@ -68,7 +68,7 @@ ROOT). Each resolved file's lines are classified the same way and counted in
 
 Under ``--platform`` (and in a full ``/assess`` run) a repository whose
 includes did not all resolve offline also gets GitLab's merged configuration
-from the CI lint API (``lib/gitlab_ci_lint.py``, #796). Its check lines are
+from the CI lint API (``lib/hosting/gitlab_ci_lint.py``, #796). Its check lines are
 counted in ``merged_check_commands``, apart from the offline counts (the merged
 file repeats the own and resolved jobs). ``merged_config`` says what happened:
 ``not_read`` (offline), ``not_needed`` (every include resolved offline: the
@@ -111,6 +111,10 @@ run on ordinary changes left out too (a ``workflow_dispatch``- or
   not read.
 - ``unknown_trigger`` (null): none does, but an unmasked check sits in a
   workflow or job whose triggers this reader cannot settle.
+- ``check_may_pass`` (null, #1008): none does, but a line on ordinary changes runs a
+  check whose failure the step may hide (``lib.ci_unsure``: ``pytest || echo failed``,
+  ``if pytest; then ...; fi``, ``until pytest; do break; done``, ``pytest && echo ok``
+  with more of the step after it); ``lint_basis`` alike.
 - ``script_not_found`` (null, #937): none does, but one runs a check through a
   committed script the tree does not hold (``lib.ci_scripts``: ``./ci.sh`` with no
   ``ci.sh``); ``lint_basis`` alike. ``test_or_lint_configured`` still counts it. A committed
@@ -164,6 +168,7 @@ unmasked line of its job runs ``git diff --exit-code`` (``lib.ci_lint_gates``).
   linter on ordinary changes.
 - ``included_jobs`` / ``merged_config_partial`` (null): as ``basis``.
 - ``unknown_trigger`` (null): an unmasked lint line's triggers are not settled.
+- ``check_may_pass`` (null): a lint line's failure may not fail its job (#1008).
 - ``script_not_found`` (null): the only lint line runs a script no tracked file matches.
 - ``check_target`` (null): no lint line, but an unmasked check target or
   script may run one.
@@ -311,7 +316,7 @@ Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture ta
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Sequence
 from functools import partial
 from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
@@ -322,7 +327,10 @@ from lib.check_command import (
 from lib.ci_includes import IncludeRecord, Resolution, resolve_includes
 from lib.ci_lint_gates import (
     line_commands, line_compiler_gate, line_dotnet_build, lint_gate, rewrite_gated)
-from lib.ci_masking import unmasked_lines
+from lib.ci_check_state import (
+    EnforcedBasis as EnforcedBasis, External as External, LintBasis as LintBasis, Tally,
+    _enforced_state, _lint_state, _max, _sum)
+from lib.ci_masking import mask_lines, unmasked_lines
 from lib.named_check import (
     instruction_words, named_count, setup_ci_target, sourced_env, unread_ci_target)
 from lib.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
@@ -368,16 +376,7 @@ def merged_partial(text: str, resolution: Resolution | None, merged_text: str | 
 CiChecksBasis = Literal["check_command", "merged_config", "included_jobs",
                         "merged_config_partial", "unread_ci_system", "external_ci",
                         "external_ci_marker", "no_check_command", "no_ci"]
-EnforcedBasis = Literal[
-    "enforced_check", "included_jobs", "unknown_trigger", "script_not_found", "check_target",
-    "unread_ci_system", "external_ci", "external_ci_marker", "not_enforced", "no_check_command",
-    "no_ci"]
-LintBasis = Literal["lint_command", "included_jobs", "merged_config_partial", "unknown_trigger",
-                    "script_not_found", "check_target", "unread_ci_system", "external_ci",
-                    "external_ci_marker", "analysers_in_build", "compiler_gate_only",
-                    "not_enforced", "no_lint_command", "no_ci"]
-# Off-repository CI, in precedence order (#928): platform evidence, then the Prow marker.
-External = Literal["external_ci", "external_ci_marker"] | None
+
 # The offline Prow marker (#928): a root OWNERS_ALIASES with no CI file of any kind.
 PROW_MARKER = "OWNERS_ALIASES"
 
@@ -586,7 +585,6 @@ def enforced_check_commands(text: str) -> tuple[int, int]:
     return enforced, max(total - enforced, 0)
 
 
-Tally = tuple[int, int, int, int]
 
 
 def _is_lint_test(test: LineTest) -> bool:
@@ -596,23 +594,25 @@ def _is_lint_test(test: LineTest) -> bool:
 
 def _trigger_tally(text: str, workflow: Trigger | None,
                    tests: Sequence[LineTest] = (_line_runs_check,)) -> list[Tally]:
-    """Per line test: ``(ordinary, unknown trigger, off trigger, masked)`` lines of one CI file.
+    """Per line test: ``(ordinary, unknown trigger, off trigger, masked, may pass)`` lines of one CI file.
 
     ``workflow`` is a GitHub workflow's settled trigger; None reads GitLab job triggers.
     The lint test also counts the rewrite lines a ``git diff`` gate makes lint runs (#926).
     """
     lines = text.splitlines()
     gated = rewrite_gated(text) if any(_is_lint_test(t) for t in tests) else frozenset()
-    unmasked = unmasked_lines(text)
+    unmasked, unsure = mask_lines(text)
     triggers: list[Trigger] = (gitlab_line_triggers(text) if workflow is None
                                else [workflow] * len(lines))
     kept = [keep(unmasked, triggers, t) for t in ("ordinary", "unknown", "not_ordinary")]
+    may = [keep(unsure, triggers, t) for t in ("ordinary", "unknown")]
     out: list[Tally] = []
     for test in tests:
         extra = gated if _is_lint_test(test) else frozenset()
         counts = [count_check_lines(k, context=lines, test=test, extra=extra) for k in kept]
-        masked = max(count_check_lines(lines, test=test, extra=extra) - sum(counts), 0)
-        out.append((counts[0], counts[1], counts[2], masked))
+        may_pass = sum(count_check_lines(k, context=lines, test=test) for k in may)
+        masked = max(count_check_lines(lines, test=test, extra=extra) - sum(counts) - may_pass, 0)
+        out.append((counts[0], counts[1], counts[2], masked, may_pass))
     return out
 
 
@@ -637,7 +637,7 @@ def _basis(found: bool, merged: bool, *, elsewhere: bool, partial: bool, unread:
 def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
                    merged_ci: object = None, external_ci: object = None) -> CiChecksBlock:
     """Build the ``ci_checks`` block for the repository at ``repo_root``. ``merged_ci`` is the
-    ``gitlab_merged_ci`` reading (``lib/gitlab_ci_lint.py``) and ``external_ci`` the
+    ``gitlab_merged_ci`` reading (``lib/hosting/gitlab_ci_lint.py``) and ``external_ci`` the
     ``external_ci`` one (``lib/external_ci.py``); anything else is not read."""
     root = repo_root.resolve()
     merged = as_merged(merged_ci)
@@ -683,19 +683,19 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     tallies += [_trigger_tally(f.text, None, tests) for f in resolution.files] if resolution else []
     check_t, lint_t, miss_t, lint_miss_t, may_t, may_check_t, gate_t, dotnet_t = (
         _sum(t[i] for t in tallies) for i in range(len(tests)))
-    ordinary, unknown, off, masked = check_t
+    ordinary, unknown, off, masked, may_pass = check_t
     if merged.read and merged.text is not None:
         # GitLab's merged configuration (#796) repeats the file's own jobs: read it only
         # where the files alone found no enforced check, as basis reads merged_config.
         m_check, m_lint, m_miss, m_lint_miss, m_may, m_may_check, m_gate, m_dotnet = _trigger_tally(
             merged.text, None, tests)
-        m_ordinary, m_unknown, m_off, m_masked = m_check
+        m_ordinary, m_unknown, m_off, m_masked, m_may_pass = m_check
         if not lint_t[0]:
             lint_t, may_t = _max(lint_t, m_lint), _max(may_t, m_may)
             lint_miss_t = _max(lint_miss_t, m_lint_miss)
             gate_t, dotnet_t = _max(gate_t, m_gate), _max(dotnet_t, m_dotnet)
         if not ordinary:
-            ordinary, unknown = m_ordinary, max(unknown, m_unknown)
+            ordinary, unknown, may_pass = m_ordinary, max(unknown, m_unknown), max(may_pass, m_may_pass)
             may_check_t, miss_t = _max(may_check_t, m_may_check), _max(miss_t, m_miss)
         if not (checks or included_checks):
             off, masked = m_off, m_masked
@@ -705,7 +705,7 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     enforced_runs, enforced_basis = _enforced_state(
         ordinary, unknown, may_check_t, elsewhere=bool(elsewhere), unread=bool(unread),
         any_check=bool(found or merged_checks or named_count(check_commands, texts.values())), has_files=bool(files), external=external,
-        missing=miss_t)
+        missing=miss_t, may_pass=may_pass)
     lint_runs, lint_basis = _lint_state(lint_t, _max(may_t, may_check_t), elsewhere=bool(elsewhere),
                                         partial=partial_merge, unread=bool(unread),
                                         has_files=bool(files), external=external,
@@ -730,65 +730,3 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
             "masked_check_commands": masked, "off_trigger_check_commands": off,
             "lint_runs": lint_runs, "lint_basis": lint_basis,
             "unread_ci_files": unread}
-
-
-def _sum(tallies: Iterable[Tally]) -> Tally:
-    a = b = c = d = 0
-    for t in tallies:
-        a, b, c, d = a + t[0], b + t[1], c + t[2], d + t[3]
-    return a, b, c, d
-
-
-def _max(x: Tally, y: Tally) -> Tally:
-    return max(x[0], y[0]), max(x[1], y[1]), max(x[2], y[2]), max(x[3], y[3])
-
-
-def _enforced_state(ordinary: int, unknown: int, may_check: Tally, *, elsewhere: bool,
-                    unread: bool, any_check: bool, has_files: bool,
-                    external: External = None,
-                    missing: Tally = (0, 0, 0, 0)) -> tuple[bool | None, EnforcedBasis]:
-    """``enforced_check_runs`` and ``enforced_basis`` (#775); unknown beats wrong, so an
-    unread CI system (#787) or an unmasked target whose recipe is not read (#920) reads
-    null ahead of a masked or off-trigger check."""
-    if ordinary:
-        return True, "enforced_check"
-    if elsewhere:
-        return None, "included_jobs"
-    if unknown:
-        return None, "unknown_trigger"
-    if missing[0] or missing[1]:
-        return None, "script_not_found"
-    if may_check[0] or may_check[1]:
-        return None, "check_target"
-    if unread:
-        return None, "unread_ci_system"
-    if external:
-        return None, external  # off-repository CI (#928): never credit, never false
-    if any_check:
-        return False, "not_enforced"
-    return False, "no_check_command" if has_files else "no_ci"
-
-
-def _lint_state(lint: Tally, may: Tally, *, elsewhere: bool, partial: bool, unread: bool,
-                has_files: bool, external: External = None,
-                missing: Tally = (0, 0, 0, 0)) -> tuple[bool | None, LintBasis]:
-    """``lint_runs`` and ``lint_basis`` from the lint and may-lint tallies (#782); an unread
-    CI system (#787) reads null ahead of the false cases, as for ``enforced_check_runs``."""
-    ordinary, unknown, off, masked = lint
-    if ordinary:
-        return True, "lint_command"
-    if elsewhere:
-        return None, "merged_config_partial" if partial else "included_jobs"
-    if unknown:
-        return None, "unknown_trigger"
-    if missing[0] or missing[1]:
-        return None, "script_not_found"
-    if may[0] or may[1]:
-        return None, "check_target"
-    if unread:
-        return None, "unread_ci_system"
-    if external:
-        return None, external
-    if not has_files:
-        return False, "no_ci"
-    return False, "not_enforced" if off or masked else "no_lint_command"

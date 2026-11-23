@@ -447,7 +447,7 @@
               "reason"
             ]
           },
-          "description": "Does CI run a test or lint check (lib/ci_checks.py), read from the git-tracked CI files and the GitLab includes resolved offline (lib/ci_includes.py: local files, and project or component files of clones in the --ghsync-root). test_or_lint_configured is true when an own or included CI line runs one, false when none does and every include resolved, and null (unknown) when a CI file pulls jobs from a file this run could not read (an unresolved GitLab include, a reusable workflow in another repository); basis says which. Under --platform, a repository with an unresolved GitLab include also gets GitLab's merged configuration from the CI lint API (lib/gitlab_ci_lint.py), counted apart in merged_check_commands; a template resolved offline wins. enforced_check_runs (issue #775) is the same test with masked checks left out (|| true, continue-on-error: true, allow_failure: true, set +e without a re-raise; lib/ci_masking.py) and checks off the ordinary triggers left out (lib/ci_triggers.py); masked_check_commands and off_trigger_check_commands count the lines left out. lint_runs (issue #782) is the enforced test for lint lines only (Layer 3 level 1); a check target or script that may run a linter inside it reads null. CI files of other systems are not parsed (issues #787, #928): unread_ci_files counts them, and with no readable check one makes basis unread_ci_system and enforced_check_runs null (and lint_runs null with no readable lint line). The unread-CI paths, all relative to the repository root: Jenkinsfile, .circleci/config.yml, bitbucket-pipelines.yml, .travis.yml, azure-pipelines.yml, azure-pipelines.yaml, .azure-pipelines.yml, .azure-pipelines.yaml, .buildkite/pipeline.yml, .buildkite/pipeline.yaml, buildkite.yml, buildkite.yaml, .ci.yaml (Flutter Cocoon / LUCI), .prow.yaml, .zuul.yaml, .drone.yml, .woodpecker.yml, .cirrus.yml, appveyor.yml, .semaphore/semaphore.yml, cloudbuild.yaml, bitrise.yml and codemagic.yaml; any *.star or *.cfg file under infra/config/ (LUCI project configuration); any *.yml or *.yaml file under .azure/pipelines/, eng/pipelines/, .azure-pipelines/, azure-pipelines/ (Azure Pipelines) or .woodpecker/; and any file under zuul.d/ (lib/unread_ci.py). Off-repository CI (issue #928): under --platform, when more than half of the sampled merged pull requests carry a check run or commit status of a known external CI system (lib/external_ci.py, at most two GET calls per sampled pull request), the false cases read null with basis external_ci; offline, a root Prow OWNERS_ALIASES file with no CI file of any kind reads null with basis external_ci_marker. Neither earns credit.",
+          "description": "Does CI run a test or lint check (lib/ci_checks.py), read from the git-tracked CI files and the GitLab includes resolved offline (lib/ci_includes.py: local files, and project or component files of clones in the --ghsync-root). test_or_lint_configured is true when an own or included CI line runs one, false when none does and every include resolved, and null (unknown) when a CI file pulls jobs from a file this run could not read (an unresolved GitLab include, a reusable workflow in another repository); basis says which. Under --platform, a repository with an unresolved GitLab include also gets GitLab's merged configuration from the CI lint API (lib/hosting/gitlab_ci_lint.py), counted apart in merged_check_commands; a template resolved offline wins. enforced_check_runs (issue #775) is the same test with masked checks left out (|| true, continue-on-error: true, allow_failure: true, set +e without a re-raise; lib/ci_masking.py) and checks off the ordinary triggers left out (lib/ci_triggers.py); masked_check_commands and off_trigger_check_commands count the lines left out. lint_runs (issue #782) is the enforced test for lint lines only (Layer 3 level 1); a check target or script that may run a linter inside it reads null. CI files of other systems are not parsed (issues #787, #928): unread_ci_files counts them, and with no readable check one makes basis unread_ci_system and enforced_check_runs null (and lint_runs null with no readable lint line). The unread-CI paths, all relative to the repository root: Jenkinsfile, .circleci/config.yml, bitbucket-pipelines.yml, .travis.yml, azure-pipelines.yml, azure-pipelines.yaml, .azure-pipelines.yml, .azure-pipelines.yaml, .buildkite/pipeline.yml, .buildkite/pipeline.yaml, buildkite.yml, buildkite.yaml, .ci.yaml (Flutter Cocoon / LUCI), .prow.yaml, .zuul.yaml, .drone.yml, .woodpecker.yml, .cirrus.yml, appveyor.yml, .semaphore/semaphore.yml, cloudbuild.yaml, bitrise.yml and codemagic.yaml; any *.star or *.cfg file under infra/config/ (LUCI project configuration); any *.yml or *.yaml file under .azure/pipelines/, eng/pipelines/, .azure-pipelines/, azure-pipelines/ (Azure Pipelines) or .woodpecker/; and any file under zuul.d/ (lib/unread_ci.py). Off-repository CI (issue #928): under --platform, when more than half of the sampled merged pull requests carry a check run or commit status of a known external CI system (lib/external_ci.py, at most two GET calls per sampled pull request), the false cases read null with basis external_ci; offline, a root Prow OWNERS_ALIASES file with no CI file of any kind reads null with basis external_ci_marker. Neither earns credit.",
           "properties": {
             "available": {
               "type": "boolean"
@@ -593,6 +593,7 @@
                 "enforced_check",
                 "included_jobs",
                 "unknown_trigger",
+                "check_may_pass",
                 "script_not_found",
                 "check_target",
                 "unread_ci_system",
@@ -602,7 +603,7 @@
                 "no_check_command",
                 "no_ci"
               ],
-              "description": "The reason for enforced_check_runs: enforced_check (true), included_jobs, unknown_trigger, script_not_found, check_target or unread_ci_system (null), external_ci (null: an external check context on merged changes under --platform; more than half of the sampled merged pull requests carry a check run or commit status of a known external CI system such as Buildkite, LUCI, Prow tide or Azure Pipelines, read with at most two GET calls per sampled pull request; it never gives credit), external_ci_marker (null: offline, a root Prow OWNERS_ALIASES file with no CI file present, neither a workflow, a .gitlab-ci.yml nor an unread CI file; an OWNERS file alone is not a marker), not_enforced, no_check_command or no_ci (false)."
+              "description": "The reason for enforced_check_runs: enforced_check (true), included_jobs, unknown_trigger, check_may_pass (a check whose failure the step may hide: pytest || echo failed, an if or while condition, an until loop that breaks out, a check before && with more of the step after it, a { } group or function called in such a position; issue #1008), script_not_found, check_target or unread_ci_system (null), external_ci (null: an external check context on merged changes under --platform; more than half of the sampled merged pull requests carry a check run or commit status of a known external CI system such as Buildkite, LUCI, Prow tide or Azure Pipelines, read with at most two GET calls per sampled pull request; it never gives credit), external_ci_marker (null: offline, a root Prow OWNERS_ALIASES file with no CI file present, neither a workflow, a .gitlab-ci.yml nor an unread CI file; an OWNERS file alone is not a marker), not_enforced, no_check_command or no_ci (false)."
             },
             "masked_check_commands": {
               "type": "integer",
@@ -625,6 +626,7 @@
                 "included_jobs",
                 "merged_config_partial",
                 "unknown_trigger",
+                "check_may_pass",
                 "script_not_found",
                 "check_target",
                 "unread_ci_system",
@@ -636,7 +638,7 @@
                 "no_lint_command",
                 "no_ci"
               ],
-              "description": "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, unknown_trigger, script_not_found, check_target, unread_ci_system, external_ci or external_ci_marker (null; as enforced_basis), analysers_in_build (null: a CI .NET build runs the analysers a committed Directory.Build.props or .csproj turns on with EnforceCodeStyleInBuild or AnalysisLevel; their severities live in .editorconfig, which the scan does not evaluate), compiler_gate_only (null: the only static gate is a compiler run with warnings as errors, such as mix compile --warnings-as-errors, -Werror or TreatWarningsAsErrors; issue #926), not_enforced, no_lint_command or no_ci (false)."
+              "description": "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, unknown_trigger, check_may_pass, script_not_found, check_target, unread_ci_system, external_ci or external_ci_marker (null; as enforced_basis), analysers_in_build (null: a CI .NET build runs the analysers a committed Directory.Build.props or .csproj turns on with EnforceCodeStyleInBuild or AnalysisLevel; their severities live in .editorconfig, which the scan does not evaluate), compiler_gate_only (null: the only static gate is a compiler run with warnings as errors, such as mix compile --warnings-as-errors, -Werror or TreatWarningsAsErrors; issue #926), not_enforced, no_lint_command or no_ci (false)."
             },
             "unread_ci_files": {
               "type": "integer",
@@ -764,13 +766,14 @@
                 "threshold_below_minimum",
                 "threshold_not_read",
                 "unknown_trigger",
+                "check_may_pass",
                 "indirect_run",
                 "included_jobs",
                 "unread_ci_system",
                 "not_run_in_ci",
                 "no_ci"
               ],
-              "description": "The reason for enforced_meets_minimum: ci_run (true); no_gate, threshold_below_minimum, not_run_in_ci and no_ci (false); threshold_not_read, unknown_trigger, indirect_run (a check target or script such as make test may run it), included_jobs and unread_ci_system (null)."
+              "description": "The reason for enforced_meets_minimum: ci_run (true); no_gate, threshold_below_minimum, not_run_in_ci and no_ci (false); threshold_not_read, unknown_trigger, check_may_pass (the run's failure may not fail its job: pytest --cov || echo failed; issue #1008), indirect_run (a check target or script such as make test may run it), included_jobs and unread_ci_system (null)."
             },
             "not_detected": {
               "type": [
@@ -804,7 +807,7 @@
               "reason"
             ]
           },
-          "description": "How work flows through review to merge (lib/delivery.py), from one shared sample of up to 30 changes merged inside the run window, newest merge first (the sample review_reality reads). A platform block: present only under --platform (absent otherwise); a refused read is available false with a reason (no_access on HTTP 403), never zeros. Durations are hours; shares are of merged_count.",
+          "description": "How work flows through review to merge (lib/hosting/delivery.py), from one shared sample of up to 30 changes merged inside the run window, newest merge first (the sample review_reality reads). A platform block: present only under --platform (absent otherwise); a refused read is available false with a reason (no_access on HTTP 403), never zeros. Durations are hours; shares are of merged_count.",
           "properties": {
             "available": {
               "type": "boolean"
@@ -885,7 +888,7 @@
                 "integer",
                 "null"
               ],
-              "description": "Changes per heavy read of the sample (lib/merged_sample.py PAGE_SIZE, or half of it after one retry on HTTP 502 or 504); null when no heavy read was made."
+              "description": "Changes per heavy read of the sample (lib/hosting/merged_sample.py PAGE_SIZE, or half of it after one retry on HTTP 502 or 504); null when no heavy read was made."
             }
           }
         },
@@ -1032,7 +1035,7 @@
               "reason"
             ]
           },
-          "description": "Whether merged changes were reviewed (lib/review_reality.py), from the shared sample of up to 30 changes merged inside the run window. A platform block: a refused read is available false with a reason (no_access on HTTP 403), never zeros. Shares are of merged_count; no title, number, login or name is written.",
+          "description": "Whether merged changes were reviewed (lib/hosting/review_reality.py), from the shared sample of up to 30 changes merged inside the run window. A platform block: a refused read is available false with a reason (no_access on HTTP 403), never zeros. Shares are of merged_count; no title, number, login or name is written.",
           "properties": {
             "available": {
               "type": "boolean"

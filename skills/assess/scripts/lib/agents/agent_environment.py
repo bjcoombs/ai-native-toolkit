@@ -52,7 +52,7 @@ at HEAD (``lib.command_index.repo_files``):
   unmet requirements and their evidence.
 
 ``ci_duration`` is the one network read: the median wall time of recent
-successful push runs on the default branch, per workflow, through ``lib.gh_cli``
+successful push runs on the default branch, per workflow, through ``lib.hosting.gh_cli``
 with a short per-call timeout. No remote, no ``gh``, no auth, offline or a
 refused read gives ``{"available": False, "reason"}`` and never fails the run.
 It is report evidence only: the 10-minute figure is published guidance with no
@@ -106,7 +106,7 @@ from typing import Any, Literal, NotRequired, TypedDict
 from lib.named_check import is_named_check, is_named_check_name
 from lib.command_index import RepoIndex, build_index
 from lib.command_resolver import extract_commands, resolve
-from lib.gh_cli import GhUnavailable, gh_json, open_github
+from lib.hosting.gh_cli import GhUnavailable, gh_json, open_github
 from lib.pinning import PinningBlock, PinRow, counted, pin_rows, pinning_block
 
 SetupKind = Literal[

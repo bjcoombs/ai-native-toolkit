@@ -18,7 +18,7 @@ A row whose offline scan failed gets no platform read.
 
 The scans run are ``PLATFORM_SCANS`` restricted to ``--scans`` when that is
 given. Every child shares one response cache directory for the pass
-(``lib/platform_cli.py``), created here and removed when the pass ends, so an
+(``lib/hosting/platform_cli.py``), created here and removed when the pass ends, so an
 auth probe or a ``users/<login>[bot]`` lookup is answered once per run.
 
 ``after`` (``--delete-after``) runs on each row once its platform read is done,
