@@ -42,13 +42,15 @@ from lib.prior_level import write_prior_level
 from lib.since_last_run import baseline_record
 from lib.assess_diagrams_review import COUNTS_ONLY_FILES, build_all, counts_only_diagrams, write_all
 from lib.badge import write_headline_badge
-from lib.exec_summary import summarised
-from lib.headline import as_headline, run_context_headline
+from lib.exec_summary import run_headline
+from lib.headline import as_headline
 from lib.counts_only.content_free import COUNTS_ONLY_FILE
 from lib.counts_only.content_free import add_cli_arguments as add_counts_only_arguments
 from lib.counts_only.content_free import apply_cli as apply_counts_only, validate_cli_args as validate_counts_only_args
 from lib.testing.coverage_report import load_coverage_data
-from lib.level_tally import default_model, run_context_level
+from lib.level_signals import signal_path_validator
+from lib.profiles import ModelChoice, ProfileError, add_model_arguments, chosen_model, run_level
+from lib.profiles import single_repo_choice
 from lib.testing.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.testing.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.run_publish import publish_run
@@ -62,7 +64,7 @@ from lib.test_pressure import scan_test_pressure
 
 def build_run_context(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
-    scope: Path | None = None,
+    scope: Path | None = None, model: ModelChoice | None = None,
 ) -> dict[str, Any]:
     """Run the deterministic pipeline and return the structured context dict.
 
@@ -78,6 +80,9 @@ def build_run_context(
     staleness) see only the subtree, so the score/badge/wiki carry no signal
     from a sibling directory. None (the default) is a whole-repo run, unchanged.
 
+    ``model`` is the maturity model the ``level`` and ``headline`` blocks evaluate
+    (``--profile`` / ``--levels``, ``lib.profiles``, #1150); None is the default model.
+
     Every block comes from the declared table in ``lib/scan_registry.py``. The
     table only reads, so this function has no file-system side effects: it
     creates no ``.assess/`` directory and writes no artifact. The publish step
@@ -85,12 +90,12 @@ def build_run_context(
     run-context.json, through ``lib.run_publish.publish_run``) is
     ``build_and_publish_run``'s, which ``main`` calls.
     """
-    return _scan(repo_root, run_date, non_interactive, scope)[0]
+    return _scan(repo_root, run_date, non_interactive, scope, model)[0]
 
 
 def build_and_publish_run(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
-    scope: Path | None = None,
+    scope: Path | None = None, model: ModelChoice | None = None,
 ) -> dict[str, Any]:
     """``build_run_context``, then the publish step that writes the artifacts.
 
@@ -98,25 +103,35 @@ def build_and_publish_run(
     run-context.json, and fills the context keys only it can know
     (``pruned_hotspots``, ``log_integrity``, ``prior_findings_snapshot``, ...).
     """
-    ctx, scan_inputs = _scan(repo_root, run_date, non_interactive, scope)
+    ctx, scan_inputs = _scan(repo_root, run_date, non_interactive, scope, model)
     publish_run(ctx, scan_inputs)
     return ctx
 
 
 def _scan(
     repo_root: Path, run_date: str, non_interactive: bool, scope: Path | None,
+    model: ModelChoice | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Run the scan table; return the context and the inputs it filled."""
     scan_inputs: dict[str, Any] = {
         "repo_root": repo_root, "requested_scope": scope,
         "run_date": run_date, "non_interactive": non_interactive,
+        "maturity_model": model,
     }
     ctx: dict[str, Any] = {}
     run_scans(ctx, scan_inputs)
     return ctx, scan_inputs
 
 
-def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
+def _model_differs(level_block: Any, model: ModelChoice | None) -> bool:
+    """True when the run's ``level`` block names a model version ``model`` does not have."""
+    recorded = level_block.get("levels_version") if isinstance(level_block, dict) else None
+    version = chosen_model(model)["version"]
+    return isinstance(recorded, str) and recorded != version
+
+
+def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
+                        model: ModelChoice | None = None) -> int:
     """Re-run the Layer-1 test-pressure scan with the bounded mutation pass ON.
 
     The consent-gated counterpart to the default read-only scan in
@@ -136,6 +151,10 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
     do not read ``test_pressure`` (``test_focus``, ``gap_actions``) are kept.
     ``run_bounded_mutation`` itself caps the scope at ``MAX_FILES_TO_MUTATE``, so
     passing every focus path is safe.
+
+    ``model`` is the run's ``--profile`` / ``--levels`` choice (None for the default
+    model), which the recount uses; a model whose version is not the ``level`` block's
+    returns 2, so a refresh never recounts a profile run under another model (#1150).
 
     The treemap overlay (regenerated separately by the orchestrator) then reads
     the refreshed ``test_pressure.per_file`` so covered-but-unpinned files get
@@ -179,9 +198,11 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
     # The tally reads mutation_run (Layer 6 level 2, #744): recount it in place.
     # The headline and the badge carry the tally, so they are rewritten with it (#747).
     if "level" in ctx:
-        ctx["level"] = run_context_level(ctx)
-        ctx["headline"] = summarised(run_context_headline(ctx["level"]), ctx["level"],
-                                     ctx.get("since_last_run"), default_model())
+        if _model_differs(ctx["level"], model):
+            print("--opt-in-mutation needs the --profile or --levels the run used", file=sys.stderr)
+            return 2
+        ctx["level"] = run_level(ctx, model)
+        ctx["headline"] = run_headline(ctx["level"], ctx.get("since_last_run"), model)
         write_headline_badge(
             assess_dir, as_headline(ctx["headline"]), run_id=ctx.get("run_id"),
             scope=ctx.get("scope"),
@@ -245,21 +266,28 @@ def main(argv: list[str] | None = None) -> int:
             "wiki, and artifacts are all computed for and labelled with the "
             "scope, and land under `.assess/<scope-slug>/`. The scoped scans "
             "carry no signal from a sibling directory. Omit for a whole-repo "
-            "run (unchanged). Pass the same `--scope` to `--opt-in-mutation`."
+            "run (unchanged). Pass the same `--scope` (and `--profile` or `--levels`) to `--opt-in-mutation`."
         ),
     )
+    add_model_arguments(parser)
     add_counts_only_arguments(parser)
     parsed = parser.parse_args(argv)
     validate_counts_only_args(parser, parsed)
     repo_root = Path(parsed.repo_root).resolve()
+    try:
+        choice = single_repo_choice(parsed.profile, parsed.levels, signal_path_validator())
+    except ProfileError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    model = None if choice.kind == "default" else choice
     if parsed.opt_in_mutation:
-        return run_opt_in_mutation(repo_root, scope=parsed.scope)
+        return run_opt_in_mutation(repo_root, scope=parsed.scope, model=model)
     run_date = datetime.now().strftime("%Y-%m-%d")
     try:
         ctx = build_and_publish_run(
             repo_root=repo_root, run_date=run_date,
             non_interactive=parsed.non_interactive,
-            scope=parsed.scope,
+            scope=parsed.scope, model=model,
         )
     except ValueError as e:
         # Invalid --scope (missing path or outside the repo). Report cleanly

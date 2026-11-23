@@ -200,9 +200,10 @@ def test_the_run_context_level_reads_the_owner_exclusions_block():
 
 def test_the_level_entry_reads_the_exclusions_block_last():
     spec = next(s for s in SCANS if s.key == "level")
-    assert spec.reads == lt.LEVEL_READS and spec.reads[-1] == "owner_exclusions"
+    # the run's maturity-model choice follows the blocks (#1150)
+    assert spec.reads == (*lt.LEVEL_READS, "maturity_model") and spec.reads[-2] == "owner_exclusions"
     blocks = [None] * len(lt.DEFAULT_BLOCKS)
-    result = core_scans.level(*blocks, {"exclusions": [_exclude("doc-freshness.1")]})
+    result = core_scans.level(*blocks, {"exclusions": [_exclude("doc-freshness.1")]}, None)
     assert result["excluded"][0]["id"] == "doc-freshness.1"
 
 

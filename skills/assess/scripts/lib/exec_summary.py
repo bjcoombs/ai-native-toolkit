@@ -19,6 +19,11 @@ it cannot import the Step sentences without an import cycle):
      part "not known" when the block says so, ``Since last run: not known.`` when nothing is
      known or the block is absent or degraded, and ``First run.`` on a first run.
 
+  A run under a profile or a ``--levels`` model (#1150) opens with the lines
+  ``lib.profiles.model_lines`` gives: the model named, then whether every practice holds
+  (``Ready for handover (profile: handover).``) or exactly which do not, then the practices
+  the default model does not define, when there are any. A default run has none of them.
+
 - ``call_to_action``: ``**Start here:** [<task>](<catalog Step gates entry>)`` for the first
   blocking gate, ``""`` at the top Step. No action carries a how-to link of its own, so the
   link is the gate's entry in the catalog (``STEP_GATES_URL``);
@@ -37,11 +42,13 @@ from collections.abc import Mapping
 from typing import Any, cast
 
 from lib.assess_diagrams_ladder import meaning
-from lib.headline import GATE_CHANGE, gate_note
+from lib.headline import GATE_CHANGE, gate_note, headline
 from lib.level_result_types import Blocker, Headline, LevelResult
 from lib.levels import MaturityModel
+from lib.profiles import ModelChoice, chosen_model, model_lines
 
-__all__ = ["GATE_TASK", "STEP_GATES_URL", "call_to_action", "since_line", "summarised", "summary_lines"]
+__all__ = ["GATE_TASK", "STEP_GATES_URL", "call_to_action", "run_headline", "since_line", "summarised",
+           "summary_lines"]
 
 # The catalog's Step gates entry: what each gate covers. measured_appendix.CATALOG_URL names the
 # same page; importing it here would close a cycle through lib.signals.
@@ -132,13 +139,22 @@ def call_to_action(level: LevelResult) -> str:
     return f"**Start here:** [{task[:1].upper()}{task[1:]}]({STEP_GATES_URL}){gate_note(gates[0])}."
 
 
-def summarised(block: Headline, level: Any, since: Any, model: MaturityModel) -> Headline:
+def summarised(block: Headline, level: Any, since: Any, model: MaturityModel,
+               choice: ModelChoice | None = None) -> Headline:
     """``block`` with its summary fields filled from ``level`` and ``since``; unchanged when the
-    headline is unavailable or ``level`` is not a level result."""
+    headline is unavailable or ``level`` is not a level result. ``choice`` is the run's model
+    choice: a profile or ``--levels`` model leads the lines with ``profiles.model_lines``."""
     if block.get("available") is not True or not isinstance(level, dict) or "tally" not in level:
         return block
     result = cast(LevelResult, level)  # narrowed by the tally check above
-    lines = summary_lines(result, since, model)
+    lines = [*model_lines(result, choice), *summary_lines(result, since, model)]
     action = call_to_action(result)
     markdown = "\n\n".join([*lines, action] if action else lines)
     return {**block, "summary_lines": lines, "call_to_action": action, "summary_markdown": markdown}
+
+
+def run_headline(level: Any, since: Any, choice: ModelChoice | None) -> Headline:
+    """The run context's ``headline`` block: the headline of ``level`` under the run's model
+    (``choice``, the default when None), summarised with ``since`` and the model lines."""
+    model = chosen_model(choice)
+    return summarised(headline(level, model), level, since, model, choice)

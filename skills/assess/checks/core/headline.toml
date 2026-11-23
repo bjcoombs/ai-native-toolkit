@@ -9,7 +9,7 @@ summary = "The Step with the gate that blocks the next one, 'Catalogue coverage:
 issues = [747, 844, 1083, 1102]
 callable = "lib.core_scans:headline"
 publishes = ["headline"]
-reads = ["level", "since_last_run"]
+reads = ["level", "since_last_run", "maturity_model"]
 stage = "post_offers"
 shapes = [
   { path = "headline", type = "lib.level_result_types:Headline" },
