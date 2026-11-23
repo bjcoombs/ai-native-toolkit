@@ -113,6 +113,21 @@ def test_first_green_needs_every_workflow_green_at_merge():
     assert fm.first_green(runs, "z") is None
 
 
+def test_first_green_restarts_after_a_red_head():
+    # a green 10:30, b red 11:00, c green 12:00: rework after a is not wait.
+    runs = [run("a", "tests", "success", "2026-11-22T10:30:00Z"),
+            run("b", "tests", "failure", "2026-11-22T11:00:00Z"),
+            run("c", "tests", "success", "2026-11-22T12:00:00Z")]
+    assert fm.first_green(runs, "c") == fm.parse_ts("2026-11-22T12:00:00Z")
+
+
+def test_first_green_ignores_a_failure_rerun_to_green():
+    runs = [run("a", "tests", "failure", "2026-11-22T10:20:00Z"),
+            run("a", "tests", "success", "2026-11-22T10:30:00Z"),
+            run("b", "tests", "success", "2026-11-22T11:00:00Z")]
+    assert fm.first_green(runs, "b") == fm.parse_ts("2026-11-22T10:30:00Z")
+
+
 def test_truncated_runs_read_null(tmp_path):
     track, gh = build(tmp_path)
     runs = json.loads((gh / "1.runs.json").read_text())

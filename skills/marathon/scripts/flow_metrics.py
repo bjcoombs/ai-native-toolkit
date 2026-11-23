@@ -23,8 +23,9 @@ Definitions (each metric is null, never 0, when its input is missing):
 - pushes: distinct head SHAs among the PR's workflow runs.
 - merges of main: PR commits with two or more parents.
 - review rounds: distinct commits that received a review.
-- first green: the earliest head SHA on which every workflow that succeeded on
-  the merged head also succeeded; the time is the latest of those runs' ends.
+- first green: the earliest head SHA, pushed after the last red one, on which
+  every workflow that succeeded on the merged head also succeeded; the time is
+  the latest of those runs' ends (see `first_green`).
 - wait: first green to merged, in minutes.
 - spawn to PR: the unit's `spawned_at` to the PR's `created_at`, in minutes.
 - mean WIP: the time-weighted mean of open PRs over the run window.
@@ -44,7 +45,7 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 EVENT_TYPES = ("semantic_conflict", "recheck_failure", "contract_refreeze", "main_red", "load")
 
@@ -71,19 +72,39 @@ def load_json(path: Path) -> Any:
 
 
 def first_green(runs: List[Json], head_sha: str) -> Optional[datetime]:
-    """The end time of the earliest SHA on which every workflow green at the merged head was green."""
+    """When the PR last became green and stayed green until merge.
+
+    The required set is every workflow green at the merged head. A SHA is red
+    when a required workflow failed on it and never succeeded on it. The result
+    is the end time of the earliest fully green SHA pushed after the last red
+    one, so review rework after an earlier green counts as work, not as wait.
+    """
     required = {r["name"] for r in runs if r.get("head_sha") == head_sha and r.get("conclusion") == "success"}
     if not required:
         return None
-    by_sha: Dict[str, Dict[str, datetime]] = {}
+    pushed: Dict[str, datetime] = {}
+    green: Dict[str, Dict[str, datetime]] = {}
+    failed: Dict[str, Set[str]] = {}
     for r in runs:
         ts = parse_ts(r.get("updated_at"))
-        if r.get("conclusion") != "success" or r.get("name") not in required or ts is None:
+        if ts is None:
             continue
-        seen = by_sha.setdefault(r["head_sha"], {})
-        if r["name"] not in seen or ts < seen[r["name"]]:
-            seen[r["name"]] = ts
-    complete = [max(names.values()) for names in by_sha.values() if set(names) == required]
+        sha = r["head_sha"]
+        started = parse_ts(r.get("created_at")) or ts
+        if sha not in pushed or started < pushed[sha]:
+            pushed[sha] = started
+        if r.get("name") not in required:
+            continue
+        if r.get("conclusion") == "success":
+            seen = green.setdefault(sha, {})
+            if r["name"] not in seen or ts < seen[r["name"]]:
+                seen[r["name"]] = ts
+        elif r.get("conclusion") in ("failure", "cancelled", "timed_out"):
+            failed.setdefault(sha, set()).add(r["name"])
+    red = [pushed[sha] for sha, names in failed.items() if names - set(green.get(sha, {}))]
+    cutoff = max(red) if red else None
+    complete = [max(names.values()) for sha, names in green.items()
+                if set(names) == required and (cutoff is None or pushed[sha] > cutoff)]
     return min(complete) if complete else None
 
 

@@ -543,7 +543,7 @@ The lead operates as a **tech lead running a sprint** — not a task router.
    - Criteria not met or partially met (flag for user)
    - Scope that was delivered beyond the original acceptance criteria (emergent work)
 5. Read the retro log (path from Marathon Configuration `$RETRO_LOG`, or skip if not configured)
-6. Compute the flow metrics, then run the retrospective using the structured format below. Save the GitHub responses as [Flow metrics](references/flow-metrics.md) describes, then run `python3 "${CLAUDE_SKILL_DIR}/scripts/flow_metrics.py" --tracking "$TRACK_FILE" --github <saved-dir> --previous <previous-run-json>` (drop `--previous` on a first run). Its markdown is the retrospective's Flow table.
+6. Compute the flow metrics, then run the retrospective using the structured format below. Save the GitHub responses as [Flow metrics](references/flow-metrics.md) describes, then run `python3 "${CLAUDE_SKILL_DIR}/scripts/flow_metrics.py" --tracking "$TRACK_FILE" --github <saved-dir> --previous <previous-run-json>` (drop `--previous` on a first run). Its markdown is the retrospective's Flow table. Run it once more with `--format json > flow-metrics.json` and keep that file beside the retro log (`$RETRO_LOG`'s directory, or the tracking directory when unset): it is the next run's `--previous`.
 7. Append this marathon to the retro log (Marathon History + update Template Changes validation)
 
 ### Retro Boundary
