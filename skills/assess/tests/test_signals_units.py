@@ -113,11 +113,15 @@ def test_hashed_path_is_dropped_plain_and_hashed_under_a_salt() -> None:
 # --- --scope -----------------------------------------------------------------------
 
 def test_scope_measures_one_folder_and_stamps_it(repo: Path, tmp_path: Path) -> None:
-    whole = _run(repo, tmp_path / "w.json", "--scans", "stats_summary,ci_checks")
-    scoped = _run(repo, tmp_path / "s.json", "--scans", "stats_summary,ci_checks", "--scope", "web")
+    # promissory_markers reads the scope and needs no optional tool (lizard may be absent)
+    whole = _run(repo, tmp_path / "w.json", "--scans", "promissory_markers,ci_checks")
+    scoped = _run(repo, tmp_path / "s.json", "--scans", "promissory_markers,ci_checks", "--scope", "web")
+    billing = _run(repo, tmp_path / "b.json", "--scans", "promissory_markers", "--scope", "services/billing")
     assert scoped["stamp"]["scope"] == "web"
-    assert scoped["scans"]["stats_summary"]["files_scored"] == 1
-    assert whole["scans"]["stats_summary"]["files_scored"] == 3
+    # the one suppression sits in services/billing: outside web, inside billing
+    assert whole["scans"]["promissory_markers"]["total_markers"] == 1
+    assert scoped["scans"]["promissory_markers"]["total_markers"] == 0
+    assert billing["scans"]["promissory_markers"]["total_markers"] == 1
     # a repository-wide scan still reads the root CI
     assert scoped["scans"]["ci_checks"] == whole["scans"]["ci_checks"]
 
