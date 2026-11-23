@@ -19,8 +19,10 @@ untouched, so a single-unit repository reads exactly as before.
 - ``unlocks``: the changes that would move units to their own next Step, ranked (#747).
   Each is a Step gate whose condition reads ``unmet`` in at least one unit (a gate that is
   not measured or that the owner excluded is no change to make). ``scope`` is
-  ``repo_wide`` when every unit's unmet gate conditions rest on the repository-wide reading
-  (origin ``inherited``): one change at the root reaches all those units, so it counts once
+  ``repo_wide`` when every gate condition not yet met in the unit rests on the
+  repository-wide reading (origin ``inherited``; a gate holds only when all of them are met,
+  so one with origin ``unit`` makes the change unit-local, and a gate with no condition read
+  reads ``unit``): one change at the root reaches all those units, so it counts once
   (``changes`` 1), never once per unit. ``unit`` means each unit needs its own change
   (``changes`` is the number of units). ``held`` counts the units the gate holds back and
   ``lifted`` those for which it is the last blocker: their only blocking gate, with the
@@ -92,7 +94,8 @@ def _unit_unlocks(unit: Mapping[str, Any], steps: Mapping[int, StepDef]) -> list
     nxt = unit.get("next_step")
     if not isinstance(nxt, Mapping):
         return []
-    step = steps.get(nxt.get("step"))  # type: ignore[arg-type]
+    number = nxt.get("step")
+    step = steps.get(number) if isinstance(number, int) else None
     blockers = [b for b in nxt.get("blockers") or [] if isinstance(b, Mapping)]
     gates = [b for b in blockers if b.get("kind") == "gate"]
     threshold = next((b for b in blockers if b.get("kind") == "threshold"), None)
@@ -104,7 +107,9 @@ def _unit_unlocks(unit: Mapping[str, Any], steps: Mapping[int, StepDef]) -> list
         gate = str(b.get("gate", ""))
         waiting = [by_id[c] for c in _gate_conditions(step, gate)
                    if c in by_id and by_id[c].get("state") != "met"]
-        scope: Scope = "repo_wide" if all(c.get("origin") == "inherited" for c in waiting) else "unit"
+        # no condition read behind the gate: never claim a change at the root
+        scope: Scope = "repo_wide" if waiting and all(c.get("origin") == "inherited" for c in waiting) \
+            else "unit"
         gain = sum(1 for c in waiting if c.get("counted"))
         short = (threshold.get("threshold", 0) - threshold.get("met", 0) - gain) if threshold else 0
         out.append((gate, scope, len(gates) == 1 and short <= 0))
@@ -155,9 +160,9 @@ def _lines(block: UnitRollUpBlock) -> list[str]:
     if top is not None and top["lift_per_change"] > 0:
         change = GATE_CHANGE.get(top["gate"], f"the {top['gate']} gate holds")
         where = "once at the root" if top["scope"] == "repo_wide" else "in one unit"
-        noun = "unit" if top["lift_per_change"] == 1 else "units"
+        noun = "unit to its" if top["lift_per_change"] == 1 else "units to their"
         lines.append(f"Next unlock across units: {change}, {where}, moves "
-                     f"{top['lift_per_change']} {noun} to their next Step")
+                     f"{top['lift_per_change']} {noun} next Step")
     return lines
 
 

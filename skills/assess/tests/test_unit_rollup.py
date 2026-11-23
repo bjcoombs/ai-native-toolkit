@@ -157,6 +157,13 @@ def test_an_unmeasured_or_excluded_gate_is_no_change_to_rank(blocker: dict[str, 
     assert ur.unit_rollup(_block(unit, unit | {"path": "b"}))["unlocks"] == []
 
 
+def test_a_gate_with_no_condition_read_is_never_claimed_at_the_root() -> None:
+    bare = _unit("a", 1, [_gate("instructions", INSTR)], {})
+    block = ur.unit_rollup(_block(bare, bare | {"path": "b"}))
+    assert [e["scope"] for e in block["unlocks"]] == ["unit"]
+    assert block["lines"][1].endswith(", in one unit, moves 1 unit to its next Step")
+
+
 # --- unknown stays unknown, single units ----------------------------------------------
 
 def test_an_unmeasured_unit_is_counted_but_never_read_as_step_1() -> None:
