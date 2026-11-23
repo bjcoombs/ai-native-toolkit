@@ -299,7 +299,7 @@ def test_markdown_has_one_section_per_tag_and_each_criterion_once() -> None:
     assert "equals `structure.front_door_ratio`" in _section(text, "### Docs")
     assert "| hazard |" in _section(text, "### Governance")
     assert "`layer-6-coverage.2` is guarded by `layer-5-ci.1`." in text
-    assert "| 3 | Unattended agent PRs | 3 | `ci_runs_tests` | `layer-5-ci.1` |" in text
+    assert "| 3 | Unattended agent PRs | `ci_runs_tests` | `layer-5-ci.1` |" in text
     claims = [line for line in table_rows if line.startswith("| `layer-0-instructions.2` ")]
     assert len(claims) == 3 and all("| `declared` | no, listed |" in line for line in claims)  # the condition's
     headers = [line for line in text.splitlines() if line.startswith("| Condition |")]

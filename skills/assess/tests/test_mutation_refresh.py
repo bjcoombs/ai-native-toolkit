@@ -138,10 +138,11 @@ def test_e2e_high_survivor_density_on_hotspot_fires_untrusted(
     assert {"name": "untrusted_hotspot", "count": 1} in ctx["keyhole_summary"]["concerns"]
     assert any(p["path"] == "src/hot.py" for p in ctx["prescribed_actions"])
     assert ctx["mutation_not_run_cap"]["applies"] is False
-    # The badge counts the newly fired finding and keeps the run's id.
+    # The badge keeps the run's id. Its message names the Step and the next gate, no count
+    # (#1083), and a finding moves no gate, so the message stays as it was.
     badge = _load(assess_dir / "badge.json")
     assert badge["run_id"] == before["run_id"]
-    assert badge["message"] != badge_before["message"]
+    assert badge["message"] == badge_before["message"]
     # Blocks that do not read test_pressure are untouched.
     for key in ("test_focus", "gap_actions", "behaviour", "documentation", "run_id"):
         assert ctx[key] == before[key]

@@ -15,8 +15,8 @@ model, before the diagrams, so the report opens on credit and the next step:
    raised moves first. These are not achievements and take nothing away: every line says the
    repository did not change. At most ``PER_KIND`` lines.
 4. **Targets**, when a targets file was given: each Step target met, or the unit's lowest
-   Step, the gates of the target Step still missing with the repositories each holds back,
-   and how many repositories are below its threshold (#945).
+   Step and the gates of the target Step still missing with the repositories each holds
+   back (#945; gates only since #1083).
 
 The section opens with a line starting ``In place:`` (``lib/vocabulary.IN_PLACE``, #743)
 that says what is already earned or held before any next step. Every line is phrased as
@@ -142,9 +142,6 @@ def _target(t: TargetProgress) -> str:
     parts = [f"at Step {t['lowest_step']} ({t['measured']} of {t['repos']} measured)"]
     if gates:
         parts.append(f"gates to go: {gates}")
-    if t["below_threshold"]:
-        practices = "practice" if t["threshold"] == 1 else "practices"
-        parts.append(f"{t['below_threshold']} below the threshold of {t['threshold']} {practices} in place")
     return f"- {where}: " + "; ".join(parts) + "."
 
 

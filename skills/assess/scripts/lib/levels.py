@@ -91,11 +91,13 @@ Two optional additions feed the verified tally and the Steps (``lib/level_tally.
 - ``requires`` on a level: condition ids (``<row id>.<level>``) that must be met
   for this condition to count as met, for a dependency that is real (mutation
   credit needs CI running tests). The row's own level ignores it.
-- ``[[steps]]``: the autonomy Steps, numbered 1..K. Each has a ``name``, a
-  ``threshold`` (the met, counted conditions it needs) and ``gates``, each
-  ``{ id, row, level }``: the gate holds when that row's conditions up to
-  ``level`` are met. Step 1 has threshold 0 and no gates; each later Step keeps
-  every gate of the one below (gates accumulate) and never lowers the threshold.
+- ``[[steps]]``: the autonomy Steps, numbered 1..K. Each has a ``name`` and
+  ``gates``, each ``{ id, row, level }``: the gate holds when that row's
+  conditions up to ``level`` are met. Step 1 has no gates; each later Step keeps
+  every gate of the one below (gates accumulate). A Step needs its gates and
+  nothing else, so adding a condition to the model never moves a Step (#1083).
+  The ``threshold`` key of earlier models (a count of met conditions) is refused at
+  load with a message naming its removal, never silently ignored.
 
 Four condition fields come from ``lib/levels_fields.py`` (#843), which documents
 them: ``truth`` (required, multi-valued tags, with the legacy layer alias for a model
@@ -147,7 +149,9 @@ OPERATORS = _EQUALITY_OPS + _ORDER_OPS + _MEMBER_OPS
 _ROOT_KEYS = frozenset({"version", "rows", "steps"})
 _ROW_KEYS = frozenset({"id", "title", "scope", "aggregation", "share", "levels"})
 _LEVEL_KEYS = frozenset({"level", "criteria", "requires", "truth", "polarity", "guarded_by"})
-_STEP_KEYS = frozenset({"step", "name", "threshold", "gates"})
+_STEP_KEYS = frozenset({"step", "name", "gates"})
+# The 2.x and 3.0 Step count key, refused by name since #1083: Steps are gates only.
+REMOVED_STEP_KEY = "threshold"
 _GATE_KEYS = frozenset({"id", "row", "level"})
 _CRITERION_KEYS = frozenset({"signal", "op", "value", "eq_signal"})
 
@@ -213,8 +217,7 @@ class StepGate(TypedDict):
 class StepDef(TypedDict):
     step: int
     name: str
-    threshold: int  # met, counted conditions the Step needs
-    gates: list[StepGate]
+    gates: list[StepGate]  # the only thing a Step needs (#1083)
 
 
 class MaturityModel(TypedDict):
@@ -514,7 +517,7 @@ def _parse_gate(raw: Any, where: str, rows: Mapping[str, Row]) -> StepGate:
 
 
 def _parse_steps(raw: Any, rows: list[Row]) -> list[StepDef]:
-    """``[[steps]]``: numbered 1..K, gates accumulating, thresholds never falling."""
+    """``[[steps]]``: numbered 1..K, gates accumulating, no count threshold (#1083)."""
     if not isinstance(raw, list) or not raw:
         raise LevelsError("maturity model: 'steps' must be a non-empty array of tables")
     by_id = {row["id"]: row for row in rows}
@@ -523,26 +526,24 @@ def _parse_steps(raw: Any, rows: list[Row]) -> list[StepDef]:
         where = f"step #{index + 1}"
         if not isinstance(entry, dict):
             raise LevelsError(f"{where}: must be a table")
+        if REMOVED_STEP_KEY in entry:
+            raise LevelsError(f"{where}: 'threshold' was removed (issue #1083): a Step needs its gates "
+                              "only, so delete the key")
         _check_keys(entry, _STEP_KEYS, where)
-        number, threshold, gates = _whole(entry.get("step")), _whole(entry.get("threshold")), entry.get("gates", [])
+        number, gates = _whole(entry.get("step")), entry.get("gates", [])
         if number != index + 1 or number is None:
             raise LevelsError(f"{where}: steps must be numbered 1..K in order (got {entry.get('step')!r})")
-        if threshold is None or threshold < 0:
-            raise LevelsError(f"{where}: 'threshold' must be a whole number of at least 0 "
-                              f"(got {entry.get('threshold')!r})")
         if not isinstance(gates, list):
             raise LevelsError(f"{where}: 'gates' must be an array of tables")
-        step: StepDef = {"step": number, "name": _text(entry, "name", where), "threshold": threshold,
+        step: StepDef = {"step": number, "name": _text(entry, "name", where),
                          "gates": [_parse_gate(g, where, by_id) for g in gates]}
-        if number == 1 and (threshold != 0 or step["gates"]):
-            raise LevelsError(f"{where}: step 1 is always reached: threshold 0 and no gates")
+        if number == 1 and step["gates"]:
+            raise LevelsError(f"{where}: step 1 is always reached: no gates")
         if steps:
             below = steps[-1]
             missing = [g["id"] for g in below["gates"] if g not in step["gates"]]
             if missing:
                 raise LevelsError(f"{where}: gates accumulate; missing {', '.join(missing)} from step {number - 1}")
-            if threshold < below["threshold"]:
-                raise LevelsError(f"{where}: 'threshold' is below step {number - 1}'s")
         ids = [g["id"] for g in step["gates"]]
         if len(set(ids)) != len(ids):
             raise LevelsError(f"{where}: duplicate gate id")

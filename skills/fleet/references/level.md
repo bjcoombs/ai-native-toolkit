@@ -21,9 +21,10 @@ the maturity model as one condition, `<row id>.<level>`, and reports:
 - `counted` and `listed`: the met conditions that count, and the met ones that are only
   listed (config-only, declared, or a signal with no producer class);
 - `not_measured[]`: `{id, reason}`;
-- `step` and `next_step` (`step`, `threshold`, `blockers[]`), from the model's `[[steps]]`
-  (null without them). A Step is held when `tally.met` reaches its threshold and its gates
-  hold; a gate reads the state of its row's conditions, not their grade.
+- `step` and `next_step` (`step`, `blockers[]`), from the model's `[[steps]]` (null without
+  them). A Step is held when its gates hold, and nothing else moves it (#1083): the tally
+  never does. A gate reads the state of its row's conditions, not their grade, and each
+  blocker is a gate (`kind: "gate"`).
 
 Each result applies the owner exclusions of the repository's own `.assess/config.toml`
 (#910), read from its `owner_exclusions` scan: an excluded condition reads `not_applicable`,

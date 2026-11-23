@@ -25,7 +25,7 @@ they have no per-repository cell or unit roll-up; their levels stay in
 the owner's ``exclusions`` and ``gate_blockers``, every Step gate that does not hold (#945,
 which a Step target above the next Step reads); each unit carries a ``step`` roll-up: the lowest Step over
 its measured repositories, "N of M measured", and for the next Step how many repositories
-each gate holds back and how many are below its threshold.
+each gate holds back (a Step reads its gates only, #1083).
 
 **Per-repository cell** (one per ``team`` row): ``status`` and ``level`` as
 ``lib.levels.evaluate_row`` gives them, plus the criterion that explains it:

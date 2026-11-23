@@ -39,13 +39,11 @@ class Tally(TypedDict):
 
 
 class Blocker(TypedDict):
-    kind: str  # "gate" or "threshold"
+    kind: str  # "gate": the only kind since Steps read gates only (#1083)
     gate: NotRequired[str]
     condition: NotRequired[str]  # the gate's first condition that is not met
     state: NotRequired[str]
     reason: NotRequired[str]
-    threshold: NotRequired[int]
-    met: NotRequired[int]
     disposition: NotRequired[str]  # the gate condition's disposition, when the owner excluded it
     exclusion_kind: NotRequired[str]
 
@@ -60,7 +58,6 @@ class ExcludedCondition(TypedDict):
 
 class NextStep(TypedDict):
     step: int
-    threshold: int
     blockers: list[Blocker]
 
 
