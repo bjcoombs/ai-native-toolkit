@@ -160,6 +160,7 @@ list file, and pass it with `--from-list`.
 - [`level.json`](references/level.md): per-repository maturity-model levels.
 - [`fleet-data.json`](references/fleet-data.md): units, roll-ups, repositories and opportunities.
 - [`achievements.json`](references/achievements.md): achievements, next steps and the targets file.
+- [Database projection](references/publish.md): the artifact database writes, access rules and size guard.
 - [`agent_clusters.json`](references/agent-clusters.md): agent clusters.
 - [`run.json`](references/run.md): the run stamp.
 - [`--fleet-config`](references/fleet-config.md): the `--fleet-config` sections and keys.
