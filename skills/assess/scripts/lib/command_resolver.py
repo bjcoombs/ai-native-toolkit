@@ -66,15 +66,14 @@ from __future__ import annotations
 import posixpath
 import re
 import shlex
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
-from contextvars import ContextVar
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Literal
 
 from lib.command_index import RepoIndex, TargetSet, build_index, is_gitignored
 from lib.doc_graph import is_excluded_path
+from lib.dot_source import dot_words
 
 __all__ = [
     "Command", "EXTERNAL_TOOLS", "Resolution", "RepoIndex", "RUNNERS",
@@ -172,24 +171,9 @@ def _tokens(segment: str) -> list[str]:
 
 
 def command_words(text: str) -> list[str]:
-    """Public form of the tokeniser ``resolve`` uses, for callers that classify commands.
-    Under ``dot_as_source`` (CI lines only, #1033) the ``.`` builtin reads as ``source``:
-    ``. ./test.sh`` is ``source ./test.sh``; instruction-file reading is unchanged."""
-    words = _tokens(text)
-    return ["source", *words[1:]] if words[:1] == ["."] and _DOT_AS_SOURCE.get() else words
-
-
-_DOT_AS_SOURCE: ContextVar[bool] = ContextVar("dot_as_source", default=False)
-
-
-@contextmanager
-def dot_as_source() -> Iterator[None]:
-    """Read ``. x`` as ``source x`` in ``command_words`` inside the block (also a decorator)."""
-    token = _DOT_AS_SOURCE.set(True)
-    try:
-        yield
-    finally:
-        _DOT_AS_SOURCE.reset(token)
+    """Public form of the tokeniser ``resolve`` uses, for callers that classify commands
+    (``. x`` reads as ``source x`` on a CI line, ``lib.dot_source``, #1033)."""
+    return dot_words(_tokens(text))
 
 
 def _cd_target(words: list[str], cwd: str) -> str | None:
