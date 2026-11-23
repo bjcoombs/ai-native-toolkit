@@ -35,8 +35,8 @@ lost (``lib/fleet/fleet_cleanup.py``). Every run also writes the run stamp
 
 It also draws the fleet diagrams (``lib/fleet/fleet_diagrams.py``): ``<out>/report.md``
 embedding ``quadrant.svg``, ``shared-tooling.svg``, ``trend.svg`` (group trend lines
-over the run history, ``lib/fleet/fleet_trends.py``), ``slope.svg`` (from the ``--compare``
-result) and ``layer-bars.svg``, or the reason each was skipped;
+over the run history, ``lib/fleet/fleet_trends.py``), and ``slope.svg`` (from the ``--compare``
+result), or the reason each was skipped;
 ``--no-diagrams`` turns them off. ``report.md`` opens with the coverage line: with
 ``--discovered FILE`` (ghsync's ``--porcelain`` or ``--porcelain-json`` listing) how many of
 the discoverable repositories were assessed and each gap counted, also in ``run.json``

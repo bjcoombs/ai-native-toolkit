@@ -235,6 +235,9 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
     "repos.gate_blockers.gate": TOKEN,
     "repos.gate_blockers.state": TOKEN,
     "repos.gate_blockers.disposition": TOKEN,
+    # #1073: the per-tag tally names a tag from the fixed truth-tag list; every other field is a count
+    "repos.tags.tag": TOKEN,
+    "views.units.tags.cells.tag": TOKEN,
 }
 
 

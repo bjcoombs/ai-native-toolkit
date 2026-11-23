@@ -33,11 +33,3 @@ In place: 4 groups with a known level in both runs.
 What moved since the earlier run, and which row moved it?
 
 [![Before and after](./slope.svg)](./slope.svg)
-
-## Maturity by layer
-
-In place: 2 of 2 team rows have at least one repository at level 1 or above.
-
-Which layer has the most room to grow across the fleet?
-
-[![Maturity by layer](./layer-bars.svg)](./layer-bars.svg)
