@@ -87,7 +87,7 @@ Tag `structure`: 6 conditions, none shared with another tag.
 | `layer-3-linters.2` Stale suppressions stay at 10 or fewer | `promissory_markers` | Stale suppression comments: is at most 10 (`promissory_markers.families.suppression.stale lte 10`) | `measured` | yes | - | positive | requires `layer-3-linters.1` | A suppression that survives many edits switches a check off in code that keeps changing, and an agent editing nearby gets no sign the warning still matters. | Revisit the oldest suppression comments and fix or remove them. |
 | `layer-3-linters.2` Suppression ages can be read from history | `promissory_markers` | Marker aging is reliable: is true (`promissory_markers.aging_reliable eq true`) | `measured` | yes | - | positive | requires `layer-3-linters.1` | A guard for the suppression count: on a shallow or squashed history every suppression looks new, so a count of 0 would say nothing. | Run on a full clone so suppression ages can be measured. |
 | `layer-4-architecture.1` A boundary or ownership map names a module path | `structure_drift` | Ownership-map patterns naming a module path: is above 0 (`structure_drift.tier_0.boundary_patterns gt 0`) | `config_only` | no, listed | - | positive | - | A map that names module paths tells an agent which code belongs together, and with CODEOWNERS, whose review a change there needs. | Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths. |
-| `layer-4-architecture.2` 95% of files are 500 lines or fewer | `stats_summary` | File size at the 95th percentile: is at most 500 (`stats_summary.loc.p95 lte 500`) | `measured` | yes | - | positive | requires `layer-4-architecture.1` | With nearly all files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. | Split the largest files along their natural seams. |
+| `layer-4-architecture.2` 95% of production source files are 500 lines or fewer | `stats_summary` | Production source file size at the 95th percentile: is at most 500 (`stats_summary.loc_by_class.source.p95 lte 500`) | `measured` | yes | - | positive | requires `layer-4-architecture.1` | With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file. | Split the largest files along their natural seams. |
 
 ### Agent context
 
@@ -592,12 +592,12 @@ It summarises file size and complexity across the repository; the 95th-percentil
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
 - Counts-only: numbers, booleans and nulls kept; strings by field: `stats_summary.ccn.basis` token, `stats_summary.complexity_unreliable.language` token, `stats_summary.complexity_unreliable.path` path, `stats_summary.est_tokens.budget.budget_basis` drop, `stats_summary.fn_ccn.backend_by_language.*` token, `stats_summary.fn_ccn.basis` token, `stats_summary.fn_ccn.source.name` token, `stats_summary.top_complex.ccn_basis` token, `stats_summary.top_complex.max_fn_name` drop, `stats_summary.top_complex.source` token, `stats_summary.top_hotspots.ccn_basis` token, `stats_summary.top_hotspots.max_fn_name` drop, `stats_summary.top_hotspots.source` token, `stats_summary.top_large.ccn_basis` token, `stats_summary.top_large.max_fn_name` drop, `stats_summary.top_large.source` token.
 - Used by: row `layer-4-architecture`.
-- Evidence: `stats_summary.loc.p95` head_structure (measured).
+- Evidence: `stats_summary.loc_by_class.source.p95` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.
 
 Why the signals named here matter:
 
-- `stats_summary.loc.p95` feeds `layer-4-architecture.2:stats_summary.loc.p95`: With nearly all files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice.
+- `stats_summary.loc_by_class.source.p95` feeds `layer-4-architecture.2:stats_summary.loc_by_class.source.p95`: With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file.
 
 ### `promissory_markers`: Promissory markers
 

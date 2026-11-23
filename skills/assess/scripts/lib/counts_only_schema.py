@@ -59,6 +59,7 @@ from lib.guardrails import GuardrailsBlock
 from lib.instruction_placement import InstructionPlacementBlock
 from lib.liveness_scan import ObservabilityBlock
 from lib.mutation_cap import MutationNotRunCap
+from lib.run_context_types_size import LocByClass
 from lib.run_context_types import (
     AttentionRow,
     DeadCodeBlock,
@@ -149,6 +150,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("stats_summary.loc", SizeBlock),
     ("stats_summary.est_tokens", SizeBlock),
     ("stats_summary.est_tokens.budget", KeyholeBudget),
+    ("stats_summary.loc_by_class", LocByClass),
     # The blocks a default criterion reads (#793), so a --levels path under them
     # is checked segment by segment at load.
     ("agent_ops", AgentOpsBlock),
