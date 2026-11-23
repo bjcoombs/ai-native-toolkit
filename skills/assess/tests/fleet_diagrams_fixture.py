@@ -123,8 +123,11 @@ def goldens(out: Path) -> dict[str, str]:
     levels, repos = load_levels(out / "levels.toml"), read_repos(out)
     # the per-tag roll-up as fleet-data.json writes it (#940), from the same level results
     results = level_results(levels, repos)
-    profile = tag_profile(levels, tag_fields(levels, results).values())
-    diagrams = build_diagrams(levels, repos, WINDOW, comparison=comparison(levels, repos), tag_profile=profile)
+    tags = tag_fields(levels, results)
+    data = {"run": {"counts_only": True, "paths_hashed": False}, "tag_profile": tag_profile(levels, tags.values()),
+            "repos": [{"key": r["repo"], "tags": tags[r["repo"]],
+                       "step": (results[r["repo"]] or {}).get("step")} for r in repos]}
+    diagrams = build_diagrams(levels, repos, WINDOW, comparison=comparison(levels, repos), data=data)
     files = {f"expected-{d['file']}": d["svg"] for d in diagrams if d["svg"] is not None}
     return {**files, "expected-report.md": report_markdown(diagrams)}
 

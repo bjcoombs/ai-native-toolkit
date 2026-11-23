@@ -10,6 +10,14 @@ Which truth tags hold across the estate, and how far apart are the repositories 
 
 Not drawn: skipped: the run wrote no per-tag tally (fleet-data.json tag_profile).
 
+## Truth tags by repository
+
+In place: 0 repositories in this run, scanned with no model call.
+
+Which tags have the most room to grow across the estate, and on which repositories?
+
+Not drawn: skipped: the run wrote no fleet-data.json to read the per-tag tallies from.
+
 ## Activity and maturity
 
 In place: 0 repositories in this run, scanned with no model call.

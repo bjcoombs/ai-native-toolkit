@@ -196,7 +196,6 @@ from lib.fleet.condition_effect import (  # noqa: E402
 )
 from lib.measured_appendix import measured_section  # noqa: E402
 from lib.fleet.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data  # noqa: E402
-from lib.fleet.fleet_tag_profile import FleetTagRow  # noqa: E402
 from lib.fleet.fleet_targets import TargetSpec, TargetsError, check_units, load_targets, resolve  # noqa: E402
 from lib.fleet_config import FleetConfig, FleetConfigError, config_sha256, parse_fleet_config, read_fleet_config  # noqa: E402
 from lib.fleet.fleet_groups import GroupRow, SettingsError, load_settings, roll_up, write_groups  # noqa: E402
@@ -557,14 +556,14 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
               window: str, *, history: list[TrendRun] | None = None,
               comparison: Comparison | None = None, credit: str | None = None,
               coverage: str | None = None, opportunities: Callable[[], str | None] | None = None,
-              tag_profile: list[FleetTagRow] | None = None) -> None:
+              data: FleetData | None = None) -> None:
     """Draw the diagrams and their report, or clear them; a failure never changes the exit code."""
     try:
         if no_diagrams:
             clear_diagrams(out_dir)
             return
         diagrams = build_diagrams(maturity_model, rows, window, history=history, comparison=comparison,
-                                  tag_profile=tag_profile)
+                                  data=data)
         ok = [row["scans"] for row in rows if row["status"] == "ok" and row["scans"] is not None]
         write_diagrams(out_dir, diagrams, credit, coverage, opportunities() if opportunities else None,
                        measured_section(ok))
@@ -819,7 +818,7 @@ def main(argv: list[str] | None = None) -> int:
     history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, public, maturity_model)
     _diagrams(out_dir, args.no_diagrams, maturity_model, public, window, history=history, comparison=comparison,
               credit=credit, coverage=coverage_line(coverage, len(rows)),
-              opportunities=lambda: opportunities_section(data, achieved), tag_profile=data.get("tag_profile"))
+              opportunities=lambda: opportunities_section(data, achieved), data=data)
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
           file=sys.stderr)

@@ -2,7 +2,9 @@
 (issue #364)."""
 from __future__ import annotations
 
+import gc
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -148,27 +150,33 @@ def test_dart_scanner_run_boundaries_keep_the_token_rules(
 
 
 # Pathological inputs, each as (generator of a size-n input, n, reps). The
-# 1 s budget test scans gen(n); the scaling test scans gen(n) `reps` times
+# 1 s budget test scans gen(n) once; the scaling test scans gen(n) `reps` times
 # against gen(n // 4) `4 * reps` times, so both sides do the same work when the
-# scan is linear. `reps` lifts a fast case well above the 15.6 ms tick of
-# Windows' `process_time`.
+# scan is linear. `reps` keeps each side at about 50 ms on an M-series Mac and
+# more on CI, so scheduler jitter of a millisecond or two moves the ratio by a
+# few percent at most (#1125).
 PATHOLOGICAL = {
     "deep-nesting": (lambda n: "void f() {" + "{" * n, 200_000, 2),
     "unclosed-functions": (lambda n: "void f() {" * n, 100_000, 1),
     "nested-functions": (lambda n: "void f() {" * n + "}" * n, 50_000, 1),
     "unterminated-string": (
-        lambda n: "void f() { var s = '" + "if (x) " * n, 50_000, 40),
+        lambda n: "void f() { var s = '" + "if (x) " * n, 50_000, 64),
     "unterminated-interpolation": (
-        lambda n: "void f() { var s = '''" + "${" * n, 50_000, 1),
-    "nested-comment": (lambda n: "/*" * n, 100_000, 3),
+        lambda n: "void f() { var s = '''" + "${" * n, 50_000, 2),
+    "nested-comment": (lambda n: "/*" * n, 100_000, 4),
     "long-line": (
-        lambda n: "void f() { if (a && b || c) {} } " * n, 10_000, 1),
-    "one-token": (lambda n: "x" * n, 1_000_000, 3),
+        lambda n: "void f() { if (a && b || c) {} } " * n, 10_000, 2),
+    "one-token": (lambda n: "x" * n, 1_000_000, 4),
     # A `=>` body still open when its enclosing function's `}` arrives: closing
     # the function first scanned `fns` on every `}`, quadratic in depth (#929).
     "nested-arrow-bodies": (
         lambda n: "void f() { g() => 1 " * n + "}" * n, 20_000, 1),
 }
+
+# Each side of the scaling ratio must take at least this long, so the clock's
+# resolution and scheduler jitter stay small against it. A table entry whose
+# small side falls under it needs a larger `reps` (#1125).
+_MIN_SIDE_SECONDS = 0.02
 
 
 def _fastest_cpu_seconds(text: str, reps: int) -> float:
@@ -180,6 +188,42 @@ def _fastest_cpu_seconds(text: str, reps: int) -> float:
         return time.process_time() - start
 
     return min(once() for _ in range(3))
+
+
+def _scaling_ratio(gen: Callable[[int], str], n: int,
+                   reps: int) -> tuple[float, float, float]:
+    """``(big / small, big, small)``: `reps` scans of gen(n) against
+    `4 * reps` scans of gen(n // 4), each side the fastest of 5 runs.
+
+    The clock is ``perf_counter``, not ``process_time``: on Windows
+    ``process_time`` ticks every 15.6 ms, so a side of a few ticks reads
+    one or two ticks off and crosses the bound (#1125). ``perf_counter``
+    resolves well under a microsecond there. The runs alternate big and
+    small, so a slow spell on the runner lands on both sides, and garbage
+    collection is off while a run is timed. A linear scan reads about 1, a
+    quadratic one about 4.
+    """
+    big_text, small_text = gen(n), gen(n // 4)
+
+    def once(text: str, count: int) -> float:
+        start = time.perf_counter()
+        for _ in range(count):
+            scan_dart_functions(text)
+        return time.perf_counter() - start
+
+    bigs: list[float] = []
+    smalls: list[float] = []
+    was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        for _ in range(5):
+            bigs.append(once(big_text, reps))
+            smalls.append(once(small_text, 4 * reps))
+    finally:
+        if was_enabled:
+            gc.enable()
+    big, small = min(bigs), min(smalls)
+    return big / small, big, small
 
 
 def test_dart_scanner_closes_an_open_arrow_body_with_its_enclosing_brace() -> None:
@@ -217,19 +261,49 @@ def test_dart_scanner_pathological_input_is_fast(case: str) -> None:
 def test_dart_scanner_pathological_input_scales_linearly(case: str) -> None:
     """A pathological input's scaling ratio time(n) / time(n/4) stays under 8 (#929).
 
-    The bound is ``time(n) < 8 * time(n/4) + slack``: a linear scan gives a
-    ratio near 4 and a quadratic 16, so 8 separates them with room for CI timer
-    noise. The check compares the
-    scanner with itself on the same machine at the same moment, so it holds on
-    a slow runner where an absolute budget would not, and the 1 s budget above
-    stays the absolute guard. The small side runs ``4 * reps`` scans, so both
-    sides take about the same CPU time and a coarse timer tick weighs on them
-    equally; the slack covers about two Windows ticks.
+    The small side runs four times the scans, so ``_scaling_ratio`` reads 1
+    for a linear scan and 4 for a quadratic one; the bound of 2 (a per-scan
+    ratio of 8) separates them with room for runner noise. The check compares
+    the scanner with itself on the same machine at the same moment, so it
+    holds on a slow runner where an absolute budget would not, and the 1 s
+    budget above stays the absolute guard. Both sides must clear
+    ``_MIN_SIDE_SECONDS``, so the measurement stays far above the clock's
+    resolution (#1125).
     """
     gen, n, reps = PATHOLOGICAL[case]
-    big = _fastest_cpu_seconds(gen(n), reps)
-    small_x4 = _fastest_cpu_seconds(gen(n // 4), 4 * reps)
-    assert big < 2 * small_x4 + 0.035, (case, big, small_x4)
+    ratio, big, small = _scaling_ratio(gen, n, reps)
+    assert small >= _MIN_SIDE_SECONDS, (
+        f"{case}: small side {small:.4f} s is too short to time; raise reps")
+    assert ratio < 2, (case, ratio, big, small)
+
+
+def _close_brace_function_first(self: dart_complexity._Scanner) -> None:
+    """``_on_close_brace`` as it was before #1078: the brace's own function
+    closes before the `=>` bodies inside it, which makes `_close` scan `fns`
+    on every `}`."""
+    if self.interps:
+        self.interps[-1][2] -= 1
+    opened = self.braces.pop() if self.braces else None
+    if opened is not None:
+        self._close(opened)
+    self._close_arrows()
+
+
+@pytest.mark.no_cover
+@pytest.mark.cpu_budget
+def test_dart_scaling_ratio_catches_the_929_quadratic(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """Kill test for the scaling bound (#1125): with the #929 quadratic put
+    back, ``_scaling_ratio`` on nested `=>` bodies crosses the bound of 2.
+
+    n is a fifth of the table's, so the quadratic scan stays near 0.25 s.
+    """
+    monkeypatch.setitem(dart_complexity._OP_HANDLERS, "}",
+                        _close_brace_function_first)
+    gen, _n, _reps = PATHOLOGICAL["nested-arrow-bodies"]
+    ratio, big, small = _scaling_ratio(gen, 4_000, 1)
+    assert small >= _MIN_SIDE_SECONDS, small
+    assert ratio >= 2, (ratio, big, small)
 
 
 def test_dart_scanner_reads_a_bounded_prefix(tmp_path: Path,
