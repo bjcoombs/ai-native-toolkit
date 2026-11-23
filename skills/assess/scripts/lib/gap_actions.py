@@ -20,7 +20,7 @@ signal before it is filled from judgement:
 
 Each entry is ``{signal, action, paths, why}``, where ``signal`` is the run-context
 block the gap was read from and ``why`` is that scan's why from the check manifest
-(``lib.manifest_whys.scan_whys``, #939): static text, the same in every run. The root-instructions entry, when present, comes
+(``lib.manifest.manifest_whys.scan_whys``, #939): static text, the same in every run. The root-instructions entry, when present, comes
 first, then coverage.
 A lint complexity-rule gap is deliberately absent: the core has no detector for
 it, and the layer scorer owns that check.
@@ -48,7 +48,7 @@ from __future__ import annotations
 
 from typing import TypedDict
 
-from lib.keyhole_signals import is_archive_path
+from lib.keyhole.keyhole_signals import is_archive_path
 from lib.run_context_types import JsonDict
 
 
@@ -163,7 +163,7 @@ def build_gap_actions(
         _reachability_gap(doc_graph or {}),
     ]
     from lib.manifest.check_manifest import core_manifest  # lazy: the manifest loads once
-    from lib.manifest_whys import scan_whys
+    from lib.manifest.manifest_whys import scan_whys
     whys = scan_whys(core_manifest())
     out = [g for g in gaps if g is not None]
     for g in out:

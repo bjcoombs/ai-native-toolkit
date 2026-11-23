@@ -107,7 +107,7 @@ ever cut, this note is where the intended boundary is written down.
 ## Check manifest whys (#939)
 
 Every check manifest entry says why it matters to an agent. The loader is
-`check_manifest.load_manifest` (`manifest/check_manifest.py`); the why rules and accessors are in `manifest_whys.py`.
+`check_manifest.load_manifest` (`manifest/check_manifest.py`); the why rules and accessors are in `manifest/manifest_whys.py`.
 
 | Entry | Where its why lives | Accessor |
 |---|---|---|
@@ -153,9 +153,12 @@ moved yet. A moved module keeps its filename.
 
 Each old path `lib/<stem>.py` is a shim until 4.0.0: it sets `sys.modules[__name__]` to the
 moved module, so the old and new dotted paths name one module object, and a module that runs
-as a script gets a `runpy` `__main__` branch. A shim cannot be run by path, because a script
-run as `python scripts/lib/<stem>.py` does not have `lib` on `sys.path`; run the moved file
-(`python scripts/lib/<pkg>/<stem>.py`) instead. New code imports the new path.
+as a script gets a `runpy` `__main__` branch. Run as `python scripts/lib/<stem>.py`, Python
+puts `lib/` first on `sys.path`, not `scripts/`, so such a shim first inserts `scripts/`
+(`Path(__file__).resolve().parents[1]`) and the old path keeps running. Running a shim as
+`__main__` imports the moved module before `runpy` runs it, so Python prints a
+`RuntimeWarning`; the moved file (`python scripts/lib/<pkg>/<stem>.py`) runs without it.
+New code imports the new path.
 
 - **`agents/`**: what a repository builds with agents and how an agent runs in it, the
   Layer 8 inputs. `agent_identity` is shared core, and `agent_consistency`, `agent_systems`
@@ -186,9 +189,17 @@ run as `python scripts/lib/<stem>.py` does not have `lib` on `sys.path`; run the
   #917 module map and stay at the root. Files: `__init__.py`, `config_drift.py`, `delivery.py`,
   `gh_cli.py`, `gitlab_ci_lint.py`, `gitlab_cli.py`, `gitlab_notes.py`, `merged_sample.py`,
   `platform_cli.py`, `review_reality.py`.
-- **`manifest/`**: the check manifest loader (`checks/core.toml` and its fragments) and its
-  structured validation errors. `manifest_whys` (#939), which the loader calls, postdates the #917 module map,
-  so it has no group and stays at the root. Files: `__init__.py`, `check_manifest.py`, `check_validation.py`.
+- **`keyhole/`**: the keyhole-readiness signals and findings, and the Layer 1 liveness
+  inputs: accretion, promissory markers, structure drift, hidden coupling, understanding,
+  archetype and the Dart and JVM capability entries. `promissory_markers` and
+  `accretion_ratchet` also run as scripts: run the moved file,
+  `python scripts/lib/keyhole/<stem>.py`. Files: `__init__.py`,
+  `accretion_ratchet.py`, `archetype.py`, `coupling_analysis.py`, `dart_capabilities.py`,
+  `jvm_capabilities.py`, `keyhole_signals.py`, `liveness_scan.py`, `promissory_markers.py`,
+  `python_regions.py`, `structure_drift.py`, `understanding_analysis.py`.
+- **`manifest/`**: the check manifest loader (`checks/core.toml` and its fragments), its
+  structured validation errors, and the `why` rules the loader applies to every entry
+  (#939). Files: `__init__.py`, `check_manifest.py`, `check_validation.py`, `manifest_whys.py`.
 - **`test_pressure/`** (predates #917): write-side truth pressure, with a facade
   `__init__.py` that re-exports the package's names. Files: `__init__.py`, `aggregate.py`, `common.py`, `heuristics.py`, `mutation.py`, `mutmut3.py`, `reason_paths.py`.
 

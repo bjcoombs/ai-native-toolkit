@@ -38,6 +38,7 @@ from lib.agents.agent_environment import AgentEnvironmentBlock
 from lib.agents.agent_harness import AgentHarnessBlock
 from lib.agent_instructions_grader import SensitiveFinding
 from lib.ci_checks import CiChecksBlock
+from lib.agent_outcome import AgentOutcomeBlock
 from lib.ai_usage import AiUsageBlock
 from lib.block_shapes import (
     AgentOpsBlock,
@@ -57,7 +58,7 @@ from lib.doc_staleness import DocStalenessBlock, DocStalenessRow
 from lib.gap_actions import GapAction
 from lib.guardrails import GuardrailsBlock
 from lib.instruction_placement import InstructionPlacementBlock
-from lib.liveness_scan import ObservabilityBlock
+from lib.keyhole.liveness_scan import ObservabilityBlock
 from lib.mutation_cap import MutationNotRunCap
 from lib.run_context_types_size import LocByClass
 from lib.run_context_types import (
@@ -93,7 +94,7 @@ from lib.unit_levels import UnitLevelsBlock
 from lib.unit_rollup import UnitRollUpBlock
 from lib.unit_readings import UnitReadingsBlock
 from lib.graph.structure_graph import StructureBlock
-from lib.understanding_analysis import UnderstandingModule
+from lib.keyhole.understanding_analysis import UnderstandingModule
 
 # Where each typed shape sits in run-context.json, as a field pattern. A list
 # shape is rooted at the list's pattern (list levels add no segment).
@@ -143,6 +144,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("prior_findings_snapshot", FindingsSnapshot),
     ("instruction_placement", InstructionPlacementBlock),
     ("ai_usage", AiUsageBlock),
+    ("agent_outcome", AgentOutcomeBlock),
     ("delivery", DeliveryBlock),
     ("doc_claims", DocClaimsBlock),
     ("guardrails", GuardrailsBlock),

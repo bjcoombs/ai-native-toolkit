@@ -27,7 +27,7 @@ from _pytest.mark.structures import ParameterSet
 
 from lib.level_signals import load_default_levels
 from lib.levels import Group, evaluate
-from lib.promissory_markers import scan_promissory_markers
+from lib.keyhole.promissory_markers import scan_promissory_markers
 from lib.signals import build_document
 
 _ISSUES = "https://github.com/bjcoombs/ai-native-toolkit/issues/"

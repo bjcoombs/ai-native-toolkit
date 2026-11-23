@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lib import keyhole_signals as ks
+import lib.keyhole.keyhole_signals as ks
 
 # A bleeding-but-statically-modular dir -> hidden_coupling; reused across the
 # family files.

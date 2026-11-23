@@ -12,13 +12,13 @@ import assess_signals
 from assess_report import format_structure_drift_findings
 from lib.context_blocks import _structure_drift_block
 from lib.graph.import_graph import is_graph_source
-from lib.coupling_analysis import detect_hidden_coupling
-from lib.keyhole_signals import _graphed_dirs, project_static_modularity
+from lib.keyhole.coupling_analysis import detect_hidden_coupling
+from lib.keyhole.keyhole_signals import _graphed_dirs, project_static_modularity
 from lib.graph.import_graph import select_graph
 from lib.import_graph_builders import BUILDERS
 from lib.run_context_types import CoChangePair
 from lib.signals_schema import SCHEMA_PATH
-from lib.structure_drift import detect_grouping_disagreement
+from lib.keyhole.structure_drift import detect_grouping_disagreement
 from lib.graph.import_graph_go import (
     GO_BUILDER,
     exported_surface,

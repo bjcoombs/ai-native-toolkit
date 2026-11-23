@@ -18,10 +18,11 @@ import os
 import subprocess
 from pathlib import Path
 
-from lib import ownership_parser, structure_drift
+import lib.keyhole.structure_drift as structure_drift
+from lib import ownership_parser
 import lib.graph.structure_graph as sg
 from lib.graph.import_graph import ModuleGraph
-from lib.structure_drift import (
+from lib.keyhole.structure_drift import (
     SEAM_ALLOWLIST,
     apply_seam_allowlist,
     cochange_grouping_relation,

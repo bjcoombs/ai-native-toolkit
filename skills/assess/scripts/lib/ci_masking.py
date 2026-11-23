@@ -77,12 +77,21 @@ parser (the core has no YAML dependency). Only literal values count.
   the block's indentation are one line, so ``pytest`` and ``|| true`` on two lines are one
   masked statement, and ``pytest`` then ``exit 0`` is the one command ``pytest exit 0``.
 
-Known limits: ``|| echo ...`` is not a no-op here, so it stays credited; an exempt check
-with no later ``exit 0`` is credited, though any later statement that passes, or the
-status of a lone ``pytest | tee log`` without pipefail, would hide its failure; an
-``until`` loop that breaks out is credited; an exempt check inside a ``( )`` / ``{ }``
-group is credited (a subshell or a function returns its status as one command, and
-errexit stops there; a ``{ }`` group would not); a compound command in an exempt position
+- Not measured (#1008, ``lib.ci_unsure``). ``mask_lines(text)`` returns ``(unmasked,
+  unsure)``: the forms whose failure the step may hide are left out of the unmasked lines
+  and returned on their own, so ``ci_checks`` and ``coverage_ci`` read them null
+  (``check_may_pass``), never credit: a ``||`` fallback that can pass (``pytest || echo
+  failed``), an ``if`` / ``while`` condition with no re-raise, an ``until`` loop that
+  breaks, a check before ``&&`` / ``||`` with a later statement in the body (in a ``{ }``
+  group, an ``if`` or a loop body too; not inside a subshell or a function, which return
+  the status), and a ``{ }`` group or function called before ``&&`` / ``||`` or in a
+  condition. ``unmasked_lines(text)`` is ``mask_lines(text)[0]``.
+
+Known limits: the status of a lone ``pytest | tee log`` without pipefail is credited,
+though it would hide the failure; a check before ``&&`` inside a subshell or function with
+a later statement there is credited; a ``{ }`` group or function called before ``&&`` reads
+null even where its last command is the check and nothing follows (bash would exit 1); a
+GitLab body is read for the ``||`` fallback only; a compound command in an exempt position
 (``fi || true``) does not exempt its body; ``allow_failure`` inherited through
 ``default:``, ``extends:`` or a YAML anchor is not resolved; a GitLab ``set +e`` in
 ``before_script:`` does not reach ``script:``; reusable-workflow and composite-action
@@ -135,10 +144,9 @@ line before any rule reads it. The default `bash -e` stops at the failing check 
 `exit 0` rule; a literal `if: false`,
 `if: 'false'` or `if: ${{ false }}` masks its step or job like `continue-on-error: true`.
 `\\` continuations are joined first.
-Known limits (module docstring): `|| echo`, an exempt check with no later `exit 0`
-(a lone `pytest | tee log` without pipefail, `pytest && echo ok` followed by any passing
-statement), an `until` loop that breaks out, an exempt check inside a `( )` / `{ }` group
-(a subshell or function returns its status, so it is not read as exempt), `allow_failure` through `default:` / `extends:` / anchors, a
+Issue #1008 adds `mask_lines(text) -> (unmasked, unsure)`, the forms that read null
+(`lib.ci_unsure`). Known limits (module docstring): a lone `pytest | tee log` without
+pipefail, an exempt check inside a subshell or function with a later statement there, `allow_failure` through `default:` / `extends:` / anchors, a
 `before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
 `tests/test_ci_checks.py`. `IndentTree` / `parse_lines` (the indentation model) are
 shared with `ci_triggers.py`. Tests for the #919 and #936 rules: `tests/test_ci_false_credit.py`.
@@ -151,6 +159,7 @@ from dataclasses import dataclass
 
 from lib.ci_exempt import condition_flags, exempt_segments, pipefail_after, shell_pipefail, unquoted
 from lib.ci_statements import _join, _pick, _same_line_keep, split_statements
+from lib.ci_unsure import group_call_unsure, opaque_flags, or_arm_unsure, until_break_flags
 from lib.command_index import ci_line_text
 
 __all__ = ["IndentTree", "parse_lines", "split_statements", "strip_comment", "unmasked_lines"]
@@ -534,7 +543,7 @@ Parsed = dict[int, list[list[tuple[str, str]]]]
 
 def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, texts: dict[int, str],
                     run_shell: tuple[bool, bool, bool] | None,
-                    ) -> tuple[list[tuple[int, int]], dict[tuple[int, int], frozenset[int]]]:
+                    ) -> tuple[list[tuple[int, int]], Segments, Segments]:
     """The statements of one script body masked by ``set +e`` or by a later top-level ``exit 0``,
     and the segments a later ``exit 0`` masks in a body with errexit on.
 
@@ -570,9 +579,16 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     code = [not data.get(first, False) for first, _ in refs]
     depths, grouped = _depths([parsed[first][k] if keep else [] for (first, k), keep in zip(refs, code)],
                      keywords=bash)
-    conditions = condition_flags([raw[first][k] if keep else [] for (first, k), keep in zip(refs, code)])
+    body = [raw[first][k] if keep else [] for (first, k), keep in zip(refs, code)]
+    conditions = condition_flags(body)
+    readable = run_shell is not None and bash   # the #1008 forms: a GitHub bash or sh body
+    until = until_break_flags(body) if readable else [False] * len(refs)
+    in_group = group_call_unsure(body, conditions) if readable else set()
+    opaque = opaque_flags(body)
     out: list[tuple[int, int]] = []
-    exempt: dict[tuple[int, int], frozenset[int]] = {}
+    exempt: Segments = {}
+    unsure: Segments = {}
+    later_code = False   # a later statement runs after this one (not a lone closer)
     reraised = False
     exited = False   # a later top-level ``exit 0`` ends the body with success
     exit_reraised = False
@@ -588,15 +604,59 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
                     else exempt_segments(statement, pipes[idx]))
             if drop:
                 exempt[(first, k)] = drop
+        elif readable and code[idx] and not (state[idx] or off[idx] or reraised or own):
+            statement = raw[first][k]
+            whole = frozenset(range(len(statement)))
+            # A ``{ }`` group or a compound body passes an exempt failure on; a subshell
+            # or a function returns it (``lib.ci_unsure.opaque_flags``).
+            maybe = (whole if idx in in_group or conditions[idx] or until[idx]
+                     else exempt_segments(statement, True) if (later_code or later_exit) and not opaque[idx]
+                     else frozenset())
+            if maybe:
+                unsure[(first, k)] = maybe
+        if code[idx] and any(seg for _, seg in raw[first][k]) and _head(raw[first][k]) not in _ENDS:
+            later_code = True
         if code[idx] and depths[idx] == 0 and _exit_zero(parsed[first][k]):
             exited, exit_reraised = True, False
         reraised = reraised or own
         exit_reraised = exit_reraised or own
-    return out, exempt
+    return out, exempt, unsure
+
+
+# A statement that only closes a compound command runs nothing after the one before it.
+_ENDS = frozenset({"fi", "done", "esac", "}", "else", "elif"})
+Segments = dict[tuple[int, int], frozenset[int]]
+
+
+def _head(statement: list[tuple[str, str]]) -> str:
+    words = statement[0][1].split() if statement else []
+    return words[0] if words else ""
+
+
+def _move_unsure(unsure: Segments, masked: dict[int, set[int]], kept: dict[tuple[int, int], list[int]],
+                 raw: Parsed, count: int) -> list[str]:
+    """Take the unsure segments out of ``kept`` (``unmasked_lines``) and return them per line."""
+    out = [""] * count
+    for (first, k), skip in unsure.items():
+        if k in masked.get(first, set()):
+            continue
+        base = kept.get((first, k), list(range(len(raw[first][k]))))
+        moved = [i for i in base if i in skip]
+        if moved:
+            kept[(first, k)] = [i for i in base if i not in skip]
+            out[first] = "; ".join(filter(None, (out[first], _join(_pick(raw[first][k], moved)))))
+    return out
 
 
 def unmasked_lines(text: str) -> list[str]:
     """``text``'s lines with every masked statement removed (an all-masked line is empty)."""
+    return mask_lines(text)[0]
+
+
+def mask_lines(text: str) -> tuple[list[str], list[str]]:
+    """``(unmasked, unsure)``: ``unmasked_lines(text)`` with the #1008 forms
+    (``lib.ci_unsure``) left out too, and per line the text of those forms alone (empty
+    where none), so a classifier reads them as not measured, never as credit."""
     lines = text.splitlines()
     tree = IndentTree(parse_lines(lines))
     spans = _logical_lines(lines, tree)
@@ -605,6 +665,7 @@ def unmasked_lines(text: str) -> list[str]:
     span_at = {span[0]: span for span in spans}
     masked: dict[int, set[int]] = {}
     kept: dict[tuple[int, int], list[int]] = {}
+    unsure: Segments = {}
     bodies: dict[int, list[tuple[int, int]]] = {}
     for span in spans:
         first = span[0]
@@ -614,6 +675,9 @@ def unmasked_lines(text: str) -> list[str]:
             continue
         for k, statement in enumerate(statements):
             keep = _same_line_keep(statement, lambda: [lines[j] for j in tree.job(first) if j > span[-1]])
+            arm = or_arm_unsure(statement, " ; ".join(_join(s) for s in statements[k + 1:]))
+            if arm:
+                unsure[(first, k)] = frozenset(arm)
             if len(keep) < len(statement):
                 kept[(first, k)] = keep
                 statements[k] = _pick(statement, keep)
@@ -621,19 +685,27 @@ def unmasked_lines(text: str) -> list[str]:
     for body, refs in bodies.items():
         run_shell = run_errexit(tree, body) if tree.lines[body].key == "run" else None
         texts = {first: _joined(lines, span_at[first]) for first in dict.fromkeys(f for f, _ in refs)}
-        whole, exempt = _masked_in_body(refs, parsed, raw, texts, run_shell)
+        whole, exempt, body_unsure = _masked_in_body(refs, parsed, raw, texts, run_shell)
         for first, k in whole:
             masked.setdefault(first, set()).add(k)
         for (first, k), skip in exempt.items():
             base = kept.get((first, k), list(range(len(raw[first][k]))))
             if any(i in skip for i in base):
                 kept[(first, k)] = [i for i in base if i not in skip]
+        for ref, more in body_unsure.items():
+            unsure[ref] = unsure.get(ref, frozenset()) | more
+    unsure_out = _move_unsure(unsure, masked, kept, raw, len(lines))
     for (first, k), keep in kept.items():
         if keep:
             parsed[first][k] = _pick(raw[first][k], keep)
         else:
             masked.setdefault(first, set()).add(k)
-    changed = {first for first, _ in kept}
+    return _render(lines, spans, parsed, masked, {first for first, _ in kept}), unsure_out
+
+
+def _render(lines: list[str], spans: list[range], parsed: Parsed, masked: dict[int, set[int]],
+            changed: set[int]) -> list[str]:
+    """``lines`` with each logical line rewritten to its kept statements (empty when none)."""
     out = list(lines)
     for span in spans:
         drop = masked.get(span[0], set())

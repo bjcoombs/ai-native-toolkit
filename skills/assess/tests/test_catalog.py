@@ -23,7 +23,7 @@ from lib.catalog import (CATALOG_VERSION, GRADE_ORDER, UNCLASSIFIED, build_catal
                          grade_of, render_json)
 from lib.catalog_md import CONDITION_COLUMNS, render_markdown
 from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
-from lib.keyhole_signals import FINDING_ORDER
+from lib.keyhole.keyhole_signals import FINDING_ORDER
 from lib.level_signals import SIGNAL_INPUTS, counts_toward_level, load_default_levels
 from lib.scan_registry import SCANS
 from lib.signals import known_scans
@@ -334,7 +334,7 @@ def _scan_section(text: str, name: str) -> str:
 
 def test_every_entry_carries_its_manifest_why() -> None:
     # #939: criteria, scans, findings and tags carry why and why_source; signals carry none.
-    from lib import manifest_whys as mw
+    import lib.manifest.manifest_whys as mw
     catalog, m = build_catalog(), cm.load_manifest()
     whys = mw.condition_whys(m)
     crits = [c for r in catalog["rows"] for lv in r["levels"] for c in lv["criteria"]]
@@ -366,7 +366,7 @@ def test_a_section_naming_a_signal_holds_every_condition_it_feeds() -> None:
 
 
 def test_a_version_1_manifest_renders_without_whys() -> None:
-    from lib import manifest_whys as mw
+    import lib.manifest.manifest_whys as mw
     data = _manifest_data()
     data["manifest_version"] = 1
     data.pop("tags")
