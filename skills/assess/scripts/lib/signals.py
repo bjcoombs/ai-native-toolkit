@@ -39,10 +39,10 @@ blocks the unit pass reads, and they run only when named or with ``units=True``
 The headless, signals-only run behind `assess_signals.py` (issue #545). `collect` runs
 the selected registry scans, plus the registry keys they read, through `run_scans` with
 inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
-`grade_instruction_files`, `scope=None`, `excludes` from `load_excludes`,
+`grade_instruction_files`, `scope` (`--scope`, or None), `excludes` from `load_excludes`,
 `history_window` set to `--window` for history-reading scans, `fleet_config` merged from
 `--fleet-config` and the target's `.assess/config.toml` (`fleet_config.repo_fleet_config`), and the
-`build_run_context` arguments `requested_scope=None`, `run_date` and
+`build_run_context` arguments `requested_scope` (the same scope), `run_date` and
 `non_interactive=True`), so a raising scan degrades through `safe` and the run
 completes. A name the runner provides is never recomputed from the table. A
 `network` scan runs its `offline_fn` or is reported

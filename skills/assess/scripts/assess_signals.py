@@ -34,7 +34,8 @@ under it (``lib/ci_includes.py``, #766). ``fleet.py`` passes its ROOT.
 does: the scans that read the scope (suppressions, the doc graph and staleness, structure,
 size, the coverage gate) read that folder, and the repository-wide ones (CI, review,
 agent settings, the root instruction file) read the whole checkout. The stamp records
-the folder as ``scope``; counts-only output drops it, or hashes it under ``--hash-paths``.
+the folder as ``scope``; counts-only output writes ``set`` in its place, or its salted hash
+under ``--hash-paths``, so ``null`` still means the whole checkout.
 
 ``--units`` (#866) adds the monorepo unit scans (``lib/signals.py`` ``UNIT_SCANS``): the
 ``units`` block and ``unit_readings``, each unit's own readings of the scoped scans with
@@ -78,6 +79,7 @@ from lib.counts_only import (  # noqa: E402
     validate_cli_args,
 )
 from lib.fleet_config import FleetConfig, FleetConfigError, load_fleet_config  # noqa: E402
+from lib.run_context_types import SignalsDocument  # noqa: E402
 from lib.run_scope import resolve_scope  # noqa: E402
 from lib.signals import (  # noqa: E402
     DEFAULT_WINDOW,
@@ -89,6 +91,11 @@ from lib.signals import (  # noqa: E402
     select_scans,
 )
 from lib.tool_lookup import warn_missing_packages  # noqa: E402
+
+
+# A scoped counts-only run's stamp ``scope`` without --hash-paths: the folder is hidden,
+# and the run still reads as scoped (null is the whole checkout).
+SCOPE_REDACTED = "set"
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -193,18 +200,24 @@ def main(argv: list[str] | None = None) -> int:
                               platform=args.platform, ghsync_root=ghsync_root,
                               scope=scope, units=args.units)
     if args.counts_only:
-        # Content-free mode: free text, identities and the target's commit
-        # are dropped; references/counts-only.md lists what each block keeps.
-        hash_paths, salt = hash_options(args)
-        if hash_paths and salt is None:
-            salt = secrets.token_hex(16)  # one salt for the scans and the stamp's scope
-        document["scans"] = counts_only_scans(document["scans"], hash_paths=hash_paths, salt=salt)
-        document["stamp"]["target_head"] = None
-        stamped = document["stamp"]["scope"]
-        # the scope folder, like a unit's: never in clear, hashed under --hash-paths
-        document["stamp"]["scope"] = hash_value(stamped, salt) if stamped and salt else None
+        _counts_only(document, args)
     _write_atomically(out, json.dumps(document, indent=2, default=str) + "\n")
     return 0
+
+
+def _counts_only(document: SignalsDocument, args: argparse.Namespace) -> None:
+    """Content-free mode, in place: free text, identities and the target's commit are
+    dropped; references/counts-only.md lists what each block keeps."""
+    hash_paths, salt = hash_options(args)
+    if hash_paths and salt is None:
+        salt = secrets.token_hex(16)  # one salt for the scans and the stamp's scope
+    document["scans"] = counts_only_scans(document["scans"], hash_paths=hash_paths, salt=salt)
+    document["stamp"]["target_head"] = None
+    stamped = document["stamp"]["scope"]
+    # the scope folder, like a unit's: never in clear, hashed under --hash-paths, else
+    # SCOPE_REDACTED, so null keeps meaning the whole checkout
+    if stamped is not None:
+        document["stamp"]["scope"] = hash_value(stamped, salt) if salt else SCOPE_REDACTED
 
 
 def _write_atomically(out: Path, text: str) -> None:

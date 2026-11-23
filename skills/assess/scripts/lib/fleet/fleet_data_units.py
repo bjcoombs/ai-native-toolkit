@@ -19,11 +19,13 @@ fields are computed from the row (``lib.fleet.fleet_level.repo_level``):
 - ``tags``: the unit's per-tag tally, the headline strip (``lib.headline.tag_cells``) over the
   unit's level result, the shape of the repository's ``tags`` (#1073).
 
-No row carries a tally or an "N of M" figure: the unit Steps, their next blockers and the
-per-tag counts are the comparison inside one repository (#800 decision 3). ``unit_rows`` is
-null when the repository was not measured by unit: a failed scan, a run without a model or
-without ``--monorepo-units``, or an unavailable ``unit_readings`` block. Null is not measured, never
-an empty list; a measured repository with no unit lists none.
+No row carries a condition tally (``tally``, "N of M measured"): the unit Steps, their next
+blockers and the per-tag counts are the comparison inside one repository (#800 decision 3).
+``unit_rows`` is null when the repository was not measured by unit: its scans carry no
+available ``unit_readings`` block (no ``--monorepo-units`` or ``--scans unit_readings``, a
+failed scan, an unavailable block) or the run has no model. Any row whose scans carry the
+block gets rows, a re-score of stored rows included. Null is not measured, never an empty
+list; a measured repository with no unit lists none.
 
 Every value is a Step, a count, a token or the unit's hashed folder, so a counts-only file
 names no unit (``FLEET_DATA_RULES``). Tests: ``tests/test_fleet_data_units.py``.

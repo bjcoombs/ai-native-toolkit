@@ -127,9 +127,11 @@ def test_scope_accepts_an_absolute_folder_under_the_target(repo: Path, tmp_path:
     assert doc["stamp"]["scope"] == "services/search"
 
 
-def test_counts_only_hides_the_scope_unless_hashed(repo: Path, tmp_path: Path) -> None:
+def test_counts_only_hides_the_scope_folder_but_keeps_it_scoped(repo: Path, tmp_path: Path) -> None:
     plain = _run(repo, tmp_path / "p.json", "--scans", "stats_summary", "--scope", "web", "--counts-only")
-    assert plain["stamp"]["scope"] is None
+    assert plain["stamp"]["scope"] == assess_signals.SCOPE_REDACTED  # scoped, folder hidden
+    whole = _run(repo, tmp_path / "wc.json", "--scans", "stats_summary", "--counts-only")
+    assert whole["stamp"]["scope"] is None  # null is only the whole checkout
     hashed = _run(repo, tmp_path / "h.json", "--scans", "stats_summary", "--scope", "web",
                   "--counts-only", "--hash-salt", "fleet")
     units = _run(repo, tmp_path / "u.json", "--units", "--counts-only", "--hash-salt", "fleet")

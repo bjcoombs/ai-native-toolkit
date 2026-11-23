@@ -117,10 +117,12 @@ units. Each row has:
   `state` and `disposition`, as `gate_blockers` writes them; `null` when no gate blocks it.
 - `tags`: the unit's per-tag tally, the shape of the repository's `tags`.
 
-A unit row carries no tally and no "N of M" figure: compare units inside one repository by
-Step, next blocker and tag counts. `unit_rows` is `null` when the repository was not
-scanned by unit (no `--monorepo-units`, a failed scan, a run without `--levels`, or an
-unavailable `unit_readings` block); a measured repository with no unit has an empty list.
+A unit row carries no condition tally (`tally`, "N of M measured"): compare units inside
+one repository by Step, next blocker and per-tag counts. `unit_rows` is `null` when the
+repository was not scanned with the unit scans (its scans carry no available
+`unit_readings` block: no `--monorepo-units` and no `--scans unit_readings`, a failed scan,
+or an unavailable block) or the run has no `--levels`; a re-score of stored rows that carry
+the block rebuilds them. A measured repository with no unit has an empty list.
 
 **Privacy.** `--full` keeps everything. Counts-only (the default) keeps keys, which carry
 the group and team paths (`ownership/acme/platform`) and repository ids unless

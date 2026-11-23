@@ -91,7 +91,8 @@ for any consumer; both are `null` on a whole-repo run.
 `assess_signals.py --scope <path>` runs the headless signals against one folder, as
 `/assess <path>` does: the scans that read the scope read that folder, and repository-wide
 scans read the whole checkout. The document's stamp records the folder as `scope`;
-counts-only output drops it, or writes its salted hash under `--hash-paths`.
+counts-only output writes `set` in its place, or its salted hash under `--hash-paths`, so a
+scoped run never reads as a whole-repo run (`null`).
 
 `assess_signals.py --units` adds the `units` and `unit_readings` blocks below, one scoped
 pass per unit. It does not combine with `--scope`. `fleet.py --monorepo-units` passes it to
