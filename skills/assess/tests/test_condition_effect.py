@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,9 @@ def _row(repo: str, stale: Any, revert: Any, rework: Any = None, *, status: str 
             "scans": {"doc_staleness": {"summary": {"stale_pct": stale}}, "agent_outcome": outcome}}
 
 
+# math.isclose, not pytest.approx: another test leaves a numpy stub in sys.modules on the
+# same xdist worker, and approx calls numpy when it is imported.
+
 # --- the Student t quantile ------------------------------------------------------------
 
 
@@ -38,12 +42,12 @@ def _row(repo: str, stale: Any, revert: Any, rework: Any = None, *, status: str 
     (1, 12.706205), (9, 2.262157), (18, 2.100922), (30, 2.042272), (1e7, 1.959964),
 ])
 def test_t_quantile_matches_the_published_table(df: float, expected: float) -> None:
-    assert ce.t_quantile(0.975, df) == pytest.approx(expected, abs=1e-5)
+    assert math.isclose(ce.t_quantile(0.975, df), expected, abs_tol=1e-5)
 
 
 def test_t_cdf_is_symmetric() -> None:
-    assert ce.t_cdf(0.0, 5) == pytest.approx(0.5)
-    assert ce.t_cdf(-1.3, 7) == pytest.approx(1 - ce.t_cdf(1.3, 7))
+    assert math.isclose(ce.t_cdf(0.0, 5), 0.5, abs_tol=1e-12)
+    assert math.isclose(ce.t_cdf(-1.3, 7), 1 - ce.t_cdf(1.3, 7), abs_tol=1e-12)
 
 
 # --- the estimate ----------------------------------------------------------------------
@@ -54,15 +58,17 @@ def test_welch_with_equal_spread_uses_the_pooled_degrees_of_freedom() -> None:
     effect = ce.welch("revert_share", met, unmet)
     var = sum((v - 0.1) ** 2 for v in met) / 9
     half = 2.100922 * (2 * var / 10) ** 0.5
-    assert effect["effect"] == pytest.approx(-0.3)
-    assert effect["interval"] == pytest.approx([-0.3 - half, -0.3 + half], abs=1e-5)
+    assert effect["effect"] is not None and math.isclose(effect["effect"], -0.3, abs_tol=1e-9)
+    assert effect["interval"] is not None
+    low, high = effect["interval"]
+    assert math.isclose(low, -0.3 - half, abs_tol=1e-5) and math.isclose(high, -0.3 + half, abs_tol=1e-5)
     assert effect["includes_zero"] is False and effect["low_confidence"] is False
     assert (effect["met"], effect["unmet"], effect["reason"]) == (10, 10, None)
 
 
 def test_overlapping_groups_include_zero() -> None:
     effect = ce.welch("revert_share", [0.1, 0.3] * 5, [0.15, 0.25] * 5)
-    assert effect["effect"] == pytest.approx(0.0, abs=1e-9)
+    assert effect["effect"] is not None and math.isclose(effect["effect"], 0.0, abs_tol=1e-9)
     assert effect["includes_zero"] is True
 
 
@@ -174,6 +180,17 @@ def test_history_reads_comparable_earlier_entries_oldest_first(tmp_path: Path) -
     assert [r.rows[0]["repo"] for r in runs] == ["a", "a"]
 
 
+def test_a_hashed_entry_under_another_salt_is_passed_over(tmp_path: Path) -> None:
+    from lib.counts_only.content_free import hash_value
+
+    org = tmp_path / "org"
+    _entry(org, "2026-11-01", [_row(hash_value("grp/a", "salt-1"), 0, 0.5)])  # another salt
+    _entry(org, "2026-11-08", [_row(hash_value("grp/a", "salt-2"), 0, 0.4)])  # this run's salt
+    this = frozenset({hash_value("grp/a", "salt-2")})
+    runs = ce.history_runs(org, stamp("2026-11-23", "v1"), this)
+    assert [r.scan_date for r in runs] == ["2026-11-08"]
+
+
 def test_a_missing_history_is_no_runs(tmp_path: Path) -> None:
     assert ce.history_runs(tmp_path / "none", stamp("2026-11-23", "v1"), frozenset()) == []
 
@@ -221,5 +238,7 @@ def test_a_failure_never_fails_the_run(tmp_path: Path, monkeypatch: Any, capsys:
     def boom(*_args: object) -> None:
         raise ValueError("bug")
     monkeypatch.setattr(fleet_cli, "build_condition_effect", boom)
+    (tmp_path / ce.CONDITION_EFFECT_FILE).write_text("{}", encoding="utf-8")  # an earlier run's
     fleet_cli._condition_effect(tmp_path, _model(), stamp("2026-11-23", "v1"), [], None, None)
     assert "fleet: condition_effect.json not written (ValueError)" in capsys.readouterr().err
+    assert not (tmp_path / ce.CONDITION_EFFECT_FILE).exists()

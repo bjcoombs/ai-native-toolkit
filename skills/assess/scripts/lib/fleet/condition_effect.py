@@ -8,7 +8,9 @@ no Step, count or headline reads it. The demotion that acts on it is a separate 
 **Observations.** The runs are this run (from memory) and the comparable earlier entries
 of the run history (``history_runs``: one per scan date, ``fleet_history.one_per_date``,
 stamps matching on ``fleet_trends.MATCH_KEYS``: window, scans, output mode, path hashing,
-``--fleet-config`` and ``--platform``). Every run is re-scored under this run's maturity
+``--fleet-config`` and ``--platform``), less a hashed entry that shares no repository id with
+this run: ``--hash-paths`` without a fixed salt hashes each run under a new one, so its ids
+would count every repository once per run (the achievements rule, #909). Every run is re-scored under this run's maturity
 model (``fleet_level.repo_level``), so a condition reads the same criteria in every run.
 For each condition and each measure in ``MEASURES``, a repository gives one observation:
 its newest run in which the condition is ``met`` or ``unmet`` and the share is a number
@@ -45,7 +47,8 @@ rounded to ``DIGITS`` places, conditions are in model order, and nothing reads t
 so the same history gives the same bytes.
 
 Each condition's outcome effect over the fleet history (#1086), informational.
-`history_runs(org_dir, current, repos)` reads the comparable earlier entries' `repos.jsonl`;
+`history_runs(org_dir, current, repos)` reads the comparable earlier entries' `repos.jsonl`,
+passing over a hashed entry under another salt (`_same_salt`);
 `observations(runs, model)` keeps each repository's newest met-or-unmet state with a numeric
 share per condition and measure (`MEASURES`: `revert_share`, `rework_share`); `welch(met,
 unmet)` gives the mean difference and its Welch interval at `CONFIDENCE` (0.95), with
@@ -62,6 +65,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, NamedTuple, TypedDict
 
+from lib.counts_only.content_free import is_hashed
 from lib.fleet.fleet_history import one_per_date
 from lib.fleet.fleet_legacy import stamp_value, upgrade
 from lib.fleet.fleet_level import repo_level
@@ -286,11 +290,21 @@ def _read_entry(entry: Path, date: str, current: FleetStamp) -> HistoryRun | Non
         return None
 
 
+def _same_salt(run: HistoryRun, repos: frozenset[str]) -> bool:
+    """False for a hashed entry that shares no repository id with this run: it was hashed under
+    another salt, so its ids would count each repository again (the achievements rule, #909)."""
+    ids = {row["repo"] for row in run.rows}
+    return not any(is_hashed(r) for r in ids) or bool(ids & repos)
+
+
 def history_runs(org_dir: Path, current: FleetStamp, repos: frozenset[str],
                  read: Callable[[Path, str, FleetStamp], HistoryRun | None] = _read_entry) -> list[HistoryRun]:
-    """The comparable earlier runs under ``org_dir``, one per scan date before this run's, oldest first."""
-    return [run for _date, run in one_per_date(org_dir, current["scan_date"], repos,
-                                               lambda entry, date: read(entry, date, current))]
+    """The comparable earlier runs under ``org_dir``, one per scan date before this run's, oldest
+    first; a hashed entry under another salt is passed over (``_same_salt``)."""
+    def keep(entry: Path, date: str) -> HistoryRun | None:
+        run = read(entry, date, current)
+        return run if run is not None and _same_salt(run, repos) else None
+    return [run for _date, run in one_per_date(org_dir, current["scan_date"], repos, keep)]
 
 
 def write_condition_effect(out_dir: Path, doc: ConditionEffectDoc) -> Path:

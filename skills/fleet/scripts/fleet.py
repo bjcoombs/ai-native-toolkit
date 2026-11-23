@@ -533,6 +533,7 @@ def _condition_effect(out_dir: Path, maturity_model: MaturityModel | None, stamp
         write_condition_effect(out_dir, build_condition_effect(
             maturity_model, [*earlier, EffectRun(stamp["scan_date"], rows)]))
     except Exception as e:  # noqa: BLE001 - informational, never fails a completed run
+        path.unlink(missing_ok=True)  # never leave an earlier run's estimate beside this run's results
         print(f"fleet: {CONDITION_EFFECT_FILE} not written ({type(e).__name__})", file=sys.stderr)
 
 
