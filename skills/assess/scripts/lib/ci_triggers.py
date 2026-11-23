@@ -37,7 +37,7 @@ runs in either, ``not_ordinary`` when it runs in neither and ``unknown`` otherwi
   branch pushes when it names ``branches``, ``pushes`` or a branch name; it names
   only ``tags``, ``schedules``, ``web``, ``triggers``, ``api``, ``pipelines``,
   ``external`` or ``chat``: neither. The map form (``only: {refs: ...}``) reads its
-  ``refs``; anything else is ``unknown``.
+  ``refs``; anything else, a flow map (``only: {refs: [tags]}``) included, is ``unknown``.
 - ``except:`` with the same reader, taken away from what ``only:`` (or its default) runs:
   ``except: [branches]`` runs in neither, ``except: [main]`` on some branches, and an
   ``except:`` map with a key other than ``refs`` (``variables:``) is ``unknown`` unless
@@ -47,7 +47,7 @@ runs in either, ``not_ordinary`` when it runs in neither and ``unknown`` otherwi
   winning, then the job's own keys. ``rules:`` and ``when:`` overwrite, so a job's own
   ``rules:`` replace a template's whole; two ``only:`` or ``except:`` maps would be
   deep-merged and read ``unknown``. A target not in the file (one from ``include:``), a
-  cycle, an anchor or tag value, and a merged job holding ``rules:`` beside ``only:`` or
+  cycle, an anchor or tag value, a parent given inline or through ``<<:``, and a merged job holding ``rules:`` beside ``only:`` or
   ``except:`` (GitLab rejects it) read ``unknown``, never as a job without rules.
 - No such key: branch pushes, and merge requests too when ``workflow: rules:`` exists.
 - A top-level ``workflow: rules:`` decides which of the two pipelines GitLab creates,
@@ -213,6 +213,8 @@ def _only_outcomes(tree: IndentTree, key: int, refs_only: bool = False) -> _Outc
     line = tree.lines[key]
     values: list[str]
     unknown: _Outcomes = {c: "unknown" for c in CONTEXTS}
+    if line.value.startswith("{"):
+        return unknown  # a flow map (``only: {refs: [tags]}``): its keys are not ref names
     if line.value:
         values = _names(line.value)
     else:
@@ -284,7 +286,7 @@ def _job_keys(tree: IndentTree, job: int, top: dict[str, int], seen: frozenset[i
               cache: dict[int, _Keys | None]) -> _Keys | None:
     """The read keys of ``job`` after ``extends:``: parents in order, the last winning, then the
     job's own keys. None when a parent is not a top-level key of this file, is given inline
-    (``.t: {rules: ...}``, an anchor), or on a cycle."""
+    (``.t: {rules: ...}``, an alias) or merges an anchor (``<<: *b``), or on a cycle."""
     if job in cache:
         return cache[job]
     own = {tree.lines[k].key: k for k in tree.children(job)}
@@ -296,7 +298,10 @@ def _job_keys(tree: IndentTree, job: int, top: dict[str, int], seen: frozenset[i
             return None
         for name in names:
             parent = top.get(name)
-            readable = parent is not None and parent not in seen and not tree.lines[parent].value
+            # An inline value (``.t: *b``, ``.t: {rules: ...}``) or a keyless line (a ``<<: *b``
+            # merge, which the line reader leaves without a key) is not read.
+            readable = parent is not None and parent not in seen and not tree.lines[parent].value and all(
+                tree.lines[k].key for k in tree.children(parent))
             inherited = _job_keys(tree, parent, top, seen | {job}, cache) if readable and parent is not None else None
             if inherited is None:
                 cache[job] = None
