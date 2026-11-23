@@ -186,6 +186,7 @@ def test_fix_opens_the_pull_request_through_the_runner(tmp_path: Path) -> None:
     assert report["delivery"]["mode"] == "pull_request"
     create = next(c for c in runner.calls if c[:3] == ["gh", "pr", "create"])
     assert "CLAUDE.md" in create[create.index("--body") + 1]
+    assert "the checkout is now on assess/fix-instructions" in cli.render(report)
 
 
 def test_assess_output_does_not_make_the_tree_dirty(tmp_path: Path) -> None:

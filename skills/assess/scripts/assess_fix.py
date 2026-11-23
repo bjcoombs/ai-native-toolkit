@@ -180,7 +180,8 @@ def render(report: FixReport) -> str:
         out.append(f"- {p['task']}: " + ("holds" if p["held_after"] else f"not yet; manual step: {p['manual']}"))
     d = report["delivery"]
     if d["mode"] == "pull_request":
-        out.append(f"Opened {d['url'] or 'a pull request'} from branch {d['branch']}.")
+        out.append(f"Opened {d['url'] or 'a pull request'} from branch {d['branch']}; "
+                   f"the checkout is now on {d['branch']}.")
     elif d["mode"] == "working_tree":
         why = _DELIVERY_WORDS.get(d["reason"], d["reason"].replace("_", " "))
         where = f" on branch {d['branch']}" if d["branch"] else ""

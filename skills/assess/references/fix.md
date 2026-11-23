@@ -5,12 +5,14 @@ Loaded by `/assess` when the arguments contain `--fix` or `--starter`. Only thes
 - **`--fix`:** run the assessment as usual, then run the fix script on `$REPO_ROOT`. It writes a file for each gate blocking the next Step.
 - **`--starter`:** for an empty or new repository, such as one a scaffolding flow just created. Skip the assessment steps and run the script with `--starter`; it writes a file for every gate up to the top Step. Add `--language <name>` and `--check-command "<command>"` when the repository has no source or build file yet, and `--ci github|gitlab` when it has no remote.
 
+<!-- chat-skip:start -->
 ```bash
-uv run scripts/assess_fix.py "$REPO_ROOT" --fix        # relative to this skill dir
-uv run scripts/assess_fix.py "$REPO_ROOT" --starter --language python --check-command "pytest"
+uv run "${CLAUDE_SKILL_DIR}/scripts/assess_fix.py" "$REPO_ROOT" --fix
+uv run "${CLAUDE_SKILL_DIR}/scripts/assess_fix.py" "$REPO_ROOT" --starter --language python --check-command "pytest"
 ```
+<!-- chat-skip:end -->
 
-Pass `--no-pr` when the user asked to review locally first, and `--json` for a machine-readable report.
+Without `--no-pr` the script pushes a branch and opens a pull (merge) request when it can. In an interactive run, ask the user first whether to open one or keep the files staged locally, and pass `--no-pr` for local. A non-interactive run passes `--no-pr` unless the caller asked for a pull request. `--json` gives a machine-readable report.
 
 ## What it writes
 
@@ -29,4 +31,4 @@ It never overwrites a file. An existing one is reported as a conflict, with the 
 
 The script stages the files, reads the Step again and reports, per gate, whether it now holds or the one manual step left: an `include:` line, a check command to name, or a coverage threshold for a language with no coverage form it knows. Exit 0 means every targeted gate holds; exit 1 means a manual step is left.
 
-When the tree was clean before the run (the assessment's own `.assess/` output aside; it is never committed) and `gh` or `glab` is authenticated for `origin`, it commits to a new `assess/fix-<gate>` branch and opens a pull (merge) request. Otherwise the files stay staged in the working tree for review and the report says why. Relay the report to the user as written.
+When the tree was clean before the run (the assessment's own `.assess/` output aside; it is never committed) and `gh` or `glab` is authenticated for `origin`, it commits to a new `assess/fix-<gate>` branch, leaves the checkout on that branch, and opens a pull (merge) request. Otherwise the files stay staged in the working tree for review and the report says why. Relay the report to the user as written.
