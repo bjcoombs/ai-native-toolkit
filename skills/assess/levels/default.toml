@@ -30,8 +30,8 @@
 #   for community structure), level 2 adds cross-package imports entering
 #   through a package's front door (its public API) rather than burrowing
 #   into its submodules, and needs at least one such import: with no
-#   package boundary crossed the ratio is a vacuous 1.0, so a single-package
-#   repository stops at level 1. Level 2 requires layer-2-design.1 (#906):
+#   package boundary crossed the ratio is null (no import to judge), so a
+#   single-package repository stops at level 1. Level 2 requires layer-2-design.1 (#906):
 #   front-door imports across a tangled graph (modularity below 0.3) are not
 #   design, so the condition takes level 1's state. A strictly typed
 #   codebase with tangled modules scores low here and Present in /assess; a loosely typed one with clean
@@ -43,8 +43,8 @@
 #   package or a directory with an index file. A Go graph's node is a
 #   package (a directory) and each package is its own boundary: an import
 #   reaches only exported identifiers, so Go's front_door_ratio is 1.0 by
-#   construction and its level 2 reads modularity plus one cross-package
-#   import. A repository with no graph reports structure unavailable with a
+#   construction once one import crosses a package (null with none) and its
+#   level 2 reads modularity plus one cross-package import. A repository with no graph reports structure unavailable with a
 #   reason naming its dominant source language
 #   (no_import_graph_<language>, no_python_packages for Python with no
 #   importable package, no_source_files with no source), so the row is

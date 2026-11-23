@@ -436,3 +436,43 @@ def test_a_bump_leaves_the_streaks_of_old_steps_unchanged(tmp_path: Path) -> Non
     streaks = [a for a in native["achievements"] if a["kind"] == fa.STREAK]
     assert streaks and streaks == [a for a in bumped["achievements"] if a["kind"] == fa.STREAK]
     assert bumped["achievements"] == native["achievements"]
+
+
+def test_an_entry_with_no_stored_model_version_is_rescored_with_a_null_from_version(tmp_path: Path) -> None:
+    # #860: a run with no --levels stamps levels_version null; the re-score keeps it null
+    # rather than a "none" string, so no "(was none)" reaches a Recount line
+    org = tmp_path / "org"
+    for date in DATES:
+        _entry(org, date, BASE, V1, levels_version=None)
+    runs = earlier_runs(org, _stamp(NOW, V2), frozenset(BASE), model=V2, key=KEY)
+    assert [r.run_id for r in runs] == list(DATES)
+    assert all(r.rescored_from is None and r.stored is not None for r in runs)
+    doc = _doc(org, V2)
+    assert doc["rescored_runs"] == list(DATES)
+    assert doc["recount"] is not None and doc["recount"]["from_version"] is None
+    assert doc["recount"]["lines"]
+    assert not any("(was" in line["text"] for line in doc["recount"]["lines"])
+    section = credit_section(doc, V2)
+    assert "none" not in section[section.index("### Recount"):section.index("### Next level-ups")]
+    jsonschema.validate(json.loads(fa.dumps_achievements(doc)), json.loads(render()))
+
+
+def test_a_row_new_to_the_model_gets_no_recount_line(tmp_path: Path) -> None:
+    # #860: the Recount compares a stored cell with its re-score; a row with no stored cell has no line
+    added = _model(LEVELS.replace('version = "fleet-data-1"', 'version = "fleet-data-2"') + """
+[[rows]]
+id = "lint"
+title = "Lint gate"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["structure"]
+  criteria = [{ signal = "ci.required", op = "eq", value = true }]
+""")
+    stored = _data(DATES[0], BASE, V1)
+    again = fr.rescore(stored, _rows(BASE), added, KEY)
+    assert again is not None
+    assert any(c["row"] == "lint" and c["level"] for r in again["repos"] for c in r["rows"])
+    assert not [ln for ln in fr.recount(stored, again, added, DATES[0], "fleet-data-1")["lines"] if ln["row"] == "lint"]

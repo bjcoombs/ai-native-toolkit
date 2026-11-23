@@ -60,6 +60,18 @@ SKILLS: dict[str, dict[str, Any]] = {
         # changes/ holds the release-time version notes (#1011), not skill content.
         "exclude_dirs": {"tests", "__pycache__", ".pytest_cache", ".venv", "changes"},
         "replacements": {
+            # /assess --tour (#1102, #1149): the sample ships in tour/, so the tour runs from
+            # the ZIP too. The arguments line drops the Claude Code-only $ARGUMENTS.
+            "tour-arguments": (
+                "**`--tour` (the guided first run):** when the request asks for the tour, skip "
+                "every step below. Do not assess the current repository. Follow "
+                "`references/tour.md` (relative to this skill dir) instead: it builds a small "
+                "sample repository in a temporary directory, walks the report one section at a "
+                "time, has the newcomer make one fix and re-runs so they see the Step move."
+            ),
+            "tour-build": 'uv run scripts/assess_tour.py build "$(mktemp -d)/tally"',
+            "tour-run": 'uv run scripts/assess_tour.py run "<sample>"',
+            "tour-fix": 'uv run scripts/assess_tour.py fix "<sample>"',
             "uv-treemap": (
                 'uv run scripts/complexity-treemap.py "$REPO_ROOT" '
                 '-o "$REPO_ROOT/.assess/complexity-heatmap.svg" '

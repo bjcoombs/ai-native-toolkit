@@ -124,7 +124,7 @@ from typing import Any, Callable, Iterable, Literal, Mapping, NotRequired, Typed
 
 from lib.levels_fields import LevelsError as LevelsError, MixedTruthError as MixedTruthError
 from lib.levels_fields import check_guards, check_truth, legacy_truth, parse_eq_signal, parse_guard
-from lib.levels_fields import ReviewFields, apply_review, parse_polarity, parse_truth
+from lib.levels_fields import ModelDemotions, ReviewFields, apply_review, parse_polarity, parse_truth
 from lib.signal_aliases import dealias_model
 from lib.signal_grades import EMPTY_DENOMINATORS
 
@@ -218,7 +218,7 @@ class StepDef(TypedDict):
     gates: list[StepGate]  # the only thing a Step needs (#1083)
 
 
-class MaturityModel(TypedDict):
+class MaturityModel(ModelDemotions):  # demoted: set by fleet.py only (#1086)
     version: str
     rows: list[Row]
     steps: NotRequired[list[StepDef]]  # absent: the model defines no Steps
