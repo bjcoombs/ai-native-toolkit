@@ -150,7 +150,7 @@
               },
               "counted": {
                 "type": "boolean",
-                "description": "true when the grade is one of measured, verified and the owner did not exclude it"
+                "description": "true when the grade is one of measured, verified, the owner did not exclude it and the fleet exit rule did not demote it (#1086)"
               },
               "state": {
                 "enum": [
@@ -166,7 +166,8 @@
               },
               "disposition": {
                 "enum": [
-                  "excluded_by_owner"
+                  "excluded_by_owner",
+                  "demoted_by_exit_rule"
                 ]
               },
               "exclusion_kind": {

@@ -230,6 +230,14 @@ def parse_eq_signal(raw: Mapping[str, Any], op: Any, where: str) -> str:
     return other
 
 
+class ModelDemotions(TypedDict, total=False):
+    """The fleet exit rule's demoted condition ids on a model (#1086); ``lib.levels.MaturityModel``
+    extends it. Never parsed: ``demoted`` is not a model-file key, so ``parse_levels`` rejects it,
+    and only ``fleet.py`` sets it (``lib.fleet.condition_demotion.with_demotions``)."""
+
+    demoted: list[str]
+
+
 class ReviewFields(TypedDict, total=False):
     """A condition's exit-rule fields (#1086); ``lib.levels.Level`` extends it."""
 

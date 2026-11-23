@@ -240,5 +240,5 @@ def test_a_failure_never_fails_the_run(tmp_path: Path, monkeypatch: Any, capsys:
     monkeypatch.setattr(fleet_cli, "build_condition_effect", boom)
     (tmp_path / ce.CONDITION_EFFECT_FILE).write_text("{}", encoding="utf-8")  # an earlier run's
     fleet_cli._condition_effect(tmp_path, _model(), stamp("2026-11-23", "v1"), [], None, None)
-    assert "fleet: condition_effect.json not written (ValueError)" in capsys.readouterr().err
+    assert "fleet: condition_effect.json and demotions.json not written (ValueError); no demotions applied" in capsys.readouterr().err
     assert not (tmp_path / ce.CONDITION_EFFECT_FILE).exists()

@@ -25,7 +25,7 @@ from lib.fleet.fleet_group_schema import type_schema  # noqa: E402
 from lib.fleet.runner import RepoCommit  # noqa: E402
 from lib.fleet.fleet_level import FleetLevels  # noqa: E402
 from lib.level_result_types import LevelResult  # noqa: E402
-from lib.level_tally import COUNTED_GRADES, EXCLUDED_BY_OWNER, LEVEL_RESULT_VERSION, STATES  # noqa: E402
+from lib.level_tally import COUNTED_GRADES, DEMOTED, EXCLUDED_BY_OWNER, LEVEL_RESULT_VERSION, STATES  # noqa: E402
 from lib.owner_exclusions import KINDS, SOURCE_REPO  # noqa: E402
 from lib.level_signals import INPUT_GRADES  # noqa: E402
 from lib.levels_fields import TRUTH_TAGS  # noqa: E402
@@ -44,10 +44,11 @@ def level_result_schema() -> JsonDict:
     grades = sorted(set(INPUT_GRADES.values()), key=list(INPUT_GRADES.values()).index)
     condition["grade"] = {"enum": [*grades, None]}
     condition["counted"]["description"] = (
-        f"true when the grade is one of {', '.join(sorted(COUNTED_GRADES))} and the owner did not exclude it")
+        f"true when the grade is one of {', '.join(sorted(COUNTED_GRADES))}, the owner did not exclude it "
+        "and the fleet exit rule did not demote it (#1086)")
     excluded = props["excluded"]["items"]["properties"]
     condition["exclusion_kind"] = excluded["kind"] = {"enum": list(KINDS)}
-    condition["disposition"] = {"enum": [EXCLUDED_BY_OWNER]}
+    condition["disposition"] = {"enum": [EXCLUDED_BY_OWNER, DEMOTED]}
     excluded["source"] = {"enum": [SOURCE_REPO]}
     condition["polarity"] = {"enum": ["hazard"], "description": "present only on a hazard condition, which is never counted (lib/levels_fields.py)"}
     props["tags"]["items"]["properties"]["tag"] = {"enum": list(TRUTH_TAGS)}
