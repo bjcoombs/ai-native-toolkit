@@ -415,6 +415,14 @@ _WORDING: dict[str, Wording] = {
     "guardrails.stated_pct": _guardrails_stated,
     "agent_consistency.conflicts": _agents_agree,
     "agent_consistency.unlinked": _agents_linked,
+    "skill_disclosure.files_breaking": _none_left(
+        "In each `SKILL.md` or agent definition the report names, fix the rule it breaks: move "
+        "detail only some tasks need into `references/` files linked from `SKILL.md`, keep the "
+        "`description` to 1024 characters, and link each reference from `SKILL.md` to a file "
+        "that exists.",
+        "Every `SKILL.md` and agent definition has a body of 500 lines or fewer, about 5000 tokens "
+        "(20,000 characters) or fewer, a `name` and a `description` of 1024 characters or fewer, "
+        "and every `references/` link resolves straight from it."),
     "coverage_gate.configured": _flag(
         "Make the test run exit non-zero when line coverage drops below a floor.",
         "The test command CI runs enforces a coverage threshold (`fail_under` in `pyproject.toml`, "
@@ -510,6 +518,8 @@ _MEASURE_HINTS = {
                       "calls, so this is not measured there.",
     "review_evidence": "Unknown when no AI review step is committed to CI and review on merged "
                        "changes is not read: a headless fleet scan reads it with `--platform`.",
+    "skill_disclosure": "Not measured (`no_skill_files`) when the repository, or the skill unit, "
+                        "holds no `SKILL.md` or agent definition: there is nothing to disclose.",
     "agent_environment": "The `agent_environment` scan reported it unavailable or did not run: "
                          "check the fleet run's `--scans` and its `logs/` directory. The lockfile "
                          "check (`unlocked_total`) is also not measured with no dependency manifest "

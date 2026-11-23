@@ -1135,6 +1135,50 @@
           ]
         }
       ]
+    },
+    {
+      "id": "skill-disclosure",
+      "title": "Skill disclosure",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "skill-disclosure.1",
+          "truth": [
+            "agent_context"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "skill-disclosure.1:skill_disclosure.files_breaking",
+              "signal": "skill_disclosure.files_breaking",
+              "producer": {
+                "scan": "skill_disclosure",
+                "collector": "core.skill_disclosure"
+              },
+              "op": "eq",
+              "value": 0,
+              "eq_signal": null,
+              "text": "Skill and agent files that break a disclosure rule: is 0",
+              "title": "Skills load only what the task needs",
+              "fix": "For each file the report names, fix the rule it breaks: move detail only some tasks need into references/ linked from SKILL.md, keep the description to 1024 characters, and link each reference straight from SKILL.md to a file that exists.",
+              "why": "A skill loads its whole SKILL.md every time it triggers, so detail that only one branch needs spends an agent's context before work starts; keeping the body small, the description within its limit and references one level deep keeps that cost to what the task uses.",
+              "why_source": "https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
     }
   ],
   "tags": [
@@ -1214,7 +1258,8 @@
         "guardrails-stated.1",
         "guardrails-stated.2",
         "agent-consistency.1",
-        "agent-consistency.2"
+        "agent-consistency.2",
+        "skill-disclosure.1"
       ],
       "listed": [
         "layer-0-instructions.1",
@@ -1222,7 +1267,8 @@
         "guardrails-stated.1",
         "guardrails-stated.2",
         "agent-consistency.1",
-        "agent-consistency.2"
+        "agent-consistency.2",
+        "skill-disclosure.1"
       ],
       "shared": [
         "layer-0-instructions.2"
@@ -2418,6 +2464,51 @@
       "why_source": ""
     },
     {
+      "name": "skill_disclosure",
+      "title": "Skill disclosure",
+      "summary": "Each SKILL.md and agent definition against Anthropic's skill authoring guidance: body lines, size in tokens, name and description, and references that resolve one level deep.",
+      "collector": "core.skill_disclosure",
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "skill_disclosure.files.breaks": "token",
+          "skill_disclosure.files.kind": "token",
+          "skill_disclosure.files.path": "path",
+          "skill_disclosure.files.references.target": "path"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "skill-disclosure"
+        ],
+        "conditions": [
+          "skill-disclosure.1:skill_disclosure.files_breaking"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "skill_disclosure.files_breaking",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ],
+      "why": "A skill loads its whole SKILL.md every time it triggers, so detail that only one branch needs spends an agent's context before work starts; keeping the body small, the description within its limit and references one level deep keeps that cost to what the task uses.",
+      "why_source": "https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices"
+    },
+    {
       "name": "agent_consistency",
       "title": "Cross-agent instruction consistency",
       "summary": "Compares the root instruction files of every agent system present (Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue, Zed): check commands one names and another does not, conflicting thresholds, and whether each links to one canonical file, with the pointer line for each unlinked system.",
@@ -3183,6 +3274,7 @@
         "doc_staleness",
         "layer_grades",
         "promissory_markers",
+        "skill_disclosure",
         "stats_summary",
         "structure",
         "excludes",
@@ -5023,6 +5115,20 @@
       "private": false
     },
     {
+      "name": "skill_disclosure",
+      "title": "Skill disclosure",
+      "publishes": [
+        "skill_disclosure"
+      ],
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "gap_actions",
       "title": "Gap actions",
       "publishes": [
@@ -5135,6 +5241,7 @@
         "promissory_markers",
         "review_evidence",
         "review_reality",
+        "skill_disclosure",
         "stats_summary",
         "structure",
         "structure_drift",
@@ -5186,6 +5293,7 @@
         "doc_staleness",
         "layer_grades",
         "promissory_markers",
+        "skill_disclosure",
         "stats_summary",
         "structure",
         "excludes",
@@ -5217,6 +5325,7 @@
         "promissory_markers",
         "review_evidence",
         "review_reality",
+        "skill_disclosure",
         "stats_summary",
         "structure",
         "structure_drift",
@@ -5483,6 +5592,15 @@
       "input_class": "head_structure",
       "grade": "measured",
       "null_means": "fewer than two agent systems: nothing to link"
+    },
+    {
+      "path": "skill_disclosure.files_breaking",
+      "title": "Skill and agent files that break a disclosure rule",
+      "type": "number",
+      "collector": "core.skill_disclosure",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "no_skill_files: the repository, or the skill unit, holds no SKILL.md or agent definition (files_considered 0), so there is nothing to measure"
     }
   ],
   "findings": [

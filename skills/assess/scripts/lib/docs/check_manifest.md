@@ -55,7 +55,9 @@ The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` an
   (`signals.PLATFORM_ONLY_SCANS`), `unit_scope` (`scoped`: a monorepo unit's reading is
   this scan run again on the unit; `override`: the repository-wide reading, replaced when
   the unit holds its own evidence; absent: repo-wide, inherited by every unit;
-  `lib/unit_readings.py`, #863), `headless` (published block to `registered`,
+  `lib/unit_readings.py`, #863), `unit_kinds` (with `unit_scope = "scoped"`: the unit kinds,
+  from `package`, `skill`, `agents` and `commands`, that read the blocks as their own; every
+  other unit inherits them; absent: every kind; `UNIT_KINDS`, #1045), `headless` (published block to `registered`,
   `headless_variant` or `unregistered`; an unlisted block is not reported headless),
   `headless_variants` (the `signals.HEADLESS_SCANS` spec for a block, as `block`,
   `callable`, `reads`, `stage`), `shapes` (the `counts_only_schema.ROOTS` typed roots

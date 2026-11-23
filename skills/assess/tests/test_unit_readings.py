@@ -82,7 +82,7 @@ def monorepo(tmp_path_factory: pytest.TempPathFactory) -> ur.UnitReadingsBlock:
 def test_the_unit_blocks_are_the_scoped_and_override_model_blocks() -> None:
     assert ur.unit_blocks(cm.core_manifest()) == [
         "coverage_gate", "doc_staleness", "layer_grades", "promissory_markers",
-        "stats_summary", "structure"]
+        "skill_disclosure", "stats_summary", "structure"]
 
 
 def test_scope_classes_come_from_the_manifest() -> None:
@@ -96,7 +96,8 @@ def test_the_unit_pass_reruns_only_scope_sensitive_scans() -> None:
     table, external = ur.unit_table(cm.core_manifest(), SCANS, HEADLESS_SCANS)
     keys = [s.key for s in table]
     assert keys == ["promissory", "doc_graph", "doc_staleness", "structure_scan",
-                    "promissory_markers", "coverage_gate", "stats_summary", "structure"]
+                    "promissory_markers", "coverage_gate", "skill_disclosure", "stats_summary",
+                    "structure"]
     assert all("scope" in s.reads or set(s.reads) & set(keys) for s in table)
     assert external == ur.UNIT_EXTERNAL_READS
 

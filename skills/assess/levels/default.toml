@@ -228,6 +228,13 @@
 #   fewer than two systems there is nothing to agree with: both signals are
 #   null and the row is unknown, never 0. Graded measured: it compares the
 #   files and their links at the commit, as instruction_claims.failed does.
+# - Skill disclosure reads skill_disclosure.files_breaking (lib/skill_disclosure.py,
+#   #1045): every SKILL.md and agent definition has a body of 500 lines or fewer, 5000
+#   estimated tokens or fewer, a name and a description of 1024 characters or fewer, and
+#   references that resolve one level deep. A repository with no such file has nothing to
+#   measure: the row is unknown (no_skill_files), never met. Read per skill unit only
+#   (unit_kinds = ["skill"]); it gates no Step. Graded measured: it reads the files'
+#   structure at the commit.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures.
 #
@@ -483,6 +490,17 @@ aggregation = "min"
   truth = ["agent_context"]
   requires = ["agent-consistency.1"]
   criteria = [{ signal = "agent_consistency.unlinked", op = "eq", value = 0 }]
+
+[[rows]]
+id = "skill-disclosure"
+title = "Skill disclosure"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["agent_context"]
+  criteria = [{ signal = "skill_disclosure.files_breaking", op = "eq", value = 0 }]
 
 [[steps]]
 step = 1

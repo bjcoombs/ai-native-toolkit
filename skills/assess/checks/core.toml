@@ -98,6 +98,7 @@ fragments = [
   "agent_building",
   "layer_grades",
   "instruction_placement",
+  "skill_disclosure",
   "gap_actions",
   "agent_consistency",
   "ai_usage",
