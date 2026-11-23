@@ -28,6 +28,7 @@ shapes = [
   { path = "prior_findings_snapshot", type = "lib.run_context_types:FindingsSnapshot" },
   { path = "stats_summary.loc", type = "lib.run_context_types:SizeBlock" },
   { path = "stats_summary.est_tokens", type = "lib.run_context_types:SizeBlock" },
+  { path = "stats_summary.loc_by_class", type = "lib.run_context_types_size:LocByClass" },
   { path = "stats_summary.est_tokens.budget", type = "lib.run_context_types:KeyholeBudget" },
 ]
 revision = 1
@@ -77,18 +78,18 @@ revision = 1
   "prior_findings_snapshot.findings.paths" = "path"
 
 [[entries]]
-id = "core:stats_summary.loc.p95"
+id = "core:stats_summary.loc_by_class.source.p95"
 kind = "signal"
-title = "File size at the 95th percentile"
+title = "Production source file size at the 95th percentile"
 collector = "core.run_header"
-path = "stats_summary.loc.p95"
+path = "stats_summary.loc_by_class.source.p95"
 type = "number"
 evidence = "head_structure"
 
 [[entries]]
 id = "core.cond.layer-4-architecture.2.p95"
 kind = "condition"
-title = "95% of files are 500 lines or fewer"
-key = "layer-4-architecture.2:stats_summary.loc.p95"
-why = "With nearly all files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice."
+title = "95% of production source files are 500 lines or fewer"
+key = "layer-4-architecture.2:stats_summary.loc_by_class.source.p95"
+why = "With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file."
 fix = "Split the largest files along their natural seams."

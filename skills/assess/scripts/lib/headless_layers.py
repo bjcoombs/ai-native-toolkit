@@ -25,8 +25,9 @@ modules, so the boundary from #557/#558 stays as it is:
   block is the same ``no_ownership_map`` marker the full run writes (#908).
 - ``stats_summary`` scores the tracked source files with lizard, in process.
   The full run's sidecar also scores scc-only languages, so its percentiles can
-  differ; the headless block carries ``files_scored``, ``loc`` and ``ccn`` only
-  (no hotspot lists, which need churn and name files).
+  differ; the headless block carries ``files_scored``, ``loc``, ``ccn`` and
+  ``loc_by_class`` (the size split by path class, ``lib.class_sizes``, #820)
+  only (no hotspot lists, which need churn and name files).
 
 Every unavailable block is the bare ``{"available": false, "reason": ...}``
 marker with a ``code: sentence`` reason, so the counts-only filter keeps a
@@ -58,6 +59,7 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from lib.assess_config import is_user_excluded
+from lib.class_sizes import loc_by_class, percentile
 from lib.context_blocks import no_ownership_map, structure_drift_tier_0
 from lib.counts_only_rules import REASON_SENTENCE_CODES
 from lib.doc_graph import is_excluded_path
@@ -151,17 +153,6 @@ def structure_drift(repo_root: Path) -> JsonDict:
 
 # -- stats_summary -----------------------------------------------------------
 
-def percentile(values: Sequence[float], q: float) -> float:
-    """``numpy.percentile``'s default (linear) interpolation; 0.0 when empty."""
-    ordered = sorted(values)
-    if not ordered:
-        return 0.0
-    rank = (len(ordered) - 1) * q / 100.0
-    low = int(rank)
-    high = min(low + 1, len(ordered) - 1)
-    return float(ordered[low] + (ordered[high] - ordered[low]) * (rank - low))
-
-
 def _distribution(values: Sequence[float]) -> Distribution:
     return {"p50": percentile(values, 50), "p95": percentile(values, 95),
             "max": float(max(values)) if values else 0.0}
@@ -237,6 +228,8 @@ def stats_summary(
     if analyze is None:
         return _marker("no_lizard", "lizard not installed; file size and complexity not scored")
     scores: list[FileScore] = []
+    rels: list[str] = []
+    root = repo_root.resolve()
     for path in source_files(repo_root, excludes, scope):
         try:
             score = analyze(str(path))
@@ -244,7 +237,9 @@ def stats_summary(
             continue
         if score is not None:
             scores.append(score)
+            rels.append(path.relative_to(root).as_posix())
     block: JsonDict = dict(summarise(scores))
+    block["loc_by_class"] = loc_by_class(zip(rels, (nloc for nloc, _ in scores)))
     return block
 
 

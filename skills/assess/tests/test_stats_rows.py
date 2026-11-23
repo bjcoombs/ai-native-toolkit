@@ -66,7 +66,7 @@ def _write_repo_stats(tmp_path: Path) -> dict:
 
 def test_write_stats_files_key_reaches_the_join(tmp_path: Path) -> None:
     stats = _write_repo_stats(tmp_path)
-    assert stats["schema_version"] == _load_treemap().STATS_SCHEMA_VERSION == 7
+    assert stats["schema_version"] == _load_treemap().STATS_SCHEMA_VERSION == 8
     assert len(stats["files"]) == stats["files_scored"] == 313
     top_paths = {r["path"] for k in ("top_complex", "top_large", "top_hotspots")
                  for r in stats[k]}

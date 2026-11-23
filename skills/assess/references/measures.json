@@ -485,8 +485,8 @@
           "counts": true,
           "criteria": [
             {
-              "key": "layer-4-architecture.2:stats_summary.loc.p95",
-              "signal": "stats_summary.loc.p95",
+              "key": "layer-4-architecture.2:stats_summary.loc_by_class.source.p95",
+              "signal": "stats_summary.loc_by_class.source.p95",
               "producer": {
                 "scan": "stats_summary",
                 "collector": "core.run_header"
@@ -494,10 +494,10 @@
               "op": "lte",
               "value": 500,
               "eq_signal": null,
-              "text": "File size at the 95th percentile: is at most 500",
-              "title": "95% of files are 500 lines or fewer",
+              "text": "Production source file size at the 95th percentile: is at most 500",
+              "title": "95% of production source files are 500 lines or fewer",
               "fix": "Split the largest files along their natural seams.",
-              "why": "With nearly all files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice.",
+              "why": "With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file.",
               "why_source": "",
               "input_class": "head_structure",
               "grade": "measured",
@@ -2635,14 +2635,14 @@
           "layer-4-architecture"
         ],
         "conditions": [
-          "layer-4-architecture.2:stats_summary.loc.p95"
+          "layer-4-architecture.2:stats_summary.loc_by_class.source.p95"
         ],
         "findings": []
       },
       "unknown_reasons": [],
       "evidence": [
         {
-          "signal": "stats_summary.loc.p95",
+          "signal": "stats_summary.loc_by_class.source.p95",
           "input_class": "head_structure",
           "grade": "measured"
         }
@@ -5064,8 +5064,8 @@
       "null_means": "the block is omitted with no ownership map"
     },
     {
-      "path": "stats_summary.loc.p95",
-      "title": "File size at the 95th percentile",
+      "path": "stats_summary.loc_by_class.source.p95",
+      "title": "Production source file size at the 95th percentile",
       "type": "number",
       "collector": "core.run_header",
       "input_class": "head_structure",

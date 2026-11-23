@@ -95,14 +95,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from lib.assess_config import resolve_excludes
 from lib.dart_complexity import BACKEND_NAME as DART_BACKEND, dart_function_scores
-from lib.git_churn import (
-    churn_is_degenerate,
-    git_churn_scores, pick_churn_window, rename_paths,
-)
-from lib.generated_files import (
-    GENERATED_NAME_PATTERNS,
-    generated_reason,
-)
+from lib.class_sizes import loc_by_class
+from lib.git_churn import churn_is_degenerate, git_churn_scores, pick_churn_window, rename_paths
+from lib.generated_files import GENERATED_NAME_PATTERNS, generated_reason
 from lib.run_context_types import (
     Distribution, FnCcnBlock, GeneratedExclusion, KeyholeBudget,
     ScoredHotspotRow, SizeBlock, SubtreeTokens,
@@ -789,12 +784,13 @@ def _read_plugin_version() -> str:
 # is a structural change to the sidecar shape (a metric added/removed/redefined)
 # that voids the diff against an older snapshot until the next clean run
 # re-seeds the baseline (lib.diff_reliability._diff_is_reliable reads it).
-STATS_SCHEMA_VERSION = 7  # 2: generated-file content excludes + excluded_generated
+STATS_SCHEMA_VERSION = 8  # 2: generated-file content excludes + excluded_generated
                           # 3: generated test-report excludes + loc/est_tokens max_code/max_data
                           # 4: fn_ccn.source list + backend_by_language, rows max_fn_name
                           # 5: dart-scanner fills max_fn_ccn for Dart rows, moving their score
                           # 6: files key, every scored file's {path, ccn} (#556)
                           # 7: complexity_unreliable, scc-only files with implausibly low ccn (#590)
+                          # 8: loc_by_class, the size split by path class (#820)
 
 # Per-function complexity backends, by name, with whether their counts are
 # approximate. `fn_ccn.source` in the stats file lists the ones that scored a
@@ -1155,7 +1151,8 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     ``languages_by_path`` (scc's language name per path, from ``collect``)
     splits the ``loc`` and ``est_tokens`` maxima into ``max_code`` and
     ``max_data``: a file whose language is in ``DATA_LANGUAGES`` is data,
-    everything else code. A side with no files reports 0.
+    everything else code. A side with no files reports 0. ``loc_by_class``
+    splits the line counts by path class (``lib.class_sizes``, #820).
 
     ``fn_name_by_path`` gives each row's ``max_fn_name`` (null wherever
     ``max_fn_ccn`` is null). ``fn_backend_by_path`` names the per-function
@@ -1224,6 +1221,8 @@ def write_stats(files: list[tuple[Path, int, float, str]],
         # The maxima split by scc language (DATA_LANGUAGES), so a large
         # JSON fixture cannot pass for the largest source file.
         "loc": _size_block(locs, is_data),
+        # Lines per path class (lib.class_sizes): L4 level 2 reads the source p95 (#820).
+        "loc_by_class": loc_by_class((_rel_path(f[0], root), f[1]) for f in files),
         # Estimated tokens (~chars/4) - the keyhole size unit. Sized the treemap
         # blocks and feeds the hotspot composite. `budget` rolls the per-file
         # totals into the "does the relevant slice fit one keyhole?" finding.
