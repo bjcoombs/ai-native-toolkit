@@ -100,10 +100,18 @@ def _redirect_amp(text: str, i: int) -> bool:
 
 def _noop_spans(statement: list[tuple[str, str]]) -> list[range]:
     """The segments each ``|| <no-op>`` masks, itself included: back to the start of the
-    ``( )`` group it sits in (#1008), or to the statement's start at top level. A ``(`` that
-    opens a segment opens a group and a ``)`` that ends one closes it; ``$(`` never opens
-    one (``split_statements`` keeps a command substitution inside its segment)."""
-    spans: list[range] = []
+    ``( )`` group it sits in (#1008), or to the statement's start at top level."""
+    return [span for span, arm in or_arms(statement) if arm in _NOOPS]
+
+
+def or_arms(statement: list[tuple[str, str]]) -> list[tuple[range, str]]:
+    """Each ``||`` of one statement as ``(span, arm)``: ``span`` runs from the start of the
+    ``( )`` group the ``||`` sits in (or the statement's start at top level) to the arm's
+    segment, and ``arm`` is that segment's text with group parentheses and spacing
+    stripped. A ``(`` that opens a segment opens a group and a ``)`` that ends one closes
+    it; ``$(`` never opens one (``split_statements`` keeps a command substitution inside
+    its segment)."""
+    arms: list[tuple[range, str]] = []
     groups: list[int] = []   # the segment index each open group starts at
     for k, (op, seg) in enumerate(statement):
         text = seg.strip()
@@ -114,10 +122,10 @@ def _noop_spans(statement: list[tuple[str, str]]) -> list[range]:
         # ``(cd $(dirname x)`` stays open.
         bare = _QUOTED.sub("", core)
         closed = max(0, bare.count(")") - bare.count("("))
-        if op == "||" and " ".join(core.rstrip(")").split()) in _NOOPS:
-            spans.append(range(start, k + 1))
+        if op == "||":
+            arms.append((range(start, k + 1), " ".join(core.rstrip(")").split())))
         del groups[max(0, len(groups) - closed):]
-    return spans
+    return arms
 
 
 def _capture_targets(statement: list[tuple[str, str]]) -> list[str]:

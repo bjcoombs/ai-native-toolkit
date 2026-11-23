@@ -38,7 +38,7 @@ collector = "core.coverage_gate"
 path = "coverage_gate.enforced_meets_minimum"
 type = "bool"
 evidence = "ci_executed"
-null_means = "threshold_not_read: the threshold is unknown; unknown_trigger: the run's triggers are not settled; indirect_run: a CI target or script (make test, tox) may run it; included_jobs: it may be in an included file; unread_ci_system: it may run in an unparsed CI system"
+null_means = "threshold_not_read: the threshold is unknown; unknown_trigger: the run's triggers are unsettled; check_may_pass: may not fail its job; indirect_run: a CI target or script (make test, tox) may run it; included_jobs: it may be in an included file; unread_ci_system: an unparsed CI system may run it"
 
 [[entries]]
 id = "core.cond.layer-6-coverage.1.enforced_meets_minimum"

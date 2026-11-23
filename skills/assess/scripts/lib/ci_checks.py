@@ -111,6 +111,10 @@ run on ordinary changes left out too (a ``workflow_dispatch``- or
   not read.
 - ``unknown_trigger`` (null): none does, but an unmasked check sits in a
   workflow or job whose triggers this reader cannot settle.
+- ``check_may_pass`` (null, #1008): none does, but a line on ordinary changes runs a
+  check whose failure the step may hide (``lib.ci_unsure``: ``pytest || echo failed``,
+  ``if pytest; then ...; fi``, ``until pytest; do break; done``, ``pytest && echo ok``
+  with more of the step after it); ``lint_basis`` alike.
 - ``script_not_found`` (null, #937): none does, but one runs a check through a
   committed script the tree does not hold (``lib.ci_scripts``: ``./ci.sh`` with no
   ``ci.sh``); ``lint_basis`` alike. ``test_or_lint_configured`` still counts it. A committed
@@ -164,6 +168,7 @@ unmasked line of its job runs ``git diff --exit-code`` (``lib.ci_lint_gates``).
   linter on ordinary changes.
 - ``included_jobs`` / ``merged_config_partial`` (null): as ``basis``.
 - ``unknown_trigger`` (null): an unmasked lint line's triggers are not settled.
+- ``check_may_pass`` (null): a lint line's failure may not fail its job (#1008).
 - ``script_not_found`` (null): the only lint line runs a script no tracked file matches.
 - ``check_target`` (null): no lint line, but an unmasked check target or
   script may run one.
@@ -325,7 +330,7 @@ from lib.ci_lint_gates import (
 from lib.ci_check_state import (
     EnforcedBasis as EnforcedBasis, External as External, LintBasis as LintBasis, Tally,
     _enforced_state, _lint_state, _max, _sum)
-from lib.ci_masking import unmasked_lines
+from lib.ci_masking import mask_lines, unmasked_lines
 from lib.named_check import (
     instruction_words, named_count, setup_ci_target, sourced_env, unread_ci_target)
 from lib.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
@@ -589,23 +594,25 @@ def _is_lint_test(test: LineTest) -> bool:
 
 def _trigger_tally(text: str, workflow: Trigger | None,
                    tests: Sequence[LineTest] = (_line_runs_check,)) -> list[Tally]:
-    """Per line test: ``(ordinary, unknown trigger, off trigger, masked)`` lines of one CI file.
+    """Per line test: ``(ordinary, unknown trigger, off trigger, masked, may pass)`` lines of one CI file.
 
     ``workflow`` is a GitHub workflow's settled trigger; None reads GitLab job triggers.
     The lint test also counts the rewrite lines a ``git diff`` gate makes lint runs (#926).
     """
     lines = text.splitlines()
     gated = rewrite_gated(text) if any(_is_lint_test(t) for t in tests) else frozenset()
-    unmasked = unmasked_lines(text)
+    unmasked, unsure = mask_lines(text)
     triggers: list[Trigger] = (gitlab_line_triggers(text) if workflow is None
                                else [workflow] * len(lines))
     kept = [keep(unmasked, triggers, t) for t in ("ordinary", "unknown", "not_ordinary")]
+    may = [keep(unsure, triggers, t) for t in ("ordinary", "unknown")]
     out: list[Tally] = []
     for test in tests:
         extra = gated if _is_lint_test(test) else frozenset()
         counts = [count_check_lines(k, context=lines, test=test, extra=extra) for k in kept]
-        masked = max(count_check_lines(lines, test=test, extra=extra) - sum(counts), 0)
-        out.append((counts[0], counts[1], counts[2], masked))
+        may_pass = sum(count_check_lines(k, context=lines, test=test) for k in may)
+        masked = max(count_check_lines(lines, test=test, extra=extra) - sum(counts) - may_pass, 0)
+        out.append((counts[0], counts[1], counts[2], masked, may_pass))
     return out
 
 
@@ -676,19 +683,19 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     tallies += [_trigger_tally(f.text, None, tests) for f in resolution.files] if resolution else []
     check_t, lint_t, miss_t, lint_miss_t, may_t, may_check_t, gate_t, dotnet_t = (
         _sum(t[i] for t in tallies) for i in range(len(tests)))
-    ordinary, unknown, off, masked = check_t
+    ordinary, unknown, off, masked, may_pass = check_t
     if merged.read and merged.text is not None:
         # GitLab's merged configuration (#796) repeats the file's own jobs: read it only
         # where the files alone found no enforced check, as basis reads merged_config.
         m_check, m_lint, m_miss, m_lint_miss, m_may, m_may_check, m_gate, m_dotnet = _trigger_tally(
             merged.text, None, tests)
-        m_ordinary, m_unknown, m_off, m_masked = m_check
+        m_ordinary, m_unknown, m_off, m_masked, m_may_pass = m_check
         if not lint_t[0]:
             lint_t, may_t = _max(lint_t, m_lint), _max(may_t, m_may)
             lint_miss_t = _max(lint_miss_t, m_lint_miss)
             gate_t, dotnet_t = _max(gate_t, m_gate), _max(dotnet_t, m_dotnet)
         if not ordinary:
-            ordinary, unknown = m_ordinary, max(unknown, m_unknown)
+            ordinary, unknown, may_pass = m_ordinary, max(unknown, m_unknown), max(may_pass, m_may_pass)
             may_check_t, miss_t = _max(may_check_t, m_may_check), _max(miss_t, m_miss)
         if not (checks or included_checks):
             off, masked = m_off, m_masked
@@ -698,7 +705,7 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     enforced_runs, enforced_basis = _enforced_state(
         ordinary, unknown, may_check_t, elsewhere=bool(elsewhere), unread=bool(unread),
         any_check=bool(found or merged_checks or named_count(check_commands, texts.values())), has_files=bool(files), external=external,
-        missing=miss_t)
+        missing=miss_t, may_pass=may_pass)
     lint_runs, lint_basis = _lint_state(lint_t, _max(may_t, may_check_t), elsewhere=bool(elsewhere),
                                         partial=partial_merge, unread=bool(unread),
                                         has_files=bool(files), external=external,

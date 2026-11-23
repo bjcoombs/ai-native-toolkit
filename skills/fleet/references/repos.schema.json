@@ -554,6 +554,7 @@
                     "enforced_check",
                     "included_jobs",
                     "unknown_trigger",
+                    "check_may_pass",
                     "script_not_found",
                     "check_target",
                     "unread_ci_system",
@@ -563,7 +564,7 @@
                     "no_check_command",
                     "no_ci"
                   ],
-                  "description": "The reason for enforced_check_runs: enforced_check (true), included_jobs, unknown_trigger, script_not_found, check_target or unread_ci_system (null), external_ci (null: an external check context on merged changes under --platform; more than half of the sampled merged pull requests carry a check run or commit status of a known external CI system such as Buildkite, LUCI, Prow tide or Azure Pipelines, read with at most two GET calls per sampled pull request; it never gives credit), external_ci_marker (null: offline, a root Prow OWNERS_ALIASES file with no CI file present, neither a workflow, a .gitlab-ci.yml nor an unread CI file; an OWNERS file alone is not a marker), not_enforced, no_check_command or no_ci (false)."
+                  "description": "The reason for enforced_check_runs: enforced_check (true), included_jobs, unknown_trigger, check_may_pass (a check whose failure the step may hide: pytest || echo failed, an if or while condition, an until loop that breaks out, a check before && with more of the step after it, a { } group or function called in such a position; issue #1008), script_not_found, check_target or unread_ci_system (null), external_ci (null: an external check context on merged changes under --platform; more than half of the sampled merged pull requests carry a check run or commit status of a known external CI system such as Buildkite, LUCI, Prow tide or Azure Pipelines, read with at most two GET calls per sampled pull request; it never gives credit), external_ci_marker (null: offline, a root Prow OWNERS_ALIASES file with no CI file present, neither a workflow, a .gitlab-ci.yml nor an unread CI file; an OWNERS file alone is not a marker), not_enforced, no_check_command or no_ci (false)."
                 },
                 "masked_check_commands": {
                   "type": "integer",
@@ -586,6 +587,7 @@
                     "included_jobs",
                     "merged_config_partial",
                     "unknown_trigger",
+                    "check_may_pass",
                     "script_not_found",
                     "check_target",
                     "unread_ci_system",
@@ -597,7 +599,7 @@
                     "no_lint_command",
                     "no_ci"
                   ],
-                  "description": "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, unknown_trigger, script_not_found, check_target, unread_ci_system, external_ci or external_ci_marker (null; as enforced_basis), analysers_in_build (null: a CI .NET build runs the analysers a committed Directory.Build.props or .csproj turns on with EnforceCodeStyleInBuild or AnalysisLevel; their severities live in .editorconfig, which the scan does not evaluate), compiler_gate_only (null: the only static gate is a compiler run with warnings as errors, such as mix compile --warnings-as-errors, -Werror or TreatWarningsAsErrors; issue #926), not_enforced, no_lint_command or no_ci (false)."
+                  "description": "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, unknown_trigger, check_may_pass, script_not_found, check_target, unread_ci_system, external_ci or external_ci_marker (null; as enforced_basis), analysers_in_build (null: a CI .NET build runs the analysers a committed Directory.Build.props or .csproj turns on with EnforceCodeStyleInBuild or AnalysisLevel; their severities live in .editorconfig, which the scan does not evaluate), compiler_gate_only (null: the only static gate is a compiler run with warnings as errors, such as mix compile --warnings-as-errors, -Werror or TreatWarningsAsErrors; issue #926), not_enforced, no_lint_command or no_ci (false)."
                 },
                 "unread_ci_files": {
                   "type": "integer",
@@ -725,13 +727,14 @@
                     "threshold_below_minimum",
                     "threshold_not_read",
                     "unknown_trigger",
+                    "check_may_pass",
                     "indirect_run",
                     "included_jobs",
                     "unread_ci_system",
                     "not_run_in_ci",
                     "no_ci"
                   ],
-                  "description": "The reason for enforced_meets_minimum: ci_run (true); no_gate, threshold_below_minimum, not_run_in_ci and no_ci (false); threshold_not_read, unknown_trigger, indirect_run (a check target or script such as make test may run it), included_jobs and unread_ci_system (null)."
+                  "description": "The reason for enforced_meets_minimum: ci_run (true); no_gate, threshold_below_minimum, not_run_in_ci and no_ci (false); threshold_not_read, unknown_trigger, check_may_pass (the run's failure may not fail its job: pytest --cov || echo failed; issue #1008), indirect_run (a check target or script such as make test may run it), included_jobs and unread_ci_system (null)."
                 },
                 "not_detected": {
                   "type": [
