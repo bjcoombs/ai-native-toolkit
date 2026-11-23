@@ -151,14 +151,16 @@ def reach(entries: Sequence[Mapping[str, Any]]) -> Reach:
     produced the name before the reader in manifest order: its scan key, or a block of a
     spread collector. A collector is used when a row or finding names one of its blocks or
     its key, or a used collector reads it; a used collector's reads are all used, since it
-    computes its blocks together. A scan is read when a used collector other than its own
-    reads it by name (or reads its collector's key)."""
+    computes its blocks together. A collector's reads include those of its
+    ``headless_variants``, since the headless runner builds the block from them. A scan is read
+    when a used collector other than its own reads it by name (or reads its collector's key)."""
     cols = [e for e in entries if e.get("kind") == "collector"]
     produced: dict[str, str] = {}
     edges: list[tuple[str, str, str]] = []  # (reader id, producer id, name read)
     for c in cols:
         cid = str(c["id"])
-        edges += [(cid, produced[r], r) for r in c.get("reads", []) if r in produced]
+        reads = [*c.get("reads", []), *(r for v in c.get("headless_variants", []) for r in v.get("reads", []))]
+        edges += [(cid, produced[r], r) for r in dict.fromkeys(reads) if r in produced]
         produced[_key(cid)] = cid
         if c.get("spread"):
             produced.update({block: cid for block in c.get("publishes", [])})

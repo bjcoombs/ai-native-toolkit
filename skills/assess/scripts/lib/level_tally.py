@@ -265,23 +265,28 @@ def _conditions(model: MaturityModel, data: Mapping[str, Any] | None,
     return built
 
 
-def condition_why(row_id: str, level: int, criteria: Sequence[Criterion]) -> str:
+def condition_why(row_id: str, level: int, criteria: Sequence[Criterion],
+                  whys: Mapping[str, str] | None = None) -> str:
     """The whys of a condition's criteria from the core check manifest (#939), in criterion
     order, each once, joined by one space; ``""`` when no criterion has a manifest why (a
-    caller's own model)."""
+    caller's own model). ``whys`` is ``manifest_whys.condition_whys`` of the core manifest,
+    built here when not given."""
     from lib.check_manifest import condition_key, core_manifest  # lazy: the manifest loads once
     from lib.manifest_whys import condition_whys
-    whys = condition_whys(core_manifest())
+    whys = condition_whys(core_manifest()) if whys is None else whys
     found = [whys.get(condition_key(row_id, level, c["signal"]), "") for c in criteria]
     return " ".join(dict.fromkeys(w for w in found if w))
 
 
 def _add_whys(model: MaturityModel, conditions: Sequence[ConditionResult]) -> None:
     """Set each condition's ``why`` (``condition_why``) where its criteria have one."""
+    from lib.check_manifest import core_manifest
+    from lib.manifest_whys import condition_whys
+    whys = condition_whys(core_manifest())
     by_id = {c["id"]: c for c in conditions}
     for row in model["rows"]:
         for level in row["levels"]:
-            if (why := condition_why(row["id"], level["level"], level["criteria"])):
+            if (why := condition_why(row["id"], level["level"], level["criteria"], whys)):
                 by_id[condition_id(row["id"], level["level"])]["why"] = why
 
 

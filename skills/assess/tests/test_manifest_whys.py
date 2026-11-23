@@ -183,3 +183,14 @@ def test_a_load_through_the_cli_names_the_entry() -> None:
     run = subprocess.run([sys.executable, "-c", code], capture_output=True, encoding="utf-8",
                          errors="replace", check=False, cwd=cm.CORE_MANIFEST.parents[1])
     assert run.returncode == 0 and "ok" in run.stdout, run.stderr
+
+
+def test_a_headless_variants_reads_count_as_reads() -> None:
+    # A used collector whose headless variant reads a plumbing scan makes it read.
+    data = _core()
+    structure = _collector_of(data, "structure")
+    structure["headless_variants"] = [*structure.get("headless_variants", []),
+                                      {"block": "structure", "callable": "lib.x:f",
+                                       "reads": ["delivery"], "stage": "post_offers"}]
+    seen = mw.reach(data["entries"])
+    assert "keyhole_blocks" in seen["read"].get(("core.delivery", "delivery"), [])
