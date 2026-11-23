@@ -2778,6 +2778,7 @@
         "strings_kept": {
           "observability.boundary": "drop",
           "observability.discoverable.signals": "drop",
+          "observability.instrumented.kinds": "token",
           "observability.instrumented.signals": "drop",
           "observability.reachable.signals": "drop"
         }

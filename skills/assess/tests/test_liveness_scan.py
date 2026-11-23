@@ -4,6 +4,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 import lib.liveness_scan as liveness
 from lib.liveness_scan import (
     _parse_deadcode,
@@ -276,6 +278,54 @@ def test_mcp_tooling_reaches_rung_3_without_instrumentation(tmp_path: Path) -> N
     assert r["instrumented"]["present"] is False
     assert r["rung"] == 3
     assert any("MCP server" in s for s in r["reachable"]["signals"])
+
+
+@pytest.mark.parametrize("rel", [
+    "crates/ty_python_semantic/resources/lint_docs/function-call-in-default-argument.md",
+    "crates/ty_python_semantic/resources/lint_docs/non-callable-init-subclass.md",
+    "docs/rules/function_call.md",
+])
+def test_a_word_containing_on_call_is_not_a_runbook(tmp_path: Path, rel: str) -> None:
+    """#823: the on-call name pattern is anchored on word or segment boundaries.
+    These paths classify as source, so only the pattern keeps them out."""
+    _write(tmp_path, "requirements.txt", "structlog\n")
+    _write(tmp_path, rel, "# A lint rule\n")
+    r = scan_observability(tmp_path)
+    assert r.discoverable == []
+    assert r.rung == 1
+
+
+@pytest.mark.parametrize("rel", [
+    "docs/on-call.md", "docs/oncall.md", "docs/on_call_rota.md", "on-call/escalation.md",
+    "docs/team-oncall.md",
+])
+def test_an_on_call_doc_is_a_runbook(tmp_path: Path, rel: str) -> None:
+    _write(tmp_path, "requirements.txt", "structlog\n")
+    _write(tmp_path, rel, "# Paging\n")
+    assert scan_observability(tmp_path).rung == 2
+
+
+@pytest.mark.parametrize("rel", [
+    "tests/fixtures/runbook.md", "crates/x/resources/mdtest/oncall.md",
+    "tests/docs/observability.md",
+])
+def test_a_runbook_under_a_test_or_fixture_path_is_not_discoverable(tmp_path: Path,
+                                                                    rel: str) -> None:
+    """#823: the shared path classifier sets test and fixture docs aside, for the
+    name signal and for the body-content fallback alike."""
+    _write(tmp_path, "requirements.txt", "structlog\n")
+    _write(tmp_path, rel, "We watch SLOs in Grafana and page via alerting.\n")
+    r = scan_observability(tmp_path)
+    assert r.discoverable == []
+    assert r.rung == 1
+
+
+def test_instrumented_kinds_ride_on_the_block(tmp_path: Path) -> None:
+    _write(tmp_path, "package.json", '{"dependencies":{"winston":"3"}}')
+    assert scan_observability(tmp_path).as_dict()["instrumented"]["kinds"] == ["dependency"]
+    (tmp_path / "empty").mkdir()
+    assert scan_observability(tmp_path / "empty").as_dict()["instrumented"] == {
+        "present": False, "signals": [], "kinds": []}
 
 
 # ── read-only: build-mutating dead-code tools are gated ────────────────────

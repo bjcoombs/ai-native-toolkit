@@ -96,6 +96,15 @@ def test_dropped_list_of_strings_becomes_its_length() -> None:
     assert counts_only(ctx)["observability"]["discoverable"] == {"present": True, "signals": 2}
 
 
+def test_instrumented_kinds_survive_as_tokens() -> None:
+    """#823: the kinds behind rung 1 are tokens, kept; the labels stay a count."""
+    ctx = {"observability": {"rung": 1, "instrumented": {
+        "present": True, "signals": ["Python logging", "Rust tracing"],
+        "kinds": ["code", "dependency"]}}}
+    assert counts_only(ctx)["observability"]["instrumented"] == {
+        "present": True, "signals": 2, "kinds": ["code", "dependency"]}
+
+
 def test_unclassified_block_field_is_dropped() -> None:
     """A new scan field that carries text cannot leak before it is classified."""
     ctx = {"agent_ops": {"available": True, "count": 4, "detail": SECRET,

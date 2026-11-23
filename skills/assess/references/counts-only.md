@@ -245,6 +245,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `dead_code.tools.consent` | dropped |
 | `observability.boundary` | dropped |
 | `observability.instrumented.signals` | dropped |
+| `observability.instrumented.kinds` | token |
 | `observability.discoverable.signals` | dropped |
 | `observability.reachable.signals` | dropped |
 | `capability_offers.build_system` | token |

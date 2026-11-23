@@ -322,7 +322,7 @@ def attach_liveness_blocks(ctx: dict[str, Any], liveness: Any) -> None:
     ctx["observability"] = (
         liveness["observability"] if liveness_ok
         else {"rung": None, "available": False, "reason": reason,
-              "instrumented": {"present": False, "signals": []},
+              "instrumented": {"present": False, "signals": [], "kinds": []},
               "discoverable": {"present": False, "signals": []},
               "reachable": {"present": False, "signals": []}}
     )

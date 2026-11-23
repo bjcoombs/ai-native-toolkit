@@ -1,0 +1,214 @@
+"""Tests for lib/instrumentation_scan.py: observability rung 1 from manifests, code and config (#823)."""
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+import lib.instrumentation_scan as inst
+from lib.instrumentation_scan import detect_instrumented
+from lib.liveness_scan import scan_observability
+
+
+def _write(root: Path, rel: str, text: str) -> None:
+    p = root / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text, encoding="utf-8")
+
+
+def _detect(root: Path) -> tuple[list[str], list[str]]:
+    files = sorted(p for p in root.rglob("*") if p.is_file())
+    labels, kinds = detect_instrumented(root, files)
+    return labels, list(kinds)
+
+
+# Each code form: (file name, content, label). Every one is credited in source
+# and never under a test or fixture path.
+CODE_FORMS = [
+    ("app/log.py", "import logging\n\nlogger = logging.getLogger(__name__)\n", "Python logging"),
+    ("app/log2.py", "from logging import getLogger\nlog = getLogger(__name__)\n", "Python logging"),
+    ("cmd/main.go", 'package main\n\nimport (\n\t"fmt"\n\t"log/slog"\n)\n', "Go log/slog"),
+    ("cmd/one.go", 'package main\n\nimport "log/slog"\n', "Go log/slog"),
+    ("src/main/java/a/A.java", "package a;\nimport java.util.logging.Logger;\n", "java.util.logging"),
+    ("src/main/java/a/B.java", "package a;\nimport org.slf4j.LoggerFactory;\n", "SLF4J"),
+    ("app/src/main/kotlin/C.kt", "package c\nimport android.util.Log\n", "Android Log"),
+    ("Sources/Lib/Logger.swift", "import Foundation\nimport OSLog\n", "Apple unified logging (OSLog)"),
+    ("lib/pool.ex", "defmodule P do\n  def f, do: :telemetry.execute([:p], %{})\nend\n",
+     "telemetry (Erlang/Elixir)"),
+    ("lib/assoc.rb", "ActiveSupport::Notifications.instrument('x') { }\n",
+     "ActiveSupport::Notifications"),
+]
+
+
+@pytest.mark.parametrize(("rel", "text", "label"), CODE_FORMS)
+def test_a_logger_in_source_is_credited_as_code(tmp_path: Path, rel: str, text: str,
+                                                label: str) -> None:
+    _write(tmp_path, rel, text)
+    assert _detect(tmp_path) == ([label], ["code"])
+
+
+@pytest.mark.parametrize("prefix", ["tests/", "tests/fixtures/", "testdata/", "examples/"])
+@pytest.mark.parametrize(("rel", "text", "label"), CODE_FORMS)
+def test_a_logger_in_a_test_or_fixture_is_not_credited(tmp_path: Path, prefix: str, rel: str,
+                                                       text: str, label: str) -> None:
+    _write(tmp_path, prefix + rel, text)
+    assert _detect(tmp_path) == ([], [])
+
+
+@pytest.mark.parametrize(("rel", "text"), [
+    ("app/a.py", "# use logging.getLogger(__name__) here\n"),
+    ("app/b.py", "import mylogging\nx = mylogging.getLogger(1)\n"),
+    ("cmd/a.go", 'package main\n// see "log/slog"\nvar s = "use log/slog"\n'),
+    ("src/A.java", "// import org.slf4j.Logger;\nclass A {}\n"),
+    ("lib/a.ex", "# :telemetry.execute([:x], %{})\n"),
+    ("lib/a.rb", "# ActiveSupport::Notifications.instrument\n"),
+    ("Sources/A.swift", "import OSLogExtras\n"),
+])
+def test_a_mention_that_is_not_an_import_or_call_is_not_credited(tmp_path: Path, rel: str,
+                                                                 text: str) -> None:
+    _write(tmp_path, rel, text)
+    assert _detect(tmp_path) == ([], [])
+
+
+def test_django_shape_reads_rung_1(tmp_path: Path) -> None:
+    """Success criterion: only `logging.getLogger(__name__)` reads rung 1."""
+    _write(tmp_path, "pkg/views.py", "import logging\nlogger = logging.getLogger(__name__)\n")
+    r = scan_observability(tmp_path).as_dict()
+    assert r["rung"] == 1
+    assert r["instrumented"] == {"present": True, "signals": ["Python logging"],
+                                 "kinds": ["code"]}
+
+
+# ── manifests ────────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize(("rel", "text", "label"), [
+    ("go.mod", "require go.opentelemetry.io/otel v1.0.0\n", "OpenTelemetry"),
+    ("pyproject.toml", '[project]\ndependencies = ["opentelemetry-sdk"]\n', "OpenTelemetry"),
+    ("package.json", '{"dependencies":{"prom-client":"1"}}', "Prometheus"),
+    ("go.mod", "require go.uber.org/zap v1.0.0\n", "structured logging (zap)"),
+    ("composer.json", '{"require":{"monolog/monolog":"^3"}}', "logging (Monolog)"),
+    ("App.csproj", '<PackageReference Include="Serilog" />', "structured logging (Serilog)"),
+    ("App.csproj", '<PackageReference Include="NLog" />', "logging (NLog)"),
+    ("Package.swift", '.package(url: "https://github.com/apple/swift-log.git", from: "1.0.0")',
+     "logging (swift-log)"),
+    ("pubspec.yaml", "dependencies:\n  sentry_flutter: ^7.0.0\n", "Sentry"),
+    ("gradle/libs.versions.toml",
+     '[libraries]\ntimber = { module = "com.jakewharton.timber:timber", version = "5" }\n',
+     "logging (Timber)"),
+])
+def test_a_telemetry_dependency_is_credited(tmp_path: Path, rel: str, text: str,
+                                            label: str) -> None:
+    _write(tmp_path, rel, text)
+    assert _detect(tmp_path) == ([label], ["dependency"])
+
+
+@pytest.mark.parametrize(("rel", "text"), [
+    ("package.json", '{"dependencies":{"hotel-booking":"1"}}'),
+    ("package.json", '{"dependencies":{"zapier-platform-core":"1"}}'),
+    ("package.json", '{"dependencies":{"pinot-client":"1"}}'),
+    ("requirements.txt", "pdfslogan==1.0\n"),
+    ("package.json", '{"description":"request tracing and telemetry helpers"}'),
+    ("gradle/libs.versions.toml", '[libraries]\ntimber = { module = "org.example:timber" }\n'),
+])
+def test_a_name_that_only_contains_a_needle_is_not_credited(tmp_path: Path, rel: str,
+                                                            text: str) -> None:
+    _write(tmp_path, rel, text)
+    assert _detect(tmp_path) == ([], [])
+
+
+@pytest.mark.parametrize("prefix", ["tests/fixtures/", "examples/demo/", "vendor/x/"])
+def test_a_manifest_outside_production_source_is_not_credited(tmp_path: Path,
+                                                               prefix: str) -> None:
+    _write(tmp_path, prefix + "package.json", '{"dependencies":{"@sentry/node":"7"}}')
+    assert _detect(tmp_path) == ([], [])
+
+
+@pytest.mark.parametrize("text", [
+    '[dependencies]\ntracing = "0.1"\n',
+    '[dependencies]\ntracing = { workspace = true }\n',
+    '[workspace.dependencies]\ntracing = "0.1"\n',
+    '[target.\'cfg(unix)\'.dependencies]\ntracing = "0.1"\n',
+])
+def test_the_rust_tracing_crate_is_credited(tmp_path: Path, text: str) -> None:
+    _write(tmp_path, "Cargo.toml", text)
+    assert _detect(tmp_path) == (["Rust tracing"], ["dependency"])
+
+
+def test_the_rust_log_crate_is_credited(tmp_path: Path) -> None:
+    _write(tmp_path, "crates/a/Cargo.toml", '[dependencies]\nlog = "0.4"\n')
+    assert _detect(tmp_path) == (["Rust log"], ["dependency"])
+
+
+@pytest.mark.parametrize("text", [
+    '[dev-dependencies]\ntracing = "0.1"\n',
+    '[build-dependencies]\nlog = "0.4"\n',
+    '[package]\nname = "x"\ndescription = "fast tracing of log files"\n',
+    '[dependencies\nbroken = ',
+])
+def test_rust_tracing_outside_runtime_dependencies_is_not_credited(tmp_path: Path,
+                                                                   text: str) -> None:
+    _write(tmp_path, "Cargo.toml", text)
+    assert _detect(tmp_path) == ([], [])
+
+
+def test_the_ruff_shape_reads_rung_1(tmp_path: Path) -> None:
+    _write(tmp_path, "Cargo.toml", '[workspace.dependencies]\ntracing = "0.1"\n')
+    _write(tmp_path, "crates/a/Cargo.toml", "[dependencies]\ntracing = { workspace = true }\n")
+    r = scan_observability(tmp_path).as_dict()
+    assert r["rung"] == 1
+    assert r["instrumented"]["kinds"] == ["dependency"]
+
+
+def test_elixir_telemetry_dependency_is_credited_only_in_mix(tmp_path: Path) -> None:
+    _write(tmp_path, "mix.exs", 'defp deps do\n  [{:telemetry, "~> 1.0"}]\nend\n')
+    assert _detect(tmp_path) == (["telemetry (Erlang/Elixir)"], ["dependency"])
+
+
+def test_the_word_telemetry_in_a_manifest_is_not_credited(tmp_path: Path) -> None:
+    _write(tmp_path, "mix.exs", '# no :telemetry dependency yet\n[{:jason, "~> 1.0"}]\n')
+    _write(tmp_path, "package.json", '{"keywords":["telemetry"]}')
+    assert _detect(tmp_path) == ([], [])
+
+
+# ── config and kinds ─────────────────────────────────────────────────────────
+
+def test_a_collector_config_is_credited_as_config(tmp_path: Path) -> None:
+    _write(tmp_path, "deploy/prometheus.yml", "scrape_configs: []\n")
+    assert _detect(tmp_path) == (["telemetry config present"], ["config"])
+
+
+def test_a_collector_config_under_a_test_path_is_not_credited(tmp_path: Path) -> None:
+    _write(tmp_path, "tests/fixtures/prometheus.yml", "scrape_configs: []\n")
+    assert _detect(tmp_path) == ([], [])
+
+
+def test_every_kind_that_matched_is_recorded(tmp_path: Path) -> None:
+    _write(tmp_path, "requirements.txt", "structlog\n")
+    _write(tmp_path, "app/x.py", "import logging\nlog = logging.getLogger(__name__)\n")
+    _write(tmp_path, "prometheus.yml", "x: 1\n")
+    labels, kinds = _detect(tmp_path)
+    assert kinds == ["code", "config", "dependency"]
+    assert "Python logging" in labels
+
+
+def test_a_rule_that_matched_stops_reading_its_files(tmp_path: Path,
+                                                     monkeypatch: pytest.MonkeyPatch) -> None:
+    for n in range(5):
+        _write(tmp_path, f"app/m{n}.py", "import logging\nlog = logging.getLogger(__name__)\n")
+    reads: list[Path] = []
+    real = inst._read
+
+    def counting(path: Path) -> str:
+        reads.append(path)
+        return real(path)
+
+    monkeypatch.setattr(inst, "_read", counting)
+    assert _detect(tmp_path) == (["Python logging"], ["code"])
+    assert len(reads) == 1
+
+
+def test_an_oversized_source_file_is_not_read(tmp_path: Path,
+                                              monkeypatch: pytest.MonkeyPatch) -> None:
+    _write(tmp_path, "app/big.py", "import logging\nlog = logging.getLogger(__name__)\n")
+    monkeypatch.setattr(inst, "MAX_CODE_BYTES", 4)
+    assert _detect(tmp_path) == ([], [])

@@ -241,7 +241,7 @@ jq '.language_capabilities' "$REPO_ROOT/.assess/run-context.json"
 
 **Observability tier (the decisive one) - three rungs (`observability.rung`, 0-3):**
 
-1. **Instrumented** - telemetry is emitted (OpenTelemetry, Prometheus, Datadog/APM, structured logging). Necessary, not sufficient.
+1. **Instrumented** - telemetry is emitted (OpenTelemetry, Prometheus, Datadog/APM, structured logging, or a standard-library logger such as Python `logging.getLogger`, Go `log/slog` or the Rust `tracing` crate). `observability.instrumented.kinds` says whether it came from a manifest dependency, from code or from a collector config. Necessary, not sufficient.
 2. **Discoverable** - an `OBSERVABILITY.md` / runbook tells the agent *where* runtime truth lives. Orients, but grants no access.
 3. **Reachable** - the agent has an *invokable* path to runtime state: an MCP server over logs/metrics/traces (`.mcp.json`), a repo skill that tails logs / queries metrics, or a runbook with runnable query commands. **This is the rung that decides the score** - without it the agent *knows* telemetry exists but cannot *use* it, so liveness stays unverifiable in practice. A Grafana no agent can query from stops at rung 1. **Boundary:** this scores what the *repo provides* toward agent-reachability; it cannot know the agent's live environment - say so in the report.
 
