@@ -101,7 +101,7 @@ def test_not_measured_gate_says_so():
     gate = {"kind": "gate", "gate": "ci_runs_tests", "condition": "layer-5-ci.1",
             "state": "not_measured", "reason": "needs_platform"}
     h = headline(_level(step=2, next_step={"step": 3, "blockers": [gate]}), default_model())
-    assert h["lines"][1] == ("Next: Step 3 · Unattended agent PRs unlocks when CI runs the tests "
+    assert h["lines"][1] == ("Next: Step 3 · Unattended agent PRs unlocks when CI turns red on a broken test "
                              "(not measured here: needs GitHub or GitLab access)")
 
 

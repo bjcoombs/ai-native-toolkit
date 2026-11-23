@@ -73,7 +73,7 @@ def test_steps_one_to_three_name_the_step_the_next_task_and_what_it_allows(step:
     assert h["summary_lines"] == [
         f"Step {step} of 4: {STEP_MEANING[step]}.",
         f"Next: {task}. Then you reach Step {step + 1}: {STEP_MEANING[step + 1]}.",
-        "Since last run: 2 actions closed; now in place: CI runs the tests.",
+        "Since last run: 2 actions closed; now in place: CI turns red on a broken test.",
     ]
     assert h["call_to_action"] == f"**Start here:** [{task[:1].upper()}{task[1:]}]({STEP_GATES_URL})."
     assert h["summary_markdown"] == "\n\n".join([_linked(h["summary_lines"][0]), *h["summary_lines"][1:],
@@ -113,7 +113,7 @@ def test_since_last_run_words_each_part_and_says_which_part_is_not_known() -> No
     assert since_line({**KNOWN, "closed_count": 1, "gates_gained": [], "gates_lost": ["coverage_gate"]}) == \
         f"Since last run: 1 action closed; no longer in place: {GATE_CHANGE['coverage_gate']}."
     assert since_line({**KNOWN, "closed_count": None}) == \
-        "Since last run: now in place: CI runs the tests; closed actions not known."
+        "Since last run: now in place: CI turns red on a broken test; closed actions not known."
     assert since_line({**KNOWN, "gates_gained": None, "gates_lost": None}) == \
         "Since last run: 2 actions closed; gate changes not known."
 

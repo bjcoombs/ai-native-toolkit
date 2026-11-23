@@ -18,7 +18,7 @@
 <path d="M550.0 186.0 l10 -7 l0 14 z" class="f-accent"/>
 <text x="566.0" y="191.0" font-size="13" text-anchor="start" class="t-accent" font-weight="600">You are here</text>
 <path d="M70.0 248.0 L70.0 220.0 M64.0 226.0 L70.0 220.0 L76.0 226.0" fill="none" class="s-muted" stroke-width="1.5" data-gate-to="3"/>
-<text x="88.0" y="236.0" font-size="12" text-anchor="start" class="t-muted">Gate: CI runs the tests (in place)</text>
+<text x="88.0" y="236.0" font-size="12" text-anchor="start" class="t-muted">Gate: CI turns red on a broken test (in place)</text>
 <rect x="40.0" y="252.0" width="500.0" height="52.0" rx="6" class="f-bg s-accent" stroke-width="2" data-step="2" data-state="reached"/>
 <text x="54.0" y="273.0" font-size="14" text-anchor="start" class="t-fg" font-weight="600">Step 2 · Supervised agent PRs</text>
 <text x="54.0" y="292.0" font-size="12" text-anchor="start" class="t-fg">An agent opens pull requests, a person reviews each one</text>

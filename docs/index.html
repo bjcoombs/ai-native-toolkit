@@ -86,7 +86,7 @@ body { margin: 0; }
   <section>
     <h2>The ladder</h2>
     <p>Every repository sits on one of four Steps. Each Step is a level of trust you can give an agent. Between Steps is a gate: one concrete thing your repository must enforce before the next level of trust is safe.</p>
-    <div class="card ladder" role="img" aria-label="Four Steps of agent autonomy. Step 1 Assisted, gate: an instruction file is committed. Step 2 Supervised agent PRs, gate: CI runs the tests. Step 3 Unattended agent PRs, gate: a coverage gate is enforced. Step 4 Autonomous loops. Example marker on Step 2, next gate CI runs the tests.">
+    <div class="card ladder" role="img" aria-label="Four Steps of agent autonomy. Step 1 Assisted, gate: an instruction file is committed. Step 2 Supervised agent PRs, gate: CI turns red on a broken test. Step 3 Unattended agent PRs, gate: a coverage gate is enforced. Step 4 Autonomous loops. Example marker on Step 2, next gate CI turns red on a broken test.">
       <svg viewBox="0 0 640 430" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Sans, system-ui, sans-serif">
         <style>
           .rung { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
@@ -121,7 +121,7 @@ body { margin: 0; }
         <text class="desc" x="100" y="175">Agents open pull requests nobody has to watch.</text>
         <!-- gate 2 to 3, the next one -->
         <path class="arrow-next" d="M120 232 v-30 m-7 9 l7 -9 l7 9"/>
-        <text class="gate-next" x="140" y="223">next gate: CI runs the tests</text>
+        <text class="gate-next" x="140" y="223">next gate: CI turns red on a broken test</text>
 
         <!-- Step 2, you are here -->
         <rect class="here" x="40" y="238" width="560" height="66" rx="8"/>
