@@ -5,11 +5,11 @@
 id = "core.unit_rollup"
 kind = "collector"
 title = "Monorepo unit roll-up"
-summary = "The lowest unit's Step plus 'N of M measured units' at the next Step, and the changes that move units to their next Step, ranked by the units one change lifts, repository-wide changes first."
-issues = [800, 865]
+summary = "The lowest unit's Step plus 'N of M measured units' at the next Step, and the changes that move units to their next Step, ranked by the units one change lifts, repository-wide changes first, and the sibling units that already hold each unit's next gate."
+issues = [800, 865, 1155]
 callable = "lib.core_scans:unit_rollup"
 publishes = ["unit_rollup"]
-reads = ["unit_levels"]
+reads = ["unit_levels", "units"]
 stage = "post_offers"
 shapes = [
   { path = "unit_rollup", type = "lib.unit_rollup:UnitRollUpBlock" },
@@ -19,5 +19,8 @@ revision = 1
   "unit_rollup.unit_count_reason" = "token"
   "unit_rollup.unlocks.gate" = "token"
   "unit_rollup.unlocks.scope" = "token"
+  "unit_rollup.learn_from.unit" = "hashed_path"
+  "unit_rollup.learn_from.gate" = "token"
+  "unit_rollup.learn_from.names" = "hashed_path"
   "unit_rollup.lines" = "drop"
   "unit_rollup.markdown" = "drop"

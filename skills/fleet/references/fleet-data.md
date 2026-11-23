@@ -135,6 +135,14 @@ units. Each row has:
 - `next_blocker`: the first gate of that Step that does not hold, as tokens: `gate`,
   `state` and `disposition`, as `gate_blockers` writes them; `null` when no gate blocks it.
 - `tags`: the unit's per-tag tally, the shape of the repository's `tags`.
+- `learn_from`: up to three sibling units of the same repository that already hold the
+  unit's `next_blocker` gate (#1155), the same ecosystem and kind first, then by folder, so a
+  team can learn from a unit that has solved the same problem. A sibling holds a gate only
+  when every condition the gate covers is met. An empty list when no sibling holds it, or
+  when the gate is not one to change (not measured, excluded by the owner, or none). The
+  folders are written like `key`: in clear under `--full`, hashed under `--hash-paths` or
+  `--hash-salt` (the same hash as the sibling's own `key`), and the field is `null` in plain
+  counts-only output.
 
 A unit row carries no condition tally (`tally`, "N of M measured"): compare units inside
 one repository by Step, next blocker and per-tag counts. `unit_rows` is `null` when the

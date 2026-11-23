@@ -855,11 +855,25 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "learn_from": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
                     "key",
                     "kind",
+                    "learn_from",
                     "next_blocker",
                     "next_step",
                     "step",
