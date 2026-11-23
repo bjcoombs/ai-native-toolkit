@@ -57,7 +57,10 @@ baseline and earns nothing:
   with no clean move is neutral.
 - ``target_hit``: a Step target (targets file, ``lib/fleet_targets.py``; #945) hit: a
   clean move of the subject's lowest Step over its measured members from below the
-  target Step to at or above it (``lib/fleet_step_targets.py``). It reads Steps, not
+  target Step to at or above it (``lib/fleet_step_targets.py``), measured against the
+  latest earlier run with the same measured set (``same_set``), not only the run before,
+  so a member's failed scan in between never loses the hit; ``previous_run`` names that
+  run. It reads Steps, not
   rows, so it never moves a streak. Evidence: ``from_step``, ``to_step`` and
   ``target_step``; ``row`` is null.
 
@@ -382,10 +385,13 @@ class _Replay:
         self.titles, self.tops, self.targets, self.firsts = titles, tops, targets, firsts
         self.reached: dict[tuple[str, str, str], int] = {}
         self.streak: dict[SubjectKey, int] = {}
+        self.steps: dict[SubjectKey, list[tuple[str, StepState]]] = {}  # each run's Step state, oldest first
         self.out: list[Achievement] = []
 
-    def see(self, subs: Mapping[SubjectKey, Subject]) -> None:
-        """Record a run's known levels as held (any run, clean or not)."""
+    def see(self, run: str, subs: Mapping[SubjectKey, Subject]) -> None:
+        """Record a run's known levels as held (any run, clean or not) and its Step states."""
+        for key, sub in subs.items():
+            self.steps.setdefault(key, []).append((run, sub.step))
         for sub in subs.values():
             for row, state in sub.rows.items():
                 if state.level is not None:
@@ -408,6 +414,7 @@ class _Replay:
             peers[(sub.view, sub.kind)] = peers.get((sub.view, sub.kind), 0) + 1
         for key in sorted(now):
             sub, old = now[key], then.get(key)
+            self._targets(run, key, sub)
             if old is None:  # new to the fleet (or keys under another salt): nothing to compare with
                 continue
             clean_rows = [row for row in sorted(sub.rows) if clean(old.rows.get(row), sub.rows[row])]
@@ -424,10 +431,6 @@ class _Replay:
                     held = reached_before.get((sub.view, sub.kind, row))
                     if self.firsts and (held is None or lv_now > held) and peers[(sub.view, sub.kind)] > 1:
                         self._earn(FIRST, sub, run, previous, _evidence(row, lv_then, lv_now, moves, level=lv_now))
-            for target in sorted(self.targets, key=target_order):
-                if (target.view, target.unit) == (sub.view, sub.key) and hit(target, old.step, sub.step):
-                    self._earn(TARGET_HIT, sub, run, previous, _evidence(
-                        from_step=old.step.lowest, to_step=sub.step.lowest, target_step=target.step))
             moved_unknown = [unknown_move(then_cells, now_cells, sub.key, row, rescored)
                              for row in sorted(sub.rows) if row not in clean_rows] \
                 if rescored is not None and sub.kind == REPO_VIEW else []
@@ -438,7 +441,28 @@ class _Replay:
                 self.streak[key] = self.streak.get(key, 1) + 1
                 if self.streak[key] in STREAK_MILESTONES:
                     self._earn(STREAK, sub, run, previous, _evidence(runs=self.streak[key]))
-        self.see(now)
+        self.see(run, now)
+
+    def _targets(self, run: str, key: SubjectKey, sub: Subject) -> None:
+        """``target_hit`` against the latest earlier run with the same measured set (``same_set``),
+        so a member's failed scan on the run before the crossing never loses the hit."""
+        mine = [t for t in sorted(self.targets, key=target_order) if (t.view, t.unit) == (sub.view, sub.key)]
+        earlier = same_set(self.steps.get(key, []), sub.step) if mine else None
+        if earlier is None:
+            return
+        previous, then = earlier
+        for target in mine:
+            if hit(target, then, sub.step):
+                self._earn(TARGET_HIT, sub, run, previous, _evidence(
+                    from_step=then.lowest, to_step=sub.step.lowest, target_step=target.step))
+
+
+def same_set(history: Sequence[tuple[str, StepState]], now: StepState) -> tuple[str, StepState] | None:
+    """The latest earlier ``(run, state)`` measuring exactly ``now``'s repositories; None when none does."""
+    if now.lowest is None:
+        return None
+    return next(((run, state) for run, state in reversed(history)
+                 if state.lowest is not None and state.measured == now.measured), None)
 
 
 LAPSE, GAIN = "lapse", "gain"
@@ -536,7 +560,7 @@ def build_achievements(current: HistoryRun, earlier: Sequence[HistoryRun], model
     replay = _Replay(titles, tops, targets, firsts)
     states = [(run.run_id, subjects(run.data, rules), run_cells(run.data)) for run in runs]
     caused = [rule_unknowns(run.stored, run.data) if run.stored is not None else None for run in runs]
-    replay.see(states[0][1])
+    replay.see(states[0][0], states[0][1])
     for i, ((prev_id, prev, prev_cells), (run_id, now, now_cells)) in enumerate(zip(states, states[1:])):
         then_caused = caused[i]
         # both runs re-scored from one earlier version: the step keeps its native-model credit

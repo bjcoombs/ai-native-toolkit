@@ -14,7 +14,10 @@ from or to it is neutral.
 
 **Hit** (``hit``): a clean move (both runs have a lowest Step and the measured set is
 identical, as ``fleet_achievements.clean`` asks of a row) from below the target to at or
-above it. ``fleet_achievements`` emits it as ``target_hit``.
+above it. ``fleet_achievements`` emits it as ``target_hit``, comparing each run with the
+latest earlier run whose measured set is the same (``fleet_achievements.same_set``): a
+member that fails its scan on the run before the crossing delays the comparison to the
+last fully comparable run instead of losing the hit.
 
 **Progress** (``target_progress``, this run only): the unit's ``lowest_step``, ``measured``
 of ``repos``, ``distance`` (Steps to go, 0 when met, None when nothing is measured), the

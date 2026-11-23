@@ -124,6 +124,27 @@ def test_an_unmeasured_or_new_repository_neither_earns_nor_blocks(history: list[
     assert not _hits(_build(history))
 
 
+@pytest.mark.parametrize("history", [
+    # b fails on the run where a alone already reads Step 3, and returns at Step 3
+    [HISTORY[0], HISTORY[1], ("2026-11-15", {**BASE, "grp/sub/b": (-1, True)}), ("2026-11-22", HISTORY[2][1])],
+    # b fails on the run before the crossing (it was at Step 2) and returns at Step 3
+    [HISTORY[0], ("2026-11-08", {**BASE, "grp/sub/b": (-1, True)}), HISTORY[2]],
+])
+def test_a_failed_scan_before_the_crossing_never_loses_the_hit(history: list[tuple[str, Spec]]) -> None:
+    """The return run compares with the latest earlier run measuring the same repositories."""
+    doc = _build([*history, ("2026-11-29", HISTORY[3][1]), ("2026-12-06", HISTORY[3][1])])
+    returned = history[-1][0]
+    assert _hits(doc) == [(returned, TEAM[1], 3)]  # exactly once, never again on later runs
+    (hit,) = [a for a in doc["achievements"] if a["kind"] == fa.TARGET_HIT]
+    compared = [date for date, spec in history if spec.get("grp/sub/b", (0, True))[0] != -1][-2]
+    assert hit["previous_run"] == compared and hit["evidence"]["from_step"] == 2
+
+
+def test_the_hit_fires_once_and_not_again_after_a_later_gap() -> None:
+    gap = [*HISTORY[:3], ("2026-11-22", {**BASE, "grp/sub/b": (-1, True)}), ("2026-11-29", HISTORY[3][1])]
+    assert _hits(_build(gap)) == [("2026-11-15", TEAM[1], 3)]
+
+
 def test_a_stored_run_without_steps_is_neutral() -> None:
     runs = [fa.HistoryRun(date, _data(date, spec)) for date, spec in HISTORY[1:3]]
     for repo in runs[0].data["repos"]:  # written before #944
