@@ -28,6 +28,7 @@ runs, from GitHub workflows and ``.gitlab-ci.yml``:
   ``working-directory`` anywhere in the file) leaves it unresolved.
 - ``--rcfile`` / ``--cov-config`` names the config instead, resolved against that
   working directory (``.coveragerc`` itself is coverage.py's default, so discovery).
+- ``uv --directory X`` and ``poetry -C X`` / ``--directory X`` run the tool in X.
 - a plain ``pytest`` is a coverage run when the root config's ``addopts`` holds
   ``--cov``; a run whose coverage state is not settled (``pytest -c`` naming a file not
   read) counts as unresolved unless it is known not to read the root config.
@@ -82,6 +83,8 @@ _MAX_DEPTH = 4
 _CONFIG_FLAGS = ("--rcfile", "--cov-config")
 # coverage.py treats this name as its own default: discovery, not a named file.
 _DEFAULT_RCFILE = ".coveragerc"
+# Runner flags that run the command in another directory.
+_DIRECTORY_FLAGS = {"uv": ("--directory",), "poetry": ("-C", "--directory")}
 # The root files whose pytest ``addopts`` a run from the root reads.
 _PYTEST_CONFIGS = ("pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini")
 # ``cd`` at the start of a command: the line's start, or after ``;``, ``&&``, ``||``, ``|``, ``(``.
@@ -176,7 +179,8 @@ def _defaults_workdir(lines: Sequence[str]) -> bool:
             continue
         indent = len(match.group(1))
         parents = [lines[r].strip() for r in range(row - 1, -1, -1)
-                   if lines[r].strip() and len(lines[r]) - len(lines[r].lstrip()) < indent]
+                   if lines[r].strip() and not lines[r].strip().startswith("#")
+                   and len(lines[r]) - len(lines[r].lstrip()) < indent]
         if parents[:2] == ["run:", "defaults:"]:
             return True
     return False
@@ -240,6 +244,19 @@ def _cwd(run: Run, lines: Sequence[str], gitlab: bool) -> Cwd:
             if match.group(1) == "popd" or _in_closed_group(text, match.start(1)):
                 return None   # a subshell ``(cd docs && make)`` does not move the run
             cwd = _move(cwd, match.group(2))
+    return _runner_directory(cwd, run.words)
+
+
+def _runner_directory(cwd: Cwd, words: Sequence[str]) -> Cwd:
+    """``cwd`` after a ``uv --directory X`` / ``poetry -C X`` lead, which runs the tool in X."""
+    if not words or words[0] not in _DIRECTORY_FLAGS:
+        return cwd
+    flags = _DIRECTORY_FLAGS[words[0]]
+    for i, word in enumerate(words[1:], 1):
+        if word in flags:
+            return _move(cwd, words[i + 1] if i + 1 < len(words) else None)
+        if any(word.startswith(f + "=") for f in flags if f.startswith("--")):
+            return _move(cwd, word.split("=", 1)[1])
     return cwd
 
 
@@ -297,7 +314,7 @@ def _reads_root(run: Run, lines: Sequence[str], gitlab: bool, config: str) -> bo
 
 def _root_activation(root: Path) -> Activation:
     """What a run from the root reads of pytest ``addopts`` (``--cov`` / ``--no-cov``)."""
-    files = [(name, (root / name).read_text(encoding="utf-8", errors="replace").splitlines())
+    files = [(name, read_config(root, name).splitlines())
              for name in _PYTEST_CONFIGS if (root / name).is_file()]
     return read_activation(files)
 

@@ -140,6 +140,11 @@ def test_the_whole_repo_run_is_unchanged(tmp_path: Path) -> None:
     ("      - run: (cd docs && make html) && pytest --cov\n", None),
     ("      - run: (cd pkg && pytest --cov)\n", False),
     ("      - run: pytest --cov --cov-config=.coveragerc\n", True),
+    ("      - run: uv run --directory pkg pytest --cov\n", False),
+    ("      - run: uv --directory=pkg run pytest --cov\n", False),
+    ("      - run: poetry -C pkg run pytest --cov\n", False),
+    ("      - run: uv run --directory $D pytest --cov\n", None),
+    ("      - run: uv run pytest --cov\n", True),
     ("      - run: pytest -c ci/pytest.ini\n      - run: cd pkg && pytest --cov\n", None),
 ])
 def test_where_ci_runs_coverage_decides(tmp_path: Path, steps: str, applies: bool | None) -> None:
@@ -164,9 +169,10 @@ def test_a_dispatch_only_root_run_does_not_count(tmp_path: Path) -> None:
     assert _applies(root) is False
 
 
-def test_a_defaults_working_directory_is_unresolved(tmp_path: Path) -> None:
+@pytest.mark.parametrize("comment", ["", "      # note\n"])
+def test_a_defaults_working_directory_is_unresolved(tmp_path: Path, comment: str) -> None:
     root = _write(tmp_path, {"pyproject.toml": ROOT_FLOOR, "pkg/a.py": "", CI: (
-        "on: [pull_request]\njobs:\n  t:\n    defaults:\n      run:\n"
+        "on: [pull_request]\njobs:\n  t:\n    defaults:\n" + comment + "      run:\n"
         "        working-directory: pkg\n    steps:\n      - run: pytest --cov\n")})
     assert _applies(root) is None
 
