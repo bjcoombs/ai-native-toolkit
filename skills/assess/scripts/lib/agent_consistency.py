@@ -96,7 +96,7 @@ from lib.agent_systems import AIDER_CONFIG, SYSTEM_BY_ID, SYSTEM_ORDER
 from lib.check_command import ALWAYS_CHECK, LINT_PROGRAMS, is_lint_command
 from lib.named_check import is_named_check
 from lib.command_resolver import command_words, extract_commands
-from lib.doc_graph import is_repo_file
+from lib.docs.doc_graph import is_repo_file
 from lib.git_churn import tracked_files
 from lib.instruction_budget import follow_imports
 from lib.instruction_discovery import InstructionCandidate, collect_instruction_files, mirror_pair

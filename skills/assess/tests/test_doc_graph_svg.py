@@ -5,7 +5,7 @@ those are stubbed before import (same approach as test_complexity_treemap). We
 then drive `main()` with `build_doc_graph` / `analyze_doc_staleness` / `render`
 patched to capture the excludes they receive, proving the SVG path resolves
 `.assess/config.toml` + `--exclude` and threads the union into both scans - so
-the SVG and `lib.doc_graph` compute over the identical doc set.
+the SVG and `lib.docs.doc_graph` compute over the identical doc set.
 """
 from __future__ import annotations
 

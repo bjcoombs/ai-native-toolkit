@@ -49,9 +49,9 @@ from lib.context_blocks import (
 )
 from lib.testing.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
-from lib.doc_complexity_join import analyze_doc_complexity_join
-from lib.doc_graph import build_doc_graph
-from lib.doc_staleness import analyze_doc_staleness
+from lib.docs.doc_complexity_join import analyze_doc_complexity_join
+from lib.docs.doc_graph import build_doc_graph
+from lib.docs.doc_staleness import analyze_doc_staleness
 from lib.gap_actions import build_gap_actions
 from lib.instruction_files import (
     broken_instruction_refs,
@@ -121,7 +121,7 @@ def doc_graph(
 def doc_staleness(
     repo_root: Path, doc_graph_block: dict[str, Any], excludes: Excludes, scope: Path | None,
 ) -> Any:
-    """Doc staleness over the doc graph's doc->code edges (``lib.doc_staleness``)."""
+    """Doc staleness over the doc graph's doc->code edges (``lib.docs.doc_staleness``)."""
     dirs, patterns = excludes
     return analyze_doc_staleness(
         repo_root, doc_to_code_edges=doc_to_code_edges(doc_graph_block),

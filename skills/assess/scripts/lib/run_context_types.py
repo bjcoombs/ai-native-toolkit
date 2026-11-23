@@ -131,7 +131,7 @@ class DocSignal(TypedDict, total=False):
 
 
 class DocGraphBlock(TypedDict):
-    """``run-context.json`` ``doc_graph``: :meth:`lib.doc_graph.DocGraphResult.as_dict`."""
+    """``run-context.json`` ``doc_graph``: :meth:`lib.docs.doc_graph.DocGraphResult.as_dict`."""
 
     available: bool
     reason: str

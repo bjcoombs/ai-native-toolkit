@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from lib.doc_graph import EXCLUDE_DIRS
+from lib.docs.doc_graph import EXCLUDE_DIRS
 
 # Per-heuristic cap so a pathological repo can't bloat the run-context block.
 MAX_FINDINGS = 50

@@ -86,7 +86,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import TypedDict
 
-from lib.ownership_parser import (
+from lib.docs.ownership_parser import (
     _discover_arch_docs,
     _extract_path_refs,
     _FENCE_RE,
@@ -443,7 +443,7 @@ def static_grouping_relation(
     """The import-graph community grouping as a relation over file pairs.
 
     ``communities`` is ``structure_graph._detect_communities()``'s output: a list
-    of sets of *dotted module names* (e.g. ``{"lib.doc_graph", "lib.git_churn"}``).
+    of sets of *dotted module names* (e.g. ``{"lib.docs.doc_graph", "lib.git_churn"}``).
     Each community asserts its modules belong together; we resolve every module
     name to its repo-relative source file (via the same package-root resolution
     ``structure_graph`` uses) and contribute the same-group pairs over the files.

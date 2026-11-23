@@ -75,7 +75,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from lib.doc_graph import is_excluded_path
+from lib.docs.doc_graph import is_excluded_path
 from lib.run_context_types import DeadCodeCandidate, JsonDict
 
 # Capabilities a JVM project exposes, in report order. Only ``liveness`` is

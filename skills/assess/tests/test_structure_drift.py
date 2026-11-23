@@ -19,7 +19,7 @@ import subprocess
 from pathlib import Path
 
 import lib.keyhole.structure_drift as structure_drift
-from lib import ownership_parser
+import lib.docs.ownership_parser as ownership_parser
 import lib.graph.structure_graph as sg
 from lib.graph.import_graph import ModuleGraph
 from lib.keyhole.structure_drift import (

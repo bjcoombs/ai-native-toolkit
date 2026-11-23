@@ -22,7 +22,7 @@ from pathlib import Path
 
 import lib.test_pressure as tp
 import lib.graph.structure_graph as structure_graph
-from lib import doc_graph
+import lib.docs.doc_graph as doc_graph
 from lib.test_pressure import mutation, mutmut3
 from lib.test_pressure import run_bounded_mutation, scan_test_pressure
 
@@ -522,7 +522,7 @@ def test_tool_error_line_keeps_a_raised_warning() -> None:
 
 
 def test_mutant_glob_follows_mutmut_naming() -> None:
-    assert mutmut3._mutant_glob("src/lib/doc_staleness.py") == "lib.doc_staleness.*"
+    assert mutmut3._mutant_glob("src/lib/docs/doc_staleness.py") == "lib.docs.doc_staleness.*"
     assert mutmut3._mutant_glob("pkg/calc.py") == "pkg.calc.*"
     assert mutmut3._mutant_glob("pkg/__init__.py") == "pkg.*"
     assert mutmut3._mutant_glob("src.py") == "src.*"

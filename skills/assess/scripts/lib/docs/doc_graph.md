@@ -1,6 +1,6 @@
-# `lib/doc_graph.py`
+# `lib/docs/doc_graph.py`
 
-The full reference for `skills/assess/scripts/lib/doc_graph.py`, whose module docstring holds the summary.
+The full reference for `skills/assess/scripts/lib/docs/doc_graph.py`, whose module docstring holds the summary.
 
 (co-change hotspot)
 Doc link-graph for Layer 0 navigability. Parses `[[wikilinks]]` and

@@ -36,7 +36,7 @@ from lib.change_coupling import (
 )
 from lib.keyhole.coupling_analysis import (
     StaticModularity, detect_hidden_coupling, find_refactor_boundaries)
-from lib.doc_complexity_join import _extract_file_ccn, _high_ccn_threshold, analyze_doc_complexity_join
+from lib.docs.doc_complexity_join import _extract_file_ccn, _high_ccn_threshold, analyze_doc_complexity_join
 from lib.graph.import_graph import is_graph_source
 from lib.keyhole.liveness_scan import STATIC_REACHABILITY_CAVEAT
 from lib.reviewed_findings import mark_reviewed, open_findings, render_reviewed_markdown

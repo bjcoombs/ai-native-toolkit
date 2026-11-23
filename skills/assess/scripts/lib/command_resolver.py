@@ -72,7 +72,7 @@ from pathlib import Path, PurePosixPath
 from typing import Literal
 
 from lib.command_index import RepoIndex, TargetSet, build_index, is_gitignored
-from lib.doc_graph import is_excluded_path
+from lib.docs.doc_graph import is_excluded_path
 from lib.dot_source import dot_words
 
 __all__ = [

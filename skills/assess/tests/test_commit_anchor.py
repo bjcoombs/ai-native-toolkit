@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from lib.ai_usage import scan_ai_usage
-from lib.doc_staleness import analyze_doc_staleness, content_clock
+from lib.docs.doc_staleness import analyze_doc_staleness, content_clock
 from lib.commit_anchor import head_commit_epoch
 from lib.git_churn import commit_epochs_by_file, git_churn_scores
 from lib.history_window import anchored_since
