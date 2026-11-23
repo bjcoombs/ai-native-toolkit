@@ -19,12 +19,16 @@ alone or in a cluster such as ``-kn``) or ``-i`` / ``--ignore-errors``; ``-k`` s
 so it is not one. A cluster is read left to right up to the first letter that takes a value
 (``C``, ``f``, ``I``, ``o``, ``O``, ``W``, ``E``, ``N``, or ``j`` / ``l`` before digits), so ``-Ctests``,
 ``-Iinclude`` and ``-kCtests`` run the target. Each rule
-was checked against bash 3.2 and 5.3, dash and GNU make. Tests: ``tests/test_check_command.py``.
+was checked against bash 3.2 and 5.3, dash and GNU make. ``maven_skips_tests(words)`` is a Maven
+run with ``-DskipTests`` or ``-Dmaven.test.skip`` (not ``=false``) and lifecycle phases only
+(``mvn -DskipTests verify``): ``lib.ci_checks`` reads it as a target it cannot settle (#799).
+Tests: ``tests/test_check_command.py``.
 """
 from __future__ import annotations
 
 import re
 import shlex
+from pathlib import PurePosixPath
 
 from lib.command_resolver import command_words
 
@@ -124,3 +128,20 @@ def make_args(args: list[str]) -> list[str]:
         out.append(word)
         i += 1
     return out
+
+
+# Maven properties that skip the test run: ``-DskipTests`` (compiles, skips running) and
+# ``-Dmaven.test.skip`` (skips compiling too). ``-DskipITs`` still runs the unit tests.
+_MAVEN_SKIP = frozenset({"skipTests", "maven.test.skip"})
+
+
+def maven_skips_tests(words: list[str]) -> bool:
+    """``mvn -DskipTests verify``: a Maven run with its tests skipped and only lifecycle
+    phases asked for (no ``plugin:goal``), so its check reading rests on tests that do not
+    run (#799). ``=false`` is no skip; ``-DskipTests checkstyle:check verify`` still runs a
+    check goal and is read as usual."""
+    if not words or PurePosixPath(words[0]).name not in ("mvn", "mvnw"):
+        return False
+    skip = any(w.startswith("-D") and w[2:].partition("=")[0] in _MAVEN_SKIP
+               and w[2:].partition("=")[2].lower() in ("", "true") for w in words[1:])
+    return skip and not any(":" in w for w in words[1:] if not w.startswith(("-", "$")))
