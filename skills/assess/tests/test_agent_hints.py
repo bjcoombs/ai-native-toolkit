@@ -8,6 +8,7 @@ co-author trailers still count without confirmation.
 """
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -31,9 +32,12 @@ from lib.agent_identity import (  # noqa: E402
     is_agent_hint,
 )
 from lib.ai_usage import scan_ai_usage  # noqa: E402
-from lib.delivery import agent_authored  # noqa: E402
+from lib.counts_only import counts_only_scans  # noqa: E402
+from lib.delivery import agent_authored, hinted_author, scan_delivery  # noqa: E402
+from lib.gitlab_cli import GitlabProject  # noqa: E402
+from lib.merged_sample import MergedSample  # noqa: E402
 from lib.fleet_config import parse_fleet_config  # noqa: E402
-from lib.gitlab_notes import NoteClassifier, NoteFacts, note_facts  # noqa: E402
+from lib.gitlab_notes import NoteClassifier, NoteFacts, classifier_from_config, note_facts  # noqa: E402
 
 HINTS = (
     ("noreply@anthropic.com", None),
@@ -131,9 +135,22 @@ def _facts(user: str, matcher: AuthorMatcher | None = None, body: str = "looks f
     return note_facts([_note(user, body)], "alice", NoteClassifier(matcher), True)
 
 
-@pytest.mark.parametrize("user", ["coderabbitai", "claude", "cursor", "copilot", "openhands-agent"])
-def test_an_unconfirmed_hint_is_neither_review_nor_human(user: str) -> None:
-    assert _facts(user) == NoteFacts(False, False, None)
+@pytest.mark.parametrize("user", ["coderabbitai", "gemini-code-assist", "claude", "cursor", "copilot",
+                                  "openhands-agent"])
+def test_an_unconfirmed_hint_leaves_review_and_human_undecided(user: str) -> None:
+    # It could be an AI reviewer or a person: never a silent False (#883).
+    assert _facts(user, body="## Summary of Changes") == NoteFacts(None, None, None, frozenset({user}))
+
+
+def test_a_hint_after_the_first_human_leaves_only_ai_review_undecided() -> None:
+    notes = [_note("bob"), {**_note("cursor"), "created_at": "2026-09-02T10:00:00Z"}]
+    facts = note_facts(notes, "alice", NoteClassifier(), True)
+    assert facts == NoteFacts(True, None, "2026-09-01T10:00:00Z", frozenset({"cursor"}))
+
+
+def test_ai_review_found_elsewhere_decides_despite_a_hint() -> None:
+    notes = [_note("claude[bot]"), _note("cursor")]
+    assert note_facts(notes, "alice", NoteClassifier(), True).ai_review is True
 
 
 def test_a_marker_still_makes_a_hinted_note_ai_review() -> None:
@@ -144,6 +161,49 @@ def test_confirmed_answers_decide_a_hinted_gitlab_account() -> None:
     assert _facts("coderabbitai", _confirmed(agents=["coderabbitai"])) == NoteFacts(False, True, None)
     assert _facts("cursor", _confirmed(people=["cursor"])) == NoteFacts(True, False, "2026-09-01T10:00:00Z")
     assert _facts("coderabbitai", _confirmed(bots=["coderabbitai"])) == NoteFacts(False, False, None)
+
+
+def _gitlab_scan(notes: tuple[NoteFacts, ...], authors: tuple[str, ...],
+                 config: str = "") -> dict[str, Any]:
+    mrs = tuple({"iid": i, "author": {"username": a}, "created_at": "2026-09-01T00:00:00Z",
+                 "merged_at": "2026-09-02T00:00:00Z"} for i, a in enumerate(authors, 1))
+    sample = MergedSample("gitlab", mrs, None, gitlab=GitlabProject("gitlab.com", "grp/app"))
+    return dict(scan_delivery(sample, {"available": True}, parse_fleet_config(config) if config else None, notes))
+
+
+def test_a_gitlab_change_reviewed_only_by_a_hint_nulls_the_share_and_is_counted() -> None:
+    hinted = note_facts([_note("gemini-code-assist")], "ann", NoteClassifier(), True)
+    plain = note_facts([_note("bob")], "ann", NoteClassifier(), True)
+    block = _gitlab_scan((hinted, plain), ("ann", "ann"))
+    assert block["ai_review_share"] is None
+    assert block["human_commented_share"] is None
+    assert block["unconfirmed_ai_accounts"] == 1
+    config = '[identities]\nagents = ["gemini-code-assist"]\n'
+    classifier = classifier_from_config(parse_fleet_config(config))
+    confirmed = note_facts([_note("gemini-code-assist")], "ann", classifier, True)
+    block = _gitlab_scan((confirmed, plain), ("ann", "ann"), config)
+    assert block["ai_review_share"] == 0.5
+    assert block["human_commented_share"] == 0.5
+    assert block["unconfirmed_ai_accounts"] == 0
+
+
+def test_a_hinted_change_author_nulls_the_agent_authored_share() -> None:
+    plain = note_facts([], "ann", NoteClassifier(), True)
+    block = _gitlab_scan((plain, plain), ("openhands-agent", "ann"))
+    assert block["agent_authored_share"] is None
+    assert block["unconfirmed_ai_accounts"] == 1
+    block = _gitlab_scan((plain, plain), ("openhands-agent", "ann"),
+                         '[identities]\nagents = ["openhands-agent"]\n')
+    assert block["agent_authored_share"] == 0.5
+    assert block["unconfirmed_ai_accounts"] == 0
+
+
+def test_github_hinted_author_unless_the_account_is_an_app() -> None:
+    matcher = AuthorMatcher()
+    assert hinted_author({"author": {"login": "Copilot", "is_bot": False}}, "github", matcher) == "copilot"
+    assert hinted_author({"author": {"login": "copilot", "is_bot": True}}, "github", matcher) is None
+    assert hinted_author({"author": {"login": "ann"}}, "github", matcher) is None
+    assert hinted_author({"author": {"login": "copilot"}}, "github", _confirmed(people=["copilot"])) is None
 
 
 def test_a_confirmed_bot_is_never_a_human_comment() -> None:
@@ -188,3 +248,11 @@ def test_a_hinted_author_awaits_confirmation_and_a_trailer_still_counts(hinted_r
     assert confirmed["available"] is True
     assert confirmed["agent_authored_commits"] == 2
     assert confirmed["identities_awaiting_confirmation"] == 0
+
+
+def test_the_unconfirmed_count_survives_counts_only() -> None:
+    hinted = note_facts([_note("gemini-code-assist")], "ann", NoteClassifier(), True)
+    block = _gitlab_scan((hinted,), ("ann",))
+    reduced = counts_only_scans({"delivery": block})["delivery"]
+    assert reduced["unconfirmed_ai_accounts"] == 1
+    assert "gemini" not in json.dumps(reduced) and "gemini" not in json.dumps(block)

@@ -21,7 +21,8 @@ Block (``delivery``)::
      "approved_share": float | None,            # copied from review_reality
      "self_merged_share": float | None,         # copied from review_reality
      "agent_authored_share": float | None,      # changes an agent identity authored
-     "sample_page_size": int | None}            # changes per heavy sample read (#995)
+     "sample_page_size": int | None,            # changes per heavy sample read (#995)
+     "unconfirmed_ai_accounts": int}            # name-only AI hints awaiting confirmation (#883)
 
 Durations are hours, rounded to 0.01, over the sampled changes that have both
 timestamps; a percentile is the nearest-rank value (the ``ceil(p * n)``-th
@@ -60,7 +61,10 @@ apps only; a name-only login such as ``copilot`` is a hint that counts once
 confirmed, #883). On GitHub ``gh`` drops an App
 author's ``[bot]`` (and ``login`` drops ``app/``), so ``[bot]`` is re-appended only
 when the author object says ``is_bot``; a person whose login is ``claude`` is not
-the Claude App. On GitLab the merge request author's ``username`` is classified
+the Claude App. An author that is an unconfirmed name-only hint (``hinted_author``:
+``agent_identity.is_agent_hint``, not a GitHub ``is_bot`` account, not in
+``[identities]``) could be an agent or a person, so any one in the sample makes the
+share None (#883). On GitLab the merge request author's ``username`` is classified
 as it stands: an access-token user counts only under ``token_users_as_agents``,
 and a dependency bot never counts. A change with no author login (a deleted
 account) counts as not agent-authored. The author comes from the sample's own
@@ -78,14 +82,24 @@ it is a hint that counts once confirmed, #883; an access-token user only when
 undecided after up to ``NOTES_MAX_PAGES`` (3) pages / 300 notes makes it None; so does a refused notes read
 (``review_reality`` then carries the reason).
 
+Unconfirmed AI accounts (#883). ``unconfirmed_ai_accounts`` counts the distinct
+sampled accounts that are name-only AI hints awaiting confirmation: hinted change
+authors, and on GitLab the hinted note authors ``gitlab_notes`` saw (a username in
+``AI_REVIEWERS`` or an ``AGENT_HINT_RULES`` login; a note by one leaves AI review, and
+a human comment it precedes, undecided). A non-zero count is why a share above reads
+None; confirming the accounts in ``[identities]`` decides them. A count, never a name.
+
 Privacy: counts, shares and durations only; no title, login or comment text.
 
 The `delivery` platform block (#715, part of #702), reads `merged_sample`,
 `review_reality`, `fleet_config` and `gitlab_note_facts`: `{available, merged_count,
 time_to_merge_hours_p50, time_to_merge_hours_p90, first_human_comment_hours_p50,
 first_human_comment_hours_p90, human_commented_share, ai_review_share,
-approved_share, self_merged_share, agent_authored_share, sample_page_size}`
-(`sample_page_size`: the sample's `page_size`, a count, #995). Hours rounded to 0.01; percentiles are
+approved_share, self_merged_share, agent_authored_share, sample_page_size,
+unconfirmed_ai_accounts}`
+(`sample_page_size`: the sample's `page_size`, a count, #995; `unconfirmed_ai_accounts`:
+distinct sampled name-only AI hints awaiting confirmation, #883, whose presence nulls the
+share they would decide). Hours rounded to 0.01; percentiles are
 nearest-rank. `approved_share` and `self_merged_share` are copied from
 `review_reality` (null when it is unavailable). First human comment (GitHub): the
 earliest comment or review by an account that is not the author, not
@@ -118,7 +132,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
-from lib.agent_identity import AGENT, AuthorMatcher
+from lib.agent_identity import AGENT, AuthorMatcher, is_agent_hint
 from lib.ai_usage import matcher_from_config
 from lib.fleet_config import FleetConfig
 from lib.merged_sample import STATUS_BOTS, BotClassifier, MergedSample, SampleOrReason, login, parse_time
@@ -165,6 +179,7 @@ class DeliveryBlock(TypedDict):
     self_merged_share: float | None
     agent_authored_share: float | None
     sample_page_size: int | None
+    unconfirmed_ai_accounts: int
 
 
 def percentile(values: Sequence[float], p: float) -> float | None:
@@ -225,6 +240,20 @@ def _configured(matcher: AuthorMatcher, name: str) -> bool:
     for a known bot (``_pinned`` after ``BotClassifier``, or an ``is_bot`` author),
     so a loose rule such as ``bot`` never turns a person into an agent."""
     return matcher.classify_username(name).rule_index is not None
+
+
+def hinted_author(change: dict[str, Any], provider: str, matcher: AuthorMatcher) -> str | None:
+    """The lower-case login of a change author that is an unconfirmed name-only agent
+    match (``agent_identity.is_agent_hint``, #883) and not otherwise an agent, else None."""
+    actor = change.get("author")
+    if provider != "gitlab" and isinstance(actor, dict) and actor.get("is_bot") is True:
+        return None  # a GitHub App account: its identity is the [bot] form, never a hint
+    name = actor.get("username") if provider == "gitlab" and isinstance(actor, dict) else login(actor)
+    if (not isinstance(name, str) or not name or not is_agent_hint(username=name)
+            or matcher.confirmed_username(name) is not None
+            or matcher.classify_username(name).bucket == AGENT):
+        return None
+    return name.lower()
 
 
 def agent_authored(change: dict[str, Any], provider: str, matcher: AuthorMatcher) -> bool:
@@ -290,6 +319,7 @@ def _block(total: int, merge: list[float], comment: list[float] | None, commente
         "self_merged_share": _copied(review, "self_merged_share"),
         "agent_authored_share": None,  # filled by scan_delivery from the same sample
         "sample_page_size": None,  # filled by scan_delivery from the same sample
+        "unconfirmed_ai_accounts": 0,  # filled by scan_delivery
     }
 
 
@@ -332,7 +362,11 @@ def scan_delivery(sample: SampleOrReason, review_reality: Any,
         block = gitlab_delivery(sample, review_reality, notes)
     else:
         block = github_delivery(sample, review_reality, matcher)
+    hinted = {h for h in (hinted_author(c, sample.provider, matcher) for c in sample.changes) if h}
     authored = sum(agent_authored(c, sample.provider, matcher) for c in sample.changes)
-    block["agent_authored_share"] = _share(authored, len(sample.changes))
+    block["agent_authored_share"] = None if hinted else _share(authored, len(sample.changes))
     block["sample_page_size"] = sample.page_size
+    if sample.provider == "gitlab" and isinstance(notes, tuple):
+        hinted.update(*(f.hints for f in notes))
+    block["unconfirmed_ai_accounts"] = len(hinted)
     return block

@@ -67,8 +67,8 @@ def test_ai_accounts_are_ai_review_never_human() -> None:
 
 
 def test_a_pinned_ai_review_name_is_a_hint_until_confirmed() -> None:
-    # delivery.AI_REVIEWERS on GitLab, which has no bot flag (#883): neither review nor human.
-    assert _facts(_note("coderabbitai", "plain text")) == NoteFacts(False, False, None)
+    # delivery.AI_REVIEWERS on GitLab, which has no bot flag (#883): undecided, never a silent no.
+    assert _facts(_note("coderabbitai", "plain text")) == NoteFacts(None, None, None, frozenset({"coderabbitai"}))
     confirmed = classifier_from_config(parse_fleet_config('[identities]\nagents = ["coderabbitai"]\n'))
     assert _facts(_note("coderabbitai", "plain text"), classifier=confirmed) == NoteFacts(False, True, None)
 
