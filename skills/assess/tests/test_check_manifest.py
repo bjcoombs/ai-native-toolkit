@@ -37,7 +37,7 @@ from lib.counts_only_schema import ROOTS
 from lib.import_graph import STRUCTURE_REASON_CODES
 from lib.keyhole_signals import (FINDING_ACTIONS, FINDING_MODE_VALUES, FINDING_MODES,
                                  FINDING_ORDER, GIT_HISTORY_FINDINGS, _CHURN_DERIVED_FINDINGS)
-from lib.level_signals import SIGNAL_INPUTS, InputClass, load_default_levels
+from lib.level_signals import InputClass, load_default_levels
 
 SCHEMA = Path(__file__).resolve().parents[1] / "references" / "check-manifest.schema.json"
 GATE_TOKENS = {sr._SETUP: "setup", sr._BAD_SCOPE: "bad_scope",
@@ -258,12 +258,8 @@ def test_signals_match_default_model(manifest: cm.CheckManifest) -> None:
     _clean(problems)
 
 
-def test_signal_evidence_matches_level_signals(manifest: cm.CheckManifest) -> None:
-    """The evidence class is level_signals.SIGNAL_INPUTS (#783); the grade derives from it."""
-    got = {s["path"]: s["evidence"] for s in cm.signals(manifest)}
-    _clean([f"{p}: evidence {got.get(p)!r} in the manifest, {cls!r} in SIGNAL_INPUTS"
-            for p, cls in SIGNAL_INPUTS.items() if got.get(p) != cls]
-           + [f"{p}: no SIGNAL_INPUTS class" for p in got if p not in SIGNAL_INPUTS])
+def test_evidence_vocabulary_is_the_input_classes() -> None:
+    """SIGNAL_INPUTS is generated from the evidence (#953); the vocabularies must agree."""
     assert set(cm.EVIDENCE) == set(get_args(InputClass))
 
 

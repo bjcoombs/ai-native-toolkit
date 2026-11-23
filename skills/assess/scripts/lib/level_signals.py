@@ -61,8 +61,9 @@ new signal has to be classified on purpose; ``input_class`` raises
 Config-only names (#783). A signal read from configuration text says so in its name,
 never that something ran or was enforced: ``ci_checks.test_or_lint_configured`` (was
 ``test_or_lint_runs``) and ``coverage_gate.configured`` (was ``enforced``). Both are pure
-renames, so ``lib.fleet_rescore.SIGNAL_ALIASES`` reads a stored scan's old path under the
-new name; a maturity model naming an old path fails at load, since both blocks are typed.
+renames, so ``lib.signal_aliases.SIGNAL_ALIASES`` reads a stored scan's old path under the
+new name, and a maturity model naming an old path loads under the new one with a deprecation
+line (``lib.signal_aliases``, #970).
 
 ``criterion_grade`` grades one criterion: the grade of its signal's input
 class, whatever the operator. Per the #789 grades design, the grade comes from
@@ -143,7 +144,7 @@ reads are their own class; instruction files stay declared but still gate Steps)
 `lib/catalog.py` reads it). `UNMEASURED_VALUES`
 names the values that mean "could not be measured" with the tally's reason code
 (`test_pressure.mutation_run` false: `needs_full_run`; `promissory_markers.aging_reliable`
-false: `degenerate_history`). A new criterion signal needs its own `SIGNAL_INPUTS` line, and a removed one loses it (the table holds exactly the default signals).
+false: `degenerate_history`). A new criterion signal needs its own signal entry with an `evidence` class in `checks/core/`, which generates `SIGNAL_INPUTS` (#953), and a removed one loses it (the table holds exactly the default signals).
 Tests: `tests/test_signal_inputs.py`, one case per default criterion signal.
 """
 from __future__ import annotations

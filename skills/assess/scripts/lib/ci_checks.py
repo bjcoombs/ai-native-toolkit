@@ -345,8 +345,8 @@ def conditional_include(text: str) -> bool:
     return any(_INCLUDE_RULES.search(line.split("#", 1)[0]) for _, line, _ in include_lines(text))
 
 
-# A job-level ``trigger:`` key: a child or downstream pipeline the merge does not expand.
-_TRIGGER = re.compile(r"""^\s+["']?trigger["']?\s*:""", re.MULTILINE)
+# A job's indented ``trigger:`` key (not a job named trigger, #958): a child or downstream pipeline.
+_TRIGGER = re.compile(r"""^[ \t]+["']?trigger["']?\s*:""", re.MULTILINE)
 
 
 def child_pipeline(text: str) -> bool:
