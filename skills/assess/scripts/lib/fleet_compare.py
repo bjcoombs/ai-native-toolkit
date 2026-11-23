@@ -42,7 +42,8 @@ side for a signal that run's scans lack is ``set`` with ``absent_signals``.
 
 Per repository scanned on both sides, ``signals`` lists every leaf of the
 ``scans`` map whose value changed (dotted path, value then and now; a side
-where the leaf is absent omits its key). Lists compare whole. Output has
+where the leaf is absent omits its key). A pure rename is read under its new path on both
+sides first (``lib.signal_aliases.renamed``, #970), so it is no leaf change. Lists compare whole. Output has
 sorted keys and no absolute path, so comparing the same two runs again gives
 the same bytes. With hashed paths on both sides, hashes compare only under one
 ``--hash-salt``; ``notes`` says so.
@@ -86,6 +87,7 @@ from lib.fleet_data import FLEET_DATA_FILE
 from lib.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow, RowLevel
 from lib.fleet_legacy import stamp_value, upgrade
 from lib.levels import floor_of
+from lib.signal_aliases import renamed
 from lib.fleet_view import FleetViewError, load_groups, read_repos
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 from lib.fleet_scanner_diff import (
@@ -435,7 +437,7 @@ def compare(earlier: FleetRun, later: FleetRun, scanner: ScannerDiff | None = No
     repos: list[RepoSignals] = []
     for repo in sorted(set(then_repos) & set(now_repos)):
         if then_repos[repo]["status"] == STATUS_OK and now_repos[repo]["status"] == STATUS_OK:
-            changes = signal_changes(then_repos[repo]["scans"], now_repos[repo]["scans"])
+            changes = signal_changes(renamed(then_repos[repo]["scans"]), renamed(now_repos[repo]["scans"]))
             if changes:
                 repos.append({"repo": repo, "signals": changes})
     changed = {entry["repo"] for entry in repos}

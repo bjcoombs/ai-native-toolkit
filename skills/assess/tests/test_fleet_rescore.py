@@ -151,12 +151,16 @@ def test_the_783_config_only_renames_are_aliased_so_a_stored_scan_reads_the_new_
                       "coverage_gate": {"available": True, "enforced": False}}  # input untouched
 
 
-def test_a_model_reading_a_renamed_signal_gives_no_recount_over_scans_stored_under_the_old_name() -> None:
+def test_a_model_reading_a_renamed_signal_gives_no_recount_over_scans_stored_under_the_old_name(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    # The old model as 2.1.0 loaded it, before #970 read an old path under its new name.
+    monkeypatch.setattr("lib.levels.dealias_model", lambda data: data)
     old = _model(LEVELS.replace('{ signal = "ci.required", op = "eq", value = true }',
                                 '{ signal = "coverage_gate.enforced", op = "eq", value = true }'))
     new = _model(LEVELS.replace('version = "fleet-data-1"', 'version = "fleet-data-2"')
                  .replace('{ signal = "ci.required", op = "eq", value = true }',
                           '{ signal = "coverage_gate.configured", op = "eq", value = true }'))
+    monkeypatch.undo()
     rows = _rows(BASE)
     for row in rows:  # a scan stored before #783: the gate under its old name
         scans: dict[str, Any] = row["scans"]  # type: ignore[assignment]

@@ -27,7 +27,7 @@ over when its `repos.jsonl` holds no readable scans or a stored repository key d
 join under this run's key (another `--hash-salt`). A row whose new criterion reads a
 signal the stored scans lack re-scores as unknown in the earlier runs: neutral, never a
 slip. Pure signal renames are read under their new name (`SIGNAL_ALIASES` in
-`lib/fleet_rescore.py`, empty until a rename ships), so a rename causes no Recount line.
+`lib/signal_aliases.py`), so a rename causes no Recount line.
 `--compare`, `trend.svg` and the heat map's compare view still refuse across a
 maturity-model change.
 
