@@ -57,7 +57,7 @@ from lib.doc_graph_layout import classify_node, group_broken_links, radial_shell
 from lib.assess_config import load_working_notes_config, resolve_excludes
 from lib.doc_staleness import analyze_doc_staleness
 from lib.run_context_types import BrokenLink
-from lib.treemap_render import adaptive_cap, blend_to_grey, plural, rgba_to_hex
+from lib.complexity.treemap_render import adaptive_cap, blend_to_grey, plural, rgba_to_hex
 
 # Colour-blind-safe by default. The status palette uses the Okabe-Ito set
 # (distinguishable under all common colour-vision deficiencies); the staleness

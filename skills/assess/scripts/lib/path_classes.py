@@ -9,7 +9,7 @@ it rather than keeping their own lists.
 The first rule that matches wins, in this order:
 
 1. ``generated``: the basename matches a generated-file name pattern
-   (``lib.generated_files.GENERATED_NAME_PATTERNS``: ``*.generated.*``,
+   (``lib.complexity.generated_files.GENERATED_NAME_PATTERNS``: ``*.generated.*``,
    ``*.gen.ts``, ``database.types.ts``). Content checks (a generator header,
    payload-length lines) stay with the callers that read the file.
 2. ``vendored``: a directory segment is one of ``VENDORED_DIRS``
@@ -37,7 +37,7 @@ from __future__ import annotations
 from pathlib import PurePath, PurePosixPath
 from typing import Literal
 
-from lib.generated_files import matches_generated_name
+from lib.complexity.generated_files import matches_generated_name
 from lib.sibling_tests import is_test_path
 
 PathClass = Literal["source", "test", "fixture", "example", "vendored", "generated"]

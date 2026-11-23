@@ -23,7 +23,7 @@ def render_lib(treemap):
     dir is on sys.path and numpy is stubbed before import."""
     import importlib
 
-    return importlib.import_module("lib.treemap_render")
+    return importlib.import_module("lib.complexity.treemap_render")
 
 
 # ── survivor-density overlay (task 5) ─────────────────────────────────────────

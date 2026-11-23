@@ -1,6 +1,6 @@
 """Tests for raw-source subtree detection (issue #225).
 
-The pure classifier in ``lib.raw_source`` decides, from three per-doc graph
+The pure classifier in ``lib.complexity.raw_source`` decides, from three per-doc graph
 signals, whether a directory subtree is a dump of raw, machine-extracted source
 documents that should be excluded from the headline read-side metrics. These
 tests pin the threshold contract so the detector behaves identically regardless
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from lib.raw_source import (
+from lib.complexity.raw_source import (
     RAW_TREE_ISOLATION_DENSITY,
     RAW_TREE_MACHINE_DENSITY,
     RAW_TREE_MIN_FILES,
