@@ -9,7 +9,8 @@ which seldom has a manifest. This module finds those folders from the tracked fi
 
 - ``skill``: a folder holding a ``SKILL.md``. Folders are taken shallowest first, so a
   ``SKILL.md`` inside a skill (a bundled sub-skill) is part of that skill and is
-  skipped as ``claimed``, the nesting rule #862 uses for a manifest inside a unit.
+  skipped as ``claimed``, the nesting rule #862 uses for a manifest inside a unit. A
+  ``SKILL.md`` at the root is the exception: it claims nothing (``unit_discovery``).
 - ``agents`` and ``commands``: the ``agents/`` and ``commands/`` folder of a plugin root, a
   folder holding ``.claude-plugin/plugin.json``. A plugin's agents and commands are not
   attributed to a skill: no file ties an agent to the skill that uses it, so the folder is
@@ -93,7 +94,8 @@ def discover_components(files: Iterable[str], dirs: frozenset[str]) -> Component
     units: list[Component] = []
     claimed: list[str] = []
     for folder in sorted(candidates, key=_depth):
-        if any(_under(folder, u.path) for u in units):
+        # a root skill claims nothing: the skills and packages below it stay units
+        if any(u.path != "." and _under(folder, u.path) for u in units):
             claimed.append(folder)
         else:
             units.append(Component(folder, candidates[folder]))

@@ -138,7 +138,10 @@ is part of that skill. A `SKILL.md` below a fixture, test, example or vendored f
 test data and never a unit, and one below a hidden folder (`.github/skills/`,
 `.agents/skills/`) is agent configuration, not a product. Only the folders above a skill
 are read this way, so `skills/spec/` is a skill. A skill with its own `pyproject.toml` or `package.json` is one
-unit, and a package inside a skill, or below a root `SKILL.md`, is listed as `claimed`. A package above the skills is a unit of the source files no
+unit, and a package inside a skill is listed as `claimed`. A root `SKILL.md` claims
+nothing: the packages and skills below it stay units, and the root is a `skill` unit of the
+files none of them owns, so a monorepo that adds a usage skill keeps its per-package
+readings. A repository that is only a skill is one unit. A package above the skills is a unit of the source files no
 skill holds, and no unit when the skills hold all of them.
 
 Each skill gets its own readings, Step and next unlock, as any unit does. Its own evidence

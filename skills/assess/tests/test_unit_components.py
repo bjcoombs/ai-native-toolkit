@@ -79,22 +79,46 @@ def test_a_package_whose_only_sources_sit_in_skills_is_no_unit(tmp_path: Path) -
     assert _skipped(block) == {".": "manifest_only"}  # type: ignore[arg-type]
 
 
-def test_a_skill_at_the_root_is_the_one_unit(tmp_path: Path) -> None:
-    files = {"SKILL.md": "# s\n", "scripts/pyproject.toml": '[project]\nname = "s"\n',
-             "scripts/run.py": "1\n", "examples/inner/SKILL.md": "# inner\n"}
+def test_a_repository_that_is_only_a_skill_is_one_unit(tmp_path: Path) -> None:
+    files = {"SKILL.md": "# s\n", "scripts/run.py": "1\n", "references/guide.md": "# g\n",
+             "examples/inner/SKILL.md": "# inner\n"}  # test data, no unit
     block = scan_units(_write(tmp_path, files))
     assert _kinds(block) == {".": ("skill", None, "component")}  # type: ignore[arg-type]
-    # the manifest the skill claims is listed; the example skill is test data, not listed
-    assert _skipped(block) == {"scripts": "claimed"}  # type: ignore[arg-type]
+    assert block["unit_count"] == 1 and _skipped(block) == {}  # type: ignore[arg-type]
 
 
-def test_a_root_skill_over_packages_lists_every_package_it_claims(tmp_path: Path) -> None:
+def test_a_root_skill_over_packages_keeps_every_package_a_unit(tmp_path: Path) -> None:
+    """Maintainer decision on #1098: a root usage skill must not collapse a monorepo."""
     files = {"SKILL.md": "# s\n", "svc-a/go.mod": "module a\n", "svc-a/main.go": "package main\n",
              "svc-b/go.mod": "module b\n", "svc-b/main.go": "package main\n",
-             "svc-b/testdata/fx/go.mod": "module fx\n"}
+             "web/package.json": '{"name": "web"}\n', "web/index.js": "1\n",
+             "skills/usage/SKILL.md": "# usage\n"}
     block = scan_units(_write(tmp_path, files))
-    assert _paths(block) == ["."]  # type: ignore[arg-type]
-    assert _skipped(block) == {"svc-a": "claimed", "svc-b": "claimed"}  # type: ignore[arg-type]
+    assert _kinds(block) == {  # type: ignore[arg-type]
+        ".": ("skill", None, "component"),
+        "skills/usage": ("skill", None, "component"),
+        "svc-a": ("package", "go", "manifest"),
+        "svc-b": ("package", "go", "manifest"),
+        "web": ("package", "npm", "manifest"),
+    }
+    assert block["unit_count"] == 5 and _skipped(block) == {}  # type: ignore[arg-type]
+
+
+def test_a_root_skill_beside_a_root_package_is_one_root_unit(tmp_path: Path) -> None:
+    files = {"SKILL.md": "# s\n", "pyproject.toml": '[project]\nname = "r"\n', "src/r.py": "1\n",
+             "svc/go.mod": "module s\n", "svc/main.go": "package main\n"}
+    block = scan_units(_write(tmp_path, files))
+    # a root package already holds the manifests below it (#862); the root skill only names its kind
+    assert _kinds(block) == {".": ("skill", "python", "manifest")}  # type: ignore[arg-type]
+
+
+def test_a_root_skill_over_a_tooling_root_is_the_root_unit_not_a_skip(tmp_path: Path) -> None:
+    files = {"SKILL.md": "# s\n", "pyproject.toml": "[tool.ruff]\n",
+             "svc/go.mod": "module s\n", "svc/main.go": "package main\n"}
+    block = scan_units(_write(tmp_path, files))
+    assert _kinds(block) == {".": ("skill", "python", "component"),  # type: ignore[arg-type]
+                             "svc": ("package", "go", "manifest")}
+    assert _skipped(block) == {}  # type: ignore[arg-type]
 
 
 def test_a_skill_folder_named_like_test_data_is_still_a_skill(tmp_path: Path) -> None:

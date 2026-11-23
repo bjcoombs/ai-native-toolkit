@@ -64,7 +64,8 @@ manifest's path) and its folder is still a candidate, as if the broken file
 declared no workspace. The count stays known. A workspace member shallower than its
 workspace (``deep/ws`` listing ``../../lib``) is visited first as a plain candidate;
 when the workspace later lists it, its leaf skip moves to ``unreadable_manifests``.
-A repository with no build manifest has no units (``unit_count`` 0).
+A repository with no build manifest and no skill or plugin component has no units
+(``unit_count`` 0).
 
 **Skill and plugin-component units (#1098).** Before the manifest walk,
 ``lib.unit_components`` finds each folder holding a ``SKILL.md`` (kind ``skill``) and each
@@ -73,7 +74,11 @@ first. They are units of origin ``component``, claimed before any manifest: a ma
 inside one is part of it (a skill with a ``pyproject.toml`` is one ``skill`` unit with the
 manifest's ecosystem) and is listed in ``skipped`` as ``claimed`` (unless it is test data), and a
 manifest folder above them is a unit of the source files no
-component or nested manifest owns. Every other unit is of kind ``package``.
+component or nested manifest owns. A root ``SKILL.md`` claims nothing (maintainer decision on
+#1098): the packages and skills below it stay units, and ``.`` is a ``skill`` unit of the
+files none of them owns (the root package unit re-kinded when there is one), so a monorepo
+that adds a usage skill keeps its per-package readings. A repository that is only a skill is
+one unit. Every other unit is of kind ``package``.
 
 **Declared units.** ``[[units]]`` in ``.assess/config.toml`` replaces discovery::
 
@@ -599,29 +604,46 @@ class _Walk:
                     self.visit(member, "workspace_member", folder, ws.ecosystem)
 
 
+def _root_skill(found: _Discovery, names: frozenset[str] | None) -> None:
+    """Make ``.`` the root skill's unit: the root package unit re-kinded, or a new unit of the
+    files no package or nested skill owns (a skipped root reads as that unit, not a skip)."""
+    root = next((u for u in found.units if u["path"] == "."), None)
+    if root is not None:
+        root["kind"] = "skill"
+        return
+    found.skipped[:] = [s for s in found.skipped if s["path"] != "."]
+    found.units.append({"path": ".", "kind": "skill", "origin": "component",
+                        "ecosystem": _ecosystem(names) if names else None,
+                        "workspace": None, "name": None})
+
+
 def discover_units(repo_root: Path, files: Iterable[str]) -> _Discovery:
     """The units of ``files`` (repo-relative POSIX paths) by the rules in the module docstring."""
     files = list(files)
     components = discover_components(files, frozenset(p for rel in files for p in _parents(rel)))
-    walk = _Walk(repo_root, files, (c.path for c in components.units))
-    for comp in components.units:
+    # a root skill claims nothing: it is the unit of the residue no package or skill owns
+    claiming = [c for c in components.units if c.path != "."]
+    walk = _Walk(repo_root, files, (c.path for c in claiming))
+    for comp in claiming:
         names = walk.manifest_dirs.get(comp.path)
         walk.found.units.append({"path": comp.path, "kind": comp.kind, "origin": "component",
                                  "ecosystem": _ecosystem(names) if names else None,
                                  "workspace": None, "name": None})
     walk.found.skipped.extend({"path": path, "problem": "claimed"} for path in components.claimed)
     # a build-manifest folder inside a component is part of it, listed so the claim is visible
-    # (a root SKILL.md over a monorepo's packages); test data below it is not listed
+    # (a package inside a skill); test data below it is not listed
     walk.found.skipped.extend(
         {"path": folder, "problem": "claimed"} for folder in sorted(walk.manifest_dirs)
         if folder not in components.claimed
-        and any(c.path != folder and _is_under(folder, c.path) for c in components.units)
+        and any(c.path != folder and _is_under(folder, c.path) for c in claiming)
         and is_production(posixpath.join(folder, sorted(walk.manifest_dirs[folder])[0])))
     depth = {d: (0 if d == "." else d.count("/") + 1) for d in walk.manifest_dirs}
     for folder in sorted(walk.manifest_dirs, key=lambda d: (depth[d], d)):
         if folder not in walk.visited and not any(_is_under(folder, c) for c in walk.claimed):
             walk.visit(folder, "manifest", None)
     found = walk.found
+    if len(claiming) < len(components.units):
+        _root_skill(found, walk.manifest_dirs.get("."))
     found.units.sort(key=lambda u: u["path"])
     found.unreadable.sort()
     return found
