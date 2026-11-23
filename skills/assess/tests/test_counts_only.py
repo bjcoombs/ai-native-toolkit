@@ -213,6 +213,16 @@ def test_slug_shaped_data_keys_in_an_undeclared_map_are_dropped() -> None:
     ]
 
 
+def test_review_sequences_survive_as_tokens() -> None:
+    """The review strip's per-change tokens (#943) are kept, hashing on or off."""
+    block = {"available": True, "merged_count": 3, "reviewed_share": 0.667,
+             "sequence": ["approved", "unreviewed", "unknown"],
+             "bot_sequence": ["none", "bot", "unknown"]}
+    for out in (counts_only({"review_reality": block}),
+                counts_only({"review_reality": block}, hash_paths=True, salt="s")):
+        assert out["review_reality"] == block
+
+
 def test_every_typed_identifier_keyed_map_is_declared() -> None:
     """A typed ``dict[str, X]`` field is declared path-keyed or identifier-keyed."""
     assert [m for m in typed_identifier_maps() if m not in IDENTIFIER_KEYED_MAPS] == []

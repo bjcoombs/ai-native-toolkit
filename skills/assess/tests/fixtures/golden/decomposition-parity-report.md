@@ -18,6 +18,18 @@ In place: 0 counted conditions met (0 verified, 0 measured) and 1 listed from co
 
 Verified and measured squares count toward the level, listed ones are shown but never counted, and hatched ones were not measured, never read as zero.
 
+## Docs behind their code
+
+In place: this run's scans, gathered with no model call.
+
+Not drawn: no doc maps to code of its own; 1 doc measured against the whole repository is counted, not drawn.
+
+## Review on recent merges
+
+In place: this run's scans, gathered with no model call.
+
+Not drawn: not measured here: no remote.
+
 ## Metrics Dashboard
 
 - **Files scored:** 3
