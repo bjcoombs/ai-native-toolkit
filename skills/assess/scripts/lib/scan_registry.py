@@ -659,6 +659,10 @@ SCANS = (*SCANS, pinned_reads(_spec("unit_readings", cs.unit_readings),
 # Each unit's Step and tally (lib/unit_levels.py, #864): the level engine over the run
 # context with each unit's own readings in place. Core-only; reads pinned by position.
 SCANS = (*SCANS, pinned_reads(_spec("unit_levels", cs.unit_levels), UNIT_LEVEL_READS))
+# The repository roll-up over the units and the unit-unlock ranking (lib/unit_rollup.py,
+# #865): the lowest unit's Step plus "N of M measured", and the changes ranked by the
+# units they lift. Core-only.
+SCANS = (*SCANS, _spec("unit_rollup", cs.unit_rollup))
 
 validate(SCANS)
 

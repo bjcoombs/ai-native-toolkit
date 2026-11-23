@@ -108,6 +108,7 @@ fragments = [
   "headline",
   "unit_readings",
   "unit_levels",
+  "unit_rollup",
 ]
 
 # The why of each truth tag (lib/levels_fields.py TRUTH_TAGS, #939): one table per tag,

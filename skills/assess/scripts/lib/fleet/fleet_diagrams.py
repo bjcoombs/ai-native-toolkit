@@ -14,7 +14,7 @@ report beside ``groups.jsonl``, removing any diagram file a previous run left
 that this run did not draw, so a stale picture never sits beside new data;
 ``clear_diagrams`` removes them all (``fleet.py --no-diagrams``).
 
-The slope chart and the layer bars (#675) follow the trend; the slope chart reads
+The slope chart (#675) follows the trend; it reads
 the ``--compare`` result (``comparison``) and is skipped without one; the trend
 (#676, ``lib/fleet/fleet_trends.py``) reads the run history. A new diagram adds its file,
 report heading and question to ``HEADINGS`` (the one source a drawn, skipped or failed diagram
@@ -34,7 +34,9 @@ given, then embeds each with a relative clickable image link or says
 why it is not drawn, then the `measured_appendix` section when given (`fleet.py` passes it,
 built from the ok rows' `scans`). `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
-stale picture. A new diagram (#676) adds its module, its `FILE` with its
+stale picture. `RETIRED_FILES` names a diagram the fleet no longer draws (`layer-bars.svg`,
+retired with the layer framing in #1073: the fleet rolls up by truth tag), which `clear_diagrams`
+also removes, so a picture from before never sits beside new data. A new diagram (#676) adds its module, its `FILE` with its
 report heading and question to `HEADINGS` (one source for a drawn, skipped or failed diagram,
 #684; `DIAGRAM_FILES` follows it) and an entry to `build_diagrams`. Golden renders: `tests/fixtures/fleet_diagrams/` (regenerate with
 `uv run --locked python tests/fleet_diagrams_fixture.py` from `skills/assess`).
@@ -47,7 +49,6 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TypedDict
 
-import lib.fleet.fleet_layer_bars as fleet_layer_bars
 import lib.fleet.fleet_maturity as fleet_maturity
 import lib.fleet.fleet_quadrant as fleet_quadrant
 import lib.fleet.fleet_slope as fleet_slope
@@ -68,11 +69,13 @@ HEADINGS: dict[str, tuple[str, str]] = {
                              "What does a shared template change reach, and which pins differ from the fleet's?"),
     fleet_trends.FILE: ("Group trends", "Is each team improving?"),
     fleet_slope.FILE: ("Before and after", "What moved since the earlier run, and which row moved it?"),
-    fleet_layer_bars.FILE: ("Maturity by layer", "Which layer has the most room to grow across the fleet?"),
 }
 
 
 DIAGRAM_FILES = tuple(HEADINGS)
+# Diagrams no longer drawn, removed with the others so an earlier run's picture never stays:
+# the per-layer bars, retired when the fleet moved from layers to truth tags (#1073).
+RETIRED_FILES = ("layer-bars.svg",)
 
 
 class Diagram(TypedDict):
@@ -163,24 +166,6 @@ def _slope(levels: MaturityModel | None, comparison: Comparison | None, repos: i
     return entry
 
 
-def _layer_bars(levels: MaturityModel | None, repos: Sequence[FleetRow]) -> Diagram:
-    entry = _entry(fleet_layer_bars.FILE, len(repos))
-    if levels is None:
-        entry["skipped"] = NO_LEVELS
-    elif not _has_team_rows(levels):
-        entry["skipped"] = NO_TEAM_ROWS
-    elif not repos:
-        entry["skipped"] = NO_REPOS
-    else:
-        org = [row["title"] for row in levels["rows"] if row["scope"] == "org"]
-        bars = fleet_layer_bars.layer_bars(levels, repos)
-        started = sum(1 for bar in bars if sum(bar["counts"][1:]))
-        entry["in_place"] = (f"{IN_PLACE} {started} of {len(bars)} team rows have at least one "
-                             "repository at level 1 or above.")
-        entry["svg"] = fleet_layer_bars.render_layer_bars(bars, org)
-    return entry
-
-
 def _trend(levels: MaturityModel | None, history: Sequence[TrendRun] | None, repos: int) -> Diagram:
     entry = _entry(fleet_trends.FILE, repos)
     if levels is None:
@@ -231,7 +216,6 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
         _guarded(lambda: _tooling(repos), fleet_tooling_map.FILE, count),
         _guarded(lambda: _trend(levels, history, count), fleet_trends.FILE, count),
         _guarded(lambda: _slope(levels, comparison, count), fleet_slope.FILE, count),
-        _guarded(lambda: _layer_bars(levels, repos), fleet_layer_bars.FILE, count),
     ]
 
 
@@ -265,7 +249,7 @@ def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None,
 
 def clear_diagrams(out_dir: Path) -> None:
     """Remove the report and every diagram file a run writes (regular files only)."""
-    for name in (REPORT_FILE, *DIAGRAM_FILES):
+    for name in (REPORT_FILE, *DIAGRAM_FILES, *RETIRED_FILES):
         path = out_dir / name
         if path.is_file() and not path.is_symlink():
             path.unlink()

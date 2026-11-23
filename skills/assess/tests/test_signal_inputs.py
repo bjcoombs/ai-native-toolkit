@@ -68,7 +68,7 @@ def test_is_declared_matches_the_classification_table(criterion: Criterion, decl
     ({"signal": "coverage_gate.enforced_meets_minimum", "op": "eq", "value": True}, "verified"),
     ({"signal": "ci_checks.lint_runs", "op": "eq", "value": True}, "verified"),
     ({"signal": "observability.rung", "op": "gte", "value": 3}, "declared"),
-    ({"signal": "stats_summary.loc.p95", "op": "lte", "value": 500}, "measured"),
+    ({"signal": "stats_summary.loc_by_class.source.p95", "op": "lte", "value": 500}, "measured"),
     ({"signal": "doc_staleness.summary.stale_pct", "op": "lte", "value": 50}, "measured"),
     ({"signal": "review_reality.approved_share", "op": "gte", "value": 0.5}, "verified"),
 ])

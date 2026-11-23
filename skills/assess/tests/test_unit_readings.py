@@ -115,14 +115,15 @@ def test_the_root_unit_reads_the_repo_blocks_without_a_pass(tmp_path: Path) -> N
     def never(*_: Any) -> None:
         raise AssertionError("the root unit ran the unit pass")
 
-    repo_blocks = {"stats_summary": {"available": True, "loc": {"p95": 40.0}, "files_scored": 3},
+    source = {"files_scored": 3, "p95": 40.0}
+    repo_blocks = {"stats_summary": {"available": True, "loc_by_class": {"source": source}},
                    "coverage_gate": {"available": True, "gates": [{"file": "pyproject.toml"}],
                                      "enforced_meets_minimum": True}}
     block = cs.unit_readings({"unit_count": 1, "units": [{"path": "."}]}, None,
                              *[repo_blocks.get(b) for b in ur.REPO_BLOCKS],
                              NO_EXCLUDES, tmp_path, None)
     own = block["units"][0]["blocks"]
-    assert own["stats_summary"] == {"available": True, "loc": {"p95": 40.0}, "files_scored": 3}
+    assert own["stats_summary"] == {"available": True, "loc_by_class": {"source": source}}
     assert own["coverage_gate"]["enforced_meets_minimum"] is True
     assert ur.read_units({"units": [{"path": "."}]}, None, NO_EXCLUDES, tmp_path, None,
                          run=never, repo_blocks={})["units"][0]["path"] == "."

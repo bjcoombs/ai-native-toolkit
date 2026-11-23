@@ -58,7 +58,8 @@ excluded conditions and those whose `requires` names one (#910), then the per-ta
 the model's `truth`, badges only when non-zero, no line when no condition is tagged).
 Also `markdown` (the lines, the first bold, pasted verbatim by the report and
 `assess_report.py`), `summary` (the badge message and the `log.md` readiness line,
-"Step 3 · 4 in place of 4 measured"), `verified` and `tags` (`TagCell` per strip cell), `step`,
+"Step 3 · 4 in place of 4 measured"), `verified` and `tags` (`TagCell` per strip cell, from `tag_cells`, which the fleet's per-tag
+tally also reads, #1073), `step`,
 `next_step`, `levels_version`, `headline_version` and `next_why` (#939: for each blocking gate,
 the `why` of every condition of its row up to its level that is not met, from the level
 block's conditions, each once and joined by one space; `""` at the top Step or with no gate
@@ -234,7 +235,7 @@ def _truth(model: MaturityModel) -> dict[str, list[str]]:
             for row in model["rows"] for lv in row["levels"]}
 
 
-def _tag_cells(level: LevelResult, model: MaturityModel) -> list[TagCell]:
+def tag_cells(level: LevelResult, model: MaturityModel) -> list[TagCell]:
     """One cell per truth tag a condition in the result carries, in ``TRUTH_TAGS`` order."""
     truth = _truth(model)
     cells: dict[str, TagCell] = {}
@@ -286,7 +287,7 @@ def headline(value: Any, model: MaturityModel) -> Headline:
         lines.append(f"Step {step} · {names.get(step, '')} · contracts in place")
         lines.append(_next_line(level, model, names))
     lines.append(_tally_line(level))
-    cells = _tag_cells(level, model)
+    cells = tag_cells(level, model)
     if cells:
         lines.append(_strip_line(cells))
     nxt = level["next_step"]

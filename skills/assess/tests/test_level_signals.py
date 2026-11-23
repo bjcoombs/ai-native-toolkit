@@ -329,8 +329,10 @@ def test_default_levels_on_the_golden_run_context() -> None:
     single["structure"]["cross_package_edges"] = 0
     single["structure"]["front_door_ratio"] = None  # #760: no boundary, no ratio
     assert _row(_run({"toolkit": single}), "layer-2-design")["level"] == 1
-    # A current run counts its non-catch-all boundaries; with loc p95 483.65 that is level 2.
+    # A current run counts its non-catch-all boundaries; with a source p95 of 483.65 that is
+    # level 2 (the capture predates loc_by_class, #820, so the split is added here).
     single["structure_drift"]["tier_0"]["boundary_patterns"] = 115
+    single["stats_summary"]["loc_by_class"] = {"source": {"files_scored": 100, "p95": 483.65}}
     assert _row(_run({"toolkit": single}), "layer-4-architecture")["level"] == 2
     assert dumps_result(result) == dumps_result(_run({"toolkit": copy.deepcopy(run_context)}))
 
