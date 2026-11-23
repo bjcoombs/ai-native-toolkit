@@ -1,4 +1,4 @@
-"""The required ``why`` on every check manifest entry (lib/manifest_whys.py, #939)."""
+"""The required ``why`` on every check manifest entry (lib/manifest/manifest_whys.py, #939)."""
 from __future__ import annotations
 
 import copy
@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 import lib.manifest.check_manifest as cm
-from lib import manifest_whys as mw
+import lib.manifest.manifest_whys as mw
 from lib.levels_fields import TRUTH_TAGS
 
 COND_KEY = "layer-5-ci.1:ci_checks.enforced_check_runs"
