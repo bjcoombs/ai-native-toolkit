@@ -39,7 +39,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from lib import fleet_svg as svg
+import lib.fleet.fleet_svg as svg
 from lib.assess_diagrams import wrap
 from lib.headline import reason_word
 from lib.reason_codes import reason_code
