@@ -24,10 +24,10 @@ from lib.agent_environment import (  # noqa: E402
     COPILOT_PATH,
     check_copilot_setup,
     ci_duration,
-    is_check_command,
     scan_agent_environment,
 )
 from lib.counts_only import counts_only_scans  # noqa: E402
+from lib.named_check import is_named_check  # noqa: E402
 from lib.scan_registry import SCANS  # noqa: E402
 
 CI = "name: Tests\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: make test\n"
@@ -249,7 +249,7 @@ def test_untracked_settings_is_not_setup(tmp_path: Path) -> None:
     ("yarn", False), ("npm check", False), ("pnpm build", False),
 ])
 def test_is_check_command(text: str, expected: bool) -> None:
-    assert is_check_command(text) is expected
+    assert is_named_check(text) is expected
 
 
 def test_unresolved_named_check_keeps_the_cap(tmp_path: Path) -> None:

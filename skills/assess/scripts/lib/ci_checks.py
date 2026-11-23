@@ -293,7 +293,7 @@ basis in place of `not_enforced`, `no_check_command`, `no_lint_command` or `no_c
 enforced check still reads true. An `OWNERS` file alone, a nested `OWNERS_ALIASES` and an
 environment-variable read (`ENV["BUILDKITE"]`, `LUCI_`) are not markers.
 Issue #926: a target whose recipe is not read (`_line_may_check`: `make foo`, `npm run
-foo`, `./scripts/foo.sh`) reads `lint_basis` `check_target` too, as at Layer 5. A rewrite
+foo`, `./scripts/foo.sh`; any `ci` name, #951: see `lib.named_check`) reads `lint_basis` `check_target` too, as at Layer 5. A rewrite
 formatter line counts as a lint line when `ci_lint_gates.rewrite_gated` names it
 (`count_check_lines(..., extra=)`). With `lint_runs` otherwise false, `ci_lint_gates.lint_gate`
 gives the two new null codes, `analysers_in_build` ahead of `compiler_gate_only`, from the
@@ -322,8 +322,9 @@ from lib.ci_includes import IncludeRecord, Resolution, resolve_includes
 from lib.ci_lint_gates import (
     line_commands, line_compiler_gate, line_dotnet_build, lint_gate, rewrite_gated)
 from lib.ci_masking import unmasked_lines
+from lib.named_check import instruction_words, named_count, unread_ci_target
 from lib.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
-from lib.ci_scripts import Present, committed, present_in
+from lib.ci_scripts import Present, committed, present_in, runs_missing
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.command_resolver import command_words, extract_commands
 from lib.external_ci_rules import as_external
@@ -430,13 +431,6 @@ def _line_runs_check(line: str, *, script_item: bool = True, present: Present | 
     )
 
 
-def _line_runs_missing_check(line: str, *, script_item: bool = True,
-                             present: Present | None = None) -> bool:
-    """A line that runs a check only through a script the tree does not hold (#937)."""
-    return (_line_runs_check(line, script_item=script_item)
-            and not _line_runs_check(line, script_item=script_item, present=present))
-
-
 # GitHub Actions that run a linter as a step (#782): ``uses: <one of these>@<ref>``.
 # An unknown third-party action is not read.
 LINT_ACTIONS = frozenset({
@@ -480,13 +474,6 @@ def _line_runs_lint(line: str, *, script_item: bool = True, present: Present | N
                for c in line_commands(line))
 
 
-def _line_runs_missing_lint(line: str, *, script_item: bool = True,
-                            present: Present | None = None) -> bool:
-    """A line that runs a linter only through a script the tree does not hold (#937)."""
-    return (_line_runs_lint(line, script_item=script_item)
-            and not _line_runs_lint(line, script_item=script_item, present=present))
-
-
 def _line_may_lint(line: str, *, script_item: bool = True) -> bool:
     """One CI line whose check target or script may run a linter inside it (#782),
     or a ``uses:`` step of an action that does (``MAY_LINT_ACTIONS``)."""
@@ -502,7 +489,7 @@ def _line_may_check(line: str, *, script_item: bool = True) -> bool:
     """One CI line whose target's recipe is not read, so it may run a check (#920):
     ``make foo``, ``npm run foo``, ``./scripts/foo.sh``, ``docker compose run app``."""
     bare_item = _BARE_ITEM.match(line) is not None
-    return any(may_check(c.text) and not is_info_invocation(c.text)
+    return any((may_check(c.text) or unread_ci_target(c.text)) and not is_info_invocation(c.text)
                and not (bare_item and not script_item and _lone_check(c.text))
                for c in line_commands(line))
 
@@ -681,7 +668,8 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     present = present_in(root, tracked)
     tests: tuple[LineTest, ...] = tuple(
         partial(t, present=present) for t in (_line_runs_check, _line_runs_lint,
-                                              _line_runs_missing_check, _line_runs_missing_lint)
+                                              instruction_words(runs_missing(_line_runs_check)),
+                                              runs_missing(_line_runs_lint))
     ) + (_line_may_lint, _line_may_check, line_compiler_gate, line_dotnet_build)
     tallies = [_trigger_tally(texts[rel], workflows.get(rel), tests) for rel in files]
     tallies += [_trigger_tally(f.text, None, tests) for f in resolution.files] if resolution else []
@@ -708,7 +696,7 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
                          unread=bool(unread), files=bool(files), external=external)
     enforced_runs, enforced_basis = _enforced_state(
         ordinary, unknown, may_check_t, elsewhere=bool(elsewhere), unread=bool(unread),
-        any_check=bool(found or merged_checks), has_files=bool(files), external=external,
+        any_check=bool(found or merged_checks or named_count(check_commands, texts.values())), has_files=bool(files), external=external,
         missing=miss_t)
     lint_runs, lint_basis = _lint_state(lint_t, _max(may_t, may_check_t), elsewhere=bool(elsewhere),
                                         partial=partial_merge, unread=bool(unread),

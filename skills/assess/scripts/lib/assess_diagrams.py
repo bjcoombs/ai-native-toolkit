@@ -5,7 +5,8 @@
 one-line reason it was not drawn, in report order; it never raises (a renderer that
 raises becomes a "the renderer raised X" reason). ``write_diagrams`` writes the drawn
 SVGs into the artifact directory beside ``run-context.json`` and removes any diagram
-file this run did not draw, so a stale picture never sits beside new data; a symlink in
+file (of ``files``, by default ``DIAGRAM_FILES``; ``lib/assess_diagrams_review.py``
+passes its own, #943) this run did not draw, so a stale picture never sits beside new data; a symlink in
 a diagram's place is removed, never written through, and a path that cannot be written
 is named on stderr and skipped, so writing never stops a run either.
 ``run_publish.publish_run`` calls it, and ``assess_core.run_opt_in_mutation`` again
@@ -298,14 +299,16 @@ def diagrams_section(diagrams: Sequence[AssessDiagram]) -> str:
     return "\n".join(lines).rstrip("\n")
 
 
-def write_diagrams(assess_dir: Path, diagrams: Sequence[AssessDiagram]) -> list[Path]:
+def write_diagrams(assess_dir: Path, diagrams: Sequence[AssessDiagram],
+                   files: Sequence[str] = DIAGRAM_FILES) -> list[Path]:
     """Write each drawn SVG (LF line endings) and remove every diagram file not drawn this run;
     a symlink in a diagram's place is removed, never written through. A file that cannot be
     written (``OSError``) is named on stderr and skipped, so writing never stops the run either.
+    ``files`` are the diagram files this call owns (a sibling module passes its own, #943).
     Returns the paths written."""
     written: list[Path] = []
     drawn = {d["file"]: d["svg"] for d in diagrams if d["svg"] is not None}
-    for name in DIAGRAM_FILES:
+    for name in files:
         path = assess_dir / name
         try:
             if path.is_symlink() or (path.is_file() and name not in drawn):

@@ -970,6 +970,114 @@
                 }
               }
             },
+            "review_reality": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'. The codes name the missing piece: network (a headless run without --platform makes no GitHub or GitLab read); no_remote (the repository has no GitHub or GitLab remote, so there are no merged changes to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              },
+              "description": "Whether merged changes were reviewed (lib/review_reality.py), from the shared sample of up to 30 changes merged inside the run window. A platform block: a refused read is available false with a reason (no_access on HTTP 403), never zeros. Shares are of merged_count; no title, number, login or name is written.",
+              "properties": {
+                "available": {
+                  "type": "boolean"
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "Why the block is unavailable."
+                },
+                "merged_count": {
+                  "type": "integer",
+                  "description": "Merged changes in the sample (at most 30)."
+                },
+                "oldest_merged_days_ago": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "Age in days of the oldest sampled merge; null when no merge time was read."
+                },
+                "reviewed_share": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Share (0 to 1) of changes with a review by an account other than the author (on GitLab also an approval, a human comment or AI review); null also when a GitLab merge request's notes decide nothing; null when nothing was counted."
+                },
+                "approved_share": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Share (0 to 1) of changes approved by an account other than the author; null when nothing was counted."
+                },
+                "bot_review_share": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Share (0 to 1) of changes with review-bot output (a GitHub comment by a bot other than github-actions, a GitLab AI-review note); null when nothing was counted."
+                },
+                "self_merged_share": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Share (0 to 1) of changes merged by their author; null when nothing was counted."
+                },
+                "review_required": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "Whether the default branch requires an approving review; null when the rules could not be read."
+                },
+                "hollow_required_review": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "review_required and reviewed_share under 0.2; null when either is unknown or fewer than 5 changes were sampled."
+                },
+                "required_approval_bypassed": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "review_required and approved_share under 0.2; null as for hollow_required_review."
+                },
+                "sequence": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "One token per sampled change, oldest merge first: approved, reviewed, unreviewed or unknown, read with the predicates behind approved_share and reviewed_share (#943)."
+                },
+                "bot_sequence": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "One token per sampled change, in the order of sequence: bot, none or unknown (review-bot output, #943)."
+                }
+              }
+            },
             "layer_grades": {
               "type": "object",
               "if": {
@@ -1037,30 +1145,6 @@
                   "reason": {
                     "type": "string",
                     "description": "'code: sentence'. The codes name the missing piece: network (no AI review step is committed in CI, and a headless run without --platform makes no GitHub or GitLab read); no_remote (no AI review step is committed in CI and the repository has no GitHub or GitLab remote, so there are no merged changes to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
-                  }
-                },
-                "required": [
-                  "reason"
-                ]
-              }
-            },
-            "review_reality": {
-              "type": "object",
-              "if": {
-                "properties": {
-                  "available": {
-                    "const": false
-                  }
-                },
-                "required": [
-                  "available"
-                ]
-              },
-              "then": {
-                "properties": {
-                  "reason": {
-                    "type": "string",
-                    "description": "'code: sentence'. The codes name the missing piece: network (a headless run without --platform makes no GitHub or GitLab read); no_remote (the repository has no GitHub or GitLab remote, so there are no merged changes to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
                   }
                 },
                 "required": [
