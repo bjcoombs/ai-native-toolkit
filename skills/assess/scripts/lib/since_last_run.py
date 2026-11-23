@@ -250,6 +250,10 @@ def _words(block: SinceLastRun, has_steps: bool, level_known: bool) -> list[str]
     if block["next_blocker"] is not None:
         lines.append(f"Next blocker: {_noun(block['next_blocker'])}")
     else:
+        if not level_known and block["previous_run_id"]:
+            # #1158: this run writes no prior-level.json, so the next run compares with that run
+            lines.append(f"Baseline kept: this run's level result is unavailable, so the baseline stays "
+                         f"the previous good run, `{block['previous_run_id']}`")
         lines.append("Next blocker: not known (the level result is unavailable for this run)"
                      if not level_known else "Next blocker: none, every gate is held" if has_steps
                      else "Next blocker: none, the model defines no Steps")
