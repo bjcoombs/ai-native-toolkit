@@ -15,10 +15,17 @@ A fixture fleet run for `tests/test_fleet_diagrams.py`:
   exercise the end-label spacing.
 - `expected-quadrant.svg`, `expected-shared-tooling.svg`, `expected-slope.svg`,
   `expected-report.md`: the golden renders.
+- `expected-tag-profile.svg` and `expected-tag-heatmap.svg`: the fleet median tag profile strip
+  and the estate tag heatmap (#940) over this run. `expected-tag-profile-states.svg`
+  (`tests/fleet_tag_profile_fixture.py`) and `expected-tag-heatmap-full.svg` and
+  `expected-tag-heatmap-counts-only.svg` (`tests/fleet_tag_heatmap_fixture.py`) draw every row
+  and cell state from hand-built tallies, with names kept and with numbered rows.
 
 Everything here except `levels.toml` and this README is generated: never hand-edit or
 hand-merge it. After a deliberate change, regenerate from `skills/assess` and review the diff:
 
 ```bash
 uv run --locked python tests/fleet_diagrams_fixture.py
+uv run --locked python tests/fleet_tag_profile_fixture.py
+uv run --locked python tests/fleet_tag_heatmap_fixture.py
 ```
