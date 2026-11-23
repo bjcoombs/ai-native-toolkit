@@ -12,9 +12,12 @@ the report: static reachability proves "nothing in *this* repo calls it", never
 
 **Observability tier (the decisive one), scored by three rungs:**
   1. **Instrumented** -- telemetry is emitted (OpenTelemetry, Prometheus,
-     Datadog/APM, structured logging). Necessary, not sufficient.
+     Datadog/APM, structured logging, or a standard-library logger in use in
+     production source; ``lib.keyhole.instrumentation_scan`` records which kind matched).
+     Necessary, not sufficient.
   2. **Discoverable** -- an ``OBSERVABILITY.md`` / runbook tells the agent where
-     runtime truth lives. Orients, but grants no access.
+     runtime truth lives. Orients, but grants no access. Docs under a test or
+     fixture path (``lib.path_classes``) never count.
   3. **Reachable** -- the agent has an *invokable* path to runtime state: an MCP
      server over logs/metrics/traces, a repo skill that tails logs or queries
      metrics, a documented runnable CLI. Without this the agent knows telemetry
@@ -39,6 +42,8 @@ from pathlib import Path
 from typing import NotRequired, TypedDict
 
 from lib.docs.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_excluded_path
+from lib.keyhole.instrumentation_scan import InstrumentationKind, detect_instrumented
+from lib.path_classes import path_class
 from lib.run_context_types import (
     DeadCodeBlock,
     DeadCodeCandidate,
@@ -427,31 +432,20 @@ def scan_dead_code(repo_root: Path, run: bool = True,
 
 # ── observability tier ───────────────────────────────────────────────────
 
-# Exact manifest filenames. .NET .csproj files are matched by suffix instead
-# (the name varies per project), so they are not listed here.
-_MANIFESTS = [
-    "package.json", "pyproject.toml", "requirements.txt", "Pipfile",
-    "go.mod", "Cargo.toml", "pom.xml", "build.gradle", "build.gradle.kts",
-    "Gemfile", "composer.json",
-]
-
-# substring -> human signal name. Matched against manifest text (lowercased).
-_INSTRUMENTED_SIGNALS = {
-    "opentelemetry": "OpenTelemetry", "otel": "OpenTelemetry",
-    "prom-client": "Prometheus", "prometheus": "Prometheus",
-    "micrometer": "Micrometer/Prometheus",
-    "dd-trace": "Datadog APM", "datadog": "Datadog",
-    "newrelic": "New Relic", "elastic-apm": "Elastic APM", "sentry": "Sentry",
-    "structlog": "structured logging (structlog)", "zerolog": "structured logging (zerolog)",
-    "logrus": "structured logging (logrus)", "zap": "structured logging (zap)",
-    "winston": "structured logging (winston)", "pino": "structured logging (pino)",
-    "slog": "structured logging (slog)",
-}
-
 # Filename / directory signal: a file or dir literally named for runbooks /
-# observability / dashboards is a strong single-hit signal.
+# observability / dashboards is a strong single-hit signal. On-call is anchored on
+# word or path-segment boundaries so ordinary words that contain it
+# ("function-call", "non-callable") do not read as runbooks (#823). A plural or a
+# CamelCase continuation ("oncalls", "OnCallGuide") still matches, as does a
+# CamelCase "On" after a lowercase letter ("TeamOnCall", "PagerOnCall").
 _RUNBOOK_NAME_RE = re.compile(
-    r"(observability|runbook|on[- ]?call|oncall|dashboards?)", re.IGNORECASE)
+    r"(observability|runbook|"
+    r"(?:(?:^|[-_ /])on|(?-i:(?<=[a-z])On))[-_ ]?calls?(?:[-_ ./]|$|(?-i:[A-Z]))|"
+    r"dashboards?)",
+    re.IGNORECASE)
+# Path classes whose docs never count as the repository's runbooks (#823): a
+# test or fixture doc describes the code under test, not this repository.
+_NOT_RUNBOOK_CLASSES = frozenset({"test", "fixture"})
 # Body-content fallback: weaker, so it requires >=2 *distinct* hits (see
 # _detect_discoverable). `dashboard` is deliberately absent here - it's too
 # overloaded in product docs (a UI "dashboard" feature) and is already covered
@@ -518,21 +512,6 @@ def _read(path: Path) -> str:
         return ""
 
 
-def _detect_instrumented(repo_root: Path, files: list[Path]) -> list[str]:
-    signals: set[str] = set()
-    for path in files:
-        if path.name in _MANIFESTS or path.suffix == ".csproj":
-            text = _read(path).lower()
-            for needle, label in _INSTRUMENTED_SIGNALS.items():
-                if needle in text:
-                    signals.add(label)
-        # Config-file presence is also instrumentation evidence.
-        if path.name.lower() in {"otel-collector-config.yaml", "otel-collector-config.yml",
-                                 "prometheus.yml", "prometheus.yaml"}:
-            signals.add("telemetry config present")
-    return sorted(signals)
-
-
 def _detect_discoverable(repo_root: Path, files: list[Path]) -> tuple[list[str], list[Path]]:
     signals: set[str] = set()
     runbooks: list[Path] = []
@@ -540,6 +519,8 @@ def _detect_discoverable(repo_root: Path, files: list[Path]) -> tuple[list[str],
         if path.suffix.lower() not in {".md", ".mdx", ".markdown"}:
             continue
         rel = path.relative_to(repo_root)
+        if path_class(rel) in _NOT_RUNBOOK_CLASSES:
+            continue
         # Match the doc's own name or an *intra-repo* directory (runbooks/,
         # observability/) - never the repo-root dir name, which says nothing.
         dir_parts = rel.parts[:-1]
@@ -593,11 +574,17 @@ class ObservabilityRung(TypedDict):
     signals: list[str]
 
 
+class InstrumentedRung(ObservabilityRung):
+    """Rung 1, plus the kinds of evidence found (``lib.keyhole.instrumentation_scan``, #823)."""
+
+    kinds: list[InstrumentationKind]
+
+
 class ObservabilityBlock(TypedDict):
     """``run-context.json`` ``liveness.observability``."""
 
     rung: int
-    instrumented: ObservabilityRung
+    instrumented: InstrumentedRung
     discoverable: ObservabilityRung
     reachable: ObservabilityRung
     boundary: str
@@ -616,6 +603,7 @@ class LivenessBlock(TypedDict):
 @dataclass
 class ObservabilityResult:
     instrumented: list[str] = field(default_factory=list)
+    instrumented_kinds: list[InstrumentationKind] = field(default_factory=list)
     discoverable: list[str] = field(default_factory=list)
     reachable: list[str] = field(default_factory=list)
     rung: int = 0
@@ -623,7 +611,8 @@ class ObservabilityResult:
     def as_dict(self) -> ObservabilityBlock:
         return {
             "rung": self.rung,
-            "instrumented": {"present": bool(self.instrumented), "signals": self.instrumented},
+            "instrumented": {"present": bool(self.instrumented), "signals": self.instrumented,
+                             "kinds": self.instrumented_kinds},
             "discoverable": {"present": bool(self.discoverable), "signals": self.discoverable},
             "reachable": {"present": bool(self.reachable), "signals": self.reachable},
             "boundary": (
@@ -644,7 +633,7 @@ def scan_observability(repo_root: Path,
         extra_exclude_dirs=extra_exclude_dirs,
         extra_exclude_patterns=extra_exclude_patterns,
     )
-    instrumented = _detect_instrumented(repo_root, files)
+    instrumented, kinds = detect_instrumented(repo_root, files)
     discoverable, runbooks = _detect_discoverable(repo_root, files)
     reachable = _detect_reachable(repo_root, files, runbooks)
     # Instrumentation is *necessary* for the doc-based ladder (see the rung model
@@ -665,7 +654,7 @@ def scan_observability(repo_root: Path,
     else:
         rung = 0
     return ObservabilityResult(
-        instrumented=instrumented, discoverable=discoverable,
+        instrumented=instrumented, instrumented_kinds=kinds, discoverable=discoverable,
         reachable=reachable, rung=rung,
     )
 

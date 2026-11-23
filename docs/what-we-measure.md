@@ -673,7 +673,7 @@ It reads how far the repository gives an agent a view of the running system: tel
 - Collector: `core.liveness_blocks`, reading `liveness`.
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `observability.boundary` drop, `observability.discoverable.signals` drop, `observability.instrumented.signals` drop, `observability.reachable.signals` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `observability.boundary` drop, `observability.discoverable.signals` drop, `observability.instrumented.kinds` token, `observability.instrumented.signals` drop, `observability.reachable.signals` drop.
 - Used by: row `layer-1-liveness`.
 - Evidence: `observability.rung` head_text (declared).
 - Not measured when: it cannot read its input; the block says why.
