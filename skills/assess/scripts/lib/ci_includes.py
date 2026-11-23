@@ -13,7 +13,10 @@ disk, returns its text so those scans read the included jobs too:
   expanded (``glob``).
 - ``project: <path>`` with ``file:`` (a scalar or a list) and ``ref:``: the
   clone ``<root>/<path>/<last segment>-main`` of the ghsync root passed as
-  ``--ghsync-root`` (``fleet.py`` passes its ROOT). The file is read with
+  ``--ghsync-root`` (``fleet.py`` passes its ROOT). Each path segment matches
+  ignoring case, as GitLab paths do, so ``Grp/CI-Templates`` finds the clone
+  ``grp/ci-templates`` on every OS; two entries differing only in case are
+  ambiguous (``not_cloned``) (#859). The file is read with
   ``git show`` at ``ref`` when the clone holds it (a branch, tag or
   ``origin/<ref>``; ``ref_basis: ref``). A pin the clone does not hold, or one
   that is not a plain ref name (a CI variable, an option-like value), is
@@ -53,7 +56,7 @@ flow list or mapping, bare strings; `file:` as a scalar, flow list or block list
 says whether a section exists. `resolve_includes(repo_root, ghsync_root)` (cached per
 argument pair) walks the repository's `.gitlab-ci.yml`: `local:` from the work tree
 (`ref_basis: worktree`) or, inside a template, from the template's commit; `project:`
-from the clone `<ghsync_root>/<path>/<last>-main` with `git show <commit>:<file>` at
+from the clone `<ghsync_root>/<path>/<last>-main` (segments matched ignoring case, #859) with `git show <commit>:<file>` at
 `ref:` when the clone holds it (`ref_basis: ref`), at HEAD only with no `ref:` (`head`); a pin
 the clone does not hold, or no plain ref name (a CI variable), is `ref_missing`; `component:
 <host>/<project>/<name>@<v>` from `templates/<name>.yml` or `templates/<name>/template.yml`
@@ -399,10 +402,26 @@ class _Source:
         return _git(self.checkout, "cat-file", "blob", fields[2])
 
 
-def _clone(root: Path, project: str) -> Path | None:
-    clone = root / project / f"{project.rsplit('/', 1)[-1]}-main"
+def _entry(parent: Path, name: str) -> Path | None:
+    """``parent/name`` under its on-disk name: an exact match, else the one entry equal to
+    ``name`` ignoring case (GitLab paths are case-insensitive, #859). None when there is no
+    entry, or more than one differing only in case."""
     try:
-        if not clone.is_dir():
+        names = os.listdir(parent)
+    except OSError:
+        return None
+    if name in names:
+        return parent / name
+    folded = [n for n in names if n.casefold() == name.casefold()]
+    return parent / folded[0] if len(folded) == 1 else None
+
+
+def _clone(root: Path, project: str) -> Path | None:
+    clone: Path | None = root
+    for name in (*project.split("/"), f"{project.rsplit('/', 1)[-1]}-main"):
+        clone = _entry(clone, name) if clone is not None else None
+    try:
+        if clone is None or not clone.is_dir():
             return None
         resolved = clone.resolve()
         resolved.relative_to(root)  # a symlinked clone pointing outside the root is not read
