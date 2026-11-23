@@ -88,7 +88,7 @@ def test_as_prior_level_keeps_a_valid_value_only() -> None:
 
 
 def test_counts_only_keeps_every_count_and_token() -> None:
-    from lib.counts_only import counts_only
+    from lib.counts_only.content_free import counts_only
 
     prior = build_prior_level(_level())
     assert counts_only({"prior_level": prior})["prior_level"] == prior  # fails if a field is dropped

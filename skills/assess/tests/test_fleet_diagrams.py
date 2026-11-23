@@ -218,7 +218,7 @@ def test_a_fleet_pinned_only_by_variables_still_draws_pins_unknown():
 
 
 def test_counts_only_keeps_ref_variable():
-    from lib.counts_only import counts_only_scans
+    from lib.counts_only.content_free import counts_only_scans
     entry = {"kind": "gitlab_project", "source": "s", "id": "gitlab_project:x", "ref": None,
              "ref_variable": True, "path": ".gitlab-ci.yml", "line": 1, "tracked": True}
     block = {"available": True, "ci_includes": [entry], "marketplaces": [],
@@ -228,7 +228,7 @@ def test_counts_only_keeps_ref_variable():
 
 
 def test_counts_only_keeps_a_token_ref_and_drops_a_slash_ref_to_pin_unknown():
-    from lib.counts_only import counts_only_scans
+    from lib.counts_only.content_free import counts_only_scans
     block = {"available": True, "ci_includes": [{"kind": "gitlab_project", "source": "s",
                                                  "id": "gitlab_project:x", "ref": "release/1.2",
                                                  "path": ".gitlab-ci.yml", "line": 1, "tracked": True}],

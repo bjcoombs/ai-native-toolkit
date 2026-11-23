@@ -26,7 +26,7 @@ from lib.agent_outcome import (  # noqa: E402
     scan_agent_outcome,
 )
 from lib.ai_usage import scan_ai_usage  # noqa: E402
-from lib.counts_only import counts_only_scans  # noqa: E402
+from lib.counts_only.content_free import counts_only_scans  # noqa: E402
 from lib.scan_registry import SCANS  # noqa: E402
 
 CLAUDE = "Claude Helper <noreply@anthropic.com>"
@@ -310,7 +310,7 @@ def test_registered_after_ai_usage_with_its_reads() -> None:
 
 
 def test_every_reason_code_survives_counts_only() -> None:
-    from lib.reason_codes import BLOCK_REASON_CODES, reason_token
+    from lib.counts_only.reason_codes import BLOCK_REASON_CODES, reason_token
     for sentence, code in agent_outcome.REASON_CODES.items():
         assert code in BLOCK_REASON_CODES
         assert reason_token(f"{code}: {sentence}") == code

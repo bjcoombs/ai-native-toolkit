@@ -80,7 +80,7 @@ that read `history_window` (`ai_usage`). Every git call runs inside `read_only_g
 forced and restored), so `git status` cannot rewrite the target's index. The stamp is read once,
 before the scans; the caller keeps the checkout fixed for the run. Nothing here writes or reaches
 the network.
-`FULL_RUN_ONLY_REASONS` (#697) is the set of reason codes (`lib.counts_only.reason_code` of `UNREGISTERED_REASON` and `NETWORK_REASON`: `not_registered`, `network`) that mark a block only a full `/assess` run produces; derived, never listed by hand.
+`FULL_RUN_ONLY_REASONS` (#697) is the set of reason codes (`lib.counts_only.content_free.reason_code` of `UNREGISTERED_REASON` and `NETWORK_REASON`: `not_registered`, `network`) that mark a block only a full `/assess` run produces; derived, never listed by hand.
 """
 from __future__ import annotations
 
@@ -95,7 +95,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.assess_config import load_excludes
-from lib.counts_only import reason_code
+from lib.counts_only.content_free import reason_code
 from lib.fleet_config import FleetConfig, repo_fleet_config
 from lib.hosting.gh_cli import NETWORK_REASON as NETWORK_REASON  # re-exported: defined beside the platform reads
 from lib.git_churn import git_commit_info
@@ -193,7 +193,7 @@ def signal_scans(
 SIGNAL_SCANS = signal_scans()
 
 # The reason codes of the blocks only a full /assess run measures (#697): the code
-# ``lib.counts_only.reason_code`` keeps of each reason the runner writes for a block it
+# ``lib.counts_only.content_free.reason_code`` keeps of each reason the runner writes for a block it
 # cannot produce, so a counts-only row and a --full row read alike. Derived, never
 # listed, so a reason added here (or a scan moving out of UNREGISTERED_SCANS) carries.
 # A PLATFORM_SCANS block is the exception: ``fleet --platform`` measures it, so its

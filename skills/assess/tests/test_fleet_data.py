@@ -9,7 +9,7 @@ import pytest
 
 from fleet_data_fixture import FIXTURES, ROWS, SALT, STAMP, VARIANTS, WEB_URLS, build, model
 import lib.fleet.fleet_data as fd
-from lib.counts_only_rules import FLEET_DATA_KEPT, FLEET_DATA_RULES, classify_fleet_data
+from lib.counts_only.counts_only_rules import FLEET_DATA_KEPT, FLEET_DATA_RULES, classify_fleet_data
 from lib.fleet.fleet_data_schema import SCHEMA_PATH, render
 from lib.fleet.fleet_units import build_trees, empty_map
 from lib.levels import parse_levels

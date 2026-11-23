@@ -59,7 +59,7 @@ repository not scanned by unit.
 everything. Counts-only keeps keys and tokens, writes a non-token string value
 as ``set``, drops unit names and owners (``owner_count`` stays). With path
 hashing every unit and repository key (and every reference to one) is hashed
-under the run's salt (``lib.counts_only.hash_value``), and no name, owner or
+under the run's salt (``lib.counts_only.content_free.hash_value``), and no name, owner or
 web URL is written, so the file holds no repository, group or host name.
 
 Deterministic: every list sorted, keys sorted, no timing. The same inputs (and,
@@ -98,8 +98,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import NamedTuple, NotRequired, TypedDict
 
-from lib.counts_only import hash_value, is_hashed
-from lib.counts_only_rules import DROP, HASHED_PATH, ID, PATH, TOKEN, TOKEN_RE, classify_fleet_data
+from lib.counts_only.content_free import hash_value, is_hashed
+from lib.counts_only.counts_only_rules import DROP, HASHED_PATH, ID, PATH, TOKEN, TOKEN_RE, classify_fleet_data
 from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_data_steps import (
     NO_STEPS,

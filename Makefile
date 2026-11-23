@@ -79,7 +79,7 @@ regen:
 	cd skills/assess && uv run --locked python scripts/lib/fleet/fleet_achievements_schema.py
 	cd skills/assess && uv run --locked python scripts/lib/fleet/fleet_labels.py
 	cd skills/assess && uv run --locked python scripts/gen_catalog.py
-	cd skills/assess && uv run --locked python -c "import sys; sys.path.insert(0, 'scripts'); from lib.counts_only import render_doc; open('references/counts-only.md', 'w', encoding='utf-8', newline='\\n').write(render_doc())"
+	cd skills/assess && uv run --locked python -c "import sys; sys.path.insert(0, 'scripts'); from lib.counts_only.content_free import render_doc; open('references/counts-only.md', 'w', encoding='utf-8', newline='\\n').write(render_doc())"
 	cd skills/assess && uv run --locked python tests/fleet_data_fixture.py
 	cd skills/assess && uv run --locked python tests/fleet_diagrams_fixture.py
 	cd skills/assess && uv run --locked python tests/fleet_tag_profile_fixture.py

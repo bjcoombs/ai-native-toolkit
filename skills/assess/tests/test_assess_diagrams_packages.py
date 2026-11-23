@@ -20,7 +20,7 @@ from assess_diagrams_packages_fixture import FIXTURES, LARGE, SMALL, goldens
 from lib import assess_diagrams_packages as pm
 import lib.fleet.fleet_svg as svg
 from lib.assess_diagrams import diagrams_section
-from lib.counts_only import HASH_PREFIX, counts_only
+from lib.counts_only.content_free import HASH_PREFIX, counts_only
 from lib.graph.structure_graph import analyze_structure
 from lib.vocabulary import IN_PLACE, banned_hits
 from svg_cascade import overridden_text_attributes

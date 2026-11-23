@@ -32,8 +32,8 @@ from lib import scan_registry as sr
 from lib import signals as sg
 import lib.keyhole.coupling_analysis as ca
 from lib.assess_config import GATE_CONCERN_FINDINGS
-from lib.counts_only_rules import RULES, FieldClass
-from lib.counts_only_schema import ROOTS
+from lib.counts_only.counts_only_rules import RULES, FieldClass
+from lib.counts_only.counts_only_schema import ROOTS
 from lib.graph.import_graph import STRUCTURE_REASON_CODES
 from lib.keyhole.keyhole_signals import (FINDING_ACTIONS, FINDING_MODE_VALUES, FINDING_MODES,
                                  FINDING_ORDER, GIT_HISTORY_FINDINGS, _CHURN_DERIVED_FINDINGS)

@@ -19,7 +19,7 @@ from conftest import skip_without_posix_shell
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.counts_only import reason_code  # noqa: E402
+from lib.counts_only.content_free import reason_code  # noqa: E402
 from lib.hosting.platform_cli import CACHE_ENV  # noqa: E402
 from lib.hosting.review_reality import scan_review_reality  # noqa: E402
 from lib.signals import collect  # noqa: E402
