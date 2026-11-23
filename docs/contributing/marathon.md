@@ -52,7 +52,7 @@ Non-blocking checks:
 
 ### AI-readiness regression gate
 
-An `/assess`-based gate that is **effectively required but re-runs on every base advance** (it diffs the PR against `main`). It is not in the classic branch-protection `required_status_checks.contexts`, so it does not show in that API list, but a plain `gh pr merge` is refused while it is re-running. In a multi-PR wave each merge re-triggers it on the still-open PRs: either wait for it to re-settle per PR, or merge with `--admin` once the eight named required checks are green.
+An `/assess`-based gate that is **effectively required but re-runs on every base advance** (it diffs the PR against `main`). It is not in the classic branch-protection `required_status_checks.contexts`, so it does not show in that API list, but a plain `gh pr merge` is refused while it is re-running. In a multi-PR wave each merge re-triggers it on the still-open PRs: either wait for it to re-settle per PR, or merge with `--admin` once the eight named required checks are green. Once `main` has a merge queue, the lead enqueues instead and never passes `--admin`, which merges past the queue (`skills/pr-review-merge/SKILL.md`, Smart Merge).
 
 ## The version hot file
 

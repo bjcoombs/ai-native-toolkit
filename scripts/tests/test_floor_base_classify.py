@@ -64,6 +64,28 @@ def test_an_unprotected_change_requests_nothing(repo, tmp_path):
     assert "run_canaries=false" in out
 
 
+def test_a_merge_group_answers_false_twice_for_a_floor_core_change(repo, tmp_path):
+    # #1088: inside the merge queue the sign-off is not requested again. It is
+    # a pull-request gate, and the queue admits only a pull request whose
+    # `floor enforcement` passed on its head (FLOOR.md, "The merge queue").
+    base = _head(repo)
+    with (repo / "scripts" / "floor_check.py").open("a", encoding="utf-8") as fh:
+        fh.write("# a floor-core edit\n")
+    _commit(repo, "floor core edit")
+    queued = _run_filter(repo, base, "someone", tmp_path, event="merge_group")
+    assert queued == "run_canaries=false\nfloor_core_changed=false\n"
+
+
+def test_only_the_merge_group_event_skips_the_classification(repo, tmp_path):
+    # The same floor-core change on any other event is classified as before.
+    base = _head(repo)
+    with (repo / "scripts" / "floor_check.py").open("a", encoding="utf-8") as fh:
+        fh.write("# a floor-core edit\n")
+    _commit(repo, "floor core edit")
+    for event in ("pull_request", "push", "", "merge_group_x"):
+        assert CORE_CHANGED in _run_filter(repo, base, "someone", tmp_path, event=event)
+
+
 def test_a_base_without_the_path_filter_subcommand_fails_closed(repo, tmp_path):
     _edit_script(repo, '"path-filter",\n', '"retired",\n')
     base = _commit(repo, "base predates path-filter")
@@ -232,6 +254,12 @@ def test_the_anchor_accepts_a_clean_change_beside_the_step(tmp_path):
         # the step made non-fatal, or run by another shell
         ("        id: filter\n", "        id: filter\n        continue-on-error: true\n"),
         ("        id: filter\n", "        id: filter\n        shell: sh\n"),
+        # #1088: the merge-group branch widened to other events
+        ('[ "${EVENT_NAME}" = "merge_group" ]', '[ "${EVENT_NAME}" != "push" ]'),
+        # ...or keyed on a value a pull request controls
+        ("EVENT_NAME: ${{ github.event_name }}", "EVENT_NAME: ${{ github.head_ref }}"),
+        # ...or answering true-for-false inside the queue on a pull request
+        ("        run: |\n          if [", "        run: |\n          EVENT_NAME=merge_group\n          if ["),
         # a comment in the run block, which bash reads after a continuation
         (
             "          BASE_COPY=",

@@ -140,14 +140,21 @@ JOB_OUTPUT_RE = re.compile(
 # left gaps -- a path variable reassigned between extract and call, a glob copy
 # over the extract, ``eval``, an answer overwritten after the fail-closed
 # branch -- and an exact comparison closes every one without parsing shell.
+# A merge group alone skips the script (#1088; FLOOR.md, "The merge queue").
 FILTER_STEP = """\
       - name: Detect changes to protected paths
         id: filter
         env:
+          EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_ACTOR: ${{ github.actor }}
         run: |
+          if [ "${EVENT_NAME}" = "merge_group" ]; then
+            echo "Merge group: not classified. The sign-off and the canaries ran on the pull request, and the queue admits only a pull request whose floor enforcement passed on its head."
+            printf 'run_canaries=false\\nfloor_core_changed=false\\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           BASE_SHA="$(git merge-base "origin/${BASE_REF}" HEAD)"
           BASE_COPY="${RUNNER_TEMP}/floor_check_base.py"
           if ! git show "${BASE_SHA}:scripts/floor_check.py" > "${BASE_COPY}" \\

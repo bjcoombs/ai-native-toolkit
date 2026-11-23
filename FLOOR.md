@@ -88,3 +88,29 @@ from a file that previously carried it (base-vs-head removal detection). So a
 retro that guts the instructions while leaving the marker comment intact still
 goes red, and a marked file that moves is followed to its new path rather than
 read as a deletion.
+
+## The merge queue
+
+`main` may merge through GitHub's merge queue, which tests a temporary branch
+holding `main` plus the queued pull requests ahead of a pull request plus that
+pull request (a merge group), and merges only when every required check passes
+on it. The floor's behaviour there:
+
+- **`floor enforcement` runs on every merge group.** Marker removal is judged
+  against the group's base commit, so it covers every pull request in the
+  group at once, and the four clauses are checked on the group's head.
+- **`floor self-anchor` runs on every merge group,** reading the live branch
+  protection and the `floor-signoff` environment as it does on a pull request.
+- **The sign-off is a pull-request gate.** The path filter does not classify a
+  merge group (both of its answers are false), so no deployment review is
+  requested inside the queue and the canary suite does not run there. A
+  floor-core pull request still cannot reach the queue unapproved: the queue
+  admits only a pull request whose required checks passed on its head, and
+  `floor enforcement` on that head is red until the maintainer approves the
+  review (clause iii). A push to a queued pull request removes it from the
+  queue, so the approved head is the head that merges. An administrator merge
+  bypasses the queue, not the review: with `enforce_admins` on, branch
+  protection still requires `floor enforcement`.
+- **A workflow that stops triggering on merge groups fails closed.** Its
+  required context never reports on the group, and the queue removes the pull
+  request when the check timeout expires; nothing merges.

@@ -409,9 +409,27 @@ If green with 0 unresolved threads, run smart-merge regardless of teammate messa
 
 The lead runs smart-merge via the pr-review-merge skill (Smart Merge section): dismiss stale
 bot CRs, verify the five auto-merge criteria, handle UNSTABLE/UNKNOWN, merge in hot-file order.
-On a solo-maintainer repo (0 required approvals) merge with `gh pr merge $PR --squash --delete-branch --admin`
-once the *required* checks are green — a plain merge gets bounced when a non-required check (CodeRabbit,
-an advisory AI review, a regression gate that re-runs on base advance) is mid-run at the merge instant.
+
+**When the base branch has a merge queue, the lead enqueues and the queue merges.** Enqueue with
+`gh pr merge $PR --match-head-commit <head sha>` (no strategy flag, never `--admin`, which skips the
+queue) or the GraphQL `enqueuePullRequest` mutation, in hot-file order. The queue tests the base plus
+every PR ahead plus this one on the required checks and merges only when they pass, so it replaces the
+lead's manual re-check of a hot PR (main plus the PR, the full suite and `make regen` run by hand before
+merging): a semantic conflict between two individually green PRs now fails the second one's group, and
+`$BASE_BRANCH` stays green. The lead no longer serialises merges behind that re-check, so throughput is
+bounded by CI capacity, not by the lead. What stays with the lead:
+- **The pre-review of hot and contract PRs.** Read the diff of a PR that touches a hot file or a frozen
+  contract's paths before enqueueing it; the queue runs checks, it does not judge intent.
+- **Reacting to a dequeue.** A failed group removes the PR from the queue with a timeline event naming the
+  failing check. Send the failure to the PR's teammate (or a fresh one), and enqueue again once its
+  required checks are green on the new head. A push to a queued PR dequeues it as well.
+- **Confirming the merge.** Enqueueing returns at once; the verified-`MERGED` gate below runs when the
+  queue reports the merge, not after the enqueue call.
+
+**Without a merge queue**, on a solo-maintainer repo (0 required approvals) merge with
+`gh pr merge $PR --squash --delete-branch --admin` once the *required* checks are green — a plain merge
+gets bounced when a non-required check (CodeRabbit, an advisory AI review, a regression gate that re-runs
+on base advance) is mid-run at the merge instant.
 After a merge, close the unit via the adapter's **close on merge** operation, then proceed to
 the wave transition below.
 

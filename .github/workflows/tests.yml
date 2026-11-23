@@ -4,11 +4,16 @@ name: Tests
 # The core is intentionally deterministic - same input, same output - so
 # CI failure means a real regression, not flake.
 
+# merge_group: the merge queue runs these jobs on main plus the queued pull
+# requests, under the same job names, which are the required check contexts
+# (#1088). Branch protection reads them by name on the group's head.
 on:
   pull_request:
     branches: [main]
   push:
     branches: [main]
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
