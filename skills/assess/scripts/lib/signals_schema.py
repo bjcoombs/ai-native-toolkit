@@ -75,8 +75,8 @@ def reason_description(block: str | None = None) -> str:
     every block, whatever the run-context privacy class of ``<block>.reason``.
     """
     if block is None:
-        return ("Why the block is unavailable: a sentence, or 'code: sentence' for a block "
-                f"whose codes are listed under its own entry. {REASON_KEPT}")
+        return ("Why the block is unavailable, usually 'code: sentence'; only blocks with a "
+                f"named entry list their codes. {REASON_KEPT}")
     codes = reason_codes(core_manifest(), block)
     text = ("'code: sentence'. The codes name the missing piece: "
             + "; ".join(f"{r['code']} ({r['means'][:1].lower()}{r['means'][1:].rstrip('.')})" for r in codes) + "."

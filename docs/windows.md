@@ -56,8 +56,9 @@ the interpreter you run them with; the exact `pip` line is in
   policy stops it creating them, the tool is still under
   `%LOCALAPPDATA%\Microsoft\WinGet\Packages`. `/assess` and `/fleet` look for
   `rg.exe` there on their own, and `RG_PATH` can name the binary directly.
-- uv installs to `%USERPROFILE%\.local\bin`; add it to PATH if `uv --version`
-  is not found.
+- The standalone uv installer puts uv in `%USERPROFILE%\.local\bin`; winget
+  puts its alias in the WinGet Links folder above. Add the one you used to PATH
+  if `uv --version` is not found.
 - In PowerShell, use `python`, not `python3`. If `python` opens the Microsoft
   Store, turn off the `python.exe` and `python3.exe` App execution aliases in
   Settings.

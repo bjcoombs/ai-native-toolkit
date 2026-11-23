@@ -45,6 +45,6 @@ same-day rerun goes to a suffixed history entry instead of replacing the day's o
 The group roll-up joins `--settings` by the real group name before hashing. To rebuild
 team pages for such a run with `--settings`, pass `fleet_next_steps.py` the same
 `--hash-salt`; a `--hash-paths` run with no salt cannot rejoin settings. Terminal output
-(stderr) still names repositories. A history entry kept by a hashed run before this
-change holds clear ids, so the first comparison against it shows every repository as
+(stderr) still names repositories. A history entry kept by a hashed run before v2.2.0
+holds clear ids, so the first comparison against it shows every repository as
 added and removed.
