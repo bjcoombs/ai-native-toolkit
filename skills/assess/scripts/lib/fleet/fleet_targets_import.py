@@ -87,15 +87,16 @@ def target_doc_id(view: str, key: str) -> str:
 
 
 def known_units(bundle: FleetData) -> dict[tuple[str, str], str]:
-    """``(view, fleet-data.json key)`` to the unit as the targets file writes it."""
+    """``(view, fleet-data.json key)`` to the unit as the targets file writes it (never a blank id)."""
     known: dict[tuple[str, str], str] = {}
     for view in bundle["views"]:
         prefix = f"{view['view']}/"
         for unit in view["units"]:
-            if unit["key"].startswith(prefix):
+            if unit["key"].startswith(prefix) and unit["key"][len(prefix):].strip():
                 known[(view["view"], unit["key"])] = unit["key"][len(prefix):]
     for repo in bundle["repos"]:
-        known[(REPO_VIEW, repo["key"])] = repo["key"]
+        if repo["key"].strip():
+            known[(REPO_VIEW, repo["key"])] = repo["key"]
     return known
 
 

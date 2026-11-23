@@ -51,18 +51,23 @@ def test_target_doc_id_encodes_the_unit_key():
     assert ti.target_doc_id("repo", "acme/svc") == "repo~acme~2Fsvc"
 
 
+FIXTURE_ROWS = [
+    _row("ownership", "ownership/acme/payments", {"step": 3, "note": "Q1 goal"}),
+    _row("ownership", "ownership/nope", {"step": 2}),
+    _row("ownership", "ownership/acme", {"step": 5}),
+    _row("system", "system/billing", {"step": 2, "owner": "someone"}),
+    _row("repo", "acme/svc", {"step": 2, "note": "x" * (ti.NOTE_MAX + 1)}),
+]
+FIXTURE_REFUSALS = [ti.Refusal(2, ti.UNKNOWN_UNIT), ti.Refusal(3, ti.STEP_OUT_OF_RANGE),
+                    ti.Refusal(4, ti.UNKNOWN_FIELD), ti.Refusal(5, ti.STRING_TOO_LONG)]
+
+
 def test_one_valid_and_four_invalid_rows_give_one_target_and_four_named_refusals():
-    rows = [
-        _row("ownership", "ownership/acme/payments", {"step": 3, "note": "Q1 goal"}),
-        _row("team", "ownership/acme", {"step": 2}),
-        _row("ownership", "ownership/nope", {"step": 2}),
-        _row("ownership", "ownership/acme", {"step": 5}),
-        _row("system", "system/billing", {"step": 2, "owner": "someone"}),
-    ]
-    result = ti.import_rows(rows, _bundle(), MODEL)
+    result = ti.import_rows(FIXTURE_ROWS, _bundle(), MODEL)
     assert result.targets == [TargetSpec("ownership", "acme/payments", 3)]
-    assert result.refusals == [ti.Refusal(2, ti.UNKNOWN_VIEW), ti.Refusal(3, ti.UNKNOWN_UNIT),
-                               ti.Refusal(4, ti.STEP_OUT_OF_RANGE), ti.Refusal(5, ti.UNKNOWN_FIELD)]
+    assert result.refusals == FIXTURE_REFUSALS
+    unknown_view = ti.import_rows([_row("team", "ownership/acme", {"step": 2})], _bundle(), MODEL)
+    assert unknown_view.refusals == [ti.Refusal(1, ti.UNKNOWN_VIEW)]
 
 
 @pytest.mark.parametrize(("row", "reason"), [
@@ -140,8 +145,9 @@ def test_the_export_must_be_a_list_and_the_model_needs_steps():
         ti.import_rows([], _bundle(), cast(MaturityModel, {"steps": [{"step": 1}]}))
 
 
-def test_known_units_skips_a_key_outside_its_view():
-    bundle = cast(FleetData, {"views": [{"view": "system", "units": [{"key": "ownership/x"}]}], "repos": []})
+def test_known_units_skips_a_key_outside_its_view_and_a_blank_id():
+    bundle = cast(FleetData, {"views": [{"view": "system", "units": [{"key": "ownership/x"}, {"key": "system/ "}]}],
+                              "repos": [{"key": ""}]})
     assert ti.known_units(bundle) == {}
 
 
@@ -154,6 +160,21 @@ def _files(tmp_path: Path, rows: object) -> list[str]:
     (tmp_path / "levels.toml").write_text(STEP_LEVELS, encoding="utf-8")
     return [str(tmp_path / "export.json"), "--fleet-data", str(tmp_path / "fleet-data.json"),
             "--levels", str(tmp_path / "levels.toml"), "--out", str(tmp_path / "targets.toml")]
+
+
+def test_cli_writes_the_one_valid_fixture_row_and_names_the_four_refusals(tmp_path, capsys):
+    args = _files(tmp_path, FIXTURE_ROWS)
+    gate = '\ngates = [{ id = "instructions", row = "instructions", level = 1 }]\n'
+    four = STEP_LEVELS + '\n[[steps]]\nstep = 3\nname = "Unattended agent PRs"\nthreshold = 0' + gate \
+        + '\n[[steps]]\nstep = 4\nname = "Autonomous loops"\nthreshold = 0' + gate
+    (tmp_path / "levels.toml").write_text(four, encoding="utf-8")
+    assert cli.main(args) == 0
+    targets = parse_targets(tomllib.loads((tmp_path / "targets.toml").read_text(encoding="utf-8")), MODEL)
+    assert targets == [TargetSpec("ownership", "acme/payments", 3)]
+    err = capsys.readouterr().err
+    assert [line.split(": ", 1)[1] for line in err.splitlines() if ": row " in line] == [
+        f"row {r.row}: {r.reason}" for r in FIXTURE_REFUSALS]
+    assert "1 target(s) written, 4 row(s) refused" in err
 
 
 def test_cli_writes_the_file_byte_identically_and_reports_refusals_without_echoing_rows(tmp_path, capsys):
@@ -199,7 +220,10 @@ def test_the_imported_file_drives_fleet_targets_to_a_target_hit(tmp_path, monkey
     (tmp_path / "levels.toml").write_text(STEP_LEVELS, encoding="utf-8")
     base = [str(root), "--levels", "levels.toml", "--history-dir", "hist"]
     assert fleet_cli.main([*base, "--out", "o1"]) == 0
-    rows = [_row("repo", "grpa/svc1", {"step": 2, "note": "reach Step 2"}), _row("repo", "grpa/gone", {"step": 2})]
+    bundle = json.loads((tmp_path / "o1" / "fleet-data.json").read_text(encoding="utf-8"))
+    unit_key = next(u["key"] for v in bundle["views"] if v["view"] == "ownership" for u in v["units"])
+    rows = [_row("repo", "grpa/svc1", {"step": 2, "note": "reach Step 2"}), _row("repo", "grpa/gone", {"step": 2}),
+            _row("ownership", unit_key, {"step": 2})]
     (tmp_path / "export.json").write_text(json.dumps(rows), encoding="utf-8")
     assert cli.main(["export.json", "--fleet-data", "o1/fleet-data.json", "--levels", "levels.toml",
                      "--out", "targets.toml"]) == 0
@@ -209,3 +233,4 @@ def test_the_imported_file_drives_fleet_targets_to_a_target_hit(tmp_path, monkey
     assert fleet_cli.main([*base, "--targets", "targets.toml", "--out", "o2"]) == 0
     doc = json.loads((tmp_path / "o2" / "achievements.json").read_text(encoding="utf-8"))
     assert ("target_hit", "grpa/svc1") in {(a["kind"], a["unit"]) for a in doc["achievements"]}
+    assert {("repo", "grpa/svc1"), ("ownership", unit_key)} <= {(t["view"], t["unit"]) for t in doc["targets"]}

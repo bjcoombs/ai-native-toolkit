@@ -96,14 +96,16 @@ reads the current versions and pins each write.
 The page writes one `targets` document per Step target, and `/fleet` reads the collection
 back before the next run (#948). `fleet.py` stays free of network calls, so the session
 exports the collection to a JSON file and runs
-`skills/fleet/scripts/fleet_targets_import.py`, which writes the targets file that
+`scripts/fleet_targets_import.py`, which writes the targets file that
 `fleet.py --targets` reads ([format](achievements.md#output-achievementsjson)). The logic
 is `lib/fleet/fleet_targets_import.py`.
 
+<!-- chat-skip:start -->
 ```bash
-uv run skills/fleet/scripts/fleet_targets_import.py targets-export.json \
+uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_targets_import.py" targets-export.json \
     --fleet-data out/fleet-data.json --levels levels.toml --out targets.toml
 ```
+<!-- chat-skip:end -->
 
 **Row contract.** The page writes to this shape.
 
