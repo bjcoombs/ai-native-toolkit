@@ -81,9 +81,11 @@ two Steps below the target shows every gate it is missing, not only its next Ste
 **Recount.** `recount` is set on the first run under a new maturity-model version,
 when the newest replayed earlier entry was re-scored, and null otherwise (on the next run
 that entry is at the current version, so no stored state is needed). It holds
-`from_version`, `to_version`, `run` (the re-scored entry) and `lines`: one per repository
+`from_version` (null when the re-scored entry stamped no maturity-model version),
+`to_version`, `run` (the re-scored entry) and `lines`: one per repository
 and team row whose stored cell (its scans under its own rules) differs from its re-scored
-cell (the same scans under this run's rules). Every line is attributed to the rules
+cell (the same scans under this run's rules). A row new to the model has no stored cell,
+so it gets no Recount line. Every line is attributed to the rules
 (`attributed_to` `rules`) and says the repository did not change; its `direction` is
 `down` (cause "Now checked", the new criterion as `signal`), `up` ("No longer checked",
 the old criterion), `now_measured` (unknown to a level, "Now measured") or `not_measured`
@@ -91,6 +93,7 @@ the old criterion), `now_measured` (unknown to a level, "Now measured") or `not_
 `from_status`, `from_level`, `to_status`, `to_level`, `cause`, `signal` and `text`, one
 Markdown line:
 `` `<repo>` <row title>: level <A> -> <B> under maturity model <new> (was <old>). <Cause>: `<signal>`. The repository did not change. ``
+(with no "(was <old>)" when `from_version` is null).
 Recount lines are display-only: they never earn an achievement, break a streak or change
 a level reached or a best share. `rescored_runs` lists every replayed run that was
 re-scored from an earlier maturity-model version (empty when none was); the report's

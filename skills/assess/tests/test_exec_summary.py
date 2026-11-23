@@ -169,3 +169,11 @@ def test_ci2_report_opens_with_the_summary(ci2: Path) -> None:  # noqa: F811 - t
     assert report.index(head["summary_markdown"]) < report.index("## Headline")
     for line in head["summary_lines"]:
         _plain_checks(line)
+
+
+def test_the_landing_page_shows_the_summary_the_code_prints() -> None:
+    """The site's "What the report says first" example is the code's own output, word for word."""
+    page = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+    since = {**KNOWN, "closed_count": 1, "gates_gained": [], "gates_lost": []}
+    for line in _summary(2, since)["summary_lines"]:
+        assert f"<div>{line}</div>" in page, line

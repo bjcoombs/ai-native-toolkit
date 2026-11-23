@@ -158,7 +158,7 @@ def test_counts_only_keeps_every_opportunity_field_and_names_no_rank() -> None:
     opps = doc["opportunities"]
     assert set(opps) == {"measured", "in_place", "biggest_lift", "shared_templates"}
     assert set(opps["biggest_lift"]) == {"row", "level", "signal", "repo_count", "repos", "gate", "step",
-                                         "change", "done_when", "text"}
+                                         "change", "done_when", "why", "text"}
     assert set(opps["shared_templates"][0]) == {"source", "kind", "includers", "row", "level", "signal",
                                                 "repo_count", "repos", "text"}
     assert opps["shared_templates"][0]["source"] == SOURCE  # shared_tooling ids stay readable

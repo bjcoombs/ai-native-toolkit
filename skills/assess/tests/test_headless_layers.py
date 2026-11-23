@@ -11,7 +11,7 @@ from typing import Any
 
 import jsonschema
 import pytest
-from conftest import use_real_lizard
+from assess_test_support import use_real_lizard
 
 import assess_signals
 from lib import headless_layers as hl
@@ -162,8 +162,7 @@ def test_structure_drift_reads_tier_0_and_marks_tier_1_unprobed(target: Path) ->
 ])
 def test_percentile_matches_numpy_linear_interpolation(values: list[float], q: float,
                                                        expected: float) -> None:
-    # Not pytest.approx: it calls into numpy, which test_complexity_treemap stubs.
-    assert abs(hl.percentile(values, q) - expected) < 1e-9
+    assert hl.percentile(values, q) == pytest.approx(expected, abs=1e-9)
 
 
 def test_summarise_follows_the_sidecar_rules() -> None:

@@ -239,7 +239,7 @@ round-trip), and a repo-relative path is rendered with `.as_posix()`, never `str
 `tests/test_windows_portability.py` guards all three across every runtime Python tree: each
 `skills/*/scripts/` and the repo-level `scripts/`, leaving out `tests/`, `fixtures/` and dot directories.
 The fleet run files (`repos.jsonl`, `groups.jsonl`, `run.json`, `compare.json`, `labels.jsonl`,
-`doc_freshness.jsonl`, `agent_clusters.json`, `achievements.json`, `fleet-data.json`, the
+`doc_freshness.jsonl`, `agent_clusters.json`, `achievements.json`, `condition_effect.json`, `fleet-data.json`, the
 generated fleet schemas and the next-steps pages) are written with `newline="\n"`, so Windows and
 Linux produce the same bytes; the same test checks that every writer in `lib/fleet/`, the `lib/fleet_*.py` modules and
 `skills/fleet/scripts/` names `newline`. `promissory_markers` asks `rg` for `--path-separator /`

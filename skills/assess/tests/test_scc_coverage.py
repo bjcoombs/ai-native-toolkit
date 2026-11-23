@@ -12,7 +12,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from test_complexity_treemap import _load_treemap
+from test_complexity_treemap import stubbed_treemap
 
 from assess_report import render_hotspots_table
 from lib.anomaly_detector import detect_anomalies
@@ -37,6 +37,12 @@ CALIBRATION = [
     ("scripts/cowork-fallback/cowork.sh", 769, 70),
     ("tests/test-artifact-common.sh", 581, 103),
 ]
+
+
+@pytest.fixture(scope="module")
+def treemap():
+    with stubbed_treemap() as mod:
+        yield mod
 
 
 def _files(rows, lang="Shell", src="scc"):
@@ -107,8 +113,7 @@ def test_backend_by_language_null_for_partial_coverage():
 
 # --- end to end: sidecar -> run-context anomaly -> report --------------------
 
-def test_write_stats_carries_complexity_unreliable(tmp_path):
-    treemap = _load_treemap()
+def test_write_stats_carries_complexity_unreliable(treemap, tmp_path):
     files = [(tmp_path / p, loc, float(ccn), "scc") for p, loc, ccn in CALIBRATION]
     langs = {f[0]: "Shell" for f in files}
     out = tmp_path / "stats.json"
@@ -119,8 +124,7 @@ def test_write_stats_carries_complexity_unreliable(tmp_path):
     assert treemap.STATS_SCHEMA_VERSION >= 7
 
 
-def test_lizard_only_sidecar_has_empty_list(tmp_path):
-    treemap = _load_treemap()
+def test_lizard_only_sidecar_has_empty_list(treemap, tmp_path):
     out = tmp_path / "stats.json"
     treemap.write_stats([(tmp_path / "a.py", 100, 5.0, "lizard")], None, None,
                         tmp_path, out, fn_ccn_by_path={tmp_path / "a.py": [5.0]})
@@ -214,8 +218,7 @@ def _plain_script(n_blocks: int) -> str:
 
 
 @pytest.mark.skipif(shutil.which("scc") is None, reason="scc not installed")
-def test_real_scc_undercount_is_flagged(tmp_path):
-    treemap = _load_treemap()
+def test_real_scc_undercount_is_flagged(treemap, tmp_path):
     (tmp_path / "doctor.sh").write_text(_undercounted_script(280), encoding="utf-8")
     (tmp_path / "plain.sh").write_text(_plain_script(60), encoding="utf-8")
     (tmp_path / "other.sh").write_text(_plain_script(40), encoding="utf-8")

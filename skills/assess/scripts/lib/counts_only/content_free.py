@@ -389,7 +389,8 @@ def render_doc() -> str:
         "path hashing); under hashing no name, owner or web URL is written.",
         "The run stamp (`run.*`) and maturity-model fields (`model.*`, the row ids,",
         "`repos.rows.signal`) come from the run and the `--levels` file and are",
-        "kept as written. A string",
+        "kept as written, as is a criterion's `why` (`repos.rows.why`,",
+        "`opportunities.biggest_lift.why`), the check manifest's own text. A string",
         "`repos.rows.value` that is not a token is written `set`.",
         "", "| Field | Kept as |", "|---|---|",
     ]

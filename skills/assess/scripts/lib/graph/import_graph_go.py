@@ -14,7 +14,8 @@ Implements the ``lib.graph.import_graph`` builder interface for Go. No go tool r
 - The **package boundary** is the package itself (``package_of[m] == m``) and
   every package is a front door: an importer reaches only a package's exported
   identifiers, so Go has no burrow import and ``front_door_ratio`` is 1.0 by
-  construction. Layer 2 level 2 for Go therefore reads modularity plus at least
+  construction once one import crosses a package (null with none, as for every
+  language). Layer 2 level 2 for Go therefore reads modularity plus at least
   one cross-package import.
 - The **public surface** (A1) is the package's exported top-level ``func``
   (methods excluded) and ``type`` declarations across its files.
@@ -42,7 +43,7 @@ so no module path appears in the block, hashed or not. A package belongs to the 
 `go.mod` at or above it; nested modules resolve each other's imports. Each package is
 its own boundary (`package_of[m] == m`) and a front door, since an importer reaches only
 exported identifiers: Go has no burrow edge and `front_door_ratio` is 1.0 by
-construction, so its Layer 2 level 2 reads modularity plus one cross-package import. The
+construction once one import crosses a package (null with none), so its Layer 2 level 2 reads modularity plus one cross-package import. The
 public surface is the package's exported top-level `func` (not method) and `type`
 declarations. There is no `module_file` (a package is several files), so A1 size reads 0
 and structure-drift tier 1, whose static lens pairs files, empties its three

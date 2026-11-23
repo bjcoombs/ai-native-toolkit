@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import use_real_lizard
+from assess_test_support import use_real_lizard
 
 from lib.ci_checks import scan_ci_checks
 from lib.counts_only.content_free import counts_only_scans

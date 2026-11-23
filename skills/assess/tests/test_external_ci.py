@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from conftest import skip_without_posix_shell
+from assess_test_support import skip_without_posix_shell
 from lib import external_ci as ext
 from lib.ci_checks import scan_ci_checks
 from lib.testing.coverage_gate import detect_coverage_gate

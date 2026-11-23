@@ -8,11 +8,9 @@ byte-for-byte the pre-scope behaviour.
 """
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
-import types
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -23,10 +21,8 @@ from lib.headline import as_headline
 from lib.docs.doc_graph import build_doc_graph, discover_doc_files
 from lib.git_churn import git_churn_scores
 from lib.run_scope import resolve_scope
-from test_complexity_treemap import _StubNumpy
+from test_complexity_treemap import stubbed_treemap
 from lib.wiki_writer import HotspotEntry, write_index
-
-_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "complexity-treemap.py"
 
 
 _STATS_SHAPE = {
@@ -130,19 +126,14 @@ def test_build_doc_graph_scope_confines_docs(git_repo) -> None:
 # --------------------------------------------------------------------------
 # treemap collect scope (lizard/scc stubbed - no heavy deps in the test env)
 # --------------------------------------------------------------------------
-def _load_treemap():
-    for name in ("lizard", "matplotlib", "matplotlib.pyplot", "squarify"):
-        sys.modules.setdefault(name, types.ModuleType(name))
-    sys.modules.setdefault("numpy", _StubNumpy("numpy"))  # with percentile (#831)
-    sys.modules["matplotlib"].pyplot = sys.modules["matplotlib.pyplot"]
-    spec = importlib.util.spec_from_file_location("complexity_treemap_scope", _SCRIPT)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+@pytest.fixture
+def treemap():
+    with stubbed_treemap() as mod:
+        yield mod
 
 
-def test_treemap_collect_filters_to_scope(tmp_path: Path) -> None:
-    mod = _load_treemap()
+def test_treemap_collect_filters_to_scope(tmp_path: Path, treemap: ModuleType) -> None:
+    mod = treemap
     a = (tmp_path / "service-a" / "app.py")
     b = (tmp_path / "service-b" / "app.py")
     a.parent.mkdir(parents=True)

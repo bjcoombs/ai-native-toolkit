@@ -495,5 +495,5 @@ def test_no_assess_test_parks_a_windows_failure():
 
 
 def test_the_windows_skip_markers_are_the_posix_only_set():
-    from conftest import WINDOWS_SKIP_MARKERS
+    from assess_test_support import WINDOWS_SKIP_MARKERS
     assert set(WINDOWS_SKIP_MARKERS) == POSIX_ONLY_MARKERS

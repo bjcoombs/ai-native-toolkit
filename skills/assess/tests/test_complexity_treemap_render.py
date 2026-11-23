@@ -9,12 +9,13 @@ import json
 from pathlib import Path
 
 import pytest
-from test_complexity_treemap import _load_treemap
+from test_complexity_treemap import stubbed_treemap
 
 
 @pytest.fixture(scope="module")
 def treemap():
-    return _load_treemap()
+    with stubbed_treemap() as mod:
+        yield mod
 
 
 @pytest.fixture(scope="module")

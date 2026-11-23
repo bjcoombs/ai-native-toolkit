@@ -359,7 +359,10 @@
           "type": "object",
           "properties": {
             "from_version": {
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "to_version": {
               "type": "string"

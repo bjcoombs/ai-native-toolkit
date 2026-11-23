@@ -1,7 +1,8 @@
 """Unit tests for the pure logic inside complexity-treemap.py.
 
 The script imports lizard/matplotlib/numpy at module load (it's a CLI wrapper),
-so those are stubbed in sys.modules before import. We only exercise functions
+so those are stood in for in sys.modules while a module's tests run
+(``stubbed_treemap``). We only exercise functions
 that don't touch the real heavy deps. This module holds the stubbed loader,
 the build-artifact filter, the plugin version stamp, the render summary and
 main's CLI paths; the sibling test_complexity_treemap_*.py modules hold the
@@ -10,49 +11,39 @@ test_complexity_treemap_schema_versions.py.
 """
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import sys
 import types
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from assess_test_support import stub_heavy_deps
 
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "complexity-treemap.py"
 
 
-class _StubNumpy(types.ModuleType):
-    """Minimal numpy: only percentile, with numpy's default linear interp."""
+@contextlib.contextmanager
+def stubbed_treemap() -> Iterator[types.ModuleType]:
+    """complexity-treemap.py, imported with its heavy deps stood in for until the block exits.
 
-    @staticmethod
-    def percentile(values, q):
-        s = sorted(values)
-        if not s:
-            return 0.0
-        k = (len(s) - 1) * q / 100.0
-        f = int(k)
-        c = min(f + 1, len(s) - 1)
-        return float(s[f] + (s[c] - s[f]) * (k - f))
-
-
-def _load_treemap():
-    """Import complexity-treemap.py with heavy deps stubbed out."""
-    for name in ("lizard", "matplotlib", "matplotlib.pyplot", "squarify"):
-        sys.modules.setdefault(name, types.ModuleType(name))
-    # Another file's loader may have left a bare numpy stub in sys.modules
-    # (test_scope, test_doc_graph_svg); this one needs percentile (#831).
-    if not hasattr(sys.modules.get("numpy"), "percentile"):
-        sys.modules["numpy"] = _StubNumpy("numpy")
-    # complexity-treemap does `import matplotlib.pyplot as plt`
-    sys.modules["matplotlib"].pyplot = sys.modules["matplotlib.pyplot"]
-    spec = importlib.util.spec_from_file_location("complexity_treemap", _SCRIPT)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    A module fixture yields from inside it, so the stand-ins last for that module
+    and leave ``sys.modules`` as it was afterwards (#831).
+    """
+    with pytest.MonkeyPatch.context() as mp:
+        stub_heavy_deps(mp)
+        spec = importlib.util.spec_from_file_location("complexity_treemap", _SCRIPT)
+        assert spec and spec.loader
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        yield mod
 
 
 @pytest.fixture(scope="module")
 def treemap():
-    return _load_treemap()
+    with stubbed_treemap() as mod:
+        yield mod
 
 
 @pytest.fixture(scope="module")
