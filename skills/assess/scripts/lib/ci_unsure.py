@@ -247,6 +247,7 @@ _CALL_LEADS = frozenset({"!", "if", "elif", "while", "until", "then", "do", "els
 # Commands whose arguments are text, never run (``echo f``).
 _TEXT_COMMANDS = frozenset({"echo", "printf", ":"})
 _ASSIGN = re.compile(r"^[A-Za-z_]\w*=")
+_EXPANSION = re.compile(r"\$\{[^{}]*\}")
 _LEAD = re.compile(r"^\s*(?:function\s+[\w.-]+(?:\s*\(\s*\))?|[\w.-]+\s*\(\s*\))\s*\{")
 
 
@@ -313,6 +314,24 @@ def uncalled_functions(statements: list[Statement]) -> tuple[set[int], set[int]]
     return out, maybe - out
 
 
+def piped_calls(statements: list[Statement], pipefail: list[bool]) -> dict[int, frozenset[int]]:
+    """Per body statement, every segment of a function whose every call is a pipeline member
+    but the last run with pipefail off (``f | tee log`` under ``bash -e``, #1061): the call runs
+    in a pipeline subshell and the step takes the last command's status, as for a piped group.
+    ``pipefail`` is the setting as each statement starts."""
+    out: dict[int, frozenset[int]] = {}
+    for start, end, name in _groups(statements):
+        if not name:
+            continue
+        body = range(start, end + 1)
+        calls = [(i, k) for i, statement in enumerate(statements) if i not in body
+                 for k, (_, seg) in enumerate(statement) if name in _call_words(seg)]
+        if calls and all(k + 1 < len(statements[i]) and statements[i][k + 1][0] == "|" and not pipefail[i]
+                         for i, k in calls):
+            out.update({i: frozenset(range(len(statements[i]))) for i in body})
+    return out
+
+
 def opaque_flags(statements: list[Statement]) -> list[bool]:
     """Per statement: does it sit in, or open, a ``( )`` subshell or a function body? Those
     return their status as one command, so errexit stops at the call (``f() { pytest &&
@@ -336,17 +355,19 @@ def _groups(statements: list[Statement]) -> list[tuple[int, int, str]]:
     """``(first, last statement, function name or "")`` per top-level ``{ }`` group."""
     out: list[tuple[int, int, str]] = []
     depth = 0
-    start, name = 0, ""
+    start, name, opened = 0, "", False
     for i, statement in enumerate(statements):
-        text = unquoted(" ".join(seg for _, seg in statement)).replace("${", "")
+        # A whole ``${VAR}`` expansion holds no group delimiter (#1061: its ``}`` closed none).
+        text = _EXPANSION.sub("", unquoted(" ".join(seg for _, seg in statement)))
         if depth == 0 and "{" in text:
-            start = i
+            start, opened = i, True
             match = _FUNCTION.match(statement[0][1].strip().split("{")[0].strip() + " {")
             name = (match.group(1) or match.group(2)) if match else ""
         depth += text.count("{") - text.count("}")
-        if depth <= 0 and ("{" in text or "}" in text):
+        if opened and depth <= 0 and ("{" in text or "}" in text):
             out.append((start, i, name))
-            depth = 0
+            opened = False
+        depth = max(depth, 0)   # a stray ``}`` with no group open closes nothing
     return out
 
 

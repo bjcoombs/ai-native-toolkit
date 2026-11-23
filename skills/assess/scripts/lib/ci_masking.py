@@ -89,8 +89,9 @@ parser (the core has no YAML dependency). Only literal values count.
 - A pipe without pipefail (#1061). In a GitHub bash or sh ``run:`` body with pipefail off
   (the default ``bash -e {0}``, ``shell: sh``, no ``set -o pipefail`` before it), every
   pipeline member but the last is masked (``ci_exempt.piped_members``), and so is every
-  segment of a ``{ }`` / ``( )`` group piped on (``piped_groups``: ``{ pytest; } | tee log``,
-  ``(pytest; echo x) | tee log``, which run in a pipeline subshell): the pipeline takes
+  segment of a ``{ }`` / ``( )`` group piped on, or of a function only ever called piped on
+  (``piped_groups``, ``ci_unsure.piped_calls``: ``{ pytest; } | tee log``, ``f | tee log``;
+  a pipeline subshell): the pipeline takes
   the last command's status, so ``pytest | tee log`` exits 0 on a failing check. A capture
   (above: a later line of the job names the file and exits non-zero) stays credited. When the
   statement or a later one reads ``PIPESTATUS`` or a later one re-raises a status (``pytest
@@ -180,7 +181,7 @@ from lib.ci_exempt import (
 from lib.ci_statements import (
     _capture_targets, _checked_later, _join, _pick, _same_line_keep, split_statements)
 from lib.ci_unsure import (
-    group_call_unsure, opaque_flags, or_arm_unsure, uncalled_functions, until_break_flags)
+    group_call_unsure, opaque_flags, or_arm_unsure, piped_calls, uncalled_functions, until_break_flags)
 from lib.command_index import ci_line_text
 
 __all__ = ["IndentTree", "parse_lines", "split_statements", "strip_comment", "unmasked_lines"]
@@ -609,7 +610,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     until = until_break_flags(body) if readable else [False] * len(refs)
     in_group = group_call_unsure(body, conditions) if readable else set()
     uncalled, named = uncalled_functions(body) if readable else (set(), set())   # #1061
-    grouped_pipes = piped_groups(body) if readable else {}   # { pytest; } | tee log (#1061)
+    grouped_pipes = {**piped_groups(body), **piped_calls(body, before)} if readable else {}   # #1061
     opaque = opaque_flags(body)
     out: list[tuple[int, int]] = []
     exempt: Segments = {}
