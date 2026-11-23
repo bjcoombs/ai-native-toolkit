@@ -13,10 +13,10 @@ from pathlib import Path
 
 import pytest
 
-from lib.coverage_codecov import (CODECOV_UNMEASURED, PATCH_ONLY, STATUS_UNCONFIRMED,
+from lib.testing.coverage_codecov import (CODECOV_UNMEASURED, PATCH_ONLY, STATUS_UNCONFIRMED,
                                   codecov_statuses, config_path, target_percent)
 from lib import unit_readings as ur
-from lib.coverage_gate import GO_RUST_UNMEASURED, detect_coverage_gate
+from lib.testing.coverage_gate import GO_RUST_UNMEASURED, detect_coverage_gate
 
 CI = ".github/workflows/ci.yml"
 WORKFLOW = ("on: [pull_request]\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n"
@@ -118,6 +118,17 @@ def test_a_patch_status_never_meets_beside_a_low_project_target(tmp_path: Path) 
     block = detect_coverage_gate(_write(tmp_path, {"codecov.yml": text}))
     assert block["threshold_meets_minimum"] is None
     assert block["unmeasured_reason"] == PATCH_ONLY
+
+
+def test_max_threshold_percent_leaves_out_a_patch_target(tmp_path: Path) -> None:
+    text = ("coverage:\n  status:\n    project:\n      default:\n        target: 60%\n"
+            "    patch:\n      default:\n        target: 95%\n")
+    block = detect_coverage_gate(_write(tmp_path, {"codecov.yml": text}))
+    assert block["threshold_meets_minimum"] is True
+    assert block["max_threshold_percent"] == 60.0
+    patch_only = "coverage:\n  status:\n    patch:\n      default:\n        target: 95%\n"
+    block = detect_coverage_gate(_write(tmp_path, {"codecov.yml": patch_only}))
+    assert block["max_threshold_percent"] is None
 
 
 def test_an_auto_project_target_names_its_reason_beside_a_patch_status(tmp_path: Path) -> None:

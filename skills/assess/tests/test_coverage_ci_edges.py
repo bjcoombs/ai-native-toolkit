@@ -1,5 +1,5 @@
-"""Tests for the #954 coverage-gate CI credit edge cases (lib/coverage_ci.py and
-lib/coverage_activation.py).
+"""Tests for the #954 coverage-gate CI credit edge cases (lib/testing/coverage_ci.py and
+lib/testing/coverage_activation.py).
 
 Each form from PR #933's review either reads as the real tool behaves or reads null
 with a reason, never true where no CI run enforces the gate. The expected exits were
@@ -16,9 +16,9 @@ from pathlib import Path
 
 import pytest
 
-from lib.coverage_activation import addopts_cov, below, covers, read_activation
-from lib.coverage_ci import gradle_tasks, runs_tool
-from lib.coverage_gate import detect_coverage_gate
+from lib.testing.coverage_activation import addopts_cov, below, covers, read_activation
+from lib.testing.coverage_ci import gradle_tasks, runs_tool
+from lib.testing.coverage_gate import detect_coverage_gate
 
 PYPROJECT_80 = "[project]\nname = 'x'\n\n[tool.coverage.report]\nfail_under = 80\n"
 GRADLE_080 = ('plugins { id "jacoco" }\njacocoTestCoverageVerification {\n'

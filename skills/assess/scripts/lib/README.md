@@ -202,6 +202,13 @@ New code imports the new path.
   (#939). Files: `__init__.py`, `check_manifest.py`, `check_validation.py`, `manifest_whys.py`.
 - **`test_pressure/`** (predates #917): write-side truth pressure, with a facade
   `__init__.py` that re-exports the package's names. Files: `__init__.py`, `aggregate.py`, `common.py`, `heuristics.py`, `mutation.py`, `mutmut3.py`, `reason_paths.py`.
+- **`testing/`**: the Layer 6 test signals outside `test_pressure/`: the coverage gate and
+  the readings it combines (coverage activation, CI coverage runs, the root coverage.py
+  config), the coverage report, test focus, sibling tests, import credit, the mutation cap
+  and refresh, and untrusted hotspots. Files: `__init__.py`, `coverage_activation.py`,
+  `coverage_ci.py`, `coverage_gate.py`, `coverage_report.py`, `coverage_root_config.py`,
+  `import_credit.py`, `mutation_cap.py`, `mutation_refresh.py`, `sibling_tests.py`,
+  `test_focus.py`, `untrusted_hotspot.py`.
 
 ## Module reference
 

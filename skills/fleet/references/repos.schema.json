@@ -750,7 +750,7 @@
                   "reason"
                 ]
               },
-              "description": "Committed line-coverage thresholds (lib/coverage_gate.py), read from config and CI files at HEAD, never from measured coverage. Each gate keeps its threshold as written beside threshold_percent, the same value as a percentage (a JaCoCo ratio 0.80 is 80).",
+              "description": "Committed line-coverage thresholds (lib/testing/coverage_gate.py), read from config and CI files at HEAD, never from measured coverage. Each gate keeps its threshold as written beside threshold_percent, the same value as a percentage (a JaCoCo ratio 0.80 is 80).",
               "properties": {
                 "available": {
                   "type": "boolean"
@@ -817,7 +817,7 @@
                     "number",
                     "null"
                   ],
-                  "description": "The highest non-null threshold_percent across the gates; null when no gate has one. An unresolved root gate on a scoped run (issue #1032) is left out."
+                  "description": "The highest non-null threshold_percent across the gates; null when no gate has one. An unresolved root gate on a scoped run (issue #1032) and a Codecov patch target (issue #882) are left out."
                 },
                 "threshold_meets_minimum": {
                   "type": [

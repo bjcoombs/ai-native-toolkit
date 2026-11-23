@@ -47,7 +47,7 @@ from lib.context_blocks import (
     doc_to_code_edges,
     excluded_generated,
 )
-from lib.coverage_report import detect_coverage_report, load_coverage_data
+from lib.testing.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
 from lib.doc_complexity_join import analyze_doc_complexity_join
 from lib.doc_graph import build_doc_graph
@@ -69,12 +69,12 @@ from lib.unit_discovery import UnitsBlock, scan_units
 from lib.unit_levels import UnitLevelsBlock, unit_levels as unit_levels_block
 from lib.unit_rollup import UnitRollUpBlock, unit_rollup as unit_rollup_block
 from lib.unit_readings import UnitReadingsBlock, read_units, split_reads
-from lib.mutation_cap import mutation_not_run_cap, normalize_test_pressure
+from lib.testing.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.keyhole.promissory_markers import scan_promissory_markers
 from lib.run_context_types import DocGraphBlock, KeyholeIntegration
-from lib.sibling_tests import TestIndex, build_test_index
+from lib.testing.sibling_tests import TestIndex, build_test_index
 from lib.graph.structure_graph import StructureBlock, analyze_structure
-from lib.test_focus import compute_test_focus
+from lib.testing.test_focus import compute_test_focus
 from lib.test_pressure import scan_test_pressure
 
 Excludes = tuple[set[str], list[str]]

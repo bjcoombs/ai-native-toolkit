@@ -19,7 +19,7 @@ How a status counts toward Layer 6 level 1 (maintainer-approved, #882):
   ``codecov_patch_only`` (``PATCH_ONLY``), never false.
 - The status is server-side: it gates a merge only when branch protection requires it,
   which this read does not see. So a Codecov gate never reads as run by CI:
-  ``lib.coverage_ci`` reads it null with ``enforced_basis`` ``status_check_unconfirmed``
+  ``lib.testing.coverage_ci`` reads it null with ``enforced_basis`` ``status_check_unconfirmed``
   (``STATUS_UNCONFIRMED``). A Codecov status alone therefore never makes Layer 6 level 1
   true or false: it reads not measured.
 
@@ -34,7 +34,7 @@ one-line flow maps, comments and quotes), stdlib only; a line it cannot read is 
 never raised. Tests: ``tests/test_coverage_codecov.py``.
 
 Inward-only imports: stdlib and ``lib.assess_config.is_user_excluded``; never
-``lib.coverage_gate`` (which calls it) or an orchestrator.
+``lib.testing.coverage_gate`` (which calls it) or an orchestrator.
 """
 from __future__ import annotations
 

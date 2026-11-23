@@ -18,7 +18,7 @@ from lib.ai_usage import AiUsageBlock  # noqa: E402
 from lib.block_shapes import ReviewRealityBlock  # noqa: E402
 from lib.ci_checks import CiChecksBlock  # noqa: E402
 from lib.counts_only import counts_only_scans  # noqa: E402
-from lib.coverage_gate import CoverageGateBlock  # noqa: E402
+from lib.testing.coverage_gate import CoverageGateBlock  # noqa: E402
 from lib.hosting.delivery import DeliveryBlock  # noqa: E402
 from lib.guardrails import GuardrailsBlock  # noqa: E402
 from lib.layer_grades import LayerGradesBlock  # noqa: E402

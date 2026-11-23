@@ -1,6 +1,6 @@
-# `lib/coverage_gate.py`
+# `lib/testing/coverage_gate.py`
 
-The full reference for `skills/assess/scripts/lib/coverage_gate.py`, whose module docstring holds the summary.
+The full reference for `skills/assess/scripts/lib/testing/coverage_gate.py`, whose module docstring holds the summary.
 
 Answers the Layer 6 question measurement cannot: is a line-coverage threshold
 *configured*? `detect_coverage_gate(repo_root, scope, excludes)` runs from the scan
@@ -76,7 +76,7 @@ a null from another gate (a templated threshold) keeps its own reason, and a gat
 for every Go and Rust manifest present, even one gating nothing, keeps the normal
 reading, with `unmeasured_reason` null. The collector's manifest `revision` moved to 2 for the
 #788 change of meaning, and to 4 in the 3.0.0 release for the #937 widening.
-Root coverage.py config on a scoped run (#1032, `lib.coverage_root_config`): coverage.py
+Root coverage.py config on a scoped run (#1032, `lib.testing.coverage_root_config`): coverage.py
 reads its config from the directory it runs in, so a root `[tool.coverage]`, `.coveragerc`,
 `setup.cfg` or `tox.ini` floor governs a Python scope with no coverage.py config of its own
 when CI runs coverage from the root. `_root_floor` scans that root config's `fail_under` and
@@ -91,7 +91,7 @@ when they change
 `root_coverage_config_unresolved` (so `enforced_basis` is `threshold_not_read`); a root
 floor below 50 leaves false, which is false either way. A scope holding no `.py` file, or
 its own coverage.py config, is not affected. Only CI runs on ordinary triggers count. The manifest `revision` moved to 5 for this change of meaning.
-Codecov status targets (#882, `lib.coverage_codecov`): the first Codecov config Codecov
+Codecov status targets (#882, `lib.testing.coverage_codecov`): the first Codecov config Codecov
 reads (`codecov.yml`, `.codecov.yml`, `codecov.yaml`, `.codecov.yaml` at the root, then in
 `.github/`, then `dev/`; on a scoped run too) gives one gate per `coverage.status.project`
 or `.patch` status, tool `codecov`, `metric` `project` or `patch`, `form`
@@ -125,5 +125,5 @@ beside `value = "MISSED..."`) is a gate with unit `uncovered_count` or `missed_r
 its `threshold_percent` is null, so it reads unknown, never 0, and any such bound
 (zero included) gates something.
 Stdlib plus `lib.doc_graph.is_excluded_path`, `lib.assess_config.is_user_excluded`,
-`lib.coverage_activation`, `lib.coverage_ci` and `lib.coverage_codecov`. Tests:
-`tests/test_coverage_gate.py`, `tests/test_coverage_codecov.py`.
+`lib.testing.coverage_activation`, `lib.testing.coverage_ci` and `lib.testing.coverage_codecov`.
+Tests: `tests/test_coverage_gate.py`, `tests/test_coverage_codecov.py`.

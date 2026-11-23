@@ -290,7 +290,7 @@ CI_CHECKS: JsonDict = {
 
 COVERAGE_GATE: JsonDict = {
     "description": (
-        "Committed line-coverage thresholds (lib/coverage_gate.py), read from config and CI "
+        "Committed line-coverage thresholds (lib/testing/coverage_gate.py), read from config and CI "
         "files at HEAD, never from measured coverage. Each gate keeps its threshold as written "
         "beside threshold_percent, the same value as a percentage (a JaCoCo ratio 0.80 is 80)."),
     "properties": {
@@ -321,7 +321,7 @@ COVERAGE_GATE: JsonDict = {
         "max_threshold_percent": _field(
             _NUM_OR_NULL, "The highest non-null threshold_percent across the gates; null "
                               "when no gate has one. An unresolved root gate on a scoped run (issue #1032) "
-                              "is left out."),
+                              "and a Codecov patch target (issue #882) are left out."),
         "threshold_meets_minimum": _field(
             {"type": ["boolean", "null"]},
             "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at "
