@@ -21,7 +21,12 @@ fields are computed from the row (``lib.fleet.fleet_level.repo_level``):
   ``state``, ``disposition``, as ``gate_blockers`` writes them, #945), null when no gate
   blocks it;
 - ``tags``: the unit's per-tag tally, the headline strip (``lib.headline.tag_cells``) over the
-  unit's level result, the shape of the repository's ``tags`` (#1073).
+  unit's level result, the shape of the repository's ``tags`` (#1073);
+- ``learn_from``: up to three sibling units of the same repository that already hold the
+  unit's next blocking gate (#1155, ``lib.fleet.fleet_learn_from``), the same ecosystem and
+  kind first, by their folder. Empty when no sibling holds it or the gate is not one to make
+  (not measured, owner-excluded, none). Written like ``key``: clear in ``--full``, hashed under
+  ``--hash-paths``, null in plain counts-only, so a published file names no unit.
 
 No row carries a condition tally (``tally``, "N of M measured"): the unit Steps, their next
 blockers and the per-tag counts are the comparison inside one repository (#800 decision 3).
@@ -40,6 +45,7 @@ from collections.abc import Mapping
 from typing import Any, TypedDict
 
 from lib.fleet.fleet_data_steps import GateBlocker
+from lib.fleet.fleet_learn_from import Sibling, condition_states, ecosystems, learn_from, next_gate
 from lib.headline import tag_cells
 from lib.level_result_types import LevelResult, TagCell
 from lib.levels import MaturityModel
@@ -58,6 +64,7 @@ class UnitRow(TypedDict):
     next_step: int | None  # the Step above; None at the top Step
     next_blocker: GateBlocker | None  # the first gate of next_step that does not hold
     tags: list[TagCell]  # the headline's per-tag strip over the unit's result
+    learn_from: list[str] | None  # #1155: siblings holding next_blocker; None where names are not written
 
 
 def next_blocker(result: LevelResult) -> GateBlocker | None:
@@ -72,13 +79,29 @@ def next_blocker(result: LevelResult) -> GateBlocker | None:
 
 def unit_row(reading: Mapping[str, Any], scans: Mapping[str, Any], model: MaturityModel) -> UnitRow:
     """One unit's row: its reading overlaid on the repository's scans (see the module docstring)."""
-    result = unit_result(reading, scans, model)
+    return _row(reading, unit_result(reading, scans, model), model)
+
+
+def _row(reading: Mapping[str, Any], result: LevelResult, model: MaturityModel) -> UnitRow:
     path, kind = reading.get("path"), reading.get("kind")
     nxt = result["next_step"]
     return {"key": path if isinstance(path, str) else None,
             "kind": kind if kind in KINDS else None, "step": result["step"],
             "next_step": nxt["step"] if nxt is not None else None,
-            "next_blocker": next_blocker(result), "tags": tag_cells(result, model)}
+            "next_blocker": next_blocker(result), "tags": tag_cells(result, model), "learn_from": []}
+
+
+def _learn_from(rows: list[UnitRow], results: list[LevelResult], scans: Mapping[str, Any],
+                model: MaturityModel) -> None:
+    """Fill each row's ``learn_from`` from its siblings' results (#1155)."""
+    eco = ecosystems(scans.get("units"))
+    siblings = [Sibling(row["key"], row["kind"], eco.get(row["key"]), condition_states(result["conditions"]))
+                for row, result in zip(rows, results) if row["key"] is not None]
+    for row, result in zip(rows, results):
+        gate = next_gate(result["next_step"], model)
+        if gate is not None and row["key"] is not None:
+            me = Sibling(row["key"], row["kind"], eco.get(row["key"]), {})
+            row["learn_from"] = learn_from(me, gate, siblings)[0]
 
 
 def unit_rows(model: MaturityModel | None, scans: Mapping[str, Any] | None) -> list[UnitRow] | None:
@@ -87,5 +110,10 @@ def unit_rows(model: MaturityModel | None, scans: Mapping[str, Any] | None) -> l
     if model is None or not isinstance(block, Mapping) or block.get("available") is not True:
         return None
     units = block.get("units")
-    return [unit_row(u, scans or {}, model) for u in units if isinstance(u, Mapping)] \
-        if isinstance(units, list) else None
+    if not isinstance(units, list):
+        return None
+    readings = [u for u in units if isinstance(u, Mapping)]
+    results = [unit_result(u, scans or {}, model) for u in readings]
+    rows = [_row(u, r, model) for u, r in zip(readings, results)]
+    _learn_from(rows, results, scans or {}, model)
+    return rows
