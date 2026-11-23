@@ -14,7 +14,7 @@ exempt position runs on past its failure, so a later top-level ``exit 0`` masks 
 
 An ``until`` condition is not read as exempt: ``until pytest; do sleep 5; done`` loops
 until the check passes, so it never reaches the ``exit 0`` on a failure unless the loop
-breaks out (a known limit: a ``break`` in the loop body is not read).
+breaks out (``lib.ci_unsure.until_break_flags`` reads that loop as not measured, #1008).
 
 Which segments of one shell statement errexit does not stop on (issue #936), read by
 `ci_masking` on a GitHub `run:` body with errexit on, per the bash manual's `set -e`

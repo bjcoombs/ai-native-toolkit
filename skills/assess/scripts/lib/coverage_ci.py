@@ -147,7 +147,7 @@ from typing import Literal, TypeVar
 
 from lib.check_command import (
     _DIRECT_TESTS, LINT_PROGRAMS, _exec_program, _info_program, is_info_invocation)
-from lib.ci_masking import unmasked_lines
+from lib.ci_masking import mask_lines
 from lib.coverage_activation import Activation, below, covers
 from lib.named_check import may_lint_named
 from lib.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, workflow_trigger
@@ -158,7 +158,7 @@ from lib.shared_tooling import pulls_jobs_from_elsewhere
 
 EnforcedBasis = Literal[
     "ci_run", "no_gate", "threshold_below_minimum", "threshold_not_read", "unknown_trigger",
-    "indirect_run", "included_jobs", "unread_ci_system", "not_run_in_ci", "no_ci"]
+    "check_may_pass", "indirect_run", "included_jobs", "unread_ci_system", "not_run_in_ci", "no_ci"]
 
 # A gate as ``coverage_gate`` reports it; read by key so this module does not import it.
 Gate = Mapping[str, object]
@@ -180,7 +180,7 @@ _TASK_FILES = frozenset({
     "pyproject.toml", "setup.cfg"})
 # The null reasons, most specific first.
 _NULL_ORDER: tuple[EnforcedBasis, ...] = (
-    "unknown_trigger", "indirect_run", "included_jobs", "unread_ci_system")
+    "unknown_trigger", "check_may_pass", "indirect_run", "included_jobs", "unread_ci_system")
 
 
 @dataclass(frozen=True)
@@ -192,6 +192,7 @@ class Run:
     words: tuple[str, ...]
     text: str
     trigger: Trigger
+    may_pass: bool = False   # a #1008 form: its failure may not fail the job
 
 
 @dataclass(frozen=True)
@@ -208,10 +209,13 @@ class CiRuns:
 NO_RUNS = CiRuns((), frozenset(), False, False)
 
 
-def _command_groups(lines: list[str], unmasked: list[str]) -> list[tuple[range, str]]:
+def _command_groups(lines: list[str], unmasked: list[str], texts: list[str] | None = None,
+                    which: int = 0) -> list[tuple[range, str]]:
     """``(span, text)`` per command line; a folded block scalar (``run: >-``) is one text
     per paragraph, and lines joined by a trailing ``\\`` are one text, attributed to
-    their first line."""
+    their first line. ``texts`` and ``which`` read the unsure lines instead
+    (``ci_masking.mask_lines``' second value, #1008)."""
+    texts = unmasked if texts is None else texts
     out: list[tuple[range, str]] = []
     i = 0
     while i < len(lines):
@@ -221,7 +225,7 @@ def _command_groups(lines: list[str], unmasked: list[str]) -> list[tuple[range, 
             j = i
             while j + 1 < len(lines) and lines[j].rstrip().endswith("\\"):
                 j += 1
-            parts = [ci_line_text(unmasked[i])] + [unmasked[k].strip() for k in range(i + 1, j + 1)]
+            parts = [ci_line_text(texts[i])] + [texts[k].strip() for k in range(i + 1, j + 1)]
             text = " ".join(p.removesuffix("\\").strip() for p in parts if p.strip())
             out.append((range(i, j + 1), text))
             i = j + 1
@@ -238,21 +242,23 @@ def _command_groups(lines: list[str], unmasked: list[str]) -> list[tuple[range, 
                 continue
             if paragraph:
                 out.append((range(paragraph[0], paragraph[-1] + 1),
-                            _folded_text(lines, unmasked, paragraph)))
+                            _folded_text(lines, unmasked if which == 0 else texts, paragraph, which)))
                 paragraph = []
         i = j
     return out
 
 
-def _folded_text(lines: list[str], unmasked: list[str], paragraph: list[int]) -> str:
+def _folded_text(lines: list[str], unmasked: list[str], paragraph: list[int], which: int = 0) -> str:
     """One folded paragraph as the shell runs it, masked as one line: a line blanked by
     its step or body (``continue-on-error``, ``set +e``) drops the paragraph, and the
     joined text is masked by #775's same-line rules, so a ``|| true`` on a continuation
-    line masks the head it follows."""
-    if any(not unmasked[n].strip() for n in paragraph):
+    line masks the head it follows. With ``which`` 1, ``unmasked`` is the unsure lines
+    (#1008), and a paragraph holding none reads nothing."""
+    blank = any(not unmasked[n].strip() for n in paragraph)
+    if blank if which == 0 else not any(unmasked[n].strip() for n in paragraph):
         return ""
     joined = " ".join(lines[n].strip() for n in paragraph)
-    return ci_line_text(unmasked_lines(f"run: {joined}")[0])
+    return ci_line_text(mask_lines(f"run: {joined}")[which][0])
 
 
 def _word_lists(text: str) -> list[tuple[tuple[str, ...], str]]:
@@ -295,7 +301,7 @@ def read_ci_runs(repo_root: Path) -> CiRuns:
         lines = text.splitlines()
         triggers: list[Trigger] = (gitlab_line_triggers(text) if gitlab
                                    else [workflows.get(rel, "unknown")] * len(lines))
-        unmasked = unmasked_lines(text)
+        unmasked, unsure = mask_lines(text)
         for span, line_text in _command_groups(lines, unmasked):
             # An action step is masked like a run: line (continue-on-error, if: false).
             if _GO_TC_ACTION.search(unmasked[span[0]]):
@@ -304,6 +310,9 @@ def read_ci_runs(repo_root: Path) -> CiRuns:
             for words, command in _word_lists(line_text):
                 if words:
                     runs.append(Run(rel, span, words, command, triggers[span[0]]))
+        for span, line_text in _command_groups(lines, unmasked, unsure, 1):
+            runs.extend(Run(rel, span, words, command, triggers[span[0]], True)
+                        for words, command in _word_lists(line_text) if words)
     return CiRuns(tuple(runs), frozenset(files), elsewhere, unread)
 
 
@@ -657,7 +666,7 @@ def _line_gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates,
         if state is False and cov_dirs and _activates(gate, run.words, True, off, activation):
             state = None   # only a package's addopts --cov: the run directory is not resolved
         if state is True:
-            states.append(True if run.trigger == "ordinary"
+            states.append(("check_may_pass" if run.may_pass else True) if run.trigger == "ordinary"
                           else "unknown_trigger" if run.trigger == "unknown" else False)
         elif state is None and run.trigger != "not_ordinary":
             states.append("indirect_run" if run.trigger == "ordinary" else "unknown_trigger")
@@ -685,7 +694,7 @@ def _tool_state(run: Run, family: str, pytest_cov: bool, jest_collects: bool,
         return False
     if run.trigger == "unknown":
         return "unknown_trigger"
-    return True if state else "indirect_run"
+    return ("check_may_pass" if run.may_pass else True) if state else "indirect_run"
 
 
 def _indirect(ci: CiRuns, family: str | None = None) -> bool | str:
