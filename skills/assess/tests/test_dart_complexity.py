@@ -215,10 +215,11 @@ def test_dart_scanner_pathological_input_is_fast(case: str) -> None:
 @pytest.mark.cpu_budget
 @pytest.mark.parametrize("case", list(PATHOLOGICAL))
 def test_dart_scanner_pathological_input_scales_linearly(case: str) -> None:
-    """Quadrupling a pathological input at most quadruples its scan time (#929).
+    """A pathological input's scaling ratio time(n) / time(n/4) stays under 8 (#929).
 
     The bound is ``time(n) < 8 * time(n/4) + slack``: a linear scan gives a
-    ratio near 4, while n^1.5 gives 8 and a quadratic 16. The check compares the
+    ratio near 4 and a quadratic 16, so 8 separates them with room for CI timer
+    noise. The check compares the
     scanner with itself on the same machine at the same moment, so it holds on
     a slow runner where an absolute budget would not, and the 1 s budget above
     stays the absolute guard. The small side runs ``4 * reps`` scans, so both

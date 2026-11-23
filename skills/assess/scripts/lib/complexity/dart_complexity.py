@@ -54,8 +54,9 @@ cost of the common case, which keeps the pathological-input budget in
 `test_dart_complexity.py` on the Windows runner. Functions sort by the ordinal of their
 opening, which is source order. A `}` closes the `=>` bodies opened inside it before its
 own function, so a close always pops the innermost frame and deep nesting stays linear
-(#929); `test_dart_complexity.py` asserts that each pathological input's scan time at
-most quadruples when the input quadruples. Pure stdlib.
+(#929). `test_dart_complexity.py` bounds each pathological input's scaling ratio
+`time(n) / time(n/4)` at 8: a linear scan reads 4 and a quadratic one 16, so 8 separates
+them with room for CI timer noise. Pure stdlib.
 """
 from __future__ import annotations
 
