@@ -26,7 +26,7 @@ question off the import graph:
     sub-clusters *are* the proposed cut-lines.
 
 The graph comes from a language builder (``lib.graph.import_graph``): each
-registered builder (``lib.graph.import_graph_builders``) returns one language's
+registered builder (``lib.import_graph_builders``) returns one language's
 :class:`~lib.graph.import_graph.ModuleGraph` -- modules, edges, front doors, module
 files and package boundaries -- and the largest is measured, its language in the
 block's ``language`` field. Nothing here assumes a language: a package boundary,
@@ -116,7 +116,7 @@ from lib.graph.import_graph import (
     NameCollision,
     select_graph,
 )
-from lib.graph.import_graph_builders import BUILDERS
+from lib.import_graph_builders import BUILDERS
 
 __all__ = ["EXCLUDE_DIRS", "NameCollision"]
 

@@ -499,7 +499,7 @@ def _module_graph(repo_root: Path) -> ModuleGraph | None:
     here can differ from ``structure.language``.
     """
     try:
-        from lib.graph.import_graph_builders import BUILDERS
+        from lib.import_graph_builders import BUILDERS
     except ImportError:  # pragma: no cover - exercised only on a broken env
         return None
     try:

@@ -24,7 +24,7 @@ from lib.graph.import_graph import (
     language_counts,
     select_graph,
 )
-from lib.graph.import_graph_builders import BUILDERS
+from lib.import_graph_builders import BUILDERS
 from lib.graph.import_graph_python import PYTHON_BUILDER
 from lib.graph.import_graph_typescript import TYPESCRIPT_BUILDER
 from lib.graph.structure_graph import analyze_structure

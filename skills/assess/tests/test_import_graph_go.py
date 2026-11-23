@@ -15,7 +15,7 @@ from lib.graph.import_graph import is_graph_source
 from lib.coupling_analysis import detect_hidden_coupling
 from lib.keyhole_signals import _graphed_dirs, project_static_modularity
 from lib.graph.import_graph import select_graph
-from lib.graph.import_graph_builders import BUILDERS
+from lib.import_graph_builders import BUILDERS
 from lib.run_context_types import CoChangePair
 from lib.signals_schema import SCHEMA_PATH
 from lib.structure_drift import detect_grouping_disagreement

@@ -24,7 +24,7 @@ from lib.graph.import_graph import (
     builder_languages,
     select_graph,
 )
-from lib.graph.import_graph_builders import BUILDERS
+from lib.import_graph_builders import BUILDERS
 from lib.graph.structure_graph import analyze_structure
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"

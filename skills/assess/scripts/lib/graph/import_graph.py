@@ -13,7 +13,7 @@ A builder is any object with a ``language`` token and a ``build`` method (the
 :class:`ImportGraphBuilder` protocol). ``build`` returns ``None`` when the
 repository holds nothing it can graph, and raises :class:`GraphUnavailable` with a
 reason sentence when its tool is missing or fails, so the reason survives in the
-block. The registered builders live in ``lib.graph.import_graph_builders``.
+block. The registered builders live in ``lib.import_graph_builders``.
 
 This module imports no graph tool; it is types, dispatch and the dominant-language
 count only.
@@ -389,7 +389,7 @@ def is_graph_source(
     configs). A language no builder covers keeps the extension check alone.
     """
     if builders is None:
-        from lib.graph.import_graph_builders import BUILDERS  # lazy: builders import this module
+        from lib.import_graph_builders import BUILDERS  # lazy: builders import this module
         builders = BUILDERS
     covering = next((b for b in builders if language in builder_languages(b)), None)
     covered = builder_languages(covering) if covering is not None else {language}
