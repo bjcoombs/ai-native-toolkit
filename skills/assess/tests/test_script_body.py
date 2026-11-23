@@ -73,7 +73,8 @@ CASES: list[tuple[str, str, bool]] = [
 MASKED = [SH + "pytest\necho done\n", SH + "pytest || true\n", SH + "set -e\npytest | tee log\n",
           SH + "pytest\nexit 0\n", SH + "set -e\n! pytest\n",
           SH + "[ -n \"$STRICT\" ] && set -e\npytest\necho done\n", SH + "set -e\necho \"Usage:\npytest\n\"\n",
-          SH + "set -e\necho hi; trap 'exit 0' ERR\npytest\n", SH + "set -e\necho; pytest() { true; }\npytest\n",
+          # ERR traps are a bash feature (dash, Ubuntu's /bin/sh, has none), so this one names bash
+          "#!/bin/bash\nset -e\necho hi; trap 'exit 0' ERR\npytest\n", SH + "set -e\necho; pytest() { true; }\npytest\n",
           SH + "set -e\necho; exec true\npytest\n", SH + "set -e\n[ -z \"$RUN\" ] && exit 0\npytest\n",
           SH + "set -e\n. ./lib.sh\npytest\necho done\n"]
 
@@ -146,9 +147,14 @@ def test_a_credited_body_fails_the_step_in_a_real_shell(tmp_path: Path, invocati
 
 @pytest.mark.parametrize("body", MASKED)
 def test_a_masked_body_passes_in_a_real_shell(tmp_path: Path, body: str) -> None:
+    """Each body runs as written, and a ``#!/bin/sh`` one also under dash where it is installed
+    (macOS ``/bin/sh`` is bash; Ubuntu's is dash)."""
     skip_without_posix_shell()
+    dash = shutil.which("dash")
+    bodies = [body, *([body.replace(SH, f"#!{dash}\n", 1)] if dash and body.startswith(SH) else [])]
     for shell in _shells():
-        assert _run(shell, tmp_path, "./x.sh", body) == 0, (shell, body)
+        for text in bodies:
+            assert _run(shell, tmp_path, "./x.sh", text) == 0, (shell, text)
 
 
 def test_a_sourced_set_e_is_ignored_in_an_exempt_position(tmp_path: Path) -> None:

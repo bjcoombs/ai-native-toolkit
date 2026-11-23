@@ -23,7 +23,9 @@ ERR``), a nested ``.`` / ``source`` of anything but an environment file (``. ./l
 ``set +e``; ``. venv/bin/activate`` is fine), and an ``exit`` behind ``&&`` / ``||`` other than a
 non-zero re-raise (``[ -z "$RUN" ] && exit 0``). A check behind a guard (``[ -n "$RUN" ] &&
 pytest``) is credited as a CI line with the same guard is: it fails the script when it runs.
-False means "not shown", never "no check": callers only upgrade a
+Known limit: a nested source is refused whatever the file holds, so a body that sources a
+harmless ``. ./lib.sh`` (``X=1``) and then fails on its check reads null, not true. That null
+is safe (never credit), only less precise. False means "not shown", never "no check": callers only upgrade a
 reading with it (``lib.ci_scripts.ScriptTree``), so a name rule's True or null stands.
 
 ``start_state(form, body)`` gives the errexit and pipefail a script starts with:
