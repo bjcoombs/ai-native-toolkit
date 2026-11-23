@@ -26,6 +26,9 @@ def _workflow(on: str, job: str = _JOB) -> str:
     ("on:\n  - push\n  - schedule", ["push", "schedule"]),
     ("on: {push: {branches: [main]}, workflow_dispatch: {}}", ["push", "workflow_dispatch"]),
     ("on:  # comment\n  pull_request:", ["pull_request"]),
+    # A block sequence may sit at its parent key's column (#958).
+    ("on:\n- push\n- schedule", ["push", "schedule"]),
+    ("on:\n\n- pull_request  # c\n", ["pull_request"]),
 ])
 def test_workflow_events_reads_every_on_form(on: str, events: list[str]) -> None:
     assert workflow_events(_workflow(on)) == events
@@ -40,6 +43,10 @@ def test_workflow_events_reads_every_on_form(on: str, events: list[str]) -> None
     ("on: release", "not_ordinary"),
     ("on: workflow_call", "called"),
     ("", "unknown"),
+    ("on:\n- push", "ordinary"),
+    ("on:\n- workflow_dispatch", "not_ordinary"),
+    # Column-0 items only open the block: after indented children, one ends it.
+    ("on:\n  - workflow_dispatch\n- push", "not_ordinary"),
 ])
 def test_workflow_trigger(on: str, trigger: str) -> None:
     assert workflow_trigger(_workflow(on)) == trigger
@@ -62,6 +69,11 @@ def _block(tmp_path: Path, files: dict[str, str]) -> tuple[bool | None, str, int
 def test_a_dispatch_only_workflow_is_not_enforced(tmp_path: Path) -> None:
     files = {".github/workflows/ci.yml": _workflow("on: workflow_dispatch")}
     assert _block(tmp_path, files) == (False, "not_enforced", 1)
+
+
+def test_a_column_zero_on_list_is_enforced(tmp_path: Path) -> None:
+    files = {".github/workflows/ci.yml": _workflow("on:\n- pull_request")}
+    assert _block(tmp_path, files) == (True, "enforced_check", 0)
 
 
 def test_a_workflow_with_no_readable_on_is_unknown(tmp_path: Path) -> None:

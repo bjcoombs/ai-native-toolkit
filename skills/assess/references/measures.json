@@ -1499,7 +1499,9 @@
       "privacy": {
         "written": true,
         "strings_kept": {
-          "review_reality.reason": "drop"
+          "review_reality.bot_sequence": "token",
+          "review_reality.reason": "drop",
+          "review_reality.sequence": "token"
         }
       },
       "used_by": {

@@ -6,6 +6,10 @@ Branch protection reads only that name, so the aggregator must report on every
 run and must be green only when every leg is green: a failed, cancelled or
 skipped leg turns it red. The ghsync/ghreport path gate (#971) stays a step
 inside its leg, so no leg is ever skipped at job level on purpose.
+
+The shared `Install ripgrep` step retries choco, then falls back to the pinned
+ripgrep GitHub release zip, checked against a pinned SHA256, so a Chocolatey
+outage cannot turn every leg red. Both paths install the same version.
 """
 import re
 from pathlib import Path
@@ -152,3 +156,62 @@ def test_superseded_pr_runs_cancel() -> None:
         "group": "windows-${{ github.event.pull_request.number || github.sha }}",
         "cancel-in-progress": "${{ github.event_name == 'pull_request' }}",
     }
+
+
+# The ripgrep install: choco with retries, then the pinned GitHub release
+# checked against a pinned SHA256. A version bump changes these two constants
+# and the step's env together; the SHA256 is computed from the release asset
+# and compared with the release's published .sha256 asset.
+RG_VERSION = "15.2.0"
+RG_SHA256 = "71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5"
+
+
+def _ripgrep_step() -> dict[str, Any]:
+    _, job = _matrix_job(_jobs())
+    steps = [s for s in job["steps"] if s.get("name") == "Install ripgrep"]
+    assert len(steps) == 1
+    return steps[0]
+
+
+def test_ripgrep_install_pins_one_version_and_checksum() -> None:
+    step = _ripgrep_step()
+    assert step["shell"] == "pwsh"
+    assert step["env"] == {"RG_VERSION": RG_VERSION, "RG_SHA256": RG_SHA256}
+    assert re.fullmatch(r"[0-9a-f]{64}", RG_SHA256)
+    # Shared setup with no leg guard: every leg needs rg.
+    assert "if" not in step
+    assert "continue-on-error" not in step
+
+
+def test_ripgrep_choco_install_retries_the_pinned_version() -> None:
+    run = _ripgrep_step()["run"]
+    assert "foreach ($attempt in 1..3)" in run
+    assert "choco install ripgrep --version $env:RG_VERSION -y --no-progress" in run
+    assert "if ($LASTEXITCODE -eq 0) { $installed = $true; break }" in run
+    assert "Start-Sleep" in run
+
+
+def test_ripgrep_falls_back_to_the_checked_github_release() -> None:
+    run = _ripgrep_step()["run"]
+    fallback = run[run.index("if (-not $installed)"):]
+    assert (
+        "https://github.com/BurntSushi/ripgrep/releases/download/$env:RG_VERSION/$name.zip"
+        in fallback
+    )
+    assert '$name = "ripgrep-$env:RG_VERSION-x86_64-pc-windows-msvc"' in fallback
+    # The hash check sits between the download and the extract, and a
+    # mismatch exits before rg reaches PATH.
+    download = fallback.index("Invoke-WebRequest")
+    check = fallback.index("Get-FileHash -Path $zip -Algorithm SHA256")
+    mismatch = fallback.index("if ($hash -ne $env:RG_SHA256)")
+    extract = fallback.index("Expand-Archive")
+    path = fallback.index("$env:GITHUB_PATH")
+    assert download < check < mismatch < extract < path
+    assert "exit 1" in fallback[mismatch:extract]
+
+
+def test_ripgrep_step_fails_unless_rg_is_the_pinned_version() -> None:
+    run = _ripgrep_step()["run"]
+    tail = run[run.rindex("rg --version"):]
+    assert "^ripgrep $([regex]::Escape($env:RG_VERSION))(\\s|$)" in tail
+    assert "exit 1" in tail
