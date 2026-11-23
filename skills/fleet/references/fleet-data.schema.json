@@ -315,6 +315,62 @@
                     "repos"
                   ],
                   "additionalProperties": false
+                },
+                "tags": {
+                  "type": "object",
+                  "properties": {
+                    "measured": {
+                      "type": "integer"
+                    },
+                    "repos": {
+                      "type": "integer"
+                    },
+                    "cells": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tag": {
+                            "type": "string"
+                          },
+                          "met": {
+                            "type": "integer"
+                          },
+                          "measured": {
+                            "type": "integer"
+                          },
+                          "verified": {
+                            "type": "integer"
+                          },
+                          "not_measured": {
+                            "type": "integer"
+                          },
+                          "hazards": {
+                            "type": "integer"
+                          },
+                          "declined": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "declined",
+                          "hazards",
+                          "measured",
+                          "met",
+                          "not_measured",
+                          "tag",
+                          "verified"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "cells",
+                    "measured",
+                    "repos"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -328,6 +384,7 @@
                 "repos",
                 "source",
                 "step",
+                "tags",
                 "view"
               ],
               "additionalProperties": false
@@ -636,6 +693,52 @@
               ],
               "additionalProperties": false
             }
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "type": "string"
+                    },
+                    "met": {
+                      "type": "integer"
+                    },
+                    "measured": {
+                      "type": "integer"
+                    },
+                    "verified": {
+                      "type": "integer"
+                    },
+                    "not_measured": {
+                      "type": "integer"
+                    },
+                    "hazards": {
+                      "type": "integer"
+                    },
+                    "declined": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "declined",
+                    "hazards",
+                    "measured",
+                    "met",
+                    "not_measured",
+                    "tag",
+                    "verified"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -650,6 +753,7 @@
           "rows",
           "status",
           "step",
+          "tags",
           "tally",
           "units",
           "web_url"

@@ -87,7 +87,7 @@ Tag `structure`: 6 conditions, none shared with another tag.
 | `layer-3-linters.2` Stale suppressions stay at 10 or fewer | `promissory_markers` | Stale suppression comments: is at most 10 (`promissory_markers.families.suppression.stale lte 10`) | `measured` | yes | - | positive | requires `layer-3-linters.1` | A suppression that survives many edits switches a check off in code that keeps changing, and an agent editing nearby gets no sign the warning still matters. | Revisit the oldest suppression comments and fix or remove them. |
 | `layer-3-linters.2` Suppression ages can be read from history | `promissory_markers` | Marker aging is reliable: is true (`promissory_markers.aging_reliable eq true`) | `measured` | yes | - | positive | requires `layer-3-linters.1` | A guard for the suppression count: on a shallow or squashed history every suppression looks new, so a count of 0 would say nothing. | Run on a full clone so suppression ages can be measured. |
 | `layer-4-architecture.1` A boundary or ownership map names a module path | `structure_drift` | Ownership-map patterns naming a module path: is above 0 (`structure_drift.tier_0.boundary_patterns gt 0`) | `config_only` | no, listed | - | positive | - | A map that names module paths tells an agent which code belongs together, and with CODEOWNERS, whose review a change there needs. | Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths. |
-| `layer-4-architecture.2` 95% of files are 500 lines or fewer | `stats_summary` | File size at the 95th percentile: is at most 500 (`stats_summary.loc.p95 lte 500`) | `measured` | yes | - | positive | requires `layer-4-architecture.1` | With nearly all files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. | Split the largest files along their natural seams. |
+| `layer-4-architecture.2` 95% of production source files are 500 lines or fewer | `stats_summary` | Production source file size at the 95th percentile: is at most 500 (`stats_summary.loc_by_class.source.p95 lte 500`) | `measured` | yes | - | positive | requires `layer-4-architecture.1` | With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file. | Split the largest files along their natural seams. |
 
 ### Agent context
 
@@ -300,6 +300,7 @@ Finds coverage thresholds written in CI, task-runner and tool config, each with 
 - Evidence: `coverage_gate.enforced_meets_minimum` ci_executed (verified).
 - Not measured when:
   - `go_rust_gate_form_not_read`: The repository holds a go.mod or Cargo.toml with no coverage gate found for it, and no gate of at least 50 percent for another language (a low Python gate beside go.mod is not unmet): its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read. Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines.
+  - `root_coverage_config_unresolved`: A scoped run found a fail_under in the root coverage.py config for a Python package with none of its own, but not where CI runs coverage: coverage.py reads the config of the directory it runs in, so the root floor governs the package only when CI runs coverage from the root or names that config. Run coverage in CI from the repository root (pytest --cov, coverage report), or pass the root config with --cov-config or --rcfile; or give the package its own fail_under and run coverage from its directory or with --cov-config naming that config.
 
 Why the signals named here matter:
 
@@ -591,12 +592,12 @@ It summarises file size and complexity across the repository; the 95th-percentil
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
 - Counts-only: numbers, booleans and nulls kept; strings by field: `stats_summary.ccn.basis` token, `stats_summary.complexity_unreliable.language` token, `stats_summary.complexity_unreliable.path` path, `stats_summary.est_tokens.budget.budget_basis` drop, `stats_summary.fn_ccn.backend_by_language.*` token, `stats_summary.fn_ccn.basis` token, `stats_summary.fn_ccn.source.name` token, `stats_summary.top_complex.ccn_basis` token, `stats_summary.top_complex.max_fn_name` drop, `stats_summary.top_complex.source` token, `stats_summary.top_hotspots.ccn_basis` token, `stats_summary.top_hotspots.max_fn_name` drop, `stats_summary.top_hotspots.source` token, `stats_summary.top_large.ccn_basis` token, `stats_summary.top_large.max_fn_name` drop, `stats_summary.top_large.source` token.
 - Used by: row `layer-4-architecture`.
-- Evidence: `stats_summary.loc.p95` head_structure (measured).
+- Evidence: `stats_summary.loc_by_class.source.p95` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.
 
 Why the signals named here matter:
 
-- `stats_summary.loc.p95` feeds `layer-4-architecture.2:stats_summary.loc.p95`: With nearly all files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice.
+- `stats_summary.loc_by_class.source.p95` feeds `layer-4-architecture.2:stats_summary.loc_by_class.source.p95`: With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file.
 
 ### `promissory_markers`: Promissory markers
 
@@ -1030,3 +1031,4 @@ The scan registry in run order, including the private inputs other scans read.
 | `since_last_run` | Since last run | `level`, `assess_dir`, `repo_root` | `since_last_run` | no |
 | `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
 | `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
+| `unit_rollup` | Monorepo unit roll-up | `unit_levels` | `unit_rollup` | no |

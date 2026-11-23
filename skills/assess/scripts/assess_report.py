@@ -585,6 +585,15 @@ def render_since_section(ctx: dict[str, Any]) -> str:
     return f"## Since Last Run\n\n{block['markdown']}\n\n"
 
 
+def _headline_markdown(ctx: dict[str, Any]) -> str:
+    """The headline, then the monorepo unit roll-up (#865) when the run scored two or more
+    units. A run with fewer units renders the headline alone, byte for byte."""
+    markdown = as_headline(ctx.get("headline"))["markdown"]
+    rollup = ctx.get("unit_rollup")
+    extra = rollup.get("markdown") if isinstance(rollup, dict) else None
+    return f"{markdown}\n\n{extra}" if isinstance(extra, str) and extra else markdown
+
+
 def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None = None) -> str:
     """Render the full deterministic Markdown report from a run-context dict.
 
@@ -617,7 +626,7 @@ def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None =
         plugin_version=ctx.get("plugin_version", "unknown"),
         commit_note=_render_commit_note(ctx),
         since_section=render_since_section(ctx),
-        headline=as_headline(ctx.get("headline"))["markdown"],
+        headline=_headline_markdown(ctx),
         diagrams_section=diagrams_section(build_all(ctx), assess_dir),
         files_scored=_fmt(stats.get("files_scored", 0)),
         loc_total=_fmt(loc.get("total")),

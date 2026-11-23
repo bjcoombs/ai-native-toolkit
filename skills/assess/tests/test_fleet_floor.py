@@ -15,7 +15,6 @@ import pytest
 
 import assess_signals
 import lib.fleet.fleet_heatmap as fh
-import lib.fleet.fleet_layer_bars as flb
 import lib.fleet.fleet_maturity as fm
 import lib.fleet.fleet_next_steps as ns
 import lib.fleet.fleet_quadrant as fq
@@ -180,15 +179,9 @@ def test_heatmap_draws_a_floor_apart_from_known_and_unknown():
     assert "fleet-floor" not in fh.render_heatmap([plain], columns)
 
 
-def test_layer_bars_and_quadrant_show_the_floor():
+def test_the_quadrant_shows_the_floor():
     model = _model()
     repos = [_row("g/a", _scans()), _row("g/b", _scans(gate=False)), _row("g/c", {})]
-    bars = flb.layer_bars(model, repos)
-    assert bars[0]["unknown"] == ["g/a", "g/c"] and bars[0]["floored"] == {"g/a": 1}
-    assert flb.floor_counts(bars[0]) == [(1, 1)]
-    svg = flb.render_layer_bars(bars)
-    assert "at least level 1 of 2 for g/a" in svg and "level unknown for g/c" in svg
-    assert "g/a (at least 1)" in svg
     points = {p["repo"]: p for p in fq.repo_points(model, repos)}
     assert points["g/a"]["maturity"] is None and points["g/a"]["maturity_floor"] == 0.5
     assert "maturity_floor" not in points["g/b"] and "maturity_floor" not in points["g/c"]

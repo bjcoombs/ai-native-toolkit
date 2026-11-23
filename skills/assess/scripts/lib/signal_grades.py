@@ -8,7 +8,7 @@ reaching the scanners. ``SIGNAL_INPUTS`` is generated at import from each signal
 
 The classification data `level_signals.py` documents and re-exports: `InputClass`, `Grade`,
 `INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES`, `EMPTY_DENOMINATORS` (signal
-to its set's count and the code when that count is 0, read by `levels.py`: `no_scored_files`,
+to its set's count and the code when that count is 0, read by `levels.py`: `no_source_files`,
 `no_manifests`) and the `DEFAULT_LEVELS` path, importing only `lib.manifest.check_manifest` (which imports only
 `lib.manifest.check_validation` and `lib.manifest_whys`, neither a scanner), so `level_tally.py` and the run context's `level` entry read them
 without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
@@ -54,7 +54,9 @@ UNMEASURED_VALUES: dict[str, tuple[bool, str]] = {
 # A statistic over an empty set is not a measurement: a p95 of no files is 0 and
 # would pass any "at most" test (#906).
 EMPTY_DENOMINATORS: dict[str, tuple[str, str]] = {
-    "stats_summary.loc.p95": ("stats_summary.files_scored", "no_scored_files"),
+    # No production source file is not a small one (#820).
+    "stats_summary.loc_by_class.source.p95": (
+        "stats_summary.loc_by_class.source.files_scored", "no_source_files"),
     # No manifest to lock is not a lockfile check passed (#927).
     "agent_environment.pinning.unlocked_total": ("agent_environment.pinning.manifests_total", "no_manifests"),
 }

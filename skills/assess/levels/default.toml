@@ -23,7 +23,7 @@
 #   promissory_markers blocks itself (lib/headless_layers.py) when grimp,
 #   networkx, lizard and rg are installed; a missing tool makes its block
 #   unavailable with a named reason, so the row is unknown there. Headless
-#   stats_summary scores the files lizard reads only, so its loc p95 can
+#   stats_summary scores the files lizard reads only, so its source p95 can
 #   differ from a full run's.
 # - Layer 2 reads the import graph's design, not type strictness: level 1 is
 #   real module structure (Newman modularity Q >= 0.3, the usual threshold
@@ -91,11 +91,16 @@
 #   a catch-all or extension glob (`*`, `/**`, `*.py`), a dot-directory
 #   (`/.github/`), a root file (`README.md`, `LICENSE`) or a docs-only
 #   path leaves the code with one owner, so it does not count. Level 2 adds a
-#   file-size outcome (95% of scored files at 500 lines or fewer) and requires
-#   layer-4-architecture.1 (#906). With no file scored (a docs-only
-#   repository) the p95 is a statistic over nothing: the condition reads not
-#   measured (no_scored_files, signal_grades.EMPTY_DENOMINATORS), never met,
-#   and the row level reads unknown there too. Neither level proves an
+#   file-size outcome (95% of production source files at 500 lines or
+#   fewer) and requires layer-4-architecture.1 (#906). The percentile reads
+#   stats_summary.loc_by_class.source (#820): test, fixture, example,
+#   vendored and generated paths (lib/path_classes.py) are set aside, so
+#   small fixtures cannot hide a large source file and large tests cannot
+#   fail clean source. With no source file scored (a docs-only or
+#   tests-only repository) the p95 is a statistic over nothing: the
+#   condition reads not measured (no_source_files,
+#   signal_grades.EMPTY_DENOMINATORS), never met, and the row level reads
+#   unknown there too. Neither level proves an
 #   architecture test runs in CI, which is what /assess looks for. With no
 #   map the structure_drift block reads no_ownership_map in both /assess and a headless run, so the row is
 #   unknown rather than 0.
@@ -348,7 +353,7 @@ aggregation = "min"
   [[rows.levels]]
   level = 2
   truth = ["structure"]
-  criteria = [{ signal = "stats_summary.loc.p95", op = "lte", value = 500 }]
+  criteria = [{ signal = "stats_summary.loc_by_class.source.p95", op = "lte", value = 500 }]
   requires = ["layer-4-architecture.1"]
 
 [[rows]]

@@ -176,24 +176,30 @@ def test_thin_history_is_not_measured_not_unmet():
     assert _state(result, "lint.1") == ("not_measured", "degenerate_history")
 
 
-P95 = "stats_summary.loc.p95"
+P95 = "stats_summary.loc_by_class.source.p95"
+
+
+def _sized(files: int, p95: float | None) -> dict[str, Any]:
+    """A ``stats_summary`` whose production source has ``files`` files at ``p95`` lines (#820)."""
+    return {"files_scored": files, "loc": {"p95": p95 or 0.0},
+            "loc_by_class": {"source": {"files_scored": files, "p95": p95}}}
 
 
 @pytest.mark.parametrize("stats", [
-    {"files_scored": 0, "loc": {"p50": 0.0, "p95": 0.0, "max": 0.0}},  # the headless block
-    {"files_scored": 0, "loc": {}},  # a full run whose treemap scored nothing
+    _sized(0, None),  # no source file scored: null percentiles
+    {"files_scored": 0, "loc": {}, "loc_by_class": {"source": {"files_scored": 0, "p95": 0.0}}},
 ])
 def test_a_statistic_over_no_files_is_not_measured_in_both_run_kinds(stats):
-    """#906 A: a p95 of no files is 0 in fleet and absent in /assess; both read no_scored_files."""
+    """#906 A, #820: a p95 of no source files is not a measurement; it reads no_source_files."""
     model = _model(_row("size", [{"signal": P95, "op": "lte", "value": 500}]))
     assert _state(lt.level_result(model, {"stats_summary": stats}), "size.1") == (
-        "not_measured", "no_scored_files")
+        "not_measured", "no_source_files")
 
 
 def test_a_scored_set_or_an_unavailable_block_keeps_the_usual_rules():
     model = _model(_row("size", [{"signal": P95, "op": "lte", "value": 500}]))
-    scored = {"stats_summary": {"files_scored": 3, "loc": {"p95": 3.0}}}
-    big = {"stats_summary": {"files_scored": 3, "loc": {"p95": 900.0}}}
+    scored = {"stats_summary": _sized(3, 3.0)}
+    big = {"stats_summary": _sized(3, 900.0)}
     no_lizard = {"stats_summary": {"available": False, "reason": "no_lizard: lizard not installed"}}
     assert _state(lt.level_result(model, scored), "size.1") == ("met", None)
     assert _state(lt.level_result(model, big), "size.1") == ("unmet", None)
@@ -214,15 +220,15 @@ def test_a_tangled_graph_does_not_count_front_door_imports():
 
 
 def test_file_size_counts_only_beside_a_boundary_map():
-    small = {"stats_summary": {"files_scored": 4, "loc": {"p95": 40.0}}}
+    small = {"stats_summary": _sized(4, 40.0)}
     no_map = {**small, "structure_drift": {"available": False, "reason": "no_ownership_map: none"}}
     assert _default_state(no_map, "layer-4-architecture.2") == (
         "not_measured", "requires:layer-4-architecture.1")
     mapped = {**small, "structure_drift": {"tier_0": {"boundary_patterns": 2}}}
     assert _default_state(mapped, "layer-4-architecture.2") == ("met", None)
-    empty = {"stats_summary": {"files_scored": 0, "loc": {"p95": 0.0}},
+    empty = {"stats_summary": _sized(0, None),
              "structure_drift": {"tier_0": {"boundary_patterns": 2}}}
-    assert _default_state(empty, "layer-4-architecture.2") == ("not_measured", "no_scored_files")
+    assert _default_state(empty, "layer-4-architecture.2") == ("not_measured", "no_source_files")
 
 
 @pytest.mark.parametrize("pinning, state", [
@@ -241,18 +247,18 @@ def test_no_counted_manifest_reads_not_measured(pinning, state):
 def test_a_real_unmet_sibling_outweighs_an_empty_set():
     model = _model(_row("size", [_eq(INSTR), {"signal": P95, "op": "lte", "value": 500}]))
     signals = {"layer_grades": {"instruction_file_present": False},
-               "stats_summary": {"files_scored": 0, "loc": {"p95": 0.0}}}
+               "stats_summary": _sized(0, None)}
     assert _state(lt.level_result(model, signals), "size.1") == ("unmet", None)
 
 
 def test_the_row_level_agrees_with_the_tally_on_an_empty_set():
     """A docs-only repository with a boundary map: the row is unknown above level 1, not 2."""
-    docs_only = {"stats_summary": {"files_scored": 0, "loc": {"p95": 0.0}},
+    docs_only = {"stats_summary": _sized(0, None),
                  "structure_drift": {"tier_0": {"boundary_patterns": 2}}}
     row = next(r for r in lt.default_model()["rows"] if r["id"] == "layer-4-architecture")
     evaluation = evaluate_row(row, docs_only)
     assert evaluation["status"] == "unknown" and evaluation["floor"] == 1
-    assert evaluation["levels"][1]["unmet"][0]["reason"] == "no_scored_files"
+    assert evaluation["levels"][1]["unmet"][0]["reason"] == "no_source_files"
 
 
 def test_a_real_unmet_criterion_outweighs_an_unknown_one():

@@ -4,7 +4,7 @@ Every report reads as a readiness snapshot, never a verdict on the people who bu
 the repository. This module is the one source for the words rendered prose leaves
 out, the old band labels that stay retired, and the opening line every report
 section starts with. ``tests/test_vocabulary_guard.py`` renders the fleet report,
-the team next-steps pages, the heat map, the layer bars and the /assess
+the team next-steps pages, the heat map and the /assess
 deterministic report from source and fails, naming the word and where it was
 found, when one of them reappears.
 
@@ -62,7 +62,7 @@ levels" in the amber `warn` role, not the red `bad` one; the keyhole summary sho
 reason code it has no entry for with "did not complete" and "not found" in place of "failed" and
 "missing" (`headline.reason_word`).
 
-**Colour.** The fleet level ramp (`fleet_svg.LEVEL_RAMP`, heat map and layer bars) is the
+**Colour.** The fleet level ramp (`fleet_svg.LEVEL_RAMP`, the heat map) is the
 ColorBrewer YlGn growth palette, pale yellow to deep green, in place of the red OrRd ramp;
 unknown cells stay hatched. The complexity treemap and the doc graph keep their own ramps:
 they encode complexity and staleness, not maturity.

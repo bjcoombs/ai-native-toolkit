@@ -34,7 +34,8 @@ lines that lead name gates, never a count. The lines, in order:
 in it: ``Step 3 · next: coverage gate`` (``GATE_NOUN`` names the first blocking gate),
 ``Step 4 · all gates held`` at the top Step, and ``no Steps defined`` for a model without
 ``[[steps]]``. ``markdown`` is the lines, the first bold, pasted verbatim by the report and
-``assess_report.py``. ``verified`` and ``tags`` (``TagCell`` per cell) hold the coverage
+``assess_report.py``. ``verified`` and ``tags`` (``TagCell`` per cell, from ``tag_cells``, which the fleet's
+per-tag tally also reads, #1073) hold the coverage
 numbers for counts-only readers, which drop the text lines. ``next_why`` (#939) is, for
 each blocking gate, the ``why`` of every condition of its row up to its level that is not
 met, each once and joined by one space (``""`` at the top Step). A run whose ``level``
@@ -193,7 +194,7 @@ def _truth(model: MaturityModel) -> dict[str, list[str]]:
             for row in model["rows"] for lv in row["levels"]}
 
 
-def _tag_cells(level: LevelResult, model: MaturityModel) -> list[TagCell]:
+def tag_cells(level: LevelResult, model: MaturityModel) -> list[TagCell]:
     """One cell per truth tag a condition in the result carries, in ``TRUTH_TAGS`` order."""
     truth = _truth(model)
     cells: dict[str, TagCell] = {}
@@ -244,7 +245,7 @@ def headline(value: Any, model: MaturityModel) -> Headline:
         lines.append(f"Step {step} · {names.get(step, '')} · contracts in place")
         lines.append(_next_line(level, names))
     lines.append(_tally_line(level))
-    cells = _tag_cells(level, model)
+    cells = tag_cells(level, model)
     if cells:
         lines.append(_strip_line(cells))
     nxt = level["next_step"]
