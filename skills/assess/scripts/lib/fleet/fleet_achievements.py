@@ -31,9 +31,9 @@ Each run is compared with the latest earlier run measuring the same repositories
 before a move delays the credit to the run it returns instead of losing it; the
 achievement's ``previous_run`` names the run compared with. One move is credited once: each
 row records its last credited move, up or down, and a move credited after the run
-compared with bounds the next one: only the part of a move outside [the level then, the
-credited level] is new (``_credited_bounds``, #1060), so a ``level_up`` starts above the
-higher of the two (``Evidence`` ``from_level``) and a slip falls below the lower. So a
+compared with bounds the next one (``_credited_bounds``, #1060): a ``level_up`` starts above
+the credited level (``Evidence`` ``from_level``), and a slip falls below both the credited
+level and the level then. So a
 member returning after the others moved neither credits the move again, nor counts a slip
 twice, nor reads the full set's unchanged level as a slip from the subset's credited one,
 and a real drop and recovery, on a subset or not, is two moves.
@@ -517,12 +517,15 @@ def same_set(history: Sequence[tuple[str, State]], measured: frozenset[str], kno
 
 def _credited_bounds(credited: tuple[str, int] | None, then: int,
                      after: Callable[[str], bool]) -> tuple[int, int]:
-    """``(low, high)`` a row's level must leave to be a new move: the level of the run compared
-    with, widened to the level of a move credited after that run (#1060). A ``level_up`` starts
-    above ``high`` and a slip below ``low``, so a level between the two is already accounted for."""
+    """``(low, high)`` a row's level must leave to be a new move, after a move credited after the
+    run compared with (#1060). ``high`` is the credited level: a ``level_up`` starts above it, so a
+    move up credited on a subset is not credited again, and a recovery from a slip credited on a
+    subset is a new move. ``low`` is the lower of the credited level and the level then: a slip
+    falls below both, so a return to the level before the gap is no slip. Without such a move
+    both are the level then."""
     if credited is None or not after(credited[0]):
         return then, then
-    return min(then, credited[1]), max(then, credited[1])
+    return min(then, credited[1]), credited[1]
 
 
 def _row_known(state: RowState) -> bool:

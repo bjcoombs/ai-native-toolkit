@@ -137,3 +137,17 @@ def test_two_job_counts_give_identical_bytes_on_the_two_run_gap() -> None:
                ("2026-11-15", {**BASE, "grp/sub/a": (2, True), "grp/sub/b": GONE}),
                ("2026-11-22", {**BASE, "grp/sub/a": (2, True)})]
     assert fa.dumps_achievements(_build(history)) == fa.dumps_achievements(_build(history))
+
+
+def test_a_recovery_after_a_slip_credited_during_the_gap_is_a_level_up() -> None:
+    """A slip credited on the subset during the gap, then the full set back at the level before
+    it: a real drop and recovery, so the recovery is credited (as without the gap)."""
+    history: list[tuple[str, Spec]] = [
+        ("2026-11-01", BASE),  # {a, b} at docs 1
+        ("2026-11-08", {**BASE, "grp/sub/b": GONE}),  # {a} at docs 1
+        ("2026-11-15", {**BASE, "grp/sub/a": (0, True), "grp/sub/b": GONE}),  # {a} at docs 0: a slip
+        ("2026-11-22", BASE),  # {a, b} at docs 1
+    ]
+    assert _ups(history) == [("2026-11-22", "2026-11-01", 0)]
+    gapless = [("2026-11-01", BASE), ("2026-11-15", {**BASE, "grp/sub/a": (0, True)}), ("2026-11-22", BASE)]
+    assert _ups(gapless) == [("2026-11-22", "2026-11-15", 0)]
