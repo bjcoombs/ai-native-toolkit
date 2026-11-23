@@ -264,3 +264,26 @@ def test_a_log_with_earlier_runs_but_no_context_is_not_a_first_run(repo: Path) -
     assert (block["closed"], block["gates_gained"]) == (None, None)
     assert FIRST_RUN not in block["lines"]
     assert any("log.md records an earlier run" in line for line in block["lines"])
+
+
+def test_an_unavailable_level_never_claims_every_gate_is_held(repo: Path) -> None:
+    block = since_last_run({"available": False, "reason": "boom"}, repo / ".assess", repo)
+    assert block["next_blocker"] is None
+    assert block["lines"][-1] == "Next blocker: not known (the level result is unavailable for this run)"
+
+
+def test_a_malformed_actions_json_and_a_shallow_clone_read_not_known(repo: Path, tmp_path: Path) -> None:
+    before = _git(repo, "rev-parse", "HEAD")
+    _previous(repo, _level("met", "met"), before)
+    (repo / ".assess" / "actions.json").write_text(json.dumps({"schema": 2, "actions": {"x": 1}}), encoding="utf-8")
+    _commit(repo, "2026-11-02T10:00:00Z", "malformed")
+    assert since_last_run(_level("met", "met"), repo / ".assess", repo)["closed_reason"] == "actions_unreadable"
+    _actions(repo, {"action": "Done", "status": "done", "completed_sha": _git(repo, "rev-parse", "HEAD")})
+    _commit(repo, "2026-11-03T10:00:00Z", "record")
+    shallow = tmp_path / "shallow"
+    subprocess.run(["git", "clone", "-q", "--depth", "1", repo.as_uri(), str(shallow)], check=True, capture_output=True)
+    (shallow / ".assess" / "run-context.json").write_text(
+        json.dumps({"run_id": "p", "measured_commit": {"available": True, "head_sha": _git(shallow, "rev-parse", "HEAD")},
+                    "level": _level("met", "met")}), encoding="utf-8")
+    block = since_last_run(_level("met", "met"), shallow / ".assess", shallow)
+    assert (block["closed"], block["closed_reason"]) == (None, "shallow_clone")

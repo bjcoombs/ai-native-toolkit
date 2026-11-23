@@ -32,7 +32,10 @@ this run's publish step overwrites any of them:
   ``None`` when the previous run has no level result or one that lacks a gate's
   condition (an older model), so the rest of the block still reads.
 
-``next_blocker`` is the first gate blocking this run's next Step (``None`` at the top Step).
+``next_blocker`` is the first gate blocking this run's next Step (``None`` at the top Step,
+or when this run's level result is unavailable, which the line says rather than claiming
+every gate is held). A shallow clone, or a git that cannot answer an ancestry check, reads
+the closed actions as unknown (``shallow_clone``, ``ancestry_unknown``), never as zero.
 ``lines`` and ``markdown`` word the block (``GATE_NOUN`` names each gate, as the badge
 does); counts-only output keeps the counts, ids and shas and drops the action text and the
 lines. ``since_last_run(level, assess_dir, repo_root, superseded)`` is the ``since_last_run`` scan
@@ -66,6 +69,8 @@ UNKNOWN_CLOSED = {
     "actions_not_committed": "no .assess/actions.json is committed; commit it for closed actions to count",
     "previous_unreadable": "the previous run-context.json could not be read",
     "previous_state_missing": "log.md records an earlier run, but its run-context.json is not here",
+    "shallow_clone": "this is a shallow clone, so commit ancestry cannot be checked",
+    "ancestry_unknown": "git could not check a commit's ancestry",
 }
 
 
@@ -117,7 +122,10 @@ def _committed_actions(repo_root: Path) -> tuple[list[dict[str, Any]] | None, st
         payload = json.loads(shown.stdout)
     except json.JSONDecodeError:
         return None, "actions_unreadable"
-    return (action_entries(payload), None) if isinstance(payload, Mapping) else (None, "actions_unreadable")
+    lists = [payload.get(k) for k in ("actions", "completed")] if isinstance(payload, Mapping) else []
+    if not isinstance(payload, Mapping) or any(v is not None and not isinstance(v, list) for v in lists):
+        return None, "actions_unreadable"
+    return action_entries(payload), None
 
 
 def _one_line(text: str) -> str:
@@ -130,6 +138,12 @@ def is_commit(repo_root: Path, sha: str) -> bool:
     """Whether ``sha`` names a commit in this clone."""
     found = _git(repo_root, "cat-file", "-e", f"{sha}^{{commit}}")
     return found is not None and found.returncode == 0
+
+
+def _shallow(repo_root: Path) -> bool:
+    """Whether the clone is shallow (or git cannot say): its ancestry is incomplete."""
+    found = _git(repo_root, "rev-parse", "--is-shallow-repository")
+    return found is None or found.returncode != 0 or found.stdout.strip() != "false"
 
 
 def _ancestor(repo_root: Path, sha: str, of: str) -> int | None:
@@ -161,7 +175,10 @@ def closed_actions(repo_root: Path, previous: str) -> tuple[list[ClosedAction], 
         if not is_commit(repo_root, sha):
             unresolved += 1
             continue
-        if _ancestor(repo_root, sha, "HEAD") != 0 or _ancestor(repo_root, sha, previous) != 1:
+        on_head, before = _ancestor(repo_root, sha, "HEAD"), _ancestor(repo_root, sha, previous)
+        if on_head not in (0, 1) or before not in (0, 1):
+            return "ancestry_unknown"  # git could not answer: unknown, never a silent zero
+        if on_head != 0 or before != 1:
             continue
         seen.add((text, sha))
         condition, finding = entry.get("condition"), entry.get("finding")
@@ -188,7 +205,7 @@ def _next_blocker(level: Mapping[str, Any]) -> str | None:
     return next((b["gate"] for b in blockers if b.get("kind") == "gate" and b.get("gate")), None)
 
 
-def _words(block: SinceLastRun, has_steps: bool) -> list[str]:
+def _words(block: SinceLastRun, has_steps: bool, level_known: bool) -> list[str]:
     """The section's lines; a closed action is an indented line under its count."""
     if block["first_run"]:
         lines = [FIRST_RUN]
@@ -207,7 +224,8 @@ def _words(block: SinceLastRun, has_steps: bool) -> list[str]:
     if block["next_blocker"] is not None:
         lines.append(f"Next blocker: {_noun(block['next_blocker'])}")
     else:
-        lines.append("Next blocker: none, every gate is held" if has_steps
+        lines.append("Next blocker: not known (the level result is unavailable for this run)"
+                     if not level_known else "Next blocker: none, every gate is held" if has_steps
                      else "Next blocker: none, the model defines no Steps")
     return lines
 
@@ -267,6 +285,8 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
         reason = "no_previous_commit"
     elif not is_commit(repo_root, previous_commit):
         reason = "previous_commit_absent"  # a rewritten history or a shallow clone: not zero
+    elif _shallow(repo_root):
+        reason = "shallow_clone"  # ancestry stops at the boundary, so "not an ancestor" can lie
     elif isinstance(found := closed_actions(repo_root, previous_commit), str):
         reason = found
     else:
@@ -280,6 +300,7 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
         "gates_gained": gained if isinstance(gained, list) else None,
         "gates_lost": lost if isinstance(lost, list) else None,
         "next_blocker": _next_blocker(current), "lines": [], "markdown": ""}
-    block["lines"] = _words(block, bool(steps))
+    known = isinstance(level, Mapping) and isinstance(level.get("conditions"), list)
+    block["lines"] = _words(block, bool(steps), known)
     block["markdown"] = _markdown(block["lines"])
     return block
