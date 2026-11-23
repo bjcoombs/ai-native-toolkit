@@ -22,7 +22,8 @@ nothing is demoted until a PR sets a date (maintainer decision on #1086, no back
 
 **Who decides.** Only the fleet, from measured outcomes. ``fleet.py --levels`` builds this
 record from its own ``condition_effect.json`` (this run plus its comparable history), applies
-``demoted`` to this run's level results (``fleet_level.repo_level``), writes
+``demoted`` to every level result of this run by carrying it on the model (``with_demotions``:
+repositories, units, tags and re-scored history alike, so they agree), writes
 ``demotions.json`` to ``--out`` and keeps it in the run history entry
 (``fleet_history.OPTIONAL_HISTORY_FILES``), so each demotion is recorded with its evidence and
 needs no hand edit. No ``--fleet-config`` key and no ``.assess/config.toml`` key reads or
@@ -49,7 +50,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TypedDict
+from typing import TypedDict, cast
 
 from lib.fleet.condition_effect import ConditionEffectDoc, MeasureEffect
 from lib.level_tally import gate_conditions
@@ -91,14 +92,13 @@ def _status(evidence: list[MeasureEffect]) -> str:
 def decide(model: MaturityModel, effects: ConditionEffectDoc, scan_date: str) -> DemotionsDoc:
     """The exit rule's record for this run: one entry per condition with a review date."""
     gates = gate_conditions(model)
-    by_id = {c["id"]: c for c in effects["conditions"]}
     out: list[Demotion] = []
     for cond in effects["conditions"]:
         predicted, review = cond["predicted"], cond["review"]
         if predicted is None or review is None:
             continue
         measures = PREDICTION_MEASURES[predicted]
-        evidence = [e for e in by_id[cond["id"]]["effects"] if e["measure"] in measures]
+        evidence = [e for e in cond["effects"] if e["measure"] in measures]
         if review > scan_date:  # ISO dates compare as text
             status = "not_due"
         elif cond["id"] in gates:
@@ -110,6 +110,12 @@ def decide(model: MaturityModel, effects: ConditionEffectDoc, scan_date: str) ->
     return DemotionsDoc(demotions_version=DEMOTIONS_VERSION, levels_version=model["version"],
                         scan_date=scan_date, demoted=[d["id"] for d in out if d["status"] == "demoted"],
                         conditions=out)
+
+
+def with_demotions(model: MaturityModel, demoted: list[str]) -> MaturityModel:
+    """A copy of ``model`` carrying the exit rule's ``demoted`` ids, which ``level_tally`` reads.
+    ``fleet.py`` alone calls it, after deciding, so every result of the run applies the same set."""
+    return cast(MaturityModel, {**model, "demoted": list(demoted)})
 
 
 def write_demotions(out_dir: Path, doc: DemotionsDoc) -> Path:

@@ -106,9 +106,10 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   its Step stays unreachable and the blocker carries the disposition and kind. `excluded[]`
   (`{id, kind, source}`) is present only when an exclusion applies, so a result without
   exclusions is unchanged. Ids the model does not define are ignored.
-- Exit-rule demotions (#1086): `level_result(..., demoted=ids)` takes the condition ids the
-  fleet's exit rule demoted (`lib/fleet/condition_demotion.py`). Only `lib/fleet/fleet_level.py`
-  passes them, from `fleet.py`'s own run and history; no repository input reaches the argument.
+- Exit-rule demotions (#1086): a model's `demoted` ids are the conditions the fleet's exit rule
+  demoted (`lib/fleet/condition_demotion.py`). Only `fleet.py` sets them, on the model every
+  fleet result reads (`with_demotions`), so repository, unit, tag and re-scored results agree; a
+  model file cannot carry the key and `/assess` never sets it, so no repository input reaches it.
   A demoted condition keeps its state, is never counted (it is listed when met) and carries
   `disposition: "demoted_by_exit_rule"`. A gate condition (`gate_conditions`) or an unknown id
   is ignored, so a demotion changes the count and never a Step. An owner exclusion wins.
@@ -381,15 +382,16 @@ def _excluded(model: MaturityModel, exclusions: Sequence[Mapping[str, Any]]) -> 
 
 
 def level_result(model: MaturityModel, data: Mapping[str, Any] | None,
-                 exclusions: Sequence[Mapping[str, Any]] = (), demoted: Collection[str] = ()) -> LevelResult:
+                 exclusions: Sequence[Mapping[str, Any]] = ()) -> LevelResult:
     """The tally and the Step of one repository's signals (``scans`` or a run context).
 
     ``exclusions`` are the owner's (``OwnerExclusion`` entries, ``lib/owner_exclusions.py``);
-    an id the model does not define is ignored. ``demoted`` are the fleet exit rule's
-    condition ids (#1086), passed only by ``lib.fleet.fleet_level``; a gate condition among
-    them is ignored, so a demotion never moves a Step."""
+    an id the model does not define is ignored. The model's ``demoted`` ids are the fleet exit
+    rule's (#1086), set only by ``fleet.py``; a gate condition among them is ignored, so a
+    demotion never moves a Step."""
     excluded = _excluded(model, exclusions)
-    conditions = _conditions(model, data, excluded, frozenset(demoted) & condition_ids(model) - gate_conditions(model))
+    demoted = frozenset(model.get("demoted", ())) & condition_ids(model) - gate_conditions(model)
+    conditions = _conditions(model, data, excluded, demoted)
     _add_whys(model, conditions)
     counted = [c for c in conditions if c["counted"]]
     met = sum(c["state"] == "met" for c in counted)

@@ -194,7 +194,7 @@ from lib.fleet.condition_effect import (  # noqa: E402
     history_runs as effect_history,
     write_condition_effect,
 )
-from lib.fleet.condition_demotion import DEMOTIONS_FILE, decide, write_demotions  # noqa: E402
+from lib.fleet.condition_demotion import DEMOTIONS_FILE, decide, with_demotions, write_demotions  # noqa: E402
 from lib.measured_appendix import measured_section  # noqa: E402
 from lib.fleet.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data  # noqa: E402
 from lib.fleet.fleet_targets import TargetSpec, TargetsError, check_units, load_targets, resolve  # noqa: E402
@@ -618,11 +618,11 @@ def _achievements(out_dir: Path, data: FleetData, stamp: FleetStamp, maturity_mo
 def _write_fleet_data(out_dir: Path, stamp: FleetStamp, rows: list[FleetRow],
                       maturity_model: MaturityModel | None, trees: list[Tree], full: bool,
                       hash_salt: str | None, units: UnitsMap, codeowners: dict[str, list[str]],
-                      web_urls: dict[str, str | None], demoted: list[str] | None = None) -> FleetData:
+                      web_urls: dict[str, str | None]) -> FleetData:
     """``OUT/fleet-data.json`` (lib/fleet/fleet_data.py), before the run is kept in the history."""
     data = build_fleet_data(stamp, rows, maturity_model, trees,
                             owners=repo_owners(units, codeowners, (row["repo"] for row in rows)),
-                            web_urls=web_urls, privacy=privacy_for(full, hash_salt), demoted=demoted or ())
+                            web_urls=web_urls, privacy=privacy_for(full, hash_salt))
     write_fleet_data(out_dir, data)
     print(f"fleet: units: {sum(len(v['units']) for v in data['views'])} units -> {FLEET_DATA_FILE}",
           file=sys.stderr)
@@ -819,10 +819,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     write_stamp(out_dir, stamp)
     demoted = _condition_effect(out_dir, maturity_model, stamp, public, org_dir, entry)
+    if maturity_model is not None and demoted:  # every result below reads the same demotions (#1086)
+        maturity_model = with_demotions(maturity_model, demoted)
     write_fleet_levels(out_dir, public, maturity_model, toolkit_commit=stamp["toolkit_commit"],
-                       plugin_version=stamp["plugin_version"], demoted=demoted)
+                       plugin_version=stamp["plugin_version"])
     data = _write_fleet_data(out_dir, stamp, rows, maturity_model, trees, args.full, hash_salt, units, codeowners,
-                             {repo: f.web_url for repo, f in facts.items()}, demoted)
+                             {repo: f.web_url for repo, f in facts.items()})
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, public, groups, row_signals(data)), earlier)
     credit, achieved = _achievements(out_dir, data, stamp, maturity_model, org_dir, entry,
                            ids, step_targets,

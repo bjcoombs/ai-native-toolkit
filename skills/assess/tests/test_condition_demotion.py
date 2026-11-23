@@ -1,4 +1,4 @@
-"""The fleet exit rule (#1086): lib/fleet/condition_demotion.py and the tally's ``demoted`` argument."""
+"""The fleet exit rule (#1086): lib/fleet/condition_demotion.py and the model's ``demoted`` ids."""
 from __future__ import annotations
 
 import ast
@@ -44,9 +44,13 @@ DATA = {"doc_staleness": {"summary": {"stale_pct": 0}}}
 # --- the tally -------------------------------------------------------------------------
 
 
+def _demoted(*ids: str, practice: dict[str, Any] | None = None) -> Any:
+    return cd.with_demotions(_model(practice), list(ids))
+
+
 def test_a_demoted_condition_is_listed_not_counted_and_the_step_holds() -> None:
     plain = lt.level_result(_model(), DATA)
-    demoted = lt.level_result(_model(), DATA, demoted=["p.1"])
+    demoted = lt.level_result(_demoted("p.1"), DATA)
     cond = next(c for c in demoted["conditions"] if c["id"] == "p.1")
     assert cond["state"] == "met" and cond["counted"] is False and cond["disposition"] == lt.DEMOTED
     assert demoted["listed"] == ["p.1"] and demoted["counted"] == ["g.1"]
@@ -55,35 +59,60 @@ def test_a_demoted_condition_is_listed_not_counted_and_the_step_holds() -> None:
 
 
 def test_a_gate_condition_or_unknown_id_is_never_demoted() -> None:
-    plain = lt.level_result(_model(), DATA)
-    assert lt.level_result(_model(), DATA, demoted=["g.1", "nope.1"]) == plain
+    assert lt.level_result(_demoted("g.1", "nope.1"), DATA) == lt.level_result(_model(), DATA)
     assert lt.gate_conditions(_model()) == frozenset({"g.1"})
 
 
 def test_an_owner_exclusion_wins_over_a_demotion() -> None:
-    result = lt.level_result(_model(), DATA, [{"id": "p.1", "kind": "other"}], demoted=["p.1"])
+    result = lt.level_result(_demoted("p.1"), DATA, [{"id": "p.1", "kind": "other"}])
     cond = next(c for c in result["conditions"] if c["id"] == "p.1")
     assert cond["disposition"] == lt.EXCLUDED_BY_OWNER
 
 
-def test_fleet_levels_apply_the_demotions() -> None:
+def test_with_demotions_copies_and_leaves_the_model_unchanged() -> None:
+    model = _model()
+    assert "demoted" not in model and cd.with_demotions(model, ["p.1"])["demoted"] == ["p.1"]
+
+
+def test_repository_unit_and_tag_results_read_the_same_demotions() -> None:
+    from lib.fleet.fleet_data_units import unit_rows
+    from lib.level_tags import tag_rows
+
     row = {"fleet_row_version": FLEET_ROW_VERSION, "repo": "a", "group": "g", "status": "ok", "scans": DATA}
-    levels = fleet_levels([row], _model(), toolkit_commit=None, plugin_version="3.0.0",  # type: ignore[list-item]
-                          demoted=["p.1"])
-    assert levels["repos"]["a"]["listed"] == ["p.1"]
+    model = _demoted("p.1")
+    levels = fleet_levels([row], model, toolkit_commit=None, plugin_version="3.0.0")  # type: ignore[list-item]
+    repo = levels["repos"]["a"]
+    assert repo["listed"] == ["p.1"]
+    scans = {**DATA, "unit_readings": {"available": True, "units": [{"path": "pkg", "kind": "package", "blocks": {}}]}}
+    def docs(m: Any) -> tuple[int, int]:
+        (unit,) = unit_rows(m, scans) or []
+        cell = next(c for c in unit["tags"] if c["tag"] == "docs")
+        return cell["met"], cell["measured"]
+    repo_docs = next(r for r in tag_rows(repo, model) if r["tag"] == "docs")
+    assert docs(model) == (repo_docs["met"], repo_docs["measured"]) == (1, 1)  # p.1 out of both
+    assert docs(_model()) == (2, 2)
 
 
 # --- a repository can never demote -----------------------------------------------------
 
 
-def test_only_the_fleet_passes_demotions_to_the_tally() -> None:
+def test_only_fleet_py_applies_demotions() -> None:
+    fleet = SCRIPTS.parents[1] / "fleet" / "scripts"
     callers = []
-    for path in sorted(SCRIPTS.rglob("*.py")):
+    for path in sorted([*SCRIPTS.rglob("*.py"), *fleet.rglob("*.py")]):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "level_result"
-                    and (len(node.args) > 3 or any(k.arg == "demoted" for k in node.keywords))):
-                callers.append(path.relative_to(SCRIPTS).as_posix())
-    assert callers == ["lib/fleet/fleet_level.py"]
+            if isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", "")) == "with_demotions":
+                callers.append(path.name)
+    assert callers == ["fleet.py"]
+
+
+def test_a_model_file_cannot_carry_demotions() -> None:
+    from lib.levels import LevelsError
+
+    raw = {"version": "v1", "demoted": ["p.1"], "rows": [
+        {"id": "p", "title": "p", "scope": "team", "aggregation": "min", "levels": [_level()]}]}
+    with pytest.raises(LevelsError, match="demoted"):
+        parse_levels(raw)
 
 
 @pytest.mark.parametrize("config", [
@@ -195,3 +224,16 @@ def test_fleet_writes_and_applies_the_demotions(tmp_path: Path, capsys: pytest.C
     assert "fleet: exit rule: 1 condition(s) demoted to informational: p.1" in capsys.readouterr().err
     assert fleet_cli._condition_effect(tmp_path, None, stamp("2026-11-23", None), rows, None, None) == []
     assert not (tmp_path / cd.DEMOTIONS_FILE).exists()
+
+
+def test_rescored_history_reads_the_demotions_of_the_model_it_is_given() -> None:
+    from lib.fleet.fleet_data import build_fleet_data
+    from lib.fleet.fleet_rescore import rescore
+    from fleet_data_fixture import _row
+
+    row = _row("grp/a", DATA)
+    stored = build_fleet_data(stamp("2026-11-01", "v1"), [row], _model(), [])  # type: ignore[list-item]
+    now = build_fleet_data(stamp("2026-11-23", "v1"), [row], _demoted("p.1"), [])  # type: ignore[list-item]
+    again = rescore(stored, [row], _demoted("p.1"), key=str)  # type: ignore[list-item]
+    assert again is not None
+    assert again["repos"][0]["tally"] == now["repos"][0]["tally"] != stored["repos"][0]["tally"]
