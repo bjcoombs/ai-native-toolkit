@@ -24,6 +24,7 @@ from collections.abc import Callable, Sequence
 from lib.check_command import (
     BARE_RUN_PROGRAMS, LINT_PROGRAMS, TYPE_PROGRAMS, is_check_command, is_info_invocation,
     is_lint_command, is_lint_run, may_check, may_lint)
+from lib.ci_compound import compound_core
 from lib.ci_lint_gates import line_commands
 from lib.ci_scripts import Present, committed, script_runs
 from lib.command_flags import maven_skips_tests
@@ -171,7 +172,7 @@ def _script_items(lines: Sequence[str]) -> list[bool]:
     """
     flags = [True] * len(lines)
     for i, line in enumerate(lines):
-        text = ci_line_text(line)
+        text = compound_core(ci_line_text(line))   # - (pytest) under matrix: is a value too (#1061)
         if _BARE_ITEM.match(line) is None or not (_lone_check(text) or _lone_linter(text)
                                                   or _lone_build(text)):
             continue   # only a lone always-check, linter or build item needs its parent

@@ -65,7 +65,7 @@ _FAILS = re.compile(
 _FUNCTION = re.compile(r"^(?:function\s+([\w-]+)(?:\s*\(\))?|([\w-]+)\s*\(\))\s*\{?\s*$")
 
 
-def or_arm_unsure(statement: Statement, tail: str = "") -> set[int]:
+def or_arm_unsure(statement: Statement, tail: str = "", pipefail: bool = True) -> set[int]:
     """The segments a ``||`` arm that can pass leaves unsure: those before it, back to the
     start of its ``( )`` group. ``tail`` is the rest of the line after this statement, read
     when the arm opens a group that runs past it (``|| { echo failed; exit 1; }``).
@@ -73,32 +73,66 @@ def or_arm_unsure(statement: Statement, tail: str = "") -> set[int]:
     An arm is judged by the commands that run, not by its words (#1061): from the failing
     check on, each ``||`` / ``&&`` arm runs or is skipped by the status so far, so ``pytest ||
     echo false`` and ``pytest || echo failed || exit 1`` (the ``echo`` succeeds, so ``exit 1``
-    never runs) can pass, while ``pytest || false`` and ``pytest || echo failed && exit 1`` fail."""
+    never runs) can pass, while ``pytest || false`` and ``pytest || echo failed && exit 1`` fail.
+    ``pipefail`` is the body's setting: with it off, a pipeline member but the last loses its
+    status and its ``exit`` (``pytest || exit 1 | tee log`` can pass)."""
     out: set[int] = set()
     for span, arm in or_arms(statement):
         if arm in _NOOPS:
             continue
-        if _chain_fails(statement, span.stop - 1, tail) is False:
+        if _chain_fails(statement, span.stop - 1, tail, pipefail) is False:
             out.update(range(span.start, span.stop - 1))
     return out
 
 
-def _chain_fails(statement: Statement, start: int, tail: str) -> bool | None:
+def _chain_fails(statement: Statement, start: int, tail: str, pipefail: bool = True) -> bool | None:
     """Does the step fail when the command before segment ``start`` (a ``||`` arm) fails?
     None when a group arm runs on past its line: not read, so the check stays credited."""
-    failing = True
-    for j in range(start, len(statement)):
-        op, seg = statement[j]
-        if (op == "&&" and failing) or (op == "||" and not failing):
-            continue   # skipped: a group it opens is skipped whole, its closer is not read
+    result = _run(statement[start:], True, tail, pipefail)
+    return None if result is None else result[1]
+
+
+def _run(segments: Statement, failing: bool, tail: str = "",
+         pipefail: bool = True) -> tuple[bool, bool] | None:
+    """``(ended, failing)`` after running ``segments`` from a status (``failing``): ``ended``
+    when an ``exit`` / ``return`` ends the step with that status. Each ``&&`` / ``||``
+    pipeline runs or is skipped by the status so far; a pipeline member but the last runs in
+    a subshell, so its ``exit`` ends only that member, and its status counts only with
+    ``pipefail`` (a failing member then fails the pipeline). A ``{ }`` /
+    ``( )`` group is read from its body, then the operators after its closer. None when a
+    group does not close on this line (``tail`` is the rest of the line)."""
+    runs = True
+    piped_failed = False   # an earlier member of this pipeline failed (counts under pipefail)
+    for j, (op, seg) in enumerate(segments):
+        if op in ("&&", "||"):
+            runs = (op == "&&") != failing   # && runs on success, || on failure
+        elif op != "|":
+            runs = True
+        if op != "|":
+            piped_failed = False
+        if not runs:
+            continue
+        piped = j + 1 < len(segments) and segments[j + 1][0] == "|"
         if seg.lstrip().startswith(("{", "(")):
-            body = _group_body(_join(_pick(statement, list(range(j, len(statement))))) + " ; " + tail)
-            return None if body is None else _body_fails(body)
-        result = _status(seg, failing)
-        if result is not None:
-            return result
-        failing = _fails_status(seg)
-    return failing
+            found = _group_body(_join(_pick(segments, list(range(j, len(segments))))) + " ; " + tail)
+            if found is None:
+                return None
+            body, rest = found
+            ended, failing = _run_body(body, pipefail)
+            if ended and seg.lstrip()[0] == "{" and not piped:
+                return True, failing
+            rest = rest.lstrip()
+            after = split_statements(rest) if rest.startswith(("&&", "||", "|")) else []
+            return _run(after[0][1:], failing, "", pipefail) if after else (False, failing)
+        status = _status(seg, failing)
+        if piped:
+            member = status if status is not None else _fails_status(seg)
+            piped_failed = piped_failed or (pipefail and member)
+            continue
+        if status is not None:
+            return True, status
+        failing = _fails_status(seg) or piped_failed
+    return False, failing
 
 
 def _status(seg: str, failing: bool) -> bool | None:
@@ -118,9 +152,10 @@ def _fails_status(seg: str) -> bool:
     return words[:1] in (["false"], ["/bin/false"])
 
 
-def _group_body(text: str) -> str | None:
-    """The text inside the ``{ }`` / ``( )`` group ``text`` opens, or None when the group does
-    not close on this line. Quotes, ``$(...)`` and ``${...}`` open no group."""
+def _group_body(text: str) -> tuple[str, str] | None:
+    """``(body, rest)``: the text inside the ``{ }`` / ``( )`` group ``text`` opens and the text
+    after its closer, or None when the group does not close on this line. Quotes, ``$(...)``
+    and ``${...}`` open no group."""
     bare = unquoted(text.lstrip())
     stack: list[str] = []
     i = 0
@@ -135,26 +170,25 @@ def _group_body(text: str) -> str | None:
         elif ch in ")}" and stack:
             top = stack.pop()
             if not stack:
-                return bare[1:i] if top == bare[0] else None
+                return (bare[1:i], bare[i + 1:]) if top == bare[0] else None
         i += 1
     return None
 
 
-def _body_fails(body: str) -> bool:
-    """A group body fails the step when a statement exits non-zero or ends failing (errexit
-    applies in the last command of a list); an ``exit 0`` ends it with success."""
+def _run_body(body: str, pipefail: bool = True) -> tuple[bool, bool]:
+    """``(ended, failing)`` for a group body: an ``exit`` ends it; a statement that ends
+    failing fails it (errexit applies to the last command of a list); else the last status."""
+    failing = False
     for statement in split_statements(body):
-        failing = False
-        for op, seg in statement:
-            if (op == "&&" and failing) or (op == "||" and not failing):
-                continue
-            result = _status(seg, failing)
-            if result is not None:
-                return result
-            failing = _fails_status(seg)
+        result = _run(statement, False, "", pipefail)
+        if result is None:
+            return False, False   # a nested group not read: it may pass
+        if result[0]:
+            return result
+        failing = result[1]
         if failing:
-            return True
-    return False
+            return False, True
+    return False, failing
 
 
 def until_break_flags(statements: list[Statement]) -> list[bool]:
@@ -212,14 +246,17 @@ def uncalled_functions(statements: list[Statement]) -> set[int]:
     bodies = {name: range(start, end + 1) for start, end, name in _groups(statements) if name}
     words = {name: re.compile(r"(?<![\w.-])" + re.escape(name) + r"(?![\w.-])") for name in bodies}
     texts = [_join(statement) for statement in statements]
+    # A closing statement's text after its ``}`` runs outside any body, called or not
+    # (``f() { pytest; } && f``).
+    closers = {body[-1]: unquoted(texts[body[-1]]).partition("}")[2] for body in bodies.values()}
     out: set[int] = set()
     uncalled: set[str] = set()
     changed = True
     while changed:
         changed = False
         for name, body in bodies.items():
-            if name not in uncalled and not any(
-                    words[name].search(text) for i, text in enumerate(texts) if i not in body and i not in out):
+            outside = (text for i, text in enumerate(texts) if i not in body and i not in out)
+            if name not in uncalled and not any(words[name].search(t) for t in (*outside, *closers.values())):
                 uncalled.add(name)
                 out.update(body)
                 changed = True

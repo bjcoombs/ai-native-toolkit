@@ -45,6 +45,8 @@ ROWS = [
     ("pytest | tee log && echo ok", MASKED, CREDIT, MASKED),
     ("set -o pipefail; pytest | tee log", CREDIT, CREDIT, CREDIT),
     ("cat /dev/null | pytest", CREDIT, CREDIT, CREDIT),
+    ("pytest | tee log && set -o pipefail", MASKED, CREDIT, MASKED),   # set after the pipe
+    ("set -o pipefail && pytest | tee log", CREDIT, CREDIT, CREDIT),
     # Gap 4: a line that opens a compound command.
     ("if ! pytest; then exit 1; fi", CREDIT, CREDIT, CREDIT),
     ("if pytest; then :; else exit 1; fi", CREDIT, CREDIT, CREDIT),
@@ -59,6 +61,7 @@ ROWS = [
     ("f() { pytest; }", MASKED, MASKED, MASKED),   # defined, never called
     ("f() { pytest; }; g() { f; }", MASKED, MASKED, MASKED),   # named only in an uncalled body
     ("f() { pytest; }; g() { f; }; g", CREDIT, CREDIT, CREDIT),
+    ("f() { pytest; } && f", CREDIT, CREDIT, CREDIT),   # called after the closing brace
     # Gap 5: a fallback arm is judged by the commands that run.
     ("pytest || echo false", MAY, MAY, MAY),
     ("pytest || echo exit", MAY, MAY, MAY),
@@ -72,6 +75,9 @@ ROWS = [
     ("pytest || echo failed && exit 1", CREDIT, CREDIT, CREDIT),
     ("pytest || { echo failed; exit 1; }", CREDIT, CREDIT, CREDIT),
     ("pytest || (echo failed; exit 1)", CREDIT, CREDIT, CREDIT),
+    ("pytest || { echo recovered; } && exit 1", CREDIT, CREDIT, CREDIT),   # read past the closer
+    ("pytest || { echo recovered; }", MAY, MAY, MAY),
+    ("pytest || exit 1 | tee log", MAY, CREDIT, MAY),   # the exit ends only its pipeline member
     # Not a check before, and still not one: ``!`` inverts the status.
     ("! pytest", (False, "no_check_command"), (False, "no_check_command"), (False, "no_check_command")),
 ]
@@ -152,6 +158,8 @@ def test_each_reading_matches_the_real_exit(tmp_path: Path, row: tuple[object, .
     env = {"PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin"}
     for i, (name, shells) in enumerate(_real_shells().items()):
         for shell in shells:
+            if "pipefail" in run and Path(shell[0]).name == "dash":
+                continue   # dash rejects set -o pipefail (exit 2) whatever the check does
             done = subprocess.run([*shell, str(script)], cwd=tmp_path, env=env, capture_output=True,
                                   encoding="utf-8", errors="replace", timeout=10, check=False)
             assert (done.returncode != 0) == (row[1 + i] == CREDIT), (name, shell, run, done.returncode)
@@ -281,3 +289,17 @@ def test_dash_reads_a_named_or_missing_script_as_sh_does(tmp_path: Path, run: st
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
     assert reading("dash", tmp_path / "a") == reading("sh", tmp_path / "b")
+
+
+def test_a_subshell_matrix_value_is_not_a_run(tmp_path: Path) -> None:
+    text = ("on: pull_request\njobs:\n  t:\n    runs-on: x\n    strategy:\n      matrix:\n"
+            "        cmd:\n          - (pytest)\n    steps:\n      - run: echo hi\n")
+    block = scan_ci_checks(_repo(tmp_path, {".github/workflows/ci.yml": text}))
+    assert (block["test_or_lint_configured"], block["basis"]) == (False, "no_check_command")
+
+
+@pytest.mark.parametrize("command", ["dash -eo nounset ci.sh", "bash -eo nounset ci.sh", "dash ci.sh"])
+def test_a_shell_flag_cluster_takes_its_value(tmp_path: Path, command: str) -> None:
+    from lib.command_resolver import resolve
+    root = _repo(tmp_path, {"ci.sh": "pytest\n"})
+    assert resolve(command, root).verdict == "resolved"

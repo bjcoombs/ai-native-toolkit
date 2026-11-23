@@ -585,9 +585,11 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     state: list[bool] = []
     off: list[bool] = []
     pipes: list[bool] = []
+    before: list[bool] = []   # pipefail as each statement starts (#1061)
     for first, k in refs:
         errexit = _errexit(parsed[first][k], errexit)
         shell_errexit = _errexit(parsed[first][k], shell_errexit)
+        before.append(pipefail)
         pipefail = pipefail_after(raw[first][k], pipefail)
         state.append(not errexit)
         off.append(run_shell is not None and not shell_errexit)
@@ -633,10 +635,10 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
                      else frozenset())
             if maybe:
                 unsure[(first, k)] = maybe
-        if readable and code[idx] and not (pipes[idx] or state[idx] or off[idx]) and (first, k) not in captured:
+        if readable and code[idx] and not (state[idx] or off[idx]) and (first, k) not in captured:
             # pytest | tee log without pipefail: tee's status is the pipeline's (#1061). A later
             # re-raise or PIPESTATUS read may carry the check's status out, so that reads null.
-            piped = piped_members(raw[first][k])
+            piped = _piped_without_pipefail(raw[first][k], before[idx])
             text = _join(raw[first][k])
             target = unsure if reraised or pipestatus or "PIPESTATUS" in text else exempt
             if piped:
@@ -650,6 +652,19 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
         reraised = reraised or own
         exit_reraised = exit_reraised or own
     return out, exempt, unsure
+
+
+def _piped_without_pipefail(statement: list[tuple[str, str]], pipefail: bool) -> frozenset[int]:
+    """The piped members of ``statement`` (``ci_exempt.piped_members``) that run with pipefail
+    off, read in command order: ``set -o pipefail && pytest | tee log`` keeps ``pytest``,
+    ``pytest | tee log && set -o pipefail`` does not."""
+    piped = piped_members(statement)
+    out: set[int] = set()
+    for k, segment in enumerate(statement):
+        if k in piped and not pipefail:
+            out.add(k)
+        pipefail = pipefail_after([segment], pipefail)
+    return frozenset(out)
 
 
 # A statement that only closes a compound command runs nothing after the one before it.
@@ -715,12 +730,16 @@ def mask_lines(text: str) -> tuple[list[str], list[str]]:
             masked[first] = set(range(len(statements)))
             continue
         later = _later_lines(lines, tree, first, span[-1])
+        body = tree.body(first)
+        # The body's pipefail for the fallback-arm reading; set -o pipefail inside it is not
+        # read there, so a piped arm reads null (never credit) where it may matter.
+        arm_pipefail = run_errexit(tree, body)[2] if tree.lines[body].key == "run" else True
         for k, statement in enumerate(statements):
             keep = _same_line_keep(statement, later)
             targets = _capture_targets(statement)
             if targets and _checked_later(targets, later()):
                 captured.add((first, k))
-            arm = or_arm_unsure(statement, " ; ".join(_join(s) for s in statements[k + 1:]))
+            arm = or_arm_unsure(statement, " ; ".join(_join(s) for s in statements[k + 1:]), arm_pipefail)
             if arm:
                 unsure[(first, k)] = frozenset(arm)
             if len(keep) < len(statement):
