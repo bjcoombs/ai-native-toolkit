@@ -117,7 +117,7 @@ import sys
 import tempfile
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -613,6 +613,13 @@ def _platform_pass(args: argparse.Namespace, targets: list[Target], fleet_config
     return platform
 
 
+def utc_today() -> date:
+    """The run date, today in UTC: ``scan_date`` in ``run.json``, ``fleet-data.json`` and
+    ``achievements.json``, and the history entry name. Read once per run; the tests pin it
+    so runs either side of 00:00Z stay byte-identical (#1029)."""
+    return datetime.now(timezone.utc).date()
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     maturity_model: MaturityModel | None = None
@@ -673,7 +680,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     for repo in unmatched_repos(units, (t.repo for t in targets)):
         print(f"fleet: units: {repo} is mapped but not in this run; skipped", file=sys.stderr)
-    today = datetime.now(timezone.utc).date()
+    today = utc_today()
     window = args.window or DEFAULT_WINDOW
     hash_salt = None if args.full else run_salt(args.hash_paths, args.hash_salt)
     # stamped only when a platform read runs: --scans can select no platform scan

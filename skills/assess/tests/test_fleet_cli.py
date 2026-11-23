@@ -7,12 +7,14 @@ import os
 import shutil
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType
 
 import jsonschema
 import pytest
 
+from conftest import pin_fleet_run_date
 from lib.counts_only import classify
 from lib.fleet_cleanup import _rmtree
 from lib.fleet_schema import build_schema
@@ -43,6 +45,7 @@ def _load_cli() -> ModuleType:
 
 
 fleet_cli = _load_cli()
+UTC_TODAY = fleet_cli.utc_today  # the real clock, before any test pins it (#1029)
 
 
 @pytest.fixture(scope="module")
@@ -159,6 +162,40 @@ aggregation = "min"
 
 def _ci(ref: str) -> str:
     return f"include:\n  - project: grp/ci-templates\n    ref: {ref}\n    file: /build.yml\n"
+
+
+class _MidnightClock(datetime):
+    """A UTC clock that reads 23:59:59Z on its first read and 00:00:01Z the next day after."""
+
+    reads = 0
+
+    @classmethod
+    def now(cls, tz: object = None) -> _MidnightClock:  # type: ignore[override]
+        cls.reads += 1
+        late = cls(2026, 11, 22, 23, 59, 59, tzinfo=timezone.utc)
+        return late if cls.reads == 1 else late + timedelta(seconds=2)  # type: ignore[return-value]
+
+
+def _stamped_dates(froot: Path, tmp_path: Path, *outs: str) -> list[str]:
+    for out in outs:
+        assert fleet_cli.main([str(froot), "--no-history", "--no-diagrams", "--out", str(tmp_path / out)]) == 0
+    return [json.loads((tmp_path / out / "run.json").read_text(encoding="utf-8"))["scan_date"] for out in outs]
+
+
+def test_runs_either_side_of_utc_midnight_stamp_one_date_once_pinned(froot, tmp_path, monkeypatch):
+    """#1029: a byte-identical test whose runs cross 00:00Z. On the real clock the second run
+    is stamped a day later; with the date pinned (``conftest._one_fleet_run_date``, which
+    every test gets) both runs carry the first date and their stamps match byte for byte."""
+    monkeypatch.setattr(fleet_cli, "datetime", _MidnightClock)
+    monkeypatch.setattr(fleet_cli, "utc_today", UTC_TODAY)
+    monkeypatch.setattr(_MidnightClock, "reads", 0)
+    assert _stamped_dates(froot, tmp_path, "a1", "a2") == ["2026-11-22", "2026-11-23"]  # the flake
+
+    monkeypatch.setattr(_MidnightClock, "reads", 0)
+    assert pin_fleet_run_date(monkeypatch, fleet_cli).isoformat() == "2026-11-22"
+    assert _stamped_dates(froot, tmp_path, "b1", "b2") == ["2026-11-22", "2026-11-22"]
+    for name in ("run.json", "fleet-data.json"):
+        assert (tmp_path / "b1" / name).read_bytes() == (tmp_path / "b2" / name).read_bytes(), name
 
 
 def test_diagrams_are_drawn_from_a_real_run_and_byte_identical(tmp_path, monkeypatch):

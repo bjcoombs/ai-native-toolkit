@@ -238,3 +238,20 @@ def dated_git_repo(tmp_path: Path) -> Path:
     cannot show that a window is counted from HEAD rather than from today.
     """
     return build_dated_repo(tmp_path / "dated")
+
+
+def pin_fleet_run_date(monkeypatch: pytest.MonkeyPatch, cli: object) -> _dt.date:
+    """Pin ``cli.utc_today`` (``skills/fleet/scripts/fleet.py``) to the date it reads now."""
+    day: _dt.date = cli.utc_today()  # type: ignore[attr-defined]
+    monkeypatch.setattr(cli, "utc_today", lambda: day)
+    return day
+
+
+@pytest.fixture(autouse=True)
+def _one_fleet_run_date(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#1029: every in-process fleet run in one test stamps the same ``scan_date``, so a
+    multi-run byte-identical test cannot fail when its runs fall either side of 00:00Z.
+    The fleet tests share the one ``fleet_cli`` module ``test_fleet_cli`` loads."""
+    cli = getattr(sys.modules.get("test_fleet_cli"), "fleet_cli", None)
+    if cli is not None:
+        pin_fleet_run_date(monkeypatch, cli)
