@@ -90,7 +90,7 @@ when they change
 `threshold_meets_minimum` it reads null with `unmeasured_reason`
 `root_coverage_config_unresolved` (so `enforced_basis` is `threshold_not_read`); a root
 floor below 50 leaves false, which is false either way. A scope holding no `.py` file, or
-its own coverage.py config, is not affected. This widening is listed for the next release.
+its own coverage.py config, is not affected. Only CI runs on ordinary triggers count. The manifest `revision` moved to 5 for this change of meaning.
 Adding a gate form: build the gate with `_gate` and the right
 `unit`; `threshold_percent` and both block fields follow with no other change. A form
 whose number is not a coverage percentage (a count) needs its own `unit`, mapped to

@@ -47,7 +47,10 @@ a job-level ``defaults`` working directory reads unresolved, not resolved; step 
 conditions and matrix values are not read; a run from the root is credited even when
 its test paths name another package.
 
-Inward-only imports: stdlib, ``lib.coverage_ci``, ``lib.command_index``,
+Only runs on ordinary triggers count (``lib.ci_triggers``): a ``workflow_dispatch`` or
+``schedule``-only run is skipped, and one whose triggers are not settled reads unresolved.
+
+Inward-only imports: stdlib, ``lib.coverage_activation``, ``lib.coverage_ci``, ``lib.command_index``,
 ``lib.doc_graph`` and ``lib.assess_config``; never ``lib.coverage_gate`` (which calls it)
 or an orchestrator. Tests: ``tests/test_coverage_root_config.py``.
 """
@@ -303,10 +306,12 @@ def _coverage_runs(ci: CiRuns, activation: Activation) -> Iterator[tuple[Run, bo
     """The runs of coverage.py, with None where whether coverage is on is not settled."""
     on, off = "" in activation.pytest_cov, "" in activation.pytest_off
     for run in ci.runs:
+        if run.trigger == "not_ordinary":
+            continue   # a dispatch- or schedule-only run gates no change
         state = runs_tool(run.words, "coverage.py", pytest_cov=on, pytest_off=off,
                           activation=activation)
         if state is not False:
-            yield run, state
+            yield run, (None if run.trigger == "unknown" else state)
 
 
 def root_config_applies(root: Path, config: str, ci: CiRuns) -> bool | None:

@@ -155,6 +155,15 @@ def test_a_bare_pytest_reads_the_root_addopts(tmp_path: Path) -> None:
     assert (block["threshold_meets_minimum"], block["enforced_meets_minimum"]) == (True, True)
 
 
+def test_a_dispatch_only_root_run_does_not_count(tmp_path: Path) -> None:
+    root = _write(tmp_path, {"pyproject.toml": ROOT_FLOOR, "pkg/a.py": "",
+        ".github/workflows/manual.yml": "on: [workflow_dispatch]\njobs:\n  t:\n    steps:\n"
+                                        "      - run: pytest --cov\n",
+        CI: "on: [pull_request]\njobs:\n  t:\n    steps:\n"
+            "      - run: pytest --cov\n        working-directory: pkg\n"})
+    assert _applies(root) is False
+
+
 def test_a_defaults_working_directory_is_unresolved(tmp_path: Path) -> None:
     root = _write(tmp_path, {"pyproject.toml": ROOT_FLOOR, "pkg/a.py": "", CI: (
         "on: [pull_request]\njobs:\n  t:\n    defaults:\n      run:\n"
