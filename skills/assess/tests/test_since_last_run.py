@@ -318,3 +318,19 @@ def test_a_committed_baseline_compares_the_held_gates(repo: Path) -> None:
                      "held_gates": ["instructions", "ci_runs_tests"]}}), encoding="utf-8")
     block = since_last_run(_level("met", "unmet"), repo / ".assess", repo)
     assert (block["previous_run_id"], block["gates_gained"], block["gates_lost"]) == ("p", [], ["ci_runs_tests"])
+
+
+def test_a_baseline_from_another_branch_or_without_a_run_id_reads_safely(repo: Path) -> None:
+    """Review of #1130: a baseline commit not in HEAD's history is unknown; a missing run_id is None."""
+    base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "-b", "other")
+    (repo / "o.txt").write_text("o\n", encoding="utf-8")
+    _commit(repo, "2026-11-02T10:00:00Z", "other branch")
+    other = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "main")
+    for sha, reason in ((other, "previous_not_ancestor"), (base, "actions_not_committed")):
+        (repo / ".assess" / "prior-level.json").write_text(json.dumps({
+            "prior_level_version": 2, "levels_version": "x", "tags": [],
+            "baseline": {"head_sha": sha, "held_gates": []}}), encoding="utf-8")
+        block = since_last_run(_level("met", "met"), repo / ".assess", repo)
+        assert (block["previous_run_id"], block["closed"], block["closed_reason"]) == (None, None, reason)

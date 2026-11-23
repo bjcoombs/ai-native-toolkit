@@ -74,6 +74,7 @@ UNKNOWN_CLOSED = {
     "previous_unreadable": "the previous run-context.json could not be read",
     "previous_state_missing": "log.md records an earlier run, but its run-context.json is not here",
     "shallow_clone": "this is a shallow clone, so commit ancestry cannot be checked",
+    "previous_not_ancestor": "the previous run measured a commit that is not in this branch's history",
     "ancestry_unknown": "git could not check a commit's ancestry",
 }
 
@@ -256,7 +257,10 @@ def _baseline(assess_dir: Path, superseded: Any) -> tuple[bool, str | None, Mapp
 
     Read order: the superseded run's own block (below), then the committed baseline in
     ``prior-level.json`` (#1122, returned as ``{run_id, head_sha, held_gates}``), then
-    ``run-context.json``, then ``log.md``.
+    ``run-context.json``, then ``log.md``. Inheriting a superseded run's block needs that run's
+    ``run-context.json``; without it a same-day re-run on the same commit reads the committed
+    baseline, whose commit is HEAD, and so credits nothing new: the superseded run's own entry
+    in ``log.md`` stays as the record of what it credited.
 
     No ``run-context.json`` is a first run only when ``log.md`` records no earlier run either:
     the context is often gitignored, so a fresh clone or a CI checkout has the log and not the
@@ -272,7 +276,7 @@ def _baseline(assess_dir: Path, superseded: Any) -> tuple[bool, str | None, Mapp
             return bool(inherited.get("first_run")), None, None, inherited
     committed = load_baseline(assess_dir)  # the committed baseline first (#1122)
     if committed is not None:
-        return False, None, {"run_id": committed["run_id"], "head_sha": committed["head_sha"],
+        return False, None, {"run_id": committed.get("run_id"), "head_sha": committed["head_sha"],
                              "held_gates": committed["held_gates"]}, None
     path = assess_dir / "run-context.json"
     if not path.is_file():
@@ -317,6 +321,8 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
         reason = "previous_commit_absent"  # a rewritten history or a shallow clone: not zero
     elif _shallow(repo_root):
         reason = "shallow_clone"  # ancestry stops at the boundary, so "not an ancestor" can lie
+    elif _ancestor(repo_root, previous_commit, "HEAD") != 0:
+        reason = "previous_not_ancestor"  # another branch's run: its commits are not this history's past
     elif isinstance(found := closed_actions(repo_root, previous_commit), str):
         reason = found
     else:

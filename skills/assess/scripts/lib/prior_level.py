@@ -28,8 +28,8 @@ reads first: a fresh clone or a CI checkout has it. ``load_baseline`` returns it
 the file has none (a version-1 file, which this reader still accepts, a run with no commit,
 or a malformed baseline, which is dropped while the tags still read).
 
-Every value is a tag token, a condition id, a reason code, a version token or a count, so
-the file and the run context's ``prior_level`` name no path, repository or person.
+Every value is a tag token, a condition id, a reason code, a version token, a count, a
+commit sha (``baseline.head_sha``), a run id token or a gate id, so the file and the run context's ``prior_level`` name no path, repository or person.
 Tests: ``tests/test_prior_level.py``.
 """
 from __future__ import annotations
