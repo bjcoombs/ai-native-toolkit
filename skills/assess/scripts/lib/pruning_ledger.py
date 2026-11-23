@@ -16,6 +16,8 @@ value}``) and a ``completed_sha`` on HEAD's history. ``update_ledger`` keeps one
   not known) leaves it as it was, never counted;
 - a re-run on the commit the previous run measured adds nothing, so superseding a run never
   counts twice;
+- a pending entry whose removal is no longer a done action on HEAD's history (squashed away,
+  reopened, deleted) is dropped; a credited one stays as the record;
 - at ``HOLD_RUNS`` holds the entry is credited once, with ``saved`` the measured drop: the
   always-on lines at the proposal less the lines now (all of them when the file is gone
   from disk), and ``credited_at``, the commit; a re-run on that commit shows the credit again.
@@ -72,9 +74,13 @@ def update_ledger(prior: Sequence[PruningEntry], done_removals: Iterable[Pruning
     ``held_now`` and ``held_before`` are the Step gates held now and at the previous run (None
     when unknown). An entry records the gates it must keep when it is first seen: the gates
     held before the removal landed, else those held now."""
-    entries = {(e["path"], e["completed_sha"]): cast(PruningEntry, dict(e)) for e in prior}
-    for e in done_removals:
-        entries.setdefault((e["path"], e["completed_sha"]), cast(PruningEntry, dict(e)))
+    done = {(e["path"], e["completed_sha"]): e for e in done_removals}
+    # a pending entry counts only while its removal is still done on HEAD's history: one
+    # squashed away, reopened or deleted is dropped, so it never counts beside a fresh entry
+    entries = {(e["path"], e["completed_sha"]): cast(PruningEntry, dict(e)) for e in prior
+               if e["credited"] or (e["path"], e["completed_sha"]) in done}
+    for key, e in done.items():
+        entries.setdefault(key, cast(PruningEntry, dict(e)))
     for e in entries.values():
         if e["credited"] or not new_commit:
             continue

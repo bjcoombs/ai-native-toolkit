@@ -112,3 +112,15 @@ def test_a_degraded_scan_keeps_the_stored_ledger() -> None:
     ctx = {"since_last_run": {"available": False, "reason": "boom"}, "prior_level": {"pruning": stored}}
     assert pruning_record(ctx) == stored
     assert pruning_record({"since_last_run": {"available": True, "pruning": []}}) == []
+
+
+def test_a_pending_removal_no_longer_done_on_head_is_dropped_and_a_credited_one_stays() -> None:
+    """Review of #1134: a squashed-away commit must not keep counting beside a fresh entry."""
+    pending, _ = _run([], _placement(False, 180), head="c1")
+    after, _ = update_ledger(pending, [], _placement(False, 180), held_now=GATES, held_before=GATES,
+                             head_sha="c2", new_commit=True, repo_root=ROOT)
+    assert after == []
+    credited = [{**pending[0], "credited": True, "saved": 100, "credited_at": "c2"}]
+    kept, _ = update_ledger(credited, [], _placement(False, 180), held_now=GATES, held_before=GATES,  # type: ignore[arg-type]
+                            head_sha="c3", new_commit=True, repo_root=ROOT)
+    assert kept == credited
