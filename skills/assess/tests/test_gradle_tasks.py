@@ -189,6 +189,13 @@ V = frozenset({"jacocoTestCoverageVerification"})
     (":lib:jacocoTestCoverageVerification jacocoTestCoverageVerification", "app/build.gradle",
      True),
     (":app:check", "app/build.gradle", False),
+    # No settings file read (outside a scan): the gate's directory ends with the path.
+    (":app:jacocoTestCoverageVerification", "android/app/build.gradle", True),
+    ("-p android :app:jacocoTestCoverageVerification", "android/app/build.gradle", True),
+    ("-p ./android :app:jacocoTestCoverageVerification", "android/app/build.gradle", True),
+    ("-p android :lib:jacocoTestCoverageVerification", "android/app/build.gradle", None),
+    ("-c other.gradle :app:jacocoTestCoverageVerification", "app/build.gradle", None),
+    ("-p $DIR :app:jacocoTestCoverageVerification", "app/build.gradle", None),
 ])
 def test_gradle_runs_in(args: str, file: str, runs: bool | None) -> None:
     assert gradle_runs_in(args.split(), V, file) is runs
@@ -198,6 +205,8 @@ def test_gradle_runs_in(args: str, file: str, runs: bool | None) -> None:
 GATE = ('plugins { id "java"; id "jacoco" }\njacocoTestCoverageVerification {\n'
         '  violationRules { rule { limit { minimum = 0.80 } } }\n}\n')
 WIRED = GATE + "check.dependsOn jacocoTestCoverageVerification\n"
+ANDROID = {"android/settings.gradle": "include ':app'\n", "android/app/build.gradle": GATE}
+ROOTED = {"settings.gradle": "include ':app', ':lib'\n"}
 
 
 def _gate(root: Path, line: str, files: dict[str, str]) -> tuple[bool | None, str]:
@@ -219,6 +228,21 @@ def _gate(root: Path, line: str, files: dict[str, str]) -> tuple[bool | None, st
     ("./gradlew check", {"lib/build.gradle": WIRED}, (True, "ci_run")),
     ("./gradlew --warning-mode all jacocoTestCoverageVerification", {"build.gradle": GATE},
      (True, "ci_run")),
+    # The Gradle root is the nearest tracked settings file (claude-review on #1143).
+    ("cd android && ./gradlew :app:jacocoTestCoverageVerification", ANDROID, (True, "ci_run")),
+    ("./gradlew -p android :app:jacocoTestCoverageVerification", ANDROID, (True, "ci_run")),
+    ("./gradlew --project-dir=android :app:check",
+     {**ANDROID, "android/app/build.gradle": WIRED}, (True, "ci_run")),
+    ("cd android && ./gradlew :lib:jacocoTestCoverageVerification", ANDROID,
+     (None, "indirect_run")),
+    ("./gradlew :app:jacocoTestCoverageVerification", ROOTED | {"app/build.gradle": GATE},
+     (True, "ci_run")),
+    ("./gradlew :app:jacocoTestCoverageVerification", ROOTED | {"lib/build.gradle": GATE},
+     (None, "indirect_run")),
+    ("./gradlew :app:jacocoTestCoverageVerification", ROOTED | {"lib/app/build.gradle": GATE},
+     (None, "indirect_run")),
+    ("./gradlew -c other.gradle :app:jacocoTestCoverageVerification",
+     ROOTED | {"app/build.gradle": GATE}, (None, "indirect_run")),
 ])
 def test_coverage_gate_by_project(tmp_path: Path, line: str, files: dict[str, str],
                                   expected: tuple[bool | None, str]) -> None:

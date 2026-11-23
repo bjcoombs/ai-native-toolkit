@@ -162,8 +162,8 @@ from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, re
 from lib.unread_ci import unread_ci_paths
 from lib.command_resolver import command_words, extract_commands
 from lib.runner_args import (
-    GRADLE, SCRIPT, gradle_dry_run, gradle_runs_in, gradle_tasks as gradle_tasks, partly_excluded, pdm_scripts,
-    pdm_scripts_set, script_run)
+    GRADLE, SCRIPT, gradle_dry_run, gradle_roots, gradle_roots_set, gradle_runs_in,
+    gradle_tasks as gradle_tasks, partly_excluded, pdm_scripts, pdm_scripts_set, script_run)
 from lib.shared_tooling import pulls_jobs_from_elsewhere
 
 EnforcedBasis = Literal[
@@ -216,6 +216,7 @@ class CiRuns:
     elsewhere: bool
     unread: bool
     pdm_scripts: frozenset[str] | None = None   # runner_args.pdm_scripts (#1046)
+    gradle_roots: frozenset[str] | None = None   # runner_args.gradle_roots (#1126)
 
 
 # Nothing read: the CI is not read when no threshold of at least 50 percent is set.
@@ -326,7 +327,8 @@ def read_ci_runs(repo_root: Path) -> CiRuns:
         for span, line_text in _command_groups(lines, unmasked, unsure, 1):
             runs.extend(Run(rel, span, words, command, triggers[span[0]], True)
                         for words, command in _word_lists(line_text) if words)
-    return CiRuns(tuple(runs), frozenset(files), elsewhere, unread, pdm_scripts(root))
+    return CiRuns(tuple(runs), frozenset(files), elsewhere, unread, pdm_scripts(root),
+                  gradle_roots(root))
 
 
 def _size(path: Path) -> int:
@@ -720,7 +722,7 @@ def enforced_meets_minimum(
         unfloored = is_patch(gate) or (gate["tool"] == "codecov" and percent is None)
         if not counted(gate) or unfloored or (isinstance(percent, (int, float)) and percent < minimum):
             continue
-        with pdm_scripts_set(ci.pdm_scripts):   # a pytest script shadows pytest (#1046)
+        with pdm_scripts_set(ci.pdm_scripts), gradle_roots_set(ci.gradle_roots):   # #1046, #1126
             state = gate_run(gate, ci, line_gates, activation)
         if state is True and percent is not None:
             return True, "ci_run"

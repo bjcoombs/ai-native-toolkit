@@ -28,8 +28,10 @@ Gradle:
   False for a dry run or ``-x check``.
 - ``gradle_task_paths(args)`` keeps each run task's project path, and
   ``gradle_runs_in(args, names, build_file)`` (#1126) matches it to a build file's
-  directory (``:app:x`` is ``app/build.gradle[.kts]``, ``:x`` the root): True on a match or
-  an unqualified task, None on a mismatch, a root-file gate or a moved start (``-p``).
+  directory under the Gradle root, the nearest tracked ``settings.gradle[.kts]`` at or above
+  the ``-p`` start or the gate (``:app:x`` is ``android/app/build.gradle`` beside
+  ``android/settings.gradle``; ``:x`` the root build file): True on a match or an
+  unqualified task, None on a mismatch, a root-file gate or ``-b`` / ``-c``.
 
 Script runners (``script_run(words)``): what ``hatch run``, ``pdm [run]`` and ``poe`` run,
 as ``(words, is_script)``, or None for another command (``pdm install``):
@@ -82,10 +84,14 @@ _GRADLE_VALUED = frozenset({
     "--max-workers", "--priority", "--project-cache-dir", "--configuration-cache-problems",
     "--update-locks", "--tests",
 })
-# Options that move the build Gradle starts from, so a project path is not read against
-# the checkout's own layout (``-p sub :app:check``).
-_GRADLE_START = ("-p", "-b", "--project-dir", "--build-file")
+# Options that replace the build or settings file, so a project path is not read against
+# the checkout's own layout (``-c other/settings.gradle :app:check``).
+_GRADLE_LAYOUT = frozenset({"-b", "-c", "--build-file", "--settings-file"})
 _GRADLE_BUILD_FILES = frozenset({"build.gradle", "build.gradle.kts"})
+_GRADLE_SETTINGS = frozenset({"settings.gradle", "settings.gradle.kts"})
+# The directories of the tracked settings files (each a Gradle root), set by
+# ``gradle_roots_set`` (from the coverage gate's ``CiRuns.gradle_roots``); None outside one.
+_GRADLE_ROOTS: ContextVar[frozenset[str] | None] = ContextVar("gradle_roots", default=None)
 
 
 def is_gradle(words: Sequence[str]) -> bool:
@@ -137,12 +143,11 @@ def gradle_runs_in(args: Sequence[str], names: frozenset[str],
                    build_file: str | None) -> bool | None:
     """Does a run task named in ``names`` run in ``build_file``'s project (#1126)? True for
     an unqualified one (every project) or a project path naming ``build_file``'s directory
-    (``:app`` is ``app/build.gradle[.kts]``, ``:task`` the root build file); None when only
-    a path to another or unmatched project names one (a ``settings.gradle`` ``projectDir``
-    can move a project, a root build file can configure subprojects, ``-p`` moves the
-    start); False when none is named. ``build_file`` None: any named task."""
-    moved = any((w.partition("=")[0] if w.startswith("--") else w[:2]) in _GRADLE_START
-                for w in args)
+    (``_in_project``); None when only a path to another or unmatched project names one (a
+    ``settings.gradle`` ``projectDir`` can move a project, a root build file can configure
+    subprojects, ``-b`` / ``-c`` replace the layout); False when none is named.
+    ``build_file`` None: any named task."""
+    start, replaced = _gradle_start(args)
     named = False
     for task in gradle_task_paths(args):
         if task.rsplit(":", 1)[-1] not in names:
@@ -150,11 +155,53 @@ def gradle_runs_in(args: Sequence[str], names: frozenset[str],
         project = gradle_project(task)
         if project is None or build_file is None:
             return True
-        if (not moved and posixpath.basename(build_file) in _GRADLE_BUILD_FILES
-                and project == posixpath.dirname(build_file)):
+        if (not replaced and posixpath.basename(build_file) in _GRADLE_BUILD_FILES
+                and _in_project(project, posixpath.dirname(build_file), start)):
             return True
         named = True
     return None if named else False
+
+
+def _gradle_start(args: Sequence[str]) -> tuple[str | None, bool]:
+    """``(the -p / --project-dir directory, normalised, or None, whether the layout is
+    unread)``: ``-b`` / ``-c``, or a ``-p`` value that is a shell expansion."""
+    start: str | None = None
+    replaced = False
+    words = iter(args)
+    for word in words:
+        head, eq, value = word.partition("=") if word.startswith("--") else (word[:2], "", word[2:])
+        if head in _GRADLE_LAYOUT:
+            replaced = True
+        elif head in ("-p", "--project-dir"):
+            value = value if eq or value else next(words, "")
+            replaced = replaced or not value or value.startswith(("$", "/", "~"))
+            start = posixpath.normpath(value) if value else None
+            start = "" if start == "." else start
+    return start, replaced
+
+
+def _in_project(project: str, gate_dir: str, start: str | None) -> bool:
+    """``:a:b`` is ``a/b`` under the Gradle root: the nearest directory holding a tracked
+    ``settings.gradle[.kts]`` at or above the start (``-p``), else above the gate's own
+    directory (a CI line's ``cd`` is not resolved, so the gate's build is taken as the one
+    run: ``cd android && ./gradlew :app:x`` is ``android/app``). With no root read, the
+    gate's directory is ``project`` or ends with ``/project``."""
+    roots = _GRADLE_ROOTS.get()
+    base = gate_dir if start is None else start
+    root = None if roots is None else _nearest(base, roots)
+    if root is None:
+        want = "/".join(p for p in (start, project) if p)
+        return gate_dir == want or gate_dir.endswith("/" + want)
+    return gate_dir == "/".join(p for p in (root, project) if p)
+
+
+def _nearest(directory: str, roots: frozenset[str]) -> str | None:
+    """``directory`` or its nearest parent in ``roots`` (``""`` is the repository root)."""
+    while directory not in roots:
+        if not directory:
+            return None
+        directory = posixpath.dirname(directory)
+    return directory
 
 
 def _excluded_name(task: str) -> str:
@@ -247,6 +294,22 @@ def gradle_tests_in_check(root: Path) -> bool:
     alias or a convention plugin applies one this does not read."""
     return any(_JVM_PLUGIN_RE.search(_GRADLE_COMMENT_RE.sub("", read_config(root, rel)))
                for rel in sorted(repo_files(root)) if rel.endswith((".gradle", ".gradle.kts")))
+
+
+def gradle_roots(root: Path) -> frozenset[str]:
+    """The directories of the tracked ``settings.gradle[.kts]`` files (``""``: the root)."""
+    return frozenset(posixpath.dirname(rel) for rel in repo_files(root)
+                     if posixpath.basename(rel) in _GRADLE_SETTINGS)
+
+
+@contextmanager
+def gradle_roots_set(roots: frozenset[str] | None) -> Iterator[None]:
+    """Give ``gradle_runs_in`` these Gradle roots (None: not read) inside the block."""
+    token = _GRADLE_ROOTS.set(roots)
+    try:
+        yield
+    finally:
+        _GRADLE_ROOTS.reset(token)
 
 
 def gradle_build_verdict(words: Sequence[str]) -> bool | None:
