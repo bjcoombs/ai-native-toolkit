@@ -1,7 +1,7 @@
 """A Gradle run's working directory selects the project it runs in (#1162, #1163).
 
 ``./gradlew -p app <task>`` and ``cd app && ../gradlew <task>`` run an unqualified task in
-``app`` and its subprojects only (Gradle 9.4), so a JaCoCo gate in ``lib`` is not run: it
+``app`` and its subprojects only (the readings #1162 sets out), so a JaCoCo gate in ``lib`` is not run: it
 reads null (``indirect_run``; ``allprojects {}`` or a ``projectDir`` override can still
 reach it), never false. A gate in ``app`` or under it keeps its credit. The Gradle root is
 the nearest settings file at or above the known working directory, so ``:app:x`` at the
@@ -15,7 +15,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 from lib.runner_args import gradle_roots_set, gradle_runs_in
-from lib.testing.ci_workdir import run_cwd
+from lib.testing.ci_workdir import exact_cwd, run_cwd
 from lib.testing.coverage_ci import read_ci_runs
 from lib.testing.coverage_gate import detect_coverage_gate
 
@@ -77,9 +77,14 @@ NULL = (None, "indirect_run")
     # A -p naming the root, or no -p and no cd, keeps today's reading.
     (f"./gradlew -p . {TASK}", ROOTED | {"lib/build.gradle": GATE}, CREDIT),
     (f"./gradlew {TASK}", ROOTED | {"lib/build.gradle": GATE}, CREDIT),
-    # An unreadable -p or cd: the project is unknown, null for any gate.
+    # An unreadable -p: the project is unknown, null for any gate.
     (f"./gradlew -p $DIR {TASK}", ROOTED | {"app/build.gradle": GATE}, NULL),
+    # An unresolved cd leaves the working directory unknown: today's reading.
     (f"cd $DIR && ./gradlew {TASK}", ROOTED | {"lib/build.gradle": GATE}, CREDIT),
+    # Two runs and a cd on one line, or a cd after a quote: unresolved, today's reading.
+    (f"cd app && ../gradlew {TASK} && cd ../lib && ../gradlew {TASK}",
+     ROOTED | {"lib/build.gradle": GATE}, CREDIT),
+    (f"bash -c \"cd app && ../gradlew {TASK}\"", ROOTED | {"lib/build.gradle": GATE}, CREDIT),
     # A subshell cd that closes before the run leaves it unresolved: today's reading.
     (f"(cd app) && ./gradlew {TASK}", ROOTED | {"lib/build.gradle": GATE}, CREDIT),
 ])
@@ -105,9 +110,12 @@ def test_step_working_directory(tmp_path: Path, workdir: str, gate: str,
     (f"./gradlew :app:{TASK}", TWO_ROOTS, NULL),
     (f"cd android && ./gradlew :app:{TASK}", TWO_ROOTS, CREDIT),
     (f"./gradlew -p android :app:{TASK}", TWO_ROOTS, CREDIT),
-    # An unqualified task at the root runs the root build only.
-    (f"./gradlew {TASK}", TWO_ROOTS, NULL),
+    # An unqualified task at the root keeps today's reading, whichever settings file is
+    # nearer the gate (a root build may include a project holding its own settings file).
+    (f"./gradlew {TASK}", TWO_ROOTS, CREDIT),
     (f"cd android && ./gradlew {TASK}", TWO_ROOTS, CREDIT),
+    (f"./gradlew {TASK}", {"settings.gradle": "include ':android'\n",
+                           "android/settings.gradle": "", "android/build.gradle": GATE}, CREDIT),
     # #1126: with no root settings file, android/app is still matched by its path.
     (f"./gradlew :app:{TASK}",
      {"android/settings.gradle": "include ':app'\n", "android/app/build.gradle": GATE}, CREDIT),
@@ -140,12 +148,12 @@ def test_gradle_runs_in_with_cwd(args: str, cwd: str | None, file: str,
     assert gradle_runs_in(args.split(), V, None, cwd) is (runs is not False)
 
 
-def test_unqualified_task_under_another_root_reads_unsure() -> None:
-    roots = frozenset({"", "android"})
-    with gradle_roots_set(roots):
-        assert gradle_runs_in([TASK], V, "android/app/build.gradle", "") is None
-        assert gradle_runs_in([TASK], V, "android/app/build.gradle", "android") is True
-        assert gradle_runs_in([TASK], V, "app/build.gradle", "") is True
+def test_root_comes_from_the_start_for_a_project_path() -> None:
+    with gradle_roots_set(frozenset({"", "android"})):
+        assert gradle_runs_in([f":app:{TASK}"], V, "android/app/build.gradle", "") is None
+        assert gradle_runs_in([f":app:{TASK}"], V, "android/app/build.gradle", "android") is True
+        assert gradle_runs_in([f":app:{TASK}"], V, "android/app/build.gradle", None) is True
+        assert gradle_runs_in([TASK], V, "android/app/build.gradle", "") is True
 
 
 def test_ci_runs_carry_the_gradle_working_directory(tmp_path: Path) -> None:
@@ -162,4 +170,19 @@ def test_ci_runs_carry_the_gradle_working_directory(tmp_path: Path) -> None:
 def test_run_cwd_reads_a_step() -> None:
     lines = ["      - run: cd pkg/a && ./gradlew check"]
     assert run_cwd(range(0, 1), ["./gradlew", "check"], lines, False) == PurePosixPath("pkg/a")
+    assert exact_cwd(range(0, 1), ["./gradlew", "check"], lines, False) == PurePosixPath("pkg/a")
     assert run_cwd(range(0, 1), ["./gradlew"], ["      - run: cd $X && ./gradlew"], False) is None
+
+
+@pytest.mark.parametrize("line", [
+    "      - run: cd a && ./gradlew x && cd ../b && ./gradlew y",
+    "      - run: bash -c \"cd a && ./gradlew x\"",
+    "      - run: sh -c 'cd a && ./gradlew x'",
+])
+def test_exact_cwd_refuses_a_misplaceable_run(line: str) -> None:
+    assert exact_cwd(range(0, 1), ["./gradlew", "x"], [line], False) is None
+
+
+def test_exact_cwd_keeps_two_runs_without_a_cd() -> None:
+    line = "      - run: ./gradlew x && ./gradlew y"
+    assert exact_cwd(range(0, 1), ["./gradlew", "y"], [line], False) == PurePosixPath()

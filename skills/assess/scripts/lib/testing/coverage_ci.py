@@ -164,7 +164,7 @@ from lib.named_check import may_lint_named
 from lib.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, workflow_trigger
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.unread_ci import unread_ci_paths
-from lib.testing.ci_workdir import run_cwd
+from lib.testing.ci_workdir import exact_cwd
 from lib.command_resolver import command_words, extract_commands
 from lib.runner_args import (
     GRADLE, SCRIPT, gradle_dry_run, gradle_roots, gradle_roots_set, gradle_runs_in,
@@ -345,7 +345,7 @@ def _gradle_cwd(span: range, words: tuple[str, ...], lines: list[str], gitlab: b
     Gradle only; None: unresolved, or another program."""
     if program(words)[0] not in GRADLE:
         return None
-    cwd = run_cwd(span, words, lines, gitlab)
+    cwd = exact_cwd(span, words, lines, gitlab)
     return None if cwd is None else "" if not cwd.parts else cwd.as_posix()
 
 

@@ -17,6 +17,9 @@ for a Gradle run, #1162):
   anything else (``$VAR``, ``~``, an absolute path, ``cd -``, ``popd``, a path above the
   root) is unresolved.
 - ``uv --directory X`` and ``poetry -C X`` / ``--directory X`` run the tool in X.
+- ``exact_cwd`` (the Gradle reading) is also unresolved where ``run_cwd`` may misplace the
+  run: a line holding a ``cd`` that names the program twice, or a ``cd`` after a quote
+  (``bash -c "cd x && ..."``).
 
 ``PurePosixPath()`` is the repository root. Inward-only imports: stdlib and
 ``lib.command_index``; never an orchestrator. Tests: ``tests/test_coverage_root_config.py``,
@@ -152,6 +155,23 @@ def run_cwd(span: range, words: Sequence[str], lines: Sequence[str], gitlab: boo
                 return None   # a subshell ``(cd docs && make)`` does not move the run
             cwd = move(cwd, match.group(2))
     return _runner_directory(cwd, words)
+
+
+# A ``cd`` / ``pushd`` right after a quote or backtick (``bash -c "cd x && ..."``), which
+# ``_CD_RE`` does not read.
+_QUOTED_CD_RE = re.compile(r"[\"'`]\s*(?:cd|pushd)(?=\s)")
+
+
+def exact_cwd(span: range, words: Sequence[str], lines: Sequence[str], gitlab: bool) -> Cwd:
+    """``run_cwd`` for a caller that relies on the exact directory (a Gradle run, #1162):
+    also None when the run's own lines hold a ``cd`` and name ``words[0]`` twice (``cd a &&
+    ./gradlew x && cd ../b && ./gradlew y``: ``run_cwd`` reads both runs at the first), or a
+    ``cd`` after a quote (``bash -c "cd android && ./gradlew x"``)."""
+    text = " ".join(ci_line_text(lines[r]) for r in span)
+    named = re.findall(r"(?<![\w./-])" + re.escape(words[0]) + r"(?![\w./-])", text) if words else []
+    if (len(named) > 1 and _CD_RE.search(text)) or _QUOTED_CD_RE.search(text):
+        return None
+    return run_cwd(span, words, lines, gitlab)
 
 
 def _runner_directory(cwd: Cwd, words: Sequence[str]) -> Cwd:

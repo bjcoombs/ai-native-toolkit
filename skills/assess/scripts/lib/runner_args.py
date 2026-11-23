@@ -34,7 +34,7 @@ Gradle:
   mismatch, a root-file gate or ``-b`` / ``-c``. The start (#1162, #1163) is the CI line's
   known working directory ``cwd`` (``""`` the root; ``cd`` / ``working-directory:``, read by
   ``lib.testing.ci_workdir``) joined with ``-p`` / ``--project-dir``. An unqualified task
-  runs in the start's project and its subprojects under the same root: a gate elsewhere, or
+  runs in the start's project and its subprojects: a gate outside them, or
   any gate with an unreadable ``-p`` (``$DIR``, absolute, above the root), reads None; with
   the start unknown it runs in every project (True).
 
@@ -196,18 +196,11 @@ def _gradle_start(args: Sequence[str], cwd: str | None = None
 
 def _in_start(gate_dir: str, start: str | None, unread: bool) -> bool:
     """An unqualified task runs in the start directory's project and its subprojects
-    (#1162): ``gate_dir`` at or under ``start``, and under the same Gradle root when the
-    roots are read (``android/`` with its own ``settings.gradle`` is another build). An
-    unknown start keeps the reading before #1162: every project."""
+    (#1162): ``gate_dir`` at or under ``start``. An unknown start keeps the reading before
+    #1162: every project."""
     if unread:
         return False
-    if start is None:
-        return True
-    if start and gate_dir != start and not gate_dir.startswith(start + "/"):
-        return False
-    roots = _GRADLE_ROOTS.get()
-    root = None if roots is None else _nearest(start, roots)
-    return root is None or _nearest(gate_dir, roots or frozenset()) == root
+    return not start or gate_dir == start or gate_dir.startswith(start + "/")
 
 
 def _in_project(project: str, gate_dir: str, start: str | None) -> bool:
