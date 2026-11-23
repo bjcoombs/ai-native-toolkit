@@ -44,7 +44,13 @@ a case-insensitive regex searched, plus a field `email`, `username` or `name`; n
 reads e-mail and username) come from `compile_config_rules` over the
 `[[ai_usage.agent_identities]]` tables. Pinned defaults (`AGENT_RULES`,
 `DEPENDENCY_BOT_RULES`) are written in the username form and never read a display
-name; `COVERED_AUTHOR_AGENTS` names them in words. `is_dependency_bot(email, username)`
+name; `COVERED_AUTHOR_AGENTS` names them in words. `AGENT_RULES` holds only `[bot]`-suffix
+apps (#883). The name-only matches (`AGENT_HINT_RULES`: `noreply@anthropic.com`, `copilot@`
+addresses, the `copilot` login, Cursor's and OpenHands' addresses, `openhands-agent`) are
+hints: `is_agent_hint(email, username)` tests one, the matcher never counts one, and it
+becomes an agent only through `[identities]` or a config rule. The trailer matchers above
+are unchanged, so an AI co-author trailer still counts without confirmation.
+`confirmed_username(username)` gives a platform user's `[identities]` class. `is_dependency_bot(email, username)`
 is the dependency-bot test on its own, the public seam `account_discovery` reads (#1031).
 Order: a dependency bot (always, whatever a rule says), then config rules in order (first match credited), then
 pinned agents, then a GitLab access-token user (`is_gitlab_token_user`:
@@ -206,32 +212,39 @@ def rule(pattern: str, field: RuleField | None = None) -> IdentityRule:
     return IdentityRule(re.compile(pattern, re.IGNORECASE), field)
 
 
-# Agent apps and service accounts, matched on username or e-mail, never name.
+# Agent apps, counted without confirmation: every rule needs the reserved
+# ``[bot]`` suffix of a GitHub App account, which no person carries (#883).
 AGENT_RULES: tuple[IdentityRule, ...] = (
     rule(r"^claude\[bot\]$"),                    # Claude GitHub App
-    rule(r"^noreply@anthropic\.com$"),           # Claude Code
     rule(r"^copilot-swe-agent\[bot\]$"),         # GitHub Copilot coding agent
-    rule(r"^copilot$", "username"),              # Copilot's noreply login
-    rule(r"^copilot@", "email"),                 # Copilot addresses
     rule(r"^devin-ai-integration\[bot\]$"),      # Devin
     rule(r"^google-labs-jules\[bot\]$"),         # Jules
     rule(r"^chatgpt-codex-connector\[bot\]$"),   # OpenAI Codex
+    rule(r"^amazon-q-developer\[bot\]$"),        # Amazon Q Developer
+)
+
+# Name-only agent matches (#883): an address or login with no ``[bot]`` suffix or
+# verified app identity, which a person can share or commit under. A hint counts
+# as nothing until the account is confirmed in ``[identities]`` (#765) or matched by
+# an ``[[ai_usage.agent_identities]]`` rule; ``account_discovery`` lists it as a
+# candidate with the ``pinned_agent_hint`` evidence.
+AGENT_HINT_RULES: tuple[IdentityRule, ...] = (
+    rule(r"^noreply@anthropic\.com$"),           # Claude Code
+    rule(r"^copilot$", "username"),              # Copilot's noreply login
+    rule(r"^copilot@", "email"),                 # Copilot addresses
     rule(r"^cursoragent@cursor\.com$", "email"),  # Cursor background agent
     rule(r"^openhands@all-hands\.dev$", "email"),  # OpenHands
     rule(r"^openhands-agent$"),                  # OpenHands
-    rule(r"^amazon-q-developer\[bot\]$"),        # Amazon Q Developer
 )
 
 # The agents AGENT_RULES recognise as commit authors, in words with no address,
 # for a block's stated limits. Keep it in step with AGENT_RULES.
 COVERED_AUTHOR_AGENTS = (
-    "Claude (GitHub App and Claude Code)",
-    "GitHub Copilot (coding agent and Copilot accounts)",
+    "Claude (GitHub App)",
+    "GitHub Copilot (coding agent)",
     "Devin",
     "Jules",
     "OpenAI Codex",
-    "Cursor (background agent)",
-    "OpenHands",
     "Amazon Q Developer",
 )
 
@@ -295,6 +308,15 @@ def is_dependency_bot(email: str, username: str) -> bool:
     """True when ``DEPENDENCY_BOT_RULES`` match the e-mail or username (Renovate,
     Dependabot). A display name is never read."""
     return any(_rule_matches(r, email, username, "") for r in DEPENDENCY_BOT_RULES)
+
+
+def is_agent_hint(email: str = "", username: str | None = None) -> bool:
+    """True when an ``AGENT_HINT_RULES`` name-only match (#883) fits the e-mail or
+    username (derived from a noreply e-mail when not given). A display name is never read."""
+    email = email.strip()
+    if username is None:
+        username = username_from_email(email) or ""
+    return any(_rule_matches(r, email, username.strip(), "") for r in AGENT_HINT_RULES)
 
 
 def identity_keys(email: str = "", name: str = "", username: str | None = None) -> frozenset[str]:
@@ -376,6 +398,10 @@ class AuthorMatcher:
         A config rule with ``field = "email"`` or ``"name"`` cannot match here.
         """
         return self.classify(email="", name="", username=username.strip())
+
+    def confirmed_username(self, username: str) -> Literal["agent", "bot", "person"] | None:
+        """The ``[identities]`` class of a platform user, or None when unconfirmed."""
+        return self.confirmed.class_of(identity_keys(username=username.strip()))
 
 
 def compile_config_rules(entries: Sequence[Mapping[str, object]]) -> tuple[IdentityRule, ...]:

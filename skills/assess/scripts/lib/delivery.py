@@ -55,7 +55,9 @@ type is unknown decides a change, ``ai_review_share`` is None.
 
 Agent-authored share (#717). The share of sampled changes whose author an agent
 identity matches, by the #695 username form (``AuthorMatcher.classify_username``):
-a config rule or a pinned ``AGENT_RULES`` entry. On GitHub ``gh`` drops an App
+an ``[identities]`` agent, a config rule or a pinned ``AGENT_RULES`` entry (``[bot]``
+apps only; a name-only login such as ``copilot`` is a hint that counts once
+confirmed, #883). On GitHub ``gh`` drops an App
 author's ``[bot]`` (and ``login`` drops ``app/``), so ``[bot]`` is re-appended only
 when the author object says ``is_bot``; a person whose login is ``claude`` is not
 the Claude App. On GitLab the merge request author's ``username`` is classified
@@ -70,7 +72,8 @@ from the ``gitlab_note_facts`` spec (``lib/gitlab_notes.py``, #716), which reads
 each sampled merge request's notes once: hours from ``created_at`` to the first
 human comment's ``created_at`` over the merge requests that have one,
 ``human_commented_share``, and ``ai_review_share`` (a note with an AI-review
-marker, or by an agent or pinned AI-review app; an access-token user only when
+marker, or by an agent; a GitLab ``AI_REVIEWERS`` username has no bot flag behind it, so
+it is a hint that counts once confirmed, #883; an access-token user only when
 ``token_users_as_agents`` or an identity rule makes it an agent). A merge request whose notes leave a figure
 undecided after up to ``NOTES_MAX_PAGES`` (3) pages / 300 notes makes it None; so does a refused notes read
 (``review_reality`` then carries the reason).
@@ -98,8 +101,8 @@ comment by an `[[ai_usage.agent_identities]]` config match (username as given), 
 never makes a person an agent); status bots never count,
 an unknown account that decides a change nulls the share. Agent-authored share
 (#717): changes whose author `AuthorMatcher.classify_username` puts in the `agent`
-bucket - a config rule or a pinned `AGENT_RULES`
-entry, with `[bot]` re-appended only when the GitHub author is `is_bot`; on GitLab
+bucket - an `[identities]` agent, a config rule or a pinned `[bot]` `AGENT_RULES`
+entry (name-only logins are hints until confirmed, #883), with `[bot]` re-appended only when the GitHub author is `is_bot`; on GitLab
 the author `username`, so access-token users count only under
 `token_users_as_agents` and dependency bots never; a deleted author is not an
 agent. Read from the sample's own listing, no extra call. GitLab: time to merge, the
@@ -124,7 +127,8 @@ if TYPE_CHECKING:  # gitlab_notes reads AI_REVIEWERS from here
     from lib.gitlab_notes import NoteFactsOrReason
 
 # AI code-review apps, by GitHub login with the ``[bot]`` suffix dropped. A login
-# counts only when ``BotClassifier`` reads the account as a bot. ``gh pr list``
+# counts only when ``BotClassifier`` reads the account as a bot. On GitLab, which
+# has no bot flag, a name here is only a hint until confirmed (#883, ``gitlab_notes``). ``gh pr list``
 # drops the suffix and carries no account type for comment and review authors,
 # and the classifier's ``users/<login>[bot]`` probe only shows that the App
 # exists, so a person whose login equals one of these App names would read as

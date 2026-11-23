@@ -20,14 +20,17 @@ remotes) logged in.
   (a review or comment by a known AI review app, a pinned agent app, or an
   `[[ai_usage.agent_identities]]` rule), and `approved_share` / `self_merged_share`
   copied from `review_reality`, and `agent_authored_share` (changes authored by a
-  pinned agent app or an `[[ai_usage.agent_identities]]` rule, by username; a
+  pinned `[bot]` agent app, an `[identities]` agent or an `[[ai_usage.agent_identities]]`
+  rule, by username; a name-only login such as `copilot` counts once confirmed; a
   GitLab access-token user counts only under `token_users_as_agents`), and
   `sample_page_size` (changes per request the sample was read at: 20, or 10 after
   one retry on an HTTP 502 or 504 from a large repository). Durations
   are hours, percentiles nearest-rank. On GitLab the comment and AI-review
   figures come from each merge request's notes (#716): the first human comment is
   the first non-system note by a person other than the author, and AI review is a
-  note with an AI-review marker or by an agent or a pinned AI-review app. A figure
+  note with an AI-review marker or by an agent. GitLab has no bot flag, so a pinned
+  AI-review app name there is a hint that counts as neither review nor a human comment
+  until `[identities]` confirms it (#883). A figure
   is null when the notes leave it undecided after 3 pages (300 notes) on any
   sampled merge request, or when the notes read is refused. Counts-only output
   (the default) keeps every `delivery` figure, the same as `--full`.

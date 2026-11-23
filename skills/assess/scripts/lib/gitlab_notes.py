@@ -25,15 +25,19 @@ skipped) is classified once, first rule that applies:
    (case-insensitive substrings). Whoever else posted it, the note is AI review
    and never a human comment.
 3. **AI review by account.** The author's username is in the ``agent`` bucket of
-   ``agent_identity.AuthorMatcher.classify_username`` (an ``[ai_usage]`` identity
-   rule or a pinned agent, #695), or in ``delivery.AI_REVIEWERS`` (the pinned
-   AI-review apps, ``[bot]`` dropped). A GitLab project or group access-token user
+   ``agent_identity.AuthorMatcher.classify_username`` (an account confirmed as an
+   agent in ``[identities]``, #765; an ``[ai_usage]`` identity rule; or a ``[bot]``-suffix
+   pinned agent, #695). A GitLab project or group access-token user
    (``project_<id>_bot_<hash>``, recognised by that generated form, never a display
    name) lands in the ``agent`` bucket only with ``[ai_usage] token_users_as_agents``.
 4. **Automation** (neither review nor a human comment): an access-token user that is
    not an agent and whose note carries no marker (coverage reporters, Danger,
    semantic-release post through tokens; counting them would make review look done
-   when nobody looked), and a dependency bot (Renovate, Dependabot).
+   when nobody looked), a dependency bot (Renovate, Dependabot), an account confirmed
+   as a bot, and an unconfirmed name-only AI match (#883): a username in
+   ``delivery.AI_REVIEWERS`` (``[bot]`` dropped) or an ``AGENT_HINT_RULES`` login. GitLab
+   has no bot flag, so a person can hold one of those names: it counts as nothing
+   until ``[identities]`` confirms it as an agent (AI review) or a person (human).
 5. **Human comment**: anyone else. The first one's ``created_at`` is
    ``first_human_comment_at``.
 
@@ -63,8 +67,10 @@ when its body (cut to `MAX_BODY`) carries a `PINNED_MARKERS` marker (a line-star
 Review" / "AI Review" heading, plain or bold, emoji allowed, or an HTML comment naming AI
 review or CodeRabbit; prose mentioning AI review does not match) or a `[review]
 ai_review_markers` string (case-insensitive substring), whoever else posted it; AI review when
-its author is in the `agent` bucket of `agent_identity.AuthorMatcher.classify_username` or
-its username is in `delivery.AI_REVIEWERS` (`[bot]` dropped); nothing for automation, a
+its author is in the `agent` bucket of `agent_identity.AuthorMatcher.classify_username`
+(confirmed, a config rule or a `[bot]` pinned app); nothing for an unconfirmed name-only AI
+match (`is_hint`, #883: a `delivery.AI_REVIEWERS` username, `[bot]` dropped, or an
+`AGENT_HINT_RULES` login), an account confirmed as a bot, automation, a
 dependency bot or a `project_<id>_bot_<hash>` / `group_<id>_bot_<hash>` access-token user
 (recognised by that form, never a display name) that is not an agent: an unmarked token
 note is a coverage reporter, Danger or semantic-release as often as an AI reviewer, so it
@@ -86,7 +92,7 @@ import re
 from collections.abc import Sequence
 from typing import Any, NamedTuple
 
-from lib.agent_identity import AGENT, DEPENDENCY_BOT, TOKEN_USER, AuthorMatcher
+from lib.agent_identity import AGENT, DEPENDENCY_BOT, TOKEN_USER, AuthorMatcher, is_agent_hint
 from lib.ai_usage import matcher_from_config
 from lib.delivery import AI_REVIEWERS
 from lib.fleet_config import FleetConfig, review_section
@@ -149,16 +155,26 @@ class NoteClassifier:
         return self.matcher.classify_username(name).bucket
 
     def is_ai(self, author: Any) -> bool:
-        """An agent (a token user only under ``token_users_as_agents``) or a pinned
-        AI-review app, by username."""
+        """An agent by username: confirmed in ``[identities]``, an identity rule, a
+        ``[bot]``-suffix pinned app, or a token user under ``token_users_as_agents``."""
+        return self._bucket(author) == AGENT
+
+    def is_hint(self, author: Any) -> bool:
+        """An unconfirmed name-only AI match (#883): a ``delivery.AI_REVIEWERS`` name or an
+        ``agent_identity.AGENT_HINT_RULES`` login that is not otherwise an agent."""
         name = author.get("username") if isinstance(author, dict) else None
-        if not isinstance(name, str) or not name:
+        if not isinstance(name, str) or not name or self.matcher.confirmed_username(name) is not None:
             return False
-        return name.lower().removesuffix("[bot]") in AI_REVIEWERS or self._bucket(author) == AGENT
+        named = name.lower().removesuffix("[bot]") in AI_REVIEWERS or is_agent_hint(username=name)
+        return named and self._bucket(author) != AGENT
 
     def is_automation(self, author: Any) -> bool:
-        """A non-agent access-token user or a dependency bot: never review, never human."""
-        return self._bucket(author) in (TOKEN_USER, DEPENDENCY_BOT)
+        """Never review, never human: a non-agent access-token user, a dependency bot, an
+        account confirmed as a bot, or an unconfirmed name-only AI match (``is_hint``)."""
+        if self._bucket(author) in (TOKEN_USER, DEPENDENCY_BOT) or self.is_hint(author):
+            return True
+        name = author.get("username") if isinstance(author, dict) else None
+        return isinstance(name, str) and bool(name) and self.matcher.confirmed_username(name) == "bot"
 
 
 def classifier_from_config(config: FleetConfig | None) -> NoteClassifier:
