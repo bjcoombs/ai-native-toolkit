@@ -32,7 +32,8 @@ runs, from GitHub workflows and ``.gitlab-ci.yml``:
   ``--cov``; a run whose coverage state is not settled (``pytest -c`` naming a file not
   read) counts as unresolved unless it is known not to read the root config.
 - a GitLab job whose ``before_script`` key sits after the command (GitLab runs it
-  first) leaves the directory unresolved.
+  first) leaves the directory unresolved; a GitLab ``after_script`` runs in its own shell,
+  so its ``cd`` is not read.
 
 True when one run reads the root config (from the root, or by naming it). False when
 every run is resolved and none does (each runs in the scope or another directory with
@@ -224,7 +225,10 @@ def _cwd(run: Run, lines: Sequence[str], gitlab: bool) -> Cwd:
             match = _WORKDIR_RE.match(lines[r])
             if match and (r == step.start or len(match.group(1)) == key_indent):
                 cwd = _move(cwd, match.group(2).strip("\"'") or None)
+    after = _after_script_rows(lines, step) if gitlab else set()
     for r in range(step.start, run.span[-1] + 1):
+        if r in after:
+            continue   # GitLab runs ``after_script`` in its own shell, after ``script``
         text = ci_line_text(lines[r])
         if r in run.span:
             at = text.find(run.words[0])
@@ -234,6 +238,23 @@ def _cwd(run: Run, lines: Sequence[str], gitlab: bool) -> Cwd:
                 return None   # a subshell ``(cd docs && make)`` does not move the run
             cwd = _move(cwd, match.group(2))
     return cwd
+
+
+def _after_script_rows(lines: Sequence[str], step: range) -> set[int]:
+    """The rows of a GitLab job's ``after_script:`` block (key line included)."""
+    rows: set[int] = set()
+    key: int | None = None
+    for r in step:
+        line = lines[r]
+        indent = len(line) - len(line.lstrip())
+        if key is not None and line.strip() and (
+                indent < key or indent == key and not line.lstrip().startswith("-")):
+            key = None
+        if key is None and line.strip().startswith("after_script:"):
+            key = indent
+        if key is not None:
+            rows.add(r)
+    return rows
 
 
 def _in_closed_group(text: str, at: int) -> bool:

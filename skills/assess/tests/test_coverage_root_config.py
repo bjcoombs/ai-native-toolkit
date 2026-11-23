@@ -173,6 +173,8 @@ def test_a_defaults_working_directory_is_unresolved(tmp_path: Path) -> None:
     (".base: &base\n  before_script: [cd pkg]\ntest:\n  <<: *base\n  script:\n"
      "    - pytest --cov\n", None),
     ("test:\n  script:\n    - pytest --cov\n  before_script:\n    - cd pkg\n", None),
+    ("test:\n  after_script: [cd reports && ls]\n  script:\n    - pytest --cov\n", True),
+    ("test:\n  after_script:\n    - cd reports\n  script:\n    - pytest --cov\n", True),
     ("default:\n  image: python\nbefore_script:\n  - pip install .\n"
      "test:\n  script:\n    - pytest --cov\n", True),
 ])
