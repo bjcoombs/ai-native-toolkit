@@ -140,3 +140,15 @@ def test_a_profile_run_after_a_default_run_compares_no_gate(ci2: Path) -> None: 
     assert "model changed (default → handover); gates not compared" in ctx["headline"]["summary_lines"][-1]
     again = build_and_publish_run(repo_root=ci2, run_date="2026-11-24", non_interactive=True, model=HANDOVER)
     assert model_changed_line(again["since_last_run"]) is None
+
+
+def test_a_degraded_headline_still_keeps_a_custom_level_off_the_default_diagrams() -> None:
+    level = {"levels_version": "my-1", "step": 1, "next_step": None,
+             "conditions": [{"id": "fresh-docs.1", "row": "fresh-docs", "level": 1, "grade": "measured",
+                             "counted": True, "state": "met"}]}
+    ctx = {"level": level, "headline": {"available": False}}
+    assert custom_run(ctx)
+    assert [d["skipped"] for d in build_diagrams(ctx)] == [CUSTOM_NOT_DRAWN, CUSTOM_NOT_DRAWN]
+    default_ids = {**level, "conditions": [{**level["conditions"][0], "id": "layer-0-instructions.1"}]}
+    assert not custom_run({"level": default_ids, "headline": {"available": False}})
+    assert not custom_run({"level": level})  # no headline block: not a run context

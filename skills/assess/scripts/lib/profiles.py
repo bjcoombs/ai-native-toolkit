@@ -24,8 +24,10 @@ the same Step as ``/fleet --levels`` for the same repository.
 ``model_lines(level, choice)`` are the lines the executive summary (``lib/exec_summary.py``)
 adds for a model that is not the default, ``[]`` for the default:
 
-1. ``Maturity model: profile handover, not the default.`` (``model: my.toml, a custom
-   file, not the default`` for ``--levels``);
+1. ``Maturity model: profile handover, not the default.`` (``Maturity model: my.toml, a
+   custom file, not the default.`` for ``--levels``). A custom file's ``version`` may not
+   start ``default-`` or ``profile-`` (``RESERVED_PREFIXES``, refused by ``resolve``):
+   those name the shipped models, and the report tells models apart by version;
 2. the readiness line: ``Ready for handover (profile: handover).`` when every practice
    holds, else ``Not ready for handover (profile: handover). Missing: <practice> (<state>);
    ...`` (``READY_WORDS``; ``Every practice met`` and ``Not every practice met``
@@ -59,7 +61,7 @@ from lib.level_tally import run_exclusions
 from lib.levels import LevelsError, MaturityModel, PathValidator, load_levels
 from lib.signal_grades import DEFAULT_LEVELS
 
-__all__ = ["CUSTOM_MODEL_LINE", "PROFILES_DIR", "READY_WORDS", "ModelChoice", "ProfileError", "add_model_arguments",
+__all__ = ["CUSTOM_MODEL_SUFFIX", "PROFILES_DIR", "RESERVED_PREFIXES", "READY_WORDS", "ModelChoice", "ProfileError", "add_model_arguments",
            "chosen_model", "model_lines", "non_default_ids", "profile_names", "profile_path", "resolve",
            "run_level", "single_repo_choice"]
 
@@ -73,8 +75,11 @@ _READY_DEFAULT = ("Every practice met", "Not every practice met")
 
 ModelKind = Literal["default", "profile", "file"]
 
-# How the summary's first line opens for a custom --levels model (lib/model_change.custom_run).
-CUSTOM_MODEL_LINE = "Maturity model: model: "
+# How the summary's first line ends for a custom --levels model (lib/model_change.custom_run).
+CUSTOM_MODEL_SUFFIX = ", a custom file, not the default."
+# Version prefixes that name the shipped models (lib/model_change.model_name): a custom file
+# may not use them, or the report would read it as the shipped model.
+RESERVED_PREFIXES = ("default-", "profile-")
 
 
 class ProfileError(ValueError):
@@ -144,7 +149,12 @@ def resolve(profile: str | None, levels: str | Path | None,
             return ModelChoice(load_levels(profile_path(profile), validator), "profile", profile)
         if levels is not None:
             path = Path(levels)
-            return ModelChoice(load_levels(path, validator), "file", path.name)
+            model = load_levels(path, validator)
+            if model["version"].startswith(RESERVED_PREFIXES):
+                raise ProfileError(
+                    f"{path.name} has version {model['version']!r}: versions starting "
+                    f"{' or '.join(RESERVED_PREFIXES)} name the shipped models, so give a custom model its own")
+            return ModelChoice(model, "file", path.name)
     except (LevelsError, OSError) as e:
         raise ProfileError(str(e)) from e
     return ModelChoice(default_model(), "default", "default")
@@ -217,7 +227,7 @@ def model_lines(level: LevelResult, choice: ModelChoice | None) -> list[str]:
     if choice is None or choice.kind == "default":
         return []
     first = (f"Maturity model: profile {choice.name}, not the default." if choice.kind == "profile"
-             else f"{CUSTOM_MODEL_LINE}{choice.name}, a custom file, not the default.")
+             else f"Maturity model: {choice.name}{CUSTOM_MODEL_SUFFIX}")
     foreign = non_default_ids(choice.model)
     lines = [first, _readiness(level, choice, set(foreign))]
     if foreign:

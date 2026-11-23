@@ -9,7 +9,9 @@ module keeps the parts of the report that compare or redraw the level on that sa
 - ``model_for_level(level)`` is the model a ``level`` block was computed with when the
   report can reread it: the default model, or the shipped profile of that name. None for
   a custom file, or for a block that names no version. ``custom_run(ctx)`` is True when the
-  run's executive summary opens with the custom-model line (``profiles.CUSTOM_MODEL_LINE``);
+  run's executive summary opens with the custom-model line (``profiles.CUSTOM_MODEL_SUFFIX``),
+  or, when the headline is degraded, when the level holds a condition the default model
+  does not define;
   the Step ladder and the evidence waffle (``lib/assess_diagrams.py``) are then not drawn,
   with ``CUSTOM_NOT_DRAWN`` in their place, rather than drawn from the default model beside
   a summary on another. The version alone cannot say so: any string is a valid version.
@@ -39,7 +41,7 @@ from typing import Any, cast
 from lib.levels import LevelsError, MaturityModel, load_levels
 from lib.level_tally import default_model
 from lib.prior_level import load_prior_level
-from lib.profiles import CUSTOM_MODEL_LINE, ModelChoice, profile_names, profile_path
+from lib.profiles import CUSTOM_MODEL_SUFFIX, ModelChoice, profile_names, profile_path
 from lib.run_context_types_since import SinceLastRun
 from lib.unit_rollup import UnitRollUpBlock
 
@@ -79,12 +81,23 @@ def model_for_level(level: Any) -> MaturityModel | None:
 
 
 def custom_run(ctx: Mapping[str, Any]) -> bool:
-    """True when the run's executive summary names a custom ``--levels`` model
-    (``profiles.model_lines`` writes that first line, and only for such a run)."""
+    """True when the run's level cannot be from the default model: the executive summary
+    names a custom ``--levels`` model (``profiles.model_lines`` writes that first line, and
+    only for such a run), or, with the run's headline block degraded, the level holds a
+    condition the default model does not define."""
     block = ctx.get("headline")
     lines = block.get("summary_lines") if isinstance(block, Mapping) else None
-    return isinstance(lines, list) and bool(lines) and isinstance(lines[0], str) \
-        and lines[0].startswith(CUSTOM_MODEL_LINE)
+    if isinstance(lines, list) and lines and isinstance(lines[0], str) \
+            and lines[0].startswith("Maturity model: ") and lines[0].endswith(CUSTOM_MODEL_SUFFIX):
+        return True
+    if not isinstance(block, Mapping) or block.get("available") is True:
+        return False  # no headline block at all is not a run's context; a whole one decided above
+    level = ctx.get("level")
+    conditions = level.get("conditions") if isinstance(level, Mapping) else None
+    if not isinstance(conditions, list):
+        return False
+    known = {f"{r['id']}.{lv['level']}" for r in default_model()["rows"] for lv in r["levels"]}
+    return any(isinstance(c, Mapping) and c.get("id") not in known for c in conditions)
 
 
 def _version(level: Any) -> str | None:

@@ -143,7 +143,7 @@ def test_a_custom_model_marks_the_practices_the_default_does_not_define(tmp_path
     choice = single_repo_choice(None, _custom(tmp_path), signal_path_validator())
     assert choice.kind == "file" and choice.label == "model: my.toml"
     lines = _summary(_blocks(), choice)
-    assert lines[0] == "Maturity model: model: my.toml, a custom file, not the default."
+    assert lines[0] == "Maturity model: my.toml, a custom file, not the default."
     assert lines[1] == ("Not every practice met (model: my.toml). "
                         "Missing: Very fresh docs (not met) [not in the default model].")
     assert lines[2] == "Not in the default model: Very fresh docs."
@@ -298,3 +298,11 @@ def test_the_step_line_keeps_its_glossary_link_under_a_profile() -> None:
     paragraphs = core_scans.headline(level, None, choice)["summary_markdown"].split("\n\n")
     assert paragraphs[0] == "Maturity model: profile handover, not the default."
     assert paragraphs[2].startswith("[Step](") and "#step) 4 of 4: " in paragraphs[2]
+
+
+def test_a_custom_model_may_not_take_a_shipped_version(tmp_path: Path) -> None:
+    for version in (default_model()["version"], "profile-handover-2026.11.23"):
+        path = tmp_path / "copy.toml"
+        path.write_text(CUSTOM.replace('version = "my-1"', f'version = "{version}"'), encoding="utf-8")
+        with pytest.raises(ProfileError, match="name the shipped models"):
+            resolve(None, path)
