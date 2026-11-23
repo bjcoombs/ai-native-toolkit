@@ -623,11 +623,44 @@
               ],
               "additionalProperties": false
             }
+          },
+          "gate_blockers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "gate": {
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "met",
+                    "unmet",
+                    "not_applicable",
+                    "not_measured",
+                    "declined"
+                  ]
+                },
+                "disposition": {
+                  "enum": [
+                    "excluded_by_owner",
+                    null
+                  ]
+                }
+              },
+              "required": [
+                "disposition",
+                "gate",
+                "state"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
           "active",
           "exclusions",
+          "gate_blockers",
           "key",
           "next_step",
           "owner_count",

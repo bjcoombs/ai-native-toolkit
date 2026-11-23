@@ -53,24 +53,31 @@ default (#772): it compares a unit with its peers, so it is earned only with
 |------|-------------|
 | `level_up` | A row moves cleanly to a higher level. |
 | `first` | Off by default; on with `--first-achievements`. A `level_up` to a level no subject of the same view and kind has held on that row in this fleet's history. Every subject reaching it in the same run is credited: a milestone, never a ranking. A view and kind with one subject (the org root) earns none. |
-| `target_hit` | A row moves cleanly from below a `--targets` target to at or above it: a `level` target reads the row's level; a `share` target reads the unit's mean share of top level on the row over its measured repositories (worked out by the engine from the repository cells), so it can be hit while a `min` row's level stays put. |
+| `target_hit` | The unit's lowest Step (over its measured repositories, from each repository's `fleet-data.json` `step`) moves cleanly from below a `--targets` Step target to at or above it. Clean means a lowest Step in both runs and the same measured repositories, so a repository that goes unmeasured, fails its scan or joins neither earns nor blocks. Each run is compared with the latest earlier run that measured the same repositories, so a member's failed scan on the run before the crossing delays the credit to the run it returns instead of losing it; `previous_run` names that run. One crossing is credited once: a target already credited after the run compared with is not credited again. A run stored before Steps were in `fleet-data.json` is neutral. It reads Steps, not rows, so it never moves a streak. |
 | `streak` | Runs since the subject last slipped (a clean move down on any row) reach 3, 5, 10, 25, 50 or 100. A run with no clean move neither breaks nor extends it. |
 
 Each achievement has `kind`, `view`, `unit` (the key `fleet-data.json` writes),
 `unit_kind`, `run` and `previous_run` (run ids are scan dates), `evidence` (`row`,
-`from_level`, `to_level`, `level`, `share_from`, `share_to`, `target_share`, `runs`, and `moves`: each
+`from_level`, `to_level`, `level`, `from_step`, `to_step`, `target_step`, `runs`, and `moves`: each
 repository that moved up, from which level to which, and `criterion`, the next-level
-criterion that went from unmet to met) and `credit`, one Markdown line.
+criterion that went from unmet to met; a `target_hit` has `row` null and sets the three
+Step fields) and `credit`, one Markdown line.
 
 **Next steps.** `nearest_level_ups` holds one entry per subject and team row below the
 top level: among the measured repositories one level below the next, the next-level
 criterion most of them share (`signal`), those `repos`, how many more must reach the next
 level for the subject to move (`needed`), and the `change` and `done_when` in the team
-next-steps pages' wording. `targets` gives each target's current `level` and `share`
-(the row's mean share of top level), and its distance: `distance` in levels for a level
-target, `share_distance` in share for a share target (0 when met; null when the row is not
-measured this run or the target is of the other kind). `target` holds a level target's
-level and `share_target` a share target's share; the other is null.
+next-steps pages' wording. `targets` gives each Step target's progress this run: `view`,
+`unit`, `step` (the target), `lowest_step` (null when no repository is measured),
+`measured` of `repos`, `distance` (Steps to go, 0 when met, null when not measured), the
+target Step's `threshold`, `held` (measured repositories below the target Step),
+`below_threshold` (of those, the ones whose met tally is below the threshold) and
+`missing_gates`: each gate of the target Step that holds back at least one measured
+repository, in model order, with `gate`, `row`, `level`, `held` and, of those,
+`not_measured` and `excluded` (the owner excluded the gate's condition). The counts are
+repositories; a repository's own practices to go are `threshold` less its `tally.met` in
+`fleet-data.json`. The gates come from each repository's `gate_blockers`, so a repository
+two Steps below the target shows every gate it is missing, not only its next Step's.
 
 **Recount.** `recount` is set on the first run under a new maturity-model version,
 when the newest replayed earlier entry was re-scored, and null otherwise (on the next run
@@ -96,23 +103,24 @@ opening line states the unknown exception whenever it is non-empty, Recount or n
 [[target]]
 view = "ownership"      # "ownership" (default), "system", or "repo"
 unit = "acme/payments"  # a unit id in that view, or a repository id for "repo"
-row = "layer-5-ci"      # a team row of the maturity model
-level = 2               # 1 to the row's top level
-
-[[target]]
-unit = "acme"           # a mean-share target: the unit's mean share of top level on the row
-row = "layer-5-ci"
-share = 0.5             # above 0 and at most 1
+step = 3                # a [[steps]] entry of the maturity model above Step 1
 ```
 
-Each target sets exactly one of `level` and `share`. A share target is hit on the run the
-unit's mean share on the row moves cleanly from below `share` to at or above it, and its
-distance is reported in share. Credit names units and repositories only, never people.
-With hashed paths the unit is hashed under the run's salt before it is matched.
+A target names a Step (the default model's 2 Supervised agent PRs, 3 Unattended agent PRs
+and 4 Autonomous loops), one per unit and view. It needs `--levels` with `[[steps]]`. The
+run exits 2 before any scan on an unknown key or view, a `step` that is not a whole
+number from 2 to the top Step, a second target on one unit, a unit that is not in this
+run's unit trees, or a repository that is not in the run. The 2.x format that named a
+layer `row` with a `level` or a mean `share` was removed in 3.0.0: a file using `row`,
+`level` or `share` is refused with an error naming the entry and saying to use `step`.
+Credit names units and repositories only, never people. With hashed paths the unit is
+hashed under the run's salt before it is matched.
 
 **Report.** `report.md` opens with "What changed and who earned it", before the
 diagrams: this run's achievements by kind (up to 20 lines each), then each unit's nearest
-level-up (the row needing the fewest repositories), then target distances. On the first
+level-up (the row needing the fewest repositories), then each Step target: met, or the
+unit's lowest Step, the gates to go with the repositories each holds back, and how many
+repositories are below the threshold. On the first
 run under a new maturity-model version a `### Recount` subsection follows "Earned this
 run": the Recount lines, raised moves first (up to 20). Every line is
 credit or a next step. With `--no-diagrams` there is no report; `achievements.json` is

@@ -825,3 +825,6 @@ kept as written. A string
 | `repos.exclusions.kind` | token |
 | `repos.exclusions.source` | token |
 | `repos.exclusions.reason` | dropped |
+| `repos.gate_blockers.gate` | token |
+| `repos.gate_blockers.state` | token |
+| `repos.gate_blockers.disposition` | token |

@@ -162,10 +162,9 @@ def well_formed(data: FleetData) -> bool:
                     return False
                 tops[cell["row"]] = cell["top_level"]
         rules = {row: (Fraction(1), top) for row, top in tops.items()}
-        for sub in subjects(data, rules).values():
-            shares = [state.share for state in sub.rows.values()]
-            if any(share is not None and not isinstance(share, (int, float)) for share in shares):
-                return False
+        subjects(data, rules)
+        if any(repo.get("step") is not None and type(repo.get("step")) is not int for repo in data["repos"]):
+            return False
     except (KeyError, TypeError, AttributeError, ValueError, IndexError):
         return False
     return True

@@ -55,22 +55,26 @@ baseline and earns nothing:
   (``STREAK_MILESTONES``). A slip is a clean move down on any row. A run where the
   subject had a clean move on some row and slipped on none extends the streak; a run
   with no clean move is neutral.
-- ``target_hit``: a clean move from below a target to at or above it (targets file,
-  ``lib/fleet_targets.py``). A level target reads the subject's level on the row; a
-  share target reads its mean share of top level on the row over the measured members
-  (``RowState.share``, worked out here from the cells: ``fleet-data.json`` holds no
-  average since #772), so a ``min`` row can hit a share target while its level stays put.
+- ``target_hit``: a Step target (targets file, ``lib/fleet_targets.py``; #945) hit: a
+  clean move of the subject's lowest Step over its measured members from below the
+  target Step to at or above it (``lib/fleet_step_targets.py``), measured against the
+  latest earlier run with the same measured set (``same_set``), not only the run before,
+  so a member's failed scan in between never loses the hit; ``previous_run`` names that
+  run. A target credited after that run is not credited again (one crossing, one hit). It reads Steps, not
+  rows, so it never moves a streak. Evidence: ``from_step``, ``to_step`` and
+  ``target_step``; ``row`` is null.
 
-``personal_best`` was retired in #772 (an average compared across runs); ``share_from``
-and ``share_to`` stay in ``Evidence`` for share targets.
+``personal_best`` was retired in #772 (an average compared across runs); level and share
+targets on a row were retired in #945.
 
 **Next steps** (this run only): ``nearest_level_up`` per subject and row below the top
 level: among the measured members one level below the next level, the next-level
 criterion (their cell ``signal``) shared by the most of them, the repositories it
 applies to, how many must reach the next level for the subject to move (``needed``)
 and the change and "done when" from ``lib.next_step_guidance`` (the team next-steps
-wording). ``targets`` gives each target's distance: in levels for a level target, in
-share of top level for a share target.
+wording). ``targets`` gives each Step target's progress: the lowest Step, the Steps to go,
+and the target Step's missing gates with the repositories each holds back
+(``fleet_step_targets.target_progress``).
 
 **Privacy.** Keys, names and values come from ``fleet-data.json``, already reduced
 for counts-only (a unit's ``name`` is null there, so its key is shown). Owners are
@@ -86,8 +90,8 @@ roll-up rule (`levels.share_level`) over measured members, with the measured set
 `clean` is the one gate on a move (known both sides, same measured set), and
 `known_level` the one place a cell's level is read (the hook for #697's floor). `_Replay`
 emits `level_up`, `first` (only with `firsts=True`, `fleet.py --first-achievements`; off
-by default since #772), `target_hit` (a level target on the row's level, a share target
-on its mean share of top level, `RowState.share`, worked out from the cells, #780) and
+by default since #772), `target_hit` (a Step target reached by the subject's lowest Step,
+#945, `fleet_step_targets`) and
 `streak` (#772 retired `personal_best`), each with
 `moves` evidence (repository, row, from and to level, the criterion that became met) and
 a Markdown `credit` line. On a step from a re-scored entry (#771) `unknown_move` counts a
@@ -110,10 +114,21 @@ from fractions import Fraction
 from pathlib import Path
 from typing import NamedTuple, TypedDict
 
-from lib.fleet_data import FLEET_DATA_VERSION, NOT_SCANNED, PLACES, Cell, FleetData
-from lib.fleet_maturity import SCOPE, mean_share
+from lib.fleet_data import FLEET_DATA_VERSION, NOT_SCANNED, Cell, FleetData
+from lib.fleet_data_steps import RepoSteps
+from lib.fleet_maturity import SCOPE
 from lib.fleet_next_steps import code, expression, text
 from lib.fleet_rescore import Recount, recount, rule_unknowns
+from lib.fleet_step_targets import (
+    StepState,
+    Target,
+    TargetProgress,
+    hit,
+    member_steps,
+    step_state,
+    target_order,
+    target_progress,
+)
 from lib.levels import MaturityModel, Row, share_level
 from lib.next_step_guidance import guidance
 
@@ -144,13 +159,13 @@ class Move(TypedDict):
 
 
 class Evidence(TypedDict):
-    row: str | None  # None for streak
+    row: str | None  # None for streak and target_hit
     from_level: int | None
     to_level: int | None
-    level: int | None  # first: the level reached first; target_hit: the target level (level targets)
-    share_from: float | None  # target_hit (share targets): the row's mean share then
-    share_to: float | None  # target_hit (share targets): the row's mean share now
-    target_share: float | None  # target_hit (share targets): the target mean share on the row
+    level: int | None  # first: the level reached first
+    from_step: int | None  # target_hit: the subject's lowest Step then
+    to_step: int | None  # target_hit: its lowest Step now
+    target_step: int | None  # target_hit: the target Step
     runs: int | None  # streak: runs since the last slip
     moves: list[Move]
 
@@ -182,18 +197,6 @@ class NextStep(TypedDict):
     credit: str  # one Markdown line, phrased as a next step
 
 
-class TargetProgress(TypedDict):
-    view: str
-    unit: str
-    row: str
-    target: int | None  # the target level; None for a share target
-    share_target: float | None  # the target mean share on the row; None for a level target
-    level: int | None  # None when unknown in this run
-    share: float | None  # the row's mean share of top level this run; None when unknown
-    distance: int | None  # level targets: levels to go; 0 when met; None when unknown or a share target
-    share_distance: float | None  # share targets: share to go; 0 when met; None when unknown or a level target
-
-
 class Achievements(TypedDict):
     achievements_version: int
     fleet_data_version: int
@@ -215,25 +218,10 @@ class HistoryRun(NamedTuple):
     stored: FleetData | None = None  # a re-scored entry's cells as stored, under its own rules
 
 
-class Target(NamedTuple):
-    """One target: a ``level`` or a mean ``share`` of top level on ``row`` (exactly one is set)."""
-
-    view: str
-    unit: str  # key as fleet-data.json writes it (hashed under the run's salt when hashing)
-    row: str
-    level: int | None
-    share: float | None = None
-
-
-def target_order(t: Target) -> tuple[str, str, str, int, float]:
-    return (t.view, t.unit, t.row, t.level or 0, t.share or 0.0)
-
-
 @dataclass(frozen=True)
 class RowState:
     level: int | None
     measured: frozenset[str]
-    share: float | None = None  # mean share of top level over ``measured`` (share targets only)
 
 
 @dataclass(frozen=True)
@@ -243,6 +231,8 @@ class Subject:
     kind: str
     label: str
     rows: Mapping[str, RowState]
+    step: StepState = StepState(None, frozenset())  # the lowest Step over its measured members (#945)
+    members: tuple[str, ...] = ()  # repository keys at or below the subject
 
 
 def known_level(cell: Cell) -> int | None:
@@ -264,22 +254,22 @@ def _rules(model: MaturityModel) -> dict[str, tuple[Fraction, int]]:
 
 
 def _row_state(cells: Mapping[str, Cell], members: Sequence[str], rule: tuple[Fraction, int]) -> RowState:
-    """The level by the row's rule, the measured set, and the mean share of top level over the
-    measured members (``lib.fleet_maturity.mean_share``, rounded), which share targets read."""
+    """The level by the row's rule over the measured members, and the measured set."""
     known = {m: lv for m in members if m in cells and (lv := known_level(cells[m])) is not None}
     level = share_level(list(known.values()), rule[0], rule[1]) if known else None
-    share = mean_share((lv, cells[m]["top_level"]) for m, lv in known.items())
-    return RowState(level, frozenset(known), round(share, PLACES) if share is not None else None)
+    return RowState(level, frozenset(known))
 
 
 def subjects(data: FleetData, rules: Mapping[str, tuple[Fraction, int]]) -> dict[tuple[str, str], Subject]:
     """Every unit and repository of one run, by ``(view, key)``."""
     cells = run_cells(data)
+    steps = run_steps(data)
     out: dict[tuple[str, str], Subject] = {}
     for repo in data["repos"]:
         rows = {row: _row_state({repo["key"]: cells[repo["key"]][row]}, [repo["key"]], rule)
                 for row, rule in rules.items() if row in cells[repo["key"]]}
-        out[(REPO_VIEW, repo["key"])] = Subject(REPO_VIEW, repo["key"], "repo", repo["key"], rows)
+        out[(REPO_VIEW, repo["key"])] = Subject(REPO_VIEW, repo["key"], "repo", repo["key"], rows,
+                                                step_state([repo["key"]], steps), (repo["key"],))
     for view in data["views"]:
         parent = {u["key"]: u["parent"] for u in view["units"]}
         members: dict[str, list[str]] = {u["key"]: [] for u in view["units"]}
@@ -294,8 +284,14 @@ def subjects(data: FleetData, rules: Mapping[str, tuple[Fraction, int]]) -> dict
             rows = {row: _row_state({m: cells[m][row] for m in mine if row in cells[m]}, mine, rule)
                     for row, rule in rules.items()}
             out[(view["view"], unit["key"])] = Subject(view["view"], unit["key"], unit["kind"],
-                                                      unit["name"] or unit["key"], rows)
+                                                      unit["name"] or unit["key"], rows,
+                                                      step_state(mine, steps), tuple(mine))
     return out
+
+
+def run_steps(data: FleetData) -> dict[str, RepoSteps]:
+    """``{repository key: Step fields}`` for one run; unmeasured for an entry written before #944."""
+    return {repo["key"]: member_steps(repo) for repo in data["repos"]}
 
 
 def run_cells(data: FleetData) -> dict[str, dict[str, Cell]]:
@@ -325,23 +321,12 @@ def moves_up(row: str, state: RowState, then_cells: Mapping[str, Mapping[str, Ce
 
 
 def _evidence(row: str | None = None, from_level: int | None = None, to_level: int | None = None,
-              moves: list[Move] | None = None, *, level: int | None = None, share_from: float | None = None,
-              share_to: float | None = None, runs: int | None = None,
-              target_share: float | None = None) -> Evidence:
+              moves: list[Move] | None = None, *, level: int | None = None, runs: int | None = None,
+              from_step: int | None = None, to_step: int | None = None,
+              target_step: int | None = None) -> Evidence:
     return {"row": row, "from_level": from_level, "to_level": to_level, "level": level,
-            "share_from": share_from, "share_to": share_to, "runs": runs, "moves": moves or [],
-            "target_share": target_share}
-
-
-def _crossed(target: Target, then: RowState, now: RowState) -> bool:
-    """Whether a clean move took the row from below ``target`` to at or above it."""
-    if target.share is not None:
-        if then.share is None or now.share is None:
-            return False
-        goal = Fraction(str(target.share))
-        return Fraction(str(then.share)) < goal <= Fraction(str(now.share))
-    assert then.level is not None and now.level is not None and target.level is not None
-    return then.level < target.level <= now.level
+            "from_step": from_step, "to_step": to_step, "target_step": target_step, "runs": runs,
+            "moves": moves or []}
 
 
 # --- credit sentences ----------------------------------------------------------
@@ -349,10 +334,6 @@ def _crossed(target: Target, then: RowState, now: RowState) -> bool:
 
 def _who(subject: Subject) -> str:
     return code(subject.label)
-
-
-def _pct(share: float) -> str:
-    return f"{share * 100:.0f}%"
 
 
 def _moved(moves: Sequence[Move]) -> str:
@@ -373,10 +354,11 @@ def _credit(kind: str, subject: Subject, ev: Evidence, titles: Mapping[str, str]
         what = "repository" if subject.kind == "repo" else subject.kind
         return f"A first for this fleet: {_who(subject)} is the first {what} at level {ev['level']} on {title}."
     if kind == TARGET_HIT:
-        if ev["target_share"] is not None:
-            return (f"{_who(subject)} hit its target of {_pct(ev['target_share'])} of top level on {title}: "
-                    f"mean share {_pct(ev['share_from'] or 0.0)} to {_pct(ev['share_to'] or 0.0)}.")
-        return f"{_who(subject)} hit its target of level {ev['level']} on {title}."
+        where = "" if subject.kind == "repo" else (
+            f" (the lowest Step over its {len(subject.step.measured)} measured "
+            f"{'repository' if len(subject.step.measured) == 1 else 'repositories'})")
+        return (f"{_who(subject)} reached its target of Step {ev['target_step']}: "
+                f"Step {ev['from_step']} to Step {ev['to_step']}{where}.")
     return f"{_who(subject)} held every level for {ev['runs']} runs in a row."
 
 
@@ -403,10 +385,16 @@ class _Replay:
         self.titles, self.tops, self.targets, self.firsts = titles, tops, targets, firsts
         self.reached: dict[tuple[str, str, str], int] = {}
         self.streak: dict[SubjectKey, int] = {}
+        self.steps: dict[SubjectKey, list[tuple[str, StepState]]] = {}  # each run's Step state, oldest first
+        self.order: dict[str, int] = {}  # run id -> position in the replay
+        self.hit_at: dict[tuple[SubjectKey, Target], str] = {}  # the run each target was last credited
         self.out: list[Achievement] = []
 
-    def see(self, subs: Mapping[SubjectKey, Subject]) -> None:
-        """Record a run's known levels as held (any run, clean or not)."""
+    def see(self, run: str, subs: Mapping[SubjectKey, Subject]) -> None:
+        """Record a run's known levels as held (any run, clean or not) and its Step states."""
+        self.order.setdefault(run, len(self.order))
+        for key, sub in subs.items():
+            self.steps.setdefault(key, []).append((run, sub.step))
         for sub in subs.values():
             for row, state in sub.rows.items():
                 if state.level is not None:
@@ -429,6 +417,7 @@ class _Replay:
             peers[(sub.view, sub.kind)] = peers.get((sub.view, sub.kind), 0) + 1
         for key in sorted(now):
             sub, old = now[key], then.get(key)
+            self._targets(run, key, sub)
             if old is None:  # new to the fleet (or keys under another salt): nothing to compare with
                 continue
             clean_rows = [row for row in sorted(sub.rows) if clean(old.rows.get(row), sub.rows[row])]
@@ -445,15 +434,6 @@ class _Replay:
                     held = reached_before.get((sub.view, sub.kind, row))
                     if self.firsts and (held is None or lv_now > held) and peers[(sub.view, sub.kind)] > 1:
                         self._earn(FIRST, sub, run, previous, _evidence(row, lv_then, lv_now, moves, level=lv_now))
-                # a share target can be hit with no level-up: under ``min`` the share rises first
-                for target in sorted(self.targets, key=target_order):
-                    if (target.view, target.unit, target.row) == (sub.view, sub.key, row) \
-                            and _crossed(target, then_row, now_row):
-                        ev = (_evidence(row, lv_then, lv_now, moves, share_from=then_row.share,
-                                        share_to=now_row.share, target_share=target.share)
-                              if target.share is not None else
-                              _evidence(row, lv_then, lv_now, moves, level=target.level))
-                        self._earn(TARGET_HIT, sub, run, previous, ev)
             moved_unknown = [unknown_move(then_cells, now_cells, sub.key, row, rescored)
                              for row in sorted(sub.rows) if row not in clean_rows] \
                 if rescored is not None and sub.kind == REPO_VIEW else []
@@ -464,7 +444,33 @@ class _Replay:
                 self.streak[key] = self.streak.get(key, 1) + 1
                 if self.streak[key] in STREAK_MILESTONES:
                     self._earn(STREAK, sub, run, previous, _evidence(runs=self.streak[key]))
-        self.see(now)
+        self.see(run, now)
+
+    def _targets(self, run: str, key: SubjectKey, sub: Subject) -> None:
+        """``target_hit`` against the latest earlier run with the same measured set (``same_set``),
+        so a member's failed scan on the run before the crossing never loses the hit. A target
+        already credited after that run is not credited again: one crossing, one hit."""
+        mine = [t for t in sorted(self.targets, key=target_order) if (t.view, t.unit) == (sub.view, sub.key)]
+        earlier = same_set(self.steps.get(key, []), sub.step) if mine else None
+        if earlier is None:
+            return
+        previous, then = earlier
+        for target in mine:
+            credited = self.hit_at.get((key, target))
+            if credited is not None and self.order[credited] > self.order[previous]:
+                continue
+            if hit(target, then, sub.step):
+                self.hit_at[(key, target)] = run
+                self._earn(TARGET_HIT, sub, run, previous, _evidence(
+                    from_step=then.lowest, to_step=sub.step.lowest, target_step=target.step))
+
+
+def same_set(history: Sequence[tuple[str, StepState]], now: StepState) -> tuple[str, StepState] | None:
+    """The latest earlier ``(run, state)`` measuring exactly ``now``'s repositories; None when none does."""
+    if now.lowest is None:
+        return None
+    return next(((run, state) for run, state in reversed(history)
+                 if state.lowest is not None and state.measured == now.measured), None)
 
 
 LAPSE, GAIN = "lapse", "gain"
@@ -489,8 +495,9 @@ def unknown_move(then_cells: Mapping[str, Mapping[str, Cell]], now_cells: Mappin
     return None
 
 
-def _sort_key(a: Achievement) -> tuple[int, str, str, str]:
-    return (KINDS.index(a["kind"]), a["view"], a["unit"], a["evidence"]["row"] or "")
+def _sort_key(a: Achievement) -> tuple[int, str, str, str, int]:
+    return (KINDS.index(a["kind"]), a["view"], a["unit"], a["evidence"]["row"] or "",
+            a["evidence"]["target_step"] or 0)
 
 
 # --- next steps ----------------------------------------------------------------
@@ -541,20 +548,6 @@ def nearest_level_up(sub: Subject, row: Row, rule: tuple[Fraction, int],
             "change": change, "done_when": done_when, "credit": credit}
 
 
-def target_progress(subs: Mapping[SubjectKey, Subject], targets: Sequence[Target]) -> list[TargetProgress]:
-    out: list[TargetProgress] = []
-    for t in sorted(targets, key=target_order):
-        sub = subs.get((t.view, t.unit))
-        state = sub.rows.get(t.row) if sub is not None else None
-        level = state.level if state is not None else None
-        share = state.share if state is not None else None
-        distance = None if level is None or t.level is None else max(0, t.level - level)
-        share_distance = None if share is None or t.share is None else round(max(0.0, t.share - share), PLACES)
-        out.append({"view": t.view, "unit": t.unit, "row": t.row, "target": t.level, "share_target": t.share,
-                    "level": level, "share": share, "distance": distance, "share_distance": share_distance})
-    return out
-
-
 # --- the document --------------------------------------------------------------
 
 
@@ -575,7 +568,7 @@ def build_achievements(current: HistoryRun, earlier: Sequence[HistoryRun], model
     replay = _Replay(titles, tops, targets, firsts)
     states = [(run.run_id, subjects(run.data, rules), run_cells(run.data)) for run in runs]
     caused = [rule_unknowns(run.stored, run.data) if run.stored is not None else None for run in runs]
-    replay.see(states[0][1])
+    replay.see(states[0][0], states[0][1])
     for i, ((prev_id, prev, prev_cells), (run_id, now, now_cells)) in enumerate(zip(states, states[1:])):
         then_caused = caused[i]
         # both runs re-scored from one earlier version: the step keeps its native-model credit
@@ -598,7 +591,8 @@ def build_achievements(current: HistoryRun, earlier: Sequence[HistoryRun], model
             "run": current.run_id, "levels_version": model["version"] if model is not None else None,
             "runs": [run.run_id for run in runs], "note": note if not earlier else None,
             "achievements": achievements, "nearest_level_ups": steps,
-            "targets": target_progress(now_subs, targets), "recount": counted,
+            "targets": target_progress({k: sub.members for k, sub in now_subs.items()},
+                                       run_steps(current.data), targets, model), "recount": counted,
             "rescored_runs": [run.run_id for run in earlier if run.rescored_from is not None]}
 
 
