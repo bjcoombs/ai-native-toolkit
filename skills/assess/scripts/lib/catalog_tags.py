@@ -18,7 +18,7 @@
   id (a signal path for ``eq_signal``).
 
 Each tag carries its ``why`` and ``why_source`` from the check manifest's root ``tags`` table
-(``lib.manifest_whys.tag_why``, #939; ``""`` from a version 1 manifest).
+(``lib.manifest.manifest_whys.tag_why``, #939; ``""`` from a version 1 manifest).
 """
 from __future__ import annotations
 

@@ -5,8 +5,8 @@ blocks carry the figures a fleet reader compares across repositories, so the
 published schemas (``skills/assess/references/signals.schema.json`` and
 ``skills/fleet/references/repos.schema.json``) name and explain their fields
 here: ``ai_usage`` (#547, #695), ``ci_checks`` (#698), ``coverage_gate`` (#781),
-``delivery`` (#715), ``review_reality`` (#943), ``guardrails`` (#767), ``agent_consistency`` (#768) and
-``layer_grades`` (#620, #821).
+``delivery`` (#715), ``review_reality`` (#943), ``guardrails`` (#767), ``agent_consistency`` (#768),
+``agent_outcome`` (#1085) and ``layer_grades`` (#620, #821).
 Both generators read :data:`BLOCK_SCHEMAS`, so the two files describe the same
 fields in the same words.
 
@@ -19,7 +19,8 @@ a field of the block's TypedDict, and that real documents validate.
 
 `BLOCK_SCHEMAS` (`dict[str, JsonDict]`): hand-written field descriptions (with units: delivery durations are hours)
 of the blocks a fleet reader compares, `ai_usage`, `ci_checks`, `coverage_gate` (#781),
-`delivery` (#779), `review_reality` (#943), `guardrails` (#767) and `agent_consistency` (#768), read
+`delivery` (#779), `review_reality` (#943), `guardrails` (#767), `agent_consistency` (#768) and
+`agent_outcome` (#1085), read
 by both `signals_schema` and `fleet_schema` so `signals.schema.json` and `repos.schema.json`
 describe them alike. Tests: `tests/test_scan_block_schemas.py` (every described field is a
 TypedDict field and every TypedDict field is described; real full and counts-only blocks
@@ -91,6 +92,44 @@ AI_USAGE: JsonDict = {
         "lower_bound": {"type": "boolean"},
         "covered_agents": _STRINGS,
         "covered_author_agents": _STRINGS,
+        "limits": _STRINGS,
+        "reason": {"type": "string"},
+    },
+}
+
+AGENT_OUTCOME: JsonDict = {
+    "description": (
+        "Revert and rework rate of the agent commits of the run window (lib/agent_outcome.py, "
+        "issue #1085). Informational: no Step, count or headline reads it. The agent commits "
+        "are those ai_usage counts in agent_either_commits (an AI-assistant trailer or an agent "
+        "author). Reverted: a later commit's 'This reverts commit' message names it, or a later "
+        "commit's diff is its exact inverse (equal git patch-id). Reworked: git blame, "
+        "rework_days after the commit, no longer attributes some line it added to it. A share "
+        "with nothing to divide by is null with a token reason."),
+    "properties": {
+        "available": {"type": "boolean"},
+        "window": _field({"type": "string"}, "The history window read, as in ai_usage."),
+        "since": _field({"type": ["string", "null"]},
+                        "The window as an absolute git --since bound; dropped in counts-only output."),
+        "informational": _field({"type": "boolean"}, "Always true: nothing scores this block."),
+        "agent_rule": _field({"type": "string"},
+                             "Which commits count as agent commits (trailer_or_author)."),
+        "agent_commits": _field(_INT, "Agent commits in the window."),
+        "reverted_commits": _field(_INT, "Agent commits later reverted, by message or by inverse diff."),
+        "reverted_by_message": _field(_INT, "Agent commits a 'This reverts commit' message names."),
+        "reverted_by_restore": _field(_INT, "Agent commits a later commit's inverse diff undoes; "
+                                            "a git revert usually counts here too."),
+        "revert_share": _share("agent commits later reverted"),
+        "revert_null_reason": _field({"type": ["string", "null"]},
+                                     "Why revert_share is null: no_agent_commits."),
+        "rework_days": _field(_INT, "The rework span, in days after each agent commit."),
+        "rework_observed_commits": _field(_INT, "Agent commits at least rework_days older than HEAD."),
+        "rework_sampled_commits": _field(_INT, "Of those, the newest checked (at most 50)."),
+        "reworked_commits": _field(_INT, "Sampled agent commits with an added line rewritten "
+                                         "or removed within rework_days."),
+        "rework_share": _share("sampled agent commits reworked within rework_days"),
+        "rework_null_reason": _field({"type": ["string", "null"]},
+                                     "Why rework_share is null: no_agent_commits or none_old_enough."),
         "limits": _STRINGS,
         "reason": {"type": "string"},
     },
@@ -350,6 +389,11 @@ DELIVERY: JsonDict = {
             {"type": ["integer", "null"]},
             "Changes per heavy read of the sample (lib/hosting/merged_sample.py PAGE_SIZE, or half "
             "of it after one retry on HTTP 502 or 504); null when no heavy read was made."),
+        "unconfirmed_ai_accounts": _field(
+            _INT,
+            "Distinct sampled accounts that are name-only AI matches awaiting confirmation in "
+            "[identities] (#883): change authors, and on GitLab note authors. A non-zero count "
+            "is why the share it would decide reads null."),
     },
 }
 
@@ -519,6 +563,7 @@ LAYER_GRADES: JsonDict = {
 
 BLOCK_SCHEMAS: dict[str, JsonDict] = {
     "agent_consistency": AGENT_CONSISTENCY,
+    "agent_outcome": AGENT_OUTCOME,
     "ai_usage": AI_USAGE,
     "ci_checks": CI_CHECKS,
     "coverage_gate": COVERAGE_GATE,

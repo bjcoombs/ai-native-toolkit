@@ -281,7 +281,7 @@ def condition_why(row_id: str, level: int, criteria: Sequence[Criterion],
     caller's own model). ``whys`` is ``manifest_whys.condition_whys`` of the core manifest,
     built here when not given."""
     from lib.manifest.check_manifest import condition_key, core_manifest  # lazy: the manifest loads once
-    from lib.manifest_whys import condition_whys
+    from lib.manifest.manifest_whys import condition_whys
     whys = condition_whys(core_manifest()) if whys is None else whys
     found = [whys.get(condition_key(row_id, level, c["signal"]), "") for c in criteria]
     return " ".join(dict.fromkeys(w for w in found if w))
@@ -290,7 +290,7 @@ def condition_why(row_id: str, level: int, criteria: Sequence[Criterion],
 def _add_whys(model: MaturityModel, conditions: Sequence[ConditionResult]) -> None:
     """Set each condition's ``why`` (``condition_why``) where its criteria have one."""
     from lib.manifest.check_manifest import core_manifest
-    from lib.manifest_whys import condition_whys
+    from lib.manifest.manifest_whys import condition_whys
     whys = condition_whys(core_manifest())
     by_id = {c["id"]: c for c in conditions}
     for row in model["rows"]:
