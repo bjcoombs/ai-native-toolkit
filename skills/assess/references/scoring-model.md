@@ -6,6 +6,8 @@ This page is the single source for how `/assess` and `/fleet` score a repository
 
 ## Glossary
 
+For newcomers, the same words in plain English are in [the glossary](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md).
+
 | Term | Meaning | Status |
 |---|---|---|
 | **Condition** | One checkable practice, with file:line evidence. It is the unit of counting. Each level of a maturity-model row is one condition, `<row id>.<level>` (`lib/level_tally.py`). | Shipped, https://github.com/bjcoombs/ai-native-toolkit/pull/888 |
