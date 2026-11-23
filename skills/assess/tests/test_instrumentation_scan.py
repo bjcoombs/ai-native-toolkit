@@ -7,7 +7,7 @@ import pytest
 
 import lib.instrumentation_scan as inst
 from lib.instrumentation_scan import detect_instrumented
-from lib.liveness_scan import scan_observability
+from lib.keyhole.liveness_scan import scan_observability
 
 
 def _write(root: Path, rel: str, text: str) -> None:

@@ -55,17 +55,17 @@ Every `test_*.py` file in this directory has a row below.
 | `test_doc_graph.py` | `lib/doc_graph.py` - doc link-graph, link parsing (unit level: `test_doc_links.py`), orphan detection, connectivity, MOC validation, doc->code edges |
 | `test_doc_links.py` | `lib/doc_links.py` - link pass called directly: wikilink and markdown-link edges, ghosts, directory links, machine-link counts, code-span skipping, ambiguity, fence stripping |
 | `test_doc_graph_layout.py` | `lib/doc_graph_layout.py` - radial shells, node classification, broken-link ghost grouping |
-| `test_keyhole_hidden_coupling.py` | `lib/keyhole_signals.py` - containment by directory, static-modularity projection, behaviour block, coupled pairs on hidden_coupling, structure-drift seams |
-| `test_keyhole_blocks.py` | `lib/keyhole_signals.py` - documentation, understanding and runtime run-context blocks |
-| `test_keyhole_attention.py` | `lib/keyhole_signals.py` - `assemble_findings` in `FINDING_ORDER`, candidate dead weight, attention ranking and tie-break, `FINDING_MODES` |
-| `test_keyhole_render.py` | `lib/keyhole_signals.py` - findings markdown, keyhole summary, prescribed actions |
-| `test_keyhole_untrusted_hotspot.py` | `lib/keyhole_signals.py` - E1 untrusted hotspots, E2 test-to-code mapping |
-| `test_keyhole_accretion.py` | `lib/keyhole_signals.py` - accretion_ratchet finding |
-| `test_keyhole_override_contradicts.py` | `lib/keyhole_signals.py` - override_contradicts_signals finding |
-| `test_keyhole_suppression.py` | `lib/keyhole_signals.py` - degenerate churn, config excludes, archive paths, pruning of renamed or deleted paths |
+| `test_keyhole_hidden_coupling.py` | `lib/keyhole/keyhole_signals.py` - containment by directory, static-modularity projection, behaviour block, coupled pairs on hidden_coupling, structure-drift seams |
+| `test_keyhole_blocks.py` | `lib/keyhole/keyhole_signals.py` - documentation, understanding and runtime run-context blocks |
+| `test_keyhole_attention.py` | `lib/keyhole/keyhole_signals.py` - `assemble_findings` in `FINDING_ORDER`, candidate dead weight, attention ranking and tie-break, `FINDING_MODES` |
+| `test_keyhole_render.py` | `lib/keyhole/keyhole_signals.py` - findings markdown, keyhole summary, prescribed actions |
+| `test_keyhole_untrusted_hotspot.py` | `lib/keyhole/keyhole_signals.py` - E1 untrusted hotspots, E2 test-to-code mapping |
+| `test_keyhole_accretion.py` | `lib/keyhole/keyhole_signals.py` - accretion_ratchet finding |
+| `test_keyhole_override_contradicts.py` | `lib/keyhole/keyhole_signals.py` - override_contradicts_signals finding |
+| `test_keyhole_suppression.py` | `lib/keyhole/keyhole_signals.py` - degenerate churn, config excludes, archive paths, pruning of renamed or deleted paths |
 | `keyhole_helpers.py` | shared `integrate()` fixtures for the `test_keyhole_*.py` files (not a test module) |
 | `test_change_coupling.py` | `lib/change_coupling.py` - B1 change-coupling pairs, B2 containment ratio, B4 authorship; synthetic git histories built in tmp dirs |
-| `test_coupling_analysis.py` | `lib/coupling_analysis.py` - B3 static-vs-historical disagreement; hidden-coupling, bleeding-module, and refactor-boundary classification with mocked inputs |
+| `test_coupling_analysis.py` | `lib/keyhole/coupling_analysis.py` - B3 static-vs-historical disagreement; hidden-coupling, bleeding-module, and refactor-boundary classification with mocked inputs |
 | `test_doc_complexity_join.py` | `lib/doc_complexity_join.py` - Signal C: doc_value formula, slop-doc guard, threshold behaviour; mocked complexity-stats and staleness inputs |
 | `test_doc_ownership.py` | `lib/doc_ownership.py` - the one doc-to-code ownership rule: spec expansion per method, the README-beside-design.md tie-break through both blocks, one `subject_code_count`, the export cap, scoped-run keys |
 | `test_rename_churn.py` | `lib/git_churn.py` + `lib/doc_staleness.py` - churn counts that follow renames (issue #425): parity with `git log --follow`, twin histories with and without a rename giving the same finding, and low confidence when the rename map is incomplete |
@@ -73,8 +73,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_doc_staleness.py` | `lib/doc_staleness.py` - doc->code association (base-doc, parallel docs/, code links, repo-wide fallback), churn-relative staleness ratios, and the lying-map rule that counts only the subject's commits after the doc's last edit |
 | `test_doc_modularity.py` | `lib/doc_staleness.py` - the `modularity` block: size-weighted coverage, the large-repo flag, and a base-doc directory ratio that counts only code directories |
 | `test_structure_graph.py` | `lib/graph/structure_graph.py` - A1 footprint additivity, A2 SCCs and Q range, A3 front-door vs burrow, A4 cut-lines, graceful degradation |
-| `test_understanding_analysis.py` | `lib/understanding_analysis.py` - B4 human anchor + intent source, velocity clock (D2), orphaned-understanding classification; both pure-logic (mocked) and git-integration variants |
-| `test_liveness_scan.py` | `lib/liveness_scan.py` - dead-code tool output parsers, observability rungs, the anchored on-call runbook name and the test and fixture exclusion (#823), graceful degradation when tools are absent |
+| `test_understanding_analysis.py` | `lib/keyhole/understanding_analysis.py` - B4 human anchor + intent source, velocity clock (D2), orphaned-understanding classification; both pure-logic (mocked) and git-integration variants |
+| `test_liveness_scan.py` | `lib/keyhole/liveness_scan.py` - dead-code tool output parsers, observability rungs, the anchored on-call runbook name and the test and fixture exclusion (#823), graceful degradation when tools are absent |
 | `test_instrumentation_scan.py` | `lib/instrumentation_scan.py` - observability rung 1 from manifests (whole names, Cargo and mix dependency keys), standard-library loggers in source and collector configs, each with a test and fixture false-credit case, and the recorded kinds (#823) |
 | `test_test_pressure.py` | `lib/test_pressure/` - mutation tier output parsing, cheap heuristics (test/source ratio, assertion density, gap signal) |
 | `test_ci_workflow.py` | `lib/ci_workflow.py` - template substitution (version, branch, tool steps, path filters), path-filtered workflow detection, literal-dollar escaping, YAML well-formedness, and the `actions/checkout` pin matching this repo's gate workflow and `README.md` |
@@ -88,8 +88,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_command_resolver.py` | `lib/command_resolver.py` - command extraction and per-runner resolution (resolved / missing / external / unknown) |
 | `test_command_index.py` | `lib/command_index.py` - the per-repo target index: config parsing, tracked files, lenient families |
 | `test_instruction_content.py` | `lib/instruction_content.py` - stale path and symbol references, directory trees, overview headings, README overlap |
-| `test_accretion_ratchet.py` | `lib/accretion_ratchet.py` - the accretion-ratchet scanner (files that only ever grow) |
-| `test_accretion_ratchet_threshold.py` | `lib/accretion_ratchet.py` - regression: the caller's `--deletion-threshold` is the cut applied |
+| `test_accretion_ratchet.py` | `lib/keyhole/accretion_ratchet.py` - the accretion-ratchet scanner (files that only ever grow) |
+| `test_accretion_ratchet_threshold.py` | `lib/keyhole/accretion_ratchet.py` - regression: the caller's `--deletion-threshold` is the cut applied |
 | `test_agent_instructions_grader.py` | `lib/agent_instructions_grader.py` - heuristic grading of agent instruction files, the verified-commands vs directive-monolith fixture pair, findings |
 | `test_agent_harness.py` | `lib/agents/agent_harness.py` - the committed agent harness inventory and its secret-exposure findings: a planted fixture with one of each finding kind, a clean fixture with the near misses, and this repository |
 | `test_agent_environment.py` | `lib/agents/agent_environment.py` - the agent working-environment block: the CI-only, eligible-for-Present and malformed `copilot-setup-steps.yml` fixtures, each setup source, check-command classification, lockfile rows, and the `gh` CI-duration probe against a fake `gh` |
@@ -104,7 +104,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_shared_tooling.py` | `lib/shared_tooling.py` - shared CI sources and agent marketplaces: GitLab includes, GitHub reusable workflows, marketplace manifests and `extraKnownMarketplaces`, tracked-only credit, and the distinct-marketplace roll-up fixture from #550 |
 | `test_agent_ops.py` | `lib/agents/agent_ops.py` - agent-operations guardrail scan (Layer 8 evidence) |
 | `test_anomaly_detector.py` | `lib/anomaly_detector.py` - anomaly detection on run output |
-| `test_archetype.py` | `lib/archetype.py` - repository archetype detection |
+| `test_archetype.py` | `lib/keyhole/archetype.py` - repository archetype detection |
 | `test_assess_config.py` | `lib/assess_config.py` - the working-notes keys in `.assess/config.toml` |
 | `test_badge.py` | `lib/badge.py` - the shields.io endpoint badge: the headline summary as its message, colour by Step |
 | `test_claude_config.py` | `lib/claude_config.py` - legacy command files and Claude Code frontmatter the runtime ignores, plugin path overrides, scope, and the unchanged run-context of an unconfigured repo |
@@ -114,7 +114,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_context_blocks.py` | `lib/context_blocks.py` - keyhole, stale-hub, liveness, coverage-report, accretion, structure-drift and exclusion/pruning blocks in run-context |
 | `test_coverage_gate.py` | `lib/coverage_gate.py` - configured coverage-threshold detector |
 | `test_coverage_report.py` | `lib/coverage_report.py` - coverage-report parser |
-| `test_dart_capabilities.py` | `lib/dart_capabilities.py` - Dart linting and liveness capability entries |
+| `test_dart_capabilities.py` | `lib/keyhole/dart_capabilities.py` - Dart linting and liveness capability entries |
 | `test_dart_complexity.py` | `lib/complexity/dart_complexity.py` - the approximate Dart per-function scanner |
 | `test_decline_markers.py` | `lib/decline_markers.py` - decline-marker provenance and re-offer on a major bump |
 | `test_diff_reliability.py` | `lib/complexity/diff_reliability.py` - cross-run diff reliability: version stamps, tool-version changes, schema changes |
@@ -132,7 +132,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_instruction_files.py` | `lib/instruction_files.py` - instruction-file discovery and grading, alias grade inheritance, broken references, sensitive content, ancestor cascade (through `build_run_context`) |
 | `test_instruction_globs.py` | `lib/instruction_globs.py` - scope frontmatter parsing and glob matching |
 | `test_interactivity.py` | `lib/interactivity.py` - the non-interactive consent contract |
-| `test_jvm_capabilities.py` | `lib/jvm_capabilities.py` - the capability-driven JVM offer flow |
+| `test_jvm_capabilities.py` | `lib/keyhole/jvm_capabilities.py` - the capability-driven JVM offer flow |
 | `test_mutation_cap.py` | `lib/mutation_cap.py` - the `test_pressure` block shape and the Layer 6 mutation-not-run cap |
 | `test_mutation_cap_partial.py` | `lib/mutation_cap.py` - the Layer 6 cap holds at Partial, and finalize refuses Present, when every mutmut 3 group with records stopped at the time budget (`partial`) |
 | `test_mutation_refresh.py` | `scripts/assess_core.py --opt-in-mutation` - the opt-in pass rebuilds every block derived from `test_pressure` (E1 `untrusted_hotspot`, attention, findings markdown, summary, prescribed actions, badge), not only the block and the cap |
@@ -140,8 +140,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_mutmut3_layout.py` | `lib/test_pressure/mutmut3.py` - the pass across package layouts: grouping by package root, the package's own config against a generated one, files read outside the package, several packages in one focus set (mutmut faked) |
 | `test_mutmut3_runner.py` | `lib/test_pressure/mutmut3.py` (`_resolve_runner`) - the environment the pass runs in (package venv, uv scratch environment, PATH) and the reason naming the first import error or failing test when the baseline run fails |
 | `test_ownership_parser.py` | `lib/ownership_parser.py` - ownership-map parser |
-| `test_promissory_markers.py` | `lib/promissory_markers.py` - stale TODOs, suppressions and skips |
-| `test_promissory_markers_literals.py` | `lib/promissory_markers.py` and `lib/python_regions.py` - marker text in Python string literals, quoted directives and config files is data, not a marker; docstrings and real comments still count and age |
+| `test_promissory_markers.py` | `lib/keyhole/promissory_markers.py` - stale TODOs, suppressions and skips |
+| `test_promissory_markers_literals.py` | `lib/keyhole/promissory_markers.py` and `lib/keyhole/python_regions.py` - marker text in Python string literals, quoted directives and config files is data, not a marker; docstrings and real comments still count and age |
 | `test_raw_source.py` | `lib/complexity/raw_source.py` - raw-source subtree detection |
 | `test_review_reality.py` | `lib/hosting/review_reality.py` - review-automation evidence from merged PRs |
 | `test_reviewed_findings.py` | `lib/reviewed_findings.py` - a done review in the committed `.assess/actions.json` clears `self_referential_tests` from attention and the prescribed actions while the source is unchanged since `completed_sha` (the path keeps a `reviewed` note in `derived_findings`), a later source change re-flags it, entries that do not clear, the mutation refresh, counts-only, and `assess_finalize` keeping done entries under `completed` (#721) |
@@ -152,7 +152,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_scan_registry.py` | `lib/scan_registry.py` - the declared scan table and the loop that runs it |
 | `test_sibling_tests.py` | `lib/sibling_tests.py` - the one sibling-test resolver |
 | `test_import_credit.py` | `lib/import_credit.py` - the import tier of the sibling-test probe |
-| `test_structure_drift.py` | `lib/structure_drift.py` - Tier 0 path-existence structure-drift signal |
+| `test_structure_drift.py` | `lib/keyhole/structure_drift.py` - Tier 0 path-existence structure-drift signal |
 | `test_test_focus.py` | `lib/test_focus.py` - `compute_test_focus` and mutation scope |
 | `test_vault_queries.py` | `lib/vault_queries.py` - vault-native navigation query parser |
 | `test_wiki_state.py` | `lib/wiki_state.py` - first-flagged dates and their rekeying through the rename map |

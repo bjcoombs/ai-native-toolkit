@@ -13,14 +13,14 @@ from pathlib import Path
 
 import pytest
 
-from lib.jvm_capabilities import (
+from lib.keyhole.jvm_capabilities import (
     count_used_undeclared,
     detect_build_system,
     detect_configured_plugins,
     parse_dependency_analyze,
     scan_jvm_capabilities,
 )
-from lib.liveness_scan import scan_liveness
+from lib.keyhole.liveness_scan import scan_liveness
 
 FIXTURE = Path(__file__).parent / "fixtures" / "maven_project"
 
@@ -382,7 +382,7 @@ def test_scan_liveness_attaches_jvm_block_and_offer_tool() -> None:
 def test_scan_liveness_served_merges_candidates_into_dead_code(monkeypatch) -> None:
     # Drive the served path by stubbing the analyze run so dead_code carries the
     # Maven candidates the runtime block (static_reachability) consumes.
-    import lib.jvm_capabilities as jc
+    import lib.keyhole.jvm_capabilities as jc
 
     monkeypatch.setattr(jc, "_run_dependency_analyze",
                         lambda root: _analyze_output())

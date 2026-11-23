@@ -21,8 +21,8 @@ import os
 import subprocess
 from pathlib import Path
 
-import lib.accretion_ratchet as ar
-from lib.accretion_ratchet import (
+import lib.keyhole.accretion_ratchet as ar
+from lib.keyhole.accretion_ratchet import (
     DELETION_FRACTION_THRESHOLD,
     MIN_COMMITS_FOR_ACCRETION,
     AccretionFile,

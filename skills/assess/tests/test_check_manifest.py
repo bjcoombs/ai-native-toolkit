@@ -30,12 +30,12 @@ import pytest
 import lib.manifest.check_manifest as cm
 from lib import scan_registry as sr
 from lib import signals as sg
-from lib import coupling_analysis as ca
+import lib.keyhole.coupling_analysis as ca
 from lib.assess_config import GATE_CONCERN_FINDINGS
 from lib.counts_only_rules import RULES, FieldClass
 from lib.counts_only_schema import ROOTS
 from lib.graph.import_graph import STRUCTURE_REASON_CODES
-from lib.keyhole_signals import (FINDING_ACTIONS, FINDING_MODE_VALUES, FINDING_MODES,
+from lib.keyhole.keyhole_signals import (FINDING_ACTIONS, FINDING_MODE_VALUES, FINDING_MODES,
                                  FINDING_ORDER, GIT_HISTORY_FINDINGS, _CHURN_DERIVED_FINDINGS)
 from lib.level_signals import InputClass, load_default_levels
 
@@ -284,7 +284,7 @@ def test_finding_tables_are_generated_from_the_manifest(manifest: cm.CheckManife
 
 def test_every_finding_has_a_path_derivation() -> None:
     """The manifest's finding names are the derivation's keys (a missing key would read empty)."""
-    from lib.keyhole_signals import _finding_path_inputs
+    from lib.keyhole.keyhole_signals import _finding_path_inputs
     inputs = _finding_path_inputs(
         behaviour={}, documentation={}, understanding={}, drift_hidden_dirs=[],  # type: ignore[typeddict-item]
         churn_degenerate=False, untrusted=[], self_ref_paths=[], unactioned=[],

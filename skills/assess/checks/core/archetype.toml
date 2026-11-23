@@ -32,5 +32,5 @@ action = "Review archetype marker - deterministic signals suggest a different cl
 mode = "characterize_first"
 concern = true
 inputs = ["archetype"]
-derive = "lib.keyhole_signals:_override_contradiction_paths"
+derive = "lib.keyhole.keyhole_signals:_override_contradiction_paths"
 headless = "unregistered"

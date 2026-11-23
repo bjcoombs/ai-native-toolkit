@@ -66,6 +66,8 @@ HEADLESS_WORDS = {
     "headless_variant": "reported by headless and fleet runs (built by the headless runner's own scan)",
     "unregistered": "only a full /assess run builds it; headless and fleet runs report it not measured",
     "platform_only": "only with --platform; left out otherwise",
+    "units_only": ("only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; "
+                   "left out otherwise"),
 }
 
 

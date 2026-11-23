@@ -1,6 +1,6 @@
-# `lib/liveness_scan.py`
+# `lib/keyhole/liveness_scan.py`
 
-The full reference for `skills/assess/scripts/lib/liveness_scan.py`, whose module docstring holds the summary.
+The full reference for `skills/assess/scripts/lib/keyhole/liveness_scan.py`, whose module docstring holds the summary.
 
 Layer 1 liveness inputs, three tiers:
 - Dead-code tier: runs a language-appropriate static dead-code tool (vulture, ts-prune,

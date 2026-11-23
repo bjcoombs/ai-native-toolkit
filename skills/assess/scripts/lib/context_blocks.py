@@ -34,7 +34,7 @@ from typing import Any
 from lib.complexity.generated_files import matches_generated_name
 from lib.run_context_types import KeyholeIntegration
 from lib.degrade import safe as _safe
-from lib.structure_drift import (
+from lib.keyhole.structure_drift import (
     NO_STATIC_FILE_MAP, SEAM_ALLOWLIST, STATIC_METRICS, detect_path_existence_drift,
 )
 
@@ -80,7 +80,7 @@ def _top_band_paths(complexity_stats: dict[str, Any]) -> set[str]:
     Union of the three ranked top-N lists (``top_hotspots``/``top_complex``/
     ``top_large``). Accretion is only surfaced for a file already in this set:
     a growing file that scores low on complexity *and* size isn't a hotspot, so
-    flagging its growth would be noise. Mirrors lib.keyhole_signals._paths_from_stats.
+    flagging its growth would be noise. Mirrors lib.keyhole.keyhole_signals._paths_from_stats.
     """
     paths: set[str] = set()
     for key in ("top_hotspots", "top_complex", "top_large"):

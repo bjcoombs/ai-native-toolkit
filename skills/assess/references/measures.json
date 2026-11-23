@@ -1682,6 +1682,48 @@
       "why_source": ""
     },
     {
+      "name": "units",
+      "title": "Monorepo units",
+      "summary": "The repository's units: the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped.",
+      "collector": "core.units",
+      "reads": [
+        "repo_root",
+        "excludes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "units_only",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "units.aggregators.ecosystem": "token",
+          "units.aggregators.path": "drop",
+          "units.skipped.path": "drop",
+          "units.skipped.problem": "token",
+          "units.source": "token",
+          "units.unit_count_reason": "token",
+          "units.units.ecosystem": "token",
+          "units.units.name": "drop",
+          "units.units.origin": "token",
+          "units.units.path": "hashed_path",
+          "units.units.workspace": "drop",
+          "units.unreadable_manifests": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ],
+      "why": "One score for a monorepo describes none of its services. Naming each unit lets every one be scored on its own, so one service's gaps are not hidden behind another's practices.",
+      "why_source": ""
+    },
+    {
       "name": "instruction_claims",
       "title": "Instruction claims",
       "summary": "",
@@ -3063,6 +3105,50 @@
         "unclassified"
       ],
       "why": "It reads the checks a repository's owners have committed as not applying to them, so the Step holds a team only to practices it has not deliberately set aside, and each exclusion stays visible and reviewable in the repository.",
+      "why_source": ""
+    },
+    {
+      "name": "unit_readings",
+      "title": "Monorepo unit readings",
+      "summary": "Each unit's own readings of the scope-sensitive scans (suppressions, doc staleness, structure, size, its own coverage gate or instruction file), with every condition tagged unit or inherited.",
+      "collector": "core.unit_readings",
+      "reads": [
+        "units",
+        "nested_instructions",
+        "coverage_gate",
+        "doc_staleness",
+        "layer_grades",
+        "promissory_markers",
+        "stats_summary",
+        "structure",
+        "excludes",
+        "repo_root",
+        "working_notes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "units_only",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "unit_readings.unit_blocks": "token",
+          "unit_readings.unit_count_reason": "token",
+          "unit_readings.units.conditions.id": "token",
+          "unit_readings.units.conditions.origin": "token",
+          "unit_readings.units.path": "hashed_path"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ],
+      "why": "A unit inherits root CI and review but not the root's suppressions, stale docs or structure. Reading those per unit, with each condition labelled, shows which change lifts which unit.",
       "why_source": ""
     },
     {
