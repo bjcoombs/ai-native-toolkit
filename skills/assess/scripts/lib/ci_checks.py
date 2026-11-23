@@ -322,7 +322,7 @@ from lib.ci_includes import IncludeRecord, Resolution, resolve_includes
 from lib.ci_lint_gates import (
     line_commands, line_compiler_gate, line_dotnet_build, lint_gate, rewrite_gated)
 from lib.ci_masking import unmasked_lines
-from lib.named_check import instruction_words, named_count, unread_ci_target
+from lib.named_check import instruction_words, named_count, setup_ci_target, unread_ci_target
 from lib.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
 from lib.ci_scripts import Present, committed, present_in, runs_missing
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
@@ -425,7 +425,8 @@ def _line_runs_check(line: str, *, script_item: bool = True, present: Present | 
     bare_item = _BARE_ITEM.match(line) is not None
     return any(
         not is_info_invocation(c.text) and committed(c.text, present) and (
-            (is_check_command(c.text) and not (bare_item and not script_item and _lone_check(c.text)))
+            (is_check_command(c.text) and not setup_ci_target(c.text)
+             and not (bare_item and not script_item and _lone_check(c.text)))
             or (is_lint_command(c.text) and not (bare_item and _lone_linter(c.text))))
         for c in commands
     )
@@ -489,7 +490,8 @@ def _line_may_check(line: str, *, script_item: bool = True) -> bool:
     """One CI line whose target's recipe is not read, so it may run a check (#920):
     ``make foo``, ``npm run foo``, ``./scripts/foo.sh``, ``docker compose run app``."""
     bare_item = _BARE_ITEM.match(line) is not None
-    return any((may_check(c.text) or unread_ci_target(c.text)) and not is_info_invocation(c.text)
+    return any((may_check(c.text) or unread_ci_target(c.text)) and not setup_ci_target(c.text)
+               and not is_info_invocation(c.text)
                and not (bare_item and not script_item and _lone_check(c.text))
                for c in line_commands(line))
 

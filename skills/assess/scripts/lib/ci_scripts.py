@@ -1,7 +1,8 @@
 """Does the tree hold the script a CI line runs? (issue #937)
 
 ``script_path(text)`` names the repository file a command runs as a committed script:
-``./ci.sh`` is ``ci.sh``, ``bash scripts/test.sh`` is ``scripts/test.sh``, ``bin/test``
+``./ci.sh`` is ``ci.sh``, ``bash scripts/test.sh`` and ``. scripts/test.sh`` (``source``, #1033)
+are ``scripts/test.sh``, ``bin/test``
 is itself. It returns None for no script (``bash -c '...'``, ``pytest``), a modelled
 runner (``./gradlew``), a known tool installed into the tree (``_KNOWN_TOOLS``: the lint,
 type, test and analyser programs of ``lib.check_command``, so ``./bin/golangci-lint run``
@@ -60,7 +61,7 @@ def script_path(text: str) -> str | None:
     if not words:
         return None
     head = words[0]
-    if head in ("bash", "sh", "zsh"):
+    if head in ("bash", "sh", "zsh", "source", "."):
         i, flags = 1, []
         while i < len(words) and words[i][:1] in ("-", "+"):
             flags.append(words[i])
