@@ -107,7 +107,7 @@ ever cut, this note is where the intended boundary is written down.
 ## Check manifest whys (#939)
 
 Every check manifest entry says why it matters to an agent. The loader is
-`check_manifest.load_manifest` (`manifest/check_manifest.py`); the why rules and accessors are in `manifest_whys.py`.
+`check_manifest.load_manifest` (`manifest/check_manifest.py`); the why rules and accessors are in `manifest/manifest_whys.py`.
 
 | Entry | Where its why lives | Accessor |
 |---|---|---|
@@ -178,9 +178,17 @@ run as `python scripts/lib/<stem>.py` does not have `lib` on `sys.path`; run the
   imports it inside a function, because each builder imports `import_graph`.
   Files: `__init__.py`, `import_graph.py`, `import_graph_go.py`, `import_graph_python.py`,
   `import_graph_typescript.py`, `structure_graph.py`.
-- **`manifest/`**: the check manifest loader (`checks/core.toml` and its fragments) and its
-  structured validation errors. `manifest_whys` (#939), which the loader calls, postdates the #917 module map,
-  so it has no group and stays at the root. Files: `__init__.py`, `check_manifest.py`, `check_validation.py`.
+- **`hosting/`**: the `gh` and `glab` reads and the platform blocks built from them: the
+  shared merged sample, delivery, review reality, GitLab notes and CI lint, and config drift.
+  Named `hosting`, not `platform`, because a `lib/platform/` package would shadow the standard
+  library's `platform` module for any script run by path from `lib/` (decision 9 on #917).
+  `external_ci`, `external_ci_rules`, `gitlab_rules` and `unread_ci` (#884, #928) postdate the
+  #917 module map and stay at the root. Files: `__init__.py`, `config_drift.py`, `delivery.py`,
+  `gh_cli.py`, `gitlab_ci_lint.py`, `gitlab_cli.py`, `gitlab_notes.py`, `merged_sample.py`,
+  `platform_cli.py`, `review_reality.py`.
+- **`manifest/`**: the check manifest loader (`checks/core.toml` and its fragments), its
+  structured validation errors, and the `why` rules the loader applies to every entry
+  (#939). Files: `__init__.py`, `check_manifest.py`, `check_validation.py`, `manifest_whys.py`.
 - **`test_pressure/`** (predates #917): write-side truth pressure, with a facade
   `__init__.py` that re-exports the package's names. Files: `__init__.py`, `aggregate.py`, `common.py`, `heuristics.py`, `mutation.py`, `mutmut3.py`, `reason_paths.py`.
 

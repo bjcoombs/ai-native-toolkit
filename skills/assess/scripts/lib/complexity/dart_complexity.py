@@ -52,7 +52,11 @@ everything else goes one token at a time through `_CODE_TOKEN`. Both see the sam
 tokens, so the output does not depend on the path; the fast path cuts the per-token
 cost of the common case, which keeps the pathological-input budget in
 `test_dart_complexity.py` on the Windows runner. Functions sort by the ordinal of their
-opening, which is source order. Pure stdlib.
+opening, which is source order. A `}` closes the `=>` bodies opened inside it before its
+own function, so a close always pops the innermost frame and deep nesting stays linear
+(#929). `test_dart_complexity.py` bounds each pathological input's scaling ratio
+`time(n) / time(n/4)` at 8: a linear scan reads 4 and a quadratic one 16, so 8 separates
+them with room for CI timer noise. Pure stdlib.
 """
 from __future__ import annotations
 
@@ -337,9 +341,12 @@ class _Scanner:
         if self.interps:
             self.interps[-1][2] -= 1
         opened = self.braces.pop() if self.braces else None
+        # Close the `=>` bodies opened inside this brace first: they sit above
+        # its function on `fns`, so closing that function first would take the
+        # O(depth) `remove` path on every `}` (#929).
+        self._close_arrows()
         if opened is not None:
             self._close(opened)
-        self._close_arrows()
 
     def _on_arrow(self) -> None:
         name = self._body_name()

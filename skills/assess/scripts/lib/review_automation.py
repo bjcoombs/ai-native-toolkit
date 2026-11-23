@@ -42,7 +42,7 @@ for the repository's own file). Job scripts in a template are not read for
 review steps; a review is seen through a review component or project name, or a
 ``[review] ai_review_components`` entry (a known limit). Under ``--platform``
 (and in a full ``/assess`` run), where an include did not resolve offline, the
-sources GitLab's CI lint API lists as merged in (``lib/gitlab_ci_lint.py``,
+sources GitLab's CI lint API lists as merged in (``lib/hosting/gitlab_ci_lint.py``,
 #796: a component location, a project file's project) are matched the same way;
 a source an offline match already names is not listed twice. Such a match has
 ``line`` null and ``depth`` 1 (the API does not say the level). When git
@@ -337,7 +337,7 @@ def scan_review_automation(repo_root: Path, fleet_config: FleetConfig | None = N
                            ghsync_root: Path | None = None,
                            merged_ci: object = None) -> ReviewAutomationBlock:
     """Build the ``review_automation`` block for one repository. ``merged_ci`` is the
-    ``gitlab_merged_ci`` reading (``lib/gitlab_ci_lint.py``); anything else is not read."""
+    ``gitlab_merged_ci`` reading (``lib/hosting/gitlab_ci_lint.py``); anything else is not read."""
     repo_root = repo_root.resolve()
     tracked = tracked_files(repo_root)
     configured = configured_components(fleet_config)

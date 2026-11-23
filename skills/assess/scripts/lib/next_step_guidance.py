@@ -287,7 +287,7 @@ def _file_size(op: str, value: Operand) -> Guidance | None:
         return None
     bound = f"{number:g} lines or fewer" if op == "lte" else f"fewer than {number:g} lines"
     return {"change": f"Split large source files and enforce a file-size limit in CI, so 95% of "
-                      f"files stay at {bound}.",
+                      f"production source files stay at {bound}.",
             "done_when": f"A CI check turns the job red for a file over the limit, and 95% of source files are "
                          f"{bound}."}
 
@@ -406,7 +406,7 @@ _WORDING: dict[str, Wording] = {
         "be aged.",
         "`git rev-parse --is-shallow-repository` prints `false` and most changed files have "
         "more than one commit in the history."),
-    "stats_summary.loc.p95": _file_size,
+    "stats_summary.loc_by_class.source.p95": _file_size,
     "doc_staleness.summary.stale_pct": _stale_docs,
     "guardrails.stated_pct": _guardrails_stated,
     "agent_consistency.conflicts": _agents_agree,
@@ -476,9 +476,11 @@ _MEASURE_HINTS = {
                  "`modularity_q` null (`modularity_reason: no_import_edges`): modules "
                  "that never import each other have no community structure to measure.",
     "stats_summary": _NEEDS.format("stats_summary", "lizard is not installed (`no_lizard`)")
-                     + " With no file scored (`files_scored` 0, a docs-only repository) "
-                     "the file size is not measured (`no_scored_files`): a percentile of "
-                     "no files says nothing. A full run with no `complexity-stats.json` "
+                     + " With no production source file scored (a docs-only repository, or "
+                     "only tests, fixtures or examples) the file size is not measured "
+                     "(`no_source_files`): a percentile of no files says nothing. A stats "
+                     "sidecar from an older toolkit has no class split (`no_class_split`); "
+                     "rerun `/assess`. A full run with no `complexity-stats.json` "
                      "reads `no_complexity_stats`: the treemap step did not run or did not "
                      "finish, or scored nothing without `scc` on `PATH` (with it, an empty "
                      "set is written as `files_scored` 0). Install `scc`, then check the "
@@ -525,6 +527,11 @@ _MEASURE_HINTS = {
                  "does not read (`enforced_basis: check_target`: `make foo`, `npm run foo`, "
                  "`./scripts/foo.sh`, `docker run img`): call the test command in its "
                  "own CI step (`make test`, `pytest`) to measure it. "
+                 "It is unknown when the only check's exit status may not reach its step "
+                 "(`enforced_basis: check_may_pass`: `pytest || echo failed`, `if pytest; then "
+                 "...; fi`, `until pytest; do break; done`, `pytest && echo ok` with more of "
+                 "the step after it): run the check on its own line, or end the fallback with "
+                 "`exit 1` (`pytest || { echo failed; exit 1; }`). "
                  "It is unknown when the only check runs a committed script the tree does "
                  "not hold (`enforced_basis: script_not_found`, `run: ./ci.sh` with no "
                  "`ci.sh`): commit the script, or call the test command in its own CI step. "

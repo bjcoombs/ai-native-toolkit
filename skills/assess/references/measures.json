@@ -485,8 +485,8 @@
           "counts": true,
           "criteria": [
             {
-              "key": "layer-4-architecture.2:stats_summary.loc.p95",
-              "signal": "stats_summary.loc.p95",
+              "key": "layer-4-architecture.2:stats_summary.loc_by_class.source.p95",
+              "signal": "stats_summary.loc_by_class.source.p95",
               "producer": {
                 "scan": "stats_summary",
                 "collector": "core.run_header"
@@ -494,10 +494,10 @@
               "op": "lte",
               "value": 500,
               "eq_signal": null,
-              "text": "File size at the 95th percentile: is at most 500",
-              "title": "95% of files are 500 lines or fewer",
+              "text": "Production source file size at the 95th percentile: is at most 500",
+              "title": "95% of production source files are 500 lines or fewer",
               "fix": "Split the largest files along their natural seams.",
-              "why": "With nearly all files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice.",
+              "why": "With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file.",
               "why_source": "",
               "input_class": "head_structure",
               "grade": "measured",
@@ -2123,6 +2123,12 @@
           "carried_in": "enforced_basis"
         },
         {
+          "code": "check_may_pass",
+          "means": "In enforced_basis and lint_basis: the check's exit status may not reach its job: a || fallback that can pass (pytest || echo failed), an if or while condition, an until loop that breaks, a check before && with more of the step after it, or a { } group or function called that way.",
+          "next_step": "Let the check's exit status reach the step: run it on its own line, or end the fallback with exit 1 (pytest || { echo failed; exit 1; }).",
+          "carried_in": "enforced_basis"
+        },
+        {
           "code": "script_not_found",
           "means": "In enforced_basis and lint_basis: the only CI line that would settle the signal runs a committed script (./ci.sh, bash scripts/test.sh, ./scripts/lint.sh) that no tracked file matches, so it is not credited; an earlier step may still create it.",
           "next_step": "Commit the script the CI step runs, or call the test or lint command in its own CI step (pytest, ruff check .), so the scan can read it.",
@@ -2407,6 +2413,76 @@
       "why_source": ""
     },
     {
+      "name": "agent_outcome",
+      "title": "Agent commit outcomes",
+      "summary": "",
+      "collector": "core.agent_outcome",
+      "reads": [
+        "repo_root",
+        "scope",
+        "history_window",
+        "fleet_config"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "agent_outcome.agent_rule": "token",
+          "agent_outcome.limits": "drop",
+          "agent_outcome.reason": "reason",
+          "agent_outcome.revert_null_reason": "token",
+          "agent_outcome.rework_null_reason": "token",
+          "agent_outcome.since": "drop",
+          "agent_outcome.window": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "shallow_clone",
+          "means": "The checkout is a shallow clone, so a reverting or rewriting commit may be cut from the history read.",
+          "next_step": "Nothing to change in the repository; a full clone (git fetch --unshallow) lets the scan read it."
+        },
+        {
+          "code": "shallow_unknown",
+          "means": "Git could not confirm the checkout is a full clone.",
+          "next_step": "Nothing to change in the repository; run the scan on a full clone."
+        },
+        {
+          "code": "not_a_repo",
+          "means": "The path is not a git repository, or one with no commits.",
+          "next_step": "Nothing to change: there is no history to read."
+        },
+        {
+          "code": "no_git",
+          "means": "git is not installed where the scan ran.",
+          "next_step": "Install git where the scan runs."
+        },
+        {
+          "code": "git_failed",
+          "means": "A git read past the windowed log (a patch-id, numstat or blame read) failed on a repository the log could read.",
+          "next_step": "Nothing to change in the repository; re-run the scan, and report the failure if it repeats."
+        },
+        {
+          "code": "git_timeout",
+          "means": "A git read took longer than the scan allows.",
+          "next_step": "Nothing to change in the repository; a shorter --window reads less history."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ],
+      "why": "No other scan says whether agent work holds once it lands; this records the share of agent commits later reverted or rewritten within two weeks, as a history to set beside the gates. Nothing scores it.",
+      "why_source": ""
+    },
+    {
       "name": "doc_claims",
       "title": "Doc claims",
       "summary": "",
@@ -2641,14 +2717,14 @@
           "layer-4-architecture"
         ],
         "conditions": [
-          "layer-4-architecture.2:stats_summary.loc.p95"
+          "layer-4-architecture.2:stats_summary.loc_by_class.source.p95"
         ],
         "findings": []
       },
       "unknown_reasons": [],
       "evidence": [
         {
-          "signal": "stats_summary.loc.p95",
+          "signal": "stats_summary.loc_by_class.source.p95",
           "input_class": "head_structure",
           "grade": "measured"
         }
@@ -4835,6 +4911,21 @@
       "private": false
     },
     {
+      "name": "agent_outcome",
+      "title": "Agent commit outcomes",
+      "publishes": [
+        "agent_outcome"
+      ],
+      "reads": [
+        "repo_root",
+        "scope",
+        "history_window",
+        "fleet_config"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "doc_claims",
       "title": "Doc claims",
       "publishes": [
@@ -4959,6 +5050,18 @@
       ],
       "network": false,
       "private": false
+    },
+    {
+      "name": "unit_rollup",
+      "title": "Monorepo unit roll-up",
+      "publishes": [
+        "unit_rollup"
+      ],
+      "reads": [
+        "unit_levels"
+      ],
+      "network": false,
+      "private": false
     }
   ],
   "signals": [
@@ -5041,7 +5144,7 @@
       "collector": "core.ci_checks",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "included_jobs, merged_config_partial: an include may run it; unknown_trigger: unsettled; script_not_found: not committed; check_target: a target may; unread_ci_system: unparsed CI may; external_ci, external_ci_marker: CI elsewhere; analysers_in_build: .NET analysers; compiler_gate_only: -Werror"
+      "null_means": "included_jobs, merged_config_partial: an include may; unknown_trigger: unsettled; check_may_pass: may pass; script_not_found: not committed; check_target: a target may; unread_ci_system: unparsed CI; external_ci(_marker): CI elsewhere; analysers_in_build: .NET analysers; compiler_gate_only: -Werror"
     },
     {
       "path": "promissory_markers.families.suppression.stale",
@@ -5071,8 +5174,8 @@
       "null_means": "the block is omitted with no ownership map"
     },
     {
-      "path": "stats_summary.loc.p95",
-      "title": "File size at the 95th percentile",
+      "path": "stats_summary.loc_by_class.source.p95",
+      "title": "Production source file size at the 95th percentile",
       "type": "number",
       "collector": "core.run_header",
       "input_class": "head_structure",
@@ -5086,7 +5189,7 @@
       "collector": "core.ci_checks",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "included_jobs: in an included file; unknown_trigger: triggers unsettled; script_not_found: its script is not committed; check_target: a target may run it; unread_ci_system: an unparsed CI system may; external_ci: merged changes carry external checks; external_ci_marker: a root Prow OWNERS_ALIASES"
+      "null_means": "included_jobs: in an included file; unknown_trigger: triggers unsettled; check_may_pass: may pass; script_not_found: script not committed; check_target: a target may; unread_ci_system: an unparsed CI system may; external_ci: external checks on merges; external_ci_marker: a root Prow OWNERS_ALIASES"
     },
     {
       "path": "agent_environment.pinning.unlocked_total",
@@ -5104,7 +5207,7 @@
       "collector": "core.coverage_gate",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "threshold_not_read: the threshold is unknown; unknown_trigger: the run's triggers are not settled; indirect_run: a CI target or script (make test, tox) may run it; included_jobs: it may be in an included file; unread_ci_system: it may run in an unparsed CI system"
+      "null_means": "threshold_not_read: the threshold is unknown; unknown_trigger: the run's triggers are unsettled; check_may_pass: may not fail its job; indirect_run: a CI target or script (make test, tox) may run it; included_jobs: it may be in an included file; unread_ci_system: an unparsed CI system may run it"
     },
     {
       "path": "test_pressure.mutation_run",

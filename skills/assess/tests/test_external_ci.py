@@ -16,9 +16,9 @@ from lib import external_ci as ext
 from lib.ci_checks import scan_ci_checks
 from lib.coverage_gate import detect_coverage_gate
 from lib.external_ci_rules import NOT_READ, ExternalCi, as_external, known_app, known_context
-from lib.gh_cli import GhUnavailable, GithubRepo
-from lib.merged_sample import MergedSample
-from lib.platform_cli import CACHE_ENV
+from lib.hosting.gh_cli import GhUnavailable, GithubRepo
+from lib.hosting.merged_sample import MergedSample
+from lib.hosting.platform_cli import CACHE_ENV
 from lib.signals import collect
 from lib.unread_ci import UNREAD_CI_FILES, is_unread_ci_path, unread_ci_paths
 

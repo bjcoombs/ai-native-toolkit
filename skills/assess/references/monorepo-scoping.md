@@ -100,5 +100,16 @@ only in other units is theirs: a unit without its own reads none.
 (practices met, measured, not measured and verified), from the same maturity model with
 the unit's own readings in place. Inherited conditions count toward the unit's tally and
 Step gates; `inherited` lists the met ones, which the report labels "inherited from root".
-The roll-up across units comes later (#865); until then, report each unit's Step as the
-run context lists it.
+`unit_rollup` rolls the units up for the repository: the lowest unit's Step plus "N of M
+measured units" at the next Step, never a mean and never a unit named. An unmeasured unit
+counts toward the units, never as Step 1. `unlocks` ranks the Step gates that hold units
+back by the units one change moves to their next Step. A change at the root to a
+condition every held unit inherits counts once and ranks first on a tie; a unit-local
+change counts once per unit. The repository's own Step and headline are unchanged. With
+two or more units, the report shows the roll-up lines under the headline:
+
+```text
+Units: Step 1 (lowest unit) · 0 of 3 measured units at Step 2
+
+Next unlock across units: an instruction file an agent reads is committed, once at the root, moves 3 units to their next Step
+```

@@ -29,7 +29,7 @@ from lib.fleet.runner import (
 )
 from lib.fleet.fleet_platform import failure_reason, join, platform_scans, run_platform
 from lib.fleet.fleet_schema import build_schema, build_stamp_schema
-from lib.merged_sample import PR_FIELDS
+from lib.hosting.merged_sample import PR_FIELDS
 from lib.run_context_types import JsonDict
 from lib.signals import NETWORK_REASON, PLATFORM_SCANS
 from test_fleet import make_repo

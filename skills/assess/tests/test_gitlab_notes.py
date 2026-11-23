@@ -1,4 +1,4 @@
-"""Tests for lib/gitlab_notes.py: classifying GitLab merge-request notes (#716)."""
+"""Tests for lib/hosting/gitlab_notes.py: classifying GitLab merge-request notes (#716)."""
 from __future__ import annotations
 
 import sys
@@ -9,7 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib.fleet_config import parse_fleet_config  # noqa: E402
-from lib.gitlab_notes import NoteClassifier, NoteFacts, classifier_from_config, note_facts  # noqa: E402
+from lib.hosting.gitlab_notes import NoteClassifier, NoteFacts, classifier_from_config, note_facts  # noqa: E402
 
 AUTHOR = "alice"
 TOKEN = "project_42_bot_4ffc0de1a2b3"
@@ -62,12 +62,15 @@ def test_prose_mentioning_ai_review_is_a_human_comment() -> None:
     assert facts == NoteFacts(True, False, "2026-09-01T10:00:00Z")
 
 
-@pytest.mark.parametrize("user", [
-    "claude[bot]",     # a pinned agent identity
-    "coderabbitai",    # a pinned AI-review app (delivery.AI_REVIEWERS)
-])
-def test_ai_accounts_are_ai_review_never_human(user: str) -> None:
-    assert _facts(_note(user, "plain text")) == NoteFacts(False, True, None)
+def test_ai_accounts_are_ai_review_never_human() -> None:
+    assert _facts(_note("claude[bot]", "plain text")) == NoteFacts(False, True, None)  # a pinned [bot] app
+
+
+def test_a_pinned_ai_review_name_is_a_hint_until_confirmed() -> None:
+    # delivery.AI_REVIEWERS on GitLab, which has no bot flag (#883): undecided, never a silent no.
+    assert _facts(_note("coderabbitai", "plain text")) == NoteFacts(None, None, None, frozenset({"coderabbitai"}))
+    confirmed = classifier_from_config(parse_fleet_config('[identities]\nagents = ["coderabbitai"]\n'))
+    assert _facts(_note("coderabbitai", "plain text"), classifier=confirmed) == NoteFacts(False, True, None)
 
 
 @pytest.mark.parametrize("user", [TOKEN, "group_7_bot_abc123"])
@@ -121,10 +124,10 @@ def test_malformed_entries_are_skipped() -> None:
 
 # ---- the registry entry and the GitLab delivery figures ----------------------
 
-from lib.delivery import scan_delivery  # noqa: E402
-from lib.gitlab_cli import GitlabProject  # noqa: E402
-from lib.gitlab_notes import gitlab_note_facts  # noqa: E402
-from lib.merged_sample import MergedSample  # noqa: E402
+from lib.hosting.delivery import scan_delivery  # noqa: E402
+from lib.hosting.gitlab_cli import GitlabProject  # noqa: E402
+from lib.hosting.gitlab_notes import gitlab_note_facts  # noqa: E402
+from lib.hosting.merged_sample import MergedSample  # noqa: E402
 
 _MRS = ({"iid": 1, "created_at": "2026-09-01T00:00:00Z", "merged_at": "2026-09-02T00:00:00Z"},
         {"iid": 2, "created_at": "2026-09-01T00:00:00Z", "merged_at": "2026-09-03T00:00:00Z"})

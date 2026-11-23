@@ -29,7 +29,7 @@ Diagrams:
   ``repo-baseline`` docs are counted in the caption, never drawn. A truncated or degenerate
   history draws nothing and says why, as the summary's counts read null there.
 - **Review strip** (``review-strip.svg``): one tick per sampled merged change from
-  ``review_reality.sequence`` (``lib/review_reality.py``), oldest merge first, in three
+  ``review_reality.sequence`` (``lib/hosting/review_reality.py``), oldest merge first, in three
   states: approved, reviewed and merged without review; an ``unknown`` change (GitLab notes
   that decide nothing) is hatched. A dot over a tick marks review-bot output
   (``bot_sequence``) and a hollow dot a change where that is not known (an ``unknown`` mark,
@@ -58,7 +58,7 @@ from lib.doc_complexity_join import STALENESS_RATIO_THRESHOLD, is_stale
 from lib.doc_ownership import REPO_BASELINE
 from lib.headline import reason_word
 from lib.reason_codes import reason_code
-from lib.review_reality import APPROVED, BOT, NO_BOT, REVIEWED, SEQUENCE_STATES, UNKNOWN, UNREVIEWED
+from lib.hosting.review_reality import APPROVED, BOT, NO_BOT, REVIEWED, SEQUENCE_STATES, UNKNOWN, UNREVIEWED
 from lib.run_context_types_diagrams import AssessDiagram
 from lib.run_context_types_diagrams_review import DriftBar
 from lib.vocabulary import IN_PLACE

@@ -87,7 +87,7 @@ Tag `structure`: 6 conditions, none shared with another tag.
 | `layer-3-linters.2` Stale suppressions stay at 10 or fewer | `promissory_markers` | Stale suppression comments: is at most 10 (`promissory_markers.families.suppression.stale lte 10`) | `measured` | yes | - | positive | requires `layer-3-linters.1` | A suppression that survives many edits switches a check off in code that keeps changing, and an agent editing nearby gets no sign the warning still matters. | Revisit the oldest suppression comments and fix or remove them. |
 | `layer-3-linters.2` Suppression ages can be read from history | `promissory_markers` | Marker aging is reliable: is true (`promissory_markers.aging_reliable eq true`) | `measured` | yes | - | positive | requires `layer-3-linters.1` | A guard for the suppression count: on a shallow or squashed history every suppression looks new, so a count of 0 would say nothing. | Run on a full clone so suppression ages can be measured. |
 | `layer-4-architecture.1` A boundary or ownership map names a module path | `structure_drift` | Ownership-map patterns naming a module path: is above 0 (`structure_drift.tier_0.boundary_patterns gt 0`) | `config_only` | no, listed | - | positive | - | A map that names module paths tells an agent which code belongs together, and with CODEOWNERS, whose review a change there needs. | Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths. |
-| `layer-4-architecture.2` 95% of files are 500 lines or fewer | `stats_summary` | File size at the 95th percentile: is at most 500 (`stats_summary.loc.p95 lte 500`) | `measured` | yes | - | positive | requires `layer-4-architecture.1` | With nearly all files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. | Split the largest files along their natural seams. |
+| `layer-4-architecture.2` 95% of production source files are 500 lines or fewer | `stats_summary` | Production source file size at the 95th percentile: is at most 500 (`stats_summary.loc_by_class.source.p95 lte 500`) | `measured` | yes | - | positive | requires `layer-4-architecture.1` | With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file. | Split the largest files along their natural seams. |
 
 ### Agent context
 
@@ -441,6 +441,7 @@ Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether 
   - `included_jobs`: A CI file pulls its jobs from a file this checkout does not hold, so the check may live there. Nothing to change: this reads as not measured until the included file can be read. On GitLab, fleet --platform reads the merged configuration through the CI lint API.
   - `merged_config_partial`: GitLab's merged CI configuration was read and runs no check, but it may lack jobs: an include under rules: or a trigger: child pipeline is not expanded by the lint API. Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false.
   - `unknown_trigger`: In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle (no on: key, a rules: if: on a custom variable). Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it.
+  - `check_may_pass`: In enforced_basis and lint_basis: the check's exit status may not reach its job: a || fallback that can pass (pytest || echo failed), an if or while condition, an until loop that breaks, a check before && with more of the step after it, or a { } group or function called that way. Let the check's exit status reach the step: run it on its own line, or end the fallback with exit 1 (pytest || { echo failed; exit 1; }).
   - `script_not_found`: In enforced_basis and lint_basis: the only CI line that would settle the signal runs a committed script (./ci.sh, bash scripts/test.sh, ./scripts/lint.sh) that no tracked file matches, so it is not credited; an earlier step may still create it. Commit the script the CI step runs, or call the test or lint command in its own CI step (pytest, ruff check .), so the scan can read it.
   - `check_target`: No CI line runs the linter (lint_basis) or the check (enforced_basis), but one runs a target whose recipe is not read and may run it: make check or npm test for a linter; make foo, npm run foo or ./scripts/foo.sh for a check. Nothing to change if the target runs the check; calling the test or lint command in its own CI step (make test, pytest, ruff check .) lets the scan read it.
   - `unread_ci_system`: No readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure Pipelines, Buildkite, LUCI, Prow, Zuul and others; the lib/unread_ci.py docstring lists the paths); unread_ci_files counts them. Nothing to change: the scanner cannot read those systems' configuration, so their checks read as not measured rather than absent.
@@ -527,6 +528,24 @@ Run plumbing: no row or finding reads this scan.
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
 
+### `agent_outcome`: Agent commit outcomes
+
+No other scan says whether agent work holds once it lands; this records the share of agent commits later reverted or rewritten within two weeks, as a history to set beside the gates. Nothing scores it.
+
+- Collector: `core.agent_outcome`, reading `repo_root`, `scope`, `history_window`, `fleet_config`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_outcome.agent_rule` token, `agent_outcome.limits` drop, `agent_outcome.reason` reason, `agent_outcome.revert_null_reason` token, `agent_outcome.rework_null_reason` token, `agent_outcome.since` drop, `agent_outcome.window` token.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `shallow_clone`: The checkout is a shallow clone, so a reverting or rewriting commit may be cut from the history read. Nothing to change in the repository; a full clone (git fetch --unshallow) lets the scan read it.
+  - `shallow_unknown`: Git could not confirm the checkout is a full clone. Nothing to change in the repository; run the scan on a full clone.
+  - `not_a_repo`: The path is not a git repository, or one with no commits. Nothing to change: there is no history to read.
+  - `no_git`: git is not installed where the scan ran. Install git where the scan runs.
+  - `git_failed`: A git read past the windowed log (a patch-id, numstat or blame read) failed on a repository the log could read. Nothing to change in the repository; re-run the scan, and report the failure if it repeats.
+  - `git_timeout`: A git read took longer than the scan allows. Nothing to change in the repository; a shorter --window reads less history.
+
 ### `doc_claims`: Doc claims
 
 An agent reads guides as literally as instruction files. This checks the same pin and count claims across the doc set and names two docs that state different values.
@@ -592,12 +611,12 @@ It summarises file size and complexity across the repository; the 95th-percentil
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
 - Counts-only: numbers, booleans and nulls kept; strings by field: `stats_summary.ccn.basis` token, `stats_summary.complexity_unreliable.language` token, `stats_summary.complexity_unreliable.path` path, `stats_summary.est_tokens.budget.budget_basis` drop, `stats_summary.fn_ccn.backend_by_language.*` token, `stats_summary.fn_ccn.basis` token, `stats_summary.fn_ccn.source.name` token, `stats_summary.top_complex.ccn_basis` token, `stats_summary.top_complex.max_fn_name` drop, `stats_summary.top_complex.source` token, `stats_summary.top_hotspots.ccn_basis` token, `stats_summary.top_hotspots.max_fn_name` drop, `stats_summary.top_hotspots.source` token, `stats_summary.top_large.ccn_basis` token, `stats_summary.top_large.max_fn_name` drop, `stats_summary.top_large.source` token.
 - Used by: row `layer-4-architecture`.
-- Evidence: `stats_summary.loc.p95` head_structure (measured).
+- Evidence: `stats_summary.loc_by_class.source.p95` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.
 
 Why the signals named here matter:
 
-- `stats_summary.loc.p95` feeds `layer-4-architecture.2:stats_summary.loc.p95`: With nearly all files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice.
+- `stats_summary.loc_by_class.source.p95` feeds `layer-4-architecture.2:stats_summary.loc_by_class.source.p95`: With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file.
 
 ### `promissory_markers`: Promissory markers
 
@@ -1024,9 +1043,11 @@ The scan registry in run order, including the private inputs other scans read.
 | `instruction_placement` | Instruction placement | `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes` | `instruction_placement` | no |
 | `agent_consistency` | Cross-agent instruction consistency | `repo_root`, `excludes` | `agent_consistency` | no |
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |
+| `agent_outcome` | Agent commit outcomes | `repo_root`, `scope`, `history_window`, `fleet_config` | `agent_outcome` | no |
 | `doc_claims` | Doc claims | `repo_root`, `instruction_files`, `scope`, `excludes` | `doc_claims` | no |
 | `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope` | `guardrails` | no |
 | `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `level` | no |
 | `headline` | Deterministic headline | `level` | `headline` | no |
 | `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
 | `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
+| `unit_rollup` | Monorepo unit roll-up | `unit_levels` | `unit_rollup` | no |

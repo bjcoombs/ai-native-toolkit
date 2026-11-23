@@ -744,6 +744,18 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `ai_usage.covered_author_agents` | dropped |
 | `ai_usage.limits` | dropped |
 
+## agent_outcome
+
+| Field | Kept as |
+|---|---|
+| `agent_outcome.reason` | reason code |
+| `agent_outcome.window` | token |
+| `agent_outcome.since` | dropped |
+| `agent_outcome.agent_rule` | token |
+| `agent_outcome.revert_null_reason` | token |
+| `agent_outcome.rework_null_reason` | token |
+| `agent_outcome.limits` | dropped |
+
 ## doc_claims
 
 | Field | Kept as |
@@ -843,6 +855,16 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `unit_levels.units.next_step.blockers.reason` | token |
 | `unit_levels.units.next_step.blockers.disposition` | token |
 | `unit_levels.units.next_step.blockers.exclusion_kind` | token |
+
+## unit_rollup
+
+| Field | Kept as |
+|---|---|
+| `unit_rollup.unit_count_reason` | token |
+| `unit_rollup.unlocks.gate` | token |
+| `unit_rollup.unlocks.scope` | token |
+| `unit_rollup.lines` | dropped |
+| `unit_rollup.markdown` | dropped |
 
 ## fleet-data.json (the fleet skill)
 

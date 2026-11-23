@@ -93,8 +93,20 @@
 # by always running when the gate code changes rather than by branch protection.
 name: Floor
 
+# Pull requests and merge groups. In a merge group (GitHub's merge queue: main
+# plus the queued pull requests ahead of this one plus this one) the two
+# required contexts run their deterministic halves: `floor enforcement` checks
+# marker removal against the group's base commit and FLOOR.md's clauses, and
+# `floor self-anchor` re-reads the live settings. The sign-off is a
+# pull-request gate only: the path filter answers false for a merge group, so
+# no deployment review is requested inside the queue, and the queue admits
+# only a pull request whose `floor enforcement` passed on its head, which a
+# floor-core change does only with the review approved. A push to a queued
+# pull request removes it from the queue. FLOOR.md, "The merge queue".
 on:
   pull_request:
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
@@ -151,12 +163,24 @@ jobs:
       # NO --depth=1 here. The checkout above is unshallow on purpose, and a
       # shallow fetch into it writes a graft that truncates the base branch's
       # ancestry at its tip -- exactly where `git merge-base` below has to walk.
+      # A merge group has no base ref: its base commit is already in the
+      # unshallow checkout, an ancestor of the group's head.
       - name: Fetch the PR base branch
+        if: github.event_name == 'pull_request'
         run: git fetch --no-tags origin "${{ github.base_ref }}"
 
+      # In a merge group the base is the group's base commit, so removal is
+      # judged across every queued pull request in the group at once.
       - name: Marker removal detection (base-vs-head)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          QUEUE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
         run: |
-          BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
+          if [ "${EVENT_NAME}" = "merge_group" ]; then
+            BASE_SHA="${QUEUE_BASE_SHA}"
+          else
+            BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
+          fi
           echo "merge-base: ${BASE_SHA}"
           python scripts/floor_check.py markers --base "${BASE_SHA}"
 
@@ -400,7 +424,9 @@ jobs:
       # NO --depth=1 here. The checkout above is unshallow on purpose, and a
       # shallow fetch into it writes a graft that truncates the base branch's
       # ancestry at its tip -- exactly where `git merge-base` below has to walk.
+      # A merge group is not classified (the step below), so it fetches nothing.
       - name: Fetch the PR base branch
+        if: github.event_name == 'pull_request'
         run: git fetch --no-tags origin "${{ github.base_ref }}"
 
       # The one path decision this workflow makes, and it delegates it: the
@@ -414,6 +440,11 @@ jobs:
       # sign-off. Any failure to answer with the base copy (no script at the
       # base, a base that predates `path-filter`, a crash) fails closed: both
       # outputs are true, so the canaries run and sign-off is requested.
+      # A merge group is the one event not classified: both outputs are false,
+      # so neither the canaries nor a deployment review run inside the queue.
+      # The review is a pull-request gate, and the queue admits a pull request
+      # only once its `floor enforcement` passed on its head (FLOOR.md, "The
+      # merge queue"). The event name comes from GitHub, not from the diff.
       # The self-anchor (scripts/floor_anchor.py FILTER_STEP) compares this
       # step byte for byte, so it carries no comment of its own and any edit
       # to it -- a reassigned path, a copy over the extract, an eval, a late
@@ -421,10 +452,12 @@ jobs:
       - name: Detect changes to protected paths
         id: filter
         env:
+          EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_ACTOR: ${{ github.actor }}
         run: |
+          [ "${EVENT_NAME}" != "merge_group" ] || { printf 'run_canaries=false\nfloor_core_changed=false\n' >> "$GITHUB_OUTPUT"; exit 0; }
           BASE_SHA="$(git merge-base "origin/${BASE_REF}" HEAD)"
           BASE_COPY="${RUNNER_TEMP}/floor_check_base.py"
           if ! git show "${BASE_SHA}:scripts/floor_check.py" > "${BASE_COPY}" \

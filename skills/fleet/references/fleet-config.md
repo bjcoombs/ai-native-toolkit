@@ -68,9 +68,11 @@ tables are `lib/fleet_config.py` (`SECTION_KEYS`).
 ### `[ai_usage]`: agent identities
 
 Read by the `ai_usage` scan (`lib/agent_identity.py`, `AuthorMatcher`) to count the
-commits an in-house agent authored, beside the pinned agent apps (Claude, the
-Copilot coding agent, Devin, Jules, Codex, the Cursor background agent, OpenHands,
-Amazon Q Developer).
+commits an in-house agent authored, beside the pinned `[bot]` agent apps (Claude,
+the Copilot coding agent, Devin, Jules, Codex, Amazon Q Developer). Name-only pinned
+matches (Claude Code's `noreply@anthropic.com`, `copilot@` addresses and the `copilot`
+login, the Cursor background agent, OpenHands) are hints that count only once
+confirmed in `[identities]` (#883).
 
 ```toml
 [ai_usage]

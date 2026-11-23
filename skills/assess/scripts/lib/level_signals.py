@@ -87,9 +87,9 @@ requires reliable history").
 
 ``EMPTY_DENOMINATORS`` names the signals that are a statistic over a set, with
 the count of that set and the reason code the tally gives when the count is 0:
-``stats_summary.loc.p95`` over ``stats_summary.files_scored``
-(``no_scored_files``, #906). A p95 of no files is 0, which would pass an "at
-most 500 lines" test, so the condition reads not measured instead.
+``stats_summary.loc_by_class.source.p95`` over that class's ``files_scored``
+(``no_source_files``, #906, #820). A p95 of no files would pass an "at most
+500 lines" test, so the condition reads not measured instead.
 
 Maintainer rulings (#783 and #789 triage decisions, 2026-11-21):
 

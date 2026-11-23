@@ -1,4 +1,4 @@
-"""Tests for lib/gitlab_ci_lint.py: GitLab's merged CI configuration through the CI lint API
+"""Tests for lib/hosting/gitlab_ci_lint.py: GitLab's merged CI configuration through the CI lint API
 under ``--platform`` (issue #796, #766 part 2), and how ci_checks and review_automation read it."""
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 
 from conftest import skip_without_posix_shell
 
-from lib import gitlab_ci_lint
+import lib.hosting.gitlab_ci_lint as gitlab_ci_lint
 from lib.ci_checks import scan_ci_checks
 from lib.counts_only import counts_only_scans
 from lib.merged_ci import NOT_NEEDED, NOT_READ, MergedCi, as_merged

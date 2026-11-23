@@ -317,10 +317,10 @@ def test_next_step_wording_names_both_paths_of_an_eq_signal_criterion() -> None:
 
 def test_an_empty_set_on_the_eq_signal_side_takes_its_code() -> None:
     model = parse_levels(_model({"truth": ["contracts"], "criteria": [
-        {"signal": "a.x", "op": "eq", "eq_signal": "stats_summary.loc.p95"}]}))
-    data = {"a": {"x": 1}, "stats_summary": {"files_scored": 0, "loc": {}}}
+        {"signal": "a.x", "op": "eq", "eq_signal": "stats_summary.loc_by_class.source.p95"}]}))
+    data = {"a": {"x": 1}, "stats_summary": {"loc_by_class": {"source": {"files_scored": 0, "p95": None}}}}
     (crit,) = evaluate_row(model["rows"][0], data)["levels"][0]["unmet"]
-    assert (crit["status"], crit["reason"]) == ("unknown", "no_scored_files")
+    assert (crit["status"], crit["reason"]) == ("unknown", "no_source_files")
 
 
 def test_a_guard_cannot_be_a_hazard() -> None:
