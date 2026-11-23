@@ -25,8 +25,9 @@ pipeline, and, with pipefail off, of the last pipeline but its last command;
 condition, up to its `then` / `do` (an `until` condition loops until the check passes,
 so it is not read as exempt); `pipefail_after` reads `set -o pipefail` / `set -euo
 pipefail` / `set +o pipefail`; `shell_pipefail` reads a custom shell's flags;
-`piped_members(statement)` is every pipeline member but the last (#1061: with pipefail
-off its status is lost, so `ci_masking` masks it); `unquoted(text)` drops quoted spans and escapes, so `_depths` and `_not_code` read no
+`piped_members(statement)` is every pipeline member but the last, and `piped_groups(statements)`
+every segment of a `{ }` / `( )` group piped on (#1061: with pipefail off their status is lost,
+so `ci_masking` masks them); `unquoted(text)` drops quoted spans and escapes, so `_depths` and `_not_code` read no
 `{` or `<<EOF` inside quotes. Tests: `tests/test_ci_false_credit.py`.
 """
 from __future__ import annotations
@@ -73,6 +74,37 @@ def piped_members(statement: Statement) -> frozenset[int]:
     log``): with ``pipefail`` off a pipeline's status is its last command's, so theirs is lost
     (#1061)."""
     return frozenset(k for k in range(len(statement) - 1) if statement[k + 1][0] == "|")
+
+
+# ``$(...)`` and ``${...}`` open no group (one level is enough for a CI line).
+_SUBST = re.compile(r"\$\([^()]*\)|\$\{[^{}]*\}")
+
+
+def _group_marks(segment: str) -> tuple[int, int]:
+    """``(opens, closes)``: the ``( )`` / ``{ }`` group delimiters a segment holds."""
+    bare = _SUBST.sub("", unquoted(segment))
+    words = bare.replace("(", " ( ").replace(")", " ) ").split()
+    return (sum(w in ("(", "{") for w in words), sum(w in (")", "}") for w in words))
+
+
+def piped_groups(statements: list[Statement]) -> dict[int, frozenset[int]]:
+    """Per statement index, the segments inside a ``{ }`` / ``( )`` group whose closer is piped
+    into a later command (``{ pytest; } | tee log``, ``(pytest; echo x) | tee log``): the group
+    runs in a pipeline subshell, so with pipefail off its status is lost (#1061)."""
+    out: dict[int, set[int]] = {}
+    stack: list[tuple[int, int]] = []
+    order = [(i, k) for i, statement in enumerate(statements) for k in range(len(statement))]
+    for pos, (i, k) in enumerate(order):
+        opens, closes = _group_marks(statements[i][k][1])
+        stack.extend([(pos, pos)] * opens)
+        for _ in range(closes):
+            if not stack:
+                break
+            start, _ = stack.pop()
+            if k + 1 < len(statements[i]) and statements[i][k + 1][0] == "|":
+                for si, sk in order[start:pos + 1]:
+                    out.setdefault(si, set()).add(sk)
+    return {i: frozenset(ks) for i, ks in out.items()}
 
 
 def condition_flags(statements: list[Statement]) -> list[bool]:

@@ -92,17 +92,18 @@ def _chain_fails(statement: Statement, start: int, tail: str, pipefail: bool = T
     return None if result is None else result[1]
 
 
-def _run(segments: Statement, failing: bool, tail: str = "",
-         pipefail: bool = True) -> tuple[bool, bool] | None:
+def _run(segments: Statement, failing: bool, tail: str = "", pipefail: bool = True,
+         piped_failed: bool = False) -> tuple[bool, bool] | None:
     """``(ended, failing)`` after running ``segments`` from a status (``failing``): ``ended``
     when an ``exit`` / ``return`` ends the step with that status. Each ``&&`` / ``||``
     pipeline runs or is skipped by the status so far; a pipeline member but the last runs in
     a subshell, so its ``exit`` ends only that member, and its status counts only with
     ``pipefail`` (a failing member then fails the pipeline). A ``{ }`` /
-    ``( )`` group is read from its body, then the operators after its closer. None when a
-    group does not close on this line (``tail`` is the rest of the line)."""
+    ``( )`` group is read from its body, then the operators after its closer; a group piped
+    on (``{ echo x; exit 1; } | tee log``) is a pipeline member like any other. None when a
+    group does not close on this line (``tail`` is the rest of the line). ``piped_failed``:
+    an earlier member of the current pipeline failed (counts under pipefail)."""
     runs = True
-    piped_failed = False   # an earlier member of this pipeline failed (counts under pipefail)
     for j, (op, seg) in enumerate(segments):
         if op in ("&&", "||"):
             runs = (op == "&&") != failing   # && runs on success, || on failure
@@ -119,11 +120,15 @@ def _run(segments: Statement, failing: bool, tail: str = "",
                 return None
             body, rest = found
             ended, failing = _run_body(body, pipefail)
-            if ended and seg.lstrip()[0] == "{" and not piped:
-                return True, failing
             rest = rest.lstrip()
+            group_piped = rest.startswith("|") and not rest.startswith("||")
+            if ended and seg.lstrip()[0] == "{" and not (piped or group_piped):
+                return True, failing
             after = split_statements(rest) if rest.startswith(("&&", "||", "|")) else []
-            return _run(after[0][1:], failing, "", pipefail) if after else (False, failing)
+            if not after:
+                return False, failing
+            return _run(after[0][1:], failing, "", pipefail,
+                        piped_failed=group_piped and pipefail and failing)
         status = _status(seg, failing)
         if piped:
             member = status if status is not None else _fails_status(seg)

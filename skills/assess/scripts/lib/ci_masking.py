@@ -88,7 +88,9 @@ parser (the core has no YAML dependency). Only literal values count.
   condition. ``unmasked_lines(text)`` is ``mask_lines(text)[0]``.
 - A pipe without pipefail (#1061). In a GitHub bash or sh ``run:`` body with pipefail off
   (the default ``bash -e {0}``, ``shell: sh``, no ``set -o pipefail`` before it), every
-  pipeline member but the last is masked (``ci_exempt.piped_members``): the pipeline takes
+  pipeline member but the last is masked (``ci_exempt.piped_members``), and so is every
+  segment of a ``{ }`` / ``( )`` group piped on (``piped_groups``: ``{ pytest; } | tee log``,
+  ``(pytest; echo x) | tee log``, which run in a pipeline subshell): the pipeline takes
   the last command's status, so ``pytest | tee log`` exits 0 on a failing check. A capture
   (above: a later line of the job names the file and exits non-zero) stays credited. When the
   statement or a later one reads ``PIPESTATUS`` or a later one re-raises a status (``pytest
@@ -174,7 +176,7 @@ from pathlib import PurePosixPath
 from dataclasses import dataclass
 
 from lib.ci_exempt import (
-    condition_flags, exempt_segments, pipefail_after, piped_members, shell_pipefail, unquoted)
+    condition_flags, exempt_segments, pipefail_after, piped_groups, piped_members, shell_pipefail, unquoted)
 from lib.ci_statements import (
     _capture_targets, _checked_later, _join, _pick, _same_line_keep, split_statements)
 from lib.ci_unsure import (
@@ -607,6 +609,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     until = until_break_flags(body) if readable else [False] * len(refs)
     in_group = group_call_unsure(body, conditions) if readable else set()
     uncalled, named = uncalled_functions(body) if readable else (set(), set())   # #1061
+    grouped_pipes = piped_groups(body) if readable else {}   # { pytest; } | tee log (#1061)
     opaque = opaque_flags(body)
     out: list[tuple[int, int]] = []
     exempt: Segments = {}
@@ -641,7 +644,13 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
         if readable and code[idx] and not (state[idx] or off[idx]) and (first, k) not in captured:
             # pytest | tee log without pipefail: tee's status is the pipeline's (#1061). A later
             # re-raise or PIPESTATUS read may carry the check's status out, so that reads null.
-            piped = _piped_without_pipefail(raw[first][k], before[idx])
+            group = frozenset() if before[idx] else grouped_pipes.get(idx, frozenset())
+            piped = _piped_without_pipefail(raw[first][k], before[idx]) | group
+            if group and raw[first][k][min(group)][0] == "||":
+                # pytest || { ...; exit 1; } | tee log: the arm's pipeline takes tee's status, so
+                # the check before it may pass (an arm group over several lines too).
+                arm = frozenset(range(min(group)))
+                unsure[(first, k)] = unsure.get((first, k), frozenset()) | arm
             text = _join(raw[first][k])
             target = unsure if reraised or pipestatus or "PIPESTATUS" in text else exempt
             if piped:

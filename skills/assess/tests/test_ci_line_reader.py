@@ -20,7 +20,7 @@ import pytest
 
 from lib.ci_checks import scan_ci_checks
 from lib.ci_compound import compound_core, segment_core
-from lib.ci_exempt import piped_members
+from lib.ci_exempt import piped_groups, piped_members
 from lib.ci_masking import split_statements
 
 SHELLS = {"default": "", "bash": "        shell: bash\n", "sh": "        shell: sh\n"}
@@ -47,6 +47,13 @@ ROWS = [
     ("cat /dev/null | pytest", CREDIT, CREDIT, CREDIT),
     ("pytest | tee log && set -o pipefail", MASKED, CREDIT, MASKED),   # set after the pipe
     ("set -o pipefail && pytest | tee log", CREDIT, CREDIT, CREDIT),
+    # A piped group runs in a pipeline subshell: its status is lost without pipefail.
+    ("{ pytest || exit 1; } | tee log", MASKED, CREDIT, MASKED),
+    ("{ pytest; } | tee log", MASKED, CREDIT, MASKED),
+    ("{ pytest; } 2>&1 | tee log", MASKED, CREDIT, MASKED),
+    ("(pytest; echo x) | tee log", MASKED, CREDIT, MASKED),
+    ("pytest || { echo x; exit 1; } | tee log", MAY, CREDIT, MAY),
+    ("{ pytest; } > log", CREDIT, CREDIT, CREDIT),
     # Gap 4: a line that opens a compound command.
     ("if ! pytest; then exit 1; fi", CREDIT, CREDIT, CREDIT),
     ("if pytest; then :; else exit 1; fi", CREDIT, CREDIT, CREDIT),
@@ -89,6 +96,7 @@ ROWS = [
 # A later statement may carry the piped check's status out: null, never a false 0.
 SAFE_NULL = [
     "pytest | tee log; exit ${PIPESTATUS[0]}",
+    "{ pytest; } | tee log; exit ${PIPESTATUS[0]}",
     "pytest | tee out.txt; grep -q failed out.txt && exit 1",
 ]
 
@@ -318,3 +326,30 @@ def test_a_shell_flag_cluster_takes_its_value(tmp_path: Path, command: str) -> N
     from lib.command_resolver import resolve
     root = _repo(tmp_path, {"ci.sh": "pytest\n"})
     assert resolve(command, root).verdict == "resolved"
+
+
+@pytest.mark.parametrize(("body", "default", "bash"), [
+    ("{\n  pytest || exit 1\n} | tee log", MASKED, CREDIT),
+    ("{\n  pytest\n} 2>&1 | tee log", MASKED, CREDIT),
+    ("(\n  pytest\n  echo x\n) | tee log", MASKED, CREDIT),
+    ("pytest || {\n  echo x\n  exit 1\n} | tee log", MAY, CREDIT),
+    ("pytest || {\n  echo x\n  exit 1\n}", CREDIT, CREDIT),
+])
+def test_a_piped_group_over_several_lines_reads_the_same(tmp_path: Path, body: str, default: tuple[object, str],
+                                                          bash: tuple[object, str]) -> None:
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    assert _enforced(tmp_path / "a", _block(body)) == default
+    assert _enforced(tmp_path / "b", _block(body, "bash")) == bash
+
+
+@pytest.mark.parametrize(("line", "groups"), [
+    ("{ pytest; } | tee log", {0: {0}, 1: {0}}),
+    ("(pytest; echo x) | tee log", {0: {0}, 1: {0}}),
+    ("pytest || { echo x; exit 1; } | tee log", {0: {1}, 1: {0}, 2: {0}}),
+    ("{ pytest; } > log", {}),
+    ("{ pytest; }; echo next | tee log", {}),
+    ('x=$(pytest) | tee log', {}),
+])
+def test_piped_groups(line: str, groups: dict[int, set[int]]) -> None:
+    assert piped_groups(split_statements(line)) == groups
