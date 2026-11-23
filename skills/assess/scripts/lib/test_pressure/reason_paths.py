@@ -19,6 +19,9 @@ from pathlib import Path
 _TAIL = r"[^\s'\"()\[\]<>,;]*"
 # ``/``, ``\`` or the doubled ``\\`` of a repr.
 _SEP = r"(?:/|\\{1,2})"
+# The directory's own last segment has ended: a character that could carry it on
+# (``/home/u`` inside ``/home/u2``, ``/home/u.bak`` or ``/home/u-old``) does not follow.
+_SEGMENT_END = r"(?![\w.~-])"
 
 
 def _case_insensitive() -> bool:
@@ -36,9 +39,12 @@ def _spellings(path: Path) -> list[str]:
 def cut_prefix(detail: str, path: Path, label: str | None) -> str:
     """Cut ``path`` from ``detail``: with no ``label`` a path under it becomes
     relative and the directory itself ``.``; with one, the prefix becomes the
-    label. The prefix is cut only before a separator, so ``/home/u`` does not
-    rewrite ``/home/u2``, and the separators in the rest of that path become
-    ``/``. Longest spelling first: where the directory sits behind a symlink
+    label. A labelled prefix is cut only where its last segment ends (before a
+    separator, at the end of the text, or before any other character that
+    cannot carry a path segment on), so ``/home/u`` does not rewrite
+    ``/home/u2`` while a bare ``HOME=/home/u`` reads ``HOME=~`` (issue #978),
+    and the separators in the rest of that path become ``/``. Longest spelling
+    first: where the directory sits behind a symlink
     (macOS /var -> /private/var) the unresolved form is a substring of the
     resolved one, and cutting it first would leave "/private" glued on."""
     if label is not None and path == Path(path.anchor):
@@ -49,6 +55,7 @@ def cut_prefix(detail: str, path: Path, label: str | None) -> str:
         detail = re.sub(re.escape(prefix) + _SEP + "(" + _TAIL + ")",
                         lambda m: lead + re.sub(r"\\{1,2}", "/", m.group(1)),
                         detail, flags=flags)
-        if label is None:
-            detail = re.sub(re.escape(prefix), lambda _m: ".", detail, flags=flags)
+        bare = "." if label is None else label
+        tail = "" if label is None else _SEGMENT_END
+        detail = re.sub(re.escape(prefix) + tail, lambda _m: bare, detail, flags=flags)
     return detail

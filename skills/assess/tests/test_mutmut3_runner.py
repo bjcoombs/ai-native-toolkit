@@ -284,6 +284,36 @@ def test_labels_stop_at_a_separator_and_skip_a_root_home(tmp_path: Path) -> None
         "ImportError: x (/home/u/a.py) (/home/u2/b.py)")
 
 
+@pytest.mark.parametrize(("line", "scrubbed"), [
+    ("cwd is /home/bob now", "cwd is ~ now"),            # whitespace follows
+    ("HOME=/home/bob", "HOME=~"),                       # end of the text follows
+    ("'/home/bob'", "'~'"),                             # a quote follows
+    ("(/home/bob)", "(~)"),                             # a bracket follows
+    ("in /home/bob: no such file", "in ~: no such file"),
+    ("/home/bob/a.py", "~/a.py"),                       # a separator follows
+])
+def test_a_label_cuts_a_bare_directory_at_any_boundary(line: str, scrubbed: str) -> None:
+    """A home path no separator follows still names the user, so it is cut
+    wherever the path segment ends (issue #978)."""
+    assert mutmut3._cut_prefix(line, Path("/home/bob"), "~") == scrubbed
+
+
+@pytest.mark.parametrize("line", [
+    "(/home/u2/b.py)", "cwd is /home/u2", "/home/u.bak", "/home/u-old/a.py", "/home/u~",
+])
+def test_a_label_leaves_a_longer_directory_name_alone(line: str) -> None:
+    """``/home/u`` is not cut out of a path whose segment carries on past it."""
+    assert mutmut3._cut_prefix(line, Path("/home/u"), "~") == line
+
+
+def test_a_bare_home_is_cut_from_the_stored_reason() -> None:
+    proc = subprocess.CompletedProcess(
+        ["m"], 1, stdout="", stderr="RuntimeError: cwd is '/home/bob' (HOME=/home/bob)\n")
+    assert mutmut3._no_records_reason(
+        "mutmut", proc, labels={Path("/home/bob"): "~"}).endswith(
+        "RuntimeError: cwd is '~' (HOME=~)")
+
+
 def test_cut_prefix_cuts_either_separator_spelling(tmp_path: Path) -> None:
     """Windows ``str(path)`` uses ``\\`` while a tool prints ``/`` (and the other
     way round): both spellings of one directory are cut, and the rest of the
