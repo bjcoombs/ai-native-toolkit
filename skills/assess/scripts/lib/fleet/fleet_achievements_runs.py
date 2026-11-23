@@ -69,8 +69,9 @@ _TOP_KEYS = ("run", "model", "views", "repos")
 # the mean-share roll-up #772 removed, which the engine no longer reads; 3 (#746) only adds
 # ``opportunities``, which the engine does not read; 4 (#944, #945) only adds the repository
 # ``step``, ``next_step``, ``tally``, ``exclusions`` and ``gate_blockers`` and the unit ``step``;
-# the per-tag ``tags`` (#1073) are additive too, and an entry without them reads as not measured
-# (``fleet_data_tags.member_tags``). Every version from 1 up: a FLEET_DATA_VERSION bump can never
+# the per-tag ``tags`` (#1073) are additive too, which the engine does not read; the tag drawings
+# (#940) read a stored entry through ``fleet_data_tags.member_tags``, where an absent tally is
+# not measured. Every version from 1 up: a FLEET_DATA_VERSION bump can never
 # drop the one before it (#1072), since the range follows the constant.
 READABLE_FLEET_DATA_VERSIONS = frozenset(range(1, FLEET_DATA_VERSION + 1))
 

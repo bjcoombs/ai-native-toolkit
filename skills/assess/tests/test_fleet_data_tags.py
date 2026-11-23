@@ -84,8 +84,9 @@ def test_without_a_model_no_repository_has_a_tally() -> None:
 def test_history_without_the_field_reads_as_not_measured_never_zero() -> None:
     assert member_tags({"key": "k"}) is None
     assert member_tags({"key": "k", "tags": None}) is None
+    assert member_tags({"key": "k", "tags": [_cell("docs", 1, 1)]}) == [_cell("docs", 1, 1)]
     stored = [_cell("docs", 1, 1), {"tag": "not-a-tag", "met": 1}]
-    assert member_tags({"key": "k", "tags": stored}) == [_cell("docs", 1, 1)]
+    assert member_tags({"key": "k", "tags": stored}) is None  # one bad cell: never a partial tally
 
 
 def test_a_rescore_rebuilds_the_tally_of_an_entry_written_before_it() -> None:

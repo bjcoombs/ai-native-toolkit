@@ -95,8 +95,9 @@ catalog's tag order, with `tag`, `met`, `measured` and `verified` (counted like 
 and `not_measured`, `hazards` and `declined` (the NOT MEASURED, HAZARD and DECLINED counts).
 A condition with several tags is in each of their cells and counted once in the tally.
 `tags` is `null` when the repository is not measured (failed, or without `--levels`). A
-`fleet-data.json` written before this field has no `tags`: a reader takes that as not
-measured, never as zero, and a re-score under a new maturity-model version rebuilds it from
+`fleet-data.json` written before this field has no `tags`: a reader takes that, or a
+malformed tally, as not measured, never as zero (`lib/fleet/fleet_data_tags.py`
+`member_tags`), and a re-score under a new maturity-model version rebuilds it from
 the stored scans. Tag names come from the fixed truth-tag list and every other field is a
 count, so the tally names no repository, path or owner.
 

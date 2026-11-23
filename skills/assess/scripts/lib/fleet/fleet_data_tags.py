@@ -19,8 +19,10 @@ with a per-tag tally (an unmeasured one counts in ``repos`` only, never as zeros
 ``cells`` sums each count over the measured repositories, one cell per tag any of them
 carries, in ``TRUTH_TAGS`` order. A unit with no measured repository has no cells.
 
-**History** (``member_tags``): a ``fleet-data.json`` written before this field has no
-``tags``; it reads as null, not measured, never as a row of zeros. ``fleet_rescore`` rebuilds
+**History** (``member_tags``, the reader the tag drawings of #940 use for stored runs): a
+``fleet-data.json`` written before this field has no ``tags``; it reads as null, not measured,
+never as a row of zeros. A stored tally with any malformed cell reads as null too, never as a
+partial tally. ``fleet_rescore`` rebuilds
 the field from the stored scans where the history allows a re-score.
 
 **Privacy.** Tag names come from the fixed ``TRUTH_TAGS`` list and every other field is a
@@ -72,9 +74,11 @@ def tag_roll_up(members: Sequence[list[TagCell] | None]) -> TagRollUp:
 
 
 def member_tags(repo: Mapping[str, Any]) -> list[TagCell] | None:
-    """A stored repository's per-tag tally; None (not measured) for an entry written before #1073."""
+    """A stored repository's per-tag tally; None (not measured) for an entry written before #1073
+    or one with any malformed cell."""
     tags = repo.get("tags")
-    if not isinstance(tags, list):
+    if not isinstance(tags, list) or not all(
+            isinstance(cell, dict) and cell.get("tag") in TRUTH_TAGS
+            and all(type(cell.get(count)) is int for count in COUNTS) for cell in tags):
         return None
-    return [cast(TagCell, cell) for cell in tags if isinstance(cell, dict) and cell.get("tag") in TRUTH_TAGS
-            and all(type(cell.get(count)) is int for count in COUNTS)]
+    return [cast(TagCell, cell) for cell in tags]

@@ -47,7 +47,7 @@ Unknown is never drawn as zero: a repository with no measured row or no commit c
 `shared_tooling` evidence, a group with no row known in both compared runs, or a repository
 with an undetermined level on a row, is named on a hatched strip or segment, and a group
 with no level in a run breaks its trend line and is named on a hatched note. An unknown row with
-a confirmed `floor` is shown as "at least N" beside each known-only mean a floor-inclusive figure labelled as a lower bound (tooltips and
+a confirmed `floor` is shown as "at least N": beside each known-only mean, a floor-inclusive figure labelled as a lower bound (tooltips and
 the not-plotted strip), never moving a plotted point. Colours follow the
 viewer's light or dark scheme. The SVGs have no script and no external font or link, and the
 same run draws the same bytes. Logic: `lib/fleet/fleet_diagrams.py`, `lib/fleet/fleet_quadrant.py`,
