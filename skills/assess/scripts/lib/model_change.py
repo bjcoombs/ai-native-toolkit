@@ -30,7 +30,9 @@ module keeps the parts of the report that compare or redraw the level on that sa
   that model's own Steps when ``since_last_run`` (which reads the default Steps) left them
   unknown: a profile with fewer Steps, such as ``citizen``. ``previous`` is the level block
   of the ``run-context.json`` the earlier run left (``previous_level``). Two runs of one
-  profile then read their gains and losses as two default runs do.
+  profile then read their gains and losses as two default runs do. A block ``across_models``
+  already marked as a model change stays as it is, even when ``run-context.json`` names the
+  same model (the baseline in ``prior-level.json`` decided it, as for ``since_last_run``).
 - ``units_label(block, choice)`` marks the monorepo unit roll-up "(default model)" when the
   run's own model is not the default, since the unit pass still reads the default model.
 
@@ -162,7 +164,7 @@ def on_own_steps(block: SinceLastRun, level: Any, previous: Any) -> SinceLastRun
     profile with fewer Steps, such as ``citizen``, cannot fill)."""
     model, version, before = model_for_level(level), _version(level), _version(previous)
     if (block.get("available") is not True or block.get("first_run") or block.get("gates_gained") is not None
-            or model is None or version is None or before is None or model_name(before) != model_name(version)):
+            or model_changed_line(block) is not None or model is None or version is None or before is None or model_name(before) != model_name(version)):
         return block
     gained, lost = gate_changes(model.get("steps", []), level, previous)
     if gained is None or lost is None:

@@ -186,3 +186,8 @@ def test_on_own_steps_leaves_a_known_or_cross_model_block_alone() -> None:
     assert on_own_steps(unknown, _level(CITIZEN), _level(None)) is unknown
     assert on_own_steps(unknown, _level(CITIZEN), None) is unknown
     assert on_own_steps(unknown, _level(CITIZEN), {"levels_version": CITIZEN.model["version"]}) is unknown
+
+
+def test_a_model_change_from_the_baseline_is_never_refilled_from_run_context() -> None:
+    changed = across_models(_since(), _level(CITIZEN), DEFAULT_VERSION)
+    assert on_own_steps(changed, _level(CITIZEN), _level(CITIZEN)) is changed
