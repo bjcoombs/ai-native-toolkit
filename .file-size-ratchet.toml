@@ -53,7 +53,7 @@ reason = "pre-existing; ratchet from 2026-10-07"
 lines = 1493
 reason = "raised by #468: mypy strict type annotations; lowered to 1517 after #556 (top lists moved to lib/stats_rows.py); lowered to 1493 after #590 (backend_by_language moved to lib/scc_coverage.py)"
 
-[ceilings."skills/assess/scripts/lib/doc_graph.py"]
+[ceilings."skills/assess/scripts/lib/docs/doc_graph.py"]
 lines = 1107
 reason = "raised by #468: mypy strict type annotations; +3 for the run_context_types import (disallow_any_generics ratchet)"
 

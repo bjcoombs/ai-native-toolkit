@@ -51,10 +51,10 @@ from lib.block_shapes import (
 from lib.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
 from lib.counts_only_rules import PATH_KEYED_MAPS
 from lib.hosting.delivery import DeliveryBlock
-from lib.doc_claims import DocClaimsBlock
+from lib.docs.doc_claims import DocClaimsBlock
 from lib.agent_consistency import AgentConsistencyBlock
-from lib.doc_complexity_join import DocUnit
-from lib.doc_staleness import DocStalenessBlock, DocStalenessRow
+from lib.docs.doc_complexity_join import DocUnit
+from lib.docs.doc_staleness import DocStalenessBlock, DocStalenessRow
 from lib.gap_actions import GapAction
 from lib.guardrails import GuardrailsBlock
 from lib.instruction_placement import InstructionPlacementBlock

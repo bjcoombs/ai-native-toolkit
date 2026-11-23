@@ -170,6 +170,14 @@ New code imports the new path.
   raw-source exclusions they apply. Files: `__init__.py`, `dart_complexity.py`,
   `diff_reliability.py`, `generated_files.py`, `raw_source.py`, `scc_coverage.py`,
   `stats_diff.py`, `stats_rows.py`, `treemap_render.py`.
+- **`docs/`**: the doc graph and the Layer 0 doc signals: links, claims, ownership,
+  provenance, staleness and its generator directives, the doc-to-complexity join and the
+  vault queries. `doc_graph` imports `ownership_parser` inside a function, because
+  `ownership_parser` imports `doc_graph`. The folder holds two kinds of file: the doc-scan
+  modules (`.py`) and every group's long module references (`.md`, one per module, #981).
+  Files: `__init__.py`, `doc_claims.py`, `doc_complexity_join.py`, `doc_directives.py`,
+  `doc_graph.py`, `doc_graph_layout.py`, `doc_links.py`, `doc_ownership.py`,
+  `doc_provenance.py`, `doc_staleness.py`, `ownership_parser.py`, `vault_queries.py`.
 - **`fleet/`**: the `/fleet` runner, roll-ups, run history, published fleet schemas and
   diagrams. `lib/fleet.py` became `fleet/runner.py`, because the package now holds that
   name; until 4.0.0 the package `__init__.py` forwards each runner name (`lib.fleet.FleetRow`)

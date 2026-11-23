@@ -4,8 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 
 
-import lib.doc_graph as doc_graph
-from lib.doc_graph import build_doc_graph
+import lib.docs.doc_graph as doc_graph
+from lib.docs.doc_graph import build_doc_graph
 
 
 def _write(root: Path, rel: str, text: str) -> None:
@@ -249,7 +249,7 @@ def test_unrelated_top_level_fixtures_dir_not_excluded(tmp_path: Path) -> None:
 
 
 def test_is_excluded_path_helper() -> None:
-    from lib.doc_graph import is_excluded_path
+    from lib.docs.doc_graph import is_excluded_path
 
     assert is_excluded_path(Path("a/tests/fixtures/x.md"))
     assert is_excluded_path(Path("tests/fixtures/x.md"))
@@ -273,7 +273,7 @@ def test_graph_object_exposed_for_renderer(tmp_path: Path) -> None:
 
 def test_is_repo_file_rejects_symlink_escape(tmp_path: Path) -> None:
     import os
-    from lib.doc_graph import is_repo_file
+    from lib.docs.doc_graph import is_repo_file
     repo = tmp_path / "repo"
     repo.mkdir()
     outside = tmp_path / "outside.md"

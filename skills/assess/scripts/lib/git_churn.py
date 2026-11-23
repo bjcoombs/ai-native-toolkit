@@ -311,7 +311,7 @@ def file_last_commit_epoch(path: Path) -> int | None:
 
     The raw commit time, before any days-ago conversion. Provenance-aware staleness needs the absolute timestamp so it can
     compare a generated doc against its declared source on the same axis (epoch
-    seconds), independent of "now" - see `lib.doc_provenance`.
+    seconds), independent of "now" - see `lib.docs.doc_provenance`.
     """
     try:
         out = subprocess.run(

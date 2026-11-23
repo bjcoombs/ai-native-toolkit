@@ -283,14 +283,14 @@ def test_sibling_test_fallback_parallel_tests_tree(tmp_path: Path) -> None:
     (skills/assess/tests/test_<stem>.py for skills/assess/scripts/lib/<stem>.py),
     a root tests/ tree mirroring the source path, a mirror that drops a src/
     root, an adjacent test/ directory, and a Go-style root test/ tree."""
-    for rel in ("skills/assess/scripts/lib/doc_graph.py",
+    for rel in ("skills/assess/scripts/lib/docs/doc_graph.py",
                 "skills/assess/tests/test_doc_graph.py",
                 "src/pkg/mod.py", "tests/src/pkg/test_mod.py",
                 "src/app/view.ts", "tests/app/view.spec.ts",
                 "lib/util.js", "lib/test/util.test.js",
                 "cmd/run.go", "test/run_test.go"):
         _touch(tmp_path, rel)
-    hot = ["skills/assess/scripts/lib/doc_graph.py", "src/pkg/mod.py",
+    hot = ["skills/assess/scripts/lib/docs/doc_graph.py", "src/pkg/mod.py",
            "src/app/view.ts", "lib/util.js", "cmd/run.go"]
     block = compute_test_focus(hot, None, None, repo_root=tmp_path)
     by_path = {e["path"]: e["test_signal"] for e in block["entries"]}
@@ -299,11 +299,11 @@ def test_sibling_test_fallback_parallel_tests_tree(tmp_path: Path) -> None:
 
 def test_sibling_test_fallback_parallel_tree_needs_matching_name(tmp_path: Path) -> None:
     """A tests/ tree with only unrelated test files does not credit a source."""
-    _touch(tmp_path, "skills/assess/scripts/lib/doc_graph.py")
+    _touch(tmp_path, "skills/assess/scripts/lib/docs/doc_graph.py")
     _touch(tmp_path, "skills/assess/tests/test_other.py")
     _touch(tmp_path, "tests/doc_graph.py")
     block = compute_test_focus(
-        ["skills/assess/scripts/lib/doc_graph.py"], None, None, repo_root=tmp_path,
+        ["skills/assess/scripts/lib/docs/doc_graph.py"], None, None, repo_root=tmp_path,
     )
     assert block["entries"][0]["test_signal"] == "unsupported"
 
@@ -335,16 +335,16 @@ def test_flat_tests_tree_does_not_credit_every_same_named_file(tmp_path: Path) -
     src/a/mod.py or src/b/mod.py, so a bare-name match cannot credit both; this
     repo's own flat skills/assess/tests layout is still credited alongside."""
     for rel in ("src/a/mod.py", "src/b/mod.py", "tests/test_mod.py",
-                "skills/assess/scripts/lib/doc_graph.py",
+                "skills/assess/scripts/lib/docs/doc_graph.py",
                 "skills/assess/tests/test_doc_graph.py"):
         _touch(tmp_path, rel)
-    hot = ["src/a/mod.py", "src/b/mod.py", "skills/assess/scripts/lib/doc_graph.py"]
+    hot = ["src/a/mod.py", "src/b/mod.py", "skills/assess/scripts/lib/docs/doc_graph.py"]
     block = compute_test_focus(hot, None, None, repo_root=tmp_path)
     by_path = {e["path"]: e["test_signal"] for e in block["entries"]}
     credited = [p for p in ("src/a/mod.py", "src/b/mod.py")
                 if by_path[p] == "sibling_test_only"]
     assert len(credited) <= 1
-    assert by_path["skills/assess/scripts/lib/doc_graph.py"] == "sibling_test_only"
+    assert by_path["skills/assess/scripts/lib/docs/doc_graph.py"] == "sibling_test_only"
 
 
 def test_flat_tests_tree_bounded_to_package_depth(tmp_path: Path) -> None:

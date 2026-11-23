@@ -1,4 +1,4 @@
-"""Tests for the doc graph's link pass (``lib.doc_links``), called directly
+"""Tests for the doc graph's link pass (``lib.docs.doc_links``), called directly
 rather than through ``build_doc_graph``."""
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import networkx as nx
 
-from lib.doc_links import INLINE_CODE_RE, harvest_links, strip_fenced_lines
+from lib.docs.doc_links import INLINE_CODE_RE, harvest_links, strip_fenced_lines
 
 DOC_EXTS = {".md"}
 CODE_EXTS = {".py"}
