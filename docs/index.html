@@ -287,7 +287,7 @@
       <dl class="legend" data-kind="skill" data-standalone="true">
         <div>
           <dt>/assess</dt>
-          <dd>Measures a codebase's readiness for AI contributors as a list of conditions, each one practice with file:line evidence and truth tags naming what it keeps honest. The headline is the autonomy Step the repo supports, from 1 Assisted to 4 Autonomous loops, each Step past the first held by a named gate, then "Practices in place: N of M measured, V verified", where a condition the run could not see never counts as 0. Draws a complexity hotspot treemap, a doc-navigability graph, an evidence waffle, a package map, a doc-drift map and a review strip. Writes a report with the Top 3 Actions, naming files.</dd>
+          <dd>Measures a codebase's readiness for AI contributors as a list of conditions, each one practice with file:line evidence and truth tags naming what it keeps honest. The headline is the autonomy Step the repo supports, from 1 Assisted to 4 Autonomous loops, each Step past the first held by a named gate and nothing else, then "Catalogue coverage: N of M measured, V verified", where a condition the run could not see never counts as 0. Draws a complexity hotspot treemap, a doc-navigability graph, an evidence waffle, a package map, a doc-drift map and a review strip. Writes a report with the Top 3 Actions, naming files.</dd>
         </div>
         <div>
           <dt>/huddle</dt>
@@ -406,7 +406,7 @@
 
       <div class="figure-row">
         <h3 class="row-title">Four more views of one run: llama.cpp</h3>
-        <p>One run of the current toolkit against the public <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a> repo at commit <code>1f8baae</code> (22 November 2026). Its headline is Step 3, Unattended agent PRs, with "Practices in place: 6 of 14 measured, 3 verified" and one condition not measured.</p>
+        <p>One run of the current toolkit against the public <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a> repo at commit <code>1f8baae</code> (22 November 2026). Its headline is Step 3, Unattended agent PRs, with "Catalogue coverage: 6 of 14 measured, 3 verified" and one condition not measured.</p>
         <figure>
           <a class="plate" href="./example-waffle.svg"><img src="./example-waffle.svg" width="680" height="574" loading="lazy" decoding="async" alt="Evidence waffle for llama.cpp: 24 conditions, one square each, grouped by maturity-model row; 3 met and verified, 3 met and measured, 4 met but only listed from config, 13 not met yet, 1 not measured."></a>
           <figcaption><b>Evidence waffle.</b> 6 counted conditions met (3 verified, 3 measured), 4 listed, 13 not met, 1 not measured.</figcaption>
@@ -429,7 +429,7 @@
         <div>
           <h3>Reading the waffle and the package map</h3>
           <ul>
-            <li><strong>One square per condition</strong>, one row per maturity-model row. Dark teal is verified by a run or the platform, mid teal measured from the code or its history, pale teal listed from config and never counted, grey not met yet, counted or listed: here 8 of the 13 grey squares count, so 6 met plus 8 make the "of 14". A hatched square was not measured, its reason in the key. The verified and measured squares are the N in "Practices in place".</li>
+            <li><strong>One square per condition</strong>, one row per maturity-model row. Dark teal is verified by a run or the platform, mid teal measured from the code or its history, pale teal listed from config and never counted, grey not met yet, counted or listed: here 8 of the 13 grey squares count, so 6 met plus 8 make the "of 14". A hatched square was not measured, its reason in the key. The verified and measured squares are the N in "Catalogue coverage".</li>
             <li><strong>Row imports from column</strong>, darker for more imports, with a lines-of-code bar per package. A corner mark flags imports that reach past the target package's front door.</li>
             <li>The import graph builders read Python, Go, and TypeScript or JavaScript, so on llama.cpp, whose C and C++ they cannot read, the map shows the TypeScript web UI.</li>
           </ul>
