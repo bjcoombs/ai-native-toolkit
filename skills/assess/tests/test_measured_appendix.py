@@ -1,7 +1,7 @@
 """The "How this was measured" report section lists the scans that ran and were skipped (#794)."""
 from __future__ import annotations
 
-from lib.fleet_diagrams import report_markdown
+from lib.fleet.fleet_diagrams import report_markdown
 from lib.measured_appendix import CATALOG_URL, HEADING, measured_section
 from lib.vocabulary import banned_hits
 

@@ -1,5 +1,5 @@
-"""Tests for the group trend lines (issue #676): lib/fleet_trends.py and its entry in
-lib/fleet_diagrams.py.
+"""Tests for the group trend lines (issue #676): lib/fleet/fleet_trends.py and its entry in
+lib/fleet/fleet_diagrams.py.
 
 The golden under ``tests/fixtures/fleet_trends/`` locks the whole render; regenerate it with
 ``uv run --locked python tests/fleet_trends_fixture.py`` from ``skills/assess``.
@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from lib import fleet_diagrams as fd
-from lib import fleet_trends as ft
-from lib.fleet_groups import GroupRow
+import lib.fleet.fleet_diagrams as fd
+import lib.fleet.fleet_trends as ft
+from lib.fleet.fleet_groups import GroupRow
 from lib.levels import MaturityModel
 from fleet_trends_fixture import (CURRENT_STAMP, ENTRIES, FIXTURES, LEVELS, LONG, REPOS, TOP, build, goldens,
                                   group, runs, stamp)

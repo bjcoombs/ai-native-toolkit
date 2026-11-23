@@ -194,7 +194,7 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
 }
 
 
-# The fleet's ``fleet-data.json`` (lib/fleet_data.py, issue #703): field pattern -> class,
+# The fleet's ``fleet-data.json`` (lib/fleet/fleet_data.py, issue #703): field pattern -> class,
 # the dotted keys from the top of that document, list levels left out. Kept apart from
 # RULES so its field names never widen the run-context record keys ``field_names`` keeps.
 # ``key`` fields (unit and repository keys, and the references to them) are PATH: kept in

@@ -1,4 +1,4 @@
-"""Tests for the fleet run stamp and --delete-after (issue #569): lib/fleet_stamp.py, lib/fleet_cleanup.py."""
+"""Tests for the fleet run stamp and --delete-after (issue #569): lib/fleet/fleet_stamp.py, lib/fleet/fleet_cleanup.py."""
 from __future__ import annotations
 
 import json
@@ -10,12 +10,13 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from lib import fleet_cleanup, fleet_stamp
-from lib.fleet import STATUS_FAILED, STATUS_OK, FleetRow, ScanOptions, Target, run_fleet
-from lib.fleet_cleanup import CloneDeleter, delete_clone
-from lib.fleet_schema import STAMP_SCHEMA_PATH, build_stamp_schema, render_stamp
+import lib.fleet.fleet_cleanup as fleet_cleanup
+import lib.fleet.fleet_stamp as fleet_stamp
+from lib.fleet.runner import STATUS_FAILED, STATUS_OK, FleetRow, ScanOptions, Target, run_fleet
+from lib.fleet.fleet_cleanup import CloneDeleter, delete_clone
+from lib.fleet.fleet_schema import STAMP_SCHEMA_PATH, build_stamp_schema, render_stamp
 from lib.fleet_activity import is_active, window_start
-from lib.fleet_stamp import build_stamp, write_stamp
+from lib.fleet.fleet_stamp import build_stamp, write_stamp
 from test_fleet import make_checkout, make_repo
 from test_fleet_cli import fleet_cli
 
@@ -94,7 +95,7 @@ def test_is_active_reads_the_head_commit_date(tmp_path):
 
 
 def test_scan_target_sets_active_only_when_asked(tmp_path, monkeypatch):
-    from lib import fleet
+    import lib.fleet.runner as fleet
     monkeypatch.setattr(fleet, "checkout_problem", lambda _c: None)
     monkeypatch.setattr(fleet, "commit_state",
                         lambda _c: {"head_sha": None, "dirty": None, "dirty_reason": fleet.NO_COMMIT})
@@ -412,7 +413,7 @@ def test_an_extreme_window_completes_the_run(tmp_path, monkeypatch):
 
 def test_the_checked_in_stamp_schema_matches_the_type():
     assert STAMP_SCHEMA_PATH.read_text(encoding="utf-8") == render_stamp(), (
-        "regenerate: cd skills/assess && uv run --locked python scripts/lib/fleet_schema.py")
+        "regenerate: cd skills/assess && uv run --locked python scripts/lib/fleet/fleet_schema.py")
 
 
 def test_a_dormant_repository_is_scanned_but_not_qualifying(tmp_path, monkeypatch):

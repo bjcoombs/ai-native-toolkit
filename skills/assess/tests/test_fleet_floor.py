@@ -1,7 +1,7 @@
 """A level's floor when only a higher level's signal is unmeasured (issue #697).
 
 ``lib.levels`` gives an unknown row ``floor`` when its confirmed criteria reach
-at least level 1; ``lib.fleet_groups`` carries it, and ``full_run_only`` names
+at least level 1; ``lib.fleet.fleet_groups`` carries it, and ``full_run_only`` names
 the missing signals only a full ``/assess`` measures; the views print "at least".
 """
 from __future__ import annotations
@@ -14,15 +14,15 @@ from typing import Any
 import pytest
 
 import assess_signals
-from lib import fleet_heatmap as fh
-from lib import fleet_layer_bars as flb
-from lib import fleet_maturity as fm
-from lib import fleet_next_steps as ns
-from lib import fleet_quadrant as fq
+import lib.fleet.fleet_heatmap as fh
+import lib.fleet.fleet_layer_bars as flb
+import lib.fleet.fleet_maturity as fm
+import lib.fleet.fleet_next_steps as ns
+import lib.fleet.fleet_quadrant as fq
 from lib import signals
-from lib.fleet import FLEET_ROW_VERSION, FleetRow
-from lib.fleet_groups import FLEET_GROUP_VERSION, full_run_only_signals, group_row
-from lib.fleet_view import FleetViewError, _check_row
+from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
+from lib.fleet.fleet_groups import FLEET_GROUP_VERSION, full_run_only_signals, group_row
+from lib.fleet.fleet_view import FleetViewError, _check_row
 from lib.level_signals import load_default_levels
 from lib.levels import MaturityModel, evaluate, evaluate_row, floor_of, parse_levels
 
@@ -240,7 +240,7 @@ def test_a_headless_coverage_gate_repository_gets_layer_6_floor_1(tmp_path, coun
 
 
 def test_a_floor_appearing_is_not_a_move_but_is_carried():
-    from lib import fleet_compare as fc
+    import lib.fleet.fleet_compare as fc
     rows = [_row("g/a", _scans())]
     old = group_row("g", rows, _model(), {})
     old_levels = [{k: v for k, v in e.items() if k not in ("floor", "full_run_only")} for e in old["levels"]]
@@ -253,8 +253,8 @@ def test_a_floor_appearing_is_not_a_move_but_is_carried():
 
 
 def test_slope_and_trend_carry_the_bound_without_moving_the_line():
-    from lib import fleet_slope as fs
-    from lib import fleet_trends as ft
+    import lib.fleet.fleet_slope as fs
+    import lib.fleet.fleet_trends as ft
     state: Any = {"status": "unknown", "level": None, "floor": 1}
     known: Any = {"status": "level", "level": 2}
     move: Any = {"id": "cov", "scope": "team", "then": state, "now": known, "moved": True, "cause": "level"}
@@ -268,8 +268,8 @@ def test_slope_and_trend_carry_the_bound_without_moving_the_line():
 
 
 def test_charts_print_the_lower_bound_as_visible_text():
-    from lib import fleet_slope as fs
-    from lib import fleet_trends as ft
+    import lib.fleet.fleet_slope as fs
+    import lib.fleet.fleet_trends as ft
     floored: Any = {"status": "unknown", "level": None, "floor": 1}
     known: Any = {"status": "level", "level": 1}
     rows: Any = [{"id": "cov", "scope": "team", "then": known, "now": floored, "moved": True,
@@ -296,7 +296,7 @@ def test_charts_print_the_lower_bound_as_visible_text():
 
 
 def test_rows_without_floors_render_no_floor_text():
-    from lib import fleet_trends as ft
+    import lib.fleet.fleet_trends as ft
     run = ft.trend_run({"levels_version": "t-1", "scan_date": "2026-11-20"},
                        [group_row("g", [_row("g/a", _scans(gate=False))], _model(), {})])
     assert run is not None and "floor_means" not in run and ft._bound_lines(run, ["g"]) == []

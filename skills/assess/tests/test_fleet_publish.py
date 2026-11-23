@@ -1,4 +1,4 @@
-"""``lib.fleet_publish``: the fleet artifact database projection (issue #947)."""
+"""``lib.fleet.fleet_publish``: the fleet artifact database projection (issue #947)."""
 from __future__ import annotations
 
 import copy
@@ -10,8 +10,8 @@ from typing import Any, cast
 import pytest
 
 from fleet_data_fixture import SALT, build
-from lib import fleet_data as fd
-from lib import fleet_publish as fp
+import lib.fleet.fleet_data as fd
+import lib.fleet.fleet_publish as fp
 
 RUN_1, RUN_2 = "2026-11-20", "2026-11-27"
 

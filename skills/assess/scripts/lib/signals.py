@@ -101,7 +101,7 @@ from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
 # Bumped when the document's envelope (stamp fields, top-level keys) changes,
 # or when a scanner change alters when an existing signal reads true or null
 # without a new signal name (the fleet comparison convention,
-# lib/fleet_scanner_diff.py). Per-scan block shapes are not versioned here.
+# lib/fleet/fleet_scanner_diff.py). Per-scan block shapes are not versioned here.
 SIGNALS_SCHEMA_VERSION = 2
 
 # Run-context blocks ``assess_core`` assembles through its own table entries in
@@ -172,7 +172,7 @@ SIGNAL_SCANS = signal_scans()
 # cannot produce, so a counts-only row and a --full row read alike. Derived, never
 # listed, so a reason added here (or a scan moving out of UNREGISTERED_SCANS) carries.
 # A PLATFORM_SCANS block is the exception: ``fleet --platform`` measures it, so its
-# ``network`` gap is a scan option away, not a full run (``lib.fleet_groups``).
+# ``network`` gap is a scan option away, not a full run (``lib.fleet.fleet_groups``).
 FULL_RUN_ONLY_REASONS: frozenset[str] = frozenset(
     reason_code(reason) for reason in (UNREGISTERED_REASON, NETWORK_REASON))
 

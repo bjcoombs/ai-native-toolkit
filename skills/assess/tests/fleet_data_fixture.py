@@ -14,10 +14,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.fleet import FLEET_ROW_VERSION, FleetRow  # noqa: E402
-from lib.fleet_data import FleetData, Privacy, build_fleet_data, dumps_fleet_data  # noqa: E402
-from lib.fleet_stamp import FleetStamp  # noqa: E402
-from lib.fleet_units import build_trees, parse_units, repo_owners  # noqa: E402
+from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow  # noqa: E402
+from lib.fleet.fleet_data import FleetData, Privacy, build_fleet_data, dumps_fleet_data  # noqa: E402
+from lib.fleet.fleet_stamp import FleetStamp  # noqa: E402
+from lib.fleet.fleet_units import build_trees, parse_units, repo_owners  # noqa: E402
 from lib.levels import MaturityModel, parse_levels  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/doc_freshness.schema.json",
   "title": "fleet cross-repo doc freshness row",
-  "description": "One line of doc_freshness.jsonl written by skills/fleet/scripts/fleet.py: one declared [[describes]] mapping. A measured row (current, minor_drift, behind) has a null reason, a confidence and a count; any other status has a reason token. commits is null in counts-only output. Generated from lib/fleet_doc_freshness.py by lib/fleet_schema.py.",
+  "description": "One line of doc_freshness.jsonl written by skills/fleet/scripts/fleet.py: one declared [[describes]] mapping. A measured row (current, minor_drift, behind) has a null reason, a confidence and a count; any other status has a reason token. commits is null in counts-only output. Generated from lib/fleet/fleet_doc_freshness.py by lib/fleet/fleet_schema.py.",
   "type": "object",
   "properties": {
     "freshness_row_version": {

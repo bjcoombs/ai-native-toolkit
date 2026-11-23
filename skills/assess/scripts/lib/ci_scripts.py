@@ -1,7 +1,8 @@
 """Does the tree hold the script a CI line runs? (issue #937)
 
 ``script_path(text)`` names the repository file a command runs as a committed script:
-``./ci.sh`` is ``ci.sh``, ``bash scripts/test.sh`` is ``scripts/test.sh``, ``bin/test``
+``./ci.sh`` is ``ci.sh``, ``bash scripts/test.sh`` and ``. scripts/test.sh`` (``source``, #1033)
+are ``scripts/test.sh``, ``bin/test``
 is itself. It returns None for no script (``bash -c '...'``, ``pytest``), a modelled
 runner (``./gradlew``), a known tool installed into the tree (``_KNOWN_TOOLS``: the lint,
 type, test and analyser programs of ``lib.check_command``, so ``./bin/golangci-lint run``
@@ -30,12 +31,23 @@ test under ``named_check.instruction_words``, so a missing ``./ci.sh`` stays
 ``script_not_found`` after #951. Tests:
 ``tests/test_check_command.py`` (``script_path``) and ``tests/test_ci_checks.py``.
 
+``ScriptTree(root, tracked)`` is that predicate plus a body reader (#1033):
+``script_runs(text, present, test)`` is true when ``present`` is a ``ScriptTree`` and the script
+``text`` runs, read at its exact tracked path (never the lenient suffix; at most 64 KiB),
+provably fails on a failing ``test`` command (``lib.script_body``). The form decides the
+start state: ``. x`` / ``source x`` is sourced, ``bash -e x`` takes the shell's flags, ``./x``
+its shebang, and only when git records the file as executable (mode 100755), since a
+``./x`` of a 100644 file exits 126 and gates nothing. ``lib.ci_checks`` adds it to its check and lint line tests, so a read body only
+upgrades a name reading: ``./ci.sh`` that ends in ``pytest`` reads true; one it cannot show
+keeps the name's reading (``check_target``, or true for ``./test.sh``).
+
 Inward-only imports: ``lib.check_command``, ``lib.command_index``,
-``lib.command_resolver``, ``lib.doc_graph`` and ``lib.lint_vocabulary``; never an
+``lib.command_resolver``, ``lib.doc_graph``, ``lib.lint_vocabulary`` and ``lib.script_body``; never an
 orchestrator.
 """
 from __future__ import annotations
 
+import subprocess
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
@@ -44,6 +56,7 @@ from lib.command_index import is_gitignored
 from lib.command_resolver import RUNNERS, command_words
 from lib.doc_graph import is_excluded_path
 from lib.lint_vocabulary import ANALYSER_PROGRAMS, program_name
+from lib.script_body import body_runs, start_state
 
 Present = Callable[[str], bool]
 
@@ -60,7 +73,7 @@ def script_path(text: str) -> str | None:
     if not words:
         return None
     head = words[0]
-    if head in ("bash", "sh", "zsh"):
+    if head in ("bash", "sh", "zsh", "source"):   # . reads as source (command_words)
         i, flags = 1, []
         while i < len(words) and words[i][:1] in ("-", "+"):
             flags.append(words[i])
@@ -86,6 +99,83 @@ def runs_missing(test: Callable[..., bool]) -> Callable[..., bool]:
         return (test(line, script_item=script_item)
                 and not test(line, script_item=script_item, present=present))
     return missing
+
+
+class ScriptTree:
+    """A ``present`` predicate that can also read a committed script's body (#1033)."""
+
+    def __init__(self, root: Path, tracked: frozenset[str]) -> None:
+        self._root, self._tracked, self._present = root, tracked, present_in(root, tracked)
+        self._modes: dict[str, str] | None = None
+
+    def executable(self, path: str) -> bool:
+        """Whether git records ``path`` as executable (mode 100755): ``./x`` of a 100644
+        file exits 126, so the step fails whatever the check does and the check gates nothing."""
+        if self._modes is None:
+            self._modes = _index_modes(self._root)
+        return self._modes.get(path) == "100755"
+
+    def __call__(self, path: str) -> bool:
+        return self._present(path)
+
+    def runs(self, text: str, test: Callable[[str], bool]) -> bool:
+        """Whether the script ``text`` runs, at its exact tracked path, provably fails on a
+        failing ``test`` command (``lib.script_body``); false when its body is not read."""
+        path = script_path(text)
+        if path is None or path not in self._tracked or any(
+                rel.endswith("/" + path) for rel in self._tracked):
+            return False   # cd svc && ./ci.sh may run svc/ci.sh: only an unambiguous path is read
+        try:
+            with (self._root / path).open("rb") as handle:
+                raw = handle.read(_MAX_BODY + 1)
+        except OSError:
+            return False
+        if len(raw) > _MAX_BODY:
+            return False
+        body = raw.decode("utf-8", errors="replace")
+        words = command_words(text)
+        form = "sourced" if words[0] == "source" else "shell" if words[0] in _SHELL_HEADS else "executed"
+        if form == "executed" and not self.executable(path):
+            return False
+        state = start_state(form, body, _flags(words) if form == "shell" else [])
+        return state is not None and body_runs(body, errexit=state[0], pipefail=state[1], test=test,
+                                               sourced=form == "sourced")
+
+
+def script_runs(text: str, present: Present | None, test: Callable[[str], bool]) -> bool:
+    """``ScriptTree.runs`` when ``present`` is one, else false (the line was read without a tree)."""
+    return isinstance(present, ScriptTree) and present.runs(text, test)
+
+
+def _index_modes(root: Path) -> dict[str, str]:
+    """``{path: mode}`` from ``git ls-files -s -z``; empty outside a git checkout."""
+    try:
+        done = subprocess.run(["git", "-C", str(root), "ls-files", "-s", "-z"], capture_output=True,
+                              encoding="utf-8", errors="surrogateescape", check=False, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    if done.returncode:
+        return {}
+    modes: dict[str, str] = {}
+    for entry in done.stdout.split("\0"):
+        meta, _, path = entry.partition("\t")
+        if path and meta:
+            modes[path] = meta.split(" ", 1)[0]
+    return modes
+
+
+_MAX_BODY = 64 * 1024
+_SHELL_HEADS = frozenset({"bash", "sh", "zsh"})
+
+
+def _flags(words: list[str]) -> list[str]:
+    """A shell's own leading flags with their values (``bash -eo pipefail x`` -> ``-eo pipefail``)."""
+    out: list[str] = []
+    i = 1
+    while i < len(words) and words[i][:1] in ("-", "+"):
+        out += words[i:i + 2] if _takes_value(words[i]) else words[i:i + 1]
+        i += 2 if _takes_value(words[i]) else 1
+    return out
 
 
 def committed(text: str, present: Present | None) -> bool:

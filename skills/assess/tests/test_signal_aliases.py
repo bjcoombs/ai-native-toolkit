@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from lib import fleet_rescore
-from lib.fleet_compare import compare
+import lib.fleet.fleet_rescore as fleet_rescore
+from lib.fleet.fleet_compare import compare
 from lib.level_signals import DEFAULT_LEVELS, load_default_levels, signal_path_validator
 from lib.levels import evaluate, load_levels, parse_levels
 from lib.signal_aliases import SIGNAL_ALIASES, aliased, dealias_model, deprecation_line, renamed

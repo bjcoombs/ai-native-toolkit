@@ -5,43 +5,43 @@ its own process from a worker pool, counts-only by default, and writes one JSON
 line per repository to ``<out>/repos.jsonl``, sorted by repository id. A scan
 process that exits non-zero leaves its stderr tail in ``<out>/logs/<repo>.stderr``. The row
 shape is ``skills/fleet/references/repos.schema.json``; the logic lives in
-``skills/assess/scripts/lib/fleet.py``. It then rolls the rows up to one
-line per group in ``<out>/groups.jsonl`` (``lib/fleet_groups.py``, schema
+``skills/assess/scripts/lib/fleet/runner.py``. It then rolls the rows up to one
+line per group in ``<out>/groups.jsonl`` (``lib/fleet/fleet_groups.py``, schema
 ``skills/fleet/references/groups.schema.json``): repository counts, distinct
 shared CI sources and marketplaces, the joined ``--settings`` and each
 ``--levels`` row's whole level, plus each group's agent-building class counts.
 With ``--levels`` each scanned repository's verified tally, condition states and
-autonomy Step go to ``<out>/level.json`` (``lib/fleet_level.py``, schema
+autonomy Step go to ``<out>/level.json`` (``lib/fleet/fleet_level.py``, schema
 ``skills/fleet/references/level.schema.json``; #744).
 Similar ``builds-agent`` repositories across groups are clustered into
-``<out>/agent_clusters.json`` (``lib/fleet_agent_building.py``): counts and SDK
+``<out>/agent_clusters.json`` (``lib/fleet/fleet_agent_building.py``): counts and SDK
 slugs only, member repositories named only with ``--name-agent-clusters``.
-``<out>/fleet-data.json`` (``lib/fleet_data.py``, schema
+``<out>/fleet-data.json`` (``lib/fleet/fleet_data.py``, schema
 ``skills/fleet/references/fleet-data.schema.json``) holds the org units tree per view
-(``lib/fleet_units.py``; ``--units`` maps it), each unit's roll-ups and each repository's
+(``lib/fleet/fleet_units.py``; ``--units`` maps it), each unit's roll-ups and each repository's
 units, web URL and per-row level, value and reason. ``<out>/achievements.json``
-(``lib/fleet_achievements.py``, schema ``skills/fleet/references/achievements.schema.json``)
+(``lib/fleet/fleet_achievements.py``, schema ``skills/fleet/references/achievements.schema.json``)
 replays the comparable runs in the history and credits each unit's level-ups, streaks
 and ``--targets`` hit (firsts only with ``--first-achievements``), with each unit's
 nearest level-up; the
-report opens with them ("What changed and who earned it", ``lib/fleet_credit.py``).
+report opens with them ("What changed and who earned it", ``lib/fleet/fleet_credit.py``).
 
 Target repositories are never written to. With ``--delete-after`` a scanned
 clone is removed once its row is in hand, only when nothing in it would be
-lost (``lib/fleet_cleanup.py``). Every run also writes the run stamp
-``<out>/run.json`` (``lib/fleet_stamp.py``). A docs repository that declares
+lost (``lib/fleet/fleet_cleanup.py``). Every run also writes the run stamp
+``<out>/run.json`` (``lib/fleet/fleet_stamp.py``). A docs repository that declares
 ``[[describes]]`` mappings gets one row per mapping in ``<out>/doc_freshness.jsonl``
-(``lib/fleet_doc_freshness.py``); without any, no such file is written.
+(``lib/fleet/fleet_doc_freshness.py``); without any, no such file is written.
 
-It also draws the fleet diagrams (``lib/fleet_diagrams.py``): ``<out>/report.md``
+It also draws the fleet diagrams (``lib/fleet/fleet_diagrams.py``): ``<out>/report.md``
 embedding ``quadrant.svg``, ``shared-tooling.svg``, ``trend.svg`` (group trend lines
-over the run history, ``lib/fleet_trends.py``), ``slope.svg`` (from the ``--compare``
+over the run history, ``lib/fleet/fleet_trends.py``), ``slope.svg`` (from the ``--compare``
 result) and ``layer-bars.svg``, or the reason each was skipped;
 ``--no-diagrams`` turns them off. ``report.md`` opens with the coverage line: with
 ``--discovered FILE`` (ghsync's ``--porcelain`` or ``--porcelain-json`` listing) how many of
 the discoverable repositories were assessed and each gap counted, also in ``run.json``
-(``lib/fleet_coverage.py``, #745); without it, coverage unknown. After the credit section
-comes "Opportunities" (``lib/fleet_opportunities.py``, #746), also in ``fleet-data.json``.
+(``lib/fleet/fleet_coverage.py``, #745); without it, coverage unknown. After the credit section
+comes "Opportunities" (``lib/fleet/fleet_opportunities.py``, #746), also in ``fleet-data.json``.
 
 ``--fleet-config FILE`` (``lib/fleet_config.py``, #706) is validated before any scan
 and every repository scan gets the same copy of it; a repository's own
@@ -49,7 +49,7 @@ and every repository scan gets the same copy of it; a repository's own
 records its canonical sha256 and per-section entry counts, never a value, and
 runs with different configs do not compare.
 
-``--platform`` (``lib/fleet_platform.py``, #714) runs a separate platform pass after
+``--platform`` (``lib/fleet/fleet_platform.py``, #714) runs a separate platform pass after
 the offline scan: one more ``assess_signals.py --platform`` child per ok repository
 (``--platform-jobs`` at a time, ``--platform-timeout`` each; defaults from the
 ``[platform]`` section of ``--fleet-config``) whose ``gh``/``glab`` blocks
@@ -69,10 +69,10 @@ scanned), so those includes stay unknown.
 
 A counts-only run is also kept in the run history,
 ``${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet/<org>/<date>/``
-(``--history-dir``, ``--history-org``, ``--no-history``; ``lib/fleet_history.py``).
+(``--history-dir``, ``--history-org``, ``--no-history``; ``lib/fleet/fleet_history.py``).
 ``--compare [RUN_DIR]`` compares this run with an earlier one (by default the
 latest history entry whose stamp matches) and writes ``<out>/compare.json``
-(``lib/fleet_compare.py``).
+(``lib/fleet/fleet_compare.py``).
 
 Exit codes:
     0  the run completed and repos.jsonl and run.json were written. Repositories that could
@@ -126,7 +126,7 @@ sys.dont_write_bytecode = True
 ASSESS_SCRIPTS = Path(__file__).resolve().parents[2] / "assess" / "scripts"
 sys.path.insert(0, str(ASSESS_SCRIPTS))
 
-from lib.fleet import (  # noqa: E402
+from lib.fleet.runner import (  # noqa: E402
     DEFAULT_TIMEOUT,
     FleetRow,
     LOGS_DIR,
@@ -144,11 +144,11 @@ from lib.fleet import (  # noqa: E402
     write_rows,
 )
 from lib.fleet_activity import window_start  # noqa: E402
-from lib.fleet_agent_building import clusters, write_clusters  # noqa: E402
-from lib.fleet_doc_freshness import freshness_rows, summary_line, write_freshness  # noqa: E402
-from lib.fleet_cleanup import CloneDeleter  # noqa: E402
-from lib.fleet_coverage import Discovered, DiscoveryError, coverage_line, read_discovery, reconcile  # noqa: E402
-from lib.fleet_compare import (  # noqa: E402
+from lib.fleet.fleet_agent_building import clusters, write_clusters  # noqa: E402
+from lib.fleet.fleet_doc_freshness import freshness_rows, summary_line, write_freshness  # noqa: E402
+from lib.fleet.fleet_cleanup import CloneDeleter  # noqa: E402
+from lib.fleet.fleet_coverage import Discovered, DiscoveryError, coverage_line, read_discovery, reconcile  # noqa: E402
+from lib.fleet.fleet_compare import (  # noqa: E402
     Comparison,
     FleetRun,
     RunVersionError,
@@ -159,13 +159,13 @@ from lib.fleet_compare import (  # noqa: E402
     summary_lines,
     write_comparison,
 )
-from lib.fleet_diagrams import (  # noqa: E402
+from lib.fleet.fleet_diagrams import (  # noqa: E402
     REPORT_FILE,
     build_diagrams,
     clear_diagrams,
     write_diagrams,
 )
-from lib.fleet_achievements import (  # noqa: E402
+from lib.fleet.fleet_achievements import (  # noqa: E402
     ACHIEVEMENTS_FILE,
     Achievements,
     HistoryRun,
@@ -173,18 +173,18 @@ from lib.fleet_achievements import (  # noqa: E402
     clear_achievements,
     write_achievements,
 )
-from lib.fleet_achievements_runs import earlier_runs  # noqa: E402
-from lib.fleet_credit import credit_section  # noqa: E402
-from lib.fleet_opportunities_section import opportunities_section  # noqa: E402
-from lib.fleet_level import write_fleet_levels  # noqa: E402
+from lib.fleet.fleet_achievements_runs import earlier_runs  # noqa: E402
+from lib.fleet.fleet_credit import credit_section  # noqa: E402
+from lib.fleet.fleet_opportunities_section import opportunities_section  # noqa: E402
+from lib.fleet.fleet_level import write_fleet_levels  # noqa: E402
 from lib.measured_appendix import measured_section  # noqa: E402
-from lib.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data  # noqa: E402
-from lib.fleet_targets import TargetSpec, TargetsError, check_units, load_targets, resolve  # noqa: E402
+from lib.fleet.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data  # noqa: E402
+from lib.fleet.fleet_targets import TargetSpec, TargetsError, check_units, load_targets, resolve  # noqa: E402
 from lib.fleet_config import FleetConfig, FleetConfigError, config_sha256, parse_fleet_config, read_fleet_config  # noqa: E402
-from lib.fleet_groups import GroupRow, SettingsError, load_settings, roll_up, write_groups  # noqa: E402
-from lib.fleet_hashed import public_freshness, public_groups, public_ids, public_rows  # noqa: E402
-from lib.fleet_repo_facts import collect_facts  # noqa: E402
-from lib.fleet_units import (  # noqa: E402
+from lib.fleet.fleet_groups import GroupRow, SettingsError, load_settings, roll_up, write_groups  # noqa: E402
+from lib.fleet.fleet_hashed import public_freshness, public_groups, public_ids, public_rows  # noqa: E402
+from lib.fleet.fleet_repo_facts import collect_facts  # noqa: E402
+from lib.fleet.fleet_units import (  # noqa: E402
     Tree,
     UnitsError,
     UnitsMap,
@@ -194,7 +194,7 @@ from lib.fleet_units import (  # noqa: E402
     repo_owners,
     unmatched_repos,
 )
-from lib.fleet_history import (  # noqa: E402
+from lib.fleet.fleet_history import (  # noqa: E402
     HistoryError,
     choose_entry,
     default_org,
@@ -204,16 +204,16 @@ from lib.fleet_history import (  # noqa: E402
     persist,
     safe_component,
 )
-from lib.fleet_platform import (  # noqa: E402
+from lib.fleet.fleet_platform import (  # noqa: E402
     DEFAULT_PLATFORM_JOBS,
     DEFAULT_PLATFORM_TIMEOUT,
     platform_scans,
     run_platform,
 )
-from lib.fleet_scanner_diff import row_signals, scanner_diff  # noqa: E402
-from lib.fleet_trends import TrendRun, history_runs, series_runs, trend_run  # noqa: E402
-from lib.fleet_view import FleetViewError  # noqa: E402
-from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp, build_stamp, write_stamp  # noqa: E402
+from lib.fleet.fleet_scanner_diff import row_signals, scanner_diff  # noqa: E402
+from lib.fleet.fleet_trends import TrendRun, history_runs, series_runs, trend_run  # noqa: E402
+from lib.fleet.fleet_view import FleetViewError  # noqa: E402
+from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp, build_stamp, write_stamp  # noqa: E402
 from lib.levels import add_renamed_flag, LevelsError, load_levels, MaturityModel  # noqa: E402
 from lib.level_signals import signal_path_validator  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
@@ -268,7 +268,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--units", metavar="FILE",
-        help="Org units mapping (TOML, lib/fleet_units.py format): declared units and repository "
+        help="Org units mapping (TOML, lib/fleet/fleet_units.py format): declared units and repository "
              "placements for the ownership and system views of OUT/fleet-data.json. It overrides "
              "the tree inferred from repository paths, GitHub teams and CODEOWNERS.",
     )
@@ -315,7 +315,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--no-history", action="store_true", help="Do not keep this run in the history.")
     parser.add_argument(
         "--targets", metavar="FILE",
-        help=f"Step targets (TOML, lib/fleet_targets.py): each [[target]] names a view, a unit and a "
+        help=f"Step targets (TOML, lib/fleet/fleet_targets.py): each [[target]] names a view, a unit and a "
              f"Step (step = 2 or higher). OUT/{ACHIEVEMENTS_FILE} credits a target when the unit's lowest "
              "Step reaches it and the report shows the gates still missing. Needs --levels with [[steps]]; "
              "not part of the run stamp.",
@@ -536,7 +536,7 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
 def _achievements(out_dir: Path, data: FleetData, stamp: FleetStamp, maturity_model: MaturityModel | None,
                   org_dir: Path | None, entry: Path | None, repos: frozenset[str], specs: list[TargetSpec],
                   privacy_key: Callable[[str], str], firsts: bool = False) -> tuple[str | None, Achievements | None]:
-    """``OUT/achievements.json`` (lib/fleet_achievements.py), the report's credit section and
+    """``OUT/achievements.json`` (lib/fleet/fleet_achievements.py), the report's credit section and
     the document; both None when not written. Never raises: achievements never fail a run."""
     try:
         if org_dir is None or entry is None:
@@ -564,7 +564,7 @@ def _write_fleet_data(out_dir: Path, stamp: FleetStamp, rows: list[FleetRow],
                       maturity_model: MaturityModel | None, trees: list[Tree], full: bool,
                       hash_salt: str | None, units: UnitsMap, codeowners: dict[str, list[str]],
                       web_urls: dict[str, str | None]) -> FleetData:
-    """``OUT/fleet-data.json`` (lib/fleet_data.py), before the run is kept in the history."""
+    """``OUT/fleet-data.json`` (lib/fleet/fleet_data.py), before the run is kept in the history."""
     data = build_fleet_data(stamp, rows, maturity_model, trees,
                             owners=repo_owners(units, codeowners, (row["repo"] for row in rows)),
                             web_urls=web_urls, privacy=privacy_for(full, hash_salt))
@@ -597,7 +597,7 @@ def _scan_all(targets: list[Target], options: ScanOptions, jobs: int, deleter: C
 def _platform_pass(args: argparse.Namespace, targets: list[Target], fleet_config: FleetConfig | None,
                    scans: list[str] | None, deleter: CloneDeleter | None) -> PlatformPass | None:
     """``--platform``: the separate pass run after the offline scan and joined into its rows
-    (``lib/fleet_platform.py``); None without it."""
+    (``lib/fleet/fleet_platform.py``); None without it."""
     if not args.platform:
         return None
     section = fleet_config["platform"] if fleet_config is not None else {}

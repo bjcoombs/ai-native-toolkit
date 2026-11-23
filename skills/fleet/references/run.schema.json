@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/run.schema.json",
   "title": "fleet run stamp",
-  "description": "run.json written by skills/fleet/scripts/fleet.py beside repos.jsonl: what produced the run and its repository counts. Generated from lib/fleet_stamp.py by lib/fleet_schema.py.",
+  "description": "run.json written by skills/fleet/scripts/fleet.py beside repos.jsonl: what produced the run and its repository counts. Generated from lib/fleet/fleet_stamp.py by lib/fleet/fleet_schema.py.",
   "type": "object",
   "properties": {
     "coverage": {

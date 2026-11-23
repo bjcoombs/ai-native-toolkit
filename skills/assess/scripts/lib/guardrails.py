@@ -9,7 +9,10 @@ fixed config form, and every check is a line match.
 Gate kinds read (one gate per configuring file):
 
 - ``complexity_limit``: ruff's mccabe limit, when ``C901`` is selected (``select``
-  or ``extend-select`` names ``C901``, ``C90``, ``C9``, ``C`` or ``ALL``) in
+  or ``extend-select`` names ``C901``, ``C90``, ``C9``, ``C`` or ``ALL``, and no
+  ``ignore`` or ``extend-ignore`` selector at least as specific switches it off: the
+  longest matching prefix wins, ``ALL`` the least specific, ignore winning a tie, as
+  Ruff resolves them, so ``select = ["C901"]`` beside ``ignore = ["C"]`` keeps it) in
   ``pyproject.toml`` (``[tool.ruff]`` / ``[tool.ruff.lint]``), ``ruff.toml`` or
   ``.ruff.toml``; the threshold is ``max-complexity`` (``[...mccabe]``), or ruff's
   default 10 when unset. flake8's ``max-complexity`` (or ``max_complexity``) in ``[flake8]`` of
@@ -26,7 +29,15 @@ Gate kinds read (one gate per configuring file):
 Every kind counts one gate per configuring file. Ruff, flake8 and mypy configs
 are read wherever they sit in the repository (a package's own ``pyproject.toml``
 is a gate of its own), through the walk ``coverage_gate`` uses, so a monorepo's
-package gates are counted beside its coverage floors. Within one directory only
+package gates are counted beside its coverage floors. A scoped run walks the scope
+only (#956), as ``coverage_gate`` does, so a package config beside the scope is not a
+gate of the run. Ruff finds its config by walking up from each file, and mypy and flake8
+from the directory they run in, so when the scope root holds no config for a tool the
+nearest one at or above it (up to the repository root, in the tool's order) is the
+scope's gate for that tool.
+The root pre-commit config still counts, as the root CI files do for ``coverage_gate``,
+because it runs on every commit to the scope; its hooks' ``files`` and ``exclude``
+filters are not read, and ``not_read`` says so. Within one directory only
 the config the tool itself reads counts: the first, in the tool's own order, that
 configures the tool at all (ruff: ``.ruff.toml``, ``ruff.toml``, then a
 ``pyproject.toml`` with ``[tool.ruff]``; flake8: the first of ``setup.cfg``,
@@ -40,12 +51,14 @@ CI checks and branch protection, sign-off rules.
 
 A gate is **stated** when one line of a graded instruction file (the keys of the
 core's ``instruction_files``) names its rule and, where the gate has a threshold,
-the threshold as a standalone number:
+the threshold as a standalone number (no letter, digit or underscore on either side and
+no dot before it, so ``v1.0``, ``max10`` or ``80th`` states nothing):
 
 - ``complexity_limit``: ``complexity``, ``C901`` or ``mccabe`` and the limit;
 - ``coverage_floor``: ``coverage`` and the threshold as a percentage (``80``) or
-  a ratio (``0.80``); with no readable threshold, ``coverage`` beside ``fail_under``,
-  ``threshold``, ``floor`` or ``minimum``;
+  a ratio with a decimal point (``0.80``, and ``1.0`` for 100, never a bare ``1``,
+  so "step 1" does not state a floor of 100); with no readable threshold,
+  ``coverage`` beside ``fail_under``, ``threshold``, ``floor`` or ``minimum``;
 - ``pre_commit``: ``pre-commit``;
 - ``type_strictness``: ``mypy`` and ``strict``.
 
@@ -57,12 +70,13 @@ built from a template and the gate's own figures, never from file text.
 is found, so the maturity-model row reads unknown rather than a false 0.
 
 Guardrails stated (#767): does an instruction file tell an agent what the gates
-enforce? `scan_guardrails(repo_root, instruction_files, coverage_gate, excludes)` runs from the
+enforce? `scan_guardrails(repo_root, instruction_files, coverage_gate, excludes, scope)` runs from the
 scan table (`guardrails`, post-offers stage, headless `registered`) and returns the
 `guardrails` block (`GuardrailsBlock`): `{available, gates, enforced, stated, unstated,
 stated_pct, instruction_files_read, not_read}`. Each gate (`Guardrail`) is `{kind, tool,
 rule, threshold, file, line, stated, stated_in, snippet}`, one per configuring file:
-`complexity_limit` (ruff's mccabe `max-complexity` when `C901` is selected, ruff's
+`complexity_limit` (ruff's mccabe `max-complexity` when `C901` is selected, the most
+specific matching selector winning and an ignore winning a tie, as Ruff resolves it; ruff's
 default 10 when unset, in `pyproject.toml`, `ruff.toml` or `.ruff.toml`; flake8
 `max-complexity` or `max_complexity` in `.flake8`, `setup.cfg` or `tox.ini`), `coverage_floor` (per file
 of the `coverage_gate` block, its counted gate with the highest `threshold_percent`, through
@@ -72,7 +86,10 @@ count) and `type_strictness` (mypy `strict = true` in `[tool.mypy]`, `mypy.ini`,
 `.mypy.ini` or `setup.cfg`). Ruff, flake8 and mypy configs are read wherever they sit
 (`config_files`, through `coverage_gate.walk_named`: the coverage scan's bounded walk with
 the built-in and user excludes), so each package's own `pyproject.toml` is a gate of its
-own and a monorepo's package gates are counted beside its coverage floor. Every kind counts
+own and a monorepo's package gates are counted beside its coverage floor; a scoped run
+walks the scope only (#956), and for a scope root without a ruff, flake8 or mypy config
+the tool's nearest config at or above it counts (`_nearest_above`); the root pre-commit
+config still counts, its hook file filters named in `not_read`. Every kind counts
 one gate per configuring file. Within a directory only the config the tool reads counts
 (`_applied`): the first, in the tool's own order, that configures it (ruff `.ruff.toml`,
 `ruff.toml`, a `pyproject.toml` with `[tool.ruff]`; flake8 the first of `setup.cfg`, `tox.ini`,
@@ -80,8 +97,10 @@ one gate per configuring file. Within a directory only the config the tool reads
 `setup.cfg` with `[mypy]`). A gate is stated (`states`) when one line of a graded instruction file
 (the keys of `instruction_files`, an aliased file read once) names its rule and its
 threshold as a standalone number: `complexity`/`C901`/`mccabe` plus the limit,
-`coverage` plus the floor (with no readable floor, `coverage` beside `fail_under`,
-`threshold`, `floor` or `minimum`), `pre-commit`, or `mypy` plus `strict`. The local
+`coverage` plus the floor (a ratio only with a decimal point, so `1.0` for 100; with no
+readable floor, `coverage` beside `fail_under`, `threshold`, `floor` or `minimum`),
+`pre-commit`, or `mypy` plus `strict`. A threshold with a letter, digit or underscore on
+either side, or a dot before it (`v1.0`, `max10`, `80th`), states no gate. The local
 command is not required. An unstated gate carries `snippet`, a one-line sentence built
 from a template and the gate's own figures (never from file text) naming the rule, the
 threshold, the configuring file and the command that checks it. `stated_pct` is
@@ -108,7 +127,6 @@ GateKind = Literal["complexity_limit", "coverage_floor", "pre_commit", "type_str
 
 RUFF_DEFAULT_MAX_COMPLEXITY = 10
 _C901_SELECTORS = frozenset({"C901", "C90", "C9", "C", "ALL"})
-_C901_IGNORES = frozenset({"C901", "C90", "C9", "C"})
 _FAIL_UNDER_TOOLS = frozenset({"coverage.py", "pytest-cov"})
 # Each tool's own discovery order within one directory.
 _RUFF_FILES = (".ruff.toml", "ruff.toml", "pyproject.toml")
@@ -125,6 +143,9 @@ NOT_READ: tuple[str, ...] = (
     "required CI checks and branch protection",
     "sign-off rules",
 )
+NOT_READ_SCOPED: tuple[str, ...] = ("pre-commit hook `files` and `exclude` filters",)
+# Ruff compares C9 and C90 as the same linter-level selector (#956).
+_SELECTOR_SPECIFICITY = {"ALL": 0, "C9": 3}
 
 
 class Guardrail(TypedDict):
@@ -177,21 +198,25 @@ def _table(data: Mapping[str, Any], dotted: str) -> Mapping[str, Any]:
     return node if isinstance(node, Mapping) else {}
 
 
-def _names_any(tables: Iterable[Mapping[str, Any]], keys: tuple[str, ...],
-               codes: frozenset[str]) -> bool:
+def _c901_specificity(tables: Iterable[Mapping[str, Any]], keys: tuple[str, ...]) -> int:
+    """The most specific selector under ``keys`` that matches C901: its prefix length,
+    0 for ``ALL`` and 3 for ``C9`` (Ruff ranks it with ``C90``), -1 when none does."""
+    best = -1
     for table in tables:
         for key in keys:
             listed = table.get(key)
-            if isinstance(listed, list) and any(str(code) in codes for code in listed):
-                return True
-    return False
+            for code in listed if isinstance(listed, list) else ():
+                if str(code) in _C901_SELECTORS:
+                    best = max(best, _SELECTOR_SPECIFICITY.get(str(code), len(str(code))))
+    return best
 
 
 def _selects_c901(*tables: Mapping[str, Any]) -> bool:
-    """C901 is selected and not ignored (``select = ["ALL"]`` beside ``ignore = ["C901"]``)."""
-    if _names_any(tables, ("ignore", "extend-ignore"), _C901_IGNORES):
-        return False
-    return _names_any(tables, ("select", "extend-select"), _C901_SELECTORS)
+    """C901 is on: the most specific matching selector is a select, an ignore winning a
+    tie (``select = ["ALL"]`` beside ``ignore = ["C901"]`` is off, ``select = ["C901"]``
+    beside ``ignore = ["C"]`` is on), as Ruff resolves them (#956)."""
+    selected = _c901_specificity(tables, ("select", "extend-select"))
+    return selected >= 0 and selected > _c901_specificity(tables, ("ignore", "extend-ignore"))
 
 
 def _number(value: Any) -> float | None:
@@ -364,25 +389,62 @@ def _applied(root: Path, files: list[str], order: tuple[str, ...],
     return chosen
 
 
-def config_files(root: Path, excludes: Excludes | None = None) -> list[str]:
+def config_files(root: Path, excludes: Excludes | None = None,
+                 scope: Path | None = None) -> list[str]:
     """Repo-relative POSIX paths of the ruff, flake8 and mypy config files anywhere
-    under ``root`` (a package's own ``pyproject.toml`` included), the walk
-    ``coverage_gate`` uses: bounded depth, built-in and user excludes."""
+    under ``root``, or under ``scope`` on a scoped run (a package's own ``pyproject.toml``
+    included), the walk ``coverage_gate`` uses: bounded depth, built-in and user excludes."""
     wanted = set(_RUFF_FILES) | set(_FLAKE8_FILES) | set(_MYPY_FILES)
-    return [rel.as_posix() for rel in walk_named(root, excludes or (set(), []), wanted)]
+    return [rel.as_posix()
+            for rel in walk_named(root, excludes or (set(), []), wanted, scope)]
+
+
+def _scope_base(root: Path, scope: Path | str | None) -> Path | None:
+    """The absolute scope directory under the resolved ``root``, or None for a
+    whole-repository run."""
+    if scope is None:
+        return None
+    base = (root / scope).resolve()
+    return None if base == root else base
+
+
+def _nearest_above(root: Path, base: Path | None, applied: list[str], order: tuple[str, ...],
+                   configures: Callable[[Path, str], bool]) -> list[str]:
+    """``applied``, plus, on a scoped run whose scope root has no config for the tool, the
+    one the tool applies to it: the nearest at or above the scope, up to the repository
+    root, in the tool's own order. Ruff walks up from each file, and mypy and flake8 from
+    the directory they run in, so a root config gates a scope that has none (#956)."""
+    if base is None:
+        return applied
+    scope_rel = base.relative_to(root).as_posix()
+    if any(Path(rel).parent.as_posix() == scope_rel for rel in applied):
+        return applied
+    for directory in [base, *base.parents]:
+        if not directory.is_relative_to(root):
+            break
+        for name in order:
+            rel = (directory / name).relative_to(root).as_posix()
+            if (directory / name).is_file() and configures(root, rel):
+                return [rel, *applied]
+    return applied
 
 
 def find_gates(root: Path, coverage_gate: Mapping[str, Any] | None,
-               excludes: Excludes | None = None) -> list[Guardrail]:
-    """Every gate this module reads under ``root``, in kind order then file order."""
-    files = config_files(root, excludes)
+               excludes: Excludes | None = None,
+               scope: Path | None = None) -> list[Guardrail]:
+    """Every gate this module reads under ``root`` (or ``scope``, an absolute directory
+    under it), in kind order then file order."""
+    files = config_files(root, excludes, scope)
+
+    def applied(order: tuple[str, ...], configures: Callable[[Path, str], bool]) -> list[str]:
+        return _nearest_above(root, scope, _applied(root, files, order, configures), order,
+                              configures)
+
     gates: list[Guardrail | None] = [
-        _ruff_gate(root, rel) for rel in _applied(root, files, _RUFF_FILES, _configures_ruff)]
-    gates += [_flake8_gate(root, rel)
-              for rel in _applied(root, files, _FLAKE8_FILES, _configures_flake8)]
+        _ruff_gate(root, rel) for rel in applied(_RUFF_FILES, _configures_ruff)]
+    gates += [_flake8_gate(root, rel) for rel in applied(_FLAKE8_FILES, _configures_flake8)]
     gates += [*_coverage_gates(coverage_gate), _pre_commit_gate(root)]
-    gates += [_mypy_gate(root, rel)
-              for rel in _applied(root, files, _MYPY_FILES, _configures_mypy)]
+    gates += [_mypy_gate(root, rel) for rel in applied(_MYPY_FILES, _configures_mypy)]
     return [gate for gate in gates if gate is not None]
 
 
@@ -392,10 +454,12 @@ def _figure(value: float) -> str:
     return str(int(value)) if value == int(value) else f"{value:g}"
 
 
-def _number_re(value: float) -> re.Pattern[str]:
+def _number_re(value: float, *, decimal: bool = False) -> re.Pattern[str]:
+    """``value`` as a standalone number; ``decimal`` requires a decimal point, so the
+    ratio form of a floor of 100 is ``1.0`` and never a bare ``1`` (#956)."""
     figure = _figure(value)
-    zeros = "0*" if "." in figure else r"(?:\.0+)?"
-    return re.compile(rf"(?<![\d.]){re.escape(figure)}{zeros}(?!\.?\d)")
+    zeros = "0*" if "." in figure else (r"\.0+" if decimal else r"(?:\.0+)?")
+    return re.compile(rf"(?<![\w.]){re.escape(figure)}{zeros}(?!\.?\d|[A-Za-z_])")
 
 
 _RULE_WORDS: dict[GateKind, re.Pattern[str]] = {
@@ -420,8 +484,10 @@ def states(gate: Guardrail, line: str) -> bool:
         return True
     if threshold is None:
         return kind != "coverage_floor" or bool(_COVERAGE_FLOOR_WORDS.search(line))
-    figures = [threshold, threshold / 100] if kind == "coverage_floor" else [threshold]
-    return any(_number_re(figure).search(line) for figure in figures)
+    if _number_re(threshold).search(line):
+        return True
+    return kind == "coverage_floor" and bool(
+        _number_re(threshold / 100, decimal=True).search(line))
 
 
 def snippet(gate: Guardrail) -> str:
@@ -467,15 +533,18 @@ def _instruction_lines(root: Path, files: Iterable[str]) -> tuple[list[tuple[str
 
 def scan_guardrails(repo_root: Path | str, instruction_files: Iterable[str],
                     coverage_gate: Mapping[str, Any] | None,
-                    excludes: Excludes | None = None) -> GuardrailsBlock:
+                    excludes: Excludes | None = None,
+                    scope: Path | str | None = None) -> GuardrailsBlock:
     """Return the ``guardrails`` run-context block for ``repo_root``.
 
     ``instruction_files`` are paths relative to ``repo_root`` (the keys of the
     core's ``instruction_files``); ``coverage_gate`` is that scan's block;
-    ``excludes`` is the user's ``(dirs, patterns)`` pair.
+    ``excludes`` is the user's ``(dirs, patterns)`` pair; ``scope`` (absolute, or
+    relative to ``repo_root``) limits the config walk to that subtree.
     """
-    root = Path(repo_root)
-    gates = find_gates(root, coverage_gate, excludes)
+    root = Path(repo_root).resolve()
+    base = _scope_base(root, scope)
+    gates = find_gates(root, coverage_gate, excludes, base)
     lines, read = _instruction_lines(root, instruction_files)
     for gate in gates:
         where = next((rel for rel, line in lines if states(gate, line)), None)
@@ -491,5 +560,5 @@ def scan_guardrails(repo_root: Path | str, instruction_files: Iterable[str],
         "unstated": len(gates) - stated,
         "stated_pct": round(100.0 * stated / len(gates), 1) if gates else None,
         "instruction_files_read": read,
-        "not_read": list(NOT_READ),
+        "not_read": [*NOT_READ, *(NOT_READ_SCOPED if base is not None else ())],
     }

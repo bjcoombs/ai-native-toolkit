@@ -73,6 +73,7 @@ from typing import Literal
 
 from lib.command_index import RepoIndex, TargetSet, build_index, is_gitignored
 from lib.doc_graph import is_excluded_path
+from lib.dot_source import dot_words
 
 __all__ = [
     "Command", "EXTERNAL_TOOLS", "Resolution", "RepoIndex", "RUNNERS",
@@ -170,8 +171,9 @@ def _tokens(segment: str) -> list[str]:
 
 
 def command_words(text: str) -> list[str]:
-    """Public form of the tokeniser ``resolve`` uses, for callers that classify commands."""
-    return _tokens(text)
+    """Public form of the tokeniser ``resolve`` uses, for callers that classify commands
+    (``. x`` reads as ``source x`` on a CI line, ``lib.dot_source``, #1033)."""
+    return dot_words(_tokens(text))
 
 
 def _cd_target(words: list[str], cwd: str) -> str | None:

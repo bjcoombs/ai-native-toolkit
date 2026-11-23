@@ -1,4 +1,4 @@
-"""Tests for fleet coverage against ghsync's discovery listing (issue #745): lib/fleet_coverage.py
+"""Tests for fleet coverage against ghsync's discovery listing (issue #745): lib/fleet/fleet_coverage.py
 and ``fleet.py --discovered``."""
 from __future__ import annotations
 
@@ -10,11 +10,12 @@ from typing import get_type_hints
 import jsonschema
 import pytest
 
-from lib import fleet_compare, fleet_history
-from lib import fleet_coverage as fc
-from lib.fleet import STATUS_FAILED, STATUS_OK, FleetRow
-from lib.fleet_schema import build_stamp_schema
-from lib.fleet_stamp import build_stamp
+import lib.fleet.fleet_compare as fleet_compare
+import lib.fleet.fleet_history as fleet_history
+import lib.fleet.fleet_coverage as fc
+from lib.fleet.runner import STATUS_FAILED, STATUS_OK, FleetRow
+from lib.fleet.fleet_schema import build_stamp_schema
+from lib.fleet.fleet_stamp import build_stamp
 from test_fleet import make_repo
 from test_fleet_cli import fleet_cli
 

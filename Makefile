@@ -72,18 +72,19 @@ catalog:
 # tests/canaries/).
 regen:
 	cd skills/assess && uv run --locked python scripts/lib/signals_schema.py
-	cd skills/assess && uv run --locked python scripts/lib/fleet_schema.py
-	cd skills/assess && uv run --locked python scripts/lib/fleet_level_schema.py
-	cd skills/assess && uv run --locked python scripts/lib/fleet_group_schema.py
-	cd skills/assess && uv run --locked python scripts/lib/fleet_data_schema.py
-	cd skills/assess && uv run --locked python scripts/lib/fleet_achievements_schema.py
-	cd skills/assess && uv run --locked python scripts/lib/fleet_labels.py
+	cd skills/assess && uv run --locked python scripts/lib/fleet/fleet_schema.py
+	cd skills/assess && uv run --locked python scripts/lib/fleet/fleet_level_schema.py
+	cd skills/assess && uv run --locked python scripts/lib/fleet/fleet_group_schema.py
+	cd skills/assess && uv run --locked python scripts/lib/fleet/fleet_data_schema.py
+	cd skills/assess && uv run --locked python scripts/lib/fleet/fleet_achievements_schema.py
+	cd skills/assess && uv run --locked python scripts/lib/fleet/fleet_labels.py
 	cd skills/assess && uv run --locked python scripts/gen_catalog.py
 	cd skills/assess && uv run --locked python -c "import sys; sys.path.insert(0, 'scripts'); from lib.counts_only import render_doc; open('references/counts-only.md', 'w', encoding='utf-8', newline='\\n').write(render_doc())"
 	cd skills/assess && uv run --locked python tests/fleet_data_fixture.py
 	cd skills/assess && uv run --locked python tests/fleet_diagrams_fixture.py
 	cd skills/assess && uv run --locked python tests/assess_diagrams_fixture.py
 	cd skills/assess && uv run --locked python tests/assess_diagrams_review_fixture.py
+	cd skills/assess && uv run --locked python tests/assess_diagrams_packages_fixture.py
 	cd skills/assess && uv run --locked python tests/fleet_trends_fixture.py
 	cd skills/assess && uv run --locked python tests/fleet_heatmap_fixture.py
 	cd skills/assess && uv run --locked python ../fleet/scripts/heatmap.py tests/fixtures/fleet_heatmap --levels tests/fixtures/fleet_heatmap/levels.toml --output tests/fixtures/fleet_heatmap/expected.svg

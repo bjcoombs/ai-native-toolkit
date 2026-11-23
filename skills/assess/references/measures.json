@@ -2448,7 +2448,8 @@
         "repo_root",
         "instruction_files",
         "coverage_gate",
-        "excludes"
+        "excludes",
+        "scope"
       ],
       "network": false,
       "platform": false,
@@ -4851,7 +4852,8 @@
         "repo_root",
         "instruction_files",
         "coverage_gate",
-        "excludes"
+        "excludes",
+        "scope"
       ],
       "network": false,
       "private": false
@@ -5176,7 +5178,7 @@
       "collector": "core.guardrails",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": "no gate found: nothing to state"
+      "null_means": "no gate found in the run (the scope, on a scoped run): nothing to state"
     },
     {
       "path": "agent_consistency.conflicts",

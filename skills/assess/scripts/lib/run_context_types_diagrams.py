@@ -26,3 +26,19 @@ class WaffleSquare(TypedDict):
     level: int
     category: str  # one of ``assess_diagrams.CATEGORIES``
     reason: str | None  # the not-measured reason code, else None
+
+
+class PackageView(TypedDict):
+    """What the package map draws from one ``structure`` block, and what it leaves out (#942)."""
+
+    ids: list[str]  # the drawn packages, largest first (the block's order)
+    loc: list[int]  # their lines of code, in ``ids`` order
+    cells: dict[str, dict[str, list[int]]]  # from -> to -> [imports, bypass], recorded pairs only
+    package_count: int  # every package of the graph
+    cross_imports: int  # ``cross_package_edges``
+    drawn_imports: int  # imports between drawn packages
+    past_top: int  # recorded imports to or from a package past the drawn ones
+    unrecorded: int  # imports the block does not record (package or pair cap)
+    burrows: int  # ``burrow_edge_count``
+    drawn_bypass: int  # front-door bypasses between drawn packages
+    edge_cap_applied: bool  # ``package_edges`` holds fewer pairs than ``package_edge_count``

@@ -1,4 +1,4 @@
-"""Tests for the fleet platform pass, fleet.py --platform (issue #714): lib/fleet_platform.py.
+"""Tests for the fleet platform pass, fleet.py --platform (issue #714): lib/fleet/fleet_platform.py.
 
 Unit tests drive ``run_platform`` with a fake child; the end-to-end tests run
 the real command over a repository with a github.com remote and a ``gh`` shell
@@ -17,8 +17,8 @@ import pytest
 
 from conftest import skip_without_posix_shell
 
-from lib import fleet_platform
-from lib.fleet import (
+import lib.fleet.fleet_platform as fleet_platform
+from lib.fleet.runner import (
     SCAN_TIMEOUT,
     STATUS_FAILED,
     STATUS_OK,
@@ -27,8 +27,8 @@ from lib.fleet import (
     Target,
     signals_command,
 )
-from lib.fleet_platform import failure_reason, join, platform_scans, run_platform
-from lib.fleet_schema import build_schema, build_stamp_schema
+from lib.fleet.fleet_platform import failure_reason, join, platform_scans, run_platform
+from lib.fleet.fleet_schema import build_schema, build_stamp_schema
 from lib.merged_sample import PR_FIELDS
 from lib.run_context_types import JsonDict
 from lib.signals import NETWORK_REASON, PLATFORM_SCANS

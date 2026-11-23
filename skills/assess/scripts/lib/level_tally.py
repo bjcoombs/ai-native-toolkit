@@ -77,7 +77,7 @@ Every value is a count, a boolean, an id from the model or a reason code, so the
 block survives counts-only output unchanged, and ``dumps_level`` gives identical
 bytes for identical inputs. ``/assess`` writes the result as the run context's
 ``level`` block (``run_context_level``); ``/fleet`` writes one per repository to
-``level.json`` (``lib/fleet_level.py``). Shape: ``LevelResult`` (``lib/level_result_types.py``); the published
+``level.json`` (``lib/fleet/fleet_level.py``). Shape: ``LevelResult`` (``lib/level_result_types.py``); the published
 schema is ``skills/fleet/references/level.schema.json``.
 
 The verified tally and the autonomy Step: result = f(commit, maturity-model version), from

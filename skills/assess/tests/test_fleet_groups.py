@@ -1,4 +1,4 @@
-"""Tests for the fleet group roll-up, lib/fleet_groups.py (issue #568)."""
+"""Tests for the fleet group roll-up, lib/fleet/fleet_groups.py (issue #568)."""
 from __future__ import annotations
 
 import json
@@ -7,9 +7,9 @@ import tomllib
 import jsonschema
 import pytest
 
-from lib import fleet_groups as fg
-from lib.fleet import FLEET_ROW_VERSION, FleetRow
-from lib.fleet_group_schema import SCHEMA_PATH, build_schema, render, type_schema
+import lib.fleet.fleet_groups as fg
+from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
+from lib.fleet.fleet_group_schema import SCHEMA_PATH, build_schema, render, type_schema
 from lib.levels import parse_levels
 from lib.level_signals import DEFAULT_LEVELS, load_default_levels
 from test_fleet_cli import fleet_cli, froot  # noqa: F401 - froot is a fixture
@@ -158,7 +158,7 @@ def test_group_rows_carry_levels_rules_settings_and_distinct_ids():
 
 
 def test_a_group_row_written_before_top_level_still_validates_and_loads(tmp_path):
-    from lib.fleet_view import load_groups
+    from lib.fleet.fleet_view import load_groups
     rows = [_row("grpa/svc1", _scans(20, []))]
     (group,) = fg.roll_up(rows, LEVELS, {"grpa": _fragment("grpa", "on")})
     legacy = {**group, "levels": [{k: v for k, v in r.items() if k != "top_level"} for r in group["levels"]]}
@@ -238,7 +238,7 @@ def test_write_groups_is_sorted_compact_jsonl(tmp_path, monkeypatch):
 
 def test_schema_file_matches_the_type():
     assert SCHEMA_PATH.read_text(encoding="utf-8") == render(), (
-        "regenerate: cd skills/assess && uv run --locked python scripts/lib/fleet_group_schema.py")
+        "regenerate: cd skills/assess && uv run --locked python scripts/lib/fleet/fleet_group_schema.py")
 
 
 def test_schema_mapper_rejects_an_unknown_type():

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/fleet-data.schema.json",
   "title": "fleet data bundle",
-  "description": "fleet-data.json written by skills/fleet/scripts/fleet.py: the run stamp, the maturity model rows, the ownership and system unit trees with rolled-up levels, and per repository its units, web URL, per-row level, value and reason, and its Step, next Step, tally and owner exclusions as level.json gives them, with each unit's Step roll-up. Generated from lib/fleet_data.py by lib/fleet_data_schema.py.",
+  "description": "fleet-data.json written by skills/fleet/scripts/fleet.py: the run stamp, the maturity model rows, the ownership and system unit trees with rolled-up levels, and per repository its units, web URL, per-row level, value and reason, and its Step, next Step, tally and owner exclusions as level.json gives them, with each unit's Step roll-up. Generated from lib/fleet/fleet_data.py by lib/fleet/fleet_data_schema.py.",
   "type": "object",
   "properties": {
     "fleet_data_version": {

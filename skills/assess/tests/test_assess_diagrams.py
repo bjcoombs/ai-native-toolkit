@@ -241,9 +241,10 @@ def test_the_report_cli_checks_the_artifact_directory(tmp_path: Path) -> None:
 
 def test_every_diagram_build_all_draws_gets_the_disk_check(tmp_path: Path) -> None:
     """#943's doc-drift map and review strip go through the same ``assess_dir`` check."""
+    from assess_diagrams_packages_fixture import SMALL
     from assess_diagrams_review_fixture import CTX
     from lib.assess_diagrams_review import ALL_FILES, build_all, write_all
-    diagrams = build_all({**CTX, "level": LEVEL}, MODEL_ROWS)
+    diagrams = build_all({**CTX, "level": LEVEL, "structure": SMALL}, MODEL_ROWS)
     assert {d["file"] for d in diagrams if d["svg"] is not None} == set(ALL_FILES)
     assert ad.diagrams_section(diagrams, tmp_path).count(f"Not drawn: {ad.NOT_ON_DISK}") == len(ALL_FILES)
     write_all(tmp_path, diagrams)

@@ -78,7 +78,7 @@ Artefacts will land at:
 - `$REPO_ROOT/.assess/complexity-stats.json`
 - `$REPO_ROOT/.assess/doc-graph.svg`
 - `$REPO_ROOT/.assess/evidence-waffle.svg` (written by the deterministic core from the level result: one square per maturity-model condition, coloured by state and evidence grade)
-- `$REPO_ROOT/.assess/doc-drift.svg` and `$REPO_ROOT/.assess/review-strip.svg` (written by the deterministic core when their data is available: the docs furthest behind their code, and the review state of each sampled merged change)
+- `$REPO_ROOT/.assess/package-map.svg`, `$REPO_ROOT/.assess/doc-drift.svg` and `$REPO_ROOT/.assess/review-strip.svg` (written by the deterministic core when their data is available: the 20 largest packages as an import matrix with front-door bypasses outlined, the docs furthest behind their code, and the review state of each sampled merged change)
 - `$REPO_ROOT/.assess/assess-report.md`
 
 > **Write-protected repo root?** `/assess` writes `.assess/` into `$REPO_ROOT`, and the treemap/core run as `uv` subprocesses that write there too. If your workflow keeps the repo root pristine and read-only (e.g. a `<repo>-main` clone that teammates branch from, with a hook blocking direct edits), a guard on *your* writes won't stop the subprocess - it just makes the run write into the directory you meant to protect. **Create a worktree first and run `/assess` from there.**

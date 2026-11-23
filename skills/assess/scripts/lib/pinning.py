@@ -17,7 +17,7 @@ excludes, with the lockfile found for it. Read from the files at HEAD
 | ``pubspec.yaml`` | ``pubspec.lock`` | ``dart`` |
 | ``Package.swift`` (with a ``.package(`` dependency) | ``Package.resolved`` beside it, or under ``<name>.xcworkspace/xcshareddata/swiftpm/`` (also inside an ``.xcodeproj``) in its directory | ``swift`` |
 | ``*.csproj``, ``*.fsproj`` (with a ``PackageReference``) | ``packages.lock.json`` beside the project | ``dotnet`` |
-| ``build.gradle``, ``build.gradle.kts`` (with a ``dependencies`` block outside ``buildscript``) | ``gradle.lockfile`` beside it, or ``gradle/verification-metadata.xml`` in its directory or a parent (the build root) | ``jvm`` |
+| ``build.gradle``, ``build.gradle.kts`` (with a ``dependencies`` block, or a Kotlin Multiplatform ``<sourceSet>.dependencies`` block such as ``commonMain.dependencies``, outside ``buildscript``) | ``gradle.lockfile`` beside it, or ``gradle/verification-metadata.xml`` in its directory or a parent (the build root) | ``jvm`` |
 | ``vcpkg.json`` (with dependencies) | a baseline: ``builtin-baseline``, or ``default-registry.baseline`` in an embedded ``vcpkg-configuration`` or a ``vcpkg-configuration.json`` beside it | ``cpp`` |
 | ``conanfile.py``, ``conanfile.txt`` (not a recipe's ``test_package/``) | ``conan.lock`` | ``cpp`` |
 
@@ -25,14 +25,18 @@ A lock is looked for in the manifest's directory and then each parent (a
 workspace root), except the per-project .NET and Gradle locks, which sit beside
 the project they lock.
 
+Files are read as UTF-8 with an optional byte-order mark (``utf-8-sig``), so a
+``package.json``, ``composer.json`` or ``vcpkg.json`` saved with a BOM parses.
+
 Each row carries a ``note``:
 
 - ``skipped_library``: a library whose ecosystem's convention is to commit no
   lock, with none committed: a ``composer.json`` whose ``type`` is ``library``
   or absent (Composer's default), a ``pubspec.yaml`` without ``publish_to:
   none`` (a published package) and a ``Package.swift`` declaring a
-  ``.library(`` product and no ``.executable(`` or ``.executableTarget(`` (an
-  executable makes it an app; comments are not read). The row stays in ``manifests`` for the reader, but
+  ``.library(`` product and no ``.executable(`` product (an executable product
+  makes it an app; an ``.executableTarget(`` alone is a plugin's or a tool's
+  target, not a product; comments are not read). The row stays in ``manifests`` for the reader, but
   ``manifests_total`` and ``unlocked_total`` leave it out, so a repository of
   such libraries alone reads Layer 5 level 2 not measured (``no_manifests``)
   until a not-applicable state exists (#827). A library that commits its lock
@@ -97,13 +101,16 @@ _SWIFT_RESOLVED = re.compile(
 _REQUIREMENTS = re.compile(r"^requirements[\w.-]*\.txt$")
 _PUBLISH_NONE = re.compile(r"""^publish_to:\s*["']?none["']?\s*(?:#.*)?$""", re.MULTILINE)
 _SWIFT_LIBRARY = re.compile(r"\.library\s*\(")
-_SWIFT_EXECUTABLE = re.compile(r"\.executable(?:Target)?\s*\(")
+# An executable *product*. A `.library(` package whose only executable is an `.executableTarget(`
+# (often a build-tool plugin's tool) reads as a library, as the spec on issue #1025 states.
+_SWIFT_EXECUTABLE = re.compile(r"\.executable\s*\(")
 _SWIFT_DEPENDENCY = re.compile(r"\.package\s*\(")
 # A string literal is matched first and kept, so `"**/*IT.class"` never opens a comment.
 _C_COMMENTS = re.compile(r"""("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|/\*.*?\*/|//[^\n]*""", re.DOTALL)
 _BUILDSCRIPT = re.compile(r"\bbuildscript\s*\{")
 # A dependencies block with something in it: `dependencies { }` has nothing to lock.
-_GRADLE_DEPS = re.compile(r"^\s*dependencies\s*\{\s*[^\s}]", re.MULTILINE)
+# A Kotlin Multiplatform accessor (`commonMain.dependencies {`) is one too.
+_GRADLE_DEPS = re.compile(r"^\s*(?:[A-Za-z_]\w*\.)?dependencies\s*\{\s*[^\s}]", re.MULTILINE)
 _CONAN = frozenset({"conanfile.py", "conanfile.txt"})
 _PACKAGE_REFERENCE = re.compile(r"<PackageReference\b")
 
@@ -125,7 +132,7 @@ class PinningBlock(TypedDict):
 
 def _read(root: Path, rel: str) -> str:
     try:
-        return (root / rel).read_text(encoding="utf-8", errors="replace")
+        return (root / rel).read_text(encoding="utf-8-sig", errors="replace")
     except OSError:
         return ""
 

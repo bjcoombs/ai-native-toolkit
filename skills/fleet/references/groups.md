@@ -2,7 +2,7 @@
 
 One line per group (a repository row's `group`), sorted by group, keys sorted.
 Schema: [`references/groups.schema.json`](groups.schema.json).
-Logic: `skills/assess/scripts/lib/fleet_groups.py`.
+Logic: `skills/assess/scripts/lib/fleet/fleet_groups.py`.
 
 | Key | Value |
 |-----|-------|

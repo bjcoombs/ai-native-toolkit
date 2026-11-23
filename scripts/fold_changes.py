@@ -77,19 +77,19 @@ COUNTERS: dict[str, Counter] = {
         lead=("#",),
     ),
     "fleet_data": Counter(
-        Path("skills/assess/scripts/lib/fleet_data.py"),
+        Path("skills/assess/scripts/lib/fleet/fleet_data.py"),
         re.compile(r"^FLEET_DATA_VERSION = (?P<value>[0-9]+)$"),
         "int",
         before=re.compile(r"^# Bump on any change"),
     ),
     "achievements": Counter(
-        Path("skills/assess/scripts/lib/fleet_achievements.py"),
+        Path("skills/assess/scripts/lib/fleet/fleet_achievements.py"),
         re.compile(r"^ACHIEVEMENTS_VERSION = (?P<value>[0-9]+)$"),
         "int",
         before=re.compile(r"^# Bump on any change"),
     ),
     "fleet_row": Counter(
-        Path("skills/assess/scripts/lib/fleet.py"),
+        Path("skills/assess/scripts/lib/fleet/runner.py"),
         re.compile(r"^FLEET_ROW_VERSION = (?P<value>[0-9]+)$"),
         "int",
         explicit="the fleet history readers accept only the current row version, so a bump"

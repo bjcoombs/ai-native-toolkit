@@ -45,7 +45,11 @@ Not filtered: the wiki pages, hotspot pages, badge and report the run
 also writes stay in the target repository's `.assess/` directory and
 carry full text. Only `run-context.counts-only.json` (and an
 `assess_signals.py --counts-only` document) is content-free, with the
-`doc-drift.counts-only.svg` and `review-strip.counts-only.svg` drawn from it.
+`package-map.counts-only.svg`, `doc-drift.counts-only.svg` and
+`review-strip.counts-only.svg` drawn from it. Like the JSON, those copies keep
+path-class values (package ids, doc paths) in clear under `--counts-only` alone;
+only `--hash-paths` or `--hash-salt` hashes them, so share them from a hashed run.
+The evidence waffle has no copy: it names only maturity-model rows and counts.
 
 ## Path-keyed maps
 
