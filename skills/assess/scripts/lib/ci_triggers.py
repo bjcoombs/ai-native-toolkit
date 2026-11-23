@@ -8,7 +8,8 @@ parser), and classifies each CI line as ``ordinary``, ``not_ordinary`` or
 
 GitHub Actions, per workflow file, from its top-level ``on`` key (``"on"`` and
 the YAML 1.1 ``true`` spelling included), as a scalar, a flow list or mapping,
-or a block list or mapping:
+or a block list or mapping (a block list may sit at the ``on`` key's own column,
+``on:`` then ``- push``, as YAML allows for a sequence under a mapping key):
 
 - ``push``, ``pull_request``, ``pull_request_target`` or ``merge_group`` among
   the events: ``ordinary``. Branch and path filters are not read.
@@ -152,7 +153,7 @@ def workflow_events(text: str) -> list[str] | None:
             if not stripped or stripped.startswith("#"):
                 continue
             indent = len(line) - len(line.lstrip(" "))
-            if indent == 0:
+            if indent == 0 and not (child_indent <= 0 and stripped.startswith("- ")):
                 break
             if child_indent < 0:
                 child_indent = indent

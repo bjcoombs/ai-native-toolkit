@@ -179,7 +179,7 @@ from lib.fleet_opportunities_section import opportunities_section  # noqa: E402
 from lib.fleet_level import write_fleet_levels  # noqa: E402
 from lib.measured_appendix import measured_section  # noqa: E402
 from lib.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data  # noqa: E402
-from lib.fleet_targets import TargetSpec, TargetsError, load_targets, resolve  # noqa: E402
+from lib.fleet_targets import TargetSpec, TargetsError, check_units, load_targets, resolve  # noqa: E402
 from lib.fleet_config import FleetConfig, FleetConfigError, config_sha256, parse_fleet_config, read_fleet_config  # noqa: E402
 from lib.fleet_groups import GroupRow, SettingsError, load_settings, roll_up, write_groups  # noqa: E402
 from lib.fleet_hashed import public_freshness, public_groups, public_ids, public_rows  # noqa: E402
@@ -315,9 +315,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--no-history", action="store_true", help="Do not keep this run in the history.")
     parser.add_argument(
         "--targets", metavar="FILE",
-        help=f"Level targets (TOML, lib/fleet_targets.py): each [[target]] names a view, a unit, a "
-             f"team row and a level. OUT/{ACHIEVEMENTS_FILE} credits a target when it is reached and "
-             "the report shows the distance to each. Needs --levels; not part of the run stamp.",
+        help=f"Step targets (TOML, lib/fleet_targets.py): each [[target]] names a view, a unit and a "
+             f"Step (step = 2 or higher). OUT/{ACHIEVEMENTS_FILE} credits a target when the unit's lowest "
+             "Step reaches it and the report shows the gates still missing. Needs --levels with [[steps]]; "
+             "not part of the run stamp.",
     )
     parser.add_argument(
         "--first-achievements", action="store_true",
@@ -554,9 +555,8 @@ def _achievements(out_dir: Path, data: FleetData, stamp: FleetStamp, maturity_mo
     print(f"fleet: achievements: {mine} earned this run over {len(doc['runs'])} comparable run(s) "
           f"-> {ACHIEVEMENTS_FILE}", file=sys.stderr)
     for t in doc["targets"]:
-        if t["level"] is None:
-            print(f"fleet: targets: {t['view']} {t['unit']} has no measured level on {t['row']}",
-                  file=sys.stderr)
+        if t["lowest_step"] is None:
+            print(f"fleet: targets: {t['view']} {t['unit']} has no measured Step this run", file=sys.stderr)
     return section, doc
 
 
@@ -636,7 +636,7 @@ def main(argv: list[str] | None = None) -> int:
             scans = select_scans([s.strip() for s in args.scans.split(",") if s.strip()])
         if args.window is not None:
             parse_window(args.window)
-        level_targets = load_targets(Path(args.targets), maturity_model) if args.targets is not None else []
+        step_targets = load_targets(Path(args.targets), maturity_model) if args.targets is not None else []
         targets = _targets(args)
         if args.discovered is not None:
             discovered = read_discovery(Path(args.discovered), Path(args.root).resolve())
@@ -670,6 +670,11 @@ def main(argv: list[str] | None = None) -> int:
         trees = build_trees((t.repo for t in targets), units, settings, codeowners)
     except UnitsError as e:
         print(f"error: --units {args.units}: {e}", file=sys.stderr)
+        return 2
+    try:
+        check_units(step_targets, trees, frozenset(t.repo for t in targets))
+    except TargetsError as e:
+        print(f"error: --targets {args.targets}: {e}", file=sys.stderr)
         return 2
     for repo in unmatched_repos(units, (t.repo for t in targets)):
         print(f"fleet: units: {repo} is mapped but not in this run; skipped", file=sys.stderr)
@@ -757,7 +762,7 @@ def main(argv: list[str] | None = None) -> int:
                              {repo: f.web_url for repo, f in facts.items()})
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, public, groups, row_signals(data)), earlier)
     credit, achieved = _achievements(out_dir, data, stamp, maturity_model, org_dir, entry,
-                           ids, level_targets,
+                           ids, step_targets,
                            privacy_for(args.full, hash_salt).key, args.first_achievements)
     history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, public, maturity_model)
     _diagrams(out_dir, args.no_diagrams, maturity_model, public, window, history=history, comparison=comparison,

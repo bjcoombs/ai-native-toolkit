@@ -91,7 +91,7 @@ def _head(repo_root: Path) -> str | None:
 
 def include_sources(includes: object) -> tuple[str, ...]:
     """The sources in a lint response's ``includes`` list: a component's ``location``, a
-    project file's ``extra.project``; first appearance kept."""
+    project file's ``extra.project``; stripped, first appearance kept (#958)."""
     out: list[str] = []
     for item in includes if isinstance(includes, list) else ():
         if not isinstance(item, dict):
@@ -102,7 +102,7 @@ def include_sources(includes: object) -> tuple[str, ...]:
         elif item.get("type") == "file":
             extra = item.get("extra")
             source = extra.get("project") if isinstance(extra, dict) else None
-        if isinstance(source, str) and source.strip() and source not in out:
+        if isinstance(source, str) and source.strip() and source.strip() not in out:
             out.append(source.strip())
     return tuple(out)
 
