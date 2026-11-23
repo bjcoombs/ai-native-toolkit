@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from lib import headless_layers as hl
-from lib import promissory_markers as pm
+import lib.keyhole.promissory_markers as pm
 from lib.counts_only import reason_code
 from lib.tool_lookup import (
     RG_MISSING_REASON,

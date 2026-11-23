@@ -15,6 +15,8 @@ repository, without running anything:
   whether pytest is configured; tox environments and nox sessions;
 - the lines of the CI configuration (GitHub Actions workflows, GitLab CI), so a
   command a CI step runs verbatim resolves even when its runner is unknown.
+  ``ci_line_text`` closes up each GitHub ``${{ ... }}`` expression into one word, so
+  ``-Dset=${{ matrix.set }}`` stays one flag (#799).
 
 Files come from ``git ls-files`` when the root is a git repository (tracked
 files only - an untracked Makefile is not part of what the repo ships; a
@@ -381,9 +383,15 @@ def ci_config_files(files: Iterable[str]) -> list[str]:
     )
 
 
+# A GitHub Actions expression (``${{ matrix.module }}``): one opaque word, never three (#799).
+_EXPRESSION = re.compile(r"\$\{\{.*?\}\}")
+
+
 def ci_line_text(line: str) -> str:
-    """One CI configuration line with its ``- ``, ``run:`` / ``script:`` lead and extra spaces dropped."""
+    """One CI configuration line with its ``- ``, ``run:`` / ``script:`` lead and extra spaces
+    dropped, and each ``${{ ... }}`` expression closed up into one word (#799)."""
     text = re.sub(r"^\s*(?:-\s+)?(?:run:|script:)?\s*", "", line)
+    text = _EXPRESSION.sub(lambda m: "".join(m.group(0).split()), text)
     return " ".join(text.split())
 
 

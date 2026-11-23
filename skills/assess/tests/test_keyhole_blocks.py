@@ -9,7 +9,7 @@ in keyhole_helpers.py.
 """
 from __future__ import annotations
 
-from lib import keyhole_signals as ks
+import lib.keyhole.keyhole_signals as ks
 
 
 # --- documentation block -----------------------------------------------------

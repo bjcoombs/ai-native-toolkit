@@ -91,11 +91,17 @@ The pair above is this toolkit assessing a private monorepo. Below is `/assess` 
 
 <table>
   <tr>
+    <th colspan="2">Step ladder</th>
+  </tr>
+  <tr>
+    <td colspan="2"><a href="docs/example-step-ladder.svg"><img alt="Step ladder for llama.cpp: four rungs of agent autonomy, bottom to top - 1 Assisted, an agent can read and help with your code; 2 Supervised agent PRs, an agent opens pull requests and a person reviews each one; 3 Unattended agent PRs, agents open pull requests nobody has to watch; 4 Autonomous loops, agents run longer loops on their own. You are here on Step 3; the instruction-file and CI gates below are in place, and the next gate, a coverage gate is enforced, is highlighted" title="llama.cpp: Step 3 of 4, Unattended agent PRs; next gate: a coverage gate is enforced" src="docs/example-step-ladder.svg"></a></td>
+  </tr>
+  <tr>
     <th width="50%">Evidence waffle</th>
     <th width="50%">Package map</th>
   </tr>
   <tr>
-    <td><a href="docs/example-waffle.svg"><img alt="Evidence waffle for llama.cpp: 24 conditions, one square each, grouped by maturity-model row; 3 met and verified, 3 met and measured, 4 met but only listed from config, 13 not met yet, 1 not measured" title="llama.cpp: 6 counted conditions met (3 verified, 3 measured), 4 listed, 13 not met, 1 not measured" src="docs/example-waffle.svg"></a></td>
+    <td><a href="docs/example-waffle.svg"><img alt="Evidence waffle for llama.cpp: 24 conditions, each row a practice and each square one of its levels, the three Step-gate squares outlined; 3 met and verified, 3 met and measured, 4 met but only listed from config, 13 not met yet, 1 not measured" title="llama.cpp: 6 counted conditions met (3 verified, 3 measured), 4 listed, 13 not met, 1 not measured" src="docs/example-waffle.svg"></a></td>
     <td><a href="docs/example-package-map.svg"><img alt="Package map for llama.cpp's TypeScript import graph: the 20 largest of 77 packages as a matrix of row-imports-column cells; 106 cross-package imports, 84 of them through a front door" title="llama.cpp (TypeScript graph): 77 packages, 106 cross-package imports, 84 through a front door" src="docs/example-package-map.svg"></a></td>
   </tr>
   <tr>
@@ -294,6 +300,7 @@ Runs against the current directory (or pass a path). Produces:
 - `.assess/assess-report.md` - the Step and verified-practices headline, per-layer scorecard, top 3 leverage actions, hotspot callouts
 - `.assess/doc-graph.svg` - the doc-navigability graph shown above
 - `.assess/complexity-heatmap.svg` - the complexity treemap shown above
+- `.assess/step-ladder.svg` - the four Steps as rungs of agent autonomy, the gate between each pair, "You are here" on the run's Step and the next gate highlighted; the report shows it first
 - `.assess/evidence-waffle.svg` - one square per maturity-model condition, showing how much of the level rests on verified or measured evidence
 - `.assess/package-map.svg` - the 20 largest packages as an import matrix, with the imports that bypass a package's front door outlined
 - `.assess/doc-drift.svg` - the 15 docs furthest behind the code they describe, as ranked bars
@@ -484,7 +491,7 @@ ai-native-toolkit/
     ├── superpowers/                   # Design history: plans/ + specs/ behind the skills
     ├── design/                        # Modernization programme specs
     ├── huddle-explainer/              # Narrated skill explainer pipeline
-    └── example-*.svg                  # Real /assess diagrams: heatmaps, doc graphs, waffle, package map, doc drift, review strip
+    └── example-*.svg                  # Real /assess diagrams: heatmaps, doc graphs, Step ladder, waffle, package map, doc drift, review strip
 ```
 
 The [Map of Content](docs/index.md) links each subtree's entry doc: [`skills/README.md`](skills/README.md) for skills, and its own [Agents](docs/index.md#agents) section for `agents/`, which holds no README because Claude Code would load one as an agent.

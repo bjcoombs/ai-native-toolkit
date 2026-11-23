@@ -4,8 +4,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import lib.liveness_scan as liveness
-from lib.liveness_scan import (
+import lib.keyhole.liveness_scan as liveness
+from lib.keyhole.liveness_scan import (
     _parse_deadcode,
     _parse_staticcheck,
     _parse_ts_prune,
@@ -154,7 +154,7 @@ def test_dead_code_excludes_test_fixtures(tmp_path: Path, monkeypatch) -> None:
     """Vulture is told to skip `**/tests/fixtures/**` at scan time, and the
     post-scan filter drops any fixture candidate that slips through, so a
     deliberately-dead fixture file never surfaces as repo dead code (#83)."""
-    from lib.liveness_scan import _under_excluded, _vulture_excludes
+    from lib.keyhole.liveness_scan import _under_excluded, _vulture_excludes
 
     assert "*/tests/fixtures/*" in _vulture_excludes().split(",")
     assert _under_excluded("a/tests/fixtures/sample.py") is True
@@ -498,7 +498,7 @@ def test_scorer_doc_names_every_dead_code_status() -> None:
     emitted = set(re.findall(r'"(?:absent_)?status":\s*"(\w+)"', source))
     emitted |= set(re.findall(r'get\("absent_status",\s*"(\w+)"\)', source))
     assert {"not_applicable", "honest_degrade", "tool_absent"} <= emitted
-    repo_root = lib_dir.parents[3]
+    repo_root = lib_dir.parents[4]
     doc = (repo_root / "agents" / "assess-layer-scorer.md").read_text(encoding="utf-8")
     missing = sorted(s for s in emitted if f"`{s}`" not in doc)
     assert not missing, f"assess-layer-scorer.md does not name: {missing}"

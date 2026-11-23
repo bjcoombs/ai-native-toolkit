@@ -21,7 +21,7 @@ from keyhole_helpers import (
     _MODULAR_STRUCTURE,
     _stale_doc_staleness,
 )
-from lib import keyhole_signals as ks
+import lib.keyhole.keyhole_signals as ks
 
 
 # --- Issue #172: degenerate churn drops churn-derived findings ----------------

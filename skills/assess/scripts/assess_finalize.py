@@ -49,7 +49,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.action_conditions import condition_errors
 from lib.headline import as_headline
 from lib.evidence_check import check_evidence, describe
-from lib.keyhole_signals import mode_for_finding
+from lib.keyhole.keyhole_signals import mode_for_finding
 from lib.mutation_cap import layer6_cap_violation
 from lib.reviewed_findings import action_entries, carried_completed, reopened_status
 from lib.run_context_types import ActionLifecycle, FinalizeInput, JsonDict
@@ -338,7 +338,7 @@ def _match_prior_action(prior: dict[str, list[JsonDict]], action: JsonDict) -> J
 
     A text hit is refused when the two entries share no file. The directive is
     not free text per file: the core renders one canned phrase per finding type
-    (``FINDING_ACTIONS`` in ``lib/keyhole_signals.py``) with the path in its own
+    (``FINDING_ACTIONS`` in ``lib/keyhole/keyhole_signals.py``) with the path in its own
     column, so two hotspots sharing a finding carry byte-identical directives.
     Without the refusal a newly flagged file would inherit the completed status
     of a different file that happened to share the phrase - the very false carry

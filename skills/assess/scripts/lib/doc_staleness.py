@@ -44,14 +44,7 @@ subject can be checked.
 Churn comes from ``lib.git_churn`` -- the same machinery the complexity treemap
 uses, so churn is computed one way across the whole skill.
 
-Doc-staleness metric for Layer 0. Associates each doc with the code it describes through
-`doc_ownership.py`, computes code churn relative to doc maintenance, and
-emits a signed ratio (high = decaying map). `ratio` is the whole-window ratio
-(`window_ratio`, subject churn over doc edits) capped by `code_churn_since_doc_change`,
-the distinct subject commits authored after the doc's last content change, so a doc is a
-decaying map only while it is behind its subject: one corrected after its subject's last
-change scores 0 however busy the window was, and new churn after the fix raises it again.
-Both `stale_hubs` and the `lying_map` join read this capped `ratio`. The association logic
+Both `stale_hubs` and the `lying_map` join read the capped `ratio`. The association logic
 reuses `doc_graph`'s code-link edges. For *generated* docs it reads `doc_provenance`
 (per-doc and via the `[[generated]]` config map) and replaces the churn ratio with a
 source-vs-doc verdict. `last_commit_days` and the instruction grader's `freshness_days`
@@ -70,6 +63,10 @@ every method but `repo-baseline`), `stale_docs` (those `doc_complexity_join.is_s
 marks: ratio above `STALENESS_RATIO_THRESHOLD`, or a newer declared source) and
 `stale_pct` (their share, a whole percent rounded up). Both counts are null on a truncated
 or degenerate history, or with no measured doc, so the doc-freshness row reads unknown.
+A page of only generator directives (`lib.doc_directives`, a mkdocstrings `::: pkg.mod`
+stub with no declared provenance) renders from code at build time: its row carries
+`directive_only: true` and ratio 0, it leaves `measured_docs`, and
+`summary.generator_directive_docs` counts it (#816).
 Paths are repo-relative POSIX (`as_posix`) on every platform. The `modularity` block's `base_doc_dir_ratio`
 is code directories holding a base doc over all code directories; a base doc in a
 directory with no code (`docs/`, `agents/`) counts in neither, so the ratio stays
@@ -84,6 +81,7 @@ from pathlib import Path
 from typing import NotRequired, TypedDict
 
 from lib.doc_complexity_join import is_stale
+from lib.doc_directives import is_directive_only
 from lib.doc_graph import (
     CODE_EXTENSIONS,
     DOC_EXTENSIONS,
@@ -143,6 +141,7 @@ class DocStalenessRow(TypedDict):
     last_change_basis: NotRequired[str]
     last_commit_days_bound: NotRequired[str]
     provenance: NotRequired[DocProvenance]
+    directive_only: NotRequired[bool]
 
 
 class DocAssociation(TypedDict):
@@ -178,11 +177,13 @@ class DocStalenessSummary(TypedDict):
     rounded up so a share is never understated. Both are null when the history
     cannot carry the measure (a truncated or degenerate history) or no doc is
     measured, so a reader sees unknown rather than a false fresh.
+    ``generator_directive_docs`` counts the directive-only pages left out (#816).
     """
 
     measured_docs: int
     stale_docs: int | None
     stale_pct: int | None
+    generator_directive_docs: int
 
 
 class DocStalenessBlock(TypedDict):
@@ -252,6 +253,7 @@ class DocStaleness:
     # whose newest visible change is the boundary has a lower-bound age.
     history_truncated: bool = False
     age_is_lower_bound: bool = False
+    directive_only: bool = False  # generator-directive page (#816)
 
     @property
     def confidence(self) -> str:
@@ -285,6 +287,8 @@ class DocStaleness:
             d["last_change_basis"] = self.last_change_basis
         if self.age_is_lower_bound:
             d["last_commit_days_bound"] = "lower"
+        if self.directive_only:
+            d["directive_only"] = True
         if self.provenance_method:
             d["provenance"] = {
                 "method": self.provenance_method,
@@ -478,13 +482,16 @@ class _ChurnContext:
 def staleness_summary(rows: list[DocStalenessRow], reliable: bool) -> DocStalenessSummary:
     """The ``summary`` counts over the subject-mapped ``rows``; null counts when
     not ``reliable`` or no row is mapped."""
-    mapped = [row for row in rows if row["subject_method"] != REPO_BASELINE
-              or row.get("provenance", {}).get("source_newer") is not None]
+    directive = sum(1 for row in rows if row.get("directive_only"))
+    mapped = [row for row in rows if not row.get("directive_only") and (
+        row["subject_method"] != REPO_BASELINE
+        or row.get("provenance", {}).get("source_newer") is not None)]
     if not reliable or not mapped:
-        return {"measured_docs": len(mapped), "stale_docs": None, "stale_pct": None}
+        return {"measured_docs": len(mapped), "stale_docs": None, "stale_pct": None,
+                "generator_directive_docs": directive}
     stale = sum(1 for row in mapped if is_stale({**row}))
     return {"measured_docs": len(mapped), "stale_docs": stale,
-            "stale_pct": -(-100 * stale // len(mapped))}
+            "stale_pct": -(-100 * stale // len(mapped)), "generator_directive_docs": directive}
 
 
 def _resolve_docs(
@@ -564,7 +571,8 @@ def _doc_row(
     # freshness directly; the churn ratio is left untouched as a secondary
     # signal.
     prov_method, prov_source_rels, generated_by, src_newer = _provenance(d, ctx)
-    if src_newer is False:
+    directive_only = not prov_method and is_directive_only(d)
+    if src_newer is False or directive_only:
         ratio = 0.0
 
     return DocStaleness(
@@ -588,6 +596,7 @@ def _doc_row(
         renames_followed=ctx.renames_complete,
         history_truncated=ctx.clock.truncated,
         age_is_lower_bound=d in ctx.clock.lower_bound,
+        directive_only=directive_only,
     )
 
 

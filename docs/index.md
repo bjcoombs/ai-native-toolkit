@@ -104,4 +104,4 @@ The Six Thinking Hats team, orchestrated by [`/huddle`](../skills/huddle/SKILL.m
 - [Code review instructions](../.github/claude-review-instructions.md) - the guidelines the automated reviewer follows on pull requests.
 - [How to build a narrated skill explainer](./huddle-explainer/README.md) - the repeatable Claude Code + Claude Design + ElevenLabs pipeline, worked through end to end on `/huddle`.
 
-The rendered example SVGs used in the README (the doc-navigability graph and the complexity heatmap before and after the action sweep, the calibration heatmaps, and the evidence waffle, package map, doc-drift map and review strip from a llama.cpp run) live alongside this file in `docs/`.
+The rendered example SVGs used in the README (the doc-navigability graph and the complexity heatmap before and after the action sweep, the calibration heatmaps, and the Step ladder, evidence waffle, package map, doc-drift map and review strip from a llama.cpp run) live alongside this file in `docs/`.
