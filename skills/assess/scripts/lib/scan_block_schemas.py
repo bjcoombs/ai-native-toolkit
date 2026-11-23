@@ -105,7 +105,7 @@ CI_CHECKS: JsonDict = {
         "resolved, and null (unknown) when a CI file pulls jobs from a file this run could not "
         "read (an unresolved GitLab include, a reusable workflow in another repository); basis "
         "says which. Under --platform, a repository with an unresolved GitLab include also gets "
-        "GitLab's merged configuration from the CI lint API (lib/gitlab_ci_lint.py), counted "
+        "GitLab's merged configuration from the CI lint API (lib/hosting/gitlab_ci_lint.py), counted "
         "apart in merged_check_commands; a template resolved offline wins. enforced_check_runs (issue #775) is the same test with "
         "masked checks left out (|| true, continue-on-error: true, allow_failure: true, set +e "
         "without a re-raise; lib/ci_masking.py) and checks off the ordinary triggers left out "
@@ -318,7 +318,7 @@ COVERAGE_GATE: JsonDict = {
 
 DELIVERY: JsonDict = {
     "description": (
-        "How work flows through review to merge (lib/delivery.py), from one shared sample of "
+        "How work flows through review to merge (lib/hosting/delivery.py), from one shared sample of "
         "up to 30 changes merged inside the run window, newest merge first (the sample "
         "review_reality reads). A platform block: present only under --platform (absent "
         "otherwise); a refused read is available false with a reason (no_access on HTTP 403), "
@@ -344,7 +344,7 @@ DELIVERY: JsonDict = {
         "agent_authored_share": _share("changes an agent identity authored"),
         "sample_page_size": _field(
             {"type": ["integer", "null"]},
-            "Changes per heavy read of the sample (lib/merged_sample.py PAGE_SIZE, or half "
+            "Changes per heavy read of the sample (lib/hosting/merged_sample.py PAGE_SIZE, or half "
             "of it after one retry on HTTP 502 or 504); null when no heavy read was made."),
         "unconfirmed_ai_accounts": _field(
             _INT,
@@ -358,7 +358,7 @@ _TOKENS: JsonDict = {"type": "array", "items": {"type": "string"}}
 
 REVIEW_REALITY: JsonDict = {
     "description": (
-        "Whether merged changes were reviewed (lib/review_reality.py), from the shared sample "
+        "Whether merged changes were reviewed (lib/hosting/review_reality.py), from the shared sample "
         "of up to 30 changes merged inside the run window. A platform block: a refused read is "
         "available false with a reason (no_access on HTTP 403), never zeros. Shares are of "
         "merged_count; no title, number, login or name is written."),

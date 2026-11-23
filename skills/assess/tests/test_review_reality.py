@@ -1,8 +1,8 @@
-"""Tests for lib/review_reality.py.
+"""Tests for lib/hosting/review_reality.py.
 
 GitHub is faked with a `gh` shell script first on PATH that logs every call and
 answers from JSON files, so the tests run the real subprocess path through
-lib/gh_cli.py, including the 403 mapping.
+lib/hosting/gh_cli.py, including the 403 mapping.
 """
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ from conftest import skip_without_posix_shell
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib.counts_only import reason_code  # noqa: E402
-from lib.platform_cli import CACHE_ENV  # noqa: E402
-from lib.review_reality import scan_review_reality  # noqa: E402
+from lib.hosting.platform_cli import CACHE_ENV  # noqa: E402
+from lib.hosting.review_reality import scan_review_reality  # noqa: E402
 from lib.signals import collect  # noqa: E402
 
 FAKE_GH = """#!/bin/sh
@@ -260,7 +260,7 @@ def test_review_reality_small_sample_withholds_both_flags(world) -> None:
 def test_review_reality_reports_age_of_oldest_merge() -> None:
     from datetime import datetime, timezone
 
-    from lib.review_reality import summarize
+    from lib.hosting.review_reality import summarize
 
     now = datetime(2026, 9, 19, tzinfo=timezone.utc)
     prs = [_pr(0, merged_at="2026-09-18T12:00:00Z"), _pr(1, merged_at="2026-08-20T00:00:00Z"),

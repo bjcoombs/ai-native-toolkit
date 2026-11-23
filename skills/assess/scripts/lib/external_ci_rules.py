@@ -3,7 +3,7 @@
 ``lib/external_ci.py`` reads the check runs and commit statuses of sampled merged
 pull requests and returns an :class:`ExternalCi`; ``lib/ci_checks.py`` reads that
 value through :func:`as_external`. The two live apart so the offline ``ci_checks``
-scan never imports a platform client (``lib.gh_cli``).
+scan never imports a platform client (``lib.hosting.gh_cli``).
 
 The allowlist: a check run's app slug in ``EXTERNAL_CI_APPS``, or a commit status
 context equal to an entry of ``EXTERNAL_CI_CONTEXTS`` or the entry followed by a

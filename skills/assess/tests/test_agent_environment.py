@@ -3,7 +3,7 @@
 Fixture repositories are built in tmp_path and committed, because the scan reads
 the files at HEAD. GitHub is faked with a `gh` shell script first on PATH (the
 pattern in test_gate_cost.py), so the real subprocess path through
-lib/gh_cli.py runs.
+lib/hosting/gh_cli.py runs.
 """
 from __future__ import annotations
 

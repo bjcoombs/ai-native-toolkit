@@ -5,7 +5,7 @@
 id = "core.config_drift"
 kind = "collector"
 title = "Configuration drift"
-callable = "lib.config_drift:scan_config_drift"
+callable = "lib.hosting.config_drift:scan_config_drift"
 publishes = ["config_drift"]
 reads = ["repo_root"]
 stage = "read_side"

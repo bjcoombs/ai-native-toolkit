@@ -33,11 +33,11 @@ from lib.agent_identity import (  # noqa: E402
 )
 from lib.ai_usage import scan_ai_usage  # noqa: E402
 from lib.counts_only import counts_only_scans  # noqa: E402
-from lib.delivery import agent_authored, hinted_author, scan_delivery  # noqa: E402
-from lib.gitlab_cli import GitlabProject  # noqa: E402
-from lib.merged_sample import MergedSample  # noqa: E402
+from lib.hosting.delivery import agent_authored, hinted_author, scan_delivery  # noqa: E402
+from lib.hosting.gitlab_cli import GitlabProject  # noqa: E402
+from lib.hosting.merged_sample import MergedSample  # noqa: E402
 from lib.fleet_config import parse_fleet_config  # noqa: E402
-from lib.gitlab_notes import NoteClassifier, NoteFacts, classifier_from_config, note_facts  # noqa: E402
+from lib.hosting.gitlab_notes import NoteClassifier, NoteFacts, classifier_from_config, note_facts  # noqa: E402
 
 HINTS = (
     ("noreply@anthropic.com", None),

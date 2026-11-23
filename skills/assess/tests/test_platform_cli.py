@@ -1,4 +1,4 @@
-"""Tests for lib/platform_cli.py: how gh and glab are run (issue #714).
+"""Tests for lib/hosting/platform_cli.py: how gh and glab are run (issue #714).
 
 No prompt (stdin closed, prompt variables set), a bounded 429 backoff that
 honours a printed Retry-After, and the per-run response cache. The CLIs are
@@ -14,9 +14,11 @@ import pytest
 
 from conftest import skip_without_posix_shell
 
-from lib import gh_cli, gitlab_cli, platform_cli
-from lib.gh_cli import GhUnavailable
-from lib.gitlab_cli import GitlabProject
+import lib.hosting.gh_cli as gh_cli
+import lib.hosting.gitlab_cli as gitlab_cli
+import lib.hosting.platform_cli as platform_cli
+from lib.hosting.gh_cli import GhUnavailable
+from lib.hosting.gitlab_cli import GitlabProject
 
 STUB = """#!/bin/sh
 echo "$*" >> "$STUB_DIR/log"
