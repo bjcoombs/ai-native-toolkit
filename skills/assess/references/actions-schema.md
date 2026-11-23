@@ -47,12 +47,13 @@
 | `scope_fence` | string | What NOT to touch. Without it a weak executor over-extends. |
 | `status` | enum | Lifecycle: `pending` \| `claimed` \| `done` \| `reopened`. See below. |
 | `claimed_by` | string \| null | Identifier of the executor that claimed the action; `null` while unclaimed. |
+| `cost` | object, optional | A removal's measured cost, `{metric, path, value}` (`metric` `always_on_lines`: the instruction lines every session loads), copied from the `gap_actions` proposal. Carried through verbatim. |
 | `completed_sha` | string \| null | The commit SHA that satisfied `done_when`; `null` until done. The next run credits the action under "Closed since last run" when this commit landed after the commit the previous run measured (`lib/since_last_run.py`, #1083); commit `.assess/actions.json` for it to count; an uncommitted file reads "not known", never 0. |
 | `mode` | enum | Deterministic execution posture, derived from `finding`: `characterize_first` \| `verify_then_retire` \| `refactor_safe`. See below. |
 
 ### Recommended (passed through when the LLM supplies them)
 
-`layer`, `condition`, `effort`, `files`, `first_step`, and `finding` are carried through verbatim if present. `condition` is the **condition id** of the maturity-model condition the action moves (`<row id>.<level>`, e.g. `layer-5-ci.1`), as the run's level result lists it in `run-context.json` `level.conditions[].id`; it ties the advice to the same conditions as the headline's Step and verified tally (#747). `assess_finalize.py` checks it before writing anything: an id the level result does not list, or a condition named on a run with no level result, is refused with a non-zero exit naming the id, and `actions.json` is left unchanged. An action without `condition` (a finding-driven action) is accepted as before. `finding` is the finding type the action addresses; it drives `mode` derivation and, together with `files`, forms the action's identity for status carry-forward, so supplying both is what keeps a completed action's lifecycle attached to it.
+`layer`, `condition`, `effort`, `files`, `first_step`, `finding` and `cost` are carried through verbatim if present. `condition` is the **condition id** of the maturity-model condition the action moves (`<row id>.<level>`, e.g. `layer-5-ci.1`), as the run's level result lists it in `run-context.json` `level.conditions[].id`; it ties the advice to the same conditions as the headline's Step and verified tally (#747). `assess_finalize.py` checks it before writing anything: an id the level result does not list, or a condition named on a run with no level result, is refused with a non-zero exit naming the id, and `actions.json` is left unchanged. An action without `condition` (a finding-driven action) is accepted as before. `finding` is the finding type the action addresses; it drives `mode` derivation and, together with `files`, forms the action's identity for status carry-forward, so supplying both is what keeps a completed action's lifecycle attached to it.
 
 ## `status` lifecycle
 
@@ -87,13 +88,14 @@ Where several prior entries share a directive, the one sharing a file wins outri
 
 ## `mode` derivation
 
-`mode` is derived deterministically by the finalize step from the action's `finding` type (via `FINDING_MODES` in `lib/keyhole/keyhole_signals.py`) - it is never guessed by the LLM. Each mode traces to one of the write-side tendencies the toolkit guards against:
+`mode` is derived deterministically by the finalize step from the action's `finding` type (`lib.gap_actions.action_mode`: `REMOVAL_MODES` for a removal proposal, else `FINDING_MODES` in `lib/keyhole/keyhole_signals.py`) - it is never guessed by the LLM. Each mode traces to one of the write-side tendencies the toolkit guards against:
 
 | Mode | Posture | Finding types |
 |------|---------|---------------|
 | `characterize_first` | Understand/contract the code before changing it - the risk is acting blind on an unpinned seam or complexity. | `hidden_coupling`, `unexplained_complexity`, `untrusted_hotspot`, `orphaned_understanding`, `override_contradicts_signals` |
 | `verify_then_retire` | A self-description that may be lying - verify whether it is still true, then delete / ticket / escalate. Never trust it as-is. | `lying_map`, `self_referential_tests`, `unactioned_intent`, `candidate_dead_weight` |
 | `refactor_safe` | A bounded island safe to restructure in isolation. | `refactor_boundary`, `accretion_ratchet` |
+| `remove` | Take a practice away because it costs more than it pays, keeping every gate in place (#1084). Advice and credit only: the number of practices is never scored. | `instruction_always_on` (a removal proposal from `gap_actions`, not a keyhole finding) |
 
 An action whose `finding` is absent or unrecognised defaults to `characterize_first` - the conservative "understand before you touch it" posture.
 

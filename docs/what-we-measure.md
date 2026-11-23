@@ -956,10 +956,10 @@ Files that only ever grow get harder to read whole with every addition; this nam
 
 Run plumbing: no row or finding reads this scan.
 
-- Collector: `core.gap_actions`, reading `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`.
+- Collector: `core.gap_actions`, reading `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`, `instruction_placement`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `gap_actions.action` drop, `gap_actions.paths` path, `gap_actions.signal` token, `gap_actions.why` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `gap_actions.action` drop, `gap_actions.cost.metric` token, `gap_actions.cost.path` path, `gap_actions.finding` token, `gap_actions.mode` token, `gap_actions.paths` path, `gap_actions.signal` token, `gap_actions.why` drop.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when:
@@ -1070,8 +1070,8 @@ The scan registry in run order, including the private inputs other scans read.
 | `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci` | `ci_checks` | no |
 | `agent_building` | Agent building | `repo_root` | `agent_building` | no |
 | `layer_grades` | Deterministic layer grades | `instruction_grading`, `nested_instructions` | `layer_grades` | no |
-| `gap_actions` | Gap actions | `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions` | `gap_actions` | no |
 | `instruction_placement` | Instruction placement | `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes` | `instruction_placement` | no |
+| `gap_actions` | Gap actions | `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`, `instruction_placement` | `gap_actions` | no |
 | `agent_consistency` | Cross-agent instruction consistency | `repo_root`, `excludes` | `agent_consistency` | no |
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |
 | `agent_outcome` | Agent commit outcomes | `repo_root`, `scope`, `history_window`, `fleet_config` | `agent_outcome` | no |

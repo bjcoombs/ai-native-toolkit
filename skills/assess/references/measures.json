@@ -3885,7 +3885,8 @@
         "current",
         "archetype",
         "layer_grades",
-        "nested_instructions"
+        "nested_instructions",
+        "instruction_placement"
       ],
       "network": false,
       "platform": false,
@@ -3894,6 +3895,10 @@
         "written": true,
         "strings_kept": {
           "gap_actions.action": "drop",
+          "gap_actions.cost.metric": "token",
+          "gap_actions.cost.path": "path",
+          "gap_actions.finding": "token",
+          "gap_actions.mode": "token",
           "gap_actions.paths": "path",
           "gap_actions.signal": "token",
           "gap_actions.why": "drop"
@@ -4954,23 +4959,6 @@
       "private": false
     },
     {
-      "name": "gap_actions",
-      "title": "Gap actions",
-      "publishes": [
-        "gap_actions"
-      ],
-      "reads": [
-        "coverage_report",
-        "doc_graph",
-        "current",
-        "archetype",
-        "layer_grades",
-        "nested_instructions"
-      ],
-      "network": false,
-      "private": false
-    },
-    {
       "name": "instruction_placement",
       "title": "Instruction placement",
       "publishes": [
@@ -4982,6 +4970,24 @@
         "nested_instructions",
         "scope",
         "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "gap_actions",
+      "title": "Gap actions",
+      "publishes": [
+        "gap_actions"
+      ],
+      "reads": [
+        "coverage_report",
+        "doc_graph",
+        "current",
+        "archetype",
+        "layer_grades",
+        "nested_instructions",
+        "instruction_placement"
       ],
       "network": false,
       "private": false

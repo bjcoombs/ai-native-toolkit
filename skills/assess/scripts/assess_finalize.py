@@ -49,7 +49,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.action_conditions import condition_errors
 from lib.headline import as_headline
 from lib.evidence_check import check_evidence, describe
-from lib.keyhole.keyhole_signals import mode_for_finding
+from lib.gap_actions import action_mode
 from lib.testing.mutation_cap import layer6_cap_violation
 from lib.reviewed_findings import action_entries, carried_completed, reopened_status
 from lib.run_context_types import ActionLifecycle, FinalizeInput, JsonDict
@@ -431,7 +431,7 @@ def _write_actions_contract(
         matched.append(_match_prior_action(prior, a))
         life = _carry_status_fields(matched[-1])
         life["status"] = reopened_status(matched[-1], life["status"])
-        entries.append({**a, **life, "mode": mode_for_finding(a.get("finding"))})
+        entries.append({**a, **life, "mode": action_mode(a.get("finding"))})
     completed = carried_completed(prior, matched)  # done entries that left the Top 3
     payload = {"schema": ACTIONS_SCHEMA_VERSION, "run_id": run_id, "actions": entries,
                **({"completed": completed} if completed else {})}
