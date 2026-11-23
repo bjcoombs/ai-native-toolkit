@@ -1,4 +1,4 @@
-"""Tests for lib/diff_reliability.py: whether the cross-run diff can be trusted
+"""Tests for lib/complexity/diff_reliability.py: whether the cross-run diff can be trusted
 (version stamps, tool versions, schema changes).
 
 Moved out of test_assess_core.py when assess_core's helpers split into
@@ -10,13 +10,13 @@ import json
 from pathlib import Path
 
 from assess_core import build_and_publish_run
-from lib import diff_reliability
+import lib.complexity.diff_reliability as diff_reliability
 
 
 def test_diff_is_reliable_pure_matrix() -> None:
     """Direct unit coverage of the pure reliability decision, independent of the
     full pipeline."""
-    from lib.diff_reliability import _diff_is_reliable
+    from lib.complexity.diff_reliability import _diff_is_reliable
 
     # Missing prior version stamp.
     assert _diff_is_reliable(None, "1.0.0", 1, 1) == (

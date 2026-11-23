@@ -36,7 +36,7 @@ Scoring tiers (size + complexity):
   2. scc       -> keyword-heuristic complexity, covers 200+ languages.
                   Skipped for files lizard already scored. Optional.
      Dart files scc scored also get an approximate per-function breakdown
-     from lib/dart_complexity.py (the `dart-scanner` backend), since lizard
+     from lib/complexity/dart_complexity.py (the `dart-scanner` backend), since lizard
      has no Dart reader.
 
 Churn window auto-widens (12mo -> 24mo -> 5y -> all-time) until at least
@@ -94,12 +94,12 @@ import lizard
 import matplotlib.pyplot as plt
 import numpy as np
 from lib.assess_config import resolve_excludes
-from lib.dart_complexity import BACKEND_NAME as DART_BACKEND, dart_function_scores
+from lib.complexity.dart_complexity import BACKEND_NAME as DART_BACKEND, dart_function_scores
 from lib.git_churn import (
     churn_is_degenerate,
     git_churn_scores, pick_churn_window, rename_paths,
 )
-from lib.generated_files import (
+from lib.complexity.generated_files import (
     GENERATED_NAME_PATTERNS,
     generated_reason,
 )
@@ -107,9 +107,9 @@ from lib.run_context_types import (
     Distribution, FnCcnBlock, GeneratedExclusion, KeyholeBudget,
     ScoredHotspotRow, SizeBlock, SubtreeTokens,
 )
-from lib.scc_coverage import DATA_LANGUAGES, backend_by_language, complexity_unreliable
-from lib.stats_rows import file_ccn_rows, top_lists
-from lib.treemap_render import (
+from lib.complexity.scc_coverage import DATA_LANGUAGES, backend_by_language, complexity_unreliable
+from lib.complexity.stats_rows import file_ccn_rows, top_lists
+from lib.complexity.treemap_render import (
     ColoredFile, Rect, Rgba, adaptive_cap, blend_to_grey, build_tree, layout, plural, write_svg,
 )
 
@@ -144,7 +144,7 @@ EXCLUDE_DIRS = {".git", "node_modules", "dist", "build", "target", "vendor",
 #     files were protobuf bindings).
 # Files that match no glob but declare themselves generated (a header marker)
 # or carry payload-length lines are caught by content in `collect`, via
-# lib.generated_files, and listed in the stats file's `excluded_generated`.
+# lib.complexity.generated_files, and listed in the stats file's `excluded_generated`.
 # Pass --include-artifacts to disable.
 EXCLUDE_FILE_PATTERNS = [
     # --- build artifacts ---
@@ -366,7 +366,7 @@ def _add_dart_scores(files: list[tuple[Path, int, float, str]],
     """Give scc-scored ``.dart`` files the approximate per-function breakdown.
 
     lizard has no Dart reader, so scc scores Dart at file level only; the
-    ``dart-scanner`` backend (lib/dart_complexity.py) fills ``fn_ccn_by_path``,
+    ``dart-scanner`` backend (lib/complexity/dart_complexity.py) fills ``fn_ccn_by_path``,
     the worst function's name and the backend name for each such file.
     """
     for path, _loc, _metric, src in files:
@@ -416,7 +416,7 @@ def collect(root: Path, by: str = "complexity",
     it (the default) for a whole-repo run.
 
     `excluded_generated`, when a list, receives one ``{"path", "reason"}`` entry
-    (repo-relative path) per file the content checks in lib.generated_files
+    (repo-relative path) per file the content checks in lib.complexity.generated_files
     dropped: a generator header in the first lines (``generated-header``) or a
     payload-length average line (``long-lines``). ``include_artifacts`` skips
     those checks as it skips the filename globs.
@@ -788,7 +788,7 @@ def _read_plugin_version() -> str:
 # diff is only trustworthy when both snapshots share this schema; a bump here
 # is a structural change to the sidecar shape (a metric added/removed/redefined)
 # that voids the diff against an older snapshot until the next clean run
-# re-seeds the baseline (lib.diff_reliability._diff_is_reliable reads it).
+# re-seeds the baseline (lib.complexity.diff_reliability._diff_is_reliable reads it).
 STATS_SCHEMA_VERSION = 7  # 2: generated-file content excludes + excluded_generated
                           # 3: generated test-report excludes + loc/est_tokens max_code/max_data
                           # 4: fn_ccn.source list + backend_by_language, rows max_fn_name
@@ -1098,7 +1098,7 @@ def _provenance(files: list[tuple[Path, int, float, str]]) -> dict[str, object]:
         "run_id": _new_run_id(),
         "plugin_version": _read_plugin_version(),
         # Layout version of this sidecar. A cross-run diff is only comparable
-        # when both snapshots share it (lib.diff_reliability._diff_is_reliable).
+        # when both snapshots share it (lib.complexity.diff_reliability._diff_is_reliable).
         "schema_version": STATS_SCHEMA_VERSION,
         # The complexity backends and their captured versions. A backend version
         # change can shift scores, so a later run flags the diff as not
@@ -1173,7 +1173,7 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     uncapped, for the doc-complexity join (issue #556).
 
     ``complexity_unreliable`` lists the scc-only files whose ccn is an order of
-    magnitude below their language's median density (``lib.scc_coverage``,
+    magnitude below their language's median density (``lib.complexity.scc_coverage``,
     issue #590); the run reports them as a ``COMPLEXITY_UNRELIABLE`` anomaly.
     Their rows still rank on the scc figure, which the report labels approximate.
 

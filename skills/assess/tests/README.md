@@ -44,7 +44,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_complexity_treemap_schema_versions.py` | `scripts/complexity-treemap.py` - `ARTIFACT_SCHEMA_VERSION`, `STATS_SCHEMA_VERSION` and tool-version stamps; the one module a schema bump edits |
 | `test_complexity_treemap_stats.py` | `scripts/complexity-treemap.py` - stats-sidecar enrichment: field naming, hotspot rank, per-function ccn, estimated tokens, code/data maxima and distribution blocks |
 | `test_complexity_treemap_exclusions.py` | `scripts/complexity-treemap.py` - `.assess` self-exclusion, `--exclude` and `config.toml` merging, generated-file sniffing and generated test reports |
-| `test_complexity_treemap_render.py` | `scripts/complexity-treemap.py` + `lib/treemap_render.py` - survivor-density hatch overlay, SVG legend, a11y title, tooltips and the size-by tree build |
+| `test_complexity_treemap_render.py` | `scripts/complexity-treemap.py` + `lib/complexity/treemap_render.py` - survivor-density hatch overlay, SVG legend, a11y title, tooltips and the size-by tree build |
 | `test_complexity_treemap_backends.py` | `scripts/complexity-treemap.py` - per-function backends per language (lizard, the approximate Dart scanner), `backend_by_language` and the worst function's name |
 | `test_complexity_treemap_ordering.py` | `scripts/complexity-treemap.py` - the scc-only hint and the tie-break by path across the top lists, the dominant-file warning and largest-first |
 
@@ -77,8 +77,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_liveness_scan.py` | `lib/liveness_scan.py` - dead-code tool output parsers, observability rungs, graceful degradation when tools are absent |
 | `test_test_pressure.py` | `lib/test_pressure/` - mutation tier output parsing, cheap heuristics (test/source ratio, assertion density, gap signal) |
 | `test_ci_workflow.py` | `lib/ci_workflow.py` - template substitution (version, branch, tool steps, path filters), path-filtered workflow detection, literal-dollar escaping, YAML well-formedness, and the `actions/checkout` pin matching this repo's gate workflow and `README.md` |
-| `test_stats_diff.py` | `lib/stats_diff.py` - hotspot transition classification (graduated, regressed, restructured, new, persistent; restructured when the worst function falls while summed complexity rises) and sidecar loading |
-| `test_stats_rows.py` | `lib/stats_rows.py` + `scripts/complexity-treemap.py` - the top-10 lists and the uncapped `files` key, that the doc-complexity join sees a complex file outside every top list, and the one-time diff disarm from the stats schema bump |
+| `test_stats_diff.py` | `lib/complexity/stats_diff.py` - hotspot transition classification (graduated, regressed, restructured, new, persistent; restructured when the worst function falls while summed complexity rises) and sidecar loading |
+| `test_stats_rows.py` | `lib/complexity/stats_rows.py` + `scripts/complexity-treemap.py` - the top-10 lists and the uncapped `files` key, that the doc-complexity join sees a complex file outside every top list, and the one-time diff disarm from the stats schema bump |
 | `test_wiki_writer.py` | `lib/wiki_writer.py` - wiki file rendering (index, log, hotspot pages) and HotspotEntry / LogEntry dataclass behaviour |
 | `test_git_commit_info.py` | `lib/git_churn.py` (`git_commit_info`) - commit snapshot with SHA/timestamp for staleness warnings |
 | `test_instruction_bloat.py` | `lib/agent_instructions_grader.py` - score on always-on size and share (#560): always-on lines past 200, fetch-on-need lines, neither gated on the share flag, B cap past 400 loaded lines, and the grade matching its `instruction_placement` record |
@@ -114,16 +114,16 @@ Every `test_*.py` file in this directory has a row below.
 | `test_coverage_gate.py` | `lib/coverage_gate.py` - configured coverage-threshold detector |
 | `test_coverage_report.py` | `lib/coverage_report.py` - coverage-report parser |
 | `test_dart_capabilities.py` | `lib/dart_capabilities.py` - Dart linting and liveness capability entries |
-| `test_dart_complexity.py` | `lib/dart_complexity.py` - the approximate Dart per-function scanner |
+| `test_dart_complexity.py` | `lib/complexity/dart_complexity.py` - the approximate Dart per-function scanner |
 | `test_decline_markers.py` | `lib/decline_markers.py` - decline-marker provenance and re-offer on a major bump |
-| `test_diff_reliability.py` | `lib/diff_reliability.py` - cross-run diff reliability: version stamps, tool-version changes, schema changes |
+| `test_diff_reliability.py` | `lib/complexity/diff_reliability.py` - cross-run diff reliability: version stamps, tool-version changes, schema changes |
 | `test_doc_provenance.py` | `lib/doc_provenance.py` - provenance-aware staleness of generated docs |
 | `test_doc_claims.py` | `lib/doc_claims.py` - claim checks across the doc set and cross-document contradictions |
 | `test_evidence_check.py` | `lib/evidence_check.py` - deterministic re-check of scorer evidence |
 | `test_scorer_evidence.py` | `lib/evidence_check.py` - the layer scorer's structured evidence contract |
 | `test_gap_actions.py` | `lib/gap_actions.py` - the deterministic Top 3 gap candidates |
 | `test_gate_cost.py` | `lib/gate_cost.py` - the CI gate's Actions cost estimate |
-| `test_generated_files.py` | `lib/generated_files.py` - generated-file header sniff and long-line detector |
+| `test_generated_files.py` | `lib/complexity/generated_files.py` - generated-file header sniff and long-line detector |
 | `test_git_churn.py` | `lib/git_churn.py` - churn-degeneracy detector |
 | `test_instruction_claims.py` | `lib/instruction_claims.py` - verifying claims in agent instruction files |
 | `test_instruction_budget.py` | `lib/instruction_budget.py` - `@import` resolution and the always-loaded budget per tool |
@@ -141,7 +141,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_ownership_parser.py` | `lib/ownership_parser.py` - ownership-map parser |
 | `test_promissory_markers.py` | `lib/promissory_markers.py` - stale TODOs, suppressions and skips |
 | `test_promissory_markers_literals.py` | `lib/promissory_markers.py` and `lib/python_regions.py` - marker text in Python string literals, quoted directives and config files is data, not a marker; docstrings and real comments still count and age |
-| `test_raw_source.py` | `lib/raw_source.py` - raw-source subtree detection |
+| `test_raw_source.py` | `lib/complexity/raw_source.py` - raw-source subtree detection |
 | `test_review_reality.py` | `lib/review_reality.py` - review-automation evidence from merged PRs |
 | `test_reviewed_findings.py` | `lib/reviewed_findings.py` - a done review in the committed `.assess/actions.json` clears `self_referential_tests` from attention and the prescribed actions while the source is unchanged since `completed_sha` (the path keeps a `reviewed` note in `derived_findings`), a later source change re-flags it, entries that do not clear, the mutation refresh, counts-only, and `assess_finalize` keeping done entries under `completed` (#721) |
 | `test_delivery.py` | `lib/delivery.py` + `lib/merged_sample.py` - delivery figures over a recorded, scrubbed `gh pr list` response (`fixtures/platform/`), the windowed two-read GitHub sample and one-read GitLab sample |
@@ -157,7 +157,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_wiki_state.py` | `lib/wiki_state.py` - first-flagged dates and their rekeying through the rename map |
 | `test_run_setup.py` | `lib/run_setup.py` + `lib/core_scans.py` + `lib/run_publish.py` - the setup-stage scan adapters and the publish step |
 | `test_scan_registry_degrade.py` | `lib/scan_registry.py` - degrade by construction: every scan-table entry without a `GATE_REASONS` reason is forced to raise and the run carries the unavailable marker downstream |
-| `test_scc_coverage.py` | `lib/scc_coverage.py` - the implausibly-low scc complexity check, calibrated on real scc output for an under-counted shell script |
+| `test_scc_coverage.py` | `lib/complexity/scc_coverage.py` - the implausibly-low scc complexity check, calibrated on real scc output for an under-counted shell script |
 | `test_counts_only.py` | `lib/counts_only.py` + `lib/counts_only_rules.py` + `lib/counts_only_schema.py` - the content-free run-context mode: every typed string field has a keep/drop/path rule, and the counts-only document drops copied text |
 | `test_counts_only_reason.py` | `lib/counts_only.py` `reason_token` + the `REASON` rule - a full counts-only run keeps `structure.reason` as its code (`no_import_graph_rust` on a Rust repository), never the sentence (#764) |
 | `test_levels.py` | `lib/levels.py` - TOML maturity model loading and deterministic whole-level evaluation |
@@ -206,7 +206,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_smoke.py` | `lib/__init__.py` - confirms the lib package is importable and `__version__` is set |
 | `test_golden_baseline.py` | `tests/golden.py` + dogfood fixtures - guards the regression baseline scaffolding (fixture completeness, normalization idempotency, loader correctness) used by `test_decomposition_parity.py` |
 | `test_golden_svg_render.py` | `scripts/complexity-treemap.py` + `scripts/doc-graph-svg.py` - runs the real renderers and locks their colour encoding |
-| `test_svg_cascade.py` | `lib/treemap_render.py` - the heatmap stylesheet never overrides a `<text>` presentation attribute (the check itself is in `svg_cascade.py`) |
+| `test_svg_cascade.py` | `lib/complexity/treemap_render.py` - the heatmap stylesheet never overrides a `<text>` presentation attribute (the check itself is in `svg_cascade.py`) |
 | `svg_cascade.py` | the CSS-cascade check shared by `test_svg_cascade.py` and `test_golden_svg_render.py` (not a test module) |
 | `test_symlink_walks.py` | the committed `skills/assess/src -> scripts` symlink (relative to the repo root) - the link exists and points at `scripts`; the treemap and the shared walks count linked files once; the mutation pass's scratch copy keeps the link, never links back into the assessed tree, ignores an inherited `GIT_DIR`, and maps focus paths through it both ways |
 | `test_doc_graph_svg.py` | `scripts/doc-graph-svg.py` - the SVG honours the same excludes as the scorer; node encoding, labels and layout; title and summary counts with singular/plural nouns and no em dash; CLI argument checks |

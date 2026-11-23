@@ -1,4 +1,4 @@
-"""Tests for lib.scc_coverage: the implausibly-low scc complexity check (#590).
+"""Tests for lib.complexity.scc_coverage: the implausibly-low scc complexity check (#590).
 
 The calibration rows are real scc 3.5.0 output for the shell scripts of the
 repository the issue came from: ``scripts/doctor.sh`` scored ccn 5 across 2,150
@@ -16,7 +16,7 @@ from test_complexity_treemap import _load_treemap
 
 from assess_report import render_hotspots_table
 from lib.anomaly_detector import detect_anomalies
-from lib.scc_coverage import (
+from lib.complexity.scc_coverage import (
     MIN_UNRELIABLE_NLOC,
     backend_by_language,
     complexity_unreliable,

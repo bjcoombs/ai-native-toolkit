@@ -11,7 +11,7 @@ from assess_core_helpers import _minimal_repo
 from lib import core_scans, run_setup
 from lib.run_publish import publish_run
 from lib.scan_registry import STAGE_SETUP, run_scans
-from lib.stats_diff import StatsDiff
+from lib.complexity.stats_diff import StatsDiff
 
 
 def _setup(repo: Path, scope: Path | None = None) -> tuple[dict, dict]:

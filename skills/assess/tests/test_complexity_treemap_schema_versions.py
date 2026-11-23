@@ -112,7 +112,7 @@ def test_write_stats_version_keys_are_tool_versions_or_listed_non_tools(
     """Every `*_version` key write_stats emits is either a tool version that
     diff_reliability.stats_tool_versions reads or a stamp listed in
     _NON_TOOL_VERSION_KEYS, so the writer and the reader cannot drift."""
-    from lib import diff_reliability
+    import lib.complexity.diff_reliability as diff_reliability
 
     monkeypatch.setattr(treemap, "_scc_version", lambda: "3.7.0")
     root = tmp_path

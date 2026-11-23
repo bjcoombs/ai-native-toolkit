@@ -1,4 +1,4 @@
-"""Tests for lib.dart_complexity, the approximate Dart per-function scanner
+"""Tests for lib.complexity.dart_complexity, the approximate Dart per-function scanner
 (issue #364)."""
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from lib import dart_complexity
-from lib.dart_complexity import dart_function_scores, scan_dart_functions
+import lib.complexity.dart_complexity as dart_complexity
+from lib.complexity.dart_complexity import dart_function_scores, scan_dart_functions
 
 # The acceptance fixture: routeOrder has 10 decision points in its own body and
 # 1 in a nested closure (ccn 12 with the closure folded in), behind about 20
