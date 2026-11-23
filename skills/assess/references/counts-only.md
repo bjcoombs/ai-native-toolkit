@@ -140,6 +140,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `prior_level.tags.countable_not_measured.id` | token |
 | `prior_level.tags.countable_not_measured.reason` | token |
 | `prior_level.reason` | token |
+| `prior_level.baseline.run_id` | token |
+| `prior_level.baseline.head_sha` | token |
+| `prior_level.baseline.held_gates` | token |
 
 ## doc_graph
 
