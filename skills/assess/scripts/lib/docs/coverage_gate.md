@@ -76,6 +76,21 @@ a null from another gate (a templated threshold) keeps its own reason, and a gat
 for every Go and Rust manifest present, even one gating nothing, keeps the normal
 reading, with `unmeasured_reason` null. The collector's manifest `revision` moved to 2 for the
 #788 change of meaning, and to 4 in the 3.0.0 release for the #937 widening.
+Root coverage.py config on a scoped run (#1032, `lib.coverage_root_config`): coverage.py
+reads its config from the directory it runs in, so a root `[tool.coverage]`, `.coveragerc`,
+`setup.cfg` or `tox.ini` floor governs a Python scope with no coverage.py config of its own
+when CI runs coverage from the root. `_root_floor` scans that root config's `fail_under` and
+asks `root_config_applies` where CI's coverage runs run (`working-directory:`, a `cd` in the
+same step or GitLab job, an inherited GitLab `before_script` `cd` reading unresolved,
+`--rcfile` / `--cov-config`). True: the root gates are counted,
+and the root config's `addopts` is read for activation. False (every run resolved, none
+reads the root config): dropped. None: the gates are listed in `gates` but left out of
+`configured`, `max_threshold_percent` and the CI credit of `enforced_meets_minimum`, and
+when they change
+`threshold_meets_minimum` it reads null with `unmeasured_reason`
+`root_coverage_config_unresolved` (so `enforced_basis` is `threshold_not_read`); a root
+floor below 50 leaves false, which is false either way. A scope holding no `.py` file, or
+its own coverage.py config, is not affected. Only CI runs on ordinary triggers count. The manifest `revision` moved to 5 for this change of meaning.
 Adding a gate form: build the gate with `_gate` and the right
 `unit`; `threshold_percent` and both block fields follow with no other change. A form
 whose number is not a coverage percentage (a count) needs its own `unit`, mapped to

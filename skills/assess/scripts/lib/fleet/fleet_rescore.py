@@ -10,7 +10,9 @@ rewritten.
 **Re-score.** Each repository's cells come from ``fleet_data.repo_cells`` over its stored
 scans (values written as counts-only output writes them, ``Privacy().value``), and every
 unit's row roll-ups are recomputed over its members, and so are the Step fields of each
-repository and unit (#944, ``fleet_data.step_fields``, with counts-only privacy) (a version 1 entry's ``mean_share`` and
+repository and unit (#944, ``fleet_data.step_fields``, with counts-only privacy) and the per-tag tally
+of each repository and unit (#1073, ``fleet_data.tag_fields``): an entry written before that tally
+gains it from its stored scans (a version 1 entry's ``mean_share`` and
 ``overall``, which #772 removed, are dropped), using the parents and placements the entry already stores. ``model`` and
 ``run.levels_version`` become this run's. ``rescore`` returns None when a stored repository
 key does not join to a scanned row under this run's key function (another salt), or a
@@ -52,7 +54,8 @@ Re-scores a stored run under the current maturity model and builds the Recount (
 `rescore` rebuilds a history entry's `FleetData` in memory from its stored scans:
 cells from `fleet_data.repo_cells` (values through `Privacy().value`) and each unit's row
 roll-ups (`row_roll_up`) over the stored placements (a version 1 entry's `mean_share` and
-`overall` are dropped, #772); None when a stored key does not join under the run's key
+`overall` are dropped, #772), with the Step fields and the per-tag tally (`tag_fields`,
+`fleet_data_tags.tag_roll_up`, #1073) rebuilt too; None when a stored key does not join under the run's key
 function. `SIGNAL_ALIASES` (old path to new, pure renames only: #783's
 `ci_checks.test_or_lint_runs` to `ci_checks.test_or_lint_configured` and
 `coverage_gate.enforced` to `coverage_gate.configured`) is applied to the scans first
@@ -76,12 +79,17 @@ from lib.fleet.fleet_data import (
     Privacy,
     View,
     model_rows,
+    level_results,
     public_steps,
+    public_tags,
     repo_cells,
     row_roll_up,
     step_fields,
+    tag_fields,
 )
 from lib.fleet.fleet_data_steps import RepoSteps, step_roll_up
+from lib.fleet.fleet_data_tags import tag_roll_up
+from lib.level_result_types import TagCell
 from lib.fleet.fleet_maturity import SCOPE
 from lib.fleet.fleet_next_steps import code, text
 from lib.levels import MaturityModel
@@ -139,6 +147,7 @@ def rescore(data: FleetData, rows: Sequence[FleetRow], model: MaturityModel,
     team_rows = [row for row in model["rows"] if row["scope"] == SCOPE]
     cells: dict[str, list[Cell]] = {}
     steps: dict[str, RepoSteps] = {}
+    tags: dict[str, list[TagCell] | None] = {}
     for repo in data["repos"]:
         row = by_key.get(repo["key"])
         if row is None or (row["status"] == STATUS_OK and not isinstance(row["scans"], dict)):
@@ -146,9 +155,12 @@ def rescore(data: FleetData, rows: Sequence[FleetRow], model: MaturityModel,
         scanned = cast(FleetRow, {**row, "scans": aliased(row["scans"], aliases)}) if row["scans"] else row
         cells[repo["key"]] = [{**cell, "value": Privacy().value(cell["value"])}
                               for cell in repo_cells(team_rows, scanned)]
-        steps[repo["key"]] = public_steps(step_fields(model, [scanned])[scanned["repo"]], Privacy())
+        results = level_results(model, [scanned])
+        steps[repo["key"]] = public_steps(step_fields(model, [scanned], results)[scanned["repo"]], Privacy())
+        tags[repo["key"]] = public_tags(tag_fields(model, results)[scanned["repo"]], Privacy())
     repos: list[DataRepo] = [cast(DataRepo, {**{k: v for k, v in repo.items() if k != "mean_share"},
-                                             "rows": cells[repo["key"]], **steps[repo["key"]]})
+                                             "rows": cells[repo["key"]], **steps[repo["key"]],
+                                             "tags": tags[repo["key"]]})
                              for repo in data["repos"]]
     views: list[View] = []
     for view in data["views"]:
@@ -160,7 +172,7 @@ def rescore(data: FleetData, rows: Sequence[FleetRow], model: MaturityModel,
                       for i, row in enumerate(team_rows)]
             step = step_roll_up(model.get("steps", []), [steps[k] for k in mine])
             units.append(cast(DataUnit, {**{k: v for k, v in unit.items() if k != "overall"}, "levels": levels,
-                                         "step": step}))
+                                         "step": step, "tags": tag_roll_up([tags[k] for k in mine])}))
         views.append({"view": view["view"], "units": units})
     return {**data, "run": {**data["run"], "levels_version": model["version"]}, "model": model_rows(model),
             "views": views, "repos": repos}

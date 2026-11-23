@@ -485,8 +485,8 @@
           "counts": true,
           "criteria": [
             {
-              "key": "layer-4-architecture.2:stats_summary.loc.p95",
-              "signal": "stats_summary.loc.p95",
+              "key": "layer-4-architecture.2:stats_summary.loc_by_class.source.p95",
+              "signal": "stats_summary.loc_by_class.source.p95",
               "producer": {
                 "scan": "stats_summary",
                 "collector": "core.run_header"
@@ -494,10 +494,10 @@
               "op": "lte",
               "value": 500,
               "eq_signal": null,
-              "text": "File size at the 95th percentile: is at most 500",
-              "title": "95% of files are 500 lines or fewer",
+              "text": "Production source file size at the 95th percentile: is at most 500",
+              "title": "95% of production source files are 500 lines or fewer",
               "fix": "Split the largest files along their natural seams.",
-              "why": "With nearly all files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice.",
+              "why": "With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file.",
               "why_source": "",
               "input_class": "head_structure",
               "grade": "measured",
@@ -1656,6 +1656,12 @@
           "means": "The repository holds a go.mod or Cargo.toml with no coverage gate found for it, and no gate of at least 50 percent for another language (a low Python gate beside go.mod is not unmet): its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read.",
           "next_step": "Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines.",
           "carried_in": "unmeasured_reason"
+        },
+        {
+          "code": "root_coverage_config_unresolved",
+          "means": "A scoped run found a fail_under in the root coverage.py config for a Python package with none of its own, but not where CI runs coverage: coverage.py reads the config of the directory it runs in, so the root floor governs the package only when CI runs coverage from the root or names that config.",
+          "next_step": "Run coverage in CI from the repository root (pytest --cov, coverage report), or pass the root config with --cov-config or --rcfile; or give the package its own fail_under and run coverage from its directory or with --cov-config naming that config.",
+          "carried_in": "unmeasured_reason"
         }
       ],
       "evidence": [
@@ -2631,14 +2637,14 @@
           "layer-4-architecture"
         ],
         "conditions": [
-          "layer-4-architecture.2:stats_summary.loc.p95"
+          "layer-4-architecture.2:stats_summary.loc_by_class.source.p95"
         ],
         "findings": []
       },
       "unknown_reasons": [],
       "evidence": [
         {
-          "signal": "stats_summary.loc.p95",
+          "signal": "stats_summary.loc_by_class.source.p95",
           "input_class": "head_structure",
           "grade": "measured"
         }
@@ -4948,6 +4954,18 @@
       ],
       "network": false,
       "private": false
+    },
+    {
+      "name": "unit_rollup",
+      "title": "Monorepo unit roll-up",
+      "publishes": [
+        "unit_rollup"
+      ],
+      "reads": [
+        "unit_levels"
+      ],
+      "network": false,
+      "private": false
     }
   ],
   "signals": [
@@ -5060,8 +5078,8 @@
       "null_means": "the block is omitted with no ownership map"
     },
     {
-      "path": "stats_summary.loc.p95",
-      "title": "File size at the 95th percentile",
+      "path": "stats_summary.loc_by_class.source.p95",
+      "title": "Production source file size at the 95th percentile",
       "type": "number",
       "collector": "core.run_header",
       "input_class": "head_structure",

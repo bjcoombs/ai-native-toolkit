@@ -59,7 +59,7 @@ from collections.abc import Sequence
 from typing import TypedDict
 
 import lib.fleet.fleet_svg as fleet_svg
-from lib.fleet.fleet_svg import (  # the level ramp is shared with the layer bars
+from lib.fleet.fleet_svg import (  # the shared level ramp
     CHAR_W,
     LEVEL_RAMP,
     STEP_TEXT,

@@ -34,6 +34,7 @@ scope = "org"
 
   [[rows.levels]]
   level = 1
+  truth = ["governance"]
   criteria = [{ signal = "two_factor.value", op = "eq", value = "on" }]
 
 [[rows]]
@@ -44,10 +45,12 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
+  truth = ["agent_context", "docs"]  # two tags: in each tag's cell, once in the tally (#1073)
   criteria = [{ signal = "docs.lines", op = "gt", value = 0 }]
 
   [[rows.levels]]
   level = 2
+  truth = ["docs"]
   criteria = [{ signal = "docs.grade", op = "in", value = ["A", "B"] }]
 
 [[rows]]
@@ -58,6 +61,7 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
+  truth = ["behaviour"]
   criteria = [{ signal = "ci.required", op = "eq", value = true }]
 
 # #944: fixture signals have no producer class, so their conditions are listed, never

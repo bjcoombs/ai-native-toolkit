@@ -63,7 +63,10 @@ as 0) and `lowest_level`, the lowest level a measured repository holds on the ro
 `next_step` for the Step above it (`null` at the top Step or when none is measured): `step`,
 `held` (measured repositories below it) and `gates`, every gate of that Step in model order
 with `held` (repositories it holds back) and, of those, `not_measured` and `excluded` (the
-owner excluded the gate's condition, so the Step stays unreached). The roll-up holds no average and names no
+owner excluded the gate's condition, so the Step stays unreached). Each unit also has a `tags`
+roll-up (#1073): `measured` of `repos` (repositories with a per-tag tally; a failed one counts in
+`repos` only, never as zeros) and `cells`, one per truth tag any measured repository carries, in
+the catalog's tag order, each count summed over the measured repositories. The roll-up holds no average and names no
 repository (#772: the no-comparison rule of #740), so `fleet-data.json` version 2 has no
 `mean_share`, `weakest` or `overall`. `org` rows read a group's settings, not a
 repository, so they have no unit roll-up; their levels are in `groups.jsonl`.
@@ -85,7 +88,17 @@ gate of the model's `[[steps]]` that does not hold, once per gate id in Step ord
 tokens only: `gate` (the gate id), `state` (the blocking condition's state) and
 `disposition` (`excluded_by_owner`, else `null`); empty when every gate holds or the
 repository is not measured. A Step target above the repository's next Step reads
-its missing gates from it.
+its missing gates from it. `tags` (#1073) is the per-tag strip of the repository's own
+headline for the same level result: one cell per truth tag a condition carries, in the
+catalog's tag order, with `tag`, `met`, `measured` and `verified` (counted like the tally)
+and `not_measured`, `hazards` and `declined` (the NOT MEASURED, HAZARD and DECLINED counts).
+A condition with several tags is in each of their cells and counted once in the tally.
+`tags` is `null` when the repository is not measured (failed, or without `--levels`). A
+`fleet-data.json` written before this field has no `tags`: a reader takes that, or a
+malformed tally, as not measured, never as zero (`lib/fleet/fleet_data_tags.py`
+`member_tags`), and a re-score under a new maturity-model version rebuilds it from
+the stored scans. Tag names come from the fixed truth-tag list and every other field is a
+count, so the tally names no repository, path or owner.
 
 **Privacy.** `--full` keeps everything. Counts-only (the default) keeps keys, which carry
 the group and team paths (`ownership/acme/platform`) and repository ids unless

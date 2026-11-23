@@ -287,7 +287,7 @@ def _file_size(op: str, value: Operand) -> Guidance | None:
         return None
     bound = f"{number:g} lines or fewer" if op == "lte" else f"fewer than {number:g} lines"
     return {"change": f"Split large source files and enforce a file-size limit in CI, so 95% of "
-                      f"files stay at {bound}.",
+                      f"production source files stay at {bound}.",
             "done_when": f"A CI check turns the job red for a file over the limit, and 95% of source files are "
                          f"{bound}."}
 
@@ -406,7 +406,7 @@ _WORDING: dict[str, Wording] = {
         "be aged.",
         "`git rev-parse --is-shallow-repository` prints `false` and most changed files have "
         "more than one commit in the history."),
-    "stats_summary.loc.p95": _file_size,
+    "stats_summary.loc_by_class.source.p95": _file_size,
     "doc_staleness.summary.stale_pct": _stale_docs,
     "guardrails.stated_pct": _guardrails_stated,
     "agent_consistency.conflicts": _agents_agree,
@@ -476,9 +476,11 @@ _MEASURE_HINTS = {
                  "`modularity_q` null (`modularity_reason: no_import_edges`): modules "
                  "that never import each other have no community structure to measure.",
     "stats_summary": _NEEDS.format("stats_summary", "lizard is not installed (`no_lizard`)")
-                     + " With no file scored (`files_scored` 0, a docs-only repository) "
-                     "the file size is not measured (`no_scored_files`): a percentile of "
-                     "no files says nothing. A full run with no `complexity-stats.json` "
+                     + " With no production source file scored (a docs-only repository, or "
+                     "only tests, fixtures or examples) the file size is not measured "
+                     "(`no_source_files`): a percentile of no files says nothing. A stats "
+                     "sidecar from an older toolkit has no class split (`no_class_split`); "
+                     "rerun `/assess`. A full run with no `complexity-stats.json` "
                      "reads `no_complexity_stats`: the treemap step did not run or did not "
                      "finish, or scored nothing without `scc` on `PATH` (with it, an empty "
                      "set is written as `files_scored` 0). Install `scc`, then check the "
@@ -555,7 +557,11 @@ _MEASURE_HINTS = {
                      "unknown (`unmeasured_reason` `go_rust_gate_form_not_read`): a script "
                      "comparing `go tool cover` to a number is not read, while go-test-coverage's "
                      "`.testcoverage.yml`, `cargo tarpaulin --fail-under` and `cargo llvm-cov "
-                     "--fail-under-lines` are. The block is unavailable when the scan did not run: check "
+                     "--fail-under-lines` are. A scoped run of a Python package with no coverage.py "
+                     "config of its own reads unknown (`root_coverage_config_unresolved`) when "
+                     "the root config's floor would decide it but where CI runs coverage is not "
+                     "resolved: run coverage from the root in CI, or pass `--cov-config`. "
+                     "The block is unavailable when the scan did not run: check "
                      "the fleet run's `--scans` and its `logs/` directory.",
     "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
                      "headless fleet scan does not.",

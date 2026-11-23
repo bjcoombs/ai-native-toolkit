@@ -60,8 +60,8 @@ Semantics:
   carries that absence as a boolean.
 - A statistic over an empty set is unknown, never met or unmet (#906): a signal
   listed in ``signal_grades.EMPTY_DENOMINATORS`` whose set's count reads exactly
-  0 (``stats_summary.loc.p95`` with ``files_scored`` 0) gives an ``unknown``
-  criterion whose ``reason`` is the table's code (``no_scored_files``). A count
+  0 (``stats_summary.loc_by_class.source.p95`` with its ``files_scored`` 0) gives
+  an ``unknown`` criterion whose ``reason`` is the table's code (``no_source_files``). A count
   that is unavailable or absent leaves the usual rules in place: that branch is
   kept for the unmeasured count, such as a headless ``stats_summary`` without
   lizard (``no_lizard``) or a full run whose treemap step wrote no

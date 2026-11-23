@@ -245,7 +245,7 @@ def test_the_slope_chart_is_drawn_only_with_compare(tmp_path, monkeypatch, capsy
     assert "slope.svg skipped: no earlier run compared" in capsys.readouterr().err
     first = (tmp_path / "first" / "report.md").read_text(encoding="utf-8")
     assert "Not drawn: skipped: no earlier run compared (no --compare, or no history entry matched this run)." in first
-    assert "[![Maturity by layer](./layer-bars.svg)](./layer-bars.svg)" in first
+    assert "layer-bars" not in first and "by layer" not in first.lower()  # #1073: the layer bars are retired
     assert not (tmp_path / "first" / "slope.svg").exists()
     assert fleet_cli.main([*base, "--out", "second", "--compare"]) == 0
     slope = (tmp_path / "second" / "slope.svg").read_text(encoding="utf-8")

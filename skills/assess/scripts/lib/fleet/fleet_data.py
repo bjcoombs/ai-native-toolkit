@@ -27,6 +27,12 @@ which a Step target above the next Step reads); each unit carries a ``step`` rol
 its measured repositories, "N of M measured", and for the next Step how many repositories
 each gate holds back (a Step reads its gates only, #1083).
 
+**Tags** (#1073, ``lib/fleet/fleet_data_tags.py``): each repository carries ``tags``, the
+headline's per-tag strip (#844) over the same level result, so it equals the ``tags`` of the
+repository's own headline; null when not measured. Each unit carries a ``tags`` roll-up:
+"N of M measured" and each tag's counts summed over its measured repositories. Tag names
+come from the fixed truth-tag list and the rest are counts.
+
 **Per-repository cell** (one per ``team`` row): ``status`` and ``level`` as
 ``lib.levels.evaluate_row`` gives them, plus the criterion that explains it:
 
@@ -65,6 +71,8 @@ Version 3 (#746) adds `opportunities` (`fleet_opportunities.build_opportunities`
 without a model). `step_fields` gives each repository its Step fields (`fleet_data_steps`)
 from `fleet_level.repo_level`; `public_steps` writes the exclusions' strings under `Privacy`
 (the owner's reason only in `--full`). Additive and unreleased under the run 4 version freeze (#944).
+`level_results` evaluates each scanned repository once (`fleet_level.repo_level`), for both
+`step_fields` and the per-tag tally (`fleet_data_tags.repo_tags`, unit `tag_roll_up`, #1073).
 """
 from __future__ import annotations
 
@@ -87,13 +95,14 @@ from lib.fleet.fleet_data_steps import (
     repo_steps,
     step_roll_up,
 )
+from lib.fleet.fleet_data_tags import TagRollUp, repo_tags, tag_roll_up
 from lib.fleet.fleet_groups import repo_signals
 from lib.fleet.fleet_level import repo_level
 from lib.fleet.fleet_maturity import SCOPE
 from lib.fleet.fleet_opportunities import Opportunities, build_opportunities
 from lib.fleet.fleet_stamp import FleetStamp, RepositoryCounts
 from lib.fleet.fleet_units import Tree
-from lib.level_result_types import NextStep, Tally
+from lib.level_result_types import LevelResult, NextStep, Tally, TagCell
 from lib.levels import Evaluation, MaturityModel, Row, StepDef, evaluate_row
 
 # 1 (#703): first version. 2 (#772): the roll-up drops ``mean_share``, ``weakest`` and
@@ -142,6 +151,7 @@ class DataUnit(TypedDict):
     repos: int  # repositories below the unit, at any depth
     levels: list[RowRollUp]
     step: StepRollUp  # #944
+    tags: TagRollUp  # #1073: the per-tag tally over the repositories below
 
 
 class View(TypedDict):
@@ -179,6 +189,7 @@ class DataRepo(TypedDict):
     tally: Tally | None
     exclusions: list[RepoExclusion]  # the owner's, listed and never counted
     gate_blockers: list[GateBlocker]  # #945: every Step gate that does not hold, as tokens
+    tags: list[TagCell] | None  # #1073: the headline's per-tag strip; None when not measured
 
 
 # The stamp fields RunDetails leaves out: the stamp's own envelope version, the
@@ -316,7 +327,8 @@ def unit_key(view: str, uid: str) -> str:
 
 def build_view(tree: Tree, team_rows: Sequence[Row], cells: Mapping[str, list[Cell]],
                privacy: Privacy, steps: Sequence[StepDef] = (),
-               repo_step: Mapping[str, RepoSteps] | None = None) -> View:
+               repo_step: Mapping[str, RepoSteps] | None = None,
+               tags: Mapping[str, list[TagCell] | None] | None = None) -> View:
     below = _below(tree)
     view = tree["view"]
     units: list[DataUnit] = []
@@ -337,6 +349,7 @@ def build_view(tree: Tree, team_rows: Sequence[Row], cells: Mapping[str, list[Ce
             "repos": len(repos),
             "levels": levels,
             "step": step_roll_up(steps, [(repo_step or {}).get(r, NO_STEPS) for r in repos]),
+            "tags": tag_roll_up([(tags or {}).get(r) for r in repos]),
         })
     return {"view": view, "units": sorted(units, key=lambda u: u["key"])}
 
@@ -362,12 +375,24 @@ def model_rows(maturity_model: MaturityModel | None) -> list[ModelRow]:
             for row in maturity_model["rows"]]
 
 
-def step_fields(maturity_model: MaturityModel | None, rows: Sequence[FleetRow]) -> dict[str, RepoSteps]:
+def level_results(maturity_model: MaturityModel | None, rows: Sequence[FleetRow]) -> dict[str, LevelResult | None]:
+    """Each repository's level result by id; None when failed or without a model."""
+    return {row["repo"]: repo_level(maturity_model, row) if maturity_model is not None
+            and row["status"] == STATUS_OK else None for row in rows}
+
+
+def step_fields(maturity_model: MaturityModel | None, rows: Sequence[FleetRow],
+                results: Mapping[str, LevelResult | None] | None = None) -> dict[str, RepoSteps]:
     """Each repository's Step fields by id: its level result, or none when failed or without a model."""
     steps = maturity_model.get("steps", []) if maturity_model is not None else []
-    return {row["repo"]: repo_steps(repo_level(maturity_model, row) if maturity_model is not None
-                                    and row["status"] == STATUS_OK else None, row["scans"], steps)
-            for row in rows}
+    results = level_results(maturity_model, rows) if results is None else results
+    return {row["repo"]: repo_steps(results[row["repo"]], row["scans"], steps) for row in rows}
+
+
+def tag_fields(maturity_model: MaturityModel | None,
+               results: Mapping[str, LevelResult | None]) -> dict[str, list[TagCell] | None]:
+    """Each repository's per-tag tally by id (#1073); None when it was not measured."""
+    return {repo: repo_tags(result, maturity_model) for repo, result in results.items()}
 
 
 def public_steps(fields: RepoSteps, privacy: Privacy) -> RepoSteps:
@@ -385,6 +410,13 @@ def public_steps(fields: RepoSteps, privacy: Privacy) -> RepoSteps:
     return {**fields, "exclusions": exclusions, "gate_blockers": blockers}
 
 
+def public_tags(cells: list[TagCell] | None, privacy: Privacy) -> list[TagCell] | None:
+    """``cells`` with each tag written under ``privacy``: a token from the fixed list (#1073)."""
+    if cells is None:
+        return None
+    return [{**cell, "tag": privacy.text("repos.tags.tag", cell["tag"]) or ""} for cell in cells]
+
+
 def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model: MaturityModel | None,
                      trees: Sequence[Tree], *, owners: Mapping[str, list[str]] | None = None,
                      web_urls: Mapping[str, str | None] | None = None,
@@ -392,7 +424,9 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
     """The whole document for one run."""
     team_rows = [row for row in (maturity_model["rows"] if maturity_model else []) if row["scope"] == SCOPE]
     cells = {repo["repo"]: repo_cells(team_rows, repo) for repo in rows}
-    repo_step = step_fields(maturity_model, rows)
+    results = level_results(maturity_model, rows)
+    repo_step = step_fields(maturity_model, rows, results)
+    repo_tag = {repo: public_tags(cells, privacy) for repo, cells in tag_fields(maturity_model, results).items()}
     steps = maturity_model.get("steps", []) if maturity_model else []
     owners = owners or {}
     web_urls = web_urls or {}
@@ -412,12 +446,13 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
                       for tree in trees if name in tree["placement"]],
             "rows": [{**cell, "value": privacy.value(cell["value"])} for cell in cells[name]],
             **public_steps(repo_step[name], privacy),
+            "tags": repo_tag[name],
         })
     return {
         "fleet_data_version": FLEET_DATA_VERSION,
         "run": run_details(stamp),
         "model": model_rows(maturity_model),
-        "views": [build_view(tree, team_rows, cells, privacy, steps, repo_step) for tree in trees],
+        "views": [build_view(tree, team_rows, cells, privacy, steps, repo_step, repo_tag) for tree in trees],
         "repos": sorted(repos, key=lambda r: r["key"]),
         "opportunities": build_opportunities(maturity_model, rows, privacy.key),
     }

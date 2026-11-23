@@ -35,7 +35,7 @@ LAYER_SIGNALS = (
     "promissory_markers.aging_reliable",
     "promissory_markers.families.suppression.stale",
     "structure_drift.tier_0.boundary_patterns",
-    "stats_summary.loc.p95",
+    "stats_summary.loc_by_class.source.p95",
 )
 
 LONG_NAME = "a_function_name_long_enough_to_fail_the_forty_character_rule"
