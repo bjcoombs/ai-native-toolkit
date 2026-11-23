@@ -140,6 +140,7 @@ def _decide(practice: dict[str, Any], samples: tuple[list[float], list[float]] =
     (_level("none", PAST), NO_EFFECT, "demoted"),
     (_level("lower_revert", PAST), ([0.1, 0.3] * 4, [0.15, 0.25] * 5), "insufficient_evidence"),
     (_level("lower_revert", PAST), ([0.1], [0.2]), "insufficient_evidence"),
+    (_level("lower_revert", PAST), ([0.0] * 10, [0.0] * 10), "insufficient_evidence"),  # no spread
 ])
 def test_each_status(practice: dict[str, Any], samples: tuple[list[float], list[float]], status: str) -> None:
     doc = _decide(practice, samples)
