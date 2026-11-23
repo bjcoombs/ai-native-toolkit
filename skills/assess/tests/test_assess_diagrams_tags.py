@@ -78,7 +78,7 @@ def test_a_tag_with_no_measured_condition_is_dashed_with_its_reason_never_at_zer
     assert 'data-mark="dot"' not in docs
     assert "not measured: needs GitHub or GitLab access" in docs  # the most frequent reason
     assert "waits on another condition" in _row(svg, "governance")
-    assert "listed from config or a declaration only" in _row(svg, "agent_runtime")
+    assert "its conditions are listed, never counted" in _row(svg, "agent_runtime")
     assert "excluded by the owner or declined" in _row(svg, "supply_chain")
 
 
@@ -128,6 +128,43 @@ def test_an_earlier_run_under_another_model_draws_no_outline_and_says_why_in_one
                     "run fixture-2, so the two do not compare.")
     assert "\n" not in note and "the earlier run used maturity model fixture-1" in svg
     assert note in td.tag_diagrams(OTHER)[0]["caption"]
+
+
+def test_a_same_model_earlier_run_that_measured_nothing_says_so() -> None:
+    blank = {**PRIOR, "tags": [{**row, "met": 0, "measured": 0} for row in PRIOR["tags"]]}
+    drawn = td.tag_diagrams({"level": LEVEL, "prior_level": blank})[0]
+    assert drawn["svg"] is not None and 'data-mark="prior"' not in drawn["svg"]
+    assert "measured no tag" in drawn["caption"] and "Hollow dots" not in drawn["svg"]
+
+
+def _exclude(*tags: str, grades: tuple[str, ...] = ("measured", "verified")) -> dict[str, str]:
+    """``row_state`` of each tag when the owner excludes every countable condition with it."""
+    from lib.level_tags import truth_map
+    model = default_model()
+    graded = level_result(model, {})["conditions"]
+    truth = truth_map(model)
+    ids = [c["id"] for c in graded if c["grade"] in grades and set(truth[c["id"]]) & set(tags)]
+    result = level_result(model, {}, [{"id": cid, "kind": "other", "source": "repo"} for cid in ids])
+    return {r["tag"]: td.row_state(r) for r in result["tags"]}
+
+
+def test_an_owner_exclusion_reads_set_aside_never_listed() -> None:
+    """Through the engine: an excluded countable condition is set aside, not listed."""
+    states = _exclude("governance", "behaviour")
+    assert states["governance"] == "set_aside" and states["behaviour"] == "set_aside"
+    assert "excluded by the owner" in td.dashed_text(
+        next(r for r in level_result(default_model(), {}, [
+            {"id": c["id"], "kind": "other", "source": "repo"}
+            for c in level_result(default_model(), {})["conditions"]])["tags"] if r["tag"] == "behaviour"))
+    # with nothing excluded, a tag of declared and config-only conditions alone reads listed
+    plain = {r["tag"]: td.row_state(r) for r in level_result(default_model(), {})["tags"]}
+    assert plain["agent_runtime"] == "listed" and plain["behaviour"] == "not_measured"
+
+
+def test_countable_grades_are_the_tally_counted_grades() -> None:
+    from lib.level_tags import COUNTABLE_GRADES
+    from lib.level_tally import COUNTED_GRADES
+    assert COUNTABLE_GRADES == COUNTED_GRADES
 
 
 @pytest.mark.parametrize("prior", [None, {"prior_level_version": 99}, "junk"])

@@ -16,10 +16,11 @@ manifest (``manifest_whys.tag_why``, #939). A row reads one of (``row_state``):
 - ``share``: a dot on a shared 0 to 100 percent scale at ``met`` of ``measured``, with the
   counts beside it. A point mark on a line, never a filled area;
 - ``none``: no condition carries the tag yet (``contracts`` today): "not yet measured", no track;
-- ``listed``: its conditions are all listed (config or a declaration), never counted;
-- ``not_measured``: none of its counted conditions was measured; the most frequent reason
-  code (ties by code) in words;
-- ``set_aside``: its counted conditions were excluded by the owner or declined.
+- ``listed``: no condition has a grade the tally counts (config, a declaration or a hazard):
+  ``countable`` is 0;
+- ``not_measured``: a countable condition is not set aside and none was measured; the most
+  frequent reason code (ties by code) in words;
+- ``set_aside``: every countable condition was excluded by the owner or declined.
 
 Every row but ``share`` is a dashed, hollow track with its reason and no dot: a tag that was
 not measured never plots at 0. A real 0 of N measured does.
@@ -59,7 +60,7 @@ TAG_FILES = tuple(HEADINGS)
 STATES = ("share", "none", "listed", "not_measured", "set_aside")
 DASHED_TEXT = {
     "none": "not yet measured: no condition has this tag",
-    "listed": "not measured: listed from config or a declaration only",
+    "listed": "not counted: its conditions are listed, never counted",
     "set_aside": "not measured: excluded by the owner or declined",
 }
 
@@ -89,9 +90,9 @@ def row_state(row: TagRow) -> str:
         return "none"
     if row["measured"] > 0:
         return "share"
-    if row["counted"] == 0:
+    if row["countable"] == 0:
         return "listed"
-    if row["not_measured"]:
+    if row["not_measured"] and row["set_aside"] < row["countable"]:
         return "not_measured"
     return "set_aside"
 
@@ -136,6 +137,13 @@ def tag_whys() -> dict[str, str]:
     return {tag: tag_why(manifest, tag)["why"] or TRUTH_TAG_TITLES[tag] for tag in TRUTH_TAGS}
 
 
+def earlier_shares(prior: Mapping[str, Any] | None, level: Mapping[str, Any]) -> dict[str, tuple[int, int]]:
+    """``(met, measured)`` per tag the earlier run measured, when it used this run's model."""
+    if prior is None or not same_model(prior, level):
+        return {}
+    return {r["tag"]: (r["met"], r["measured"]) for r in prior["tags"] if r["measured"] > 0}
+
+
 def prior_note(prior: Mapping[str, Any] | None, level: Mapping[str, Any]) -> str:
     """The one line about the earlier run's outline dots."""
     if prior is None:
@@ -143,6 +151,8 @@ def prior_note(prior: Mapping[str, Any] | None, level: Mapping[str, Any]) -> str
     if not same_model(prior, level):
         return (f"Earlier dots not drawn: the earlier run used maturity model {prior['levels_version']} "
                 f"and this run {level.get('levels_version')}, so the two do not compare.")
+    if not earlier_shares(prior, level):
+        return "No earlier dots: the earlier run, under the same maturity model, measured no tag."
     return f"Hollow dots: the earlier run, under the same maturity model {level.get('levels_version')}."
 
 
@@ -153,9 +163,7 @@ def _share(met: int, measured: int) -> float:
 def render_strip(level: Mapping[str, Any], rows: Sequence[TagRow], prior: Mapping[str, Any] | None,
                  whys: Mapping[str, str]) -> str:
     """The tag profile strip SVG for one level block's tag rows."""
-    earlier: dict[str, tuple[int, int]] = {}
-    if prior is not None and same_model(prior, level):
-        earlier = {r["tag"]: (r["met"], r["measured"]) for r in prior["tags"] if r["measured"] > 0}
+    earlier = earlier_shares(prior, level)
     labels = [row_label(r) for r in rows]
     label_w = max(svg.text_width(label) for label in labels) + 16
     x0 = PAD + label_w

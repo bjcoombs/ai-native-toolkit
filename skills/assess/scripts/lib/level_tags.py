@@ -11,8 +11,10 @@ tally (``lib/fleet/fleet_data_tags.py``, #1073) read it; ``lib.headline`` re-exp
 always all of them in that fixed order, so two profiles always compare row for row. ``met``
 and ``measured`` are copied from ``tag_cells``, never counted a second time; ``conditions``
 is the number of the model's conditions with the tag (0 for a tag no condition carries yet,
-such as ``contracts``), ``counted`` those the tally can count (a measured or verified grade,
-not a hazard, not excluded by the owner), and ``not_measured`` lists each condition with the
+such as ``contracts``), ``countable`` those the tally can count by grade (``measured`` or
+``verified``, not a hazard; ``COUNTABLE_GRADES`` is ``level_tally.COUNTED_GRADES``), ``set_aside``
+the countable ones the owner excluded (``not_applicable``) or that were declined, and
+``not_measured`` lists each condition with the
 tag that was not measured, with its reason code (``{id, reason}``, as the result's own
 ``not_measured``). A row with ``measured`` 0 is not measured, never a share of 0: the tag
 profile strip (``lib/assess_diagrams_tags.py``) draws it dashed with its reason.
@@ -26,7 +28,11 @@ from lib.level_result_types import LevelResult, TagCell, TagRow
 from lib.levels import MaturityModel
 from lib.levels_fields import TRUTH_TAGS
 
-__all__ = ["tag_cells", "tag_rows", "truth_map"]
+__all__ = ["COUNTABLE_GRADES", "tag_cells", "tag_rows", "truth_map"]
+
+# The grades the tally counts (``lib.level_tally.COUNTED_GRADES``; kept here, below the engine,
+# so the engine can import this module; a test holds the two equal).
+COUNTABLE_GRADES = frozenset({"measured", "verified"})
 
 
 def truth_map(model: MaturityModel) -> dict[str, list[str]]:
@@ -62,11 +68,13 @@ def tag_rows(level: LevelResult, model: MaturityModel) -> list[TagRow]:
     rows: list[TagRow] = []
     for tag in TRUTH_TAGS:
         mine = [c for c in level["conditions"] if tag in truth.get(c["id"], [])]
+        countable = [c for c in mine if c["grade"] in COUNTABLE_GRADES and c.get("polarity") != "hazard"]
         cell = cells.get(tag)
         rows.append({
             "tag": tag,
             "conditions": len(mine),
-            "counted": sum(c["counted"] for c in mine),
+            "countable": len(countable),
+            "set_aside": sum(c["state"] in ("not_applicable", "declined") for c in countable),
             "met": cell["met"] if cell else 0,
             "measured": cell["measured"] if cell else 0,
             "not_measured": [{"id": c["id"], "reason": c.get("reason", "no_value")}

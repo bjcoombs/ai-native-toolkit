@@ -35,7 +35,7 @@ from lib.levels_fields import TRUTH_TAGS
 PRIOR_LEVEL_FILE = "prior-level.json"
 # 1 (#940): the first version.
 PRIOR_LEVEL_VERSION = 1
-_COUNTS = ("conditions", "counted", "met", "measured")
+_COUNTS = ("conditions", "countable", "set_aside", "met", "measured")
 
 
 class PriorLevel(TypedDict):

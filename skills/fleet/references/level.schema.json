@@ -330,7 +330,10 @@
               "conditions": {
                 "type": "integer"
               },
-              "counted": {
+              "countable": {
+                "type": "integer"
+              },
+              "set_aside": {
                 "type": "integer"
               },
               "met": {
@@ -361,10 +364,11 @@
             },
             "required": [
               "conditions",
-              "counted",
+              "countable",
               "measured",
               "met",
               "not_measured",
+              "set_aside",
               "tag"
             ],
             "additionalProperties": false

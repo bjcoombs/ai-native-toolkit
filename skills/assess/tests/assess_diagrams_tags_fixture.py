@@ -24,21 +24,22 @@ from lib.level_result_types import TagRow  # noqa: E402
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "assess_diagrams"
 
 
-def _row(tag: str, conditions: int, counted: int, met: int, measured: int,
+def _row(tag: str, conditions: int, countable: int, set_aside: int, met: int, measured: int,
          missing: tuple[tuple[str, str], ...] = ()) -> TagRow:
-    return {"tag": tag, "conditions": conditions, "counted": counted, "met": met, "measured": measured,
+    return {"tag": tag, "conditions": conditions, "countable": countable, "set_aside": set_aside,
+            "met": met, "measured": measured,
             "not_measured": [{"id": cid, "reason": reason} for cid, reason in missing]}
 
 
 TAGS: list[TagRow] = [
-    _row("behaviour", 3, 3, 2, 3),
-    _row("contracts", 0, 0, 0, 0),
-    _row("docs", 3, 2, 0, 0, (("doc.1", "needs_platform"), ("doc.2", "needs_platform"), ("doc.3", "no_remote"))),
-    _row("structure", 6, 5, 0, 2, (("st.3", "requires:layer-4-architecture.1"),)),
-    _row("agent_context", 6, 4, 4, 4),
-    _row("agent_runtime", 4, 0, 0, 0),
-    _row("governance", 3, 1, 0, 0, (("gov.2", "requires:layer-7-review.1"), ("gov.3", "requires:layer-7-review.1"))),
-    _row("supply_chain", 2, 1, 0, 0),
+    _row("behaviour", 3, 3, 0, 2, 3),
+    _row("contracts", 0, 0, 0, 0, 0),
+    _row("docs", 3, 2, 0, 0, 0, (("doc.1", "needs_platform"), ("doc.2", "needs_platform"), ("doc.3", "no_remote"))),
+    _row("structure", 6, 5, 0, 0, 2, (("st.3", "requires:layer-4-architecture.1"),)),
+    _row("agent_context", 6, 4, 0, 4, 4),
+    _row("agent_runtime", 4, 0, 0, 0, 0),
+    _row("governance", 3, 1, 0, 0, 0, (("gov.2", "requires:layer-7-review.1"), ("gov.3", "requires:layer-7-review.1"))),
+    _row("supply_chain", 2, 1, 1, 0, 0, (("sc.2", "no_value"),)),
 ]
 
 LEVEL: dict[str, Any] = {

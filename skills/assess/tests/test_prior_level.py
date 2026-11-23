@@ -51,11 +51,11 @@ def test_write_then_load_round_trips_the_tags_and_model_version(tmp_path: Path) 
     json.dumps({"prior_level_version": 1, "levels_version": 7, "tags": []}),
     json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [{"tag": "nope"}]}),
     json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [
-        {"tag": "docs", "conditions": 1, "counted": 1, "met": -1, "measured": 1, "not_measured": []}]}),
+        {"tag": "docs", "conditions": 1, "countable": 1, "set_aside": 0, "met": -1, "measured": 1, "not_measured": []}]}),
     json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [
-        {"tag": "docs", "conditions": 1, "counted": 1, "met": True, "measured": 1, "not_measured": []}]}),
+        {"tag": "docs", "conditions": 1, "countable": 1, "set_aside": 0, "met": True, "measured": 1, "not_measured": []}]}),
     json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [
-        {"tag": "docs", "conditions": 1, "counted": 1, "met": 0, "measured": 1, "not_measured": [{"id": 1}]}]}),
+        {"tag": "docs", "conditions": 1, "countable": 1, "set_aside": 0, "met": 0, "measured": 1, "not_measured": [{"id": 1}]}]}),
 ])
 def test_a_malformed_file_reads_none(tmp_path: Path, content: str) -> None:
     (tmp_path / PRIOR_LEVEL_FILE).write_text(content, encoding="utf-8")
@@ -134,3 +134,26 @@ def test_a_run_reads_the_earlier_file_before_writing_its_own(repo: Path) -> None
     assert after["tags"] == second["level"]["tags"]
     ctx = json.loads((repo / ".assess" / "run-context.json").read_text(encoding="utf-8"))
     assert ctx["prior_level"] == stored
+
+
+def test_the_mutation_recount_rewrites_the_file_and_keeps_the_earlier_run(
+        repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``run_opt_in_mutation`` writes the recounted tags and never re-reads the file it replaces."""
+    import assess_core
+    from assess_core import build_and_publish_run
+
+    build_and_publish_run(repo_root=repo, run_date="2026-11-22", non_interactive=True)
+    earlier = load_prior_level(repo / ".assess")
+    build_and_publish_run(repo_root=repo, run_date="2026-11-23", non_interactive=True)
+    ctx_path = repo / ".assess" / "run-context.json"
+    ctx = json.loads(ctx_path.read_text(encoding="utf-8"))
+    assert ctx["prior_level"] == earlier
+    (repo / ".assess" / PRIOR_LEVEL_FILE).write_text("stale", encoding="utf-8")
+    monkeypatch.setattr(assess_core, "mutation_scope", lambda focus: ["src/a.py"])
+    monkeypatch.setattr(assess_core, "scan_test_pressure", lambda *a, **k: ctx["test_pressure"])
+    assert assess_core.run_opt_in_mutation(repo) == 0
+    after = json.loads(ctx_path.read_text(encoding="utf-8"))
+    assert after["prior_level"] == earlier
+    assert load_prior_level(repo / ".assess") == build_prior_level(after["level"])
+    strip = (repo / ".assess" / "tag-profile.svg").read_text(encoding="utf-8")
+    assert "Hollow dots: the earlier run" in strip

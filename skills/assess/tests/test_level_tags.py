@@ -48,20 +48,23 @@ def _level() -> LevelResult:
 def test_every_tag_has_a_row_in_the_fixed_order() -> None:
     rows = tag_rows(_level(), _model())
     assert [r["tag"] for r in rows] == list(TRUTH_TAGS)
-    assert all(r == {"tag": r["tag"], "conditions": 0, "counted": 0, "met": 0, "measured": 0, "not_measured": []}
+    assert all(r == {"tag": r["tag"], "conditions": 0, "countable": 0, "set_aside": 0, "met": 0, "measured": 0,
+                     "not_measured": []}
                for r in rows if r["tag"] in ("contracts", "structure", "agent_context", "agent_runtime"))
 
 
 def test_a_multi_tagged_condition_is_on_each_row_and_the_tally_is_unchanged() -> None:
     rows = {r["tag"]: r for r in tag_rows(_level(), _model())}
     # r.1 carries behaviour and docs: met on both rows
-    assert rows["behaviour"] == {"tag": "behaviour", "conditions": 2, "counted": 2, "met": 1,
+    assert rows["behaviour"] == {"tag": "behaviour", "conditions": 2, "countable": 2, "set_aside": 0, "met": 1,
                                "measured": 2, "not_measured": []}
-    assert rows["docs"] == {"tag": "docs", "conditions": 2, "counted": 2, "met": 1, "measured": 1,
+    assert rows["docs"] == {"tag": "docs", "conditions": 2, "countable": 2, "set_aside": 0, "met": 1, "measured": 1,
                             "not_measured": [{"id": "r.3", "reason": "no_remote"}]}
     assert sum(r["met"] for r in rows.values()) == 3  # r.1 twice, s.3 once
-    assert rows["supply_chain"]["counted"] == 0 and rows["supply_chain"]["measured"] == 0
-    assert rows["governance"]["counted"] == 1 and rows["governance"]["met"] == 1
+    assert rows["supply_chain"]["countable"] == 0 and rows["supply_chain"]["measured"] == 0
+    # s.2 is excluded by the owner: countable by grade, set aside
+    assert rows["governance"]["countable"] == 2 and rows["governance"]["set_aside"] == 1
+    assert rows["governance"]["met"] == 1
 
 
 def test_a_multi_tagged_condition_leaves_the_real_tally_unchanged() -> None:
@@ -100,7 +103,8 @@ def test_corpus_rows_equal_the_strip_cells(name: str) -> None:
     for row in level["tags"]:
         cell = cells.get(row["tag"], {"met": 0, "measured": 0})
         assert (row["met"], row["measured"]) == (cell["met"], cell["measured"])
-        assert row["conditions"] >= row["counted"] >= row["measured"] >= row["met"]
+        assert row["conditions"] >= row["countable"] >= row["measured"] + row["set_aside"]
+        assert row["measured"] >= row["met"]
 
 
 def test_contracts_has_no_condition_in_the_shipped_model() -> None:
