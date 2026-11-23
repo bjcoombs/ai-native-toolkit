@@ -59,8 +59,8 @@ Reason codes of a ``not_measured`` condition (the first unknown criterion's):
   ``needs_full_run``, never unmet, #740; ``aging_reliable`` false:
   ``degenerate_history``). Any other unmet criterion makes the condition unmet;
 - a ``level_signals.EMPTY_DENOMINATORS`` code, when a criterion's signal is a
-  statistic over a set whose count is 0 (``stats_summary.loc.p95`` with
-  ``files_scored`` 0: ``no_scored_files``, #906). ``lib.levels`` reads that
+  statistic over a set whose count is 0 (``stats_summary.loc_by_class.source.p95``
+  with its ``files_scored`` 0: ``no_source_files``, #906, #820). ``lib.levels`` reads that
   criterion as unknown, so the row level and the condition agree, and a real
   unmet sibling criterion still makes the condition unmet;
 - ``needs_full_run``: the block is ``not_registered`` in a headless run;
@@ -115,7 +115,7 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   condition of a gate that is not met, or `{kind: "threshold", threshold, met}`.
 
 Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a set whose count
-is 0, such as `stats_summary.loc.p95` with `files_scored` 0: `no_scored_files`, #906, and
+is 0, such as `stats_summary.loc_by_class.source.p95` with its `files_scored` 0: `no_source_files`, #906 and #820, and
 `agent_environment.pinning.unlocked_total` with `manifests_total` 0: `no_manifests`, #927); an
 `UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
 `needs_platform` for a `network` one; another unavailable block's own code, such as
@@ -279,7 +279,7 @@ def condition_why(row_id: str, level: int, criteria: Sequence[Criterion],
     caller's own model). ``whys`` is ``manifest_whys.condition_whys`` of the core manifest,
     built here when not given."""
     from lib.manifest.check_manifest import condition_key, core_manifest  # lazy: the manifest loads once
-    from lib.manifest_whys import condition_whys
+    from lib.manifest.manifest_whys import condition_whys
     whys = condition_whys(core_manifest()) if whys is None else whys
     found = [whys.get(condition_key(row_id, level, c["signal"]), "") for c in criteria]
     return " ".join(dict.fromkeys(w for w in found if w))
@@ -288,7 +288,7 @@ def condition_why(row_id: str, level: int, criteria: Sequence[Criterion],
 def _add_whys(model: MaturityModel, conditions: Sequence[ConditionResult]) -> None:
     """Set each condition's ``why`` (``condition_why``) where its criteria have one."""
     from lib.manifest.check_manifest import core_manifest
-    from lib.manifest_whys import condition_whys
+    from lib.manifest.manifest_whys import condition_whys
     whys = condition_whys(core_manifest())
     by_id = {c["id"]: c for c in conditions}
     for row in model["rows"]:

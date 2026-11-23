@@ -31,7 +31,7 @@ Plugin-only (Claude Code, no standalone ZIP):
 
 Team-orchestration library skills (invoked by the workflow skills, not standalone):
 
-- [`marathon`](../skills/marathon/SKILL.md) - parallel agent marathon orchestration: DAG analysis, waves, crash recovery, retrospective. Its [forge report](../skills/marathon/forge/forge-report.md) is a real `/skill-forge` run output, kept as a worked example.
+- [`marathon`](../skills/marathon/SKILL.md) - parallel agent marathon orchestration: DAG analysis, waves, crash recovery, retrospective. Its [forge report](../skills/marathon/forge/forge-report.md) is a real `/skill-forge` run output, kept as a worked example. Its [flow control](../skills/marathon/references/flow-control.md) rules size the team by merge throughput, and its [flow metrics](../skills/marathon/references/flow-metrics.md) measure whether they worked.
 - [`pr-review-merge`](../skills/pr-review-merge/SKILL.md) - the PR review-to-green loop plus smart merge.
 - [`ab-equivalence`](../skills/ab-equivalence/SKILL.md) - A/B behavioural equivalence testing: given two document versions and a transfer set, judges per-case equivalence. Composed by `skill-forge` and `semantic-compress`.
 

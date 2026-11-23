@@ -38,6 +38,7 @@ from lib.agents.agent_environment import AgentEnvironmentBlock
 from lib.agents.agent_harness import AgentHarnessBlock
 from lib.agent_instructions_grader import SensitiveFinding
 from lib.ci_checks import CiChecksBlock
+from lib.agent_outcome import AgentOutcomeBlock
 from lib.ai_usage import AiUsageBlock
 from lib.block_shapes import (
     AgentOpsBlock,
@@ -49,7 +50,7 @@ from lib.block_shapes import (
 )
 from lib.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
 from lib.counts_only_rules import PATH_KEYED_MAPS
-from lib.delivery import DeliveryBlock
+from lib.hosting.delivery import DeliveryBlock
 from lib.doc_claims import DocClaimsBlock
 from lib.agent_consistency import AgentConsistencyBlock
 from lib.doc_complexity_join import DocUnit
@@ -59,6 +60,7 @@ from lib.guardrails import GuardrailsBlock
 from lib.instruction_placement import InstructionPlacementBlock
 from lib.liveness_scan import ObservabilityBlock
 from lib.mutation_cap import MutationNotRunCap
+from lib.run_context_types_size import LocByClass
 from lib.run_context_types import (
     AttentionRow,
     DeadCodeBlock,
@@ -142,6 +144,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("prior_findings_snapshot", FindingsSnapshot),
     ("instruction_placement", InstructionPlacementBlock),
     ("ai_usage", AiUsageBlock),
+    ("agent_outcome", AgentOutcomeBlock),
     ("delivery", DeliveryBlock),
     ("doc_claims", DocClaimsBlock),
     ("guardrails", GuardrailsBlock),
@@ -149,6 +152,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("stats_summary.loc", SizeBlock),
     ("stats_summary.est_tokens", SizeBlock),
     ("stats_summary.est_tokens.budget", KeyholeBudget),
+    ("stats_summary.loc_by_class", LocByClass),
     # The blocks a default criterion reads (#793), so a --levels path under them
     # is checked segment by segment at load.
     ("agent_ops", AgentOpsBlock),

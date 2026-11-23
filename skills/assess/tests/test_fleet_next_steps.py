@@ -334,7 +334,7 @@ def test_every_default_levels_signal_has_repository_native_wording():
     ("structure.modularity_q", "gte", 0.3, "at least 0.3"),
     ("structure.front_door_ratio", "gte", 0.9, "At least 90% of imports"),
     ("promissory_markers.families.suppression.stale", "lte", 10, "10 or fewer suppressions"),
-    ("stats_summary.loc.p95", "lte", 500, "500 lines or fewer"),
+    ("stats_summary.loc_by_class.source.p95", "lte", 500, "500 lines or fewer"),
     ("structure_drift.tier_0.matched_patterns", "gt", 0, "CODEOWNERS"),
     ("coverage_gate.threshold_meets_minimum", "eq", True, "below 50 does not count"),
     ("structure_drift.tier_0.boundary_patterns", "gt", 0, "tracked, non-excluded source file"),
@@ -359,7 +359,7 @@ def test_a_strict_bound_is_never_worded_at_least(signal):
     ("agent_environment.layer5_cap.applies", "eq", True), ("two_factor.value", "lt", 1),
     ("nested_instructions.budget.claude_code.bytes", "lt", 5), ("unknown.signal", "eq", 1),
     ("review_reality.approved_share", "lt", 0.5), ("structure.modularity_q", "lt", 0.3),
-    ("promissory_markers.families.suppression.total", "eq", 0), ("stats_summary.loc.p95", "gt", 5),
+    ("promissory_markers.families.suppression.total", "eq", 0), ("stats_summary.loc_by_class.source.p95", "gt", 5),
     ("structure.front_door_ratio", "lt", 0.9), ("structure_drift.tier_0.boundary_patterns", "eq", 0),
     ("structure_drift.tier_0.matched_patterns", "eq", 0),
     ("promissory_markers.families.suppression.stale", "gt", 10),
@@ -385,7 +385,7 @@ def test_measure_hints():
     assert "unread_ci_system" in hint and "Jenkins" in hint and "CircleCI" in hint   # #787
     assert "cannot read those systems" in hint and "nothing in the repository needs to change" in hint
     assert "`enforced_basis: external_ci`" in hint and "`OWNERS_ALIASES`" in hint   # #928
-    assert "`no_lizard`" in measure_hint("stats_summary.loc.p95")
+    assert "`no_lizard`" in measure_hint("stats_summary.loc_by_class.source.p95")
     assert "full `/assess` run" not in measure_hint("structure_drift.tier_0.boundary_patterns")
     assert "no lint suppressions" in measure_hint("promissory_markers.families.suppression.total")
     assert "`DESIGN.md`" in measure_hint("structure_drift.tier_0.boundary_patterns")

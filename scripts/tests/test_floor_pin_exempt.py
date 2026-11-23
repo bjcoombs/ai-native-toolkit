@@ -173,7 +173,8 @@ def _filter_step_script() -> str:
 
 
 def _run_filter(
-    root: Path, base: str, author: str, tmp_path: Path, actor: str | None = None
+    root: Path, base: str, author: str, tmp_path: Path, actor: str | None = None,
+    event: str = "pull_request",
 ) -> str:
     if sys.platform == "win32":
         pytest.skip("runs floor.yml's canary path filter step, an ubuntu-latest bash step, "
@@ -193,6 +194,7 @@ def _run_filter(
         "PATH": f"{bindir}{os.pathsep}{os.environ['PATH']}",
         "RUNNER_TEMP": str(runner_temp),
         "GITHUB_OUTPUT": str(output),
+        "EVENT_NAME": event,
         "BASE_REF": "main",
         "PR_AUTHOR": author,
         "PR_ACTOR": author if actor is None else actor,

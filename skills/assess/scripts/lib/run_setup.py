@@ -236,6 +236,10 @@ by the same step just before it rewrites findings.json.
                if current.get("available") is False else {}),
             "files_scored": None if current.get("available") is False else current.get("files_scored", 0),
             "loc": current.get("loc", {}),
+            # Lines per path class (#820). A sidecar from before it reads unavailable, never 0;
+            # with no sidecar at all the outer marker already names the cause.
+            **({} if current.get("available") is False else {"loc_by_class": current.get("loc_by_class") or {
+                "available": False, "reason": "no_class_split: the stats sidecar predates loc_by_class"}}),
             "est_tokens": current.get("est_tokens", {}),
             "ccn": current.get("ccn", {}),
             "top_hotspots": current.get("top_hotspots", []),

@@ -1,10 +1,10 @@
-"""Tests for lib/delivery.py and lib/merged_sample.py (issue #715).
+"""Tests for lib/hosting/delivery.py and lib/hosting/merged_sample.py (issue #715).
 
 The GitHub figures are computed over ``fixtures/platform/github_merged_prs.json``,
 a recorded ``gh pr list --json`` response from a real repository with every
 title and comment body replaced and the maintainer's login renamed. Bot probes
 are answered by a stub classifier, and the sample's listing calls are replaced
-in ``lib.merged_sample``, so nothing reaches the network.
+in ``lib.hosting.merged_sample``, so nothing reaches the network.
 """
 from __future__ import annotations
 
@@ -19,17 +19,17 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib import merged_sample as ms  # noqa: E402
-from lib.delivery import (  # noqa: E402
+import lib.hosting.merged_sample as ms  # noqa: E402
+from lib.hosting.delivery import (  # noqa: E402
     AI_REVIEWERS, DeliveryBlock, agent_authored, ai_reviewed, first_human_comment, percentile,
     scan_delivery,
 )
 from lib.counts_only import counts_only_scans  # noqa: E402
 from lib.fleet_config import parse_fleet_config  # noqa: E402
-from lib.gh_cli import GhUnavailable, GithubRepo  # noqa: E402
-from lib.gitlab_cli import GitlabProject  # noqa: E402
-from lib.gitlab_notes import NoteFacts  # noqa: E402
-from lib.merged_sample import BotClassifier, MergedSample  # noqa: E402
+from lib.hosting.gh_cli import GhUnavailable, GithubRepo  # noqa: E402
+from lib.hosting.gitlab_cli import GitlabProject  # noqa: E402
+from lib.hosting.gitlab_notes import NoteFacts  # noqa: E402
+from lib.hosting.merged_sample import BotClassifier, MergedSample  # noqa: E402
 
 RECORDED = Path(__file__).resolve().parent / "fixtures" / "platform" / "github_merged_prs.json"
 REPO = GithubRepo("acme", "widget")

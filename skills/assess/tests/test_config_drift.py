@@ -1,4 +1,4 @@
-"""Tests for lib/config_drift.py and the shared gh helper lib/gh_cli.py.
+"""Tests for lib/hosting/config_drift.py and the shared gh helper lib/hosting/gh_cli.py.
 
 GitHub is faked with a `gh` shell script placed first on PATH: it logs every
 call and answers from JSON files in a directory, so the tests exercise the real
@@ -19,8 +19,8 @@ from conftest import skip_without_posix_shell
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.config_drift import diff_values, find_snapshots, scan_config_drift  # noqa: E402
-from lib.gh_cli import (  # noqa: E402
+from lib.hosting.config_drift import diff_values, find_snapshots, scan_config_drift  # noqa: E402
+from lib.hosting.gh_cli import (  # noqa: E402
     GhUnavailable,
     gh_json,
     open_github,
@@ -362,7 +362,7 @@ def test_ruleset_list_excludes_inherited_rulesets(world) -> None:
 
 
 def test_json_without_a_snapshot_key_is_not_parsed(world, monkeypatch) -> None:
-    import lib.config_drift as cd
+    import lib.hosting.config_drift as cd
 
     world.track("data/big.json", {"items": list(range(100))})
     parsed: list[str] = []
@@ -386,7 +386,7 @@ def test_entries_rank_worst_first(world) -> None:
 
 
 def test_entries_are_capped_with_a_dropped_count(world) -> None:
-    from lib.config_drift import MAX_ENTRIES
+    from lib.hosting.config_drift import MAX_ENTRIES
     n = MAX_ENTRIES + 7
     tracked = _ruleset(False)
     tracked["rules"] = [{"type": f"rule-{i:02d}", "parameters": {"v": 1}} for i in range(n)]

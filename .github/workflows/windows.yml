@@ -32,11 +32,17 @@ name: Windows
 # skip_without_posix_shell() from a fixture that puts a #!/bin/sh gh/glab stub
 # on PATH.
 
+# merge_group: the merge queue runs the legs and the aggregator on main plus
+# the queued pull requests (#1088). Every leg runs in full there, the ghsync
+# leg included: the path gate below runs its suites on any event but a pull
+# request.
 on:
   pull_request:
     branches: [main]
   push:
     branches: [main]
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read

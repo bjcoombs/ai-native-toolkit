@@ -30,6 +30,7 @@ from pathlib import Path
 from assess_core import build_and_publish_run
 from assess_report import render_report
 from golden import normalize_report
+from lib.class_sizes import loc_by_class
 
 # skills/assess/tests/ -> repo root is three parents up from this file's dir.
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -49,6 +50,7 @@ def _build_parity_fixture(repo: Path) -> Path:
     stats = {
         "files_scored": 3,
         "loc": {"p50": 30.0, "p95": 200.0, "max": 500.0, "total": 600},
+        "loc_by_class": loc_by_class([("src/a.py", 500), ("src/b.py", 80), ("src/c.py", 20)]),
         "ccn": {"p50": 2.0, "p95": 8.0, "max": 20.0, "basis": "file-aggregate"},
         "top_hotspots": [
             {"path": "src/a.py", "loc": 500, "ccn": 20.0, "commits": 5},

@@ -92,28 +92,29 @@ from lib.agent_consistency import scan_agent_consistency
 from lib.agents.agent_environment import scan_agent_environment
 from lib.agents.agent_harness import scan_agent_harness
 from lib.agents.agent_ops import scan_agent_ops
+from lib.agent_outcome import scan_agent_outcome
 from lib.ai_usage import scan_ai_usage
 from lib.ci_checks import scan_ci_checks
 from lib.claude_config import scan_claude_config
-from lib.config_drift import scan_config_drift
+from lib.hosting.config_drift import scan_config_drift
 from lib.degrade import safe as safe  # re-exported: callers import it from here
 from lib.degrade import unavailable
 from lib.coverage_gate import detect_coverage_gate
-from lib.delivery import scan_delivery
+from lib.hosting.delivery import scan_delivery
 from lib.external_ci import no_external_ci, read_external_ci
 from lib.doc_claims import scan_doc_claims
 from lib.gate_cost import estimate_gate_cost
-from lib.gitlab_notes import gitlab_note_facts
+from lib.hosting.gitlab_notes import gitlab_note_facts
 from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.layer_grades import scan_layer_grades
 from lib.level_tally import LEVEL_READS
-from lib.merged_sample import merged_sample, offline_merged_sample
-from lib.gitlab_ci_lint import no_merged_ci, read_merged_ci
+from lib.hosting.merged_sample import merged_sample, offline_merged_sample
+from lib.hosting.gitlab_ci_lint import no_merged_ci, read_merged_ci
 from lib.guardrails import scan_guardrails
 from lib.review_automation import review_evidence, scan_review_automation
-from lib.review_reality import review_reality_from_sample
+from lib.hosting.review_reality import review_reality_from_sample
 from lib.shared_tooling import scan_shared_tooling
 from lib.manifest.check_manifest import core_manifest
 from lib.unit_levels import READS as UNIT_LEVEL_READS
@@ -569,7 +570,7 @@ SCANS: tuple[ScanSpec, ...] = (
     # listed in [review] ai_review_components), or an AI review app's config
     # file. Offline file reads; review_evidence (Layer 7 level 1) reads it with
     # review_reality and is rebuilt by the --platform pass (PLATFORM_SCANS).
-    # GitLab's merged CI configuration (#796, lib/gitlab_ci_lint.py): the CI lint API,
+    # GitLab's merged CI configuration (#796, lib/hosting/gitlab_ci_lint.py): the CI lint API,
     # asked only where an include did not resolve offline. Private, held in memory;
     # review_automation and ci_checks read it. Offline it reads nothing.
     _spec("gitlab_merged_ci", read_merged_ci, offline_fn=no_merged_ci),
@@ -622,6 +623,10 @@ SCANS: tuple[ScanSpec, ...] = (
     # excluded. Since #695 also the commits an agent identity authored (pinned
     # defaults plus the [ai_usage] rules of `fleet_config`). Matcher: lib.agent_identity.
     _spec("ai_usage", scan_ai_usage),
+    # Agent commit outcomes (issue #1085): of the ai_usage agent commits (trailer or
+    # agent author), the share later reverted and the share whose added lines were
+    # rewritten within REWORK_DAYS. Informational: no Step, count or headline reads it.
+    _spec("agent_outcome", scan_agent_outcome),
     # Checkable claims across the doc set (issue #491): the instruction_claims
     # kinds run over docs/ (minus the historical design records),
     # skills/*/references/ and skills/*/SKILL.md, plus the cross-document kind
