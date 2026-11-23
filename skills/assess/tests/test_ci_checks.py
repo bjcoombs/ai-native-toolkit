@@ -583,8 +583,9 @@ def test_lint_runs_on_an_unread_ci_system_is_not_measured(
 
 @pytest.mark.parametrize(("files", "expected"), [
     pytest.param(_gha("./ci.sh"), (None, "script_not_found"), id="missing-ci-sh"),
-    # #951: the old credit came from the name ci, not the body (lib.named_check): null.
-    pytest.param({**_gha("./ci.sh"), "ci.sh": "pytest\n"}, (None, "check_target"),
+    # #951 took away the credit from the name ci; #1033 credits the body it reads (lib.script_body):
+    # its last statement is pytest, so the script fails when pytest does.
+    pytest.param({**_gha("./ci.sh"), "ci.sh": "pytest\n"}, (True, "enforced_check"),
                  id="committed-ci-sh"),
     pytest.param({**_gha("./ci.sh"), "ci.sh": "echo deploy\n"}, (None, "check_target"),
                  id="committed-ci-sh-runs-no-check"),
@@ -593,7 +594,8 @@ def test_lint_runs_on_an_unread_ci_system_is_not_measured(
                  id="missing-bash-script-with-flag"),
     pytest.param({**_gha("bash scripts/test.sh"), "scripts/test.sh": "pytest\n"},
                  (True, "enforced_check"), id="committed-bash-script"),
-    # #951: a committed ci.sh is an unread target (lib.named_check), so null, not credit.
+    # #951: a ci.sh matched only by suffix is an unread target (lib.named_check): #1033 reads a body
+    # only at its exact tracked path, so null, not credit.
     pytest.param({**_gha("cd svc && ./ci.sh"), "svc/ci.sh": "pytest\n"}, (None, "check_target"),
                  id="script-under-a-subdirectory"),
     pytest.param({".github/workflows/ci.yml": _gha("./ci.sh")[".github/workflows/ci.yml"]
@@ -635,8 +637,8 @@ def test_a_missing_script_in_a_git_checkout_reads_the_tracked_files(tmp_path: Pa
     assert (block["enforced_check_runs"], block["enforced_basis"]) == (None, "script_not_found")
     subprocess.run(["git", "-C", str(tmp_path), "add", "ci.sh"], check=True)
     block = scan_ci_checks(tmp_path)
-    # #951: once tracked, ci.sh is an unread target (lib.named_check), not a credited check.
-    assert (block["enforced_check_runs"], block["enforced_basis"]) == (None, "check_target")
+    # Once tracked, its body is read (#1033, lib.script_body): pytest is its last statement.
+    assert (block["enforced_check_runs"], block["enforced_basis"]) == (True, "enforced_check")
 
 
 def test_a_gitignored_script_is_not_missing(tmp_path: Path) -> None:
