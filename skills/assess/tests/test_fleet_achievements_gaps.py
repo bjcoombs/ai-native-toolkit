@@ -97,3 +97,43 @@ def test_one_drop_seen_on_two_runs_is_one_slip() -> None:
     streaks = [a["run"] for a in _build(flap)["achievements"] if a["kind"] == fa.STREAK and a["unit"] == TEAM]
     # reset to 1 on 11-15 only; 11-22, 11-29 count (2, 3); a second reset on 11-22 would move it to 12-06
     assert streaks == ["2026-11-29"]
+
+
+def test_a_member_returning_at_the_level_before_a_two_run_gap_is_no_slip() -> None:
+    """#1060: b misses two runs, the subset {a} is credited up to docs 2, and b returns at docs 1.
+    The full set reads docs 1, as before the gap: nothing moved, so no slip and no second
+    level_up, and the team streak runs on."""
+    history: list[tuple[str, Spec]] = [
+        ("2026-11-01", BASE),  # {a, b} at docs 1
+        ("2026-11-08", {**BASE, "grp/sub/b": GONE}),  # {a} at docs 1
+        ("2026-11-15", {**BASE, "grp/sub/a": (2, True), "grp/sub/b": GONE}),  # {a} at docs 2: credited
+        ("2026-11-22", {**BASE, "grp/sub/a": (2, True)}),  # {a, b} at docs 1, as on 11-01
+        ("2026-11-29", {**BASE, "grp/sub/a": (2, True)}), ("2026-12-06", {**BASE, "grp/sub/a": (2, True)}),
+    ]
+    assert _ups(history) == [("2026-11-15", "2026-11-08", 1)]
+    streaks = [a["run"] for a in _build(history)["achievements"] if a["kind"] == fa.STREAK and a["unit"] == TEAM]
+    # 11-15 (2), 11-22 (3), 11-29 (4), 12-06 (5); a false slip on 11-22 would give 12-06 only
+    assert streaks == ["2026-11-22", "2026-12-06"]
+    # once the full set has read docs 1 again, b really reaching docs 2 is the team's own move
+    on = [*history, ("2026-12-13", UP)]
+    assert _ups(on) == [("2026-11-15", "2026-11-08", 1), ("2026-12-13", "2026-12-06", 1)]
+
+
+def test_a_return_below_the_level_before_the_gap_is_a_slip() -> None:
+    history: list[tuple[str, Spec]] = [
+        ("2026-11-01", BASE),
+        ("2026-11-08", {**BASE, "grp/sub/b": GONE}),
+        ("2026-11-15", {**BASE, "grp/sub/a": (2, True), "grp/sub/b": GONE}),  # {a} credited at 2
+        ("2026-11-22", {**BASE, "grp/sub/a": (2, True), "grp/sub/b": (0, True)}),  # {a, b} at 0: below both
+        ("2026-11-29", {**BASE, "grp/sub/a": (2, True), "grp/sub/b": (0, True)}),
+        ("2026-12-06", {**BASE, "grp/sub/a": (2, True), "grp/sub/b": (0, True)}),
+    ]
+    streaks = [a["run"] for a in _build(history)["achievements"] if a["kind"] == fa.STREAK and a["unit"] == TEAM]
+    assert streaks == ["2026-12-06"]  # reset on 11-22, then 2 and 3
+
+
+def test_two_job_counts_give_identical_bytes_on_the_two_run_gap() -> None:
+    history = [("2026-11-01", BASE), ("2026-11-08", {**BASE, "grp/sub/b": GONE}),
+               ("2026-11-15", {**BASE, "grp/sub/a": (2, True), "grp/sub/b": GONE}),
+               ("2026-11-22", {**BASE, "grp/sub/a": (2, True)})]
+    assert fa.dumps_achievements(_build(history)) == fa.dumps_achievements(_build(history))
