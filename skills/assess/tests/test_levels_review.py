@@ -76,6 +76,10 @@ def test_the_fields_change_no_result(stale_pct: Any) -> None:
     assert reviewed == plain
 
 
+def test_every_prediction_has_catalog_words() -> None:
+    assert set(catalog_md.PREDICTION_WORDS) == set(PREDICTIONS)
+
+
 def test_the_catalog_shows_the_prediction_and_review_date() -> None:
     raw = tomllib.loads(DEFAULT_LEVELS.read_text(encoding="utf-8"))
     raw["rows"][0]["levels"][0].update(predicted="lower_revert", review=REVIEW)

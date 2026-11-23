@@ -70,7 +70,7 @@ Layer to truth, the documented mapping of the alias:
   #1086, no backfill). Neither field changes a criterion, a state, the tally or a
   Step; the catalog shows them.
 
-The rules for the four condition fields of a maturity model (#843); `levels.parse_levels`
+The rules for the six condition fields of a maturity model (#843); `levels.parse_levels`
 calls them, and the module docstring is the reference.
 
 - **`truth`** (required, multi-valued): every level carries a non-empty array of distinct tags
@@ -109,7 +109,7 @@ calls them, and the module docstring is the reference.
   value, a quoted or timed date, or one field without the other fails the load naming the row
   and level. They change no result; the catalog shows them (`catalog_md.review_cell`).
 
-Tests: `tests/test_levels_fields.py`.
+Tests: `tests/test_levels_fields.py`; `predicted` and `review` in `tests/test_levels_review.py`.
 """
 from __future__ import annotations
 
