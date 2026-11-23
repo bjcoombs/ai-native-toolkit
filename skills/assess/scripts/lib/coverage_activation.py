@@ -25,7 +25,8 @@ for each candidate config file and returns an ``Activation``:
 ``covers(dirs, file)`` is the directory rule ``coverage_ci`` applies: a config gate is
 switched on by an activation in its own directory or a directory above it (the config
 pytest or Jest finds walking up from the package), never by a sibling package's.
-The root directory is ``""``.
+The root directory is ``""``. ``below(dirs, file)``: an activation in a directory under
+the gate's may apply (``pytest tests`` reads ``tests/pytest.ini``), so it reads unsure.
 
 Split out of ``coverage_gate`` (#954), which calls it. Inward-only imports: stdlib
 only; never ``lib.coverage_gate``, ``lib.coverage_ci`` or an orchestrator.
@@ -80,6 +81,14 @@ def covers(dirs: frozenset[str], file: str) -> bool:
     """A config activation in ``file``'s directory or one above it (``""`` is the root)."""
     here = posixpath.dirname(file)
     return any(d == "" or here == d or here.startswith(d + "/") for d in dirs)
+
+
+def below(dirs: frozenset[str], file: str) -> bool:
+    """An activation in a directory under ``file``'s (``tests/pytest.ini`` beside a root
+    ``.coveragerc``): ``pytest tests`` finds it walking up from its argument, so it may
+    switch the gate on."""
+    here = posixpath.dirname(file)
+    return any(d != here and (here == "" or d.startswith(here + "/")) for d in dirs)
 
 
 def read_activation(files: Iterable[tuple[str, list[str]]]) -> Activation:

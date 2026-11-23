@@ -52,7 +52,8 @@ FILE`` / ``--config-file FILE`` reads FILE's ``addopts`` as the run's own (null 
 FILE was not read), and ``--rootdir`` with no ``--cov`` reads null. Coverage switched on in config (pytest ``addopts``,
 Jest ``collectCoverage: true``) is keyed by the config's directory
 (``lib.coverage_activation``): it switches on a config gate in that directory or below,
-never a sibling package's, and a gate on a CI line reads it from the root, with a
+never a sibling package's (an ``addopts`` ``--cov`` in a directory under the gate's, such
+as ``tests/pytest.ini``, reads ``indirect_run``: ``pytest tests`` may read it), and a gate on a CI line reads it from the root, with a
 package-only ``addopts`` reading ``indirect_run``.
 
 Unknown beats wrong. A gate reads null (not false) when the line or tool run
@@ -145,7 +146,7 @@ from typing import Literal, TypeVar
 from lib.check_command import (
     _DIRECT_TESTS, LINT_PROGRAMS, _exec_program, _info_program, is_info_invocation)
 from lib.ci_masking import unmasked_lines
-from lib.coverage_activation import Activation, covers
+from lib.coverage_activation import Activation, below, covers
 from lib.named_check import may_lint_named
 from lib.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, workflow_trigger
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
@@ -503,7 +504,8 @@ def pytest_on(args: Sequence[str], on: bool, off: bool,
 
 def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
               jest_collects: bool = False, gradle_check: bool = False,
-              pytest_off: bool = False, activation: Activation = Activation()) -> bool | None:
+              pytest_off: bool = False, activation: Activation = Activation(),
+              pytest_maybe: bool = False) -> bool | None:
     """Does this command run ``family``'s coverage check? The tool must be the program
     the command runs (``program``), never an argument. None: it runs the tool, but
     whether coverage is on is set elsewhere (a Jest or Vitest config), or a Gradle task
@@ -517,7 +519,10 @@ def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
             # Either family gates only with pytest-cov on: ``--cov`` on the line or in
             # ``addopts``. An ``addopts`` threshold with no ``--cov`` anywhere checks nothing,
             # and ``--no-cov`` turns it off (#954).
-            return pytest_on(args, pytest_cov, pytest_off, activation)
+            state = pytest_on(args, pytest_cov, pytest_off, activation)
+            if state is False and pytest_maybe and pytest_on(args, True, pytest_off, activation):
+                return None   # an addopts --cov below the gate's directory may apply
+            return state
         return (family == "coverage.py" and name == "coverage"
                 and bool(args) and args[0] in _COVERAGE_REPORTS)
     if family in ("jest", "vitest"):
@@ -598,8 +603,9 @@ def gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates,
         pytest_cov = covers(activation.pytest_cov, file)
         jest_collects = covers(activation.jest_collects, file)
         off = covers(activation.pytest_off, file)
+        maybe = below(activation.pytest_cov, file)
         found = _merge([_tool_state(run, family, pytest_cov, jest_collects,
-                                    activation.gradle_check, off, activation)
+                                    activation.gradle_check, off, activation, maybe)
                         for run in ci.runs] + [_indirect(ci, family)])
     if found is False and ci.elsewhere:
         return "included_jobs"
@@ -652,9 +658,10 @@ def _activates(gate: Gate, words: tuple[str, ...], on: bool, off: bool,
 
 def _tool_state(run: Run, family: str, pytest_cov: bool, jest_collects: bool,
                 gradle_check: bool = False, pytest_off: bool = False,
-                activation: Activation = Activation()) -> bool | None | str:
+                activation: Activation = Activation(), maybe: bool = False) -> bool | None | str:
     state = runs_tool(run.words, family, pytest_cov=pytest_cov, jest_collects=jest_collects,
-                      gradle_check=gradle_check, pytest_off=pytest_off, activation=activation)
+                      gradle_check=gradle_check, pytest_off=pytest_off, activation=activation,
+                      pytest_maybe=maybe)
     if state is False or run.trigger == "not_ordinary":
         return False
     if run.trigger == "unknown":

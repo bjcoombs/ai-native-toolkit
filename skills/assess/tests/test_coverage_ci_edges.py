@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.coverage_activation import addopts_cov, covers, read_activation
+from lib.coverage_activation import addopts_cov, below, covers, read_activation
 from lib.coverage_ci import gradle_tasks, runs_tool
 from lib.coverage_gate import detect_coverage_gate
 
@@ -193,12 +193,18 @@ ADDOPTS_COV = "[tool.pytest.ini_options]\naddopts = \"--cov=src\"\n"
       "b/pyproject.toml": PYPROJECT_80}, (True, "ci_run")),
     ({**_ci("npx jest"), "b/jest.config.js": "module.exports = { collectCoverage: true,\n"
       "  coverageThreshold: { global: { lines: 80 } } };\n"}, (True, "ci_run")),
+    # An addopts --cov under the gate's directory: pytest tests reads tests/pytest.ini and
+    # coverage.py the root .coveragerc, so it may apply (null, never false).
+    ({**_ci("pytest tests"), ".coveragerc": "[report]\nfail_under = 80\n",
+      "tests/pytest.ini": "[pytest]\naddopts = --cov\n"}, (None, "indirect_run")),
+    ({**_ci("pytest"), "pyproject.toml": PYPROJECT_80, "a/pyproject.toml": ADDOPTS_COV},
+     (None, "indirect_run")),
     # A gate on a CI line: a package-only addopts may or may not apply (null).
     ({**_ci("pytest --cov-fail-under=80"), "a/pyproject.toml": ADDOPTS_COV},
      (None, "indirect_run")),
     ({**_ci("pytest --cov-fail-under=80"), "pyproject.toml": ADDOPTS_COV}, (True, "ci_run")),
 ], ids=["pytest-sibling", "jest-sibling", "pytest-same-dir", "pytest-root-addopts",
-        "jest-same-dir", "ci-line-package-addopts", "ci-line-root-addopts"])
+        "jest-same-dir", "addopts-below-gate", "package-addopts-root-gate", "ci-line-package-addopts", "ci-line-root-addopts"])
 def test_case6_activation_is_per_directory(
         tmp_path: Path, files: dict[str, str], expected: tuple[bool | None, str]) -> None:
     assert _read(tmp_path, files) == expected
@@ -226,6 +232,13 @@ def test_case6_activation_is_per_directory(
 def test_pytest_config_file_on_the_line(
         tmp_path: Path, files: dict[str, str], expected: tuple[bool | None, str]) -> None:
     assert _read(tmp_path, files) == expected
+
+
+def test_below_reads_directories_under_the_gate() -> None:
+    assert below(frozenset({"tests"}), ".coveragerc")
+    assert below(frozenset({"a/tests"}), "a/pyproject.toml")
+    assert not below(frozenset({"b"}), "a/pyproject.toml")
+    assert not below(frozenset({"a"}), "a/pyproject.toml")
 
 
 def test_covers_reads_own_directory_and_above() -> None:
