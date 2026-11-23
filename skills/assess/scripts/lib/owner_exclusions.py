@@ -30,9 +30,10 @@ list (a single inline table, say), is one skipped entry with index 0 and code
 ``lib.level_tally`` reads the exclusions in force: an excluded condition reads
 ``not_applicable`` with ``disposition: excluded_by_owner``, leaves the
 denominator, never earns, and never holds a Step gate, so the Step it gates
-stays unreachable while it is excluded (#744 decision). The fleet side
-(``--fleet-config``) waits on the method stamp (#952), so this reads the
-repository's own file only.
+stays unreachable while it is excluded (#744 decision). The headless runner
+reports this block too (``lib.headless_static``), so ``/fleet`` applies a
+repository's own exclusions (#944). Fleet-wide exclusions (``--fleet-config``)
+wait on the method stamp (#952), so this reads the repository's own file only.
 
 Reads the owner's condition exclusions from `.assess/config.toml` (#910):
 `[checks] exclude = [{id, reason, kind?, excluded_by?, excluded_at?, plugin_version?}]`.
@@ -46,8 +47,9 @@ entries with a `PROBLEMS` code (`not_a_list` for a `[checks]` or `exclude` of th
 `unknown_condition`, `duplicate`; the first entry per id wins) and one report `disclosures`
 line per exclusion. A skipped entry leaves its condition in force. `owner_exclusions_block`
 reads the repository's config and warns on stderr per skipped entry; never raises. A
-`scan_registry` entry (`core_scans.owner_exclusions`), core-only, so the headless runner and
-`/fleet` do not read it: the fleet side waits on the method stamp (#952). Counts-only keeps
+`scan_registry` entry (`core_scans.owner_exclusions`); the headless runner reports it too
+(`headless_static.owner_exclusions`, #944), so `/fleet` applies a repository's own exclusions
+in `level.json` and `fleet-data.json`. Counts-only keeps
 ids, kinds and dates and drops the reason and the owner. Tests: `tests/test_owner_exclusions.py`.
 """
 from __future__ import annotations

@@ -270,6 +270,8 @@ Runs against the current directory (or pass a path). Produces:
 - `.assess/doc-graph.svg` - the doc-navigability graph shown above
 - `.assess/complexity-heatmap.svg` - the complexity treemap shown above
 - `.assess/evidence-waffle.svg` - one square per maturity-model condition, showing how much of the level rests on verified or measured evidence
+- `.assess/doc-drift.svg` - the 15 docs furthest behind the code they describe, as ranked bars
+- `.assess/review-strip.svg` - one tick per recently merged change: approved, reviewed or merged without review, in merge order
 - `.assess/complexity-stats.json` - percentiles and ranked file lists that feed the report
 
 After writing, the skill asks whether to open a PR in the target repo with the report and both SVGs.
