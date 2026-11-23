@@ -13,7 +13,7 @@ set through the ``check_command.CHECK_NAMES`` context variable for the one call,
 stay installs. ``unread_ci_target(text)`` is a command that reads as a check only under
 that vocabulary and false under ``CHECK_WORDS`` (``python ci.py``, ``source ci.sh``,
 ``cargo ci``, ``./gradlew ci``, ``mvn ci``, ``go ci``, whose ``./ci.sh`` and ``make ci``
-siblings already read null): ``lib.ci_checks._line_may_check`` counts it as a target whose
+siblings already read null): ``lib.ci_lines._line_may_check`` counts it as a target whose
 recipe is not read, so Layer 5 and Layer 3 read null with ``check_target``, never a false 0.
 ``may_lint_named(text)`` is ``check_command.may_lint`` under the instruction vocabulary;
 ``lib.testing.coverage_ci._indirect`` reads it, so a CI line running only ``make ci`` keeps the
@@ -28,7 +28,7 @@ never reads its body (``echo deploy`` was credited before #951).
 ``setup_ci_target(text)`` (#1033) is a ``ci`` name that also names setup or a build
 (``make deploy-ci``, ``npm run build:ci``, ``./scripts/deploy-ci.sh``, ``make ci-deploy``):
 a part of the name is in ``check_command.SETUP_TARGETS``. It runs no check, so it is never
-an ``unread_ci_target`` and ``lib.ci_checks._line_may_check`` reads it false, as it reads
+an ``unread_ci_target`` and ``lib.ci_lines._line_may_check`` reads it false, as it reads
 ``make deploy``; the instruction side (``is_named_check``, ``may_lint_named``) is unchanged.
 ``sourced_env(text)`` is a sourced environment file (``. venv/bin/activate``, ``source .env``,
 ``. ./env.sh``): ``_line_may_check`` reads it false too, since it runs no check.
@@ -129,7 +129,7 @@ def _targets(words: list[str]) -> list[str]:
     """The targets a target runner or package manager is asked for, or a script's own path."""
     if not words:
         return []
-    if words[0] in ("bash", "sh", "zsh", "source"):
+    if words[0] in ("bash", "sh", "dash", "zsh", "source"):
         pos = [w for w in words[1:] if not w.startswith("-")]
         return pos[:1]
     if words[0] not in _TARGET_HEADS:

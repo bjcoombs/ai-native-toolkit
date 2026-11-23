@@ -61,7 +61,7 @@ too. None (`may_check(text)`) for a target whose recipe is not read: any other t
 of a target runner, its default target (a bare `make`), a `hatch run` script that is not
 check-named, a package script (`npm run foo`, `pnpm foo`, `yarn foo`), a committed script
 (`./scripts/foo.sh`, `bash ci/foo.sh`, `bin/foo`; only a `./` or `bin/` head, a `.sh`
-file or a path passed to `bash`/`sh`/`zsh`/`source` (`.` too, #1033), read by file name so `./ci/deploy.sh` is
+file or a path passed to `bash`/`sh`/`dash`/`zsh`/`source` (`.` too, #1033), read by file name so `./ci/deploy.sh` is
 false), and a container's default command or an unknown
 program behind any wrapper (`docker compose run app`, `docker run img some-tool`, `uv run foo`,
 `poetry run foo`, `pipx run foo`, `uvx foo`, `npx foo`, `pnpm exec foo`, `yarn dlx foo`).
@@ -72,7 +72,7 @@ A target runner asked for `--version` or its list (`task --list`, `rake -T`) is 
 `may_lint` reads the direct runners (`dotnet test`, `mix test`, `hatch test`, `ctest`,
 `bundle exec rspec`) as tests only; `bazel test`, `turbo`, `nx` and `task` targets may
 lint. `BARE_RUN_PROGRAMS` is the set a lone bare YAML item is a value for
-(`ci_checks._lone_check`). Other ecosystems (issue #926): `LINT_PROGRAMS` takes the
+(`ci_lines._lone_check`). Other ecosystems (issue #926): `LINT_PROGRAMS` takes the
 analysers of `lint_vocabulary.ANALYSER_PROGRAMS`, and `is_lint_command` and `is_lint_run`
 also accept `lint_vocabulary.ecosystem_lint` (a formatter in its check mode, `mix credo`,
 `dart analyze`, a Gradle lint task). `_plain_wrapper` reads `xargs [flags] <program>` and
