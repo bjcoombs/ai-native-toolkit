@@ -27,7 +27,12 @@ runs, from GitHub workflows and ``.gitlab-ci.yml``:
   else (``$VAR``, ``~``, an absolute path, ``cd -``, ``popd``, a ``defaults:``
   ``working-directory`` anywhere in the file) leaves it unresolved.
 - ``--rcfile`` / ``--cov-config`` names the config instead, resolved against that
-  working directory.
+  working directory (``.coveragerc`` itself is coverage.py's default, so discovery).
+- a plain ``pytest`` is a coverage run when the root config's ``addopts`` holds
+  ``--cov``; a run whose coverage state is not settled (``pytest -c`` naming a file not
+  read) counts as unresolved unless it is known not to read the root config.
+- a GitLab job whose ``before_script`` key sits after the command (GitLab runs it
+  first) leaves the directory unresolved.
 
 True when one run reads the root config (from the root, or by naming it). False when
 every run is resolved and none does (each runs in the scope or another directory with
@@ -54,6 +59,7 @@ from pathlib import Path, PurePosixPath
 
 from lib.assess_config import is_user_excluded
 from lib.command_index import CI_CONFIG_FILES, ci_line_text, read_config
+from lib.coverage_activation import Activation, read_activation
 from lib.coverage_ci import CiRuns, Run, runs_tool
 from lib.doc_graph import is_excluded_path
 
@@ -70,6 +76,10 @@ _CONFIGS: tuple[tuple[str, str | None], ...] = (
 _SECTION_RE = re.compile(r"^\s*\[([^\]]+)\]")
 _MAX_DEPTH = 4
 _CONFIG_FLAGS = ("--rcfile", "--cov-config")
+# coverage.py treats this name as its own default: discovery, not a named file.
+_DEFAULT_RCFILE = ".coveragerc"
+# The root files whose pytest ``addopts`` a run from the root reads.
+_PYTEST_CONFIGS = ("pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini")
 # ``cd`` at the start of a command: the line's start, or after ``;``, ``&&``, ``||``, ``|``, ``(``.
 _CD_RE = re.compile(r"(?:^|[;&|(])\s*(cd|pushd|popd)(?=\s|$|[;&|)])\s*([^\s;&|)]*)")
 _WORKDIR_RE = re.compile(r"^(\s*)(?:-\s+)?working-directory\s*:\s*(.*?)\s*(?:#.*)?$")
@@ -202,6 +212,10 @@ def _cwd(run: Run, lines: Sequence[str], gitlab: bool) -> Cwd:
     if gitlab and (_inherited_cd(lines) or any(
             lines[r].strip().startswith(("extends:", "<<:")) for r in step)):
         return None
+    # GitLab runs a job's ``before_script`` first, wherever the key sits in the job.
+    if gitlab and any(lines[r].strip().startswith("before_script:")
+                      for r in step if r > run.span[-1]):
+        return None
     if not gitlab:
         if _defaults_workdir(lines):
             return None
@@ -248,6 +262,7 @@ def _named_config(words: Sequence[str]) -> str | None:
 def _reads_root(run: Run, lines: Sequence[str], gitlab: bool, config: str) -> bool | None:
     cwd = _cwd(run, lines, gitlab)
     named = _named_config(run.words)
+    named = None if named == _DEFAULT_RCFILE else named
     if cwd is None:
         return None
     if named is None:
@@ -256,20 +271,32 @@ def _reads_root(run: Run, lines: Sequence[str], gitlab: bool, config: str) -> bo
     return None if target is None else target == PurePosixPath(config)
 
 
-def _coverage_runs(ci: CiRuns) -> Iterator[Run]:
+def _root_activation(root: Path) -> Activation:
+    """What a run from the root reads of pytest ``addopts`` (``--cov`` / ``--no-cov``)."""
+    files = [(name, (root / name).read_text(encoding="utf-8", errors="replace").splitlines())
+             for name in _PYTEST_CONFIGS if (root / name).is_file()]
+    return read_activation(files)
+
+
+def _coverage_runs(ci: CiRuns, activation: Activation) -> Iterator[tuple[Run, bool | None]]:
+    """The runs of coverage.py, with None where whether coverage is on is not settled."""
+    on, off = "" in activation.pytest_cov, "" in activation.pytest_off
     for run in ci.runs:
-        if runs_tool(run.words, "coverage.py"):
-            yield run
+        state = runs_tool(run.words, "coverage.py", pytest_cov=on, pytest_off=off,
+                          activation=activation)
+        if state is not False:
+            yield run, state
 
 
 def root_config_applies(root: Path, config: str, ci: CiRuns) -> bool | None:
     """Does CI run coverage.py where it reads the root ``config``? (module docstring)"""
     states: list[bool | None] = []
     texts: dict[str, list[str]] = {}
-    for run in _coverage_runs(ci):
+    for run, on in _coverage_runs(ci, _root_activation(root)):
         if run.file not in texts:
             texts[run.file] = read_config(root, run.file).splitlines()
-        states.append(_reads_root(run, texts[run.file], run.file in CI_CONFIG_FILES, config))
+        reads = _reads_root(run, texts[run.file], run.file in CI_CONFIG_FILES, config)
+        states.append(reads if on else (None if reads is not False else False))
     if True in states:
         return True
     if not states or None in states or ci.unread or ci.elsewhere:

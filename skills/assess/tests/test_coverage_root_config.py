@@ -139,9 +139,20 @@ def test_the_whole_repo_run_is_unchanged(tmp_path: Path) -> None:
     ("      - run: |\n          (cd docs && make html)\n          pytest --cov\n", None),
     ("      - run: (cd docs && make html) && pytest --cov\n", None),
     ("      - run: (cd pkg && pytest --cov)\n", False),
+    ("      - run: pytest --cov --cov-config=.coveragerc\n", True),
+    ("      - run: pytest -c ci/pytest.ini\n      - run: cd pkg && pytest --cov\n", None),
 ])
 def test_where_ci_runs_coverage_decides(tmp_path: Path, steps: str, applies: bool | None) -> None:
     assert _applies(_repo(tmp_path, steps)) is applies
+
+
+def test_a_bare_pytest_reads_the_root_addopts(tmp_path: Path) -> None:
+    root = _repo(tmp_path, "      - run: pytest\n", **{"pyproject.toml": (
+        "[tool.pytest.ini_options]\naddopts = \"--cov=pkg\"\n\n"
+        "[tool.coverage.report]\nfail_under = 85\n")})
+    assert _applies(root) is True
+    block = detect_coverage_gate(root, Path("pkg"))
+    assert (block["threshold_meets_minimum"], block["enforced_meets_minimum"]) == (True, True)
 
 
 def test_a_defaults_working_directory_is_unresolved(tmp_path: Path) -> None:
@@ -161,6 +172,7 @@ def test_a_defaults_working_directory_is_unresolved(tmp_path: Path) -> None:
      "    - pytest --cov\n", None),
     (".base: &base\n  before_script: [cd pkg]\ntest:\n  <<: *base\n  script:\n"
      "    - pytest --cov\n", None),
+    ("test:\n  script:\n    - pytest --cov\n  before_script:\n    - cd pkg\n", None),
     ("default:\n  image: python\nbefore_script:\n  - pip install .\n"
      "test:\n  script:\n    - pytest --cov\n", True),
 ])

@@ -284,7 +284,8 @@ COVERAGE_GATE: JsonDict = {
             "least 50; null (unknown) when none is but a counted gate's percentage was not "
             "read, or when a repository holding a go.mod or Cargo.toml has no gate of that "
             "language and none of at least 50 for another, or when a scoped run cannot tell "
-            "whether the root coverage.py floor governs the scope (see unmeasured_reason); false "
+            "whether the root coverage.py floor governs the scope and that floor would change "
+            "the reading (see unmeasured_reason); false "
             "otherwise. Gates counted are those enforced "
             "counts."),
         "unmeasured_reason": _field(
