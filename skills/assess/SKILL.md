@@ -44,7 +44,7 @@ The write-side scores aren't abstract good practice - each traces to a known ten
 
 The layered model assumes a software repo. A **knowledge / document base** - markdown sources, an LLM-maintained wiki, a `CLAUDE.md` schema, and no application code or runtime - has no code surface for the write-side layers (L2-L7). Marking them Missing is itself a lying verdict: a well-run KB reads as mostly missing when it is in fact well-run, with gaps reported for tests on code it doesn't contain.
 
-The deterministic core (`lib/archetype.py`) classifies the repo and writes an `archetype` block to `run-context.json`:
+The deterministic core (`lib/keyhole/archetype.py`) classifies the repo and writes an `archetype` block to `run-context.json`:
 
 - **Detection** is a heuristic - the code-file ratio (code vs markdown) and the absence of a runtime surface (`package.json`, `pyproject.toml`, `go.mod`, `Dockerfile`, ...). A documentation-heavy *application* (lots of markdown but a real build) stays software because of the runtime-surface gate.
 - **Override marker.** An `assess-archetype: knowledge-base` (or `software`) marker in any instruction file (`CLAUDE.md`/`AGENTS.md`/...) **forces or suppresses** detection, so a maintainer is never trapped by a misfire. Write it as an HTML comment, e.g. `<!-- assess-archetype: knowledge-base -->`.
@@ -77,7 +77,7 @@ Artefacts will land at:
 - `$REPO_ROOT/.assess/complexity-heatmap.svg`
 - `$REPO_ROOT/.assess/complexity-stats.json`
 - `$REPO_ROOT/.assess/doc-graph.svg`
-- `$REPO_ROOT/.assess/evidence-waffle.svg` (written by the deterministic core from the level result: one square per maturity-model condition, coloured by state and evidence grade)
+- `$REPO_ROOT/.assess/step-ladder.svg` (written by the deterministic core from the level result: the maturity model's Steps as rungs, bottom to top, each with what an agent can do there, the gate between each pair, "You are here" on the run's Step and the next gate highlighted; the report shows it first), and `$REPO_ROOT/.assess/evidence-waffle.svg` (also by the deterministic core from the level result: one square per maturity-model condition, coloured by state and evidence grade, a "Level N" header per column and the Step-gate squares outlined)
 - `$REPO_ROOT/.assess/package-map.svg`, `$REPO_ROOT/.assess/doc-drift.svg` and `$REPO_ROOT/.assess/review-strip.svg` (written by the deterministic core when their data is available: the 20 largest packages as an import matrix with front-door bypasses outlined, the docs furthest behind their code, and the review state of each sampled merged change)
 - `$REPO_ROOT/.assess/assess-report.md`
 

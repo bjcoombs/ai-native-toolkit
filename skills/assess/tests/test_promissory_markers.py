@@ -10,8 +10,8 @@ import os
 import subprocess
 from pathlib import Path
 
-from lib.keyhole_signals import FINDING_ORDER, integrate
-from lib.promissory_markers import (
+from lib.keyhole.keyhole_signals import FINDING_ORDER, integrate
+from lib.keyhole.promissory_markers import (
     FAMILY_PATTERNS,
     MarkerScan,
     scan_promissory_markers,
@@ -208,7 +208,7 @@ def test_linked_markers_of_other_families_still_go_stale(tmp_path: Path) -> None
 
 def test_bare_suppression_rule_names_with_hyphens_are_not_justified() -> None:
     """A hyphenated rule name is not a ``-- reason`` separator."""
-    from lib.promissory_markers import JUSTIFIED_SUPPRESSION_RE
+    from lib.keyhole.promissory_markers import JUSTIFIED_SUPPRESSION_RE
     assert not JUSTIFIED_SUPPRESSION_RE.search(
         "x; // eslint-disable-line @typescript-eslint/no-explicit-any"
     )
@@ -400,7 +400,7 @@ def test_inline_example_in_prose_is_not_a_marker(tmp_path: Path) -> None:
 
 
 def test_double_dash_reason_per_suppression_family() -> None:
-    from lib.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
+    from lib.keyhole.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
     for justified in (
         "x = 1  # noqa: E501 -- long URL kept on one line",
         "x = 1  # noqa -- generated module",
@@ -424,7 +424,7 @@ def test_double_dash_reason_per_suppression_family() -> None:
 
 
 def test_single_dash_and_parenthesised_suppression_reasons() -> None:
-    from lib.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
+    from lib.keyhole.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
     assert rx.search("# noqa: BLE001 - intentional catch-all")
     assert rx.search("# noqa: S310 (fixed api host)")
     assert rx.search("# noqa: E501, E402 - generated table")
@@ -723,7 +723,7 @@ _SECOND_DIRECTIVES = (
 
 
 def test_second_directive_is_never_a_reason() -> None:
-    from lib.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
+    from lib.keyhole.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
     for second in _SECOND_DIRECTIVES:
         for line in (
             f"run(cmd)  # noqa: S603  # {second}",
@@ -739,13 +739,13 @@ def test_every_suppression_directive_has_a_second_directive_sample() -> None:
     above, so its exclusion from reason credit is pinned by a test."""
     import re
 
-    from lib.promissory_markers import SUPPRESSION_DIRECTIVES
+    from lib.keyhole.promissory_markers import SUPPRESSION_DIRECTIVES
     for _, token in SUPPRESSION_DIRECTIVES:
         assert any(re.match(token, s) for s in _SECOND_DIRECTIVES), token
 
 
 def test_directive_word_inside_a_real_reason_is_still_credited() -> None:
-    from lib.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
+    from lib.keyhole.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
     assert rx.search("run(cmd)  # noqa: S603  # args are constant, so nosec is moot")
 
 
@@ -758,7 +758,7 @@ def test_pyright_ignore_is_a_suppression(tmp_path: Path) -> None:
 
 
 def test_pyright_ignore_reason_forms_are_credited() -> None:
-    from lib.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
+    from lib.keyhole.promissory_markers import JUSTIFIED_SUPPRESSION_RE as rx
     for justified in (
         "x = f()  # pyright: ignore[reportAssignmentType]  # stub lags runtime",
         "x = f()  # pyright: ignore[reportAssignmentType] - stub lags runtime",

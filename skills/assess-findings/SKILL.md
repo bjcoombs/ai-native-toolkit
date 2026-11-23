@@ -131,11 +131,17 @@ _Note: Mutation testing stopped at its time budget in every package it ran in. L
 
 <one-line takeaway: reachability plus whether it is a wayfinding or a truth gap - e.g. "~10% link-reachable: a curation/wayfinding gap, not hidden content; no lying maps.">
 
-### Evidence behind the level
+### Where you are on the Steps
 
-[![Evidence behind the level](./evidence-waffle.svg)](./evidence-waffle.svg)
+[![Where you are on the Steps](./step-ladder.svg)](./step-ladder.svg)
 
-<the waffle's caption and its "In place:" line, copied verbatim from the `## Evidence behind the level` section that `assess_report.py <repo> --stdout` prints; when that section says "Not drawn:", write its reason here instead of the image>
+<the ladder's caption and its "In place:" line, copied verbatim from the `## Where you are on the Steps` section that `assess_report.py <repo> --stdout` prints; when that section says "Not drawn:", write its reason here instead of the image>
+
+### Evidence behind the Step
+
+[![Evidence behind the Step](./evidence-waffle.svg)](./evidence-waffle.svg)
+
+<the waffle's caption and its "In place:" line, copied verbatim from the `## Evidence behind the Step` section that `assess_report.py <repo> --stdout` prints; when that section says "Not drawn:", write its reason here instead of the image>
 
 ### Packages and their imports
 

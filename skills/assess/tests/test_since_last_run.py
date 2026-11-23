@@ -104,7 +104,10 @@ def test_actions_json_is_read_at_head_not_from_the_working_tree(repo: Path) -> N
     (repo / "b.txt").write_text("2\n", encoding="utf-8")
     _commit(repo, "2026-11-02T10:00:00Z", "fix")
     _actions(repo, {"action": "x", "status": "done", "completed_sha": _git(repo, "rev-parse", "HEAD")})
-    assert since_last_run(_level("met", "met"), repo / ".assess", repo)["closed_count"] == 0
+    block = since_last_run(_level("met", "met"), repo / ".assess", repo)
+    # never committed: not known, never a zero that hides a working-tree done entry
+    assert (block["closed"], block["closed_reason"]) == (None, "actions_not_committed")
+    assert any("commit it for closed actions to count" in line for line in block["lines"])
 
 
 def test_unknown_previous_state_reads_null_not_zero(repo: Path) -> None:
@@ -117,7 +120,9 @@ def test_unknown_previous_state_reads_null_not_zero(repo: Path) -> None:
     assert "Gates gained: not known (the previous run has no level result)" in block["lines"]
     assert block["lines"][-1] == "Next blocker: none, every gate is held"
     (repo / ".assess" / "run-context.json").write_text("{not json", encoding="utf-8")
-    assert since_last_run(_level("met", "met"), repo / ".assess", repo)["first_run"] is False
+    block = since_last_run(_level("met", "met"), repo / ".assess", repo)
+    assert block["first_run"] is False and block["closed_reason"] == "previous_unreadable"
+    assert "Gates gained: not known (the previous run-context.json could not be read)" in block["lines"]
 
 
 def test_a_lost_gate_is_listed() -> None:
@@ -208,6 +213,43 @@ def test_unreadable_actions_json_reads_not_known_and_action_text_stays_on_one_li
     _actions(repo, {"action": "Fix\n## 2026-01-01\n<!-- chain:x -->", "status": "done", "completed_sha": sha})
     _commit(repo, "2026-11-04T10:00:00Z", "record")
     block = since_last_run(_level("met", "met"), repo / ".assess", repo)
-    assert block["closed"] is not None and block["closed"][0]["action"] == "Fix ## 2026-01-01 <!-- chain:x -->"
+    assert block["closed"] is not None and block["closed"][0]["action"] == "Fix ## 2026-01-01 &lt;!-- chain:x -->"
+    assert "<!--" not in block["markdown"]
     assert all("\n" not in line for line in block["lines"])
     assert not any(line.startswith(("## ", "<!--")) for line in block["markdown"].splitlines())
+
+
+def test_a_scoped_run_reads_the_whole_repo_actions_json(repo: Path) -> None:
+    """finalize writes only .assess/actions.json, so a --scope run reads that file."""
+    scoped = repo / ".assess" / "svc"
+    scoped.mkdir()
+    before = _git(repo, "rev-parse", "HEAD")
+    (scoped / "run-context.json").write_text(json.dumps(
+        {"run_id": "p", "measured_commit": {"available": True, "head_sha": before}, "level": _level("met", "met")}),
+        encoding="utf-8")
+    (repo / "b.txt").write_text("2\n", encoding="utf-8")
+    _commit(repo, "2026-11-02T10:00:00Z", "fix")
+    _actions(repo, {"action": "Scoped work", "status": "done", "completed_sha": _git(repo, "rev-parse", "HEAD")})
+    _commit(repo, "2026-11-03T10:00:00Z", "record")
+    assert since_last_run(_level("met", "met"), scoped, repo)["closed_count"] == 1
+
+
+def test_a_superseding_run_keeps_the_superseded_runs_baseline(repo: Path) -> None:
+    """A same-day re-run on the same commit compares against the run before the one it replaces."""
+    before = _git(repo, "rev-parse", "HEAD")
+    (repo / "b.txt").write_text("2\n", encoding="utf-8")
+    _commit(repo, "2026-11-02T10:00:00Z", "fix")
+    _actions(repo, {"action": "Work", "status": "done", "completed_sha": _git(repo, "rev-parse", "HEAD")})
+    _commit(repo, "2026-11-03T10:00:00Z", "record")
+    _previous(repo, _level("met", "unmet"), before)
+    replaced = since_last_run(_level("met", "met"), repo / ".assess", repo)
+    head = _git(repo, "rev-parse", "HEAD")
+    (repo / ".assess" / "run-context.json").write_text(json.dumps(
+        {"run_id": "b", "measured_commit": {"available": True, "head_sha": head}, "since_last_run": replaced}),
+        encoding="utf-8")
+    superseded = json.loads((repo / ".assess" / "run-context.json").read_text(encoding="utf-8"))
+    again = since_last_run(_level("met", "met"), repo / ".assess", repo, superseded)
+    assert (again["closed_count"], again["previous_commit"], again["previous_run_id"]) == (1, before, "prev-run")
+    assert (again["gates_gained"], again["lines"]) == (["ci_runs_tests"], replaced["lines"])
+    # without the supersede input the same files would compare against run b: nothing closed
+    assert since_last_run(_level("met", "met"), repo / ".assess", repo)["closed_count"] == 0

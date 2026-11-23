@@ -12,8 +12,8 @@ import json
 from pathlib import Path
 
 from assess_core import build_and_publish_run
-from lib.dart_capabilities import scan_dart_capabilities
-from lib.liveness_scan import scan_liveness
+from lib.keyhole.dart_capabilities import scan_dart_capabilities
+from lib.keyhole.liveness_scan import scan_liveness
 
 
 def _write(root: Path, rel: str, text: str = "x") -> None:

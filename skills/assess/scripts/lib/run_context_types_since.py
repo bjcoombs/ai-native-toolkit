@@ -25,7 +25,7 @@ class SinceLastRun(TypedDict):
     previous_run_id: str | None
     previous_commit: str | None  # the commit the previous run measured; None when unknown
     closed: list[ClosedAction] | None  # None: unknown, ``closed_reason`` says why
-    closed_reason: str | None  # no_previous_commit, previous_commit_absent or actions_unreadable
+    closed_reason: str | None  # why ``closed`` is unknown (``since_last_run.UNKNOWN_CLOSED``)
     closed_count: int | None
     unresolved: int | None  # done entries naming a commit not in this clone; None when not read
     gates_gained: list[str] | None  # gate ids, in Step order; None: the previous run has no level

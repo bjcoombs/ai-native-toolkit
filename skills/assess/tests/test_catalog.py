@@ -23,7 +23,7 @@ from lib.catalog import (CATALOG_VERSION, GRADE_ORDER, UNCLASSIFIED, build_catal
                          grade_of, render_json)
 from lib.catalog_md import CONDITION_COLUMNS, render_markdown
 from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
-from lib.keyhole_signals import FINDING_ORDER
+from lib.keyhole.keyhole_signals import FINDING_ORDER
 from lib.level_signals import SIGNAL_INPUTS, counts_toward_level, load_default_levels
 from lib.scan_registry import SCANS
 from lib.signals import known_scans

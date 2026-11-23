@@ -9,6 +9,8 @@ run check`, `tox`, the program after `uv run`), or a committed script named for 
 check; an install (`npm ci`, `uv sync --extra test`) never is. `is_check_name(name)`
 splits a target name on `:_./-` and looks for a word of `CHECK_NAMES` (`CHECK_WORDS`, no `ci`:
 #951, so CI's `make ci` reads null; `lib.named_check` adds `ci` for instruction files).
+For `make`, `mvn`, `gradle`, `go` and `cargo` the first positional names the work, skipping a
+shell expansion (`mvn ${MVN_ARGS} verify` runs `verify`; #799).
 `is_lint_command(text)` walks the same program/target anchoring with `LINT_WORDS`
 (`lint`, `vet`, `clippy` and the linters) and `LINT_PROGRAMS` (`ruff`, `eslint`,
 `mypy` ... run directly), so `make lint` and `npx eslint` count and an install
@@ -74,7 +76,8 @@ lint. `BARE_RUN_PROGRAMS` is the set a lone bare YAML item is a value for
 analysers of `lint_vocabulary.ANALYSER_PROGRAMS`, and `is_lint_command` and `is_lint_run`
 also accept `lint_vocabulary.ecosystem_lint` (a formatter in its check mode, `mix credo`,
 `dart analyze`, a Gradle lint task). `_plain_wrapper` reads `xargs [flags] <program>` and
-`dotnet tool run <program>` as the program they run, in `_wrapped` too, where a non-check
+`dotnet tool run <program>`, and (#799) `xvfb-run [flags] <program>` and `timeout [flags]
+DURATION <program>`, as the program they run, in `_wrapped` too, where a non-check
 program behind them stays false (`xargs rm` is not a target whose recipe is unread).
 `is_format_rewrite(text)` is a formatter that rewrites files (`clang-format -i`,
 `xargs clang-format-21 -i`, `mix format`), read by `ci_lint_gates`. `is_info_invocation`

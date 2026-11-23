@@ -17,11 +17,19 @@ Catalogue coverage: 0 of 3 measured, 0 verified · 15 not measured (needs a full
 
 By tag: behaviour 0 of 2 (NOT MEASURED: 1) · docs 0 of 0 (NOT MEASURED: 2) · structure 0 of 1 (NOT MEASURED: 5) · agent_context 0 of 0 (NOT MEASURED: 4) · agent_runtime 0 of 0 (NOT MEASURED: 1) · governance 0 of 0 (NOT MEASURED: 2) · supply_chain 0 of 0 (NOT MEASURED: 1)
 
-## Evidence behind the level
+## Where you are on the Steps
+
+In place: Step 1 of 4, Assisted: an agent can read and help with your code.
+
+[![Where you are on the Steps](./step-ladder.svg)](./step-ladder.svg)
+
+Step 2, Supervised agent PRs, opens when more practices are in place.
+
+## Evidence behind the Step
 
 In place: 0 counted conditions met (0 verified, 0 measured) and 1 listed from config or a declaration.
 
-[![Evidence behind the level](./evidence-waffle.svg)](./evidence-waffle.svg)
+[![Evidence behind the Step](./evidence-waffle.svg)](./evidence-waffle.svg)
 
 Verified and measured squares count toward the level, listed ones are shown but never counted, and hatched ones were not measured, never read as zero.
 

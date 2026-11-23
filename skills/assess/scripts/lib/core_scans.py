@@ -29,9 +29,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from lib.accretion_ratchet import AccretionScan, scan_accretion_ratchet
+from lib.keyhole.accretion_ratchet import AccretionScan, scan_accretion_ratchet
 from lib.anomaly_detector import detect_anomalies
-from lib.archetype import analyze_archetype
+from lib.keyhole.archetype import analyze_archetype
 from lib.since_last_run import SinceLastRun
 from lib.since_last_run import since_last_run as since_last_run_block
 from lib.assess_config import WorkingNotesConfig, load_structure_config, load_working_notes_config
@@ -61,18 +61,18 @@ from lib.instruction_files import (
     instruction_file_size,
 )
 from lib.interactivity import build_offers_block
-from lib.keyhole_signals import integrate
+from lib.keyhole.keyhole_signals import integrate
 from lib.headline import Headline, run_context_headline
 from lib.level_result_types import LevelResult, OwnerExclusionsBlock
 from lib.level_tally import LEVEL_READS, run_context_level
-from lib.liveness_scan import scan_liveness
+from lib.keyhole.liveness_scan import scan_liveness
 from lib.owner_exclusions import owner_exclusions_block
 from lib.unit_discovery import UnitsBlock, scan_units
 from lib.unit_levels import UnitLevelsBlock, unit_levels as unit_levels_block
 from lib.unit_rollup import UnitRollUpBlock, unit_rollup as unit_rollup_block
 from lib.unit_readings import UnitReadingsBlock, read_units, split_reads
 from lib.mutation_cap import mutation_not_run_cap, normalize_test_pressure
-from lib.promissory_markers import scan_promissory_markers
+from lib.keyhole.promissory_markers import scan_promissory_markers
 from lib.run_context_types import DocGraphBlock, KeyholeIntegration
 from lib.sibling_tests import TestIndex, build_test_index
 from lib.graph.structure_graph import StructureBlock, analyze_structure
@@ -401,7 +401,8 @@ def headline(level_block: Any) -> Headline:
     return run_context_headline(level_block)
 
 
-def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path) -> SinceLastRun:
+def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path, superseded: Any) -> SinceLastRun:
     """The run context's ``since_last_run`` block (#1083): actions closed, gates gained or
-    lost and the next blocker, against the run-context the previous run left."""
-    return since_last_run_block(level_block, assess_dir, repo_root)
+    lost and the next blocker, against the run-context the previous run left (or, for a run
+    that supersedes a same-day run on the same commit, against that run's own baseline)."""
+    return since_last_run_block(level_block, assess_dir, repo_root, superseded)

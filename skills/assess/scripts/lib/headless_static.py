@@ -43,12 +43,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from lib.archetype import analyze_archetype
+from lib.keyhole.archetype import analyze_archetype
 from lib.assess_config import load_working_notes_config
 from lib.context_blocks import doc_to_code_edges
 from lib.doc_graph import build_doc_graph
 from lib.doc_staleness import analyze_doc_staleness
-from lib.liveness_scan import scan_observability
+from lib.keyhole.liveness_scan import scan_observability
 from lib.owner_exclusions import owner_exclusions_block
 from lib.run_context_types import JsonDict
 from lib.scan_registry import STAGE_READ_SIDE, STAGE_SETUP, ScanSpec

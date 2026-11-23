@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.accretion_ratchet import (  # noqa: E402
+from lib.keyhole.accretion_ratchet import (  # noqa: E402
     _FileHistory,
     _build_accretion_file,
 )

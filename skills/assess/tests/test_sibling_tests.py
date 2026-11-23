@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lib import keyhole_signals as ks
+import lib.keyhole.keyhole_signals as ks
 from lib import run_wiki
 from lib import sibling_tests as tc
 from lib.test_focus import compute_test_focus, mutation_scope
