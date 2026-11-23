@@ -195,6 +195,28 @@ def test_a_rename_with_an_edit_counts_only_the_edited_lines(tmp_path: Path) -> N
     assert agent_outcome._added_lines(r, _git(r, "rev-parse", "HEAD").strip()) == {"g.txt": 1}
 
 
+def test_blame_ignores_a_configured_ignore_revs_file(tmp_path: Path) -> None:
+    r = _init(tmp_path)
+    _git(r, "config", "blame.ignoreRevsFile", "missing-ignore-revs")
+    _commit(r, "x.txt", "one\ntwo\n", T0 + DAY, agent=True)
+    _commit(r, "x.txt", "one\nTWO\n", T0 + 2 * DAY)
+    _commit(r, "pad.txt", "pad\n", T0 + (REWORK_DAYS + 5) * DAY)
+    block = _ok(scan_agent_outcome(r, None, None))
+    assert block["reworked_commits"] == 1
+
+
+def test_rework_reads_only_lines_inside_the_scope(tmp_path: Path) -> None:
+    r = _init(tmp_path)
+    (r / "out.txt").write_text("one\ntwo\n", encoding="utf-8")
+    _git(r, "add", "out.txt", at=T0 + DAY)
+    _commit(r, "pkg/in.txt", "in\n", T0 + DAY, agent=True)  # also commits out.txt
+    _commit(r, "out.txt", "one\nTWO\n", T0 + 2 * DAY)       # rework outside the scope
+    _commit(r, "pad.txt", "pad\n", T0 + (REWORK_DAYS + 5) * DAY)
+    assert _ok(scan_agent_outcome(r, None, None))["reworked_commits"] == 1
+    scoped = _ok(scan_agent_outcome(r, r / "pkg", None))
+    assert scoped["agent_commits"] == 1 and scoped["reworked_commits"] == 0
+
+
 def test_rework_sample_is_the_newest_observed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(agent_outcome, "REWORK_SAMPLE", 1)
     r = _init(tmp_path)

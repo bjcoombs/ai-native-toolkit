@@ -48,7 +48,7 @@ clone (a truncated history hides the reverting commit) each make the block
 which counts-only output keeps (``lib.reason_codes``).
 
 Scope: the agent commits are those touching the ``--scope`` subtree, as in
-``ai_usage``; the reverting and restoring commits are looked for across the
+``ai_usage``, and rework reads only the lines they added inside it; the reverting and restoring commits are looked for across the
 whole repository, since a path filter would cut the diffs the patch-ids compare.
 
 Privacy: counts, shares and fixed strings only. No sha, path, name or subject
@@ -244,13 +244,14 @@ def _reverted(repo_root: Path, agents: list[HistoryCommit],
     return by_message, by_restore
 
 
-def _added_lines(repo_root: Path, sha: str) -> dict[str, int]:
-    """Lines the commit added, per path it leaves; binary files left out.
+def _added_lines(repo_root: Path, sha: str, scope: Path | None = None) -> dict[str, int]:
+    """Lines the commit added under ``scope``, per path it leaves; binary files left out.
 
     Renames are detected (``-M``), so a pure ``git mv`` adds no line and a rename with
     an edit adds only the edited lines, under the new path: ``git blame`` follows the
     rename back and credits the moved lines to their first commit."""
-    out = _git(repo_root, "show", "--numstat", "-z", "-M", "--format=", sha)
+    out = _git(repo_root, "show", "--numstat", "-z", "-M", "--format=", sha,
+               "--", str(scope) if scope is not None else ".")
     fields = out.lstrip("\n").split("\0")
     added: dict[str, int] = {}
     i = 0
@@ -274,11 +275,13 @@ def _surviving(repo_root: Path, sha: str, at: str, path: str) -> int | None:
     path is gone at ``at``."""
     if not _git(repo_root, "ls-tree", "--name-only", at, "--", path).strip():
         return None
-    out = _git(repo_root, "blame", "-l", "-s", "--root", at, "--", path)
+    # --no-ignore-revs-file: a blame.ignoreRevsFile in the user's config would make the
+    # attribution depend on the machine, or fail outright where the file is missing.
+    out = _git(repo_root, "blame", "--no-ignore-revs-file", "-l", "-s", "--root", at, "--", path)
     return sum(1 for line in out.splitlines() if line.startswith(sha))
 
 
-def _reworked(repo_root: Path, commit: HistoryCommit) -> bool:
+def _reworked(repo_root: Path, commit: HistoryCommit, scope: Path | None = None) -> bool:
     """Whether a line the commit added is not its own in blame ``REWORK_DAYS`` later.
 
     The blame point is the newest descendant of the commit on HEAD's history within the
@@ -290,7 +293,7 @@ def _reworked(repo_root: Path, commit: HistoryCommit) -> bool:
               f"{commit.sha}..HEAD").strip()
     if not at:
         return False
-    for path, count in _added_lines(repo_root, commit.sha).items():
+    for path, count in _added_lines(repo_root, commit.sha, scope).items():
         if not _git(repo_root, "log", "--format=%H", f"{commit.sha}..{at}", "--", path).strip():
             continue  # nothing touched the file in the span
         kept = _surviving(repo_root, commit.sha, at, path)
@@ -319,7 +322,7 @@ def scan_agent_outcome(
         head_time = int(_git(repo_root, "log", "-1", "--format=%ct", "HEAD").strip() or 0)
         observed = [c for c in agents if c.committed_at + REWORK_DAYS * DAY_SECONDS <= head_time]
         sample = sorted(observed, key=lambda c: c.committed_at, reverse=True)[:REWORK_SAMPLE]
-        reworked = sum(_reworked(repo_root, c) for c in sample)
+        reworked = sum(_reworked(repo_root, c, scope) for c in sample)
     except _GitFailed as e:
         return _unavailable(str(e))
     reverted = by_message | by_restore
