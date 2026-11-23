@@ -3,8 +3,9 @@
 A project ``target: 80%`` is a gate at 80, but Codecov posts its status server-side, so
 whether it gates a merge (branch protection requiring it) is not read: Layer 6 level 1
 reads null, never true and never false. ``target: auto`` (or no target) reads unknown
-with ``codecov_target_not_read``. Project and patch statuses both count (#788 names
-both). A malformed config never raises.
+with ``codecov_target_not_read``. A patch status bounds changed lines only: it never
+meets the minimum, and a patch-only config reads null with ``codecov_patch_only``, never
+false (maintainer-approved on #882). A malformed config never raises.
 """
 from __future__ import annotations
 
@@ -12,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from lib.coverage_codecov import (CODECOV_UNMEASURED, STATUS_UNCONFIRMED, codecov_statuses,
-                                  config_path, target_percent)
+from lib.coverage_codecov import (CODECOV_UNMEASURED, PATCH_ONLY, STATUS_UNCONFIRMED,
+                                  codecov_statuses, config_path, target_percent)
 from lib import unit_readings as ur
 from lib.coverage_gate import GO_RUST_UNMEASURED, detect_coverage_gate
 
@@ -100,19 +101,38 @@ def test_go_rust_reason_keeps_its_precedence_over_a_low_codecov_target(tmp_path:
     assert block["unmeasured_reason"] == GO_RUST_UNMEASURED
 
 
-@pytest.mark.parametrize(("target", "meets", "reason", "basis"), [
-    ("100%", True, None, STATUS_UNCONFIRMED),
-    ("auto", None, CODECOV_UNMEASURED, "threshold_not_read"),
-])
-def test_a_patch_status_counts_and_never_reads_unmet(
-        tmp_path: Path, target: str, meets: bool | None, reason: str | None, basis: str) -> None:
+@pytest.mark.parametrize("target", ["100%", "auto", "10"])
+def test_a_patch_only_config_reads_unknown_never_met_or_unmet(tmp_path: Path, target: str) -> None:
     patch = f"coverage:\n  status:\n    patch:\n      default:\n        target: {target}\n"
     block = detect_coverage_gate(_write(tmp_path, {"codecov.yml": patch}))
     assert [g["metric"] for g in block["gates"]] == ["patch"]
     assert block["configured"] is True
-    assert block["threshold_meets_minimum"] is meets
-    assert block["unmeasured_reason"] == reason
-    assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (None, basis)
+    assert block["threshold_meets_minimum"] is None
+    assert block["unmeasured_reason"] == PATCH_ONLY
+    assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (None, "threshold_not_read")
+
+
+def test_a_patch_status_never_meets_beside_a_low_project_target(tmp_path: Path) -> None:
+    text = ("coverage:\n  status:\n    project:\n      default:\n        target: 20%\n"
+            "    patch:\n      default:\n        target: 100%\n")
+    block = detect_coverage_gate(_write(tmp_path, {"codecov.yml": text}))
+    assert block["threshold_meets_minimum"] is None
+    assert block["unmeasured_reason"] == PATCH_ONLY
+
+
+def test_an_auto_project_target_names_its_reason_beside_a_patch_status(tmp_path: Path) -> None:
+    text = ("coverage:\n  status:\n    project:\n      default:\n        target: auto\n"
+            "    patch:\n      default:\n        target: 100%\n")
+    block = detect_coverage_gate(_write(tmp_path, {"codecov.yml": text}))
+    assert block["threshold_meets_minimum"] is None
+    assert block["unmeasured_reason"] == CODECOV_UNMEASURED
+
+
+def test_a_ci_gate_run_in_ci_still_meets_beside_a_patch_status(tmp_path: Path) -> None:
+    patch = "coverage:\n  status:\n    patch:\n      default:\n        target: 100%\n"
+    block = detect_coverage_gate(_write(tmp_path, {"codecov.yml": patch, CI: WORKFLOW.format(n=80)}))
+    assert (block["threshold_meets_minimum"], block["unmeasured_reason"]) == (True, None)
+    assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (True, "ci_run")
 
 
 def test_no_codecov_config_leaves_the_reading_unchanged(tmp_path: Path) -> None:

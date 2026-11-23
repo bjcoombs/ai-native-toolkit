@@ -49,8 +49,8 @@ reads counts when CI runs coverage from the root, and reads unknown when where C
 it is not resolved (#1032, ``lib.coverage_root_config``).
 
 Codecov status targets in ``codecov.yml`` (#882, ``lib.coverage_codecov``): a project
-``target: 80%`` (project or patch) is a gate at 80 that CI does not run
-(``status_check_unconfirmed``); an ``auto`` target reads unknown (``codecov_target_not_read``).
+``target: 80%`` is a gate at 80 that CI does not run (``status_check_unconfirmed``); an
+``auto`` target reads unknown (``codecov_target_not_read``), and so does a patch status.
 
 What switches coverage on for a plain ``pytest`` or ``jest`` run (``addopts``,
 ``collectCoverage``), read per config directory, is ``lib.coverage_activation``'s.
@@ -71,7 +71,7 @@ from typing import Literal, TypedDict
 
 from lib.assess_config import is_user_excluded
 from lib.coverage_activation import read_activation
-from lib.coverage_codecov import CODECOV_UNMEASURED, codecov_statuses, codecov_unread
+from lib.coverage_codecov import codecov_reason, codecov_statuses, meets_percent
 from lib.coverage_ci import NO_RUNS, CiRuns, EnforcedBasis, enforced_meets_minimum, read_ci_runs
 from lib.coverage_root_config import ROOT_UNRESOLVED, root_config, root_config_applies
 from lib.doc_graph import is_excluded_path
@@ -702,8 +702,8 @@ def threshold_meets_minimum(gates: list[CoverageGate]) -> bool | None:
     count), since it could be 50 or more; otherwise False.
     """
     counted = [g for g in gates if gates_something(g)]
-    percents = [g["threshold_percent"] for g in counted]
-    if any(p is not None and p >= MINIMUM_THRESHOLD_PERCENT for p in percents):
+    percents = [meets_percent(g) for g in counted]   # #882: a Codecov patch status is unknown
+    if any(isinstance(p, (int, float)) and p >= MINIMUM_THRESHOLD_PERCENT for p in percents):
         return True
     if any(p is None for p in percents):
         return None
@@ -773,8 +773,8 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
     meets = None if unmeasured else meets
     if applies is None and unmeasured is None and meets != own:
         meets, unmeasured = None, ROOT_UNRESOLVED   # the root floor may not govern the scope
-    if meets is None and unmeasured is None and codecov_unread(gates, gates_something):
-        unmeasured = CODECOV_UNMEASURED   # #882: a Codecov ``target: auto`` decides it
+    if meets is None and unmeasured is None:
+        unmeasured = codecov_reason(gates, gates_something)   # #882: Codecov decides it
     # Root gates that may not govern the scope are reported, never counted or credited.
     known = gates if applies is not None else gates[:len(gates) - len(root_gates)]
     enforced, basis = enforced_meets_minimum(

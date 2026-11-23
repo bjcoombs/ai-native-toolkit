@@ -7,12 +7,16 @@ and the target as written (``80%`` and ``80`` are 80); ``target: auto``, a statu
 no ``target`` (Codecov's default is ``auto``: the base commit's coverage) and a target
 that is not a number read ``threshold: null``.
 
-How a status counts toward Layer 6 level 1 (project and patch alike, as #788 names both):
+How a status counts toward Layer 6 level 1 (maintainer-approved, #882):
 
-- It counts like any other gate: ``target: 80%`` makes ``threshold_meets_minimum``
-  true, and an ``auto`` target makes it null with ``unmeasured_reason``
-  ``codecov_target_not_read`` (``CODECOV_UNMEASURED``) when no other gate decides it,
-  never false.
+- A project status counts like any other gate: ``target: 80%`` makes
+  ``threshold_meets_minimum`` true, and an ``auto`` target makes it null with
+  ``unmeasured_reason`` ``codecov_target_not_read`` (``CODECOV_UNMEASURED``) when no
+  other gate decides it, never false.
+- A patch status bounds only the changed lines (removing a test changes none), so it
+  never makes ``threshold_meets_minimum`` true; read as a gate whose percentage of total
+  coverage is not known (``meets_percent``), a patch-only config reads null with
+  ``codecov_patch_only`` (``PATCH_ONLY``), never false.
 - The status is server-side: it gates a merge only when branch protection requires it,
   which this read does not see. So a Codecov gate never reads as run by CI:
   ``lib.coverage_ci`` reads it null with ``enforced_basis`` ``status_check_unconfirmed``
@@ -43,6 +47,7 @@ from typing import TypeVar
 from lib.assess_config import is_user_excluded
 
 CODECOV_UNMEASURED = "codecov_target_not_read"
+PATCH_ONLY = "codecov_patch_only"
 STATUS_UNCONFIRMED = "status_check_unconfirmed"
 TOOL = "codecov"
 
@@ -175,8 +180,21 @@ def codecov_statuses(root: Path, excludes: Excludes = (set(), [])) -> list[Statu
     return _statuses(rel, text.splitlines())
 
 
-def codecov_unread(gates: Sequence[G], counted: Callable[[G], bool]) -> bool:
-    """True when every counted gate whose percentage was not read is a Codecov status
-    (so ``threshold_meets_minimum`` is null because of a Codecov ``auto`` target)."""
-    unread = [g for g in gates if counted(g) and g["threshold_percent"] is None]
-    return bool(unread) and all(g["tool"] == TOOL for g in unread)
+def _patch(gate: Mapping[str, object]) -> bool:
+    return gate["tool"] == TOOL and gate["metric"] == "patch"
+
+
+def meets_percent(gate: Mapping[str, object]) -> object:
+    """The percentage of total coverage a gate holds: its ``threshold_percent``, or None
+    for a Codecov patch status, which bounds changed lines only."""
+    return None if _patch(gate) else gate["threshold_percent"]
+
+
+def codecov_reason(gates: Sequence[G], counted: Callable[[G], bool]) -> str | None:
+    """The ``unmeasured_reason`` for a null ``threshold_meets_minimum`` when every counted
+    gate whose percentage is not known is a Codecov status: ``codecov_target_not_read``
+    when one is a project status, ``codecov_patch_only`` when all are patch; else None."""
+    unread = [g for g in gates if counted(g) and meets_percent(g) is None]
+    if not unread or not all(g["tool"] == TOOL for g in unread):
+        return None
+    return PATCH_ONLY if all(_patch(g) for g in unread) else CODECOV_UNMEASURED
