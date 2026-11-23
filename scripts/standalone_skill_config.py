@@ -14,6 +14,8 @@ Each entry in SKILLS maps a skill name to:
   bundle_files           — optional dict mapping ZIP-relative dest paths → source
                            paths (relative to repo root). Markdown files have their
                            YAML frontmatter stripped during bundling.
+  generated_files        — optional dict mapping ZIP-relative dest paths → text the
+                           build writes there (assess: plugin-version.json, #1166).
 """
 
 import json
@@ -57,6 +59,9 @@ SKILLS: dict[str, dict[str, Any]] = {
             + VERSION_SUFFIX
         ),
         "source_dir": "skills/assess",
+        # The standalone copy has no .claude-plugin/plugin.json, so the build writes the
+        # version beside the skill for lib/plugin_version.py to read (#1166).
+        "generated_files": {"plugin-version.json": json.dumps({"version": VERSION}) + "\n"},
         # changes/ holds the release-time version notes (#1011), not skill content.
         "exclude_dirs": {"tests", "__pycache__", ".pytest_cache", ".venv", "changes"},
         "replacements": {

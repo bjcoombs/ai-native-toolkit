@@ -73,6 +73,7 @@ for name, cfg in SKILLS.items():
         replacements=cfg["replacements"],
         exclude_dirs=frozenset(cfg["exclude_dirs"]),
         bundle_files=bundle_files,
+        generated_files=cfg.get("generated_files"),
     )
     if issues:
         print(f"  FAIL — {len(issues)} issue(s):")

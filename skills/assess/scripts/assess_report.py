@@ -5,6 +5,8 @@ Reads ``.assess/run-context.json`` and renders a Markdown report from a stdlib
 tokens and produces the same report for the same context, on every PR forever.
 
 It renders:
+- the header: the run date, the `/assess` version (left out when the run read none,
+  ``made_by``, #1166) and the measured commit,
 - the executive summary first (``lib/exec_summary.py``, #1102): the Step and what an
   agent can do there, the next gate as a task, what changed since the last run, and one
   linked call to action, pasted from the ``headline`` block's ``summary_markdown``,
@@ -105,7 +107,7 @@ TIER1_METRICS = [
 
 REPORT_TEMPLATE = Template("""# Deterministic Assessment Snapshot: $repo_name
 
-_Generated $run_date by `/assess` v$plugin_version.${commit_note}_
+_Generated $run_date by $made_by.${commit_note}_
 
 ${summary_section}${since_section}## Headline
 
@@ -633,7 +635,7 @@ def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None =
     report = REPORT_TEMPLATE.substitute(
         repo_name=repo_name,
         run_date=ctx.get("run_date", "unknown"),
-        plugin_version=ctx.get("plugin_version", "unknown"),
+        made_by=made_by(ctx),
         commit_note=_render_commit_note(ctx),
         summary_section=render_summary_section(ctx),
         since_section=render_since_section(ctx),
@@ -658,6 +660,16 @@ def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None =
     # measured. structure_drift with no ownership map leaves a no_ownership_map marker.
     measured = measured_section([ctx], absent_code="no_block")
     return f"{report.rstrip()}\n\n{measured}\n"
+
+
+def made_by(ctx: dict[str, Any]) -> str:
+    """The header's tool stamp: "`/assess` v<version>", or "`/assess`" with no version.
+
+    A run that could read no version (#1166: neither ``plugin.json`` nor the standalone
+    build's version file) leaves the version out rather than printing "vunknown".
+    """
+    version = ctx.get("plugin_version") or "unknown"
+    return "`/assess`" if version == "unknown" else f"`/assess` v{version}"
 
 
 def _structure_drift_section(ctx: dict[str, Any], repo_name: str) -> str:
