@@ -366,11 +366,11 @@ def unit_levels(readings: Any, *blocks: Any) -> UnitLevelsBlock:
     return unit_levels_block(readings, *blocks)
 
 
-def unit_rollup(levels: Any) -> UnitRollUpBlock:
+def unit_rollup(levels: Any, units_block: Any = None) -> UnitRollUpBlock:
     """The repository roll-up over the units and the unit-unlock ranking (#865): the lowest
-    unit's Step, "N of M measured units" at the next Step, and the changes ranked by the
-    units they lift. Core-only."""
-    return unit_rollup_block(levels)
+    unit's Step, "N of M measured units" at the next Step, the changes ranked by the
+    units they lift, and the siblings that hold each unit's next gate (#1155). Core-only."""
+    return unit_rollup_block(levels, units_block=units_block)
 
 
 def offers_blocks(non_interactive: bool) -> dict[str, Any]:

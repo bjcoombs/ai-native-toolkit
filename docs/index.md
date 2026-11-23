@@ -43,6 +43,8 @@ Team-orchestration library skills (invoked by the workflow skills, not standalon
 
 The deterministic core's per-module reference is each module's docstring under `skills/assess/scripts/lib/`, and its seam map is [`skills/assess/scripts/lib/README.md`](../skills/assess/scripts/lib/README.md); its test suites are mapped to the modules they pin in [`skills/assess/tests/README.md`](../skills/assess/tests/README.md).
 
+The [glossary](glossary.md) gives the report's words (Step, gate, practice, level, evidence grade and more) in plain English, a sentence or two each.
+
 The [scoring model](../skills/assess/references/scoring-model.md) is the current, decided state of how `/assess` and `/fleet` score a repository, marking what has shipped and what is decided but pending: truth tags, Steps by gates only, and the headline with its catalogue coverage line. It is the page to read before changing the maturity model.
 
 The hotspot score's formula, and why a co-change breadth term was tested and left out, is recorded in the [co-change experiment note](../skills/assess/references/hotspot-cochange-experiment.md).

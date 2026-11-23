@@ -21,7 +21,6 @@ four `WIKI_KEYS`, `prior_findings_snapshot` and `prior_level` (#940) reserved as
 """
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -35,6 +34,7 @@ from lib.context_blocks import generated_exclusion
 from lib.complexity.diff_reliability import compute_diff_reliability, prior_stamps, stats_tool_versions
 from lib.git_churn import git_commit_info, window_from_churn_label
 from lib.instruction_files import grade_instruction_files
+from lib.plugin_version import read_version
 from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
 from lib.complexity.stats_diff import StatsDiff, diff_stats, load_stats
 from lib.wiki_state import (
@@ -77,18 +77,15 @@ def new_run_id() -> str:
 
 
 def read_plugin_version(plugin_json: Path = PLUGIN_JSON) -> str:
-    """The plugin version from ``.claude-plugin/plugin.json``, or ``unknown``.
+    """The plugin version from ``.claude-plugin/plugin.json``, else the standalone skill's
+    ``plugin-version.json`` (``lib.plugin_version``, #1166), or ``unknown``.
 
     Never raises: an unreadable, malformed or non-object manifest reads as
     ``unknown``, the string every reader (decline markers, the wiki log, the
     report) already treats as no version, so the scan table's entry needs no
     degrade marker in place of a string.
     """
-    try:
-        data = json.loads(plugin_json.read_text(encoding="utf-8"))
-        return str(data.get("version", "unknown"))
-    except (OSError, ValueError, AttributeError):
-        return "unknown"
+    return read_version(plugin_json)
 
 
 def run_scope(repo_root: Path, requested_scope: Path | None) -> tuple[Path | None, str | None, str]:

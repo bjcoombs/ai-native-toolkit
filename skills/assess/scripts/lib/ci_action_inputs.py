@@ -80,7 +80,7 @@ def forwarded_inputs(action_text: str) -> frozenset[str]:
     return frozenset(names)
 
 
-def _local_paths(uses: str) -> list[str]:
+def local_action_paths(uses: str) -> list[str]:
     path = uses.removeprefix("./").rstrip("/")
     if not path or path.split("/")[0] == ".." or "${{" in path:
         return []
@@ -92,7 +92,7 @@ def _local_paths(uses: str) -> list[str]:
 def _shell_input(uses: str, key: str, read_local: ReadLocal) -> bool | None:
     """True when the action runs input ``key`` as shell, False when it is known not to, else None."""
     if uses.startswith("./"):
-        for rel in _local_paths(uses):
+        for rel in local_action_paths(uses):
             text = read_local(rel)
             if text is not None:
                 return True if key in forwarded_inputs(text) else None

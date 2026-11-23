@@ -91,7 +91,12 @@ gate of the model's `[[steps]]` that does not hold, once per gate id in Step ord
 tokens only: `gate` (the gate id), `state` (the blocking condition's state) and
 `disposition` (`excluded_by_owner`, else `null`); empty when every gate holds or the
 repository is not measured. A Step target above the repository's next Step reads
-its missing gates from it. `tags` (#1073) is the per-tag strip of the repository's own
+its missing gates from it. `learn_from` (#1155) lists up to three measured repositories of the run that
+already hold the first gate of the repository's `next_step`, by key, so a team can learn
+from one that has solved the same problem: in clear under `--full`, hashed under
+`--hash-paths` or `--hash-salt`, `null` in plain counts-only output and for a repository not
+measured; empty when no repository holds the gate or the gate is not one to change (not
+measured or excluded by the owner). `tags` (#1073) is the per-tag strip of the repository's own
 headline for the same level result: one cell per truth tag a condition carries, in the
 catalog's tag order, with `tag`, `met`, `measured` and `verified` (counted like the tally)
 and `not_measured`, `hazards` and `declined` (the NOT MEASURED, HAZARD and DECLINED counts).
@@ -135,6 +140,14 @@ units. Each row has:
 - `next_blocker`: the first gate of that Step that does not hold, as tokens: `gate`,
   `state` and `disposition`, as `gate_blockers` writes them; `null` when no gate blocks it.
 - `tags`: the unit's per-tag tally, the shape of the repository's `tags`.
+- `learn_from`: up to three sibling units of the same repository that already hold the
+  unit's `next_blocker` gate (#1155), the same ecosystem and kind first, then by folder, so a
+  team can learn from a unit that has solved the same problem. A sibling holds a gate only
+  when every condition the gate covers is met. An empty list when no sibling holds it, or
+  when the gate is not one to change (not measured, excluded by the owner, or none). The
+  folders are written like `key`: in clear under `--full`, hashed under `--hash-paths` or
+  `--hash-salt` (the same hash as the sibling's own `key`), and the field is `null` in plain
+  counts-only output.
 
 A unit row carries no condition tally (`tally`, "N of M measured"): compare units inside
 one repository by Step, next blocker and per-tag counts. `unit_rows` is `null` when the
