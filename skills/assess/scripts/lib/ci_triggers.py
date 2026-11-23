@@ -38,6 +38,17 @@ runs in either, ``not_ordinary`` when it runs in neither and ``unknown`` otherwi
   only ``tags``, ``schedules``, ``web``, ``triggers``, ``api``, ``pipelines``,
   ``external`` or ``chat``: neither. The map form (``only: {refs: ...}``) reads its
   ``refs``; anything else is ``unknown``.
+- ``except:`` with the same reader, taken away from what ``only:`` (or its default) runs:
+  ``except: [branches]`` runs in neither, ``except: [main]`` on some branches, and an
+  ``except:`` map with a key other than ``refs`` (``variables:``) is ``unknown`` unless
+  ``only:`` already runs in neither (#1021).
+- ``extends:`` (#1021): a name or a list of names, resolved through the top-level keys of
+  the same file, multi-level, in GitLab's merge order: parents in order with the last
+  winning, then the job's own keys. ``rules:`` and ``when:`` overwrite, so a job's own
+  ``rules:`` replace a template's whole; two ``only:`` or ``except:`` maps would be
+  deep-merged and read ``unknown``. A target not in the file (one from ``include:``), a
+  cycle, an anchor or tag value, and a merged job holding ``rules:`` beside ``only:`` or
+  ``except:`` (GitLab rejects it) read ``unknown``, never as a job without rules.
 - No such key: branch pushes, and merge requests too when ``workflow: rules:`` exists.
 - A top-level ``workflow: rules:`` decides which of the two pipelines GitLab creates,
   with the same reader; a job runs only in a pipeline that is created.
@@ -46,8 +57,8 @@ runs in either, ``not_ordinary`` when it runs in neither and ``unknown`` otherwi
 - A job limited to some branches inside a workflow limited to some branches is
   ``unknown``: the two limits are not compared.
 
-Known limits: rules and ``when`` inherited through ``extends:``, ``default:``
-or a YAML anchor are not read, nor ``except:``; ``workflow: rules:`` is read only
+Known limits: ``extends:`` across ``include:`` reads ``unknown``; rules and ``when``
+inherited through ``default:`` or a YAML anchor are not read; ``workflow: rules:`` is read only
 in the file that holds it, not across ``include:``; hidden
 jobs (``.name:``) are read like any job; GitHub branch and path filters and
 ``if:`` conditions are not read here (a literal ``if: false`` is a mask in
@@ -68,9 +79,10 @@ one trigger per line from its job: `when: manual` / `never` is `not_ordinary`; `
 and `rules:` are read for merge request and branch forms (`ordinary`), schedule, tag,
 web, trigger and api forms (`not_ordinary`) and anything else (`unknown`); lines
 outside a job are `ordinary`. `keep(lines, triggers, wanted)` blanks the other lines,
-so `count_check_lines` counts each class. Known limits: `extends:`, `default:`,
-anchors and `workflow: rules:` are not resolved; branch and path filters are not
-read. Tests: `tests/test_ci_triggers.py`.
+so `count_check_lines` counts each class. Same-file `extends:` is resolved before
+`rules:`, `when:`, `only:` and `except:` are read (#1021). Known limits: `default:`,
+anchors, `extends:` across `include:` and `workflow: rules:` across files are not
+resolved; branch and path filters are not read. Tests: `tests/test_ci_triggers.py`.
 """
 from __future__ import annotations
 
@@ -194,7 +206,9 @@ def resolve_workflows(triggers: dict[str, WorkflowTrigger], texts: dict[str, str
 _Outcomes = dict[Context, Outcome]
 
 
-def _only_outcomes(tree: IndentTree, key: int) -> _Outcomes:
+def _only_outcomes(tree: IndentTree, key: int, refs_only: bool = False) -> _Outcomes:
+    """Which ordinary pipelines an ``only:`` (or ``except:``) names; ``refs_only`` makes a map
+    with any key besides ``refs`` unknown, since an unread ``except: variables:`` may stop a run."""
     line = tree.lines[key]
     values: list[str]
     unknown: _Outcomes = {c: "unknown" for c in CONTEXTS}
@@ -203,6 +217,8 @@ def _only_outcomes(tree: IndentTree, key: int) -> _Outcomes:
     else:
         children = tree.children(key)
         refs = [k for k in children if tree.lines[k].key == "refs"]
+        if refs_only and len(refs) != len(children):
+            return unknown
         if refs:
             ref = tree.lines[refs[0]]
             values = _names(ref.value) if ref.value else [tree.lines[k].value for k in tree.children(refs[0])]
@@ -242,18 +258,109 @@ def _rules_outcomes(tree: IndentTree, key: int, default_when: str = "on_success"
     return {c: outcome(rules, c, default_when) for c in CONTEXTS}
 
 
-def _job_outcomes(tree: IndentTree, job: int, workflow_rules: bool) -> _Outcomes:
-    keys = {tree.lines[k].key: k for k in tree.children(job)}
-    when = tree.lines[keys["when"]].value.strip("'\"") if "when" in keys else ""
-    if "rules" in keys:
-        return _rules_outcomes(tree, keys["rules"], when or "on_success")
+# The job keys this reader takes through ``extends:``.
+_READ_KEYS = ("rules", "when", "only", "except")
+# Each read key's defining lines, nearest the job last; None when ``extends:`` is unresolved.
+_Keys = dict[str, list[int]]
+
+
+def _parents(tree: IndentTree, key: int) -> list[str] | None:
+    """The job names an ``extends:`` value lists, or None when it is not a plain name or list."""
+    line = tree.lines[key]
+    if line.value:
+        names = _names(line.value) if line.value.startswith("[") else [line.value.strip("'\"")]
+    else:
+        children = tree.children(key)
+        if not children or not all(tree.lines[k].dash and not tree.lines[k].key for k in children):
+            return None
+        names = [tree.lines[k].value.strip("'\"") for k in children]
+    if not names or any(not n or n[0] in "&*!{|>" for n in names):
+        return None
+    return names
+
+
+def _job_keys(tree: IndentTree, job: int, top: dict[str, int], seen: frozenset[int],
+              cache: dict[int, _Keys | None]) -> _Keys | None:
+    """The read keys of ``job`` after ``extends:``: parents in order, the last winning, then the
+    job's own keys. None when a parent is not a top-level key of this file, or on a cycle."""
+    if job in cache:
+        return cache[job]
+    own = {tree.lines[k].key: k for k in tree.children(job)}
+    merged: _Keys = {}
+    if "extends" in own:
+        names = _parents(tree, own["extends"])
+        if names is None:
+            cache[job] = None
+            return None
+        for name in names:
+            parent = top.get(name)
+            inherited = None if parent is None or parent in seen else _job_keys(
+                tree, parent, top, seen | {job}, cache)
+            if inherited is None:
+                cache[job] = None
+                return None
+            for read, lines in inherited.items():
+                merged[read] = merged.get(read, []) + lines
+    for read in _READ_KEYS:
+        if read in own:
+            merged[read] = merged.get(read, []) + [own[read]]
+    cache[job] = merged
+    return merged
+
+
+def _is_map(tree: IndentTree, key: int) -> bool:
+    children = tree.children(key)
+    return not tree.lines[key].value and bool(children) and not all(tree.lines[k].dash for k in children)
+
+
+def _merged(tree: IndentTree, keys: _Keys, read: str) -> int | None:
+    """The line that decides ``read``, or -1 when GitLab deep-merges two maps (not read here)."""
+    lines = keys.get(read)
+    if not lines:
+        return None
+    # extends: deep-merges hashes and overwrites anything else: only: {refs} over only: {variables}.
+    if read in ("only", "except") and _is_map(tree, lines[-1]) and any(_is_map(tree, k) for k in lines[:-1]):
+        return -1
+    return lines[-1]
+
+
+def _except(base: _Outcomes, excluded: _Outcomes) -> _Outcomes:
+    """``only:`` outcomes less the pipelines ``except:`` names."""
+    out: _Outcomes = {}
+    for c in CONTEXTS:
+        runs, stops = base[c], excluded[c]
+        if runs == "no" or stops == "no":
+            out[c] = runs
+        elif stops == "yes":
+            out[c] = "no"
+        else:
+            # except: [main] under the default only: some branches; two branch limits are not compared.
+            out[c] = "some" if (runs, stops) == ("yes", "some") else "unknown"
+    return out
+
+
+def _job_outcomes(tree: IndentTree, keys: _Keys | None, workflow_rules: bool) -> _Outcomes:
+    unknown: _Outcomes = {c: "unknown" for c in CONTEXTS}
+    if keys is None:
+        return unknown
+    rules, when_key, only, excepted = (_merged(tree, keys, read) for read in _READ_KEYS)
+    if -1 in (only, excepted):
+        return unknown
+    when = tree.lines[when_key].value.strip("'\"") if when_key is not None else ""
+    if rules is not None:
+        # GitLab rejects a job with rules: beside only: or except:, as extends: can make one.
+        if only is not None or excepted is not None:
+            return unknown
+        return _rules_outcomes(tree, rules, when or "on_success")
     if when in ("manual", "never", "on_failure"):
         return {c: "no" for c in CONTEXTS}
-    if "only" in keys:
-        return _only_outcomes(tree, keys["only"])
-    # No rules: the default ``only: [branches, tags]`` leaves merge request pipelines out, unless
-    # ``workflow: rules:`` creates them; then the job runs there too (merge_request_pipelines docs).
-    return {"merge_request": "yes" if workflow_rules else "no", "push": "yes"}
+    # No only: means the default ``only: [branches, tags]``, which leaves merge request pipelines out
+    # unless ``workflow: rules:`` creates them; then the job runs there too (merge_request_pipelines docs).
+    default: _Outcomes = {"merge_request": "yes" if workflow_rules else "no", "push": "yes"}
+    base = _only_outcomes(tree, only) if only is not None else default
+    if excepted is not None:
+        base = _except(base, _only_outcomes(tree, excepted, refs_only=True))
+    return base
 
 
 def _workflow_outcomes(tree: IndentTree) -> _Outcomes | None:
@@ -290,16 +397,20 @@ def gitlab_line_triggers(text: str) -> list[Trigger]:
     # default: and a top-level before_script: run with the jobs, in the pipelines created.
     outside = _trigger({c: "yes" for c in CONTEXTS}, created)
     jobs: dict[int, Trigger] = {}
+    top = {line.key: i for i, line in enumerate(tree.lines)
+           if line.structural and line.level == 0 and not line.dash and line.key}
+    cache: dict[int, _Keys | None] = {}
     out: list[Trigger] = []
     for i in range(len(tree.lines)):
         ancestors = tree.ancestors(i)
-        top = ancestors[-1] if ancestors else None
-        if top is None or tree.lines[top].level != 0 or tree.lines[top].key in _GITLAB_RESERVED:
+        job = ancestors[-1] if ancestors else None
+        if job is None or tree.lines[job].level != 0 or tree.lines[job].key in _GITLAB_RESERVED:
             out.append(outside)
             continue
-        if top not in jobs:
-            jobs[top] = _trigger(_job_outcomes(tree, top, workflow is not None), created)
-        out.append(jobs[top])
+        if job not in jobs:
+            keys = _job_keys(tree, job, top, frozenset(), cache)
+            jobs[job] = _trigger(_job_outcomes(tree, keys, workflow is not None), created)
+        out.append(jobs[job])
     return out
 
 
