@@ -11,30 +11,24 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-import types
 from pathlib import Path
 
 import pytest
-from test_complexity_treemap import _StubNumpy
+from assess_test_support import stub_heavy_deps
 
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "doc-graph-svg.py"
 
 
-def _load_svg():
-    for name in ("matplotlib", "matplotlib.pyplot"):
-        sys.modules.setdefault(name, types.ModuleType(name))
-    sys.modules.setdefault("numpy", _StubNumpy("numpy"))  # with percentile (#831)
-    sys.modules["matplotlib"].pyplot = sys.modules["matplotlib.pyplot"]
-    spec = importlib.util.spec_from_file_location("doc_graph_svg", _SCRIPT)
-    mod = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
-    spec.loader.exec_module(mod)
-    return mod
-
-
 @pytest.fixture(scope="module")
 def svg():
-    return _load_svg()
+    """doc-graph-svg.py with matplotlib and numpy stood in for while this module runs (#831)."""
+    with pytest.MonkeyPatch.context() as mp:
+        stub_heavy_deps(mp, ("matplotlib", "matplotlib.pyplot", "numpy"))
+        spec = importlib.util.spec_from_file_location("doc_graph_svg", _SCRIPT)
+        assert spec and spec.loader
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        yield mod
 
 
 class _FakeResult:

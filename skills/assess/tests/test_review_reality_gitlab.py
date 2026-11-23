@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import skip_without_posix_shell
+from assess_test_support import skip_without_posix_shell
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 

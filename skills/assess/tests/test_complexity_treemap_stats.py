@@ -8,12 +8,13 @@ from __future__ import annotations
 import json
 
 import pytest
-from test_complexity_treemap import _load_treemap
+from test_complexity_treemap import stubbed_treemap
 
 
 @pytest.fixture(scope="module")
 def treemap():
-    return _load_treemap()
+    with stubbed_treemap() as mod:
+        yield mod
 
 
 def test_write_stats_uses_commits_field_and_balanced_rank(treemap, tmp_path):

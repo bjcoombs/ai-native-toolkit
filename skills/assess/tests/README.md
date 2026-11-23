@@ -40,7 +40,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_assess_report.py` | `scripts/assess_report.py` - deterministic report renderer; template substitution, section renderers, conditional fallbacks |
 | `test_emit_workflow.py` | `scripts/assess_emit_workflow.py` - CLI wrapper for the frozen-harness workflow emitter; default derivation, arg parsing, path filters and the path-filter default |
 | `test_decomposition_parity.py` | `scripts/assess_core.py` + `scripts/assess_report.py` - parity harness; guards that the deterministic pipeline produces byte-for-byte identical output after the Part 3 SKILL.md decomposition |
-| `test_complexity_treemap.py` | `scripts/complexity-treemap.py` - build-artifact filter, plugin version stamp, the render summary, CLI argument and scope checks, and the `plural()` count helper; holds `_load_treemap`, the stubbed loader the sibling modules import (heavy deps are stubbed) |
+| `test_complexity_treemap.py` | `scripts/complexity-treemap.py` - build-artifact filter, plugin version stamp, the render summary, CLI argument and scope checks, and the `plural()` count helper; holds `stubbed_treemap`, the loader the sibling modules' fixtures use (heavy deps stood in for until the fixture's scope ends, #831) |
 | `test_complexity_treemap_schema_versions.py` | `scripts/complexity-treemap.py` - `ARTIFACT_SCHEMA_VERSION`, `STATS_SCHEMA_VERSION` and tool-version stamps; the one module a schema bump edits |
 | `test_complexity_treemap_stats.py` | `scripts/complexity-treemap.py` - stats-sidecar enrichment: field naming, hotspot rank, per-function ccn, estimated tokens, code/data maxima and distribution blocks |
 | `test_complexity_treemap_exclusions.py` | `scripts/complexity-treemap.py` - `.assess` self-exclusion, `--exclude` and `config.toml` merging, generated-file sniffing and generated test reports |
@@ -63,6 +63,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_keyhole_accretion.py` | `lib/keyhole/keyhole_signals.py` - accretion_ratchet finding |
 | `test_keyhole_override_contradicts.py` | `lib/keyhole/keyhole_signals.py` - override_contradicts_signals finding |
 | `test_keyhole_suppression.py` | `lib/keyhole/keyhole_signals.py` - degenerate churn, config excludes, archive paths, pruning of renamed or deleted paths |
+| `assess_test_support.py` | helpers tests import by name instead of `from conftest import` (#1056): the Windows skip markers, `skip_without_posix_shell`, `pin_fleet_run_date`, and `stub_heavy_deps` with the leak check behind the conftest stand-in guard (#831) (not a test module) |
+| `test_test_session_isolation.py` | `assess_test_support.py` - no test imports the bare `conftest` name, test-tree module names stay unique, and the stand-in leak check (#831, #1056) |
 | `keyhole_helpers.py` | shared `integrate()` fixtures for the `test_keyhole_*.py` files (not a test module) |
 | `test_change_coupling.py` | `lib/change_coupling.py` - B1 change-coupling pairs, B2 containment ratio, B4 authorship; synthetic git histories built in tmp dirs |
 | `test_coupling_analysis.py` | `lib/keyhole/coupling_analysis.py` - B3 static-vs-historical disagreement; hidden-coupling, bleeding-module, and refactor-boundary classification with mocked inputs |
@@ -231,6 +233,10 @@ Every `test_*.py` file in this directory has a row below.
 (a throwaway repo plus a `commit_fn` that can backdate author and committer time). At
 import time it points `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at the null device, so
 ambient commit signing or hooks cannot break the git-backed tests.
+A module-scoped autouse guard fails any test module that leaves a stand-in for
+numpy, lizard, matplotlib or squarify in `sys.modules` (#831); install stand-ins with
+`assess_test_support.stub_heavy_deps(monkeypatch)`. Import shared helpers from
+`assess_test_support`, never from `conftest` (#1056).
 
 `fixtures/` holds data, not tests; `pyproject.toml` excludes it from collection:
 
