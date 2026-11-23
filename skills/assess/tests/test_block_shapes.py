@@ -31,7 +31,7 @@ from lib.instruction_claims import scan_instruction_claims
 from lib.level_signals import _ROOTS, load_default_levels
 from lib.levels import LevelsError, load_levels
 from lib.level_signals import signal_path_validator
-from lib.promissory_markers import scan_promissory_markers
+from lib.keyhole.promissory_markers import scan_promissory_markers
 from lib.hosting.review_reality import summarize
 
 FLEET_GOLDEN = Path(__file__).parent / "fixtures" / "fleet_golden" / "repos.jsonl"

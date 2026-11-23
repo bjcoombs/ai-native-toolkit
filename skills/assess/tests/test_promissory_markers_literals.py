@@ -16,10 +16,10 @@ from pathlib import Path
 
 import pytest
 
-from lib.keyhole_signals import integrate
-import lib.promissory_markers as pm
-from lib.promissory_markers import MarkerScan
-from lib.python_regions import (
+from lib.keyhole.keyhole_signals import integrate
+import lib.keyhole.promissory_markers as pm
+from lib.keyhole.promissory_markers import MarkerScan
+from lib.keyhole.python_regions import (
     CODE,
     COMMENT,
     DOCSTRING,

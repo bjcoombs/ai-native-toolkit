@@ -1,4 +1,4 @@
-"""Tests for repository archetype detection (lib/archetype.py).
+"""Tests for repository archetype detection (lib/keyhole/archetype.py).
 
 Covers the four acceptance criteria of issue #224:
 1. A markdown KB repo is auto-detected; an override marker forces/suppresses.
@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.archetype import (  # noqa: E402
+from lib.keyhole.archetype import (  # noqa: E402
     KARPATHY_GIST_URL,
     KB_APPLICABLE_LAYERS,
     SOFTWARE_DENOMINATOR,

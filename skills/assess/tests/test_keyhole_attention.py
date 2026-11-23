@@ -14,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from keyhole_helpers import _finding_paths
-from lib import keyhole_signals as ks
+import lib.keyhole.keyhole_signals as ks
 
 
 # --- derived findings --------------------------------------------------------

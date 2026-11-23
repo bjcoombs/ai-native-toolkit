@@ -26,5 +26,5 @@ action = "refactor down: extract, delete dead code, or split the file"
 mode = "refactor_safe"
 concern = true
 inputs = ["accretion_ratchet"]
-derive = "lib.keyhole_signals:_accretion_ratchet_finding"
+derive = "lib.keyhole.keyhole_signals:_accretion_ratchet_finding"
 headless = "unregistered"

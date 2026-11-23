@@ -20,7 +20,7 @@ headless_variants = [
 ]
 shapes = [
   { path = "dead_code", type = "lib.run_context_types:DeadCodeBlock" },
-  { path = "observability", type = "lib.liveness_scan:ObservabilityBlock" },
+  { path = "observability", type = "lib.keyhole.liveness_scan:ObservabilityBlock" },
 ]
 revision = 1
   [entries.privacy]
@@ -75,5 +75,5 @@ action = "verify liveness, then delete if dead"
 mode = "verify_then_retire"
 concern = true
 inputs = ["dead_code"]
-derive = "lib.keyhole_signals:candidate_dead_weight_paths"
+derive = "lib.keyhole.keyhole_signals:candidate_dead_weight_paths"
 headless = "unregistered"

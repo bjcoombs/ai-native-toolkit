@@ -57,7 +57,7 @@ reason = "raised by #468: mypy strict type annotations; lowered to 1517 after #5
 lines = 1107
 reason = "raised by #468: mypy strict type annotations; +3 for the run_context_types import (disallow_any_generics ratchet)"
 
-[ceilings."skills/assess/scripts/lib/keyhole_signals.py"]
+[ceilings."skills/assess/scripts/lib/keyhole/keyhole_signals.py"]
 lines = 1556
 reason = "raised by #468, then lowered by #473 (E1 detector moved to lib/untrusted_hotspot.py) and #795 (finding tables load from checks/core.toml)"
 

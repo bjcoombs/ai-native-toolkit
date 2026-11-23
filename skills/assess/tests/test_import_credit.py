@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from lib import import_credit as ic
-from lib import keyhole_signals as ks
+import lib.keyhole.keyhole_signals as ks
 from lib import run_wiki
 from lib import sibling_tests as tc
 from lib.test_focus import compute_test_focus
@@ -318,7 +318,7 @@ def test_this_repo_credits_keyhole_signals() -> None:
     """The issue's success criterion: ``keyhole_signals.py`` is covered by the
     split ``test_keyhole_<family>.py`` files, none named after it."""
     repo = Path(__file__).resolve().parents[3]
-    rel = "skills/assess/scripts/lib/keyhole_signals.py"
+    rel = "skills/assess/scripts/lib/keyhole/keyhole_signals.py"
     if not (repo / rel).is_file():
         pytest.skip("not running from the repository checkout")
     index = tc.build_test_index(repo)

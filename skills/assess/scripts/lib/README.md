@@ -186,6 +186,14 @@ run as `python scripts/lib/<stem>.py` does not have `lib` on `sys.path`; run the
   #917 module map and stay at the root. Files: `__init__.py`, `config_drift.py`, `delivery.py`,
   `gh_cli.py`, `gitlab_ci_lint.py`, `gitlab_cli.py`, `gitlab_notes.py`, `merged_sample.py`,
   `platform_cli.py`, `review_reality.py`.
+- **`keyhole/`**: the keyhole-readiness signals and findings, and the Layer 1 liveness
+  inputs: accretion, promissory markers, structure drift, hidden coupling, understanding,
+  archetype and the Dart and JVM capability entries. `promissory_markers` and
+  `accretion_ratchet` also run as scripts: run `python scripts/lib/keyhole/<stem>.py`, or
+  `python -m lib.<stem>` from `scripts/` through the shim. Files: `__init__.py`,
+  `accretion_ratchet.py`, `archetype.py`, `coupling_analysis.py`, `dart_capabilities.py`,
+  `jvm_capabilities.py`, `keyhole_signals.py`, `liveness_scan.py`, `promissory_markers.py`,
+  `python_regions.py`, `structure_drift.py`, `understanding_analysis.py`.
 - **`manifest/`**: the check manifest loader (`checks/core.toml` and its fragments) and its
   structured validation errors. `manifest_whys` (#939), which the loader calls, postdates the #917 module map,
   so it has no group and stays at the root. Files: `__init__.py`, `check_manifest.py`, `check_validation.py`.
