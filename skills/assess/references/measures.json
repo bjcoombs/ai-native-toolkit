@@ -5236,6 +5236,7 @@
       ],
       "reads": [
         "unit_levels",
+        "units",
         "maturity_model"
       ],
       "network": false,

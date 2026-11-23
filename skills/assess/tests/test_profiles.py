@@ -290,3 +290,11 @@ def test_a_mutation_refresh_under_another_model_stops_before_mutating(tmp_path: 
     (tmp_path / ".assess" / "run-context.json").write_text(json.dumps(ctx), encoding="utf-8")
     assert run_opt_in_mutation(tmp_path) == 2
     assert "needs the --profile or --levels the run used" in capsys.readouterr().err
+
+
+def test_the_step_line_keeps_its_glossary_link_under_a_profile() -> None:
+    choice = resolve("handover", None)
+    level = core_scans.level(*(_blocks().get(k) for k in LEVEL_READS), choice)
+    paragraphs = core_scans.headline(level, None, choice)["summary_markdown"].split("\n\n")
+    assert paragraphs[0] == "Maturity model: profile handover, not the default."
+    assert paragraphs[2].startswith("[Step](") and "#step) 4 of 4: " in paragraphs[2]

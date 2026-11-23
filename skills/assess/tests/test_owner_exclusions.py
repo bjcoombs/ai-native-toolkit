@@ -214,7 +214,7 @@ def test_the_headline_names_an_excluded_gate_and_counts_exclusions():
     signals = {**_fresh(), "layer_grades": {"instruction_file_present": True},
                "ci_checks": {"test_or_lint_configured": True}}
     lines = hl.headline(lt.level_result(model, signals, [_exclude("ci.1")]), model)["lines"]
-    assert "CI runs the tests (excluded by owner: measured elsewhere; the Step waits while the exclusion stands)" \
+    assert "CI turns red when a check breaks (excluded by owner: measured elsewhere; the Step waits while the exclusion stands)" \
         in lines[1]
     assert "· 1 not applicable (excluded by owner) ·" in lines[2]
     plain = hl.headline(lt.level_result(model, signals), model)["lines"]

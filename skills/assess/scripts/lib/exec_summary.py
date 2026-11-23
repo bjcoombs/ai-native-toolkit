@@ -30,7 +30,9 @@ it cannot import the Step sentences without an import cycle):
   link is the gate's entry in the catalog (``STEP_GATES_URL``);
 - ``summary_markdown``: the lines and the call to action, one paragraph each, which the
   deterministic report (``assess_report.py``) and the findings template paste verbatim at
-  the very top.
+  the very top. Its first word, "Step", links the glossary's Step entry
+  (``headline.GLOSSARY_URL``, #1102), the one place a newcomer first meets the word;
+  ``summary_lines`` stays plain text.
 
 The lines name no layer, no condition id and no count of practices: the only "N of M" is the
 Step's place on the ladder. A headline that is unavailable, or a model without Steps, keeps
@@ -43,7 +45,7 @@ from collections.abc import Mapping
 from typing import Any, cast
 
 from lib.assess_diagrams_ladder import meaning
-from lib.headline import GATE_CHANGE, gate_note, headline
+from lib.headline import GATE_CHANGE, GLOSSARY_URL, gate_note, headline
 from lib.level_result_types import Blocker, Headline, LevelResult
 from lib.levels import MaturityModel
 from lib.model_change import model_changed_line
@@ -60,7 +62,7 @@ STEP_GATES_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/w
 # "make the <id> gate hold".
 GATE_TASK = {
     "instructions": "commit an instruction file agents read, such as AGENTS.md or CLAUDE.md",
-    "ci_runs_tests": "make CI run the tests",
+    "ci_runs_tests": "make CI turn red when a check breaks",
     "coverage_gate": "enforce a coverage gate in CI",
 }
 
@@ -154,7 +156,11 @@ def summarised(block: Headline, level: Any, since: Any, model: MaturityModel,
     result = cast(LevelResult, level)  # narrowed by the tally check above
     lines = [*model_lines(result, choice), *summary_lines(result, since, model)]
     action = call_to_action(result)
-    markdown = "\n\n".join([*lines, action] if action else lines)
+    # the Step line links its first "Step" to the glossary; a profile's model lines come before it
+    at = len(model_lines(result, choice))
+    linked = [line.replace("Step", f"[Step]({GLOSSARY_URL}#step)", 1) if i == at else line
+              for i, line in enumerate(lines)]
+    markdown = "\n\n".join([*linked, *([action] if action else [])])
     return {**block, "summary_lines": lines, "call_to_action": action, "summary_markdown": markdown}
 
 

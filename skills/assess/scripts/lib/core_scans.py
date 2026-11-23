@@ -368,12 +368,13 @@ def unit_levels(readings: Any, *blocks: Any) -> UnitLevelsBlock:
     return unit_levels_block(readings, *blocks)
 
 
-def unit_rollup(levels: Any, choice: ModelChoice | None) -> UnitRollUpBlock:
+def unit_rollup(levels: Any, units_block: Any = None, choice: ModelChoice | None = None) -> UnitRollUpBlock:
     """The repository roll-up over the units and the unit-unlock ranking (#865): the lowest
-    unit's Step, "N of M measured units" at the next Step, and the changes ranked by the
-    units they lift. Core-only. The units are read on the default model, so under a
-    profile or ``--levels`` model the line says so (#1150)."""
-    return units_label(unit_rollup_block(levels), choice)
+    unit's Step, "N of M measured units" at the next Step, the changes ranked by the
+    units they lift, and the siblings that hold each unit's next gate (#1155). Core-only.
+    The units are read on the default model, so under a profile or ``--levels`` model the
+    line says so (#1150)."""
+    return units_label(unit_rollup_block(levels, units_block=units_block), choice)
 
 
 def offers_blocks(non_interactive: bool) -> dict[str, Any]:

@@ -234,7 +234,7 @@ def test_the_registry_entry_reads_unit_levels() -> None:
     spec = next(s for s in SCANS if s.key == "unit_rollup")
     assert spec.fn is cs.unit_rollup
     # the core wrapper also reads the run's model choice, to label the line (#1150)
-    assert tuple(spec.reads) == (*ur.READS, "maturity_model") and ur.READS == ("unit_levels",)
+    assert tuple(spec.reads) == (*ur.READS, "maturity_model") and ur.READS == ("unit_levels", "units")
     keys = [s.key for s in SCANS]
     assert keys.index("unit_levels") < keys.index("unit_rollup")
 
