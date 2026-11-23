@@ -280,7 +280,7 @@ def comparability(earlier: FleetStamp, later: FleetStamp) -> tuple[list[str], li
     for key, label in (("levels_version", "maturity-model version"), ("window", "window"),
                        ("counts_only", "counts-only mode"), ("scans", "scan selection"),
                        ("paths_hashed", "path hashing"), ("fleet_config_sha256", "fleet config"),
-                       ("platform", "platform pass")):
+                       ("platform", "platform pass"), ("managed_settings", "managed settings read")):
         then, now = stamp_value(earlier, key), stamp_value(later, key)
         if then != now:
             reasons.append(f"{label} changed {then!r}->{now!r}")

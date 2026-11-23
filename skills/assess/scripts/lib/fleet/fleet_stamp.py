@@ -83,6 +83,7 @@ class _LaterStampKeys(TypedDict, total=False):
     does not require them (``NotRequired`` is not seen under postponed annotations)."""
 
     coverage: Coverage | None  # None without --discovered (unknown); absent before #745
+    managed_settings: bool  # --managed-settings read this machine's managed settings; absent before #1153
 
 
 class FleetStamp(_LaterStampKeys):
@@ -115,7 +116,7 @@ def build_stamp(
     rows: list[FleetRow], *, toolkit_commit: str | None, plugin_version: str,
     today: date, window: str, levels_version: str | None, counts_only: bool, paths_hashed: bool,
     scans: list[str] | None, fleet_config: FleetConfig | None = None, platform: bool = False,
-    coverage: Coverage | None = None,
+    coverage: Coverage | None = None, managed_settings: bool = False,
 ) -> FleetStamp:
     return {
         "fleet_stamp_version": FLEET_STAMP_VERSION,
@@ -132,6 +133,7 @@ def build_stamp(
         "platform": platform,
         "repositories": count_repositories(rows),
         "coverage": coverage,
+        "managed_settings": managed_settings,
     }
 
 

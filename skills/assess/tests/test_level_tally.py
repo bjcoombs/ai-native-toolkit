@@ -179,6 +179,17 @@ def test_thin_history_is_not_measured_not_unmet():
     assert _state(result, "lint.1") == ("not_measured", "degenerate_history")
 
 
+def test_unreadable_managed_settings_are_not_measured_not_unmet():
+    """#1153: a null signal names its sibling ``<leaf>_reason`` code."""
+    sig = "agent_ops.summary.permissions_encoded"
+    model = _model(_row("ops", [_eq(sig)]))
+    summary = {"permissions_encoded": None, "permissions_encoded_reason": "managed_settings_unreadable"}
+    result = lt.level_result(model, {"agent_ops": {"available": True, "summary": summary}})
+    assert _state(result, "ops.1") == ("not_measured", "managed_settings_unreadable")
+    bare = {"agent_ops": {"available": True, "summary": {"permissions_encoded": None}}}
+    assert _state(lt.level_result(model, bare), "ops.1") == ("not_measured", "no_value")
+
+
 P95 = "stats_summary.loc_by_class.source.p95"
 
 

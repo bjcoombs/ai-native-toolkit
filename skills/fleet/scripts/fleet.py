@@ -103,7 +103,7 @@ Run:
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
         [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
         [--no-history] [--no-diagrams] [--fleet-config FILE] [--name-agent-clusters] [--discovered FILE]
-        [--platform [--platform-jobs N] [--platform-timeout SECONDS]]
+        [--platform [--platform-jobs N] [--platform-timeout SECONDS]] [--managed-settings]
     uv run fleet.py --from-list FILE [ROOT] --out DIR [...]
 """
 # /// script
@@ -351,6 +351,13 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--no-diagrams", action="store_true",
         help=f"Do not draw the diagrams (OUT/{REPORT_FILE} and its SVGs); any a previous run left "
              "are removed.",
+    )
+    parser.add_argument(
+        "--managed-settings", action="store_true",
+        help="Read the Claude Code managed settings of the machine running the fleet for the agent "
+             "permissions practice (#1153): a central rule credits every repository scanned, so use "
+             "it only when this machine carries the organisation's policy. Stamped in run.json. "
+             "A repository's .assess/config.toml never turns it on.",
     )
     parser.add_argument(
         "--platform", action="store_true",
@@ -775,6 +782,7 @@ def main(argv: list[str] | None = None) -> int:
         window=args.window, scans=args.scans, timeout=args.timeout,
         log_dir=out_dir / LOGS_DIR, active_since=window_start(window, today),
         ghsync_root=include_root(args), units=args.monorepo_units,
+        managed_settings=args.managed_settings,
     )
     try:  # before any scan, so --delete-after never removes a clone whose results cannot land
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -817,6 +825,7 @@ def main(argv: list[str] | None = None) -> int:
         today=today, window=window, levels_version=maturity_model["version"] if maturity_model is not None else None,
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
         fleet_config=fleet_config, platform=platform_ran, coverage=coverage,
+        managed_settings=options.managed_settings,
     )
     write_stamp(out_dir, stamp)
     demoted = _condition_effect(out_dir, maturity_model, stamp, public, org_dir, entry)
