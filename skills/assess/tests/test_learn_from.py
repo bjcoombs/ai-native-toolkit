@@ -94,7 +94,7 @@ def test_the_rollup_names_the_sibling_that_holds_the_next_gate() -> None:
     block = ur.unit_rollup(_levels(), units_block=UNITS)
     assert block["learn_from"] == [{"unit": B, "gate": "ci_runs_tests", "holders": 1, "names": [A]},
                                    {"unit": C, "gate": "ci_runs_tests", "holders": 1, "names": [A]}]
-    assert f"{B}: CI runs the tests. Learn from: {A}" in block["lines"]
+    assert f"{B}: CI turns red when a check breaks. Learn from: {A}" in block["lines"]
     assert f"Learn from: {A}" in block["markdown"]
     # A's next gate (coverage) is held by no sibling: no line for A
     assert not any(line_.startswith(f"{A}:") for line_ in block["lines"])
