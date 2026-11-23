@@ -254,7 +254,9 @@ COVERAGE_GATE: JsonDict = {
         "reason": _field({"type": "string"}, "Why the block is unavailable."),
         "configured": _field({"type": "boolean"},
                              "True when any gate gates something (a non-zero threshold, or a "
-                             "null one from a tool default or a templated flag). Read from configuration text at HEAD; was enforced before issue #783."),
+                             "null one from a tool default or a templated flag). Read from configuration text at HEAD; was enforced before issue #783. "
+                             "A root coverage.py gate listed on a scoped run whose hold on the scope is not resolved "
+                             "(unmeasured_reason root_coverage_config_unresolved, issue #1032) is not counted here."),
         "gates": _field(
             {"type": "array", "items": {"type": "object", "properties": {
                 "file": {"type": "string"},
@@ -274,7 +276,8 @@ COVERAGE_GATE: JsonDict = {
             "Each gate found, with its file and 1-based line."),
         "max_threshold_percent": _field(
             _NUM_OR_NULL, "The highest non-null threshold_percent across the gates; null "
-                              "when no gate has one."),
+                              "when no gate has one. An unresolved root gate on a scoped run (issue #1032) "
+                              "is left out."),
         "threshold_meets_minimum": _field(
             {"type": ["boolean", "null"]},
             "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at "

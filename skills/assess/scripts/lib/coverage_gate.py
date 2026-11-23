@@ -762,11 +762,13 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
         gates, meets, (ci or read_ci_runs(root)) if meets else NO_RUNS,
         lambda text: _cli_line_gates("", 0, text, False), counted=gates_something,
         minimum=MINIMUM_THRESHOLD_PERCENT, activation=read_activation(read))
+    # Root gates that may not govern the scope are reported, never counted as configured.
+    known = gates if applies is not None else gates[:len(gates) - len(root_gates)]
     return {
         "available": True,
-        "configured": any(gates_something(g) for g in gates),
+        "configured": any(gates_something(g) for g in known),
         "gates": gates,
-        "max_threshold_percent": max_threshold_percent(gates),
+        "max_threshold_percent": max_threshold_percent(known),
         "threshold_meets_minimum": meets,
         "unmeasured_reason": unmeasured,
         "enforced_meets_minimum": enforced,

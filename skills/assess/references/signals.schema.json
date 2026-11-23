@@ -678,7 +678,7 @@
             },
             "configured": {
               "type": "boolean",
-              "description": "True when any gate gates something (a non-zero threshold, or a null one from a tool default or a templated flag). Read from configuration text at HEAD; was enforced before issue #783."
+              "description": "True when any gate gates something (a non-zero threshold, or a null one from a tool default or a templated flag). Read from configuration text at HEAD; was enforced before issue #783. A root coverage.py gate listed on a scoped run whose hold on the scope is not resolved (unmeasured_reason root_coverage_config_unresolved, issue #1032) is not counted here."
             },
             "gates": {
               "type": "array",
@@ -734,7 +734,7 @@
                 "number",
                 "null"
               ],
-              "description": "The highest non-null threshold_percent across the gates; null when no gate has one."
+              "description": "The highest non-null threshold_percent across the gates; null when no gate has one. An unresolved root gate on a scoped run (issue #1032) is left out."
             },
             "threshold_meets_minimum": {
               "type": [

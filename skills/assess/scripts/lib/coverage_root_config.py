@@ -14,14 +14,15 @@ or None when it does not concern the scope: the scope holds no ``.py`` file with
 walk's depth (coverage.py measures Python only), or the scope directory holds a
 coverage.py config of its own (``coverage_gate`` reads that one, as before).
 
-``root_config_applies(root, scope, config, ci)`` reads where each enforced CI command
+``root_config_applies(root, config, ci)`` reads where each enforced CI command
 that runs coverage.py (``pytest`` with ``--cov``, ``coverage report|xml|json|html|lcov``)
 runs, from GitHub workflows and ``.gitlab-ci.yml``:
 
 - the working directory is the repository root, unless the step's
   ``working-directory:`` or a ``cd`` / ``pushd`` earlier in the same step (GitLab: the
   same job, whose script lines share one shell), or on the command's own line before it,
-  moves it. Literal relative paths are resolved (``cd pkg``, ``cd ../..``); anything
+  moves it. A GitLab ``cd`` in an inherited ``before_script`` (top level, or under
+  ``default:``) leaves it unresolved. Literal relative paths are resolved (``cd pkg``, ``cd ../..``); anything
   else (``$VAR``, ``~``, an absolute path, ``cd -``, ``popd``, a ``defaults:``
   ``working-directory`` anywhere in the file) leaves it unresolved.
 - ``--rcfile`` / ``--cov-config`` names the config instead, resolved against that
@@ -32,7 +33,8 @@ every run is resolved and none does (each runs in the scope or another directory
 no ``--rcfile`` naming the root config). None otherwise: no coverage run is found, a
 run's directory is unresolved, or CI is not fully read (``CiRuns.unread`` or jobs
 included from elsewhere). ``coverage_gate`` counts the root gates when true, drops them
-when false, and when None reports them with ``threshold_meets_minimum`` null and
+when false, and when None reports them in ``gates`` (outside ``configured`` and
+``max_threshold_percent``) with ``threshold_meets_minimum`` null and
 ``unmeasured_reason`` ``ROOT_UNRESOLVED`` wherever they change its value. Known limits:
 a job-level ``defaults`` working directory reads unresolved, not resolved; step ``if:``
 conditions and matrix values are not read; a run from the root is credited even when
@@ -169,11 +171,37 @@ def _defaults_workdir(lines: Sequence[str]) -> bool:
     return False
 
 
+def _inherited_cd(lines: Sequence[str]) -> bool:
+    """A GitLab ``before_script`` at the top level or under ``default:`` holding a ``cd``:
+    it runs in the same shell as every job's ``script``."""
+    parent = ""
+    for row, line in enumerate(lines):
+        indent = len(line) - len(line.lstrip())
+        if line.strip() and indent == 0 and not line.startswith("#"):
+            parent = line.split(":", 1)[0].strip()
+        key = line.strip().split(":", 1)[0]
+        if key != "before_script" or not (indent == 0 or parent == "default"):
+            continue
+        texts = [ci_line_text(line.split(":", 1)[1])]
+        for text in lines[row + 1:]:
+            outdent = len(text) - len(text.lstrip())
+            # A YAML list may sit at its key's own indent (``before_script:`` then ``- cd``).
+            if text.strip() and (outdent < indent or outdent == indent
+                                 and not text.lstrip().startswith("-")):
+                break
+            texts.append(ci_line_text(text))
+        if any(_CD_RE.search(t.strip("[]")) for t in texts):
+            return True
+    return False
+
+
 def _cwd(run: Run, lines: Sequence[str], gitlab: bool) -> Cwd:
     """The directory ``run`` runs in, relative to the root, or None when unresolved."""
     row = run.span[0]
     step = _step_lines(lines, row, gitlab)
     cwd: Cwd = PurePosixPath()
+    if gitlab and _inherited_cd(lines):
+        return None
     if not gitlab:
         if _defaults_workdir(lines):
             return None

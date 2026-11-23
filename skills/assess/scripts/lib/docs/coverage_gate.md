@@ -81,9 +81,11 @@ reads its config from the directory it runs in, so a root `[tool.coverage]`, `.c
 `setup.cfg` or `tox.ini` floor governs a Python scope with no coverage.py config of its own
 when CI runs coverage from the root. `_root_floor` scans that root config's `fail_under` and
 asks `root_config_applies` where CI's coverage runs run (`working-directory:`, a `cd` in the
-same step or GitLab job, `--rcfile` / `--cov-config`). True: the root gates are counted,
+same step or GitLab job, an inherited GitLab `before_script` `cd` reading unresolved,
+`--rcfile` / `--cov-config`). True: the root gates are counted,
 and the root config's `addopts` is read for activation. False (every run resolved, none
-reads the root config): dropped. None: the gates are reported, and when they change
+reads the root config): dropped. None: the gates are listed in `gates` but left out of
+`configured` and `max_threshold_percent`, and when they change
 `threshold_meets_minimum` it reads null with `unmeasured_reason`
 `root_coverage_config_unresolved` (so `enforced_basis` is `threshold_not_read`); a root
 floor below 50 leaves false, which is false either way. A scope holding no `.py` file, or

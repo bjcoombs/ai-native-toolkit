@@ -60,6 +60,21 @@ def test_no_ci_step_reads_the_root_floor_as_unknown_not_absent(tmp_path: Path) -
     assert block["enforced_meets_minimum"] is None
 
 
+def test_an_unresolved_root_floor_is_reported_but_not_configured(tmp_path: Path) -> None:
+    """The root gates stay in ``gates`` as evidence; ``configured`` and the maximum read
+    only the gates known to govern the scope."""
+    low = _repo(tmp_path / "low", None, **{"pyproject.toml": "[tool.coverage.report]\nfail_under = 30\n"})
+    block = detect_coverage_gate(low, Path("pkg"))
+    assert [g["file"] for g in block["gates"]] == ["pyproject.toml"]
+    assert (block["configured"], block["max_threshold_percent"]) == (False, None)
+    own = _repo(tmp_path / "own", None, **{
+        "pyproject.toml": "[tool.coverage.report]\nfail_under = 95\n",
+        "pkg/jest.config.js": "module.exports = { coverageThreshold: { global: { lines: 60 } } };\n"})
+    block = detect_coverage_gate(own, Path("pkg"))
+    assert (block["configured"], block["max_threshold_percent"]) == (True, 60.0)
+    assert block["threshold_meets_minimum"] is True
+
+
 def test_a_ci_run_only_inside_the_scope_drops_the_root_floor(tmp_path: Path) -> None:
     root = _repo(tmp_path, "      - run: pytest --cov\n        working-directory: pkg\n")
     block = detect_coverage_gate(root, Path("pkg"))
@@ -121,8 +136,13 @@ def test_a_defaults_working_directory_is_unresolved(tmp_path: Path) -> None:
     ("test:\n  script:\n    - cd pkg\n    - pytest --cov\n", False),
     ("test:\n  script:\n    - pytest --cov\n", True),
     ("lint:\n  script:\n    - cd pkg\ntest:\n  script:\n    - pytest --cov\n", True),
+    ("default:\n  before_script: [cd pkg]\ntest:\n  script:\n    - pytest --cov\n", None),
+    ("before_script:\n- cd pkg\ntest:\n  script:\n    - pytest --cov\n", None),
+    ("default:\n  image: python\nbefore_script:\n  - pip install .\n"
+     "test:\n  script:\n    - pytest --cov\n", True),
 ])
-def test_gitlab_cd_holds_for_the_job(tmp_path: Path, script: str, applies: bool) -> None:
+def test_gitlab_cd_holds_for_the_job(tmp_path: Path, script: str,
+                                     applies: bool | None) -> None:
     root = _write(tmp_path, {"pyproject.toml": ROOT_FLOOR, "pkg/a.py": "",
                              ".gitlab-ci.yml": script})
     assert _applies(root) is applies
