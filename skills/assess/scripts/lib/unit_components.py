@@ -8,12 +8,16 @@ which seldom has a manifest. This module finds those folders from the tracked fi
 **Kinds** (``UnitEntry.kind``; ``package`` is a build-manifest unit):
 
 - ``skill``: a folder holding a ``SKILL.md``. Folders are taken shallowest first, so a
-  ``SKILL.md`` inside a skill (a test fixture, an example) is part of that skill and is
+  ``SKILL.md`` inside a skill (a bundled sub-skill) is part of that skill and is
   skipped as ``claimed``, the nesting rule #862 uses for a manifest inside a unit.
 - ``agents`` and ``commands``: the ``agents/`` and ``commands/`` folder of a plugin root, a
   folder holding ``.claude-plugin/plugin.json``. A plugin's agents and commands are not
   attributed to a skill: no file ties an agent to the skill that uses it, so the folder is
   one unit. One inside a skill folder is part of that skill instead.
+
+Only production paths are candidates (``lib.path_classes``): a ``SKILL.md`` or plugin
+manifest under a fixture, test, example, vendored or generated folder
+(``pkg/tests/fixtures/sample/SKILL.md``) is test data, not a unit, wherever it sits.
 
 A component folder that also holds a build manifest (``skills/assess`` with its
 ``pyproject.toml``) is one unit of kind ``skill`` with the manifest's ecosystem. A build
@@ -26,6 +30,8 @@ from __future__ import annotations
 import posixpath
 from collections.abc import Iterable
 from typing import Literal, NamedTuple
+
+from lib.path_classes import is_production
 
 Kind = Literal["package", "skill", "agents", "commands"]
 KINDS: tuple[Kind, ...] = ("package", "skill", "agents", "commands")
@@ -61,6 +67,7 @@ def discover_components(files: Iterable[str], dirs: frozenset[str]) -> Component
     """The skill and plugin-component folders of ``files`` (repo-relative POSIX paths, already
     filtered by the run's excludes); ``dirs`` is every folder holding a tracked file."""
     candidates: dict[str, Kind] = {}
+    files = [rel for rel in files if is_production(rel)]
     for rel in files:
         if posixpath.basename(rel) == SKILL_FILE:
             candidates[posixpath.dirname(rel) or "."] = "skill"

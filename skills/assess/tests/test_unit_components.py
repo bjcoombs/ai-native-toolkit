@@ -32,10 +32,13 @@ PLUGIN = {
     "skills/tooled/pyproject.toml": '[project]\nname = "tooled"\n',
     "skills/tooled/scripts/run.py": "print(1)\n",
     "skills/tooled/tests/test_run.py": "def test_x():\n    pass\n",
-    # a skill inside a skill (a fixture) and a plugin inside a skill are part of that skill
-    "skills/tooled/examples/sample/SKILL.md": "---\nname: sample\n---\n",
-    "skills/tooled/examples/plug/.claude-plugin/plugin.json": "{}\n",
-    "skills/tooled/examples/plug/agents/a.md": "# a\n",
+    # a skill inside a skill and a plugin inside a skill are part of that skill
+    "skills/tooled/inner/SKILL.md": "---\nname: inner\n---\n",
+    "skills/tooled/bundle/.claude-plugin/plugin.json": "{}\n",
+    "skills/tooled/bundle/agents/a.md": "# a\n",
+    # test data is no unit, inside a skill or not
+    "skills/tooled/tests/fixtures/sample/SKILL.md": "---\nname: sample\n---\n",
+    "skills/tooled/examples/demo/SKILL.md": "---\nname: demo\n---\n",
 }
 
 
@@ -55,8 +58,8 @@ def test_each_skill_and_plugin_component_is_a_unit(tmp_path: Path) -> None:
     assert block["unit_count"] == 4
     assert _skipped(block) == {  # type: ignore[arg-type]
         ".": "tooling_only",
-        "skills/tooled/examples/plug/agents": "claimed",
-        "skills/tooled/examples/sample": "claimed",
+        "skills/tooled/bundle/agents": "claimed",
+        "skills/tooled/inner": "claimed",
     }
 
 
@@ -81,7 +84,27 @@ def test_a_skill_at_the_root_is_the_one_unit(tmp_path: Path) -> None:
              "scripts/run.py": "1\n", "examples/inner/SKILL.md": "# inner\n"}
     block = scan_units(_write(tmp_path, files))
     assert _kinds(block) == {".": ("skill", None, "component")}  # type: ignore[arg-type]
-    assert _skipped(block) == {"examples/inner": "claimed"}  # type: ignore[arg-type]
+    # the manifest the skill claims is listed; the example skill is test data, not listed
+    assert _skipped(block) == {"scripts": "claimed"}  # type: ignore[arg-type]
+
+
+def test_a_root_skill_over_packages_lists_every_package_it_claims(tmp_path: Path) -> None:
+    files = {"SKILL.md": "# s\n", "svc-a/go.mod": "module a\n", "svc-a/main.go": "package main\n",
+             "svc-b/go.mod": "module b\n", "svc-b/main.go": "package main\n",
+             "svc-b/testdata/fx/go.mod": "module fx\n"}
+    block = scan_units(_write(tmp_path, files))
+    assert _paths(block) == ["."]  # type: ignore[arg-type]
+    assert _skipped(block) == {"svc-a": "claimed", "svc-b": "claimed"}  # type: ignore[arg-type]
+
+
+def test_a_skill_fixture_inside_a_package_is_no_unit(tmp_path: Path) -> None:
+    files = {"pkg/pyproject.toml": '[project]\nname = "pkg"\n', "pkg/src/m.py": "x = 1\n",
+             "pkg/tests/fixtures/sample/SKILL.md": "# sample\n",
+             "pkg/tests/fixtures/plug/.claude-plugin/plugin.json": "{}\n",
+             "pkg/tests/fixtures/plug/agents/a.md": "# a\n"}
+    block = scan_units(_write(tmp_path, files))
+    assert _kinds(block) == {"pkg": ("package", "python", "manifest")}  # type: ignore[arg-type]
+    assert _skipped(block) == {}  # type: ignore[arg-type]
 
 
 def test_agents_without_a_plugin_manifest_are_not_a_unit(tmp_path: Path) -> None:

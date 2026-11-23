@@ -71,7 +71,8 @@ A repository with no build manifest has no units (``unit_count`` 0).
 plugin root's ``agents/`` and ``commands/`` (kinds ``agents``, ``commands``), shallowest
 first. They are units of origin ``component``, claimed before any manifest: a manifest
 inside one is part of it (a skill with a ``pyproject.toml`` is one ``skill`` unit with the
-manifest's ecosystem), and a manifest folder above them is a unit of the source files no
+manifest's ecosystem) and is listed in ``skipped`` as ``claimed`` (unless it is test data), and a
+manifest folder above them is a unit of the source files no
 component or nested manifest owns. Every other unit is of kind ``package``.
 
 **Declared units.** ``[[units]]`` in ``.assess/config.toml`` replaces discovery::
@@ -107,6 +108,7 @@ from typing import Any, Literal, NamedTuple, TypedDict
 from lib.assess_config import _clean_rel, is_user_excluded, load_config
 from lib.command_index import repo_files
 from lib.doc_graph import CODE_EXTENSIONS, EXCLUDE_DIRS
+from lib.path_classes import is_production
 from lib.unit_components import SKILL_FILE, Kind, discover_components
 
 Ecosystem = Literal["cargo", "pnpm", "npm", "go", "uv", "gradle", "maven", "python"]
@@ -603,6 +605,12 @@ def discover_units(repo_root: Path, files: Iterable[str]) -> _Discovery:
                                  "ecosystem": _ecosystem(names) if names else None,
                                  "workspace": None, "name": None})
     walk.found.skipped.extend({"path": path, "problem": "claimed"} for path in components.claimed)
+    # a build-manifest folder inside a component is part of it, listed so the claim is visible
+    # (a root SKILL.md over a monorepo's packages); test data below it is not listed
+    walk.found.skipped.extend(
+        {"path": folder, "problem": "claimed"} for folder in sorted(walk.manifest_dirs)
+        if any(c.path != folder and _is_under(folder, c.path) for c in components.units)
+        and is_production(posixpath.join(folder, sorted(walk.manifest_dirs[folder])[0])))
     depth = {d: (0 if d == "." else d.count("/") + 1) for d in walk.manifest_dirs}
     for folder in sorted(walk.manifest_dirs, key=lambda d: (depth[d], d)):
         if folder not in walk.visited and not any(_is_under(folder, c) for c in walk.claimed):
