@@ -2,7 +2,7 @@
 
 Each counts-only run is also kept, so a programme can see what moved since the
 last sprint. The run's `repos.jsonl`, `groups.jsonl` and `run.json` (plus
-`fleet-data.json`, and `doc_freshness.jsonl` when the run wrote one) are copied to `<history>/<org>/<scan_date>/`, where `<history>` is `--history-dir` or
+`fleet-data.json`, `demotions.json` with `--levels`, and `doc_freshness.jsonl` when the run wrote one) are copied to `<history>/<org>/<scan_date>/`, where `<history>` is `--history-dir` or
 `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet`, and `<org>` is
 `--history-org` or the first segment every repository id shares (the distinct
 ones sorted and joined by `+` when they differ, e.g. `grpa+grpb`). A `--full`

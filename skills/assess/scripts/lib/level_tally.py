@@ -106,6 +106,12 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   its Step stays unreachable and the blocker carries the disposition and kind. `excluded[]`
   (`{id, kind, source}`) is present only when an exclusion applies, so a result without
   exclusions is unchanged. Ids the model does not define are ignored.
+- Exit-rule demotions (#1086): `level_result(..., demoted=ids)` takes the condition ids the
+  fleet's exit rule demoted (`lib/fleet/condition_demotion.py`). Only `lib/fleet/fleet_level.py`
+  passes them, from `fleet.py`'s own run and history; no repository input reaches the argument.
+  A demoted condition keeps its state, is never counted (it is listed when met) and carries
+  `disposition: "demoted_by_exit_rule"`. A gate condition (`gate_conditions`) or an unknown id
+  is ignored, so a demotion changes the count and never a Step. An owner exclusion wins.
 - `tally`: `met` (the level: counted conditions met), `measured` (counted conditions met or
   unmet) and `not_measured` (conditions of any grade not measured). An unknown never counts.
 - `counted` and `listed`: the ids of the counted and the listed (config-only, declared or
@@ -170,6 +176,8 @@ _RUN_KIND_REASONS = {"not_registered": NEEDS_FULL_RUN, "network": NEEDS_PLATFORM
 # The codes lib.levels gives a criterion whose signal is a statistic over an empty set.
 EMPTY_SET_CODES = frozenset(code for _, code in EMPTY_DENOMINATORS.values())
 EXCLUDED_BY_OWNER = "excluded_by_owner"
+# A condition the fleet's exit rule demoted (lib/fleet/condition_demotion.py, #1086): listed, never counted.
+DEMOTED = "demoted_by_exit_rule"
 
 
 def _block_reason(data: Mapping[str, Any] | None, signal: str) -> str:
@@ -227,8 +235,17 @@ def _own_state(outcome: LevelOutcome, criteria: list[Criterion],
     return "not_measured", _block_reason(data, unavailable_signal(criterion, data))
 
 
+def _mark(entry: ConditionResult, exclusion: ExcludedCondition | None, demoted: bool) -> None:
+    """The condition's disposition: the owner's exclusion wins over the exit rule's demotion."""
+    if exclusion is not None:
+        entry["disposition"] = EXCLUDED_BY_OWNER
+        entry["exclusion_kind"] = exclusion["kind"]
+    elif demoted:
+        entry["disposition"] = DEMOTED
+
+
 def _conditions(model: MaturityModel, data: Mapping[str, Any] | None,
-                excluded: Mapping[str, ExcludedCondition]) -> list[ConditionResult]:
+                excluded: Mapping[str, ExcludedCondition], demoted: Collection[str] = ()) -> list[ConditionResult]:
     own: dict[str, tuple[str, str | None]] = {}
     built: list[ConditionResult] = []
     requires: dict[str, list[str]] = {}
@@ -246,13 +263,12 @@ def _conditions(model: MaturityModel, data: Mapping[str, Any] | None,
             grade = _grade(row, level["level"])
             hazard = level.get("polarity") == "hazard"
             entry: ConditionResult = {"id": cid, "row": row["id"], "level": level["level"], "grade": grade,
-                                      "counted": grade in COUNTED_GRADES and cid not in excluded and not hazard,
+                                      "counted": (grade in COUNTED_GRADES and cid not in excluded and not hazard
+                                                  and cid not in demoted),
                                       "state": state}
             if hazard:
                 entry["polarity"] = "hazard"
-            if cid in excluded:
-                entry["disposition"] = EXCLUDED_BY_OWNER
-                entry["exclusion_kind"] = excluded[cid]["kind"]
+            _mark(entry, excluded.get(cid), cid in demoted)
             built.append(entry)
     final: dict[str, tuple[str, str | None]] = {}
 
@@ -342,6 +358,12 @@ def _blockers(step: StepDef, by_id: Mapping[str, ConditionResult]) -> list[Block
     return [b for g in step["gates"] if (b := _gate_blocker(g["id"], g["row"], g["level"], by_id)) is not None]
 
 
+def gate_conditions(model: MaturityModel) -> frozenset[str]:
+    """Every condition a Step gate reads: its row's levels 1 up to the gate's level."""
+    return frozenset(condition_id(g["row"], n) for step in model.get("steps", []) for g in step["gates"]
+                     for n in range(1, g["level"] + 1))
+
+
 def condition_ids(model: MaturityModel) -> frozenset[str]:
     """Every condition id of a model."""
     return frozenset(condition_id(row["id"], level["level"]) for row in model["rows"] for level in row["levels"])
@@ -359,13 +381,15 @@ def _excluded(model: MaturityModel, exclusions: Sequence[Mapping[str, Any]]) -> 
 
 
 def level_result(model: MaturityModel, data: Mapping[str, Any] | None,
-                 exclusions: Sequence[Mapping[str, Any]] = ()) -> LevelResult:
+                 exclusions: Sequence[Mapping[str, Any]] = (), demoted: Collection[str] = ()) -> LevelResult:
     """The tally and the Step of one repository's signals (``scans`` or a run context).
 
     ``exclusions`` are the owner's (``OwnerExclusion`` entries, ``lib/owner_exclusions.py``);
-    an id the model does not define is ignored."""
+    an id the model does not define is ignored. ``demoted`` are the fleet exit rule's
+    condition ids (#1086), passed only by ``lib.fleet.fleet_level``; a gate condition among
+    them is ignored, so a demotion never moves a Step."""
     excluded = _excluded(model, exclusions)
-    conditions = _conditions(model, data, excluded)
+    conditions = _conditions(model, data, excluded, frozenset(demoted) & condition_ids(model) - gate_conditions(model))
     _add_whys(model, conditions)
     counted = [c for c in conditions if c["counted"]]
     met = sum(c["state"] == "met" for c in counted)

@@ -28,7 +28,7 @@ stale file when the run has no model. Tests: `tests/test_level_tally.py`.
 """
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from pathlib import Path
 from typing import TypedDict
 
@@ -49,14 +49,15 @@ class FleetLevels(TypedDict):
     commits: dict[str, RepoCommit]  # the same ids: the commit each result measured (#907)
 
 
-def repo_level(model: MaturityModel, row: FleetRow) -> LevelResult:
-    """One scanned repository's level result, with the owner's exclusions from its scans."""
+def repo_level(model: MaturityModel, row: FleetRow, demoted: Collection[str] = ()) -> LevelResult:
+    """One scanned repository's level result, with the owner's exclusions from its scans and
+    the fleet exit rule's ``demoted`` condition ids (#1086; ``fleet.py`` alone passes them)."""
     scans = row.get("scans") or {}
-    return level_result(model, scans, run_exclusions(scans))
+    return level_result(model, scans, run_exclusions(scans), demoted)
 
 
 def fleet_levels(rows: Iterable[FleetRow], model: MaturityModel, *, toolkit_commit: str | None,
-                 plugin_version: str) -> FleetLevels:
+                 plugin_version: str, demoted: Collection[str] = ()) -> FleetLevels:
     """One result per scanned repository, sorted by id."""
     scanned = sorted((row for row in rows if row["status"] == STATUS_OK), key=lambda row: row["repo"])
     return {
@@ -64,19 +65,21 @@ def fleet_levels(rows: Iterable[FleetRow], model: MaturityModel, *, toolkit_comm
         "levels_version": model["version"],
         "toolkit_commit": toolkit_commit,
         "plugin_version": plugin_version,
-        "repos": {row["repo"]: repo_level(model, row) for row in scanned},
+        "repos": {row["repo"]: repo_level(model, row, demoted) for row in scanned},
         "commits": {row["repo"]: {"head_sha": row.get("head_sha"), "dirty": row.get("dirty")}
                     for row in scanned},
     }
 
 
 def write_fleet_levels(out_dir: Path, rows: Iterable[FleetRow], model: MaturityModel | None, *,
-                       toolkit_commit: str | None, plugin_version: str) -> Path | None:
+                       toolkit_commit: str | None, plugin_version: str,
+                       demoted: Collection[str] = ()) -> Path | None:
     """Write ``level.json``, or remove a stale one when the run has no model."""
     path = out_dir / LEVEL_FILE
     if model is None:
         path.unlink(missing_ok=True)
         return None
-    levels = fleet_levels(rows, model, toolkit_commit=toolkit_commit, plugin_version=plugin_version)
+    levels = fleet_levels(rows, model, toolkit_commit=toolkit_commit, plugin_version=plugin_version,
+                          demoted=demoted)
     path.write_text(dumps_level(levels), encoding="utf-8", newline="\n")
     return path

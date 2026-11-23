@@ -101,7 +101,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 from typing import NamedTuple, NotRequired, TypedDict
 
@@ -409,9 +409,11 @@ def model_rows(maturity_model: MaturityModel | None) -> list[ModelRow]:
             for row in maturity_model["rows"]]
 
 
-def level_results(maturity_model: MaturityModel | None, rows: Sequence[FleetRow]) -> dict[str, LevelResult | None]:
-    """Each repository's level result by id; None when failed or without a model."""
-    return {row["repo"]: repo_level(maturity_model, row) if maturity_model is not None
+def level_results(maturity_model: MaturityModel | None, rows: Sequence[FleetRow],
+                  demoted: Collection[str] = ()) -> dict[str, LevelResult | None]:
+    """Each repository's level result by id; None when failed or without a model. ``demoted``:
+    the fleet exit rule's condition ids (#1086)."""
+    return {row["repo"]: repo_level(maturity_model, row, demoted) if maturity_model is not None
             and row["status"] == STATUS_OK else None for row in rows}
 
 
@@ -473,11 +475,11 @@ def public_unit_rows(rows: list[UnitRow] | None, privacy: Privacy) -> list[UnitR
 def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model: MaturityModel | None,
                      trees: Sequence[Tree], *, owners: Mapping[str, list[str]] | None = None,
                      web_urls: Mapping[str, str | None] | None = None,
-                     privacy: Privacy = Privacy()) -> FleetData:
-    """The whole document for one run."""
+                     privacy: Privacy = Privacy(), demoted: Collection[str] = ()) -> FleetData:
+    """The whole document for one run; ``demoted``: the exit rule's condition ids (#1086)."""
     team_rows = [row for row in (maturity_model["rows"] if maturity_model else []) if row["scope"] == SCOPE]
     cells = {repo["repo"]: repo_cells(team_rows, repo) for repo in rows}
-    results = level_results(maturity_model, rows)
+    results = level_results(maturity_model, rows, demoted)
     repo_step = step_fields(maturity_model, rows, results)
     repo_tag = {repo: public_tags(cells, privacy) for repo, cells in tag_fields(maturity_model, results).items()}
     steps = maturity_model.get("steps", []) if maturity_model else []
