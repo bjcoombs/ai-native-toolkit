@@ -54,7 +54,8 @@ def test_stylesheet_never_overrides_a_text_attribute(ctx: dict[str, Any]) -> Non
 
 def test_the_strip_follows_the_waffle_and_owns_its_file() -> None:
     files = [d["file"] for d in build_all(SAME)]
-    assert files[:2] == ["evidence-waffle.svg", td.TAG_FILE]
+    # the relative order this depends on, not a position: the Step ladder (#1102) leads
+    assert files[files.index("evidence-waffle.svg") + 1] == td.TAG_FILE
     assert td.TAG_FILE in ALL_FILES
 
 
