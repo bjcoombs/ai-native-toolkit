@@ -182,11 +182,7 @@ def _fixed_lines(sample: Path, env: dict[str, str], patch: str, paths: list[str]
     with tempfile.TemporaryDirectory(prefix="assess-tour-fix-") as tmp:
         for rel in paths:
             _copy_lf(sample / "repo" / rel, Path(tmp) / rel)
-        done = subprocess.run(
-            ["git", "apply", "-"], cwd=tmp, input=patch, check=False,
-            capture_output=True, encoding="utf-8", errors="replace", env=env,
-        )
-        if done.returncode != 0:
+        if not _git_apply(["git", "apply", "-"], patch, env, cwd=tmp):
             return None
         return {rel: _code_lines((Path(tmp) / rel).read_text(encoding="utf-8")) for rel in paths}
 
@@ -199,12 +195,29 @@ def _is_fixed(texts: dict[str, str], fixed: dict[str, list[str]] | None) -> bool
     return fixed is not None and all(_code_lines(texts[rel]) == lines for rel, lines in fixed.items())
 
 
-def _apply(repo: Path, env: dict[str, str], patch: str, *flags: str) -> bool:
+def _git_apply(argv: list[str], patch: str, env: dict[str, str], cwd: str | None = None) -> bool:
+    """Run ``git apply`` on ``patch``, fed as LF bytes.
+
+    Bytes, not text: a text-mode pipe on Windows turns every "\n" into "\r\n", and the
+    patch then matches no line of the LF sample.
+    """
     done = subprocess.run(
-        ["git", "-C", str(repo), "apply", *flags, "-"], input=patch, check=False,
-        capture_output=True, encoding="utf-8", errors="replace", env=env,
+        argv, cwd=cwd, input=patch.replace("\r\n", "\n").encode("utf-8"), check=False,
+        capture_output=True, env=env,
     )
     return done.returncode == 0
+
+
+def _apply(repo: Path, env: dict[str, str], patch: str, *flags: str) -> bool:
+    return _git_apply(["git", "-C", str(repo), "apply", *flags, "-"], patch, env)
+
+
+def _read(path: Path) -> str:
+    """A file's text, or "" when it is missing (a newcomer may delete the workflow)."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return ""
 
 
 def fix(repo: Path, *, sample: Path = SAMPLE_DIR) -> str:
@@ -226,7 +239,7 @@ def fix(repo: Path, *, sample: Path = SAMPLE_DIR) -> str:
     paths = patched_paths(patch)
     fixed = _fixed_lines(sample, env, patch, paths)
     if _git(repo, env, "status", "--porcelain", "--untracked-files=no", "--", *paths).strip():
-        tree = {rel: (repo / rel).read_text(encoding="utf-8") for rel in paths}
+        tree = {rel: _read(repo / rel) for rel in paths}
         if not _is_fixed(tree, fixed):
             diff = _git(repo, env, "diff", "--", *paths)
             raise ValueError(f"the edit to {', '.join(paths)} is not the tour's fix "

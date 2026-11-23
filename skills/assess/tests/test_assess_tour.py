@@ -7,6 +7,7 @@ build must give the same report byte for byte, so the cold-reader test in CI rea
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -195,3 +196,29 @@ def test_a_repository_with_no_commits_is_refused(tmp_path: Path, capsys: pytest.
     assert assess_tour.main(["run", str(empty)]) == 2
     err = capsys.readouterr().err
     assert "not a tour sample" in err and "ambiguous" not in err
+
+
+def test_a_crlf_hand_fix_is_the_fix(tmp_path: Path) -> None:
+    # An editor on Windows may save the workflow with CRLF endings.
+    repo = assess_tour.build(tmp_path / "tally")
+    ci = repo / ".github" / "workflows" / "ci.yml"
+    ci.write_bytes(ci.read_bytes().replace(b" || true", b"").replace(b"\n", b"\r\n"))
+    assert assess_tour.fix(repo) == "edited"
+    assert assess_tour.fix(repo) == "already_fixed"
+
+
+def test_a_crlf_patch_still_applies(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # What a text-mode pipe on Windows makes of the patch: it is normalised before git sees it.
+    sample = tmp_path / "sample"
+    shutil.copytree(assess_tour.SAMPLE_DIR, sample)
+    patch = sample / "fix.patch"
+    patch.write_bytes(patch.read_bytes().replace(b"\n", b"\r\n"))
+    repo = assess_tour.build(tmp_path / "tally", sample=sample)
+    assert assess_tour.fix(repo, sample=sample) == "applied"
+
+
+def test_a_deleted_workflow_is_not_the_fix(tmp_path: Path) -> None:
+    repo = assess_tour.build(tmp_path / "tally")
+    (repo / ".github" / "workflows" / "ci.yml").unlink()
+    with pytest.raises(ValueError, match="not the tour's fix"):
+        assess_tour.fix(repo)
