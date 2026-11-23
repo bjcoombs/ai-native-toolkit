@@ -53,7 +53,7 @@ STEP_GATES_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/w
 # "make the <id> gate hold".
 GATE_TASK = {
     "instructions": "commit an instruction file agents read, such as AGENTS.md or CLAUDE.md",
-    "ci_runs_tests": "make CI run the tests",
+    "ci_runs_tests": "make CI turn red when a test breaks",
     "coverage_gate": "enforce a coverage gate in CI",
 }
 

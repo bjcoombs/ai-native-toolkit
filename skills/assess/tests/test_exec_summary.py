@@ -121,7 +121,7 @@ def test_since_last_run_words_each_part_and_says_which_part_is_not_known() -> No
 def test_a_gate_not_measured_or_excluded_carries_the_headline_note() -> None:
     level = _at(2, state="not_measured", reason="needs_full_run")
     lines = summary_lines(level, KNOWN, default_model())  # type: ignore[arg-type]
-    assert lines[1].startswith("Next: make CI run the tests (not measured here: needs a full run). Then")
+    assert lines[1].startswith("Next: make CI turn red when a test breaks (not measured here: needs a full run). Then")
     assert call_to_action(level).endswith("(not measured here: needs a full run).")  # type: ignore[arg-type]
     excluded = _at(2, disposition="excluded_by_owner", exclusion_kind="not_applicable")
     assert "(excluded by owner: not applicable;" in summary_lines(excluded, KNOWN, default_model())[1]  # type: ignore[arg-type]
@@ -132,8 +132,8 @@ def test_two_blocking_gates_are_both_tasks_and_the_call_to_action_names_the_firs
         {"kind": "gate", "gate": "ci_runs_tests", "condition": "x.1", "state": "unmet"},
         {"kind": "gate", "gate": "own_gate", "condition": "y.1", "state": "unmet"}]})
     lines = summary_lines(level, KNOWN, default_model())  # type: ignore[arg-type]
-    assert lines[1].startswith("Next: make CI run the tests and make the own_gate gate hold. Then you reach Step 4")
-    assert "[Make CI run the tests]" in call_to_action(level)  # type: ignore[arg-type]
+    assert lines[1].startswith("Next: make CI turn red when a test breaks and make the own_gate gate hold. Then you reach Step 4")
+    assert "[Make CI turn red when a test breaks]" in call_to_action(level)  # type: ignore[arg-type]
 
 
 def test_an_unavailable_headline_or_a_model_without_steps_keeps_the_fields_empty() -> None:
