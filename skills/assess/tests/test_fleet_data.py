@@ -128,9 +128,10 @@ def test_run_details_copy_every_stamp_field_but_the_documented_exclusions() -> N
     assert fd.RUN_EXCLUDED <= stamp_keys
     assert set(get_type_hints(fd.RunDetails)) == stamp_keys - fd.RUN_EXCLUDED
     assert set(fd.run_details(STAMP)) == stamp_keys - fd.RUN_EXCLUDED
-    older = {k: v for k, v in STAMP.items() if k not in ("platform", "fleet_config_sha256")}
+    older = {k: v for k, v in STAMP.items()
+             if k not in ("platform", "fleet_config_sha256", "managed_settings")}
     run = fd.run_details(older)  # type: ignore[arg-type]
-    assert (run["platform"], run["fleet_config_sha256"]) == (False, None)
+    assert (run["platform"], run["fleet_config_sha256"], run["managed_settings"]) == (False, None, False)
 
 
 def test_privacy_for_full_ignores_any_salt() -> None:
