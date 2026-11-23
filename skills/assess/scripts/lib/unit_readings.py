@@ -38,7 +38,8 @@ they read ``scope``, directly or through another dependency; every other read
 (``excludes``, ``working_notes``, ``repo_root``) is the repository-wide value, passed in
 once (``UNIT_EXTERNAL_READS``, the registry entry's last reads, after ``OWN_READS``). A producer that does not read the scope is a misclassified
 collector and raises ``ValueError``. The root unit (``.``) runs no pass: it reads the
-repository-wide blocks (``REPO_BLOCKS``), the same scans over the same tree. Where member
+repository-wide blocks (``REPO_BLOCKS``), the same scans over the same tree, as its own,
+override blocks included (the root instruction file and the root gates are the root's own). Where member
 units sit below a root unit, the root's scoped readings therefore cover the members' files
 too (a known limit: no scan can leave out the folders of other units yet). Each unit's pass goes through ``scan_registry.run_scans``,
 so a failing scan degrades to its unavailable marker for that unit alone.
@@ -355,14 +356,20 @@ def read_units(units: Any, nested_instructions: Any, *external: Any,
             continue
         inputs: dict[str, Any] = {**values, "scope": _scope(Path(values["repo_root"]), rel)}
         ctx: dict[str, Any] = {}
-        if rel in ("", ".") and repo_blocks is not None:
-            ctx.update(repo_blocks)  # the root unit's tree is the repository's
+        root = rel in ("", ".") and repo_blocks is not None
+        if root:
+            ctx.update(repo_blocks or {})  # the root unit's tree is the repository's
         elif specs:
             run(ctx, inputs, None, specs)
         own: dict[str, JsonDict] = {}
         for block in own_blocks:
             result = ctx.get(block, inputs.get(block))
-            if scopes[block] == "override":
+            if root:
+                # The repository-wide reading is the root's own, root instruction file and
+                # gates included; a member unit's nested file is that unit's, not the root's.
+                if result is None:
+                    continue
+            elif scopes[block] == "override":
                 result = OVERRIDES[block](rel, result, repo)
                 if result is None:
                     continue

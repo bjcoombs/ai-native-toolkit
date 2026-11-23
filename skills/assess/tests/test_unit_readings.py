@@ -126,6 +126,32 @@ def test_the_root_unit_reads_the_repo_blocks_without_a_pass(tmp_path: Path) -> N
                          run=never, repo_blocks={})["units"][0]["path"] == "."
 
 
+def test_a_root_only_instruction_file_is_the_root_units_own(tmp_path: Path) -> None:
+    # nested_instructions never lists the root CLAUDE.md; layer_grades carries it, and a
+    # member unit's nested file is not credited to the root.
+    layer_grades = {"available": True, "instruction_file_present": True,
+                    "instruction_presence": "root"}
+    nested = {"available": True, "files": [{"path": "svc/a/CLAUDE.md"}]}
+    blocks = {"layer_grades": layer_grades}
+    block = cs.unit_readings(
+        {"unit_count": 2, "units": [{"path": "."}, {"path": "svc/b"}]}, nested,
+        *[blocks.get(b) for b in ur.REPO_BLOCKS], NO_EXCLUDES, tmp_path, None)
+    root, member = block["units"]
+    assert root["blocks"]["layer_grades"] == {"available": True, "instruction_file_present": True}
+    assert _origins(root)["layer-0-instructions.1"] == "unit"
+    assert "layer_grades" not in member["blocks"]
+    assert _origins(member)["layer-0-instructions.1"] == "inherited"
+
+
+def test_the_root_unit_is_not_credited_with_a_members_nested_file(tmp_path: Path) -> None:
+    nested = {"available": True, "files": [{"path": "svc/a/CLAUDE.md"}]}
+    absent = {"available": True, "instruction_file_present": False}
+    block = cs.unit_readings({"unit_count": 1, "units": [{"path": "."}]}, nested,
+                             *[{"layer_grades": absent}.get(b) for b in ur.REPO_BLOCKS],
+                             NO_EXCLUDES, tmp_path, None)
+    assert block["units"][0]["blocks"]["layer_grades"]["instruction_file_present"] is False
+
+
 def test_the_registry_entry_reads_what_the_unit_pass_needs() -> None:
     spec = next(s for s in SCANS if s.key == "unit_readings")
     assert spec.reads == (*ur.OWN_READS, *ur.UNIT_EXTERNAL_READS)
