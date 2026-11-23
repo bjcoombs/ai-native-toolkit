@@ -1,0 +1,169 @@
+"""The repository tag profile strip (``lib/assess_diagrams_tags.py``, #940).
+
+The goldens under ``tests/fixtures/assess_diagrams/`` lock the whole render; these tests hold
+each honesty rule of #940 on its own. Regenerate the goldens with
+``uv run --locked python tests/assess_diagrams_tags_fixture.py`` from ``skills/assess``.
+"""
+from __future__ import annotations
+
+import copy
+import re
+from typing import Any
+
+import pytest
+
+import lib.assess_diagrams_tags as td
+from assess_diagrams_tags_fixture import FIXTURES, LEVEL, PRIOR, PRIOR_OTHER, TAGS, goldens
+from lib.assess_diagrams_review import ALL_FILES, build_all
+from lib.level_tally import default_model, level_result
+from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
+from lib.vocabulary import banned_hits
+from svg_cascade import overridden_text_attributes
+
+
+def _svg(ctx: dict[str, Any]) -> str:
+    drawn = td.tag_diagrams(ctx)[0]["svg"]
+    assert drawn is not None
+    return drawn
+
+
+def _row(svg: str, tag: str) -> str:
+    return svg.split(f'<g data-tag="{tag}"', 1)[1].split("</g>", 1)[0]
+
+
+SAME = {"level": LEVEL, "prior_level": PRIOR}
+OTHER = {"level": LEVEL, "prior_level": PRIOR_OTHER}
+
+
+# --- goldens and determinism ----------------------------------------------------
+
+
+@pytest.mark.parametrize("name", sorted(goldens()))
+def test_render_matches_golden(name: str) -> None:
+    assert goldens()[name] == (FIXTURES / name).read_text(encoding="utf-8")
+
+
+def test_two_renders_are_byte_identical() -> None:
+    assert td.tag_diagrams(copy.deepcopy(SAME)) == td.tag_diagrams(copy.deepcopy(SAME))
+
+
+@pytest.mark.parametrize("ctx", [SAME, OTHER])
+def test_stylesheet_never_overrides_a_text_attribute(ctx: dict[str, Any]) -> None:
+    assert overridden_text_attributes(_svg(ctx)) == []
+
+
+def test_the_strip_follows_the_waffle_and_owns_its_file() -> None:
+    files = [d["file"] for d in build_all(SAME)]
+    assert files[:2] == ["evidence-waffle.svg", td.TAG_FILE]
+    assert td.TAG_FILE in ALL_FILES
+
+
+# --- the honesty rules ----------------------------------------------------------
+
+
+def test_row_order_is_fixed_and_every_label_carries_its_condition_count() -> None:
+    svg = _svg(SAME)
+    assert re.findall(r'<g data-tag="([a-z_]+)"', svg) == list(TRUTH_TAGS)
+    for row in TAGS:
+        assert f">{TRUTH_TAG_TITLES[row['tag']]} · {row['conditions']}<" in _row(svg, row["tag"])
+    # the order is the tag list's, not the rows' order in the data
+    shuffled = {**LEVEL, "tags": list(reversed(TAGS))}
+    assert td.tag_diagrams({"level": shuffled})[0]["svg"] is None
+
+
+def test_a_tag_with_no_measured_condition_is_dashed_with_its_reason_never_at_zero() -> None:
+    svg = _svg(SAME)
+    docs = _row(svg, "docs")
+    assert 'data-state="not_measured"' in docs and 'data-mark="dashed"' in docs
+    assert 'data-mark="dot"' not in docs
+    assert "not measured: needs GitHub or GitLab access" in docs  # the most frequent reason
+    assert "waits on another condition" in _row(svg, "governance")
+    assert "listed from config or a declaration only" in _row(svg, "agent_runtime")
+    assert "excluded by the owner or declined" in _row(svg, "supply_chain")
+
+
+def test_a_real_zero_of_n_measured_plots_at_zero() -> None:
+    structure = _row(_svg(SAME), "structure")
+    assert 'data-state="share"' in structure and 'data-mark="dot"' in structure
+    assert "0 of 2 met" in structure
+
+
+def test_a_model_tag_with_no_condition_reads_not_yet_measured() -> None:
+    contracts = _row(_svg(SAME), "contracts")
+    assert 'data-state="none"' in contracts and "not yet measured" in contracts
+    assert 'data-mark="dot"' not in contracts
+    shipped = level_result(default_model(), {})
+    assert "not yet measured" in _row(_svg({"level": shipped}), "contracts")
+
+
+def test_marks_are_dots_on_one_linear_scale_with_no_filled_area() -> None:
+    svg = _svg(SAME)
+    assert "<path" not in svg and "<polygon" not in svg and "<polyline" not in svg
+    xs = {tag: float(re.search(r'<circle cx="([\d.]+)"[^>]*data-mark="dot"', _row(svg, tag)).group(1))  # type: ignore[union-attr]
+          for tag in ("behaviour", "structure", "agent_context")}
+    zero, full = xs["structure"], xs["agent_context"]
+    assert xs["behaviour"] == pytest.approx(zero + (full - zero) * 2 / 3, abs=0.1)
+
+
+def test_hover_text_is_each_tag_why() -> None:
+    svg = _svg(SAME)
+    whys = td.tag_whys()
+    for tag in TRUTH_TAGS:
+        assert f"<title>{whys[tag]}</title>" in _row(svg, tag)
+        assert whys[tag] != TRUTH_TAG_TITLES[tag]  # every shipped tag has a why (#939)
+
+
+def test_an_earlier_run_under_the_same_model_draws_an_outline_dot() -> None:
+    svg = _svg(SAME)
+    assert 'data-mark="prior"' in _row(svg, "behaviour")
+    assert 'data-mark="prior"' not in _row(svg, "agent_context")  # not measured earlier: no outline
+    assert "Hollow dots: the earlier run, under the same maturity model fixture-2." in svg
+
+
+def test_an_earlier_run_under_another_model_draws_no_outline_and_says_why_in_one_line() -> None:
+    svg = _svg(OTHER)
+    assert 'data-mark="prior"' not in svg
+    note = td.prior_note(PRIOR_OTHER, LEVEL)
+    assert note == ("Earlier dots not drawn: the earlier run used maturity model fixture-1 and this "
+                    "run fixture-2, so the two do not compare.")
+    assert "\n" not in note and "the earlier run used maturity model fixture-1" in svg
+    assert note in td.tag_diagrams(OTHER)[0]["caption"]
+
+
+@pytest.mark.parametrize("prior", [None, {"prior_level_version": 99}, "junk"])
+def test_no_readable_earlier_run_draws_no_outline(prior: Any) -> None:
+    drawn = td.tag_diagrams({"level": LEVEL, "prior_level": prior})[0]
+    assert drawn["svg"] is not None and 'data-mark="prior"' not in drawn["svg"]
+    assert "No earlier run is recorded here" in drawn["caption"]
+
+
+def test_the_strip_names_no_path_repository_or_person() -> None:
+    svg = _svg(SAME)
+    for value in ("doc.1", "st.3", "gov.2", "layer-4-architecture", "layer-7-review"):
+        assert value not in svg
+
+
+def test_captions_and_labels_pass_the_vocabulary_with_no_layer_number() -> None:
+    for ctx in (SAME, OTHER, {"level": level_result(default_model(), {})}):
+        drawn = td.tag_diagrams(ctx)[0]
+        text = "\n".join([drawn["in_place"], drawn["caption"], drawn["svg"] or ""])
+        assert banned_hits(text) == []
+        assert not re.search(r"\blayer\s*\d", text, re.IGNORECASE)
+        assert drawn["in_place"].startswith("In place:")
+
+
+@pytest.mark.parametrize(("level", "reason"), [
+    (None, "the run has no level result"),
+    ({"conditions": []}, "the level result has no per-tag rows"),
+    ({"conditions": [], "tags": [{"tag": "docs"}]}, "the level result has no per-tag rows"),
+])
+def test_not_drawn_says_why(level: Any, reason: str) -> None:
+    drawn = td.tag_diagrams({"level": level})[0]
+    assert drawn["svg"] is None and drawn["skipped"] is not None and drawn["skipped"].startswith(reason)
+
+
+def test_a_renderer_error_becomes_a_skip_line(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(*_: Any) -> str:
+        raise RuntimeError("x")
+    monkeypatch.setattr(td, "render_strip", boom)
+    assert td.tag_diagrams(SAME)[0]["skipped"] == "the renderer raised RuntimeError."

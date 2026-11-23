@@ -5,7 +5,7 @@ import cycle (the engine reads ``lib.level_signals``, which reads the counts-onl
 shapes). String fields hold condition ids, states, grades and reason codes only.
 
 The `LevelResult` TypedDicts (`ConditionResult`, `Tally`, `NotMeasured`, `Blocker`,
-`NextStep`) and the run context's `Headline` (#747) with its per-tag `TagCell` (#844), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
+`NextStep`) and the run context's `Headline` (#747) with its per-tag `TagCell` (#844) and the level's per-tag `TagRow` (#940), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
 import cycle. Tests: `tests/test_level_tally.py`.
 """
 from __future__ import annotations
@@ -64,6 +64,21 @@ class NextStep(TypedDict):
     blockers: list[Blocker]
 
 
+class TagRow(TypedDict):
+    """One truth tag of a level result's ``tags`` (``lib/level_tags.py``, #940).
+
+    Every tag of ``TRUTH_TAGS`` has a row, in that order. ``met`` and ``measured`` are the
+    headline strip cell's (``TagCell``); ``measured`` 0 means not measured, never a share of 0.
+    """
+
+    tag: str  # one of lib.levels_fields.TRUTH_TAGS
+    conditions: int  # conditions with this tag, any grade or state; 0: no condition carries it yet
+    counted: int  # of those, the ones the tally counts (measured or verified, not hazard, not excluded)
+    met: int  # counted conditions with this tag that are met
+    measured: int  # counted conditions with this tag, met or unmet
+    not_measured: list[NotMeasured]  # conditions with this tag not measured, with the reason code
+
+
 class LevelResult(TypedDict):
     level_result_version: int
     levels_version: str
@@ -75,6 +90,7 @@ class LevelResult(TypedDict):
     step: int | None  # None: the model defines no Steps
     next_step: NextStep | None  # None: no Steps, or the top Step is held
     excluded: NotRequired[list[ExcludedCondition]]  # present only when the owner excluded a condition
+    tags: NotRequired[list[TagRow]]  # #940: every truth tag, in TRUTH_TAGS order; absent before #940
 
 
 class OwnerExclusion(TypedDict):

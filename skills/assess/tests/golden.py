@@ -50,6 +50,8 @@ _VOLATILE_TOP_LEVEL = (
     "prior_stats_exists",
     # The findings.json read back from disk, like the prior stats sidecar.
     "prior_findings_snapshot",
+    # The prior-level.json read back from disk (#940), the same way.
+    "prior_level",
 )
 
 #: Sub-keys of ``measured_commit`` that identify the specific commit/work-tree

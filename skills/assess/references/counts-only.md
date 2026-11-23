@@ -132,6 +132,10 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `instruction_files.{}.findings.reason` | dropped |
 | `prior_findings_snapshot.findings.name` | token |
 | `prior_findings_snapshot.findings.paths` | path (hashed when hashing is on) |
+| `prior_level.levels_version` | token |
+| `prior_level.tags.tag` | token |
+| `prior_level.tags.not_measured.id` | token |
+| `prior_level.tags.not_measured.reason` | token |
 
 ## doc_graph
 
@@ -788,6 +792,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.excluded.id` | token |
 | `level.excluded.kind` | token |
 | `level.excluded.source` | token |
+| `level.tags.tag` | token |
+| `level.tags.not_measured.id` | token |
+| `level.tags.not_measured.reason` | token |
 
 ## headline
 

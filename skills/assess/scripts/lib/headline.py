@@ -58,7 +58,8 @@ excluded conditions and those whose `requires` names one (#910), then the per-ta
 the model's `truth`, badges only when non-zero, no line when no condition is tagged).
 Also `markdown` (the lines, the first bold, pasted verbatim by the report and
 `assess_report.py`), `summary` (the badge message and the `log.md` readiness line,
-"Step 3 · 4 in place of 4 measured"), `verified` and `tags` (`TagCell` per strip cell, from `tag_cells`, which the fleet's per-tag
+"Step 3 · 4 in place of 4 measured"), `verified` and `tags` (`TagCell` per strip cell, from `tag_cells`, which lives in
+`lib/level_tags.py` with the level's `tags` rows (#940) and which the fleet's per-tag
 tally also reads, #1073), `step`,
 `next_step`, `levels_version`, `headline_version` and `next_why` (#939: for each blocking gate,
 the `why` of every condition of its row up to its level that is not met, from the level
@@ -76,16 +77,16 @@ from collections.abc import Mapping
 from typing import Any
 
 from lib.level_result_types import Blocker, ConditionResult, Headline, LevelResult, TagCell
+from lib.level_tags import tag_cells
 from lib.level_tally import default_model
 from lib.levels import MaturityModel
-from lib.levels_fields import TRUTH_TAGS
 
 # Bumped when the headline block's shape changes. It has no changes/ counter, so a
 # release PR moves it by hand during a version freeze.
 # 2 (3.0.0 release): the block gains `verified` and `tags` (#844).
 HEADLINE_VERSION = 2
 
-__all__ = ["Headline", "as_headline", "headline", "run_context_headline"]
+__all__ = ["Headline", "as_headline", "headline", "run_context_headline", "tag_cells"]
 
 # The change that holds each Step gate, as the Next line words it. A gate id the
 # table does not know (a caller's own model) reads "the <id> gate holds".
@@ -227,32 +228,6 @@ def _tally_line(level: LevelResult) -> str:
         gone = sum(c["state"] == "not_applicable" for c in level["conditions"])
         line += f" · {gone} not applicable (excluded by owner)"
     return line + f" · model {level['levels_version']}"
-
-
-def _truth(model: MaturityModel) -> dict[str, list[str]]:
-    """Each condition id of the model and its truth tags."""
-    return {f"{row['id']}.{lv['level']}": lv.get("truth", [])
-            for row in model["rows"] for lv in row["levels"]}
-
-
-def tag_cells(level: LevelResult, model: MaturityModel) -> list[TagCell]:
-    """One cell per truth tag a condition in the result carries, in ``TRUTH_TAGS`` order."""
-    truth = _truth(model)
-    cells: dict[str, TagCell] = {}
-    for c in level["conditions"]:
-        for tag in truth.get(c["id"], []):
-            cell = cells.setdefault(tag, {"tag": tag, "met": 0, "measured": 0, "verified": 0,
-                                          "not_measured": 0, "hazards": 0, "declined": 0})
-            state = c["state"]
-            if c["counted"] and state in ("met", "unmet"):
-                cell["measured"] += 1
-                if state == "met":
-                    cell["met"] += 1
-                    cell["verified"] += c["grade"] == "verified"
-            cell["not_measured"] += state == "not_measured"
-            cell["hazards"] += c.get("polarity") == "hazard" and state == "met"
-            cell["declined"] += state == "declined"
-    return [cells[t] for t in TRUTH_TAGS if t in cells]  # the model load admits no other tag
 
 
 def _strip_line(cells: list[TagCell]) -> str:

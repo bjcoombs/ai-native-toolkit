@@ -38,6 +38,7 @@ from typing import Any
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from lib.prior_level import write_prior_level
 from lib.assess_diagrams_review import COUNTS_ONLY_FILES, build_all, counts_only_diagrams, write_all
 from lib.badge import write_headline_badge
 from lib.headline import as_headline, run_context_headline
@@ -185,8 +186,11 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
         refresh_log_readiness(
             assess_dir, ctx.get("run_id"), as_headline(ctx["headline"])["summary"],
         )
-        # The evidence waffle draws the level's conditions (#942): redraw it with them.
+        # The evidence waffle draws the level's conditions (#942): redraw it with them. The tag
+        # profile strip reads the earlier run from ctx["prior_level"]; the recounted tags are
+        # this run's, so they replace prior-level.json (#940).
         write_all(assess_dir, build_all(ctx))
+        write_prior_level(assess_dir, ctx["level"])
     # E1 crosses the refreshed survivor density with this run's hotspots; the
     # findings, attention and report products are rebuilt from it.
     refresh_mutation_findings(

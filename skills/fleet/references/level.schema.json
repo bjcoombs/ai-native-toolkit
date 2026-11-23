@@ -309,6 +309,67 @@
             ],
             "additionalProperties": false
           }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tag": {
+                "enum": [
+                  "behaviour",
+                  "contracts",
+                  "docs",
+                  "structure",
+                  "agent_context",
+                  "agent_runtime",
+                  "governance",
+                  "supply_chain"
+                ]
+              },
+              "conditions": {
+                "type": "integer"
+              },
+              "counted": {
+                "type": "integer"
+              },
+              "met": {
+                "type": "integer"
+              },
+              "measured": {
+                "type": "integer"
+              },
+              "not_measured": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "conditions",
+              "counted",
+              "measured",
+              "met",
+              "not_measured",
+              "tag"
+            ],
+            "additionalProperties": false
+          },
+          "description": "one row per truth tag, every tag in this order (#940); met and measured are the headline strip's cells, and measured 0 means not measured, never a share of 0 (lib/level_tags.py)"
         }
       },
       "required": [

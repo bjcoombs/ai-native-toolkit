@@ -60,7 +60,7 @@ RUN_HEADER_KEYS = (
     "prior_plugin_version", "schema_version", "prior_schema_version", "tool_versions",
     "prior_tool_versions", "diff_detail", "pruned_hotspots", "retired_excluded_hotspots",
     "dropped_first_flagged", "provisional_first_flagged", "log_integrity",
-    "prior_findings_snapshot",
+    "prior_findings_snapshot", "prior_level",
 )
 
 PLUGIN_JSON = Path(__file__).resolve().parents[4] / ".claude-plugin" / "plugin.json"
@@ -269,5 +269,7 @@ by the same step just before it rewrites findings.json.
         # Reserved like the WIKI_KEYS: lib/run_publish.py reads the previous
         # findings.json into it just before rewriting that file (#554).
         "prior_findings_snapshot": None,
+        # Reserved the same way: run_publish reads the previous prior-level.json into it (#940).
+        "prior_level": None,
     }
     return header
