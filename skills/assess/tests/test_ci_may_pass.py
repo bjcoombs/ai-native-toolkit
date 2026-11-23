@@ -226,3 +226,45 @@ def test_a_folded_coverage_run_that_may_pass_reads_check_may_pass(tmp_path: Path
             "          pytest --cov --cov-fail-under=80\n          || echo failed\n")
     block = detect_coverage_gate(_repo(tmp_path, {".github/workflows/ci.yml": text}))
     assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (None, "check_may_pass")
+
+
+def _block_step(body: str) -> str:
+    lines = "".join(f"          {line}\n" for line in body.splitlines())
+    return f"on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n      - run: |\n{lines}"
+
+
+# End to end. The CI-line classifier takes no line that opens with ``if``, ``while``,
+# ``until``, ``{`` or ``f()`` as a check (on main too, a known limit tracked on #1061), so
+# those forms read no check at all; the masking rules above still apply to them. A
+# multi-line ``{ }`` group or function body puts the check on its own line, which reads
+# check_may_pass, or credit for a plain call.
+@pytest.mark.parametrize(("text", "expected"), [
+    pytest.param(_step("if pytest; then echo ok; fi", "default"), (False, "no_check_command"), id="if-line"),
+    pytest.param(_step("while pytest; do break; done", "default"), (False, "no_check_command"), id="while-line"),
+    pytest.param(_step("until pytest; do break; done", "default"), (False, "no_check_command"), id="until-line"),
+    pytest.param(_step("{ pytest && echo ok; }; echo next", "default"), (False, "no_check_command"),
+                 id="brace-line"),
+    pytest.param(_step("f() { pytest; echo done; }; f && echo ok", "default"),
+                 (False, "no_check_command"), id="function-line"),
+    pytest.param(_step("if ! pytest; then exit 1; fi", "default"), (False, "no_check_command"),
+                 id="if-not-line"),
+    pytest.param(_step("{ pytest; }; echo next", "default"), (False, "no_check_command"),
+                 id="brace-credited-line"),
+    pytest.param(_step("f() { pytest; }; f", "default"), (False, "no_check_command"),
+                 id="function-credited-line"),
+    pytest.param(_block_step("if pytest; then\n  echo ok\nfi"), (False, "no_check_command"), id="if-block"),
+    pytest.param(_block_step("while pytest; do\n  break\ndone"), (False, "no_check_command"),
+                 id="while-block"),
+    pytest.param(_block_step("until pytest; do\n  break\ndone"), (False, "no_check_command"),
+                 id="until-block"),
+    pytest.param(_block_step("{\n  pytest && echo ok\n}\necho next"), (None, "check_may_pass"),
+                 id="brace-block"),
+    pytest.param(_block_step("f() {\n  pytest\n  echo done\n}\nf && echo ok"), (None, "check_may_pass"),
+                 id="function-block"),
+    pytest.param(_block_step("f() {\n  pytest\n}\nf"), (True, "enforced_check"), id="function-block-credited"),
+    pytest.param(_step("pytest && echo ok; echo next", "default"), (None, "check_may_pass"), id="and-next"),
+    pytest.param(_step("pytest || echo failed", "default"), (None, "check_may_pass"), id="or-echo"),
+])
+def test_end_to_end_readings(tmp_path: Path, text: str, expected: tuple[object, str]) -> None:
+    block = scan_ci_checks(_repo(tmp_path, {".github/workflows/ci.yml": text}))
+    assert (block["enforced_check_runs"], block["enforced_basis"]) == expected
