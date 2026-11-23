@@ -7,8 +7,8 @@ kind = "collector"
 title = "Agent working environment"
 summary = "Committed agent setup, the check command an instruction file names, lockfiles per manifest and the Layer 5 cap; the CI-duration probe is off in headless runs. A manifest row's note is skipped_library (a library whose ecosystem commits no lock: listed, not counted in manifests_total or unlocked_total) or direct_pins_only (a Gradle version catalog or NuGet central package management with no lock: unlocked)."
 issues = [514]
-callable = "lib.agent_environment:scan_agent_environment"
-offline_callable = "lib.agent_environment:scan_agent_environment"
+callable = "lib.agents.agent_environment:scan_agent_environment"
+offline_callable = "lib.agents.agent_environment:scan_agent_environment"
 publishes = ["agent_environment"]
 reads = ["repo_root", "instruction_files", "agent_harness", "excludes"]
 stage = "post_offers"
@@ -16,7 +16,7 @@ network = true
 headless = { agent_environment = "registered" }
 whys.agent_environment = "It reads what an agent needs to work like CI does: the check command its instructions name, the committed setup and a lockfile for each dependency manifest."
 shapes = [
-  { path = "agent_environment", type = "lib.agent_environment:AgentEnvironmentBlock" },
+  { path = "agent_environment", type = "lib.agents.agent_environment:AgentEnvironmentBlock" },
 ]
 revision = 1
   [entries.privacy]

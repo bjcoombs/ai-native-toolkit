@@ -12,7 +12,7 @@ live run) against these shapes, so a builder that adds a key fails until the sha
 names it. Every block may also degrade to ``{"available": false, "reason"}``, which
 ``team_path_ok`` accepts for any block.
 
-- ``agent_ops`` (``lib.agent_ops.scan_agent_ops``)
+- ``agent_ops`` (``lib.agents.agent_ops.scan_agent_ops``)
 - ``coverage_gate`` (``lib.coverage_gate.detect_coverage_gate``)
 - ``instruction_claims`` (``lib.instruction_claims.scan_instruction_claims``)
 - ``promissory_markers`` (``lib.promissory_markers.MarkerScan.summary``)

@@ -87,11 +87,11 @@ from typing import Any
 import lib.manifest.check_manifest as cm
 from lib import core_scans as cs
 from lib import run_setup as rs
-from lib.agent_building import scan_agent_building
+from lib.agents.agent_building import scan_agent_building
 from lib.agent_consistency import scan_agent_consistency
-from lib.agent_environment import scan_agent_environment
-from lib.agent_harness import scan_agent_harness
-from lib.agent_ops import scan_agent_ops
+from lib.agents.agent_environment import scan_agent_environment
+from lib.agents.agent_harness import scan_agent_harness
+from lib.agents.agent_ops import scan_agent_ops
 from lib.ai_usage import scan_ai_usage
 from lib.ci_checks import scan_ci_checks
 from lib.claude_config import scan_claude_config

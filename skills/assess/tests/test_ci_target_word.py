@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from lib.agent_consistency import check_commands
-from lib.agent_environment import scan_agent_environment
+from lib.agents.agent_environment import scan_agent_environment
 from lib.check_command import check_verdict, is_check_name
 from lib.ci_checks import scan_ci_checks
 from lib.ci_scripts import Present, runs_missing

@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from lib.agent_ops import scan_agent_ops
+from lib.agents.agent_ops import scan_agent_ops
 
 
 def _write_settings(repo: Path, rel: str, data: object) -> Path:
