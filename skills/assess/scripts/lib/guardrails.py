@@ -110,7 +110,7 @@ measured) reads unknown, never 0. `not_read` names the gate forms not read yet (
 `complexity`, TypeScript `strict`, file-size ratchets, architecture tests, required CI
 checks and branch protection, sign-off rules). Counts-only keeps `kind`, `tool`, `rule`,
 the numbers, `file` and `stated_in` as paths, and drops `snippet` (and `not_read` to its
-length). Stdlib plus `lib.coverage_gate`. Tests: `tests/test_guardrails.py`.
+length). Stdlib plus `lib.testing.coverage_gate`. Tests: `tests/test_guardrails.py`.
 """
 from __future__ import annotations
 
@@ -121,7 +121,7 @@ from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
-from lib.coverage_gate import CoverageGate, Excludes, gates_something, walk_named
+from lib.testing.coverage_gate import CoverageGate, Excludes, gates_something, walk_named
 
 GateKind = Literal["complexity_limit", "coverage_floor", "pre_commit", "type_strictness"]
 

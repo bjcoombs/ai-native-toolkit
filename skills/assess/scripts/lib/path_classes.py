@@ -21,7 +21,7 @@ The first rule that matches wins, in this order:
    root).
 4. ``test``: a directory segment is one of ``TEST_DIRS`` (``test``, ``tests``,
    ``__tests__``, ``spec``, ``e2e`` ...), or the file is itself a test by name
-   (``lib.sibling_tests.is_test_path``: ``test_x.py``, ``x_test.go``,
+   (``lib.testing.sibling_tests.is_test_path``: ``test_x.py``, ``x_test.go``,
    ``x.spec.ts``, ``FooTest.java``, ``.bats``).
 5. ``example``: a directory segment is one of ``EXAMPLE_DIRS`` (``examples``,
    ``samples``, ``demo`` ...).
@@ -38,7 +38,7 @@ from pathlib import PurePath, PurePosixPath
 from typing import Literal
 
 from lib.complexity.generated_files import matches_generated_name
-from lib.sibling_tests import is_test_path
+from lib.testing.sibling_tests import is_test_path
 
 PathClass = Literal["source", "test", "fixture", "example", "vendored", "generated"]
 

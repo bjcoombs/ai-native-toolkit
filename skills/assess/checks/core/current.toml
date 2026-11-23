@@ -25,7 +25,7 @@ action = "strengthen tests to pin observable behaviour (not internal state)"
 mode = "characterize_first"
 concern = true
 inputs = ["current", "test_pressure"]
-derive = "lib.untrusted_hotspot:untrusted_hotspot_paths"
+derive = "lib.testing.untrusted_hotspot:untrusted_hotspot_paths"
 headless = "unregistered"
 
 [[entries]]
