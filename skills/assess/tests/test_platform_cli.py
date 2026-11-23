@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import skip_without_posix_shell
+from assess_test_support import skip_without_posix_shell
 
 import lib.hosting.gh_cli as gh_cli
 import lib.hosting.gitlab_cli as gitlab_cli

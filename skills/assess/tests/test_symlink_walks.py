@@ -11,9 +11,15 @@ from pathlib import Path
 import pytest
 
 from lib.test_pressure.common import _iter_files
-from test_complexity_treemap import _load_treemap
+from test_complexity_treemap import stubbed_treemap
 
 REPO = Path(__file__).resolve().parents[3]
+
+
+@pytest.fixture(scope="module")
+def treemap():
+    with stubbed_treemap() as mod:
+        yield mod
 
 
 def _linked_repo(root: Path) -> Path:
@@ -27,12 +33,11 @@ def _linked_repo(root: Path) -> Path:
 
 
 def test_treemap_counts_a_file_reached_through_a_link_once(
-        tmp_path: Path, monkeypatch) -> None:
+        treemap, tmp_path: Path, monkeypatch) -> None:
     """Even a walker that follows the link (both spellings reported) leaves
     one treemap entry, because lizard and scc results are keyed by resolved
     path."""
     real = _linked_repo(tmp_path)
-    treemap = _load_treemap()
     spellings = [real, tmp_path / "pkg" / "src" / "lib" / "a.py"]
     fake = [types.SimpleNamespace(filename=str(p), nloc=2, function_list=[
         types.SimpleNamespace(cyclomatic_complexity=1, name="f")]) for p in spellings]
