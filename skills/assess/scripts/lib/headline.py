@@ -35,7 +35,9 @@ lines that lead name gates, never a count. The lines, in order:
 in it: ``Step 3 · next: coverage gate`` (``GATE_NOUN`` names the first blocking gate),
 ``Step 4 · all gates held`` at the top Step, and ``no Steps defined`` for a model without
 ``[[steps]]``. ``markdown`` is the lines, the first bold, pasted verbatim by the report and
-``assess_report.py``. ``verified`` and ``tags`` (``TagCell`` per cell, from ``tag_cells``, which lives in
+``assess_report.py``; in it alone, "measured" and "verified" on the catalogue coverage line link
+their plain-English entry in ``docs/glossary.md`` (``GLOSSARY_URL``, #1102), so ``lines``, the
+badge and the ``log.md`` entry stay plain text. ``verified`` and ``tags`` (``TagCell`` per cell, from ``tag_cells``, which lives in
 ``lib/level_tags.py`` with the level's ``tags`` rows (#940) and which the fleet's
 per-tag tally also reads, #1073) hold the coverage
 numbers for counts-only readers, which drop the text lines. ``next_why`` (#939) is, for
@@ -71,8 +73,12 @@ from lib.levels import MaturityModel
 #   "Catalogue coverage". No key is added or removed.
 HEADLINE_VERSION = 3
 
-__all__ = ["GATE_CHANGE", "GATE_NOUN", "Headline", "as_headline", "gate_change", "gate_note", "headline", "reason_word",
+__all__ = ["GATE_CHANGE", "GATE_NOUN", "GLOSSARY_URL", "Headline", "as_headline", "gate_change", "gate_note", "headline", "reason_word",
            "run_context_headline", "tag_cells", "verified_count"]
+
+# The plain-English glossary (#1102). The report's markdown links a term's first use to its
+# heading anchor; exec_summary.py and assess_report.py read it from here.
+GLOSSARY_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md"
 
 # The change that holds each Step gate, as the Next line words it. A gate id the
 # table does not know (a caller's own model) reads "the <id> gate holds".
@@ -204,6 +210,12 @@ def _tally_line(level: LevelResult) -> str:
     return line + f" · model {level['levels_version']}"
 
 
+def _linked_tally(line: str) -> str:
+    """The catalogue coverage line with "measured" and "verified" linked to the glossary once."""
+    line = line.replace(" measured, ", f" [measured]({GLOSSARY_URL}#evidence-grade), ", 1)
+    return line.replace(" verified", f" [verified]({GLOSSARY_URL}#evidence-grade)", 1)
+
+
 def _strip_line(cells: list[TagCell]) -> str:
     parts = []
     for cell in cells:
@@ -240,7 +252,8 @@ def headline(value: Any, model: MaturityModel) -> Headline:
         lines.append(_strip_line(cells))
     nxt = level["next_step"]
     summary = _summary(level)
-    markdown = "\n\n".join([f"**{lines[0]}**", *lines[1:]])
+    linked = [_linked_tally(line) if line.startswith("Catalogue coverage:") else line for line in lines]
+    markdown = "\n\n".join([f"**{linked[0]}**", *linked[1:]])
     return {"headline_version": HEADLINE_VERSION, "available": True,
             "levels_version": level["levels_version"], "step": step,
             "next_step": nxt["step"] if nxt else None, "lines": lines,

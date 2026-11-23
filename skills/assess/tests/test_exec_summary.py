@@ -17,7 +17,7 @@ import pytest
 
 from lib.assess_diagrams_ladder import STEP_MEANING
 from lib.exec_summary import GATE_TASK, STEP_GATES_URL, call_to_action, since_line, summarised, summary_lines
-from lib.headline import GATE_CHANGE, as_headline, headline
+from lib.headline import GATE_CHANGE, GLOSSARY_URL, as_headline, headline
 from lib.level_tally import default_model
 from test_headline import SCRIPTS, _level, _run, ci2  # noqa: F401 - ci2 is a fixture
 
@@ -44,6 +44,19 @@ def _summary(step: int, since: Any = None) -> dict[str, Any]:
     return dict(summarised(headline(level, default_model()), level, since, default_model()))
 
 
+def _linked(first: str) -> str:
+    """Summary line 1 as the markdown carries it: its leading "Step" links the glossary (#1102)."""
+    assert first.startswith("Step "), first
+    return f"[Step]({GLOSSARY_URL}#step){first[4:]}"
+
+
+def test_the_markdown_links_step_once_and_the_lines_stay_plain() -> None:
+    h = _summary(2)
+    assert h["summary_markdown"].count("](") == 2  # the Step link and the call to action
+    assert h["summary_markdown"].startswith(f"[Step]({GLOSSARY_URL}#step) 2 of 4: ")
+    assert all("](" not in line for line in h["summary_lines"])
+
+
 def _plain_checks(text: str) -> None:
     assert "layer" not in text.lower(), text
     assert not CONDITION_ID.search(text), text
@@ -63,7 +76,8 @@ def test_steps_one_to_three_name_the_step_the_next_task_and_what_it_allows(step:
         "Since last run: 2 actions closed; now in place: CI runs the tests.",
     ]
     assert h["call_to_action"] == f"**Start here:** [{task[:1].upper()}{task[1:]}]({STEP_GATES_URL})."
-    assert h["summary_markdown"] == "\n\n".join([*h["summary_lines"], h["call_to_action"]])
+    assert h["summary_markdown"] == "\n\n".join([_linked(h["summary_lines"][0]), *h["summary_lines"][1:],
+                                                  h["call_to_action"]])
     for line in h["summary_lines"]:
         _plain_checks(line)
 
@@ -73,7 +87,7 @@ def test_the_top_step_says_every_gate_holds_and_has_no_call_to_action() -> None:
     assert h["summary_lines"][:2] == [f"Step 4 of 4: {STEP_MEANING[4]}.",
                                       "Next: every gate holds; keep them in place to stay at Step 4."]
     assert h["call_to_action"] == ""
-    assert h["summary_markdown"] == "\n\n".join(h["summary_lines"])
+    assert h["summary_markdown"] == "\n\n".join([_linked(h["summary_lines"][0]), *h["summary_lines"][1:]])
     for line in h["summary_lines"]:
         _plain_checks(line)
 

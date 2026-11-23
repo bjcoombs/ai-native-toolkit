@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from lib.headline import GATE_CHANGE, GATE_NOUN, as_headline, gate_change, headline, run_context_headline
+from lib.headline import GATE_CHANGE, GATE_NOUN, GLOSSARY_URL, as_headline, gate_change, headline, run_context_headline
 from lib.level_tally import default_model
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
@@ -55,6 +55,17 @@ def test_three_lines_step_next_and_coverage():
     assert h["summary"] == "Step 3 · next: coverage gate"
     assert h["markdown"].startswith("**Step 3 · Unattended agent PRs · contracts in place**\n\n")
     assert (h["step"], h["next_step"], h["levels_version"], h["available"]) == (3, 4, "m-1", True)
+
+
+def test_the_markdown_links_measured_and_verified_once_and_the_lines_stay_plain():
+    """#1102: the catalogue coverage line in the markdown links each grade word to the
+    glossary once; ``lines``, the badge summary and the log entry stay plain text."""
+    h = headline(_level(), default_model())
+    grade = f"{GLOSSARY_URL}#evidence-grade"
+    assert (f"Catalogue coverage: 4 of 6 [measured]({grade}), 0 [verified]({grade})"
+            " · 3 not measured (needs a full run: 1, no remote: 2) · model m-1") in h["markdown"]
+    assert h["markdown"].count("](") == 2
+    assert all("](" not in line for line in [*h["lines"], h["summary"]])
 
 
 def test_the_summary_and_next_line_carry_no_count():

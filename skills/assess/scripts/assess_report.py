@@ -56,7 +56,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.assess_diagrams import diagrams_section  # noqa: E402
 from lib.assess_diagrams_review import build_all  # noqa: E402
-from lib.headline import as_headline  # noqa: E402
+from lib.headline import GLOSSARY_URL, as_headline  # noqa: E402
 from lib.measured_appendix import measured_section  # noqa: E402
 
 # Caps on rows rendered so a pathological repo can't bloat the frozen report.
@@ -589,7 +589,7 @@ def render_since_section(ctx: dict[str, Any]) -> str:
     return f"## Since Last Run\n\n{block['markdown']}\n\n"
 
 
-_GLOSSARY = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md"
+_GLOSSARY = GLOSSARY_URL
 # The fixed line under the executive summary (#1102 part B): each term the summary
 # introduces links to its plain-English entry. skills/assess-findings/SKILL.md carries it
 # verbatim, so both report paths match (tests/test_glossary.py).
