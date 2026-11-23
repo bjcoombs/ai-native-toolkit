@@ -156,21 +156,30 @@ def _frontmatter_end(lines: list[str]) -> int:
 
 
 def description_text(text: str) -> str | None:
-    """The frontmatter ``description``, with a YAML block scalar (``>``, ``|``) unfolded."""
+    """The frontmatter ``description``, with its continuation lines.
+
+    ``parse_frontmatter`` keeps only a key's first line, so the indented lines after it are
+    gathered here: a block scalar (``>`` folds them with spaces, ``|`` keeps the line breaks)
+    or a plain or quoted value that wraps (YAML folds it with spaces). Matching outer quotes
+    are dropped."""
     fm = parse_frontmatter(text)
     entry = next((e for e in fm.entries if e.key == "description"), None) if fm else None
     if entry is None:
         return None
     lines = text.splitlines()
-    raw = lines[entry.line - 1].split(":", 1)[1].strip() if entry.line <= len(lines) else ""
-    if not _BLOCK_SCALAR.match(raw):
-        return entry.value
-    body: list[str] = []
-    for line in lines[entry.line:]:
+    end = _frontmatter_end(lines) - 1  # the closing fence's index
+    raw = lines[entry.line - 1].split(":", 1)[1].strip()
+    more: list[str] = []
+    for line in lines[entry.line:end]:
         if line.strip() and not line[:1].isspace():
             break
-        body.append(line.strip())
-    joined = (" " if raw.startswith(">") else "\n").join(body).strip()
+        more.append(line.strip())
+    if _BLOCK_SCALAR.match(raw):
+        joined = (" " if raw.startswith(">") else "\n").join(more).strip()
+    else:
+        joined = " ".join(part for part in [raw, *more] if part)
+        if len(joined) >= 2 and joined[0] == joined[-1] and joined[0] in "\"'":
+            joined = joined[1:-1]
     return joined or None
 
 

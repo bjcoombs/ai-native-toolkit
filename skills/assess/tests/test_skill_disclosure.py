@@ -77,6 +77,21 @@ def test_a_folded_block_scalar_is_unfolded_before_it_is_counted(tmp_path: Path) 
     assert entry["breaks"] == ["description_long"]
 
 
+@pytest.mark.parametrize(("frontmatter", "expected"), [
+    ("name: demo\ndescription: " + "a" * 600 + "\n  " + "b" * 600, "a" * 600 + " " + "b" * 600),
+    ('name: demo\ndescription: "' + "a" * 600 + "\n  " + "b" * 600 + '"', "a" * 600 + " " + "b" * 600),
+    ("name: demo\ndescription: 'short'", "short"),
+    ("name: demo\ndescription: |\n  one\n  two", "one\ntwo"),
+    ("description: plain\nname: demo", "plain"),
+])
+def test_a_wrapped_or_quoted_description_is_read_whole(tmp_path: Path, frontmatter: str, expected: str) -> None:
+    _skill(tmp_path, "body\n", frontmatter=frontmatter)
+    entry = _one(tmp_path)
+    assert entry["description_chars"] == len(expected)
+    assert ("description_long" in entry["breaks"]) is (len(expected) > sd.DESCRIPTION_MAX_CHARS)
+    assert sd.description_text(f"---\n{frontmatter}\n---\nbody\n") == expected
+
+
 @pytest.mark.parametrize(("name", "description", "breaks"), [
     (None, "d", ["name_missing"]),
     ("demo", None, ["description_missing"]),
