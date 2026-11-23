@@ -28,6 +28,14 @@ In place: 0 counted conditions met (0 verified, 0 measured) and 1 listed from co
 
 Verified and measured squares count toward the level, listed ones are shown but never counted, and hatched ones were not measured, never read as zero.
 
+## Practices in place by truth tag
+
+In place: 2 of the 8 truth tags have a measured condition, each shown with the share of its measured conditions met.
+
+[![Practices in place by truth tag](./tag-profile.svg)](./tag-profile.svg)
+
+Each dot is the share of that tag's measured conditions that are met. A condition with several tags counts on each of its rows and once in the tally, and a dashed row was not measured, never read as zero. No earlier run is recorded here, so no earlier dots are drawn.
+
 ## Packages and their imports
 
 In place: this run's scans, gathered with no model call.

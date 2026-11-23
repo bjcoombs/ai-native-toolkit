@@ -2892,6 +2892,7 @@
         "strings_kept": {
           "observability.boundary": "drop",
           "observability.discoverable.signals": "drop",
+          "observability.instrumented.kinds": "token",
           "observability.instrumented.signals": "drop",
           "observability.reachable.signals": "drop"
         }
@@ -4171,7 +4172,8 @@
         "dropped_first_flagged",
         "provisional_first_flagged",
         "log_integrity",
-        "prior_findings_snapshot"
+        "prior_findings_snapshot",
+        "prior_level"
       ],
       "reads": [
         "run_id",

@@ -181,7 +181,7 @@ body { margin: 0; }
         <text x="10" y="90" font-size="10" text-anchor="middle" fill="var(--muted)">L1</text>
         <text x="36" y="90" font-size="10" text-anchor="middle" fill="var(--muted)">L2</text>
       </svg>
-      <p>One square per practice, in rows by area, such as agent instructions, CI or code review. Most areas have two practices: <b>level 1</b> is the basic one, <b>level 2</b> the stronger bar. Dark teal is met and verified by a run, mid teal met and measured from the code, pale teal met but only listed from config (shown, not counted), grey not met yet, hatched not measured. Purple marks a practice the owners declined, and an empty outline one that does not apply.</p>
+      <p>One square per practice, in rows by area, such as agent instructions, CI or code review. Most areas have two practices: <b>level 1</b> is the basic one, <b>level 2</b> the stronger bar. Dark teal is met and verified by a run, mid teal met and measured from the code, pale teal met but only listed from config (shown, not counted), grey not met yet, hatched not measured. Purple marks a practice the owners declined, and an empty square one that does not apply. A frame drawn around a square marks a Step gate: those squares decide the Step.</p>
     </div>
   </section>
 
@@ -206,8 +206,9 @@ body { margin: 0; }
 
   <section>
     <h2>See it on a real repository</h2>
-    <p>Diagrams from an <code>/assess</code> run on <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a>. Click to open full size.</p>
+    <p>Diagrams from an <code>/assess</code> run on <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a>, plus an illustrative Step ladder. Click to open full size.</p>
     <div class="gallery">
+      <a href="./example-step-ladder.svg"><img src="./example-step-ladder.svg" alt="Illustrative Step ladder: four rungs of agent autonomy with a you-are-here marker and the next gate highlighted">The Step ladder (illustrative sample)</a>
       <a href="./example-waffle.svg"><img src="./example-waffle.svg" alt="Evidence waffle: one square per practice level">Evidence behind the Step</a>
       <a href="./example-heatmap-llamacpp.svg"><img src="./example-heatmap-llamacpp.svg" alt="Complexity treemap">Where the code is hard to change</a>
       <a href="./example-package-map.svg"><img src="./example-package-map.svg" alt="Package import matrix">How the packages depend on each other</a>

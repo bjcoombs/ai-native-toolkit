@@ -28,6 +28,7 @@ from lib.level_result_types import LevelResult  # noqa: E402
 from lib.level_tally import COUNTED_GRADES, EXCLUDED_BY_OWNER, LEVEL_RESULT_VERSION, STATES  # noqa: E402
 from lib.owner_exclusions import KINDS, SOURCE_REPO  # noqa: E402
 from lib.level_signals import INPUT_GRADES  # noqa: E402
+from lib.levels_fields import TRUTH_TAGS  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 
 SCHEMA_PATH = Path(__file__).resolve().parents[4] / "fleet" / "references" / "level.schema.json"
@@ -49,6 +50,10 @@ def level_result_schema() -> JsonDict:
     condition["disposition"] = {"enum": [EXCLUDED_BY_OWNER]}
     excluded["source"] = {"enum": [SOURCE_REPO]}
     condition["polarity"] = {"enum": ["hazard"], "description": "present only on a hazard condition, which is never counted (lib/levels_fields.py)"}
+    props["tags"]["items"]["properties"]["tag"] = {"enum": list(TRUTH_TAGS)}
+    props["tags"]["description"] = (
+        "one row per truth tag, every tag in this order (#940); met and measured are the headline strip's "
+        "cells, and measured 0 means not measured, never a share of 0 (lib/level_tags.py)")
     blocker = next(b for b in props["next_step"]["anyOf"] if b.get("type") == "object")
     blocker_fields = blocker["properties"]["blockers"]["items"]["properties"]
     blocker_fields["kind"] = {"enum": ["gate"]}

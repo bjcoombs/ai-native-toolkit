@@ -110,6 +110,11 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   unmet) and `not_measured` (conditions of any grade not measured). An unknown never counts.
 - `counted` and `listed`: the ids of the counted and the listed (config-only, declared or
   unclassified) conditions that are met. `not_measured[]`: `{id, reason}`.
+- `tags` (#940, `lib/level_tags.py` `tag_rows`): one row per truth tag, all of `TRUTH_TAGS` in
+  that order, with `conditions` (the conditions carrying the tag, 0 for a tag none carries
+  yet), `countable` and `set_aside` (by grade, and of those excluded or declined), `met` and `measured` (the headline strip cell's, `tag_cells`, never a second
+  tally) `not_measured[]` (`{id, reason}`) and `countable_not_measured[]`, its countable subset. A multi-tagged condition is on each of its rows
+  and counted once in `tally`; `measured` 0 means not measured, never a share of 0.
 - `step` (null without `[[steps]]`) and `next_step` (`step`, `blockers[]`; null at the top
   Step): a Step is held when every gate holds (the gate row's conditions up to its level all
   `met`, whatever their grade), every lower Step held too. Gates only (#1083): the tally never
@@ -138,6 +143,7 @@ from collections.abc import Collection, Mapping, Sequence
 from typing import Any
 
 from lib.counts_only.reason_codes import reason_code, reason_token
+from lib.level_tags import tag_rows
 from lib.level_result_types import Blocker, ConditionResult, ExcludedCondition, LevelResult, NextStep
 from lib.levels import Criterion, CriterionOutcome, Evaluation, LevelOutcome, MaturityModel, Row, StepDef
 from lib.levels import condition_id, evaluate_row, unavailable_signal
@@ -387,6 +393,7 @@ def level_result(model: MaturityModel, data: Mapping[str, Any] | None,
     }
     if excluded:
         result["excluded"] = [excluded[c["id"]] for c in conditions if c["id"] in excluded]
+    result["tags"] = tag_rows(result, model)
     return result
 
 

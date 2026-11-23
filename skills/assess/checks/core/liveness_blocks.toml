@@ -22,7 +22,7 @@ shapes = [
   { path = "dead_code", type = "lib.run_context_types:DeadCodeBlock" },
   { path = "observability", type = "lib.keyhole.liveness_scan:ObservabilityBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "dead_code.caveat" = "drop"
   "dead_code.candidates.kind" = "token"
@@ -34,6 +34,7 @@ revision = 1
   "dead_code.tools.consent" = "drop"
   "observability.boundary" = "drop"
   "observability.instrumented.signals" = "drop"
+  "observability.instrumented.kinds" = "token"
   "observability.discoverable.signals" = "drop"
   "observability.reachable.signals" = "drop"
   "capability_offers.build_system" = "token"

@@ -200,7 +200,7 @@ def test_failed_liveness_fallback_blocks_exact_shape(tmp_path: Path, monkeypatch
     }
     assert ctx["observability"] == {
         "rung": None, "available": False, "reason": reason,
-        "instrumented": {"present": False, "signals": []},
+        "instrumented": {"present": False, "signals": [], "kinds": []},
         "discoverable": {"present": False, "signals": []},
         "reachable": {"present": False, "signals": []},
     }
