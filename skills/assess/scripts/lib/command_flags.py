@@ -17,7 +17,7 @@ build`` runs ``build``; ``make -j build`` also runs ``build``, with unlimited jo
 ``--dry-run``, ``--just-print``, ``--recon``, ``-t`` / ``--touch``, ``-q`` / ``--question``,
 alone or in a cluster such as ``-kn``) or ``-i`` / ``--ignore-errors``; ``-k`` still exits 2,
 so it is not one. A cluster is read left to right up to the first letter that takes a value
-(``C``, ``f``, ``I``, ``o``, ``W``, ``E``, ``N``, or ``j`` / ``l`` before digits), so ``-Ctests``,
+(``C``, ``f``, ``I``, ``o``, ``O``, ``W``, ``E``, ``N``, or ``j`` / ``l`` before digits), so ``-Ctests``,
 ``-Iinclude`` and ``-kCtests`` run the target. Each rule
 was checked against bash 3.2 and 5.3, dash and GNU make. Tests: ``tests/test_check_command.py``.
 """
@@ -95,7 +95,7 @@ def make_runs_no_recipe(words: list[str]) -> bool:
 
 # Short make options whose value may be attached (``-Ctests``, ``-Iinclude``, ``-otarget``);
 # ``-j`` / ``-l`` take attached digits (``-j4``).
-_MAKE_VALUE_LETTERS = frozenset("CfIoWEN")
+_MAKE_VALUE_LETTERS = frozenset("CfIoOWEN")   # O: --output-sync[=TYPE], attached only (make 4)
 
 
 def _cluster_letters(word: str) -> set[str]:

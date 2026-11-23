@@ -231,7 +231,7 @@ def test_make_option_values_are_dropped_on_the_lint_path_too(text: str) -> None:
     "make -n test", "make --dry-run test", "make --just-print test", "make --recon test", "make -kn test",
     "make -nk test", "make -i test", "make --ignore-errors test", "make -ik test", "make -in test",
     "make -t test", "make --touch test", "make -q test", "gmake -n check", "make -sn test",
-    "make -nj4 test",
+    "make -nj4 test", "make -Onone -n test",
 ])
 def test_a_make_run_whose_recipe_cannot_fail_runs_no_check(text: str) -> None:
     """Real GNU make exits 0 for each with a failing ``test`` recipe, so nothing gates (#955)."""
@@ -245,7 +245,10 @@ def test_a_make_run_whose_recipe_cannot_fail_runs_no_check(text: str) -> None:
                                   # an attached value holding n/t/q/i is no dry run (each exits 2)
                                   "make -Ctests test", "make -Cinternal test", "make -Iinclude test",
                                   "make -otarget test", "make -Wtarget test", "make -fMakefileci test",
-                                  "make -kCtests test", "make -kj4 test", "make -j4 test"])
+                                  "make -kCtests test", "make -kj4 test", "make -j4 test",
+                                  # GNU make 4's -O[TYPE] (--output-sync) attaches its type
+                                  "make -Otarget test", "make -Oline test", "make -j4 -Oline test",
+                                  "make -O test", "make -Cintegration test", "make -Itests test"])
 def test_other_make_options_still_run_the_target(text: str) -> None:
     """``make -k test`` keeps going but still exits 2 with a failing recipe."""
     assert check_verdict(text) is True
@@ -254,3 +257,4 @@ def test_other_make_options_still_run_the_target(text: str) -> None:
 def test_an_attached_make_value_keeps_a_lint_run() -> None:
     """``make -Cinternal lint`` runs ``lint`` in ``internal/`` (real make exits 2 on a failing recipe)."""
     assert is_lint_command("make -Cinternal lint") and is_lint_run("make -Cinternal lint")
+    assert is_lint_command("make -j4 -Oline lint") and is_lint_run("make -j4 -Oline lint")
