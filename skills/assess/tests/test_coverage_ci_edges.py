@@ -88,8 +88,12 @@ def test_case2_no_cov_turns_coverage_off(
      (False, "not_run_in_ci")),
     ("./gradlew build --exclude-task jacocoTestCoverageVerification", GRADLE_WIRED,
      (False, "not_run_in_ci")),
-    ("./gradlew build --exclude-task=:app:jacocoTestCoverageVerification", GRADLE_WIRED,
+    ("./gradlew build --exclude-task=:jacocoTestCoverageVerification", GRADLE_WIRED,
      (False, "not_run_in_ci")),
+    # A project path excludes it in that project only: another may still run it.
+    ("./gradlew build --exclude-task=:app:jacocoTestCoverageVerification", GRADLE_WIRED,
+     (None, "indirect_run")),
+    ("./gradlew check -x :app:test", GRADLE_WIRED, (None, "indirect_run")),
     ("./gradlew test jacocoTestCoverageVerification -x jacocoTestCoverageVerification",
      GRADLE_080, (False, "not_run_in_ci")),
     # -x check stops the wired check crediting it; another wiring may still run it.
@@ -107,7 +111,8 @@ def test_case2_no_cov_turns_coverage_off(
     ("./gradlew check -m", GRADLE_WIRED, (False, "not_run_in_ci")),
     ("gradle build --task-graph", GRADLE_WIRED, (False, "not_run_in_ci")),
     ("./gradlew test -m", GRADLE_080, (False, "not_run_in_ci")),
-], ids=["check-x", "exclude-task", "exclude-task-eq-path", "named-and-excluded",
+], ids=["check-x", "exclude-task", "exclude-task-eq-root", "exclude-task-eq-path",
+        "x-project-test", "named-and-excluded",
         "x-check", "x-test", "verify-x-test", "x-report", "qm-cluster", "q-m",
         "d-property", "p-property", "dry-run", "m-wired-check", "task-graph", "test-dry-run"])
 def test_cases3_4_gradle_exclusion_and_dry_run(
@@ -116,8 +121,16 @@ def test_cases3_4_gradle_exclusion_and_dry_run(
 
 
 def test_gradle_tasks_splits_run_from_excluded() -> None:
-    assert gradle_tasks(["check", "-x", ":app:test", "--exclude-task=lint", "-q"]) == (
-        ["check"], {"test", "lint"})
+    assert gradle_tasks(["check", "-x", ":app:test", "--exclude-task=lint", "-x", ":doc",
+                         "-q"]) == (["check"], {":app:test", "lint", "doc"})
+
+
+def test_multi_module_project_exclusion_reads_unsure(tmp_path: Path) -> None:
+    """``include 'app', 'lib'``, both wired: excluding app's verification leaves lib's."""
+    files = {**_ci("./gradlew check -x :app:jacocoTestCoverageVerification"),
+             "settings.gradle": "include 'app', 'lib'\n",
+             "app/build.gradle": GRADLE_WIRED, "lib/build.gradle": GRADLE_WIRED}
+    assert _read(tmp_path, files) == (None, "indirect_run")
 
 
 @pytest.mark.parametrize(("words", "expected"), [

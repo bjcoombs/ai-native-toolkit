@@ -46,7 +46,9 @@ turns pytest-cov off wherever it stands, on the line or in ``addopts``
 (``--no-cov-on-fail`` does not). A Gradle task named with ``-x`` / ``--exclude-task``
 is not run (``check -x jacocoTestCoverageVerification`` reads false, and so does ``-x
 test`` with no other test task, which leaves the verification no execution data;
-``-x check`` stops a wired ``check`` crediting it), and a dry run (``-m``, in a short
+``-x check`` stops a wired ``check`` crediting it; a project path such as ``-x
+:app:jacocoTestCoverageVerification`` leaves other projects running and reads null),
+and a dry run (``-m``, in a short
 cluster such as ``-qm`` too, ``--dry-run``, ``--task-graph``) runs nothing. ``pytest -c
 FILE`` / ``--config-file FILE`` reads FILE's ``addopts`` as the run's own (null when
 FILE was not read), and ``--rootdir`` with no ``--cov`` reads null. Coverage switched on in config (pytest ``addopts``,
@@ -390,23 +392,36 @@ _VERIFY = "jacocoTestCoverageVerification"
 
 
 def gradle_tasks(args: Sequence[str]) -> tuple[list[str], set[str]]:
-    """``(tasks run, tasks excluded)`` of a Gradle command, each by its last path part
-    (``:app:check`` is ``check``); a word after ``-x`` / ``--exclude-task`` (or its ``=``
-    form) is excluded, not run."""
+    """``(tasks run, tasks excluded)`` of a Gradle command. A run task is named by its last
+    path part (``:app:check`` is ``check``). A word after ``-x`` / ``--exclude-task`` (or
+    its ``=`` form) is excluded, not run: an unqualified or root name (``test``,
+    ``:test``) excludes it in every project and is kept bare, while a project path
+    (``:app:test``) excludes it in that project only and is kept whole."""
     tasks: list[str] = []
     excluded: set[str] = set()
     skip = False
     for word in args:
         if skip:
-            excluded.add(word.rsplit(":", 1)[-1])
+            excluded.add(_excluded_name(word))
             skip = False
         elif word in _GRADLE_EXCLUDE:
             skip = True
         elif word.startswith("--exclude-task="):
-            excluded.add(word.partition("=")[2].rsplit(":", 1)[-1])
+            excluded.add(_excluded_name(word.partition("=")[2]))
         elif not word.startswith("-"):
             tasks.append(word.rsplit(":", 1)[-1])
     return tasks, excluded
+
+
+def _excluded_name(task: str) -> str:
+    """``test`` and ``:test`` are ``test``; ``:app:test`` stays ``:app:test``."""
+    bare = task.removeprefix(":")
+    return bare if ":" not in bare else task
+
+
+def _partly_excluded(excluded: set[str], task: str) -> bool:
+    """``task`` excluded in one project only (``-x :app:test``): another may still run it."""
+    return any(e.endswith(":" + task) for e in excluded)
 
 
 def gradle_runs_nothing(words: tuple[str, ...]) -> bool:
@@ -435,7 +450,9 @@ def gradle_skips_verification(words: tuple[str, ...]) -> bool:
     excludes the verification task with ``-x`` (Gradle skips an excluded task even when
     another task depends on it), or excludes ``test`` with no other test task named (no
     execution data, so the verification's ``onlyIf`` skips it; Gradle 9.4). ``-x check``
-    only stops ``check`` crediting it; ``-x jacocoTestReport`` leaves it running."""
+    only stops ``check`` crediting it; ``-x jacocoTestReport`` leaves it running. A
+    project-path exclusion (``-x :app:jacocoTestCoverageVerification``) leaves the other
+    projects' verification running, so it does not count here."""
     name, args = program(words)
     if name not in ("gradle", "gradlew"):
         return False
@@ -540,10 +557,12 @@ def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
         if name not in ("gradle", "gradlew") or gradle_skips_verification(words):
             return False   # #954: a dry run, or -x jacocoTestCoverageVerification
         tasks, excluded = gradle_tasks(args)
+        # A project-path exclusion may or may not be the gate's project: unsure, never false.
+        partly = any(_partly_excluded(excluded, t) for t in (_VERIFY, "test", "check"))
         if _VERIFY in tasks:
-            return True
+            return None if partly else True
         if gradle_check and {"build", "check"} & set(tasks) and "check" not in excluded:
-            return True
+            return None if partly else True
         return None
     if family == "go-test-coverage":
         return name == "go-test-coverage"
