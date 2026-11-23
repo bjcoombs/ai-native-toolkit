@@ -62,19 +62,17 @@ def new_gates(steps: Sequence[StepDef], step: int) -> list[StepGate]:
 
 
 def gate_state(level: LevelResult, gate: StepGate) -> str:
-    """What the run read for a gate, from its row's conditions 1..level: ``in place`` when
-    all are met; ``not yet`` when one is unmet or declined (or absent from the result);
-    otherwise ``not measured`` when one was not measured, and ``excluded by owner`` when
-    one is not applicable. Missing evidence never reads as "not yet"."""
+    """What the run read for a gate: ``in place`` when its row's conditions 1..level are all
+    met, else read from the first one not met, as the level engine picks the gate's blocker
+    (``level_tally._gate_blocker``): ``not measured``, ``excluded by owner`` (not
+    applicable), or ``not yet`` (unmet, declined, or absent from the result). Missing
+    evidence never reads as "not yet"."""
     by_id = {c["id"]: c["state"] for c in level["conditions"]}
     states = [by_id.get(f"{gate['row']}.{n}", "unmet") for n in range(1, gate["level"] + 1)]
-    if all(state == "met" for state in states):
+    first = next((state for state in states if state != "met"), None)
+    if first is None:
         return "in place"
-    if any(state in ("unmet", "declined") for state in states):
-        return "not yet"
-    if "not_measured" in states:
-        return "not measured"
-    return "excluded by owner"
+    return {"not_measured": "not measured", "not_applicable": "excluded by owner"}.get(first, "not yet")
 
 
 def _gate_words(gate: StepGate) -> str:

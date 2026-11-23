@@ -126,6 +126,17 @@ def test_a_gate_the_run_could_not_read_never_reads_not_yet(state: str, read: str
     assert f"CI runs the tests ({read})" in ladder.render_ladder(level, STEPS)
 
 
+def test_a_gate_above_level_one_reads_its_first_condition_not_met_like_the_engine() -> None:
+    level = _at(1)
+    level["conditions"] += [
+        {"id": "r.1", "row": "r", "level": 1, "grade": "verified", "counted": True, "state": "not_measured"},
+        {"id": "r.2", "row": "r", "level": 2, "grade": "verified", "counted": True, "state": "unmet"},
+    ]
+    assert ladder.gate_state(level, {"id": "g", "row": "r", "level": 2}) == "not measured"
+    level["conditions"][-2]["state"] = "met"
+    assert ladder.gate_state(level, {"id": "g", "row": "r", "level": 2}) == "not yet"
+
+
 def test_the_caption_says_why_a_next_gate_is_open_as_the_headline_does() -> None:
     level = _at(2)
     assert level["next_step"] is not None
