@@ -151,8 +151,8 @@ only_mutate = [
     "src/lib/complexity/stats_diff.py",
     "src/lib/keyhole/promissory_markers.py",
     "src/lib/keyhole/python_regions.py",
-    "src/lib/doc_staleness.py",
-    "src/lib/doc_graph.py",
+    "src/lib/docs/doc_staleness.py",
+    "src/lib/docs/doc_graph.py",
     "src/lib/keyhole/keyhole_signals.py",
 ]
 # Each mutant runs only the tests mutmut's coverage pass maps to it; this list

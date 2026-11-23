@@ -52,7 +52,7 @@ Only runs on ordinary triggers count (``lib.ci_triggers``): a ``workflow_dispatc
 ``schedule``-only run is skipped, and one whose triggers are not settled reads unresolved.
 
 Inward-only imports: stdlib, ``lib.testing.coverage_activation``, ``lib.testing.coverage_ci``, ``lib.command_index``,
-``lib.doc_graph`` and ``lib.assess_config``; never ``lib.testing.coverage_gate`` (which calls it)
+``lib.docs.doc_graph`` and ``lib.assess_config``; never ``lib.testing.coverage_gate`` (which calls it)
 or an orchestrator. Tests: ``tests/test_coverage_root_config.py``.
 """
 from __future__ import annotations
@@ -66,7 +66,7 @@ from lib.assess_config import is_user_excluded
 from lib.command_index import CI_CONFIG_FILES, ci_line_text, read_config
 from lib.testing.coverage_activation import Activation, read_activation
 from lib.testing.coverage_ci import CiRuns, Run, runs_tool
-from lib.doc_graph import is_excluded_path
+from lib.docs.doc_graph import is_excluded_path
 
 # The unmeasured_reason when the root floor may or may not govern the scope.
 ROOT_UNRESOLVED = "root_coverage_config_unresolved"

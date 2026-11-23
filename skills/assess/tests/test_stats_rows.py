@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 from lib.complexity.diff_reliability import compute_diff_reliability
-from lib.doc_complexity_join import _extract_file_ccn, analyze_doc_complexity_join
+from lib.docs.doc_complexity_join import _extract_file_ccn, analyze_doc_complexity_join
 from lib.run_context_types import ScoredHotspotRow
 from lib.complexity.stats_rows import file_ccn_rows, strip_score, top_lists
 from test_complexity_treemap import _load_treemap

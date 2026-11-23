@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lib.doc_staleness import LARGE_REPO_CODE_FILES, analyze_doc_staleness
+from lib.docs.doc_staleness import LARGE_REPO_CODE_FILES, analyze_doc_staleness
 
 
 def _write(root: Path, rel: str, text: str) -> None:

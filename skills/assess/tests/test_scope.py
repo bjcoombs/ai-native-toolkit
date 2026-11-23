@@ -20,7 +20,7 @@ import assess_core
 from assess_core import build_and_publish_run
 from lib.badge import headline_badge
 from lib.headline import as_headline
-from lib.doc_graph import build_doc_graph, discover_doc_files
+from lib.docs.doc_graph import build_doc_graph, discover_doc_files
 from lib.git_churn import git_churn_scores
 from lib.run_scope import resolve_scope
 from test_complexity_treemap import _StubNumpy

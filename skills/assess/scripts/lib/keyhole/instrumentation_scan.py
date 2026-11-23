@@ -16,7 +16,9 @@ evidence behind them, each kind a token:
   from an import or call line (``CODE_RULES``): Python ``logging.getLogger``, Go
   ``log/slog``, ``java.util.logging``, ``org.slf4j``, ``android.util.Log``, Apple
   ``OSLog``, Erlang/Elixir ``:telemetry.execute`` and
-  ``ActiveSupport::Notifications.instrument``. Only the first ``HEAD_BYTES`` of
+  ``ActiveSupport::Notifications.instrument``. A line that starts with ``#`` or
+  ``//`` is skipped, but a mention inside a Python docstring or an Erlang ``%``
+  comment is not excluded and is credited. Only the first ``HEAD_BYTES`` of
   each file are read, where imports and module-level loggers sit, so a large
   repository with no match costs a bounded read per file rather than its whole
   tree; a call made only deeper in a file is not seen. Once a rule has matched,

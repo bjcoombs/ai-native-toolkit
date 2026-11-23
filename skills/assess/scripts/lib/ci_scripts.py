@@ -44,7 +44,7 @@ upgrades a name reading: ``./ci.sh`` that ends in ``pytest`` reads true; one it 
 keeps the name's reading (``check_target``, or true for ``./test.sh``).
 
 Inward-only imports: ``lib.check_command``, ``lib.command_index``,
-``lib.command_resolver``, ``lib.doc_graph``, ``lib.lint_vocabulary`` and ``lib.script_body``; never an
+``lib.command_resolver``, ``lib.docs.doc_graph``, ``lib.lint_vocabulary`` and ``lib.script_body``; never an
 orchestrator.
 """
 from __future__ import annotations
@@ -56,7 +56,7 @@ from pathlib import Path, PurePosixPath
 from lib.check_command import BARE_RUN_PROGRAMS, LINT_PROGRAMS, TYPE_PROGRAMS
 from lib.command_index import is_gitignored
 from lib.command_resolver import RUNNERS, command_words
-from lib.doc_graph import is_excluded_path
+from lib.docs.doc_graph import is_excluded_path
 from lib.lint_vocabulary import ANALYSER_PROGRAMS, program_name
 from lib.script_body import body_runs, start_state
 

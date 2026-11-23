@@ -21,7 +21,7 @@ repository, without running anything:
 Files come from ``git ls-files`` when the root is a git repository (tracked
 files only - an untracked Makefile is not part of what the repo ships; a
 tracked symlink is listed under its own path), else from a walk that skips
-``lib.doc_graph.EXCLUDE_DIRS``.
+``lib.docs.doc_graph.EXCLUDE_DIRS``.
 
 The per-repo index `command_resolver.py` resolves against, read once from the files at
 HEAD (`git ls-files`, tracked symlinks as themselves; a walk outside git): package.json
@@ -44,7 +44,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from lib.doc_graph import is_excluded_path
+from lib.docs.doc_graph import is_excluded_path
 
 MAKEFILE_NAMES = frozenset({"Makefile", "makefile", "GNUmakefile"})
 JUSTFILE_NAMES = frozenset({"justfile", "Justfile", ".justfile", "JUSTFILE"})

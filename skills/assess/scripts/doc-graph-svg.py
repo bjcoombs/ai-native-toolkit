@@ -25,8 +25,8 @@ neither is overloaded:
   - The entry point carries a blue ring so the navigation root is obvious even
     though colour now means staleness.
 
-Reuses ``lib.doc_graph`` (structure), ``lib.doc_graph_layout`` (radial shells,
-node classes, ghost grouping) and ``lib.doc_staleness`` (the staleness
+Reuses ``lib.docs.doc_graph`` (structure), ``lib.docs.doc_graph_layout`` (radial shells,
+node classes, ghost grouping) and ``lib.docs.doc_staleness`` (the staleness
 metric) so the picture matches the Layer 0 score exactly, and folds the separate
 docs-staleness treemap into this one artifact.
 
@@ -52,10 +52,10 @@ require_packages((("networkx", "networkx"), ("numpy", "numpy"), ("matplotlib", "
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-from lib.doc_graph import DocGraphResult, build_doc_graph
-from lib.doc_graph_layout import classify_node, group_broken_links, radial_shells
+from lib.docs.doc_graph import DocGraphResult, build_doc_graph
+from lib.docs.doc_graph_layout import classify_node, group_broken_links, radial_shells
 from lib.assess_config import load_working_notes_config, resolve_excludes
-from lib.doc_staleness import analyze_doc_staleness
+from lib.docs.doc_staleness import analyze_doc_staleness
 from lib.run_context_types import BrokenLink
 from lib.complexity.treemap_render import adaptive_cap, blend_to_grey, plural, rgba_to_hex
 
@@ -160,7 +160,7 @@ def _radial_positions(graph: nx.DiGraph, entries: set[str], cx: float, cy: float
     rim. The plot is centred at (cx, cy) and scaled to radius `fit`.
     """
     # Shell assignment (the BFS/distance logic) lives in
-    # lib.doc_graph_layout.radial_shells, which is unit-tested; here we only turn the
+    # lib.docs.doc_graph_layout.radial_shells, which is unit-tested; here we only turn the
     # shells into x/y coordinates.
     shells = radial_shells(graph, entries)
     if not shells:
@@ -620,7 +620,7 @@ def main() -> int:
         return 1
 
     # Honour the same excludes the scorer applies (`.assess/config.toml` plus
-    # any `--exclude`) so the SVG and `lib.doc_graph` compute over the identical
+    # any `--exclude`) so the SVG and `lib.docs.doc_graph` compute over the identical
     # doc set rather than reporting different doc counts for one run (issue #177).
     extra_dirs, extra_patterns = resolve_excludes(root, args.exclude)
     working_notes = load_working_notes_config(root)

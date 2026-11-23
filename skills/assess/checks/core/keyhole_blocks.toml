@@ -27,9 +27,9 @@ headless_variants = [
 shapes = [
   { path = "behaviour", type = "lib.run_context_types:BehaviourBlock" },
   { path = "documentation", type = "lib.run_context_types:DocumentationBlock" },
-  { path = "documentation.stale_doc_on_complexity", type = "lib.doc_complexity_join:DocUnit" },
-  { path = "documentation.unexplained_complexity", type = "lib.doc_complexity_join:DocUnit" },
-  { path = "documentation.good_contracts", type = "lib.doc_complexity_join:DocUnit" },
+  { path = "documentation.stale_doc_on_complexity", type = "lib.docs.doc_complexity_join:DocUnit" },
+  { path = "documentation.unexplained_complexity", type = "lib.docs.doc_complexity_join:DocUnit" },
+  { path = "documentation.good_contracts", type = "lib.docs.doc_complexity_join:DocUnit" },
   { path = "understanding", type = "lib.run_context_types:UnderstandingBlock" },
   { path = "understanding.modules", type = "lib.keyhole.understanding_analysis:UnderstandingModule" },
   { path = "runtime", type = "lib.run_context_types:RuntimeBlock" },

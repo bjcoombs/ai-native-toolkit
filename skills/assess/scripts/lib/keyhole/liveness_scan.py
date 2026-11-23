@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
-from lib.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_excluded_path
+from lib.docs.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_excluded_path
 from lib.keyhole.instrumentation_scan import InstrumentationKind, detect_instrumented
 from lib.path_classes import path_class
 from lib.run_context_types import (
@@ -436,9 +436,12 @@ def scan_dead_code(repo_root: Path, run: bool = True,
 # observability / dashboards is a strong single-hit signal. On-call is anchored on
 # word or path-segment boundaries so ordinary words that contain it
 # ("function-call", "non-callable") do not read as runbooks (#823). A plural or a
-# CamelCase continuation ("oncalls", "OnCallGuide") still matches.
+# CamelCase continuation ("oncalls", "OnCallGuide") still matches, as does a
+# CamelCase "On" after a lowercase letter ("TeamOnCall", "PagerOnCall").
 _RUNBOOK_NAME_RE = re.compile(
-    r"(observability|runbook|(?:^|[-_ /])on[-_ ]?calls?(?:[-_ ./]|$|(?-i:[A-Z]))|dashboards?)",
+    r"(observability|runbook|"
+    r"(?:(?:^|[-_ /])on|(?-i:(?<=[a-z])On))[-_ ]?calls?(?:[-_ ./]|$|(?-i:[A-Z]))|"
+    r"dashboards?)",
     re.IGNORECASE)
 # Path classes whose docs never count as the repository's runbooks (#823): a
 # test or fixture doc describes the code under test, not this repository.

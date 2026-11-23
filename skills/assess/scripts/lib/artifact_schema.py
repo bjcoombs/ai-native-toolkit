@@ -86,7 +86,7 @@ instead of editing the history comment; the release PR folds the notes in with
 # 1.10.0: each run-context.json doc_staleness.docs row gains subject_roots (the
 # ownership rule's roots), base_doc_dir (the directory the doc is the base doc
 # of, or null) and subject_paths (up to 20 sorted subject paths), from
-# lib.doc_ownership (issue #555). A repo-baseline row's subject_code_count is now
+# lib.docs.doc_ownership (issue #555). A repo-baseline row's subject_code_count is now
 # 0 (it owns no subject), the same value the documentation block reports.
 # complexity-stats.json is unchanged.
 # 1.11.0: complexity-stats.json gains complexity_unreliable, the scc-only files
@@ -388,7 +388,7 @@ ARTIFACT_SCHEMA_VERSION = "1.43.0"
 #    orphaned_understanding (understanding_analysis._extract_file_ccn), which
 #    now also see every scored file.
 # 4: the complexity join takes doc ownership from the doc-staleness rule
-#    (lib.doc_ownership, issue #555): a README beside a design doc owns the
+#    (lib.docs.doc_ownership, issue #555): a README beside a design doc owns the
 #    directory's code, and a non-base doc owns none by directory.
 # 5: a CLAUDE.md identical to its AGENTS.md below the header (H1 and leading
 #    HTML comments) is the informational mirrored_instruction_files, not the

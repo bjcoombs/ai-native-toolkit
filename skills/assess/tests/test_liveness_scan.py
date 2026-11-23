@@ -283,7 +283,7 @@ def test_mcp_tooling_reaches_rung_3_without_instrumentation(tmp_path: Path) -> N
 @pytest.mark.parametrize("rel", [
     "crates/ty_python_semantic/resources/lint_docs/function-call-in-default-argument.md",
     "crates/ty_python_semantic/resources/lint_docs/non-callable-init-subclass.md",
-    "docs/rules/function_call.md",
+    "docs/rules/function_call.md", "docs/rules/FunctionCall.md", "docs/NONCALLABLE.md",
 ])
 def test_a_word_containing_on_call_is_not_a_runbook(tmp_path: Path, rel: str) -> None:
     """#823: the on-call name pattern is anchored on word or segment boundaries.
@@ -297,7 +297,8 @@ def test_a_word_containing_on_call_is_not_a_runbook(tmp_path: Path, rel: str) ->
 
 @pytest.mark.parametrize("rel", [
     "docs/on-call.md", "docs/oncall.md", "docs/on_call_rota.md", "on-call/escalation.md",
-    "docs/team-oncall.md", "docs/OnCallGuide.md", "docs/oncalls.md",
+    "docs/team-oncall.md", "docs/OnCallGuide.md", "docs/oncalls.md", "docs/TeamOnCall.md",
+    "PagerOnCall/escalation.md",
 ])
 def test_an_on_call_doc_is_a_runbook(tmp_path: Path, rel: str) -> None:
     _write(tmp_path, "requirements.txt", "structlog\n")

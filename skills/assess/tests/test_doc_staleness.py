@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lib.doc_staleness import analyze_doc_staleness
+from lib.docs.doc_staleness import analyze_doc_staleness
 
 
 def _write(root: Path, rel: str, text: str) -> None:
@@ -600,7 +600,7 @@ def test_rename_scan_failure_marks_scan_incomplete(git_repo, monkeypatch) -> Non
     """A rename map that could not be read leaves renames unfollowed, so the
     completeness flag must not vouch for the scan."""
     import lib.change_coupling as cc
-    import lib.doc_staleness as ds
+    import lib.docs.doc_staleness as ds
     import lib.git_churn as gc
 
     repo, commit = git_repo
@@ -620,7 +620,7 @@ def test_rename_scan_failure_marks_scan_incomplete(git_repo, monkeypatch) -> Non
 
 def _lying_map_paths(staleness: dict, repo: Path) -> list[str]:
     """Run the doc->complexity join with `app.py` over the high-CCN bar."""
-    from lib.doc_complexity_join import analyze_doc_complexity_join
+    from lib.docs.doc_complexity_join import analyze_doc_complexity_join
 
     stats = {"ccn": {"p95": 10.0}, "top_complex": [{"path": "app.py", "ccn": 30.0}]}
     joined = analyze_doc_complexity_join(stats, staleness, repo)
@@ -729,7 +729,7 @@ def test_generated_doc_provenance_unaffected_by_cap(git_repo) -> None:
 def test_failed_commit_read_falls_back_to_window_ratio(git_repo, monkeypatch) -> None:
     """Honest degrade: when the per-commit read fails, the cap is not applied
     and the doc reports the uncapped window ratio with no since-doc count."""
-    import lib.doc_staleness as ds
+    import lib.docs.doc_staleness as ds
 
     repo, commit = git_repo
     _churn_then_fix(repo, commit)
@@ -744,7 +744,7 @@ def test_failed_commit_read_falls_back_to_window_ratio(git_repo, monkeypatch) ->
 def test_window_since_maps_every_churn_window_label() -> None:
     """The cap reads the same window `pick_churn_window` chose; an unmatched
     label would silently widen it to full history."""
-    from lib.doc_staleness import _window_since
+    from lib.docs.doc_staleness import _window_since
     from lib.git_churn import CHURN_WINDOWS
 
     for label, since in CHURN_WINDOWS:

@@ -215,7 +215,7 @@ def _git(checkout: Path, *args: str) -> str | None:
 @lru_cache(maxsize=8)
 def _doc_clock(docs_root: Path) -> tuple[frozenset[Path], ContentClock]:
     """The docs repository's docs and content clock: one ``git log`` pass per repository."""
-    from lib.doc_staleness import discover_doc_files
+    from lib.docs.doc_staleness import discover_doc_files
 
     docs = frozenset(d.resolve() for d in discover_doc_files(docs_root))
     return docs, content_commit_clock(docs_root, docs)
