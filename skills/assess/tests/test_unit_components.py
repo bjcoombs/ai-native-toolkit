@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from lib.counts_only import counts_only
+from lib.counts_only.content_free import counts_only
 from lib.unit_components import KINDS, discover_components
 from lib.unit_discovery import scan_units
 from test_unit_discovery import _paths, _skipped, _write
