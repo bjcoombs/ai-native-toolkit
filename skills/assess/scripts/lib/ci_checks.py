@@ -68,7 +68,7 @@ ROOT). Each resolved file's lines are classified the same way and counted in
 
 Under ``--platform`` (and in a full ``/assess`` run) a repository whose
 includes did not all resolve offline also gets GitLab's merged configuration
-from the CI lint API (``lib/gitlab_ci_lint.py``, #796). Its check lines are
+from the CI lint API (``lib/hosting/gitlab_ci_lint.py``, #796). Its check lines are
 counted in ``merged_check_commands``, apart from the offline counts (the merged
 file repeats the own and resolved jobs). ``merged_config`` says what happened:
 ``not_read`` (offline), ``not_needed`` (every include resolved offline: the
@@ -637,7 +637,7 @@ def _basis(found: bool, merged: bool, *, elsewhere: bool, partial: bool, unread:
 def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
                    merged_ci: object = None, external_ci: object = None) -> CiChecksBlock:
     """Build the ``ci_checks`` block for the repository at ``repo_root``. ``merged_ci`` is the
-    ``gitlab_merged_ci`` reading (``lib/gitlab_ci_lint.py``) and ``external_ci`` the
+    ``gitlab_merged_ci`` reading (``lib/hosting/gitlab_ci_lint.py``) and ``external_ci`` the
     ``external_ci`` one (``lib/external_ci.py``); anything else is not read."""
     root = repo_root.resolve()
     merged = as_merged(merged_ci)

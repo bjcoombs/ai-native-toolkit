@@ -23,7 +23,7 @@ from lib import assess_diagrams as ad
 from lib import assess_diagrams_review as rd
 from lib.counts_only import counts_only
 from lib.doc_complexity_join import is_stale
-from lib.review_reality import summarize
+from lib.hosting.review_reality import summarize
 from lib.vocabulary import IN_PLACE, banned_hits
 from svg_cascade import overridden_text_attributes
 from test_decomposition_parity import _build_parity_fixture

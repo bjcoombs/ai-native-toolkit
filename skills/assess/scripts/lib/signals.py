@@ -89,7 +89,7 @@ from typing import Any
 from lib.assess_config import load_excludes
 from lib.counts_only import reason_code
 from lib.fleet_config import FleetConfig, repo_fleet_config
-from lib.gh_cli import NETWORK_REASON as NETWORK_REASON  # re-exported: defined beside the platform reads
+from lib.hosting.gh_cli import NETWORK_REASON as NETWORK_REASON  # re-exported: defined beside the platform reads
 from lib.git_churn import git_commit_info
 from lib.history_window import split_window
 from lib.headless_layers import HEADLESS_SCANS as LAYER_SCANS
@@ -189,12 +189,12 @@ FULL_RUN_ONLY_REASONS: frozenset[str] = frozenset(
 # changes read it as a registry input: register the sample as a private
 # ``network=True`` spec, list it in the blocks' ``reads``, and it runs (once) under
 # ``--platform`` because it is a dependency of a listed scan.
-# ``merged_sample`` (lib/merged_sample.py, #715) is that shared sample: ``review_reality``
+# ``merged_sample`` (lib/hosting/merged_sample.py, #715) is that shared sample: ``review_reality``
 # and ``delivery`` read it, and #716 extends the same two blocks on GitLab.
 # ``review_evidence`` (lib/review_automation.py, #696) is offline itself but reads
 # ``review_reality``, so the platform pass rebuilds it from the measured block.
 # ``review_automation`` and ``ci_checks`` are offline too, but read the private network
-# spec ``gitlab_merged_ci`` (lib/gitlab_ci_lint.py, #796): GitLab's merged CI
+# spec ``gitlab_merged_ci`` (lib/hosting/gitlab_ci_lint.py, #796): GitLab's merged CI
 # configuration where an include did not resolve offline.
 PLATFORM_SCANS: tuple[str, ...] = ("review_reality", "delivery", "review_evidence",
                                    "review_automation", "ci_checks")
