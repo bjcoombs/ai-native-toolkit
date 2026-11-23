@@ -78,6 +78,10 @@ def test_expression_is_one_word_and_a_leading_variable_is_not_the_goal() -> None
     ("mvn -DskipTests checkstyle:check verify", False),
     ("mvn verify", False),
     ("gradle -DskipTests check", False),
+    ("mvn -DskipTests -pl :mod verify", True),
+    ("mvn -pl a,b -DskipTests verify", True),
+    ("mvn -DskipTests -rf :core -f pom.xml -T 4 verify", True),
+    ("mvn -DskipTests org.apache.maven.plugins:maven-checkstyle-plugin:check verify", False),
 ])
 def test_maven_skips_tests(words: str, skips: bool) -> None:
     assert maven_skips_tests(words.split()) is skips
@@ -276,3 +280,15 @@ def test_helidon_shaped_workflow_reads_true(tmp_path: Path) -> None:
     block = scan_ci_checks(_repo(tmp_path, files, executable=("etc/scripts/checkstyle.sh",)))
     assert block["check_commands"] == 1   # the _tests verify; spotbugs skips its tests
     assert _reading(block) == (True, True, "enforced_check")
+
+
+def test_a_key_line_continuation_does_not_swallow_a_sibling_key() -> None:
+    text = "      - run: mvn -B \\\n        env:\n          X: 1\n"
+    assert join_continued(text) == text
+    deeper = "      - run: mvn -B \\\n          verify\n"
+    assert join_continued(deeper).splitlines()[0] == "      - run: mvn -B verify"
+
+
+def test_a_swallowed_continue_on_error_still_masks() -> None:
+    run = "      - run: pytest \\\n        continue-on-error: true\n"
+    assert enforced_check_commands(run) == (0, 1)

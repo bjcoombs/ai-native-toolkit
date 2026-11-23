@@ -9,13 +9,19 @@ blank, so every line keeps its index: the masking (``lib.ci_masking``), trigger
 
 A line continues when it ends in an odd run of backslashes (``\\\\`` is a literal backslash)
 and is not a comment. It takes the next line only when that line is not blank and sits at
-the first line's indent or deeper: a shallower line is the next YAML key, never shell. A
+the first line's indent or deeper: a shallower line is the next YAML key, never shell. When the
+first line is a ``key: value \\`` plain scalar, the next line must sit deeper than the key, so a
+sibling ``continue-on-error: true`` or ``env:`` is never swallowed. A
 folded block scalar (``run: >``) is joined by ``lib.ci_masking`` itself, not here.
 
 Inward-only imports: stdlib only. Tests: ``tests/test_ci_continuations.py``.
 """
 from __future__ import annotations
 
+import re
+
+# A ``key:`` lead (``run: mvn \\``, ``- run: mvn \\``): its plain scalar continues only deeper.
+_KEY_LEAD = re.compile(r"^(\s*(?:-\s+)?)[\w.-]+\s*:\s")
 
 def _indent(line: str) -> int:
     return len(line) - len(line.lstrip(" "))
@@ -40,6 +46,9 @@ def join_continued(text: str) -> str:
             i += 1
             continue
         joined, depth, j = lines[i].rstrip(), _indent(lines[i]), i + 1
+        lead = _KEY_LEAD.match(lines[i])
+        if lead:
+            depth = len(lead.group(1)) + 1   # a sibling key at the key's column is not shell
         while _continues(joined) and j < len(lines) and lines[j].strip() and _indent(lines[j]) >= depth:
             joined = joined[:-1].rstrip() + " " + lines[j].strip()
             out[j] = ""
