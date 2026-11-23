@@ -85,8 +85,7 @@ class HotspotEntry:
 class LogEntry:
     run_date: str
     files_scored: int
-    # The run's deterministic headline summary (lib/headline.py, #747):
-    # "Step 3 · next: coverage gate" (#1083). Written by the core, never by the LLM.
+    # The headline summary (lib/headline.py, #747, #1083), written by the core, never the LLM.
     readiness: str
     # Optional[str]: None means no instruction file was found at any known
     # location (the schema convention in CLAUDE.md). The log template renders it
@@ -111,9 +110,9 @@ class LogEntry:
     # backwards-compat with callers that don't pass it yet.
     run_id: str | None = None
     schema_version: str | None = None
-    # Hotspots whose worst function fell while the summed ccn rose (see
-    # stats_diff). Defaulted so a caller predating the status still builds.
+    # Hotspots whose worst function fell while the summed ccn rose (stats_diff); defaulted.
     restructured_count: int = 0
+    since_last_run: str = ""  # the entry's opening bullets (lib/since_last_run.py, #1083); "" for none
 
 
 def _run_id_comment(run_id: str | None, schema_version: str | None) -> str:
@@ -658,7 +657,7 @@ def append_log_entry(assess_dir: Path, entry: LogEntry) -> None:
         run_id=entry.run_id,
     )
     snippet = _load_template("log_entry.md.template").format(
-        heading=heading,
+        heading=heading, since_last_run=f"{entry.since_last_run}\n" if entry.since_last_run else "",
         files_scored=entry.files_scored,
         readiness=entry.readiness,
         instructions_grade=entry.instructions_grade,

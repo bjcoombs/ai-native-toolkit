@@ -525,3 +525,14 @@ def test_counts_only_keeps_every_projected_reading(monorepo: ur.UnitReadingsBloc
         assert kept["blocks"] == _without_reasons(unit["blocks"])
     billing = out["units"][0]["blocks"]
     assert billing["promissory_markers"]["families"]["suppression"]["stale"] == 0
+
+
+def test_each_reading_carries_its_unit_kind(tmp_path: Path) -> None:
+    """#1098: the reading names the unit's kind, so a fleet row can read skill by skill."""
+    from test_unit_components import PLUGIN
+    repo = _write(tmp_path / "plugin", PLUGIN)
+    block = _read(repo)
+    assert [(u["path"], u["kind"]) for u in block["units"]] == [
+        ("agents", "agents"), ("commands", "commands"), ("skills/plain", "skill"), ("skills/tooled", "skill")]
+    bare = ur.read_units({"units": [{"path": "agents"}]}, None, NO_EXCLUDES, repo, None)
+    assert bare["units"][0]["kind"] == "package"  # a units entry without a kind

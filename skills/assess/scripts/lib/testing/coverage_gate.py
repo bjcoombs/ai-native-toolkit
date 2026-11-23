@@ -48,12 +48,16 @@ On a scoped run with no coverage.py config of its own, the root config coverage.
 reads counts when CI runs coverage from the root, and reads unknown when where CI runs
 it is not resolved (#1032, ``lib.testing.coverage_root_config``).
 
+Codecov status targets in ``codecov.yml`` (#882, ``lib.testing.coverage_codecov``): a project
+``target: 80%`` is a gate at 80 that CI does not run (``status_check_unconfirmed``); an
+``auto`` target reads unknown (``codecov_target_not_read``), and so does a patch status.
+
 What switches coverage on for a plain ``pytest`` or ``jest`` run (``addopts``,
 ``collectCoverage``), read per config directory, is ``lib.testing.coverage_activation``'s.
 
 Inward-only imports: stdlib plus ``lib.docs.doc_graph``'s path-exclusion rule,
-``lib.assess_config.is_user_excluded``, ``lib.testing.coverage_activation`` and
-``lib.testing.coverage_ci``; never an orchestrator.
+``lib.assess_config.is_user_excluded``, ``lib.testing.coverage_activation``,
+``lib.testing.coverage_ci`` and ``lib.testing.coverage_codecov``; never an orchestrator.
 
 Full reference: lib/docs/coverage_gate.md.
 """
@@ -68,6 +72,7 @@ from typing import Literal, TypedDict
 from lib.assess_config import is_user_excluded
 from lib.testing.coverage_activation import read_activation
 from lib.testing.coverage_ci import NO_RUNS, CiRuns, EnforcedBasis, enforced_meets_minimum, read_ci_runs
+from lib.testing.coverage_codecov import codecov_reason, codecov_statuses, is_patch, meets_percent
 from lib.testing.coverage_root_config import ROOT_UNRESOLVED, root_config, root_config_applies
 from lib.docs.doc_graph import is_excluded_path
 from lib.runner_args import reads_pdm_scripts
@@ -188,8 +193,8 @@ NOT_DETECTED: tuple[str, ...] = (
     "-func` total to a number",
     "Rust: `cargo llvm-cov` `--fail-under-regions` / `--fail-under-functions`, "
     "and a tarpaulin `fail-under` in `tarpaulin.toml`",
-    "Codecov / Coveralls status targets (server-side; a gate only when the "
-    "status check is required)",
+    "Coveralls status thresholds, and whether branch protection requires a "
+    "Codecov status (server-side)",
     "Kover `minBound`, sbt-scoverage `coverageMinimumStmtTotal`, "
     "SimpleCov `minimum_coverage`",
     "JaCoCo rules built programmatically or in a shared Gradle convention plugin",
@@ -256,7 +261,7 @@ class CoverageGateBlock(TypedDict):
 _DEFAULT_THRESHOLD_TOOLS = {"nyc", "c8", "nyc/c8"}
 # A null threshold from coverage.py or pytest-cov only arises from a templated
 # value (``--cov-fail-under=${{ env.COV_MIN }}``): the flag is set, so it gates.
-_NULL_THRESHOLD_GATES = _DEFAULT_THRESHOLD_TOOLS | {"coverage.py", "pytest-cov",
+_NULL_THRESHOLD_GATES = _DEFAULT_THRESHOLD_TOOLS | {"coverage.py", "pytest-cov", "codecov",
                                                     "cargo-tarpaulin", "cargo-llvm-cov"}
 
 
@@ -683,8 +688,8 @@ def gates_something(gate: CoverageGate) -> bool:
 
 
 def max_threshold_percent(gates: list[CoverageGate]) -> float | None:
-    """The highest non-null ``threshold_percent`` across ``gates``, or None."""
-    percents = [g["threshold_percent"] for g in gates if g["threshold_percent"] is not None]
+    """The highest non-null ``threshold_percent`` across ``gates`` (a Codecov patch target left out, #882)."""
+    percents = [p for g in gates if isinstance(p := meets_percent(g), (int, float))]
     return max(percents) if percents else None
 
 
@@ -695,9 +700,13 @@ def threshold_meets_minimum(gates: list[CoverageGate]) -> bool | None:
     gates nothing. True when one has ``threshold_percent`` of at least
     ``MINIMUM_THRESHOLD_PERCENT``; otherwise None (not measured) when one has a
     null ``threshold_percent`` (a template, an nyc/c8 default, an uncovered-line
-    count), since it could be 50 or more; otherwise False.
+    count), since it could be 50 or more; otherwise False. A Codecov patch status is left
+    out (#882), and read None only when it is the only counted gate.
     """
-    counted = [g for g in gates if gates_something(g)]
+    every = [g for g in gates if gates_something(g)]
+    counted = [g for g in every if not is_patch(g)]
+    if every and not counted:
+        return None
     percents = [g["threshold_percent"] for g in counted]
     if any(p is not None and p >= MINIMUM_THRESHOLD_PERCENT for p in percents):
         return True
@@ -743,16 +752,17 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
     """
     root = Path(repo_root).resolve()
     scope_abs = (root / scope).resolve() if scope else None
-    gates: list[CoverageGate] = []
+    excl = excludes or (set(), [])
+    gates: list[CoverageGate] = [_gate(s.file, s.line, "codecov", s.form, s.target, "percent", s.kind)
+                                 for s in codecov_statuses(root, excl)]
     read: list[tuple[str, list[str]]] = []
-    for path, rel in _candidate_files(root, scope_abs, excludes or (set(), [])):
+    for path, rel in _candidate_files(root, scope_abs, excl):
         lines = _read_lines(path)
         if lines is None:
             continue
         for scan in _scanners_for(path.name, Path(rel).parts):
             gates.extend(scan(rel, lines))
         read.append((rel, lines))
-    excl = excludes or (set(), [])
     root_gates, root_lines, applies, ci = _root_floor(root, scope_abs, excl)
     own = threshold_meets_minimum(gates)
     if applies is not False:
@@ -769,6 +779,8 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
     meets = None if unmeasured else meets
     if applies is None and unmeasured is None and meets != own:
         meets, unmeasured = None, ROOT_UNRESOLVED   # the root floor may not govern the scope
+    if meets is None and unmeasured is None:
+        unmeasured = codecov_reason(gates, gates_something)   # #882: Codecov decides it
     # Root gates that may not govern the scope are reported, never counted or credited.
     known = gates if applies is not None else gates[:len(gates) - len(root_gates)]
     enforced, basis = enforced_meets_minimum(

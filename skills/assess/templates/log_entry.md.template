@@ -1,6 +1,6 @@
 {heading}
 
-- **Files scored:** {files_scored}
+{since_last_run}- **Files scored:** {files_scored}
 - **Readiness:** {readiness}
 - **Instructions grade:** {instructions_grade}
 - **Hotspot transitions:** {graduated_count} graduated, {regressed_count} regressed, {restructured_count} restructured, {new_count} new, {persistent_count} persistent

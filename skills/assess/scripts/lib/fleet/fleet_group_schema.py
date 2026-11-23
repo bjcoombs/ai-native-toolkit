@@ -23,7 +23,7 @@ import json
 import sys
 import types
 from pathlib import Path
-from typing import Any, NotRequired, Union, get_args, get_origin, get_type_hints, is_typeddict
+from typing import Any, Literal, NotRequired, Union, get_args, get_origin, get_type_hints, is_typeddict
 
 if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -50,10 +50,13 @@ SETTING: JsonDict = {
 
 
 def type_schema(tp: Any) -> JsonDict:
-    """JSON schema for scalars, unions, TypedDicts, ``list[...]`` and ``dict[str, ...]``."""
+    """JSON schema for scalars, ``Literal`` tokens (an ``enum``), unions, TypedDicts,
+    ``list[...]`` and ``dict[str, ...]``."""
     if tp in _SCALARS:
         return {"type": _SCALARS[tp]}
     origin = get_origin(tp)
+    if origin is Literal:
+        return {"enum": list(get_args(tp))}
     if origin in (Union, types.UnionType):
         members = [type_schema(arg) for arg in get_args(tp)]
         if all(set(m) == {"type"} and isinstance(m["type"], str) for m in members):

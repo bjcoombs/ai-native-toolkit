@@ -9,6 +9,10 @@ fields are computed from the row (``lib.fleet.fleet_level.repo_level``):
 - ``key``: the unit's folder. The scan writes it in clear only in ``--full`` output;
   counts-only drops it, and ``--hash-paths`` replaces it with its salted hash, the join key
   of a unit across runs (class ``hashed_path``). So ``key`` is null in plain counts-only;
+- ``kind``: the unit's kind token (#1098): ``skill`` for a skill folder, ``agents`` and
+  ``commands`` for a plugin's components, ``package`` for a build-manifest unit; null from a
+  stored reading written before units had a kind. A marketplace repository's rows are its
+  skills, so an estate of them reads skill by skill;
 - ``step``: the unit's Step, from ``lib.unit_levels.unit_result`` (the unit's readings
   overlaid on the row's scans, the repository's owner exclusions applied), the function
   ``/assess`` runs for its ``unit_levels`` block, so one commit gives one Step in both;
@@ -39,6 +43,7 @@ from lib.fleet.fleet_data_steps import GateBlocker
 from lib.headline import tag_cells
 from lib.level_result_types import LevelResult, TagCell
 from lib.levels import MaturityModel
+from lib.unit_components import KINDS, Kind
 from lib.unit_levels import unit_result
 
 READINGS = "unit_readings"
@@ -48,6 +53,7 @@ class UnitRow(TypedDict):
     """One monorepo unit of a repository (#866)."""
 
     key: str | None  # the unit's folder: clear in --full, hashed under --hash-paths, else None
+    kind: Kind | None  # package, skill, agents or commands (#1098); None from a reading without one
     step: int | None  # None: the model defines no Steps
     next_step: int | None  # the Step above; None at the top Step
     next_blocker: GateBlocker | None  # the first gate of next_step that does not hold
@@ -67,9 +73,10 @@ def next_blocker(result: LevelResult) -> GateBlocker | None:
 def unit_row(reading: Mapping[str, Any], scans: Mapping[str, Any], model: MaturityModel) -> UnitRow:
     """One unit's row: its reading overlaid on the repository's scans (see the module docstring)."""
     result = unit_result(reading, scans, model)
-    path = reading.get("path")
+    path, kind = reading.get("path"), reading.get("kind")
     nxt = result["next_step"]
-    return {"key": path if isinstance(path, str) else None, "step": result["step"],
+    return {"key": path if isinstance(path, str) else None,
+            "kind": kind if kind in KINDS else None, "step": result["step"],
             "next_step": nxt["step"] if nxt is not None else None,
             "next_blocker": next_blocker(result), "tags": tag_cells(result, model)}
 

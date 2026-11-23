@@ -2,6 +2,11 @@
 
 _Generated <<normalized>>._
 
+## Since Last Run
+
+- This is the first run, so there is no earlier run to compare with.
+- Next blocker: CI runs tests
+
 ## Headline
 
 **Step 2 · Supervised agent PRs · contracts in place**
