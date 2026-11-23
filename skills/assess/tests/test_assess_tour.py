@@ -175,3 +175,23 @@ def test_report_prints_no_repo_path(tmp_path: Path, capsys: pytest.CaptureFixtur
     assert assess_tour.main(["report", "--out", str(tmp_path / "r.md")]) == 0
     printed = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert "repo" not in printed and printed["step"] == 2
+
+
+def test_a_hand_fix_that_keeps_the_comment_reads_already_fixed_after(tmp_path: Path) -> None:
+    repo = assess_tour.build(tmp_path / "tally")
+    ci = repo / ".github" / "workflows" / "ci.yml"
+    ci.write_bytes(ci.read_bytes().replace(b" || true", b""))
+    assert assess_tour.fix(repo) == "edited"
+    assert assess_tour.fix(repo) == "already_fixed"
+
+
+def test_a_repository_with_no_commits_is_refused(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    env = assess_tour._git_env("Me <me@example.com>", "2026-10-01T00:00:00+00:00")
+    assess_tour._git(empty, env, "init", "-q", "-b", "main")
+    with pytest.raises(ValueError, match="not a tour sample"):
+        assess_tour.fix(empty)
+    assert assess_tour.main(["run", str(empty)]) == 2
+    err = capsys.readouterr().err
+    assert "not a tour sample" in err and "ambiguous" not in err

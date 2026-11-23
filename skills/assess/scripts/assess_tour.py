@@ -148,7 +148,11 @@ def require_sample(repo: Path, history: TourHistory) -> None:
     top = done.stdout.strip()
     if done.returncode != 0 or Path(top).resolve() != repo.resolve():
         raise ValueError(f"{repo.as_posix()} is not the top of a git repository; pass the path build printed")
-    roots = _git(repo, env, "log", "--max-parents=0", "--format=%ae%x00%s", "HEAD").splitlines()
+    log = subprocess.run(
+        ["git", "-C", str(repo), "log", "--max-parents=0", "--format=%ae%x00%s", "HEAD"],
+        check=False, capture_output=True, encoding="utf-8", errors="replace", env=env,
+    )
+    roots = log.stdout.splitlines() if log.returncode == 0 else []
     first = f"{history['author'].partition(' <')[2].rstrip('>')}\0{history['commits'][0]['message']}"
     if roots != [first]:
         raise ValueError(f"{repo.as_posix()} is not a tour sample; pass the path build printed")
@@ -169,29 +173,30 @@ def _code_lines(text: str) -> list[str]:
     return lines
 
 
-def _edit_is_the_fix(repo: Path, env: dict[str, str], patch: str, paths: list[str]) -> bool:
-    """Whether the working tree's copy of each patched file is the fixed file.
+def _fixed_lines(sample: Path, env: dict[str, str], patch: str, paths: list[str]) -> dict[str, list[str]] | None:
+    """Each patched file in its fixed state, as ``_code_lines``, or None if the patch fails.
 
-    The fixed file is HEAD's copy with ``fix.patch`` applied, in a scratch directory; the
-    two are compared by ``_code_lines``, so a newcomer who deletes ``|| true`` and keeps the
-    comment above it has made the fix.
+    The fixed state is the sample's own copy (``repo/<path>``) with ``fix.patch`` applied in a
+    scratch directory, so it does not depend on what the newcomer's HEAD holds.
     """
     with tempfile.TemporaryDirectory(prefix="assess-tour-fix-") as tmp:
         for rel in paths:
-            target = Path(tmp) / rel
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(_git(repo, env, "show", f"HEAD:{rel}").encode("utf-8"))
+            _copy_lf(sample / "repo" / rel, Path(tmp) / rel)
         done = subprocess.run(
             ["git", "apply", "-"], cwd=tmp, input=patch, check=False,
             capture_output=True, encoding="utf-8", errors="replace", env=env,
         )
         if done.returncode != 0:
-            return False
-        return all(
-            _code_lines((repo / rel).read_text(encoding="utf-8"))
-            == _code_lines((Path(tmp) / rel).read_text(encoding="utf-8"))
-            for rel in paths
-        )
+            return None
+        return {rel: _code_lines((Path(tmp) / rel).read_text(encoding="utf-8")) for rel in paths}
+
+
+def _is_fixed(texts: dict[str, str], fixed: dict[str, list[str]] | None) -> bool:
+    """Whether each file's text is the fixed file once comments and blank lines are set aside.
+
+    So a newcomer who deletes ``|| true`` and keeps the comment above it has made the fix.
+    """
+    return fixed is not None and all(_code_lines(texts[rel]) == lines for rel, lines in fixed.items())
 
 
 def _apply(repo: Path, env: dict[str, str], patch: str, *flags: str) -> bool:
@@ -209,7 +214,8 @@ def fix(repo: Path, *, sample: Path = SAMPLE_DIR) -> str:
     newcomer made the fix by hand, and their edit, which matches the fixed file once
     comments and blank lines are set aside, was committed as it is. Any other edit to a file
     the patch names raises ``ValueError`` with its diff; edits to other files stay out.
-    ``already_fixed``: HEAD already has the fix, so nothing was committed. The commit takes
+    ``already_fixed``: HEAD already has the fix, by the same comparison, so nothing was
+    committed. The commit takes
     the fixed date and message from ``history.toml`` either way, and holds only the files
     ``fix.patch`` names. ``repo`` must be a tour sample (``require_sample``).
     """
@@ -218,8 +224,10 @@ def fix(repo: Path, *, sample: Path = SAMPLE_DIR) -> str:
     require_sample(repo, history)
     patch = (sample / "fix.patch").read_text(encoding="utf-8").replace("\r\n", "\n")
     paths = patched_paths(patch)
+    fixed = _fixed_lines(sample, env, patch, paths)
     if _git(repo, env, "status", "--porcelain", "--untracked-files=no", "--", *paths).strip():
-        if not _edit_is_the_fix(repo, env, patch, paths):
+        tree = {rel: (repo / rel).read_text(encoding="utf-8") for rel in paths}
+        if not _is_fixed(tree, fixed):
             diff = _git(repo, env, "diff", "--", *paths)
             raise ValueError(f"the edit to {', '.join(paths)} is not the tour's fix "
                              f"(delete `|| true` from the pytest line):\n{diff}")
@@ -227,7 +235,7 @@ def fix(repo: Path, *, sample: Path = SAMPLE_DIR) -> str:
     elif _apply(repo, env, patch, "--check"):
         _apply(repo, env, patch)
         how = "applied"
-    elif _apply(repo, env, patch, "--reverse", "--check"):
+    elif _is_fixed({rel: _git(repo, env, "show", f"HEAD:{rel}") for rel in paths}, fixed):
         return "already_fixed"
     else:
         raise ValueError(f"{repo}: fix.patch does not apply and the tree has no edit to commit")
