@@ -16,7 +16,9 @@ parser (the core has no YAML dependency). Only literal values count.
   ``mkdir -p out || true && pytest`` ``pytest`` still counts. Quoted text and command
   substitutions (``$(...)``, backticks) hold no top-level operator, so
   ``OUT="$(ruff check . || true)"`` is not masked. Lines continued with ``\\``
-  are joined first.
+  are joined first. Inside a ``( )`` subshell the same rule masks back to the group's
+  start (#1008): ``(cd sub && pytest || true)`` exits 0 and is masked, ``pytest && (echo x
+  || true)`` keeps ``pytest``. The statement rules live in ``lib.ci_statements``.
 - Capture, not mask. A statement that sends the check's output to a file
   (``> out.txt``, ``&> out.txt``, ``| tee out.txt``; ``/dev/null`` and
   ``$GITHUB_STEP_SUMMARY`` do not count) is a capture when a later line of the

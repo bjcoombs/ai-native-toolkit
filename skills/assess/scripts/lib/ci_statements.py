@@ -97,13 +97,23 @@ def _redirect_amp(text: str, i: int) -> bool:
     return text[i] == "&" and ((i > 0 and text[i - 1] == ">") or text[i + 1:i + 2] == ">")
 
 
-def _noop_cut(statement: list[tuple[str, str]]) -> int:
-    """The index of the last ``|| <no-op>`` segment, or -1: it masks every segment before it."""
-    cut = -1
+def _noop_spans(statement: list[tuple[str, str]]) -> list[range]:
+    """The segments each ``|| <no-op>`` masks, itself included: back to the start of the
+    ``( )`` group it sits in (#1008), or to the statement's start at top level. A ``(`` that
+    opens a segment opens a group and a ``)`` that ends one closes it; ``$(`` never opens
+    one (``split_statements`` keeps a command substitution inside its segment)."""
+    spans: list[range] = []
+    groups: list[int] = []   # the segment index each open group starts at
     for k, (op, seg) in enumerate(statement):
-        if op == "||" and " ".join(seg.split()) in _NOOPS:
-            cut = k
-    return cut
+        text = seg.strip()
+        core = text.lstrip("(")
+        start = groups[-1] if groups else 0   # the group the operator before ``seg`` is in
+        groups.extend([k] * (len(text) - len(core)))
+        closed = len(core) - len(core.rstrip(")"))
+        if op == "||" and " ".join(core.rstrip(")").split()) in _NOOPS:
+            spans.append(range(start, k + 1))
+        del groups[max(0, len(groups) - closed):]
+    return spans
 
 
 def _capture_targets(statement: list[tuple[str, str]]) -> list[str]:
@@ -164,10 +174,9 @@ def _same_line_keep(statement: list[tuple[str, str]], later: Callable[[], list[s
     """The segment indices of one statement the same-line rules keep: a ``|| <no-op>`` masks
     the segments before it unless they are a capture checked on a ``later`` line of the job,
     and an exit-zero flag masks its segment and the ``||`` pipelines it skips."""
-    keep = list(range(len(statement)))
-    cut = _noop_cut(statement)
-    if cut >= 0:
-        targets = _capture_targets(statement[:cut])
+    masked: set[int] = set()
+    for span in _noop_spans(statement):
+        targets = _capture_targets(statement[span.start:span.stop - 1])
         if not (targets and _checked_later(targets, later())):
-            keep = keep[cut + 1:]
-    return _drop_exit_zero(statement, keep)
+            masked.update(span)
+    return _drop_exit_zero(statement, [k for k in range(len(statement)) if k not in masked])
