@@ -4,19 +4,27 @@ _Generated <<normalized>>._
 
 ## Headline
 
-**Step 1 · Assisted · contracts in place**
+**Step 2 · Supervised agent PRs · contracts in place**
 
-Next: Step 2 · Supervised agent PRs unlocks when 1 more practice is in place, for example `layer-3-linters.1`
+Next: Step 3 · Unattended agent PRs unlocks when CI runs the tests
 
-Practices in place: 0 of 3 measured, 0 verified · 15 not measured (needs a full run: 1, no manifests read: 1, no ownership map: 1, no remote: 2, no source files: 2, no value read: 6, waits on layer-4-architecture.1: 1, unavailable: 1) · model <<normalized>>
+Catalogue coverage: 0 of 3 measured, 0 verified · 15 not measured (needs a full run: 1, no manifests read: 1, no ownership map: 1, no remote: 2, no source files: 2, no value read: 6, waits on layer-4-architecture.1: 1, unavailable: 1) · model <<normalized>>
 
 By tag: behaviour 0 of 2 (NOT MEASURED: 1) · docs 0 of 0 (NOT MEASURED: 2) · structure 0 of 1 (NOT MEASURED: 5) · agent_context 0 of 0 (NOT MEASURED: 4) · agent_runtime 0 of 0 (NOT MEASURED: 1) · governance 0 of 0 (NOT MEASURED: 2) · supply_chain 0 of 0 (NOT MEASURED: 1)
 
-## Evidence behind the level
+## Where you are on the Steps
+
+In place: Step 2 of 4, Supervised agent PRs: an agent opens pull requests, a person reviews each one.
+
+[![Where you are on the Steps](./step-ladder.svg)](./step-ladder.svg)
+
+Step 3, Unattended agent PRs, opens when CI runs the tests.
+
+## Evidence behind the Step
 
 In place: 0 counted conditions met (0 verified, 0 measured) and 1 listed from config or a declaration.
 
-[![Evidence behind the level](./evidence-waffle.svg)](./evidence-waffle.svg)
+[![Evidence behind the Step](./evidence-waffle.svg)](./evidence-waffle.svg)
 
 Verified and measured squares count toward the level, listed ones are shown but never counted, and hatched ones were not measured, never read as zero.
 
@@ -78,9 +86,9 @@ _Deterministic portion of the assessment: headline, metrics, hotspots, and cross
 
 ## How this was measured
 
-In place: over 1 repository, 28 scans were measured everywhere, 17 ran but were not measured everywhere, and 0 were skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
+In place: over 1 repository, 30 scans were measured everywhere, 17 ran but were not measured everywhere, and 0 were skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
 
-### Ran (45)
+### Ran (47)
 
 - `agent_ops`
 - `config_drift`
@@ -88,6 +96,7 @@ In place: over 1 repository, 28 scans were measured everywhere, 17 ran but were 
 - `delivery`: not measured in 1 of 1 (no_remote)
 - `gate_cost_estimate`: not measured in 1 of 1 (no_remote)
 - `coverage_gate`
+- `units`
 - `instruction_claims`
 - `claude_config`: not measured in 1 of 1 (unavailable)
 - `nested_instructions`
@@ -114,6 +123,7 @@ In place: over 1 repository, 28 scans were measured everywhere, 17 ran but were 
 - `doc_staleness`
 - `archetype`
 - `owner_exclusions`
+- `unit_readings`
 - `diff`
 - `dead_code`: not measured in 1 of 1 (unavailable)
 - `ancestor_instruction_files`

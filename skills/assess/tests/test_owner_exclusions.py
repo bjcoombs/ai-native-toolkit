@@ -171,7 +171,7 @@ def test_an_excluded_gate_condition_keeps_its_step_unreachable():
     assert lt.level_result(_stepped(), signals)["step"] == 3
     result = lt.level_result(_stepped(), signals, [_exclude("ci.1", "tool_unsupported")])
     assert result["step"] == 2
-    assert result["next_step"] == {"step": 3, "threshold": 2, "blockers": [
+    assert result["next_step"] == {"step": 3, "blockers": [
         {"kind": "gate", "gate": "ci_runs_tests", "condition": "ci.1", "state": "not_applicable",
          "disposition": "excluded_by_owner", "exclusion_kind": "tool_unsupported"}]}
     assert result["tally"]["met"] == 2  # the threshold holds: only the excluded gate blocks

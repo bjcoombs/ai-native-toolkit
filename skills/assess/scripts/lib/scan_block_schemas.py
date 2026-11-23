@@ -213,16 +213,18 @@ CI_CHECKS: JsonDict = {
         "test_or_lint_configured": _field(
             {"type": ["boolean", "null"]},
             "The CI test-or-lint signal: true, false, or null when included jobs may hold "
-            "the check."),
+            "the check or a Maven run skips its tests."),
         "basis": _field(
             {"enum": ["check_command", "merged_config", "included_jobs", "merged_config_partial",
                       "unread_ci_system", "external_ci", "external_ci_marker",
-                      "no_check_command", "no_ci"]},
+                      "check_target", "no_check_command", "no_ci"]},
             "The reason for test_or_lint_configured: check_command or merged_config (true; the second "
             "when only the merged configuration ran a check), included_jobs or "
             "merged_config_partial (null; the second when the merged configuration was read "
             "with no check but may lack jobs: an include under rules:, or a trigger: child "
-            "pipeline), unread_ci_system (false: no readable check, but a CI file of a system "
+            "pipeline), check_target (null: no check, but a Maven run with its tests skipped, "
+            "mvn -DskipTests verify, whose phase may still run a lint plugin), "
+            "unread_ci_system (false: no readable check, but a CI file of a system "
             "the scan does not parse is tracked), external_ci or external_ci_marker (false: no "
             "readable check, but CI runs off the repository; as enforced_basis), "
             "no_check_command or no_ci (false)."),
@@ -288,7 +290,7 @@ CI_CHECKS: JsonDict = {
 
 COVERAGE_GATE: JsonDict = {
     "description": (
-        "Committed line-coverage thresholds (lib/coverage_gate.py), read from config and CI "
+        "Committed line-coverage thresholds (lib/testing/coverage_gate.py), read from config and CI "
         "files at HEAD, never from measured coverage. Each gate keeps its threshold as written "
         "beside threshold_percent, the same value as a percentage (a JaCoCo ratio 0.80 is 80)."),
     "properties": {

@@ -14,12 +14,10 @@ STEP_LEVELS = TEAM_LEVELS + """
 [[steps]]
 step = 1
 name = "Assisted"
-threshold = 0
 
 [[steps]]
 step = 2
 name = "Supervised agent PRs"
-threshold = 0
 gates = [{ id = "instructions", row = "instructions", level = 1 }]
 """
 

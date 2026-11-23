@@ -56,7 +56,7 @@ def level_result_schema() -> JsonDict:
         "cells, and measured 0 means not measured, never a share of 0 (lib/level_tags.py)")
     blocker = next(b for b in props["next_step"]["anyOf"] if b.get("type") == "object")
     blocker_fields = blocker["properties"]["blockers"]["items"]["properties"]
-    blocker_fields["kind"] = {"enum": ["gate", "threshold"]}
+    blocker_fields["kind"] = {"enum": ["gate"]}
     blocker_fields["disposition"] = {"enum": [EXCLUDED_BY_OWNER]}
     blocker_fields["exclusion_kind"] = {"enum": list(KINDS)}
     return schema

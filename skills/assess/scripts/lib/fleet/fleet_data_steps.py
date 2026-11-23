@@ -29,8 +29,8 @@ average and no repository named):
   ``excluded`` (the owner excluded it, so the Step stays unreached while the exclusion
   stands). A gate condition that is ``unmet``, or ``not_applicable`` through a
   ``requires:<id>`` on an excluded condition, counts in ``held`` and in neither
-  sub-count, so ``held`` minus the two is not always "unmet". ``below_threshold`` counts the held repositories whose met tally is below the
-  Step's ``threshold``.
+  sub-count, so ``held`` minus the two is not always "unmet". A Step reads its gates only
+  (#1083), so the gates are the whole of what holds a repository back.
 
 Exclusions apply where the fleet's model shares condition ids with the default model:
 ``.assess/config.toml`` entries are checked against the default model, and the engine
@@ -85,10 +85,8 @@ class GateHold(TypedDict):
 
 class StepHold(TypedDict):
     step: int
-    threshold: int
     held: int  # measured repositories below this Step
     gates: list[GateHold]
-    below_threshold: int  # of those, the met tally is below the threshold
 
 
 class StepRollUp(TypedDict):
@@ -148,9 +146,7 @@ def step_roll_up(steps: Sequence[StepDef], members: Sequence[RepoSteps]) -> Step
 
 def step_hold(definition: StepDef, members: Sequence[RepoSteps]) -> StepHold:
     """How the measured repositories among ``members`` stand against one Step: those below it,
-    per gate how many it holds back, and how many have a met tally below its threshold."""
+    and per gate how many it holds back."""
     held = [m for m in members if m["step"] is not None and m["step"] < definition["step"]]
-    return {"step": definition["step"], "threshold": definition["threshold"], "held": len(held),
-            "gates": [_gate_hold(g, held) for g in definition["gates"]],
-            "below_threshold": sum(m["tally"] is not None and m["tally"]["met"] < definition["threshold"]
-                                   for m in held)}
+    return {"step": definition["step"], "held": len(held),
+            "gates": [_gate_hold(g, held) for g in definition["gates"]]}

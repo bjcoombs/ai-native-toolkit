@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.coverage_gate import GO_RUST_UNMEASURED, detect_coverage_gate
+from lib.testing.coverage_gate import GO_RUST_UNMEASURED, detect_coverage_gate
 
 
 def _write(root: Path, rel: str, text: str) -> None:

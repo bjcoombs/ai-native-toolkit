@@ -25,13 +25,13 @@ from lib.agents.agent_ops import scan_agent_ops
 from lib.context_blocks import _structure_drift_block
 from lib.counts_only_schema import ROOTS
 from lib.counts_only import HASH_PREFIX, counts_only
-from lib.coverage_gate import detect_coverage_gate
+from lib.testing.coverage_gate import detect_coverage_gate
 from lib.headless_layers import structure_drift as headless_structure_drift
 from lib.instruction_claims import scan_instruction_claims
 from lib.level_signals import _ROOTS, load_default_levels
 from lib.levels import LevelsError, load_levels
 from lib.level_signals import signal_path_validator
-from lib.promissory_markers import scan_promissory_markers
+from lib.keyhole.promissory_markers import scan_promissory_markers
 from lib.hosting.review_reality import summarize
 
 FLEET_GOLDEN = Path(__file__).parent / "fixtures" / "fleet_golden" / "repos.jsonl"

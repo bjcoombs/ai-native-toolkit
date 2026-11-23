@@ -74,7 +74,7 @@ STAGES = ("setup", "read_side", "post_offers", "final")
 PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive"})
 # Tokens for ``scan_registry.GATE_REASONS``, the reasons a scan may opt out of degrading.
 GATE_REASONS = ("setup", "bad_scope", "self_degrading", "serialiser")
-PRIVACY_CLASSES = ("path", "token", "reason", "id", "drop")
+PRIVACY_CLASSES = ("path", "token", "reason", "id", "drop", "hashed_path")
 # Producer input classes (``level_signals.InputClass``, #783 and #789 3.1).
 EVIDENCE = ("config_text", "head_text", "head_structure", "ci_executed",
             "git_history", "execution_artifact", "platform")

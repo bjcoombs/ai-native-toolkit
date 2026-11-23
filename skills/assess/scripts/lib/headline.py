@@ -1,74 +1,49 @@
-"""The deterministic /assess headline: the Step, its next unlock, the tally and the per-tag strip (#747, #844).
+"""The deterministic /assess headline: the Step, the gate that blocks the next one, catalogue coverage and the per-tag strip (#747, #844, #1083).
 
 The headline is a pure function of the run's ``level`` block (``lib/level_tally.py``)
 and the maturity model that produced it, so the same commit always prints the same
-headline and the LLM never sets it. It retires the old layered "X / 8" score and
-its band names. The lines, in the order the scoring-model decisions on #740
-and #844 fix:
+headline and the LLM never sets it. ``headline(level, model)`` words a ``LevelResult``
+under the model that produced it; ``run_context_headline(level)`` (the ``headline`` scan,
+``core_scans.headline``, reading the ``level`` block) uses the default model. It retires
+the layered "X / 8" score and its band names. A Step reads its gates only (#1083), so the
+lines that lead name gates, never a count. The lines, in order:
 
 1. the Step, phrased as the contracts in place: ``Step 3 · Unattended agent PRs ·
    contracts in place``;
-2. the Next line, naming the next Step and the one change that reaches it:
-   ``Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced``.
-   The blocking gates come first. The count shortfall is worked out after they
-   hold (a counted gate condition adds to the tally itself), so when the gates
-   alone reach the threshold the line names only them; otherwise it adds "and N
-   more practices are in place";
-3. the tally: ``Practices in place: N of M measured, V verified · K not measured
+2. the Next line, naming the next Step and the blocking gates that reach it, in Step
+   order: ``Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced``.
+   It never names a count of practices and never picks a condition by model order. A
+   not-measured gate says so with its reason, and a gate whose condition the owner
+   excluded (#910) says "excluded by owner: <kind>; the Step waits while the exclusion
+   stands". At the top Step it says the Step holds while its gates hold;
+3. catalogue coverage: ``Catalogue coverage: N of M measured, V verified · K not measured
    (reasons) · model <version>``. N is ``tally.met``, M is ``tally.measured`` (measured
-   conditions only), V the share of N graded ``verified`` (CI-executed or
-   platform-measured; the rest of N is graded ``measured``),
-   K is ``tally.not_measured`` with each reason code and its count, <version> the
-   maturity-model version. When the owner excluded conditions (#910), the line
-   adds "E not applicable (excluded by owner)" before the model, where E counts
-   every condition that left the denominator that way, the excluded ones and those
-   whose ``requires`` names one. A blocking gate whose condition is excluded says
-   so in the Next line: the Step stays out of reach;
+   conditions only), V the share of N graded ``verified``, K is ``tally.not_measured``
+   with each reason code (``REASON_WORDS``) and its count, <version> the maturity-model
+   version. When the owner excluded conditions, the line adds "E not applicable
+   (excluded by owner)" before the model, E counting the excluded conditions and those
+   whose ``requires`` names one. The line says how much of the catalogue this run could
+   read; it is never a progress figure and never in the badge (#1083);
 4. the per-tag strip: ``By tag: behaviour 2 of 3 · docs 0 of 0 (NOT MEASURED: 1) ·
    governance 1 of 1 (HAZARD: 1)``, one cell per truth tag that any condition in the
-   result carries, in ``TRUTH_TAGS`` order. A cell counts like the tally, over the
-   conditions with that tag, so a condition with several tags is in each of their
-   cells while N counts it once. NOT MEASURED, HAZARD (a hazard condition met: the
-   harm is present) and DECLINED are badges with their counts, shown only when
-   non-zero. A result with no tagged condition has no strip line.
+   result carries, in ``TRUTH_TAGS`` order, counted like coverage over the conditions
+   with that tag. NOT MEASURED, HAZARD (a hazard condition met) and DECLINED are badges
+   with their counts, shown only when non-zero. No line when no condition is tagged.
 
-``summary`` is the one-line form the badge and the ``log.md`` entry carry
-(``Step 3 · 4 in place of 4 measured``). ``verified`` and ``tags`` (``TagCell`` per cell)
-hold the same numbers for counts-only readers, which drop the text lines. A run whose ``level`` block is missing or
-unavailable gets ``available: false`` and a headline that says the Step was not
-measured, never a guessed Step.
-
-The deterministic `/assess` headline (#747): `headline(level, model)` words a
-`LevelResult` under the model that produced it, and `run_context_headline(level)`
-(the `headline` scan, `core_scans.headline`, reading the `level` block) uses the
-default model. Three `lines`: the Step as the contracts in place ("Step 3 ·
-Unattended agent PRs · contracts in place"), the Next line naming the next Step and
-the change that reaches it (`GATE_CHANGE` per blocking gate id, then, only when the
-count still falls short once the gates hold and their counted conditions join the
-tally, "N more practices are in place, for example `<first unmet counted
-condition>`"; a not-measured gate says
-so with its reason, and a gate whose condition the owner excluded says "excluded by
-owner: <kind>; the Step waits while the exclusion stands"; at the top Step it says the
-Step holds while its gates hold), "Practices in place: N of M measured, V verified ·
-K not measured (reason: count, ...) · model <version>" (`REASON_WORDS` words the reason codes;
-V counts the met, counted conditions graded `verified`), with "E not applicable
-(excluded by owner)" before the model when the level lists exclusions, E counting the
-excluded conditions and those whose `requires` names one (#910), then the per-tag strip
-"By tag: <tag> N of M (NOT MEASURED: k, HAZARD: h, DECLINED: d) · ..." (#844; tags from
-the model's `truth`, badges only when non-zero, no line when no condition is tagged).
-Also `markdown` (the lines, the first bold, pasted verbatim by the report and
-`assess_report.py`), `summary` (the badge message and the `log.md` readiness line,
-"Step 3 · 4 in place of 4 measured"), `verified` and `tags` (`TagCell` per strip cell, from `tag_cells`, which lives in
-`lib/level_tags.py` with the level's `tags` rows (#940) and which the fleet's per-tag
-tally also reads, #1073), `step`,
-`next_step`, `levels_version`, `headline_version` and `next_why` (#939: for each blocking gate,
-the `why` of every condition of its row up to its level that is not met, from the level
-block's conditions, each once and joined by one space; `""` at the top Step or with no gate
-blocker). A missing or degraded `level` block gives
-`available: false` and "Step not measured", never a guessed Step; `as_headline`
-returns that form for a degraded `headline` block. Shape: `Headline` in
-`level_result_types.py`; under counts-only the text fields are dropped and the
-numbers and tag tokens kept. Tests: `tests/test_headline.py`.
+``summary`` is the one-line form the badge and the ``log.md`` entry carry, with no count
+in it: ``Step 3 · next: coverage gate`` (``GATE_NOUN`` names the first blocking gate),
+``Step 4 · all gates held`` at the top Step, and ``no Steps defined`` for a model without
+``[[steps]]``. ``markdown`` is the lines, the first bold, pasted verbatim by the report and
+``assess_report.py``. ``verified`` and ``tags`` (``TagCell`` per cell, from ``tag_cells``, which lives in
+``lib/level_tags.py`` with the level's ``tags`` rows (#940) and which the fleet's
+per-tag tally also reads, #1073) hold the coverage
+numbers for counts-only readers, which drop the text lines. ``next_why`` (#939) is, for
+each blocking gate, the ``why`` of every condition of its row up to its level that is not
+met, each once and joined by one space (``""`` at the top Step). A run whose ``level``
+block is missing or unavailable gets ``available: false`` and "Step not measured", never
+a guessed Step; ``as_headline`` returns that form for a degraded ``headline`` block.
+Shape: ``Headline`` in ``level_result_types.py``; under counts-only the text fields are
+dropped and the numbers and tag tokens kept. Tests: ``tests/test_headline.py``.
 """
 from __future__ import annotations
 
@@ -84,7 +59,10 @@ from lib.levels import MaturityModel
 # Bumped when the headline block's shape changes. It has no changes/ counter, so a
 # release PR moves it by hand during a version freeze.
 # 2 (3.0.0 release): the block gains `verified` and `tags` (#844).
-HEADLINE_VERSION = 2
+# 3 (#1083): Steps read gates only. `summary` reads "Step N · next: <gate>" or "Step N · all
+#   gates held", with no count; the Next line names gates only; the tally line is relabelled
+#   "Catalogue coverage". No key is added or removed.
+HEADLINE_VERSION = 3
 
 __all__ = ["Headline", "as_headline", "headline", "run_context_headline", "tag_cells"]
 
@@ -96,7 +74,15 @@ GATE_CHANGE = {
     "coverage_gate": "a coverage gate is enforced",
 }
 
-# Reason codes as the tally line words them; an unlisted code is shown with its
+# Each Step gate as the one-line summary names it: the badge and the log.md entry.
+# A gate id the table does not know reads as itself.
+GATE_NOUN = {
+    "instructions": "instruction file",
+    "ci_runs_tests": "CI runs tests",
+    "coverage_gate": "coverage gate",
+}
+
+# Reason codes as the coverage line words them; an unlisted code is shown with its
 # underscores as spaces.
 REASON_WORDS = {
     "needs_full_run": "needs a full run",
@@ -143,53 +129,26 @@ def _gate_change(blocker: Blocker) -> str:
     return change
 
 
-def _gate_gain(level: LevelResult, model: MaturityModel, step: int,
-               gates: list[Blocker]) -> tuple[int, set[str]]:
-    """The tally the blocking gates add once they hold, and the conditions they cover.
-
-    A gate holds when its row's conditions up to its level are all met; each of
-    those not met yet that is counted adds one to ``tally.met`` when the gate holds.
-    """
-    blocked = {b.get("gate") for b in gates}
-    step_def = next((s for s in model.get("steps", []) if s["step"] == step), None)
-    covered: set[str] = set()
-    for gate in (step_def["gates"] if step_def else []):
-        if gate["id"] in blocked:
-            covered |= {f"{gate['row']}.{n}" for n in range(1, gate["level"] + 1)}
-    gain = sum(1 for c in level["conditions"]
-               if c["id"] in covered and c["counted"] and c["state"] != "met")
-    return gain, covered
-
-
-def _threshold_change(short: int, level: LevelResult, covered: set[str]) -> str:
-    noun = "practice is" if short == 1 else "practices are"
-    example = next((c["id"] for c in level["conditions"]
-                    if c["counted"] and c["state"] == "unmet" and c["id"] not in covered), None)
-    tail = f", for example `{example}`" if example else ""
-    return f"{short} more {noun} in place{tail}"
-
-
-def _next_line(level: LevelResult, model: MaturityModel, names: Mapping[int, str]) -> str:
-    """The next Step and the change that reaches it.
-
-    The gates come first. The count shortfall is worked out after the gates hold,
-    because a counted gate condition adds to the tally itself: when the gates alone
-    reach the threshold, the line names only them.
-    """
+def _next_line(level: LevelResult, names: Mapping[int, str]) -> str:
+    """The next Step and the blocking gates that reach it: gates only, never a count (#1083)."""
     nxt = level["next_step"]
     if nxt is None:
         top = level["step"]
         return f"Next: Step {top} is the top Step; it holds while its gates hold"
-    gates = [b for b in nxt["blockers"] if b["kind"] == "gate"]
-    gain, covered = _gate_gain(level, model, nxt["step"], gates)
-    changes = [_gate_change(b) for b in gates]
-    for b in nxt["blockers"]:
-        if b["kind"] == "threshold":
-            short = b.get("threshold", 0) - b.get("met", 0) - gain
-            if short > 0:
-                changes.append(_threshold_change(short, level, covered))
+    changes = [_gate_change(b) for b in nxt["blockers"] if b["kind"] == "gate"]
     unlock = " and ".join(changes) if changes else "its gates hold"
     return f"Next: Step {nxt['step']} · {names.get(nxt['step'], '')} unlocks when {unlock}"
+
+
+def _summary(level: LevelResult) -> str:
+    """The badge message and the log.md readiness line: the Step and its next blocker, no count."""
+    step, nxt = level["step"], level["next_step"]
+    if step is None:
+        return "no Steps defined"
+    gate = next((b.get("gate", "") for b in nxt["blockers"] if b["kind"] == "gate"), None) if nxt else None
+    if gate is None:
+        return f"Step {step} · all gates held"
+    return f"Step {step} · next: {GATE_NOUN.get(gate, gate)}"
 
 
 def next_why(level: LevelResult, model: MaturityModel) -> str:
@@ -218,7 +177,7 @@ def verified_count(conditions: list[ConditionResult]) -> int:
 
 def _tally_line(level: LevelResult) -> str:
     tally = level["tally"]
-    line = (f"Practices in place: {tally['met']} of {tally['measured']} measured, "
+    line = (f"Catalogue coverage: {tally['met']} of {tally['measured']} measured, "
             f"{verified_count(level['conditions'])} verified")
     reasons = Counter(entry["reason"] for entry in level["not_measured"])
     detail = ", ".join(f"{reason_word(code)}: {n}" for code, n in sorted(reasons.items()))
@@ -257,17 +216,15 @@ def headline(value: Any, model: MaturityModel) -> Headline:
     names = _step_names(model)
     lines: list[str] = []
     step = level["step"]
-    tally = level["tally"]
     if step is not None:
         lines.append(f"Step {step} · {names.get(step, '')} · contracts in place")
-        lines.append(_next_line(level, model, names))
+        lines.append(_next_line(level, names))
     lines.append(_tally_line(level))
     cells = tag_cells(level, model)
     if cells:
         lines.append(_strip_line(cells))
     nxt = level["next_step"]
-    counts = f"{tally['met']} in place of {tally['measured']} measured"
-    summary = f"Step {step} · {counts}" if step is not None else counts
+    summary = _summary(level)
     markdown = "\n\n".join([f"**{lines[0]}**", *lines[1:]])
     return {"headline_version": HEADLINE_VERSION, "available": True,
             "levels_version": level["levels_version"], "step": step,

@@ -213,9 +213,6 @@
                 "step": {
                   "type": "integer"
                 },
-                "threshold": {
-                  "type": "integer"
-                },
                 "blockers": {
                   "type": "array",
                   "items": {
@@ -223,8 +220,7 @@
                     "properties": {
                       "kind": {
                         "enum": [
-                          "gate",
-                          "threshold"
+                          "gate"
                         ]
                       },
                       "gate": {
@@ -238,12 +234,6 @@
                       },
                       "reason": {
                         "type": "string"
-                      },
-                      "threshold": {
-                        "type": "integer"
-                      },
-                      "met": {
-                        "type": "integer"
                       },
                       "disposition": {
                         "enum": [
@@ -269,8 +259,7 @@
               },
               "required": [
                 "blockers",
-                "step",
-                "threshold"
+                "step"
               ],
               "additionalProperties": false
             },

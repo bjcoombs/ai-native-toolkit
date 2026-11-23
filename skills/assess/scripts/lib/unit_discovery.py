@@ -78,7 +78,9 @@ repeats a path. Declared units are used when at least one entry is valid;
 otherwise discovery runs and the skipped entries are still listed.
 
 Counts-only output drops every path and name (``checks/core/units.toml``): it
-keeps the counts, the origin and ecosystem tokens and the skip codes. Pure apart
+keeps the counts, the origin and ecosystem tokens and the skip codes. A unit's folder
+alone survives as its salted hash under ``--hash-paths`` (class ``hashed_path``, #866),
+the join key of a fleet unit row. Pure apart
 from reading the file list and the manifests.
 """
 from __future__ import annotations

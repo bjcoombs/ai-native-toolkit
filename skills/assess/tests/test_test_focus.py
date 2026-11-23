@@ -1,4 +1,4 @@
-"""Contract tests for ``lib/test_focus.compute_test_focus``.
+"""Contract tests for ``lib/testing/test_focus.compute_test_focus``.
 
 Cover each signal classification, the risk-band assignment by hotspot position,
 the ranking order, the ``covered_clean`` filter, the honest no-coverage degrade
@@ -15,7 +15,7 @@ from pathlib import Path
 # scripts/ on the path so ``lib`` imports resolve the same way the orchestrator does.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.test_focus import (  # noqa: E402
+from lib.testing.test_focus import (  # noqa: E402
     MUTABLE_SUFFIXES,
     compute_test_focus,
     mutation_scope,
@@ -454,7 +454,7 @@ def test_skill_md_mutation_scope_jq_mirrors_test_path_rule() -> None:
     """SKILL.md Step 2d re-derives the mutation scope in jq; its test-file regex
     must stay the same pattern as ``sibling_tests.IS_TEST_RE`` so the offer and
     the core never disagree about which hot files are tests."""
-    from lib.sibling_tests import IS_TEST_RE
+    from lib.testing.sibling_tests import IS_TEST_RE
 
     skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
     focus_line = next(line for line in skill.splitlines() if line.startswith("FOCUS_FILES="))

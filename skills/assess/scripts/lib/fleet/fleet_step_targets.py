@@ -21,13 +21,12 @@ last fully comparable run instead of losing the hit.
 
 **Progress** (``target_progress``, this run only): the unit's ``lowest_step``, ``measured``
 of ``repos``, ``distance`` (Steps to go, 0 when met, None when nothing is measured), the
-target Step's ``threshold``, ``held`` (measured repositories below the target Step),
-``below_threshold`` (of those, the ones whose met tally is below the threshold) and
+``held`` (measured repositories below the target Step) and
 ``missing_gates``: each gate of the target Step that holds back at least one measured
 repository, in model order, with ``held`` and, of those, ``not_measured`` and ``excluded``
 (``lib.fleet.fleet_data_steps.step_hold``, over each repository's ``gate_blockers``). The counts
-are repositories, not verified practices: the practices a repository still needs are
-``threshold`` less its met tally.
+are repositories, not practices: a Step reads its gates only (#1083), so the missing gates
+are the whole of what a repository still needs.
 
 Deterministic: targets sorted by view, unit and Step.
 """
@@ -68,9 +67,7 @@ class TargetProgress(TypedDict):
     measured: int  # members with a Step this run
     repos: int  # every member
     distance: int | None  # Steps to go; 0 when met; None when nothing is measured
-    threshold: int  # the target Step's threshold of met, counted practices
     held: int  # measured members below the target Step
-    below_threshold: int  # of those, the ones whose met tally is below the threshold
     missing_gates: list[GateHold]  # the target Step's gates holding back a measured member
 
 
@@ -112,7 +109,6 @@ def target_progress(members: Mapping[tuple[str, str], Sequence[str]], steps: Map
         out.append({"view": t.view, "unit": t.unit, "step": t.step, "lowest_step": state.lowest,
                     "measured": len(state.measured), "repos": len(mine),
                     "distance": None if state.lowest is None else max(0, t.step - state.lowest),
-                    "threshold": hold["threshold"], "held": hold["held"],
-                    "below_threshold": hold["below_threshold"],
+                    "held": hold["held"],
                     "missing_gates": [g for g in hold["gates"] if g["held"] > 0]})
     return out

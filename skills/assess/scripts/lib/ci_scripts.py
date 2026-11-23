@@ -34,7 +34,9 @@ test under ``named_check.instruction_words``, so a missing ``./ci.sh`` stays
 ``ScriptTree(root, tracked)`` is that predicate plus a body reader (#1033):
 ``script_runs(text, present, test)`` is true when ``present`` is a ``ScriptTree`` and the script
 ``text`` runs, read at its exact tracked path (never the lenient suffix; at most 64 KiB),
-provably fails on a failing ``test`` command (``lib.script_body``). The form decides the
+provably fails on a failing ``test`` command (``lib.script_body``); a tracked symlink that
+resolves outside the checkout is never read (#799), so a script is followed one level and only
+inside the repository. The form decides the
 start state: ``. x`` / ``source x`` is sourced, ``bash -e x`` takes the shell's flags, ``./x``
 its shebang, and only when git records the file as executable (mode 100755), since a
 ``./x`` of a 100644 file exits 126 and gates nothing. ``lib.ci_checks`` adds it to its check and lint line tests, so a read body only
@@ -126,6 +128,8 @@ class ScriptTree:
         if path is None or path not in self._tracked or any(
                 rel.endswith("/" + path) for rel in self._tracked):
             return False   # cd svc && ./ci.sh may run svc/ci.sh: only an unambiguous path is read
+        if not (self._root / path).resolve().is_relative_to(self._root.resolve()):
+            return False   # a tracked symlink out of the checkout is never read (#799)
         try:
             with (self._root / path).open("rb") as handle:
                 raw = handle.read(_MAX_BODY + 1)

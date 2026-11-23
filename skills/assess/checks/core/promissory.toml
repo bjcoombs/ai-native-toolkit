@@ -25,5 +25,5 @@ action = "action the promise: fix it, ticket it, or delete the marker/skip"
 mode = "verify_then_retire"
 concern = true
 inputs = ["promissory"]
-derive = "lib.keyhole_signals:_unactioned_intent_paths"
+derive = "lib.keyhole.keyhole_signals:_unactioned_intent_paths"
 headless = "unregistered"

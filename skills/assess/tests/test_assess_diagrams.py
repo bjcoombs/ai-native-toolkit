@@ -19,6 +19,7 @@ from assess_diagrams_fixture import FIXTURES, LEVEL, MODEL_ROWS, goldens
 from assess_report import render_report
 from lib import assess_diagrams as ad
 from lib.level_result_types import LevelResult
+from lib.run_context_types_diagrams import AssessDiagram
 from lib.level_tally import run_context_level
 from lib.vocabulary import IN_PLACE, banned_hits
 from svg_cascade import overridden_text_attributes
@@ -35,6 +36,10 @@ def _waffle(level: LevelResult = LEVEL) -> str:
 def _squares(content: str) -> list[ET.Element]:
     root = ET.fromstring(content.encode("utf-8"))
     return [r for r in root.iter(f"{SVG_NS}rect") if "data-category" in r.attrib]
+
+
+def _by_file(diagrams: list[AssessDiagram]) -> dict[str, AssessDiagram]:
+    return {d["file"]: d for d in diagrams}
 
 
 def _prose(content: str) -> str:
@@ -78,7 +83,7 @@ def test_real_level_result_squares_match(tmp_path: Path) -> None:
     level = run_context_level(ctx)
     written = (tmp_path / "repo" / ".assess" / ad.WAFFLE_FILE).read_text(encoding="utf-8")
     _assert_matches(level, written)
-    assert written == ad.build_diagrams(ctx)[0]["svg"]
+    assert written == _by_file(ad.build_diagrams(ctx))[ad.WAFFLE_FILE]["svg"]
 
 
 def test_category_reads_state_grade_and_counted() -> None:
@@ -122,7 +127,10 @@ def test_text_names_no_layer_number_and_no_banned_word(tmp_path: Path) -> None:
     ctx = build_and_publish_run(repo_root=_build_parity_fixture(tmp_path / "repo"), run_date="2026-01-01")
     real = ad.build_diagrams(ctx)
     texts = {"fixture svg": _prose(_waffle()), "fixture section": goldens()["expected-section.md"],
-             "real svg": _prose(real[0]["svg"] or ""), "real section": ad.diagrams_section(real)}
+             "real svg": _prose(_by_file(real)[ad.WAFFLE_FILE]["svg"] or ""),
+             "real ladder": _prose(_by_file(real)[ad.LADDER_FILE]["svg"] or ""),
+             "fixture ladder": _prose(goldens()["expected-step-ladder.svg"]),
+             "real section": ad.diagrams_section(real)}
     for name, content in texts.items():
         assert not re.search(r"\blayer[- ]\d", content, re.I), name
         assert not banned_hits(content), (name, banned_hits(content))
@@ -130,10 +138,9 @@ def test_text_names_no_layer_number_and_no_banned_word(tmp_path: Path) -> None:
 
 def test_section_opens_with_in_place_and_links_the_file() -> None:
     section = goldens()["expected-section.md"]
-    lines = section.splitlines()
-    assert lines[0] == "## Evidence behind the level"
+    lines = section.split("## Evidence behind the Step")[1].splitlines()
     assert lines[2] == f"{IN_PLACE} 3 counted conditions met (2 verified, 1 measured) and 3 listed from config or a declaration."
-    assert "[![Evidence behind the level](./evidence-waffle.svg)](./evidence-waffle.svg)" in section
+    assert "[![Evidence behind the Step](./evidence-waffle.svg)](./evidence-waffle.svg)" in section
     assert ad.waffle_caption() in section
 
 
@@ -158,7 +165,7 @@ def test_wrap_keeps_a_long_word_on_its_own_line() -> None:
      "the renderer raised ValueError."),
 ])
 def test_without_conditions_nothing_is_drawn_and_the_reason_is_said(ctx: dict[str, object], reason: str) -> None:
-    [diagram] = ad.build_diagrams(ctx, MODEL_ROWS)
+    diagram = _by_file(ad.build_diagrams(ctx, MODEL_ROWS))[ad.WAFFLE_FILE]
     assert diagram["svg"] is None and reason in (diagram["skipped"] or "")
     section = ad.diagrams_section([diagram])
     assert f"Not drawn: {diagram['skipped']}" in section and "](./" not in section
@@ -172,10 +179,10 @@ def test_unknown_category_raises() -> None:
 
 def test_write_removes_a_stale_file_and_a_symlink(tmp_path: Path) -> None:
     drawn = ad.build_diagrams({"level": LEVEL}, MODEL_ROWS)
-    assert ad.write_diagrams(tmp_path, drawn) == [tmp_path / ad.WAFFLE_FILE]
+    assert ad.write_diagrams(tmp_path, drawn) == [tmp_path / ad.LADDER_FILE, tmp_path / ad.WAFFLE_FILE]
     assert (tmp_path / ad.WAFFLE_FILE).read_bytes() == goldens()["expected-evidence-waffle.svg"].encode("utf-8")
     assert ad.write_diagrams(tmp_path, ad.build_diagrams({}, MODEL_ROWS)) == []
-    assert not (tmp_path / ad.WAFFLE_FILE).exists()
+    assert not (tmp_path / ad.WAFFLE_FILE).exists() and not (tmp_path / ad.LADDER_FILE).exists()
 
 
 def test_write_never_writes_through_a_symlink(tmp_path: Path) -> None:
@@ -193,13 +200,17 @@ def test_write_never_writes_through_a_symlink(tmp_path: Path) -> None:
 def test_report_links_the_waffle_the_run_wrote(tmp_path: Path) -> None:
     repo = _build_parity_fixture(tmp_path / "repo")
     report = render_report(build_and_publish_run(repo_root=repo, run_date="2026-01-01"), "r")
-    assert "[![Evidence behind the level](./evidence-waffle.svg)](./evidence-waffle.svg)" in report
+    assert "[![Evidence behind the Step](./evidence-waffle.svg)](./evidence-waffle.svg)" in report
     assert (repo / ".assess" / ad.WAFFLE_FILE).is_file()
+    ladder = "[![Where you are on the Steps](./step-ladder.svg)](./step-ladder.svg)"
+    assert ladder in report and report.index(ladder) < report.index("./evidence-waffle.svg")
+    assert (repo / ".assess" / ad.LADDER_FILE).is_file()
 
 
 def test_a_path_that_cannot_be_written_is_skipped_not_raised(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     (tmp_path / ad.WAFFLE_FILE).mkdir()
-    assert ad.write_diagrams(tmp_path, ad.build_diagrams({"level": LEVEL}, MODEL_ROWS)) == []
+    written = ad.write_diagrams(tmp_path, ad.build_diagrams({"level": LEVEL}, MODEL_ROWS))
+    assert written == [tmp_path / ad.LADDER_FILE]
     assert f"{ad.WAFFLE_FILE} not written" in capsys.readouterr().err
 
 
@@ -251,3 +262,34 @@ def test_every_diagram_build_all_draws_gets_the_disk_check(tmp_path: Path) -> No
     assert ad.diagrams_section(diagrams, tmp_path).count(f"Not drawn: {ad.NOT_ON_DISK}") == len(ALL_FILES)
     write_all(tmp_path, diagrams)
     assert ad.diagrams_section(diagrams, tmp_path) == ad.diagrams_section(diagrams)
+
+
+# --- level headers and outlined Step gates (#1102) -------------------------------
+
+
+def test_columns_carry_level_headers_and_the_subtitle_explains_a_square() -> None:
+    content = _waffle()
+    assert all(f">Level {n}</text>" in content for n in (1, 2, 3, 4))
+    assert ">Level 5</text>" not in content
+    assert "13 conditions: each row is a practice, each square one of its levels" in content
+    assert "<title>Evidence behind the Step</title>" in content
+
+
+def test_the_step_gate_squares_are_outlined_with_a_key_entry() -> None:
+    gates = ["layer-0-instructions.1", "layer-5-ci.1", "layer-6-coverage.1"]
+    content = ad.render_waffle(LEVEL, ad._titles(MODEL_ROWS), gates)
+    root = ET.fromstring(content.encode("utf-8"))
+    outlined = [r.attrib["data-gate"] for r in root.iter(f"{SVG_NS}rect") if "data-gate" in r.attrib]
+    assert outlined == ["layer-0-instructions.1", "layer-5-ci.1"]  # the fixture has no coverage row
+    assert "Outlined: a Step gate" in content
+    plain = _waffle()
+    assert "data-gate=" not in plain and "Outlined" not in plain
+
+
+def test_the_shipped_model_gates_are_outlined_in_the_report_waffle() -> None:
+    from lib.assess_diagrams_ladder import gate_conditions
+    from lib.level_tally import default_model
+    steps = default_model()["steps"]
+    assert gate_conditions(steps) == ["layer-0-instructions.1", "layer-5-ci.1", "layer-6-coverage.1"]
+    waffle = _by_file(ad.build_diagrams({"level": LEVEL}, MODEL_ROWS))[ad.WAFFLE_FILE]["svg"] or ""
+    assert waffle.count("data-gate=") == 2

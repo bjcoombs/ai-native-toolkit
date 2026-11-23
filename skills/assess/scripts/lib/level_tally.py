@@ -17,8 +17,10 @@ with no prior run, no stored state and no model in the path:
   ``measured`` the number of counted conditions met or unmet, and
   ``not_measured`` the number of conditions of any grade not measured. An
   unknown never earns anything, so a blind run neither lowers nor raises ``met``;
-- the **Step**: the highest Step whose threshold ``met`` reaches and whose gates
-  hold, every lower Step held too, plus the next Step and what blocks it.
+- the **Step**: the highest Step whose gates hold, every lower Step held too,
+  plus the next Step and the gates that block it. A Step reads its gates and
+  nothing else (#1083): the tally never moves it, so a condition added to the
+  model that a repository already meets leaves its Step where it was.
 
 A condition reads its own criteria only; a level does not need the level below
 it (the row's level in ``lib.levels`` still climbs). A real dependency is
@@ -113,11 +115,11 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   yet), `countable` and `set_aside` (by grade, and of those excluded or declined), `met` and `measured` (the headline strip cell's, `tag_cells`, never a second
   tally) `not_measured[]` (`{id, reason}`) and `countable_not_measured[]`, its countable subset. A multi-tagged condition is on each of its rows
   and counted once in `tally`; `measured` 0 means not measured, never a share of 0.
-- `step` (null without `[[steps]]`) and `next_step` (`step`, `threshold`, `blockers[]`; null at
-  the top Step): a Step is held when `tally.met` reaches its threshold and every gate holds
-  (the gate row's conditions up to its level all `met`, whatever their grade), every lower
-  Step held too. A blocker is `{kind: "gate", gate, condition, state, reason?}` for the first
-  condition of a gate that is not met, or `{kind: "threshold", threshold, met}`.
+- `step` (null without `[[steps]]`) and `next_step` (`step`, `blockers[]`; null at the top
+  Step): a Step is held when every gate holds (the gate row's conditions up to its level all
+  `met`, whatever their grade), every lower Step held too. Gates only (#1083): the tally never
+  moves a Step. A blocker is `{kind: "gate", gate, condition, state, reason?}` for the first
+  condition of a gate that is not met.
 
 Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a set whose count
 is 0, such as `stats_summary.loc_by_class.source.p95` with its `files_scored` 0: `no_source_files`, #906 and #820, and
@@ -335,11 +337,9 @@ def gate_blockers(steps: Sequence[StepDef], conditions: Sequence[ConditionResult
     return out
 
 
-def _blockers(step: StepDef, met: int, by_id: Mapping[str, ConditionResult]) -> list[Blocker]:
-    found = [b for g in step["gates"] if (b := _gate_blocker(g["id"], g["row"], g["level"], by_id)) is not None]
-    if met < step["threshold"]:
-        found.append({"kind": "threshold", "threshold": step["threshold"], "met": met})
-    return found
+def _blockers(step: StepDef, by_id: Mapping[str, ConditionResult]) -> list[Blocker]:
+    """The gates of ``step`` that do not hold: the only thing that holds a Step back (#1083)."""
+    return [b for g in step["gates"] if (b := _gate_blocker(g["id"], g["row"], g["level"], by_id)) is not None]
 
 
 def condition_ids(model: MaturityModel) -> frozenset[str]:
@@ -373,9 +373,9 @@ def level_result(model: MaturityModel, data: Mapping[str, Any] | None,
     step: int | None = None
     next_step: NextStep | None = None
     for definition in model.get("steps", []):
-        blockers = _blockers(definition, met, by_id)
+        blockers = _blockers(definition, by_id)
         if blockers:
-            next_step = {"step": definition["step"], "threshold": definition["threshold"], "blockers": blockers}
+            next_step = {"step": definition["step"], "blockers": blockers}
             break
         step = definition["step"]
     result: LevelResult = {

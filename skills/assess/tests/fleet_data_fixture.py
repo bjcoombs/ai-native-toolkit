@@ -69,18 +69,15 @@ aggregation = "min"
 [[steps]]
 step = 1
 name = "Assisted"
-threshold = 0
 
 [[steps]]
 step = 2
 name = "Docs"
-threshold = 0
 gates = [{ id = "docs", row = "docs", level = 1 }]
 
 [[steps]]
 step = 3
 name = "Docs and CI"
-threshold = 0
 gates = [{ id = "docs", row = "docs", level = 1 }, { id = "ci", row = "ci", level = 1 }]
 """
 
@@ -119,9 +116,18 @@ ROWS: list[FleetRow] = [
                                 "reason": "CI runs in the release pipeline repository.",
                                 "excluded_by": "maintainer", "excluded_at": "2026-11-22", "version": "2.2.0"}],
                                "skipped": [], "disclosures": []}}),
-    # level 1 docs (grade C holds it back), level 0 ci
+    # level 1 docs (grade C holds it back), level 0 ci; scanned by unit (#866): apps/api reads
+    # its own docs at grade A, apps/web its own empty docs, and both inherit the root ci
     _row("grp/sub/proj2", {"docs": {"available": True, "lines": 12, "grade": "C"},
-                           "ci": {"available": True, "required": False}}),
+                           "ci": {"available": True, "required": False},
+                           "unit_readings": {"available": True, "unit_count": 2, "unit_count_reason": None,
+                                             "unit_blocks": ["docs"], "units": [
+                               {"path": "apps/api", "blocks": {"docs": {"available": True, "lines": 30, "grade": "A"}},
+                                "conditions": [{"id": "docs.1", "origin": "unit"}, {"id": "docs.2", "origin": "unit"},
+                                               {"id": "ci.1", "origin": "inherited"}]},
+                               {"path": "apps/web", "blocks": {"docs": {"available": True, "lines": 0, "grade": "F"}},
+                                "conditions": [{"id": "docs.1", "origin": "unit"}, {"id": "docs.2", "origin": "unit"},
+                                               {"id": "ci.1", "origin": "inherited"}]}]}}),
     # docs unknown (block unavailable), ci level 1
     _row("grp/other/proj3", {"docs": {"available": False, "reason": "unavailable"},
                              "ci": {"available": True, "required": True}}),
