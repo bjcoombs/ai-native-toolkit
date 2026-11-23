@@ -37,9 +37,15 @@ scope = "org"
 
 
 def _load_cli() -> ModuleType:
+    """``fleet.py`` loaded once as ``sys.modules["fleet_cli"]``. pytest collects this file as
+    ``tests.test_fleet_cli`` while other test files import it as ``test_fleet_cli``, so one
+    shared module keeps the conftest date pin (#1029) on the object every test calls."""
+    if "fleet_cli" in sys.modules:
+        return sys.modules["fleet_cli"]
     spec = importlib.util.spec_from_file_location("fleet_cli", FLEET_SCRIPT)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
+    sys.modules["fleet_cli"] = module
     spec.loader.exec_module(module)
     return module
 
@@ -180,6 +186,13 @@ def _stamped_dates(froot: Path, tmp_path: Path, *outs: str) -> list[str]:
     for out in outs:
         assert fleet_cli.main([str(froot), "--no-history", "--no-diagrams", "--out", str(tmp_path / out)]) == 0
     return [json.loads((tmp_path / out / "run.json").read_text(encoding="utf-8"))["scan_date"] for out in outs]
+
+
+def test_the_autouse_pin_reaches_the_module_this_file_runs() -> None:
+    """#1029: the conftest pin holds here without an explicit call, under either import name."""
+    assert fleet_cli is sys.modules["fleet_cli"]
+    assert fleet_cli.utc_today is not UTC_TODAY
+    assert fleet_cli.utc_today() == UTC_TODAY()
 
 
 def test_runs_either_side_of_utc_midnight_stamp_one_date_once_pinned(froot, tmp_path, monkeypatch):

@@ -251,7 +251,7 @@ def pin_fleet_run_date(monkeypatch: pytest.MonkeyPatch, cli: object) -> _dt.date
 def _one_fleet_run_date(monkeypatch: pytest.MonkeyPatch) -> None:
     """#1029: every in-process fleet run in one test stamps the same ``scan_date``, so a
     multi-run byte-identical test cannot fail when its runs fall either side of 00:00Z.
-    The fleet tests share the one ``fleet_cli`` module ``test_fleet_cli`` loads."""
-    cli = getattr(sys.modules.get("test_fleet_cli"), "fleet_cli", None)
+    The fleet tests share the one ``sys.modules["fleet_cli"]`` that ``test_fleet_cli`` loads."""
+    cli = sys.modules.get("fleet_cli")
     if cli is not None:
         pin_fleet_run_date(monkeypatch, cli)
