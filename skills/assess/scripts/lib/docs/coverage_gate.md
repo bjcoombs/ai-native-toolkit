@@ -74,8 +74,8 @@ Python `fail_under = 10` (or `0`) beside a `go.mod` reads unknown, not unmet (#9
 language's low gate does not settle another's. A gate of at least 50 percent keeps true,
 a null from another gate (a templated threshold) keeps its own reason, and a gate read
 for every Go and Rust manifest present, even one gating nothing, keeps the normal
-reading, with `unmeasured_reason` null. The collector's manifest `revision` is 2 for the
-#788 change of meaning; the #937 widening is listed for the 3.0.0 release PR.
+reading, with `unmeasured_reason` null. The collector's manifest `revision` moved to 2 for the
+#788 change of meaning, and to 4 in the 3.0.0 release for the #937 widening.
 Adding a gate form: build the gate with `_gate` and the right
 `unit`; `threshold_percent` and both block fields follow with no other change. A form
 whose number is not a coverage percentage (a count) needs its own `unit`, mapped to

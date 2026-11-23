@@ -102,7 +102,13 @@ from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
 # or when a scanner change alters when an existing signal reads true or null
 # without a new signal name (the fleet comparison convention,
 # lib/fleet/fleet_scanner_diff.py). Per-scan block shapes are not versioned here.
-SIGNALS_SCHEMA_VERSION = 2
+# 3 (3.0.0 release): one change since 2.
+# - layer_grades.instruction_file_present reads true, and instructions_grade a letter,
+#   for a repository whose only instruction files are nested (instruction_presence
+#   nested_only, issue #821). instruction_file_present, documented as never null before,
+#   now reads null (with instruction_presence) when there is no root file and the
+#   nested_instructions scan did not run.
+SIGNALS_SCHEMA_VERSION = 3
 
 # Run-context blocks ``assess_core`` assembles through its own table entries in
 # ``CORE_MODULES`` (#557, #558). Names only: the headless runner reports each as

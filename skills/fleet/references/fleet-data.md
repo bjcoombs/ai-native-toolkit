@@ -8,7 +8,7 @@ the run history beside the other files.
 
 | Key | Value |
 |-----|-------|
-| `fleet_data_version` | Document version (3: version 3 added `opportunities`; the achievements engine reads versions 1 to 3 alike). |
+| `fleet_data_version` | Document version (4: version 4 added `step`, `next_step`, `tally`, `exclusions` and `gate_blockers` on repositories and `step` on units; version 3 added `opportunities`; the achievements engine reads versions 1 to 4 alike). |
 | `run` | The run stamp's fields from `run.json`, copied one by one: every field but `fleet_stamp_version` and `fleet_config_entries` (`platform` reads `false` for a stamp written before it). A new stamp field fails a test until it is copied or excluded here, with a `fleet_data_version` bump. |
 | `model` | Each maturity model row: `id`, `title`, `scope`, `top_level`. |
 | `views` | One entry per view, `ownership` and `system`, each with its `units`. |

@@ -279,7 +279,98 @@ instead of editing the history comment; the release PR folds the notes in with
 #   (issue #921): the threshold reading with an enforced CI run of the gate
 #   required. A gate's unit gains missed_ratio, and a JaCoCo MISSEDCOUNT /
 #   MISSEDRATIO maximum is reported as a gate. Additive: no existing key moves.
-ARTIFACT_SCHEMA_VERSION = "1.42.0"
+# 1.43.0 (3.0.0 release): 17 changes since 1.42.0.
+# - run-context.json layer_grades gains instruction_presence (issue #821): root,
+#   nested_only or none. instruction_file_present is true for nested_only, and
+#   instructions_grade there is the best nested grade, where both read as no
+#   instruction file before; both are null when there is no root file and the
+#   nested_instructions scan did not run. gap_actions gains a layer_grades entry for
+#   nested_only and now sits after layer_grades in run-context.json.
+# - run-context.json headline gains verified (the met, counted conditions graded
+#   verified) and tags, one cell per truth tag with met, measured, verified,
+#   not_measured, hazards and declined counts (issue #844). Additive: no existing
+#   key moves.
+# - run-context.json gains units (issue #862), after owner_exclusions: the monorepo
+#   units (shallowest build-manifest folders, workspace members in place of their
+#   aggregator, or the [[units]] of .assess/config.toml), the aggregators and the
+#   candidates skipped with a code. Additive.
+# - run-context.json gains `unit_readings` (issue #863, core-only): for each unit of the
+#   `units` block, its own readings of the scope-sensitive scans (`promissory_markers`,
+#   `doc_staleness`, `structure`, `stats_summary`, and `coverage_gate` or
+#   `layer_grades` only when the unit holds its own gate or instruction file), projected
+#   to the maturity model's signal paths, plus every model condition with `origin` `unit`
+#   or `inherited`. `unit_count` is copied from `units`, null included. Manifest
+#   collectors gain an optional `unit_scope` (`scoped` or `override`).
+# - run-context.json gains `unit_levels` (issue #864, core-only): for each unit of
+#   `unit_readings`, the default maturity model's Step, `next_step` and tally (`met`,
+#   `measured`, `not_measured`, `verified`) with the unit's own readings in place, every
+#   condition's `state`, `counted` and `origin` (`unit` or `inherited`), and `inherited`, the
+#   met conditions that rest on a repository-wide reading. `unit_count` is copied from
+#   `unit_readings`, null included. `unit_readings` no longer lets a unit inherit a coverage
+#   gate or nested instruction file that sits only in other units: that unit reads its own
+#   scoped coverage reading, or `instruction_file_present` false, origin `unit`. The root
+#   unit (`.`) follows the same rule: it reads a no-gate coverage reading, or a nested file
+#   only when one sits under no member unit.
+# - ci_checks.lint_basis gains analysers_in_build and compiler_gate_only (issue
+#   #926), both with lint_runs null: a CI .NET build whose committed project files
+#   turn on the analysers, and a compiler run with warnings as errors as the only
+#   static gate. The lint and analyser commands of .NET, Gradle, PHP, Elixir, Dart,
+#   Swift and C++ count as lint runs, a rewriting formatter followed by git diff
+#   --exit-code in its job counts, and a target whose recipe is not read reads
+#   check_target (null) at Layer 3 as it does at Layer 5. Additive: no key moves.
+# - run-context.json agent_environment.pinning gains manifests_total (issue #927):
+#   the number of dependency manifests the lockfile check reads. Additive: no
+#   existing key moves, and complexity-stats.json is unchanged.
+# - agent_environment.pinning.manifests[] rows gain note (issue #927 part B):
+#   skipped_library, direct_pins_only or null. A skipped_library row is listed
+#   but left out of manifests_total and unlocked_total. Additive.
+# - ci_checks basis, enforced_basis and lint_basis gain external_ci and
+#   external_ci_marker (issue #928): under --platform, more than half of the sampled
+#   merged pull requests carry a check of a known external CI system; offline, a root
+#   Prow OWNERS_ALIASES with no CI file. Either reads null in place of a false case.
+#   unread_ci_files counts more paths (LUCI .ci.yaml and infra/config/, every Azure
+#   Pipelines layout, Prow, Zuul, Drone, Woodpecker and others; lib/unread_ci.py).
+#   Additive: no existing key moves.
+# - ci_checks.enforced_basis and ci_checks.lint_basis gain script_not_found
+#   (issue #937); coverage_gate.unmeasured_reason go_rust_gate_form_not_read now
+#   also carries a low gate beside an unread Go or Rust module.
+# - the run context gains manifest whys (#939): `why` on each `level.conditions[]`
+#   entry and each `gap_actions` entry, and `headline.next_why`, the whys of the
+#   conditions the Next line's blocking gates wait on. Static text; counts-only output
+#   drops them. Additive: no key moves.
+# - structure gains packages (id, loc, modules; largest first, capped at 200),
+#   package_count and package_edges (from, to, imports, bypass), the package map's
+#   data (issue #942), and burrow_edge_count, the uncapped number of front-door
+#   bypasses (internal_burrow_edges lists at most 100). Below both list caps the
+#   bypass total equals burrow_edge_count. Package ids are path class under
+#   counts-only. Additive: no key moves.
+# - structure.package_edges is heaviest first (most imports, ties by from then to)
+#   and capped at 400 pairs; package_edge_count is the number of pairs among the
+#   kept packages before that cap (issue #942).
+# - run-context.json review_reality gains sequence and bot_sequence (issue #943): one
+#   token per sampled merged change, oldest merge first. sequence reads approved,
+#   reviewed, unreviewed or unknown with the predicates behind approved_share and
+#   reviewed_share; bot_sequence reads bot, none or unknown. Tokens only, kept by
+#   counts-only. They feed the review strip (review-strip.svg). Additive: no
+#   existing key moves.
+# - ci_checks.includes records an unparsed GitLab include as kind unknown, where it
+#   read local (issue #959), and an unquoted YAML tag, anchor or alias entry
+#   (!reference [x], *shared) is unparsed, where it read a local glob.
+#   run-context.json stats_summary with no complexity-stats.json is
+#   {available: false, reason: no_complexity_stats} with files_scored null, where
+#   files_scored read 0. review_reality and delivery on a remote host no platform
+#   read supports (Bitbucket, Azure DevOps, a host glab does not reach) read
+#   unsupported_host, where they read network.
+# - run-context.json delivery gains sample_page_size (issue #995): the changes per
+#   heavy read the merged sample finished at, or null when none was made. Additive:
+#   no existing key moves.
+# - units.skipped gains the problem code `unparseable_leaf` (issue #1030): an unparseable
+#   build manifest that cannot change the unit set (not at the repository root, a
+#   workspace member or beside a readable workspace declaration, and not named
+#   pnpm-workspace.yaml, go.work or settings.gradle(.kts)) is skipped with it, and
+#   units.unit_count stays known where it read null with `unreadable_manifest`.
+#   Additive.
+ARTIFACT_SCHEMA_VERSION = "1.43.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -466,4 +557,164 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   ./scripts/foo.sh, docker run img) reads enforced_check_runs null
 #   (check_target) where it read false; setup-named targets (make build) still
 #   read false. Layer 5 level 1 can move from 0 to met or unknown.
-ASSESS_METHOD_VERSION = 37
+# 38 (3.0.0 release): 22 rule changes since 37.
+# - the displayed headline changes (issue #844): the tally line reads "Practices in
+#   place: N of M measured, V verified" instead of "Verified practices", the Next
+#   line's shortfall reads "N more practices are in place", a per-tag strip line
+#   follows the tally with NOT MEASURED, HAZARD and DECLINED badges, and the badge
+#   and log.md summary read "Step S · N in place of M measured".
+# - structure_drift.tier_0.boundary_patterns counts an architecture-doc reference
+#   only when its resolved files hold module source under a non-dot directory, the
+#   CODEOWNERS predicate ownership_parser.is_boundary_pattern (issue #874). An
+#   ARCHITECTURE.md naming only `CONTRIBUTING.md`, `docs/` or `.github/workflows/ci.yml`
+#   no longer meets Layer 4 level 1, which can move from met to unmet.
+# - GitLab `rules:` are read as GitLab runs them (issue #884): the first matching rule
+#   decides, `if:` expressions are evaluated per merge request and branch push pipeline,
+#   and a top-level `workflow: rules:` gates every job of its file. A job gated by
+#   `$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH` or
+#   `$CI_COMMIT_TAG && ...` no longer runs a check (enforced_check_runs can move from
+#   true to false); a custom variable, inline, anchored or multi-line rules and `exists:`
+#   read unknown. Layer 5 level 1 can move from met to unmet or unknown.
+# - the empty lockfile set (issue #927): layer-5-ci.2 reads not measured
+#   (no_manifests) when agent_environment.pinning.manifests_total is 0, where it
+#   read met. Fewer conditions count on repositories with no dependency manifest.
+# - the lockfile check reads Mix, Pub, SwiftPM, .NET, Gradle, vcpkg and Conan
+#   manifests (issue #927 part B). Libraries that by convention commit no lock
+#   (Composer type library, a published Pub package, a SwiftPM library) are
+#   left out of the count; a Gradle version catalog or NuGet central package
+#   management reads unlocked. layer-5-ci.2 can move from met to unmet on
+#   repositories with those manifests, and from unmet to not measured on
+#   library-only ones.
+# - ci_checks masks a check in an errexit-exempt position before a top-level `exit 0`
+#   under the default `bash -e` (issue #936): `pytest && echo ok; exit 0`, `pytest | tee
+#   log; exit 0` without pipefail, an `if` / `while` condition or a `!` pipeline.
+#   `ruff check . --exit-zero || pytest` drops `pytest`, a folded `run: >` block is read
+#   folded, a quoted `{` or `<<EOF` no longer hides a later `exit 0`, and `hatch run
+#   pytest -V` / `--co` are info calls. Layer 3 and Layer 5 level 1 can move from met to
+#   unmet; a folded pwsh `pytest` / `exit 0` can move from unmet to met.
+# - issue #937, two false readings. A coverage gate below 50 percent beside a
+#   go.mod or Cargo.toml with no gate read for that language reads
+#   threshold_meets_minimum null (go_rust_gate_form_not_read) where it read
+#   false, so Layer 6 level 1 and the Step 4 coverage_gate gate read unknown,
+#   not unmet. A CI check or lint step that runs a committed script no tracked
+#   file matches (run: ./ci.sh with no ci.sh) reads enforced_check_runs and
+#   lint_runs null (script_not_found) where it read true: Layer 3 and Layer 5
+#   level 1 can move from met to unknown.
+# - `ci` is no longer a trusted check word (issue #951): `make ci`, `npm run ci`, `pnpm ci`,
+#   `yarn ci` and `./ci.sh` can run a build, a deploy or a test suite, and the recipe is not
+#   read, so a CI line naming only one reads null with basis `check_target`, like `make foo`;
+#   so does a `ci` name behind `python`, `source`, `cargo`, Gradle, Maven or `go`
+#   (`python ci.py`, `cargo ci`, `./gradlew ci`), never a false 0.
+#   Layer 5 level 1 (`enforced_check_runs`, the Step 3 `ci_runs_tests` gate) and Layer 3
+#   level 1 (`lint_runs`) can move from met to not measured. `bun ci` and `npm ci` stay
+#   installs, and a name that also carries a check word (`make ci-test`, `npm run test:ci`)
+#   still counts. Instruction files keep `ci` (`lib.named_check`): a CLAUDE.md that names
+#   `make ci` still counts at Layer 0 (`agent_environment.check.named_total`), unchanged.
+#   A committed `./ci.sh` was credited by its name (`lib.ci_scripts` checks that the file
+#   is there and never reads its body), so it now reads null `check_target` too; a missing
+#   one keeps `script_not_found` (#937), and a masked one keeps `not_enforced`.
+# - issue #954, coverage-gate CI credit edge cases. enforced_meets_minimum (Layer 6
+#   level 1, the Step 4 coverage_gate gate) no longer credits a CI run that does not
+#   enforce the gate: a threshold named only in echo or printf text beside a run with
+#   another threshold, pytest with --no-cov (on the line or in addopts), a Gradle run
+#   that excludes jacocoTestCoverageVerification (or test, leaving it no execution data)
+#   with -x or --exclude-task, and a Gradle dry run (-m, also in a cluster such as -qm,
+#   --dry-run, --task-graph) now read false. pytest -c FILE reads FILE's addopts as the
+#   run's own, and reads null when FILE was not read. A pytest addopts --cov or Jest
+#   collectCoverage: true switches on only the gates in its own directory or below, so a
+#   sibling package's config gate reads false or null where it read true. A threshold
+#   outside a pytest section of pyproject.toml or setup.cfg (a hatch, pdm or poe script, a
+#   tox command) is a task-runner gate: indirect_run when CI runs hatch run, pdm, poe (also
+#   through uv run or poetry run) or tox, and not_run_in_ci when it runs none, where it
+#   read unread_ci_system. pdm run is read through to the program it runs, so pdm run
+#   pytest --cov credits a coverage.py gate where it read not_run_in_ci. A second
+#   --cov-fail-under on one CI line is read as its own gate.
+# - guardrails reads the run scope (issue #956): a scoped run walks the scope
+#   only, as coverage_gate does, and a scope root with no ruff, flake8 or mypy
+#   config is gated by the tool's nearest config at or above it, as each tool
+#   resolves it (ruff from each file, mypy and flake8 from the directory they
+#   run in). Ruff's C901 selection resolves select and ignore by specificity (C9
+#   ranks with C90, an ignore wins a tie), so `select = ["C901"]` beside
+#   `ignore = ["C"]` is a complexity gate. A threshold states a gate only as a
+#   standalone number (no letter, digit or underscore on either side, no dot
+#   before it, so "80th" and "15x" state nothing), and a
+#   coverage floor's ratio form needs a decimal point, so "step 1" and "v1.0" no
+#   longer state a floor of 100.
+# - CI reader edge cases (issue #958): a GitHub workflow whose `on:` block list sits at
+#   the key's own column (`on:` then `- push`) is read, so ci_checks.enforced_check_runs
+#   can move from null (`unknown_trigger`) to true or false. A top-level GitLab job named
+#   `trigger` after a blank line is no longer read as a child pipeline, so a merged
+#   configuration with no check can move test_or_lint_configured from null
+#   (`merged_config_partial`) to false. A lint-API include source with surrounding
+#   whitespace is recorded once.
+# - agent_consistency drops a leading heading or list ordinal before reading
+#   threshold numbers (issue #960): `## 2. Coverage` beside a stated 90 is no
+#   conflict, so agent-consistency level 1 can move from unmet to met. A
+#   next step for an unlinked system names its primary file (CLAUDE.md) before
+#   a supplementary rule file.
+# - The two 2.1.0 signal paths renamed in 2.2.0 load again (issue #970):
+#   a `--levels` model naming `ci_checks.test_or_lint_runs` or
+#   `coverage_gate.enforced` reads `ci_checks.test_or_lint_configured` or
+#   `coverage_gate.configured` and scores the same, with one deprecation line
+#   on stderr per old path, where it exited 2. Fleet compare reads both sides
+#   under the new paths, so a 2.1.0 run against a 2.2.0 run lists no added or
+#   removed leaf for them. `SIGNAL_ALIASES` moves to `lib/signal_aliases.py`.
+# - issue #1008, a check inside a ( ) subshell that ends in a no-op is masked. A
+#   || true, || :, || /bin/true or || exit 0 inside a subshell masks the segments
+#   before it back to the subshell's start, as at top level, so (pytest || true) and
+#   (cd sub && pytest || true) read as masked, not enforced: enforced_check_runs and
+#   lint_runs (Layer 5 and Layer 3 level 1) and the coverage-gate CI run can move from
+#   met to unmet. (pytest && echo ok) and pytest && (echo x || true) keep their check.
+# - ci_checks.enforced_check_runs resolves a GitLab job's same-file `extends:` chain
+#   (a name or a list, multi-level, the last parent winning and the job's own keys
+#   overriding) before it reads `rules:`, `when:`, `only:` and `except:`, and reads
+#   `except:` with `only:` semantics (issue #1021). A job inheriting schedule-only or
+#   tag-only rules from a hidden template no longer counts as running on ordinary
+#   changes, and a job whose `extends:` target is not in the file (an `include:`),
+#   a cycle, or a job given `rules:` beside `only:` / `except:` reads null. Layer 5
+#   can move from met to unmet or unknown; no reading moves to met.
+# - A flow-map `only:` or `except:` (`only: {refs: [tags]}`) reads null instead of
+#   having its map keys read as ref names (issue #1021); an `only: {refs: [tags]}` job
+#   moves from running on ordinary changes to unknown.
+# - three rare lockfile readings (issue #1025): a SwiftPM package with a
+#   `.library(` product and no `.executable(` product reads skipped_library even
+#   when it declares an `.executableTarget(` (as a library that ships a build-tool
+#   or command plugin does), where it read an unlocked app; a Kotlin
+#   Multiplatform `commonMain.dependencies { ... }` block counts the build, where
+#   it gave no row; a `package.json`, `composer.json` or `vcpkg.json` with a
+#   byte-order mark parses, where it gave no row. layer-5-ci.2 can move from unmet
+#   to not measured on such Swift packages, and from met or not measured to
+#   unmet on repositories with the other two.
+# - On a CI line the `.` builtin runs a script like `source` (issue #1033); instruction files
+#   (Layer 0) read `.` as before. `. ./test.sh` read as no check, a
+#   false 0; it now reads as `source ./test.sh` does, at Layer 5 (`enforced_check_runs`) and
+#   Layer 3 (`lint_runs`). A sourced script the tree does not hold reads `script_not_found`
+#   (null), as `./x` does since #937, where `source ./test.sh` with no file was credited.
+#   Any other sourced script whose body is not shown reads null (`check_target`), not false
+#   (`source ./scripts/common.sh`). Sourcing an environment (`. venv/bin/activate`, `source
+#   .env`, `. ./env.sh`, `. ~/.nvm/nvm.sh`) runs no check and stays false.
+# - A committed CI script's body is read where it is tracked at the exact path the line runs,
+#   and for a `./x` run only when git records it executable (mode 100755) (`lib.script_body`): a body that provably fails when its check fails (`set -e` before the
+#   check, the check as the last top-level statement, or `|| exit 1` after it) reads true,
+#   so an executable `./ci.sh` ending in `pytest` moves from not measured to met. A body the reader does not
+#   model, or one whose check cannot fail the script, keeps the name's reading. The only
+#   reading that moves down is the missing sourced script above.
+# - A target whose name pairs `ci` with a setup or build word (`make deploy-ci`, `npm run
+#   build:ci`, `make ci-deploy`, `./scripts/deploy-ci.sh`) reads false (no check), not null,
+#   unless its body shows a check.
+# - One `on:` reader for GitHub workflows (issue #1036): shared_tooling.workflow_events
+#   now reads through ci_triggers.workflow_events. A column-0 `on:` list (`on:` then
+#   `- issue_comment`) was unread and so credited as running on changes; it is now
+#   read, so review_automation can move from credited to not credited for a review
+#   action wired only to `issue_comment`, `issues` or `workflow_dispatch`. Nested list
+#   items (`branches: - main`, `types: - created`) are no longer read as events. A flow
+#   list or mapping that runs onto later lines (`on: [workflow_dispatch,` then
+#   `push]`) is joined in both readers, so ci_checks.enforced_check_runs can move from
+#   false to true and review_automation from not credited to credited.
+# - ci_triggers moves on flow collections (issue #1036): a flow list or mapping opened on
+#   the `on:` line and continued below (`on: {` then `issue_comment: {}` then `}`) reads
+#   its events where it read `unknown`, so ci_checks.enforced_check_runs can move from
+#   null to true or false; one that never closes (invalid YAML) reads `unknown`, where
+#   it read its first line's events, so enforced_check_runs can move to null. Such an
+#   unclosed `on:` is never credited by review_automation (`ci_triggers.unclosed_on`).
+ASSESS_METHOD_VERSION = 38
