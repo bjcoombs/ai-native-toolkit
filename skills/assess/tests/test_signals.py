@@ -11,7 +11,7 @@ import jsonschema
 import pytest
 
 import assess_signals
-from lib import merged_sample
+import lib.hosting.merged_sample as merged_sample
 from lib import scan_registry as reg
 from lib import signals
 from lib.scan_registry import ScanSpec
@@ -330,7 +330,7 @@ def _lib_imports(module: str) -> set[str]:
 
 
 def _reaches_gh(module: str) -> bool:
-    """True when ``module`` imports ``lib.gh_cli`` or ``lib.gitlab_cli`` (the platform
+    """True when ``module`` imports ``lib.hosting.gh_cli`` or ``lib.hosting.gitlab_cli`` (the platform
     clients), directly or through other lib modules, at any package depth."""
     seen: set[str] = set()
     pending = [module]
@@ -344,11 +344,11 @@ def _reaches_gh(module: str) -> bool:
 
 
 def test_reaches_gh_counts_both_platform_clients():
-    assert _reaches_gh("gitlab_cli")
-    assert _reaches_gh("gh_cli")
+    assert _reaches_gh("hosting.gitlab_cli")
+    assert _reaches_gh("hosting.gh_cli")
     # A dotted import names the module, not its package (#917 moves the clients
     # into lib/hosting/): an attribute path is cut back to the module on disk.
-    assert _lib_module("lib.gh_cli._run_gh") == "gh_cli"
+    assert _lib_module("lib.hosting.gh_cli._run_gh") == "hosting.gh_cli"
     assert _lib_module("lib.test_pressure.mutation") == "test_pressure.mutation"
     assert _lib_module("lib.test_pressure.scan_test_pressure") == "test_pressure"
     assert "test_pressure" in _lib_imports("core_scans")
@@ -359,7 +359,7 @@ def test_reaches_gh_counts_both_platform_clients():
 
 def test_the_network_flag_marks_exactly_the_gh_scans():
     """A scan is ``network`` iff its module reaches a platform client
-    (``lib.gh_cli`` or ``lib.gitlab_cli``, the only network clients)."""
+    (``lib.hosting.gh_cli`` or ``lib.hosting.gitlab_cli``, the only network clients)."""
     reaching = {
         spec.key for spec in reg.SCANS
         if _reaches_gh(spec.fn.__module__.removeprefix("lib."))

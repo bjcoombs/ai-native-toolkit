@@ -6,7 +6,7 @@ id = "core.delivery"
 kind = "collector"
 title = "Delivery figures"
 issues = [715]
-callable = "lib.delivery:scan_delivery"
+callable = "lib.hosting.delivery:scan_delivery"
 publishes = ["delivery"]
 reads = ["merged_sample", "review_reality", "fleet_config", "gitlab_note_facts"]
 stage = "read_side"
@@ -16,7 +16,7 @@ platform_only = true
 headless = { delivery = "registered" }
 whys.delivery = "exempt: plumbing"
 shapes = [
-  { path = "delivery", type = "lib.delivery:DeliveryBlock" },
+  { path = "delivery", type = "lib.hosting.delivery:DeliveryBlock" },
 ]
 revision = 1
   [entries.privacy]

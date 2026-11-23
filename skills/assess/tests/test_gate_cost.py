@@ -1,7 +1,7 @@
 """Tests for lib/gate_cost.py: the CI gate's Actions cost estimate.
 
 GitHub is faked with a `gh` shell script first on PATH (the pattern in
-test_config_drift.py), so the real subprocess path through lib/gh_cli.py runs.
+test_config_drift.py), so the real subprocess path through lib/hosting/gh_cli.py runs.
 """
 from __future__ import annotations
 
