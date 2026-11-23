@@ -14,8 +14,9 @@ Inputs:
   `events` (typed rows, see `EVENT_TYPES`) and an optional `tokens.total`.
 - `--github`: a directory holding, per PR number n, `n.pull.json`
   (`pulls/n`), `n.commits.json` (`pulls/n/commits`), `n.reviews.json`
-  (`pulls/n/reviews`) and `n.runs.json` (`actions/runs?branch=<head>`). Only
-  `n.pull.json` is required; a missing file makes the metrics that need it null.
+  (`pulls/n/reviews`) and `n.runs.json` (`actions/runs?branch=<head>`, every
+  page). Only `n.pull.json` is required; a missing file, or a runs file holding
+  fewer runs than its `total_count`, makes the metrics that need it null.
 - `--previous`: the JSON output of an earlier run, for the comparison column.
 
 Definitions (each metric is null, never 0, when its input is missing):
@@ -90,7 +91,11 @@ def pr_metrics(number: int, gh_dir: Path, spawned_at: Optional[str]) -> Optional
     runs_doc = load_json(gh_dir / f"{number}.runs.json")
     runs: Optional[List[Json]] = None
     if runs_doc is not None:
-        runs = [r for r in runs_doc.get("workflow_runs", []) if r.get("event") == "pull_request"]
+        saved = runs_doc.get("workflow_runs", [])
+        # A truncated save (fewer runs than total_count) would undercount pushes
+        # and move first green late, so it reads null instead.
+        if runs_doc.get("total_count", len(saved)) <= len(saved):
+            runs = [r for r in saved if r.get("event") == "pull_request"]
     merged_at = parse_ts(pull.get("merged_at"))
     green = first_green(runs, pull["head"]["sha"]) if runs is not None and merged_at else None
     return {

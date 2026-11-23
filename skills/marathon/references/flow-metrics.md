@@ -66,7 +66,7 @@ Save the GitHub responses for each PR in `flow.units`, one plain command each, i
 gh api repos/<owner>/<repo>/pulls/<n> > flow/<n>.pull.json
 gh api --paginate repos/<owner>/<repo>/pulls/<n>/commits | jq -s 'add' > flow/<n>.commits.json
 gh api --paginate repos/<owner>/<repo>/pulls/<n>/reviews | jq -s 'add' > flow/<n>.reviews.json
-gh api "repos/<owner>/<repo>/actions/runs?branch=<head>&per_page=100" > flow/<n>.runs.json
+gh api --paginate "repos/<owner>/<repo>/actions/runs?branch=<head>&per_page=100" | jq -s '{total_count: .[0].total_count, workflow_runs: map(.workflow_runs) | add}' > flow/<n>.runs.json
 ```
 
 Then compute, with the script path that [Completion](../SKILL.md#completion--retrospective) step 6 resolves (`<skill-dir>` below). Keep the JSON beside the retro log as the next run's `--previous`:
@@ -75,6 +75,8 @@ Then compute, with the script path that [Completion](../SKILL.md#completion--ret
 python3 "<skill-dir>/scripts/flow_metrics.py" --tracking "$TRACK_FILE" --github flow --format json > flow-metrics.json
 python3 "<skill-dir>/scripts/flow_metrics.py" --tracking "$TRACK_FILE" --github flow --previous <previous-run>/flow-metrics.json
 ```
+
+A runs file holding fewer runs than its `total_count` is truncated, and the script reads its pushes and wait as null rather than undercount them.
 
 The markdown output is the retrospective's flow table: one row per PR, one row per run metric with the previous run's value and the change, and a last line naming the largest wait.
 

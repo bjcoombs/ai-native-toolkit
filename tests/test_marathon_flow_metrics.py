@@ -113,6 +113,17 @@ def test_first_green_needs_every_workflow_green_at_merge():
     assert fm.first_green(runs, "z") is None
 
 
+def test_truncated_runs_read_null(tmp_path):
+    track, gh = build(tmp_path)
+    runs = json.loads((gh / "1.runs.json").read_text())
+    runs["total_count"] = len(runs["workflow_runs"]) + 1
+    write(gh / "1.runs.json", runs)
+    pr1 = fm.compute(json.loads(track.read_text()), gh)["per_pr"][0]
+    assert pr1["pushes"] is None
+    assert pr1["wait_green_to_merged_min"] is None
+    assert pr1["merges_of_main"] == 1
+
+
 def test_tokens_absent_reads_null(tmp_path):
     track, gh = build(tmp_path)
     tracking = json.loads(track.read_text())
