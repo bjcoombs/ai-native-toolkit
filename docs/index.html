@@ -146,13 +146,13 @@ body { margin: 0; }
 
   <section>
     <h2>What the report says first</h2>
-    <p>The report opens with what changed since your last run: the actions you closed, each with its commit, and any gate gained or lost. Then comes the headline. Its first three lines tell you where you are and what to do next.</p>
-    <div class="card summary" aria-label="Example report headline">
-      <div><b>Step 2</b> · Supervised agent PRs · contracts in place</div>
-      <div><b>Next:</b> Step 3 · Unattended agent PRs unlocks when CI runs the tests</div>
-      <div><b>Catalogue coverage:</b> 4 of 9 measured, 2 verified</div>
+    <p>Three plain lines, before anything else. Read those and you know where you are and what to do next.</p>
+    <div class="card summary" aria-label="Example report summary">
+      <div>Step 2 of 4: an agent opens pull requests, a person reviews each one.</div>
+      <div>Next: make CI run the tests. Then you reach Step 3: agents open pull requests nobody has to watch.</div>
+      <div>Since last run: 1 action closed; nothing gained or lost.</div>
     </div>
-    <p class="note">Shortened example for a repository at Step 2. In plain words: an agent can open pull requests, a person reviews each one, and making CI run the tests is the next step up. The coverage line says how much of the catalogue the run could read; it is not a progress score.</p>
+    <p class="note">Example for a repository at Step 2 that closed one action since its last run. Under these lines the report links the one change to make, then shows what changed since the last run in full and the headline with its catalogue coverage.</p>
   </section>
 
   <section>
