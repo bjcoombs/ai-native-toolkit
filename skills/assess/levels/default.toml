@@ -235,6 +235,12 @@
 #   measure: the row is unknown (no_skill_files), never met. Read per skill unit only
 #   (unit_kinds = ["skill"]); it gates no Step. Graded measured: it reads the files'
 #   structure at the commit.
+# - Contributor files reads contributor_files.ready (lib/contributor_files.py, #1045):
+#   a CONTRIBUTING guide and a SECURITY policy (or a link to GitHub private vulnerability
+#   reporting) at the root, in .github/ or in docs/. Issue and pull or merge request
+#   templates are recorded, not required. A knowledge base (archetype knowledge-base) takes
+#   no code patches: the row is unknown (knowledge_base), never unmet. It gates no Step.
+#   Graded measured: it reads the files' names at the commit.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures.
 #
@@ -501,6 +507,17 @@ aggregation = "min"
   level = 1
   truth = ["agent_context"]
   criteria = [{ signal = "skill_disclosure.files_breaking", op = "eq", value = 0 }]
+
+[[rows]]
+id = "contributor-files"
+title = "Contributor files"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["docs"]
+  criteria = [{ signal = "contributor_files.ready", op = "eq", value = true }]
 
 [[steps]]
 step = 1

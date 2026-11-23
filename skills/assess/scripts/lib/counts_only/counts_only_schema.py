@@ -59,6 +59,7 @@ from lib.gap_actions import GapAction
 from lib.guardrails import GuardrailsBlock
 from lib.instruction_placement import InstructionPlacementBlock
 from lib.skill_disclosure import SkillDisclosureBlock
+from lib.contributor_files import ContributorFilesBlock
 from lib.keyhole.liveness_scan import ObservabilityBlock
 from lib.testing.mutation_cap import MutationNotRunCap
 from lib.run_context_types_size import LocByClass
@@ -150,6 +151,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("ai_usage", AiUsageBlock),
     ("agent_outcome", AgentOutcomeBlock),
     ("skill_disclosure", SkillDisclosureBlock),
+    ("contributor_files", ContributorFilesBlock),
     ("delivery", DeliveryBlock),
     ("doc_claims", DocClaimsBlock),
     ("guardrails", GuardrailsBlock),

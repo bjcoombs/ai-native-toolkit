@@ -250,8 +250,9 @@ def test_default_levels_loads_against_the_schema() -> None:
     maturity_model = load_default_levels()
     assert maturity_model["version"].startswith("default-")
     assert all(row["scope"] == "team" for row in maturity_model["rows"])
-    # Partial, Present; skill-disclosure is one condition (#1045)
-    assert all(len(row["levels"]) == (1 if row["id"] == "skill-disclosure" else 2) for row in maturity_model["rows"])
+    # Partial, Present; skill-disclosure and contributor-files are one condition each (#1045)
+    one = {"skill-disclosure", "contributor-files"}
+    assert all(len(row["levels"]) == (1 if row["id"] in one else 2) for row in maturity_model["rows"])
     assert "disagree" in DEFAULT_LEVELS.read_text(encoding="utf-8").lower()
 
 
@@ -308,6 +309,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "guardrails-stated": None,   # no configured gate: nothing to state
             "agent-consistency": None,   # no instruction file: nothing to agree with
             "skill-disclosure": None,    # no SKILL.md or agent definition: no_skill_files
+            "contributor-files": 0,      # no CONTRIBUTING or SECURITY file
         }
     for scans in golden_repos.values():   # measured headless, each unknown for a named reason
         assert scans["structure"]["reason"].startswith("no_python_packages:")
@@ -341,6 +343,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "guardrails-stated": None,  # the capture predates the guardrails block
         "agent-consistency": None,  # the capture predates agent_consistency
         "skill-disclosure": None,  # the capture predates skill_disclosure
+        "contributor-files": None,  # the capture predates contributor_files
     }
     assert "layer_grades.instruction_file_present" in _row(
         result, "layer-0-instructions")["missing_signals"]

@@ -99,6 +99,7 @@ fragments = [
   "layer_grades",
   "instruction_placement",
   "skill_disclosure",
+  "contributor_files",
   "gap_actions",
   "agent_consistency",
   "ai_usage",

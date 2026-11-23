@@ -415,6 +415,12 @@ _WORDING: dict[str, Wording] = {
     "guardrails.stated_pct": _guardrails_stated,
     "agent_consistency.conflicts": _agents_agree,
     "agent_consistency.unlinked": _agents_linked,
+    "contributor_files.ready": _flag(
+        "Commit a `CONTRIBUTING.md` that says how to build, test and shape a change, and a "
+        "`SECURITY.md` that says how to report a vulnerability privately (or link GitHub private "
+        "vulnerability reporting), at the root, in `.github/` or in `docs/`.",
+        "`git ls-files` lists a `CONTRIBUTING` file and a `SECURITY` file at the root, in "
+        "`.github/` or in `docs/`."),
     "skill_disclosure.files_breaking": _none_left(
         "In each `SKILL.md` or agent definition the report names, fix the rule it breaks: give "
         "each a `name` and a `description` of at most 1024 characters, move detail only some "
@@ -523,6 +529,8 @@ _MEASURE_HINTS = {
                       "calls, so this is not measured there.",
     "review_evidence": "Unknown when no AI review step is committed to CI and review on merged "
                        "changes is not read: a headless fleet scan reads it with `--platform`.",
+    "contributor_files": "Not measured (`knowledge_base`) for a knowledge base, which takes no "
+                         "code patches.",
     "skill_disclosure": "Not measured (`no_skill_files`) when the repository, or the skill unit, "
                         "holds no `SKILL.md` or agent definition: there is nothing to disclose.",
     "agent_environment": "The `agent_environment` scan reported it unavailable or did not run: "

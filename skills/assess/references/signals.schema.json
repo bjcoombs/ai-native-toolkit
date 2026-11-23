@@ -102,6 +102,7 @@
           "ci_checks",
           "claude_config",
           "config_drift",
+          "contributor_files",
           "coverage_gate",
           "coverage_report",
           "dead_code",
@@ -1309,6 +1310,30 @@
               ],
               "description": "Best letter grade (A to F) of the files instruction_presence counts: the root files, else the always-loaded or nested ones. Null only for none."
             }
+          }
+        },
+        "contributor_files": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: knowledge_base (the repository is a knowledge base (archetype knowledge-base), which takes no code patches). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
           }
         },
         "review_evidence": {

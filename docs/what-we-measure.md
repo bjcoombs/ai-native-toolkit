@@ -28,13 +28,13 @@ A scan that feeds no maturity-model criterion is `unclassified` until its eviden
 
 ## Conditions by truth tag
 
-Each condition carries one or more truth tags: the truth it keeps honest. A condition holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. A condition with several tags is listed under its first tag and named under the others as shared; it counts once. There are 25 conditions, 2 of them with more than one tag.
+Each condition carries one or more truth tags: the truth it keeps honest. A condition holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. A condition with several tags is listed under its first tag and named under the others as shared; it counts once. There are 26 conditions, 2 of them with more than one tag.
 
 | Tag | Conditions | Listed here | Shared |
 |---|---|---|---|
 | Behaviour (`behaviour`) | 3 | 3 | 0 |
 | Contracts (`contracts`) | 0 | 0 | 0 |
-| Docs (`docs`) | 3 | 2 | 1 |
+| Docs (`docs`) | 4 | 3 | 1 |
 | Structure (`structure`) | 6 | 6 | 0 |
 | Agent context (`agent_context`) | 7 | 7 | 1 |
 | Agent runtime (`agent_runtime`) | 4 | 4 | 1 |
@@ -63,12 +63,13 @@ Tag `contracts`. No condition carries this tag yet.
 
 That what an agent reads about the code is still true of the code.
 
-Tag `docs`: 3 conditions, 1 shared with another tag.
+Tag `docs`: 4 conditions, 1 shared with another tag.
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `doc-freshness.1` Most mapped docs keep pace with their code | `doc_staleness` | Share of mapped docs outrun by their code: is at most 50 (`doc_staleness.summary.stale_pct lte 50`) | `measured` | yes | - | positive | - | - | An agent reads the docs as true. A doc whose code has moved on misleads it about that code. | Refresh the docs the report lists under doc freshness. |
 | `doc-freshness.2` Four in five mapped docs keep pace | `doc_staleness` | Share of mapped docs outrun by their code: is at most 20 (`doc_staleness.summary.stale_pct lte 20`) | `measured` | yes | - | positive | - | - | With four in five mapped docs keeping pace with their code, an agent can take most of what it reads at its word. | Refresh the docs the report lists under doc freshness, oldest first. |
+| `contributor-files.1` A newcomer can learn how to send a change and report a vulnerability | `contributor_files` | A contributing guide and a security policy are committed: is true (`contributor_files.ready eq true`) | `measured` | yes | - | positive | - | - | A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue. | Commit a CONTRIBUTING.md (how to build, test and shape a change) and a SECURITY.md (how to report a vulnerability privately) at the root, in .github/ or in docs/. |
 
 Also carries this tag, listed under its first tag: `layer-0-instructions.2` (Agent context).
 
@@ -152,7 +153,7 @@ How many conditions each pair of tags shares. The diagonal is the tag's own coun
 |---|---|---|---|---|---|---|---|---|
 | `behaviour` | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `contracts` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `docs` | 0 | 0 | 3 | 0 | 1 | 0 | 0 | 0 |
+| `docs` | 0 | 0 | 4 | 0 | 1 | 0 | 0 | 0 |
 | `structure` | 0 | 0 | 0 | 6 | 0 | 0 | 0 | 0 |
 | `agent_context` | 0 | 0 | 1 | 0 | 7 | 0 | 0 | 0 |
 | `agent_runtime` | 0 | 0 | 0 | 0 | 0 | 4 | 0 | 1 |
@@ -203,6 +204,7 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | `guardrails-stated` | Guardrails stated | team | `min` | `guardrails-stated.1`, `guardrails-stated.2` |
 | `agent-consistency` | Cross-agent instruction consistency | team | `min` | `agent-consistency.1`, `agent-consistency.2` |
 | `skill-disclosure` | Skill disclosure | team | `min` | `skill-disclosure.1` |
+| `contributor-files` | Contributor files | team | `min` | `contributor-files.1` |
 
 ## Scans
 
@@ -759,6 +761,21 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
 
+### `contributor_files`: Contributor files
+
+A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue.
+
+A contributing guide and a security policy (a SECURITY file or a link to GitHub private vulnerability reporting) at the root, in .github/ or in docs/; issue and pull or merge request templates as evidence.
+
+- Collector: `core.contributor_files`, reading `repo_root`, `archetype`.
+- Network: no.
+- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `contributor_files.guide` path, `contributor_files.policy` path, `contributor_files.policy_kind` token, `contributor_files.reason` reason.
+- Used by: row `contributor-files`.
+- Evidence: `contributor_files.ready` head_structure (measured).
+- Not measured when:
+  - `knowledge_base`: The repository is a knowledge base (archetype knowledge-base), which takes no code patches. Nothing to change: a contributing guide and a security policy are not measured for a knowledge base.
+
 ### `unit_readings`: Monorepo unit readings
 
 A unit inherits root CI and review but not the root's suppressions, stale docs or structure. Reading those per unit, with each condition labelled, shows which change lifts which unit.
@@ -1088,15 +1105,16 @@ The scan registry in run order, including the private inputs other scans read.
 | `layer_grades` | Deterministic layer grades | `instruction_grading`, `nested_instructions` | `layer_grades` | no |
 | `instruction_placement` | Instruction placement | `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes` | `instruction_placement` | no |
 | `skill_disclosure` | Skill disclosure | `repo_root`, `scope`, `excludes` | `skill_disclosure` | no |
+| `contributor_files` | Contributor files | `repo_root`, `archetype` | `contributor_files` | no |
 | `gap_actions` | Gap actions | `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`, `instruction_placement` | `gap_actions` | no |
 | `agent_consistency` | Cross-agent instruction consistency | `repo_root`, `excludes` | `agent_consistency` | no |
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |
 | `agent_outcome` | Agent commit outcomes | `repo_root`, `scope`, `history_window`, `fleet_config` | `agent_outcome` | no |
 | `doc_claims` | Doc claims | `repo_root`, `instruction_files`, `scope`, `excludes` | `doc_claims` | no |
 | `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope` | `guardrails` | no |
-| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `skill_disclosure`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `level` | no |
+| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `skill_disclosure`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `level` | no |
 | `since_last_run` | Since last run | `level`, `assess_dir`, `repo_root`, `superseded`, `instruction_placement` | `since_last_run` | no |
 | `headline` | Deterministic headline | `level`, `since_last_run` | `headline` | no |
 | `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
-| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `skill_disclosure`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
+| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `skill_disclosure`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
 | `unit_rollup` | Monorepo unit roll-up | `unit_levels`, `units` | `unit_rollup` | no |

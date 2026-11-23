@@ -735,6 +735,15 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `skill_disclosure.files.breaks` | token |
 | `skill_disclosure.files.references.target` | path (hashed when hashing is on) |
 
+## contributor_files
+
+| Field | Kept as |
+|---|---|
+| `contributor_files.reason` | reason code |
+| `contributor_files.guide` | path (hashed when hashing is on) |
+| `contributor_files.policy` | path (hashed when hashing is on) |
+| `contributor_files.policy_kind` | token |
+
 ## gap_actions
 
 | Field | Kept as |

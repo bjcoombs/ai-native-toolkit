@@ -1,0 +1,48 @@
+# Check manifest fragment: the contributor_files collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.contributor_files"
+kind = "collector"
+title = "Contributor files"
+summary = "A contributing guide and a security policy (a SECURITY file or a link to GitHub private vulnerability reporting) at the root, in .github/ or in docs/; issue and pull or merge request templates as evidence."
+issues = [1045]
+callable = "lib.contributor_files:scan_contributor_files"
+publishes = ["contributor_files"]
+reads = ["repo_root", "archetype"]
+stage = "post_offers"
+headless = { contributor_files = "headless_variant" }
+# Headless, archetype is itself a variant's block, so this scan runs as a variant too, after it.
+headless_variants = [
+  { block = "contributor_files", callable = "lib.headless_static:contributor_files", reads = ["repo_root", "archetype"], stage = "post_offers" },
+]
+whys.contributor_files = "A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue."
+shapes = [
+  { path = "contributor_files", type = "lib.contributor_files:ContributorFilesBlock" },
+]
+revision = 1
+unknown_reasons = [
+  { code = "knowledge_base", means = "The repository is a knowledge base (archetype knowledge-base), which takes no code patches.", next_step = "Nothing to change: a contributing guide and a security policy are not measured for a knowledge base." },
+]
+  [entries.privacy]
+  "contributor_files.reason" = "reason"
+  "contributor_files.guide" = "path"
+  "contributor_files.policy" = "path"
+  "contributor_files.policy_kind" = "token"
+
+[[entries]]
+id = "core:contributor_files.ready"
+kind = "signal"
+title = "A contributing guide and a security policy are committed"
+collector = "core.contributor_files"
+path = "contributor_files.ready"
+type = "bool"
+evidence = "head_structure"
+
+[[entries]]
+id = "core.cond.contributor-files.1.ready"
+kind = "condition"
+title = "A newcomer can learn how to send a change and report a vulnerability"
+key = "contributor-files.1:contributor_files.ready"
+why = "A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue."
+fix = "Commit a CONTRIBUTING.md (how to build, test and shape a change) and a SECURITY.md (how to report a vulnerability privately) at the root, in .github/ or in docs/."
