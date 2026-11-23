@@ -18,23 +18,45 @@ recipe is not read, so Layer 5 and Layer 3 read null with ``check_target``, neve
 ``may_lint_named(text)`` is ``check_command.may_lint`` under the instruction vocabulary;
 ``lib.coverage_ci._indirect`` reads it, so a CI line running only ``make ci`` keeps the
 coverage gate's null ``indirect_run`` rather than a false ``not_run_in_ci``.
+``instruction_words`` runs a function under that vocabulary (the decorator behind the
+three above). ``lib.ci_checks`` applies it to ``_line_runs_missing_check``, so a missing
+``./ci.sh`` still reads ``script_not_found`` (#937), and ``named_count(count, texts)`` is
+true when ``count`` finds a check line under it, so a masked ``./ci.sh || true`` reads
+``not_enforced``. Both are false readings or null ones, never credit: a committed ``./ci.sh``
+reads null ``check_target``, because ``lib.ci_scripts`` checks that the file is there and
+never reads its body (``echo deploy`` was credited before #951).
 Pure, like ``lib.check_command``. Tests: ``tests/test_ci_target_word.py``.
 """
 from __future__ import annotations
+
+from collections.abc import Callable, Iterable
+from functools import wraps
+from typing import ParamSpec, TypeVar
 
 from lib.check_command import (
     CHECK_NAMES, CHECK_WORDS, check_verdict, is_check_command, is_check_name, may_lint)
 
 INSTRUCTION_CHECK_WORDS = CHECK_WORDS | {"ci"}
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
+def instruction_words(fn: Callable[P, R]) -> Callable[P, R]:
+    """``fn`` run with ``ci`` a check word (``check_command.CHECK_NAMES``), reset after the call."""
+    @wraps(fn)
+    def run(*args: P.args, **kwargs: P.kwargs) -> R:
+        token = CHECK_NAMES.set(INSTRUCTION_CHECK_WORDS)
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            CHECK_NAMES.reset(token)
+    return run
+
+
+@instruction_words
 def is_named_check(text: str) -> bool:
     """A check command an instruction file names, ``make ci`` and ``npm run ci`` included."""
-    token = CHECK_NAMES.set(INSTRUCTION_CHECK_WORDS)
-    try:
-        return is_check_command(text)
-    finally:
-        CHECK_NAMES.reset(token)
+    return is_check_command(text)
 
 
 def is_named_check_name(name: str) -> bool:
@@ -42,14 +64,17 @@ def is_named_check_name(name: str) -> bool:
     return is_check_name(name, INSTRUCTION_CHECK_WORDS)
 
 
+@instruction_words
 def may_lint_named(text: str) -> bool:
     """``check_command.may_lint`` under the instruction vocabulary: a ``make ci`` or
     ``./ci.sh`` whose recipe is not read may still run a gate inside it."""
-    token = CHECK_NAMES.set(INSTRUCTION_CHECK_WORDS)
-    try:
-        return may_lint(text)
-    finally:
-        CHECK_NAMES.reset(token)
+    return may_lint(text)
+
+
+@instruction_words
+def named_count(count: Callable[[str], int], texts: Iterable[str]) -> bool:
+    """Whether ``count`` finds a check line in any of ``texts`` under the instruction vocabulary."""
+    return any(count(text) for text in texts)
 
 
 def unread_ci_target(text: str) -> bool:

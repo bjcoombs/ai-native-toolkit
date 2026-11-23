@@ -56,8 +56,10 @@ _RUNNER_CI = ["python ci.py", "python3 scripts/ci.py", "source ci.sh", "cargo ci
 
 @pytest.mark.parametrize("run", ["make ci", "npm run ci", "./ci.sh", *_RUNNER_CI])
 def test_a_lone_ci_target_in_ci_reads_not_measured(tmp_path: Path, run: str) -> None:
-    """The issue's fixtures: Layer 5 level 1 and Layer 3 level 1 read null, never a false 0."""
-    assert _scan(tmp_path, run) == (None, "check_target", None, "check_target")
+    """The issue's fixtures: Layer 5 level 1 and Layer 3 level 1 read null, never a false 0.
+    A ``./ci.sh`` the tree does not hold keeps #937's more specific null, ``script_not_found``."""
+    basis = "script_not_found" if run == "./ci.sh" else "check_target"
+    assert _scan(tmp_path, run) == (None, basis, None, "check_target")
 
 
 @pytest.mark.parametrize("text", _RUNNER_CI)
@@ -73,8 +75,10 @@ def test_other_commands_are_not_unread_ci_targets(text: str) -> None:
     assert not unread_ci_target(text)
 
 
-def test_a_masked_ci_name_behind_a_runner_still_reads_false(tmp_path: Path) -> None:
-    assert _scan(tmp_path, "cargo ci || true")[:2] == (False, "no_check_command")
+@pytest.mark.parametrize("run", ["cargo ci || true", "./ci.sh || true"])
+def test_a_masked_ci_name_still_reads_false(tmp_path: Path, run: str) -> None:
+    """Masked, a ci name reads false ``not_enforced`` (``named_check.named_count``), as on main."""
+    assert _scan(tmp_path, run)[:2] == (False, "not_enforced")
 
 
 @pytest.mark.parametrize("run", ["make ci", "npm run ci", "./ci.sh", "task ci", "cargo ci"])
@@ -89,6 +93,12 @@ def test_a_ci_target_keeps_the_coverage_gate_not_measured(tmp_path: Path, run: s
         "[project]\nname = 'x'\n\n[tool.coverage.report]\nfail_under = 80\n", encoding="utf-8")
     block = detect_coverage_gate(tmp_path)
     assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (None, "indirect_run")
+
+
+def test_a_committed_ci_sh_is_read_by_its_name_no_more(tmp_path: Path) -> None:
+    """``lib.ci_scripts`` checks the file is there and never reads it: ``echo deploy`` is no check."""
+    (tmp_path / "ci.sh").write_text("echo deploy\n", encoding="utf-8")
+    assert _scan(tmp_path, "./ci.sh") == (None, "check_target", None, "check_target")
 
 
 def test_a_ci_target_beside_pytest_reads_true(tmp_path: Path) -> None:

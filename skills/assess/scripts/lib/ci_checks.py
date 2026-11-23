@@ -293,8 +293,7 @@ basis in place of `not_enforced`, `no_check_command`, `no_lint_command` or `no_c
 enforced check still reads true. An `OWNERS` file alone, a nested `OWNERS_ALIASES` and an
 environment-variable read (`ENV["BUILDKITE"]`, `LUCI_`) are not markers.
 Issue #926: a target whose recipe is not read (`_line_may_check`: `make foo`, `npm run
-foo`, `./scripts/foo.sh`, and a `ci` name behind any runner, `named_check.unread_ci_target`,
-#951: `python ci.py`, `cargo ci`) reads `lint_basis` `check_target` too, as at Layer 5. A rewrite
+foo`, `./scripts/foo.sh`; any `ci` name, #951: see `lib.named_check`) reads `lint_basis` `check_target` too, as at Layer 5. A rewrite
 formatter line counts as a lint line when `ci_lint_gates.rewrite_gated` names it
 (`count_check_lines(..., extra=)`). With `lint_runs` otherwise false, `ci_lint_gates.lint_gate`
 gives the two new null codes, `analysers_in_build` ahead of `compiler_gate_only`, from the
@@ -323,7 +322,7 @@ from lib.ci_includes import IncludeRecord, Resolution, resolve_includes
 from lib.ci_lint_gates import (
     line_commands, line_compiler_gate, line_dotnet_build, lint_gate, rewrite_gated)
 from lib.ci_masking import unmasked_lines
-from lib.named_check import unread_ci_target
+from lib.named_check import instruction_words, named_count, unread_ci_target
 from lib.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
 from lib.ci_scripts import Present, committed, present_in
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
@@ -432,6 +431,7 @@ def _line_runs_check(line: str, *, script_item: bool = True, present: Present | 
     )
 
 
+@instruction_words   # a missing ./ci.sh is still script_not_found (#937, #951)
 def _line_runs_missing_check(line: str, *, script_item: bool = True,
                              present: Present | None = None) -> bool:
     """A line that runs a check only through a script the tree does not hold (#937)."""
@@ -710,7 +710,7 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
                          unread=bool(unread), files=bool(files), external=external)
     enforced_runs, enforced_basis = _enforced_state(
         ordinary, unknown, may_check_t, elsewhere=bool(elsewhere), unread=bool(unread),
-        any_check=bool(found or merged_checks), has_files=bool(files), external=external,
+        any_check=bool(found or merged_checks or named_count(check_commands, texts.values())), has_files=bool(files), external=external,
         missing=miss_t)
     lint_runs, lint_basis = _lint_state(lint_t, _max(may_t, may_check_t), elsewhere=bool(elsewhere),
                                         partial=partial_merge, unread=bool(unread),
