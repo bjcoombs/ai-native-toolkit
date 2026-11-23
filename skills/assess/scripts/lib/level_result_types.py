@@ -24,6 +24,7 @@ class ConditionResult(TypedDict):
     disposition: NotRequired[str]  # "excluded_by_owner": the owner excluded this condition (#910)
     exclusion_kind: NotRequired[str]  # the exclusion's kind (lib.owner_exclusions.KINDS)
     polarity: NotRequired[str]  # "hazard" only: a harm, never counted (#843); absent: positive
+    why: NotRequired[str]  # the manifest whys of its criteria, joined by a space (#939)
 
 
 class NotMeasured(TypedDict):
@@ -135,4 +136,5 @@ class Headline(TypedDict):
     summary: str  # the one-line form: badge message and log entry
     verified: int | None  # counted conditions met and graded verified (#844); None: not measured
     tags: list[TagCell]  # the per-tag strip, in TRUTH_TAGS order; empty when not measured
+    next_why: str  # the whys of the conditions the Next line's gates wait on (#939); "" for none
     reason: NotRequired[str]  # why the headline is unavailable

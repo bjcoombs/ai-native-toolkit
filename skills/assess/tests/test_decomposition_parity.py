@@ -92,6 +92,13 @@ def test_layer_scorer_agent_exists():
 
 
 def test_findings_and_pr_subskills_exist():
+    # #939: "Why these three?" quotes the named entry's manifest `why`, then frames it here.
+    findings = (REPO_ROOT / "skills" / "assess-findings" / "SKILL.md").read_text(encoding="utf-8")
+    why = findings.split("### Why these three?", 1)[1].split("\n#", 1)[0]
+    assert "quote that entry's `why` verbatim" in why
+    assert "`level.conditions[]`" in why and "`gap_actions[]`" in why
+    assert "the assess skill's `references/measures.json`" in why
+    assert "framing after the quote" in why and "do not invent another reason" in why
     for name in ("assess-findings", "assess-pr"):
         skill = REPO_ROOT / "skills" / name / "SKILL.md"
         assert skill.is_file(), f"missing decomposed sub-skill: {name}"

@@ -155,7 +155,9 @@ def test_an_unscanned_run_is_neutral_for_the_streak() -> None:
     gap = [("2026-11-01", BASE), ("2026-11-08", BASE), ("2026-11-15", {**BASE, "grp/c": (FAILED, True)}),
            ("2026-11-22", BASE), ("2026-11-29", BASE)]
     mine = [run for run, _k, unit, _r in _earned(_build(gap), fa.STREAK) if unit == "grp/c"]
-    assert mine == ["2026-11-29"]  # the gap neither broke the streak nor counted toward it
+    # the gap run neither broke the streak nor counted toward it; the run after it compares
+    # with the last run measuring c (#1041), so it extends the streak to 3 at once
+    assert mine == ["2026-11-22"]
 
 
 def test_running_twice_gives_identical_bytes_and_matches_the_schema() -> None:

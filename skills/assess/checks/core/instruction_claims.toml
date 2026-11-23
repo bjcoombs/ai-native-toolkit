@@ -10,6 +10,7 @@ publishes = ["instruction_claims"]
 reads = ["repo_root", "instruction_files"]
 stage = "post_offers"
 headless = { instruction_claims = "registered" }
+whys.instruction_claims = "An agent trusts its instruction file without checking it. This checks each claim that a script runs in CI, a version is pinned or a count holds, and names the line of each that no longer does."
 shapes = [
   { path = "instruction_claims", type = "lib.block_shapes:InstructionClaimsBlock" },
 ]
@@ -33,4 +34,5 @@ id = "core.cond.layer-0-instructions.2.failed"
 kind = "condition"
 title = "Every checkable instruction claim holds"
 key = "layer-0-instructions.2:instruction_claims.failed"
+why = "An agent takes its instructions literally. A line saying a script runs in CI, or a version is pinned, that is no longer true sends it the wrong way with full confidence."
 fix = "Update the instruction lines whose claims no longer match the repository."

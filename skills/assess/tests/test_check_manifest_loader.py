@@ -123,7 +123,7 @@ def _mutate(path: list[Any], value: Any = None, delete: bool = False) -> dict[st
     (["entries", 4, "id"], "core.cond.", "BAD_ID"),
     (["entries", 0, "id"], "scan_a", "BAD_ID"),
     (["entries", 5, "id"], "core.finding.other", "BAD_ID"),
-    (["manifest_version"], 2, "WRONG_TYPE"),
+    (["manifest_version"], 3, "WRONG_TYPE"),
     (["entries"], {}, "WRONG_TYPE"),
     (["owner"], "Core", "WRONG_TYPE"),
 ])

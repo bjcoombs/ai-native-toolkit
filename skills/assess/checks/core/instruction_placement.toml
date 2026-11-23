@@ -11,6 +11,7 @@ publishes = ["instruction_placement"]
 reads = ["repo_root", "instruction_files", "nested_instructions", "scope", "excludes"]
 stage = "post_offers"
 headless = { instruction_placement = "registered" }
+whys.instruction_placement = "It names the always-loaded sections that are reference for one tool or subtree, so they can move to files an agent reads when needed and leave the always-loaded text for rules."
 shapes = [
   { path = "instruction_placement", type = "lib.instruction_placement:InstructionPlacementBlock" },
 ]

@@ -14,6 +14,7 @@ stage = "read_side"
 network = true
 platform_pass = true
 headless = { review_reality = "registered" }
+whys.review_reality = "It shows how many recently merged changes had a review and an approval, which is how far a second reader reaches into what agents and people merge."
 shapes = [
   { path = "review_reality", type = "lib.block_shapes:ReviewRealityBlock" },
 ]
@@ -50,6 +51,7 @@ id = "core.cond.layer-7-review.2.reviewed_share"
 kind = "condition"
 title = "Most merged changes are reviewed"
 key = "layer-7-review.2:review_reality.reviewed_share"
+why = "Review protects only the changes it reaches. At four in five merged changes, most of what lands, an agent's work included, has had a second reader."
 fix = "Aim for a review on at least four in five merged changes."
 
 [[entries]]
@@ -57,4 +59,5 @@ id = "core.cond.layer-7-review.2.approved_share"
 kind = "condition"
 title = "Half of merged changes are approved"
 key = "layer-7-review.2:review_reality.approved_share"
+why = "An explicit approval records that someone accepted the change, not just that it was looked at."
 fix = "Approve changes explicitly when you review them."

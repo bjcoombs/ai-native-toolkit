@@ -63,10 +63,10 @@ inside a job's `steps:` list, skipping job-level `uses:`, a `uses:` nested under
 body of a block scalar (`run: |`, `prompt: |`); `action_repo(value)` turns one into
 `owner/repo` (lowercased; None for `./` and `docker://`). Actions are not shared CI
 sources, so they never enter `ci_includes` or `ci_source_ids`. `workflow_events(text)`
-reads the top-level `on:` (a scalar, a flow list or mapping, a block list or mapping of
-events; `ON_KEY` also accepts the YAML 1.1 `true:` spelling, shared with
-`agent_harness`); None when there is none it can read. `include_lines` and
-`component_source` expose the include-section reader to `ci_includes`.
+reads the top-level `on:` through `ci_triggers.workflow_events`, the one shared `on:`
+reader (#1036), keeping event-shaped names; None when there is none it can read.
+`ON_KEY` (the `on:` key, YAML 1.1 `true:` included) is shared with `agent_harness`.
+`include_lines` and `component_source` expose the include-section reader to `ci_includes`.
 """
 from __future__ import annotations
 
@@ -76,6 +76,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any, Literal, NotRequired, TypedDict
 
+from lib.ci_triggers import workflow_events as _on_events
 from lib.git_churn import is_tracked, tracked_files
 
 _GITLAB_CI = ".gitlab-ci.yml"
@@ -471,47 +472,10 @@ ON_KEY = re.compile(r"""^(?:on|"on"|'on'|true)\s*:(?P<rest>.*)$""")
 _EVENT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
-def _event_items(value: str) -> list[str]:
-    value = value.strip()
-    if value.startswith(("[", "{")):
-        value = value.strip("[]{}")
-        items = [item.split(":", 1)[0] for item in value.split(",")]
-    else:
-        items = [value]
-    return [_unquote(item) for item in items if _unquote(item)]
-
-
 def workflow_events(text: str) -> frozenset[str] | None:
     """The events a GitHub workflow's top-level ``on:`` names, or None when it has none
-    this line reader can read (#696): ``on: push``, ``on: [push, pull_request]``,
-    ``on: {pull_request: ...}``, a block list or a block mapping of events."""
-    events: list[str] = []
-    inside = False
-    key_col: int | None = None
-    for raw in text.splitlines():
-        line = _strip_comment(raw).rstrip()
-        if not line.strip():
-            continue
-        if not line[0].isspace():
-            if inside:
-                break
-            match = ON_KEY.match(line)
-            if match:
-                inside = True
-                rest = match.group("rest")
-                events += _event_items(rest) if rest.strip() else []
-            continue
-        if not inside:
-            continue
-        content = line.lstrip()
-        col = len(line) - len(content)
-        if content.startswith("-"):
-            events += _event_items(content[1:])
-            continue
-        key_col = col if key_col is None else key_col
-        if col == key_col:
-            events.append(_unquote(content.split(":", 1)[0]))
-    names = frozenset(e for e in events if _EVENT_NAME.match(e))
+    the shared reader (``ci_triggers.workflow_events``, #1036) can read."""
+    names = frozenset(e for e in _on_events(text) or () if _EVENT_NAME.match(e))
     return names or None
 
 

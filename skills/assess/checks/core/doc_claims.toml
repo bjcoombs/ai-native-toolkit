@@ -11,6 +11,7 @@ publishes = ["doc_claims"]
 reads = ["repo_root", "instruction_files", "scope", "excludes"]
 stage = "post_offers"
 headless = { doc_claims = "registered" }
+whys.doc_claims = "An agent reads guides as literally as instruction files. This checks the same pin and count claims across the doc set and names two docs that state different values."
 shapes = [
   { path = "doc_claims", type = "lib.doc_claims:DocClaimsBlock" },
 ]

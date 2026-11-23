@@ -101,3 +101,18 @@ def test_gap_actions_root_and_none_presence_add_no_root_file_entry() -> None:
         grades = {"instruction_presence": presence}
         assert build_gap_actions(COVERAGE, _docs(0.8), HOTSPOTS, SOFTWARE,
                                  grades, _nested("pkg/AGENTS.md")) == []
+
+
+def test_each_gap_action_carries_its_scans_manifest_why() -> None:
+    """#939: an entry's why is the why of the scan its signal names, static text."""
+    from lib.check_manifest import core_manifest
+    from lib.manifest_whys import scan_whys
+
+    grades = {"instruction_presence": "nested_only", "instruction_file_present": True,
+              "instructions_grade": "C"}
+    gaps = build_gap_actions(NO_COVERAGE, _docs(0.1), HOTSPOTS, SOFTWARE,
+                             grades, _nested("pkg/AGENTS.md"))
+    whys = scan_whys(core_manifest())
+    assert [g["why"] for g in gaps] == [whys["layer_grades"], whys["coverage_report"], whys["doc_graph"]]
+    assert gaps[1]["why"] == ("It reads a coverage report the project already produced, so test depth "
+                              "on the riskiest files is known instead of assumed.")

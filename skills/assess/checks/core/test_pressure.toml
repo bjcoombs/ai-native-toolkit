@@ -12,6 +12,7 @@ stage = "read_side"
 degrade = false
 gate_reason = "self_degrading"
 headless = { test_pressure = "unregistered" }
+whys.test_pressure = "Coverage says a line ran, not that a test would notice it changing; this reads mutation results and hollow-test patterns to show where tests hold the code to account."
 shapes = [
   { path = "test_pressure", type = "lib.run_context_types:TestPressureBlock" },
   { path = "test_pressure", type = "lib.run_context_types:TestPressureUnavailable" },
@@ -52,4 +53,5 @@ id = "core.cond.layer-6-coverage.2.mutation_run"
 kind = "condition"
 title = "A mutation run has completed"
 key = "layer-6-coverage.2:test_pressure.mutation_run"
+why = "Coverage shows tests run the code; a mutation run shows whether they notice it changing. A completed run names the surviving mutants, which are the tests an agent cannot yet rely on."
 fix = "Run the opt-in mutation pass to see which tests pin behaviour."

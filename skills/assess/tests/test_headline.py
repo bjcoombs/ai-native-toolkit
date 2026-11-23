@@ -293,8 +293,37 @@ def test_counts_only_keeps_the_headline_numbers_and_drops_its_text():
     head = headline(_level(), default_model())
     kept = counts_only({"headline": head})["headline"]
     # a dropped string list is kept as its length, a dropped string goes
-    assert kept == {**{k: v for k, v in head.items() if k not in ("markdown", "summary")},
+    assert kept == {**{k: v for k, v in head.items() if k not in ("markdown", "summary", "next_why")},
                     "lines": len(head["lines"])}
+
+
+def test_next_why_holds_the_whys_of_the_unmet_gate_conditions_only() -> None:
+    """#939: the Next line's why is each blocking gate's unmet conditions' whys, nothing else."""
+    from lib.level_tally import level_result
+    from lib.levels import load_levels
+    from lib.signal_grades import DEFAULT_LEVELS
+
+    model = load_levels(DEFAULT_LEVELS)
+    level = level_result(model, {})
+    h = headline(level, model)
+    by_id = {c["id"]: c for c in level["conditions"]}
+    blockers = [b for b in (level["next_step"] or {}).get("blockers", []) if b["kind"] == "gate"]
+    assert blockers
+    expected = [by_id[b["condition"]]["why"] for b in blockers]
+    assert all(w in h["next_why"] for w in expected)
+    gated = {b["condition"].rsplit(".", 1)[0] for b in blockers}
+    others = [c["why"] for c in level["conditions"] if c["row"] not in gated]
+    assert not any(w in h["next_why"] for w in others)
+    assert headline(_level(next_step=None), default_model())["next_why"] == ""
+    threshold_only = _level(next_step={"step": 4, "threshold": 5,
+                                       "blockers": [{"kind": "threshold", "threshold": 5, "met": 4}]})
+    assert headline(threshold_only, default_model())["next_why"] == ""
+
+
+def test_as_headline_backfills_next_why_on_an_older_block() -> None:
+    old = {k: v for k, v in headline(_level(), default_model()).items() if k != "next_why"}
+    assert as_headline(old)["next_why"] == ""
+    assert as_headline(headline(_level(), default_model()))["next_why"] == headline(_level(), default_model())["next_why"]
 
 
 # --- the verified share and the per-tag strip (#844) ---------------------------

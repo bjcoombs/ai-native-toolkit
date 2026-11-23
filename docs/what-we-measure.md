@@ -43,83 +43,99 @@ Each condition carries one or more truth tags: the truth it keeps honest. A cond
 
 ### Behaviour
 
+That the code's behaviour is checked by something that runs on every change, not taken on trust.
+
 Tag `behaviour`: 3 conditions, none shared with another tag.
 
-| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Next step |
-|---|---|---|---|---|---|---|---|---|
-| `layer-5-ci.1` CI runs your tests or linters, and an error stops the job | `ci_checks` | A CI check runs on ordinary changes and can stop its job: is true (`ci_checks.enforced_check_runs eq true`) | `verified` | yes | `ci_runs_tests` | positive | - | Add a CI step that runs your test or lint command on pull requests, without \|\| true, continue-on-error or allow_failure. |
-| `layer-6-coverage.1` CI runs a coverage gate of at least 50 percent | `coverage_gate` | CI runs a coverage gate of at least 50 percent: is true (`coverage_gate.enforced_meets_minimum eq true`) | `verified` | yes | `coverage_gate` | positive | - | Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage, and run the coverage check in a CI step on pull requests (pytest --cov, not plain pytest), without \|\| true or continue-on-error, so CI holds the line you have reached. |
-| `layer-6-coverage.2` A mutation run has completed | `test_pressure` | A mutation run completed: is true (`test_pressure.mutation_run eq true`) | `measured` | yes | - | positive | requires `layer-5-ci.1` | Run the opt-in mutation pass to see which tests pin behaviour. |
+| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Why it matters | Next step |
+|---|---|---|---|---|---|---|---|---|---|
+| `layer-5-ci.1` CI runs your tests or linters, and an error stops the job | `ci_checks` | A CI check runs on ordinary changes and can stop its job: is true (`ci_checks.enforced_check_runs eq true`) | `verified` | yes | `ci_runs_tests` | positive | - | This turns "the agent says it works" into "CI says it works": a check that can stop its job runs on ordinary changes, so a broken change turns the job red where everyone can see it. | Add a CI step that runs your test or lint command on pull requests, without \|\| true, continue-on-error or allow_failure. |
+| `layer-6-coverage.1` CI runs a coverage gate of at least 50 percent | `coverage_gate` | CI runs a coverage gate of at least 50 percent: is true (`coverage_gate.enforced_meets_minimum eq true`) | `verified` | yes | `coverage_gate` | positive | - | An enforced floor turns the job red when a change takes coverage below it, so tests an agent removes or skips show in CI instead of passing quietly. | Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage, and run the coverage check in a CI step on pull requests (pytest --cov, not plain pytest), without \|\| true or continue-on-error, so CI holds the line you have reached. |
+| `layer-6-coverage.2` A mutation run has completed | `test_pressure` | A mutation run completed: is true (`test_pressure.mutation_run eq true`) | `measured` | yes | - | positive | requires `layer-5-ci.1` | Coverage shows tests run the code; a mutation run shows whether they notice it changing. A completed run names the surviving mutants, which are the tests an agent cannot yet rely on. | Run the opt-in mutation pass to see which tests pin behaviour. |
 
 ### Contracts
+
+That generated output and its source agree, so an agent editing one does not quietly break the other.
 
 Tag `contracts`. No condition carries this tag yet.
 
 ### Docs
 
+That what an agent reads about the code is still true of the code.
+
 Tag `docs`: 3 conditions, 1 shared with another tag.
 
-| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Next step |
-|---|---|---|---|---|---|---|---|---|
-| `doc-freshness.1` Most mapped docs keep pace with their code | `doc_staleness` | Share of mapped docs outrun by their code: is at most 50 (`doc_staleness.summary.stale_pct lte 50`) | `measured` | yes | - | positive | - | Refresh the docs the report lists under doc freshness. |
-| `doc-freshness.2` Four in five mapped docs keep pace | `doc_staleness` | Share of mapped docs outrun by their code: is at most 20 (`doc_staleness.summary.stale_pct lte 20`) | `measured` | yes | - | positive | - | Refresh the docs the report lists under doc freshness, oldest first. |
+| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Why it matters | Next step |
+|---|---|---|---|---|---|---|---|---|---|
+| `doc-freshness.1` Most mapped docs keep pace with their code | `doc_staleness` | Share of mapped docs outrun by their code: is at most 50 (`doc_staleness.summary.stale_pct lte 50`) | `measured` | yes | - | positive | - | An agent reads the docs as true. A doc whose code has moved on misleads it about that code. | Refresh the docs the report lists under doc freshness. |
+| `doc-freshness.2` Four in five mapped docs keep pace | `doc_staleness` | Share of mapped docs outrun by their code: is at most 20 (`doc_staleness.summary.stale_pct lte 20`) | `measured` | yes | - | positive | - | With four in five mapped docs keeping pace with their code, an agent can take most of what it reads at its word. | Refresh the docs the report lists under doc freshness, oldest first. |
 
 Also carries this tag, listed under its first tag: `layer-0-instructions.2` (Agent context).
 
 ### Structure
 
+That the code is shaped so an agent can work on one part without holding the whole repository in mind.
+
 Tag `structure`: 6 conditions, none shared with another tag.
 
-| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Next step |
-|---|---|---|---|---|---|---|---|---|
-| `layer-2-design.1` The import graph has module structure | `structure` | Import-graph modularity: is at least 0.3 (`structure.modularity_q gte 0.3`) | `measured` | yes | - | positive | - | Group related modules into packages that mostly import within themselves. |
-| `layer-2-design.2` Packages import one another | `structure` | Cross-package imports: is above 0 (`structure.cross_package_edges gt 0`) | `measured` | yes | - | positive | requires `layer-2-design.1` | Nothing to change on its own: this is met once one package imports another. |
-| `layer-2-design.2` Cross-package imports use a package's front door | `structure` | Cross-package imports through a package's front door: is at least 0.9 (`structure.front_door_ratio gte 0.9`) | `measured` | yes | - | positive | requires `layer-2-design.1` | Import other packages through their public API rather than their submodules. |
-| `layer-3-linters.1` CI runs a linter or type checker | `ci_checks` | A CI line runs a linter on ordinary changes and can stop its job: is true (`ci_checks.lint_runs eq true`) | `verified` | yes | - | positive | - | Add a CI step that runs your linter (ruff check ., eslint, mypy, make lint) on pull requests, without \|\| true, continue-on-error or allow_failure. |
-| `layer-3-linters.2` Stale suppressions stay at 10 or fewer | `promissory_markers` | Stale suppression comments: is at most 10 (`promissory_markers.families.suppression.stale lte 10`) | `measured` | yes | - | positive | requires `layer-3-linters.1` | Revisit the oldest suppression comments and fix or remove them. |
-| `layer-3-linters.2` Suppression ages can be read from history | `promissory_markers` | Marker aging is reliable: is true (`promissory_markers.aging_reliable eq true`) | `measured` | yes | - | positive | requires `layer-3-linters.1` | Run on a full clone so suppression ages can be measured. |
-| `layer-4-architecture.1` A boundary or ownership map names a module path | `structure_drift` | Ownership-map patterns naming a module path: is above 0 (`structure_drift.tier_0.boundary_patterns gt 0`) | `config_only` | no, listed | - | positive | - | Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths. |
-| `layer-4-architecture.2` 95% of files are 500 lines or fewer | `stats_summary` | File size at the 95th percentile: is at most 500 (`stats_summary.loc.p95 lte 500`) | `measured` | yes | - | positive | requires `layer-4-architecture.1` | Split the largest files along their natural seams. |
+| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Why it matters | Next step |
+|---|---|---|---|---|---|---|---|---|---|
+| `layer-2-design.1` The import graph has module structure | `structure` | Import-graph modularity: is at least 0.3 (`structure.modularity_q gte 0.3`) | `measured` | yes | - | positive | - | Clear modules let an agent load the part of the code a task touches, instead of tracing the whole repository to change one thing. | Group related modules into packages that mostly import within themselves. |
+| `layer-2-design.2` Packages import one another | `structure` | Cross-package imports: is above 0 (`structure.cross_package_edges gt 0`) | `measured` | yes | - | positive | requires `layer-2-design.1` | A guard for the next condition: with no import between packages, the front-door share reads 1.0 by default and says nothing about how packages are entered. | Nothing to change on its own: this is met once one package imports another. |
+| `layer-2-design.2` Cross-package imports use a package's front door | `structure` | Cross-package imports through a package's front door: is at least 0.9 (`structure.front_door_ratio gte 0.9`) | `measured` | yes | - | positive | requires `layer-2-design.1` | When packages are entered through one public surface, an agent can change a package's insides without breaking callers it never read. | Import other packages through their public API rather than their submodules. |
+| `layer-3-linters.1` CI runs a linter or type checker | `ci_checks` | A CI line runs a linter on ordinary changes and can stop its job: is true (`ci_checks.lint_runs eq true`) | `verified` | yes | - | positive | - | A linter or type checker in CI catches mechanical mistakes in every change, an agent's included, before a reviewer spends time on them. | Add a CI step that runs your linter (ruff check ., eslint, mypy, make lint) on pull requests, without \|\| true, continue-on-error or allow_failure. |
+| `layer-3-linters.2` Stale suppressions stay at 10 or fewer | `promissory_markers` | Stale suppression comments: is at most 10 (`promissory_markers.families.suppression.stale lte 10`) | `measured` | yes | - | positive | requires `layer-3-linters.1` | A suppression that survives many edits switches a check off in code that keeps changing, and an agent editing nearby gets no sign the warning still matters. | Revisit the oldest suppression comments and fix or remove them. |
+| `layer-3-linters.2` Suppression ages can be read from history | `promissory_markers` | Marker aging is reliable: is true (`promissory_markers.aging_reliable eq true`) | `measured` | yes | - | positive | requires `layer-3-linters.1` | A guard for the suppression count: on a shallow or squashed history every suppression looks new, so a count of 0 would say nothing. | Run on a full clone so suppression ages can be measured. |
+| `layer-4-architecture.1` A boundary or ownership map names a module path | `structure_drift` | Ownership-map patterns naming a module path: is above 0 (`structure_drift.tier_0.boundary_patterns gt 0`) | `config_only` | no, listed | - | positive | - | A map that names module paths tells an agent which code belongs together, and with CODEOWNERS, whose review a change there needs. | Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths. |
+| `layer-4-architecture.2` 95% of files are 500 lines or fewer | `stats_summary` | File size at the 95th percentile: is at most 500 (`stats_summary.loc.p95 lte 500`) | `measured` | yes | - | positive | requires `layer-4-architecture.1` | With nearly all files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. | Split the largest files along their natural seams. |
 
 ### Agent context
 
+That an agent starts each task knowing how this repository works and how to check its own change.
+
 Tag `agent_context`: 6 conditions, 1 shared with another tag.
 
-| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Next step |
-|---|---|---|---|---|---|---|---|---|
-| `layer-0-instructions.1` An instruction file is committed | `layer_grades` | A committed instruction file exists: is true (`layer_grades.instruction_file_present eq true`) | `declared` | no, listed | `instructions` | positive | - | Commit a CLAUDE.md or AGENTS.md that tells an agent how this repository works. |
-| `layer-0-instructions.2` An instruction file names a check command (shared with Docs) | `agent_environment` | Instruction files name a check command: is above 0 (`agent_environment.check.named_total gt 0`) | `declared` | no, listed | - | positive | - | Name the command that checks a change (for example make check) in your instruction file. |
-| `layer-0-instructions.2` Every checkable instruction claim holds (shared with Docs) | `instruction_claims` | Instruction claims that do not hold: is 0 (`instruction_claims.failed eq 0`) | `declared` | no, listed | - | positive | - | Update the instruction lines whose claims no longer match the repository. |
-| `layer-0-instructions.2` Always-loaded instructions fit in 200 lines (shared with Docs) | `nested_instructions` | Always-loaded Claude Code instruction lines: is at most 200 (`nested_instructions.budget.claude_code.lines lte 200`) | `declared` | no, listed | - | positive | - | Move detail that is needed only sometimes into files the instructions point to. |
-| `guardrails-stated.1` Half the configured gates are stated | `guardrails` | Share of configured gates an instruction file states: is at least 50 (`guardrails.stated_pct gte 50`) | `measured` | yes | - | positive | - | Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md, so the next session knows the rule before it runs into it. |
-| `guardrails-stated.2` Every configured gate is stated | `guardrails` | Share of configured gates an instruction file states: is at least 100 (`guardrails.stated_pct gte 100`) | `measured` | yes | - | positive | requires `guardrails-stated.1` | Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing. |
-| `agent-consistency.1` Every agent system names the same checks | `agent_consistency` | Commands and thresholds the agent systems disagree on: is 0 (`agent_consistency.conflicts eq 0`) | `measured` | yes | - | positive | - | Make the instruction files agree: name the same test and lint commands and the same thresholds in each, or replace each tool's file with the pointer line the report gives. |
-| `agent-consistency.2` Every agent system reads one canonical file | `agent_consistency` | Agent systems not linked to the canonical instruction file: is 0 (`agent_consistency.unlinked eq 0`) | `measured` | yes | - | positive | requires `agent-consistency.1` | Keep AGENTS.md as the one source and make each other tool's file a thin pointer or a symlink to it, using the exact line the report gives for that tool. |
+| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Why it matters | Next step |
+|---|---|---|---|---|---|---|---|---|---|
+| `layer-0-instructions.1` An instruction file is committed | `layer_grades` | A committed instruction file exists: is true (`layer_grades.instruction_file_present eq true`) | `declared` | no, listed | `instructions` | positive | - | Without one, an agent starts every task by guessing how the repository builds, tests and is laid out, and those guesses drive its first changes. | Commit a CLAUDE.md or AGENTS.md that tells an agent how this repository works. |
+| `layer-0-instructions.2` An instruction file names a check command (shared with Docs) | `agent_environment` | Instruction files name a check command: is above 0 (`agent_environment.check.named_total gt 0`) | `declared` | no, listed | - | positive | - | An agent can confirm its change only if it knows which command checks it. A named command that resolves saves it guessing, and running the wrong check or none. | Name the command that checks a change (for example make check) in your instruction file. |
+| `layer-0-instructions.2` Every checkable instruction claim holds (shared with Docs) | `instruction_claims` | Instruction claims that do not hold: is 0 (`instruction_claims.failed eq 0`) | `declared` | no, listed | - | positive | - | An agent takes its instructions literally. A line saying a script runs in CI, or a version is pinned, that is no longer true sends it the wrong way with full confidence. | Update the instruction lines whose claims no longer match the repository. |
+| `layer-0-instructions.2` Always-loaded instructions fit in 200 lines (shared with Docs) | `nested_instructions` | Always-loaded Claude Code instruction lines: is at most 200 (`nested_instructions.budget.claude_code.lines lte 200`) | `declared` | no, listed | - | positive | - | Always-loaded text is read on every task and competes with the task for the agent's attention. Long files bury the rules that matter. | Move detail that is needed only sometimes into files the instructions point to. |
+| `guardrails-stated.1` Half the configured gates are stated | `guardrails` | Share of configured gates an instruction file states: is at least 50 (`guardrails.stated_pct gte 50`) | `measured` | yes | - | positive | - | A gate an agent does not know about turns its job red after the work is done. Stated with its threshold, the gate is a constraint it can plan for. | Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md, so the next session knows the rule before it runs into it. |
+| `guardrails-stated.2` Every configured gate is stated | `guardrails` | Share of configured gates an instruction file states: is at least 100 (`guardrails.stated_pct gte 100`) | `measured` | yes | - | positive | requires `guardrails-stated.1` | With every configured gate written down, rule and threshold, an agent can check each one before it pushes. | Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing. |
+| `agent-consistency.1` Every agent system names the same checks | `agent_consistency` | Commands and thresholds the agent systems disagree on: is 0 (`agent_consistency.conflicts eq 0`) | `measured` | yes | - | positive | - | When agent systems are told different check commands or thresholds, one agent's change passes checks another agent was told to run differently. | Make the instruction files agree: name the same test and lint commands and the same thresholds in each, or replace each tool's file with the pointer line the report gives. |
+| `agent-consistency.2` Every agent system reads one canonical file | `agent_consistency` | Agent systems not linked to the canonical instruction file: is 0 (`agent_consistency.unlinked eq 0`) | `measured` | yes | - | positive | requires `agent-consistency.1` | One source of instructions keeps every agent's picture of the repository the same, and keeps it maintained in one place. | Keep AGENTS.md as the one source and make each other tool's file a thin pointer or a symlink to it, using the exact line the report gives for that tool. |
 
 ### Agent runtime
 
+That an agent can see the system it changes run, and confirm a change there, not only in the code.
+
 Tag `agent_runtime`: 4 conditions, 1 shared with another tag.
 
-| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Next step |
-|---|---|---|---|---|---|---|---|---|
-| `layer-1-liveness.1` Some runtime telemetry is committed | `observability` | Observability rung: is at least 1 (`observability.rung gte 1`) | `declared` | no, listed | - | positive | - | Add a telemetry dependency, a runbook or an OBSERVABILITY.md so an agent can see the system run. |
-| `layer-1-liveness.2` Runtime telemetry reaches rung 3 | `observability` | Observability rung: is at least 3 (`observability.rung gte 3`) | `declared` | no, listed | - | positive | - | Give agents a way to read logs or metrics, such as a logs or metrics MCP server or skill. |
-| `layer-5-ci.2` Every dependency manifest has its lockfile (shared with Supply chain) | `agent_environment` | Dependency manifests without a committed lockfile: is 0 (`agent_environment.pinning.unlocked_total eq 0`) | `declared` | no, listed | - | positive | - | Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests. A Gradle version catalog or NuGet central package management pins direct versions only: turn on dependency locking. |
-| `layer-8-agent-ops.2` Agent hooks are committed | `agent_ops` | Agent hooks are committed: is true (`agent_ops.summary.hooks_present eq true`) | `config_only` | no, listed | - | positive | - | Commit the hooks that run checks around agent actions. |
-| `layer-8-agent-ops.2` Agent routines are committed | `agent_ops` | Agent routines are committed: is true (`agent_ops.summary.routines_present eq true`) | `config_only` | no, listed | - | positive | - | Commit the routines agents run on a schedule or trigger. |
+| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Why it matters | Next step |
+|---|---|---|---|---|---|---|---|---|---|
+| `layer-1-liveness.1` Some runtime telemetry is committed | `observability` | Observability rung: is at least 1 (`observability.rung gte 1`) | `declared` | no, listed | - | positive | - | Telemetry in the code is what any view of the running system is built on. Without it, there is nothing for an agent or a person to read when checking how a change behaves in use. | Add a telemetry dependency, a runbook or an OBSERVABILITY.md so an agent can see the system run. |
+| `layer-1-liveness.2` Runtime telemetry reaches rung 3 | `observability` | Observability rung: is at least 3 (`observability.rung gte 3`) | `declared` | no, listed | - | positive | - | When an agent can query logs or metrics itself, it can check a change against the running system instead of handing that back to a person. | Give agents a way to read logs or metrics, such as a logs or metrics MCP server or skill. |
+| `layer-5-ci.2` Every dependency manifest has its lockfile (shared with Supply chain) | `agent_environment` | Dependency manifests without a committed lockfile: is 0 (`agent_environment.pinning.unlocked_total eq 0`) | `declared` | no, listed | - | positive | - | A committed lockfile means an agent installs the dependency versions CI tested, so a local test result matches CI's. | Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests. A Gradle version catalog or NuGet central package management pins direct versions only: turn on dependency locking. |
+| `layer-8-agent-ops.2` Agent hooks are committed | `agent_ops` | Agent hooks are committed: is true (`agent_ops.summary.hooks_present eq true`) | `config_only` | no, listed | - | positive | - | Committed hooks run around an agent's actions on every clone, so a check written once applies without the agent having to remember it. | Commit the hooks that run checks around agent actions. |
+| `layer-8-agent-ops.2` Agent routines are committed | `agent_ops` | Agent routines are committed: is true (`agent_ops.summary.routines_present eq true`) | `config_only` | no, listed | - | positive | - | Committed routines define the agent work the repository runs on a schedule or trigger, so it runs the same way each time and is reviewed like code. | Commit the routines agents run on a schedule or trigger. |
 
 ### Governance
 
+That people stay in the loop on what agents change, and that what agents may do is agreed and visible.
+
 Tag `governance`: 3 conditions, none shared with another tag.
 
-| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Next step |
-|---|---|---|---|---|---|---|---|---|
-| `layer-7-review.1` Changes get reviewed | `review_evidence` | Review evidence exists: is true (`review_evidence.present eq true`) | `declared` | no, listed | - | positive | - | Commit an AI review step in CI, or review merged changes before they land. |
-| `layer-7-review.2` Most merged changes are reviewed | `review_reality` | Share of merged changes reviewed: is at least 0.8 (`review_reality.reviewed_share gte 0.8`) | `verified` | yes | - | positive | - | Aim for a review on at least four in five merged changes. |
-| `layer-7-review.2` Half of merged changes are approved | `review_reality` | Share of merged changes approved: is at least 0.5 (`review_reality.approved_share gte 0.5`) | `verified` | yes | - | positive | - | Approve changes explicitly when you review them. |
-| `layer-8-agent-ops.1` Agent permissions are committed | `agent_ops` | Agent permissions are committed: is true (`agent_ops.summary.permissions_encoded eq true`) | `config_only` | no, listed | - | positive | - | Commit the agent permission allowlist your team uses, so every clone shares it. |
+| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Why it matters | Next step |
+|---|---|---|---|---|---|---|---|---|---|
+| `layer-7-review.1` Changes get reviewed | `review_evidence` | Review evidence exists: is true (`review_evidence.present eq true`) | `declared` | no, listed | - | positive | - | A second reader, a person or a review agent, catches what an agent misunderstood about intent, which tests and linters do not look for. | Commit an AI review step in CI, or review merged changes before they land. |
+| `layer-7-review.2` Most merged changes are reviewed | `review_reality` | Share of merged changes reviewed: is at least 0.8 (`review_reality.reviewed_share gte 0.8`) | `verified` | yes | - | positive | - | Review protects only the changes it reaches. At four in five merged changes, most of what lands, an agent's work included, has had a second reader. | Aim for a review on at least four in five merged changes. |
+| `layer-7-review.2` Half of merged changes are approved | `review_reality` | Share of merged changes approved: is at least 0.5 (`review_reality.approved_share gte 0.5`) | `verified` | yes | - | positive | - | An explicit approval records that someone accepted the change, not just that it was looked at. | Approve changes explicitly when you review them. |
+| `layer-8-agent-ops.1` Agent permissions are committed | `agent_ops` | Agent permissions are committed: is true (`agent_ops.summary.permissions_encoded eq true`) | `config_only` | no, listed | - | positive | - | Committed permissions make what an agent may do the same for everyone, and reviewable like code. | Commit the agent permission allowlist your team uses, so every clone shares it. |
 
 ### Supply chain
+
+That an agent builds and tests against the same dependency versions as CI and everyone else.
 
 Tag `supply_chain`: 1 condition, shared with another tag.
 
@@ -192,6 +208,8 @@ Every scan name `assess_signals.py --scans` accepts, in run order.
 
 ### `agent_ops`: Agent-operations guardrails
 
+Committed allowlists, hooks, sandbox rules and routines make an agent's limits and repeated work the same on every clone, and reviewable like code.
+
 Committed permission allowlists, hooks, sandbox rules and routine definitions.
 
 - Collector: `core.agent_ops`, reading `repo_root`.
@@ -202,7 +220,15 @@ Committed permission allowlists, hooks, sandbox rules and routine definitions.
 - Evidence: `agent_ops.summary.permissions_encoded` config_text (config_only), `agent_ops.summary.hooks_present` config_text (config_only), `agent_ops.summary.routines_present` config_text (config_only).
 - Not measured when: it cannot read its input; the block says why.
 
+Why the signals named here matter:
+
+- `agent_ops.summary.permissions_encoded` feeds `layer-8-agent-ops.1:agent_ops.summary.permissions_encoded`: Committed permissions make what an agent may do the same for everyone, and reviewable like code.
+- `agent_ops.summary.hooks_present` feeds `layer-8-agent-ops.2:agent_ops.summary.hooks_present`: Committed hooks run around an agent's actions on every clone, so a check written once applies without the agent having to remember it.
+- `agent_ops.summary.routines_present` feeds `layer-8-agent-ops.2:agent_ops.summary.routines_present`: Committed routines define the agent work the repository runs on a schedule or trigger, so it runs the same way each time and is reviewed like code.
+
 ### `config_drift`: Configuration drift
+
+An agent that reads a committed ruleset or branch-protection export as the current rule, or restores it, acts on settings the platform no longer has; this lists each difference from the live setting.
 
 - Collector: `core.config_drift`, reading `repo_root`.
 - Network: yes, GitHub or GitLab.
@@ -214,6 +240,8 @@ Committed permission allowlists, hooks, sandbox rules and routine definitions.
   - `network`: It reads GitHub or GitLab, which only a full /assess run does. Run /assess on the repository with gh or glab signed in.
 
 ### `review_reality`: Review on merged changes
+
+It shows how many recently merged changes had a review and an approval, which is how far a second reader reaches into what agents and people merge.
 
 Review and approval shares over the sampled merged changes, read through gh or glab.
 
@@ -227,7 +255,14 @@ Review and approval shares over the sampled merged changes, read through gh or g
   - `network`: A headless run without --platform makes no GitHub or GitLab read. Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in.
   - `no_remote`: The repository has no GitHub or GitLab remote, so there are no merged changes to read. Nothing to change if the repository is local only; with a GitHub or GitLab remote, /assess and fleet --platform read its merged changes.
 
+Why the signals named here matter:
+
+- `review_reality.reviewed_share` feeds `layer-7-review.2:review_reality.reviewed_share`: Review protects only the changes it reaches. At four in five merged changes, most of what lands, an agent's work included, has had a second reader.
+- `review_reality.approved_share` feeds `layer-7-review.2:review_reality.approved_share`: An explicit approval records that someone accepted the change, not just that it was looked at.
+
 ### `delivery`: Delivery figures
+
+Run plumbing: no row or finding reads this scan.
 
 - Collector: `core.delivery`, reading `merged_sample`, `review_reality`, `fleet_config`, `gitlab_note_facts`.
 - Network: yes, GitHub or GitLab (with --platform).
@@ -240,6 +275,8 @@ Review and approval shares over the sampled merged changes, read through gh or g
 
 ### `gate_cost_estimate`: Gate cost estimate
 
+Run plumbing: no row or finding reads this scan.
+
 - Collector: `core.gate_cost_estimate`, reading `repo_root`.
 - Network: yes, GitHub or GitLab.
 - Headless: reported by headless and fleet runs.
@@ -250,6 +287,8 @@ Review and approval shares over the sampled merged changes, read through gh or g
   - `network`: It reads GitHub or GitLab, which only a full /assess run does. Run /assess on the repository with gh or glab signed in.
 
 ### `coverage_gate`: Coverage gate
+
+It finds the coverage threshold the repository sets and whether CI enforces it, which is the line that keeps tests from thinning out under a run of changes.
 
 Finds coverage thresholds written in CI, task-runner and tool config, each with its file, line and threshold.
 
@@ -262,7 +301,13 @@ Finds coverage thresholds written in CI, task-runner and tool config, each with 
 - Not measured when:
   - `go_rust_gate_form_not_read`: The repository holds a go.mod or Cargo.toml with no coverage gate found for it, and no gate of at least 50 percent for another language (a low Python gate beside go.mod is not unmet): its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read. Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines.
 
+Why the signals named here matter:
+
+- `coverage_gate.enforced_meets_minimum` feeds `layer-6-coverage.1:coverage_gate.enforced_meets_minimum`: An enforced floor turns the job red when a change takes coverage below it, so tests an agent removes or skips show in CI instead of passing quietly.
+
 ### `instruction_claims`: Instruction claims
+
+An agent trusts its instruction file without checking it. This checks each claim that a script runs in CI, a version is pinned or a count holds, and names the line of each that no longer does.
 
 - Collector: `core.instruction_claims`, reading `repo_root`, `instruction_files`.
 - Network: no.
@@ -272,7 +317,13 @@ Finds coverage thresholds written in CI, task-runner and tool config, each with 
 - Evidence: `instruction_claims.failed` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.
 
+Why the signals named here matter:
+
+- `instruction_claims.failed` feeds `layer-0-instructions.2:instruction_claims.failed`: An agent takes its instructions literally. A line saying a script runs in CI, or a version is pinned, that is no longer true sends it the wrong way with full confidence.
+
 ### `claude_config`: Claude Code configuration
+
+Claude Code drops a frontmatter field it does not recognise without an error, so a skill, command or agent can look configured while doing nothing; this names each dropped field.
 
 - Collector: `core.claude_config`, reading `repo_root`, `scope`, `excludes`.
 - Network: no.
@@ -284,6 +335,8 @@ Finds coverage thresholds written in CI, task-runner and tool config, each with 
 
 ### `nested_instructions`: Nested instruction files
 
+It measures the instruction text Claude Code loads on every task and the nested files it loads per directory, so the always-loaded part stays small enough for the rules in it to be followed.
+
 - Collector: `core.nested_instructions`, reading `repo_root`, `excludes`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
@@ -292,7 +345,13 @@ Finds coverage thresholds written in CI, task-runner and tool config, each with 
 - Evidence: `nested_instructions.budget.claude_code.lines` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.
 
+Why the signals named here matter:
+
+- `nested_instructions.budget.claude_code.lines` feeds `layer-0-instructions.2:nested_instructions.budget.claude_code.lines`: Always-loaded text is read on every task and competes with the task for the agent's attention. Long files bury the rules that matter.
+
 ### `agent_harness`: Committed agent harness
+
+Committed hooks, env blocks and MCP servers run in every agent session, headless ones included; this lists what they run and flags any that expose a secret or widen an agent's reach.
 
 - Collector: `core.agent_harness`, reading `repo_root`, `scope`, `excludes`.
 - Network: no.
@@ -304,6 +363,8 @@ Finds coverage thresholds written in CI, task-runner and tool config, each with 
 
 ### `agent_environment`: Agent working environment
 
+It reads what an agent needs to work like CI does: the check command its instructions name, the committed setup and a lockfile for each dependency manifest.
+
 Committed agent setup, the check command an instruction file names, lockfiles per manifest and the Layer 5 cap; the CI-duration probe is off in headless runs. A manifest row's note is skipped_library (a library whose ecosystem commits no lock: listed, not counted in manifests_total or unlocked_total) or direct_pins_only (a Gradle version catalog or NuGet central package management with no lock: unlocked).
 
 - Collector: `core.agent_environment`, reading `repo_root`, `instruction_files`, `agent_harness`, `excludes`.
@@ -314,7 +375,14 @@ Committed agent setup, the check command an instruction file names, lockfiles pe
 - Evidence: `agent_environment.check.named_total` head_text (declared), `agent_environment.pinning.unlocked_total` head_text (declared).
 - Not measured when: it cannot read its input; the block says why.
 
+Why the signals named here matter:
+
+- `agent_environment.check.named_total` feeds `layer-0-instructions.2:agent_environment.check.named_total`: An agent can confirm its change only if it knows which command checks it. A named command that resolves saves it guessing, and running the wrong check or none.
+- `agent_environment.pinning.unlocked_total` feeds `layer-5-ci.2:agent_environment.pinning.unlocked_total`: A committed lockfile means an agent installs the dependency versions CI tested, so a local test result matches CI's.
+
 ### `shared_tooling`: Shared tooling
+
+Run plumbing: no row or finding reads this scan.
 
 - Collector: `core.shared_tooling`, reading `repo_root`.
 - Network: no.
@@ -326,6 +394,8 @@ Committed agent setup, the check command an instruction file names, lockfiles pe
 
 ### `review_automation`: AI review committed in CI
 
+A review step committed in CI reviews every change it runs on, and is evidence a headless run can read without platform access.
+
 - Collector: `core.review_automation`, reading `repo_root`, `fleet_config`, `ghsync_root`, `gitlab_merged_ci`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
@@ -335,6 +405,8 @@ Committed agent setup, the check command an instruction file names, lockfiles pe
 - Not measured when: it cannot read its input; the block says why.
 
 ### `review_evidence`: Review evidence
+
+It records whether changes get a second reader at all, from a committed AI review step or a reviewed merged change, so review is credited where it happens.
 
 An AI review step committed in CI, or a reviewed merged change.
 
@@ -348,7 +420,13 @@ An AI review step committed in CI, or a reviewed merged change.
   - `network`: No AI review step is committed in CI, and a headless run without --platform makes no GitHub or GitLab read. Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in.
   - `no_remote`: No AI review step is committed in CI and the repository has no GitHub or GitLab remote, so there are no merged changes to read. Nothing to change if the repository is local only; with a GitHub or GitLab remote, /assess and fleet --platform read its merged changes.
 
+Why the signals named here matter:
+
+- `review_evidence.present` feeds `layer-7-review.1:review_evidence.present`: A second reader, a person or a review agent, catches what an agent misunderstood about intent, which tests and linters do not look for.
+
 ### `ci_checks`: CI runs a test or lint command
+
+It reads whether CI runs tests or linters on ordinary changes in a way that can stop the job, so "it passed" means a check ran and could have said no.
 
 Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether one can fail its job on ordinary changes (not masked, not off the ordinary triggers), and whether such a line runs a linter; null when no check is found but a CI file pulls its jobs from elsewhere. Null too when no check is found and the tree tracks a CI file the scan does not parse, when under --platform most sampled merged pull requests carry an external CI check, or when a root Prow OWNERS_ALIASES is the only CI evidence.
 
@@ -370,7 +448,14 @@ Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether 
   - `analysers_in_build`: In lint_basis: no CI line runs a linter, but a CI dotnet build runs the analysers a committed Directory.Build.props or .csproj turns on (EnforceCodeStyleInBuild, AnalysisLevel). Their severities live in .editorconfig, which the scan does not evaluate. Nothing to change if the analysers fail the build on a finding; a CI step running dotnet format --verify-no-changes lets the scan read a lint run.
   - `compiler_gate_only`: In lint_basis: no CI line runs a linter, and the only static gate is a compiler run with warnings as errors (mix compile --warnings-as-errors, -Werror, dotnet build -warnaserror, TreatWarningsAsErrors in Directory.Build.props). It is not counted as a lint run. Running a linter or analyser in its own CI step (mix credo, clang-tidy, dotnet format --verify-no-changes) lets the scan read a lint run.
 
+Why the signals named here matter:
+
+- `ci_checks.lint_runs` feeds `layer-3-linters.1:ci_checks.lint_runs`: A linter or type checker in CI catches mechanical mistakes in every change, an agent's included, before a reviewer spends time on them.
+- `ci_checks.enforced_check_runs` feeds `layer-5-ci.1:ci_checks.enforced_check_runs`: This turns "the agent says it works" into "CI says it works": a check that can stop its job runs on ordinary changes, so a broken change turns the job red where everyone can see it.
+
 ### `agent_building`: Agent building
+
+Run plumbing: no row or finding reads this scan.
 
 - Collector: `core.agent_building`, reading `repo_root`.
 - Network: no.
@@ -382,6 +467,8 @@ Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether 
 
 ### `layer_grades`: Deterministic layer grades
 
+It republishes whether a committed instruction file exists, the evidence the `instructions` gate reads.
+
 The instruction-file grade and where the instruction files are (root, nested only or none), republished as a block, so a maturity model can read them.
 
 - Collector: `core.layer_grades`, reading `instruction_grading`, `nested_instructions`.
@@ -392,7 +479,13 @@ The instruction-file grade and where the instruction files are (root, nested onl
 - Evidence: `layer_grades.instruction_file_present` head_text (declared).
 - Not measured when: it cannot read its input; the block says why.
 
+Why the signals named here matter:
+
+- `layer_grades.instruction_file_present` feeds `layer-0-instructions.1:layer_grades.instruction_file_present`: Without one, an agent starts every task by guessing how the repository builds, tests and is laid out, and those guesses drive its first changes.
+
 ### `instruction_placement`: Instruction placement
+
+It names the always-loaded sections that are reference for one tool or subtree, so they can move to files an agent reads when needed and leave the always-loaded text for rules.
 
 - Collector: `core.instruction_placement`, reading `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes`.
 - Network: no.
@@ -404,6 +497,8 @@ The instruction-file grade and where the instruction files are (root, nested onl
 
 ### `agent_consistency`: Cross-agent instruction consistency
 
+It compares the instruction files of every agent system present, so each agent is told the same checks and thresholds, from one source.
+
 Compares the root instruction files of every agent system present (Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue, Zed): check commands one names and another does not, conflicting thresholds, and whether each links to one canonical file, with the pointer line for each unlinked system.
 
 - Collector: `core.agent_consistency`, reading `repo_root`, `excludes`.
@@ -414,7 +509,14 @@ Compares the root instruction files of every agent system present (Claude Code, 
 - Evidence: `agent_consistency.conflicts` head_structure (measured), `agent_consistency.unlinked` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.
 
+Why the signals named here matter:
+
+- `agent_consistency.conflicts` feeds `agent-consistency.1:agent_consistency.conflicts`: When agent systems are told different check commands or thresholds, one agent's change passes checks another agent was told to run differently.
+- `agent_consistency.unlinked` feeds `agent-consistency.2:agent_consistency.unlinked`: One source of instructions keeps every agent's picture of the repository the same, and keeps it maintained in one place.
+
 ### `ai_usage`: AI-assisted change share
+
+Run plumbing: no row or finding reads this scan.
 
 - Collector: `core.ai_usage`, reading `repo_root`, `scope`, `history_window`, `fleet_config`.
 - Network: no.
@@ -426,6 +528,8 @@ Compares the root instruction files of every agent system present (Claude Code, 
 
 ### `doc_claims`: Doc claims
 
+An agent reads guides as literally as instruction files. This checks the same pin and count claims across the doc set and names two docs that state different values.
+
 - Collector: `core.doc_claims`, reading `repo_root`, `instruction_files`, `scope`, `excludes`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
@@ -435,6 +539,8 @@ Compares the root instruction files of every agent system present (Claude Code, 
 - Not measured when: it cannot read its input; the block says why.
 
 ### `guardrails`: Guardrails stated
+
+It lists the gates the repository configures and whether an instruction file states each rule and threshold, so an agent learns a gate before CI turns red on it.
 
 Lists the gates the repository configures (a ruff or flake8 complexity limit, the coverage floor, pre-commit hooks, mypy strict) and whether a graded instruction file states each one's rule and threshold; an unstated gate carries a ready one-line snippet.
 
@@ -446,7 +552,14 @@ Lists the gates the repository configures (a ruff or flake8 complexity limit, th
 - Evidence: `guardrails.stated_pct` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.
 
+Why the signals named here matter:
+
+- `guardrails.stated_pct` feeds `guardrails-stated.1:guardrails.stated_pct`: A gate an agent does not know about turns its job red after the work is done. Stated with its threshold, the gate is a constraint it can plan for.
+- `guardrails.stated_pct` feeds `guardrails-stated.2:guardrails.stated_pct`: With every configured gate written down, rule and threshold, an agent can check each one before it pushes.
+
 ### `structure`: Keyhole blocks: structure
+
+It measures module structure and how packages import one another, which decides how much code an agent must read to change one part.
 
 - Collector: `core.keyhole_blocks`, reading `keyhole`.
 - Network: no.
@@ -463,7 +576,15 @@ Lists the gates the repository configures (a ruff or flake8 complexity limit, th
   - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
+Why the signals named here matter:
+
+- `structure.modularity_q` feeds `layer-2-design.1:structure.modularity_q`: Clear modules let an agent load the part of the code a task touches, instead of tracing the whole repository to change one thing.
+- `structure.cross_package_edges` feeds `layer-2-design.2:structure.cross_package_edges`: A guard for the next condition: with no import between packages, the front-door share reads 1.0 by default and says nothing about how packages are entered.
+- `structure.front_door_ratio` feeds `layer-2-design.2:structure.front_door_ratio`: When packages are entered through one public surface, an agent can change a package's insides without breaking callers it never read.
+
 ### `stats_summary`: Run header: stats_summary
+
+It summarises file size and complexity across the repository; the 95th-percentile file size is what decides whether an agent can read a file whole.
 
 - Collector: `core.run_header`, reading `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized`.
 - Network: no.
@@ -473,7 +594,13 @@ Lists the gates the repository configures (a ruff or flake8 complexity limit, th
 - Evidence: `stats_summary.loc.p95` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.
 
+Why the signals named here matter:
+
+- `stats_summary.loc.p95` feeds `layer-4-architecture.2:stats_summary.loc.p95`: With nearly all files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice.
+
 ### `promissory_markers`: Promissory markers
+
+TODOs, suppressions and disabled tests that survive many edits are promises nobody kept; an agent cannot tell from the code whether one is still meant.
 
 - Collector: `core.promissory_markers`, reading `promissory`.
 - Network: no.
@@ -483,7 +610,14 @@ Lists the gates the repository configures (a ruff or flake8 complexity limit, th
 - Evidence: `promissory_markers.families.suppression.stale` git_history (measured), `promissory_markers.aging_reliable` git_history (measured).
 - Not measured when: it cannot read its input; the block says why.
 
+Why the signals named here matter:
+
+- `promissory_markers.families.suppression.stale` feeds `layer-3-linters.2:promissory_markers.families.suppression.stale`: A suppression that survives many edits switches a check off in code that keeps changing, and an agent editing nearby gets no sign the warning still matters.
+- `promissory_markers.aging_reliable` feeds `layer-3-linters.2:promissory_markers.aging_reliable`: A guard for the suppression count: on a shallow or squashed history every suppression looks new, so a count of 0 would say nothing.
+
 ### `structure_drift`: Structure drift: structure_drift
+
+Ownership and boundary maps are read as authoritative, and nothing forces them to follow the code; this checks each map's patterns against where the code now lives.
 
 - Collector: `core.structure_drift_block`, reading `repo_root`, `keyhole`.
 - Network: no.
@@ -494,7 +628,13 @@ Lists the gates the repository configures (a ruff or flake8 complexity limit, th
 - Not measured when:
   - `no_ownership_map`: The repository commits no ownership or boundary map (CODEOWNERS, an ARCHITECTURE module list) for the drift check to read. Nothing to change if no one owns paths; a committed CODEOWNERS or boundary map lets the scan read it.
 
+Why the signals named here matter:
+
+- `structure_drift.tier_0.boundary_patterns` feeds `layer-4-architecture.1:structure_drift.tier_0.boundary_patterns`: A map that names module paths tells an agent which code belongs together, and with CODEOWNERS, whose review a change there needs.
+
 ### `observability`: Liveness blocks: observability
+
+It reads how far the repository gives an agent a view of the running system: telemetry emitted, a runbook that says where it lives, and a path the agent can query.
 
 - Collector: `core.liveness_blocks`, reading `liveness`.
 - Network: no.
@@ -504,7 +644,14 @@ Lists the gates the repository configures (a ruff or flake8 complexity limit, th
 - Evidence: `observability.rung` head_text (declared).
 - Not measured when: it cannot read its input; the block says why.
 
+Why the signals named here matter:
+
+- `observability.rung` feeds `layer-1-liveness.1:observability.rung`: Telemetry in the code is what any view of the running system is built on. Without it, there is nothing for an agent or a person to read when checking how a change behaves in use.
+- `observability.rung` feeds `layer-1-liveness.2:observability.rung`: When an agent can query logs or metrics itself, it can check a change against the running system instead of handing that back to a person.
+
 ### `doc_graph`: Doc graph
+
+An agent finds docs by following links from README, AGENTS.md or an index; a doc no link reaches is one it will not read.
 
 - Collector: `core.doc_graph`, reading `repo_root`, `excludes`, `scope`, `working_notes`.
 - Network: no.
@@ -516,6 +663,8 @@ Lists the gates the repository configures (a ruff or flake8 complexity limit, th
 
 ### `doc_staleness`: Doc staleness
 
+It compares each doc's last change with the churn in the code it describes, so a doc whose code moved on is found before an agent relies on it.
+
 Each doc's last content change against its code subject's churn, following renames.
 
 - Collector: `core.doc_staleness`, reading `repo_root`, `doc_graph`, `excludes`, `scope`.
@@ -526,7 +675,14 @@ Each doc's last content change against its code subject's churn, following renam
 - Evidence: `doc_staleness.summary.stale_pct` git_history (measured).
 - Not measured when: it cannot read its input; the block says why.
 
+Why the signals named here matter:
+
+- `doc_staleness.summary.stale_pct` feeds `doc-freshness.1:doc_staleness.summary.stale_pct`: An agent reads the docs as true. A doc whose code has moved on misleads it about that code.
+- `doc_staleness.summary.stale_pct` feeds `doc-freshness.2:doc_staleness.summary.stale_pct`: With four in five mapped docs keeping pace with their code, an agent can take most of what it reads at its word.
+
 ### `archetype`: Repository archetype
+
+It tells a documentation repository from a software one, so the report does not ask a repository with no code for tests and CI on code it does not hold.
 
 - Collector: `core.archetype`, reading `repo_root`.
 - Network: no.
@@ -537,6 +693,8 @@ Each doc's last content change against its code subject's churn, following renam
 - Not measured when: it cannot read its input; the block says why.
 
 ### `owner_exclusions`: Owner exclusions
+
+It reads the checks a repository's owners have committed as not applying to them, so the Step holds a team only to practices it has not deliberately set aside, and each exclusion stays visible and reviewable in the repository.
 
 The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why.
 
@@ -550,6 +708,8 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
 
 ### `diff`: Run header: diff
 
+Run plumbing: no row or finding reads this scan.
+
 - Collector: `core.run_header`, reading `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
@@ -560,6 +720,8 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
   - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
 
 ### `dead_code`: Liveness blocks: dead_code
+
+Code nothing in the repository calls still costs an agent reading time and can be kept alive by mistake; candidates are listed for a person to check, since callers outside the repository are not visible.
 
 - Collector: `core.liveness_blocks`, reading `liveness`.
 - Network: no.
@@ -572,6 +734,8 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
 
 ### `ancestor_instruction_files`: Ancestor instruction files
 
+Instruction files above the repository root load in a local session but never reach a fresh clone, so an agent elsewhere works without those rules.
+
 - Collector: `core.ancestor_instruction_files`, reading `repo_root`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
@@ -582,6 +746,8 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
   - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
 
 ### `behaviour`: Keyhole blocks: behaviour
+
+It reads which files change together in history, so coupling the import graph does not show, and modules safe to change in isolation, are both found.
 
 - Collector: `core.keyhole_blocks`, reading `keyhole`.
 - Network: no.
@@ -601,6 +767,8 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
 
 ### `documentation`: Keyhole blocks: documentation
 
+It joins doc freshness with code complexity, so the places where an agent most needs a true doc, and has none or a stale one, are named.
+
 - Collector: `core.keyhole_blocks`, reading `keyhole`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
@@ -618,6 +786,8 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
 ### `understanding`: Keyhole blocks: understanding
+
+For each complex module it reads whether a person authored it and whether a doc states its intent, so an agent knows whether there is anyone or anything to check its reading against.
 
 - Collector: `core.keyhole_blocks`, reading `keyhole`.
 - Network: no.
@@ -637,6 +807,8 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
 
 ### `runtime`: Keyhole blocks: runtime
 
+Run plumbing: no row or finding reads this scan.
+
 - Collector: `core.keyhole_blocks`, reading `keyhole`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
@@ -654,6 +826,8 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
 ### `derived_findings`: Keyhole blocks: derived_findings
+
+Run plumbing: no row or finding reads this scan.
 
 - Collector: `core.keyhole_blocks`, reading `keyhole`.
 - Network: no.
@@ -673,6 +847,8 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
 
 ### `coverage_report`: Coverage report
 
+It reads a coverage report the project already produced, so test depth on the riskiest files is known instead of assumed.
+
 - Collector: `core.coverage_report`, reading `repo_root`, `coverage_data`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
@@ -684,6 +860,8 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
 
 ### `test_pressure`: Test pressure
 
+Coverage says a line ran, not that a test would notice it changing; this reads mutation results and hollow-test patterns to show where tests hold the code to account.
+
 - Collector: `core.test_pressure`, reading `test_pressure_scan`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
@@ -693,7 +871,13 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
 - Not measured when:
   - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
 
+Why the signals named here matter:
+
+- `test_pressure.mutation_run` feeds `layer-6-coverage.2:test_pressure.mutation_run`: Coverage shows tests run the code; a mutation run shows whether they notice it changing. A completed run names the surviving mutants, which are the tests an agent cannot yet rely on.
+
 ### `test_focus`: Test focus
+
+It ranks risky files by the test work each needs, so the files where an agent's change is least held by tests come first.
 
 - Collector: `core.test_focus`, reading `repo_root`, `current`, `coverage_data`, `test_pressure`, `hot_test_index`.
 - Network: no.
@@ -706,6 +890,8 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
 
 ### `accretion_ratchet`: Accretion ratchet
 
+Files that only ever grow get harder to read whole with every addition; this names them before an agent adds the next feature to one.
+
 - Collector: `core.accretion_ratchet`, reading `accretion_scan`, `current`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
@@ -717,10 +903,12 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
 
 ### `gap_actions`: Gap actions
 
+Run plumbing: no row or finding reads this scan.
+
 - Collector: `core.gap_actions`, reading `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `gap_actions.action` drop, `gap_actions.paths` path, `gap_actions.signal` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `gap_actions.action` drop, `gap_actions.paths` path, `gap_actions.signal` token, `gap_actions.why` drop.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when:
@@ -730,19 +918,19 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
 
 In report order.
 
-| Finding | Reads | Next step | Mode | Rules |
-|---|---|---|---|---|
-| `hidden_coupling` Hidden coupling | `behaviour.hidden_coupling_findings`, `structure_drift.tier_1` | investigate the seam | `characterize_first` | emptied when `doc_staleness.churn_degenerate == true`; deleted paths pruned |
-| `lying_map` Stale doc over complex code | `documentation.stale_doc_on_complexity` | fix or delete the doc | `verify_then_retire` | emptied when `doc_staleness.churn_degenerate == true` |
-| `unexplained_complexity` Unexplained complexity | `documentation.unexplained_complexity` | write the contract the code needs (do NOT auto-generate) | `characterize_first` | - |
-| `untrusted_hotspot` Untrusted hotspot | `current`, `test_pressure` | strengthen tests to pin observable behaviour (not internal state) | `characterize_first` | - |
-| `self_referential_tests` Self-referential tests | `current` | request human review - tests verify internal consistency, not truth | `verify_then_retire` | - |
-| `unactioned_intent` Unactioned intent | `promissory` | action the promise: fix it, ticket it, or delete the marker/skip | `verify_then_retire` | - |
-| `accretion_ratchet` Accretion ratchet | `accretion_ratchet` | refactor down: extract, delete dead code, or split the file | `refactor_safe` | - |
-| `orphaned_understanding` Orphaned understanding | `understanding.orphaned_understanding` | assign a human anchor before further change | `characterize_first` | - |
-| `candidate_dead_weight` Candidate dead weight | `dead_code` | verify liveness, then delete if dead | `verify_then_retire` | - |
-| `override_contradicts_signals` Archetype override contradicts the signals | `archetype` | Review archetype marker - deterministic signals suggest a different classification | `characterize_first` | - |
-| `refactor_boundary` Refactor boundary | `behaviour.refactor_boundaries` | safe to hand an agent in isolation | `refactor_safe` | deleted paths pruned; a strength, not a concern |
+| Finding | Reads | Why it matters | Next step | Mode | Rules |
+|---|---|---|---|---|---|
+| `hidden_coupling` Hidden coupling | `behaviour.hidden_coupling_findings`, `structure_drift.tier_1` | These files change together in history with no import between them, so an agent changing one has nothing in the code telling it to change the other. | investigate the seam | `characterize_first` | emptied when `doc_staleness.churn_degenerate == true`; deleted paths pruned |
+| `lying_map` Stale doc over complex code | `documentation.stale_doc_on_complexity` | The doc has fallen behind complex code it describes, which is where an agent leans on a doc most. | fix or delete the doc | `verify_then_retire` | emptied when `doc_staleness.churn_degenerate == true` |
+| `unexplained_complexity` Unexplained complexity | `documentation.unexplained_complexity` | Complex code with no doc of what it should do leaves an agent only the code to infer intent from, so it cannot tell a bug from a requirement. | write the contract the code needs (do NOT auto-generate) | `characterize_first` | - |
+| `untrusted_hotspot` Untrusted hotspot | `current`, `test_pressure` | Complex, often-changed code whose tests let many mutants survive: an agent's change here is not held by the tests that look like they cover it. | strengthen tests to pin observable behaviour (not internal state) | `characterize_first` | - |
+| `self_referential_tests` Self-referential tests | `current` | Tests kept and committed beside the code they cover can check internal consistency rather than truth, so an agent changing both together can make them agree on a wrong answer. | request human review - tests verify internal consistency, not truth | `verify_then_retire` | - |
+| `unactioned_intent` Unactioned intent | `promissory` | A TODO or skip that survives many edits reads to an agent as a live plan or a settled exception, and it cannot tell which. | action the promise: fix it, ticket it, or delete the marker/skip | `verify_then_retire` | - |
+| `accretion_ratchet` Accretion ratchet | `accretion_ratchet` | A file that has only ever grown gets harder to read whole with each change, and each agent addition makes the next one harder. | refactor down: extract, delete dead code, or split the file | `refactor_safe` | - |
+| `orphaned_understanding` Orphaned understanding | `understanding.orphaned_understanding` | Complex code with no human author and no doc of its intent has nobody to ask and nothing to check an agent's reading against. | assign a human anchor before further change | `characterize_first` | - |
+| `candidate_dead_weight` Candidate dead weight | `dead_code` | Code nothing in the repository calls costs an agent reading time and can be maintained by mistake; it needs a person to confirm no outside caller uses it. | verify liveness, then delete if dead | `verify_then_retire` | - |
+| `override_contradicts_signals` Archetype override contradicts the signals | `archetype` | The declared repository kind decides which checks apply; when the signals disagree, checks marked not applicable may hide gaps an agent would meet. | Review archetype marker - deterministic signals suggest a different classification | `characterize_first` | - |
+| `refactor_boundary` Refactor boundary | `behaviour.refactor_boundaries` | A strength: edits here stay inside the directory, so an agent can change it without reading the rest of the repository. | safe to hand an agent in isolation | `refactor_safe` | deleted paths pruned; a strength, not a concern |
 
 ## Every registered scan
 
@@ -839,3 +1027,4 @@ The scan registry in run order, including the private inputs other scans read.
 | `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes` | `guardrails` | no |
 | `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `level` | no |
 | `headline` | Deterministic headline | `level` | `headline` | no |
+| `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |

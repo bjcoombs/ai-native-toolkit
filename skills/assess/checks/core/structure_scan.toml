@@ -9,6 +9,7 @@ callable = "lib.core_scans:structure_scan"
 publishes = []
 reads = ["repo_root", "excludes", "scope"]
 stage = "read_side"
+unit_scope = "scoped"
 private = true
 label = "structure"
 revision = 1

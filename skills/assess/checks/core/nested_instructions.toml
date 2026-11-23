@@ -11,6 +11,8 @@ publishes = ["nested_instructions"]
 reads = ["repo_root", "excludes"]
 stage = "post_offers"
 headless = { nested_instructions = "registered" }
+whys.nested_instructions = "It measures the instruction text Claude Code loads on every task and the nested files it loads per directory, so the always-loaded part stays small enough for the rules in it to be followed."
+why_sources.nested_instructions = "https://code.claude.com/docs/en/memory"
 shapes = [
   { path = "nested_instructions", type = "lib.run_context_types:NestedInstructionsBlock" },
 ]
@@ -50,4 +52,6 @@ id = "core.cond.layer-0-instructions.2.lines"
 kind = "condition"
 title = "Always-loaded instructions fit in 200 lines"
 key = "layer-0-instructions.2:nested_instructions.budget.claude_code.lines"
+why = "Always-loaded text is read on every task and competes with the task for the agent's attention. Long files bury the rules that matter."
+why_source = "https://code.claude.com/docs/en/memory"
 fix = "Move detail that is needed only sometimes into files the instructions point to."

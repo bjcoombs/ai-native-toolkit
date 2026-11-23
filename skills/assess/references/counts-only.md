@@ -78,6 +78,8 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 - `promissory_markers.families`
 - `stats_summary.fn_ccn.backend_by_language`
 - `tool_versions`
+- `unit_readings.units.blocks`
+- `unit_readings.units.blocks.promissory_markers.families`
 
 ## run_header
 
@@ -680,6 +682,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 |---|---|
 | `gap_actions.signal` | token |
 | `gap_actions.action` | dropped |
+| `gap_actions.why` | dropped |
 | `gap_actions.paths` | path (hashed when hashing is on) |
 
 ## instruction_placement
@@ -768,6 +771,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.conditions.state` | token |
 | `level.conditions.reason` | token |
 | `level.conditions.polarity` | token |
+| `level.conditions.why` | dropped |
 | `level.next_step.blockers.kind` | token |
 | `level.next_step.blockers.gate` | token |
 | `level.next_step.blockers.condition` | token |
@@ -789,8 +793,19 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `headline.lines` | dropped |
 | `headline.markdown` | dropped |
 | `headline.summary` | dropped |
+| `headline.next_why` | dropped |
 | `headline.reason` | token |
 | `headline.tags.tag` | token |
+
+## unit_readings
+
+| Field | Kept as |
+|---|---|
+| `unit_readings.unit_count_reason` | token |
+| `unit_readings.unit_blocks` | token |
+| `unit_readings.units.path` | dropped |
+| `unit_readings.units.conditions.id` | token |
+| `unit_readings.units.conditions.origin` | token |
 
 ## fleet-data.json (the fleet skill)
 
