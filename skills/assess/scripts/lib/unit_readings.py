@@ -136,8 +136,11 @@ def _under(path: object, unit: str) -> bool:
 
 
 def _coverage_own(unit: str, scoped: Any, _ctx: Mapping[str, Any]) -> JsonDict | None:
-    """The unit's scoped coverage gate when one of its gates sits under the unit."""
-    if not isinstance(scoped, Mapping) or scoped.get("available") is False:
+    """The unit's scoped coverage gate when one of its gates sits under the unit. A failed
+    scoped run is the unit's own unknown, never the parent build's gate."""
+    if isinstance(scoped, Mapping) and scoped.get("available") is False:
+        return dict(scoped)
+    if not isinstance(scoped, Mapping):
         return None
     gates = scoped.get("gates")
     if isinstance(gates, list) and any(isinstance(g, Mapping) and _under(g.get("file"), unit)

@@ -317,6 +317,22 @@ def test_a_failing_scan_degrades_for_that_unit_only(tmp_path: Path) -> None:
         is not True
 
 
+def test_a_failing_unit_coverage_scan_is_the_units_unknown_not_the_parents_gate(
+        tmp_path: Path) -> None:
+    def boom(root: Any, scope: Any, excludes: Any) -> Any:
+        raise RuntimeError("gate scan broke")
+
+    table = (ScanSpec("coverage_gate", boom, ("repo_root", "scope", "excludes"),
+                      STAGE_READ_SIDE),)
+    units = {"unit_count": 1, "units": [{"path": "a"}]}
+    block = ur.read_units(units, None, NO_EXCLUDES, tmp_path, None,
+                          table=(table, ur.UNIT_EXTERNAL_READS))
+    unit = block["units"][0]
+    assert unit["blocks"]["coverage_gate"]["available"] is False
+    assert _origins(unit)["layer-6-coverage.1"] == "unit"
+    assert resolve_signal(unit["blocks"], "coverage_gate.enforced_meets_minimum") is not True
+
+
 # --- the projection ---------------------------------------------------------------
 
 def test_projection_keeps_the_model_paths_and_their_availability() -> None:
