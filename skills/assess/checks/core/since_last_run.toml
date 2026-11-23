@@ -28,3 +28,4 @@ revision = 1
   "since_last_run.lines" = "drop"
   "since_last_run.markdown" = "drop"
   "since_last_run.reason" = "token"
+  "since_last_run.closed_reason" = "token"

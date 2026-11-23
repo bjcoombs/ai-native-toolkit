@@ -817,6 +817,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `since_last_run.lines` | dropped |
 | `since_last_run.markdown` | dropped |
 | `since_last_run.reason` | token |
+| `since_last_run.closed_reason` | token |
 
 ## unit_readings
 

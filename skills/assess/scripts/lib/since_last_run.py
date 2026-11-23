@@ -9,15 +9,18 @@ this run's publish step overwrites any of them:
   A file that cannot be read gives unknowns (``None``), never a first run;
 - **closed actions**: the entries of ``actions.json`` *as committed at HEAD* (``actions``
   and ``completed``, as ``lib/reviewed_findings.py`` reads them) with ``status: "done"``
-  and a ``completed_sha`` that is a commit and is not an ancestor of the commit the
-  previous run measured (``measured_commit.head_sha``). An action closed before the
-  previous run is not credited again; a sha git cannot resolve is left out. Reading HEAD,
-  not the working tree, keeps the block a function of the commit. With no previous commit
-  the list is ``None`` (unknown), never empty;
+  and a ``completed_sha`` that is on HEAD's history and is not an ancestor of the commit
+  the previous run measured (``measured_commit.head_sha``). An action closed before the
+  previous run is not credited again, and a branch commit squashed or rebased away is never
+  credited. A sha this clone does not hold is left out and counted in ``unresolved``.
+  Reading HEAD, not the working tree, keeps the block a function of the commit. With no
+  previous commit, or one this clone does not hold (a rewritten history, a shallow clone),
+  the list is ``None`` (unknown, ``closed_reason`` says why), never empty;
 - **gates**: every gate of the default model's Steps, held when
   ``level_tally.gate_blockers`` names no blocker for it, in this run's ``level`` block and
   in the previous run's. ``gates_gained`` and ``gates_lost`` list the ids in Step order;
-  ``None`` when the previous run has no level result.
+  ``None`` when the previous run has no level result or one that lacks a gate's
+  condition (an older model), so the rest of the block still reads.
 
 ``next_blocker`` is the first gate blocking this run's next Step (``None`` at the top Step).
 ``lines`` and ``markdown`` word the block (``GATE_NOUN`` names each gate, as the badge
@@ -45,6 +48,11 @@ __all__ = ["ClosedAction", "SinceLastRun", "closed_actions", "gate_changes", "si
 
 _SHA = re.compile(r"[0-9a-f]{7,40}")
 FIRST_RUN = "This is the first run, so there is no earlier run to compare with."
+# Why ``closed`` is unknown, as the line words each ``closed_reason`` code.
+UNKNOWN_CLOSED = {
+    "no_previous_commit": "the previous run recorded no commit",
+    "previous_commit_absent": "the previous run's commit is not in this clone",
+}
 
 
 def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str] | None:
@@ -62,8 +70,12 @@ def _gate_ids(steps: Sequence[StepDef]) -> list[str]:
 
 
 def _held(steps: Sequence[StepDef], level: Any) -> list[str] | None:
-    """The gates a level block holds, in Step order; None when it is not a level result."""
+    """The gates a level block holds, in Step order; None when it is not a level result or
+    lacks a gate's condition (a block from an older model)."""
     if not isinstance(level, Mapping) or not isinstance(level.get("conditions"), list):
+        return None
+    ids = {c.get("id") for c in level["conditions"] if isinstance(c, Mapping)}
+    if any(f"{g['row']}.{n}" not in ids for s in steps for g in s["gates"] for n in range(1, g["level"] + 1)):
         return None
     blocked = {b.get("gate") for b in gate_blockers(steps, level["conditions"])}
     return [g for g in _gate_ids(steps) if g not in blocked]
@@ -93,31 +105,44 @@ def _committed_actions(repo_root: Path, assess_dir: Path) -> list[dict[str, Any]
         return []
 
 
-def _closed_after(repo_root: Path, sha: str, previous: str) -> bool:
-    """Whether ``sha`` is a commit that is not an ancestor of ``previous``."""
-    exists = _git(repo_root, "cat-file", "-e", f"{sha}^{{commit}}")
-    if exists is None or exists.returncode != 0:
-        return False
-    ancestor = _git(repo_root, "merge-base", "--is-ancestor", sha, previous)
-    return ancestor is not None and ancestor.returncode == 1
+def is_commit(repo_root: Path, sha: str) -> bool:
+    """Whether ``sha`` names a commit in this clone."""
+    found = _git(repo_root, "cat-file", "-e", f"{sha}^{{commit}}")
+    return found is not None and found.returncode == 0
 
 
-def closed_actions(repo_root: Path, assess_dir: Path, previous: str) -> list[ClosedAction]:
-    """The done actions at HEAD whose ``completed_sha`` landed after ``previous``, in file order."""
+def _ancestor(repo_root: Path, sha: str, of: str) -> int | None:
+    """``merge-base --is-ancestor``'s exit code: 0 an ancestor, 1 not; None when git cannot run."""
+    done = _git(repo_root, "merge-base", "--is-ancestor", sha, of)
+    return None if done is None else done.returncode
+
+
+def closed_actions(repo_root: Path, assess_dir: Path, previous: str) -> tuple[list[ClosedAction], int]:
+    """The done actions at HEAD whose ``completed_sha`` landed after ``previous``, in file order,
+    and how many done entries name a commit this clone does not hold (left unchecked).
+
+    A sha counts only when it is on HEAD's history and not on ``previous``'s, so a branch
+    commit that was squashed or rebased away is never credited, once or again."""
     out: list[ClosedAction] = []
     seen: set[tuple[str, str]] = set()
+    unresolved = 0
     for entry in _committed_actions(repo_root, assess_dir):
         sha, action = entry.get("completed_sha"), entry.get("action")
         if entry.get("status") != "done" or not isinstance(sha, str) or not _SHA.fullmatch(sha):
             continue
         text = action if isinstance(action, str) else ""
-        if (text, sha) in seen or not _closed_after(repo_root, sha, previous):
+        if (text, sha) in seen:
+            continue
+        if not is_commit(repo_root, sha):
+            unresolved += 1
+            continue
+        if _ancestor(repo_root, sha, "HEAD") != 0 or _ancestor(repo_root, sha, previous) != 1:
             continue
         seen.add((text, sha))
         condition, finding = entry.get("condition"), entry.get("finding")
         out.append({"action": text, "condition": condition if isinstance(condition, str) else None,
                     "finding": finding if isinstance(finding, str) else None, "completed_sha": sha})
-    return out
+    return out, unresolved
 
 
 def _previous(assess_dir: Path) -> tuple[bool, Mapping[str, Any] | None]:
@@ -155,10 +180,13 @@ def _words(block: SinceLastRun, has_steps: bool) -> list[str]:
     else:
         closed = block["closed"]
         if closed is None:
-            lines = ["Closed since last run: not known (the previous run recorded no commit)"]
+            lines = [f"Closed since last run: not known ({UNKNOWN_CLOSED.get(block['closed_reason'] or '', 'not read')})"]
         else:
             lines = [f"Closed since last run: {len(closed)}"]
             lines += [f"  `{c['completed_sha'][:7]}` {c['action']}".rstrip() for c in closed]
+            if block["unresolved"]:
+                lines.append(f"  {block['unresolved']} more done action(s) name a commit not in this clone, "
+                             "so they were not checked")
         lines += [_gates_line("gained", block["gates_gained"]), _gates_line("lost", block["gates_lost"])]
     if block["next_blocker"] is not None:
         lines.append(f"Next blocker: {_noun(block['next_blocker'])}")
@@ -180,14 +208,24 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path) -> SinceLastRu
     previous_commit = commit.get("head_sha") if isinstance(commit, Mapping) else None
     previous_commit = previous_commit if isinstance(previous_commit, str) and previous_commit else None
     run_id = (prev or {}).get("run_id")
-    closed = closed_actions(repo_root, assess_dir, previous_commit) if previous_commit else None
+    closed: list[ClosedAction] | None = None
+    unresolved: int | None = None
+    reason: str | None = None
+    if first:
+        pass
+    elif previous_commit is None:
+        reason = "no_previous_commit"
+    elif not is_commit(repo_root, previous_commit):
+        reason = "previous_commit_absent"  # a rewritten history or a shallow clone: not zero
+    else:
+        closed, unresolved = closed_actions(repo_root, assess_dir, previous_commit)
     gained, lost = gate_changes(steps, level, (prev or {}).get("level")) if not first else (None, None)
     current = level if isinstance(level, Mapping) else {}
     block: SinceLastRun = {
         "available": True, "first_run": first,
         "previous_run_id": run_id if isinstance(run_id, str) else None,
-        "previous_commit": previous_commit, "closed": None if first else closed,
-        "closed_count": None if first or closed is None else len(closed),
+        "previous_commit": previous_commit, "closed": closed, "closed_reason": reason,
+        "closed_count": None if closed is None else len(closed), "unresolved": unresolved,
         "gates_gained": gained, "gates_lost": lost, "next_blocker": _next_blocker(current),
         "lines": [], "markdown": ""}
     block["lines"] = _words(block, bool(steps))

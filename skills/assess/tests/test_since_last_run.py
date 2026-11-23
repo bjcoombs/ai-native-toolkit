@@ -92,6 +92,8 @@ def test_only_actions_closed_after_the_previous_commit_are_credited(repo: Path) 
                                 "finding": None, "completed_sha": after}]
     assert (block["gates_gained"], block["gates_lost"]) == (["ci_runs_tests"], [])
     assert block["lines"][:2] == ["Closed since last run: 1", f"  `{after[:7]}` Run the tests in CI"]
+    assert block["unresolved"] == 1 and block["closed_reason"] is None
+    assert "  1 more done action(s) name a commit not in this clone, so they were not checked" in block["lines"]
     assert f"  - `{after[:7]}` Run the tests in CI" in block["markdown"]
     assert "Gates gained: CI runs tests" in block["lines"] and "Gates lost: none" in block["lines"]
     assert block["lines"][-1] == "Next blocker: coverage gate"
@@ -110,6 +112,7 @@ def test_unknown_previous_state_reads_null_not_zero(repo: Path) -> None:
     block = since_last_run(_level("met", "met", "met"), repo / ".assess", repo)
     assert block["first_run"] is False
     assert (block["closed"], block["closed_count"], block["gates_gained"]) == (None, None, None)
+    assert block["closed_reason"] == "no_previous_commit"
     assert "Closed since last run: not known (the previous run recorded no commit)" in block["lines"]
     assert "Gates gained: not known (the previous run has no level result)" in block["lines"]
     assert block["lines"][-1] == "Next blocker: none, every gate is held"
@@ -150,3 +153,42 @@ def test_an_action_closed_between_two_runs_opens_the_report_and_the_log(ci2: Pat
     latest = log[log.rindex("## "):]
     assert "- Closed since last run: 1" in latest
     assert latest.index("Closed since last run") < latest.index("**Files scored:**")
+
+
+def test_a_branch_commit_squashed_away_is_never_credited(repo: Path) -> None:
+    """Review of #1097: a completed_sha off HEAD's history is never an ancestor of a later
+    measured commit, so without the HEAD check it would be credited on every run."""
+    base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "-b", "topic")
+    (repo / "b.txt").write_text("2\n", encoding="utf-8")
+    _commit(repo, "2026-11-02T10:00:00Z", "branch fix")
+    branch_sha = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "main")
+    (repo / "b.txt").write_text("2\n", encoding="utf-8")
+    _commit(repo, "2026-11-02T11:00:00Z", "squashed fix")
+    _actions(repo, {"action": "Squashed work", "status": "done", "completed_sha": branch_sha})
+    _commit(repo, "2026-11-03T10:00:00Z", "record")
+    for previous in (base, _git(repo, "rev-parse", "HEAD")):
+        _previous(repo, _level("met", "met"), previous)
+        block = since_last_run(_level("met", "met"), repo / ".assess", repo)
+        assert (block["closed"], block["unresolved"]) == ([], 0)
+
+
+def test_a_previous_commit_not_in_this_clone_reads_not_known(repo: Path) -> None:
+    _previous(repo, _level("met", "met"), "0123456789abcdef0123456789abcdef01234567")
+    block = since_last_run(_level("met", "met"), repo / ".assess", repo)
+    assert (block["closed"], block["closed_count"], block["closed_reason"]) == (
+        None, None, "previous_commit_absent")
+    assert "Closed since last run: not known (the previous run's commit is not in this clone)" in block["lines"]
+
+
+def test_an_older_models_level_leaves_the_gates_unknown_and_keeps_the_credit(repo: Path) -> None:
+    before = _git(repo, "rev-parse", "HEAD")
+    _previous(repo, {"conditions": []}, before)
+    (repo / "b.txt").write_text("2\n", encoding="utf-8")
+    _commit(repo, "2026-11-02T10:00:00Z", "fix")
+    _actions(repo, {"action": "Done", "status": "done", "completed_sha": _git(repo, "rev-parse", "HEAD")})
+    _commit(repo, "2026-11-03T10:00:00Z", "record")
+    block = since_last_run(_level("met", "met"), repo / ".assess", repo)
+    assert block["available"] is True and block["closed_count"] == 1
+    assert (block["gates_gained"], block["gates_lost"]) == (None, None)
