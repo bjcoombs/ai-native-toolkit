@@ -327,6 +327,9 @@ def test_a_broken_fixture_outside_the_member_globs_leaves_the_count_known(tmp_pa
       "sub/c/Cargo.toml": "", "sub/c/src/lib.rs": ""}, ["sub/package.json"]),
     # a file named as a workspace manifest, away from the root
     ({"sub/pnpm-workspace.yaml": "packages: nope\n", "sub/i.ts": ""}, ["sub/pnpm-workspace.yaml"]),
+    # a member shallower than its workspace, visited first as a plain candidate
+    ({"deep/ws/package.json": '{"workspaces": ["../../lib"]}', "deep/ws/i.js": "",
+      "lib/package.json": "{not json", "lib/i.js": ""}, ["lib/package.json"]),
 ])
 def test_an_unparseable_manifest_that_could_change_the_units_nulls_the_count(
         tmp_path: Path, files: dict[str, str], unreadable: list[str]):

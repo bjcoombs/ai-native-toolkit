@@ -60,8 +60,10 @@ as a workspace manifest (``WORKSPACE_ONLY``: ``pnpm-workspace.yaml``, ``go.work`
 and ``unit_count`` reads null with ``unit_count_reason`` ``unreadable_manifest``:
 its members are unknown. Any other unparseable manifest is a leaf, such as a broken
 test fixture outside the member globs: it is skipped as ``unparseable_leaf`` (the
-manifest's path) and its folder is a candidate by its other manifests, as if the
-broken file declared no workspace. The count stays known.
+manifest's path) and its folder is still a candidate, as if the broken file
+declared no workspace. The count stays known. A workspace member shallower than its
+workspace (``deep/ws`` listing ``../../lib``) is visited first as a plain candidate;
+when the workspace later lists it, its leaf skip moves to ``unreadable_manifests``.
 A repository with no build manifest has no units (``unit_count`` 0).
 
 **Declared units.** ``[[units]]`` in ``.assess/config.toml`` replaces discovery::
@@ -479,6 +481,7 @@ class _Walk:
         self.found = _Discovery([], [], [], [])
         self.claimed: list[str] = []  # unit folders: nothing below one is a new candidate
         self.visited: set[str] = set()  # handled candidates (a nested aggregator claims nothing)
+        self.leaves: dict[str, list[str]] = {}  # folder -> its manifests skipped as unparseable_leaf
 
     def _unit(self, path: str, origin: Origin, eco: Ecosystem | None, workspace: str | None) -> None:
         self.found.units.append({"path": path, "origin": origin, "ecosystem": eco,
@@ -516,8 +519,6 @@ class _Walk:
         self.visited.add(folder)
         names = self.manifest_dirs.get(folder, frozenset())
         declared, broken = _workspaces(self.root, folder, names)
-        # A member shallower than its workspace (``deep/ws`` listing ``../../lib``) is
-        # visited first with origin "manifest", so a broken manifest there reads as a leaf.
         if broken and (folder == "." or origin == "workspace_member" or declared
                        or any(posixpath.basename(b) in WORKSPACE_ONLY for b in broken)):
             # the members are unknown: an aggregator of unknown size, claimed whole
@@ -528,6 +529,8 @@ class _Walk:
             return
         for path in broken:  # a leaf (a broken fixture): it cannot change the unit set
             self._skip(path, "unparseable_leaf")
+        if broken:
+            self.leaves[folder] = broken
         if member_eco is not None:
             declared = [ws for ws in declared if ws.ecosystem != "maven"]
         expanded = [(ws, *_expand(folder, ws, self.dirs, self.manifest_dirs)) for ws in declared]
@@ -543,6 +546,13 @@ class _Walk:
             return
         self.aggregate(folder, expanded)
 
+    def unleaf(self, folder: str) -> None:
+        """Move ``folder``'s leaf skips to ``unreadable``: a workspace lists it after all."""
+        broken = self.leaves.pop(folder)
+        self.found.skipped[:] = [s for s in self.found.skipped
+                                 if not (s["problem"] == "unparseable_leaf" and s["path"] in broken)]
+        self.found.unreadable.extend(broken)
+
     def aggregate(self, folder: str,
                   expanded: list[tuple[_Workspace, list[str], list[SkippedUnit], bool]]) -> None:
         for ws, members, _, root in expanded:
@@ -555,6 +565,9 @@ class _Walk:
                            "manifest_only")
         for ws, members, _, _ in expanded:
             for member in members:
+                if member in self.leaves:
+                    # a member shallower than its workspace was read as a leaf first
+                    self.unleaf(member)
                 # visited too: two workspaces that list each other would otherwise recurse
                 if member in self.visited or any(_is_under(member, c) for c in self.claimed):
                     self._skip(member, "claimed")
