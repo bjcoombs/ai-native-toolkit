@@ -283,7 +283,8 @@ def _parents(tree: IndentTree, key: int) -> list[str] | None:
 def _job_keys(tree: IndentTree, job: int, top: dict[str, int], seen: frozenset[int],
               cache: dict[int, _Keys | None]) -> _Keys | None:
     """The read keys of ``job`` after ``extends:``: parents in order, the last winning, then the
-    job's own keys. None when a parent is not a top-level key of this file, or on a cycle."""
+    job's own keys. None when a parent is not a top-level key of this file, is given inline
+    (``.t: {rules: ...}``, an anchor), or on a cycle."""
     if job in cache:
         return cache[job]
     own = {tree.lines[k].key: k for k in tree.children(job)}
@@ -295,8 +296,8 @@ def _job_keys(tree: IndentTree, job: int, top: dict[str, int], seen: frozenset[i
             return None
         for name in names:
             parent = top.get(name)
-            inherited = None if parent is None or parent in seen else _job_keys(
-                tree, parent, top, seen | {job}, cache)
+            readable = parent is not None and parent not in seen and not tree.lines[parent].value
+            inherited = _job_keys(tree, parent, top, seen | {job}, cache) if readable and parent is not None else None
             if inherited is None:
                 cache[job] = None
                 return None
@@ -320,9 +321,11 @@ def _merged(tree: IndentTree, keys: _Keys, read: str) -> int | None:
     if not lines:
         return None
     # extends: deep-merges hashes and overwrites anything else: only: {refs} over only: {variables}.
-    if read in ("only", "except") and _is_map(tree, lines[-1]) and any(_is_map(tree, k) for k in lines[:-1]):
+    # One map reached twice through a diamond (``extends: [.a, .b]``, both on ``.base``) is one map.
+    last = lines[-1]
+    if read in ("only", "except") and _is_map(tree, last) and any(k != last and _is_map(tree, k) for k in lines):
         return -1
-    return lines[-1]
+    return last
 
 
 def _except(base: _Outcomes, excluded: _Outcomes) -> _Outcomes:

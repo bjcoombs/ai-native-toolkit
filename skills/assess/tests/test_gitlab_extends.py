@@ -63,12 +63,21 @@ def test_an_unresolvable_parent_reads_null(tmp_path: Path) -> None:
     (".mid:\n  extends: .missing\ntest:\n  extends: .mid\n  script: pytest\n", "unknown"),
     (".a:\n  extends: .b\n.b:\n  extends: .a\ntest:\n  extends: .a\n  script: pytest\n", "unknown"),
     (_NIGHTLY + "test:\n  extends: *ref\n  script: pytest\n", "unknown"),
+    # A parent given inline as a flow map is not read: it must not count as a template with no keys.
+    ('.nightly: {rules: [{if: $CI_PIPELINE_SOURCE == "schedule"}]}\n'
+     "test:\n  extends: .nightly\n  script: pytest\n", "unknown"),
+    # A diamond reaching one only: map twice reads it once.
+    (".base:\n  only:\n    refs:\n      - tags\n.a:\n  extends: .base\n.b:\n  extends: .base\n"
+     "test:\n  extends: [.a, .b]\n  script: pytest\n", "not_ordinary"),
+    # Two different only: maps are deep-merged by GitLab and not read here.
+    (".v:\n  only:\n    variables:\n      - $X\ntest:\n  extends: .v\n  only:\n    refs:\n      - tags\n"
+     "  script: pytest\n", "unknown"),
     # rules: and only: meeting in one merged job: GitLab rejects the job, so it is not read.
     (_NIGHTLY + "test:\n  extends: .nightly\n  only: [branches]\n  script: pytest\n", "unknown"),
 ], ids=["two_level", "middle_overrides", "own_rules_override", "flow_list_last_wins",
         "block_list_last_wins", "inherited_when", "inherited_default_when", "inherited_only",
         "no_read_keys", "unresolvable_grandparent", "cycle", "anchor",
-        "rules_and_only"])
+        "rules_and_only", "inline_parent", "diamond_one_map", "two_maps"])
 def test_extends_is_resolved(text: str, trigger: str) -> None:
     assert _trigger(text) == trigger
 
