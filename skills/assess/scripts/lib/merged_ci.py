@@ -1,7 +1,7 @@
 """The merged CI configuration a platform read gives the offline scans (issue #796).
 
 The value type of the private ``gitlab_merged_ci`` registry spec. It lives apart from
-``lib/gitlab_ci_lint.py``, which reads it through ``glab``, so ``ci_checks`` and
+``lib/hosting/gitlab_ci_lint.py``, which reads it through ``glab``, so ``ci_checks`` and
 ``review_automation`` stay offline modules: they import this type, never a platform
 client. ``text`` is held in memory only and is never published.
 

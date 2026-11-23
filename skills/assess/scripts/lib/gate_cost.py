@@ -34,7 +34,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from lib.gh_cli import GhUnavailable, gh_json, open_github, unavailable
+from lib.hosting.gh_cli import GhUnavailable, gh_json, open_github, unavailable
 
 # Assumed wall-clock minutes per gate run. One measured run took 4m51s on a
 # 3,009-file repository; the figure is an assumption, not a measurement of the

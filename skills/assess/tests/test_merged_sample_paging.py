@@ -1,7 +1,7 @@
-"""Tests for the paged merged-sample reads (lib/merged_sample.py, issue #995).
+"""Tests for the paged merged-sample reads (lib/hosting/merged_sample.py, issue #995).
 
 ``gh`` and ``glab`` are stubbed at the process boundary (``run_cli`` in
-``lib.gh_cli`` and ``lib.gitlab_cli``): the stub answers each call from the
+``lib.hosting.gh_cli`` and ``lib.hosting.gitlab_cli``): the stub answers each call from the
 arguments it was given and prints the CLI's own HTTP 502 or 504 line on stderr for
 a page larger than it accepts, so the status parsing is exercised too. Nothing
 reaches the network.
@@ -19,13 +19,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib import gh_cli, gitlab_cli  # noqa: E402
-from lib import merged_sample as ms  # noqa: E402
-from lib.delivery import scan_delivery  # noqa: E402
+import lib.hosting.gh_cli as gh_cli  # noqa: E402
+import lib.hosting.gitlab_cli as gitlab_cli  # noqa: E402
+import lib.hosting.merged_sample as ms  # noqa: E402
+from lib.hosting.delivery import scan_delivery  # noqa: E402
 from lib.external_ci import CALLS_PER_CHANGE, read_external_ci  # noqa: E402
-from lib.gh_cli import GhUnavailable, GithubRepo  # noqa: E402
-from lib.gitlab_cli import GitlabProject  # noqa: E402
-from lib.platform_cli import CliResult  # noqa: E402
+from lib.hosting.gh_cli import GhUnavailable, GithubRepo  # noqa: E402
+from lib.hosting.gitlab_cli import GitlabProject  # noqa: E402
+from lib.hosting.platform_cli import CliResult  # noqa: E402
 
 REPO = GithubRepo("kubernetes", "kubernetes")
 PROJECT = GitlabProject("gitlab.example.com", "estate/app")

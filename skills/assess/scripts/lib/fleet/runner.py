@@ -124,7 +124,7 @@ from typing import Any, TypedDict
 
 from lib.fleet_activity import is_active
 from lib.git_churn import ASSESS_CONFIG_PATHSPEC, ASSESS_EXCLUDE_PATHSPEC
-from lib.platform_cli import CACHE_ENV
+from lib.hosting.platform_cli import CACHE_ENV
 from lib.run_context_types import JsonDict
 from lib.signals import offline_scans
 
@@ -230,7 +230,7 @@ class ScanOptions:
     active_since: date | None = None  # set: an ok row's ``active`` is HEAD committed on or after it
     fleet_config: Path | None = None  # absolute: scans run with the scratch directory as cwd
     platform: bool = False  # set: assess_signals --platform (the platform pass, lib/fleet/fleet_platform.py)
-    cache_dir: Path | None = None  # set: the scan's gh/glab response cache (lib/platform_cli.py)
+    cache_dir: Path | None = None  # set: the scan's gh/glab response cache (lib/hosting/platform_cli.py)
     ghsync_root: Path | None = None  # set: assess_signals --ghsync-root (GitLab includes, #766)
 
 

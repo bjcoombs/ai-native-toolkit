@@ -105,7 +105,7 @@ CI_CHECKS: JsonDict = {
         "resolved, and null (unknown) when a CI file pulls jobs from a file this run could not "
         "read (an unresolved GitLab include, a reusable workflow in another repository); basis "
         "says which. Under --platform, a repository with an unresolved GitLab include also gets "
-        "GitLab's merged configuration from the CI lint API (lib/gitlab_ci_lint.py), counted "
+        "GitLab's merged configuration from the CI lint API (lib/hosting/gitlab_ci_lint.py), counted "
         "apart in merged_check_commands; a template resolved offline wins. enforced_check_runs (issue #775) is the same test with "
         "masked checks left out (|| true, continue-on-error: true, allow_failure: true, set +e "
         "without a re-raise; lib/ci_masking.py) and checks off the ordinary triggers left out "
@@ -194,11 +194,14 @@ CI_CHECKS: JsonDict = {
             "script the tree does not hold, a target whose recipe is not read, a CI system the "
             "scan does not parse or an external CI system may hold one, else false."),
         "enforced_basis": _field(
-            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "script_not_found",
-                      "check_target", "unread_ci_system", "external_ci", "external_ci_marker",
-                      "not_enforced", "no_check_command", "no_ci"]},
+            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "check_may_pass",
+                      "script_not_found", "check_target", "unread_ci_system", "external_ci",
+                      "external_ci_marker", "not_enforced", "no_check_command", "no_ci"]},
             "The reason for enforced_check_runs: enforced_check (true), included_jobs, "
-            "unknown_trigger, script_not_found, check_target or unread_ci_system (null), "
+            "unknown_trigger, check_may_pass (a check whose failure the step may hide: pytest || "
+            "echo failed, an if or while condition, an until loop that breaks out, a check before "
+            "&& with more of the step after it, a { } group or function called in such a "
+            "position; issue #1008), script_not_found, check_target or unread_ci_system (null), "
             "external_ci (null: an "
             "external check context on merged changes under --platform; more than half of the "
             "sampled merged pull requests carry a check run or commit status of a known "
@@ -225,11 +228,11 @@ CI_CHECKS: JsonDict = {
             "counts only when a later line of its job runs git diff --exit-code."),
         "lint_basis": _field(
             {"enum": ["lint_command", "included_jobs", "merged_config_partial", "unknown_trigger",
-                      "script_not_found", "check_target", "unread_ci_system", "external_ci",
+                      "check_may_pass", "script_not_found", "check_target", "unread_ci_system", "external_ci",
                       "external_ci_marker", "analysers_in_build", "compiler_gate_only", "not_enforced",
                       "no_lint_command", "no_ci"]},
             "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, "
-            "unknown_trigger, script_not_found, check_target, unread_ci_system, external_ci or "
+            "unknown_trigger, check_may_pass, script_not_found, check_target, unread_ci_system, external_ci or "
             "external_ci_marker "
             "(null; as enforced_basis), analysers_in_build (null: "
             "a CI .NET build runs the analysers a committed Directory.Build.props or .csproj turns "
@@ -306,11 +309,12 @@ COVERAGE_GATE: JsonDict = {
             "is null or the run cannot be told (see enforced_basis); false otherwise."),
         "enforced_basis": _field(
             {"enum": ["ci_run", "no_gate", "threshold_below_minimum", "threshold_not_read",
-                      "unknown_trigger", "indirect_run", "included_jobs", "unread_ci_system",
-                      "not_run_in_ci", "no_ci"]},
+                      "unknown_trigger", "check_may_pass", "indirect_run", "included_jobs",
+                      "unread_ci_system", "not_run_in_ci", "no_ci"]},
             "The reason for enforced_meets_minimum: ci_run (true); no_gate, "
             "threshold_below_minimum, not_run_in_ci and no_ci (false); threshold_not_read, "
-            "unknown_trigger, indirect_run (a check target or script such as make test may run "
+            "unknown_trigger, check_may_pass (the run's failure may not fail its job: pytest "
+            "--cov || echo failed; issue #1008), indirect_run (a check target or script such as make test may run "
             "it), included_jobs and unread_ci_system (null)."),
         "not_detected": _STRINGS,
     },
@@ -318,7 +322,7 @@ COVERAGE_GATE: JsonDict = {
 
 DELIVERY: JsonDict = {
     "description": (
-        "How work flows through review to merge (lib/delivery.py), from one shared sample of "
+        "How work flows through review to merge (lib/hosting/delivery.py), from one shared sample of "
         "up to 30 changes merged inside the run window, newest merge first (the sample "
         "review_reality reads). A platform block: present only under --platform (absent "
         "otherwise); a refused read is available false with a reason (no_access on HTTP 403), "
@@ -344,7 +348,7 @@ DELIVERY: JsonDict = {
         "agent_authored_share": _share("changes an agent identity authored"),
         "sample_page_size": _field(
             {"type": ["integer", "null"]},
-            "Changes per heavy read of the sample (lib/merged_sample.py PAGE_SIZE, or half "
+            "Changes per heavy read of the sample (lib/hosting/merged_sample.py PAGE_SIZE, or half "
             "of it after one retry on HTTP 502 or 504); null when no heavy read was made."),
     },
 }
@@ -353,7 +357,7 @@ _TOKENS: JsonDict = {"type": "array", "items": {"type": "string"}}
 
 REVIEW_REALITY: JsonDict = {
     "description": (
-        "Whether merged changes were reviewed (lib/review_reality.py), from the shared sample "
+        "Whether merged changes were reviewed (lib/hosting/review_reality.py), from the shared sample "
         "of up to 30 changes merged inside the run window. A platform block: a refused read is "
         "available false with a reason (no_access on HTTP 403), never zeros. Shares are of "
         "merged_count; no title, number, login or name is written."),

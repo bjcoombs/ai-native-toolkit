@@ -10,9 +10,15 @@ name: PR Title Lint + Auto-Label
 #     Breaking changes (`feat!:` or `feat(scope)!:`) also get a `breaking`
 #     label (create with `gh label create breaking` if you want it).
 
+# merge_group: `Validate PR title` is a required check, so it must report on
+# the merge queue's group too (#1088). A group has no pull request title: the
+# job runs and passes there without the lint step, because the queue admits
+# only a pull request whose title already passed this check. Auto-label skips.
 on:
   pull_request:
     types: [opened, edited, synchronize]
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
@@ -24,7 +30,12 @@ jobs:
     name: Validate PR title
     runs-on: ubuntu-latest
     steps:
-      - uses: amannn/action-semantic-pull-request@v6
+      - name: Merge group (title checked on the pull request)
+        if: github.event_name == 'merge_group'
+        run: echo "Merge group - the title was validated on the pull request before it was queued."
+
+      - if: github.event_name == 'pull_request'
+        uses: amannn/action-semantic-pull-request@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -45,6 +56,7 @@ jobs:
   auto-label:
     name: Auto-label from PR title
     needs: lint-title
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/github-script@v9
