@@ -17,7 +17,7 @@ numbers only, so they name no repository. None without a maturity model.
 100 percent scale: a dot at the median and a whisker from the 25th to the 75th percentile (a
 whisker of zero length, as with one repository, is not drawn: it collapses to the dot). The
 row label is the tag title, its condition count and the repositories measured on it
-(``Behaviour · 3 · 12 of 14 repositories``). A row no repository measured is a dashed, hollow track
+(``Behaviour · 3 conditions · 12 of 14 repositories``). A row no repository measured is a dashed, hollow track
 with its reason and no dot (``row_state``): no condition has the tag yet, its conditions are
 listed and never counted, or no repository measured a counted condition. Each row's hover
 text is the tag ``why`` (#939). Point marks and lines only, never a filled area; no
@@ -35,7 +35,7 @@ import lib.fleet.fleet_svg as svg
 from lib.assess_diagrams import wrap
 from lib.class_sizes import percentile
 from lib.level_result_types import TagCell
-from lib.level_tags import tag_rows
+from lib.level_tags import conditions_label, tag_rows
 from lib.level_tally import level_result
 from lib.levels import MaturityModel
 from lib.levels_fields import TRUTH_TAG_TITLES
@@ -109,7 +109,7 @@ def _plural(n: int) -> str:
 
 def row_label(row: FleetTagRow) -> str:
     """The tag title, its condition count and the repositories measured on it, of those with a tally."""
-    return (f"{TRUTH_TAG_TITLES[row['tag']]} · {row['conditions']} · "
+    return (f"{TRUTH_TAG_TITLES[row['tag']]} · {conditions_label(row['conditions'])} · "
             f"{row['measured']} of {_plural(row['repos'])}")
 
 
@@ -183,7 +183,7 @@ def render(rows: Sequence[FleetTagRow], whys: Mapping[str, str]) -> str:
         y += ROW_H
     y += 12
     key = [(f'<circle cx="{PAD + 7:.1f}" cy="{{cy}}" r="{DOT_R:.1f}" class="f-accent s-bg" stroke-width="1.5"/>',
-            "Median: the middle repository's share of the tag's measured conditions met"),
+            "Median: the middle value of the repositories' shares of the tag's measured conditions met"),
            (f'<line x1="{PAD:.1f}" y1="{{cy}}" x2="{PAD + 14:.1f}" y2="{{cy}}" class="s-fg" stroke-width="2"/>',
             "Whisker: the middle half of the repositories, 25th to 75th percentile"),
            (f'<line x1="{PAD:.1f}" y1="{{cy}}" x2="{PAD + 14:.1f}" y2="{{cy}}" class="s-muted" '

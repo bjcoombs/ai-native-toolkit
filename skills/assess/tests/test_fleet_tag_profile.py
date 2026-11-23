@@ -22,6 +22,7 @@ from lib.fleet.fleet_diagrams import build_diagrams
 from lib.fleet.fleet_rescore import rescore
 from lib.level_result_types import TagCell
 from lib.level_tally import default_model
+from lib.level_tags import conditions_label
 from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
 from lib.vocabulary import banned_hits
 from svg_cascade import overridden_text_attributes
@@ -122,9 +123,11 @@ def test_row_order_is_fixed_and_labels_carry_conditions_and_repositories_measure
     svg = _svg()
     assert re.findall(r'<g data-tag="([a-z_]+)"', svg) == list(TRUTH_TAGS)
     for row in rows():
-        label = f">{TRUTH_TAG_TITLES[row['tag']]} · {row['conditions']} · {row['measured']} of {row['repos']} "
+        label = (f">{TRUTH_TAG_TITLES[row['tag']]} · {conditions_label(row['conditions'])} · "
+                 f"{row['measured']} of {row['repos']} ")
         assert label in _row(svg, row["tag"])
-    assert ">Behaviour · 3 · 3 of 4 repositories<" in svg
+    assert ">Behaviour · 3 conditions · 3 of 4 repositories<" in svg
+    assert ">Supply chain · 1 condition · 0 of 4 repositories<" in svg
 
 
 def test_a_tag_no_repository_measured_is_dashed_with_its_reason_never_zero() -> None:

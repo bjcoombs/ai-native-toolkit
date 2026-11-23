@@ -31,11 +31,16 @@ from lib.level_result_types import LevelResult, TagCell, TagRow
 from lib.levels import MaturityModel
 from lib.levels_fields import TRUTH_TAGS
 
-__all__ = ["COUNTABLE_GRADES", "tag_cells", "tag_rows", "truth_map"]
+__all__ = ["COUNTABLE_GRADES", "conditions_label", "tag_cells", "tag_rows", "truth_map"]
 
 # The grades the tally counts (``lib.level_tally.COUNTED_GRADES``; kept here, below the engine,
 # so the engine can import this module; a test holds the two equal).
 COUNTABLE_GRADES = frozenset({"measured", "verified"})
+
+
+def conditions_label(n: int) -> str:
+    """``n`` with its unit, for a tag row label: ``1 condition``, ``3 conditions``."""
+    return f"{n} condition" if n == 1 else f"{n} conditions"
 
 
 def truth_map(model: MaturityModel) -> dict[str, list[str]]:
