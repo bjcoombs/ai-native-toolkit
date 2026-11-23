@@ -110,7 +110,7 @@ with its value (`--coverage=false` runs no gate; `--coverageDirectory` is not th
 `collectCoverage: true` is read with comments stripped. A coverage action step
 (go-test-coverage) is masked like a `run:` line. A CI file read as empty that is not empty
 on disk (over the size cap, unreadable) is unread. Null, never false: `unknown_trigger`,
-`indirect_run` (an enforced `check_command.may_lint` line such as `make test`, `npm
+`indirect_run` (an enforced `named_check.may_lint_named` line, #951, such as `make test`, `make ci`, `npm
 test`, `tox`, `mvn test`, a target or script named for coverage such as `make coverage`,
 `make cov`, `npm run coverage` or `just coverage`, or a Jest / Vitest run with no
 `--coverage`),
@@ -143,9 +143,10 @@ from pathlib import Path
 from typing import Literal, TypeVar
 
 from lib.check_command import (
-    _DIRECT_TESTS, LINT_PROGRAMS, _exec_program, _info_program, is_info_invocation, may_lint)
+    _DIRECT_TESTS, LINT_PROGRAMS, _exec_program, _info_program, is_info_invocation)
 from lib.ci_masking import unmasked_lines
 from lib.coverage_activation import Activation, covers
+from lib.named_check import may_lint_named
 from lib.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, workflow_trigger
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.unread_ci import unread_ci_paths
@@ -668,7 +669,7 @@ def _indirect(ci: CiRuns, family: str | None = None) -> bool | str:
     excludes the verification (#954)."""
     return _merge(("indirect_run" if run.trigger == "ordinary" else "unknown_trigger")
                   for run in ci.runs if run.trigger != "not_ordinary"
-                  and (may_lint(run.text) or coverage_target(run.words))
+                  and (may_lint_named(run.text) or coverage_target(run.words))
                   and not gradle_runs_nothing(run.words)
                   and not (family == "gradle-jacoco" and gradle_skips_verification(run.words)))
 

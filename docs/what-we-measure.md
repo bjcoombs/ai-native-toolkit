@@ -220,7 +220,7 @@ Review and approval shares over the sampled merged changes, read through gh or g
 - Collector: `core.review_reality`, reading `merged_sample`, `gitlab_note_facts`.
 - Network: yes, GitHub or GitLab (with --platform).
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `review_reality.reason` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `review_reality.bot_sequence` token, `review_reality.reason` drop, `review_reality.sequence` token.
 - Used by: row `layer-7-review`.
 - Evidence: `review_reality.reviewed_share` platform (verified), `review_reality.approved_share` platform (verified).
 - Not measured when:
@@ -533,6 +533,18 @@ Each doc's last content change against its code subject's churn, following renam
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
 - Counts-only: numbers, booleans and nulls kept; strings by field: `archetype.archetype` token, `archetype.detected_via` token, `archetype.kb_maintenance.gist` drop, `archetype.reason` drop.
 - Used by: finding `override_contradicts_signals`.
+- Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
+
+### `owner_exclusions`: Owner exclusions
+
+The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why.
+
+- Collector: `core.owner_exclusions`, reading `repo_root`.
+- Network: no.
+- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `owner_exclusions.disclosures` drop, `owner_exclusions.exclusions.excluded_at` token, `owner_exclusions.exclusions.excluded_by` drop, `owner_exclusions.exclusions.id` token, `owner_exclusions.exclusions.kind` token, `owner_exclusions.exclusions.reason` drop, `owner_exclusions.exclusions.source` token, `owner_exclusions.exclusions.version` token, `owner_exclusions.skipped.id` drop, `owner_exclusions.skipped.problem` token.
+- Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
 

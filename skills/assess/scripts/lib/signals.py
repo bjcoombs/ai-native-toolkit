@@ -24,7 +24,7 @@ table in its own module runs here without an edit. ``lib.headless_layers``
 supplies the blocks the core builds from setup state a headless run lacks
 (``structure``, ``stats_summary``, ``promissory_markers``, ``structure_drift``;
 #667) and ``lib.headless_static`` the static ones (``observability``,
-``doc_graph``, ``doc_staleness``, ``archetype``; #699), in place of the core entries that publish them (``SIGNAL_SCANS``). The core's entries (setup
+``doc_graph``, ``doc_staleness``, ``archetype``; #699; ``owner_exclusions``, #944), in place of the core entries that publish them (``SIGNAL_SCANS``). The core's entries (setup
 state, the run header, the serialised blocks) run only when a reported scan
 reads one of them; the publish step that writes the wiki is never called.
 

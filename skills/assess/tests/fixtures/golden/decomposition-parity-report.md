@@ -18,6 +18,18 @@ In place: 0 counted conditions met (0 verified, 0 measured) and 1 listed from co
 
 Verified and measured squares count toward the level, listed ones are shown but never counted, and hatched ones were not measured, never read as zero.
 
+## Docs behind their code
+
+In place: this run's scans, gathered with no model call.
+
+Not drawn: no doc maps to code of its own; 1 doc measured against the whole repository is counted, not drawn.
+
+## Review on recent merges
+
+In place: this run's scans, gathered with no model call.
+
+Not drawn: not measured here: no remote.
+
 ## Metrics Dashboard
 
 - **Files scored:** 3
@@ -50,9 +62,9 @@ _Deterministic portion of the assessment: headline, metrics, hotspots, and cross
 
 ## How this was measured
 
-In place: over 1 repository, 27 scans were measured everywhere, 16 ran but were not measured everywhere, and 0 were skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
+In place: over 1 repository, 28 scans were measured everywhere, 16 ran but were not measured everywhere, and 0 were skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
 
-### Ran (43)
+### Ran (44)
 
 - `agent_ops`
 - `config_drift`
@@ -84,6 +96,7 @@ In place: over 1 repository, 27 scans were measured everywhere, 16 ran but were 
 - `doc_graph`
 - `doc_staleness`
 - `archetype`
+- `owner_exclusions`
 - `diff`
 - `dead_code`: not measured in 1 of 1 (unavailable)
 - `ancestor_instruction_files`
