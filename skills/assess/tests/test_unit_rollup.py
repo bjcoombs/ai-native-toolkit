@@ -76,9 +76,12 @@ def test_the_fixture_rolls_up_to_the_lowest_unit(run: dict[str, Any]) -> None:
 
 
 def test_the_repository_step_and_headline_are_untouched(run: dict[str, Any]) -> None:
+    from lib.exec_summary import summarised
     from lib.headline import run_context_headline
     from lib.level_tally import run_context_level
-    assert run["headline"] == run_context_headline(run["level"])
+    expected = summarised(run_context_headline(run["level"]), run["level"], run.get("since_last_run"),
+                          default_model())
+    assert run["headline"] == expected
     assert run["level"]["step"] == run_context_level(run)["step"]
     assert "Units:" not in run["headline"]["markdown"]
 
