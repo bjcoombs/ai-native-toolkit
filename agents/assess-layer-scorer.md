@@ -23,7 +23,7 @@ The orchestrator passes you `REPO_ROOT` (the absolute repo path). Everything you
 
 A scorecard the orchestrator forwards to the `assess-findings` step:
 
-- the **per-practice verdict** (Present / Partial / Missing, or **N/A** for a layer the archetype excludes) with a one-line evidence note each,
+- the **per-practice verdict** (Present / Partial / Missing, or **N/A** for a practice the archetype excludes) with a one-line evidence note each,
 - any layer-specific observations the report should lead with (e.g. "Layer 3 linter exists but no complexity gate"), and
 - the **`evidence`** list: every existence or wiring fact a verdict rests on, as structured entries in the schema below.
 
