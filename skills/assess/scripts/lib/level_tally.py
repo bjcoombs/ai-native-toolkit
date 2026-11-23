@@ -306,6 +306,22 @@ def _gate_blocker(gate_id: str, row_id: str, level: int,
     return None
 
 
+def gate_blockers(steps: Sequence[StepDef], conditions: Sequence[ConditionResult]) -> list[Blocker]:
+    """Every gate of ``steps`` that does not hold, once per gate id in Step order, from a level
+    result's ``conditions`` (#945: a Step target reads the gates of a Step above the next one)."""
+    by_id = {c["id"]: c for c in conditions}
+    seen: set[str] = set()
+    out: list[Blocker] = []
+    for step in steps:
+        for gate in step["gates"]:
+            if gate["id"] in seen:
+                continue
+            seen.add(gate["id"])
+            if (blocker := _gate_blocker(gate["id"], gate["row"], gate["level"], by_id)) is not None:
+                out.append(blocker)
+    return out
+
+
 def _blockers(step: StepDef, met: int, by_id: Mapping[str, ConditionResult]) -> list[Blocker]:
     found = [b for g in step["gates"] if (b := _gate_blocker(g["id"], g["row"], g["level"], by_id)) is not None]
     if met < step["threshold"]:
