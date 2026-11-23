@@ -31,6 +31,11 @@ Definitions (each metric is null, never 0, when its input is missing):
 - throughput: merged PRs per hour of the run window.
 
 Python 3.8 compatible and stdlib only, so it runs under any `python3`.
+
+Lint: this file sits outside `make lint`, which gates only `skills/assess/` and
+`scripts/`. Check it with that package's config from `scripts/`:
+`uv run --locked ruff check ../skills/marathon/scripts/flow_metrics.py` and
+`uv run --locked mypy --strict ../skills/marathon/scripts/flow_metrics.py`.
 """
 from __future__ import annotations
 

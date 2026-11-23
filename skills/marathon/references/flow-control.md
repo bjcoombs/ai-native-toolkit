@@ -6,7 +6,7 @@ The [Flow metrics](flow-metrics.md) reference measures whether these rules worke
 
 ## 1. WIP limit by merge throughput
 
-**Rule.** Cap open builder PRs at about the number the merge step clears in one CI cycle, plus one in review. To get the basis, divide the CI cycle (push to required-green, in minutes) by the lead's per-merge time (re-check plus merge plus cleanup), then add one. Spawn a new unit only when the open count is below the cap. Report the limit and its basis at each wave: `WIP limit: 4 (CI cycle 20 min / 5 min per merge, plus 1)`. At the next wave, recompute it from the measured `mean_wait_green_to_merged_min` and throughput.
+**Rule.** Cap open builder PRs at about the number the merge step clears in one CI cycle, plus one in review. To get the basis, divide the CI cycle (push to required-green, in minutes) by the lead's per-merge time (re-check plus merge plus cleanup), then add one. Spawn a new unit only when the open count is below the cap. Report the limit and its basis at each wave: `WIP limit: 5 (CI cycle 20 min / 5 min per merge, plus 1)`. At the next wave, recompute it from the measured `mean_wait_green_to_merged_min` and throughput.
 
 **Reason.** A builder whose PR cannot merge does not add throughput. It goes stale, merges main again, and restarts CI and review for everyone. The CPU count and the number of ready units are the wrong limit, because neither is the constraint.
 
