@@ -1,4 +1,4 @@
-"""Tests for comparing two fleet runs, lib/fleet_compare.py (issue #552)."""
+"""Tests for comparing two fleet runs, lib/fleet/fleet_compare.py (issue #552)."""
 from __future__ import annotations
 
 import json
@@ -8,12 +8,12 @@ from typing import Any
 
 import pytest
 
-from lib import fleet_compare as fc
-from lib.fleet import FLEET_ROW_VERSION, FleetRow, write_rows
-from lib.fleet_compare import FleetRun, compare, load_run, signal_changes
-from lib.fleet_groups import roll_up, write_groups
-from lib.fleet_view import FleetViewError
-from lib.fleet_stamp import FleetStamp, build_stamp, write_stamp
+import lib.fleet.fleet_compare as fc
+from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow, write_rows
+from lib.fleet.fleet_compare import FleetRun, compare, load_run, signal_changes
+from lib.fleet.fleet_groups import roll_up, write_groups
+from lib.fleet.fleet_view import FleetViewError
+from lib.fleet.fleet_stamp import FleetStamp, build_stamp, write_stamp
 from test_fleet_groups import LEVELS
 
 

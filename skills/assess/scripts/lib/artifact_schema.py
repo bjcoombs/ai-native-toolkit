@@ -132,7 +132,7 @@ instead of editing the history comment; the release PR folds the notes in with
 # the /fleet outputs: run.json and each groups.jsonl line carry levels_version
 # (was rubric_version), and a group line holds its rows under levels (was
 # rubric); compare.json earlier/later summaries carry levels_version
-# (fleet_compare_version 2). Readers map the old keys (lib/fleet_legacy.py), so
+# (fleet_compare_version 2). Readers map the old keys (lib/fleet/fleet_legacy.py), so
 # runs written before the rename still load and match in the history. Also
 # documented: a run-context.json structure block reports modularity_q null in two
 # cases, an import graph with no edges (modularity_reason "no_import_edges") and
@@ -264,7 +264,7 @@ instead of editing the history comment; the release PR folds the notes in with
 #   their names no longer claim a run (issue #783): ci_checks.test_or_lint_runs is
 #   test_or_lint_configured and coverage_gate.enforced is configured. Values and
 #   meaning are unchanged; the fleet re-score reads a stored scan's old path under the
-#   new name (lib/fleet_rescore.SIGNAL_ALIASES). complexity-stats.json is unchanged.
+#   new name (lib/fleet/fleet_rescore.SIGNAL_ALIASES). complexity-stats.json is unchanged.
 # - ci_checks.enforced_basis gains check_target (issue #920): no CI line runs a
 #   check, but one runs a target whose recipe is not read (make foo, npm run foo,
 #   ./scripts/foo.sh, docker run img), so enforced_check_runs reads null, never false. Common test

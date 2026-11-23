@@ -1,4 +1,4 @@
-"""Tests for scanner-change attribution of fleet comparison moves, lib/fleet_scanner_diff.py (issue #774)."""
+"""Tests for scanner-change attribution of fleet comparison moves, lib/fleet/fleet_scanner_diff.py (issue #774)."""
 from __future__ import annotations
 
 import json
@@ -6,11 +6,11 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from lib import fleet_compare as fc
-from lib import fleet_scanner_diff as sd
-from lib.fleet_compare import FleetRun, compare, summary_lines
-from lib.fleet_groups import roll_up
-from lib.fleet_scanner_diff import ScannerDiff, scanner_diff
+import lib.fleet.fleet_compare as fc
+import lib.fleet.fleet_scanner_diff as sd
+from lib.fleet.fleet_compare import FleetRun, compare, summary_lines
+from lib.fleet.fleet_groups import roll_up
+from lib.fleet.fleet_scanner_diff import ScannerDiff, scanner_diff
 from test_fleet_compare import _row, _row_move, _scans, _stamp
 from test_fleet_groups import LEVELS
 
@@ -195,9 +195,9 @@ def test_the_toolkit_root_holds_the_lib_directory_it_diffs():
 
 
 def _write(out: Path, rows: list[Any], fleet_data: dict[str, Any] | None = None, **stamp: Any) -> None:
-    from lib.fleet import write_rows
-    from lib.fleet_groups import write_groups
-    from lib.fleet_stamp import write_stamp
+    from lib.fleet.runner import write_rows
+    from lib.fleet.fleet_groups import write_groups
+    from lib.fleet.fleet_stamp import write_stamp
 
     run = _run(rows, **stamp)
     write_rows(out, rows)

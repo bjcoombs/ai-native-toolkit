@@ -474,7 +474,7 @@ query_org_settings_github() {
         --argjson details "$details" --arg detail_err "$detail_err" > "$out"
 }
 
-# The org's GitHub teams, for the fleet units tree (lib/fleet_units.py), added
+# The org's GitHub teams, for the fleet units tree (lib/fleet/fleet_units.py), added
 # to the org fragment as `teams: [{slug, parent, repos}]` (parent a team slug
 # or null, repos the repository names, both sorted). Not a setting: the report
 # does not render it. The key is written only when the team list and every

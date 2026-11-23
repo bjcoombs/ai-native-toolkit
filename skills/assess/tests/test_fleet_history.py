@@ -1,4 +1,4 @@
-"""Tests for the fleet run history (lib/fleet_history.py) and --compare wiring (issue #552)."""
+"""Tests for the fleet run history (lib/fleet/fleet_history.py) and --compare wiring (issue #552)."""
 from __future__ import annotations
 
 import importlib.util
@@ -11,8 +11,8 @@ from types import ModuleType
 
 import pytest
 
-from lib import fleet_history as fh
-from lib.fleet_history import (
+import lib.fleet.fleet_history as fh
+from lib.fleet.fleet_history import (
     HistoryError,
     choose_entry,
     default_org,
@@ -480,7 +480,7 @@ def test_heatmap_compare_uses_the_fleet_comparison_rule(froot2, tmp_path):
     assert "window changed" in (tmp_path / "w.svg").read_text(encoding="utf-8")
 
     (froot2 / "acme" / "svc2" / "svc2-main" / "CLAUDE.md").write_text("x\n", encoding="utf-8")
-    from lib.fleet_cleanup import _rmtree
+    from lib.fleet.fleet_cleanup import _rmtree
     _rmtree(froot2 / "acme" / "svc2")  # git objects are read-only on Windows
     fewer = run("c")
     assert heatmap.main([str(fewer), "--compare", str(first), "--output", str(tmp_path / "s.svg")]) == 0
@@ -516,7 +516,7 @@ def test_heatmap_reports_an_earlier_group_version_as_a_refusal(froot2, tmp_path)
 
 
 def test_view_check_refuses_a_one_side_stamped_pair(tmp_path):
-    from lib.fleet_compare import view_check
+    from lib.fleet.fleet_compare import view_check
     stamped, old, groups_only = tmp_path / "stamped", tmp_path / "old", tmp_path / "groups"
     for d in (stamped, old, groups_only):
         d.mkdir()
@@ -550,8 +550,8 @@ def test_an_unsafe_first_segment_with_history_exits_2_naming_the_fixes(tmp_path,
 
 
 def test_view_check_raises_on_a_malformed_run(tmp_path):
-    from lib.fleet_compare import view_check
-    from lib.fleet_view import FleetViewError
+    from lib.fleet.fleet_compare import view_check
+    from lib.fleet.fleet_view import FleetViewError
     for name in ("now", "then"):
         (tmp_path / name).mkdir()
         (tmp_path / name / "run.json").write_text("[1]", encoding="utf-8")
@@ -560,7 +560,7 @@ def test_view_check_raises_on_a_malformed_run(tmp_path):
 
 
 def test_view_check_reports_unreadable_runs(tmp_path):
-    from lib.fleet_compare import view_check
+    from lib.fleet.fleet_compare import view_check
     for name in ("now", "then"):
         (tmp_path / name).mkdir()
         (tmp_path / name / "run.json").write_text('{"fleet_stamp_version": 9}', encoding="utf-8")

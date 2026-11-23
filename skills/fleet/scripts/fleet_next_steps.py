@@ -5,7 +5,7 @@ writes ``OUT/teams.md`` (an index) and one Markdown page per group under
 ``OUT/teams/``: the group's level on each maturity model row, the unmet criteria of
 the next level as single-change steps with the repositories holding it back,
 and for an ``unknown`` row the signals that could not be measured. No rescan;
-the logic lives in ``skills/assess/scripts/lib/fleet_next_steps.py``.
+the logic lives in ``skills/assess/scripts/lib/fleet/fleet_next_steps.py``.
 
 Pass the maturity model and settings the fleet run used: every page level is checked
 against ``groups.jsonl`` and a difference exits 2. A run with ``--hash-salt`` hashed its
@@ -34,9 +34,9 @@ sys.dont_write_bytecode = True
 ASSESS_SCRIPTS = Path(__file__).resolve().parents[2] / "assess" / "scripts"
 sys.path.insert(0, str(ASSESS_SCRIPTS))
 
-from lib.fleet_groups import SettingsError, load_settings  # noqa: E402
-from lib.fleet_view import FleetViewError, load_groups, read_repos  # noqa: E402
-from lib.fleet_next_steps import NextStepsError, build_pages, write_pages  # noqa: E402
+from lib.fleet.fleet_groups import SettingsError, load_settings  # noqa: E402
+from lib.fleet.fleet_view import FleetViewError, load_groups, read_repos  # noqa: E402
+from lib.fleet.fleet_next_steps import NextStepsError, build_pages, write_pages  # noqa: E402
 from lib.levels import add_renamed_flag, LevelsError, load_levels  # noqa: E402
 from lib.level_signals import DEFAULT_LEVELS, signal_path_validator  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402

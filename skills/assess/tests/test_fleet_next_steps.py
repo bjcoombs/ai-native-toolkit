@@ -1,5 +1,5 @@
-"""Tests for the per-team next-steps pages (issue #571): lib/fleet_next_steps.py,
-lib/next_step_guidance.py, the readers in lib/fleet_view.py and skills/fleet/scripts/fleet_next_steps.py.
+"""Tests for the per-team next-steps pages (issue #571): lib/fleet/fleet_next_steps.py,
+lib/next_step_guidance.py, the readers in lib/fleet/fleet_view.py and skills/fleet/scripts/fleet_next_steps.py.
 
 The golden pages live in ``tests/fixtures/fleet_next_steps/expected/``. Regenerate
 them after an intended change, then review the diff:
@@ -19,10 +19,10 @@ from typing import Any
 
 import pytest
 
-from lib import fleet_next_steps as ns
-from lib.fleet import FLEET_ROW_VERSION, FleetRow, write_rows
-from lib.fleet_groups import load_settings, roll_up, write_groups
-from lib.fleet_view import FleetViewError, load_groups, read_jsonl, read_repos
+import lib.fleet.fleet_next_steps as ns
+from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow, write_rows
+from lib.fleet.fleet_groups import load_settings, roll_up, write_groups
+from lib.fleet.fleet_view import FleetViewError, load_groups, read_jsonl, read_repos
 from lib.next_step_guidance import guidance, measure_hint
 from lib.levels import load_levels
 from lib.level_signals import DEFAULT_LEVELS, load_default_levels, signal_path_validator

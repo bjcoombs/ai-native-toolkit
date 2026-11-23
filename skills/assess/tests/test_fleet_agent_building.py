@@ -7,15 +7,15 @@ from pathlib import Path
 
 from lib.agent_building import scan_agent_building
 from lib.counts_only import counts_only_scans
-from lib.fleet import FLEET_ROW_VERSION, FleetRow
-from lib.fleet_agent_building import (
+from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
+from lib.fleet.fleet_agent_building import (
     CLUSTERS_FILE,
     clusters,
     group_counts,
     jaccard,
     write_clusters,
 )
-from lib.fleet_groups import roll_up
+from lib.fleet.fleet_groups import roll_up
 
 
 def _row(repo: str, block: dict[str, object] | None, *, failed: bool = False) -> FleetRow:

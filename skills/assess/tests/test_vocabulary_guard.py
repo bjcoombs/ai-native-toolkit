@@ -121,7 +121,7 @@ def test_the_readme_documents_exactly_the_banned_list() -> None:
 
 def test_every_next_step_and_hint_the_shipped_model_can_render_is_supportive() -> None:
     """Every criterion's guidance and every signal's hint, not only the levels a fixture reaches."""
-    from lib.fleet_next_steps import FULL_RUN_HINT, PLATFORM_HINT
+    from lib.fleet.fleet_next_steps import FULL_RUN_HINT, PLATFORM_HINT
     from lib.headline import reason_word
     from lib.level_signals import load_default_levels
     from lib.next_step_guidance import _LAYER5_PARTS, guidance, measure_hint

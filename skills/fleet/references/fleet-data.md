@@ -3,7 +3,7 @@
 One JSON document per run beside `groups.jsonl`: the versioned bundle the fleet
 artifact reads (#692). Keys sorted, compact, every list sorted; the same inputs give the
 same bytes. Schema: [`references/fleet-data.schema.json`](fleet-data.schema.json).
-Logic: `lib/fleet_units.py`, `lib/fleet_repo_facts.py`, `lib/fleet_data.py`. It is kept in
+Logic: `lib/fleet/fleet_units.py`, `lib/fleet/fleet_repo_facts.py`, `lib/fleet/fleet_data.py`. It is kept in
 the run history beside the other files.
 
 | Key | Value |
@@ -121,4 +121,4 @@ tooling ids stay readable) and hashed under `--hash-paths` or `--hash-salt`. A h
 `source` is the scan's own hash, so it matches `ci_source_ids` in `repos.jsonl`; `text` holds
 counts and maturity-model titles only. Recent progress, the units that reached a new level
 since the previous run, is not in this file: it comes from the run history, is display
-only and appears only in `report.md`. Logic: `lib/fleet_opportunities.py`.
+only and appears only in `report.md`. Logic: `lib/fleet/fleet_opportunities.py`.
