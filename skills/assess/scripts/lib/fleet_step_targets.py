@@ -34,8 +34,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, NamedTuple, TypedDict, cast
 
-from lib.fleet_data_steps import GateHold, RepoSteps, step_hold
-from lib.level_result_types import Blocker, Tally
+from lib.fleet_data_steps import GateBlocker, GateHold, RepoSteps, step_hold
+from lib.level_result_types import Tally
 from lib.levels import MaturityModel, StepDef
 
 
@@ -76,7 +76,7 @@ def member_steps(repo: Mapping[str, Any]) -> RepoSteps:
     step, tally, blockers = repo.get("step"), repo.get("tally"), repo.get("gate_blockers")
     return {"step": step if type(step) is int else None, "next_step": None,
             "tally": cast(Tally, tally) if isinstance(tally, dict) else None,
-            "exclusions": [], "gate_blockers": cast(list[Blocker], blockers) if isinstance(blockers, list) else []}
+            "exclusions": [], "gate_blockers": cast(list[GateBlocker], blockers) if isinstance(blockers, list) else []}
 
 
 def step_state(members: Sequence[str], steps: Mapping[str, RepoSteps]) -> StepState:

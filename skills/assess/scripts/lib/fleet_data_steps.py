@@ -9,8 +9,9 @@ the order the level result lists them: ``id``, ``kind``, ``source`` and the owne
 ``reason``. They are listed, never counted. The reason is the owner's own words, so
 ``lib.fleet_data`` writes it only in ``--full`` output (``FLEET_DATA_RULES``: drop); a
 counts-only scan has already dropped it. ``gate_blockers`` lists every gate of the model's
-Steps that does not hold (``level_tally.gate_blockers``: once per gate id, in Step order,
-each the level result's blocker for it), so a Step target above the repository's next Step
+Steps that does not hold (``level_tally.gate_blockers``: once per gate id, in Step order),
+each as tokens only: its ``gate`` id, the blocking condition's ``state`` and its
+``disposition`` (``excluded_by_owner``, else null), so a Step target above the repository's next Step
 reads which of its gates are missing (#945); empty when every gate holds or not measured.
 
 **Per unit** (``step_roll_up``), over every repository below the unit (#772 option A: no
@@ -45,7 +46,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, TypedDict
 
-from lib.level_result_types import Blocker, LevelResult, NextStep, Tally
+from lib.level_result_types import LevelResult, NextStep, Tally
 from lib.level_tally import EXCLUDED_BY_OWNER, gate_blockers
 from lib.levels import StepDef, StepGate
 
@@ -57,12 +58,20 @@ class RepoExclusion(TypedDict):
     reason: str | None  # the owner's words; None in counts-only output
 
 
+class GateBlocker(TypedDict):
+    """A Step gate that does not hold, as tokens only (#945)."""
+
+    gate: str  # the gate id of the model's [[steps]]
+    state: str  # the blocking condition's state (lib.level_tally.STATES)
+    disposition: str | None  # "excluded_by_owner" when the owner excluded it, else None
+
+
 class RepoSteps(TypedDict):
     step: int | None
     next_step: NextStep | None
     tally: Tally | None
     exclusions: list[RepoExclusion]
-    gate_blockers: list[Blocker]  # every Step gate that does not hold (#945)
+    gate_blockers: list[GateBlocker]  # every Step gate that does not hold, in model order (#945)
 
 
 class GateHold(TypedDict):
@@ -116,15 +125,16 @@ def repo_steps(result: LevelResult | None, scans: Mapping[str, Any] | None,
         "tally": result["tally"],
         "exclusions": [{"id": e["id"], "kind": e["kind"], "source": e["source"], "reason": reasons.get(e["id"])}
                        for e in result.get("excluded", [])],
-        "gate_blockers": gate_blockers(steps, result["conditions"]),
+        "gate_blockers": [{"gate": b.get("gate", ""), "state": b.get("state", ""),
+                           "disposition": b.get("disposition")} for b in gate_blockers(steps, result["conditions"])],
     }
 
 
 def _gate_hold(gate: StepGate, held: Sequence[RepoSteps]) -> GateHold:
-    blockers = [b for m in held for b in m["gate_blockers"] if b.get("gate") == gate["id"]]
+    blockers = [b for m in held for b in m["gate_blockers"] if b["gate"] == gate["id"]]
     return {"gate": gate["id"], "row": gate["row"], "level": gate["level"], "held": len(blockers),
-            "not_measured": sum(b.get("state") == "not_measured" for b in blockers),
-            "excluded": sum(b.get("disposition") == EXCLUDED_BY_OWNER for b in blockers)}
+            "not_measured": sum(b["state"] == "not_measured" for b in blockers),
+            "excluded": sum(b["disposition"] == EXCLUDED_BY_OWNER for b in blockers)}
 
 
 def step_roll_up(steps: Sequence[StepDef], members: Sequence[RepoSteps]) -> StepRollUp:

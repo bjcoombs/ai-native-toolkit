@@ -229,6 +229,10 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
     "repos.exclusions.kind": TOKEN,
     "repos.exclusions.source": TOKEN,
     "repos.exclusions.reason": DROP,
+    # #945: each Step gate that does not hold, as tokens (gate id, state, disposition)
+    "repos.gate_blockers.gate": TOKEN,
+    "repos.gate_blockers.state": TOKEN,
+    "repos.gate_blockers.disposition": TOKEN,
 }
 
 
@@ -252,10 +256,6 @@ FLEET_DATA_KEPT: Final = frozenset({
     "repos.next_step.blockers.kind", "repos.next_step.blockers.gate", "repos.next_step.blockers.condition",
     "repos.next_step.blockers.state", "repos.next_step.blockers.reason",
     "repos.next_step.blockers.disposition", "repos.next_step.blockers.exclusion_kind",
-    # #945: the same blockers for every Step gate that does not hold
-    "repos.gate_blockers.kind", "repos.gate_blockers.gate", "repos.gate_blockers.condition",
-    "repos.gate_blockers.state", "repos.gate_blockers.reason", "repos.gate_blockers.disposition",
-    "repos.gate_blockers.exclusion_kind",
     "repos.exclusions.id", "views.units.step.next_step.gates.gate", "views.units.step.next_step.gates.row",
 })
 

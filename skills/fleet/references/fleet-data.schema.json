@@ -629,13 +629,7 @@
             "items": {
               "type": "object",
               "properties": {
-                "kind": {
-                  "const": "gate"
-                },
                 "gate": {
-                  "type": "string"
-                },
-                "condition": {
                   "type": "string"
                 },
                 "state": {
@@ -647,32 +641,17 @@
                     "declined"
                   ]
                 },
-                "reason": {
-                  "type": "string"
-                },
-                "threshold": {
-                  "type": "integer"
-                },
-                "met": {
-                  "type": "integer"
-                },
                 "disposition": {
                   "enum": [
-                    "excluded_by_owner"
-                  ]
-                },
-                "exclusion_kind": {
-                  "enum": [
-                    "not_applicable",
-                    "measured_elsewhere",
-                    "tool_unsupported",
-                    "false_positive",
-                    "other"
+                    "excluded_by_owner",
+                    null
                   ]
                 }
               },
               "required": [
-                "kind"
+                "disposition",
+                "gate",
+                "state"
               ],
               "additionalProperties": false
             }

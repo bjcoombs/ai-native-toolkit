@@ -78,14 +78,22 @@ from typing import NamedTuple, TypedDict
 from lib.counts_only import hash_value, is_hashed
 from lib.counts_only_rules import DROP, ID, PATH, TOKEN, TOKEN_RE, classify_fleet_data
 from lib.fleet import STATUS_OK, FleetRow
-from lib.fleet_data_steps import NO_STEPS, RepoExclusion, RepoSteps, StepRollUp, repo_steps, step_roll_up
+from lib.fleet_data_steps import (
+    NO_STEPS,
+    GateBlocker,
+    RepoExclusion,
+    RepoSteps,
+    StepRollUp,
+    repo_steps,
+    step_roll_up,
+)
 from lib.fleet_groups import repo_signals
 from lib.fleet_level import repo_level
 from lib.fleet_maturity import SCOPE
 from lib.fleet_opportunities import Opportunities, build_opportunities
 from lib.fleet_stamp import FleetStamp, RepositoryCounts
 from lib.fleet_units import Tree
-from lib.level_result_types import Blocker, NextStep, Tally
+from lib.level_result_types import NextStep, Tally
 from lib.levels import Evaluation, MaturityModel, Row, StepDef, evaluate_row
 
 # 1 (#703): first version. 2 (#772): the roll-up drops ``mean_share``, ``weakest`` and
@@ -163,7 +171,7 @@ class DataRepo(TypedDict):
     next_step: NextStep | None
     tally: Tally | None
     exclusions: list[RepoExclusion]  # the owner's, listed and never counted
-    gate_blockers: list[Blocker]  # #945: every Step gate that does not hold
+    gate_blockers: list[GateBlocker]  # #945: every Step gate that does not hold, as tokens
 
 
 # The stamp fields RunDetails leaves out: the stamp's own envelope version, the
@@ -362,7 +370,12 @@ def public_steps(fields: RepoSteps, privacy: Privacy) -> RepoSteps:
          "source": privacy.text("repos.exclusions.source", e["source"]) or "repo",
          "reason": privacy.text("repos.exclusions.reason", e["reason"])}
         for e in fields["exclusions"]]
-    return {**fields, "exclusions": exclusions}
+    blockers: list[GateBlocker] = [
+        {"gate": privacy.text("repos.gate_blockers.gate", b["gate"]) or "",
+         "state": privacy.text("repos.gate_blockers.state", b["state"]) or "",
+         "disposition": privacy.text("repos.gate_blockers.disposition", b["disposition"])}
+        for b in fields["gate_blockers"]]
+    return {**fields, "exclusions": exclusions, "gate_blockers": blockers}
 
 
 def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model: MaturityModel | None,

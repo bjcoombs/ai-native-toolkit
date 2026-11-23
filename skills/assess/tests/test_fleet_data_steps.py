@@ -10,7 +10,7 @@ from fleet_data_fixture import ROWS, SALT, STAMP, VARIANTS, build, model
 from lib import fleet_data as fd
 from lib.counts_only import counts_only_scans
 from lib.fleet import FleetRow
-from lib.fleet_data_steps import NO_STEPS, RepoSteps, repo_steps, step_hold, step_roll_up
+from lib.fleet_data_steps import NO_STEPS, GateBlocker, RepoSteps, repo_steps, step_hold, step_roll_up
 from lib.fleet_level import fleet_levels
 from lib.fleet_units import build_trees, empty_map
 from lib.level_result_types import Blocker
@@ -113,15 +113,16 @@ STEPS: list[StepDef] = [
 ]
 
 
-def _at(step: int, met: int = 2, *gates: Blocker) -> RepoSteps:
-    blockers: list[Blocker] = [*gates, *([{"kind": "threshold", "threshold": 2, "met": met}] if met < 2 else [])]
+def _at(step: int, met: int = 2, *gates: GateBlocker) -> RepoSteps:
+    blockers: list[Blocker] = [*({"kind": "gate", "gate": g["gate"], "state": g["state"]} for g in gates),
+                               *([{"kind": "threshold", "threshold": 2, "met": met}] if met < 2 else [])]
     return {"step": step, "tally": {"met": met, "measured": 0, "not_measured": 0}, "exclusions": [],
             "next_step": {"step": step + 1, "threshold": 2, "blockers": blockers} if step < 2 else None,
             "gate_blockers": list(gates)}
 
 
 def test_the_roll_up_counts_the_threshold_and_ignores_repositories_already_past() -> None:
-    gate: Blocker = {"kind": "gate", "gate": "g", "condition": "r.1", "state": "unmet"}
+    gate: GateBlocker = {"gate": "g", "state": "unmet", "disposition": None}
     rolled = step_roll_up(STEPS, [_at(1, 1), _at(1, 1, gate), _at(1, 2, gate), _at(2), NO_STEPS])
     assert rolled == {"measured": 4, "repos": 5, "lowest_step": 1, "next_step": {
         "step": 2, "threshold": 2, "held": 3, "below_threshold": 2,
@@ -158,3 +159,19 @@ def test_repo_steps_reads_the_first_reason_per_id_and_tolerates_a_degraded_block
     twice = {"owner_exclusions": {"exclusions": [{"id": "ci.1", "reason": "first"}, {"id": "ci.1", "reason": "x"},
                                                  "not a table", {"id": 3, "reason": "y"}]}}
     assert repo_steps(level, twice)["exclusions"][0]["reason"] == "first"
+
+
+def test_gate_blockers_are_tokens_in_model_order_and_survive_hashing() -> None:
+    """#945: each Step gate that does not hold, as its gate id, state and disposition only,
+    in the model's gate order; a hashed run writes them exactly as a full one."""
+    full = {r["key"]: r["gate_blockers"] for r in build(fd.Privacy(full=True))["repos"]}
+    assert full["grp/sub/proj1"] == [{"gate": "ci", "state": "not_applicable", "disposition": "excluded_by_owner"}]
+    assert full["grp/sub/proj2"] == [{"gate": "ci", "state": "unmet", "disposition": None}]
+    assert full["grp/other/proj3"] == [{"gate": "docs", "state": "not_measured", "disposition": None}]
+    assert full["grp/proj4"] == []
+    hashed = build(fd.Privacy(salt=SALT))
+    salted = fd.Privacy(salt=SALT)
+    assert {r["key"]: r["gate_blockers"] for r in hashed["repos"]} == {salted.key(k): v for k, v in full.items()}
+    order = [g["id"] for s in model()["steps"] for g in s["gates"]]
+    for blockers in full.values():
+        assert [b["gate"] for b in blockers] == sorted({b["gate"] for b in blockers}, key=order.index)
