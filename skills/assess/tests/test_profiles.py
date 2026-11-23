@@ -301,8 +301,27 @@ def test_the_step_line_keeps_its_glossary_link_under_a_profile() -> None:
 
 
 def test_a_custom_model_may_not_take_a_shipped_version(tmp_path: Path) -> None:
-    for version in (default_model()["version"], "profile-handover-2026.11.23"):
+    for version in (default_model()["version"], "profile-handover-2026.11.23", "default", "handover"):
         path = tmp_path / "copy.toml"
         path.write_text(CUSTOM.replace('version = "my-1"', f'version = "{version}"'), encoding="utf-8")
         with pytest.raises(ProfileError, match="name the shipped models"):
             resolve(None, path)
+
+
+def test_an_unmeasured_hazard_is_missing() -> None:
+    from lib.profiles import _holds
+
+    hazard: Any = {"id": "x.1", "row": "x", "level": 1, "grade": None, "counted": False,
+                   "state": "not_measured", "polarity": "hazard"}
+    assert not _holds(hazard)
+    assert _holds({**hazard, "state": "unmet"}) and not _holds({**hazard, "state": "met"})
+    assert not _holds({**hazard, "polarity": "positive", "state": "not_applicable"})
+
+
+def test_a_custom_steps_own_name_words_the_summary(tmp_path: Path) -> None:
+    path = tmp_path / "named.toml"
+    path.write_text(CUSTOM.replace('name = "Supervised agent PRs"', 'name = "Handover ready"'), encoding="utf-8")
+    lines = _summary(_blocks(), resolve(None, path))
+    assert any(line.startswith("Step 2 of 2: Handover ready.") for line in lines)
+    assert any(line.startswith("Step 4 of 4: ") and "Handover" not in line
+               for line in _summary(_blocks(), resolve("handover", None)))

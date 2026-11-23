@@ -150,10 +150,11 @@ def resolve(profile: str | None, levels: str | Path | None,
         if levels is not None:
             path = Path(levels)
             model = load_levels(path, validator)
-            if model["version"].startswith(RESERVED_PREFIXES):
+            if model["version"].startswith(RESERVED_PREFIXES) or model["version"] in ("default", *profile_names()):
                 raise ProfileError(
-                    f"{path.name} has version {model['version']!r}: versions starting "
-                    f"{' or '.join(RESERVED_PREFIXES)} name the shipped models, so give a custom model its own")
+                    f"{path.name} has version {model['version']!r}: 'default', a profile name and versions "
+                    f"starting {' or '.join(RESERVED_PREFIXES)} name the shipped models, so give a custom "
+                    "model its own")
             return ModelChoice(model, "file", path.name)
     except (LevelsError, OSError) as e:
         raise ProfileError(str(e)) from e
@@ -186,8 +187,10 @@ def non_default_ids(model: MaturityModel) -> list[str]:
 
 
 def _holds(condition: ConditionResult) -> bool:
-    met = condition["state"] == "met"
-    return not met if condition.get("polarity") == "hazard" else met
+    """Met for a positive practice, unmet for a hazard; any other state (not measured,
+    excluded, declined) never holds, so an unknown never reads ready."""
+    state = condition["state"]
+    return state == ("unmet" if condition.get("polarity") == "hazard" else "met")
 
 
 def _state_words(condition: ConditionResult) -> str:

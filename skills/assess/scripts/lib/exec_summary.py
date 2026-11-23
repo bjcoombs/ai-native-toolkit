@@ -47,6 +47,7 @@ from typing import Any, cast
 from lib.assess_diagrams_ladder import meaning
 from lib.headline import GATE_CHANGE, GLOSSARY_URL, gate_note, headline
 from lib.level_result_types import Blocker, Headline, LevelResult
+from lib.level_tally import default_model
 from lib.levels import MaturityModel
 from lib.model_change import model_changed_line
 from lib.profiles import ModelChoice, chosen_model, model_lines
@@ -78,9 +79,11 @@ def _gates(level: LevelResult) -> list[Blocker]:
 
 
 def _plain(step: int, model: MaturityModel) -> str:
-    """What an agent can do at ``step``: the ladder's sentence, else the Step's model name."""
+    """What an agent can do at ``step``: the ladder's sentence when the Step is the default
+    model's Step of that number (same name), else the Step's own model name (#1150)."""
     name = next((s["name"] for s in model.get("steps", []) if s["step"] == step), "")
-    return meaning(step) or name
+    default = next((s["name"] for s in default_model().get("steps", []) if s["step"] == step), None)
+    return (meaning(step) if name == default else "") or name
 
 
 def _gate_words(gates: list[str]) -> str:
