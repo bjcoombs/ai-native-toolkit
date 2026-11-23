@@ -167,11 +167,30 @@ def test_countable_grades_are_the_tally_counted_grades() -> None:
     assert COUNTABLE_GRADES == COUNTED_GRADES
 
 
-@pytest.mark.parametrize("prior", [None, {"prior_level_version": 99}, "junk"])
-def test_no_readable_earlier_run_draws_no_outline(prior: Any) -> None:
-    drawn = td.tag_diagrams({"level": LEVEL, "prior_level": prior})[0]
+def test_no_earlier_file_draws_no_outline() -> None:
+    drawn = td.tag_diagrams({"level": LEVEL, "prior_level": None})[0]
     assert drawn["svg"] is not None and 'data-mark="prior"' not in drawn["svg"]
     assert "No earlier run is recorded here" in drawn["caption"]
+
+
+@pytest.mark.parametrize("prior", [{"available": False, "reason": "unreadable"}, {"prior_level_version": 99}, "junk"])
+def test_an_unreadable_earlier_record_draws_no_outline_and_says_so(prior: Any) -> None:
+    drawn = td.tag_diagrams({"level": LEVEL, "prior_level": prior})[0]
+    assert drawn["svg"] is not None and 'data-mark="prior"' not in drawn["svg"]
+    assert "The earlier run's record could not be read, so no earlier dots are drawn." in drawn["caption"]
+    assert "No earlier run is recorded here" not in drawn["caption"]
+
+
+def test_an_earlier_dot_on_a_dashed_row_is_kept_and_keyed() -> None:
+    svg = _svg(SAME)
+    docs = _row(svg, "docs")
+    assert 'data-mark="dashed"' in docs and 'data-mark="prior"' in docs and 'data-mark="dot"' not in docs
+    key = "A hollow dot on a dashed row is the earlier run&#x27;s share; this run did not measure it"
+    assert key in svg or key.replace("&#x27;", "'") in svg
+    # no earlier dot on a dashed row: no such key line
+    only_shares = {**PRIOR, "tags": [{**r, "met": 0, "measured": 0, "not_measured": []}
+                                     if r["tag"] in ("docs", "agent_context") else r for r in PRIOR["tags"]]}
+    assert "on a dashed row" not in _svg({"level": LEVEL, "prior_level": only_shares})
 
 
 def test_the_strip_names_no_path_repository_or_person() -> None:

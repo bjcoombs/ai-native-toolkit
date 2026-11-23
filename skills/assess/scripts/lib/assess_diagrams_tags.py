@@ -27,8 +27,10 @@ not measured never plots at 0. A real 0 of N measured does.
 
 **Earlier run.** When ``prior_level`` was counted under this run's maturity-model version
 (``prior_level.same_model``), each tag the earlier run measured gets a hollow outline dot at its
-earlier share, so the strip shows what moved. Otherwise no outline dot is drawn and one line
-says why: no earlier run is recorded, or it used another model version.
+earlier share, so the strip shows what moved; on a row this run did not measure, the outline
+stays and a key line says it is the earlier share. Otherwise no outline dot is drawn and one
+line says why: no earlier run is recorded, its record could not be read, or it used another
+model version.
 
 The strip names no path, repository or person (tag titles, counts, reason words and model
 versions only), so it needs no counts-only variant. Deterministic: fixed tag order, fixed
@@ -137,17 +139,24 @@ def tag_whys() -> dict[str, str]:
     return {tag: tag_why(manifest, tag)["why"] or TRUTH_TAG_TITLES[tag] for tag in TRUTH_TAGS}
 
 
-def earlier_shares(prior: Mapping[str, Any] | None, level: Mapping[str, Any]) -> dict[str, tuple[int, int]]:
-    """``(met, measured)`` per tag the earlier run measured, when it used this run's model."""
+def earlier_shares(raw: Any, level: Mapping[str, Any]) -> dict[str, tuple[int, int]]:
+    """``(met, measured)`` per tag the earlier run measured, when it used this run's model.
+    ``raw`` is the run context's ``prior_level`` as stored."""
+    prior = as_prior_level(raw)
     if prior is None or not same_model(prior, level):
         return {}
     return {r["tag"]: (r["met"], r["measured"]) for r in prior["tags"] if r["measured"] > 0}
 
 
-def prior_note(prior: Mapping[str, Any] | None, level: Mapping[str, Any]) -> str:
-    """The one line about the earlier run's outline dots."""
-    if prior is None:
+def prior_note(raw: Any, level: Mapping[str, Any]) -> str:
+    """The one line about the earlier run's outline dots. ``raw`` is the run context's
+    ``prior_level``: None when no earlier file exists; anything not a readable ``PriorLevel``
+    (``prior_level.UNREADABLE``, or a hand-edited value) is an earlier record not read."""
+    if raw is None:
         return "No earlier run is recorded here, so no earlier dots are drawn."
+    prior = as_prior_level(raw)
+    if prior is None:
+        return "The earlier run's record could not be read, so no earlier dots are drawn."
     if not same_model(prior, level):
         return (f"Earlier dots not drawn: the earlier run used maturity model {prior['levels_version']} "
                 f"and this run {level.get('levels_version')}, so the two do not compare.")
@@ -160,7 +169,7 @@ def _share(met: int, measured: int) -> float:
     return met / measured
 
 
-def render_strip(level: Mapping[str, Any], rows: Sequence[TagRow], prior: Mapping[str, Any] | None,
+def render_strip(level: Mapping[str, Any], rows: Sequence[TagRow], prior: Any,
                  whys: Mapping[str, str]) -> str:
     """The tag profile strip SVG for one level block's tag rows."""
     earlier = earlier_shares(prior, level)
@@ -212,6 +221,10 @@ def render_strip(level: Mapping[str, Any], rows: Sequence[TagRow], prior: Mappin
     if earlier:
         key.append((f'<circle cx="{PAD + 7:.1f}" cy="{{cy}}" r="{PRIOR_R - 1:.1f}" fill="none" class="s-fg" '
                     'stroke-width="1.5"/>', "The earlier run, under the same maturity model"))
+    if any(r["tag"] in earlier and row_state(r) != "share" for r in rows):
+        key.append((f'<circle cx="{PAD + 7:.1f}" cy="{{cy}}" r="{PRIOR_R - 1:.1f}" fill="none" class="s-fg" '
+                    'stroke-width="1.5"/>',
+                    "A hollow dot on a dashed row is the earlier run's share; this run did not measure it"))
     key.append((f'<line x1="{PAD:.1f}" y1="{{cy}}" x2="{PAD + 14:.1f}" y2="{{cy}}" class="s-muted" '
                 'stroke-width="1.5" stroke-dasharray="4 4"/>', "Not measured: drawn without a dot, never as 0"))
     for paint, text in key:
@@ -253,7 +266,7 @@ def _strip(ctx: Mapping[str, Any]) -> AssessDiagram:
     if rows is None:
         entry["skipped"] = "the level result has no per-tag rows (it was written before them)."
         return entry
-    prior = as_prior_level(ctx.get("prior_level"))
+    prior = ctx.get("prior_level")
     entry["in_place"] = strip_in_place(rows)
     entry["caption"] = f"{strip_caption()} {prior_note(prior, level)}"
     entry["svg"] = render_strip(level, rows, prior, tag_whys())

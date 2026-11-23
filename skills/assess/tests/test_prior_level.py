@@ -56,10 +56,20 @@ def test_write_then_load_round_trips_the_tags_and_model_version(tmp_path: Path) 
         {"tag": "docs", "conditions": 1, "countable": 1, "set_aside": 0, "met": True, "measured": 1, "not_measured": []}]}),
     json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [
         {"tag": "docs", "conditions": 1, "countable": 1, "set_aside": 0, "met": 0, "measured": 1, "not_measured": [{"id": 1}]}]}),
+    # counts that do not nest: a share above 1 would draw off the scale
+    json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [
+        {"tag": "docs", "conditions": 60, "countable": 60, "set_aside": 0, "met": 50, "measured": 2, "not_measured": []}]}),
+    json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [
+        {"tag": "docs", "conditions": 1, "countable": 1, "set_aside": 0, "met": 0, "measured": 2, "not_measured": []}]}),
+    json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [
+        {"tag": "docs", "conditions": 1, "countable": 2, "set_aside": 0, "met": 0, "measured": 0, "not_measured": []}]}),
+    json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [
+        {"tag": "docs", "conditions": 2, "countable": 2, "set_aside": 1, "met": 0, "measured": 2, "not_measured": []}]}),
 ])
-def test_a_malformed_file_reads_none(tmp_path: Path, content: str) -> None:
+def test_a_malformed_file_reads_unreadable_not_absent(tmp_path: Path, content: str) -> None:
     (tmp_path / PRIOR_LEVEL_FILE).write_text(content, encoding="utf-8")
-    assert load_prior_level(tmp_path) is None
+    assert load_prior_level(tmp_path) == {"available": False, "reason": "unreadable"}
+    assert as_prior_level(load_prior_level(tmp_path)) is None
 
 
 def test_a_level_without_tags_writes_nothing_and_removes_a_stale_file(tmp_path: Path) -> None:
@@ -157,3 +167,15 @@ def test_the_mutation_recount_rewrites_the_file_and_keeps_the_earlier_run(
     assert load_prior_level(repo / ".assess") == build_prior_level(after["level"])
     strip = (repo / ".assess" / "tag-profile.svg").read_text(encoding="utf-8")
     assert "Hollow dots: the earlier run" in strip
+
+
+def test_a_run_over_an_unreadable_earlier_file_says_so_and_replaces_it(repo: Path) -> None:
+    from assess_core import build_and_publish_run
+
+    (repo / ".assess").mkdir()
+    (repo / ".assess" / PRIOR_LEVEL_FILE).write_text("{not json", encoding="utf-8")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-11-22", non_interactive=True)
+    assert ctx["prior_level"] == {"available": False, "reason": "unreadable"}
+    strip = (repo / ".assess" / "tag-profile.svg").read_text(encoding="utf-8")
+    assert "record could not be read" in strip and 'data-mark="prior"' not in strip
+    assert load_prior_level(repo / ".assess") == build_prior_level(ctx["level"])

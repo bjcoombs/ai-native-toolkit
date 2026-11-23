@@ -10,9 +10,12 @@ context and never from the file, and a later redraw (``assess_report.py``, the o
 pass) reads the same earlier run. ``assess_core.run_opt_in_mutation`` rewrites the file from
 the recounted level without reading it again.
 
-``load_prior_level`` returns None for no file, a file that is not JSON, and any shape other
-than ``PriorLevel`` (a version this reader does not know, a tag outside ``TRUTH_TAGS``, a
-count that is not a non-negative integer): an unreadable earlier run is never drawn.
+``load_prior_level`` returns None when there is no file, and ``UNREADABLE``
+(``{"available": false, "reason": "unreadable"}``) for a file that exists but is not JSON or
+is any shape other than ``PriorLevel`` (a version this reader does not know, a tag outside
+``TRUTH_TAGS``, a count that is not a non-negative integer, or counts that do not nest as
+``met <= measured <= countable <= conditions`` with ``measured + set_aside <= countable``):
+an unreadable earlier run is never drawn, and the strip says it could not be read.
 ``write_prior_level`` writes nothing, and removes a stale file, when the level result has no
 ``tags`` (a degraded level block), so an old run is never compared under a new label.
 The strip draws the earlier run only when its ``levels_version`` equals this run's
@@ -46,6 +49,16 @@ class PriorLevel(TypedDict):
     tags: list[TagRow]  # the level block's tags, in TRUTH_TAGS order
 
 
+class PriorLevelUnread(TypedDict):
+    """The run context's ``prior_level`` when ``prior-level.json`` exists but cannot be read."""
+
+    available: bool  # always False
+    reason: str  # always "unreadable"
+
+
+UNREADABLE: PriorLevelUnread = {"available": False, "reason": "unreadable"}
+
+
 def build_prior_level(level: Any) -> PriorLevel | None:
     """The file's content for one ``level`` block; None when the block has no ``tags``."""
     if not isinstance(level, Mapping) or not _valid_tags(level.get("tags")):
@@ -60,6 +73,11 @@ def _valid_row(row: Any) -> bool:
     if not isinstance(row, Mapping) or row.get("tag") not in TRUTH_TAGS:
         return False
     if not all(type(row.get(k)) is int and row[k] >= 0 for k in _COUNTS):
+        return False
+    # the counts nest: a share above 1 or more measured than countable is not a real row
+    if not row["met"] <= row["measured"] <= row["countable"] <= row["conditions"]:
+        return False
+    if row["measured"] + row["set_aside"] > row["countable"]:
         return False
     missing = row.get("not_measured")
     return isinstance(missing, list) and all(
@@ -80,12 +98,17 @@ def as_prior_level(value: Any) -> PriorLevel | None:
     return cast(PriorLevel, dict(value))
 
 
-def load_prior_level(assess_dir: Path) -> PriorLevel | None:
-    """The earlier run's ``prior-level.json``; None when absent or unreadable."""
-    try:
-        return as_prior_level(json.loads((assess_dir / PRIOR_LEVEL_FILE).read_text(encoding="utf-8")))
-    except (OSError, ValueError):
+def load_prior_level(assess_dir: Path) -> PriorLevel | PriorLevelUnread | None:
+    """The earlier run's ``prior-level.json``: None when there is no such file, ``UNREADABLE``
+    when it exists but cannot be read or is not a ``PriorLevel`` this reader knows."""
+    path = assess_dir / PRIOR_LEVEL_FILE
+    if not path.exists() and not path.is_symlink():
         return None
+    try:
+        prior = as_prior_level(json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        prior = None
+    return prior if prior is not None else {"available": False, "reason": "unreadable"}
 
 
 def write_prior_level(assess_dir: Path, level: Any) -> Path | None:

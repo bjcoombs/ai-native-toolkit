@@ -4,7 +4,8 @@
 ``lib.assess_diagrams_tags.row_state``: measured shares (including a real 0 of 2), a tag no
 condition carries (``contracts``), a tag listed only, a tag not measured (a plain and a
 ``requires:`` reason) and a tag set aside by the owner. ``PRIOR`` is an earlier run under the
-same maturity model, ``PRIOR_OTHER`` one under another. ``test_assess_diagrams_tags.py`` fails
+same maturity model (it measured docs, which this run did not), ``PRIOR_OTHER`` one under
+another. ``test_assess_diagrams_tags.py`` fails
 when a committed golden differs from a fresh render. Regenerate the goldens with
 ``uv run --locked python tests/assess_diagrams_tags_fixture.py`` from ``skills/assess``, then
 review the diff.
@@ -50,6 +51,7 @@ LEVEL: dict[str, Any] = {
 PRIOR: dict[str, Any] = {
     "prior_level_version": 1, "levels_version": "fixture-2",
     "tags": [{**row, "met": 1} if row["tag"] == "behaviour" else
+             {**row, "met": 1, "measured": 2, "not_measured": []} if row["tag"] == "docs" else
              {**row, "met": 0, "measured": 0, "not_measured": [{"id": "a.1", "reason": "no_value"}]}
              if row["tag"] == "agent_context" else row for row in TAGS],
 }
