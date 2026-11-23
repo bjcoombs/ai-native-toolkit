@@ -71,7 +71,9 @@ gate itself is written in such a file or in a composite action.
 ``enforced_basis`` tokens: ``ci_run`` (true); ``no_gate`` and
 ``threshold_below_minimum`` (false, as ``threshold_meets_minimum``);
 ``threshold_not_read`` (null: ``threshold_meets_minimum`` is null); the null
-reasons above; ``not_run_in_ci`` (false: CI is read and runs none of the
+reasons above; ``status_check_unconfirmed`` (null: a Codecov status target, #882,
+which no CI line runs and which gates a merge only when branch protection requires it);
+``not_run_in_ci`` (false: CI is read and runs none of the
 gates); ``no_ci`` (false: no CI file at all).
 
 Inward-only imports: stdlib and ``lib`` CI readers; never an orchestrator.
@@ -158,7 +160,8 @@ from lib.shared_tooling import pulls_jobs_from_elsewhere
 
 EnforcedBasis = Literal[
     "ci_run", "no_gate", "threshold_below_minimum", "threshold_not_read", "unknown_trigger",
-    "check_may_pass", "indirect_run", "included_jobs", "unread_ci_system", "not_run_in_ci", "no_ci"]
+    "check_may_pass", "indirect_run", "included_jobs", "unread_ci_system", "status_check_unconfirmed",
+    "not_run_in_ci", "no_ci"]
 
 # A gate as ``coverage_gate`` reports it; read by key so this module does not import it.
 Gate = Mapping[str, object]
@@ -180,7 +183,8 @@ _TASK_FILES = frozenset({
     "pyproject.toml", "setup.cfg"})
 # The null reasons, most specific first.
 _NULL_ORDER: tuple[EnforcedBasis, ...] = (
-    "unknown_trigger", "check_may_pass", "indirect_run", "included_jobs", "unread_ci_system")
+    "unknown_trigger", "check_may_pass", "indirect_run", "included_jobs", "unread_ci_system",
+    "status_check_unconfirmed")
 
 
 @dataclass(frozen=True)
@@ -618,6 +622,8 @@ def gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates,
     """True when an enforced CI line runs ``gate``; a null reason token when that cannot be
     told; False when CI is read and does not. ``activation`` switches coverage on for a
     config gate only from the gate's directory or one above it (#954)."""
+    if gate["tool"] == "codecov":   # #882: a server-side status; whether it is required is not read
+        return "status_check_unconfirmed"
     file = str(gate["file"])
     family = gate_family(gate, activation.pytest_lines)
     if file in ci.ci_files:

@@ -824,14 +824,14 @@
                     "boolean",
                     "null"
                   ],
-                  "description": "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at least 50; null (unknown) when none is but a counted gate's percentage was not read, or when a repository holding a go.mod or Cargo.toml has no gate of that language and none of at least 50 for another, or when a scoped run cannot tell whether the root coverage.py floor governs the scope and that floor would change the reading (see unmeasured_reason); false otherwise. Gates counted are those enforced counts."
+                  "description": "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at least 50; null (unknown) when none is but a counted gate's percentage was not read, or when a repository holding a go.mod or Cargo.toml has no gate of that language and none of at least 50 for another, or when a Codecov project status target is auto or missing and no other gate decides it (issue #882), or when a scoped run cannot tell whether the root coverage.py floor governs the scope and that floor would change the reading (see unmeasured_reason); false otherwise. Gates counted are those enforced counts."
                 },
                 "unmeasured_reason": {
                   "type": [
                     "string",
                     "null"
                   ],
-                  "description": "Why threshold_meets_minimum is null when no gate of the repository's Go or Rust module is found: go_rust_gate_form_not_read when the repository holds a go.mod or Cargo.toml with no gate read for it and none of at least 50 percent for another language (issue #937), so its gate may be a script this scan does not read; root_coverage_config_unresolved on a scoped run when the repository root's coverage.py floor would change the reading but where CI runs coverage is not resolved (issue #1032); null otherwise."
+                  "description": "Why threshold_meets_minimum is null when no gate of the repository's Go or Rust module is found: go_rust_gate_form_not_read when the repository holds a go.mod or Cargo.toml with no gate read for it and none of at least 50 percent for another language (issue #937), so its gate may be a script this scan does not read; root_coverage_config_unresolved on a scoped run when the repository root's coverage.py floor would change the reading but where CI runs coverage is not resolved (issue #1032); codecov_target_not_read when the only gate that could reach 50 percent is a Codecov project status with an auto, missing or non-numeric target (issue #882); null otherwise."
                 },
                 "enforced_meets_minimum": {
                   "type": [
@@ -851,10 +851,11 @@
                     "indirect_run",
                     "included_jobs",
                     "unread_ci_system",
+                    "status_check_unconfirmed",
                     "not_run_in_ci",
                     "no_ci"
                   ],
-                  "description": "The reason for enforced_meets_minimum: ci_run (true); no_gate, threshold_below_minimum, not_run_in_ci and no_ci (false); threshold_not_read, unknown_trigger, check_may_pass (the run's failure may not fail its job: pytest --cov || echo failed; issue #1008), indirect_run (a check target or script such as make test may run it), included_jobs and unread_ci_system (null)."
+                  "description": "The reason for enforced_meets_minimum: ci_run (true); no_gate, threshold_below_minimum, not_run_in_ci and no_ci (false); threshold_not_read, unknown_trigger, check_may_pass (the run's failure may not fail its job: pytest --cov || echo failed; issue #1008), indirect_run (a check target or script such as make test may run it), included_jobs, unread_ci_system and status_check_unconfirmed (a Codecov status target, which no CI line runs and which gates a merge only when branch protection requires it; issue #882) (null)."
                 },
                 "not_detected": {
                   "type": [

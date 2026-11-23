@@ -566,6 +566,11 @@ _MEASURE_HINTS = {
                      "config of its own reads unknown (`root_coverage_config_unresolved`) when "
                      "the root config's floor would decide it but where CI runs coverage is not "
                      "resolved: run coverage from the root in CI, or pass `--cov-config`. "
+                     "A Codecov project status with `target: auto` (or no target) reads unknown "
+                     "(`codecov_target_not_read`): set a numeric `target: 80%` to measure it. A "
+                     "numeric Codecov target reads CI unknown (`enforced_basis: "
+                     "status_check_unconfirmed`): whether branch protection requires the status "
+                     "is not read. "
                      "The block is unavailable when the scan did not run: check "
                      "the fleet run's `--scans` and its `logs/` directory.",
     "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
