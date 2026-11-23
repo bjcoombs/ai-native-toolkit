@@ -304,7 +304,8 @@ def test_ruff_select_and_ignore_resolve_by_the_longest_prefix(
 @pytest.mark.parametrize(("line", "stated"), [
     ("Run coverage in step 1.", False), ("Coverage must reach 100 percent.", True),
     ("Coverage ratio 1.0 is enforced.", True), ("Coverage 1.5 is not it.", False),
-    ("See the coverage v1.0 docs.", False), ("Coverage max100 applies.", False)])
+    ("See the coverage v1.0 docs.", False), ("Coverage max100 applies.", False),
+    ("Coverage 100th run.", False), ("Coverage stays at 100.", True)])
 def test_a_floor_of_100_needs_a_decimal_point_in_its_ratio_form(
         tmp_path: Path, line: str, stated: bool) -> None:
     coverage = {"available": True, "enforced": True, "gates": [

@@ -51,8 +51,8 @@ CI checks and branch protection, sign-off rules.
 
 A gate is **stated** when one line of a graded instruction file (the keys of the
 core's ``instruction_files``) names its rule and, where the gate has a threshold,
-the threshold as a standalone number (not glued to a letter, digit, underscore or dot, so
-``v1.0`` or ``max10`` states nothing):
+the threshold as a standalone number (no letter, digit or underscore on either side and
+no dot before it, so ``v1.0``, ``max10`` or ``80th`` states nothing):
 
 - ``complexity_limit``: ``complexity``, ``C901`` or ``mccabe`` and the limit;
 - ``coverage_floor``: ``coverage`` and the threshold as a percentage (``80``) or
@@ -99,8 +99,8 @@ one gate per configuring file. Within a directory only the config the tool reads
 threshold as a standalone number: `complexity`/`C901`/`mccabe` plus the limit,
 `coverage` plus the floor (a ratio only with a decimal point, so `1.0` for 100; with no
 readable floor, `coverage` beside `fail_under`, `threshold`, `floor` or `minimum`),
-`pre-commit`, or `mypy` plus `strict`. A threshold glued to a letter, digit, underscore
-or dot (`v1.0`, `max10`) is not a standalone number and states no gate. The local
+`pre-commit`, or `mypy` plus `strict`. A threshold with a letter, digit or underscore on
+either side, or a dot before it (`v1.0`, `max10`, `80th`), states no gate. The local
 command is not required. An unstated gate carries `snippet`, a one-line sentence built
 from a template and the gate's own figures (never from file text) naming the rule, the
 threshold, the configuring file and the command that checks it. `stated_pct` is
@@ -459,7 +459,7 @@ def _number_re(value: float, *, decimal: bool = False) -> re.Pattern[str]:
     ratio form of a floor of 100 is ``1.0`` and never a bare ``1`` (#956)."""
     figure = _figure(value)
     zeros = "0*" if "." in figure else (r"\.0+" if decimal else r"(?:\.0+)?")
-    return re.compile(rf"(?<![\w.]){re.escape(figure)}{zeros}(?!\.?\d)")
+    return re.compile(rf"(?<![\w.]){re.escape(figure)}{zeros}(?!\.?\d|[A-Za-z_])")
 
 
 _RULE_WORDS: dict[GateKind, re.Pattern[str]] = {
