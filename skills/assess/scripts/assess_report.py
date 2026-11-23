@@ -614,8 +614,8 @@ def render_report(ctx: dict[str, Any], repo_name: str) -> str:
         diff_section=render_diff_section(ctx),
     )
     # The scans this run measured, the ones it skipped and why, and the catalog link (#794).
-    # A full run runs every scan; one that left no block (structure_drift with no ownership
-    # map, or a degraded scan) ran but was not measured.
+    # A full run runs every scan; one that left no block (a degraded scan) ran but was not
+    # measured. structure_drift with no ownership map leaves a no_ownership_map marker.
     measured = measured_section([ctx], absent_code="no_block")
     return f"{report.rstrip()}\n\n{measured}\n"
 
