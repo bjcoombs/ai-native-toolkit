@@ -56,8 +56,12 @@ evidence is static, read from the files at HEAD:
   fenced block inside a script cannot swallow the lines after it. A command
   continued with ``\\`` is first joined onto its first line (``lib.ci_continuations``,
   #799), so ``mvn ${MVN_ARGS} \\`` / ``verify`` reads ``verify``; a Maven run with its
-  tests skipped and only lifecycle phases (``mvn -DskipTests verify``) reads as a target
-  it cannot settle (``check_target``, in ``basis`` too: null), never credit.
+  tests skipped and only lifecycle phases (``mvn -DskipTests verify``), or a Gradle run
+  with ``test`` excluded and no other test task (``./gradlew check -x test``, #1046), reads
+  as a target it cannot settle (``check_target``, in ``basis`` too: null), never credit.
+  A Gradle dry run (``./gradlew -qm check``, ``--dry-run``, ``--task-graph``) runs nothing,
+  for Layer 5 and Layer 3 alike, and ``pdm run`` / ``poe`` are read through to the program
+  or script they run (``lib.runner_args``).
 - A ``run`` / ``script`` / ``command`` input under a ``uses:`` step's ``with:`` (#799,
   ``lib.ci_action_inputs``) reads as shell only for an action that runs it: a local action
   whose committed ``action.yml`` runs ``${{ inputs.<name> }}``, or a listed runner.
@@ -351,6 +355,7 @@ from lib.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflo
 from lib.ci_scripts import ScriptTree, runs_missing
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, read_config, repo_files
 from lib.dot_source import dot_as_source
+from lib.runner_args import reads_pdm_scripts
 from lib.external_ci_rules import as_external
 from lib.merged_ci import MergedStatus, as_merged
 from lib.shared_tooling import include_lines, pulls_jobs_from_elsewhere
@@ -488,7 +493,7 @@ def _drop(lines: Sequence[str], indexes: frozenset[int]) -> list[str]:
 def _basis(found: bool, merged: bool, *, elsewhere: bool, partial: bool, unread: bool,
            files: bool, external: External = None, skipped: bool = False) -> tuple[bool | None, CiChecksBasis]:
     """``(test_or_lint_configured, basis)``: an own or included check, the merged one, pending
-    included jobs, a Maven run with its tests skipped (#799: ``verify`` may still run lint
+    included jobs, a Maven or Gradle run with its tests skipped (#799, #1046: it may still run lint
     plugins, so null), an unread CI system (#787: the value stays false, its meaning unchanged)."""
     if found:
         return True, "check_command"
@@ -516,6 +521,7 @@ def _local_reader(root: Path, tracked: frozenset[str]) -> ReadLocal:
 
 
 @dot_as_source()   # . ./test.sh reads as source ./test.sh on a CI line (#1033)
+@reads_pdm_scripts   # a [tool.pdm.scripts] name is a script, not a program (#1046)
 def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
                    merged_ci: object = None, external_ci: object = None) -> CiChecksBlock:
     """Build the ``ci_checks`` block for the repository at ``repo_root``. ``merged_ci`` is the

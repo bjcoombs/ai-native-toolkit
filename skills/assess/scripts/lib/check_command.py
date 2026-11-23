@@ -7,7 +7,10 @@ committed script named for a check (``./scripts/test.sh``). An install command
 such as ``npm ci`` or ``uv sync --extra test`` is never a check. ``lib.ci_checks``
 applies it to CI lines, ``lib.named_check`` to instruction files. ``is_lint_run`` and
 ``may_lint`` (#782) feed ``ci_checks.lint_runs``: a linter that runs, and a check whose
-recipe may run one. Pure: no file or network access, so an offline scan stays offline.
+recipe may run one. ``hatch run``, ``pdm [run]`` and ``poe`` are read through, and a Gradle
+dry run or excluded task runs nothing (#1046, ``lib.runner_args``). Pure: no file or
+network access, so an offline scan stays offline (pdm script names come in through
+``runner_args.reads_pdm_scripts``).
 
 Full reference: lib/docs/check_command.md.
 """
@@ -18,8 +21,9 @@ import shlex
 from contextvars import ContextVar
 from pathlib import PurePosixPath
 
-from lib.command_flags import SHELLS, make_args, make_runs_no_recipe, shell_args, shell_string
+from lib.command_flags import SHELLS, make_args, shell_args, shell_string
 from lib.command_resolver import RUNNERS, command_words
+from lib.runner_args import SCRIPT, gradle_run, runs_no_task, script_run
 from lib.lint_vocabulary import (
     ANALYSER_PROGRAMS, ecosystem_lint, formatter_mode, program_name, runs_no_analysis)
 
@@ -100,6 +104,9 @@ def _js_check(head: str, pos: list[str], names: frozenset[str] | None) -> bool:
 def _check_target(words: list[str], names: frozenset[str] | None = None,
                   programs: frozenset[str] = ALWAYS_CHECK) -> bool:
     """Whether the program, subcommand or target a command runs is a check."""
+    script = _hatch_run(words)   # uv run poe pytest: poe's word is a task, read as poe pytest (#1046)
+    if script is not None:
+        return bool(script) and (is_check_name(script[0], names) or _check_target(script, names, programs))
     head = words[0]
     pos = _positionals(make_args(words[1:]) if head in ("make", "gmake") else words[1:])   # -j 4 (#955)
     if head in programs:
@@ -157,8 +164,9 @@ def is_lint_command(text: str) -> bool:
 
 def _lint_words(words: list[str]) -> bool:
     """``is_lint_command`` on words, reading a wrapper by the program it runs (#920)."""
+    words = gradle_run(words)   # ./gradlew ktlintCheck -x ktlintCheck runs no task (#1046)
     head = words[0]
-    if _no_analysis(words) or make_runs_no_recipe(words):   # swiftlint --fix, make -n lint (#926, #955)
+    if _no_analysis(words) or runs_no_task(words):   # swiftlint --fix, make -n lint, gradle -m (#926, #955, #1046)
         return False
     if (head in RUNNERS or head.startswith("./") or head in LINT_PROGRAMS) and _check_target(
             words, LINT_WORDS, LINT_PROGRAMS) or _task_target(words, LINT_WORDS) or ecosystem_lint(words):
@@ -260,6 +268,7 @@ def _task_target(words: list[str], names: frozenset[str]) -> bool:
 # ``is_lint_command`` (Layer 5, ``test_or_lint_configured``) keeps its vocabulary.
 TYPE_PROGRAMS = frozenset({"pyright", "basedpyright", "pytype", "pyre", "tsc", "vue-tsc"})
 _RUN_PROGRAMS = LINT_PROGRAMS | TYPE_PROGRAMS
+_SHADOWABLE = _RUN_PROGRAMS | ALWAYS_CHECK | _JS_TEST_RUNNERS   # programs a script name can shadow
 # Programs whose ``-V`` prints the version and exits (``is_info_invocation``).
 # ``pytype -V`` is ``--python-version`` and runs the check, so pytype is left out.
 _V_VERSION = (_RUN_PROGRAMS | ALWAYS_CHECK) - {"pytype"}
@@ -311,17 +320,16 @@ def _js_lint(head: str, pos: list[str]) -> bool:
 
 
 def _hatch_run(words: list[str]) -> list[str] | None:
-    """What ``hatch run`` runs (``hatch run lint`` -> ``["lint"]``), None for another command.
-
-    ``hatch`` is not a modelled runner, so it is read here (#782): the first word after
-    ``run`` is a script name (``lint``, ``test:cov``) or a program (``ruff check``).
+    """What ``hatch run``, ``pdm [run]`` or ``poe`` runs (``hatch run lint`` -> ``["lint"]``,
+    ``pdm run ruff check .`` -> ``ruff check .``), None for another command
+    (``lib.runner_args.script_run``, #782, #1046). A script named like a program it would
+    otherwise read (``poe ruff``, a pdm ``pytest`` script) is ``SCRIPT``: its recipe is unread.
     """
-    if words[0] != "hatch":
+    run = script_run(words)
+    if run is None:
         return None
-    pos = _positionals(words[1:])
-    if pos[:1] != ["run"]:
-        return None
-    return _drop_leading_flags(words[words.index("run") + 1:])
+    rest, script = run
+    return [SCRIPT] if script and rest[:1] and rest[0] in _SHADOWABLE else rest
 
 
 def _hatch_fmt_check(words: list[str]) -> bool:
@@ -344,8 +352,8 @@ def is_lint_run(text: str) -> bool:
     if outer:   # docker compose run app ruff check ., bundle exec rubocop, xargs clang-tidy
         return is_lint_run(shlex.join(outer))
     # ``type-check`` / ``type_check`` is one word here, not a ``check`` target.
-    words = [_TYPE_CHECK.sub("typecheck", w) for w in command_words(text)]
-    if not words or is_info_invocation(text) or make_runs_no_recipe(words):
+    words = gradle_run([_TYPE_CHECK.sub("typecheck", w) for w in command_words(text)])
+    if not words or is_info_invocation(text) or runs_no_task(words):
         return False
     if _no_analysis(words):   # swiftlint --fix rewrites, phpstan --generate-baseline (#926)
         return False
@@ -396,7 +404,7 @@ def may_lint(text: str) -> bool:
     program = _program(words)
     if program[:2] == ["pre-commit", "run"]:
         return True
-    hatch = _hatch_run(words)
+    hatch = _hatch_run(program) if program else None   # uv run poe lint, as poe lint (#1046)
     if hatch is not None:   # hatch run <script>: like tox -e, its recipe is not read
         return bool(hatch) and hatch[0] not in _DIRECT_TESTS | LINT_PROGRAMS
     if _task_target(words, CHECK_WORDS):
@@ -673,8 +681,9 @@ def _toolchain_test(words: list[str]) -> bool | None:
 
 def _check_verdict(words: list[str]) -> bool | None:
     """Whether a command runs a check: True, False, or None for a target whose recipe is not read."""
+    words = gradle_run(words)   # ./gradlew check -x check, test -x test: no task runs (#1046)
     head = words[0]
-    if make_runs_no_recipe(words):   # make -n test, make -i test: exits 0 whatever the recipe does
+    if runs_no_task(words):   # make -n test, make -i test, gradle -qm check: no recipe can fail
         return False
     if (head in RUNNERS or head.startswith("./")) and _check_target(words):
         return True
