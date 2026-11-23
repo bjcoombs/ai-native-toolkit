@@ -310,6 +310,6 @@ def test_a_kotlin_multiplatform_accessor_block_is_a_dependency_block(tmp_path: P
 def test_a_json_manifest_with_a_byte_order_mark_gives_a_row(
         tmp_path: Path, name: str, body: str, lock: str | None) -> None:
     # issue #1025: a BOM-prefixed manifest parsed as unknown and gave no row.
-    pinning = _pinning(tmp_path, {name: "﻿" + body})
+    pinning = _pinning(tmp_path, {name: "\ufeff" + body})
     assert _rows(pinning) == {name: (False, lock, None)}
     assert pinning["manifests_total"] == 1
