@@ -125,6 +125,8 @@ Enumerate work units via the adapter's **enumerate** operation.
    - collapse the wave — if combining would leave fewer than 2 parallel units where the DAG allowed more, you have destroyed the wave, not optimized it; use dependencies instead;
    - fold in a task that *depends on* the others, or a complexity-8+ task — a dependency is a sequencing signal, not a combine signal. Sequence it across PRs; don't serialize it inside one.
 
+   **Small units on one file batch even when the file is not hot.** Two small units that edit the same non-generated file combine under the same ceiling: two PRs there cost two CI cycles, two reviews and a merge of main ([Flow control](references/flow-control.md) rule 4).
+
    Some hot files are touched by *every* PR and want **sequential merge, never combining**: a version counter (`.claude-plugin/plugin.json` `.version`), a changelog, a lockfile. Assign each teammate its target value explicitly at spawn and merge in order (highest version wins) — combining all PRs to dodge a one-line version conflict is the trap, not the fix.
 
    **Version values assigned at spawn are final — never re-message a new version to an in-flight teammate** (it races with PR_CREATED/REVIEW_CLEAR and produces crossed-message churn). If readiness order ends up differing from the planned merge order, that is handled at merge time, not by re-messaging — see [Smart Merge](#smart-merge).
@@ -140,6 +142,10 @@ Enumerate work units via the adapter's **enumerate** operation.
 
    Critical path: <task-ids> (<N> points sequential)
    Parallel capacity: <M> tasks in first wave
+
+   WIP limit: <N> open builder PRs (<CI cycle> min / <per-merge> min per merge, plus 1)
+   Design gate: <units needing a recorded decision, and where each is recorded or pending>
+   Area owners: <area>: <teammate> (<unit ids>)
 
    Combined tasks:
    - Tasks <X>+<Y>: <reason> (single teammate, single PR)
@@ -227,10 +233,18 @@ gh api repos/<owner>/<repo>/branches/$BASE_BRANCH/protection \
 ```
 Store non-required check names in `meta.flaky_checks`.
 
+**Flow data.** Add a `flow` object to the tracking file now and keep it to the end: spawn and PR times per unit, and an event row for each semantic conflict, failed re-check, contract re-freeze, red main and load sample. The CRUD above deletes a `tasks` entry after cleanup; `flow` is never deleted, because Completion computes the flow metrics from it. Shape and recording rules: [Flow metrics](references/flow-metrics.md).
+
 ## Step 3: Spawn Teammates
 
 **Pre-spawn: Read the retro log's open template changes:**
 Before writing any spawn prompt, read the retro log (Marathon Configuration `$RETRO_LOG`) Template Changes table — **skip this step entirely if `$RETRO_LOG` is unset** (defaults supply none), the same escape the completion-time read uses. Apply every row still marked Pending to this run's spawn prompts and lead behaviour now - that is what the table is for. Reading these only at retro time is too late — the same friction then recurs the whole run, which is exactly how past fixes sat unapplied across entire marathons before shipping.
+
+**Pre-spawn: Apply flow control** ([Flow control](references/flow-control.md); each rule there carries its reason and evidence):
+- Spawn only while open builder PRs are below the WIP limit from Step 1. Ready units beyond it wait for a merge, not for a CPU.
+- A unit that changes a public surface (a headline, a badge, a schema, the CLI) or a cross-cutting rule (contract criteria, the manifest format) needs a recorded design decision before it spawns. Contract criteria over a manifest the run is still growing state properties, never entry counts.
+- Route a unit in an owned area to that area's standing teammate.
+- While a module move is in flight or has just merged, name the moved paths in every spawn prompt and say that an edit at an old path is ported by hand to the new one.
 
 **Pre-spawn: Check for already-completed work:**
 Before spawning Wave 1, check recent merged PRs for task keywords to avoid spawning work that's already done:
@@ -492,7 +506,7 @@ Spawn → Setup worktree → Implement → Create PR → required checks green +
   → Lead: shut teammate down → Lead owns claude-review wait → smart-merge + cleanup
 ```
 
-Never reuse a teammate for a different task. Shutdown + spawn fresh.
+Never reuse a teammate for a different task. Shutdown + spawn fresh. The one exception is a standing area owner, which takes its area's units one PR at a time ([Flow control](references/flow-control.md) rule 3).
 
 ### Lead Authority
 
@@ -517,6 +531,8 @@ The lead operates as a **tech lead running a sprint** — not a task router.
 
 **Report judgment calls in status updates.**
 
+**Lead failure modes.** The lead is the serial part of the run, so its own mistakes stop the merge step. Act on a recorded decision rather than block a deadline step on a question; read the time with `date -u`; send a "merged" notice only after the merge returns MERGED; lift every hold when a freeze ends; and re-check each PR in the same feature chain as a just-merged PR, even when no hot file changed. Reasons and run 4 evidence: [Flow control](references/flow-control.md) rule 5.
+
 ## Completion + Retrospective
 
 1. Send `shutdown_request` to each remaining teammate **once**. Each approves with a structured `shutdown_response` (addressed to `team-lead`, echoing the `request_id`, `approve: true`), which terminates it. Treat that approval, or an already-exited teammate, as the completion signal - don't block waiting on one that has already gone.
@@ -527,7 +543,7 @@ The lead operates as a **tech lead running a sprint** — not a task router.
    - Criteria not met or partially met (flag for user)
    - Scope that was delivered beyond the original acceptance criteria (emergent work)
 5. Read the retro log (path from Marathon Configuration `$RETRO_LOG`, or skip if not configured)
-6. Run retrospective using the structured format below
+6. Compute the flow metrics, then run the retrospective using the structured format below. Save the GitHub responses as [Flow metrics](references/flow-metrics.md) describes, then run `python3 "${CLAUDE_SKILL_DIR}/scripts/flow_metrics.py" --tracking "$TRACK_FILE" --github <saved-dir> --previous <previous-run-json>` (drop `--previous` on a first run). Its markdown is the retrospective's Flow table.
 7. Append this marathon to the retro log (Marathon History + update Template Changes validation)
 
 ### Retro Boundary
@@ -597,6 +613,9 @@ For each that was exercised: did it help, hurt, or not apply? Mark validated.>
 - Teammates: <N> spawned (<N> sonnet, <N> opus), <N> needed intervention
 - Wall clock: ~<N> min spawn to final merge
 - Estimated waste: ~<N> min (CI waits, conflict resolution, stalled teammates)
+
+**Flow** (from `flow_metrics.py`: per-PR table, per-run metrics against the previous run, largest wait)
+<paste the script's markdown output; name the cause of the largest wait>
 ```
 
 ## Gotchas
