@@ -135,7 +135,7 @@ condition the gate covers is met: not measured never counts as held. Each such u
 a line after the roll-up lines:
 
 ```text
-packages/web: CI runs the tests. Learn from: packages/api
+packages/web: CI turns red on a broken check. Learn from: packages/api
 ```
 
 The lines are dropped in counts-only output. The structured entry keeps the gate and the
