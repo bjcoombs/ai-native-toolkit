@@ -17,6 +17,13 @@ signal before it is filled from judgement:
   knowledge base, whose test layers are N/A.
 - ``doc_graph``: fewer than ``REACHABILITY_FLOOR`` of the docs are reachable
   from the entry points. Names the unreachable docs.
+- ``instruction_placement`` (issue #1084): a removal. Each instruction file the scan
+  flags (always-on lines over ``ALWAYS_ON_FLAG_LINES`` and share over
+  ``ALWAYS_ON_FLAG_SHARE``, the scan's own #419 thresholds, never a second size) gets an
+  entry with ``finding`` ``REMOVAL_FINDING``, ``mode`` ``remove`` and a measured ``cost``
+  (``RemovalCost``: the always-on lines). It trims text and never deletes the file, so
+  the instruction-file gate, which reads presence, keeps holding. ``action_mode`` is the
+  mode finalize stamps: ``remove`` for it, the keyhole mode for every other finding.
 
 Each entry is ``{signal, action, paths, why}``, where ``signal`` is the run-context
 block the gap was read from and ``why`` is that scan's why from the check manifest
@@ -39,26 +46,51 @@ report was found in a repo whose archetype is `software` and names up to three
 `keyhole_signals.is_archive_path`); it is silent on a knowledge base (test layers N/A)
 and when no hotspot remains, and when it fires it comes next.
 A `doc_graph` entry fires when `reachability_pct` is below `REACHABILITY_FLOOR` (0.5, with
-its rationale beside it) and names up to ten unreachable docs. A repo with no markdown
+its rationale beside it) and names up to ten unreachable docs. An `instruction_placement`
+removal (#1084) follows for each instruction file the scan flags, with `finding`, `mode`
+`remove` and `cost` `{metric: "always_on_lines", path, value}`. A repo with no markdown
 reports reachability 0.0, but nothing is unreachable there, so no `doc_graph` entry fires.
 `[]` when none fires. There is no lint complexity-rule gap: the core has no detector
 for it, and the layer scorer owns that check.
 """
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
-from lib.keyhole.keyhole_signals import is_archive_path
+from lib.instruction_placement import ALWAYS_ON_FLAG_LINES
+from lib.keyhole.keyhole_signals import FINDING_MODE_VALUES, is_archive_path, mode_for_finding
 from lib.run_context_types import JsonDict
 
 
+class RemovalCost(TypedDict):
+    """What a practice costs, as measured: the metric, the file it is measured on and the
+    amount (#1084). A removal is credited with the amount it saves."""
+
+    metric: str  # "always_on_lines": instruction lines every session loads
+    path: str
+    value: int
+
+
 class GapAction(TypedDict):
-    """A Top 3 candidate read from a measured gap: ``{signal, action, paths, why}``."""
+    """A Top 3 candidate read from a measured gap: ``{signal, action, paths, why}``, plus
+    ``finding``, ``mode`` and ``cost`` on a removal proposal (#1084)."""
 
     signal: str
     action: str
     paths: list[str]
     why: str  # the manifest why of the scan ``signal`` names (#939)
+    finding: NotRequired[str]  # REMOVAL_FINDING on a removal proposal
+    mode: NotRequired[str]  # REMOVE_MODE on a removal proposal
+    cost: NotRequired[RemovalCost]
+
+
+# A removal proposal (#1084): the finding it names and the mode finalize gives it. The
+# finding is not a keyhole finding; finalize maps it to ``remove`` (``action_mode``).
+REMOVAL_FINDING = "instruction_always_on"
+REMOVE_MODE = "remove"
+REMOVAL_MODES = {REMOVAL_FINDING: REMOVE_MODE}
+# Every mode finalize can write: the keyhole modes plus ``remove``.
+ACTION_MODE_VALUES = FINDING_MODE_VALUES | {REMOVE_MODE}
 
 # Reachability floor for the doc_graph gap. Below half, most of the docs cannot
 # be reached by following links from README / AGENTS.md / an index page, so an
@@ -127,6 +159,43 @@ def _root_instructions_gap(layer_grades: JsonDict, nested: JsonDict) -> GapActio
     }
 
 
+def _removal_gaps(placement: JsonDict) -> list[GapAction]:
+    """A removal proposal per instruction file ``instruction_placement`` flags (#1084).
+
+    The scan's own flag is the trigger, never a second size: always-on lines over
+    ``ALWAYS_ON_FLAG_LINES`` and a share over ``ALWAYS_ON_FLAG_SHARE`` (the #419 decisions).
+    The cost is the always-on lines every session loads. The proposal trims the always-on
+    part and never deletes the file, so the instruction-file gate, which reads presence,
+    keeps holding; the relocatable sections the scan names are where to start.
+    """
+    if placement.get("available") is not True:
+        return []
+    out: list[GapAction] = []
+    for f in placement.get("files") or []:
+        if not isinstance(f, dict) or f.get("flagged") is not True or not isinstance(f.get("path"), str):
+            continue
+        lines = f.get("always_on_lines")
+        if not isinstance(lines, int):
+            continue
+        sections = [r["heading"] for r in f.get("relocatable") or []
+                    if isinstance(r, dict) and isinstance(r.get("heading"), str) and r["heading"]]
+        start = (" Start with the sections that belong elsewhere: "
+                 + ", ".join(f"`{h}`" for h in sections[:3]) + ".") if sections else ""
+        out.append({
+            "signal": "instruction_placement",
+            "action": (
+                f"Remove always-on text from `{f['path']}` until at most {ALWAYS_ON_FLAG_LINES} "
+                f"lines load on every session: {lines} do now. Delete what no agent needs, and "
+                f"move what one needs only sometimes to the home the report names. Keep the "
+                f"file and its check command, so the instruction-file gate still holds.{start}"
+            ),
+            "paths": [f["path"]], "why": "",
+            "finding": REMOVAL_FINDING, "mode": REMOVE_MODE,
+            "cost": {"metric": "always_on_lines", "path": f["path"], "value": lines},
+        })
+    return out
+
+
 def _reachability_gap(doc_graph: JsonDict) -> GapAction | None:
     # A repo with no markdown reports reachability 0.0 with available: true.
     # Nothing is unreachable there, so no link-the-docs action applies; a
@@ -155,12 +224,14 @@ def build_gap_actions(
     archetype: JsonDict | None,
     layer_grades: JsonDict | None = None,
     nested_instructions: JsonDict | None = None,
+    instruction_placement: JsonDict | None = None,
 ) -> list[GapAction]:
     """Return the gap actions that fire, root instructions then coverage first; ``[]`` when none do."""
     gaps = [
         _root_instructions_gap(layer_grades or {}, nested_instructions or {}),
         _coverage_gap(coverage_report or {}, top_hotspots or [], archetype or {}),
         _reachability_gap(doc_graph or {}),
+        *_removal_gaps(instruction_placement or {}),
     ]
     from lib.manifest.check_manifest import core_manifest  # lazy: the manifest loads once
     from lib.manifest.manifest_whys import scan_whys
@@ -169,3 +240,9 @@ def build_gap_actions(
     for g in out:
         g["why"] = whys.get(g["signal"], "")
     return out
+
+
+def action_mode(finding: str | None) -> str:
+    """The execution mode finalize stamps on an action: ``remove`` for a removal proposal
+    (#1084), else the keyhole finding's mode (``keyhole_signals.mode_for_finding``)."""
+    return REMOVAL_MODES.get(finding or "", "") or mode_for_finding(finding)

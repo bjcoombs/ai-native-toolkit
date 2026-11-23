@@ -140,6 +140,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `prior_level.tags.countable_not_measured.id` | token |
 | `prior_level.tags.countable_not_measured.reason` | token |
 | `prior_level.reason` | token |
+| `prior_level.baseline.run_id` | token |
+| `prior_level.baseline.head_sha` | token |
+| `prior_level.baseline.held_gates` | token |
 
 ## doc_graph
 
@@ -692,15 +695,6 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `layer_grades.instructions_grade` | token |
 | `layer_grades.instruction_presence` | token |
 
-## gap_actions
-
-| Field | Kept as |
-|---|---|
-| `gap_actions.signal` | token |
-| `gap_actions.action` | dropped |
-| `gap_actions.why` | dropped |
-| `gap_actions.paths` | path (hashed when hashing is on) |
-
 ## instruction_placement
 
 | Field | Kept as |
@@ -716,6 +710,19 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `instruction_placement.loaded_in_full.relocatable.signals` | token |
 | `instruction_placement.loaded_in_full.relocatable.home.kind` | token |
 | `instruction_placement.loaded_in_full.relocatable.home.target` | path (hashed when hashing is on) |
+
+## gap_actions
+
+| Field | Kept as |
+|---|---|
+| `gap_actions.signal` | token |
+| `gap_actions.action` | dropped |
+| `gap_actions.why` | dropped |
+| `gap_actions.paths` | path (hashed when hashing is on) |
+| `gap_actions.finding` | token |
+| `gap_actions.mode` | token |
+| `gap_actions.cost.metric` | token |
+| `gap_actions.cost.path` | path (hashed when hashing is on) |
 
 ## agent_consistency
 

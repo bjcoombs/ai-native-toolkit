@@ -30,7 +30,8 @@ import pytest
 from assess_core import build_and_publish_run
 from assess_finalize import _write_actions_contract
 from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION
-from lib.keyhole.keyhole_signals import FINDING_MODE_VALUES, mode_for_finding
+from lib.gap_actions import ACTION_MODE_VALUES
+from lib.keyhole.keyhole_signals import mode_for_finding
 from lib.wiki_writer import (
     hotspot_page_source_path,
     hotspot_page_status,
@@ -223,7 +224,7 @@ def test_actions_json_v2_schema_status_and_derived_mode(dogfood_run: dict) -> No
     assert len(entries) == 3
     for entry in entries:
         assert entry["status"] == "pending"  # fresh contract, no carry-forward
-        assert entry["mode"] in FINDING_MODE_VALUES
+        assert entry["mode"] in ACTION_MODE_VALUES
         # The mode is *derived* from the finding type, not free text.
         assert entry["mode"] == mode_for_finding(entry.get("finding"))
     # The derivation is discriminating: distinct finding types earn distinct modes.

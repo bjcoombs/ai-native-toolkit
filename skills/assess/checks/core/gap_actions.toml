@@ -7,16 +7,20 @@ kind = "collector"
 title = "Gap actions"
 callable = "lib.core_scans:gap_actions"
 publishes = ["gap_actions"]
-reads = ["coverage_report", "doc_graph", "current", "archetype", "layer_grades", "nested_instructions"]
+reads = ["coverage_report", "doc_graph", "current", "archetype", "layer_grades", "nested_instructions", "instruction_placement"]
 stage = "post_offers"
 headless = { gap_actions = "unregistered" }
 whys.gap_actions = "exempt: plumbing"
 shapes = [
   { path = "gap_actions", type = "lib.gap_actions:GapAction" },
 ]
-revision = 2
+revision = 3
   [entries.privacy]
   "gap_actions.signal" = "token"
   "gap_actions.action" = "drop"
   "gap_actions.why" = "drop"
   "gap_actions.paths" = "path"
+  "gap_actions.finding" = "token"
+  "gap_actions.mode" = "token"
+  "gap_actions.cost.metric" = "token"
+  "gap_actions.cost.path" = "path"
