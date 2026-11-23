@@ -101,5 +101,18 @@ be split, reads null (`check_target`), because the masking of `lib.ci_masking` c
 inside the quotes. make's option values are dropped before its targets are read
 (`make -j 4 build` is `build`, false). `hatch run <name>` has the name trust of `make
 <name>`: `hatch run lint` is a lint command and a lint run, as `make lint` is.
+`pdm [run]` and `poe` are read the same way (#1046, `lib.runner_args.script_run`): `pdm run
+ruff check .` is a lint run, `pdm run lint` and `poe lint` have the name trust of `make
+lint`, and any other script or task reads null (`may_check`, `may_lint`), wrapped or not
+(`uv run poe lint` is `poe lint`). A pdm script named in `[tool.pdm.scripts]` of the root
+`pyproject.toml` shadows the program (`pdm run pytest` with a `pytest` script runs the
+script), and a script or poe task named like a program this module reads (`poe ruff`) is
+`runner_args.SCRIPT`, a script whose recipe is unread: null, never credit. A bare `pdm
+<word>` that is neither a pdm command nor a script runs nothing (pdm exits 2). The scripts
+are read only inside `ci_checks.scan_ci_checks` and `coverage_gate.detect_coverage_gate`;
+elsewhere a bare `pdm <word>` is read as a script. Gradle (#1046): a dry run (`-m`, in a
+cluster such as `-qm`, `--dry-run`, `--task-graph`) runs nothing, like `make -n`
+(`runner_args.runs_no_task`), and a task named after `-x` / `--exclude-task` is not run
+(`runner_args.gradle_run`: `check -x check` and `ktlintCheck -x ktlintCheck` run no task).
 `_js_lint` reads the package managers only; `is_lint_run` reads `npx` / `bunx` by the
 program they run before it.

@@ -7,7 +7,7 @@ The navigation index for `ai-native-toolkit`. Every shipped doc in this repo is 
 | Subtree | Entry doc | What lives there |
 |---------|-----------|------------------|
 | Skills | [`skills/`](../skills/README.md) | The plugin's skills - the headline `/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`, plus `/ghsync`, `/ghreport`, `/fleet`, `/doc-contradictions`, the user-invoked workflows (`/tm`, `/issues`, `/fix-pr`, ...) and the team-orchestration library skills |
-| Agents | [Agents](#agents) below | The Six Thinking Hats team that `/huddle` and `/6hats` orchestrate, plus `/assess`'s layer scorer and `/doc-contradictions`'s comparer |
+| Agents | [Agents](#agents) below | The Six Thinking Hats team that `/huddle` and `/6hats` orchestrate, plus `/assess`'s practice scorer and `/doc-contradictions`'s comparer |
 | Docs | this file | Design history, runbooks, and the rendered example SVGs |
 
 ## Skills
@@ -37,8 +37,8 @@ Team-orchestration library skills (invoked by the workflow skills, not standalon
 
 `/assess` is itself split into three skills - the orchestrator plus two render-time helpers:
 
-- [`assess`](../skills/assess/SKILL.md) - the orchestrator and layered scorer.
-- [`assess-findings`](../skills/assess-findings/SKILL.md) - renders the report from the deterministic `run-context.json` and the layer scorecard.
+- [`assess`](../skills/assess/SKILL.md) - the orchestrator and practice scorer.
+- [`assess-findings`](../skills/assess-findings/SKILL.md) - renders the report from the deterministic `run-context.json` and the practice scorecard.
 - [`assess-pr`](../skills/assess-pr/SKILL.md) - the end-of-run offers (open a PR, track the Top 3 Actions, freeze a CI gate), including the [uninstall steps](../skills/assess/references/uninstall.md) that remove what a run wrote.
 
 The deterministic core's per-module reference is each module's docstring under `skills/assess/scripts/lib/`, and its seam map is [`skills/assess/scripts/lib/README.md`](../skills/assess/scripts/lib/README.md); its test suites are mapped to the modules they pin in [`skills/assess/tests/README.md`](../skills/assess/tests/README.md).
@@ -77,7 +77,7 @@ The Six Thinking Hats team, orchestrated by [`/huddle`](../skills/huddle/SKILL.m
 - [`green-hat`](../agents/green-hat.md) - creative alternatives.
 - [`blue-hat`](../agents/blue-hat.md) - synthesis and recommendation.
 - [`scribe`](../agents/scribe.md) - structures hat output into actionable documentation.
-- [`assess-layer-scorer`](../agents/assess-layer-scorer.md) - scores a codebase against the `/assess` layered contract model.
+- [`assess-layer-scorer`](../agents/assess-layer-scorer.md) - scores a codebase against the `/assess` practices, one verdict per practice.
 - [`doc-contradictions-comparer`](../agents/doc-contradictions-comparer.md) - `/doc-contradictions`'s read-only Haiku comparer: reads one doc cluster and its code, returns contradictions as cited JSON.
 
 ## Acceptance-contract workflow

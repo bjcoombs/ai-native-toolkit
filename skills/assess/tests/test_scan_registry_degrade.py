@@ -57,7 +57,7 @@ def test_a_raising_entry_degrades_and_every_reader_accepts_the_marker(key, tmp_p
     from assess_gate import evaluate, format_verdict
     from assess_report import render_report
     from lib.assess_config import load_gate_config
-    from lib.counts_only import counts_only, unclassified_strings
+    from lib.counts_only.content_free import counts_only, unclassified_strings
     from lib.testing.mutation_cap import layer6_cap_violation
     from lib.testing.test_focus import mutation_scope
 
@@ -129,7 +129,7 @@ def test_plugin_version_never_raises(content, tmp_path):
 def test_counts_only_keeps_a_marker_as_a_flag_under_path_keyed_and_dropped_keys():
     """A path-keyed block's marker keys are fields, not paths to hash, and a
     dropped text field that degraded still says it is unavailable."""
-    from lib.counts_only import counts_only, unclassified_strings
+    from lib.counts_only.content_free import counts_only, unclassified_strings
 
     marker = {"available": False, "reason": "scan failed: /home/me/secret"}
     ctx = {"sensitive_instruction_content": marker, "ancestor_instruction_files": marker,

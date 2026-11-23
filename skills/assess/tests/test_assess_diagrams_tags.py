@@ -16,6 +16,7 @@ import lib.assess_diagrams_tags as td
 from assess_diagrams_tags_fixture import FIXTURES, LEVEL, PRIOR, PRIOR_OTHER, TAGS, goldens
 from lib.assess_diagrams_review import ALL_FILES, build_all
 from lib.level_tally import default_model, level_result
+from lib.level_tags import conditions_label
 from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
 from lib.vocabulary import banned_hits
 from svg_cascade import overridden_text_attributes
@@ -66,7 +67,8 @@ def test_row_order_is_fixed_and_every_label_carries_its_condition_count() -> Non
     svg = _svg(SAME)
     assert re.findall(r'<g data-tag="([a-z_]+)"', svg) == list(TRUTH_TAGS)
     for row in TAGS:
-        assert f">{TRUTH_TAG_TITLES[row['tag']]} · {row['conditions']}<" in _row(svg, row["tag"])
+        assert f">{TRUTH_TAG_TITLES[row['tag']]} · {conditions_label(row['conditions'])}<" in _row(svg, row["tag"])
+    assert ">Contracts · 0 conditions<" in svg and ">Supply chain · 2 conditions<" in svg
     # the order is the tag list's, not the rows' order in the data
     shuffled = {**LEVEL, "tags": list(reversed(TAGS))}
     assert td.tag_diagrams({"level": shuffled})[0]["svg"] is None

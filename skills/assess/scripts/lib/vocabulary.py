@@ -20,7 +20,7 @@ the next goal. The banned-vocabulary guard is `tests/test_vocabulary_guard.py`
 (`cd skills/assess && uv run --locked pytest tests/test_vocabulary_guard.py`). It renders, from
 source, a real fleet run with the shipped maturity model (`report.md`, every diagram, the heat
 map and the team next-steps pages), the in-repo diagram, trend, heat map and next-steps
-fixtures, and the /assess deterministic report with every cross-layer finding. It fails,
+fixtures, and the /assess deterministic report with every cross-practice finding. It fails,
 naming the word, the output and the line, when one of these words appears in the prose as a
 whole word, case-insensitive. Fenced code, backticked spans, URLs (bare, or a Markdown link
 target) and identifiers containing an underscore are not prose (`prose`), so machine field

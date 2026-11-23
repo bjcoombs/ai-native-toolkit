@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from lib.counts_only import counts_only_scans
+from lib.counts_only.content_free import counts_only_scans
 from lib.layer_grades import scan_layer_grades
 from lib.scan_registry import SCANS
 from lib.signals import known_scans

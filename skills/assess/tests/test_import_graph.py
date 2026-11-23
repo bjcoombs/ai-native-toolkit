@@ -104,7 +104,7 @@ def test_a_repo_in_a_language_with_no_builder_names_it(tmp_path: Path) -> None:
 
 
 def test_the_headless_marker_keeps_the_language_code(tmp_path: Path) -> None:
-    from lib.counts_only import reason_code
+    from lib.counts_only.content_free import reason_code
 
     _write(tmp_path, "main.go", "package main\n")
     marker = structure(analyze_structure(tmp_path).as_dict())
@@ -266,7 +266,7 @@ def test_the_package_edge_list_keeps_the_heaviest_pairs_and_counts_them_all(
 
 
 def test_counts_only_hashes_package_ids_and_keeps_every_count() -> None:
-    from lib.counts_only import HASH_PREFIX, counts_only
+    from lib.counts_only.content_free import HASH_PREFIX, counts_only
     block = analyze_structure(REPO).as_dict()
     out = counts_only({"structure": block}, hash_paths=True, salt="fleet")["structure"]
     ids = [p["id"] for p in block["packages"]]

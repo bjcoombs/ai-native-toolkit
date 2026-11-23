@@ -53,7 +53,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple, cast
 
-from lib.counts_only import is_hashed
+from lib.counts_only.content_free import is_hashed
 from lib.fleet.fleet_achievements import HistoryRun, subjects
 from lib.fleet.fleet_compare import comparability
 from lib.fleet.fleet_data import FLEET_DATA_FILE, FLEET_DATA_VERSION, FleetData

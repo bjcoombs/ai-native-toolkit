@@ -21,6 +21,7 @@ module that leaves one behind.
 from __future__ import annotations
 
 import datetime as _dt
+import importlib
 import sys
 import types
 from collections.abc import Mapping
@@ -53,6 +54,26 @@ def pin_fleet_run_date(monkeypatch: pytest.MonkeyPatch, cli: object) -> _dt.date
     day: _dt.date = cli.utc_today()  # type: ignore[attr-defined]
     monkeypatch.setattr(cli, "utc_today", lambda: day)
     return day
+
+
+def use_real_lizard(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Put the installed lizard in ``sys.modules`` until ``monkeypatch`` undoes it.
+
+    The undo restores what stood there before: a stand-in, or no entry at all. An
+    installed lizard already in place is left alone.
+
+    ``lib.headless_layers.lizard_analyzer`` reads a stand-in as "lizard not
+    installed", so a headless ``stats_summary`` built while one is in place reads
+    ``no_lizard`` (#1117). ``stub_heavy_deps`` now removes its stand-ins when the
+    loading fixture's scope ends (#831); this keeps a headless scan scored even
+    inside a module that still holds one.
+    """
+    module = sys.modules.get("lizard")
+    if module is not None and hasattr(module, "analyze_file"):
+        return
+    monkeypatch.setitem(sys.modules, "lizard", module)  # records the stand-in, or no entry
+    del sys.modules["lizard"]
+    importlib.import_module("lizard")
 
 
 # The modules the CLI wrappers import at load and the tests stand in for.

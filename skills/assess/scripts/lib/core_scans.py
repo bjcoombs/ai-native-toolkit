@@ -32,6 +32,8 @@ from typing import Any
 from lib.keyhole.accretion_ratchet import AccretionScan, scan_accretion_ratchet
 from lib.anomaly_detector import detect_anomalies
 from lib.keyhole.archetype import analyze_archetype
+from lib.since_last_run import SinceLastRun
+from lib.since_last_run import since_last_run as since_last_run_block
 from lib.assess_config import WorkingNotesConfig, load_structure_config, load_working_notes_config
 from lib.change_coupling import RenameMap
 from lib.context_blocks import (
@@ -60,9 +62,10 @@ from lib.instruction_files import (
 )
 from lib.interactivity import build_offers_block
 from lib.keyhole.keyhole_signals import integrate
+from lib.exec_summary import summarised
 from lib.headline import Headline, run_context_headline
 from lib.level_result_types import LevelResult, OwnerExclusionsBlock
-from lib.level_tally import LEVEL_READS, run_context_level
+from lib.level_tally import LEVEL_READS, default_model, run_context_level
 from lib.keyhole.liveness_scan import scan_liveness
 from lib.owner_exclusions import owner_exclusions_block
 from lib.unit_discovery import UnitsBlock, scan_units
@@ -296,12 +299,14 @@ def keyhole_blocks(integration: KeyholeIntegration) -> dict[str, Any]:
 
 def gap_actions(
     coverage: dict[str, Any], doc_graph_block: Any, current: dict[str, Any], archetype: Any,
-    layer_grades: Any = None, nested_instructions: Any = None,
+    layer_grades: Any = None, nested_instructions: Any = None, instruction_placement: Any = None,
 ) -> Any:
-    """Top 3 candidates read from the instruction-presence, coverage and doc-graph signals."""
+    """Top 3 candidates read from the instruction-presence, coverage, doc-graph and
+    instruction-placement signals (the last proposes a removal, #1084)."""
     return build_gap_actions(
         coverage, doc_graph_block, current.get("top_hotspots"), dict_or(archetype, None),
         dict_or(layer_grades, None), dict_or(nested_instructions, None),
+        dict_or(instruction_placement, None),
     )
 
 
@@ -393,7 +398,15 @@ def level(*blocks: Any) -> LevelResult:
     return run_context_level(dict(zip(LEVEL_READS, blocks)))
 
 
-def headline(level_block: Any) -> Headline:
+def headline(level_block: Any, since_block: Any) -> Headline:
     """The run context's ``headline`` block (#747): the Step, its next unlock and the
-    verified tally, worded from the ``level`` block under the default model."""
-    return run_context_headline(level_block)
+    verified tally, worded from the ``level`` block under the default model, with the
+    executive summary (#1102) that also reads the ``since_last_run`` block."""
+    return summarised(run_context_headline(level_block), level_block, since_block, default_model())
+
+
+def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path, superseded: Any) -> SinceLastRun:
+    """The run context's ``since_last_run`` block (#1083): actions closed, gates gained or
+    lost and the next blocker, against the run-context the previous run left (or, for a run
+    that supersedes a same-day run on the same commit, against that run's own baseline)."""
+    return since_last_run_block(level_block, assess_dir, repo_root, superseded)

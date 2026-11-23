@@ -237,7 +237,7 @@ def test_run_context_has_deterministic_keyhole_products(tmp_path: Path) -> None:
     # Task 2: deterministic findings markdown is present and well-formed.
     assert "findings_markdown" in ctx
     assert ctx["findings_markdown"].startswith(
-        "## Cross-Layer Findings (Keyhole Readiness)"
+        "## Cross-Practice Findings (Keyhole Readiness)"
     )
     # Task 3: keyhole readiness summary reported alongside the 0-8 score.
     assert "keyhole_summary" in ctx

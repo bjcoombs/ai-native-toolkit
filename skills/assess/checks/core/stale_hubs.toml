@@ -16,6 +16,7 @@ revision = 1
   [entries.privacy]
   "stale_hubs.subject_method" = "token"
   "stale_hubs.subject_roots" = "path"
+  "stale_hubs.subject_match" = "token"
   "stale_hubs.subject_paths" = "path"
   "stale_hubs.base_doc_dir" = "path"
   "stale_hubs.confidence" = "token"

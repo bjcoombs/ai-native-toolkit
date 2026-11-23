@@ -1,7 +1,6 @@
 """Headless layer 2-4 blocks: structure, stats_summary, promissory_markers, structure_drift (#667)."""
 from __future__ import annotations
 
-import importlib
 import json
 import os
 import shutil
@@ -12,14 +11,15 @@ from typing import Any
 
 import jsonschema
 import pytest
+from assess_test_support import use_real_lizard
 
 import assess_signals
 from lib import headless_layers as hl
 from lib import scan_registry as reg
 from lib import signals
 import lib.graph.import_graph_python as import_graph_python
-from lib.counts_only import reason_code
-from lib.counts_only_rules import ID, PATH, classify
+from lib.counts_only.content_free import reason_code
+from lib.counts_only.counts_only_rules import ID, PATH, classify
 from lib.levels import _UNAVAILABLE, evaluate, resolve_signal
 from lib.level_signals import load_default_levels
 from lib.signals_schema import SCHEMA_PATH
@@ -73,11 +73,7 @@ def target(tmp_path: Path) -> Path:
 @pytest.fixture
 def real_lizard(monkeypatch: pytest.MonkeyPatch) -> None:
     """The installed lizard, not the empty stub test_complexity_treemap installs."""
-    for name in ("lizard", "lizard_languages"):
-        module = sys.modules.get(name)
-        if module is not None and not hasattr(module, "analyze_file") and name == "lizard":
-            monkeypatch.delitem(sys.modules, name)
-    importlib.import_module("lizard")
+    use_real_lizard(monkeypatch)
 
 
 def _run(repo: Path, out: Path, *extra: str) -> dict[str, Any]:

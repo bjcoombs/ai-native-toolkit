@@ -5,6 +5,11 @@ Reads ``.assess/run-context.json`` and renders a Markdown report from a stdlib
 tokens and produces the same report for the same context, on every PR forever.
 
 It renders:
+- the executive summary first (``lib/exec_summary.py``, #1102): the Step and what an
+  agent can do there, the next gate as a task, what changed since the last run, and one
+  linked call to action, pasted from the ``headline`` block's ``summary_markdown``,
+- the "Since Last Run" section (``lib/since_last_run.py``, #1083): actions closed
+  since the previous run with their commits, gates gained or lost and the next blocker,
 - the headline (``lib/headline.py``, #747, #844, #1083): the Step, the gate that
   blocks the next one, "Catalogue coverage: N of M measured" and the per-tag strip,
   pasted from the run context's ``headline`` block,
@@ -14,14 +19,14 @@ It renders:
   not drawn,
 - a metrics dashboard (complexity profile, churn window, total LOC),
 - the top-hotspots table,
-- the keyhole-readiness summary + the six cross-layer findings, and
+- the keyhole-readiness summary + the six cross-practice findings, and
 - the regression deltas (graduated / new / regressed / restructured / persistent), and
 - "How this was measured": the scans that ran and were skipped, with the catalog link
   (``lib/measured_appendix.py``, #794).
 
 It deliberately does NOT reproduce (these require LLM judgement and are written
 elsewhere by the orchestrator, see SKILL.md):
-- the per-layer present/partial/missing prose, or
+- the per-practice present/partial/missing prose, or
 - the Top 3 Actions priority narrative.
 
 The findings section, the keyhole summary, and the prescribed actions are
@@ -102,7 +107,7 @@ REPORT_TEMPLATE = Template("""# Deterministic Assessment Snapshot: $repo_name
 
 _Generated $run_date by `/assess` v$plugin_version.${commit_note}_
 
-## Headline
+${summary_section}${since_section}## Headline
 
 $headline
 
@@ -131,7 +136,7 @@ $diff_section
 
 ---
 
-_Deterministic portion of the assessment: headline, metrics, hotspots, and cross-layer findings. The per-layer assessments and prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
+_Deterministic portion of the assessment: headline, metrics, hotspots, and cross-practice findings. The per-practice assessments and prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
 """)
 
 
@@ -318,7 +323,7 @@ def render_generated_disclosure(ctx: dict[str, Any]) -> str:
 
 
 def render_findings_section(ctx: dict[str, Any]) -> str:
-    """Return the pre-rendered cross-layer findings section, verbatim.
+    """Return the pre-rendered cross-practice findings section, verbatim.
 
     The deterministic core already renders the six findings + attention list
     into ``findings_markdown``; this renderer copies it so the section appears
@@ -326,7 +331,7 @@ def render_findings_section(ctx: dict[str, Any]) -> str:
     """
     markdown: str | None = ctx.get("findings_markdown")
     if not markdown or not markdown.strip():
-        return "_No cross-layer findings recorded._"
+        return "_No cross-practice findings recorded._"
     return markdown.strip()
 
 
@@ -569,6 +574,27 @@ def _render_loc_split(loc: dict[str, Any]) -> str:
     return f"; code {_fmt(loc['max_code'])}, data {_fmt(loc['max_data'])}"
 
 
+def render_since_section(ctx: dict[str, Any]) -> str:
+    """The "Since Last Run" section that opens the report (#1083), ending in a blank line.
+
+    Empty for a run-context written before the block existed; a degraded block says it
+    was not measured, with its reason.
+    """
+    block = ctx.get("since_last_run")
+    if not isinstance(block, dict):
+        return ""
+    if block.get("available") is not True or not isinstance(block.get("markdown"), str):
+        return f"## Since Last Run\n\n_Not measured: {block.get('reason') or 'unavailable'}._\n\n"
+    return f"## Since Last Run\n\n{block['markdown']}\n\n"
+
+
+def render_summary_section(ctx: dict[str, Any]) -> str:
+    """The executive summary and its call to action (#1102), ending in a blank line; empty
+    when the headline has none (unavailable, no Steps, or a context written before it)."""
+    markdown = as_headline(ctx.get("headline"))["summary_markdown"]
+    return f"{markdown}\n\n" if markdown else ""
+
+
 def _headline_markdown(ctx: dict[str, Any]) -> str:
     """The headline, then the monorepo unit roll-up (#865) when the run scored two or more
     units. A run with fewer units renders the headline alone, byte for byte."""
@@ -609,6 +635,8 @@ def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None =
         run_date=ctx.get("run_date", "unknown"),
         plugin_version=ctx.get("plugin_version", "unknown"),
         commit_note=_render_commit_note(ctx),
+        summary_section=render_summary_section(ctx),
+        since_section=render_since_section(ctx),
         headline=_headline_markdown(ctx),
         diagrams_section=diagrams_section(build_all(ctx), assess_dir),
         files_scored=_fmt(stats.get("files_scored", 0)),

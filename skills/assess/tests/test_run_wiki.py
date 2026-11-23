@@ -91,7 +91,7 @@ def test_hotspot_page_carries_growth_profile_when_file_accretes(git_repo) -> Non
 
     # The block must also reach the keyhole: a populated accretion_ratchet block
     # is wired into the derived finding (assess_core passes it to integrate), so
-    # the cross-layer finding lists the path - not just the run-context block.
+    # the cross-practice finding lists the path - not just the run-context block.
     finding = next(
         f for f in ctx["derived_findings"] if f["name"] == "accretion_ratchet"
     )

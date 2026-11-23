@@ -2,6 +2,8 @@
 
 [![AI-readiness](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fbjcoombs%2Fai-native-toolkit%2Fmain%2F.assess%2Fbadge.json)](.assess/assess-report.md) [![Assess Gate](https://github.com/bjcoombs/ai-native-toolkit/actions/workflows/assess-gate.yml/badge.svg)](https://github.com/bjcoombs/ai-native-toolkit/actions/workflows/assess-gate.yml)
 
+**`/assess` tells you how much an AI agent can safely do in your repository on its own, and the one change that would let it do more.**
+
 A Claude Code plugin - and a set of standalone skills for **any AI assistant**: skills and agents for AI-native development. In Claude Code it runs locally against your own codebase using whichever model you already pay for. Several of the skills also ship as standalone [Agent Skills](https://www.anthropic.com/news/skills) ZIPs you can upload to claude.ai, Claude Desktop, Cowork, or any assistant that supports the skills format - no Claude Code required.
 
 > **Want the skills without Claude Code?** Download the ZIPs from the **[latest release](https://github.com/bjcoombs/ai-native-toolkit/releases/latest)** - the release notes link straight to that version's standalone skill bundle - and upload them in your assistant's Skills UI. Full walkthrough: [Standalone skill ZIPs](#standalone-skill-zips-any-ai-assistant). Currently standalone: `/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`.
@@ -68,7 +70,7 @@ Here is the same repo twice: an already-good AI-native codebase **before**, then
 
 ### The same lens, three real public repos
 
-The pair above is this toolkit assessing a private monorepo. Below is `/assess` run unmodified against three public codebases in different languages, ordered by score. It is a calibration check: the layered model should discriminate between genuinely-engineered projects, not rubber-stamp the famous ones. Click any image for the full interactive SVG; hover any block for its numbers.
+The pair above is this toolkit assessing a private monorepo. Below is `/assess` run unmodified against three public codebases in different languages, ordered by score. It is a calibration check: the model should discriminate between genuinely-engineered projects, not rubber-stamp the famous ones. Click any image for the full interactive SVG; hover any block for its numbers.
 
 <table>
   <tr>
@@ -83,11 +85,11 @@ The pair above is this toolkit assessing a private monorepo. Below is `/assess` 
   </tr>
 </table>
 
-> **What the spread shows.** Three real projects land three full points apart, so the model is reading enforcement, not reputation. `ktor` scores highest because it is the only one with all the write-side trust signals present - a CodeRabbit review bot, repo-wide `explicitApi()` type discipline, and a mandatory CI gate order - and its treemap stays calm (worst file ccn 141, against `llama.cpp`'s 4,123). `llama.cpp` pairs strong CI and type-checking with no coverage gates, no review bot, and no feedback loop; its `ggml-vulkan.cpp` is the textbook hotspot - cyclomatic complexity 4,123, a single function at 350, 14k LOC, 289 commits in a year - the large vivid-red block you cannot miss. `candle` is type-safe Rust with real CI but is missing both read-side layers (no committed `AGENTS.md`/`CLAUDE.md`, a fragmented doc graph), which caps how far its enforced write-side quality can carry the score. The lizard cyclomatic-complexity engine scored Rust and Kotlin directly here, not the scc keyword fallback. Point-in-time snapshot, June 2026, scored on the earlier 0-8 layer score that the Step and its gates have since replaced - these scores move as the projects do, which is the whole point.
+> **What the spread shows.** Three real projects land three full points apart, so the model is reading enforcement, not reputation. `ktor` scores highest because it is the only one with all the write-side trust signals present - a CodeRabbit review bot, repo-wide `explicitApi()` type discipline, and a mandatory CI gate order - and its treemap stays calm (worst file ccn 141, against `llama.cpp`'s 4,123). `llama.cpp` pairs strong CI and type-checking with no coverage gates, no review bot, and no feedback loop; its `ggml-vulkan.cpp` is the textbook hotspot - cyclomatic complexity 4,123, a single function at 350, 14k LOC, 289 commits in a year - the large vivid-red block you cannot miss. `candle` is type-safe Rust with real CI but is missing both read-side practices (no committed `AGENTS.md`/`CLAUDE.md`, a fragmented doc graph), which caps how far its enforced write-side quality can carry the score. The lizard cyclomatic-complexity engine scored Rust and Kotlin directly here, not the scc keyword fallback. Point-in-time snapshot, June 2026, scored on the earlier 0-8 layer score that the Step and its gates have since replaced - these scores move as the projects do, which is the whole point.
 
-### Four more views of one run: llama.cpp
+### Five more views: the Step ladder and one llama.cpp run
 
-`/assess` also draws four smaller diagrams beside the report. These four come from one run of the current toolkit against [`llama.cpp`](https://github.com/ggml-org/llama.cpp) at commit `1f8baae` (22 November 2026), the same public repo as the middle heatmap above. That run's headline is **Step 3, Unattended agent PRs**, with "Catalogue coverage: 6 of 14 measured, 3 verified" and one condition not measured. Click any image for the full SVG; hover any square, cell or tick for its numbers.
+`/assess` also draws five smaller diagrams beside the report. The Step ladder below is an illustrative sample; the other four come from one run of the current toolkit against [`llama.cpp`](https://github.com/ggml-org/llama.cpp) at commit `1f8baae` (22 November 2026), the same public repo as the middle heatmap above. That run's headline is **Step 3, Unattended agent PRs**, with "Catalogue coverage: 6 of 14 measured, 3 verified" and one condition not measured. Click any image for the full SVG; hover any square, cell or tick for its numbers.
 
 <table>
   <tr>
@@ -120,7 +122,7 @@ The pair above is this toolkit assessing a private monorepo. Below is `/assess` 
 
 Once a codebase outgrows any single LLM context window and AI agents become regular contributors, code quality stops being a function of *who knows what* and starts being a function of *what the system enforces*. Norms ("we prefer X") fail because new contributors - especially AI agents starting each session fresh - never read them. Contracts ("the build fails if you don't do X") work because they're enforced regardless of who's reading.
 
-`/assess` gives you paired views to act on that. The doc-navigability graph shows whether an agent can even find its way - how much of the docs is reachable, and which are stale maps of churning code. The complexity SVG shows where the codebase is today - which files will bite next week. The accompanying `assess-report.md` shows what scaffolding is in place to stop it getting worse: the Step and the gate that blocks the next one in its headline, then a scorecard that marks each of the layers below Present / Partial / Missing with concrete evidence.
+`/assess` gives you paired views to act on that. The doc-navigability graph shows whether an agent can even find its way - how much of the docs is reachable, and which are stale maps of churning code. The complexity SVG shows where the codebase is today - which files will bite next week. The accompanying `assess-report.md` shows what scaffolding is in place to stop it getting worse: the Step and the gate that blocks the next one in its headline, then a scorecard that marks each of the practices below Present / Partial / Missing with concrete evidence.
 
 ### The intent: keep codebases comprehensible as AI accelerates them
 
@@ -136,29 +138,29 @@ So `/assess` is grounded in the accumulated practice of legacy-code engineering,
 
 The goal is a codebase that stays legible to whoever — or whatever — works on it next: that its self-descriptions (docs, tests, types, instructions) are kept *honest under pressure*, not merely present. That honesty is what lets an agent (or a new hire) act without first having to rediscover the whole system.
 
-The nine layers (0-8) are the report's scorecard and its reading order, not its score: the headline counts conditions, and its per-tag strip groups them by truth tag, not by layer. The layer numbers survive in the maturity model's row ids and as an alias that lets older configs and fleet history resolve. Read in order, the layers run from **read-side** (can the agent form a true picture?) through **write-side** (can it be trusted to produce good output?) to **meta** (does the system keep itself honest?). The full list of conditions, their grades and their tags is in [What /assess measures](docs/what-we-measure.md); the decisions behind the model are in the [scoring model](skills/assess/references/scoring-model.md).
+The report's scorecard has one row per practice, in reading order. It is detail, not a score: the Step reads its gates, and the per-tag strip groups conditions by truth tag. Older versions numbered these practices as layers 0-8; the numbers survive only inside the maturity model's row ids (`layer-0-instructions` and so on) and the alias that lets older configs and fleet history resolve. Read in order, the practices run from **read-side** (can the agent form a true picture?) through **write-side** (can it be trusted to produce good output?) to **meta** (does the system keep itself honest?). The full list of conditions, their grades and their tags is in [What /assess measures](docs/what-we-measure.md); the decisions behind the model are in the [scoring model](skills/assess/references/scoring-model.md).
 
-| Layer | Band | What it enforces |
-|-------|------|------------------|
-| 0: Agent Instructions & Navigability | read | Compact rules in `CLAUDE.md` / `AGENTS.md` / `copilot-instructions`, plus a navigable doc graph (can an agent traverse links to the right place, and is what it finds still true?) |
-| 1: Runtime Legibility / Liveness | read | Is the code actually live, and can the agent find out? Intra-repo dead-code signals + observability the agent can reach (logs/metrics/traces) |
-| 2: Code Design | write | Compile-time correctness via types - dimensional types, generated API clients, exhaustive enums |
-| 3: Linters | write | Style + correctness with rules targeting AI failure modes (suppressions, complexity gates, leftover TODOs) |
-| 4: Architecture Tests | write | Structural rules as executable tests (`depguard`, ArchUnit-style boundary checks) |
-| 5: CI Pipeline | write | Every PR runs everything; failing pipeline blocks merge |
-| 6: Coverage Gates | write | Test discipline as a build contract |
-| 7: Review Bots | write | Design-level feedback (CodeRabbit, claude[bot]) catching what linters can't |
-| 8: AI Project Management | meta | Retros, task tracking, the feedback loop that keeps the contracts above current |
+| Practice | Band | What it enforces |
+|----------|------|------------------|
+| Agent instructions | read | Compact rules in `CLAUDE.md` / `AGENTS.md` / `copilot-instructions`, plus a navigable doc graph (can an agent traverse links to the right place, and is what it finds still true?) |
+| Runtime legibility | read | Is the code actually live, and can the agent find out? Intra-repo dead-code signals + observability the agent can reach (logs/metrics/traces) |
+| Code design (module structure) | write | Compile-time correctness via types - dimensional types, generated API clients, exhaustive enums |
+| Linters run in CI, suppression cap | write | Style + correctness with rules targeting AI failure modes (suppressions, complexity gates, leftover TODOs) |
+| Architecture boundaries and size | write | Structural rules as executable tests (`depguard`, ArchUnit-style boundary checks) |
+| CI and the agent's local check | write | Every PR runs everything; failing pipeline blocks merge |
+| Coverage gates and truth pressure | write | Test discipline as a build contract |
+| Review on merged pull requests | write | Design-level feedback (CodeRabbit, claude[bot]) catching what linters can't |
+| AI project management | meta | Retros, task tracking, the feedback loop that keeps the contracts above current |
 
-The Layer 0 navigability model - treating the docs as a link graph an agent must traverse - adapts the **"Lint"** health-check from [Andrej Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (hubs, orphans, connectivity, an `index.md` catalog and `log.md`), making its *structural* checks deterministic. The semantic ones it also lists stay out of the deterministic core: contradictions between pages are what [`/doc-contradictions`](skills/doc-contradictions/SKILL.md) looks for, and concepts lacking a page are not checked.
+The agent-instructions navigability model - treating the docs as a link graph an agent must traverse - adapts the **"Lint"** health-check from [Andrej Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (hubs, orphans, connectivity, an `index.md` catalog and `log.md`), making its *structural* checks deterministic. The semantic ones it also lists stay out of the deterministic core: contradictions between pages are what [`/doc-contradictions`](skills/doc-contradictions/SKILL.md) looks for, and concepts lacking a page are not checked.
 
-The report's headline leads with the **Step**: how much agent autonomy the repo's contracts support, on the adoption ladder from [Boris Cherny's *Steps of AI Adoption*](https://www.threads.com/@boris_cherny/post/Da4CkQnEea-) (July 2026) - 1 Assisted, 2 Supervised agent PRs, 3 Unattended agent PRs, 4 Autonomous loops - with the gate that blocks the next Step, then "Catalogue coverage: N of M measured, V verified" with the maturity-model version, then a strip of the same counts per truth tag. A Step needs its gates and nothing else, so no count moves it; the coverage line says how much of the catalogue the run could read. All three are computed deterministically from the commit, never by the model. The Steps work because Cherny's per-step guardrails are these layers seen from the org side (self-verification loops = L5/L6, automated review = L7, agent instructions = L0, encoded permissions/routines = L8): the Step bounds how far up his ladder a team can safely operate this repo, without claiming anything about how the team actually works. Layer 8's `agent_ops` signals (committed permission allowlists, hooks, sandbox rules, routine definitions) score the repo-observable subset of those guardrails.
+The report's headline leads with the **Step**: how much agent autonomy the repo's contracts support, on the adoption ladder from [Boris Cherny's *Steps of AI Adoption*](https://www.threads.com/@boris_cherny/post/Da4CkQnEea-) (July 2026) - 1 Assisted, 2 Supervised agent PRs, 3 Unattended agent PRs, 4 Autonomous loops - with the gate that blocks the next Step, then "Catalogue coverage: N of M measured, V verified" with the maturity-model version, then a strip of the same counts per truth tag. A Step needs its gates and nothing else, so no count moves it; the coverage line says how much of the catalogue the run could read. The report and its `log.md` entry open with what changed since the previous run: the actions closed, each with its commit, the gates gained or lost, and the next blocker. All three are computed deterministically from the commit, never by the model. The Steps work because Cherny's per-step guardrails are these practices seen from the org side (self-verification loops = CI and coverage gates, automated review = review on merged pull requests, agent instructions, encoded permissions and routines = AI project management): the Step bounds how far up his ladder a team can safely operate this repo, without claiming anything about how the team actually works. The AI project management practice's `agent_ops` signals (committed permission allowlists, hooks, sandbox rules, routine definitions) score the repo-observable subset of those guardrails.
 
 **Traditional tooling, applied to an AI-era question.** The assessment itself runs on conventional static analysis - `lizard`/`scc`, git history, and graph metrics over the docs and code - not the model. The LLM only writes the prose around the numbers. So a full run is fast and spends almost no model tokens, and the structural findings are reproducible run-to-run.
 
 A codebase can hold Step 4 and still be on fire (strong contracts, legacy debt) or Step 1 with a calm treemap (small codebase, no enforcement needed yet). The headline tells you whether the system will catch the next class of pain before it lands; the SVG tells you where today's pain already is. The report's **Top 3 Actions** table names specific files, always - "improve code quality" is the failure mode `/assess` exists to prevent; "Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current p95 ccn is 23; immediate offenders: `internal/import/parser.go` (ccn 67)" is what makes the report actionable.
 
-**The compounding payoff.** Contracts are front-loaded - types, lint rules, architecture tests, agent instructions all take time to write. The payoff compounds: every new service, feature, and contributor inherits the contracts that already exist. Skip them and you lose 15-45 minutes per AI session to convention drift, rework, and false signals - forever. Run `/assess` periodically to ratchet the practices in place upward; each layer you add closes a recurring cost.
+**The compounding payoff.** Contracts are front-loaded - types, lint rules, architecture tests, agent instructions all take time to write. The payoff compounds: every new service, feature, and contributor inherits the contracts that already exist. Skip them and you lose 15-45 minutes per AI session to convention drift, rework, and false signals - forever. Run `/assess` periodically to ratchet the practices in place upward; each practice you add closes a recurring cost.
 
 A stats sidecar (`complexity-stats.json`) accompanies the report with percentiles and ranked file lists that feed the treemap and the report's hotspot callouts.
 
@@ -285,7 +287,7 @@ If a skill only fires on `/skill-name` and not on natural language, the frontmat
 ### Capability differences vs Claude Code
 
 - `/huddle` runs in solo or phased sub-agent mode here - Claude reasons through each hat phase directly. Team mode (persistent agents with cross-talk) requires Claude Code.
-- `/assess` runs the full layered assessment. The SVG treemap and deterministic wiki need terminal access to the bundled scripts.
+- `/assess` runs the full assessment. The SVG treemap and deterministic wiki need terminal access to the bundled scripts.
 
 ## Try it
 
@@ -297,7 +299,7 @@ If a skill only fires on `/skill-name` and not on natural language, the frontmat
 
 Runs against the current directory (or pass a path). Produces:
 
-- `.assess/assess-report.md` - the Step and verified-practices headline, per-layer scorecard, top 3 leverage actions, hotspot callouts
+- `.assess/assess-report.md` - the Step and verified-practices headline, per-practice scorecard, top 3 leverage actions, hotspot callouts
 - `.assess/doc-graph.svg` - the doc-navigability graph shown above
 - `.assess/complexity-heatmap.svg` - the complexity treemap shown above
 - `.assess/step-ladder.svg` - the four Steps as rungs of agent autonomy, the gate between each pair, "You are here" on the run's Step and the next gate highlighted; the report shows it first
@@ -343,7 +345,7 @@ Full catalog and per-skill base docs: [`skills/README.md`](skills/README.md).
 
 | Skill | Description |
 |-------|-------------|
-| [`/assess`](skills/assess/SKILL.md) | Layered AI-readiness assessment (0-8 contract model) plus a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) and [`doc-graph-svg.py`](skills/assess/scripts/doc-graph-svg.py) so the agent runs them with no external setup. Filters build artifacts and generated code by default (opt-out with `--include-artifacts`); warns when one file dominates LOC. Offers to install optional `scc` for repos heavy in markdown/JSON/YAML. Generated PRs include a self-install footer so reviewers can adopt the plugin. |
+| [`/assess`](skills/assess/SKILL.md) | AI-readiness assessment (autonomy Steps held by named gates, a scorecard by practice) plus a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Ships [`complexity-treemap.py`](skills/assess/scripts/complexity-treemap.py) and [`doc-graph-svg.py`](skills/assess/scripts/doc-graph-svg.py) so the agent runs them with no external setup. Filters build artifacts and generated code by default (opt-out with `--include-artifacts`); warns when one file dominates LOC. Offers to install optional `scc` for repos heavy in markdown/JSON/YAML. Generated PRs include a self-install footer so reviewers can adopt the plugin. |
 | [`/huddle`](skills/huddle/SKILL.md) | Multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board). Three execution modes: solo flat-parallel, phased sub-agent (default fallback), and team mode (needs Agent Teams capability flag). |
 | [`/deslop`](skills/deslop/SKILL.md) | Detect and remove the telltale signs of AI writing - puffery, the rule of three, "not X but Y", filler diction, chatbot leakage, fabricated citations. Two modes: a silent quality gate while writing prose, or an explicit de-slop/audit pass. Ships a [`references/full-checklist.md`](skills/deslop/references/full-checklist.md) A-F catalog derived from Wikipedia's "Signs of AI writing" (revision of 15 November 2026) - the skill flags itself for re-derivation if it goes stale, since the tells drift with model generations. |
 | [`/ghsync`](skills/ghsync/SKILL.md) | Bulk clone and keep in sync every GitHub or GitLab repo you can access, skipping archived and empty ones - built for onboarding into a new enterprise. On GitLab (`--provider gitlab --host <host>`), covers every group you belong to with nested subgroups and shared projects, laid out by `path_with_namespace`; `--porcelain` plus `--from-list` split discovery from cloning for hosts reachable only from another network. For an org, unions the repos reachable through your teams with the org's repo list (so direct-collaborator and public repos count); for a personal account, uses the account's repo list. Deduplicates, then clones new ones and fast-forward syncs existing checkouts and their worktrees into a `<repo>/<repo>-main` + `<repo>/worktree` layout. Org defaults to the directory you run from. Never clobbers local work (uncommitted or off-default-branch repos are fetched, not pulled) and reports every exception in a summary. For analysis-only mirrors, `--partial` (`--filter blob:none`) and `--shallow-since DATE` shape new clones; `--active-since DURATION` keeps only repositories with a recent default-branch commit, and `--porcelain-json` prints one JSON object of metadata per repository instead of cloning. Ships [`ghsync.sh`](skills/ghsync/scripts/ghsync.sh); needs `gh` + `jq` (or `glab` + `jq` for GitLab), supports GitHub Enterprise via `GH_HOST`. |
@@ -394,7 +396,7 @@ The Six Hats team that `/huddle` and `/6hats` orchestrate:
 | `blue-hat` | Synthesis and recommendation |
 | `scribe` | Structures hat output into actionable documentation |
 
-`assess-layer-scorer` scores a codebase against the `/assess` 0-8 layered model from `run-context.json`, Present/Partial/Missing per layer with evidence (used by `/assess`).
+`assess-layer-scorer` scores a codebase against the `/assess` practices from `run-context.json`, Present/Partial/Missing per practice with evidence (used by `/assess`).
 
 ## Why Six Hats?
 

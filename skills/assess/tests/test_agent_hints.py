@@ -32,7 +32,7 @@ from lib.agent_identity import (  # noqa: E402
     is_agent_hint,
 )
 from lib.ai_usage import scan_ai_usage  # noqa: E402
-from lib.counts_only import counts_only_scans  # noqa: E402
+from lib.counts_only.content_free import counts_only_scans  # noqa: E402
 from lib.hosting.delivery import agent_authored, hinted_author, scan_delivery  # noqa: E402
 from lib.hosting.gitlab_cli import GitlabProject  # noqa: E402
 from lib.hosting.merged_sample import MergedSample  # noqa: E402

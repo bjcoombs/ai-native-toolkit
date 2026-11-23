@@ -71,7 +71,7 @@ sys.dont_write_bytecode = True
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.counts_only import (  # noqa: E402
+from lib.counts_only.content_free import (  # noqa: E402
     add_cli_arguments,
     counts_only_scans,
     hash_options,

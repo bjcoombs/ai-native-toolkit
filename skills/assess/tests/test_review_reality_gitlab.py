@@ -34,7 +34,7 @@ from lib.hosting.platform_cli import CACHE_ENV  # noqa: E402
 from lib.hosting.review_reality import scan_review_reality  # noqa: E402
 import lib.hosting.merged_sample as merged_sample_module  # noqa: E402
 from lib.hosting.merged_sample import merged_sample  # noqa: E402
-from lib.reason_codes import reason_code  # noqa: E402
+from lib.counts_only.reason_codes import reason_code  # noqa: E402
 
 FAKE_GLAB = """#!/bin/sh
 echo "$*" >> "$FAKE_GLAB/log"

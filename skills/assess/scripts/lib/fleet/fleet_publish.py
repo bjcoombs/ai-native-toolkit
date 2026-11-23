@@ -69,8 +69,8 @@ import re
 from collections.abc import Iterator, Mapping
 from typing import Final, NamedTuple, TypedDict
 
-from lib.counts_only import is_hashed
-from lib.counts_only_rules import (
+from lib.counts_only.content_free import is_hashed
+from lib.counts_only.counts_only_rules import (
     DROP,
     FLEET_DATA_KEPT,
     FLEET_DATA_RULES,

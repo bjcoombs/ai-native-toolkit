@@ -14,7 +14,9 @@ report beside ``groups.jsonl``, removing any diagram file a previous run left
 that this run did not draw, so a stale picture never sits beside new data;
 ``clear_diagrams`` removes them all (``fleet.py --no-diagrams``).
 
-The slope chart (#675) follows the trend; it reads
+The fleet median tag profile strip (#940, ``lib/fleet/fleet_tag_profile.py``) comes first, the
+summary view, drawn from ``fleet-data.json``'s ``tag_profile`` (``build_diagrams(...,
+tag_profile=)``) and skipped without it. The slope chart (#675) follows the trend; it reads
 the ``--compare`` result (``comparison``) and is skipped without one; the trend
 (#676, ``lib/fleet/fleet_trends.py``) reads the run history. A new diagram adds its file,
 report heading and question to ``HEADINGS`` (the one source a drawn, skipped or failed diagram
@@ -52,11 +54,13 @@ from typing import TypedDict
 import lib.fleet.fleet_maturity as fleet_maturity
 import lib.fleet.fleet_quadrant as fleet_quadrant
 import lib.fleet.fleet_slope as fleet_slope
+import lib.fleet.fleet_tag_profile as fleet_tag_profile
 import lib.fleet.fleet_tooling_map as fleet_tooling_map
 import lib.fleet.fleet_trends as fleet_trends
 from lib.vocabulary import IN_PLACE
 from lib.fleet.runner import FleetRow
 from lib.fleet.fleet_compare import Comparison
+from lib.fleet.fleet_tag_profile import FleetTagRow
 from lib.fleet.fleet_trends import TrendRun
 from lib.levels import MaturityModel
 
@@ -64,6 +68,8 @@ REPORT_FILE = "report.md"
 # Each diagram's report heading and question, by file: the one source for a drawn
 # diagram, a skipped one and one whose renderer raised (#684).
 HEADINGS: dict[str, tuple[str, str]] = {
+    fleet_tag_profile.FILE: (fleet_tag_profile.TITLE,
+                             "Which truth tags hold across the estate, and how far apart are the repositories on each?"),
     fleet_quadrant.FILE: ("Activity and maturity", "Which busy repositories have the most room to grow?"),
     fleet_tooling_map.FILE: ("Shared tooling",
                              "What does a shared template change reach, and which pins differ from the fleet's?"),
@@ -124,6 +130,21 @@ def _quadrant(levels: MaturityModel | None, repos: Sequence[FleetRow], window: s
         entry["in_place"] = (f"{IN_PLACE} {_repos(len(measured))} with a measured level, {half} of them "
                              "at or above half the top level.")
         entry["svg"] = fleet_quadrant.render_quadrant(points, window)
+    return entry
+
+
+def _tag_profile(levels: MaturityModel | None, profile: Sequence[FleetTagRow] | None, repos: int) -> Diagram:
+    entry = _entry(fleet_tag_profile.FILE, repos)
+    if levels is None:
+        entry["skipped"] = NO_LEVELS
+    elif profile is None:
+        entry["skipped"] = "skipped: the run wrote no per-tag tally (fleet-data.json tag_profile)."
+    elif not any(row["repos"] for row in profile):
+        entry["skipped"] = "skipped: no repository in the run has a per-tag tally (none was scanned)."
+    else:
+        from lib.assess_diagrams_tags import tag_whys  # lazy: the check manifest loads once
+        entry["in_place"] = fleet_tag_profile.in_place(profile)
+        entry["svg"] = fleet_tag_profile.render(profile, tag_whys())
     return entry
 
 
@@ -203,8 +224,12 @@ def _guarded(build: Callable[[], Diagram], file: str, repos: int) -> Diagram:
 
 def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], window: str, *,
                    history: Sequence[TrendRun] | None = None,
-                   comparison: Comparison | None = None) -> list[Diagram]:
+                   comparison: Comparison | None = None,
+                   tag_profile: Sequence[FleetTagRow] | None = None) -> list[Diagram]:
     """Every diagram for one run, in report order; never raises for a diagram's sake.
+
+    ``tag_profile`` is ``fleet-data.json``'s per-tag roll-up (#940), drawn first as the fleet's
+    summary view; None when the run wrote none.
 
     ``history`` is the trend's runs, oldest first and this run last
     (``fleet_trends.history_runs`` and ``series_runs``); None when no history was read.
@@ -212,6 +237,7 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
     """
     count = len(repos)
     return [
+        _guarded(lambda: _tag_profile(levels, tag_profile, count), fleet_tag_profile.FILE, count),
         _guarded(lambda: _quadrant(levels, repos, window), fleet_quadrant.FILE, count),
         _guarded(lambda: _tooling(repos), fleet_tooling_map.FILE, count),
         _guarded(lambda: _trend(levels, history, count), fleet_trends.FILE, count),

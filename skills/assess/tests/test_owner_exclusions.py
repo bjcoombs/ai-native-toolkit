@@ -16,7 +16,7 @@ import pytest
 
 import lib.level_tally as lt
 from lib import core_scans, headline as hl
-from lib.counts_only import counts_only
+from lib.counts_only.content_free import counts_only
 from lib.owner_exclusions import KINDS, PROBLEMS, owner_exclusions_block, parse_exclusions
 from lib.scan_registry import SCANS
 from test_level_tally import (  # noqa: F401 - estate is a fixture

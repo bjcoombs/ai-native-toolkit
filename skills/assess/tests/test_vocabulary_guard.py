@@ -4,7 +4,7 @@ Renders the user-facing outputs from source, never from a committed golden, so a
 any string that reaches them is caught here: a real fleet run with the shipped maturity
 model (``report.md``, every diagram, the heat map, the team next-steps pages), the
 in-repo diagram, trend, heat map and next-steps fixtures, and the /assess deterministic
-report with every cross-layer finding rendered. It fails when a banned word or a retired
+report with every cross-practice finding rendered. It fails when a banned word or a retired
 band label appears in the prose, naming the word, the output and the line, and when a
 section of ``report.md`` or a next-steps page does not open with ``In place:``.
 
