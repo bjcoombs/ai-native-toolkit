@@ -33,8 +33,9 @@ def _at(step: int) -> LevelResult:
          "state": "met" if gate_step <= step else "unmet"}
         for cid, gate_step in GATE_CONDITIONS.items()]
     top = max(s["step"] for s in STEPS)
+    gate = {2: "instructions", 3: "ci_runs_tests", 4: "coverage_gate"}.get(step + 1, "")
     nxt = None if step == top else {"step": step + 1, "threshold": 0,
-                                     "blockers": [{"kind": "gate", "gate": "x"}]}
+                                     "blockers": [{"kind": "gate", "gate": gate}]}
     level = copy.deepcopy(LEVEL)
     level.update({"conditions": conditions, "step": step, "next_step": nxt})  # type: ignore[typeddict-item]
     return level
@@ -100,6 +101,19 @@ def test_in_place_and_caption(step: int, caption: str) -> None:
     assert ladder.ladder_caption(level, STEPS) == caption
 
 
+def test_a_count_shortfall_after_the_gates_joins_the_caption_like_the_headline() -> None:
+    level = _at(3)
+    assert level["next_step"] is not None
+    level["next_step"]["blockers"].append({"kind": "threshold", "threshold": 9, "met": 3})
+    assert ladder.ladder_caption(level, STEPS) == (
+        "Step 4, Autonomous loops, opens when a coverage gate is enforced and more practices are in place.")
+    # The unmet, counted coverage condition joins the tally once its gate holds: 5 + 1 closes it.
+    level["next_step"]["blockers"][-1] = {"kind": "threshold", "threshold": 5, "met": 4}
+    assert ladder.ladder_caption(level, STEPS) == "Step 4, Autonomous loops, opens when a coverage gate is enforced."
+    level["next_step"]["blockers"] = []
+    assert ladder.ladder_caption(level, STEPS) == "Step 4, Autonomous loops, opens when its gates hold."
+
+
 def test_new_gates_are_the_ones_a_step_adds() -> None:
     assert [g["id"] for g in ladder.new_gates(STEPS, 2)] == ["instructions"]
     assert [g["id"] for g in ladder.new_gates(STEPS, 3)] == ["ci_runs_tests"]
@@ -113,7 +127,7 @@ def test_a_model_of_its_own_draws_its_own_steps() -> None:
          "gates": [{"id": "own_gate", "row": "r", "level": 1}]},
     ]
     level = _at(1)
-    level["next_step"] = {"step": 2, "threshold": 1, "blockers": []}
+    level["next_step"] = {"step": 2, "threshold": 1, "blockers": [{"kind": "gate", "gate": "own_gate"}]}
     content = ladder.render_ladder(level, steps)
     assert sorted(_rungs(content)) == [1, 2]
     assert "Step 2 · Further" in content and "the own_gate gate holds (not yet)" in content

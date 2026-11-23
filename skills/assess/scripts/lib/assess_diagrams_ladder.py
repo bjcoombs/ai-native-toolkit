@@ -12,7 +12,8 @@ here" marker; the gate below ``level["next_step"]`` is drawn in the warn colour 
 next one. Nothing is hard-coded about the number of Steps or their gates.
 
 ``ladder_in_place`` and ``ladder_caption`` are the report section's opening line and
-caption. ``lib/assess_diagrams.py`` builds the diagram entry and puts it first in the
+caption; the caption reads ``next_step.blockers`` the way the headline's Next line does, so
+the two name the same unlock. ``lib/assess_diagrams.py`` builds the diagram entry and puts it first in the
 report. Rungs carry ``data-step`` and ``data-state`` (``reached``, ``here``, ``ahead``),
 gate bands ``data-gate-to`` and, on the next one, ``data-next``, so tests read the
 picture back. Deterministic: model order, no date, no set iteration.
@@ -23,9 +24,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import lib.fleet.fleet_svg as svg
-from lib.headline import GATE_CHANGE
+from lib.headline import GATE_CHANGE, _gate_gain
 from lib.level_result_types import LevelResult
-from lib.levels import StepDef, StepGate
+from lib.levels import MaturityModel, StepDef, StepGate
 from lib.vocabulary import IN_PLACE
 
 LADDER_FILE = "step-ladder.svg"
@@ -139,15 +140,24 @@ def ladder_in_place(level: LevelResult, steps: Sequence[StepDef]) -> str:
 
 
 def ladder_caption(level: LevelResult, steps: Sequence[StepDef]) -> str:
-    """The caption: the next gate as a change, or that the top Step is held."""
+    """The caption: what opens the next Step, read from ``next_step.blockers`` as the
+    headline's Next line reads them, or that the top Step is held.
+
+    Each blocking gate is worded by ``GATE_CHANGE``; a count shortfall left once the gates
+    hold (``headline._gate_gain``: a counted gate condition adds to the tally) adds "more
+    practices are in place", so the caption and the headline name the same unlock."""
     nxt = level["next_step"]
     if nxt is None:
         return "This is the top Step; it holds while its gates hold."
-    gates = [g for g in new_gates(steps, nxt["step"]) if not gate_holds(level, g)]
-    if gates:
-        change = " and ".join(_gate_words(g) for g in gates)
-        return f"Step {nxt['step']}, {_name(steps, nxt['step'])}, opens when {change}."
-    return f"Step {nxt['step']}, {_name(steps, nxt['step'])}, opens when more practices are in place."
+    gates = [b for b in nxt["blockers"] if b["kind"] == "gate"]
+    changes = [GATE_CHANGE.get(b.get("gate", ""), f"the {b.get('gate', '')} gate holds") for b in gates]
+    model: MaturityModel = {"version": level["levels_version"], "rows": [], "steps": list(steps)}
+    gain, _ = _gate_gain(level, model, nxt["step"], gates)
+    if any(b.get("threshold", 0) - b.get("met", 0) - gain > 0
+           for b in nxt["blockers"] if b["kind"] == "threshold"):
+        changes.append("more practices are in place")
+    unlock = " and ".join(changes) if changes else "its gates hold"
+    return f"Step {nxt['step']}, {_name(steps, nxt['step'])}, opens when {unlock}."
 
 
 def gate_conditions(steps: Sequence[StepDef]) -> list[str]:
