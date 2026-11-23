@@ -280,7 +280,8 @@ COVERAGE_GATE: JsonDict = {
             "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at "
             "least 50; null (unknown) when none is but a counted gate's percentage was not "
             "read, or when a repository holding a go.mod or Cargo.toml has no gate of that "
-            "language and none of at least 50 for another (see unmeasured_reason); false "
+            "language and none of at least 50 for another, or when a scoped run cannot tell "
+            "whether the root coverage.py floor governs the scope (see unmeasured_reason); false "
             "otherwise. Gates counted are those enforced "
             "counts."),
         "unmeasured_reason": _field(
@@ -289,7 +290,9 @@ COVERAGE_GATE: JsonDict = {
             "module is found: go_rust_gate_form_not_read when the repository holds a go.mod "
             "or Cargo.toml with no gate read for it and none of at least 50 percent for "
             "another language (issue #937), so its gate may be a script this scan does not "
-            "read; null otherwise."),
+            "read; root_coverage_config_unresolved on a scoped run when the repository "
+            "root's coverage.py floor would change the reading but where CI runs coverage "
+            "is not resolved (issue #1032); null otherwise."),
         "enforced_meets_minimum": _field(
             {"type": ["boolean", "null"]},
             "The Layer 6 level 1 signal (issue #921): threshold_meets_minimum with a CI run "

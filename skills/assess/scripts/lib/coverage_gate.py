@@ -42,6 +42,10 @@ and ``enforced_basis`` tokens are in ``lib.coverage_ci``. A JaCoCo
 percentage is not read (unit ``uncovered_count`` / ``missed_ratio``), so it
 reads unknown, never 0.
 
+On a scoped run with no coverage.py config of its own, the root config coverage.py
+reads counts when CI runs coverage from the root, and reads unknown when where CI runs
+it is not resolved (#1032, ``lib.coverage_root_config``).
+
 What switches coverage on for a plain ``pytest`` or ``jest`` run (``addopts``,
 ``collectCoverage``), read per config directory, is ``lib.coverage_activation``'s.
 
@@ -61,7 +65,8 @@ from typing import Literal, TypedDict
 
 from lib.assess_config import is_user_excluded
 from lib.coverage_activation import read_activation
-from lib.coverage_ci import NO_RUNS, EnforcedBasis, enforced_meets_minimum, read_ci_runs
+from lib.coverage_ci import NO_RUNS, CiRuns, EnforcedBasis, enforced_meets_minimum, read_ci_runs
+from lib.coverage_root_config import ROOT_UNRESOLVED, root_config, root_config_applies
 from lib.doc_graph import is_excluded_path
 
 # The user's ``--exclude`` / config.toml excludes: (directory names, basename globs).
@@ -198,7 +203,8 @@ NOT_DETECTED: tuple[str, ...] = (
 NOT_DETECTED_SCOPED: tuple[str, ...] = (
     "Root-level package configs on a scoped run (`pyproject.toml`, `setup.cfg`, "
     "`tox.ini`, `pytest.ini`, `noxfile.py`, `package.json` at the repo root): "
-    "they belong to the root package and are not read",
+    "they belong to the root package and are not read, except the coverage.py "
+    "config for a Python scope with none of its own",
     "Whether a gate in a root CI or task-runner file targets the scope: such a "
     "gate is reported for every scoped run, even one that runs another "
     "package's suite (`cd packages/b && pytest --cov-fail-under=90`)",
@@ -690,6 +696,22 @@ def threshold_meets_minimum(gates: list[CoverageGate]) -> bool | None:
     return False
 
 
+def _root_floor(root: Path, scope: Path | None, excludes: Excludes
+                ) -> tuple[list[CoverageGate], list[str], bool | None, CiRuns | None]:
+    """#1032: the root coverage.py config's gates for a scoped run, its lines, whether
+    it governs the scope (``lib.coverage_root_config``) and the CI runs read for that."""
+    config = root_config(root, scope, excludes) if scope not in (None, root) else None
+    lines = _read_lines(root / config) if config else None
+    if config is None or lines is None:
+        return [], [], False, None
+    gates = _scan_fail_under(config, lines, _COVERAGE_PY_SECTIONS[config],
+                             _branch_configured(config, lines))
+    if not gates:
+        return [], [], False, None
+    ci = read_ci_runs(root)
+    return gates, lines, root_config_applies(root, config, ci), ci
+
+
 def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
                          excludes: Excludes | None = None) -> CoverageGateBlock:
     """Return the ``coverage_gate`` run-context block for ``repo_root``.
@@ -719,6 +741,13 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
         for scan in _scanners_for(path.name, Path(rel).parts):
             gates.extend(scan(rel, lines))
         read.append((rel, lines))
+    excl = excludes or (set(), [])
+    root_gates, root_lines, applies, ci = _root_floor(root, scope_abs, excl)
+    own = threshold_meets_minimum(gates)
+    if applies is not False:
+        gates += root_gates
+    if applies:
+        read.append((root_gates[0]["file"], root_lines))
     manifests = _go_rust_manifests(root, scope_abs if scope_abs != root else None,
                                    excludes or (set(), []))
     meets = threshold_meets_minimum(gates)
@@ -727,8 +756,10 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
     unread = {m for m in manifests if not any(g["tool"] in _MANIFEST_TOOLS[m] for g in gates)}
     unmeasured = GO_RUST_UNMEASURED if unread and meets is False else None
     meets = None if unmeasured else meets
+    if applies is None and meets is not None and meets != own:
+        meets, unmeasured = None, ROOT_UNRESOLVED   # the root floor may not govern the scope
     enforced, basis = enforced_meets_minimum(
-        gates, meets, read_ci_runs(root) if meets else NO_RUNS,
+        gates, meets, (ci or read_ci_runs(root)) if meets else NO_RUNS,
         lambda text: _cli_line_gates("", 0, text, False), counted=gates_something,
         minimum=MINIMUM_THRESHOLD_PERCENT, activation=read_activation(read))
     return {

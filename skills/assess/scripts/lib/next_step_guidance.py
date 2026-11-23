@@ -555,7 +555,11 @@ _MEASURE_HINTS = {
                      "unknown (`unmeasured_reason` `go_rust_gate_form_not_read`): a script "
                      "comparing `go tool cover` to a number is not read, while go-test-coverage's "
                      "`.testcoverage.yml`, `cargo tarpaulin --fail-under` and `cargo llvm-cov "
-                     "--fail-under-lines` are. The block is unavailable when the scan did not run: check "
+                     "--fail-under-lines` are. A scoped run of a Python package with no coverage.py "
+                     "config of its own reads unknown (`root_coverage_config_unresolved`) when "
+                     "the root config's floor would decide it but where CI runs coverage is not "
+                     "resolved: run coverage from the root in CI, or pass `--cov-config`. "
+                     "The block is unavailable when the scan did not run: check "
                      "the fleet run's `--scans` and its `logs/` directory.",
     "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
                      "headless fleet scan does not.",
