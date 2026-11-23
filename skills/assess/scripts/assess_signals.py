@@ -18,7 +18,7 @@ Exit codes:
     0  document written
     2  usage error: unknown scan name, bad --window, --out inside the target,
        a target or --ghsync-root that is not a directory, a --scope that is missing or
-       outside the target, --scope with --units, or an unreadable or invalid
+       outside the target, --scope with --units or a --scans unit scan, or an unreadable or invalid
        --fleet-config (the message names the key)
 
 Run:
@@ -88,6 +88,7 @@ from lib.signals import (  # noqa: E402
     known_scans,
     parse_window,
     platform_only_error,
+    scope_units_error,
     select_scans,
 )
 from lib.tool_lookup import warn_missing_packages  # noqa: E402
@@ -173,20 +174,18 @@ def main(argv: list[str] | None = None) -> int:
         if not ghsync_root.is_dir():
             print(f"error: --ghsync-root {args.ghsync_root} is not a directory", file=sys.stderr)
             return 2
-    scope: Path | None = None
-    if args.scope is not None:
-        try:
-            scope = resolve_scope(repo_root, Path(args.scope))[0]
-        except ValueError as e:
-            print(f"error: --scope {args.scope}: {e}", file=sys.stderr)
-            return 2
+    try:
+        scope = _scope(repo_root, args.scope)
+    except ValueError as e:
+        print(f"error: --scope {args.scope}: {e}", file=sys.stderr)
+        return 2
     requested = None
     if args.scans is not None:
         requested = [name.strip() for name in args.scans.split(",") if name.strip()]
     try:
         select_scans(requested)
         parse_window(args.window)
-        problem = platform_only_error(requested, args.platform)
+        problem = platform_only_error(requested, args.platform) or scope_units_error(requested, scope)
         if problem is not None:
             raise ValueError(problem)
     except UnknownScanError as e:
@@ -203,6 +202,15 @@ def main(argv: list[str] | None = None) -> int:
         _counts_only(document, args)
     _write_atomically(out, json.dumps(document, indent=2, default=str) + "\n")
     return 0
+
+
+def _scope(repo_root: Path, raw: str | None) -> Path | None:
+    """``--scope`` as an absolute folder under the target; None for none or the target itself,
+    so the stamp's null is the only way to say "whole checkout". Raises ``ValueError``."""
+    if raw is None:
+        return None
+    scope = resolve_scope(repo_root, Path(raw))[0]
+    return None if scope == repo_root else scope
 
 
 def _counts_only(document: SignalsDocument, args: argparse.Namespace) -> None:

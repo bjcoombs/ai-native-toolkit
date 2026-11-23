@@ -236,6 +236,16 @@ def platform_only_error(requested: Iterable[str] | None, platform: bool) -> str 
     return f"--scans {', '.join(named)} needs --platform: the block exists only on the platform"
 
 
+def scope_units_error(requested: Iterable[str] | None, scope: Path | None) -> str | None:
+    """The error for a ``--scans`` selection naming a ``UNIT_SCANS`` block on a scoped run:
+    unit discovery reads the whole checkout, so the blocks would not describe the stamped
+    scope (#866). None when fine."""
+    named = [name for name in (requested or ()) if name in UNIT_SCANS]
+    if scope is None or not named:
+        return None
+    return f"--scans {', '.join(named)} reads the whole checkout's units; it does not combine with --scope"
+
+
 def offline_scans(scans: str | None) -> str | None:
     """A comma-separated ``--scans`` value without its ``PLATFORM_ONLY_SCANS`` names, for the
     offline child of a fleet run (the platform pass reads them)."""

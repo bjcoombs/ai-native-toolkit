@@ -314,7 +314,7 @@ The repository's units: the shallowest build-manifest folders, each workspace ro
 
 - Collector: `core.units`, reading `repo_root`, `excludes`.
 - Network: no.
-- Headless: only with assess_signals --units or fleet --monorepo-units; left out otherwise.
+- Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `units.aggregators.ecosystem` token, `units.aggregators.path` drop, `units.skipped.path` drop, `units.skipped.problem` token, `units.source` token, `units.unit_count_reason` token, `units.units.ecosystem` token, `units.units.name` drop, `units.units.origin` token, `units.units.path` hashed_path, `units.units.workspace` drop, `units.unreadable_manifests` drop.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
@@ -729,7 +729,7 @@ Each unit's own readings of the scope-sensitive scans (suppressions, doc stalene
 
 - Collector: `core.unit_readings`, reading `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes`.
 - Network: no.
-- Headless: only with assess_signals --units or fleet --monorepo-units; left out otherwise.
+- Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `unit_readings.unit_blocks` token, `unit_readings.unit_count_reason` token, `unit_readings.units.conditions.id` token, `unit_readings.units.conditions.origin` token, `unit_readings.units.path` hashed_path.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.

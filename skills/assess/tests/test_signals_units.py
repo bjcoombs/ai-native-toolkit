@@ -151,7 +151,18 @@ def test_a_scope_that_is_missing_or_outside_the_target_is_a_usage_error(
     assert not (tmp_path / "x.json").exists()
 
 
-def test_scope_and_units_do_not_combine(repo: Path, tmp_path: Path) -> None:
+def test_scope_and_units_do_not_combine(repo: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc:
         assess_signals.main([str(repo), "--out", str(tmp_path / "x.json"), "--scope", "web", "--units"])
     assert exc.value.code == 2
+    # nor through --scans: the unit blocks would describe the whole checkout, not the scope
+    assert assess_signals.main([str(repo), "--out", str(tmp_path / "x.json"), "--scope", "web",
+                                "--scans", "units,unit_readings"]) == 2
+    assert "does not combine with --scope" in capsys.readouterr().err
+    assert not (tmp_path / "x.json").exists()
+
+
+def test_a_scope_of_the_target_itself_is_the_whole_checkout(repo: Path, tmp_path: Path) -> None:
+    for scope in (".", str(repo)):
+        doc = _run(repo, tmp_path / "d.json", "--scans", "stats_summary", "--scope", scope, "--counts-only")
+        assert doc["stamp"]["scope"] is None
