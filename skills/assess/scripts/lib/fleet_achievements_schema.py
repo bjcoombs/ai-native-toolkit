@@ -62,9 +62,9 @@ def build_schema() -> JsonDict:
         "title": "fleet achievements",
         "description": (
             "achievements.json written by skills/fleet/scripts/fleet.py: what each unit and repository "
-            "earned over the comparable runs in the history (level-ups, firsts, streaks, personal "
-            "bests, targets hit), each with its evidence and a credit line, plus each one's nearest "
-            "level-up and target distances, and the Recount of a maturity-model change. Generated from lib/fleet_achievements.py by "
+            "earned over the comparable runs in the history (level-ups, firsts, streaks, Step "
+            "targets hit), each with its evidence and a credit line, plus each one's nearest "
+            "level-up and each Step target's progress (lowest Step, missing gates), and the Recount of a maturity-model change. Generated from lib/fleet_achievements.py by "
             "lib/fleet_achievements_schema.py."
         ),
         **schema,
