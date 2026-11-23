@@ -11,6 +11,7 @@ publishes = ["ai_usage"]
 reads = ["repo_root", "scope", "history_window", "fleet_config"]
 stage = "post_offers"
 headless = { ai_usage = "registered" }
+whys.ai_usage = "exempt: plumbing"
 shapes = [
   { path = "ai_usage", type = "lib.ai_usage:AiUsageBlock" },
 ]

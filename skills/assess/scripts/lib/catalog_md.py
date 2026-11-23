@@ -9,10 +9,17 @@ A tag section is a ``### <tag title>`` heading, then the tag's opening lines
 (``_tag_opening``), then one table of the conditions listed under that tag. Each condition
 has one table row per criterion, under its first tag only, so it appears once however many
 tags it carries; its other tags name it in an "Also carries this tag" line. The table's columns are
-``CONDITION_COLUMNS``, one ``(header, cell)`` entry each, so a later column (the #939 "Why it
-matters") is one more entry and a tag's ``why`` one more opening line. Links are
+``CONDITION_COLUMNS``, one ``(header, cell)`` entry each; "Why it matters" holds the condition's
+``why`` (#939). Links are
 relative to ``docs/`` so they resolve in the repository. The words come from the check
 manifest, so an edit there shows here once ``make catalog`` regenerates the file.
+
+**Whys (#939).** A tag section's first line is the tag's ``why``; each scan section opens with
+the scan's ``why``, or "Run plumbing" for a scan whose why is the ``exempt: plumbing`` token;
+the finding table has a "Why it matters" column. A signal carries no why of its own, so every
+section that names a signal path in backticks also holds the why of each condition the signal
+feeds: ``_with_signal_whys`` adds a "Why the signals named here matter" list to any section that
+lacks one of them. A version 1 manifest has no whys, and none of this is written.
 
 "How the tags relate" holds the shared-condition matrix (``tag_pairs``; the diagonal is each
 tag's own count), the Step gates table (the gates new at each Step, the conditions they
@@ -28,11 +35,15 @@ so a PR that changes `core.toml`, a fragment under `checks/core/`, `default.toml
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Iterable
 from typing import NamedTuple
 
 from lib.catalog import UNCLASSIFIED, Catalog, CatalogCriterion, CatalogLevel, CatalogRow, CatalogScan
 from lib.catalog_tags import CatalogTag, tag_title
+from lib.manifest_whys import PLUMBING
+
+PLUMBING_WORDS = "Run plumbing: no row or finding reads this scan."
 
 HEADER = """# What /assess measures
 
@@ -126,6 +137,7 @@ CONDITION_COLUMNS: tuple[tuple[str, Callable[[Line], str]], ...] = (
     ("Step gate", lambda line: _codes(line.level["step_gates"])),
     ("Polarity", lambda line: line.level["polarity"]),
     ("Links", _links_cell),
+    ("Why it matters", lambda line: _cell(line.criterion["why"]) or "-"),
     ("Next step", lambda line: _cell(line.criterion["fix"])),
 )
 
@@ -148,9 +160,10 @@ def _lines(catalog: Catalog) -> dict[str, list[Line]]:
 
 def _tag_opening(tag: CatalogTag) -> list[str]:
     """The lines that open a tag section, before its table."""
+    why = [tag["why"], ""] if tag["why"] else []
     total, shared = len(tag["conditions"]), len(tag["shared"])
     if not total:
-        return [f"Tag `{tag['id']}`. No condition carries this tag yet.", ""]
+        return [*why, f"Tag `{tag['id']}`. No condition carries this tag yet.", ""]
     noun = "condition" if total == 1 else "conditions"
     if not shared:
         share = "none shared with another tag"
@@ -158,7 +171,7 @@ def _tag_opening(tag: CatalogTag) -> list[str]:
         share = "all shared with another tag" if total > 1 else "shared with another tag"
     else:
         share = f"{shared} shared with another tag"
-    return [f"Tag `{tag['id']}`: {total} {noun}, {share}.", ""]
+    return [*why, f"Tag `{tag['id']}`: {total} {noun}, {share}.", ""]
 
 
 def _tag_section(tag: CatalogTag, lines: dict[str, list[Line]], first: dict[str, str]) -> list[str]:
@@ -263,6 +276,8 @@ def _scan(scan: CatalogScan) -> list[str]:
     else:
         evidence = f"`{UNCLASSIFIED}`"
     lines = [f"### `{scan['name']}`: {scan['title']}", ""]
+    if scan["why"]:
+        lines += [PLUMBING_WORDS if scan["why"] == PLUMBING else scan["why"], ""]
     if scan["summary"]:
         lines += [scan["summary"], ""]
     network = "yes, GitHub or GitLab" + (" (with --platform)" if scan["platform"] else "") \
@@ -286,7 +301,7 @@ def _scan(scan: CatalogScan) -> list[str]:
 
 def _findings(catalog: Catalog) -> list[str]:
     lines = ["## Derived findings", "", "In report order.", "",
-             "| Finding | Reads | Next step | Mode | Rules |", "|---|---|---|---|---|"]
+             "| Finding | Reads | Why it matters | Next step | Mode | Rules |", "|---|---|---|---|---|---|"]
     for f in catalog["findings"]:
         rules = []
         if f["suppressed_when"]:
@@ -296,7 +311,8 @@ def _findings(catalog: Catalog) -> list[str]:
         if not f["concern"]:
             rules.append("a strength, not a concern")
         lines.append(f"| `{f['name']}` {_cell(f['title'])} | {', '.join(_code(i) for i in f['inputs'])} | "
-                     f"{_cell(f['action'])} | `{f['mode']}` | {_cell('; '.join(rules)) or '-'} |")
+                     f"{_cell(f['why']) or '-'} | {_cell(f['action'])} | `{f['mode']}` | "
+                     f"{_cell('; '.join(rules)) or '-'} |")
     lines.append("")
     return lines
 
@@ -314,6 +330,50 @@ def _collectors(catalog: Catalog) -> list[str]:
     return lines
 
 
+_SPAN = re.compile(r"`([^`]+)`")
+_TOKEN = re.compile(r"[a-z0-9_.]+")
+
+
+def _feeds(catalog: Catalog) -> dict[str, list[tuple[str, str]]]:
+    """Signal path -> ``(criterion key, why)`` of each condition criterion that reads it."""
+    out: dict[str, list[tuple[str, str]]] = {}
+    for row in catalog["rows"]:
+        for level in row["levels"]:
+            for c in level["criteria"]:
+                if c["why"]:
+                    out.setdefault(c["signal"], []).append((c["key"], c["why"]))
+    return out
+
+
+def _named(section: list[str]) -> set[str]:
+    """Every dotted token inside a backticked span of the section."""
+    return {t.strip(".") for line in section for span in _SPAN.findall(line) for t in _TOKEN.findall(span)}
+
+
+def _with_signal_whys(lines: list[str], feeds: dict[str, list[tuple[str, str]]]) -> list[str]:
+    """Each heading's section, plus the whys of the conditions fed by a signal it names that it
+    does not hold yet."""
+    sections: list[list[str]] = [[]]
+    for line in lines:
+        if line.startswith("#"):
+            sections.append([])
+        sections[-1].append(line)
+    out: list[str] = []
+    for section in sections:
+        text, named = "\n".join(section), _named(section)
+        extra: list[str] = []
+        for signal, fed in feeds.items():
+            if signal in named:
+                extra += [f"- `{signal}` feeds `{key}`: {why}" for key, why in fed
+                          if why not in text and why not in "\n".join(extra)]
+        if extra:
+            while section and not section[-1]:
+                section.pop()
+            section += ["", "Why the signals named here matter:", "", *extra, ""]
+        out += section
+    return out
+
+
 def render_markdown(catalog: Catalog) -> str:
     """The catalog page, ending in one newline."""
     lines = [HEADER, *_grades(catalog), *_by_tag(catalog), *_relations(catalog), *_rows(catalog),
@@ -321,4 +381,5 @@ def render_markdown(catalog: Catalog) -> str:
     for scan in catalog["scans"]:
         lines += _scan(scan)
     lines += [*_findings(catalog), *_collectors(catalog)]
+    lines = _with_signal_whys("\n".join(lines).split("\n"), _feeds(catalog))
     return "\n".join(lines).rstrip("\n") + "\n"

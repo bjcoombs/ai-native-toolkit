@@ -11,6 +11,8 @@ publishes = ["agent_harness"]
 reads = ["repo_root", "scope", "excludes"]
 stage = "post_offers"
 headless = { agent_harness = "registered" }
+whys.agent_harness = "Committed hooks, env blocks and MCP servers run in every agent session, headless ones included; this lists what they run and flags any that expose a secret or widen an agent's reach."
+why_sources.agent_harness = "https://code.claude.com/docs/en/permissions"
 shapes = [
   { path = "agent_harness", type = "lib.agent_harness:AgentHarnessBlock" },
 ]

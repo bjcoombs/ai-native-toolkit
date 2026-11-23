@@ -13,7 +13,7 @@
 # order (lib/scan_registry.py SCANS), and an id declared in two fragments fails to load.
 # A new collector adds its fragment and one line here.
 
-manifest_version = 1
+manifest_version = 2
 owner = "core"
 fragments = [
   "run_scope",
@@ -108,3 +108,30 @@ fragments = [
   "unit_readings",
   "unit_levels",
 ]
+
+# The why of each truth tag (lib/levels_fields.py TRUTH_TAGS, #939): one table per tag,
+# which the catalog opens each tag section with.
+
+[tags.behaviour]
+why = "That the code's behaviour is checked by something that runs on every change, not taken on trust."
+
+[tags.contracts]
+why = "That generated output and its source agree, so an agent editing one does not quietly break the other."
+
+[tags.docs]
+why = "That what an agent reads about the code is still true of the code."
+
+[tags.structure]
+why = "That the code is shaped so an agent can work on one part without holding the whole repository in mind."
+
+[tags.agent_context]
+why = "That an agent starts each task knowing how this repository works and how to check its own change."
+
+[tags.agent_runtime]
+why = "That an agent can see the system it changes run, and confirm a change there, not only in the code."
+
+[tags.governance]
+why = "That people stay in the loop on what agents change, and that what agents may do is agreed and visible."
+
+[tags.supply_chain]
+why = "That an agent builds and tests against the same dependency versions as CI and everyone else."

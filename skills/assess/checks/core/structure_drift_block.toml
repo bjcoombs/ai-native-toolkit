@@ -13,6 +13,7 @@ spread = true
 degrade = false
 gate_reason = "self_degrading"
 headless = { structure_drift = "headless_variant" }
+whys.structure_drift = "Ownership and boundary maps are read as authoritative, and nothing forces them to follow the code; this checks each map's patterns against where the code now lives."
 headless_variants = [
   { block = "structure_drift", callable = "lib.headless_layers:structure_drift", reads = ["repo_root"], stage = "read_side" },
 ]
@@ -45,4 +46,5 @@ id = "core.cond.layer-4-architecture.1.boundary_patterns"
 kind = "condition"
 title = "A boundary or ownership map names a module path"
 key = "layer-4-architecture.1:structure_drift.tier_0.boundary_patterns"
+why = "A map that names module paths tells an agent which code belongs together, and with CODEOWNERS, whose review a change there needs."
 fix = "Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths."

@@ -14,6 +14,7 @@ network = true
 platform_pass = true
 platform_only = true
 headless = { delivery = "registered" }
+whys.delivery = "exempt: plumbing"
 shapes = [
   { path = "delivery", type = "lib.delivery:DeliveryBlock" },
 ]

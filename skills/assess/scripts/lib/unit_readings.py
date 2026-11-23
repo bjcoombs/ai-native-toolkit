@@ -18,7 +18,9 @@ leaves every other block to the single repository-wide run.
 - ``override``: the repository-wide reading is inherited unless the unit holds its own
   evidence, which then replaces it (maintainer decision 2 on #800). ``coverage_gate`` runs
   again with the unit as scope and counts as the unit's own when one of its gates sits in
-  a file under the unit; otherwise the unit inherits the parent build's gate.
+  a file under the unit; otherwise the unit inherits the parent build's gate. A failed
+  per-unit coverage scan is the unit's own unknown (its ``available: false`` block, origin
+  ``unit``), never the parent build's gate, so a unit is not scored on the repository's gate.
   ``layer_grades`` reads ``instruction_file_present`` true, origin ``unit``, when a nested
   instruction file (``nested_instructions.files``) sits under the unit, at any depth; a
   file inside a unit is unit-local (#800 comment, refinement 2). Otherwise the root's

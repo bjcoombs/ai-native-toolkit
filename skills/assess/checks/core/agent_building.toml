@@ -11,6 +11,7 @@ publishes = ["agent_building"]
 reads = ["repo_root"]
 stage = "post_offers"
 headless = { agent_building = "registered" }
+whys.agent_building = "exempt: plumbing"
 shapes = [
   { path = "agent_building", type = "lib.agent_building:AgentBuildingBlock" },
 ]

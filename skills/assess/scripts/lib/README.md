@@ -99,6 +99,42 @@ ever cut, this note is where the intended boundary is written down.
 
 ---
 
+## Check manifest whys (#939)
+
+Every check manifest entry says why it matters to an agent. The loader is
+`check_manifest.load_manifest`; the why rules and accessors are in `manifest_whys.py`.
+
+| Entry | Where its why lives | Accessor |
+|---|---|---|
+| condition | `why` (and optional `why_source`) on the condition entry in its fragment, `checks/core/<scan key>.toml` | `manifest_whys.why_of`, `condition_whys` |
+| finding | `why` (and optional `why_source`) on the finding entry in its fragment | `manifest_whys.why_of` |
+| scan | the `whys` table of the collector that publishes it, keyed by scan name (the keys of its `headless` table); sources in `why_sources` | `manifest_whys.scan_why`, `scan_whys` |
+| truth tag | `[tags.<id>] why` in the root manifest, `checks/core.toml` (not a fragment) | `manifest_whys.tag_why` |
+| signal | none: a signal entry with `why` is rejected, and the catalog shows the why of each condition it feeds | - |
+
+**Version rule.** `manifest_version = 1` loads with no whys (every accessor returns `""`), and a
+version 1 manifest carrying any why, source or `tags` table is rejected. `manifest_version = 2`
+(the core) requires every why above, whatever the manifest's `owner`; a missing one is a named
+error such as `core/ci_checks.toml entries[4] (core.cond.layer-5-ci.1.enforced_check_runs).why:
+required`. A why is 1 to 300 characters and passes `lib.vocabulary` (no banned word, no layer
+number). A scan's why may be exactly `exempt: plumbing` only when no row or finding reads the
+scan, directly or through another collector's `reads` (a collector's read of its own block does
+not count); the catalog renders it "Run plumbing". A custom manifest that moves to version 2
+declares the eight truth-tag whys too, under its own root `tags` table; one that stays at
+version 1 needs none.
+
+**Where whys are written.** `measures.json` carries `why` and `why_source` on criteria, scans,
+findings and tags, and `docs/what-we-measure.md` renders them (`catalog_md`). In the run context,
+each `level.conditions[]` entry carries `why`: its criteria's whys in criterion order, each once,
+joined by one space (`level_tally.condition_why`), absent for a criterion with no manifest entry;
+`/fleet` writes the same in `level.json`. `headline.next_why` holds, for each blocking gate, the
+`why` of every condition of the gate's row up to its level that is not met, joined the same way
+(`""` with no gate blocker). Each `gap_actions` entry carries the `why` of the scan its `signal`
+names. All are static manifest text; counts-only output drops them, since a reader rejoins
+them from `measures.json` by id.
+
+---
+
 ## Module reference
 
 There is no per-module index here: each module documents itself in its own module docstring,

@@ -10,6 +10,7 @@ publishes = ["test_focus"]
 reads = ["repo_root", "current", "coverage_data", "test_pressure", "hot_test_index"]
 stage = "read_side"
 headless = { test_focus = "unregistered" }
+whys.test_focus = "It ranks risky files by the test work each needs, so the files where an agent's change is least held by tests come first."
 revision = 1
   [entries.privacy]
   "test_focus.entries.risk_band" = "token"

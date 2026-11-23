@@ -183,6 +183,9 @@
                   "hazard"
                 ],
                 "description": "present only on a hazard condition, which is never counted (lib/levels_fields.py)"
+              },
+              "why": {
+                "type": "string"
               }
             },
             "required": [

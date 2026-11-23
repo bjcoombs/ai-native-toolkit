@@ -12,6 +12,7 @@ reads = ["repo_root", "fleet_config", "ghsync_root", "gitlab_merged_ci"]
 stage = "post_offers"
 platform_pass = true
 headless = { review_automation = "registered" }
+whys.review_automation = "A review step committed in CI reviews every change it runs on, and is evidence a headless run can read without platform access."
 shapes = [
   { path = "review_automation", type = "lib.review_automation:ReviewAutomationBlock" },
 ]
