@@ -450,9 +450,11 @@ _WORDING: dict[str, Wording] = {
     "agent_ops.summary.permissions_encoded": _flag(
         "Commit a guardrail as a deny rule, such as `\"permissions\": {\"deny\": "
         "[\"Bash(git push origin main)\"]}` in `.claude/settings.json`. Deny rules hold in every "
-        "permission mode, auto mode included, and a rule in managed settings counts too.",
+        "permission mode, auto mode included. If your organisation sets this centrally, run with "
+        "`--managed-settings`.",
         "`.claude/settings.json` is tracked in git and its `permissions` lists at least one entry, "
-        "or a managed settings source on the machine running the check does."),
+        "or, with `--managed-settings`, a managed settings source on the machine running the "
+        "check does."),
     "agent_ops.summary.hooks_present": _flag(
         "Commit an agent hook: a `hooks` entry in `.claude/settings.json` or a script in "
         "`.claude/hooks/`.",

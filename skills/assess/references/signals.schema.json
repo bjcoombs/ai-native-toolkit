@@ -43,9 +43,13 @@
             "string",
             "null"
           ]
+        },
+        "managed_settings": {
+          "type": "boolean"
         }
       },
       "required": [
+        "managed_settings",
         "plugin_version",
         "scan_date",
         "scope",

@@ -18,7 +18,13 @@ Claude Code documents for the platform the check runs on
 Server-managed settings (the claude.ai admin console) are fetched at session start and are not
 read here: no file holds them.
 
-The result is a ``ManagedSettingsBlock``: ``state`` is ``found`` (at least one source exists and
+The read is opt-in (#1153 decision): it measures the machine, not the repository, so
+``lib.agents.agent_ops`` calls it only under ``--managed-settings`` (``assess_core``,
+``assess_signals.py``, ``/fleet``) or the ``[agent_ops] managed_settings`` key of a single
+repository's ``.assess/config.toml``; otherwise the block is ``not_read()``.
+
+The result is a ``ManagedSettingsBlock``: ``state`` is ``not_read`` (the option was off),
+``found`` (at least one source exists and
 every one that exists was read), ``absent`` (no source exists) or ``unreadable`` (a source
 exists but could not be opened or parsed: permissions, bad JSON, not an object); ``sources``
 lists one entry per source that exists, by ``kind`` token only, with its ``allow`` / ``deny`` /
@@ -41,7 +47,7 @@ from typing import Any, Literal
 
 from lib.counts_only.block_shapes import ManagedSettingsBlock, ManagedSource
 
-ManagedState = Literal["found", "absent", "unreadable"]
+ManagedState = Literal["not_read", "found", "absent", "unreadable"]
 SourceKind = Literal["file", "drop_in", "plist", "registry_hklm", "registry_hkcu"]
 
 OVERRIDE_ENV = "ASSESS_MANAGED_SETTINGS_DIR"
@@ -55,6 +61,12 @@ _DIRS = {
 _PLIST_DIR = Path("/Library/Managed Preferences")
 _PLIST_NAME = "com.anthropic.claudecode.plist"
 _REGISTRY_KEY = r"SOFTWARE\Policies\ClaudeCode"
+
+
+def not_read() -> ManagedSettingsBlock:
+    """The block when the opt-in is off: nothing on the machine was read."""
+    return {"state": "not_read", "sources": []}
+
 
 
 def _count(value: Any) -> int:

@@ -329,7 +329,8 @@ def parse_window(window: str) -> str:
 
 def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
                  fleet_config: FleetConfig | None = None,
-                 ghsync_root: Path | None = None, scope: Path | None = None) -> dict[str, Any]:
+                 ghsync_root: Path | None = None, scope: Path | None = None,
+                 managed_settings: bool = False) -> dict[str, Any]:
     """The registry's ``PROVIDED_INPUTS``, built the way ``assess_core`` builds them.
 
     ``scope`` is ``--scope`` resolved to an absolute folder under ``repo_root``
@@ -340,6 +341,8 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
     (``ai_usage``, #547). ``fleet_config`` is the ``--fleet-config`` file merged
     with the target's ``.assess/config.toml`` sections (``lib/fleet_config.py``, #706).
     ``ghsync_root`` is ``--ghsync-root``, the root GitLab includes resolve against (#766).
+    ``managed_settings`` is ``--managed-settings`` (#1153): ``agent_ops`` reads this machine's
+    Claude Code managed settings. Never read from the target's ``.assess/config.toml``.
     Besides the ``build_run_context`` arguments, it supplies the setup values
     ``instruction_files``, ``scope``, ``excludes``, ``history_window``,
     ``fleet_config`` and ``ghsync_root`` itself; the table never recomputes a name the runner provides.
@@ -350,6 +353,7 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
         "requested_scope": scope,
         "run_date": datetime.now(timezone.utc).date().isoformat(),
         "non_interactive": True,
+        "managed_settings": managed_settings,
         "instruction_files": instruction_files,
         "scope": scope,
         "excludes": load_excludes(repo_root),
@@ -386,7 +390,7 @@ def _unavailable(reason: str) -> JsonDict:
 def collect(
     repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     window: str = DEFAULT_WINDOW, fleet_config: FleetConfig | None = None, platform: bool = False,
-    ghsync_root: Path | None = None, scope: Path | None = None,
+    ghsync_root: Path | None = None, scope: Path | None = None, managed_settings: bool = False,
 ) -> dict[str, JsonDict]:
     """Run the selected scans (and what they read); one block per name.
 
@@ -394,7 +398,7 @@ def collect(
     a listed scan reads, runs its network ``fn``. Offline, a ``PLATFORM_ONLY_SCANS``
     name gets no block at all.
     """
-    inputs = build_inputs(repo_root, window, fleet_config, ghsync_root, scope)
+    inputs = build_inputs(repo_root, window, fleet_config, ghsync_root, scope, managed_settings)
     needed = _with_dependencies(selected, specs, inputs)
     online = _with_dependencies(PLATFORM_SCANS, specs, inputs) if platform else set()
     ctx: dict[str, Any] = {}
@@ -455,9 +459,10 @@ def toolkit_commit(toolkit_root: Path = TOOLKIT_ROOT) -> str | None:
 
 
 def build_stamp(repo_root: Path, window: str, toolkit_root: Path = TOOLKIT_ROOT,
-                scope: Path | None = None) -> SignalsStamp:
-    """Toolkit commit, plugin version, scan date, window, the target's HEAD and the scope
-    (repository-relative, posix; None for the whole checkout)."""
+                scope: Path | None = None, managed_settings: bool = False) -> SignalsStamp:
+    """Toolkit commit, plugin version, scan date, window, the target's HEAD, the scope
+    (repository-relative, posix; None for the whole checkout) and whether this machine's
+    managed settings were read (``--managed-settings``, #1153)."""
     head = git_commit_info(repo_root) if is_repo_root(repo_root) else {}
     available = bool(head.get("available"))
     return {
@@ -468,6 +473,7 @@ def build_stamp(repo_root: Path, window: str, toolkit_root: Path = TOOLKIT_ROOT,
         "target_head": head.get("head_sha") if available else None,
         "target_dirty": bool(head.get("dirty")) if available else None,
         "scope": scope.relative_to(repo_root).as_posix() if scope is not None else None,
+        "managed_settings": managed_settings,
     }
 
 
@@ -496,6 +502,7 @@ def build_document(
     toolkit_root: Path = TOOLKIT_ROOT, specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     fleet_config: FleetConfig | None = None, platform: bool = False,
     ghsync_root: Path | None = None, scope: Path | None = None, units: bool = False,
+    managed_settings: bool = False,
 ) -> SignalsDocument:
     """The whole signals document. Raises ``UnknownScanError`` or ``ValueError`` on bad arguments.
 
@@ -509,7 +516,7 @@ def build_document(
     with read_only_git():
         return {
             "signals_schema_version": SIGNALS_SCHEMA_VERSION,
-            "stamp": build_stamp(repo_root, window, toolkit_root, scope),
+            "stamp": build_stamp(repo_root, window, toolkit_root, scope, managed_settings),
             "scans": collect(repo_root, selected, specs, window, fleet_config, platform,
-                             ghsync_root, scope),
+                             ghsync_root, scope, managed_settings),
         }

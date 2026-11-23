@@ -91,3 +91,58 @@ def test_a_reader_that_fails_never_raises(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr(ms, "_file_sources", boom)
     assert ms.read_managed_settings()["state"] == "unreadable"
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("[agent_ops]\nmanaged_settings = true\n", True),
+    ("[agent_ops]\nmanaged_settings = \"yes\"\n", False),
+    ("managed_settings = true\n", False),
+    ("", False),
+])
+def test_the_config_opt_in_needs_a_literal_true(tmp_path, text, expected) -> None:
+    from lib.assess_config import load_managed_settings_opt_in
+    (tmp_path / ".assess").mkdir()
+    (tmp_path / ".assess" / "config.toml").write_text(text, encoding="utf-8")
+    assert load_managed_settings_opt_in(tmp_path) is expected
+
+
+def test_the_signals_run_reads_managed_settings_only_when_asked(tmp_path, monkeypatch) -> None:
+    """assess_signals --managed-settings: the stamp says so and agent_ops reads the machine;
+    the target's own config never turns it on (#1153)."""
+    from lib import signals
+    directory = _point(monkeypatch, tmp_path / "managed")
+    directory.mkdir()
+    (directory / "managed-settings.json").write_text(json.dumps(DENY), encoding="utf-8")
+    repo = tmp_path / "repo"
+    (repo / ".assess").mkdir(parents=True)
+    (repo / ".assess" / "config.toml").write_text("[agent_ops]\nmanaged_settings = true\n",
+                                                  encoding="utf-8")
+    off = signals.build_document(repo, ["agent_ops"])
+    assert off["stamp"]["managed_settings"] is False
+    assert off["scans"]["agent_ops"]["managed"]["state"] == "not_read"
+    on = signals.build_document(repo, ["agent_ops"], managed_settings=True)
+    assert on["stamp"]["managed_settings"] is True
+    assert on["scans"]["agent_ops"]["summary"]["permissions_source"] == "managed"
+
+
+@pytest.mark.parametrize(("argv", "config", "expected"), [
+    ([], "", False),
+    (["--managed-settings"], "", True),
+    ([], "[agent_ops]\nmanaged_settings = true\n", True),
+])
+def test_assess_core_takes_the_flag_or_the_config_key(tmp_path, monkeypatch, argv, config,
+                                                      expected) -> None:
+    """/assess reads the machine under --managed-settings or the single-repository key."""
+    import assess_core
+    (tmp_path / ".assess").mkdir()
+    (tmp_path / ".assess" / "config.toml").write_text(config, encoding="utf-8")
+    seen: dict[str, object] = {}
+
+    def fake_run(**kwargs: object) -> dict[str, object]:
+        seen.update(kwargs)
+        return {"diff": {}}
+
+    monkeypatch.setattr(assess_core, "build_and_publish_run", fake_run)
+    monkeypatch.setattr(assess_core, "apply_counts_only", lambda ctx, parsed: None)
+    assert assess_core.main([str(tmp_path), *argv]) == 0
+    assert seen["managed_settings"] is expected

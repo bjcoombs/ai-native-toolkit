@@ -786,6 +786,7 @@ class SignalsStamp(TypedDict):
     target_head: str | None  # None: the target is not a git repo
     target_dirty: bool | None
     scope: str | None  # --scope, repository-relative (#866); None: the whole checkout
+    managed_settings: bool  # --managed-settings read this machine's managed settings (#1153)
 
 
 class SignalsDocument(TypedDict):

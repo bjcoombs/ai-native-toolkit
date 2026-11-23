@@ -315,6 +315,14 @@ def test_fleet_passes_its_root_unless_delete_after(tmp_path: Path) -> None:
     assert "--ghsync-root" not in signals_command(tmp_path / "c", tmp_path / "o.json", ScanOptions())
 
 
+def test_fleet_passes_managed_settings_only_when_asked(tmp_path: Path) -> None:
+    """#1153: the machine read reaches each scan only under fleet --managed-settings."""
+    from lib.fleet.runner import ScanOptions, signals_command
+    assert "--managed-settings" not in signals_command(tmp_path / "c", tmp_path / "o.json", ScanOptions())
+    assert "--managed-settings" in signals_command(tmp_path / "c", tmp_path / "o.json",
+                                                   ScanOptions(managed_settings=True))
+
+
 def test_an_untracked_local_fragment_is_not_read(tmp_path: Path) -> None:
     app = tmp_path / "app"
     _commit(app, {".gitlab-ci.yml": "include:\n  - local: ci/unit.yml\n"})

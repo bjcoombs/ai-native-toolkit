@@ -126,7 +126,8 @@ from lib.unit_readings import bind as bind_unit_pass
 # ``build_run_context``. A spec may read these, or the key of any spec declared
 # before it (``instruction_files``, ``scope``, ``excludes``, ``history_window`` and
 # ``fleet_config`` are setup specs).
-PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive"})
+PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive",
+                             "managed_settings"})
 
 STAGE_SETUP = "setup"
 STAGE_READ_SIDE = "read_side"

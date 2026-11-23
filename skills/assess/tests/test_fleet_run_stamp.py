@@ -126,6 +126,12 @@ def test_build_stamp_counts_and_serialises_deterministically(tmp_path):
     assert json.loads(path.read_text(encoding="utf-8")) == stamp
     jsonschema.validate(stamp, build_stamp_schema())
     assert sorted(p.name for p in path.parent.iterdir()) == ["run.json"]
+    assert stamp["managed_settings"] is False
+    read = build_stamp(rows, toolkit_commit="abc", plugin_version="1.0.0", today=date(2026, 11, 20),
+                       window="6mo", levels_version=None, counts_only=True, paths_hashed=True,
+                       scans=None, managed_settings=True)
+    assert read["managed_settings"] is True  # #1153: runs with and without it are told apart
+    jsonschema.validate(read, build_stamp_schema())
 
 
 def test_write_stamp_leaves_no_temp_file_on_failure(tmp_path, monkeypatch):

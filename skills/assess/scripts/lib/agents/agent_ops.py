@@ -31,16 +31,19 @@ rule (an uncommitted settings file reaches no clone). Deliberately excludes
 two layers never double-count. Pure stdlib JSON/filesystem reads plus
 `git_churn.tracked_files`.
 
-Central guardrails (#1153): managed settings override every repository's, so
-`permissions_encoded` also reads true when a managed source on the machine running
+Central guardrails (#1153): managed settings override every repository's. Under the
+opt-in `managed_settings` input (`--managed-settings`, or a single repository's
+`[agent_ops] managed_settings` config key; never on by default, since it measures the
+machine), `permissions_encoded` also reads true when a managed source on the machine running
 the check lists a permission entry (`lib.agents.managed_settings`, kept as the
 `managed` sub-block; `permissions_source` says which). When the repository has none
 and a managed source exists but cannot be read, it reads null with
 `permissions_encoded_reason: managed_settings_unreadable`, so the tally reports the
-condition not measured, never unmet. With no managed source on the machine the
-repository reading stands. A settings file's `permissions.defaultMode` (auto mode
-included) is recorded as `default_mode`, information only: it never fails the
-practice, and deny rules apply in every mode.
+condition not measured, never unmet. With no managed source on the machine, or with
+the option off (`managed.state: not_read`), the repository reading stands. A
+settings file's `permissions.defaultMode` (auto mode included) is recorded as
+`default_mode`, information only: it never fails the practice, and deny rules
+apply in every mode.
 """
 from __future__ import annotations
 
@@ -48,7 +51,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from lib.agents.managed_settings import managed_permissions, read_managed_settings
+from lib.agents.managed_settings import managed_permissions, not_read, read_managed_settings
 from lib.git_churn import is_tracked, tracked_files
 
 # Candidate settings files, repo-root-relative. Order is the report order.
@@ -141,7 +144,7 @@ def _scan_dir(
     }
 
 
-def scan_agent_ops(repo_root: Path) -> dict[str, Any]:
+def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str, Any]:
     """Build the run-context ``agent_ops`` block.
 
     Returns ``settings`` (one entry per settings file found), ``hooks_dir``,
@@ -168,7 +171,7 @@ def scan_agent_ops(repo_root: Path) -> dict[str, Any]:
     hooks_dir = _scan_dir(repo_root, _HOOKS_DIR, tracked)
     routine_dirs = [_scan_dir(repo_root, rel, tracked) for rel in _ROUTINE_DIRS]
 
-    managed = read_managed_settings()
+    managed = read_managed_settings() if managed_settings else not_read()
     tracked_settings = [s for s in settings if s["tracked"]]
     in_repo = any(
         s["allow_count"] + s["deny_count"] + s["ask_count"] > 0

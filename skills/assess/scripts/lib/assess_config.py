@@ -37,6 +37,12 @@ pattern = "^inhouse-agent"
 [review]
 [platform]
 
+# Central guardrails (issue #1153): read this machine's Claude Code managed settings
+# for the agent permissions practice, as `assess_core.py --managed-settings` does. A
+# single-repository option: /fleet and assess_signals.py never read it.
+[agent_ops]
+managed_settings = true
+
 # Owner exclusions of maturity-model conditions (issue #910), read by
 # `lib/owner_exclusions.py`, not here: a condition id, a required reason and a kind.
 [checks]
@@ -168,6 +174,14 @@ def load_config(repo_root: Path) -> TomlTable:
             file=sys.stderr,
         )
         return {}
+
+
+def load_managed_settings_opt_in(repo_root: Path) -> bool:
+    """``[agent_ops] managed_settings`` (#1153): true only for a literal ``true``. Read by
+    ``assess_core`` alone, so a repository's own config never turns the machine read on
+    for a fleet."""
+    section = load_config(repo_root).get("agent_ops")
+    return isinstance(section, dict) and section.get("managed_settings") is True
 
 
 def _string_list(config: TomlTable, key: str) -> list[str]:
