@@ -56,7 +56,7 @@ evidence is static, read from the files at HEAD:
   continued with ``\\`` is first joined onto its first line (``lib.ci_continuations``,
   #799), so ``mvn ${MVN_ARGS} \\`` / ``verify`` reads ``verify``; a Maven run with its
   tests skipped and only lifecycle phases (``mvn -DskipTests verify``) reads as a target
-  it cannot settle (``check_target``), never credit.
+  it cannot settle (``check_target``, in ``basis`` too: null), never credit.
 - A ``run`` / ``script`` / ``command`` input under a ``uses:`` step's ``with:`` (#799,
   ``lib.ci_action_inputs``) reads as shell only for an action that runs it: a local action
   whose committed ``action.yml`` runs ``${{ inputs.<name> }}``, or a listed runner.
@@ -386,7 +386,7 @@ def merged_partial(text: str, resolution: Resolution | None, merged_text: str | 
 
 CiChecksBasis = Literal["check_command", "merged_config", "included_jobs",
                         "merged_config_partial", "unread_ci_system", "external_ci",
-                        "external_ci_marker", "no_check_command", "no_ci"]
+                        "external_ci_marker", "check_target", "no_check_command", "no_ci"]
 
 # The offline Prow marker (#928): a root OWNERS_ALIASES with no CI file of any kind.
 PROW_MARKER = "OWNERS_ALIASES"
@@ -516,6 +516,11 @@ def _skips_tests(text: str) -> bool:
     """``mvn -DskipTests verify``: a check reading that rests on skipped tests, so the
     line may check (``check_target``), never credit (#799; ``command_flags.maven_skips_tests``)."""
     return maven_skips_tests(command_words(text))
+
+
+def _skipped_check(line: str, *, script_item: bool = True) -> bool:
+    """A CI line whose check reading rests on Maven tests it skips (``mvn -DskipTests verify``)."""
+    return any(is_check_command(c.text) and _skips_tests(c.text) for c in line_commands(line))
 
 
 def _lone_linter(text: str) -> bool:
@@ -657,15 +662,18 @@ def _drop(lines: Sequence[str], indexes: frozenset[int]) -> list[str]:
 
 
 def _basis(found: bool, merged: bool, *, elsewhere: bool, partial: bool, unread: bool,
-           files: bool, external: External = None) -> tuple[bool | None, CiChecksBasis]:
+           files: bool, external: External = None, skipped: bool = False) -> tuple[bool | None, CiChecksBasis]:
     """``(test_or_lint_configured, basis)``: an own or included check, the merged one, pending
-    included jobs, an unread CI system (#787: the value stays false, its meaning unchanged)."""
+    included jobs, a Maven run with its tests skipped (#799: ``verify`` may still run lint
+    plugins, so null), an unread CI system (#787: the value stays false, its meaning unchanged)."""
     if found:
         return True, "check_command"
     if merged:
         return True, "merged_config"
     if elsewhere:
         return None, "merged_config_partial" if partial else "included_jobs"
+    if skipped:
+        return None, "check_target"
     if unread:
         return False, "unread_ci_system"
     if external:
@@ -754,7 +762,9 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
             off, masked = m_off, m_masked
     found = bool(checks or included_checks or any(check_t))   # a read script body (#1033)
     runs, basis = _basis(found, bool(merged_checks), elsewhere=bool(elsewhere), partial=partial_merge,
-                         unread=bool(unread), files=bool(files), external=external)
+                         unread=bool(unread), files=bool(files), external=external,
+                         skipped=any(count_check_lines(join_continued(t).splitlines(), test=_skipped_check)
+                                     for t in (*texts.values(), *(f.text for f in (resolution.files if resolution else ())))))
     enforced_runs, enforced_basis = _enforced_state(
         ordinary, unknown, may_check_t, elsewhere=bool(elsewhere), unread=bool(unread),
         any_check=bool(found or merged_checks or named_count(check_commands, texts.values())), has_files=bool(files), external=external,

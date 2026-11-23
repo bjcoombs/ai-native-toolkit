@@ -58,3 +58,11 @@ def test_github_script_is_blanked_and_other_inputs_are_left() -> None:
 def test_with_under_a_step_without_uses_is_left_alone() -> None:
     text = "steps:\n  - name: x\n    with:\n      run: pytest\n"
     assert read_inputs(text, _local({})) == (text, frozenset())
+
+
+def test_run_on_arch_and_vmactions_are_runners() -> None:
+    for uses in ("uraimo/run-on-arch-action@v3", "vmactions/freebsd-vm@v1"):
+        text = f"steps:\n  - uses: {uses}\n    with:\n      run: pytest\n"
+        assert read_inputs(text, _local({})).declared == frozenset()
+    text = "steps:\n  - uses: vmactions/freebsd-vm@v1\n    with:\n      prepare: pytest\n      script: x\n"
+    assert read_inputs(text, _local({})).declared == {4}

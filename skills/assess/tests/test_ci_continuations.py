@@ -102,7 +102,11 @@ def test_a_continued_line_that_runs_no_check_is_not_credited(tmp_path: Path, run
 
 def test_a_continued_skip_tests_verify_reads_check_target(tmp_path: Path) -> None:
     run = "      - run: |\n          mvn -B \\\n            -DskipTests \\\n            verify\n"
-    assert _reading(scan_ci_checks(_repo(tmp_path, _gha(run)))) == (False, None, "check_target")
+    block = scan_ci_checks(_repo(tmp_path, _gha(run)))
+    assert _reading(block) == (None, None, "check_target")   # verify may still run a lint plugin
+    assert block["basis"] == "check_target"
+    beside = _gha(run + "      - run: pytest\n")
+    assert _reading(scan_ci_checks(_repo(tmp_path / "b", beside))) == (True, True, "enforced_check")
 
 
 @pytest.mark.parametrize("run", [

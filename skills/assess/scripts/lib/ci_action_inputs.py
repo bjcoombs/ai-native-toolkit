@@ -10,7 +10,8 @@ input of a step (or a job calling a reusable workflow) that has a ``uses:`` key:
   file) has a ``run:`` step that is exactly ``${{ inputs.<name> }}``, for that input name; or
   a listed third-party runner (``SHELL_INPUTS``, each input name checked against the action's
   own ``action.yml``: ``nick-fields/retry`` ``command``, ``reactivecircus/android-emulator-runner``
-  ``script``, ``coactions/setup-xvfb`` and ``gabrielbb/xvfb-action`` ``run``). A ``command:``
+  ``script``, ``coactions/setup-xvfb``, ``gabrielbb/xvfb-action``, ``uraimo/run-on-arch-action``
+  and the ``vmactions/<os>-vm`` family ``run``). A ``command:``
   key is rewritten to ``run:`` so the line readers drop its lead.
 - **Not shell** (``SCRIPT_ACTIONS``: ``actions/github-script``, whose ``script:`` is
   JavaScript). Its lines are blanked.
@@ -42,7 +43,10 @@ SHELL_INPUTS: dict[str, str] = {
     "reactivecircus/android-emulator-runner": "script",
     "coactions/setup-xvfb": "run",
     "gabrielbb/xvfb-action": "run",
+    "uraimo/run-on-arch-action": "run",
 }
+# The ``vmactions/<os>-vm`` family (freebsd-vm, openbsd-vm, ...) runs its ``run`` input in the VM.
+_VM_ACTION = re.compile(r"^vmactions/[\w.-]+-vm$")
 # Actions whose ``script:`` input is not shell.
 SCRIPT_ACTIONS = frozenset({"actions/github-script"})
 INPUT_KEYS = frozenset({"run", "script", "command"})
@@ -95,7 +99,7 @@ def _shell_input(uses: str, key: str, read_local: ReadLocal) -> bool | None:
         return None
     match = _REMOTE.match(uses)
     name = match.group(1).lower() if match else ""
-    if SHELL_INPUTS.get(name) == key:
+    if SHELL_INPUTS.get(name) == key or (key == "run" and _VM_ACTION.match(name)):
         return True
     return False if name in SCRIPT_ACTIONS else None
 
