@@ -62,7 +62,8 @@ Config-only names (#783). A signal read from configuration text says so in its n
 never that something ran or was enforced: ``ci_checks.test_or_lint_configured`` (was
 ``test_or_lint_runs``) and ``coverage_gate.configured`` (was ``enforced``). Both are pure
 renames, so ``lib.fleet_rescore.SIGNAL_ALIASES`` reads a stored scan's old path under the
-new name; a maturity model naming an old path fails at load, since both blocks are typed.
+new name, and a maturity model naming an old path loads under the new one with a deprecation
+line (``lib.signal_aliases``, #970).
 
 ``criterion_grade`` grades one criterion: the grade of its signal's input
 class, whatever the operator. Per the #789 grades design, the grade comes from

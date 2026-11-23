@@ -106,7 +106,8 @@ missing version, an unset or invalid scope, a gap or duplicate in level
 numbering, an unknown operator or key, a team row with no aggregation rule,
 a ``requires`` naming a condition that does not exist (or itself, or a cycle),
 a missing, empty or unknown ``truth`` (``MixedTruthError`` when only some conditions
-carry it), a bad ``polarity``, ``guarded_by`` or ``eq_signal``, a malformed Step, or a signal path the pluggable ``PathValidator`` rejects. ``dumps_result`` gives
+carry it), a bad ``polarity``, ``guarded_by`` or ``eq_signal``, a malformed Step, or a signal path the pluggable ``PathValidator`` rejects. A renamed 2.1.0 path loads under its new
+name with one stderr line (``lib.signal_aliases.dealias_model``, #970). ``dumps_result`` gives
 byte-identical JSON for identical inputs.
 
 Full reference: lib/docs/levels.md.
@@ -124,6 +125,7 @@ from typing import Any, Callable, Iterable, Literal, Mapping, NotRequired, Typed
 from lib.levels_fields import LevelsError as LevelsError, MixedTruthError as MixedTruthError
 from lib.levels_fields import check_guards, check_truth, legacy_truth, parse_eq_signal, parse_guard
 from lib.levels_fields import parse_polarity, parse_truth
+from lib.signal_aliases import dealias_model
 from lib.signal_grades import EMPTY_DENOMINATORS
 
 Scope = Literal["org", "team"]
@@ -306,6 +308,7 @@ def parse_levels(data: Mapping[str, Any], validator: PathValidator | None = None
 
     ``source`` names the model in a ``MixedTruthError`` (``load_levels`` passes the path).
     """
+    data = dealias_model(data)  # a 2.1.0 signal path loads under its new name (#970)
     _check_keys(data, _ROOT_KEYS, "maturity model")
     version = data.get("version")
     if not isinstance(version, str) or not version.strip():

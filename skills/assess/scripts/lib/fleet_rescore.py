@@ -19,7 +19,7 @@ stored row holds no scans while ok: the caller then passes the entry over. A has
 are, so they always join their own entry's keys; ``fleet_achievements_runs`` passes over
 such an entry when none of its ids is one of this run's (another salt).
 
-**Signal aliases.** ``SIGNAL_ALIASES`` maps an old signal path to its new name for pure
+**Signal aliases.** ``SIGNAL_ALIASES`` (``lib.signal_aliases``, re-exported here) maps an old signal path to its new name for pure
 renames. #783 renamed two signals that read configuration text but were named as if
 something ran: ``ci_checks.test_or_lint_runs`` is ``ci_checks.test_or_lint_configured``
 and ``coverage_gate.enforced`` is ``coverage_gate.configured``. Before evaluation a stored
@@ -64,9 +64,8 @@ stored and re-scored cells differ, each attributed to the rules (`direction` `do
 """
 from __future__ import annotations
 
-import copy
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, TypedDict, cast
+from typing import TypedDict, cast
 
 from lib.fleet import STATUS_OK, FleetRow
 from lib.fleet_data import (
@@ -86,13 +85,8 @@ from lib.fleet_data_steps import RepoSteps, step_roll_up
 from lib.fleet_maturity import SCOPE
 from lib.fleet_next_steps import code, text
 from lib.levels import MaturityModel
-
-# Pure renames only: old signal path -> new signal path. #783 renamed the config-only
-# signals whose names claimed a run: each reads configuration text at HEAD, meaning unchanged.
-SIGNAL_ALIASES: Mapping[str, str] = {
-    "ci_checks.test_or_lint_runs": "ci_checks.test_or_lint_configured",
-    "coverage_gate.enforced": "coverage_gate.configured",
-}
+from lib.signal_aliases import SIGNAL_ALIASES as SIGNAL_ALIASES
+from lib.signal_aliases import aliased as aliased
 
 RULES = "rules"
 DOWN, UP, NOW_MEASURED, NOT_MEASURED = "down", "up", "now_measured", "not_measured"
@@ -120,38 +114,6 @@ class Recount(TypedDict):
     to_version: str  # this run's
     run: str  # the earlier entry re-scored
     lines: list[RecountLine]
-
-
-# --- signal aliases ----------------------------------------------------------
-
-
-def aliased(scans: Mapping[str, Any], aliases: Mapping[str, str] = SIGNAL_ALIASES) -> dict[str, Any]:
-    """``scans`` with each old aliased path also readable under its new path (never overwriting)."""
-    out: dict[str, Any] = copy.deepcopy(dict(scans))
-    for old, new in sorted(aliases.items()):
-        value, found = _get(out, old.split("."))
-        if found and not _get(out, new.split("."))[1]:
-            _put(out, new.split("."), copy.deepcopy(value))
-    return out
-
-
-def _get(data: Mapping[str, Any], path: Sequence[str]) -> tuple[Any, bool]:
-    node: Any = data
-    for part in path:
-        if not isinstance(node, dict) or part not in node:
-            return None, False
-        node = node[part]
-    return node, True
-
-
-def _put(data: dict[str, Any], path: Sequence[str], value: Any) -> None:
-    node = data
-    for part in path[:-1]:
-        child = node.get(part)
-        if not isinstance(child, dict):
-            child = node[part] = {}
-        node = child
-    node[path[-1]] = value
 
 
 # --- re-score ----------------------------------------------------------------
