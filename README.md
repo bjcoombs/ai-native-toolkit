@@ -91,10 +91,10 @@ The pair above is this toolkit assessing a private monorepo. Below is `/assess` 
 
 <table>
   <tr>
-    <th colspan="2">Step ladder</th>
+    <th colspan="2">Step ladder (illustrative sample, not a llama.cpp reading)</th>
   </tr>
   <tr>
-    <td colspan="2"><a href="docs/example-step-ladder.svg"><img alt="Step ladder for llama.cpp: four rungs of agent autonomy, bottom to top - 1 Assisted, an agent can read and help with your code; 2 Supervised agent PRs, an agent opens pull requests and a person reviews each one; 3 Unattended agent PRs, agents open pull requests nobody has to watch; 4 Autonomous loops, agents run longer loops on their own. You are here on Step 3; the instruction-file and CI gates below are in place, and the next gate, a coverage gate is enforced, is highlighted" title="llama.cpp: Step 3 of 4, Unattended agent PRs; next gate: a coverage gate is enforced" src="docs/example-step-ladder.svg"></a></td>
+    <td colspan="2"><a href="docs/example-step-ladder.svg"><img alt="Illustrative Step ladder: four rungs of agent autonomy, bottom to top - 1 Assisted, an agent can read and help with your code; 2 Supervised agent PRs, an agent opens pull requests and a person reviews each one; 3 Unattended agent PRs, agents open pull requests nobody has to watch; 4 Autonomous loops, agents run longer loops on their own. You are here on Step 3; the instruction-file and CI gates below are in place, and the next gate, a coverage gate is enforced, is highlighted" title="Example: Step 3 of 4, Unattended agent PRs; next gate: a coverage gate is enforced" src="docs/example-step-ladder.svg"></a></td>
   </tr>
   <tr>
     <th width="50%">Evidence waffle</th>
@@ -302,6 +302,7 @@ Runs against the current directory (or pass a path). Produces:
 - `.assess/complexity-heatmap.svg` - the complexity treemap shown above
 - `.assess/step-ladder.svg` - the four Steps as rungs of agent autonomy, the gate between each pair, "You are here" on the run's Step and the next gate highlighted; the report shows it first
 - `.assess/evidence-waffle.svg` - one square per maturity-model condition, showing how much of the level rests on verified or measured evidence
+- `.assess/tag-profile.svg` - one row per truth tag: the share of its measured conditions that are met, with the earlier run's share beside it when both used the same maturity model
 - `.assess/package-map.svg` - the 20 largest packages as an import matrix, with the imports that bypass a package's front door outlined
 - `.assess/doc-drift.svg` - the 15 docs furthest behind the code they describe, as ranked bars
 - `.assess/review-strip.svg` - one tick per recently merged change: approved, reviewed or merged without review, in merge order

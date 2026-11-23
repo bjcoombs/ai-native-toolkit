@@ -673,7 +673,7 @@ It reads how far the repository gives an agent a view of the running system: tel
 - Collector: `core.liveness_blocks`, reading `liveness`.
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `observability.boundary` drop, `observability.discoverable.signals` drop, `observability.instrumented.signals` drop, `observability.reachable.signals` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `observability.boundary` drop, `observability.discoverable.signals` drop, `observability.instrumented.kinds` token, `observability.instrumented.signals` drop, `observability.reachable.signals` drop.
 - Used by: row `layer-1-liveness`.
 - Evidence: `observability.rung` head_text (declared).
 - Not measured when: it cannot read its input; the block says why.
@@ -1009,7 +1009,7 @@ The scan registry in run order, including the private inputs other scans read.
 | `accretion_scan` | Accretion scan | `repo_root` | private input | no |
 | `accretion_by_file` | Accretion by file | `accretion_scan` | private input | no |
 | `hot_test_index` | Repository test index | `repo_root`, `current` | private input | no |
-| `run_header` | Run header | `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized` | `run_id`, `artifact_schema_version`, `assess_method_version`, `run_date`, `scope`, `scope_slug`, `measured_commit`, `prior_stats_exists`, `stats_summary`, `instruction_files`, `instructions_grade`, `diff`, `diff_reliable`, `diff_version_note`, `diff_trend_reset`, `prior_plugin_version`, `schema_version`, `prior_schema_version`, `tool_versions`, `prior_tool_versions`, `diff_detail`, `pruned_hotspots`, `retired_excluded_hotspots`, `dropped_first_flagged`, `provisional_first_flagged`, `log_integrity`, `prior_findings_snapshot` | no |
+| `run_header` | Run header | `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized` | `run_id`, `artifact_schema_version`, `assess_method_version`, `run_date`, `scope`, `scope_slug`, `measured_commit`, `prior_stats_exists`, `stats_summary`, `instruction_files`, `instructions_grade`, `diff`, `diff_reliable`, `diff_version_note`, `diff_trend_reset`, `prior_plugin_version`, `schema_version`, `prior_schema_version`, `tool_versions`, `prior_tool_versions`, `diff_detail`, `pruned_hotspots`, `retired_excluded_hotspots`, `dropped_first_flagged`, `provisional_first_flagged`, `log_integrity`, `prior_findings_snapshot`, `prior_level` | no |
 | `working_notes` | Working notes | `repo_root` | private input | no |
 | `doc_graph` | Doc graph | `repo_root`, `excludes`, `scope`, `working_notes` | `doc_graph` | no |
 | `doc_staleness` | Doc staleness | `repo_root`, `doc_graph`, `excludes`, `scope` | `doc_staleness` | no |

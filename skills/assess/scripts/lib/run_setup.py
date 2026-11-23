@@ -15,8 +15,8 @@ Setup-stage adapters for the scan table (#557): `run_scope`, `run_assess_dir`,
 generated-file filter caused), `instruction_grading`, `rename_map` and
 `measured_commit`, `config_excludes`,
 `first_flagged`, `superseded_run`, `unfinalized_exclusions`, `read_plugin_version`, and
-`run_header`, which returns the first 27 run-context keys (`RUN_HEADER_KEYS`) with the
-four `WIKI_KEYS` and `prior_findings_snapshot` reserved as None for the publish step. Reads only. Tests:
+`run_header`, which returns the first 28 run-context keys (`RUN_HEADER_KEYS`) with the
+four `WIKI_KEYS`, `prior_findings_snapshot` and `prior_level` (#940) reserved as None for the publish step. Reads only. Tests:
 `tests/test_run_setup.py`.
 """
 from __future__ import annotations
@@ -60,7 +60,7 @@ RUN_HEADER_KEYS = (
     "prior_plugin_version", "schema_version", "prior_schema_version", "tool_versions",
     "prior_tool_versions", "diff_detail", "pruned_hotspots", "retired_excluded_hotspots",
     "dropped_first_flagged", "provisional_first_flagged", "log_integrity",
-    "prior_findings_snapshot",
+    "prior_findings_snapshot", "prior_level",
 )
 
 PLUGIN_JSON = Path(__file__).resolve().parents[4] / ".claude-plugin" / "plugin.json"
@@ -213,7 +213,8 @@ def run_header(
     the trend; a backend version change or an unstamped prior voids the diff),
     and the wiki-state keys. The four ``WIKI_KEYS`` are reserved here and filled
     by the publish step after the wiki is written, and ``prior_findings_snapshot``
-by the same step just before it rewrites findings.json.
+by the same step just before it rewrites findings.json, and ``prior_level`` just before
+    it draws the diagrams and rewrites prior-level.json (#940).
     """
     _, scope_rel, scope_slug = scope
     prior_version, prior_schema = prior_stamps(prior)
@@ -273,5 +274,7 @@ by the same step just before it rewrites findings.json.
         # Reserved like the WIKI_KEYS: lib/run_publish.py reads the previous
         # findings.json into it just before rewriting that file (#554).
         "prior_findings_snapshot": None,
+        # Reserved the same way: run_publish reads the previous prior-level.json into it (#940).
+        "prior_level": None,
     }
     return header

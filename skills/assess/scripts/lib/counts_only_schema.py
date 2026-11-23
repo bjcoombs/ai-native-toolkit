@@ -87,6 +87,7 @@ from lib.run_context_types import (
 from lib.layer_grades import LayerGradesBlock
 from lib.level_result_types import Headline, LevelResult, OwnerExclusionsBlock
 from lib.run_context_types_since import SinceLastRun
+from lib.prior_level import PriorLevelBlock
 from lib.complexity.scc_coverage import UnreliableCcnRow
 from lib.review_automation import ReviewAutomationBlock, ReviewEvidenceBlock
 from lib.shared_tooling import SharedToolingBlock
@@ -143,6 +144,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("agent_building", AgentBuildingBlock),
     ("layer_grades", LayerGradesBlock),
     ("prior_findings_snapshot", FindingsSnapshot),
+    ("prior_level", PriorLevelBlock),
     ("instruction_placement", InstructionPlacementBlock),
     ("ai_usage", AiUsageBlock),
     ("agent_outcome", AgentOutcomeBlock),

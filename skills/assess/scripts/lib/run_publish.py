@@ -15,6 +15,8 @@ artifact directory, writes the wiki (`run_wiki.write_run_wiki`), fills the four 
 keys the run header reserved in place (the `log.md` entry opens with the `since_last_run`
 block's bullets, #1083), writes `badge.json` from the `headline` block
 (`badge.write_headline_badge`, #747; the `log.md` entry's readiness line is its `summary`), reads the previous
+`prior-level.json` into `prior_level` (`lib/prior_level.py`, #940) before drawing the diagrams and then
+rewrites it from the `level` block, reads the previous
 `findings.json` into `prior_findings_snapshot` and rewrites it
 (`findings_snapshot`), and then writes `run-context.json`. Tests: `tests/test_run_setup.py`.
 """
@@ -29,6 +31,7 @@ from lib.assess_diagrams_review import build_all, write_all
 from lib.badge import write_headline_badge
 from lib.headline import as_headline
 from lib.findings_snapshot import build_snapshot, load_snapshot, write_snapshot
+from lib.prior_level import load_prior_level, write_prior_level
 from lib.run_setup import read_plugin_version
 from lib.run_wiki import write_run_wiki
 
@@ -75,8 +78,12 @@ def publish_run(ctx: dict[str, Any], state: Mapping[str, Any]) -> None:
     write_headline_badge(
         assess_dir, as_headline(ctx.get("headline")), run_id=state["run_id"], scope=scope_rel,
     )
+    # The earlier run's per-tag values (#940), read before this run's are written, so the tag
+    # profile strip draws the earlier run from the context and a later redraw reads the same.
+    ctx["prior_level"] = load_prior_level(assess_dir)
     # The /assess diagrams (#942, #943), drawn from the finished context; the report links them.
     write_all(assess_dir, build_all(ctx))
+    write_prior_level(assess_dir, ctx.get("level"))
     # The committed findings snapshot (#554): read the previous one back before
     # overwriting it, so the gate can explain a method-version change by the
     # findings that appeared and cleared since.
