@@ -21,7 +21,8 @@ class ConditionResult(TypedDict):
     counted: bool
     state: str  # one of STATES
     reason: NotRequired[str]  # not_measured, or a requires that is not met
-    disposition: NotRequired[str]  # "excluded_by_owner": the owner excluded this condition (#910)
+    # "excluded_by_owner": the owner excluded it (#910); "demoted_by_exit_rule": the fleet exit rule (#1086)
+    disposition: NotRequired[str]
     exclusion_kind: NotRequired[str]  # the exclusion's kind (lib.owner_exclusions.KINDS)
     polarity: NotRequired[str]  # "hazard" only: a harm, never counted (#843); absent: positive
     why: NotRequired[str]  # the manifest whys of its criteria, joined by a space (#939)

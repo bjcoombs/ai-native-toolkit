@@ -79,7 +79,8 @@ HISTORY_FILES = (REPOS_FILE, GROUPS_FILE, RUN_FILE)  # written in this order: ru
 # repository declares ``[[describes]]``, #664); moved in before ``run.json``, and
 # a same-day entry's stale copy is removed when the new run wrote none.
 # ``fleet-data.json`` (#703) is optional so entries written before it still load.
-OPTIONAL_HISTORY_FILES = (FRESHNESS_FILE, FLEET_DATA_FILE)
+# demotions.json: the exit rule's record with its evidence, kept with the run (#1086)
+OPTIONAL_HISTORY_FILES = (FRESHNESS_FILE, FLEET_DATA_FILE, "demotions.json")
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$")
 _MATCH_KEYS = ("levels_version", "window", "counts_only", "scans", "paths_hashed", "fleet_config_sha256",
                "platform")
