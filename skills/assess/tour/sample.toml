@@ -1,0 +1,279 @@
+# The /assess tour's sample repository (#1102, #1149): tally, a tiny Python expense ledger.
+#
+# scripts/assess_tour.py `build` writes each [[file]] below to its `path` and replays
+# [[commits]] in order, with these fixed dates and one fixed author, so every build has the
+# same commits (same SHAs) and the same report. The newcomer sees an ordinary repository.
+#
+# The whole sample is one TOML file on purpose. No /assess scan reads a TOML string as code,
+# docs, instructions or CI, so the sample's AGENTS.md, workflow, tests and source never count
+# in this repository's own assessment, and the standalone ZIP ships it whole (it drops every
+# directory named `tests`). `content` is a literal string ('''), so it needs no escaping and
+# must not itself contain three single quotes. fix.patch, beside this file, is the tour's one
+# fix: it deletes `|| true` from the CI workflow.
+
+author = "Sam Sample <sam@example.com>"
+
+[[commits]]
+date = "2026-09-01T10:00:00+00:00"
+message = "Add the ledger and its tests"
+paths = [".gitignore", "README.md", "pyproject.toml", "src/tally/__init__.py", "src/tally/ledger.py", "tests/test_ledger.py"]
+
+[[commits]]
+date = "2026-09-08T10:00:00+00:00"
+message = "Add the per-category report and the command line"
+paths = ["src/tally/report.py", "src/tally/__main__.py", "tests/test_report.py"]
+
+[[commits]]
+date = "2026-09-15T10:00:00+00:00"
+message = "Run the tests in CI"
+paths = [".github/workflows/ci.yml"]
+
+[[commits]]
+date = "2026-09-22T10:00:00+00:00"
+message = "Add agent instructions"
+paths = ["AGENTS.md"]
+
+# The commit fix.patch makes, with this date and message.
+[fix]
+date = "2026-09-29T10:00:00+00:00"
+message = "Let CI fail when the tests fail"
+
+[[file]]
+path = ".gitignore"
+content = '''
+__pycache__/
+*.egg-info/
+.venv/
+tally.json
+.assess/
+'''
+
+[[file]]
+path = "README.md"
+content = '''
+# tally
+
+A tiny command-line expense ledger: record what you spend, then print a total per category.
+
+```
+python -m tally add groceries 12.50
+python -m tally report
+```
+
+Contributing: `AGENTS.md` lists the commands to run before a pull request.
+'''
+
+[[file]]
+path = "pyproject.toml"
+content = '''
+[project]
+name = "tally"
+version = "0.1.0"
+description = "A tiny command-line expense ledger"
+requires-python = ">=3.11"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+'''
+
+[[file]]
+path = "src/tally/__init__.py"
+content = '''
+"""tally: a tiny command-line expense ledger."""
+'''
+
+[[file]]
+path = "src/tally/ledger.py"
+content = '''
+"""An in-memory ledger of expenses, each with a category and an amount in pence."""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+
+@dataclass(frozen=True)
+class Entry:
+    category: str
+    pence: int
+
+
+@dataclass
+class Ledger:
+    entries: list[Entry] = field(default_factory=list)
+
+    def add(self, category: str, amount: str) -> Entry:
+        """Record an expense. ``amount`` is in pounds, such as "12.50"."""
+        name = category.strip().lower()
+        if not name:
+            raise ValueError("category must not be empty")
+        pence = round(float(amount) * 100)
+        if pence <= 0:
+            raise ValueError("amount must be positive")
+        entry = Entry(name, pence)
+        self.entries.append(entry)
+        return entry
+
+    def total(self) -> int:
+        return sum(entry.pence for entry in self.entries)
+'''
+
+[[file]]
+path = "tests/test_ledger.py"
+content = '''
+import pytest
+
+from tally.ledger import Ledger
+
+
+def test_add_records_the_amount_in_pence():
+    ledger = Ledger()
+    entry = ledger.add("Groceries ", "12.50")
+    assert (entry.category, entry.pence) == ("groceries", 1250)
+
+
+def test_total_sums_every_entry():
+    ledger = Ledger()
+    ledger.add("rent", "500")
+    ledger.add("coffee", "2.80")
+    assert ledger.total() == 50280
+
+
+@pytest.mark.parametrize("category, amount", [("", "1"), ("rent", "0"), ("rent", "-3")])
+def test_add_refuses_bad_input(category, amount):
+    with pytest.raises(ValueError):
+        Ledger().add(category, amount)
+'''
+
+[[file]]
+path = "src/tally/report.py"
+content = '''
+"""Totals per category, largest first, formatted for the terminal."""
+from __future__ import annotations
+
+from tally.ledger import Ledger
+
+
+def by_category(ledger: Ledger) -> dict[str, int]:
+    totals: dict[str, int] = {}
+    for entry in ledger.entries:
+        totals[entry.category] = totals.get(entry.category, 0) + entry.pence
+    return dict(sorted(totals.items(), key=lambda item: (-item[1], item[0])))
+
+
+def render(ledger: Ledger) -> str:
+    lines = [f"{name:<12} {pence / 100:>8.2f}" for name, pence in by_category(ledger).items()]
+    lines.append(f"{'total':<12} {ledger.total() / 100:>8.2f}")
+    return "\n".join(lines)
+'''
+
+[[file]]
+path = "src/tally/__main__.py"
+content = '''
+"""Command line: ``python -m tally add <category> <amount>`` or ``python -m tally report``."""
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+from tally.ledger import Ledger
+from tally.report import render
+
+STORE = Path("tally.json")
+
+
+def load() -> Ledger:
+    ledger = Ledger()
+    if STORE.exists():
+        for row in json.loads(STORE.read_text(encoding="utf-8")):
+            ledger.add(row["category"], str(row["pence"] / 100))
+    return ledger
+
+
+def save(ledger: Ledger) -> None:
+    rows = [{"category": e.category, "pence": e.pence} for e in ledger.entries]
+    STORE.write_text(json.dumps(rows), encoding="utf-8")
+
+
+def main(argv: list[str]) -> int:
+    ledger = load()
+    if argv[:1] == ["add"] and len(argv) == 3:
+        ledger.add(argv[1], argv[2])
+        save(ledger)
+        return 0
+    if argv == ["report"]:
+        print(render(ledger))
+        return 0
+    print(__doc__, file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
+'''
+
+[[file]]
+path = "tests/test_report.py"
+content = '''
+from tally.ledger import Ledger
+from tally.report import by_category, render
+
+
+def test_by_category_puts_the_largest_first():
+    ledger = Ledger()
+    ledger.add("coffee", "2.80")
+    ledger.add("rent", "500")
+    ledger.add("coffee", "3.20")
+    assert list(by_category(ledger)) == ["rent", "coffee"]
+
+
+def test_render_ends_with_the_total():
+    ledger = Ledger()
+    ledger.add("rent", "500")
+    assert render(ledger).splitlines()[-1].split() == ["total", "500.00"]
+'''
+
+[[file]]
+path = ".github/workflows/ci.yml"
+content = '''
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e . pytest
+      # Keeps the build green while the report test is flaky.
+      - run: pytest || true
+'''
+
+[[file]]
+path = "AGENTS.md"
+content = '''
+# AGENTS.md
+
+tally is a small command-line expense ledger. The code is in `src/tally/`, the tests in `tests/`.
+
+## Commands
+
+- Install: `pip install -e . pytest`
+- Test: `pytest`
+
+Run the tests before you open a pull request. Amounts are stored in pence as integers; never store a float.
+'''
