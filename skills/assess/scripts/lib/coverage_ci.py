@@ -138,7 +138,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypeVar
 
-from lib.check_command import _exec_program, _info_program, is_info_invocation, may_lint
+from lib.check_command import (
+    _DIRECT_TESTS, LINT_PROGRAMS, _exec_program, _info_program, is_info_invocation, may_lint)
 from lib.ci_masking import unmasked_lines
 from lib.coverage_activation import Activation, covers
 from lib.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, workflow_trigger
@@ -320,17 +321,27 @@ def program(words: tuple[str, ...]) -> tuple[str, list[str]]:
     ``check_command`` reads (``_exec_program``, then ``_info_program``: ``uv run``,
     ``poetry run``, ``uvx``, ``npx``, ``python -m``, ``bundle exec``, ``docker compose
     run``, ``pnpm exec``, ``yarn dlx``) and ``yarn jest`` / ``pnpm vitest``. The name is the
-    basename (``./mvnw`` is ``mvnw``). ``pip install pytest`` names ``pip``, and ``echo
-    pytest --cov`` names ``echo``: a tool named as an argument is not run."""
-    if not words:
+    basename (``./mvnw`` is ``mvnw``). ``pdm run`` is read through too (#954: ``pdm run
+    pytest --cov`` runs pytest; ``pdm run cov`` names the script ``cov``, a program no
+    gate family matches). ``pip install pytest`` names ``pip``, and ``echo pytest --cov``
+    names ``echo``: a tool named as an argument is not run."""
+    rest = _unwrapped(words)
+    if len(rest) > 2 and rest[0].rsplit("/", 1)[-1] == "pdm" and rest[1] == "run":
+        rest = _unwrapped(tuple(rest[2:]))
+    if not rest:
         return "", []
+    return rest[0].rsplit("/", 1)[-1], rest[1:]
+
+
+def _unwrapped(words: tuple[str, ...]) -> list[str]:
+    """``words`` through ``check_command``'s wrappers and ``yarn jest`` / ``pnpm vitest``."""
+    if not words:
+        return []
     run = _exec_program(list(words))
     rest = _info_program(run if run is not None else list(words))
     if rest and rest[0] in _BIN_RUNNERS and len(rest) > 1 and rest[1] in _BIN_TOOLS:
         rest = rest[1:]
-    if not rest:
-        return "", []
-    return rest[0].rsplit("/", 1)[-1], rest[1:]
+    return rest
 
 
 # Programs that print, set or install, and so run no gate their arguments name.
@@ -601,15 +612,17 @@ _SCRIPT_RUNNERS = frozenset({"npm", "yarn", "pnpm", "bun"})
 def coverage_target(words: tuple[str, ...]) -> bool:
     """A runner target or package script named for coverage (``make coverage``, ``make
     cov``, ``npm run coverage``, ``just coverage``), or any ``pdm run`` script or ``poe``
-    task (#954, as ``may_lint`` reads any ``hatch run`` script): it may run the gate."""
-    name, args = program(words)   # uv run poe cov, poetry run poe cov: the runner is poe
-    positionals = [w for w in args if not w.startswith("-")]
+    task (#954, as ``may_lint`` reads a ``hatch run`` script): it may run the gate. A
+    test or lint program run through ``pdm run`` (``pdm run pytest``) is no script."""
+    rest = _unwrapped(words)   # uv run poe cov, poetry run poe cov: the runner is poe
+    name = rest[0].rsplit("/", 1)[-1] if rest else ""
+    positionals = [w for w in rest[1:] if not w.startswith("-")]
     if name in _PY_SCRIPT_RUNNERS:   # pdm [run] <script>, poe <task>: the recipe is not read
         if name == "pdm" and positionals[:1] == ["run"]:
             positionals = positionals[1:]
         elif name == "pdm" and positionals[:1] and positionals[0] in _PDM_COMMANDS:
             return False
-        return bool(positionals)
+        return bool(positionals) and positionals[0] not in _DIRECT_TESTS | LINT_PROGRAMS
     if name in _SCRIPT_RUNNERS and positionals[:1] == ["run"]:
         positionals = positionals[1:]
     elif name not in _TARGET_RUNNERS | _SCRIPT_RUNNERS:

@@ -143,13 +143,19 @@ def test_case5_script_section_reads_indirect_run(
     assert _read(tmp_path, files) == (None, "indirect_run")
 
 
+def test_pdm_run_reads_through_to_the_program(tmp_path: Path) -> None:
+    files = {**_ci("pdm run pytest --cov"), "pyproject.toml": PYPROJECT_80}
+    assert _read(tmp_path, files) == (True, "ci_run")
+
+
 def test_case5_setup_cfg_tox_command_reads_indirect_run(tmp_path: Path) -> None:
     files = {**_ci("tox"), "setup.cfg":
              "[tox:tox]\nenvlist = py\n\n[testenv]\ncommands = pytest --cov --cov-fail-under=80\n"}
     assert _read(tmp_path, files) == (None, "indirect_run")
 
 
-@pytest.mark.parametrize("line", ["pdm install", "pdm sync -G test", "poe"])
+@pytest.mark.parametrize("line", ["pdm install", "pdm sync -G test", "poe",
+                                  "pdm run ruff check .", "pdm run pytest"])
 def test_case5_a_pdm_command_or_bare_poe_runs_no_script(tmp_path: Path, line: str) -> None:
     files = {**_ci(line), "pyproject.toml":
              "[tool.pdm.scripts]\ncov = \"pytest --cov --cov-fail-under=80\"\n"}
