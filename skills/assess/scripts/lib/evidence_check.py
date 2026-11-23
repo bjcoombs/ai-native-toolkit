@@ -78,7 +78,7 @@ and each rejected entry of it is printed to stderr as a warning. An input with n
 `evidence` key is not checked; a non-list value, or an entry naming no layer 0-8,
 is refused. An entry that names its layer but is otherwise malformed (unknown
 kind, missing path or needle) is rejected by `check_evidence` and counts under
-the per-layer rule like any other rejected entry.
+the per-practice rule like any other rejected entry.
 """
 from __future__ import annotations
 

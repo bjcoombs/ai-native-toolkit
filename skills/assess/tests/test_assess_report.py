@@ -69,7 +69,7 @@ def _full_ctx() -> dict:
             "summary_text": "5 structural concerns (5 hidden coupling), 1 safe zone.",
         },
         "findings_markdown": (
-            "## Cross-Layer Findings (Keyhole Readiness)\n\n"
+            "## Cross-Practice Findings (Keyhole Readiness)\n\n"
             "### hidden_coupling\n\n"
             "Action: investigate the seam\n\n"
             "Paths:\n- scripts\n- scripts/tests\n"
@@ -281,7 +281,7 @@ def test_full_render_substitute_is_strict() -> None:
 def test_minimal_render_uses_fallbacks() -> None:
     report = render_report(_minimal_ctx(), "tiny")
     assert "_No hotspots identified._" in report
-    assert "_No cross-layer findings recorded._" in report
+    assert "_No cross-practice findings recorded._" in report
     assert "_Keyhole readiness summary unavailable._" in report
     assert "first recorded snapshot" in report
     assert "$" not in report
@@ -333,15 +333,15 @@ def test_keyhole_summary_missing_fallback() -> None:
 
 def test_findings_section_verbatim() -> None:
     out = render_findings_section(_full_ctx())
-    assert out.startswith("## Cross-Layer Findings (Keyhole Readiness)")
+    assert out.startswith("## Cross-Practice Findings (Keyhole Readiness)")
     assert "### hidden_coupling" in out
     assert "Action: investigate the seam" in out
 
 
 def test_findings_section_empty_fallback() -> None:
     assert render_findings_section({"findings_markdown": "   "}) == \
-        "_No cross-layer findings recorded._"
-    assert render_findings_section({}) == "_No cross-layer findings recorded._"
+        "_No cross-practice findings recorded._"
+    assert render_findings_section({}) == "_No cross-practice findings recorded._"
 
 
 # --------------------------------------------------------------------------

@@ -72,9 +72,9 @@ Not drawn: not measured here: no remote.
 
 No structural concerns, 0 safe zones.
 
-## Cross-Layer Findings (Keyhole Readiness)
+## Cross-Practice Findings (Keyhole Readiness)
 
-_No cross-layer findings surfaced - no path crossed an axis boundary._
+_No cross-practice findings surfaced - no path crossed an axis boundary._
 
 ## Changes Since Last Run
 
@@ -82,7 +82,7 @@ _No prior run to compare against - this is the first recorded snapshot._
 
 ---
 
-_Deterministic portion of the assessment: headline, metrics, hotspots, and cross-layer findings. The per-layer assessments and prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
+_Deterministic portion of the assessment: headline, metrics, hotspots, and cross-practice findings. The per-practice assessments and prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
 
 ## How this was measured
 

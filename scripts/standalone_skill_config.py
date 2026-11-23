@@ -47,12 +47,12 @@ SKILLS: dict[str, dict[str, Any]] = {
     "assess": {
         "standalone_name": "assess",
         "standalone_description": (
-            "Assess a codebase's AI-agent readiness (0-8 layered contract model spanning "
-            "navigability, runtime liveness, and the write-side gates) and generate a complexity "
+            "Assess a codebase's AI-agent readiness (autonomy Steps held by named gates, and a "
+            "scorecard by practice from navigability to coverage gates) and generate a complexity "
             "hotspot SVG and a doc-navigability graph SVG. TRIGGER when asked for an AI-readiness "
             "review, codebase assessment, complexity heatmap, doc navigability/connectivity map, "
             "migration risk triage, or 'how ready is this code for agents?'. Full script "
-            "automation (SVGs, deterministic core) requires terminal access; the layered "
+            "automation (SVGs, deterministic core) requires terminal access; the practice "
             "assessment works in any context."
             + VERSION_SUFFIX
         ),

@@ -189,15 +189,15 @@ The rows the conditions come from. A row's level is the highest level whose cond
 
 | Row | Title | Scope | Aggregated by | Levels |
 |---|---|---|---|---|
-| `layer-0-instructions` | Layer 0: agent instructions | team | `min` | `layer-0-instructions.1`, `layer-0-instructions.2` |
-| `layer-1-liveness` | Layer 1: runtime legibility | team | `min` | `layer-1-liveness.1`, `layer-1-liveness.2` |
-| `layer-2-design` | Layer 2: code design (module structure) | team | `min` | `layer-2-design.1`, `layer-2-design.2` |
-| `layer-3-linters` | Layer 3: linters run in CI, suppression cap | team | `min` | `layer-3-linters.1`, `layer-3-linters.2` |
-| `layer-4-architecture` | Layer 4: architecture boundaries and size | team | `min` | `layer-4-architecture.1`, `layer-4-architecture.2` |
-| `layer-5-ci` | Layer 5: CI and the agent's local check | team | `min` | `layer-5-ci.1`, `layer-5-ci.2` |
-| `layer-6-coverage` | Layer 6: coverage gates and truth pressure | team | `min` | `layer-6-coverage.1`, `layer-6-coverage.2` |
-| `layer-7-review` | Layer 7: review on merged pull requests | team | `min` | `layer-7-review.1`, `layer-7-review.2` |
-| `layer-8-agent-ops` | Layer 8: AI project management | team | `min` | `layer-8-agent-ops.1`, `layer-8-agent-ops.2` |
+| `layer-0-instructions` | Agent instructions | team | `min` | `layer-0-instructions.1`, `layer-0-instructions.2` |
+| `layer-1-liveness` | Runtime legibility | team | `min` | `layer-1-liveness.1`, `layer-1-liveness.2` |
+| `layer-2-design` | Code design (module structure) | team | `min` | `layer-2-design.1`, `layer-2-design.2` |
+| `layer-3-linters` | Linters run in CI, suppression cap | team | `min` | `layer-3-linters.1`, `layer-3-linters.2` |
+| `layer-4-architecture` | Architecture boundaries and size | team | `min` | `layer-4-architecture.1`, `layer-4-architecture.2` |
+| `layer-5-ci` | CI and the agent's local check | team | `min` | `layer-5-ci.1`, `layer-5-ci.2` |
+| `layer-6-coverage` | Coverage gates and truth pressure | team | `min` | `layer-6-coverage.1`, `layer-6-coverage.2` |
+| `layer-7-review` | Review on merged pull requests | team | `min` | `layer-7-review.1`, `layer-7-review.2` |
+| `layer-8-agent-ops` | AI project management | team | `min` | `layer-8-agent-ops.1`, `layer-8-agent-ops.2` |
 | `doc-freshness` | Documentation freshness | team | `min` | `doc-freshness.1`, `doc-freshness.2` |
 | `guardrails-stated` | Guardrails stated | team | `min` | `guardrails-stated.1`, `guardrails-stated.2` |
 | `agent-consistency` | Cross-agent instruction consistency | team | `min` | `agent-consistency.1`, `agent-consistency.2` |

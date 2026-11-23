@@ -25,7 +25,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import lib.fleet.fleet_svg as svg
-from lib.headline import GATE_CHANGE, _gate_change
+from lib.headline import GATE_CHANGE, gate_change
 from lib.level_result_types import LevelResult
 from lib.levels import StepDef, StepGate
 from lib.vocabulary import IN_PLACE
@@ -152,7 +152,7 @@ def ladder_caption(level: LevelResult, steps: Sequence[StepDef]) -> str:
     """The caption: what opens the next Step, read from ``next_step.blockers`` as the
     headline's Next line reads them, or that the top Step is held.
 
-    Each blocking gate is worded by ``headline._gate_change`` (``GATE_CHANGE``, plus why a
+    Each blocking gate is worded by ``headline.gate_change`` (``GATE_CHANGE``, plus why a
     not-measured or owner-excluded gate is open). A Step reads its gates only (#1083), so
     the caption names gates and never a count, and it names the same unlock as the
     headline."""
@@ -160,7 +160,7 @@ def ladder_caption(level: LevelResult, steps: Sequence[StepDef]) -> str:
     if nxt is None:
         return "This is the top Step; it holds while its gates hold."
     gates = [b for b in nxt["blockers"] if b["kind"] == "gate"]
-    changes = [_gate_change(b) for b in gates]
+    changes = [gate_change(b) for b in gates]
     unlock = " and ".join(changes) if changes else "its gates hold"
     return f"Step {nxt['step']}, {_name(steps, nxt['step'])}, opens when {unlock}."
 

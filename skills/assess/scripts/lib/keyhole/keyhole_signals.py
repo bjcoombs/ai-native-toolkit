@@ -928,7 +928,7 @@ def render_findings_markdown(
     explicitly rather than rendering an empty heading. Always ends with a single
     trailing newline so it concatenates cleanly into the report.
     """
-    lines = ["## Cross-Layer Findings (Keyhole Readiness)", ""]
+    lines = ["## Cross-Practice Findings (Keyhole Readiness)", ""]
     rendered_any = False
     for f in findings:
         paths = f.get("paths") or []
@@ -951,7 +951,7 @@ def render_findings_markdown(
         lines.append("")
     if not rendered_any:
         lines.append(
-            "_No cross-layer findings surfaced - no path crossed an axis boundary._"
+            "_No cross-practice findings surfaced - no path crossed an axis boundary._"
         )
         lines.append("")
     if attention:

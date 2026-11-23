@@ -14,14 +14,14 @@ It renders:
   not drawn,
 - a metrics dashboard (complexity profile, churn window, total LOC),
 - the top-hotspots table,
-- the keyhole-readiness summary + the six cross-layer findings, and
+- the keyhole-readiness summary + the six cross-practice findings, and
 - the regression deltas (graduated / new / regressed / restructured / persistent), and
 - "How this was measured": the scans that ran and were skipped, with the catalog link
   (``lib/measured_appendix.py``, #794).
 
 It deliberately does NOT reproduce (these require LLM judgement and are written
 elsewhere by the orchestrator, see SKILL.md):
-- the per-layer present/partial/missing prose, or
+- the per-practice present/partial/missing prose, or
 - the Top 3 Actions priority narrative.
 
 The findings section, the keyhole summary, and the prescribed actions are
@@ -131,7 +131,7 @@ $diff_section
 
 ---
 
-_Deterministic portion of the assessment: headline, metrics, hotspots, and cross-layer findings. The per-layer assessments and prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
+_Deterministic portion of the assessment: headline, metrics, hotspots, and cross-practice findings. The per-practice assessments and prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
 """)
 
 
@@ -318,7 +318,7 @@ def render_generated_disclosure(ctx: dict[str, Any]) -> str:
 
 
 def render_findings_section(ctx: dict[str, Any]) -> str:
-    """Return the pre-rendered cross-layer findings section, verbatim.
+    """Return the pre-rendered cross-practice findings section, verbatim.
 
     The deterministic core already renders the six findings + attention list
     into ``findings_markdown``; this renderer copies it so the section appears
@@ -326,7 +326,7 @@ def render_findings_section(ctx: dict[str, Any]) -> str:
     """
     markdown: str | None = ctx.get("findings_markdown")
     if not markdown or not markdown.strip():
-        return "_No cross-layer findings recorded._"
+        return "_No cross-practice findings recorded._"
     return markdown.strip()
 
 

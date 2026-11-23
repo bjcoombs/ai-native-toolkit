@@ -1,11 +1,11 @@
 ---
 name: assess-findings
-description: Renders the /assess report from the deterministic run-context.json and the layer scorecard - the scorecard, the verbatim cross-layer findings, lying signals, and the mandatory Top 3 Actions. TRIGGER when the /assess orchestrator reaches the report-writing step; not a standalone user command.
+description: Renders the /assess report from the deterministic run-context.json and the practice scorecard - the scorecard, the verbatim cross-practice findings, lying signals, and the mandatory Top 3 Actions. TRIGGER when the /assess orchestrator reaches the report-writing step; not a standalone user command.
 ---
 
 # Assess Findings Writer
 
-The report-writing half of `/assess`. The deterministic core has written `.assess/run-context.json` (the data bus) and the `assess-layer-scorer` agent has returned the per-layer scorecard. Your job is to assemble `.assess/assess-report.md`: the deterministic headline, the scorecard, the snapshots, the **verbatim** cross-layer findings, the lying signals, and the Top 3 Actions.
+The report-writing half of `/assess`. The deterministic core has written `.assess/run-context.json` (the data bus) and the `assess-layer-scorer` agent has returned the per-practice scorecard. Your job is to assemble `.assess/assess-report.md`: the deterministic headline, the scorecard, the snapshots, the **verbatim** cross-practice findings, the lying signals, and the Top 3 Actions.
 
 **Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
 
@@ -14,11 +14,11 @@ The deterministic parts are not yours to invent - you paste them. You write the 
 ## Inputs
 
 - `$REPO_ROOT/.assess/run-context.json` - the data bus (the `headline` and `level` blocks, findings, attention, keyhole summary, prescribed actions, stats, diff).
-- The scorecard returned by the `assess-layer-scorer` agent (the per-layer verdicts and their evidence), with its `evidence` list already re-checked by `lib/evidence_check.py`: only entries that held on disk remain there; the rejected ones arrive separately under `evidence_rejected`, each with the `reason` the check gave.
+- The scorecard returned by the `assess-layer-scorer` agent (the per-practice verdicts and their evidence), with its `evidence` list already re-checked by `lib/evidence_check.py`: only entries that held on disk remain there; the rejected ones arrive separately under `evidence_rejected`, each with the `reason` the check gave.
 
 **Existence and wiring claims cite only verified evidence.** A report sentence saying a file or directory exists or is missing, or that something is or is not wired in (a workflow runs the linter, no CI job calls the script), must rest on an entry in the scorecard's `evidence` list and name the path that entry cites. When no verified entry backs such a claim, leave it out rather than restating it from the scorer's prose. The scorecard's per-layer Evidence cell is exempt only in its two empty states (no entries offered, every entry rejected), set beside the scorecard table below; a cell whose layer kept some verified entries cites only those, as the partial state there says. The deterministic findings you paste verbatim are already grounded and need no entry.
 
-## Read the cross-layer findings first
+## Read the cross-practice findings first
 
 
 The layers above each measure one axis. The deterministic core also crosses those axes against each other and emits ten named findings - the "where to look" signals no single layer surfaces. Read them once, after the per-layer scans:
@@ -40,18 +40,18 @@ jq '.derived_findings, .attention, .attention_low_signal, .keyhole_summary, .pre
 - **`candidate_dead_weight`** - high complexity with no runtime evidence it is live. The bias is to **keep** (static reachability can't see external callers - Layer 1's caveat applies). Action: verify liveness, then delete only if confirmed dead.
 - **`refactor_boundary`** (positive) - high containment: edits stay local. A safe zone, never an attention row. Action: safe to hand an agent in isolation; cite these paths in Strengths.
 
-**Partial import graph (`structure.name_collisions`).** Read it with `jq '.structure.name_collisions'`. Each entry is `{name, paths}`: one import name held by two or more discovered packages (`paths` are their repo-relative directories, with `.` written `%2E` and `%` written `%25` so each stays one module name; decode those two escapes before naming a path, so `v1%2E2/lib` reads `v1.2/lib`), which the core graphs in separate builds. Every import between those builds is dropped, not only imports of the colliding name, so the import-graph signals - the per-module import footprints, the front-door ratio, modularity, and the static containment behind `hidden_coupling` and `refactor_boundary` - cover only part of the tree and can be understated. When the list is non-empty, say so in one or two sentences directly under the `## Cross-Layer Findings (Keyhole Readiness)` heading, naming each colliding package by `name` with its `paths`, so a reader does not take the structure figures as whole-repo. Omit the note when the list is empty or `structure.available` is false (the import graph did not run; there is nothing to qualify).
+**Partial import graph (`structure.name_collisions`).** Read it with `jq '.structure.name_collisions'`. Each entry is `{name, paths}`: one import name held by two or more discovered packages (`paths` are their repo-relative directories, with `.` written `%2E` and `%` written `%25` so each stays one module name; decode those two escapes before naming a path, so `v1%2E2/lib` reads `v1.2/lib`), which the core graphs in separate builds. Every import between those builds is dropped, not only imports of the colliding name, so the import-graph signals - the per-module import footprints, the front-door ratio, modularity, and the static containment behind `hidden_coupling` and `refactor_boundary` - cover only part of the tree and can be understated. When the list is non-empty, say so in one or two sentences directly under the `## Cross-Practice Findings (Keyhole Readiness)` heading, naming each colliding package by `name` with its `paths`, so a reader does not take the structure figures as whole-repo. Omit the note when the list is empty or `structure.available` is false (the import graph did not run; there is nothing to qualify).
 
 `attention` ranks the few units landing in the most *negative* findings (`refactor_boundary` never counts) - the "look here first" list, each row carrying its `findings` and `score`. Equal scores order by `stats_summary.top_hotspots` rank (members first), then finding severity (stale-marker severity, or lower `containment_ratio` for `hidden_coupling`), then path, so the order is already the priority. Lead the report's findings with the top of this list. The sibling boolean `attention_low_signal` is true when the top `score` is 1; the ranking is then weak, and only its first row is prescribed.
 
-**Copy `findings_markdown` verbatim.** `run-context.json` carries a pre-rendered `findings_markdown` string - the deterministic findings section (the ten findings with their paths and actions, then the attention list). Paste it into the report **verbatim, inside the `🔎 Cross-layer findings` fold below** - do not paraphrase, summarise, reorder, or drop findings. You write framing prose (the "why these matter here") *inside* the block, directly under its `## Cross-Layer Findings (Keyhole Readiness)` heading - the block already opens with that heading, so **never add your own heading above or around it**; the heading must appear exactly once in the report. The section itself is the deterministic core's product, not yours. This is what makes the findings impossible to omit regardless of which LLM drives the run.
+**Copy `findings_markdown` verbatim.** `run-context.json` carries a pre-rendered `findings_markdown` string - the deterministic findings section (the ten findings with their paths and actions, then the attention list). Paste it into the report **verbatim, inside the `🔎 Cross-practice findings` fold below** - do not paraphrase, summarise, reorder, or drop findings. You write framing prose (the "why these matter here") *inside* the block, directly under its `## Cross-Practice Findings (Keyhole Readiness)` heading - the block already opens with that heading, so **never add your own heading above or around it**; the heading must appear exactly once in the report. The section itself is the deterministic core's product, not yours. This is what makes the findings impossible to omit regardless of which LLM drives the run.
 
 `keyhole_summary` rolls the same findings into a one-line readiness summary (`summary_text`), reported beside the deterministic headline - see the **headline** in the report template below. `prescribed_actions` lists the actions the report MUST include, one per top `attention` row (up to three; one when `attention_low_signal` is true), and `gap_actions` lists `{signal, action, paths}` candidates for the slots left free: instruction files that are all nested (`signal` `layer_grades`, advising a root `AGENTS.md` or `CLAUDE.md` that names the check command, naming the nested files), a missing coverage report (`signal` `coverage_report`, naming the top hotspots to measure) and doc reachability below the 0.50 floor (`signal` `doc_graph`, naming the unreachable docs), `[]` when none fires, or `{available: false, reason}` when the gap scan failed (then fill free slots by judgement) - see the **Mandatory attention rule** in the Top 3 Actions section below.
 
 
 ## Write the Report
 
-Write the report to `$REPO_ROOT/.assess/assess-report.md`. **The headline is not yours to compute.** It is the run context's `headline` block (`lib/headline.py`), a pure function of the commit and the maturity-model version: the autonomy Step with the gate that blocks the next one, then "Catalogue coverage: N of M measured, V verified" with the not-measured count and the model version, then the per-tag strip. Paste `headline.markdown` verbatim. Never write a layered score, a fraction such as "X / 8" or a band name; the per-layer verdicts sit underneath as detail, and they never set the Step.
+Write the report to `$REPO_ROOT/.assess/assess-report.md`. **The headline is not yours to compute.** It is the run context's `headline` block (`lib/headline.py`), a pure function of the commit and the maturity-model version: the autonomy Step with the gate that blocks the next one, then "Catalogue coverage: N of M measured, V verified" with the not-measured count and the model version, then the per-tag strip. Paste `headline.markdown` verbatim. Never write a layered score, a fraction such as "X / 8" or a band name; the per-practice verdicts sit underneath as detail, and they never set the Step.
 
 **Two audiences, one file.** The report serves a human (wants a short, picture-led skim) and an AI agent (wants the full structured detail). The structure below satisfies both: the **default-visible surface is short** - the headline, the Top 3 Actions, and the two SVG images, plus one caveat line - and **everything verbose is relocated into collapsible `<details>` folds**. A collapsed `<details>` keeps its content fully present in the raw markdown, so an agent reading the file sees everything inside the folds; the fold only hides it from a human's *rendered* view. **Folding is presentation, not removal - never delete content to shorten, relocate it into a fold.** Two things never fold: the **headline** and the **Top 3 Actions**. A section-ablation A/B showed that removing the Top 3 made a fresh agent confidently act on the *wrong* (lower-priority) item, so they stay visible and complete.
 
@@ -79,10 +79,10 @@ _A readiness snapshot, not a verdict._ · Keyhole: <paste `keyhole_summary.summa
 > Keep the non-verdict reassurance alive in the *tone* (a Missing or Partial locates where someone is partly blind, it is not a mark against the code) but do not lead with it or restate it as a standalone caveat - the full framing lives in the "How to read" fold. Celebrate what is working before pointing at what to improve.>
 
 <MUTATION_CAVEAT - render this line VERBATIM and above the fold only when mutation testing did not run; omit it entirely when mutation ran. Read `mutation_not_run_cap.applies` from run-context.json (equivalently `mutation_run` is false; task 8 lands this data - read it, do not recompute). When it applies, paste exactly:>
-_Note: Mutation testing was not run. Layer 6 (Coverage) is capped at Partial and truth-pressure remains unproven._
+_Note: Mutation testing was not run. Coverage gates and truth pressure is capped at Partly in place and truth-pressure remains unproven._
 
 <MUTATION_PARTIAL_CAVEAT - render this line VERBATIM and above the fold only when `mutation_not_run_cap.partial` is true (mutation ran, but every group with records stopped at the time budget); omit it otherwise. It never appears together with MUTATION_CAVEAT. When it applies, paste exactly:>
-_Note: Mutation testing stopped at its time budget in every package it ran in. Layer 6 (Coverage) is held at Partial: the figures cover only the fastest mutants, a biased sample._
+_Note: Mutation testing stopped at its time budget in every package it ran in. Coverage gates and truth pressure is held at Partly in place: the figures cover only the fastest mutants, a biased sample._
 
 > **Agents start here.** The prioritized Top 3 actions below are also machine-readable in `.assess/actions.json` (schema v2: every entry carries `rank`, `action`, `done_when`, and `scope_fence`, plus the lifecycle fields `status` / `claimed_by` / `completed_sha` and a derived execution `mode`). Read that file to pick up the work - even with a smaller model - without parsing this report's prose.
 <!-- Paste this "Agents start here" pointer VERBATIM (it is a deterministic fixed string keyed to the actions.json v2 schema, not prose to rewrite or embellish). It must sit above the first fold, pointing the reader at the durable machine-readable Top-3 contract before the human-readable table below. -->
@@ -91,11 +91,11 @@ _Note: Mutation testing stopped at its time budget in every package it ran in. L
 
 <one orientation sentence: which attention paths Actions 1-2 cover and which scorecard gap Action 3 closes.>
 
-| # | Action | Layer | Effort | Command / First Step | Done when | Scope fence | Hotspot files this addresses | Issue |
+| # | Action | Practice | Effort | Command / First Step | Done when | Scope fence | Hotspot files this addresses | Issue |
 |---|--------|-------|--------|---------------------|-----------|-------------|------------------------------|-------|
-| 1 | <one-line action - if `prescribed_actions` is non-empty, rank 1's action and path go here> | <layer number> | <small/medium/large> | `<exact command or file to edit>` | <verifiable exit criterion> | <what NOT to touch> | <paths from top_hotspots / top_complex / top_large, or "-" if not file-specific> | - |
-| 2 | <one-line action - rank 2 from `prescribed_actions` if present, else the next unused `gap_actions` entry, else judgement> | <layer number> | <small/medium/large> | `<exact command or file to edit>` | <verifiable exit criterion> | <what NOT to touch> | <paths or -> | - |
-| 3 | <one-line action - rank 3 from `prescribed_actions` if present, else the next unused `gap_actions` entry, else judgement> | <layer number> | <small/medium/large> | `<exact command or file to edit>` | <verifiable exit criterion> | <what NOT to touch> | <paths or -> | - |
+| 1 | <one-line action - if `prescribed_actions` is non-empty, rank 1's action and path go here> | <practice title> | <small/medium/large> | `<exact command or file to edit>` | <verifiable exit criterion> | <what NOT to touch> | <paths from top_hotspots / top_complex / top_large, or "-" if not file-specific> | - |
+| 2 | <one-line action - rank 2 from `prescribed_actions` if present, else the next unused `gap_actions` entry, else judgement> | <practice title> | <small/medium/large> | `<exact command or file to edit>` | <verifiable exit criterion> | <what NOT to touch> | <paths or -> | - |
+| 3 | <one-line action - rank 3 from `prescribed_actions` if present, else the next unused `gap_actions` entry, else judgement> | <practice title> | <small/medium/large> | `<exact command or file to edit>` | <verifiable exit criterion> | <what NOT to touch> | <paths or -> | - |
 
 **Done when** is the action's exit criterion and it must be *checkable, not aspirational*. State it in the repository's own terms first, so a maintainer without the plugin can check it: a command whose pass state defines done (`golangci-lint run` reports 0 new issues; `bats tests/` passes), a file state (`AGENTS.md` names the check command), or a CI result (the `lint` job runs `actionlint` and is green). A re-run criterion (`max_fn_ccn` of the named function drops below the threshold in a re-run's stats sidecar; the finding no longer lists the path) may follow, but never as the only one. An executing agent - especially a smaller model - uses this to know when to stop; an action without a verifiable exit invites either premature "done" claims or runaway scope.
 
@@ -254,25 +254,27 @@ Colour = staleness (vivid red = a frozen doc beside churning code = a lying map)
 </details>
 
 <details>
-<summary>📊 Full scorecard (per-layer evidence & gaps)</summary>
+<summary>📊 Full scorecard (per-practice evidence & gaps)</summary>
 
-The headline and the keyhole summary measure **different things and are never combined.** The Step and the verified tally answer _"which contracts are in place to catch problems?"_ (a property of the contracts and enforcement). The Keyhole Readiness summary answers _"where is today's structural pain?"_ - a pure count of structural concerns and safe zones rolled up from the ten cross-layer findings. A repo can hold Step 3 and still carry many structural concerns (strong contracts over churning legacy), or Step 1 with zero concerns (small, calm codebase). Report both side by side; never average, rescale, or fold one into the other. The per-layer rows below are detail under the headline: they explain it and never set it.
+The headline and the keyhole summary measure **different things and are never combined.** The Step and the verified tally answer _"which contracts are in place to catch problems?"_ (a property of the contracts and enforcement). The Keyhole Readiness summary answers _"where is today's structural pain?"_ - a pure count of structural concerns and safe zones rolled up from the ten cross-practice findings. A repo can hold Step 3 and still carry many structural concerns (strong contracts over churning legacy), or Step 1 with zero concerns (small, calm codebase). Report both side by side; never average, rescale, or fold one into the other. The per-practice rows below are detail under the headline: they explain it and never set it.
 
-The **What it asks** column is the question that layer answers for an agent working here - read it first; the framework name is secondary. The **Band** orders them by dependency: a read-side blind spot makes the write-side scores mean less (you can't trust enforcement of a picture you can't see), and the meta band only matters once the rest works.
+**Name each row by its practice, never by a layer number.** The scorer returns its verdicts keyed by the internal layer ids L0-L8; render each as the practice title of the maturity-model row it scores (the `title` in `levels/default.toml`), in the order above, and use the same title in the Top 3 Actions Practice column and the Lying Signals Practice column. Layer numbers are an internal name and never appear in the report.
+
+The **What it asks** column is the question that row answers for an agent working here - read it first; the framework name is secondary. The **Band** orders them by dependency: a read-side blind spot makes the write-side scores mean less (you can't trust enforcement of a picture you can't see), and the meta band only matters once the rest works.
 
 **Status labels (display only).** The scorer returns `Present`, `Partial`, `Missing` or `N/A`; render the Status cell as **In place**, **Partly in place**, **Next up** or **N/A**, and keep the scorer's token everywhere it is data (`layer_scores`, the finalize input). Write the Status, Evidence and Gap cells of this scorecard in the supportive vocabulary: the banned words of the deterministic vocabulary list (tangled, penalty, weakest, weak, lying, missing, fail, fails, failed, failing, failure, and the retired band labels Not Ready, Basic, Solid, AI-Native) stay out of those cells, and a gap reads as the next goal, never a verdict on the people who built the repository. This rule covers the scorecard cells only; the fixed headings and lines the rest of this template prescribes are unchanged here.
 
-| Layer | What it asks | Band | Status | Evidence | Gap |
-|-------|--------------|------|--------|----------|-----|
-| 0: Agent Instructions & Navigability | Can I build a true map of this codebase before I touch it? | read | In place/Partly in place/Next up | <what was found> | <what's next> |
-| 1: Runtime Legibility / Liveness | Can I see which parts are live, which need attention, and which are dead weight? | read | In place/Partly in place/Next up | <what was found - if rung 3, append: "Reachable *if* the agent has `<tools cited in runbooks>` in its execution environment"; if no deployed runtime, note that liveness is read through complexity + churn + reachability, not telemetry> | <what's next> |
-| 2: Code Design | Will the type-checker catch my mistakes? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
-| 3: Linters | Are complexity and style bounds enforced, or will my code drift? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
-| 4: Architecture Tests | Are the structural conventions executable, or just folklore? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
-| 5: CI Pipeline | Does something automatically catch a bad change before it merges? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
-| 6: Coverage Gates | Do the tests constrain behaviour, or just execute lines? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
-| 7: Code Review Bots | Is there design-level feedback on every change? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
-| 8: AI Project Mgmt (capstone) | Do learnings feed back into the contracts, or evaporate? | meta | In place/Partly in place/Next up | <what was found> | <what's next> |
+| Practice | What it asks | Band | Status | Evidence | Gap |
+|----------|--------------|------|--------|----------|-----|
+| Agent instructions | Can I build a true map of this codebase before I touch it? | read | In place/Partly in place/Next up | <what was found> | <what's next> |
+| Runtime legibility | Can I see which parts are live, which need attention, and which are dead weight? | read | In place/Partly in place/Next up | <what was found - if rung 3, append: "Reachable *if* the agent has `<tools cited in runbooks>` in its execution environment"; if no deployed runtime, note that liveness is read through complexity + churn + reachability, not telemetry> | <what's next> |
+| Code design (module structure) | Will the type-checker catch my mistakes? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
+| Linters run in CI, suppression cap | Are complexity and style bounds enforced, or will my code drift? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
+| Architecture boundaries and size | Are the structural conventions executable, or just folklore? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
+| CI and the agent's local check | Does something automatically catch a bad change before it merges? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
+| Coverage gates and truth pressure | Do the tests constrain behaviour, or just execute lines? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
+| Review on merged pull requests | Is there design-level feedback on every change? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
+| AI project management (capstone) | Do learnings feed back into the contracts, or evaporate? | meta | In place/Partly in place/Next up | <what was found> | <what's next> |
 
 **Archetype-aware Status (`N/A` ≠ `Missing`).** When the scorecard marks a layer **N/A** (the write-side layers L2-L7 on a detected knowledge base - see the headline section below), render its Status cell as `N/A`, its Evidence as "not applicable - <archetype> repo has no code surface for this layer", and its Gap as "-". **Never render an N/A layer as Missing** and never propose a remediation action for it: Missing is a real gap (the contributor is asked to be careful where a guardrail could exist); N/A means the layer cannot apply here. An N/A layer names no gap, so a knowledge base strong on its applicable layers reads as ready, not as failing the layers it has no surface for.
 
@@ -307,21 +309,21 @@ Each Step names the agent **autonomy** this repo's contracts support, in the voc
 </details>
 
 <details>
-<summary>🔎 Cross-layer findings & lying signals (keyhole detail)</summary>
+<summary>🔎 Cross-practice findings & lying signals (keyhole detail)</summary>
 
 ### Lying Signals
 
 These artefacts look true but aren't - the most dangerous failure mode for an agent navigating the codebase. Each row is something the repo presents as trustworthy that a scan flagged as hollow: a map of a place that moved, code that reads as live but is never called, a gate that reports "tested" without pinning behaviour.
 
-| Layer | Signal Type | Instance | Why it lies |
-|-------|-------------|----------|-------------|
-| 0 | Stale hub doc | `<path>` (<N>d stale; subject churned <M> commits in window) | A central doc agents anchor on, frozen while its subject code moves - reads as the map, describes terrain that no longer exists |
-| 0 | False instruction claim | `<file>:<line>` - `<path>` (<kind>) | The agent instruction file states enforcement, a pin or a file count the repo does not back - an agent trusts the rule as guarded when nothing checks it |
-| 0 | Ignored Claude Code config | `<file>:<line>` - `<key>: <value>` (<kind>) | A skill, command or agent field Claude Code drops without an error - the configuration reads as set while the runtime ignores it |
-| 1 | Dead-but-present | `<path>` - `<symbol>` (<kind>) | Compiles and reads as live, but nothing in *this* repo calls it - an agent extends or trusts a path that is never exercised |
-| 5 | Config snapshot drift | `<file>` - `<key>` (tracked <T>, live <L>) | A committed copy of platform configuration that reads as restorable truth while the live setting has moved - restoring it silently reverts a deliberate change |
-| 6 | Green-but-hollow | `<path>` (coverage <C>% vs mutation <K>%) | Tests execute the file (green coverage) but don't constrain it (mutants survive) - the gate says "tested" while behaviour is unpinned |
-| 7 | Hollow required review | `review_reality` (<R>% of <N> merged PRs reviewed, <A>% approved, by someone other than the author; <S>% self-merged) | The branch rules require an approving review, so review reads as enforced, while merges land without one - the gate is bypassed as routine |
+| Practice | Signal Type | Instance | Why it lies |
+|----------|-------------|----------|-------------|
+| Agent instructions | Stale hub doc | `<path>` (<N>d stale; subject churned <M> commits in window) | A central doc agents anchor on, frozen while its subject code moves - reads as the map, describes terrain that no longer exists |
+| Agent instructions | False instruction claim | `<file>:<line>` - `<path>` (<kind>) | The agent instruction file states enforcement, a pin or a file count the repo does not back - an agent trusts the rule as guarded when nothing checks it |
+| Agent instructions | Ignored Claude Code config | `<file>:<line>` - `<key>: <value>` (<kind>) | A skill, command or agent field Claude Code drops without an error - the configuration reads as set while the runtime ignores it |
+| Runtime legibility | Dead-but-present | `<path>` - `<symbol>` (<kind>) | Compiles and reads as live, but nothing in *this* repo calls it - an agent extends or trusts a path that is never exercised |
+| CI and the agent's local check | Config snapshot drift | `<file>` - `<key>` (tracked <T>, live <L>) | A committed copy of platform configuration that reads as restorable truth while the live setting has moved - restoring it silently reverts a deliberate change |
+| Coverage gates and truth pressure | Green-but-hollow | `<path>` (coverage <C>% vs mutation <K>%) | Tests execute the file (green coverage) but don't constrain it (mutants survive) - the gate says "tested" while behaviour is unpinned |
+| Review on merged pull requests | Hollow required review | `review_reality` (<R>% of <N> merged PRs reviewed, <A>% approved, by someone other than the author; <S>% self-merged) | The branch rules require an approving review, so review reads as enforced, while merges land without one - the gate is bypassed as routine |
 
 **Populate each row from `run-context.json`; omit any row whose signal is absent or below threshold, and omit the entire Lying Signals subsection when no row qualifies:**
 
@@ -354,7 +356,7 @@ These artefacts look true but aren't - the most dangerous failure mode for an ag
 
 <From `guardrails`: do the instruction files tell an agent what the gates enforce, so the next session does not trip over the same gate? Open with one line: "<stated> of <enforced> configured gates are stated in the instruction files". Then **In place**: one bullet per gate with `stated: true`, `<kind>` (`<tool>` `<rule>`, threshold `<threshold>` when not null) at `<file>[:<line>]`, stated in `<stated_in>`. Then **Next steps**: one bullet per gate with `stated: false`, the gate as above, followed by its `snippet` verbatim in a code span as the line to add to `CLAUDE.md` or `AGENTS.md`. Never rewrite a snippet and never write one for a gate the block does not list. With `enforced` 0, one line: "no configured gate found to state" and the `not_read` forms. `available: false`: "guardrails not checked" with the `reason`. Supportive voice: a stated gate is something the repository already does well, an unstated one is a ready line to add, never a failing. Adding the snippets is a Top 3 candidate when two or more gates are unstated. Not a lying-signal row.>
 
-<paste the `findings_markdown` string from run-context.json verbatim here - it renders as a `## Cross-Layer Findings (Keyhole Readiness)` block with the ten findings, their paths, their deterministic actions, and the attention list. Do not paraphrase, summarise, reorder, or drop any finding. The block's own `## Cross-Layer Findings (Keyhole Readiness)` line is the section's ONLY heading - never add a framing heading of your own (no `### Cross-Layer Findings (Keyhole Readiness)` above the block; the heading must appear exactly once in the report). If a sentence or two of framing helps a reader, place it directly under the block's heading line, before the first `###` finding; the findings and attention list themselves are copied, not rewritten.>
+<paste the `findings_markdown` string from run-context.json verbatim here - it renders as a `## Cross-Practice Findings (Keyhole Readiness)` block with the ten findings, their paths, their deterministic actions, and the attention list. Do not paraphrase, summarise, reorder, or drop any finding. The block's own `## Cross-Practice Findings (Keyhole Readiness)` line is the section's ONLY heading - never add a framing heading of your own (no `### Cross-Practice Findings (Keyhole Readiness)` above the block; the heading must appear exactly once in the report). If a sentence or two of framing helps a reader, place it directly under the block's heading line, before the first `###` finding; the findings and attention list themselves are copied, not rewritten.>
 
 </details>
 
@@ -380,7 +382,7 @@ This is an improvement roadmap, not a verdict. It measures one thing: **is the c
 
 - **Where the codebase is today** - the complexity heatmap shows current complexity and churn. Vivid red = complex AND actively changing = the files most likely to bite an agent (or a human) next week.
 - **Whether an agent can navigate it** - the doc graph shows the docs' link structure: how much is reachable from the entry point, and which docs are stale maps of churning code.
-- **What keeps it from getting worse** - the headline: the autonomy Step the contracts support and the practices in place behind it, with the per-layer scorecard underneath across three bands: read-side foundation (can the agent form a true picture?), write-side enforcement (can it be trusted to produce good output?), and meta (does the system keep itself honest over time?).
+- **What keeps it from getting worse** - the headline: the autonomy Step the contracts support and the practices in place behind it, with the per-practice scorecard underneath across three bands: read-side foundation (can the agent form a true picture?), write-side enforcement (can it be trusted to produce good output?), and meta (does the system keep itself honest over time?).
 
 A codebase can hold Step 4 and still be on fire (strong contracts, legacy debt) - or Step 1 with a calm treemap (small codebase, no enforcement needed yet). The views matter together.
 

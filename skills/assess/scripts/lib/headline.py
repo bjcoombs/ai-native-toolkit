@@ -15,7 +15,8 @@ lines that lead name gates, never a count. The lines, in order:
    It never names a count of practices and never picks a condition by model order. A
    not-measured gate says so with its reason, and a gate whose condition the owner
    excluded (#910) says "excluded by owner: <kind>; the Step waits while the exclusion
-   stands". At the top Step it says the Step holds while its gates hold;
+   stands" (``gate_change``, public so the Step ladder's caption words gates the same
+   way). At the top Step it says the Step holds while its gates hold;
 3. catalogue coverage: ``Catalogue coverage: N of M measured, V verified · K not measured
    (reasons) · model <version>``. N is ``tally.met``, M is ``tally.measured`` (measured
    conditions only), V the share of N graded ``verified``, K is ``tally.not_measured``
@@ -64,7 +65,8 @@ from lib.levels import MaturityModel
 #   "Catalogue coverage". No key is added or removed.
 HEADLINE_VERSION = 3
 
-__all__ = ["Headline", "as_headline", "headline", "run_context_headline", "tag_cells"]
+__all__ = ["GATE_CHANGE", "GATE_NOUN", "Headline", "as_headline", "gate_change", "headline", "reason_word",
+           "run_context_headline", "tag_cells", "verified_count"]
 
 # The change that holds each Step gate, as the Next line words it. A gate id the
 # table does not know (a caller's own model) reads "the <id> gate holds".
@@ -118,7 +120,9 @@ def reason_word(code: str) -> str:
     return words.strip()
 
 
-def _gate_change(blocker: Blocker) -> str:
+def gate_change(blocker: Blocker) -> str:
+    """A blocking gate as the Next line words it: its ``GATE_CHANGE`` change, plus why it is open
+    when it was not measured or the owner excluded it. The Step ladder's caption reads it too."""
     gate = blocker.get("gate", "")
     change = GATE_CHANGE.get(gate, f"the {gate} gate holds")
     if blocker.get("disposition") == "excluded_by_owner":
@@ -135,7 +139,7 @@ def _next_line(level: LevelResult, names: Mapping[int, str]) -> str:
     if nxt is None:
         top = level["step"]
         return f"Next: Step {top} is the top Step; it holds while its gates hold"
-    changes = [_gate_change(b) for b in nxt["blockers"] if b["kind"] == "gate"]
+    changes = [gate_change(b) for b in nxt["blockers"] if b["kind"] == "gate"]
     unlock = " and ".join(changes) if changes else "its gates hold"
     return f"Next: Step {nxt['step']} · {names.get(nxt['step'], '')} unlocks when {unlock}"
 

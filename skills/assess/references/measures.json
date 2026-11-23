@@ -44,7 +44,7 @@
   "rows": [
     {
       "id": "layer-0-instructions",
-      "title": "Layer 0: agent instructions",
+      "title": "Agent instructions",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -161,7 +161,7 @@
     },
     {
       "id": "layer-1-liveness",
-      "title": "Layer 1: runtime legibility",
+      "title": "Runtime legibility",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -237,7 +237,7 @@
     },
     {
       "id": "layer-2-design",
-      "title": "Layer 2: code design (module structure)",
+      "title": "Code design (module structure)",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -334,7 +334,7 @@
     },
     {
       "id": "layer-3-linters",
-      "title": "Layer 3: linters run in CI, suppression cap",
+      "title": "Linters run in CI, suppression cap",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -431,7 +431,7 @@
     },
     {
       "id": "layer-4-architecture",
-      "title": "Layer 4: architecture boundaries and size",
+      "title": "Architecture boundaries and size",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -509,7 +509,7 @@
     },
     {
       "id": "layer-5-ci",
-      "title": "Layer 5: CI and the agent's local check",
+      "title": "CI and the agent's local check",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -588,7 +588,7 @@
     },
     {
       "id": "layer-6-coverage",
-      "title": "Layer 6: coverage gates and truth pressure",
+      "title": "Coverage gates and truth pressure",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -668,7 +668,7 @@
     },
     {
       "id": "layer-7-review",
-      "title": "Layer 7: review on merged pull requests",
+      "title": "Review on merged pull requests",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -763,7 +763,7 @@
     },
     {
       "id": "layer-8-agent-ops",
-      "title": "Layer 8: AI project management",
+      "title": "AI project management",
       "scope": "team",
       "aggregation": "min",
       "levels": [

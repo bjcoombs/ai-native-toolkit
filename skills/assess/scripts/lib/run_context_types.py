@@ -350,7 +350,7 @@ class CouplingRow(TypedDict):
     coupled_pairs_total: NotRequired[int]
 
 
-# --- keyhole_signals: the cross-layer blocks and derived findings ----------
+# --- keyhole_signals: the cross-practice blocks and derived findings ----------
 
 class BehaviourFields(TypedDict):
     """The behaviour block's data keys, present on every path."""

@@ -1,6 +1,6 @@
 """Deterministic layer grades as one signals block (issue #620).
 
-The core computes some per-layer grades with no model in the path, but keeps
+The core computes some per-practice grades with no model in the path, but keeps
 them as run-context header keys (``instructions_grade``) that the headless
 signals document never carries, so a maturity model could not name them. This
 block republishes them under one registered scan, ``layer_grades``: the same
