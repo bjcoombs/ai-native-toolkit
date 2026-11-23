@@ -17,13 +17,13 @@ import pytest
 
 from assess_report import GLOSSARY_LINE, render_summary_section
 from lib.assess_diagrams import waffle_caption
+from lib.headline import GLOSSARY_URL
 from lib.levels import load_levels
 from lib.signal_grades import DEFAULT_LEVELS, INPUT_GRADES
 from lib.vocabulary import banned_hits
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 GLOSSARY = REPO_ROOT / "docs" / "glossary.md"
-GLOSSARY_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md"
 FINDINGS_SKILL = REPO_ROOT / "skills" / "assess-findings" / "SKILL.md"
 README = REPO_ROOT / "README.md"
 INDEX = REPO_ROOT / "docs" / "index.md"

@@ -8,11 +8,11 @@ How much an AI agent can safely do in your repository on its own, from Step 1, w
 
 ### Gate
 
-A single check that a Step needs: an instruction file agents read, CI that runs the tests, or a minimum test coverage that CI enforces. A Step is reached when all of its gates are met, and a gate the run could not check does not count as met yet.
+A single check that a Step needs: an instruction file agents read, CI that turns red when a test breaks, or a minimum test coverage that CI enforces. A Step is reached when all of its gates are met, and a gate the run could not check does not count as met yet.
 
 ### Practice
 
-One area of good engineering habits that `/assess` looks at, such as agent instructions or review on merged pull requests. Each practice is checked at one or more levels.
+One area of good engineering habits that `/assess` looks at, such as agent instructions or review on merged pull requests, checked at one or more levels. Where the report counts practices in place, it counts the levels met, one per condition.
 
 ### Level
 

@@ -589,14 +589,13 @@ def render_since_section(ctx: dict[str, Any]) -> str:
     return f"## Since Last Run\n\n{block['markdown']}\n\n"
 
 
-_GLOSSARY = GLOSSARY_URL
 # The fixed line under the executive summary (#1102 part B): each term the summary
 # introduces links to its plain-English entry. skills/assess-findings/SKILL.md carries it
 # verbatim, so both report paths match (tests/test_glossary.py).
 GLOSSARY_LINE = (
-    f"_New to these words? The [glossary]({_GLOSSARY}) explains [Step]({_GLOSSARY}#step), "
-    f"[gate]({_GLOSSARY}#gate), [practice]({_GLOSSARY}#practice), [level]({_GLOSSARY}#level), "
-    f"[evidence grade]({_GLOSSARY}#evidence-grade) and [truth tag]({_GLOSSARY}#truth-tag) "
+    f"_New to these words? The [glossary]({GLOSSARY_URL}) explains [Step]({GLOSSARY_URL}#step), "
+    f"[gate]({GLOSSARY_URL}#gate), [practice]({GLOSSARY_URL}#practice), [level]({GLOSSARY_URL}#level), "
+    f"[evidence grade]({GLOSSARY_URL}#evidence-grade) and [truth tag]({GLOSSARY_URL}#truth-tag) "
     "in a sentence or two each._"
 )
 
