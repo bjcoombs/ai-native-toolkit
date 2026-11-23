@@ -179,7 +179,8 @@ def test_a_maturity_model_can_read_the_either_share(tmp_path: Path) -> None:
 # --- matcher -----------------------------------------------------------------
 
 @pytest.mark.parametrize(("username", "bucket"), [
-    ("claude[bot]", AGENT), ("devin-ai-integration[bot]", AGENT), ("Copilot", AGENT),
+    ("claude[bot]", AGENT), ("devin-ai-integration[bot]", AGENT),
+    ("Copilot", OTHER),  # a name-only login: a hint until confirmed (#883)
     ("copilot-swe-agent[bot]", AGENT), ("renovate-bot", DEPENDENCY_BOT),
     ("renovate[bot]", DEPENDENCY_BOT), ("dependabot[bot]", DEPENDENCY_BOT),
     ("project_7_bot_0a1b2c", TOKEN_USER), ("group_9_bot_ffee", TOKEN_USER),

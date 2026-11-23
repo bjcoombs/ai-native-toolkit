@@ -13,7 +13,9 @@ from lib.liveness_scan import scan_observability
 def _write(root: Path, rel: str, text: str) -> None:
     p = root / rel
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(text, encoding="utf-8")
+    # newline="": the same bytes on every platform, so the head-size tests hold on
+    # Windows; CRLF has its own test below.
+    p.write_text(text, encoding="utf-8", newline="")
 
 
 def _detect(root: Path) -> tuple[list[str], list[str]]:
@@ -144,6 +146,7 @@ def test_the_rust_log_crate_is_credited(tmp_path: Path) -> None:
     '[build-dependencies]\nlog = "0.4"\n',
     '[package]\nname = "x"\ndescription = "fast tracing of log files"\n',
     '[dependencies\nbroken = ',
+    'workspace = 1\n',
 ])
 def test_rust_tracing_outside_runtime_dependencies_is_not_credited(tmp_path: Path,
                                                                    text: str) -> None:
@@ -245,3 +248,13 @@ def test_bytes_read_on_a_large_no_match_tree_are_bounded(
     assert _detect(tmp_path) == ([], [])
     assert len(read_bytes) == 60
     assert sum(read_bytes) <= 60 * inst.HEAD_BYTES
+
+
+@pytest.mark.parametrize(("rel", "text", "label"), CODE_FORMS)
+def test_a_crlf_source_file_is_read_like_an_lf_one(tmp_path: Path, rel: str, text: str,
+                                                   label: str) -> None:
+    """Windows checkouts write CRLF; a "$"-anchored rule must still match."""
+    p = tmp_path / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(text.replace("\n", "\r\n").encode("utf-8"))
+    assert _detect(tmp_path) == ([label], ["code"])

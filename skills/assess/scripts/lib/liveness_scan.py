@@ -435,9 +435,10 @@ def scan_dead_code(repo_root: Path, run: bool = True,
 # Filename / directory signal: a file or dir literally named for runbooks /
 # observability / dashboards is a strong single-hit signal. On-call is anchored on
 # word or path-segment boundaries so ordinary words that contain it
-# ("function-call", "non-callable") do not read as runbooks (#823).
+# ("function-call", "non-callable") do not read as runbooks (#823). A plural or a
+# CamelCase continuation ("oncalls", "OnCallGuide") still matches.
 _RUNBOOK_NAME_RE = re.compile(
-    r"(observability|runbook|(?:^|[-_ /])on[-_ ]?call(?:[-_ ./]|$)|dashboards?)",
+    r"(observability|runbook|(?:^|[-_ /])on[-_ ]?calls?(?:[-_ ./]|$|(?-i:[A-Z]))|dashboards?)",
     re.IGNORECASE)
 # Path classes whose docs never count as the repository's runbooks (#823): a
 # test or fixture doc describes the code under test, not this repository.

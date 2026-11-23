@@ -133,9 +133,12 @@ def _read_head(path: Path) -> str:
     """The first ``HEAD_BYTES`` of a file as text, empty when it cannot be read."""
     try:
         with path.open("rb") as handle:
-            return handle.read(HEAD_BYTES).decode("utf-8", errors="ignore")
+            head = handle.read(HEAD_BYTES).decode("utf-8", errors="ignore")
     except OSError:
         return ""
+    # Line-anchored rules end at "$", which stops before "\n" but not before a
+    # CRLF file's "\r", so normalise line endings first.
+    return head.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _cargo_crates(text: str) -> set[str]:
@@ -144,8 +147,9 @@ def _cargo_crates(text: str) -> set[str]:
         doc = tomllib.loads(text)
     except tomllib.TOMLDecodeError:
         return set()
+    workspace = doc.get("workspace")
     tables: list[Any] = [doc.get("dependencies"),
-                         doc.get("workspace", {}).get("dependencies")]
+                         workspace.get("dependencies") if isinstance(workspace, dict) else None]
     target = doc.get("target")
     if isinstance(target, dict):
         tables += [t.get("dependencies") for t in target.values() if isinstance(t, dict)]

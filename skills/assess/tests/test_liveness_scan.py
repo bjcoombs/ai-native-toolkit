@@ -297,7 +297,7 @@ def test_a_word_containing_on_call_is_not_a_runbook(tmp_path: Path, rel: str) ->
 
 @pytest.mark.parametrize("rel", [
     "docs/on-call.md", "docs/oncall.md", "docs/on_call_rota.md", "on-call/escalation.md",
-    "docs/team-oncall.md",
+    "docs/team-oncall.md", "docs/OnCallGuide.md", "docs/oncalls.md",
 ])
 def test_an_on_call_doc_is_a_runbook(tmp_path: Path, rel: str) -> None:
     _write(tmp_path, "requirements.txt", "structlog\n")

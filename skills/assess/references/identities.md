@@ -2,7 +2,7 @@
 
 Loaded by `/assess` after the deterministic core, on the first interactive run and whenever `ai_usage.identities_awaiting_confirmation` is above 0.
 
-Pinned lists count only the unambiguous agent accounts (an agent app such as `claude[bot]`, a vendor address such as `noreply@anthropic.com`) and AI co-author trailers. Every other account that looks automated is **awaiting confirmation**: it counts as nothing until the human classifies it, and `ai_usage.identities_awaiting_confirmation` gives the number (a count, never a name). The answers live in a committed `[identities]` section of `.assess/config.toml`, so the level stays a function of the commit:
+Pinned lists count only the unambiguous agent accounts (a `[bot]`-suffix agent app such as `claude[bot]`) and AI co-author trailers. A name-only pinned match, such as the `noreply@anthropic.com` address or the `copilot` login, is a hint (#883): a person can commit under one, so it is listed with the `pinned_agent_hint` evidence and counts only once confirmed as an agent. Every other account that looks automated is **awaiting confirmation**: it counts as nothing until the human classifies it, and `ai_usage.identities_awaiting_confirmation` gives the number (a count, never a name). The answers live in a committed `[identities]` section of `.assess/config.toml`, so the level stays a function of the commit:
 
 ```toml
 [identities]  # literal e-mails or logins, matched case-insensitively; never patterns
@@ -11,7 +11,7 @@ bots = ["codecov[bot]", "renovate[bot]"]        # automation (dependency, covera
 people = ["ann@example.com"]                    # people: never counted as agents
 ```
 
-An entry matches the author e-mail, the login a noreply address carries (`22429695+codecov[bot]@users.noreply.github.com` is `codecov[bot]`) or a `[bot]` display name. A confirmed class wins over every pinned agent rule, so a person named "Cursor" never counts unless confirmed as an agent. The one exception is a dependency bot (Renovate, Dependabot: `dependency_bot_hint`): it stays in `ai_usage.dependency_bot_commits` whatever the answer, so an agent answer for one changes no count. It is still listed so the answer clears it from the awaiting count; offer **Automation bot** as the expected answer for it. The same section in a `--fleet-config` file extends each repository's (lists append, #706).
+An entry matches the author e-mail, the login a noreply address carries (`22429695+codecov[bot]@users.noreply.github.com` is `codecov[bot]`) or a `[bot]` display name. A confirmed class wins over every pinned agent rule, so a person named "Cursor" never counts unless confirmed as an agent. The one exception is a dependency bot (Renovate, Dependabot: `dependency_bot_hint`): it stays in `ai_usage.dependency_bot_commits` whatever the answer, so an agent answer for one changes no count. It is still listed so the answer clears it from the awaiting count; offer **Automation bot** as the expected answer for it. The same section in a `--fleet-config` file extends each repository's (lists append, #706). The listing reads git history only, so an account that reviews but never commits (a GitLab AI review app, whose name alone is a hint there, #883) is never listed: add it to `agents` by hand to count its notes as AI review. A `--platform` run counts such accounts in `delivery.unconfirmed_ai_accounts` and reads the share they would decide (and the first-human-comment percentiles when one posts before the first person) as null until they are confirmed; state that count as a next step too.
 
 List the accounts awaiting confirmation (deterministic, never prompts, prints to the terminal only):
 
@@ -22,7 +22,7 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/identity_candidates.py" "$REPO_ROOT"        
 
 `--window` (default `6mo`, the headless default; `all-time` for full history) should match the run's `ai_usage.window` when it differs, so the listing covers the commits the count covered.
 
-Each line names the account, its commits and its evidence (`bot_suffix`, `gitlab_token_user`, `dependency_bot_hint`, `agent_name_hint`, `automation_name_hint`, with `co_author_trailer`, `noreply_address` and `uniform_subjects` as supporting evidence). In an interactive run with at least one candidate, ask **one round of AskUserQuestion calls**, at most four questions per call and one question per candidate, showing the evidence, with the options **AI agent**, **Automation bot** and **Person**. Record the answers (quote each `--confirm` value: `[bot]` is a shell glob), then re-run the core so `ai_usage` reads them:
+Each line names the account, its commits and its evidence (`bot_suffix`, `gitlab_token_user`, `dependency_bot_hint`, `pinned_agent_hint`, `agent_name_hint`, `automation_name_hint`, with `co_author_trailer`, `noreply_address` and `uniform_subjects` as supporting evidence). In an interactive run with at least one candidate, ask **one round of AskUserQuestion calls**, at most four questions per call and one question per candidate, showing the evidence, with the options **AI agent**, **Automation bot** and **Person**. Record the answers (quote each `--confirm` value: `[bot]` is a shell glob), then re-run the core so `ai_usage` reads them:
 
 ```bash
 uv run "${CLAUDE_SKILL_DIR}/scripts/identity_candidates.py" "$REPO_ROOT" --confirm agent=cursor@example.com --confirm 'bot=codecov[bot]'
