@@ -39,9 +39,9 @@ skipped) is classified once, first rule that applies:
 4a. **Unconfirmed AI hint** (#883): a username in ``delivery.AI_REVIEWERS`` (``[bot]``
    dropped) or an ``AGENT_HINT_RULES`` login, not in ``[identities]``. GitLab has no bot
    flag, so a person can hold one of those names: the note could be AI review or a
-   human comment. With no AI review found, ``ai_review`` is None; before the first
-   human comment (or with none), ``human_comment`` and ``first_human_comment_at`` are
-   None. ``NoteFacts.hints`` keeps the usernames in memory for ``delivery``'s
+   human comment. With no AI review found, ``ai_review`` is None; with no human comment,
+   ``human_comment`` is None; before the first human comment, only
+   ``first_human_comment_at`` is None (a person did comment). ``NoteFacts.hints`` keeps the usernames in memory for ``delivery``'s
    ``unconfirmed_ai_accounts`` count. Confirming the account as an agent (AI review) or
    a person (human comment) decides it.
 5. **Human comment**: anyone else. The first one's ``created_at`` is
@@ -76,7 +76,8 @@ ai_review_markers` string (case-insensitive substring), whoever else posted it; 
 its author is in the `agent` bucket of `agent_identity.AuthorMatcher.classify_username`
 (confirmed, a config rule or a `[bot]` pinned app); nothing for an unconfirmed name-only AI
 match (`is_hint`, #883: a `delivery.AI_REVIEWERS` username, `[bot]` dropped, or an
-`AGENT_HINT_RULES` login) leaves AI review, and a human comment it precedes, undecided (None)
+`AGENT_HINT_RULES` login) leaves AI review undecided (None), a missing human comment
+undecided, and the first human comment's time undecided when it precedes it
 and is kept in `NoteFacts.hints` (in memory; `delivery` counts them); nothing for an account
 confirmed as a bot, automation, a
 dependency bot or a `project_<id>_bot_<hash>` / `group_<id>_bot_<hash>` access-token user
@@ -207,8 +208,9 @@ def note_facts(notes: Sequence[Any], mr_author: str | None, classifier: NoteClas
     """The facts of one merge request's notes (oldest first). ``complete`` is False when
     the read may have stopped before the last note; then an undecided fact is None. An
     unconfirmed name-only AI account's note (``is_hint``, #883) could be AI review or a
-    person's comment, so with no AI review found ``ai_review`` is None, and coming before
-    the first human comment (or with none) it makes ``human_comment`` None."""
+    person's comment, so with no AI review found ``ai_review`` is None; with no human
+    comment ``human_comment`` is None, and coming before the first human comment it makes
+    only ``first_human_comment_at`` None (a person did comment)."""
     human = ai = False
     first_human: str | None = None
     hints: set[str] = set()
@@ -236,11 +238,10 @@ def note_facts(notes: Sequence[Any], mr_author: str | None, classifier: NoteClas
             human = True
             stamp = note.get("created_at")
             first_human = stamp if isinstance(stamp, str) and stamp else None
-    human_known = (human or complete) and not hint_before_human
     return NoteFacts(
-        human_comment=human if human_known else None,
+        human_comment=True if human else (None if hints or not complete else False),
         ai_review=ai if ai or (complete and not hints) else None,
-        first_human_comment_at=first_human if human_known else None,
+        first_human_comment_at=None if hint_before_human else first_human,
         hints=frozenset(hints),
     )
 

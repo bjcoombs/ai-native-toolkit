@@ -158,6 +158,13 @@ def test_a_hint_after_the_first_human_leaves_only_ai_review_undecided() -> None:
     assert facts == NoteFacts(True, None, "2026-09-01T10:00:00Z", frozenset({"cursor"}))
 
 
+def test_a_hint_before_the_first_human_nulls_only_the_timestamp() -> None:
+    facts = note_facts([_note("coderabbitai"), _note("bob")], "alice", NoteClassifier(), True)
+    assert facts.human_comment is True  # a person did comment
+    assert facts.first_human_comment_at is None  # the hint may have been the first person
+    assert facts.ai_review is None
+
+
 def test_ai_review_found_elsewhere_decides_despite_a_hint() -> None:
     notes = [_note("claude[bot]"), _note("cursor")]
     assert note_facts(notes, "alice", NoteClassifier(), True).ai_review is True
