@@ -302,6 +302,7 @@ Runs against the current directory (or pass a path). Produces:
 - `.assess/complexity-heatmap.svg` - the complexity treemap shown above
 - `.assess/step-ladder.svg` - the four Steps as rungs of agent autonomy, the gate between each pair, "You are here" on the run's Step and the next gate highlighted; the report shows it first
 - `.assess/evidence-waffle.svg` - one square per maturity-model condition, showing how much of the level rests on verified or measured evidence
+- `.assess/tag-profile.svg` - one row per truth tag: the share of its measured conditions that are met, with the earlier run's share beside it when both used the same maturity model
 - `.assess/package-map.svg` - the 20 largest packages as an import matrix, with the imports that bypass a package's front door outlined
 - `.assess/doc-drift.svg` - the 15 docs furthest behind the code they describe, as ranked bars
 - `.assess/review-strip.svg` - one tick per recently merged change: approved, reviewed or merged without review, in merge order
