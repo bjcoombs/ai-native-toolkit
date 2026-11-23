@@ -49,7 +49,7 @@ def test_every_tag_has_a_row_in_the_fixed_order() -> None:
     rows = tag_rows(_level(), _model())
     assert [r["tag"] for r in rows] == list(TRUTH_TAGS)
     assert all(r == {"tag": r["tag"], "conditions": 0, "countable": 0, "set_aside": 0, "met": 0, "measured": 0,
-                     "not_measured": []}
+                     "not_measured": [], "countable_not_measured": []}
                for r in rows if r["tag"] in ("contracts", "structure", "agent_context", "agent_runtime"))
 
 
@@ -57,9 +57,10 @@ def test_a_multi_tagged_condition_is_on_each_row_and_the_tally_is_unchanged() ->
     rows = {r["tag"]: r for r in tag_rows(_level(), _model())}
     # r.1 carries behaviour and docs: met on both rows
     assert rows["behaviour"] == {"tag": "behaviour", "conditions": 2, "countable": 2, "set_aside": 0, "met": 1,
-                               "measured": 2, "not_measured": []}
+                               "measured": 2, "not_measured": [], "countable_not_measured": []}
     assert rows["docs"] == {"tag": "docs", "conditions": 2, "countable": 2, "set_aside": 0, "met": 1, "measured": 1,
-                            "not_measured": [{"id": "r.3", "reason": "no_remote"}]}
+                            "not_measured": [{"id": "r.3", "reason": "no_remote"}],
+                            "countable_not_measured": [{"id": "r.3", "reason": "no_remote"}]}
     assert sum(r["met"] for r in rows.values()) == 3  # r.1 twice, s.3 once
     assert rows["supply_chain"]["countable"] == 0 and rows["supply_chain"]["measured"] == 0
     # s.2 is excluded by the owner: countable by grade, set aside
@@ -79,6 +80,20 @@ def test_a_multi_tagged_condition_leaves_the_real_tally_unchanged() -> None:
     assert after["tally"] == before["tally"]
     rows = {r["tag"]: r for r in after["tags"]}
     assert rows["contracts"]["conditions"] == 1
+
+
+def test_countable_not_measured_leaves_out_the_listed_and_hazard_conditions() -> None:
+    """Only a countable condition explains a missing share (#1095 review)."""
+    level = _level()
+    level["conditions"] += [_cond("s.4", "not_measured", grade="declared", counted=False, reason="block_absent"),
+                            _cond("s.5", "not_measured", counted=False, polarity="hazard", reason="block_absent"),
+                            _cond("s.6", "not_measured", reason="needs_platform")]
+    model = _model()
+    model["rows"][1]["levels"] += [{"level": n, "criteria": [], "truth": ["governance"]} for n in (4, 5, 6)]
+    rows = {r["tag"]: r for r in tag_rows(level, model)}
+    gov = rows["governance"]
+    assert [m["reason"] for m in gov["not_measured"]] == ["block_absent", "block_absent", "needs_platform"]
+    assert gov["countable_not_measured"] == [{"id": "s.6", "reason": "needs_platform"}]
 
 
 def test_met_and_measured_are_the_headline_strip_cells() -> None:
@@ -105,6 +120,10 @@ def test_corpus_rows_equal_the_strip_cells(name: str) -> None:
         assert (row["met"], row["measured"]) == (cell["met"], cell["measured"])
         assert row["conditions"] >= row["countable"] >= row["measured"] + row["set_aside"]
         assert row["measured"] >= row["met"]
+        # a countable condition is measured, not measured or set aside
+        if row["measured"] == 0 and row["countable"]:
+            assert row["countable_not_measured"] or row["set_aside"] == row["countable"]
+        assert {m["id"] for m in row["countable_not_measured"]} <= {m["id"] for m in row["not_measured"]}
 
 
 def test_contracts_has_no_condition_in_the_shipped_model() -> None:

@@ -26,10 +26,13 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures" / "assess_diagrams"
 
 
 def _row(tag: str, conditions: int, countable: int, set_aside: int, met: int, measured: int,
-         missing: tuple[tuple[str, str], ...] = ()) -> TagRow:
+         missing: tuple[tuple[str, str], ...] = (), listed: tuple[str, ...] = ()) -> TagRow:
+    """``missing`` are the not-measured conditions; those named in ``listed`` are not countable."""
     return {"tag": tag, "conditions": conditions, "countable": countable, "set_aside": set_aside,
             "met": met, "measured": measured,
-            "not_measured": [{"id": cid, "reason": reason} for cid, reason in missing]}
+            "not_measured": [{"id": cid, "reason": reason} for cid, reason in missing],
+            "countable_not_measured": [{"id": cid, "reason": reason} for cid, reason in missing
+                                       if cid not in listed]}
 
 
 TAGS: list[TagRow] = [
@@ -39,8 +42,10 @@ TAGS: list[TagRow] = [
     _row("structure", 6, 5, 0, 0, 2, (("st.3", "requires:layer-4-architecture.1"),)),
     _row("agent_context", 6, 4, 0, 4, 4),
     _row("agent_runtime", 4, 0, 0, 0, 0),
-    _row("governance", 3, 1, 0, 0, 0, (("gov.2", "requires:layer-7-review.1"), ("gov.3", "requires:layer-7-review.1"))),
-    _row("supply_chain", 2, 1, 1, 0, 0, (("sc.2", "no_value"),)),
+    # mixed reasons: the two listed conditions' reason outvotes the countable one's, and loses
+    _row("governance", 3, 1, 0, 0, 0, (("gov.1", "block_absent"), ("gov.2", "block_absent"),
+                                       ("gov.3", "requires:layer-7-review.1")), listed=("gov.1", "gov.2")),
+    _row("supply_chain", 2, 1, 1, 0, 0, (("sc.2", "no_value"),), listed=("sc.2",)),
 ]
 
 LEVEL: dict[str, Any] = {
@@ -51,8 +56,10 @@ LEVEL: dict[str, Any] = {
 PRIOR: dict[str, Any] = {
     "prior_level_version": 1, "levels_version": "fixture-2",
     "tags": [{**row, "met": 1} if row["tag"] == "behaviour" else
-             {**row, "met": 1, "measured": 2, "not_measured": []} if row["tag"] == "docs" else
-             {**row, "met": 0, "measured": 0, "not_measured": [{"id": "a.1", "reason": "no_value"}]}
+             {**row, "met": 1, "measured": 2, "not_measured": [], "countable_not_measured": []}
+             if row["tag"] == "docs" else
+             {**row, "met": 0, "measured": 0, "not_measured": [{"id": "a.1", "reason": "no_value"}],
+              "countable_not_measured": [{"id": "a.1", "reason": "no_value"}]}
              if row["tag"] == "agent_context" else row for row in TAGS],
 }
 PRIOR_OTHER: dict[str, Any] = {**PRIOR, "levels_version": "fixture-1"}

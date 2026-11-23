@@ -59,6 +59,14 @@ class PriorLevelUnread(TypedDict):
 UNREADABLE: PriorLevelUnread = {"available": False, "reason": "unreadable"}
 
 
+class PriorLevelBlock(PriorLevel, total=False):
+    """Every field the run context's ``prior_level`` can hold, for the counts-only walk and the
+    check manifest's shape: a ``PriorLevel``, or ``PriorLevelUnread``'s two fields."""
+
+    available: bool
+    reason: str  # a fixed token, never text from a file
+
+
 def build_prior_level(level: Any) -> PriorLevel | None:
     """The file's content for one ``level`` block; None when the block has no ``tags``."""
     if not isinstance(level, Mapping) or not _valid_tags(level.get("tags")):
@@ -79,7 +87,10 @@ def _valid_row(row: Any) -> bool:
         return False
     if row["measured"] + row["set_aside"] > row["countable"]:
         return False
-    missing = row.get("not_measured")
+    return all(_valid_missing(row.get(k)) for k in ("not_measured", "countable_not_measured"))
+
+
+def _valid_missing(missing: Any) -> bool:
     return isinstance(missing, list) and all(
         isinstance(m, Mapping) and isinstance(m.get("id"), str) and isinstance(m.get("reason"), str)
         for m in missing)
@@ -108,7 +119,7 @@ def load_prior_level(assess_dir: Path) -> PriorLevel | PriorLevelUnread | None:
         prior = as_prior_level(json.loads(path.read_text(encoding="utf-8")))
     except (OSError, ValueError):
         prior = None
-    return prior if prior is not None else {"available": False, "reason": "unreadable"}
+    return prior if prior is not None else {**UNREADABLE}
 
 
 def write_prior_level(assess_dir: Path, level: Any) -> Path | None:

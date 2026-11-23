@@ -111,7 +111,7 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
 - `tags` (#940, `lib/level_tags.py` `tag_rows`): one row per truth tag, all of `TRUTH_TAGS` in
   that order, with `conditions` (the conditions carrying the tag, 0 for a tag none carries
   yet), `countable` and `set_aside` (by grade, and of those excluded or declined), `met` and `measured` (the headline strip cell's, `tag_cells`, never a second
-  tally) and `not_measured[]` (`{id, reason}`). A multi-tagged condition is on each of its rows
+  tally) `not_measured[]` (`{id, reason}`) and `countable_not_measured[]`, its countable subset. A multi-tagged condition is on each of its rows
   and counted once in `tally`; `measured` 0 means not measured, never a share of 0.
 - `step` (null without `[[steps]]`) and `next_step` (`step`, `threshold`, `blockers[]`; null at
   the top Step): a Step is held when `tally.met` reaches its threshold and every gate holds

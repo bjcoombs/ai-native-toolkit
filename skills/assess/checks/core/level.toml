@@ -43,3 +43,5 @@ revision = 1
   "level.tags.tag" = "token"
   "level.tags.not_measured.id" = "token"
   "level.tags.not_measured.reason" = "token"
+  "level.tags.countable_not_measured.id" = "token"
+  "level.tags.countable_not_measured.reason" = "token"

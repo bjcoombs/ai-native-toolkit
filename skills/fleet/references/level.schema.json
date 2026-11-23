@@ -360,11 +360,31 @@
                   ],
                   "additionalProperties": false
                 }
+              },
+              "countable_not_measured": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
               }
             },
             "required": [
               "conditions",
               "countable",
+              "countable_not_measured",
               "measured",
               "met",
               "not_measured",

@@ -16,7 +16,9 @@ such as ``contracts``), ``countable`` those the tally can count by grade (``meas
 the countable ones the owner excluded (``not_applicable``) or that were declined, and
 ``not_measured`` lists each condition with the
 tag that was not measured, with its reason code (``{id, reason}``, as the result's own
-``not_measured``). A row with ``measured`` 0 is not measured, never a share of 0: the tag
+``not_measured``), and ``countable_not_measured`` the countable ones among them: a countable
+condition is measured, not measured or set aside, so when ``measured`` is 0 these say why the
+row has no share (a listed condition's reason never does). A row with ``measured`` 0 is not measured, never a share of 0: the tag
 profile strip (``lib/assess_diagrams_tags.py``) draws it dashed with its reason.
 
 Every value is a tag token, a condition id, a reason code or a count, so both survive
@@ -79,5 +81,7 @@ def tag_rows(level: LevelResult, model: MaturityModel) -> list[TagRow]:
             "measured": cell["measured"] if cell else 0,
             "not_measured": [{"id": c["id"], "reason": c.get("reason", "no_value")}
                              for c in mine if c["state"] == "not_measured"],
+            "countable_not_measured": [{"id": c["id"], "reason": c.get("reason", "no_value")}
+                                       for c in countable if c["state"] == "not_measured"],
         })
     return rows

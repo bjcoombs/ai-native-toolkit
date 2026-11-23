@@ -18,8 +18,8 @@ manifest (``manifest_whys.tag_why``, #939). A row reads one of (``row_state``):
 - ``none``: no condition carries the tag yet (``contracts`` today): "not yet measured", no track;
 - ``listed``: no condition has a grade the tally counts (config, a declaration or a hazard):
   ``countable`` is 0;
-- ``not_measured``: a countable condition is not set aside and none was measured; the most
-  frequent reason code (ties by code) in words;
+- ``not_measured``: none was measured and a countable condition was not measured; the most
+  frequent reason code among the countable ones (``countable_not_measured``, ties by code) in words;
 - ``set_aside``: every countable condition was excluded by the owner or declined.
 
 Every row but ``share`` is a dashed, hollow track with its reason and no dot: a tag that was
@@ -94,14 +94,15 @@ def row_state(row: TagRow) -> str:
         return "share"
     if row["countable"] == 0:
         return "listed"
-    if row["not_measured"] and row["set_aside"] < row["countable"]:
+    if row["countable_not_measured"]:
         return "not_measured"
     return "set_aside"
 
 
 def main_reason(row: TagRow) -> str:
-    """The most frequent not-measured reason code of a row, ties by code."""
-    counts = Counter(m["reason"] for m in row["not_measured"])
+    """The most frequent reason code among a row's countable conditions not measured, ties by
+    code: a listed condition never explains a missing share."""
+    counts = Counter(m["reason"] for m in row["countable_not_measured"])
     return min(counts, key=lambda code: (-counts[code], code))
 
 

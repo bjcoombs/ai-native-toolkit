@@ -78,6 +78,7 @@ class TagRow(TypedDict):
     met: int  # counted conditions with this tag that are met
     measured: int  # counted conditions with this tag, met or unmet
     not_measured: list[NotMeasured]  # conditions with this tag not measured, with the reason code
+    countable_not_measured: list[NotMeasured]  # of those, the countable ones: why the row has no share
 
 
 class LevelResult(TypedDict):

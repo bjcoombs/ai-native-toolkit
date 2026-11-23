@@ -82,6 +82,18 @@ def test_a_tag_with_no_measured_condition_is_dashed_with_its_reason_never_at_zer
     assert "excluded by the owner or declined" in _row(svg, "supply_chain")
 
 
+def test_the_dashed_reason_comes_from_the_countable_conditions_only() -> None:
+    """Governance's two listed conditions share a reason that outvotes its one countable one."""
+    gov = next(r for r in TAGS if r["tag"] == "governance")
+    assert [m["reason"] for m in gov["not_measured"]].count("block_absent") == 2
+    assert td.main_reason(gov) == "requires:layer-7-review.1"
+    assert td.dashed_text(gov) == "not measured: waits on another condition"
+    assert "scan did not run" not in _row(_svg(SAME), "governance")
+    # listed conditions not measured never turn a set-aside row into a not-measured one
+    supply = next(r for r in TAGS if r["tag"] == "supply_chain")
+    assert supply["not_measured"] and td.row_state(supply) == "set_aside"
+
+
 def test_a_real_zero_of_n_measured_plots_at_zero() -> None:
     structure = _row(_svg(SAME), "structure")
     assert 'data-state="share"' in structure and 'data-mark="dot"' in structure

@@ -26,7 +26,7 @@ shapes = [
   { path = "stats_summary.top_large", type = "lib.run_context_types:HotspotRow" },
   { path = "stats_summary.complexity_unreliable", type = "lib.complexity.scc_coverage:UnreliableCcnRow" },
   { path = "prior_findings_snapshot", type = "lib.run_context_types:FindingsSnapshot" },
-  { path = "prior_level", type = "lib.prior_level:PriorLevel" },
+  { path = "prior_level", type = "lib.prior_level:PriorLevelBlock" },
   { path = "stats_summary.loc", type = "lib.run_context_types:SizeBlock" },
   { path = "stats_summary.est_tokens", type = "lib.run_context_types:SizeBlock" },
   { path = "stats_summary.est_tokens.budget", type = "lib.run_context_types:KeyholeBudget" },
@@ -80,6 +80,9 @@ revision = 1
   "prior_level.tags.tag" = "token"
   "prior_level.tags.not_measured.id" = "token"
   "prior_level.tags.not_measured.reason" = "token"
+  "prior_level.tags.countable_not_measured.id" = "token"
+  "prior_level.tags.countable_not_measured.reason" = "token"
+  "prior_level.reason" = "token"
 
 [[entries]]
 id = "core:stats_summary.loc.p95"

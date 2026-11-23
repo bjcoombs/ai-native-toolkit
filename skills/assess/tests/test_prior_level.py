@@ -13,6 +13,7 @@ from lib.level_tally import default_model, level_result
 from lib.prior_level import (
     PRIOR_LEVEL_FILE,
     PRIOR_LEVEL_VERSION,
+    UNREADABLE,
     as_prior_level,
     build_prior_level,
     load_prior_level,
@@ -51,20 +52,20 @@ def test_write_then_load_round_trips_the_tags_and_model_version(tmp_path: Path) 
     json.dumps({"prior_level_version": 1, "levels_version": 7, "tags": []}),
     json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [{"tag": "nope"}]}),
     json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [
-        {"tag": "docs", "conditions": 1, "countable": 1, "set_aside": 0, "met": -1, "measured": 1, "not_measured": []}]}),
+        {"tag": "docs", "conditions": 1, "countable": 1, "set_aside": 0, "met": -1, "measured": 1, "not_measured": [], "countable_not_measured": []}]}),
     json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [
-        {"tag": "docs", "conditions": 1, "countable": 1, "set_aside": 0, "met": True, "measured": 1, "not_measured": []}]}),
+        {"tag": "docs", "conditions": 1, "countable": 1, "set_aside": 0, "met": True, "measured": 1, "not_measured": [], "countable_not_measured": []}]}),
     json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [
-        {"tag": "docs", "conditions": 1, "countable": 1, "set_aside": 0, "met": 0, "measured": 1, "not_measured": [{"id": 1}]}]}),
+        {"tag": "docs", "conditions": 1, "countable": 1, "set_aside": 0, "met": 0, "measured": 1, "not_measured": [{"id": 1}], "countable_not_measured": []}]}),
     # counts that do not nest: a share above 1 would draw off the scale
     json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [
-        {"tag": "docs", "conditions": 60, "countable": 60, "set_aside": 0, "met": 50, "measured": 2, "not_measured": []}]}),
+        {"tag": "docs", "conditions": 60, "countable": 60, "set_aside": 0, "met": 50, "measured": 2, "not_measured": [], "countable_not_measured": []}]}),
     json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [
-        {"tag": "docs", "conditions": 1, "countable": 1, "set_aside": 0, "met": 0, "measured": 2, "not_measured": []}]}),
+        {"tag": "docs", "conditions": 1, "countable": 1, "set_aside": 0, "met": 0, "measured": 2, "not_measured": [], "countable_not_measured": []}]}),
     json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [
-        {"tag": "docs", "conditions": 1, "countable": 2, "set_aside": 0, "met": 0, "measured": 0, "not_measured": []}]}),
+        {"tag": "docs", "conditions": 1, "countable": 2, "set_aside": 0, "met": 0, "measured": 0, "not_measured": [], "countable_not_measured": []}]}),
     json.dumps({"prior_level_version": 1, "levels_version": "m", "tags": [
-        {"tag": "docs", "conditions": 2, "countable": 2, "set_aside": 1, "met": 0, "measured": 2, "not_measured": []}]}),
+        {"tag": "docs", "conditions": 2, "countable": 2, "set_aside": 1, "met": 0, "measured": 2, "not_measured": [], "countable_not_measured": []}]}),
 ])
 def test_a_malformed_file_reads_unreadable_not_absent(tmp_path: Path, content: str) -> None:
     (tmp_path / PRIOR_LEVEL_FILE).write_text(content, encoding="utf-8")
@@ -91,6 +92,8 @@ def test_counts_only_keeps_every_count_and_token() -> None:
 
     prior = build_prior_level(_level())
     assert counts_only({"prior_level": prior})["prior_level"] == prior  # fails if a field is dropped
+    # the unreadable form keeps its fixed reason token too
+    assert counts_only({"prior_level": {**UNREADABLE}})["prior_level"] == UNREADABLE
 
 
 # --- through a real run ------------------------------------------------------

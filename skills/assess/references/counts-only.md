@@ -136,6 +136,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `prior_level.tags.tag` | token |
 | `prior_level.tags.not_measured.id` | token |
 | `prior_level.tags.not_measured.reason` | token |
+| `prior_level.tags.countable_not_measured.id` | token |
+| `prior_level.tags.countable_not_measured.reason` | token |
+| `prior_level.reason` | token |
 
 ## doc_graph
 
@@ -795,6 +798,8 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.tags.tag` | token |
 | `level.tags.not_measured.id` | token |
 | `level.tags.not_measured.reason` | token |
+| `level.tags.countable_not_measured.id` | token |
+| `level.tags.countable_not_measured.reason` | token |
 
 ## headline
 
