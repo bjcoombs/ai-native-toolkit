@@ -4,18 +4,24 @@ A doc under a ``docs/`` tree that no base doc owns describes the code named
 like it. ``ParallelIndex`` indexes the discovered code once per run and
 ``ParallelIndex.match`` picks one root for a doc by this stated rule:
 
-1. **Production code only.** A candidate is a code file or the directory that
+1. **Never test or fixture code.** A candidate is a code file or the directory that
    directly holds one, and only when ``lib.path_classes.path_class`` does not
    read it as ``test`` or ``fixture`` (``tests/models/``,
    ``tests/fixtures/models/``). A doc whose name matches only test code has no
    parallel match, so it falls through to its explicit links or the baseline.
+   Example, vendored and generated code stay eligible (a page about an example
+   maps to it), so this is not ``is_production``.
 2. **Stem before parent name.** The doc's stem (``cohere`` for
    ``docs/api/models/cohere.md``) matches a module file of that stem
    (``pkg/models/cohere.py``) or a directory of that name. Only when nothing
    matches the stem does the doc's parent directory name (``models``) match a
    directory. A base-doc name (``index.md``, ``README.md``) has a generic stem,
    so it matches by its parent name alone (``docs/payments/index.md`` ->
-   ``payments``).
+   ``payments``). A stem common to many modules (``setup``, ``config``,
+   ``main``: ``GENERIC_FILE_STEMS``) never matches a file, only a directory, so
+   a prose page ``docs/setup.md`` is not read as documenting ``setup.py``. The
+   parent name ``docs`` itself is never a key, so a top-level ``docs/x.md``
+   never maps to a ``docs/`` directory holding ``conf.py``.
 3. **Longest shared path suffix, then shallowest, then path order.** Among
    candidates of the same key, the one sharing the longest path suffix with the
    doc wins (``docs/api/models/cohere.md`` shares ``models/cohere`` with
@@ -40,6 +46,13 @@ from lib.path_classes import path_class
 NON_SUBJECT_CLASSES = frozenset({"test", "fixture"})
 # Doc stems that name the directory they sit in, not a module.
 GENERIC_DOC_STEMS = frozenset({"readme", "index", "_index"})
+# Module stems too common to say which file a page documents: matched only
+# against a directory of that name, never a file.
+GENERIC_FILE_STEMS = frozenset({
+    "__init__", "__main__", "main", "index", "mod", "lib", "app", "cli", "core",
+    "setup", "install", "config", "configuration", "conf", "settings", "constants",
+    "types", "utils", "util", "helpers", "common", "base", "api", "server", "client",
+})
 
 STEM = "stem"
 PARENT_NAME = "parent-name"
@@ -96,10 +109,11 @@ class ParallelIndex:
         stem = doc.stem.lower()
         if stem not in GENERIC_DOC_STEMS:
             found = self._pick(STEM, (*dirs, stem),
-                               self._files.get(stem, []) + self._dirs.get(stem, []))
+                               ([] if stem in GENERIC_FILE_STEMS else self._files.get(stem, []))
+                               + self._dirs.get(stem, []))
             if found is not None:
                 return found
-        if not dirs:
+        if dirs[-1] == "docs":
             return None
         return self._pick(PARENT_NAME, dirs, self._dirs.get(dirs[-1], []))
 

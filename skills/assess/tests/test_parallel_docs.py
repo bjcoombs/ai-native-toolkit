@@ -111,3 +111,21 @@ def test_real_source_beside_its_tests_still_maps(tmp_path: Path) -> None:
     assert rows["docs/billing.md"]["subject_code_count"] == 1
     assert rows["docs/harness.md"]["subject_method"] == "repo-baseline"
     assert "subject_match" not in rows["docs/harness.md"]
+
+
+def test_generic_file_stem_matches_a_directory_never_a_file() -> None:
+    """A prose page named like a common module (`docs/setup.md`) is not read as
+    documenting `setup.py`; a directory of that name still matches."""
+    index = ParallelIndex(["setup.py", "src/pkg/config.py", "cmd/main.go"])
+    assert index.match("docs/setup.md") is None
+    assert index.match("docs/config.md") is None
+    assert index.match("docs/main.md") is None
+    index = ParallelIndex(["src/config/loader.py", "src/pkg/config.py"])
+    assert index.match("docs/config.md") == ParallelMatch("src/config", "stem:only-match")
+
+
+def test_docs_dir_is_never_a_parent_name_key() -> None:
+    """A Sphinx `docs/conf.py` does not pull every top-level page onto `docs/`."""
+    index = ParallelIndex(["docs/conf.py", "docs/hooks.py", "src/auth/a.py"])
+    assert index.match("docs/tutorial.md") is None
+    assert index.match("docs/auth.md") == ParallelMatch("src/auth", "stem:only-match")
