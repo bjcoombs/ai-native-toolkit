@@ -62,7 +62,8 @@ Present = Callable[[str], bool]
 
 def _takes_value(flag: str) -> bool:
     """A short-flag cluster ending in ``o`` / ``O`` (``-o``, ``-euo``, ``+O``) takes the next word."""
-    return not flag.startswith("--") and len(flag) > 1 and flag[-1] in "oO"
+    return flag in ("--rcfile", "--init-file") or (
+        not flag.startswith("--") and len(flag) > 1 and flag[-1] in "oO")   # bash --rcfile f x.sh (#955)
 # A tool a CI step installs into the tree (``install.sh -b ./bin``) is not a committed script.
 _KNOWN_TOOLS = LINT_PROGRAMS | TYPE_PROGRAMS | BARE_RUN_PROGRAMS | ANALYSER_PROGRAMS
 
