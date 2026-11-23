@@ -71,10 +71,9 @@ from typing import NamedTuple, TypedDict
 
 from lib.agent_identity import (
     AGENT,
-    DEPENDENCY_BOT_RULES,
     AuthorMatcher,
-    _rule_matches,
     identity_keys,
+    is_dependency_bot,
     is_gitlab_token_user,
     username_from_email,
 )
@@ -152,7 +151,7 @@ def evidence_for(email: str, name: str, subjects: Sequence[str] = (),
         found.add("bot_suffix")
     if is_gitlab_token_user(username or email):
         found.add("gitlab_token_user")
-    if any(_rule_matches(r, email, username, "") for r in DEPENDENCY_BOT_RULES):
+    if is_dependency_bot(email, username):
         found.add("dependency_bot_hint")
     if any(_has_word(t, AI_TOOL_NAMES) for t in texts):
         found.add("agent_name_hint")

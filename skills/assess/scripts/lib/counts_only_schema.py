@@ -33,9 +33,9 @@ import typing
 from collections.abc import Iterator
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
-from lib.agent_building import AgentBuildingBlock
-from lib.agent_environment import AgentEnvironmentBlock
-from lib.agent_harness import AgentHarnessBlock
+from lib.agents.agent_building import AgentBuildingBlock
+from lib.agents.agent_environment import AgentEnvironmentBlock
+from lib.agents.agent_harness import AgentHarnessBlock
 from lib.agent_instructions_grader import SensitiveFinding
 from lib.ci_checks import CiChecksBlock
 from lib.ai_usage import AiUsageBlock
@@ -88,6 +88,7 @@ from lib.scc_coverage import UnreliableCcnRow
 from lib.review_automation import ReviewAutomationBlock, ReviewEvidenceBlock
 from lib.shared_tooling import SharedToolingBlock
 from lib.unit_discovery import UnitsBlock
+from lib.unit_levels import UnitLevelsBlock
 from lib.unit_readings import UnitReadingsBlock
 from lib.structure_graph import StructureBlock
 from lib.understanding_analysis import UnderstandingModule
@@ -158,6 +159,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("units", UnitsBlock),
     ("headline", Headline),
     ("unit_readings", UnitReadingsBlock),
+    ("unit_levels", UnitLevelsBlock),
 )
 
 _UNIONS = (Union, types.UnionType)

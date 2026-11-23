@@ -143,7 +143,14 @@ from lib.levels import load_levels
 from lib.signal_grades import DEFAULT_LEVELS, EMPTY_DENOMINATORS, INPUT_GRADES, SIGNAL_INPUTS, UNMEASURED_VALUES
 
 # Bumped when the result's shape or a state rule changes.
-LEVEL_RESULT_VERSION = 2
+# 3 (3.0.0 release): three changes since 2.
+# - a condition may carry ``polarity: "hazard"``, and a hazard is never counted (#843).
+# - owner exclusions add the optional ``excluded`` list and the condition and blocker
+#   fields ``disposition`` and ``exclusion_kind`` (#910); results without exclusions are
+#   unchanged.
+# - each condition may carry `why`, the check manifest whys of its criteria joined by one
+#   space (#939); absent for a criterion with no manifest entry. Additive: no key moves.
+LEVEL_RESULT_VERSION = 3
 
 STATES = ("met", "unmet", "not_applicable", "not_measured", "declined")
 COUNTED_GRADES = frozenset({"measured", "verified"})
@@ -271,7 +278,7 @@ def condition_why(row_id: str, level: int, criteria: Sequence[Criterion],
     order, each once, joined by one space; ``""`` when no criterion has a manifest why (a
     caller's own model). ``whys`` is ``manifest_whys.condition_whys`` of the core manifest,
     built here when not given."""
-    from lib.check_manifest import condition_key, core_manifest  # lazy: the manifest loads once
+    from lib.manifest.check_manifest import condition_key, core_manifest  # lazy: the manifest loads once
     from lib.manifest_whys import condition_whys
     whys = condition_whys(core_manifest()) if whys is None else whys
     found = [whys.get(condition_key(row_id, level, c["signal"]), "") for c in criteria]
@@ -280,7 +287,7 @@ def condition_why(row_id: str, level: int, criteria: Sequence[Criterion],
 
 def _add_whys(model: MaturityModel, conditions: Sequence[ConditionResult]) -> None:
     """Set each condition's ``why`` (``condition_why``) where its criteria have one."""
-    from lib.check_manifest import core_manifest
+    from lib.manifest.check_manifest import core_manifest
     from lib.manifest_whys import condition_whys
     whys = condition_whys(core_manifest())
     by_id = {c["id"]: c for c in conditions}

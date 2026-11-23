@@ -44,7 +44,7 @@ def test_changed_producer_module_tags_scanner_changed():
 
 
 def test_no_module_change_renders_repo_delta():
-    unrelated = _changed("skills/assess/scripts/lib/agent_ops.py")
+    unrelated = _changed("skills/assess/scripts/lib/agents/agent_ops.py")
     comparison = compare(_run(EARLIER, toolkit_commit="aaa"), _run(LATER, toolkit_commit="bbb"),
                          unrelated, PRODUCERS)
     row = _row_move(comparison, "grpa", "teamdocs")

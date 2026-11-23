@@ -31,6 +31,8 @@ so when the walk holds a ``go.mod`` (or a ``Cargo.toml``) and no gate of that
 language is read, a ``threshold_meets_minimum`` that is false reads null (not
 measured) with ``unmeasured_reason`` ``go_rust_gate_form_not_read`` (#937: a low
 Python gate beside ``go.mod`` is not unmet). A gate meeting the minimum keeps true.
+``go_rust_manifests`` exposes the same walk for the monorepo root unit's no-gate
+reading (``lib.unit_readings``, #864).
 
 A configured threshold is evidence the tooling fails below it *when coverage
 runs*. ``enforced_meets_minimum`` (#921) is ``threshold_meets_minimum`` with
@@ -606,10 +608,11 @@ def _walk(root: Path, base: Path, excludes: Excludes,
                 yield rel
 
 
-def walk_named(root: Path, excludes: Excludes, names: set[str]) -> Iterator[Path]:
-    """Repo-relative files under ``root`` whose name is in ``names``, by the same
-    bounded, excluding walk the coverage scan uses (``lib.guardrails`` reads it)."""
-    return _walk(root, root, excludes, lambda name, _parts: name in names)
+def walk_named(root: Path, excludes: Excludes, names: set[str],
+               base: Path | None = None) -> Iterator[Path]:
+    """Repo-relative files under ``base`` (default ``root``) whose name is in ``names``, by
+    the same bounded, excluding walk the coverage scan uses (``lib.guardrails`` reads it)."""
+    return _walk(root, base or root, excludes, lambda name, _parts: name in names)
 
 
 def _candidate_files(root: Path, scope: Path | None,
@@ -644,6 +647,12 @@ def _go_rust_manifests(root: Path, scope: Path | None, excludes: Excludes) -> se
     return found | {name for d in ancestors for name in _GO_RUST_MANIFESTS
                     if (d / name).is_file()
                     and not is_user_excluded((d / name).relative_to(root), *excludes)}
+
+
+def go_rust_manifests(repo_root: Path | str, excludes: Excludes | None = None) -> set[str]:
+    """The ``go.mod`` / ``Cargo.toml`` names anywhere in the repository walk (#864: the
+    root unit's no-gate reading is not measured when one is present, as here)."""
+    return _go_rust_manifests(Path(repo_root).resolve(), None, excludes or (set(), []))
 
 
 def _is_root_ci(rel: Path) -> bool:

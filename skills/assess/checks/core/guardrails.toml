@@ -9,14 +9,14 @@ summary = "Lists the gates the repository configures (a ruff or flake8 complexit
 issues = [767]
 callable = "lib.guardrails:scan_guardrails"
 publishes = ["guardrails"]
-reads = ["repo_root", "instruction_files", "coverage_gate", "excludes"]
+reads = ["repo_root", "instruction_files", "coverage_gate", "excludes", "scope"]
 stage = "post_offers"
 headless = { guardrails = "registered" }
 whys.guardrails = "It lists the gates the repository configures and whether an instruction file states each rule and threshold, so an agent learns a gate before CI turns red on it."
 shapes = [
   { path = "guardrails", type = "lib.guardrails:GuardrailsBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "guardrails.gates.kind" = "token"
   "guardrails.gates.tool" = "token"
@@ -33,7 +33,7 @@ collector = "core.guardrails"
 path = "guardrails.stated_pct"
 type = "number"
 evidence = "head_structure"
-null_means = "no gate found: nothing to state"
+null_means = "no gate found in the run (the scope, on a scoped run): nothing to state"
 
 [[entries]]
 id = "core.cond.guardrails-stated.1.stated_pct"

@@ -79,9 +79,10 @@ from lib.level_tally import default_model
 from lib.levels import MaturityModel
 from lib.levels_fields import TRUTH_TAGS
 
-# Held at 1 during the version freeze (skills/assess/changes/README.md): #844 adds
-# `verified` and `tags`, so the release PR moves it to 2; it has no changes/ counter.
-HEADLINE_VERSION = 1
+# Bumped when the headline block's shape changes. It has no changes/ counter, so a
+# release PR moves it by hand during a version freeze.
+# 2 (3.0.0 release): the block gains `verified` and `tags` (#844).
+HEADLINE_VERSION = 2
 
 __all__ = ["Headline", "as_headline", "headline", "run_context_headline"]
 
@@ -208,7 +209,7 @@ def next_why(level: LevelResult, model: MaturityModel) -> str:
     return " ".join(dict.fromkeys(w for w in whys if w))
 
 
-def _verified(conditions: list[ConditionResult]) -> int:
+def verified_count(conditions: list[ConditionResult]) -> int:
     """Counted conditions met and graded ``verified``: the verified share of N."""
     return sum(1 for c in conditions if c["counted"] and c["state"] == "met" and c["grade"] == "verified")
 
@@ -216,7 +217,7 @@ def _verified(conditions: list[ConditionResult]) -> int:
 def _tally_line(level: LevelResult) -> str:
     tally = level["tally"]
     line = (f"Practices in place: {tally['met']} of {tally['measured']} measured, "
-            f"{_verified(level['conditions'])} verified")
+            f"{verified_count(level['conditions'])} verified")
     reasons = Counter(entry["reason"] for entry in level["not_measured"])
     detail = ", ".join(f"{reason_word(code)}: {n}" for code, n in sorted(reasons.items()))
     line += f" · {tally['not_measured']} not measured" + (f" ({detail})" if detail else "")
@@ -296,7 +297,7 @@ def headline(value: Any, model: MaturityModel) -> Headline:
             "levels_version": level["levels_version"], "step": step,
             "next_step": nxt["step"] if nxt else None, "lines": lines,
             "markdown": markdown, "summary": summary,
-            "verified": _verified(level["conditions"]), "tags": cells,
+            "verified": verified_count(level["conditions"]), "tags": cells,
             "next_why": next_why(level, model)}
 
 

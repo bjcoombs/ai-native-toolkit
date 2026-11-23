@@ -99,8 +99,15 @@ from lib.levels import Evaluation, MaturityModel, Row, StepDef, evaluate_row
 # 1 (#703): first version. 2 (#772): the roll-up drops ``mean_share``, ``weakest`` and
 # ``overall`` for ``lowest_level``; repositories drop ``mean_share``. Cells are unchanged.
 # 3 (#746): ``opportunities``. Nothing else changed, so readers of 2 read 3.
+# 4 (3.0.0 release): two changes since 3.
+# - repositories gain ``step``, ``next_step`` and ``tally`` (as ``level.json`` gives them,
+#   owner exclusions applied) and ``exclusions``; units gain a ``step`` roll-up (#944).
+#   Additive: no existing key moves, so readers of 3 read the new version.
+# - repositories gain ``gate_blockers`` (#945): every Step gate that does not hold, as the level
+#   result's blocker for it, so a Step target above the next Step reads its missing gates.
+#   Additive.
 # Bump on any change to the shapes below; #704 and #705 read it.
-FLEET_DATA_VERSION = 3
+FLEET_DATA_VERSION = 4
 FLEET_DATA_FILE = "fleet-data.json"
 NOT_SCANNED = "not_scanned"
 SET = "set"

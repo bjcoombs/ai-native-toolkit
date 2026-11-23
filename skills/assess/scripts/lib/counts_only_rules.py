@@ -63,7 +63,7 @@ from __future__ import annotations
 import re
 from typing import Final, Literal, cast
 
-from lib.check_manifest import core_manifest, privacy_rules
+from lib.manifest.check_manifest import core_manifest, privacy_rules
 
 FieldClass = Literal["path", "token", "reason", "id", "drop"]
 PATH: Final = "path"

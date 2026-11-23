@@ -74,8 +74,8 @@ Python `fail_under = 10` (or `0`) beside a `go.mod` reads unknown, not unmet (#9
 language's low gate does not settle another's. A gate of at least 50 percent keeps true,
 a null from another gate (a templated threshold) keeps its own reason, and a gate read
 for every Go and Rust manifest present, even one gating nothing, keeps the normal
-reading, with `unmeasured_reason` null. The collector's manifest `revision` is 2 for the
-#788 change of meaning; the #937 widening is listed for the 3.0.0 release PR.
+reading, with `unmeasured_reason` null. The collector's manifest `revision` moved to 2 for the
+#788 change of meaning, and to 4 in the 3.0.0 release for the #937 widening.
 Root coverage.py config on a scoped run (#1032, `lib.coverage_root_config`): coverage.py
 reads its config from the directory it runs in, so a root `[tool.coverage]`, `.coveragerc`,
 `setup.cfg` or `tox.ini` floor governs a Python scope with no coverage.py config of its own
@@ -90,7 +90,7 @@ when they change
 `threshold_meets_minimum` it reads null with `unmeasured_reason`
 `root_coverage_config_unresolved` (so `enforced_basis` is `threshold_not_read`); a root
 floor below 50 leaves false, which is false either way. A scope holding no `.py` file, or
-its own coverage.py config, is not affected.
+its own coverage.py config, is not affected. This widening is listed for the next release.
 Adding a gate form: build the gate with `_gate` and the right
 `unit`; `threshold_percent` and both block fields follow with no other change. A form
 whose number is not a coverage percentage (a count) needs its own `unit`, mapped to

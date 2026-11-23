@@ -45,7 +45,11 @@ Not filtered: the wiki pages, hotspot pages, badge and report the run
 also writes stay in the target repository's `.assess/` directory and
 carry full text. Only `run-context.counts-only.json` (and an
 `assess_signals.py --counts-only` document) is content-free, with the
-`doc-drift.counts-only.svg` and `review-strip.counts-only.svg` drawn from it.
+`package-map.counts-only.svg`, `doc-drift.counts-only.svg` and
+`review-strip.counts-only.svg` drawn from it. Like the JSON, those copies keep
+path-class values (package ids, doc paths) in clear under `--counts-only` alone;
+only `--hash-paths` or `--hash-salt` hashes them, so share them from a hashed run.
+The evidence waffle has no copy: it names only maturity-model rows and counts.
 
 ## Path-keyed maps
 
@@ -806,6 +810,27 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `unit_readings.units.path` | dropped |
 | `unit_readings.units.conditions.id` | token |
 | `unit_readings.units.conditions.origin` | token |
+
+## unit_levels
+
+| Field | Kept as |
+|---|---|
+| `unit_levels.unit_count_reason` | token |
+| `unit_levels.levels_version` | token |
+| `unit_levels.units.path` | dropped |
+| `unit_levels.units.inherited` | token |
+| `unit_levels.units.conditions.id` | token |
+| `unit_levels.units.conditions.state` | token |
+| `unit_levels.units.conditions.origin` | token |
+| `unit_levels.units.conditions.reason` | token |
+| `unit_levels.units.conditions.why` | dropped |
+| `unit_levels.units.next_step.blockers.kind` | token |
+| `unit_levels.units.next_step.blockers.gate` | token |
+| `unit_levels.units.next_step.blockers.condition` | token |
+| `unit_levels.units.next_step.blockers.state` | token |
+| `unit_levels.units.next_step.blockers.reason` | token |
+| `unit_levels.units.next_step.blockers.disposition` | token |
+| `unit_levels.units.next_step.blockers.exclusion_kind` | token |
 
 ## fleet-data.json (the fleet skill)
 

@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, TypeVar, cast
 
 from lib.assess_config import is_user_excluded
-from lib.check_manifest import core_manifest, finding_tables
+from lib.manifest.check_manifest import core_manifest, finding_tables
 from lib.change_coupling import (
     RenameMap, authorship_analysis, build_rename_map, change_coupling_pairs, containment_ratio,
     find_self_referential_tests, fold_renames, parse_commit_file_sets, repo_top,

@@ -5,7 +5,7 @@ work on counts-only rows: every field they read is a vocabulary slug, a
 number or a boolean, which counts-only keeps.
 
 - ``group_counts``: per group, how many scanned repositories fall in each class
-  (``lib/agent_building.py``), carried on each ``groups.jsonl`` row as
+  (``lib/agents/agent_building.py``), carried on each ``groups.jsonl`` row as
   ``agent_building``. ``None`` when no repository in the group has an available
   block (every scan failed, degraded or was left out by ``--scans``), never a
   false 0.
@@ -58,7 +58,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict
 
-from lib.agent_building import CLASSES
+from lib.agents.agent_building import CLASSES
 from lib.fleet.runner import STATUS_OK, FleetRow
 
 CLUSTERS_FILE = "agent_clusters.json"

@@ -24,8 +24,12 @@ leaves every other block to the single repository-wide run.
   ``layer_grades`` reads ``instruction_file_present`` true, origin ``unit``, when a nested
   instruction file (``nested_instructions.files``) sits under the unit, at any depth; a
   file inside a unit is unit-local (#800 comment, refinement 2). Otherwise the root's
-  reading is inherited. ``OVERRIDES`` holds the evidence rule of each; a test pins it to
-  the manifest.
+  reading is inherited, except a repository-wide reading that rests on other units'
+  evidence alone, which is not a parent's to inherit (#864): a coverage gate whose every
+  gate sits under member units leaves the unit its own scoped reading (no gate of its
+  own), and a ``nested_only`` repository whose nested files govern no folder holding the
+  unit (a path-scoped rule only when a glob can reach the unit) reads ``instruction_file_present`` false, origin ``unit``. ``OVERRIDES`` holds the
+  evidence rule of each; a test pins it to the manifest.
 - Repo-wide (no ``unit_scope``): run once; every unit inherits the block. This includes
   ``ci_checks``: unit-local CI detection is not built yet, so a unit's CI conditions read
   ``inherited`` and never a false unit-local value.
@@ -44,7 +48,9 @@ repository-wide blocks (``REPO_BLOCKS``), the same scans over the same tree, as 
 override blocks included (the root instruction file and the root gates are the root's own),
 except evidence that sits in member units: a ``layer_grades`` reading that rests on nested
 files alone (``nested_only``), or a ``coverage_gate`` whose every gate is under a member.
-Those are their units', so the root inherits them. Where member
+Those are their units', so the root reads its own without them (#864, ``_root_without``):
+``instruction_file_present`` true only for a nested file under no member, and a
+coverage reading with no gate. Where member
 units sit below a root unit, the root's scoped readings therefore cover the members' files
 too (a known limit: no scan can leave out the folders of other units yet). Each unit's pass goes through ``scan_registry.run_scans``,
 so a failing scan degrades to its unavailable marker for that unit alone.
@@ -58,8 +64,8 @@ tally's reason codes read it as they read the full block) and ``conditions``: ev
 condition id with its ``origin``, ``unit`` when a criterion reads a block in the unit's
 ``blocks``, else ``inherited``. A unit with an override block lacking its own evidence has
 no entry for it. A degraded or absent ``units`` block yields ``available: false``.
-Per-unit Steps and the roll-up are #864 and #865: overlay a unit's ``blocks`` on the run
-context and run the tally.
+``lib.unit_levels`` (#864) overlays each unit's ``blocks`` on the run context and runs the
+tally for the unit's Step; the roll-up across units is #865.
 
 Counts-only output drops the unit paths (``checks/core/unit_readings.toml``) and keeps the
 numbers, the origin tokens and the condition ids. Tests: ``tests/test_unit_readings.py``.
@@ -70,7 +76,8 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Protocol, TypedDict
 
-from lib import check_manifest as cm
+import lib.manifest.check_manifest as cm
+from lib.coverage_gate import GO_RUST_UNMEASURED, go_rust_manifests
 from lib.level_tally import DEFAULT_BLOCKS, default_model
 from lib.levels import MaturityModel, condition_id
 from lib.run_context_types import JsonDict
@@ -137,7 +144,7 @@ def _under(path: object, unit: str) -> bool:
     return PurePosixPath(path).is_relative_to(PurePosixPath(unit))
 
 
-def _coverage_own(unit: str, scoped: Any, _ctx: Mapping[str, Any]) -> JsonDict | None:
+def _coverage_own(unit: str, scoped: Any, ctx: Mapping[str, Any]) -> JsonDict | None:
     """The unit's scoped coverage gate when one of its gates sits under the unit. A failed
     scoped run is the unit's own unknown, never the parent build's gate."""
     if isinstance(scoped, Mapping) and scoped.get("available") is False:
@@ -148,16 +155,88 @@ def _coverage_own(unit: str, scoped: Any, _ctx: Mapping[str, Any]) -> JsonDict |
     if isinstance(gates, list) and any(isinstance(g, Mapping) and _under(g.get("file"), unit)
                                        for g in gates):
         return dict(scoped)
+    # #864: a repository-wide gate that rests on member units' gates alone is theirs, not a
+    # parent build's, so there is nothing to inherit: the unit's own reading is its scoped one.
+    repo = ctx.get("coverage_gate")
+    if (isinstance(repo, Mapping) and repo.get("available") is not False
+            and isinstance(repo.get("gates"), list) and repo["gates"]
+            and not _root_owns("coverage_gate", repo, ctx.get("members") or ())):
+        return dict(scoped)
     return None
 
 
+_WILDCARDS = frozenset("*?[{")
+
+
+def _glob_prefix(pattern: str) -> str:
+    """A repo-relative glob's literal prefix: the segments before the first wildcard (the
+    whole path when it has none)."""
+    literal: list[str] = []
+    for part in pattern.strip("/").split("/"):
+        if set(part) & _WILDCARDS:
+            break
+        literal.append(part)
+    return "/".join(literal)
+
+
+def _readings(pattern: str, folder: str) -> tuple[str, ...]:
+    """A rule's glob as repo-relative and, for a rule in a nested folder, relative to that
+    folder: either reading counts, as ``instruction_discovery._pattern_live`` reads it."""
+    return (pattern,) if folder in ("", ".") else (pattern, f"{folder}/{pattern}")
+
+
+def _glob_reaches(pattern: str, unit: str, folder: str = ".") -> bool:
+    """Whether a glob can match a file under ``unit``: the literal folder prefix of either
+    reading holds the unit or sits inside it."""
+    return any(not (prefix := _glob_prefix(g)) or _under(unit, prefix) or _under(prefix, unit)
+               for g in _readings(pattern, folder))
+
+
+def _root_file(entry: Any, members: Sequence[str]) -> bool:
+    """Whether a nested instruction file is the root unit's: it sits under no member and,
+    when path-scoped, one of its globs reaches outside every member on both readings
+    (``_readings``)."""
+    if not isinstance(entry, Mapping) or not isinstance(entry.get("path"), str):
+        return False
+    if any(_under(entry["path"], m) for m in members):
+        return False
+    scope = entry.get("scope")
+    globs = scope.get("globs") if isinstance(scope, Mapping) else None
+    folder = scope.get("directory") if isinstance(scope, Mapping) else None
+    folder = folder if isinstance(folder, str) else "."
+    patterns = [g for g in globs if isinstance(g, str)] if isinstance(globs, list) else []
+    # every reading of one glob must reach outside the members: a reading that may govern
+    # only a member is that member's, so the root is never credited with it
+    return not patterns or any(all(not (prefix := _glob_prefix(r)) or not any(
+        _under(prefix, m) for m in members) for r in _readings(g, folder)) for g in patterns)
+
+
+def _covers(entry: Any, unit: str) -> bool:
+    """Whether a nested instruction file governs a folder that holds the ``unit``; a
+    path-scoped rule (``scope.globs``) only when one of its globs can reach the unit."""
+    scope = entry.get("scope") if isinstance(entry, Mapping) else None
+    folder = scope.get("directory") if isinstance(scope, Mapping) else None
+    if not isinstance(folder, str) or not _under(unit, folder or "."):
+        return False
+    globs = scope.get("globs") if isinstance(scope, Mapping) else None
+    if isinstance(globs, list) and any(isinstance(g, str) for g in globs):
+        return any(isinstance(g, str) and _glob_reaches(g, unit, folder) for g in globs)
+    return True
+
+
 def _instructions_own(unit: str, _scoped: Any, ctx: Mapping[str, Any]) -> JsonDict | None:
-    """``instruction_file_present`` true when a nested instruction file sits under the unit."""
+    """``instruction_file_present`` true when a nested instruction file sits under the unit;
+    false when the repository's only files are nested ones (``nested_only``) and none governs
+    a folder holding the unit (#864: a sibling unit's file is not inherited)."""
     nested = ctx.get("nested_instructions")
     files = nested.get("files") if isinstance(nested, Mapping) else None
     if isinstance(files, list) and any(isinstance(f, Mapping) and _under(f.get("path"), unit)
                                        for f in files):
         return {"available": True, "instruction_file_present": True}
+    repo = ctx.get("layer_grades")
+    if (isinstance(repo, Mapping) and repo.get("instruction_presence") == "nested_only"
+            and isinstance(files, list) and not any(_covers(f, unit) for f in files)):
+        return {"available": True, "instruction_file_present": False}
     return None
 
 
@@ -339,6 +418,40 @@ def _root_owns(block: str, result: Any, members: Sequence[str]) -> bool:
     return True
 
 
+def _root_without(block: str, result: Any, members: Sequence[str], nested: Any,
+                  values: Mapping[str, Any] | None = None) -> JsonDict | None:
+    """The root unit's own reading of an override block it does not own (``_root_owns``
+    false), or None to inherit the repository-wide one (#864).
+
+    The members' evidence is theirs, so it is left out, as for a member unit
+    (``_coverage_own``, ``_instructions_own``): a ``nested_only`` repository reads
+    ``instruction_file_present`` true only when a nested file sits under no member (and,
+    path-scoped, a glob reaches outside every member), and a
+    coverage reading whose every gate is under members is a no-gate reading: false, or
+    null with ``go_rust_gate_form_not_read`` when the repository-wide value was not
+    measured or the walk (``values``' ``repo_root`` and ``excludes``) holds a ``go.mod`` or
+    ``Cargo.toml``, whose gate form the scan does not read (an unknown never reads unmet).
+    """
+    if not isinstance(result, Mapping):
+        return None
+    if block == "layer_grades" and result.get("instruction_presence") == "nested_only":
+        files = nested.get("files") if isinstance(nested, Mapping) else None
+        if not isinstance(files, list):
+            return None
+        own = any(_root_file(f, members) for f in files)
+        return {"available": True, "instruction_file_present": own}
+    if block == "coverage_gate" and isinstance(result.get("gates"), list) and result["gates"]:
+        root = (values or {}).get("repo_root")
+        unread = bool(result.get("unmeasured_reason")) or (
+            root is not None and bool(go_rust_manifests(root, (values or {}).get("excludes"))))
+        meets = None if unread else False
+        return {**result, "configured": False, "gates": [], "max_threshold_percent": None,
+                "threshold_meets_minimum": meets, "enforced_meets_minimum": meets,
+                "unmeasured_reason": GO_RUST_UNMEASURED if unread else None,
+                "enforced_basis": "no_gate"}
+    return None
+
+
 def split_reads(values: Sequence[Any]) -> tuple[dict[str, Any], tuple[Any, ...]]:
     """The registry entry's reads after ``units`` and ``nested_instructions``, split into the
     ``REPO_BLOCKS`` mapping and the ``UNIT_EXTERNAL_READS`` values."""
@@ -374,11 +487,12 @@ def read_units(units: Any, nested_instructions: Any, *external: Any,
     if not isinstance(units, Mapping) or units.get("available") is False:
         return {"available": False, "unit_count": None, "unit_count_reason": "units_unavailable",
                 "unit_blocks": own_blocks, "units": []}
-    repo = {**values, "nested_instructions": nested_instructions}
     paths = _paths(model)
     readings: list[UnitReading] = []
     listed = [u for u in units.get("units") or [] if isinstance(u, Mapping)]
     members = [str(u.get("path")) for u in listed if u.get("path") not in (None, "", ".")]
+    repo = {**(repo_blocks or {}), **values, "nested_instructions": nested_instructions,
+            "members": members}
     for unit in units.get("units") or []:
         rel = str(unit.get("path", "")) if isinstance(unit, Mapping) else ""
         if not rel:
@@ -395,9 +509,14 @@ def read_units(units: Any, nested_instructions: Any, *external: Any,
             result = ctx.get(block, inputs.get(block))
             if root:
                 # The repository-wide reading is the root's own, root instruction file and
-                # gates included; a member unit's nested file is that unit's, not the root's.
-                if result is None or not _root_owns(block, result, members):
+                # gates included; a member unit's nested file or gate is that unit's, not
+                # the root's, so without its own evidence the root reads none (#864).
+                if result is None:
                     continue
+                if not _root_owns(block, result, members):
+                    result = _root_without(block, result, members, nested_instructions, values)
+                    if result is None:
+                        continue
             elif scopes[block] == "override":
                 result = OVERRIDES[block](rel, result, repo)
                 if result is None:

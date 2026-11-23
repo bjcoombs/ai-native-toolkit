@@ -6,14 +6,14 @@ id = "core.agent_building"
 kind = "collector"
 title = "Agent building"
 issues = [689, 731]
-callable = "lib.agent_building:scan_agent_building"
+callable = "lib.agents.agent_building:scan_agent_building"
 publishes = ["agent_building"]
 reads = ["repo_root"]
 stage = "post_offers"
 headless = { agent_building = "registered" }
 whys.agent_building = "exempt: plumbing"
 shapes = [
-  { path = "agent_building", type = "lib.agent_building:AgentBuildingBlock" },
+  { path = "agent_building", type = "lib.agents.agent_building:AgentBuildingBlock" },
 ]
 revision = 2
   [entries.privacy]

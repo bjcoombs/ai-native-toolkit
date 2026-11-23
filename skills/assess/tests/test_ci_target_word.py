@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from lib.agent_consistency import check_commands
-from lib.agent_environment import scan_agent_environment
+from lib.agents.agent_environment import scan_agent_environment
 from lib.check_command import check_verdict, is_check_name
 from lib.ci_checks import scan_ci_checks
 from lib.ci_scripts import Present, runs_missing
@@ -59,7 +59,7 @@ _RUNNER_CI = ["python ci.py", "python3 scripts/ci.py", "source ci.sh", "cargo ci
 def test_a_lone_ci_target_in_ci_reads_not_measured(tmp_path: Path, run: str) -> None:
     """The issue's fixtures: Layer 5 level 1 and Layer 3 level 1 read null, never a false 0.
     A ``./ci.sh`` the tree does not hold keeps #937's more specific null, ``script_not_found``."""
-    basis = "script_not_found" if run == "./ci.sh" else "check_target"
+    basis = "script_not_found" if run in ("./ci.sh", "source ci.sh") else "check_target"   # #1033: source too
     assert _scan(tmp_path, run) == (None, basis, None, "check_target")
 
 
@@ -67,7 +67,7 @@ def test_a_lone_ci_target_in_ci_reads_not_measured(tmp_path: Path, run: str) -> 
 def test_a_ci_name_behind_a_runner_is_an_unread_target(text: str) -> None:
     """Read false by the CI vocabulary and true by the instruction one: the reading rests on
     the name alone, so ``ci_checks`` treats it like ``./ci.sh`` (null), never as no check."""
-    assert unread_ci_target(text)
+    assert unread_ci_target(text) or check_verdict(text) is None   # #1033: source reads null itself
 
 
 @pytest.mark.parametrize("text", ["bun ci", "npm ci", "python build.py", "cargo build", "make ci",

@@ -467,7 +467,7 @@ def step_uses(text: str) -> list[tuple[int, str]]:
 
 # A workflow's top-level ``on:`` key. ``true:`` is how a YAML 1.1 loader (PyYAML)
 # reads and re-serialises the bare ``on`` key, so a workflow round-tripped through
-# one carries it. Shared with ``lib/agent_harness.py``.
+# one carries it. Shared with ``lib/agents/agent_harness.py``.
 ON_KEY = re.compile(r"""^(?:on|"on"|'on'|true)\s*:(?P<rest>.*)$""")
 _EVENT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 

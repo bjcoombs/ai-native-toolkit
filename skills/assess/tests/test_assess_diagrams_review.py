@@ -314,7 +314,7 @@ def test_counts_only_run_redraws_the_review_diagrams_from_the_hashed_copy(
     assert hashed and all(p.startswith("h:") for p in hashed)
     full = json.loads((repo / ".assess" / "run-context.json").read_text(encoding="utf-8"))
     real_paths = [d["path"] for d in full["doc_staleness"]["docs"]]
-    drift = repo / ".assess" / rd.COUNTS_ONLY_FILES[0]
+    drift = repo / ".assess" / "doc-drift.counts-only.svg"
     if drift.exists():
         assert not any(path in drift.read_text(encoding="utf-8") for path in real_paths)
     # The full-text pictures beside the report are left as the run drew them.
@@ -325,5 +325,6 @@ def test_counts_only_run_redraws_the_review_diagrams_from_the_hashed_copy(
 def test_counts_only_diagrams_are_named_apart() -> None:
     hashed = counts_only(CTX, hash_paths=True, salt="s")
     drawn = rd.counts_only_diagrams(hashed)
-    assert [d["file"] for d in drawn] == ["doc-drift.counts-only.svg", "review-strip.counts-only.svg"]
-    assert all(d["svg"] is not None for d in drawn)
+    assert [d["file"] for d in drawn] == ["package-map.counts-only.svg", "doc-drift.counts-only.svg",
+                                          "review-strip.counts-only.svg"]
+    assert all(d["svg"] is not None for d in drawn[1:])  # CTX has no structure block

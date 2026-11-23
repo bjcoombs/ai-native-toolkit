@@ -1,6 +1,6 @@
 # The core check manifest (#789): every collector, signal, condition and finding the
 # toolkit ships, declared once. Contract: skills/assess/references/check-manifest.schema.json;
-# loader: skills/assess/scripts/lib/check_manifest.py. The finding tables, the coupling
+# loader: skills/assess/scripts/lib/manifest/check_manifest.py. The finding tables, the coupling
 # thresholds, the counts-only rules (each collector's privacy table) and the per-block
 # reason descriptions of the published schemas are generated from it at import (#795).
 # Agreement with the scan registry, the headless tables, the typed roots and the default
@@ -106,6 +106,7 @@ fragments = [
   "level",
   "headline",
   "unit_readings",
+  "unit_levels",
 ]
 
 # The why of each truth tag (lib/levels_fields.py TRUTH_TAGS, #939): one table per tag,
