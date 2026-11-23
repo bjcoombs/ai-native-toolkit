@@ -428,3 +428,147 @@ def test_main_corrupt_context_skips_not_fails(tmp_path, capsys):
 def test_main_no_args_is_usage_error(capsys):
     assert main([]) == 2
     assert "Usage" in capsys.readouterr().err
+
+
+# --- gate loss (#1152) ----------------------------------------------------
+
+def _gate_conditions(states: dict[str, str]) -> list[dict]:
+    """Every condition a default-model Step gate reads, met unless ``states`` names
+    the gate (``{"ci_runs_tests": "unmet"}`` sets each of its conditions)."""
+    from lib.level_tally import default_model
+    out: dict[str, dict] = {}
+    for step in default_model().get("steps", []):
+        for g in step["gates"]:
+            for n in range(1, g["level"] + 1):
+                cid = f"{g['row']}.{n}"
+                out[cid] = {"id": cid, "state": states.get(g["id"], "met")}
+    return list(out.values())
+
+
+def _loss_ctx(lost: list[str] | None, states: dict[str, str] | None = None,
+              held: list[str] | None = None) -> dict:
+    """A run that lost ``lost`` since a committed baseline holding ``held`` (default:
+    instructions plus every lost gate)."""
+    ctx = _ctx([])
+    ctx["since_last_run"] = {"available": True, "first_run": False, "gates_lost": lost}
+    ctx["level"] = {"step": 2, "conditions": _gate_conditions(states or {})}
+    held = held if held is not None else ["instructions", *(lost or [])]
+    ctx["prior_level"] = {"baseline": {"run_id": "r", "head_sha": "a" * 40, "held_gates": held}}
+    return ctx
+
+
+def test_gate_loss_is_off_by_default_and_warns():
+    """Behaviour-neutral for the GitHub Action: without the opt-in a lost gate is a warn line."""
+    gate = load_gate_config(Path("/nonexistent"))
+    assert gate["fail_on_gate_loss"] is False
+    verdict = evaluate(_loss_ctx(["ci_runs_tests"], {"ci_runs_tests": "unmet"}), gate)
+    assert verdict["failed"] is False
+    assert verdict["gates_lost_warning"] == ["ci_runs_tests"]
+    text = format_verdict(verdict)
+    assert "warn gate lost: ci_runs_tests" in text
+    assert "no findings fired" not in text
+
+
+def test_gate_loss_fails_when_opted_in_and_unmet(tmp_path):
+    _write_config(tmp_path, "[gate]\nfail_on_gate_loss = true\n")
+    gate = load_gate_config(tmp_path)
+    assert gate["fail_on_gate_loss"] is True
+    verdict = evaluate(_loss_ctx(["ci_runs_tests"], {"ci_runs_tests": "unmet"}), gate)
+    assert verdict["failed"] is True
+    assert verdict["threshold_breaches"] == [
+        {"metric": "gates_lost", "count": 1, "paths": ["ci_runs_tests"], "step_from": 3, "step_to": 2}]
+    assert "FAIL gate lost: ci_runs_tests" in format_verdict(verdict)
+
+
+def test_gate_loss_unread_never_fails(tmp_path):
+    """A gate that could not be read this run is unknown, never a loss."""
+    _write_config(tmp_path, "[gate]\nfail_on_gate_loss = true\n")
+    verdict = evaluate(_loss_ctx(["ci_runs_tests"], {"ci_runs_tests": "not_measured"}),
+                       load_gate_config(tmp_path))
+    assert verdict["failed"] is False
+    assert verdict["gates_unread_warning"] == ["ci_runs_tests"]
+    assert "warn no longer measured: ci_runs_tests" in format_verdict(verdict)
+
+
+def test_gate_loss_nothing_on_first_run_or_unknown(tmp_path):
+    _write_config(tmp_path, "[gate]\nfail_on_gate_loss = true\n")
+    gate = load_gate_config(tmp_path)
+    for lost in (None, []):
+        verdict = evaluate(_loss_ctx(lost), gate)
+        assert verdict["failed"] is False and "gates_lost_warning" not in verdict
+    degraded = _loss_ctx(["ci_runs_tests"], {"ci_runs_tests": "unmet"})
+    degraded["since_last_run"] = {"available": False, "reason": "scan_error"}
+    assert evaluate(degraded, gate)["failed"] is False
+
+
+def test_gate_loss_without_level_reads_unread(tmp_path):
+    """No level result: the lost gate's state is unknown, so it cannot fail."""
+    _write_config(tmp_path, "[gate]\nfail_on_gate_loss = true\n")
+    ctx = _loss_ctx(["ci_runs_tests"])
+    ctx["level"] = {"available": False}
+    verdict = evaluate(ctx, load_gate_config(tmp_path))
+    assert verdict["failed"] is False
+    assert verdict["gates_unread_warning"] == ["ci_runs_tests"]
+    ctx["level"] = {"conditions": [{"id": "other.1", "state": "met"}]}  # another model
+    assert evaluate(ctx, load_gate_config(tmp_path))["gates_unread_warning"] == ["ci_runs_tests"]
+
+
+def test_gate_loss_malformed_config_value_defaults_off(tmp_path):
+    _write_config(tmp_path, '[gate]\nfail_on_gate_loss = "yes"\n')
+    assert load_gate_config(tmp_path)["fail_on_gate_loss"] is False
+
+
+def test_main_flags_fail_on_gate_loss_and_summary(tmp_path, capsys):
+    ctx = _loss_ctx(["ci_runs_tests"], {"ci_runs_tests": "unmet"})
+    ctx["headline"] = {"summary_lines": ["Step 2 of 4: line one.", "Next: line two.", 3]}
+    (tmp_path / ".assess").mkdir()
+    (tmp_path / ".assess" / "run-context.json").write_text(json.dumps(ctx), encoding="utf-8")
+    assert main([str(tmp_path)]) == 0
+    assert "Step 2 of 4" not in capsys.readouterr().out
+    assert main([str(tmp_path), "--fail-on-gate-loss", "--summary"]) == 1
+    out = capsys.readouterr().out
+    assert out.startswith("Step 2 of 4: line one.\nNext: line two.\n\n/assess gate")
+    assert "FAIL gate lost: ci_runs_tests" in out
+
+
+def test_main_summary_absent_headline_prints_verdict_only(tmp_path, capsys):
+    (tmp_path / ".assess").mkdir()
+    (tmp_path / ".assess" / "run-context.json").write_text(json.dumps(_ctx([])), encoding="utf-8")
+    assert main([str(tmp_path), "--summary"]) == 0
+    assert capsys.readouterr().out.startswith("/assess gate")
+
+
+def test_gate_loss_names_the_step_lost(tmp_path):
+    _write_config(tmp_path, "[gate]\nfail_on_gate_loss = true\n")
+    ctx = _loss_ctx(["ci_runs_tests"], {"ci_runs_tests": "unmet"})
+    verdict = evaluate(ctx, load_gate_config(tmp_path))
+    assert ("FAIL gate lost: ci_runs_tests held at the committed baseline and no longer holds "
+            "(Step 3 -> Step 2)") in format_verdict(verdict)
+    assert verdict["threshold_breaches"][0]["step_from"] == 3
+
+
+def test_no_baseline_yet_is_reported_and_passes(tmp_path):
+    _write_config(tmp_path, "[gate]\nfail_on_gate_loss = true\n")
+    ctx = _loss_ctx(None)
+    ctx["since_last_run"]["first_run"] = True
+    verdict = evaluate(ctx, load_gate_config(tmp_path))
+    assert verdict["failed"] is False and verdict["no_baseline"] is True
+    assert "no baseline yet" in format_verdict(verdict)
+    # Off by default: the Action's log is unchanged.
+    assert "no_baseline" not in evaluate(ctx, load_gate_config(Path("/nonexistent")))
+
+
+def test_a_loss_without_a_committed_baseline_only_warns(tmp_path):
+    """since_last_run can compare with an earlier run-context.json left on disk; only
+    the committed baseline can confirm a loss that fails the gate."""
+    _write_config(tmp_path, "[gate]\nfail_on_gate_loss = true\n")
+    gate = load_gate_config(tmp_path)
+    ctx = _loss_ctx(["ci_runs_tests"], {"ci_runs_tests": "unmet"})
+    del ctx["prior_level"]
+    verdict = evaluate(ctx, gate)
+    assert verdict["failed"] is False
+    assert verdict["gates_lost_warning"] == ["ci_runs_tests"] and verdict["no_baseline"] is True
+    assert "no baseline yet" in format_verdict(verdict)
+    # A committed baseline that did not hold the gate confirms nothing either.
+    ctx = _loss_ctx(["ci_runs_tests"], {"ci_runs_tests": "unmet"}, held=["instructions"])
+    assert evaluate(ctx, gate)["failed"] is False
