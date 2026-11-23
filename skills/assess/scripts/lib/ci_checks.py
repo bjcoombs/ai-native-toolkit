@@ -328,7 +328,7 @@ from lib.named_check import (
 from lib.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
 from lib.ci_scripts import Present, ScriptTree, committed, runs_missing, script_runs
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
-from lib.command_resolver import command_words, extract_commands
+from lib.command_resolver import command_words, dot_as_source, extract_commands
 from lib.external_ci_rules import as_external
 from lib.lint_vocabulary import dotnet_build
 from lib.merged_ci import MergedStatus, as_merged
@@ -632,6 +632,7 @@ def _basis(found: bool, merged: bool, *, elsewhere: bool, partial: bool, unread:
     return False, "no_check_command" if files else "no_ci"
 
 
+@dot_as_source()   # . ./test.sh reads as source ./test.sh on a CI line (#1033)
 def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
                    merged_ci: object = None, external_ci: object = None) -> CiChecksBlock:
     """Build the ``ci_checks`` block for the repository at ``repo_root``. ``merged_ci`` is the

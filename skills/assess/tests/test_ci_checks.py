@@ -583,9 +583,9 @@ def test_lint_runs_on_an_unread_ci_system_is_not_measured(
 
 @pytest.mark.parametrize(("files", "expected"), [
     pytest.param(_gha("./ci.sh"), (None, "script_not_found"), id="missing-ci-sh"),
-    # #951 took away the credit from the name ci; #1033 credits the body it reads (lib.script_body):
-    # its last statement is pytest, so the script fails when pytest does.
-    pytest.param({**_gha("./ci.sh"), "ci.sh": "pytest\n"}, (True, "enforced_check"),
+    # #951 took away the credit from the name ci. #1033 reads the body of an executable script
+    # only: this ci.sh is mode 100644, so ./ci.sh exits 126 and gates nothing (null).
+    pytest.param({**_gha("./ci.sh"), "ci.sh": "pytest\n"}, (None, "check_target"),
                  id="committed-ci-sh"),
     pytest.param({**_gha("./ci.sh"), "ci.sh": "echo deploy\n"}, (None, "check_target"),
                  id="committed-ci-sh-runs-no-check"),
@@ -637,8 +637,8 @@ def test_a_missing_script_in_a_git_checkout_reads_the_tracked_files(tmp_path: Pa
     assert (block["enforced_check_runs"], block["enforced_basis"]) == (None, "script_not_found")
     subprocess.run(["git", "-C", str(tmp_path), "add", "ci.sh"], check=True)
     block = scan_ci_checks(tmp_path)
-    # Once tracked, its body is read (#1033, lib.script_body): pytest is its last statement.
-    assert (block["enforced_check_runs"], block["enforced_basis"]) == (True, "enforced_check")
+    # Once tracked it is an unread target: ./ci.sh of a 100644 file is not read (#951, #1033).
+    assert (block["enforced_check_runs"], block["enforced_basis"]) == (None, "check_target")
 
 
 def test_a_gitignored_script_is_not_missing(tmp_path: Path) -> None:

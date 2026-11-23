@@ -17,6 +17,7 @@ import pytest
 from lib.check_command import check_verdict
 from lib.ci_checks import scan_ci_checks
 from lib.ci_scripts import script_path
+from lib.command_resolver import dot_as_source
 from lib.named_check import setup_ci_target
 
 Reading = tuple[bool | None, str, bool | None, str]
@@ -43,8 +44,10 @@ def _scan(tmp_path: Path, run: str, files: dict[str, str] | None = None) -> Read
     (". venv/bin/activate", "source venv/bin/activate"),
 ])
 def test_dot_reads_as_source(dot: str, source: str) -> None:
-    assert check_verdict(dot) is check_verdict(source)
-    assert script_path(dot) == script_path(source)
+    with dot_as_source():
+        assert check_verdict(dot) is check_verdict(source)
+        assert script_path(dot) == script_path(source)
+    assert check_verdict(dot) is False   # outside a CI line (instruction files): as on main
 
 
 @pytest.mark.parametrize(("run", "files", "expected"), [

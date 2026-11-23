@@ -36,7 +36,8 @@ test under ``named_check.instruction_words``, so a missing ``./ci.sh`` stays
 ``text`` runs, read at its exact tracked path (never the lenient suffix; at most 64 KiB),
 provably fails on a failing ``test`` command (``lib.script_body``). The form decides the
 start state: ``. x`` / ``source x`` is sourced, ``bash -e x`` takes the shell's flags, ``./x``
-its shebang. ``lib.ci_checks`` adds it to its check and lint line tests, so a read body only
+its shebang, and only when git records the file as executable (mode 100755), since a
+``./x`` of a 100644 file exits 126 and gates nothing. ``lib.ci_checks`` adds it to its check and lint line tests, so a read body only
 upgrades a name reading: ``./ci.sh`` that ends in ``pytest`` reads true; one it cannot show
 keeps the name's reading (``check_target``, or true for ``./test.sh``).
 
@@ -46,6 +47,7 @@ orchestrator.
 """
 from __future__ import annotations
 
+import subprocess
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
@@ -104,6 +106,14 @@ class ScriptTree:
 
     def __init__(self, root: Path, tracked: frozenset[str]) -> None:
         self._root, self._tracked, self._present = root, tracked, present_in(root, tracked)
+        self._modes: dict[str, str] | None = None
+
+    def executable(self, path: str) -> bool:
+        """Whether git records ``path`` as executable (mode 100755): ``./x`` of a 100644
+        file exits 126, so the step fails whatever the check does and the check gates nothing."""
+        if self._modes is None:
+            self._modes = _index_modes(self._root)
+        return self._modes.get(path) == "100755"
 
     def __call__(self, path: str) -> bool:
         return self._present(path)
@@ -125,6 +135,8 @@ class ScriptTree:
         body = raw.decode("utf-8", errors="replace")
         words = command_words(text)
         form = "sourced" if words[0] == "source" else "shell" if words[0] in _SHELL_HEADS else "executed"
+        if form == "executed" and not self.executable(path):
+            return False
         state = start_state(form, body, _flags(words) if form == "shell" else [])
         return state is not None and body_runs(body, errexit=state[0], pipefail=state[1], test=test,
                                                sourced=form == "sourced")
@@ -133,6 +145,23 @@ class ScriptTree:
 def script_runs(text: str, present: Present | None, test: Callable[[str], bool]) -> bool:
     """``ScriptTree.runs`` when ``present`` is one, else false (the line was read without a tree)."""
     return isinstance(present, ScriptTree) and present.runs(text, test)
+
+
+def _index_modes(root: Path) -> dict[str, str]:
+    """``{path: mode}`` from ``git ls-files -s -z``; empty outside a git checkout."""
+    try:
+        done = subprocess.run(["git", "-C", str(root), "ls-files", "-s", "-z"], capture_output=True,
+                              encoding="utf-8", errors="surrogateescape", check=False, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    if done.returncode:
+        return {}
+    modes: dict[str, str] = {}
+    for entry in done.stdout.split("\0"):
+        meta, _, path = entry.partition("\t")
+        if path and meta:
+            modes[path] = meta.split(" ", 1)[0]
+    return modes
 
 
 _MAX_BODY = 64 * 1024

@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from conftest import skip_without_posix_shell
+from lib.agent_environment import scan_agent_environment
 from lib.check_command import is_check_command, is_lint_run
 from lib.ci_checks import scan_ci_checks
 from lib.ci_scripts import ScriptTree, script_runs
@@ -146,7 +147,7 @@ def test_a_sourced_set_e_is_ignored_in_an_exempt_position(tmp_path: Path) -> Non
         assert _run(shell, tmp_path, ". ./x.sh && echo ok", body) == 0, shell
 
 
-def _repo(root: Path, run: str, files: dict[str, str]) -> Path:
+def _repo(root: Path, run: str, files: dict[str, str], executable: bool = True) -> Path:
     wf = root / ".github/workflows/ci.yml"
     wf.parent.mkdir(parents=True)
     wf.write_text(f"on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n      - run: {run}\n",
@@ -154,7 +155,8 @@ def _repo(root: Path, run: str, files: dict[str, str]) -> Path:
     for rel, text in files.items():
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text(text, encoding="utf-8")
-    for args in (["init", "-q"], ["add", "-A"]):
+    scripts = [rel for rel in files if rel.endswith(".sh")] if executable else []
+    for args in (["init", "-q"], ["add", "-A"], *([["update-index", "--chmod=+x", *scripts]] if scripts else [])):
         subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True,
                        encoding="utf-8", errors="replace")
     return root
@@ -185,6 +187,17 @@ def test_ci_reads_a_committed_body(tmp_path: Path, run: str, files: dict[str, st
     assert (block["enforced_check_runs"], block["enforced_basis"]) == expected
 
 
+@pytest.mark.parametrize(("run", "expected"), [
+    ("./ci.sh", (None, "check_target")),            # exits 126: the check gates nothing
+    ("bash ci.sh", (True, "enforced_check")), ("sh ci.sh", (True, "enforced_check")),
+    (". ./ci.sh", (True, "enforced_check")),        # no exec bit needed to read or source it
+])
+def test_only_an_executable_script_is_read_when_run_directly(
+        tmp_path: Path, run: str, expected: tuple[bool | None, str]) -> None:
+    block = scan_ci_checks(_repo(tmp_path, run, {"ci.sh": SH + "pytest\n"}, executable=False))
+    assert (block["enforced_check_runs"], block["enforced_basis"]) == expected
+
+
 def test_a_credited_body_is_a_configured_check(tmp_path: Path) -> None:
     block = scan_ci_checks(_repo(tmp_path, "./ci.sh", {"ci.sh": SH + "pytest\n"}))
     assert (block["enforced_check_runs"], block["test_or_lint_configured"], block["basis"]) == (
@@ -194,6 +207,32 @@ def test_a_credited_body_is_a_configured_check(tmp_path: Path) -> None:
 def test_layer_three_reads_a_lint_body(tmp_path: Path) -> None:
     block = scan_ci_checks(_repo(tmp_path, "./ci.sh", {"ci.sh": SH + "set -e\nruff check .\n"}))
     assert (block["lint_runs"], block["lint_basis"]) == (True, "lint_command")
+
+
+def _named_total(root: Path, run: str, present: bool) -> int:
+    wf = root / ".github/workflows/ci.yml"
+    wf.parent.mkdir(parents=True)
+    wf.write_text(f"on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n      - run: {run}\n",
+                  encoding="utf-8")
+    (root / "CLAUDE.md").write_text(f"# Repo\n\n```bash\n{run}\n```\n", encoding="utf-8")
+    if present:
+        (root / run.split()[-1].removeprefix("./")).write_text("pytest\n", encoding="utf-8")
+    for args in (["init", "-q"], ["add", "-A"],
+                 ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "init"]):
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True,
+                       encoding="utf-8", errors="replace")
+    block = scan_agent_environment(root, {"CLAUDE.md": {"grade": "B"}}, None, probe_ci=False)
+    return block["check"]["named_total"]
+
+
+@pytest.mark.parametrize(("run", "present", "total"), [
+    (". ./test.sh", True, 0), (". ./test.sh", False, 0), (". ./ci.sh", True, 0),
+    ("source ./test.sh", True, 1), ("source ./test.sh", False, 0),
+])
+def test_layer_zero_reads_dot_as_on_main(tmp_path: Path, run: str, present: bool, total: int) -> None:
+    """The ``.`` rewrite is for CI lines only (``command_resolver.dot_as_source``): the named
+    checks of an instruction file keep main's readings."""
+    assert _named_total(tmp_path, run, present) == total
 
 
 def test_script_runs_needs_a_script_tree(tmp_path: Path) -> None:
