@@ -59,4 +59,6 @@ EMPTY_DENOMINATORS: dict[str, tuple[str, str]] = {
         "stats_summary.loc_by_class.source.files_scored", "no_source_files"),
     # No manifest to lock is not a lockfile check passed (#927).
     "agent_environment.pinning.unlocked_total": ("agent_environment.pinning.manifests_total", "no_manifests"),
+    # No skill or agent file is not a skill that follows the guidance (#1045).
+    "skill_disclosure.files_breaking": ("skill_disclosure.files_considered", "no_skill_files"),
 }

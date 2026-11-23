@@ -28,7 +28,7 @@ A scan that feeds no maturity-model criterion is `unclassified` until its eviden
 
 ## Conditions by truth tag
 
-Each condition carries one or more truth tags: the truth it keeps honest. A condition holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. A condition with several tags is listed under its first tag and named under the others as shared; it counts once. There are 24 conditions, 2 of them with more than one tag.
+Each condition carries one or more truth tags: the truth it keeps honest. A condition holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. A condition with several tags is listed under its first tag and named under the others as shared; it counts once. There are 25 conditions, 2 of them with more than one tag.
 
 | Tag | Conditions | Listed here | Shared |
 |---|---|---|---|
@@ -36,7 +36,7 @@ Each condition carries one or more truth tags: the truth it keeps honest. A cond
 | Contracts (`contracts`) | 0 | 0 | 0 |
 | Docs (`docs`) | 3 | 2 | 1 |
 | Structure (`structure`) | 6 | 6 | 0 |
-| Agent context (`agent_context`) | 6 | 6 | 1 |
+| Agent context (`agent_context`) | 7 | 7 | 1 |
 | Agent runtime (`agent_runtime`) | 4 | 4 | 1 |
 | Governance (`governance`) | 3 | 3 | 0 |
 | Supply chain (`supply_chain`) | 1 | 0 | 1 |
@@ -93,7 +93,7 @@ Tag `structure`: 6 conditions, none shared with another tag.
 
 That an agent starts each task knowing how this repository works and how to check its own change.
 
-Tag `agent_context`: 6 conditions, 1 shared with another tag.
+Tag `agent_context`: 7 conditions, 1 shared with another tag.
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -105,6 +105,7 @@ Tag `agent_context`: 6 conditions, 1 shared with another tag.
 | `guardrails-stated.2` Every configured gate is stated | `guardrails` | Share of configured gates an instruction file states: is at least 100 (`guardrails.stated_pct gte 100`) | `measured` | yes | - | positive | requires `guardrails-stated.1` | - | With every configured gate written down, rule and threshold, an agent can check each one before it pushes. | Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing. |
 | `agent-consistency.1` Every agent system names the same checks | `agent_consistency` | Commands and thresholds the agent systems disagree on: is 0 (`agent_consistency.conflicts eq 0`) | `measured` | yes | - | positive | - | - | When agent systems are told different check commands or thresholds, one agent's change passes checks another agent was told to run differently. | Make the instruction files agree: name the same test and lint commands and the same thresholds in each, or replace each tool's file with the pointer line the report gives. |
 | `agent-consistency.2` Every agent system reads one canonical file | `agent_consistency` | Agent systems not linked to the canonical instruction file: is 0 (`agent_consistency.unlinked eq 0`) | `measured` | yes | - | positive | requires `agent-consistency.1` | - | One source of instructions keeps every agent's picture of the repository the same, and keeps it maintained in one place. | Keep AGENTS.md as the one source and make each other tool's file a thin pointer or a symlink to it, using the exact line the report gives for that tool. |
+| `skill-disclosure.1` Skills load only what the task needs | `skill_disclosure` | Skill and agent files that break a disclosure rule: is 0 (`skill_disclosure.files_breaking eq 0`) | `measured` | yes | - | positive | - | - | A skill loads its whole SKILL.md every time it triggers, so detail that only one branch needs spends an agent's context before work starts; keeping the body small, the description within its limit and references one level deep keeps that cost to what the task uses. | For each file the report names, fix the rule it breaks: give each SKILL.md and agent definition a name and a description of at most 1024 characters, move detail only some tasks need into references/ linked from SKILL.md, and link each reference to a file that exists. |
 
 ### Agent runtime
 
@@ -153,7 +154,7 @@ How many conditions each pair of tags shares. The diagonal is the tag's own coun
 | `contracts` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `docs` | 0 | 0 | 3 | 0 | 1 | 0 | 0 | 0 |
 | `structure` | 0 | 0 | 0 | 6 | 0 | 0 | 0 | 0 |
-| `agent_context` | 0 | 0 | 1 | 0 | 6 | 0 | 0 | 0 |
+| `agent_context` | 0 | 0 | 1 | 0 | 7 | 0 | 0 | 0 |
 | `agent_runtime` | 0 | 0 | 0 | 0 | 0 | 4 | 0 | 1 |
 | `governance` | 0 | 0 | 0 | 0 | 0 | 0 | 3 | 0 |
 | `supply_chain` | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 |
@@ -201,6 +202,7 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | `doc-freshness` | Documentation freshness | team | `min` | `doc-freshness.1`, `doc-freshness.2` |
 | `guardrails-stated` | Guardrails stated | team | `min` | `guardrails-stated.1`, `guardrails-stated.2` |
 | `agent-consistency` | Cross-agent instruction consistency | team | `min` | `agent-consistency.1`, `agent-consistency.2` |
+| `skill-disclosure` | Skill disclosure | team | `min` | `skill-disclosure.1` |
 
 ## Scans
 
@@ -514,6 +516,20 @@ It names the always-loaded sections that are reference for one tool or subtree, 
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
 
+### `skill_disclosure`: Skill disclosure
+
+A skill loads its whole SKILL.md every time it triggers, so detail that only one branch needs spends an agent's context before work starts; keeping the body small, the description within its limit and references one level deep keeps that cost to what the task uses.
+
+Each SKILL.md and agent definition against Anthropic's skill authoring guidance: body lines, size in tokens, name and description, and references that resolve one level deep.
+
+- Collector: `core.skill_disclosure`, reading `repo_root`, `scope`, `excludes`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `skill_disclosure.files.breaks` token, `skill_disclosure.files.kind` token, `skill_disclosure.files.path` path, `skill_disclosure.files.references.target` path.
+- Used by: row `skill-disclosure`.
+- Evidence: `skill_disclosure.files_breaking` head_structure (measured).
+- Not measured when: it cannot read its input; the block says why.
+
 ### `agent_consistency`: Cross-agent instruction consistency
 
 It compares the instruction files of every agent system present, so each agent is told the same checks and thresholds, from one source.
@@ -749,7 +765,7 @@ A unit inherits root CI and review but not the root's suppressions, stale docs o
 
 Each unit's own readings of the scope-sensitive scans (suppressions, doc staleness, structure, size, its own coverage gate or instruction file), with every condition tagged unit or inherited.
 
-- Collector: `core.unit_readings`, reading `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes`.
+- Collector: `core.unit_readings`, reading `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes`.
 - Network: no.
 - Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `unit_readings.unit_blocks` token, `unit_readings.unit_count_reason` token, `unit_readings.units.conditions.id` token, `unit_readings.units.conditions.origin` token, `unit_readings.units.kind` token, `unit_readings.units.path` hashed_path.
@@ -1071,15 +1087,16 @@ The scan registry in run order, including the private inputs other scans read.
 | `agent_building` | Agent building | `repo_root` | `agent_building` | no |
 | `layer_grades` | Deterministic layer grades | `instruction_grading`, `nested_instructions` | `layer_grades` | no |
 | `instruction_placement` | Instruction placement | `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes` | `instruction_placement` | no |
+| `skill_disclosure` | Skill disclosure | `repo_root`, `scope`, `excludes` | `skill_disclosure` | no |
 | `gap_actions` | Gap actions | `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`, `instruction_placement` | `gap_actions` | no |
 | `agent_consistency` | Cross-agent instruction consistency | `repo_root`, `excludes` | `agent_consistency` | no |
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |
 | `agent_outcome` | Agent commit outcomes | `repo_root`, `scope`, `history_window`, `fleet_config` | `agent_outcome` | no |
 | `doc_claims` | Doc claims | `repo_root`, `instruction_files`, `scope`, `excludes` | `doc_claims` | no |
 | `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope` | `guardrails` | no |
-| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `level` | no |
+| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `skill_disclosure`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `level` | no |
 | `since_last_run` | Since last run | `level`, `assess_dir`, `repo_root`, `superseded`, `instruction_placement` | `since_last_run` | no |
 | `headline` | Deterministic headline | `level`, `since_last_run` | `headline` | no |
-| `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
-| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
+| `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
+| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `skill_disclosure`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
 | `unit_rollup` | Monorepo unit roll-up | `unit_levels`, `units` | `unit_rollup` | no |

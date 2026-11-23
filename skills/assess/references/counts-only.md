@@ -726,6 +726,15 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `instruction_placement.loaded_in_full.relocatable.home.kind` | token |
 | `instruction_placement.loaded_in_full.relocatable.home.target` | path (hashed when hashing is on) |
 
+## skill_disclosure
+
+| Field | Kept as |
+|---|---|
+| `skill_disclosure.files.path` | path (hashed when hashing is on) |
+| `skill_disclosure.files.kind` | token |
+| `skill_disclosure.files.breaks` | token |
+| `skill_disclosure.files.references.target` | path (hashed when hashing is on) |
+
 ## gap_actions
 
 | Field | Kept as |

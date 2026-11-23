@@ -13,6 +13,7 @@ leaves every other block to the single repository-wide run.
   the unit's folder as ``scope``, and its blocks are the unit's own reading (origin
   ``unit``). The scoped collectors are the suppressions (``promissory``,
   ``promissory_markers``), the doc graph and staleness (``doc_graph``, ``doc_staleness``),
+  skill disclosure (``skill_disclosure``, #1045: a ``skill`` unit's own only),
   the import structure (``structure_scan``, and ``keyhole_blocks`` for ``structure``) and
   size and complexity (``run_header`` for ``stats_summary``).
 - ``override``: the repository-wide reading is inherited unless the unit holds its own
@@ -34,6 +35,13 @@ leaves every other block to the single repository-wide run.
   ``ci_checks``: unit-local CI detection is not built yet, so a unit's CI conditions read
   ``inherited`` and never a false unit-local value.
 
+**Unit kinds** (#1045). A scoped collector may name ``unit_kinds`` in its fragment: only units
+of those kinds (``units`` entry ``kind``) read its blocks as their own, and every other unit
+inherits them (origin ``inherited``). ``skill_disclosure`` names ``skill``: a skill folder's
+size, description and references are that skill's, while a ``package``, ``agents`` or
+``commands`` unit holding skills inherits the repository-wide reading. A collector without the
+key is every kind's (``unit_kinds``).
+
 **The unit pass** (``unit_table``). For each model block (``level_tally.DEFAULT_BLOCKS``)
 whose collector is scoped or override, its producer is the core scan that publishes it as a
 plain block, or else the block's headless variant (``headless_layers`` and ``headless_static``, as
@@ -48,7 +56,8 @@ repository-wide blocks (``REPO_BLOCKS``), the same scans over the same tree, as 
 override blocks included (the root instruction file and the root gates are the root's own),
 except evidence that sits in member units: a ``layer_grades`` reading that rests on nested
 files alone (``nested_only``), or a ``coverage_gate`` whose every gate is under a member.
-Those are their units', so the root reads its own without them (#864, ``_root_without``):
+Those are their units', so the root reads its own without them (#864, ``_root_without``;
+a root skill's ``skill_disclosure`` keeps only the files under no member unit, #1045):
 ``instruction_file_present`` true only for a nested file under no member, and a
 coverage reading with no gate. Where member
 units sit below a root unit, the root's scoped readings therefore cover the members' files
@@ -106,7 +115,7 @@ SECTION = "unit_readings"
 # The repository-wide unit blocks, which the root unit (``.``) reads as its own instead of
 # running the same scans again on the same tree (pinned to ``unit_blocks`` by a test).
 REPO_BLOCKS = ("coverage_gate", "doc_staleness", "layer_grades", "promissory_markers",
-               "stats_summary", "structure")
+               "skill_disclosure", "stats_summary", "structure")
 # The registry entry's own reads, before UNIT_EXTERNAL_READS.
 OWN_READS = ("units", "nested_instructions", *REPO_BLOCKS)
 # The repository-wide values the unit pass reads (pinned to ``unit_table`` by a test).
@@ -257,6 +266,13 @@ EVIDENCE_ONLY = frozenset({"layer_grades"})
 def unit_scopes(manifest: cm.CheckManifest) -> dict[str, str]:
     """Published block -> its collector's ``unit_scope``, for the classified collectors."""
     return {block: c["unit_scope"] for c in cm.collectors(manifest) if "unit_scope" in c
+            for block in c["publishes"]}
+
+
+def unit_kinds(manifest: cm.CheckManifest) -> dict[str, frozenset[str]]:
+    """Published block -> the unit kinds that read it as their own (``unit_kinds``, #1045), for
+    the collectors that name them; a block not listed is every kind's."""
+    return {block: frozenset(c["unit_kinds"]) for c in cm.collectors(manifest) if "unit_kinds" in c
             for block in c["publishes"]}
 
 
@@ -414,6 +430,10 @@ def _root_owns(block: str, result: Any, members: Sequence[str]) -> bool:
         return True
     if block == "layer_grades":
         return result.get("instruction_presence") == "root"
+    if block == "skill_disclosure":  # a root skill's own files, not its member skills' (#1045)
+        files = result.get("files")
+        return not isinstance(files, list) or not any(
+            isinstance(f, Mapping) and any(_under(f.get("path"), m) for m in members) for f in files)
     if block == "coverage_gate":
         gates = result.get("gates")
         return isinstance(gates, list) and any(
@@ -438,6 +458,11 @@ def _root_without(block: str, result: Any, members: Sequence[str], nested: Any,
     """
     if not isinstance(result, Mapping):
         return None
+    if block == "skill_disclosure" and isinstance(result.get("files"), list):
+        kept = [f for f in result["files"] if isinstance(f, Mapping)
+                and not any(_under(f.get("path"), m) for m in members)]
+        return {**result, "files": kept, "files_considered": len(kept),
+                "files_breaking": sum(bool(f.get("breaks")) for f in kept)}
     if block == "layer_grades" and result.get("instruction_presence") == "nested_only":
         files = nested.get("files") if isinstance(nested, Mapping) else None
         if not isinstance(files, list):
@@ -454,6 +479,17 @@ def _root_without(block: str, result: Any, members: Sequence[str], nested: Any,
                 "unmeasured_reason": GO_RUST_UNMEASURED if unread else None,
                 "enforced_basis": "no_gate"}
     return None
+
+
+def _kind(unit: Mapping[str, Any]) -> Kind:
+    """The ``units`` entry's kind, ``package`` when it names none this module knows."""
+    kind = unit.get("kind")
+    return kind if kind in KINDS else "package"
+
+
+def _kind_blocks(blocks: Sequence[str], kinds: Mapping[str, frozenset[str]], kind: str) -> list[str]:
+    """The blocks a unit of ``kind`` reads as its own; another kind's it inherits (#1045)."""
+    return [b for b in blocks if b not in kinds or kind in kinds[b]]
 
 
 def split_reads(values: Sequence[Any]) -> tuple[dict[str, Any], tuple[Any, ...]]:
@@ -484,6 +520,7 @@ def read_units(units: Any, nested_instructions: Any, *external: Any,
     model = model if model is not None else default_model()
     own_blocks = unit_blocks(manifest, tuple(sorted(_paths(model))))
     scopes = unit_scopes(manifest)
+    kinds = unit_kinds(manifest)
     values = dict(zip(UNIT_EXTERNAL_READS, external))
     if set(names) - values.keys():
         raise ValueError(f"the unit pass reads {sorted(set(names) - values.keys())}, "
@@ -509,7 +546,8 @@ def read_units(units: Any, nested_instructions: Any, *external: Any,
         elif specs:
             run(ctx, inputs, None, specs)
         own: dict[str, JsonDict] = {}
-        for block in own_blocks:
+        kind = _kind(unit)
+        for block in _kind_blocks(own_blocks, kinds, kind):
             result = ctx.get(block, inputs.get(block))
             if root:
                 # The repository-wide reading is the root's own, root instruction file and
@@ -526,8 +564,7 @@ def read_units(units: Any, nested_instructions: Any, *external: Any,
                 if result is None:
                     continue
             own[block] = project(result, paths.get(block, []))
-        kind = unit.get("kind") if isinstance(unit, Mapping) else None
-        readings.append({"path": rel, "kind": kind if kind in KINDS else "package",
+        readings.append({"path": rel, "kind": kind,
                          "blocks": own, "conditions": _conditions(model, own)})
     return {"available": True, "unit_count": units.get("unit_count"),
             "unit_count_reason": units.get("unit_count_reason"),
