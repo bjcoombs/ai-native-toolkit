@@ -5154,7 +5154,8 @@
         "level",
         "assess_dir",
         "repo_root",
-        "superseded"
+        "superseded",
+        "instruction_placement"
       ],
       "network": false,
       "private": false

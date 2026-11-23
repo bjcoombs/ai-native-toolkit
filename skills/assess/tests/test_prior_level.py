@@ -220,3 +220,17 @@ def test_version_2_adds_the_committed_baseline_and_version_1_still_reads(tmp_pat
     # a malformed baseline is dropped alone; the tags still read
     assert load_prior_level(tmp_path) == {"prior_level_version": 2, "levels_version": "m", "tags": []}
     assert load_baseline(tmp_path) is None
+
+
+def test_a_malformed_ledger_is_dropped_alone(tmp_path: Path) -> None:
+    """#1084: a bad pruning entry drops the ledger; the tags and the baseline still read."""
+    from lib.prior_level import load_baseline, load_pruning
+    level = _level()
+    (tmp_path / PRIOR_LEVEL_FILE).write_text(json.dumps({
+        "prior_level_version": 2, "levels_version": level["levels_version"], "tags": level["tags"],
+        "baseline": {"run_id": "r", "head_sha": "b" * 40, "held_gates": []},
+        "pruning": [{"path": "CLAUDE.md", "completed_sha": "a" * 40, "cost_before": 300, "runs_held": -1,
+                     "credited": False, "saved": None, "gates": None, "credited_at": None}]}), encoding="utf-8")
+    prior = load_prior_level(tmp_path)
+    assert isinstance(prior, dict) and prior["tags"] == level["tags"] and "pruning" not in prior
+    assert load_pruning(tmp_path) == [] and load_baseline(tmp_path) is not None

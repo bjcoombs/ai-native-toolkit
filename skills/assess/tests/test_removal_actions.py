@@ -89,3 +89,37 @@ def test_a_shrinking_removal_keeps_its_lifecycle_by_finding_and_files(tmp_path: 
     again = _run(repo, "2026-11-22")
     kept = finalize(gap["action"].replace(str(gap["cost"]["value"]), "999"), again["run_id"])
     assert (kept["status"], kept["completed_sha"], kept["mode"]) == ("done", "a" * 40, REMOVE_MODE)
+
+
+def test_a_removal_that_keeps_every_gate_for_two_runs_is_credited_in_the_ledger(tmp_path: Path) -> None:
+    """#1084 success criterion: propose, trim, and after two runs with the gates held the ledger
+    credits it. run-context.json is deleted before each run: the count lives in the committed
+    prior-level.json, so a fresh clone or CI keeps it."""
+    from test_since_last_run import _git
+    repo = _repo(tmp_path, ALWAYS_ON_FLAG_LINES + 60)
+    first = _run(repo, "2026-11-21")
+    (gap,) = [g for g in first["gap_actions"] if g.get("mode") == REMOVE_MODE]
+    before = gap["cost"]["value"]
+    (repo / "CLAUDE.md").write_text("Run `make test` before every commit.\n"
+                                    + "Keep functions small.\n" * 40, encoding="utf-8")
+    _commit(repo, "2026-11-22T10:00:00Z", "trim the always-on instructions")
+    sha = _git(repo, "rev-parse", "HEAD")
+    (repo / ".assess" / "actions.json").write_text(json.dumps({"schema": 2, "actions": [{
+        "rank": 1, "action": gap["action"], "status": "done", "completed_sha": sha,
+        "finding": gap["finding"], "files": gap["paths"], "cost": gap["cost"], "mode": REMOVE_MODE}]}),
+        encoding="utf-8")
+    _commit(repo, "2026-11-22T11:00:00Z", "mark the removal done")
+    (repo / ".assess" / "run-context.json").unlink()
+    second = _run(repo, "2026-11-22")["since_last_run"]
+    assert second["pruned"] == [] and second["pruning"][0]["runs_held"] == 1
+    assert any(line.startswith("Pruning in progress: `CLAUDE.md` (1 of 2") for line in second["lines"])
+    (repo / "src" / "b.py").write_text("def g():\n    return 2\n", encoding="utf-8")
+    _commit(repo, "2026-11-23T10:00:00Z", "more work")
+    (repo / ".assess" / "run-context.json").unlink()
+    third = _run(repo, "2026-11-23")["since_last_run"]
+    (credit,) = third["pruned"]
+    assert credit["credited"] and credit["saved"] == before - 41
+    assert f"- Pruned: always-on text in `CLAUDE.md`, saved {before - 41} always-on lines" in third["markdown"]
+    report = subprocess.run([sys.executable, str(SCRIPTS / "assess_report.py"), str(repo), "--stdout"],
+                            capture_output=True, encoding="utf-8", errors="replace", check=True).stdout
+    assert "Pruned: always-on text in `CLAUDE.md`" in report
