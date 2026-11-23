@@ -30,6 +30,7 @@ import re
 from collections.abc import Callable
 
 _NOOPS = frozenset({"true", "/bin/true", ":", "exit 0"})
+_QUOTED = re.compile(r"'[^']*'|\"(?:\\.|[^\"\\])*\"")
 # Flags that make a linter exit 0 whatever it finds (``ruff check --exit-zero``,
 # ``golangci-lint run --issues-exit-code=0``): the check runs but cannot fail.
 _EXIT_ZERO_FLAG = re.compile(r"(?:^|\s)(?:--exit-zero|--issues-exit-code(?:=|\s+)0)(?=\s|$)")
@@ -109,7 +110,10 @@ def _noop_spans(statement: list[tuple[str, str]]) -> list[range]:
         core = text.lstrip("(")
         start = groups[-1] if groups else 0   # the group the operator before ``seg`` is in
         groups.extend([k] * (len(text) - len(core)))
-        closed = len(core) - len(core.rstrip(")"))
+        # Only the ``)`` no ``(`` / ``$(`` in this segment opened close a group:
+        # ``(cd $(dirname x)`` stays open.
+        bare = _QUOTED.sub("", core)
+        closed = max(0, bare.count(")") - bare.count("("))
         if op == "||" and " ".join(core.rstrip(")").split()) in _NOOPS:
             spans.append(range(start, k + 1))
         del groups[max(0, len(groups) - closed):]

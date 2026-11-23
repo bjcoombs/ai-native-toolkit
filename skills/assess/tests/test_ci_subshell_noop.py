@@ -44,6 +44,10 @@ CREDITED = [
     # bash returns pytest's status: the group's no-op covers only ``echo x``.
     "pytest && (echo x || true)",
     "(cd sub && pytest)",
+    # A ``$( )`` that ends a segment closes no group: the no-op covers the group only.
+    "pytest && (V=$(cat v) && echo y || true)",
+    "pytest && (cd $(dirname x) || true)",
+    "pytest && (echo \")\" || true)",
 ]
 
 
