@@ -1,6 +1,6 @@
 """Truth tags, the legacy layer alias and the additive condition fields of a maturity model (#843).
 
-``lib.levels`` parses a maturity model; this module holds the rules for four
+``lib.levels`` parses a maturity model; this module holds the rules for the six
 condition fields it reads, so the loader stays one file and the rules one page.
 
 **``truth``** (on a level, so on one condition) is required and multi-valued: a
@@ -58,6 +58,17 @@ Layer to truth, the documented mapping of the alias:
   statistic (``signal_grades.EMPTY_DENOMINATORS``) takes that signal's code. The parsed criterion
   keeps the path as its ``value`` too, so every reader of ``value`` shows the
   path it compares with. The condition's grade is the weaker of the two signals'.
+- ``predicted`` and ``review`` on a level, together or not at all (#1086): the
+  direction a condition is predicted to move the agent-outcome measure
+  (``lib.agent_outcome``, #1085) and the date by which ``/fleet`` history should
+  show it. ``predicted`` is one of ``PREDICTIONS``: ``lower_revert`` (a met
+  condition goes with a lower ``revert_share``), ``lower_rework`` (a lower
+  ``rework_share``) or ``none`` (no effect predicted). ``review`` is a TOML local
+  date (``review = 2027-05-23``, unquoted), kept as ISO text so the parsed model
+  stays JSON. Absent (the default) means the condition has no review date and the
+  exit rule never demotes it; the default model sets none (maintainer decision on
+  #1086, no backfill). Neither field changes a criterion, a state, the tally or a
+  Step; the catalog shows them.
 
 The rules for the four condition fields of a maturity model (#843); `levels.parse_levels`
 calls them, and the module docstring is the reference.
@@ -92,12 +103,18 @@ calls them, and the module docstring is the reference.
   next-step wording skips the signal's repository-native guidance for such a criterion and names
   both paths. `levels.unavailable_signal` names the unavailable side in `missing_signals` and in
   the tally's `not_measured` reason. The catalog never counts a hazard.
+- **`predicted`** and **`review`** on a level, both or neither (#1086): `predicted` one of
+  `PREDICTIONS` (`lower_revert`, `lower_rework`, `none`), `review` a TOML local date kept as
+  ISO text. Absent means no review date, so the exit rule never demotes the condition. A bad
+  value, a quoted or timed date, or one field without the other fails the load naming the row
+  and level. They change no result; the catalog shows them (`catalog_md.review_cell`).
 
 Tests: `tests/test_levels_fields.py`.
 """
 from __future__ import annotations
 
-from typing import Any, Mapping
+import datetime as dt
+from typing import Any, Mapping, TypedDict
 
 TRUTH_TAGS: tuple[str, ...] = ("behaviour", "contracts", "docs", "structure", "agent_context",
                                "agent_runtime", "governance", "supply_chain")
@@ -111,6 +128,8 @@ POLARITIES: tuple[str, ...] = ("positive", "hazard")
 DEFAULT_POLARITY = "positive"
 HAZARD = "hazard"
 EQ_SIGNAL_OPS: tuple[str, ...] = ("eq", "ne")
+# The directions a condition can predict on the agent-outcome measure (#1085, #1086).
+PREDICTIONS: tuple[str, ...] = ("lower_revert", "lower_rework", "none")
 
 LEGACY_LAYER_TRUTH: dict[int, tuple[str, ...]] = {
     0: ("agent_context",), 1: ("agent_runtime",), 2: ("structure",), 3: ("structure",),
@@ -209,3 +228,27 @@ def parse_eq_signal(raw: Mapping[str, Any], op: Any, where: str) -> str:
     if op not in EQ_SIGNAL_OPS:
         raise LevelsError(f"{where}: 'eq_signal' needs op {' or '.join(EQ_SIGNAL_OPS)} (got {op!r})")
     return other
+
+
+class ReviewFields(TypedDict, total=False):
+    """A condition's exit-rule fields (#1086); ``lib.levels.Level`` extends it."""
+
+    predicted: str  # one of PREDICTIONS
+    review: str  # ISO date, YYYY-MM-DD
+
+
+def apply_review(level: ReviewFields, entry: Mapping[str, Any], where: str) -> None:
+    """Copy ``predicted`` and ``review`` from a raw level onto ``level``, validated; both or neither."""
+    present = [k for k in ("predicted", "review") if k in entry]
+    if not present:
+        return
+    if len(present) == 1:
+        missing = "review" if present == ["predicted"] else "predicted"
+        raise LevelsError(f"{where}: 'predicted' and 'review' go together; {missing!r} is missing")
+    predicted, review = entry["predicted"], entry["review"]
+    if predicted not in PREDICTIONS:
+        raise LevelsError(f"{where}: 'predicted' must be one of {', '.join(PREDICTIONS)} (got {predicted!r})")
+    if not isinstance(review, dt.date) or isinstance(review, dt.datetime):
+        raise LevelsError(f"{where}: 'review' must be a TOML local date, YYYY-MM-DD unquoted (got {review!r})")
+    level["predicted"] = str(predicted)
+    level["review"] = review.isoformat()

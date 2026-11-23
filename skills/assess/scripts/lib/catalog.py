@@ -17,7 +17,8 @@ named key, so a later field (the #939 ``why``) is an added key, never a restruct
   condition at that grade counts toward a level (``measured`` and ``verified`` do;
   ``config_only`` and ``declared`` are listed, not counted).
 - ``rows``: each maturity-model row with its levels. A level is one condition: its ``id``
-  (``<row id>.<level>``), ``truth`` tags, ``polarity``, ``requires``, ``guarded_by``, the
+  (``<row id>.<level>``), ``truth`` tags, ``polarity``, ``requires``, ``guarded_by``, the exit
+  rule's ``predicted`` direction and ``review`` date (null when unset, #1086), the
   ``step_gates`` that cover it, its ``grade`` (the weakest of every signal its criteria read,
   ``eq_signal`` included, as ``lib.level_tally`` grades it) and whether it ``counts``. Each
   criterion has the signal, its ``producer`` (scan block and collector), the operator and
@@ -45,6 +46,7 @@ fragments), the default maturity model and `level_signals.INPUT_GRADES` into one
 1); `render_json` writes it as `skills/assess/references/measures.json`. Keys: `grades` (each
 grade, its input classes and whether it `counts`: `measured` and `verified` do), `rows` (each
 row's levels, each one condition with its `id`, `truth`, `polarity`, `requires`, `guarded_by`,
+`predicted`, `review` (#1086),
 `step_gates`, `grade` and `counts`, and its criteria with the condition `key`, `producer`, `eq_signal`, plain-words `text`, `title` and `fix` from
 the manifest, `input_class`, `grade`, `counts`), `scans` (one per `signals.known_scans()` name:
 `collector`, `reads`, `network`, `platform`, `headless` (`registered`, `headless_variant`,
@@ -169,6 +171,8 @@ class CatalogLevel(TypedDict):
     polarity: str  # positive or hazard
     requires: list[str]
     guarded_by: str | None
+    predicted: str | None  # the exit rule's predicted direction (lib/levels_fields.py, #1086)
+    review: str | None  # its review date, ISO; None when the condition has none
     step_gates: list[str]  # the gate ids that cover this condition, in Step order
     grade: str
     counts: bool
@@ -324,7 +328,8 @@ def _rows(model: MaturityModel, signals: Mapping[str, cm.SignalEntry],
             levels.append(CatalogLevel(
                 level=level["level"], id=cid, truth=list(level["truth"]),
                 polarity="hazard" if hazard else DEFAULT_POLARITY, requires=list(level.get("requires", [])),
-                guarded_by=level.get("guarded_by"), step_gates=[g for g, _ in gated.get(cid, [])],
+                guarded_by=level.get("guarded_by"), predicted=level.get("predicted"),
+                review=level.get("review"), step_gates=[g for g, _ in gated.get(cid, [])],
                 grade=grade, counts=counts(grade) and not hazard, criteria=criteria))
         agg = row["aggregation"]
         rows.append(CatalogRow(id=row["id"], title=row["title"], scope=row["scope"],
