@@ -6,7 +6,6 @@ import gc
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -278,7 +277,7 @@ def test_dart_scanner_pathological_input_scales_linearly(case: str) -> None:
     assert ratio < 2, (case, ratio, big, small)
 
 
-def _close_brace_function_first(self: Any) -> None:
+def _close_brace_function_first(self: dart_complexity._Scanner) -> None:
     """``_on_close_brace`` as it was before #1078: the brace's own function
     closes before the `=>` bodies inside it, which makes `_close` scan `fns`
     on every `}`."""
@@ -292,7 +291,8 @@ def _close_brace_function_first(self: Any) -> None:
 
 @pytest.mark.no_cover
 @pytest.mark.cpu_budget
-def test_dart_scaling_ratio_catches_the_929_quadratic(monkeypatch) -> None:
+def test_dart_scaling_ratio_catches_the_929_quadratic(
+        monkeypatch: pytest.MonkeyPatch) -> None:
     """Kill test for the scaling bound (#1125): with the #929 quadratic put
     back, ``_scaling_ratio`` on nested `=>` bodies crosses the bound of 2.
 
