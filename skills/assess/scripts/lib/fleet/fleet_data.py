@@ -57,8 +57,9 @@ it (``FLEET_DATA_KEPT``).
 **Unit rows** (#866, ``lib/fleet/fleet_data_units.py``): a repository scanned with
 ``--monorepo-units`` carries ``unit_rows``, one per monorepo unit: its kind (``skill``, ``agents``,
 ``commands`` or ``package``, #1098), its Step, the Step above, the
-first gate of that Step that does not hold, and its per-tag tally, so the page can expand
-the repository into its units. The unit's folder is written in ``--full`` only, or as its
+first gate of that Step that does not hold, its per-tag tally and the sibling units that
+already hold that gate (``learn_from``, #1155), so the page can expand the repository into
+its units. The unit's folder, and each sibling's, is written in ``--full`` only, or as its
 salted hash under ``--hash-paths``; null in plain counts-only. ``unit_rows`` is null for a
 repository not scanned by unit.
 
@@ -93,8 +94,10 @@ from `fleet_level.repo_level`; `public_steps` writes the exclusions' strings und
 `step_fields` and the per-tag tally (`fleet_data_tags.repo_tags`, unit `tag_roll_up`, #1073).
 `unit_rows` (#866, `fleet_data_units`): each repository scanned with `--monorepo-units` lists its
 monorepo units, each with its Step, the Step above, the first gate blocking it and its
-per-tag tally; `public_unit_rows` writes the unit's folder only in `--full` or hashed
-(`hashed_path`: null in plain counts-only), the rest as tokens. Null when not run by unit.
+per-tag tally and its `learn_from` siblings (#1155); each repository's own `learn_from`
+lists the measured repositories of the run that hold its next gate (`repo_learn_from`); `public_unit_rows` writes the unit's
+folder and the siblings' only in `--full` or hashed (`hashed_path`: null in plain
+counts-only), the rest as tokens. Null when not run by unit.
 """
 from __future__ import annotations
 
@@ -119,6 +122,7 @@ from lib.fleet.fleet_data_steps import (
 )
 from lib.fleet.fleet_data_tags import TagRollUp, repo_tags, tag_roll_up
 from lib.fleet.fleet_data_units import UnitRow, unit_rows
+from lib.fleet.fleet_learn_from import repo_learn_from
 from lib.fleet.fleet_tag_profile import FleetTagRow, tag_profile
 from lib.fleet.fleet_groups import repo_signals
 from lib.fleet.fleet_level import repo_level
@@ -217,6 +221,8 @@ class DataRepo(TypedDict):
     gate_blockers: list[GateBlocker]  # #945: every Step gate that does not hold, as tokens
     tags: list[TagCell] | None  # #1073: the headline's per-tag strip; None when not measured
     unit_rows: list[UnitRow] | None  # #866: one row per monorepo unit; None when not run by unit
+    # #1155: the measured repositories holding next_step's first gate; None where names are not written
+    learn_from: list[str] | None
 
 
 # The stamp fields RunDetails leaves out: the stamp's own envelope version, the
@@ -453,6 +459,14 @@ def public_tags(cells: list[TagCell] | None, privacy: Privacy) -> list[TagCell] 
     return [{**cell, "tag": privacy.text("repos.tags.tag", cell["tag"]) or ""} for cell in cells]
 
 
+def public_names(names: list[str] | None, pattern: str, privacy: Privacy) -> list[str] | None:
+    """Sibling names (#1155) under ``privacy``: clear in ``--full``, hashed under a salt, else
+    None, so plain counts-only output names no sibling."""
+    if names is None or not (privacy.full or privacy.salt):
+        return None
+    return [n for n in (privacy.text(pattern, name) for name in names) if n]
+
+
 def public_unit_rows(rows: list[UnitRow] | None, privacy: Privacy) -> list[UnitRow] | None:
     """``rows`` with each string written under ``privacy`` (#866): the unit's folder only in
     ``--full`` or hashed, the blocker and tags as tokens."""
@@ -467,6 +481,7 @@ def public_unit_rows(rows: list[UnitRow] | None, privacy: Privacy) -> list[UnitR
             "disposition": privacy.text("repos.unit_rows.next_blocker.disposition", b["disposition"])}
         out.append({**row, "key": privacy.text("repos.unit_rows.key", row["key"]),
                     "kind": row["kind"], "next_blocker": blocker,
+                    "learn_from": public_names(row["learn_from"], "repos.unit_rows.learn_from", privacy),
                     "tags": [{**c, "tag": privacy.text("repos.unit_rows.tags.tag", c["tag"]) or ""}
                              for c in row["tags"]]})
     return out
@@ -480,6 +495,7 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
     team_rows = [row for row in (maturity_model["rows"] if maturity_model else []) if row["scope"] == SCOPE]
     cells = {repo["repo"]: repo_cells(team_rows, repo) for repo in rows}
     results = level_results(maturity_model, rows)
+    learn = repo_learn_from(results, maturity_model)
     repo_step = step_fields(maturity_model, rows, results)
     repo_tag = {repo: public_tags(cells, privacy) for repo, cells in tag_fields(maturity_model, results).items()}
     steps = maturity_model.get("steps", []) if maturity_model else []
@@ -504,6 +520,7 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
             "tags": repo_tag[name],
             "unit_rows": public_unit_rows(unit_rows(maturity_model, repo["scans"])
                                           if repo["status"] == STATUS_OK else None, privacy),
+            "learn_from": public_names(learn.get(name), "repos.learn_from", privacy),
         })
     return {
         "fleet_data_version": FLEET_DATA_VERSION,

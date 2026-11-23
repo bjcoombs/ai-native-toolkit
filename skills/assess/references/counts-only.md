@@ -920,6 +920,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `unit_rollup.unit_count_reason` | token |
 | `unit_rollup.unlocks.gate` | token |
 | `unit_rollup.unlocks.scope` | token |
+| `unit_rollup.learn_from.unit` | path, dropped unless hashing is on (then hashed) |
+| `unit_rollup.learn_from.gate` | token |
+| `unit_rollup.learn_from.names` | path, dropped unless hashing is on (then hashed) |
 | `unit_rollup.lines` | dropped |
 | `unit_rollup.markdown` | dropped |
 
@@ -972,3 +975,6 @@ kept as written, as is a criterion's `why` (`repos.rows.why`,
 | `repos.unit_rows.next_blocker.state` | token |
 | `repos.unit_rows.next_blocker.disposition` | token |
 | `repos.unit_rows.tags.tag` | token |
+| `repos.unit_rows.kind` | token |
+| `repos.unit_rows.learn_from` | path, dropped unless hashing is on (then hashed) |
+| `repos.learn_from` | path, dropped unless hashing is on (then hashed) |

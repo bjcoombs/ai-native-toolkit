@@ -859,17 +859,44 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "learn_from": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
                     "key",
                     "kind",
+                    "learn_from",
                     "next_blocker",
                     "next_step",
                     "step",
                     "tags"
                   ],
                   "additionalProperties": false
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "learn_from": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
                 }
               },
               {
@@ -883,6 +910,7 @@
           "exclusions",
           "gate_blockers",
           "key",
+          "learn_from",
           "next_step",
           "owner_count",
           "owners",
