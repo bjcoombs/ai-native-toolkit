@@ -185,7 +185,7 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
         refresh_log_readiness(
             assess_dir, ctx.get("run_id"), as_headline(ctx["headline"])["summary"],
         )
-        # The evidence waffle draws the level's conditions (#942): redraw it with them.
+        # The Step ladder and the evidence waffle draw the level (#942, #1102): redraw them with it.
         write_all(assess_dir, build_all(ctx))
     # E1 crosses the refreshed survivor density with this run's hotspots; the
     # findings, attention and report products are rebuilt from it.
