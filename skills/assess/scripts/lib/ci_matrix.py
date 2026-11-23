@@ -46,6 +46,7 @@ from lib.ci_masking import IndentTree, parse_lines
 # A ``${{ ... }}`` expression where a command starts: the inner text is group 1.
 _CMD_EXPR = re.compile(r"""(?:^|[;&|({]\s*|\b(?:then|do|else)\s+)["']?\$\{\{([^}]*)\}\}""")
 _MATRIX_REF = re.compile(r"\$\{\{\s*matrix\.([\w-]+)\s*\}\}")
+_QUOTED_RUN = re.compile(r"""^(\s*(?:-\s+)?[\w.-]+:\s+)(["'])(.*\$\{\{\s*matrix\..*)\2\s*$""")
 _KEY_ONLY = re.compile(r"^\s*matrix\.([\w-]+)\s*$")
 
 Combo = dict[str, str]
@@ -130,9 +131,10 @@ def _axis(tree: IndentTree, key: int) -> tuple[list[str] | None, list[int]]:
 def _combine(axes: dict[str, list[str]], exclude: list[Combo], include: list[Combo]) -> list[Combo]:
     combos = [dict(zip(axes, values, strict=True)) for values in itertools.product(*axes.values())] if axes else []
     combos = [c for c in combos if not any(all(c.get(k) == v for k, v in e.items()) for e in exclude)]
+    originals = list(combos)   # an include merges only into the axis product, never another include
     for entry in include:
         matched = False
-        for combo in combos:
+        for combo in originals:
             if all(combo.get(k, v) == v for k, v in entry.items() if k in axes):
                 combo.update(entry)
                 matched = True
@@ -193,7 +195,9 @@ def _command_keys(texts: list[str]) -> set[str] | None:
 
 
 def _substitute(line: str, combo: Combo) -> str:
-    """``line`` with each ``${{ matrix.<key> }}`` that ``combo`` sets replaced by its value."""
+    """``line`` with each ``${{ matrix.<key> }}`` that ``combo`` sets replaced by its value; a
+    quoted ``run: "${{ matrix.cmd }}"`` scalar loses its quotes, as YAML reads it."""
+    line = _QUOTED_RUN.sub(r"\1\3", line)
     return _MATRIX_REF.sub(lambda m: combo.get(m.group(1), m.group(0)), line)
 
 

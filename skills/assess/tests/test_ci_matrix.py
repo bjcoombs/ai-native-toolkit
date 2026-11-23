@@ -83,3 +83,10 @@ def test_a_with_run_input_is_expanded() -> None:
 
 def test_text_without_jobs_is_unchanged() -> None:
     assert expand_matrix("stages: [test]\n") == ("stages: [test]\n", frozenset())
+
+
+def test_an_include_only_matrix_keeps_every_entry() -> None:
+    matrix = "        include:\n          - cmd: ruff check .\n          - cmd: pytest\n"
+    out = expand_matrix(_job(matrix, "      - run: ${{ matrix.cmd }}\n"))
+    assert [line for line in out.text.splitlines() if "- run:" in line] == [
+        "      - run: ruff check .", "      - run: pytest"]

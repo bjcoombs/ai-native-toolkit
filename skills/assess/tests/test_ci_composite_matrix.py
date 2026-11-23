@@ -176,3 +176,18 @@ def test_a_deeper_composite_is_shifted_left_to_the_caller() -> None:
     assert inline_composites(text, {"a/action.yml": action}.get).splitlines()[4:] == [
         "    - run: pytest", "      shell: bash"]
     assert inline_composites(text, {"a/action.yml": "name: no runs\n"}.get) == text
+
+
+def test_an_include_only_matrix_is_credited(tmp_path: Path) -> None:
+    job = "    strategy:\n      matrix:\n        include:\n          - cmd: ruff check .\n          - cmd: pytest\n"
+    assert _scan(tmp_path, _wf("      - run: ${{ matrix.cmd }}\n", job=job)) == _CREDIT
+
+
+def test_a_quoted_matrix_command_is_credited(tmp_path: Path) -> None:
+    assert _scan(tmp_path, _wf("      - run: \"${{ matrix.cmd }}\"\n", job=_MATRIX)) == _CREDIT
+
+
+def test_a_forwarding_composite_called_with_echo_earns_nothing(tmp_path: Path) -> None:
+    common = "runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: ${{ inputs.run }}\n"
+    steps = "      - uses: ./.github/actions/check\n        with:\n          run: echo hi\n"
+    assert _scan(tmp_path, _wf(steps) | {_ACT: common}) == _NONE
