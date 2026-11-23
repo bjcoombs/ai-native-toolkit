@@ -28,6 +28,7 @@ Tests: ``tests/test_prior_level.py``.
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, TypedDict, cast
@@ -124,13 +125,21 @@ def load_prior_level(assess_dir: Path) -> PriorLevel | PriorLevelUnread | None:
 
 def write_prior_level(assess_dir: Path, level: Any) -> Path | None:
     """Write this run's ``prior-level.json`` (sorted keys, LF); remove a stale one when the
-    level block has no tags. Returns the path written, or None."""
+    level block has no tags. A symlink in the file's place is removed, never written through,
+    and a file that cannot be written (``OSError``) is named on stderr and skipped, as
+    ``assess_diagrams.write_diagrams`` does: the record never stops a run. Returns the path
+    written, or None."""
     path = assess_dir / PRIOR_LEVEL_FILE
     content = build_prior_level(level)
-    if content is None:
-        path.unlink(missing_ok=True)
+    try:
+        if path.is_symlink() or content is None:
+            path.unlink(missing_ok=True)
+        if content is None:
+            return None
+        path.write_text(json.dumps(content, sort_keys=True, indent=2) + "\n", encoding="utf-8", newline="\n")
+    except OSError as e:
+        print(f"/assess: {PRIOR_LEVEL_FILE} not written ({type(e).__name__}: {e})", file=sys.stderr)
         return None
-    path.write_text(json.dumps(content, sort_keys=True, indent=2) + "\n", encoding="utf-8", newline="\n")
     return path
 
 

@@ -100,6 +100,15 @@ malformed tally, as not measured, never as zero (`lib/fleet/fleet_data_tags.py`
 the stored scans. Tag names come from the fixed truth-tag list and every other field is a
 count, so the tally names no repository, path or owner.
 
+**Tag profile.** `tag_profile` (#940, `lib/fleet/fleet_tag_profile.py`) is one row per truth
+tag, every tag in the catalog's order, read from those per-repository tallies (never a second
+tally): `conditions` and `countable` (the model's conditions with the tag, and those the tally
+can count by grade), `repos` (repositories with a per-tag tally), `measured` (those with a
+measured condition on the tag), and `median`, `p25` and `p75`, the measured repositories'
+share met (`met` over `measured`) with linear interpolation, 4 places; all three are `null`
+when no repository is measured on the tag, never 0. `tag_profile` is `null` without
+`--levels`; a document written before it has none. The fleet's `tag-profile.svg` draws it.
+
 ### Unit rows
 
 A run with `--monorepo-units` (#866) scans each repository by monorepo unit, and each

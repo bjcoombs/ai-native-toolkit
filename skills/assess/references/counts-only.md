@@ -929,6 +929,7 @@ kept as written. A string
 | `repos.gate_blockers.state` | token |
 | `repos.gate_blockers.disposition` | token |
 | `repos.tags.tag` | token |
+| `tag_profile.tag` | token |
 | `views.units.tags.cells.tag` | token |
 | `repos.unit_rows.key` | path, dropped unless hashing is on (then hashed) |
 | `repos.unit_rows.next_blocker.gate` | token |

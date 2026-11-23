@@ -13,7 +13,8 @@ and ``measured`` are copied from ``tag_cells``, never counted a second time; ``c
 is the number of the model's conditions with the tag (0 for a tag no condition carries yet,
 such as ``contracts``), ``countable`` those the tally can count by grade (``measured`` or
 ``verified``, not a hazard; ``COUNTABLE_GRADES`` is ``level_tally.COUNTED_GRADES``), ``set_aside``
-the countable ones the owner excluded (``not_applicable``) or that were declined, and
+the countable ones the owner excluded, or that require one the owner excluded (both read
+``not_applicable``), or that were declined, and
 ``not_measured`` lists each condition with the
 tag that was not measured, with its reason code (``{id, reason}``, as the result's own
 ``not_measured``), and ``countable_not_measured`` the countable ones among them: a countable
@@ -30,11 +31,16 @@ from lib.level_result_types import LevelResult, TagCell, TagRow
 from lib.levels import MaturityModel
 from lib.levels_fields import TRUTH_TAGS
 
-__all__ = ["COUNTABLE_GRADES", "tag_cells", "tag_rows", "truth_map"]
+__all__ = ["COUNTABLE_GRADES", "conditions_label", "tag_cells", "tag_rows", "truth_map"]
 
 # The grades the tally counts (``lib.level_tally.COUNTED_GRADES``; kept here, below the engine,
 # so the engine can import this module; a test holds the two equal).
 COUNTABLE_GRADES = frozenset({"measured", "verified"})
+
+
+def conditions_label(n: int) -> str:
+    """``n`` with its unit, for a tag row label: ``1 condition``, ``3 conditions``."""
+    return f"{n} condition" if n == 1 else f"{n} conditions"
 
 
 def truth_map(model: MaturityModel) -> dict[str, list[str]]:

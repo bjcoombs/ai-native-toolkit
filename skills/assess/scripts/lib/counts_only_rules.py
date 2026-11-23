@@ -244,6 +244,8 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
     "repos.gate_blockers.disposition": TOKEN,
     # #1073: the per-tag tally names a tag from the fixed truth-tag list; every other field is a count
     "repos.tags.tag": TOKEN,
+    # #940: the fleet tag profile, a truth tag token per row and numbers
+    "tag_profile.tag": TOKEN,
     "views.units.tags.cells.tag": TOKEN,
     # #866: each monorepo unit row; the unit's folder only hashed, the rest tokens
     "repos.unit_rows.key": HASHED_PATH,
