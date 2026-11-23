@@ -435,7 +435,7 @@ ai-native-toolkit/
 │   ├── assess-findings/ assess-pr/    # /assess render-time helpers
 │   ├── huddle/ deslop/ skill-forge/ semantic-compress/
 │   ├── ghsync/ ghreport/              # SKILL.md + scripts/*.sh
-│   ├── fleet/                         # SKILL.md + scripts/fleet.py, heatmap.py, fleet_labels.py, fleet_next_steps.py + references/{repos,groups,labels}.schema.json
+│   ├── fleet/                         # SKILL.md + scripts/fleet.py, heatmap.py, fleet_labels.py, fleet_next_steps.py, fleet_targets_import.py + references/{repos,groups,labels}.schema.json
 │   ├── doc-contradictions/            # SKILL.md, tests/fixtures/ (eval inputs)
 │   ├── 6hats/ understand/             # User-invoked framework skills
 │   ├── tm/ issues/ fix-pr/ fix-develop/ tm-marathon-config-example/   # User-invoked workflows
