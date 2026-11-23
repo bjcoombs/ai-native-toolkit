@@ -75,6 +75,22 @@ def test_an_unresolved_root_floor_is_reported_but_not_configured(tmp_path: Path)
     assert block["threshold_meets_minimum"] is True
 
 
+def test_an_unresolved_root_floor_is_never_credited_as_run(tmp_path: Path) -> None:
+    """The scope's own 80 is what CI may run; the unresolved root 90 earns no ci_run."""
+    root = _repo(tmp_path, "      - run: cd $PKG && coverage report\n", **{
+        "pyproject.toml": "[tool.coverage.report]\nfail_under = 90\n",
+        "pkg/Makefile": "cov:\n\tpytest --cov --cov-fail-under=80\n"})
+    block = detect_coverage_gate(root, Path("pkg"))
+    assert block["threshold_meets_minimum"] is True
+    assert block["enforced_meets_minimum"] is not True
+
+
+def test_a_templated_root_floor_names_the_reason(tmp_path: Path) -> None:
+    root = _repo(tmp_path, None, **{"pyproject.toml": "[tool.coverage.report]\nfail_under = ${COV_MIN}\n"})
+    block = detect_coverage_gate(root, Path("pkg"))
+    assert (block["threshold_meets_minimum"], block["unmeasured_reason"]) == (None, ROOT_UNRESOLVED)
+
+
 def test_a_ci_run_only_inside_the_scope_drops_the_root_floor(tmp_path: Path) -> None:
     root = _repo(tmp_path, "      - run: pytest --cov\n        working-directory: pkg\n")
     block = detect_coverage_gate(root, Path("pkg"))

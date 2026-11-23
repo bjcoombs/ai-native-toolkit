@@ -34,7 +34,7 @@ no ``--rcfile`` naming the root config). None otherwise: no coverage run is foun
 run's directory is unresolved, or CI is not fully read (``CiRuns.unread`` or jobs
 included from elsewhere). ``coverage_gate`` counts the root gates when true, drops them
 when false, and when None reports them in ``gates`` (outside ``configured`` and
-``max_threshold_percent``) with ``threshold_meets_minimum`` null and
+``max_threshold_percent``, never credited as run by CI) with ``threshold_meets_minimum`` null and
 ``unmeasured_reason`` ``ROOT_UNRESOLVED`` wherever they change its value. Known limits:
 a job-level ``defaults`` working directory reads unresolved, not resolved; step ``if:``
 conditions and matrix values are not read; a run from the root is credited even when
@@ -127,15 +127,11 @@ def _step_lines(lines: Sequence[str], row: int, gitlab: bool) -> range:
                     if lines[r][:1] not in ("", " ", "\t", "#")), len(lines))
         return range(start, end)
     indent = len(lines[row]) - len(lines[row].lstrip())
-    start = row
-    for r in range(row, -1, -1):
-        step = _STEP_RE.match(lines[r])
-        if step and (r == row or len(step.group(1)) < indent):
-            start = r
-            break
-    else:
+    found = next(((r, m) for r in range(row, -1, -1) if (m := _STEP_RE.match(lines[r]))
+                  and (r == row or len(m.group(1)) < indent)), None)
+    if found is None:
         return range(row, row + 1)
-    dash = len(_STEP_RE.match(lines[start]).group(1))  # type: ignore[union-attr]
+    start, dash = found[0], len(found[1].group(1))
     end = next((r for r in range(start + 1, len(lines))
                 if lines[r].strip() and len(lines[r]) - len(lines[r].lstrip()) <= dash),
                len(lines))

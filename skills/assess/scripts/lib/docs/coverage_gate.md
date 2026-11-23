@@ -85,7 +85,8 @@ same step or GitLab job, an inherited GitLab `before_script` `cd` reading unreso
 `--rcfile` / `--cov-config`). True: the root gates are counted,
 and the root config's `addopts` is read for activation. False (every run resolved, none
 reads the root config): dropped. None: the gates are listed in `gates` but left out of
-`configured` and `max_threshold_percent`, and when they change
+`configured`, `max_threshold_percent` and the CI credit of `enforced_meets_minimum`, and
+when they change
 `threshold_meets_minimum` it reads null with `unmeasured_reason`
 `root_coverage_config_unresolved` (so `enforced_basis` is `threshold_not_read`); a root
 floor below 50 leaves false, which is false either way. A scope holding no `.py` file, or

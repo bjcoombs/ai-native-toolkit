@@ -756,14 +756,14 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
     unread = {m for m in manifests if not any(g["tool"] in _MANIFEST_TOOLS[m] for g in gates)}
     unmeasured = GO_RUST_UNMEASURED if unread and meets is False else None
     meets = None if unmeasured else meets
-    if applies is None and meets is not None and meets != own:
+    if applies is None and unmeasured is None and meets != own:
         meets, unmeasured = None, ROOT_UNRESOLVED   # the root floor may not govern the scope
+    # Root gates that may not govern the scope are reported, never counted or credited.
+    known = gates if applies is not None else gates[:len(gates) - len(root_gates)]
     enforced, basis = enforced_meets_minimum(
-        gates, meets, (ci or read_ci_runs(root)) if meets else NO_RUNS,
+        known, meets, (ci or read_ci_runs(root)) if meets else NO_RUNS,
         lambda text: _cli_line_gates("", 0, text, False), counted=gates_something,
         minimum=MINIMUM_THRESHOLD_PERCENT, activation=read_activation(read))
-    # Root gates that may not govern the scope are reported, never counted as configured.
-    known = gates if applies is not None else gates[:len(gates) - len(root_gates)]
     return {
         "available": True,
         "configured": any(gates_something(g) for g in known),
