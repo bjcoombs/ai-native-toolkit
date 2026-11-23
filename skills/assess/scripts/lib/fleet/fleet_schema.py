@@ -37,7 +37,9 @@ from typing import get_type_hints
 if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from lib.fleet.runner import DIRTY_REASONS, FAILURE_REASONS, STATUS_FAILED, STATUS_OK, FleetRow  # noqa: E402
+from lib.fleet.runner import (  # noqa: E402
+    DIRTY_REASONS, DIRTY_UNKNOWN_REASONS, FAILURE_REASONS, STATUS_FAILED, STATUS_OK, SUBMODULE_DIRTY, FleetRow,
+)
 from lib.fleet.fleet_doc_freshness import (  # noqa: E402
     METHOD,
     REASONS,
@@ -110,6 +112,17 @@ def build_schema() -> JsonDict:
                                         "signals_schema_version": {"type": "null"},
                                         "active": {"type": "null"}, "head_sha": {"type": "null"},
                                         "dirty": {"type": "null"}, "dirty_reason": {"type": "null"}}},
+            },
+            # The reason pairs with dirty (#1017): an unknown reason only on a null dirty,
+            # submodule_dirty only on a clean one.
+            {
+                "if": {"properties": {"dirty_reason": {"enum": list(DIRTY_UNKNOWN_REASONS)}},
+                       "required": ["dirty_reason"]},
+                "then": {"properties": {"dirty": {"type": "null"}}},
+            },
+            {
+                "if": {"properties": {"dirty_reason": {"const": SUBMODULE_DIRTY}}, "required": ["dirty_reason"]},
+                "then": {"properties": {"dirty": {"const": False}}},
             },
         ],
     }

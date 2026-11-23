@@ -1305,6 +1305,51 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "dirty_reason": {
+            "enum": [
+              "no_commit",
+              "status_error",
+              "index_read_error",
+              "sparse_checkout",
+              "skip_worktree",
+              "assume_unchanged"
+            ]
+          }
+        },
+        "required": [
+          "dirty_reason"
+        ]
+      },
+      "then": {
+        "properties": {
+          "dirty": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "dirty_reason": {
+            "const": "submodule_dirty"
+          }
+        },
+        "required": [
+          "dirty_reason"
+        ]
+      },
+      "then": {
+        "properties": {
+          "dirty": {
+            "const": false
+          }
+        }
+      }
     }
   ]
 }

@@ -182,6 +182,21 @@ def test_a_submodule_only_edit_is_scanned_in_place_and_stamped(tmp_path, monkeyp
     jsonschema.validate(edited, build_schema())
 
 
+@pytest.mark.parametrize(("dirty", "reason"), [
+    (None, fleet.SUBMODULE_DIRTY),
+    (True, fleet.SUBMODULE_DIRTY),
+    (True, fleet.NO_COMMIT),
+    (False, fleet.STATUS_ERROR),
+])
+def test_the_schema_pairs_each_reason_with_its_dirty_value(tmp_path, monkeypatch, dirty, reason):
+    _fake_signals(tmp_path, monkeypatch, _READS_SUBMODULE)
+    repo, _sub = _with_submodule(tmp_path)
+    row = fleet.scan_target(Target("g/r", repo), tmp_path, ScanOptions())
+    jsonschema.validate(row, build_schema())
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({**row, "dirty": dirty, "dirty_reason": reason}, build_schema())
+
+
 def test_an_untracked_file_inside_a_submodule_never_stamps_the_row(tmp_path):
     repo, sub = _with_submodule(tmp_path)
     (sub / "notes.txt").write_text("scratch\n", encoding="utf-8")
