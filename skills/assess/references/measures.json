@@ -2511,6 +2511,9 @@
           "structure.modularity_reason": "token",
           "structure.name_collisions.name": "path",
           "structure.name_collisions.paths": "path",
+          "structure.package_edges.from": "path",
+          "structure.package_edges.to": "path",
+          "structure.packages.id": "path",
           "structure.reason": "reason",
           "structure.sccs": "path"
         }

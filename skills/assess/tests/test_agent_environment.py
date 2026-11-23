@@ -374,7 +374,7 @@ def test_setup_ready_is_the_setup_half_of_layer5_cap(
 
 
 def test_counts_only_keeps_setup_ready(tmp_path: Path) -> None:
-    """The Layer 5 level 2 signal survives the counts-only filter a fleet run applies."""
+    """``setup_ready`` and the lock count Layer 5 level 2 reads (``pinning.unlocked_total``) survive counts-only."""
     block = _scan(_repo(tmp_path, {"package.json": json.dumps({"dependencies": {"x": "1"}})}))
     kept = counts_only_scans({"agent_environment": block})["agent_environment"]
     assert kept["setup_ready"] is False
