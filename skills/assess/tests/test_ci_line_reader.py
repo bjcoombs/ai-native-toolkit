@@ -57,6 +57,8 @@ ROWS = [
     ("until pytest; do break; done", MAY, MAY, MAY),
     ("{ pytest; echo done; } && echo ok", MAY, MAY, MAY),
     ("f() { pytest; }", MASKED, MASKED, MASKED),   # defined, never called
+    ("f() { pytest; }; g() { f; }", MASKED, MASKED, MASKED),   # named only in an uncalled body
+    ("f() { pytest; }; g() { f; }; g", CREDIT, CREDIT, CREDIT),
     # Gap 5: a fallback arm is judged by the commands that run.
     ("pytest || echo false", MAY, MAY, MAY),
     ("pytest || echo exit", MAY, MAY, MAY),

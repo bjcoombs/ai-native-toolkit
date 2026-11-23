@@ -206,13 +206,23 @@ def uncalled_functions(statements: list[Statement]) -> set[int]:
     """The statements of each function body that no statement outside it names (#1061):
     ``f() { pytest; }`` alone defines ``f`` and runs nothing, so its check cannot fail the step.
     Any whole-word mention outside the body counts as a call (``time f``, ``retry 3 f``,
-    ``out=$(f)``, a ``case`` arm), so a call this reader cannot place never masks the body."""
+    ``out=$(f)``, a ``case`` arm), so a call this reader cannot place never masks the body.
+    A mention inside another uncalled function's body is no call (``f() { pytest; }; g() { f; }``
+    runs nothing), so the reading repeats until no more bodies drop out."""
     bodies = {name: range(start, end + 1) for start, end, name in _groups(statements) if name}
+    words = {name: re.compile(r"(?<![\w.-])" + re.escape(name) + r"(?![\w.-])") for name in bodies}
+    texts = [_join(statement) for statement in statements]
     out: set[int] = set()
-    for name, body in bodies.items():
-        word = re.compile(r"(?<![\w.-])" + re.escape(name) + r"(?![\w.-])")
-        if not any(word.search(_join(statement)) for i, statement in enumerate(statements) if i not in body):
-            out.update(body)
+    uncalled: set[str] = set()
+    changed = True
+    while changed:
+        changed = False
+        for name, body in bodies.items():
+            if name not in uncalled and not any(
+                    words[name].search(text) for i, text in enumerate(texts) if i not in body and i not in out):
+                uncalled.add(name)
+                out.update(body)
+                changed = True
     return out
 
 

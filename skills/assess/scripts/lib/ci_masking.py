@@ -166,6 +166,7 @@ shared with `ci_triggers.py`. Tests for the #919 and #936 rules: `tests/test_ci_
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import PurePosixPath
 from dataclasses import dataclass
 
@@ -676,6 +677,17 @@ def _move_unsure(unsure: Segments, masked: dict[int, set[int]], kept: dict[tuple
     return out
 
 
+def _later_lines(lines: list[str], tree: IndentTree, first: int, last: int) -> Callable[[], list[str]]:
+    """The job's lines after ``last``, built once and only when a rule asks for them."""
+    cache: list[list[str]] = []
+
+    def later() -> list[str]:
+        if not cache:
+            cache.append([lines[j] for j in tree.job(first) if j > last])
+        return cache[0]
+    return later
+
+
 def unmasked_lines(text: str) -> list[str]:
     """``text``'s lines with every masked statement removed (an all-masked line is empty)."""
     return mask_lines(text)[0]
@@ -702,11 +714,11 @@ def mask_lines(text: str) -> tuple[list[str], list[str]]:
         if tree.step_or_job_masked(first):
             masked[first] = set(range(len(statements)))
             continue
+        later = _later_lines(lines, tree, first, span[-1])
         for k, statement in enumerate(statements):
-            later = [lines[j] for j in tree.job(first) if j > span[-1]]
-            keep = _same_line_keep(statement, lambda: later)
+            keep = _same_line_keep(statement, later)
             targets = _capture_targets(statement)
-            if targets and _checked_later(targets, later):
+            if targets and _checked_later(targets, later()):
                 captured.add((first, k))
             arm = or_arm_unsure(statement, " ; ".join(_join(s) for s in statements[k + 1:]))
             if arm:
