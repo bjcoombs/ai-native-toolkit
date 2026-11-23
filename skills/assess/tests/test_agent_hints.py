@@ -46,7 +46,8 @@ HINTS = (
     ("openhands@all-hands.dev", None),
     ("", "openhands-agent"),
     ("", "copilot"),
-    ("1+Copilot@users.noreply.github.com", None),
+    ("1+Copilot@users.noreply.github.com", None),   # another id: a person could hold it
+    ("Copilot@users.noreply.github.com", None),
 )
 
 
@@ -56,9 +57,10 @@ def _confirmed(**lists: list[str]) -> AuthorMatcher:
 
 # --- the matcher ---------------------------------------------------------------
 
-def test_counted_pinned_rules_all_carry_the_bot_suffix() -> None:
+def test_counted_pinned_rules_all_carry_the_bot_suffix_or_an_id() -> None:
     for r in AGENT_RULES:
-        assert r.pattern.pattern.endswith(r"\[bot\]$"), r.pattern.pattern
+        pinned_id = r.pattern.pattern.startswith("^198982749\\+")
+        assert r.pattern.pattern.endswith(r"\[bot\]$") or pinned_id, r.pattern.pattern
     for r in AGENT_HINT_RULES:
         assert "[bot]" not in r.pattern.pattern.replace("\\", "")
 
@@ -74,6 +76,14 @@ def test_name_only_matches_are_hints_not_agents(email: str, username: str | None
 def test_bot_suffix_apps_still_count(username: str) -> None:
     assert AuthorMatcher().classify_username(username).bucket == AGENT
     assert not is_agent_hint("", username)
+
+
+def test_the_copilot_coding_agent_commit_address_counts() -> None:
+    email = "198982749+Copilot@users.noreply.github.com"
+    assert AuthorMatcher().classify(email, "copilot-swe-agent[bot]").bucket == AGENT
+    assert AuthorMatcher().classify(email, "Copilot").bucket == AGENT
+    assert not is_agent_hint(email)
+    assert discover([HistoryCommit(email, "copilot-swe-agent[bot]", "x", "")], AuthorMatcher()) == []
 
 
 def test_a_confirmed_hint_counts_and_a_confirmed_person_never_does() -> None:

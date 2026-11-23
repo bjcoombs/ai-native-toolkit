@@ -45,7 +45,8 @@ reads e-mail and username) come from `compile_config_rules` over the
 `[[ai_usage.agent_identities]]` tables. Pinned defaults (`AGENT_RULES`,
 `DEPENDENCY_BOT_RULES`) are written in the username form and never read a display
 name; `COVERED_AUTHOR_AGENTS` names them in words. `AGENT_RULES` holds only `[bot]`-suffix
-apps (#883). The name-only matches (`AGENT_HINT_RULES`: `noreply@anthropic.com`, `copilot@`
+apps and the Copilot coding agent's id-pinned noreply address
+(`198982749+Copilot@users.noreply.github.com`) (#883). The name-only matches (`AGENT_HINT_RULES`: `noreply@anthropic.com`, `copilot@`
 addresses, the `copilot` login, Cursor's and OpenHands' addresses, `openhands-agent`) are
 hints: `is_agent_hint(email, username)` tests one, the matcher never counts one, and it
 becomes an agent only through `[identities]` or a config rule. The trailer matchers above
@@ -212,11 +213,14 @@ def rule(pattern: str, field: RuleField | None = None) -> IdentityRule:
     return IdentityRule(re.compile(pattern, re.IGNORECASE), field)
 
 
-# Agent apps, counted without confirmation: every rule needs the reserved
-# ``[bot]`` suffix of a GitHub App account, which no person carries (#883).
+# Agent apps, counted without confirmation (#883): every rule needs the reserved
+# ``[bot]`` suffix of a GitHub App account, or a noreply address pinned to the
+# account's numeric GitHub id, neither of which a person can hold.
 AGENT_RULES: tuple[IdentityRule, ...] = (
     rule(r"^claude\[bot\]$"),                    # Claude GitHub App
     rule(r"^copilot-swe-agent\[bot\]$"),         # GitHub Copilot coding agent
+    # The Copilot coding agent's commit address (user id 198982749, login Copilot).
+    rule(r"^198982749\+copilot@users\.noreply\.github\.com$", "email"),
     rule(r"^devin-ai-integration\[bot\]$"),      # Devin
     rule(r"^google-labs-jules\[bot\]$"),         # Jules
     rule(r"^chatgpt-codex-connector\[bot\]$"),   # OpenAI Codex
@@ -312,11 +316,16 @@ def is_dependency_bot(email: str, username: str) -> bool:
 
 def is_agent_hint(email: str = "", username: str | None = None) -> bool:
     """True when an ``AGENT_HINT_RULES`` name-only match (#883) fits the e-mail or
-    username (derived from a noreply e-mail when not given). A display name is never read."""
+    username (derived from a noreply e-mail when not given) and no counted ``AGENT_RULES``
+    entry does (the id-pinned Copilot address carries the hinted ``Copilot`` login). A
+    display name is never read."""
     email = email.strip()
     if username is None:
         username = username_from_email(email) or ""
-    return any(_rule_matches(r, email, username.strip(), "") for r in AGENT_HINT_RULES)
+    username = username.strip()
+    if any(_rule_matches(r, email, username, "") for r in AGENT_RULES):
+        return False
+    return any(_rule_matches(r, email, username, "") for r in AGENT_HINT_RULES)
 
 
 def identity_keys(email: str = "", name: str = "", username: str | None = None) -> frozenset[str]:
