@@ -107,7 +107,8 @@ def test_a_headless_run_reports_the_static_blocks(
     assert scans["observability"]["rung"] >= 2   # instrumented + discoverable
     assert scans["archetype"]["archetype"] == "software"
     assert scans["doc_graph"]["doc_count"] >= 1
-    assert set(scans["doc_staleness"]["summary"]) == {"measured_docs", "stale_docs", "stale_pct"}
+    assert set(scans["doc_staleness"]["summary"]) == {
+        "measured_docs", "stale_docs", "stale_pct", "generator_directive_docs"}
 
 
 def test_layer_one_gets_a_level_from_committed_telemetry(instrumented: Path, tmp_path: Path) -> None:
@@ -184,7 +185,8 @@ def test_the_summary_counts_mapped_docs_only_and_rounds_up() -> None:
     rows = [_doc("nearest-ancestor", 2.5), _doc("nearest-ancestor", 2.0),
             _doc("explicit-link", 0.0), _doc("repo-baseline", 90.0)]
     assert staleness_summary(rows, reliable=True) == {
-        "measured_docs": 3, "stale_docs": 1, "stale_pct": 34}   # 33.3% rounds up
+        "measured_docs": 3, "stale_docs": 1, "stale_pct": 34,   # 33.3% rounds up
+        "generator_directive_docs": 0}
 
 
 @pytest.mark.parametrize(("rows", "reliable"), [
@@ -229,7 +231,8 @@ def test_a_generated_doc_with_a_source_verdict_is_measured() -> None:
     generated["provenance"] = {"method": "frontmatter", "sources": ["api.py"],
                                "generated_by": None, "source_newer": True}
     summary = staleness_summary([generated, _doc("repo-baseline", 50.0)], reliable=True)
-    assert summary == {"measured_docs": 1, "stale_docs": 1, "stale_pct": 100}
+    assert summary == {"measured_docs": 1, "stale_docs": 1, "stale_pct": 100,
+                       "generator_directive_docs": 0}
 
 
 def test_a_directory_nested_in_a_checkout_is_not_git_root(instrumented: Path) -> None:
