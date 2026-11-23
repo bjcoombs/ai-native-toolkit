@@ -1,7 +1,8 @@
 """Bot and agent account discovery: suggestions for the human to confirm (issue #765).
 
 Pinned name lists classify only the unambiguous accounts (``agent_identity``'s
-``AGENT_RULES``: agent apps such as ``claude[bot]`` and vendor-owned addresses).
+``AGENT_RULES``: ``[bot]``-suffix agent apps such as ``claude[bot]``; vendor
+addresses and logins are hints since #883).
 Every other account that looks automated is a *candidate*: it counts as nothing
 until the human classifies it in the committed ``[identities]`` section of
 ``.assess/config.toml`` (or of ``--fleet-config``) as an AI agent, an automation
@@ -23,6 +24,10 @@ too (a GitHub privacy address, a run of same-shaped commit subjects):
   Dependabot). These stay in the ``dependency_bot`` bucket whatever the
   answer, so an agent answer moves no count; they are still listed so a bot
   answer clears them from ``identities_awaiting_confirmation``;
+- ``pinned_agent_hint``: a name-only pinned agent match (``agent_identity``'s
+  ``AGENT_HINT_RULES``, #883: ``noreply@anthropic.com``, a ``copilot@`` address,
+  the ``copilot`` login, Cursor's and OpenHands' addresses). A person can commit
+  under one, so it counts only once confirmed as an agent;
 - ``agent_name_hint``: an AI tool name (``AI_TOOL_NAMES``) is a word of the
   display name, login or e-mail local part. "Cursor" is a person's name too,
   which is why it is only a hint;
@@ -52,6 +57,7 @@ author_name, subject, coauthors, sha, committed_at)` rows (the last two read by 
 returns the `Candidate` rows (`account`, `name`, `email`, `commits`, `evidence[]`, most
 commits first). `evidence_for` gives the `EVIDENCE` tokens in order; only a
 `STRONG_EVIDENCE` token (`bot_suffix`, `gitlab_token_user`, `dependency_bot_hint`,
+`pinned_agent_hint` from `agent_identity.is_agent_hint` (#883),
 `agent_name_hint` from `AI_TOOL_NAMES`, `automation_name_hint`) makes a candidate, while
 `co_author_trailer`, `noreply_address` and `uniform_subjects` (at least
 `UNIFORM_MIN_COMMITS` commits, one folded subject shape covering `UNIFORM_SHARE`) only
@@ -73,6 +79,7 @@ from lib.agent_identity import (
     AGENT,
     AuthorMatcher,
     identity_keys,
+    is_agent_hint,
     is_dependency_bot,
     is_gitlab_token_user,
     username_from_email,
@@ -82,13 +89,14 @@ EVIDENCE = (
     "bot_suffix",
     "gitlab_token_user",
     "dependency_bot_hint",
+    "pinned_agent_hint",
     "agent_name_hint",
     "automation_name_hint",
     "co_author_trailer",
     "noreply_address",
     "uniform_subjects",
 )
-STRONG_EVIDENCE = frozenset(EVIDENCE[:5])
+STRONG_EVIDENCE = frozenset(EVIDENCE[:6])
 
 AI_TOOL_NAMES = (
     "aider", "amazon-q", "anthropic", "chatgpt", "claude", "codeium", "codex", "coderabbit",
@@ -155,6 +163,8 @@ def evidence_for(email: str, name: str, subjects: Sequence[str] = (),
         found.add("gitlab_token_user")
     if is_dependency_bot(email, username):
         found.add("dependency_bot_hint")
+    if is_agent_hint(email, username):
+        found.add("pinned_agent_hint")
     if any(_has_word(t, AI_TOOL_NAMES) for t in texts):
         found.add("agent_name_hint")
     if any(_has_word(t.replace("[bot]", ""), _AUTOMATION_WORDS) for t in texts):

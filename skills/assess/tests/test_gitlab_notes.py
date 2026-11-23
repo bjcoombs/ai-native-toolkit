@@ -62,12 +62,15 @@ def test_prose_mentioning_ai_review_is_a_human_comment() -> None:
     assert facts == NoteFacts(True, False, "2026-09-01T10:00:00Z")
 
 
-@pytest.mark.parametrize("user", [
-    "claude[bot]",     # a pinned agent identity
-    "coderabbitai",    # a pinned AI-review app (delivery.AI_REVIEWERS)
-])
-def test_ai_accounts_are_ai_review_never_human(user: str) -> None:
-    assert _facts(_note(user, "plain text")) == NoteFacts(False, True, None)
+def test_ai_accounts_are_ai_review_never_human() -> None:
+    assert _facts(_note("claude[bot]", "plain text")) == NoteFacts(False, True, None)  # a pinned [bot] app
+
+
+def test_a_pinned_ai_review_name_is_a_hint_until_confirmed() -> None:
+    # delivery.AI_REVIEWERS on GitLab, which has no bot flag (#883): undecided, never a silent no.
+    assert _facts(_note("coderabbitai", "plain text")) == NoteFacts(None, None, None, frozenset({"coderabbitai"}))
+    confirmed = classifier_from_config(parse_fleet_config('[identities]\nagents = ["coderabbitai"]\n'))
+    assert _facts(_note("coderabbitai", "plain text"), classifier=confirmed) == NoteFacts(False, True, None)
 
 
 @pytest.mark.parametrize("user", [TOKEN, "group_7_bot_abc123"])

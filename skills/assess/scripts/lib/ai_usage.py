@@ -69,6 +69,12 @@ AI-assisted. Only AI-assistant trailers count
 (``agent_identity.coauthors_have_ai_assistant``: the shared matcher with
 non-Copilot ``[bot]`` accounts removed), which keeps the value a floor.
 
+Name-only hints (#883). A pinned agent match with no ``[bot]`` suffix (Claude Code's
+``noreply@anthropic.com``, a ``copilot@`` address or the ``copilot`` login, Cursor's and
+OpenHands' addresses: ``agent_identity.AGENT_HINT_RULES``) is not an authored commit until
+the account is confirmed; it is counted in ``identities_awaiting_confirmation`` instead. The
+same addresses in a ``Co-authored-by`` trailer still count.
+
 Confirmed identities (#765). An account the human classified in ``[identities]``
 (``.assess/config.toml`` or ``--fleet-config``) is bucketed by that answer before
 any pinned rule: ``agents`` count as agent authors, ``bots`` and ``people`` never
@@ -145,6 +151,7 @@ LIMITS = (
     "Lower bound: squash merges that drop Co-authored-by trailers are undercounted.",
     "Lower bound: commits whose agent trailer was stripped or never written are undercounted.",
     "Lower bound: only the covered agents and the configured agent identities are recognised; other tools are not counted.",
+    "Lower bound: an agent known only by an address or login with no [bot] suffix counts once confirmed in [identities].",
     "Lower bound: an agent committing under a person's identity, with no trailer, is not counted.",
     "Automation bot co-authors (Dependabot, pre-commit-ci, github-actions) are not counted as AI assistance.",
     "Dependency bot authors (Renovate, Dependabot) are counted apart and never as agents.",

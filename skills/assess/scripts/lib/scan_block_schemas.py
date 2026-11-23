@@ -389,6 +389,11 @@ DELIVERY: JsonDict = {
             {"type": ["integer", "null"]},
             "Changes per heavy read of the sample (lib/hosting/merged_sample.py PAGE_SIZE, or half "
             "of it after one retry on HTTP 502 or 504); null when no heavy read was made."),
+        "unconfirmed_ai_accounts": _field(
+            _INT,
+            "Distinct sampled accounts that are name-only AI matches awaiting confirmation in "
+            "[identities] (#883): change authors, and on GitLab note authors. A non-zero count "
+            "is why the share it would decide reads null."),
     },
 }
 
