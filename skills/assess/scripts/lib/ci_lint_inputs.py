@@ -22,14 +22,18 @@ Each step comes back in one of two index sets of its ``uses:`` line:
 
 - ``install_only``: a literal input makes the step run no linter. ``lib.ci_checks`` does not
   count the line for ``lint_runs``.
-- ``unsure``: the deciding input is not a literal this module reads (a ``${{ }}``
-  expression, a merge key ``<<``, an alias, an empty ``args``, an unread ``install-only``
-  value or ref). ``lib.ci_checks`` counts the line as one that may lint, so ``lint_runs``
-  reads null with ``lint_basis: check_target`` when no other line settles it, never credit
-  and never a false 0.
+- ``unsure``: the deciding input is set, but not to a value this module settles (a
+  ``${{ }}`` expression, an empty ``args``, an ``install-only: true`` on a SHA or branch ref,
+  an ``install-only`` value that is neither true nor false). ``lib.ci_checks`` counts the
+  line as one that may lint, so ``lint_runs`` reads null with ``lint_basis: check_target``
+  when no other line settles it: never credit, never a false 0. A masked or off-trigger
+  unsure step is false either way, and since it is not a lint line it reads
+  ``no_lint_command``, not ``not_enforced``.
 
-A step with no deciding input keeps the #782 credit. A flow-style ``with: {args: --version}``
-is read when its items are plain ``key: value`` pairs; any other flow value is unsure.
+A step with no deciding input keeps the #782 credit. A ``with:`` this module cannot read
+keeps it too, as the issue asks: a merge key (``<<: *defaults``) or quoted key that may set
+the input, an alias value, or a flow mapping that is not plain ``key: value`` items
+(``with: {args: --version}`` and ``{src: "./src"}`` are read).
 The structure comes from ``lib.ci_masking``'s indentation model, run on the final workflow
 text ``lib.ci_checks`` tallies, so indexes match. Inward-only imports: ``lib.check_command``,
 ``lib.ci_lines`` and ``lib.ci_masking``. Tests: ``tests/test_ci_lint_inputs.py``.
@@ -86,14 +90,14 @@ def _flow_inputs(value: str) -> dict[str, Value] | None:
     if not (inner.startswith("{") and inner.endswith("}")):
         return None
     body = inner[1:-1]
-    if any(c in body for c in "{}[]\"'"):
+    if any(c in body for c in "{}[]"):
         return None
     out: dict[str, Value] = {}
     for item in filter(str.strip, body.split(",")):
         match = _FLOW_ITEM.match(item)
-        if match is None:
-            return None
-        out[match.group(1)] = match.group(2)
+        if match is None or item.count('"') % 2 or item.count("'") % 2:
+            return None   # a quoted key, or a comma inside a quoted value
+        out[match.group(1)] = _unquote(match.group(2))
     return out
 
 
@@ -129,9 +133,9 @@ def _input(inputs: dict[str, Value], name: str) -> Value:
 
 def _ruff_reading(args: Value) -> str:
     """``lint``, ``install_only`` or ``unsure`` for a ruff action's ``args``."""
-    if args is None:
-        return "lint"   # the default is check
-    if isinstance(args, _Unread) or "${{" in args:
+    if args is None or isinstance(args, _Unread):
+        return "lint"   # the default is check; an unread with: keeps today's answer
+    if "${{" in args:
         return "unsure"
     try:
         words = shlex.split(args)
@@ -146,16 +150,14 @@ def _ruff_reading(args: Value) -> str:
 
 def _golangci_reading(ref: str, install_only: Value) -> str:
     """``lint``, ``install_only`` or ``unsure`` for golangci-lint-action's ``install-only``."""
-    if install_only is None:
-        return "lint"
+    if install_only is None or isinstance(install_only, _Unread) or install_only in _FALSE:
+        return "lint"   # absent, unread (today's answer) or false: the action lints
     tag = _TAG.match(ref)
     if tag is not None and int(tag.group(1)) < _GOLANGCI_INSTALL_ONLY_SINCE:
         return "lint"   # an undeclared input: the runner warns and the action lints
-    if tag is None or isinstance(install_only, _Unread):
-        return "unsure"
-    if install_only in _TRUE:
-        return "install_only"
-    return "lint" if install_only in _FALSE else "unsure"
+    if tag is None or install_only not in _TRUE:
+        return "unsure"   # a SHA or branch ref, an expression or a value getBooleanInput refuses
+    return "install_only"
 
 
 def read_lint_inputs(text: str) -> LintInputs:

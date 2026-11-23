@@ -342,7 +342,11 @@ The per-line tests named above (`_line_runs_check`, `_line_runs_lint`, `_line_ma
 `_line_may_check`, `_script_items`, `lint_action`, `count_check_lines`) live in
 `lib.ci_lines` (#1061); this module re-exports `count_check_lines`, `lint_action`,
 `LINT_ACTIONS` and `MAY_LINT_ACTIONS`.
+Issue #893: `lib.ci_lint_inputs.read_lint_inputs` reads each ruff-action and
+golangci-lint-action step's `with:` block; `_trigger_tally(lint_inputs=)` drops an
+install-only step from the lint count and counts an unsettled one for `_line_may_lint`.
 Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture table),
+`tests/test_ci_lint_inputs.py` (#893),
 `tests/test_external_ci.py` (#928), `tests/test_ci_lint_gates.py` (the #926 fixtures),
 `tests/test_gitlab_ci_lint.py`, and the Layer 3 and Layer 5 rows in
 `tests/test_level_signals.py`.

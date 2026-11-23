@@ -57,10 +57,16 @@ def _reading(text: str) -> str:
     ("astral-sh/ruff-action@v3", _with(args="${{ matrix.args }}"), "unsure"),
     ("astral-sh/ruff-action@v3", _with(args='"check ${{ env.EXTRA }}"'), "unsure"),
     ("astral-sh/ruff-action@v3", _with(args='""'), "unsure"),
-    ("astral-sh/ruff-action@v3", _with(args="*ruff_args"), "unsure"),
-    ("astral-sh/ruff-action@v3", "        with:\n          <<: *defaults\n", "unsure"),
-    ("astral-sh/ruff-action@v3", "        with:\n          <<: *defaults\n          args: check\n", "lint"),
-    ("astral-sh/ruff-action@v3", "        with: {args: \"--version\"}\n", "unsure"),
+    # An unreadable with: keeps today's answer (the issue's rule).
+    ("astral-sh/ruff-action@v3", _with(args="*ruff_args"), "lint"),
+    ("astral-sh/ruff-action@v3", "        with:\n          <<: *defaults\n", "lint"),
+    ("astral-sh/ruff-action@v3", "        with:\n          <<: *defaults\n          args: --version\n",
+     "install_only"),
+    ("astral-sh/ruff-action@v3", "        with:\n          \"args\": --version\n", "lint"),
+    ("astral-sh/ruff-action@v3", "        with: {args: \"--version\"}\n", "install_only"),
+    ("astral-sh/ruff-action@v3", "        with: {src: \"./src\"}\n", "lint"),
+    ("astral-sh/ruff-action@v3", "        with: {args: \"a, b\"}\n", "lint"),
+    ("astral-sh/ruff-action@v3", "        with: {args: [--version]}\n", "lint"),
     # golangci-lint-action: install-only from v9.0.0.
     ("golangci/golangci-lint-action@v9", _with(**{"install-only": "true"}), "install_only"),
     ("golangci/golangci-lint-action@v9.2.1", _with(**{"install-only": "'True'"}), "install_only"),
@@ -77,12 +83,25 @@ def _reading(text: str) -> str:
     ("golangci/golangci-lint-action@3a919529898de77ec3da873e3063ca4b10e7f5cc",
      _with(**{"install-only": "true"}), "unsure"),
     ("golangci/golangci-lint-action@main", _with(**{"install-only": "true"}), "unsure"),
+    ("golangci/golangci-lint-action@main", _with(**{"install-only": "false"}), "lint"),
+    ("golangci/golangci-lint-action@3a919529898de77ec3da873e3063ca4b10e7f5cc",
+     _with(**{"install-only": "'false'"}), "lint"),
+    ("golangci/golangci-lint-action@v8", _with(**{"install-only": "${{ inputs.only }}"}), "lint"),
+    ("golangci/golangci-lint-action@v9", "        with: {version: \"v2.1\"}\n", "lint"),
+    ("golangci/golangci-lint-action@v9", "        with: {install-only: true}\n", "install_only"),
     # Other lint actions are not read here: their #782 credit stands.
     ("reviewdog/action-eslint@v1", _with(args="--version"), "lint"),
     ("super-linter/super-linter@v7", _with(**{"install-only": "true"}), "lint"),
 ])
 def test_lint_action_inputs(uses: str, with_block: str, expected: str) -> None:
     assert _reading(_step(uses, with_block)) == expected
+
+
+def test_a_named_step_is_read() -> None:
+    """The common shape: ``- name: ...`` first, then ``uses:``."""
+    text = ("on: [pull_request]\njobs:\n  lint:\n    steps:\n      - name: Install ruff\n"
+            "        uses: astral-sh/ruff-action@v3\n        with:\n          args: --version\n")
+    assert read_lint_inputs(text).install_only == {5}
 
 
 def test_a_non_lint_action_is_not_read() -> None:
@@ -130,9 +149,15 @@ def test_an_unsure_step_beside_a_lint_run_keeps_the_run(tmp_path: Path) -> None:
 
 
 def test_a_masked_unsure_step_gives_no_credit(tmp_path: Path) -> None:
+    """False either way; it is no lint line, so the basis is no_lint_command, not not_enforced."""
     text = _step("astral-sh/ruff-action@v3", _with(args="${{ matrix.args }}"),
                  "        continue-on-error: true\n")
-    assert _scan(tmp_path, text)[0] is False
+    assert _scan(tmp_path, text) == (False, "no_lint_command")
+
+
+def test_a_masked_lint_step_still_reads_not_enforced(tmp_path: Path) -> None:
+    text = _step("astral-sh/ruff-action@v3", _with(args="check"), "        continue-on-error: true\n")
+    assert _scan(tmp_path, text) == (False, "not_enforced")
 
 
 def test_layer_5_and_the_configured_reading_do_not_move(tmp_path: Path) -> None:
