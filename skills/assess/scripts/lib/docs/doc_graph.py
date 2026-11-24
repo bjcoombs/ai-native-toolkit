@@ -40,7 +40,9 @@ from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 
-from lib.docs.doc_links import INLINE_CODE_RE, LinkHarvest, harvest_links, strip_fenced_lines
+from lib.docs.doc_links import (
+    INLINE_CODE_RE, LinkHarvest, harvest_links, missing_xrefs, strip_fenced_lines,
+)
 from lib.git_churn import tracked_files
 from lib.run_context_types import (
     BrokenLink, DeclaredMoc, DirectoryBreakdownRow, DocGraphBlock, DocHub, DocSignal,
@@ -140,15 +142,6 @@ MAX_MISSING_XREFS = 60
 # directory_breakdown keeps the rows with the largest gaps; directory_count
 # carries the full total so a truncated list still says how many there were.
 MAX_DIRECTORY_BREAKDOWN = 30
-# Conventional filenames that get mentioned all the time and don't need a
-# cross-reference every time they're named - excluded from the missing-xref scan.
-_XREF_SKIP_NAMES = {
-    "readme.md", "index.md", "_index.md", "license.md", "changelog.md",
-    "contributing.md", "code_of_conduct.md", "security.md", "agents.md",
-    "claude.md", "gemini.md", "home.md", "notes.md",
-}
-
-
 @dataclass
 class DocGraphResult:
     available: bool = True
@@ -516,41 +509,6 @@ def _settle_references(
     return pairs
 
 
-def _missing_xrefs(
-    docs: list[Path], texts: dict[Path, str], graph: nx.DiGraph, repo_root: Path, rel: RelFn,
-) -> list[MissingXref]:
-    """Docs that name another doc's filename in prose but never link to it
-    (Karpathy Lint: "missing cross-references").
-
-    High-precision: matches the exact filename (e.g. `payments.md`) outside
-    fenced code, only for non-conventional target docs, and only when no link
-    to that target already exists.
-    """
-    name_to_doc: dict[str, Path] = {
-        d.name.lower(): d for d in docs if d.name.lower() not in _XREF_SKIP_NAMES
-    }
-    if not name_to_doc:
-        return []
-    alt = "|".join(re.escape(n) for n in sorted(name_to_doc, key=len, reverse=True))
-    pattern = re.compile(r"(?<![\w./-])(" + alt + r")\b", re.IGNORECASE)
-    edges = set(graph.edges())
-    out: list[MissingXref] = []
-    for d in docs:
-        text = texts.get(d)
-        if not text:
-            continue
-        body = strip_fenced_lines(text)
-        seen: set[Path] = set()
-        for m in pattern.finditer(body):
-            t = name_to_doc.get(m.group(1).lower())
-            if t is None or t == d or t in seen:
-                continue
-            seen.add(t)
-            if (rel(d), rel(t)) not in edges:  # already linked -> not missing
-                out.append({"from": rel(d), "to": rel(t)})
-    return out
-
-
 def _settle_reference_pairs(
     docs: list[Path], texts: dict[Path, str], rel: RelFn, repo_root: Path,
     scope: Path | None, extra_exclude_dirs: set[str] | None,
@@ -713,7 +671,7 @@ def build_doc_graph(
         if not graph.has_edge(rel(src), rel(tgt))
     ], kind="reference")
 
-    missing = _missing_xrefs(discovered, texts, graph, repo_root, rel)
+    missing = missing_xrefs(discovered, texts, graph, rel)
 
     # Vault-native navigation: `.base` view hubs + ```dataview``` query blocks
     # surface notes dynamically, so a static-link-only graph scores a navigable
