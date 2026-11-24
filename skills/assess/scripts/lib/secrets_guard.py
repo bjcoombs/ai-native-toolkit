@@ -59,7 +59,7 @@ Block (``secrets_guard`` in run-context.json)::
 Counts-only output drops the file paths, or hashes them under ``--hash-paths``, and keeps the
 booleans and tool tokens.
 
-Secrets guard (#1173), no model. `scan_secrets_guard(repo_root, scope)` reads the root pre-commit
+Secrets guard (#1173), no model. `scan_secrets_guard(repo_root, scope, ghsync_root)` reads the root pre-commit
 config for a `SECRET_TOOLS` hook and the GitHub workflows and `.gitlab-ci.yml` for a secrets action,
 command, the GitLab `Secret-Detection` template or a `secret_detection` job (a masked `|| true` line
 does not count). Tests: `tests/test_secrets_guard.py`.
@@ -282,7 +282,7 @@ def _ci_tools(text: str) -> list[str]:
     return sorted(tools)
 
 
-def ci_guard(root: Path) -> CiGuard:
+def ci_guard(root: Path, ghsync_root: Path | None = None) -> CiGuard:
     """The CI files with a secrets scan step, and the tools they use."""
     files: list[str] = []
     tools: set[str] = set()
@@ -297,7 +297,7 @@ def ci_guard(root: Path) -> CiGuard:
             tools.update(found)
     unresolved = 0
     if (root / ".gitlab-ci.yml").is_file():  # the files .gitlab-ci.yml includes (lib.ci_includes)
-        resolution = resolve_includes(root)
+        resolution = resolve_includes(root, ghsync_root)  # a project include resolves from a ghsync clone
         for included in resolution.files:
             found = _ci_tools(included.text)
             if found:
@@ -349,11 +349,12 @@ def _enforcement(root: Path, ci: CiGuard) -> Enforcement:
     return {"available": True, "present": False, "source": None}
 
 
-def scan_secrets_guard(repo_root: Path, scope: Path | None = None) -> SecretsGuardBlock:
+def scan_secrets_guard(repo_root: Path, scope: Path | None = None,
+                       ghsync_root: Path | None = None) -> SecretsGuardBlock:
     """Build the ``secrets_guard`` block (see the module doc). The pre-commit config and CI are the
     repository's, so a ``scope`` reads the root's, as ``guardrails`` reads the root pre-commit config."""
     root = repo_root.resolve()
-    hook, ci = pre_commit_guard(root), ci_guard(root)
+    hook, ci = pre_commit_guard(root), ci_guard(root, ghsync_root)
     sources = [SourceGrade(source=name, grade=_GRADES[name])
                for name, found in (("pre_commit", hook["present"]), ("ci", ci["present"])) if found]
     return {"available": True, "pre_commit": hook, "ci": ci, "configured": bool(sources),

@@ -1403,7 +1403,7 @@
             "properties": {
               "reason": {
                 "type": "string",
-                "description": "'code: sentence'. The codes name the missing piece: secret_scanning_not_read (no secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read); ci_includes_unresolved (no secrets scan was found in the CI read, and a GitLab include that could hold one (a local, project or remote file) was not read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                "description": "'code: sentence'. The codes name the missing piece: secret_scanning_not_read (no secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read); ci_includes_unresolved (no secrets scan was found in the CI read. A GitLab include that could hold one, a local, project or remote file, was not read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [

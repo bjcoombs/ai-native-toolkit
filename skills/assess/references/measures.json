@@ -2799,11 +2799,12 @@
     {
       "name": "secrets_guard",
       "title": "Secrets guard",
-      "summary": "A secrets hook in the pre-commit config and a secrets scan in CI (gitleaks, detect-secrets, trufflehog, ggshield and others, GitLab Secret-Detection), each recorded with its own evidence grade.",
+      "summary": "A secrets hook in the pre-commit config and a secrets scan in CI, such as gitleaks, trufflehog or GitLab Secret-Detection. Each is recorded with its own evidence grade.",
       "collector": "core.secrets_guard",
       "reads": [
         "repo_root",
-        "scope"
+        "scope",
+        "ghsync_root"
       ],
       "network": false,
       "platform": false,
@@ -2839,7 +2840,7 @@
         },
         {
           "code": "ci_includes_unresolved",
-          "means": "No secrets scan was found in the CI read, and a GitLab include that could hold one (a local, project or remote file) was not read.",
+          "means": "No secrets scan was found in the CI read. A GitLab include that could hold one, a local, project or remote file, was not read.",
           "next_step": "Clone the included project beside this one (/ghsync), or add the secrets scan to the repository's own .gitlab-ci.yml."
         }
       ],
@@ -5596,7 +5597,8 @@
       ],
       "reads": [
         "repo_root",
-        "scope"
+        "scope",
+        "ghsync_root"
       ],
       "network": false,
       "private": false

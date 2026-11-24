@@ -9,6 +9,8 @@ import pytest
 
 import lib.level_tally as lt
 import lib.manifest.check_manifest as cm
+from test_ci_includes import INCLUDE_TEST, _root_with_template
+
 from lib.secrets_guard import SECRET_TOOLS, scan_secrets_guard
 
 HOOK = "repos:\n  - repo: https://github.com/gitleaks/gitleaks\n    rev: v8.18.0\n    hooks:\n      - id: gitleaks\n"
@@ -170,6 +172,14 @@ def test_an_unread_include_leaves_level_2_not_measured(tmp_path: Path) -> None:
     assert block["ci"]["includes_unresolved"] == 1
     assert block["enforcement"]["available"] is False
     assert block["enforcement"]["reason"].startswith("ci_includes_unresolved")
+
+
+def test_a_project_include_resolves_from_a_ghsync_root(tmp_path: Path) -> None:
+    ci = INCLUDE_TEST.replace("test.yml", "scan.yml")
+    root, app = _root_with_template(tmp_path, {"templates/scan.yml": "scan:\n  script:\n    - gitleaks detect\n"}, ci=ci)
+    assert scan_secrets_guard(app)["ci"]["includes_unresolved"] == 1  # without the root, unread
+    ci_block = scan_secrets_guard(app, ghsync_root=root)["ci"]
+    assert ci_block["tools"] == ["gitleaks"] and ci_block["includes_unresolved"] == 0
 
 
 def test_a_root_gitlab_file_counts_in_a_directory_named_workflows(tmp_path: Path) -> None:
