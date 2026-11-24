@@ -105,6 +105,7 @@ def test_below_the_first_step_the_next_line_names_step_1():
     h = headline(_level(step=None, next_step={"step": 1, "blockers": [gate]}), model)
     assert h["lines"][0] == "Next: Step 1 · First unlocks when the own_gate gate holds"
     assert h["lines"][1].startswith("Catalogue coverage: ") and h["markdown"].startswith("**Next: Step 1")
+    assert h["summary"] == "no Step yet · next: own_gate"  # the badge agrees with the headline
 
 
 def test_not_measured_gate_says_so():
