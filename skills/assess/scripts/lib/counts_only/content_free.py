@@ -18,6 +18,10 @@ HMAC-SHA256 under a salt. The salt is random per call unless one is given, so
 two runs' hashes join only when the caller fixes the salt (``--hash-salt``).
 The salt itself is never written to the output.
 
+A map listed in ``IDENTIFIER_KEYED_MAPS`` keeps its identifier-like keys; an entry whose
+last segment is ``*`` covers every map one level below the one named, so ``pack.*`` keeps
+the check ids of each practice pack under ``pack`` (#1273).
+
 Pure: the input is never mutated, and nothing here reads the filesystem. The
 CLI helpers at the bottom give ``assess_core`` (and the headless entry point
 of #545) one set of flags.
@@ -123,7 +127,7 @@ def _key_kind(pattern: str, key: object, marker: bool = False) -> str | None:
         return "path"
     if not isinstance(key, str):
         return None
-    if pattern in IDENTIFIER_KEYED_MAPS:
+    if pattern in IDENTIFIER_KEYED_MAPS or f"{pattern.rpartition('.')[0]}.*" in IDENTIFIER_KEYED_MAPS:
         return "identifier" if KEY_RE.match(key) else None
     return "field" if key in field_names() else None
 

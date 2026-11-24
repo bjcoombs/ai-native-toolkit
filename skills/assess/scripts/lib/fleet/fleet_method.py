@@ -22,12 +22,22 @@ core check manifest, sorted by id. A ``revision`` is bumped when a collector's o
 changes; ``tests/test_collector_fingerprints.py`` fails when the fleet golden's output of a
 collector changes and its revision does not.
 
+**Pack identity** (#1273). A practice pack (``--pack``, ``lib/packs.py``) is named by its
+``{name, version, sha256}`` (``packs.PackIdentity``), never as a core collector revision:
+``collector_revisions`` leaves the pack collector (``PACK_COLLECTOR``) out of ``collectors``, so
+a run without ``--pack`` writes the ``collectors`` list it wrote before packs existed. The
+stamp's ``packs`` key holds the identities in pass order and is written only when a pack was
+passed; a stamp without it (no pack, or written before #1273) reads as no pack.
+
 **Comparability** (``lib/fleet/fleet_compare.py`` ``comparability``):
 
 - ``rule_reasons``: two recorded hashes that differ give the reason ``maturity-model rules
   changed``. Like a ``levels_version`` change it is a rule reason, so the achievements replay
   re-scores the earlier run from its stored scans (``RULE_KEYS``,
-  ``lib/fleet/fleet_achievements_runs.py``) and ``--compare`` refuses the pair.
+  ``lib/fleet/fleet_achievements_runs.py``) and ``--compare`` refuses the pair. Two stamps
+  whose packs differ (by name, in order, and sha256; ``pack_reasons``) give the rule reason
+  ``practice packs changed``. ``packs`` is not in ``RULE_KEYS``: stored scans carry no pack
+  block to re-score from, so that reason is never bridged by a re-score.
 - ``method_notes``: a stamp written before #952 has neither key (``fleet_legacy.STAMP_DEFAULTS``:
   None, unrecorded). Against a stamp that has them it compares on the stamped version alone,
   with a note; it is never read as the same rules, and never refused for it. A collector
@@ -53,6 +63,10 @@ from lib.manifest.check_manifest import CheckManifest, collectors, core_manifest
 
 # The stamp keys that name the rules a run scored with: a difference in any is re-scorable.
 RULE_KEYS = ("levels_version", "rules_sha256")
+# The pack collector (lib/pack_checks.py): named by each pack's sha256 in the stamp's
+# ``packs``, never by a collector revision, so it is left out of ``collectors``.
+PACK_COLLECTOR = "core.pack_checks"
+PACKS_PREFIX = "practice packs changed "
 # Model keys left out of rules_sha256, by level of the model: names, plus ``demoted``, which the
 # exit rule decides per run after the stamp and demotions.json records.
 UNHASHED_KEYS: Mapping[str, frozenset[str]] = {
@@ -98,7 +112,8 @@ def rules_sha256(model: MaturityModel | None) -> str | None:
 def collector_revisions(manifest: CheckManifest | None = None) -> list[CollectorRevision]:
     """Every collector's ``{id, revision}`` in ``manifest`` (the core manifest by default), by id."""
     entries = collectors(core_manifest() if manifest is None else manifest)
-    return sorted(({"id": c["id"], "revision": c["revision"]} for c in entries), key=lambda c: c["id"])
+    return sorted(({"id": c["id"], "revision": c["revision"]} for c in entries if c["id"] != PACK_COLLECTOR),
+                  key=lambda c: c["id"])
 
 
 def method_keys(model: MaturityModel | None) -> MethodKeys:
@@ -111,11 +126,31 @@ def _short(value: object) -> str:
 
 
 def rule_reasons(earlier: Mapping[str, Any], later: Mapping[str, Any]) -> list[str]:
-    """The rules-hash reason: both stamps recorded one, and they differ."""
+    """The rules-hash reason (both stamps recorded one, and they differ), then the
+    ``pack_reasons``."""
     then, now = earlier.get("rules_sha256"), later.get("rules_sha256")
-    if then is None or now is None or then == now:
+    reasons = [] if then is None or now is None or then == now else \
+        [f"maturity-model rules changed {_short(then)}->{_short(now)}"]
+    return reasons + pack_reasons(earlier, later)
+
+
+def _packs(stamp: Mapping[str, Any]) -> list[tuple[str, str]]:
+    """``(name, sha256)`` of each pack a stamp names, in pass order; none without ``packs``."""
+    found = stamp.get("packs")
+    if not isinstance(found, list):
         return []
-    return [f"maturity-model rules changed {_short(then)}->{_short(now)}"]
+    return [(str(p.get("name")), str(p.get("sha256"))) for p in found if isinstance(p, dict)]
+
+
+def _pack_words(packs: list[tuple[str, str]]) -> str:
+    return ",".join(f"{name}@{_short(sha)}" for name, sha in packs) or "none"
+
+
+def pack_reasons(earlier: Mapping[str, Any], later: Mapping[str, Any]) -> list[str]:
+    """The packs reason (#1273): the two stamps name different packs, in order, by name and
+    sha256. A stamp without ``packs`` names none."""
+    then, now = _packs(earlier), _packs(later)
+    return [] if then == now else [f"{PACKS_PREFIX}{_pack_words(then)}->{_pack_words(now)}"]
 
 
 def _unrecorded_rules(stamp: Mapping[str, Any]) -> bool:

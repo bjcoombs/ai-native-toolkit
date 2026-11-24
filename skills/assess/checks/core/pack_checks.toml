@@ -1,0 +1,21 @@
+# Check manifest fragment: the pack_checks collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.pack_checks"
+kind = "collector"
+title = "Practice pack checks"
+summary = "Each --pack check, read from the repository's files: a yes/no or a count, and each pack's name, version and hash. Absent without --pack."
+issues = [1273]
+callable = "lib.pack_checks:collect"
+publishes = ["pack", "packs"]
+reads = ["repo_root", "excludes", "packs"]
+stage = "post_offers"
+spread = true
+revision = 1
+  [entries.privacy]
+  "pack.reason" = "reason"
+  "packs.reason" = "reason"
+  "packs.name" = "token"
+  "packs.version" = "token"
+  "packs.sha256" = "id"

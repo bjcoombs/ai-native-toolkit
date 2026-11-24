@@ -112,6 +112,7 @@ fragments = [
   "agent_outcome",
   "doc_claims",
   "guardrails",
+  "pack_checks",
   "level",
   "since_last_run",
   "headline",

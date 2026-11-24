@@ -16,6 +16,7 @@ from lib.fleet.condition_demotion import with_demotions
 from lib.fleet.fleet_stamp import FleetStamp, build_stamp
 from lib.manifest.check_manifest import collectors, core_manifest
 from lib.levels import MaturityModel, parse_levels
+from lib.packs import PackIdentity
 from test_fleet_rescore import BASE, DATES, KEY, NOW, V1, _data, _entry, _rows, _stamp
 
 
@@ -62,8 +63,9 @@ def test_rules_hash_reads_a_new_model_key_by_default() -> None:
 
 
 def test_collector_revisions_list_every_core_collector_by_id() -> None:
+    """Every core collector but the pack collector, whose identity is each pack's sha256 (#1273)."""
     revisions = fm.collector_revisions()
-    manifest = {c["id"]: c["revision"] for c in collectors(core_manifest())}
+    manifest = {c["id"]: c["revision"] for c in collectors(core_manifest()) if c["id"] != fm.PACK_COLLECTOR}
     assert [c["id"] for c in revisions] == sorted(manifest)
     assert {c["id"]: c["revision"] for c in revisions} == manifest
 
@@ -250,3 +252,32 @@ def test_a_profile_resolved_model_changes_the_hash() -> None:
     hashes = {fm.rules_sha256(default), fm.rules_sha256(handover), fm.rules_sha256(citizen)}
     assert len(hashes) == 3 and None not in hashes
     assert _method(handover)["rules_sha256"] == fm.rules_sha256(handover)
+
+
+# --- practice packs (#1273) ----------------------------------------------------------
+
+TEAM: PackIdentity = {"name": "team", "version": "1", "sha256": "c" * 64}
+
+
+def test_the_pack_collector_is_named_by_sha256_not_a_collector_revision() -> None:
+    assert fm.PACK_COLLECTOR in {c["id"] for c in collectors(core_manifest())}
+    assert fm.PACK_COLLECTOR not in {c["id"] for c in fm.collector_revisions()}
+
+
+def test_a_stamp_without_packs_is_the_stamp_before_packs() -> None:
+    stamp = _method(V1)
+    assert "packs" not in stamp
+    with_packs = build_stamp([], toolkit_commit="abc", plugin_version="3.0.0", today=date(2026, 11, 22),
+                             window="6mo", levels_version=V1["version"], counts_only=True,
+                             paths_hashed=False, scans=None, model=V1, packs=[TEAM])
+    assert with_packs["packs"] == [TEAM]
+    assert {k: v for k, v in with_packs.items() if k != "packs"} == stamp
+
+
+def test_pack_reasons_compare_name_and_sha_in_order() -> None:
+    other = {**TEAM, "name": "other"}  # a plain mapping, as a stamp read from disk holds
+    assert fm.pack_reasons({"packs": [TEAM, other]}, {"packs": [TEAM, other]}) == []
+    assert fm.pack_reasons({"packs": [TEAM, other]}, {"packs": [other, TEAM]}) != []
+    assert fm.pack_reasons({}, {"packs": []}) == []
+    assert fm.pack_reasons({}, {"packs": [TEAM]}) == ["practice packs changed none->team@cccccccccccc"]
+    assert fm.rule_reasons({"packs": [TEAM]}, {}) == ["practice packs changed team@cccccccccccc->none"]

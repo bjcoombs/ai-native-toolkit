@@ -342,6 +342,7 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
     ``maturity_model`` is None: no headless scan evaluates a maturity model (#1150).
     ``managed_settings`` is ``--managed-settings`` (#1153): ``agent_ops`` reads this machine's
     Claude Code managed settings. Never read from the target's ``.assess/config.toml``.
+    ``packs`` is empty: the headless runner evaluates no practice pack (#1273).
     Besides the ``build_run_context`` arguments, it supplies the setup values
     ``instruction_files``, ``scope``, ``excludes``, ``history_window``,
     ``fleet_config`` and ``ghsync_root`` itself; the table never recomputes a name the runner provides.
@@ -354,6 +355,7 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
         "non_interactive": True,
         "maturity_model": None,  # the headless runner reports no level (/fleet --levels scores the rows)
         "managed_settings": managed_settings,
+        "packs": (),  # no --pack on the headless runner yet: /fleet per pack is #1276
         "instruction_files": instruction_files,
         "scope": scope,
         "excludes": load_excludes(repo_root),

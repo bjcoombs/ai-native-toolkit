@@ -83,6 +83,29 @@
         }
       ]
     },
+    "packs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "sha256",
+          "version"
+        ],
+        "additionalProperties": false
+      }
+    },
     "fleet_stamp_version": {
       "type": "integer"
     },

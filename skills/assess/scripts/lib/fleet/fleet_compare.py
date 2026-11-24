@@ -57,7 +57,8 @@ turn into a not-comparable result). `comparability` reuses
 adds maturity-model version, window, output mode, scan selection, path hashing and the
 `--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config) and
 `platform` (a pre-#714 stamp is false), and the rules hash (`rules_sha256`, #952,
-`lib/fleet/fleet_method.py`: a reason only when both stamps recorded one; an unrecorded side
+`lib/fleet/fleet_method.py`: a reason only when both stamps recorded one, and the practice
+packs, #1273: a stamp without `packs` names none; an unrecorded side
 or a collector revision change is a note, printed by `summary_lines` too); any reason
 gives `comparable: false` with no deltas. `compare` reports the measured-set movement
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
@@ -306,7 +307,8 @@ def comparability(earlier: FleetStamp, later: FleetStamp) -> tuple[list[str], li
         then, now = stamp_value(earlier, key), stamp_value(later, key)
         if then != now:
             reasons.append(f"{label} changed {then!r}->{now!r}")
-    reasons += rule_reasons(earlier, later)  # the rules hash (#952): only when both recorded one
+    # the rules hash (#952): only when both recorded one; then the practice packs (#1273)
+    reasons += rule_reasons(earlier, later)
     notes = [HASH_NOTE] if earlier.get("paths_hashed") and later.get("paths_hashed") else []
     return reasons, notes + method_notes(earlier, later)
 

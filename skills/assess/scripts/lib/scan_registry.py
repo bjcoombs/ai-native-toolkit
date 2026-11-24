@@ -65,7 +65,9 @@ core did not pass raises `ScanRegistryError` and stops the run, while a failure 
 the scan degrades. The core provides the `build_run_context` arguments
 (`repo_root`, `requested_scope`, `run_date`, `non_interactive`, and `maturity_model`: the
 `--profile` or `--levels` choice, `lib.profiles.ModelChoice`, or None for the default model,
-which the `level` and `headline` entries read, #1150); `scope` (the
+which the `level` and `headline` entries read, #1150; and `packs`, the `--pack` files loaded by
+`lib.packs.load_pack` in pass order, empty without the flag, which the `pack_checks` entry
+reads, #1273); `scope` (the
 absolute `--scope` path, or None), `instruction_files`, `excludes` (the
 `(dirs, patterns)` pair from `.assess/config.toml`) and `history_window` (the stats
 sidecar's churn window via `git_churn.window_from_churn_label`, or None) and
@@ -115,6 +117,8 @@ from lib.secrets_guard import scan_secrets_guard
 from lib.skill_script_tests import scan_skill_script_tests
 from lib.skill_personal_data import scan_skill_personal_data
 from lib.ci_model_jobs import scan_ci_model_jobs
+from lib.pack_checks import IDENTITY_BLOCK, PACK_BLOCK
+from lib.pack_checks import collect as collect_packs
 from lib.hosting.org_security_policy import scan_org_security_policy
 from lib.hosting.github_secret_scanning import scan_github_secret_scanning
 from lib.layer_grades import scan_layer_grades
@@ -135,7 +139,7 @@ from lib.unit_readings import bind as bind_unit_pass
 # before it (``instruction_files``, ``scope``, ``excludes``, ``history_window`` and
 # ``fleet_config`` are setup specs).
 PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive",
-                             "maturity_model", "managed_settings"})
+                             "maturity_model", "managed_settings", "packs"})
 
 STAGE_SETUP = "setup"
 STAGE_READ_SIDE = "read_side"
@@ -675,6 +679,11 @@ SCANS: tuple[ScanSpec, ...] = (
     # carries a ready one-line snippet. stated_pct feeds the guardrails-stated row.
     # A scoped run walks the scope only, as coverage_gate does (issue #956).
     _spec("guardrails", scan_guardrails),
+    # Practice pack checks (issue #1273, lib/pack_checks.py): each --pack check evaluated
+    # offline against the repository's files, under pack.<pack>.<check>, and each pack's
+    # name, version and sha256 under packs. A spread entry that writes neither key without
+    # --pack, so such a run's run-context.json is unchanged. Before level, which reads pack.
+    _spec("pack_checks", collect_packs, spread=(PACK_BLOCK, IDENTITY_BLOCK)),
 )
 
 

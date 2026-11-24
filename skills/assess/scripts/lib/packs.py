@@ -55,6 +55,8 @@ Rules:
 - ``[[rows]]`` is refused: rows in a pack arrive with layering (#1274).
 - Each check publishes its result under ``pack.<pack>.<check>`` (``signal``), a
   namespace no core signal uses.
+- ``pack_identity`` gives ``{name, version, sha256}``, the ``PackIdentity`` the run
+  context's ``packs`` block and the fleet stamp's ``packs`` key record (#1273).
 - ``Pack.sha256`` is the sha256 of the canonical JSON (sorted keys, no spaces,
   UTF-8) of the loaded pack: ``[pack]`` and every check's ``id``, ``title``,
   ``why`` and rule, in file order, as ``lib/fleet/fleet_method.py`` hashes a
@@ -132,6 +134,19 @@ class Pack(TypedDict):
     version: str
     checks: list[PackCheck]
     sha256: str
+
+
+class PackIdentity(TypedDict):
+    """What names a pack in the run context and the fleet stamp (#1273): never its checks."""
+
+    name: str
+    version: str
+    sha256: str
+
+
+def pack_identity(pack: Pack) -> PackIdentity:
+    """``{name, version, sha256}`` of a loaded pack."""
+    return {"name": pack["name"], "version": pack["version"], "sha256": pack["sha256"]}
 
 
 def signal_path(pack: str, check: str) -> str:

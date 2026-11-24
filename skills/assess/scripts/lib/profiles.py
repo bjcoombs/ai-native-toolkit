@@ -18,7 +18,8 @@ Each file justifies every practice it holds in one line.
 A single-repository run evaluates the chosen model over the run context's ``level``
 reads (``level_tally.LEVEL_READS``: the blocks the default model reads), so
 ``single_repo_choice`` refuses a custom model whose criteria read any other block, naming
-it, rather than reporting its criteria as not measured; over those blocks the run gives
+it, rather than reporting its criteria as not measured (the ``pack`` block of the run's
+``--pack`` checks is the one addition, #1273); over those blocks the run gives
 the same Step as ``/fleet --levels`` for the same repository.
 
 ``model_lines(level, choice)`` are the lines the executive summary (``lib/exec_summary.py``)
@@ -53,7 +54,7 @@ Tests: ``tests/test_profiles.py``.
 from __future__ import annotations
 
 import argparse
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -63,6 +64,8 @@ from lib.level_result_types import ConditionResult, LevelResult
 from lib.level_tally import DEFAULT_BLOCKS, default_model, level_result, model_blocks, run_context_level
 from lib.level_tally import run_exclusions
 from lib.levels import LevelsError, MaturityModel, PathValidator, load_levels
+from lib.packs import SIGNAL_PREFIX as PACK_BLOCK
+from lib.packs import Pack
 from lib.prior_level import model_key
 from lib.signal_grades import DEFAULT_LEVELS
 
@@ -182,10 +185,14 @@ def resolve(profile: str | None, levels: str | Path | None,
 
 
 def single_repo_choice(profile: str | None, levels: str | Path | None,
-                       validator: PathValidator | None = None) -> ModelChoice:
-    """``resolve``, refusing a model that reads a block the single-repository level does not."""
+                       validator: PathValidator | None = None, packs: Sequence[Pack] = ()) -> ModelChoice:
+    """``resolve``, refusing a model that reads a block the single-repository level does not.
+    With ``packs`` (``--pack``, #1273) the level also reads the ``pack`` block, so a model may
+    read ``pack.<pack>.<check>``; ``lib.level_signals.signal_path_validator(packs)`` refuses a
+    path of a pack that was not passed, naming ``--pack``."""
     choice = resolve(profile, levels, validator)
-    outside = sorted(set(model_blocks(choice.model)) - set(DEFAULT_BLOCKS))
+    readable = {*DEFAULT_BLOCKS, *((PACK_BLOCK,) if packs else ())}
+    outside = sorted(set(model_blocks(choice.model)) - readable)
     if outside:
         raise ProfileError(
             f"{choice.label} reads {', '.join(outside)}, which the single-repository level does not "

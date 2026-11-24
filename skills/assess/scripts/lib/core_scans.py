@@ -408,15 +408,23 @@ def anomalies(header: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 # The ``level`` entry's reads, in the order ``level`` takes them (pinned by the registry).
-LEVEL_ENTRY_READS = (*LEVEL_READS, "maturity_model")
+LEVEL_ENTRY_READS = (*LEVEL_READS, "maturity_model", "pack")
 
 
 def level(*reads: Any) -> LevelResult:
     """The run context's ``level`` block (#744): the tally over ``level_tally.LEVEL_READS``
     (the model's blocks, then the owner's exclusions), which the registry entry reads in that
-    order, then the run's ``maturity_model`` choice (#1150): the default model when it is None."""
-    *blocks, choice = reads
-    return run_level(dict(zip(LEVEL_READS, blocks)), choice)
+    order, then the run's ``maturity_model`` choice (#1150): the default model when it is None,
+    then the ``pack`` block of the ``--pack`` checks (#1273), None without ``--pack``; a
+    ``--levels`` row reads ``pack.<pack>.<check>`` from it. Without the last read (the table
+    before #1273) the tally reads no pack block."""
+    blocks = reads[:len(LEVEL_READS)]
+    choice = reads[len(LEVEL_READS)]
+    data = dict(zip(LEVEL_READS, blocks))
+    pack = reads[len(LEVEL_READS) + 1] if len(reads) > len(LEVEL_READS) + 1 else None
+    if pack is not None:
+        data["pack"] = pack
+    return run_level(data, choice)
 
 
 def headline(level_block: Any, since_block: Any, choice: ModelChoice | None) -> Headline:
