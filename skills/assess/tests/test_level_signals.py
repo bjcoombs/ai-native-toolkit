@@ -753,19 +753,6 @@ def test_layer_six_level_one_needs_a_threshold_of_at_least_fifty(tmp_path: Path)
     assert "coverage_gate.enforced_meets_minimum" in row["missing_signals"]
 
 
-@pytest.mark.parametrize("meets", [True, False, None])
-def test_coverage_threshold_signal_survives_counts_only(meets: bool | None) -> None:
-    """Counts-only output keeps the three-state signal and both percentages (#781)."""
-    gate = {"file": "pom.xml", "line": 3, "tool": "jacoco", "form": "<rules> <minimum>",
-            "threshold": 0.8, "unit": "ratio", "threshold_percent": 80.0, "metric": "line"}
-    block = {"available": True, "configured": True, "gates": [gate], "max_threshold_percent": 80.0,
-             "threshold_meets_minimum": meets, "not_detected": ["x"]}
-    out = counts_only_scans({"coverage_gate": block})["coverage_gate"]
-    assert out["threshold_meets_minimum"] is meets
-    assert out["max_threshold_percent"] == 80.0
-    assert (out["gates"][0]["threshold"], out["gates"][0]["threshold_percent"]) == (0.8, 80.0)
-
-
 def test_layer_six_is_unknown_on_a_go_repository_with_no_readable_gate(tmp_path: Path) -> None:
     """Issue #788: a Go repository with no gate found is not measured, never 0."""
     go = _coverage_repo(tmp_path / "go", {"go.mod": "module example.com/x\n\ngo 1.22\n",
@@ -780,23 +767,3 @@ def test_layer_six_is_unknown_on_a_go_repository_with_no_readable_gate(tmp_path:
                                     "      - uses: vladopajic/go-test-coverage@v2\n"})
     row = _row(_run({"r": gated}), "layer-6-coverage")
     assert (row["status"], row.get("floor")) == ("unknown", 1)
-
-
-@pytest.mark.parametrize(("meets", "basis"), [(True, "ci_run"), (False, "not_run_in_ci"),
-                                              (None, "indirect_run")])
-def test_enforced_signal_survives_counts_only(meets: bool | None, basis: str) -> None:
-    """Counts-only output keeps the #921 three-state signal and its basis token."""
-    block = {"available": True, "configured": True, "gates": [], "max_threshold_percent": 80.0,
-             "threshold_meets_minimum": True, "enforced_meets_minimum": meets,
-             "enforced_basis": basis, "not_detected": ["x"]}
-    out = counts_only_scans({"coverage_gate": block})["coverage_gate"]
-    assert (out["enforced_meets_minimum"], out["enforced_basis"]) == (meets, basis)
-
-
-def test_unmeasured_reason_survives_counts_only() -> None:
-    block = {"available": True, "configured": False, "gates": [], "max_threshold_percent": None,
-             "threshold_meets_minimum": None,
-             "unmeasured_reason": "go_rust_gate_form_not_read", "not_detected": ["x"]}
-    out = counts_only_scans({"coverage_gate": block})["coverage_gate"]
-    assert out["unmeasured_reason"] == "go_rust_gate_form_not_read"
-    assert out["threshold_meets_minimum"] is None

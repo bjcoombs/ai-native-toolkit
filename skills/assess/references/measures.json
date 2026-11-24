@@ -2862,7 +2862,7 @@
         },
         {
           "code": "trigger_unresolved",
-          "means": "No model-backed job is ungated, but the trigger or condition of at least one could not be read. Examples are an on: key this reader cannot list, a reusable workflow called from elsewhere, or an if: that joins a label test with ||.",
+          "means": "No model-backed job is ungated, but one could not be settled. Examples are an unreadable on: key, a label if: joined with ||, or a job that only names a provider secret.",
           "next_step": "Nothing to change if the job is gated; a plain paths:, schedule: or label condition lets the scan read it."
         },
         {

@@ -326,3 +326,88 @@ def test_a_job_if_on_an_ordinary_event_narrows_the_trigger(tmp_path: Path) -> No
     assert (job["state"], job["triggers"]) == ("ungated", ["pull_request"])
     gated = _workflow(tmp_path / "b", "  push:\n  pull_request:\n    paths: [p/**]", jobs)["jobs"][0]
     assert (gated["state"], gated["gates"]) == ("gated", ["event_if"])
+
+
+# --- pre-review: false credits, missed jobs, over-detection -----------------------------
+
+SECRET_ONLY = """jobs:
+  store:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gcloud secrets versions add key --data-file=- <<< "$OPENAI_API_KEY"
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+"""
+
+
+@pytest.mark.parametrize(("filters", "state"), [
+    ("    paths: ['**']", "ungated"),
+    ("    paths: ['**/*', 'src/**']", "ungated"),
+    ("    paths-ignore: []", "ungated"),
+    ("    paths-ignore: ['**']", "ungated"),
+    ("    paths: ['prompts/**']", "gated"),
+    ("    paths-ignore: ['docs/**']", "gated"),
+])
+def test_a_catch_all_paths_pattern_gates_nothing(tmp_path: Path, filters: str, state: str) -> None:
+    assert _workflow(tmp_path, "  pull_request:\n" + filters)["jobs"][0]["state"] == state
+
+
+@pytest.mark.parametrize("on", ["on: ${{ fromJSON(vars.EVENTS) }}\n", "on: [made_up_event]\n",
+                                "on:\n  schedule_typo:\n"])
+def test_an_unknown_event_reads_unknown_never_gated(tmp_path: Path, on: str) -> None:
+    root = _repo(tmp_path, {".github/workflows/e.yml": on + EVAL_STEPS})
+    block = scan_ci_model_jobs(root)
+    assert (block["jobs"][0]["state"], block["jobs"][0]["reason"]) == ("unknown", "on_unread")
+    assert _state(block) == ("not_measured", "trigger_unresolved")
+
+
+def test_a_known_gating_event_still_gates(tmp_path: Path) -> None:
+    assert _workflow(tmp_path, "  release:\n    types: [published]")["jobs"][0]["gates"] == ["event_trigger"]
+
+
+def test_a_workflow_env_secret_reaches_every_job(tmp_path: Path) -> None:
+    jobs = ("env:\n  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}\njobs:\n"
+            "  agent:\n    steps:\n      - run: claude -p 'triage'\n"
+            "  lint:\n    steps:\n      - run: ruff check .\n")
+    block = _workflow(tmp_path, "  pull_request:", jobs)
+    states = {j["job"]: (j["state"], j["signs"]) for j in block["jobs"]}
+    assert states["agent"] == ("ungated", ["agent_cli", "provider_secret"])
+    assert states["lint"][0] == "unknown"  # the secret alone: secret_only
+    assert _state(block) == ("unmet", None)
+
+
+def test_a_local_composite_holding_an_agent_action_is_followed(tmp_path: Path) -> None:
+    action = "runs:\n  using: composite\n  steps:\n    - uses: anthropics/claude-code-action@v1\n"
+    jobs = "jobs:\n  review:\n    steps:\n      - uses: ./.github/actions/review\n"
+    root = _repo(tmp_path, {".github/actions/review/action.yml": action,
+                            ".github/workflows/r.yml": "on: pull_request\n" + jobs})
+    job = scan_ci_model_jobs(root)["jobs"][0]
+    assert (job["state"], job["signs"]) == ("ungated", ["agent_action"])
+    plain = _repo(tmp_path / "b", {".github/actions/review/action.yml": action.replace("anthropics/claude-code-action", "actions/cache"),
+                                   ".github/workflows/r.yml": "on: pull_request\n" + jobs})
+    assert scan_ci_model_jobs(plain)["model_jobs"] == 0
+
+
+@pytest.mark.parametrize("jobs", [SECRET_ONLY, "jobs:\n  sync:\n    steps:\n      - uses: some/vault-sync@v1\n"
+                                               "        with:\n          secrets: OPENAI_API_KEY\n"])
+def test_a_job_whose_only_sign_is_a_secret_reads_unknown(tmp_path: Path, jobs: str) -> None:
+    block = _workflow(tmp_path, "  push:", jobs)
+    assert (block["jobs"][0]["state"], block["jobs"][0]["reason"]) == ("unknown", "secret_only")
+    assert _state(block) == ("not_measured", "trigger_unresolved")
+
+
+def test_a_secret_beside_another_sign_stays_a_model_job(tmp_path: Path) -> None:
+    assert _workflow(tmp_path, "  push:")["jobs"][0]["state"] == "ungated"  # promptfoo plus the key
+
+
+@pytest.mark.parametrize("condition", ["\"!contains(github.event.pull_request.labels.*.name, 'skip-ai')\"",
+                                       "${{ !(github.event_name == 'workflow_dispatch') }}"])
+def test_a_negated_label_or_event_test_reads_unknown(tmp_path: Path, condition: str) -> None:
+    jobs = EVAL_STEPS.replace("    runs-on:", f"    if: {condition}\n    runs-on:")
+    job = _workflow(tmp_path, "  pull_request:", jobs)["jobs"][0]
+    assert (job["state"], job["reason"]) == ("unknown", "condition_unread")
+
+
+def test_an_evals_path_needs_a_runner() -> None:
+    assert _signs("jobs:\n  j:\n    steps:\n      - run: ruff check src/ evals/\n") == []
+    assert _signs("jobs:\n  j:\n    steps:\n      - run: uv run python evals/run.py\n") == ["eval_tests"]

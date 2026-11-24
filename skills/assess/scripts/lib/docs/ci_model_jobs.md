@@ -17,27 +17,37 @@ runs nobody priced.
 | `agent_cli` | a command running `claude -p` or `claude --print` (also through `npx @anthropic-ai/claude-code`) |
 | `agent_action` | a step `uses:` one of `AGENT_ACTIONS`: `anthropics/claude-code-action`, `anthropics/claude-code-base-action`, `openai/codex-action`, `google-github-actions/run-gemini-cli` |
 | `provider_secret` | an `env:` or `with:` line of the job names one of `PROVIDER_SECRETS` (as the key or in `secrets.<NAME>`) |
-| `eval_tests` | a command running `pytest -m eval` / `-m evals`, or a path under `evals/` |
+| `eval_tests` | a command running `pytest -m eval` / `-m evals`, or a runner (`pytest`, `python`, `node`, `npx` ...) given a path under `evals/` |
 
 A command line that installs (`pip install ragas`) is never a sign. A secret named inside a command is
-not a sign either: a deploy that stores the key in a secrets manager calls no model. A workflow-level
-`env:` is not read: it would mark every job of the workflow. A step or job whose `if:` is never
-true (`if: false`) is not read.
+not a sign either. A workflow-level `env:` secret reaches every job, so it is a sign of each. A step
+that `uses:` a repo-local action (`./.github/actions/x`) carries the signs of that action's
+`action.yml`, one level, read from tracked files as `lib.ci_composite` reads one. A step or job
+whose `if:` is never true (`if: false`) is not read.
+
+**A secret alone is not enough to read ungated.** A deploy or secret-store step names the key
+without calling a model (`gcloud secrets versions add ... <<< "$OPENAI_API_KEY"`, a vault-sync
+action given the secret's name). A job whose only sign is `provider_secret`, and which would read
+ungated, reads unknown (`secret_only`). A secret beside any other sign is a model job.
 
 ## Gates
 
 | Gate | GitHub Actions | GitLab CI |
 |---|---|---|
-| `paths` | `paths:` or `paths-ignore:` on every ordinary event (`push`, `pull_request`, `pull_request_target`, `merge_group`) that fires the workflow | |
+| `paths` | `paths:` or `paths-ignore:` on every ordinary event (`push`, `pull_request`, `pull_request_target`, `merge_group`) that fires the workflow; a `paths:` list holding a catch-all (`**`, `**/*`, `*`) and a `paths-ignore:` that is empty or only catch-alls gate nothing | |
 | `pr_types` | pull request `types:` without `synchronize` | |
 | `label` | `types: [labeled]`, or a job or step `if:` on `github.event.pull_request.labels` or `github.event.label` | |
 | `event_if` | a job `if:` requiring `github.event_name ==` a non-ordinary event | |
 | `tags_only` | a push filtered to tags with no branch filter | |
-| `event_trigger` | no ordinary event fires the workflow (schedule, `workflow_dispatch`, comments) | the job runs in neither a branch nor a merge request pipeline (`lib.ci_triggers`) |
+| `event_trigger` | no ordinary event fires the workflow, and every event is one GitHub documents (`GATING_EVENTS`: schedule, `workflow_dispatch`, comments ...) | the job runs in neither a branch nor a merge request pipeline (`lib.ci_triggers`) |
 | `changes` | | the job runs in an ordinary pipeline only through a `rules:` item holding `changes:` |
 
 A job `if:` that requires an ordinary event (`github.event_name == 'pull_request'`) narrows the
 job's triggers to that event; when none of the ungated events is left, the job is gated (`event_if`).
+
+A `paths-ignore:` counts as a gate whatever it names, so `paths-ignore: ['docs/**']` reads gated
+although it skips only docs-only changes. The reader does not compare the patterns with the
+files the job tests.
 
 Not gates: a `branches:` filter alone (the default branch is still pushed), an actor `if:`, and
 `concurrency` with `cancel-in-progress: true`, recorded as `cancel_superseded`: it cancels a
@@ -53,11 +63,13 @@ no longer runs in an ordinary pipeline is gated by `changes`; one that still doe
 
 A job is `unknown` (with `reason`) and never ungated or gated when:
 
-- `on_unread`: the workflow's `on` cannot be listed;
+- `on_unread`: the workflow's `on` cannot be listed, or names an event this reader does not
+  know (an expression such as `${{ fromJSON(x) }}`, a typo);
 - `filters_unread`: an event's filters are a flow mapping or a `types:` that is not a list;
 - `called_workflow`: only `workflow_call` / `workflow_run` fire it and no workflow of the
   repository calls it (a called workflow takes its local callers' route, the worst one first);
-- `condition_unread`: a label or event `if:` joined with `||`, or a job or step `if:` on a value
+- `secret_only`: see above;
+- `condition_unread`: a label or event `if:` joined with `||` or holding a negation (`!`), or a job or step `if:` on a value
   this reader does not follow (`steps.`, `needs.`, `vars.`, `env.`, `inputs.`), such as a
   changed-files job's output, which may be a paths gate;
 - `rules_unread`: GitLab rules this reader cannot settle.
