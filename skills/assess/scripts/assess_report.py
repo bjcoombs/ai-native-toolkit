@@ -651,7 +651,7 @@ def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None =
     findings_section = render_findings_section(ctx)
     generated = render_generated_disclosure(ctx)
     if generated:
-        findings_section = f"{findings_section}\n\n{generated}"
+        findings_section = f"{findings_section}\n\n### Excluded as generated\n\n{generated}"
     report = REPORT_TEMPLATE.substitute(
         repo_name=repo_name,
         run_date=ctx.get("run_date", "unknown"),

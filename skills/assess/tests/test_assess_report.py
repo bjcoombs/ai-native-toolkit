@@ -704,6 +704,9 @@ def test_lying_map_paths_render_before_the_first_fold() -> None:
     assert report.index("### lying_map") < fold
     for path in ("docs/arch.md", "src/core.py"):
         assert report.index(path) < fold
+    # The disclosure is its own subsection, not part of the last finding or the attention list.
+    heading = report.index("### Excluded as generated")
+    assert report.index("src/core.py") < heading < report.index("13 files excluded from scoring") < fold
 
 
 def test_pruned_finding_paths_disclosure_names_incomplete_rename_map() -> None:
