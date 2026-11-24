@@ -43,6 +43,6 @@
 <g data-then="added" data-now="not_measured"><rect x="419.0" y="255.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
 <text x="16.0" y="322.0" font-size="12" text-anchor="start" class="t-fg">Each cell counts repositories by their Step in the earlier run and in this one. A dashed cell with</text>
 <text x="16.0" y="340.0" font-size="12" text-anchor="start" class="t-fg">a hatched mark holds moves that rule changes alone explain.</text>
-<text x="16.0" y="358.0" font-size="12" text-anchor="start" class="t-fg">The earlier run used another version of the maturity model, so its scans were scored again under</text>
-<text x="16.0" y="376.0" font-size="12" text-anchor="start" class="t-fg">this one.</text>
+<text x="16.0" y="358.0" font-size="12" text-anchor="start" class="t-fg">The earlier run used other maturity-model rules, so its scans were scored again under this run's</text>
+<text x="16.0" y="376.0" font-size="12" text-anchor="start" class="t-fg">rules.</text>
 </svg>

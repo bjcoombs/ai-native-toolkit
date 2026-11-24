@@ -15,7 +15,10 @@ A repository whose re-scored Step already equals its Step now, though its stored
 differs, moved because the rules changed, not the repository: ``rule_only`` counts it
 apart in its cell, drawn dashed with a hatched mark. An earlier run without ``level.json``
 (kept before #941) reads its re-scored Step as "then", and the grid says moves are not
-split. A maturity-model version change alone is bridged by that re-score; any other reason
+split. A change of rules alone is bridged by that re-score: the maturity-model version or the rules
+hash (``fleet_method.RULE_KEYS``, #952, found by the override ``_version_only`` uses, never by
+a reason's wording; this run's keys come from ``fleet-data.json`` ``run``, else the model);
+any other reason
 the comparison gives (window, scans, output mode, path hashing, fleet config and the rest,
 ``fleet_compare.comparability``) makes the pair not comparable, and the SVG shows the
 reasons in place of the grid. An earlier run that could not be read is named by a fixed
@@ -41,7 +44,9 @@ from typing import Any, TypedDict, cast
 
 import lib.fleet.fleet_svg as svg
 from lib.assess_diagrams import wrap
-from lib.fleet.fleet_compare import FleetRun
+from lib.fleet.fleet_compare import FleetRun, comparability
+from lib.fleet.fleet_method import RULE_KEYS, rule_reasons, rules_sha256
+from lib.fleet.fleet_stamp import FleetStamp
 from lib.fleet.fleet_level import repo_level
 from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.levels import MaturityModel
@@ -54,7 +59,6 @@ QUESTION = "How many repositories changed Step since the earlier run, and how ma
 CAPTION = ("Each cell counts repositories by their Step in the earlier run and in this one. "
            "A dashed cell with a hatched mark holds moves that rule changes alone explain.")
 UNREADABLE = "the earlier run's files are at a version this toolkit does not read"
-VERSION_REASON = "maturity-model version"
 NO_JOIN = ("the two runs hashed repository ids under different salts, so no repository is in both "
            "(compare runs that used one --hash-salt)")
 
@@ -85,7 +89,7 @@ class StepMoves(TypedDict):
     reasons: list[str]  # why the pair is not comparable; [] when it is
     steps: list[int]
     split: bool  # the earlier run stored its Steps, so rule-only moves are counted apart
-    rescored: bool  # the earlier run used another maturity-model version, bridged by the re-score
+    rescored: bool  # the earlier run used other rules (version or rules hash), bridged by the re-score
     cells: list[MoveCell]  # only cells with a count, in grid order
 
 
@@ -100,6 +104,23 @@ def _rescored(model: MaturityModel, row: FleetRow) -> int | None:
     return repo_level(model, cast(FleetRow, {**row, "scans": aliased(scans)}))["step"]
 
 
+def _rule_bridge(model: MaturityModel, earlier: FleetRun, data: Mapping[str, Any],
+                 reasons: Sequence[str]) -> tuple[list[str], bool]:
+    """``(blocking, rescored)``: the comparison's reasons that are not rule reasons, and whether the
+    rules differ. Rule reasons (``fleet_method.RULE_KEYS``: the model version and the rules hash
+    of #952) are found as ``_version_only`` finds them, by comparing the earlier stamp with itself
+    under this run's rule keys, so the re-score bridges every one."""
+    run = data.get("run") or {}
+    now = {key: run[key] if key in run else (model["version"] if key == "levels_version" else rules_sha256(model))
+           for key in RULE_KEYS}
+    swapped = cast(FleetStamp, {**earlier.stamp, **now})
+    rule_texts = set(comparability(earlier.stamp, swapped)[0])
+    then = {key: earlier.stamp.get(key) for key in RULE_KEYS}
+    rescored = then["levels_version"] != now["levels_version"] or bool(
+        rule_reasons(then, now))
+    return [r for r in reasons if r not in rule_texts], rescored
+
+
 def step_moves(model: MaturityModel, earlier: FleetRun | str, data: Mapping[str, Any],
                reasons: Sequence[str] = ()) -> StepMoves:
     """The grid's counts (see the module docstring). ``reasons`` are the comparison's."""
@@ -107,8 +128,7 @@ def step_moves(model: MaturityModel, earlier: FleetRun | str, data: Mapping[str,
     if isinstance(earlier, str):
         return {"comparable": False, "reasons": [UNREADABLE], "steps": steps, "split": False,
                 "rescored": False, "cells": []}
-    blocking = [r for r in reasons if not r.startswith(VERSION_REASON)]
-    rescored = earlier.stamp.get("levels_version") != model["version"]
+    blocking, rescored = _rule_bridge(model, earlier, data, reasons)
     if blocking:
         return {"comparable": False, "reasons": blocking, "steps": steps, "split": False,
                 "rescored": rescored, "cells": []}
@@ -217,8 +237,8 @@ def render(moves: StepMoves) -> str:
     y = y0 + CELL_H * len(rows) + 8
     notes = [CAPTION]
     if moves["rescored"]:
-        notes.append("The earlier run used another version of the maturity model, so its scans were "
-                     "scored again under this one.")
+        notes.append("The earlier run used other maturity-model rules, so its scans were scored again "
+                     "under this run's rules.")
     if not moves["split"]:
         notes.append("The earlier run kept no Step results, so moves from rule changes are not split out.")
     for note in notes:

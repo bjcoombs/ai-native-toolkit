@@ -171,8 +171,9 @@ def test_grid_cells_sum_to_the_repositories_in_both_runs_and_added_and_removed_k
 
 
 def test_a_rule_change_move_is_counted_apart_and_drawn_dashed() -> None:
-    moves = movement.step_moves(fx.MODEL, fx.earlier_run(**fx.RULE_CHANGE), fx.data(),
-                                ["maturity-model version changed 'a'->'b'"])
+    earlier = fx.earlier_run(**fx.RULE_CHANGE)
+    assert fx.reasons(earlier)  # a version reason the re-score bridges
+    moves = movement.step_moves(fx.MODEL, earlier, fx.data(), fx.reasons(earlier))
     assert moves["comparable"] and moves["rescored"] and moves["split"]
     cells = _cells(moves)
     assert cells[("2", "1")] == (1, 1)  # charlie: Step 2 under the old rules, 1 now and re-scored
@@ -262,3 +263,21 @@ def test_a_stored_step_this_model_lacks_keeps_its_own_lane() -> None:
     assert moves["steps"] == [1, 2, 3, 5] and cells[("5", "3")] == (1, 0)
     both = {r["repo"] for r in fx.EARLIER_ROWS} & {r["repo"] for r in fx.ROWS}
     assert sum(n for (t, w), (n, _) in cells.items() if t != movement.ADDED and w != movement.REMOVED) == len(both)
+
+
+def test_a_rules_hash_change_under_one_version_still_draws_the_grid_with_rule_only_counts() -> None:
+    """#952: an edited --levels under one version is a rule reason, bridged by the re-score."""
+    from lib.fleet.fleet_compare import comparability
+    from lib.fleet.fleet_method import rules_sha256
+
+    base = fx.earlier_run(steps=fx.OLD_RULES_STEPS)
+    earlier = type(base)({**base.stamp, "rules_sha256": "0" * 64}, base.repos, [], None, base.steps)
+    run = {"levels_version": fx.MODEL["version"], "rules_sha256": rules_sha256(fx.MODEL)}
+    reasons = comparability(earlier.stamp, {**earlier.stamp, **run})[0]  # type: ignore[typeddict-item]
+    assert reasons and all("rules changed" in r for r in reasons)
+    moves = movement.step_moves(fx.MODEL, earlier, {**fx.data(), "run": run}, reasons)
+    assert moves["comparable"] and moves["rescored"]
+    assert _cells(moves)[("2", "1")] == (1, 1)
+    assert "other maturity-model rules" in movement.render(moves)
+    blocked = movement.step_moves(fx.MODEL, earlier, {**fx.data(), "run": run}, [*reasons, *fx.NOT_COMPARABLE])
+    assert blocked["reasons"] == fx.NOT_COMPARABLE  # only the rule reason is bridged

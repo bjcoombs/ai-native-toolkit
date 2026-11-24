@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import lib.fleet.fleet_step_funnel as funnel  # noqa: E402
 import lib.fleet.fleet_step_lifts as lifts  # noqa: E402
 import lib.fleet.fleet_step_movement as movement  # noqa: E402
-from lib.fleet.fleet_compare import FleetRun  # noqa: E402
+from lib.fleet.fleet_compare import FleetRun, comparability  # noqa: E402
 from lib.fleet.fleet_data import level_results, step_fields  # noqa: E402
 from lib.fleet.fleet_stamp import build_stamp  # noqa: E402
 from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow  # noqa: E402
@@ -89,6 +89,11 @@ def earlier_run(rows: tuple[FleetRow, ...] = EARLIER_ROWS, *, levels_version: st
 
 
 RULE_CHANGE = dict(levels_version="step-diagrams-fixture-0", steps=OLD_RULES_STEPS)
+
+
+def reasons(run: FleetRun) -> list[str]:
+    """The comparison's reasons against this run, which differs from ``run`` only in its model version."""
+    return comparability(run.stamp, {**run.stamp, "levels_version": MODEL["version"]})[0]  # type: ignore[typeddict-item]
 NOT_COMPARABLE = ["window changed '6mo'->'3mo'"]
 
 
@@ -100,7 +105,7 @@ def goldens() -> dict[str, str]:
         "expected-one-change-away.svg": lifts.render(data()),
         "expected-step-movement.svg": movement.render(movement.step_moves(MODEL, earlier_run(), data())),
         "expected-step-movement-rules.svg": movement.render(movement.step_moves(
-            MODEL, earlier_run(**RULE_CHANGE), data(), ["maturity-model version changed 'x'->'y'"])),
+            MODEL, earlier_run(**RULE_CHANGE), data(), reasons(earlier_run(**RULE_CHANGE)))),
         "expected-step-movement-not-comparable.svg": movement.render(movement.step_moves(
             MODEL, earlier_run(), data(), NOT_COMPARABLE)),
         "expected-step-funnel-one.svg": funnel.render(MODEL, one),
