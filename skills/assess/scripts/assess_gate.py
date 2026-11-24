@@ -32,7 +32,10 @@ snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
   own committed record (#1184) and fails or passes on its own gates; with no record yet it reads
   "no baseline yet", as a default first run does. Without the opt-in each is a warn line. A
   ``--profile`` run whose scan plan left the findings out (``lib/scan_plan.py``, #1268) prints
-  "warn findings not checked: not run under profile <name>", never "clean snapshot". Printed output is ASCII apart from the
+  "warn findings not checked: not run under profile <name>", never "clean snapshot"; with a
+  findings-based threshold set (``fail_on`` or ``containment_min``) it fails instead, "FAIL scans
+  not run", naming the fix: re-run with ``--all-scans`` or without ``--profile`` / ``--levels``.
+  Printed output is ASCII apart from the
   headline's own text: a model pair reads ``->``, which a cp1252 console can encode.
 
 A third, explanatory part: when the committed ``.assess/findings.json`` (read
@@ -252,6 +255,21 @@ def check_gate_loss(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
     return [breach]
 
 
+def check_narrowed_run(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
+    """A blocking breach when a findings-based threshold (``fail_on``, ``containment_min``) is
+    set and a ``--profile`` / ``--levels`` scan plan narrowed the run (#1268): the scans those
+    thresholds read did not run, so the gate cannot pass on them. Otherwise nothing."""
+    plan = ctx.get("scan_plan")
+    if not isinstance(plan, dict):
+        return []
+    thresholds = (["fail_on"] if gate.get("fail_on") else []) + (
+        ["containment_min"] if gate.get("containment_min") is not None else [])
+    if not thresholds:
+        return []
+    return [{"metric": "scans_not_run", "count": 0, "paths": thresholds,
+             "reason": f"not run under {plan.get('model', 'a profile')}"}]
+
+
 def evaluate(ctx: JsonDict, gate: GateConfig) -> GateVerdict:
     """Run every check and return a structured verdict.
 
@@ -265,6 +283,7 @@ def evaluate(ctx: JsonDict, gate: GateConfig) -> GateVerdict:
         + check_containment_threshold(ctx, gate)
         + check_diff_regression(ctx, gate)
         + check_gate_loss(ctx, gate)
+        + check_narrowed_run(ctx, gate)
     )
     blocking = bool(failures or threshold_breaches)
     verdict: GateVerdict = {
@@ -307,6 +326,12 @@ def _breach_line(breach: JsonDict) -> str:
         return (
             f"  FAIL regression: {breach['count']} hotspot(s) worsened since "
             f"the prior snapshot ({sample})"
+        )
+    elif breach["metric"] == "scans_not_run":
+        return (
+            f"  FAIL scans not run: the findings scans were {breach['reason']}, and the gate needs "
+            f"the scans its {' and '.join(breach['paths'])} threshold reads; re-run /assess with "
+            "--all-scans, or without --profile / --levels"
         )
     elif breach["metric"] == "gates_not_compared":
         return (
@@ -359,7 +384,7 @@ def format_verdict(verdict: GateVerdict) -> str:
     if skipped and not failing_skip:
         lines.append(f"  warn gates not compared: {skipped}")
     not_run = verdict.get("findings_not_run")
-    if not_run:
+    if not_run and not any(b["metric"] == "scans_not_run" for b in verdict["threshold_breaches"]):
         lines.append(f"  warn findings not checked: {not_run}; run /assess with --all-scans to check them")
     if verdict.get("no_baseline"):
         lines.append(

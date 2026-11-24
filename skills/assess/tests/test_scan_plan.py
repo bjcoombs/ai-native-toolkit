@@ -255,3 +255,39 @@ def test_fleet_unit_rows_under_a_plan_match_all_scans(tmp_path: Path, monkeypatc
 
     assert json.loads((tmp_path / "plan" / "run.json").read_text(encoding="utf-8"))["scans"] is not None
     assert units("plan") and units("plan") == units("full")
+
+
+@pytest.mark.parametrize("gate_toml", ['fail_on = ["lying_map"]', "containment_min = 0.5"])
+def test_a_findings_threshold_fails_the_gate_on_a_narrowed_run(
+        ci2: Path, gate_toml: str, capsys: pytest.CaptureFixture[str]) -> None:  # noqa: F811
+    from assess_gate import main as gate_main
+
+    _core(ci2, "--profile", "citizen")
+    (ci2 / ".assess" / "config.toml").write_text(f"[gate]\n{gate_toml}\n", encoding="utf-8")
+    capsys.readouterr()
+    assert gate_main([str(ci2)]) == 1
+    out = capsys.readouterr().out
+    threshold = gate_toml.split(" ", 1)[0]
+    assert (f"FAIL scans not run: the findings scans were not run under profile citizen, and the gate "
+            f"needs the scans its {threshold} threshold reads; re-run /assess with --all-scans, or "
+            "without --profile / --levels") in out
+    assert "RESULT: FAIL" in out and "clean snapshot" not in out
+    # the same threshold over a full run under the profile reads the findings and passes
+    _core(ci2, "--profile", "citizen", "--all-scans")
+    capsys.readouterr()
+    assert gate_main([str(ci2)]) == 0
+    assert "scans not run" not in capsys.readouterr().out
+
+
+def test_a_gate_without_a_findings_threshold_only_warns_on_a_narrowed_run(
+        ci2: Path, capsys: pytest.CaptureFixture[str]) -> None:  # noqa: F811
+    from assess_gate import main as gate_main
+
+    _core(ci2, "--profile", "citizen")
+    (ci2 / ".assess" / "config.toml").write_text('[gate]\nwarn_on = ["lying_map"]\nccn_p95_max = 99\n',
+                                                 encoding="utf-8")
+    capsys.readouterr()
+    assert gate_main([str(ci2)]) == 0
+    out = capsys.readouterr().out
+    assert "warn findings not checked: not run under profile citizen" in out
+    assert "FAIL" not in out and "RESULT: PASS" in out
