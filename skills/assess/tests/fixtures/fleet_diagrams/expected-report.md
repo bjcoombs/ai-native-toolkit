@@ -18,6 +18,22 @@ Which tags have the most room to grow across the estate, and on which repositori
 
 [![Truth tags by repository](./tag-heatmap.svg)](./tag-heatmap.svg)
 
+## Repositories at each Step
+
+In place: 15 repositories in this run, scanned with no model call.
+
+Where does each repository stand, and which gate holds it there?
+
+Not drawn: skipped: the maturity model defines no Steps.
+
+## One change away from the next Step
+
+In place: 15 repositories in this run, scanned with no model call.
+
+Which single change would take the most repositories to their next Step?
+
+Not drawn: skipped: the maturity model defines no Steps.
+
 ## Activity and maturity
 
 In place: 14 repositories with a measured level, 9 of them at or above half the top level.
@@ -49,3 +65,11 @@ In place: 4 groups with a known level in both runs.
 What moved since the earlier run, and which row moved it?
 
 [![Before and after](./slope.svg)](./slope.svg)
+
+## Step movement since the earlier run
+
+In place: this run, the baseline a later comparison starts from.
+
+How many repositories changed Step since the earlier run, and how many moved only because the rules changed?
+
+Not drawn: skipped: no earlier run compared (no --compare, or no history entry matched this run).
