@@ -157,10 +157,11 @@ def summarised(block: Headline, level: Any, since: Any, model: MaturityModel,
     if block.get("available") is not True or not isinstance(level, dict) or "tally" not in level:
         return block
     result = cast(LevelResult, level)  # narrowed by the tally check above
-    lines = [*model_lines(result, choice), *summary_lines(result, since, model)]
+    named = model_lines(result, choice)
+    lines = [*named, *summary_lines(result, since, model)]
     action = call_to_action(result)
     # the Step line links its first "Step" to the glossary; a profile's model lines come before it
-    at = len(model_lines(result, choice))
+    at = len(named)
     linked = [line.replace("Step", f"[Step]({GLOSSARY_URL}#step)", 1) if i == at else line
               for i, line in enumerate(lines)]
     markdown = "\n\n".join([*linked, *([action] if action else [])])

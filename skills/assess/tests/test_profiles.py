@@ -325,3 +325,11 @@ def test_a_custom_steps_own_name_words_the_summary(tmp_path: Path) -> None:
     assert any(line.startswith("Step 2 of 2: Handover ready.") for line in lines)
     assert any(line.startswith("Step 4 of 4: ") and "Handover" not in line
                for line in _summary(_blocks(), resolve("handover", None)))
+
+
+def test_each_missing_practice_is_its_own_short_sentence() -> None:
+    lines = _summary({}, resolve("handover", None))
+    sentences = [x for x in lines[1].split(". ") if x]
+    assert sentences[0] == "Not ready for handover (profile: handover)"
+    assert len(sentences) == 1 + 6 and all(x.startswith("Missing: ") for x in sentences[1:])
+    assert max(len(x.split()) for x in sentences) <= 25

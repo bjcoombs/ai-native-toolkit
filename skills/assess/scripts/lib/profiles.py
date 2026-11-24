@@ -29,8 +29,8 @@ adds for a model that is not the default, ``[]`` for the default:
    start ``default-`` or ``profile-`` (``RESERVED_PREFIXES``, refused by ``resolve``):
    those name the shipped models, and the report tells models apart by version;
 2. the readiness line: ``Ready for handover (profile: handover).`` when every practice
-   holds, else ``Not ready for handover (profile: handover). Missing: <practice> (<state>);
-   ...`` (``READY_WORDS``; ``Every practice met`` and ``Not every practice met``
+   holds, else ``Not ready for handover (profile: handover). Missing: <practice> (<state>).
+   Missing: ...``, one sentence per practice, (``READY_WORDS``; ``Every practice met`` and ``Not every practice met``
    for a model the table does not name), naming each condition that does not hold, in model order. A positive condition
    holds only when met, a hazard only when unmet; not measured, excluded by the owner and
    a ``requires`` not met are missing, each with its reason, so unknown never reads ready.
@@ -222,7 +222,8 @@ def _readiness(level: LevelResult, choice: ModelChoice, foreign: set[str]) -> st
         return f"{ready} ({choice.label})."
     parts = [f"{_practice(c['id'], choice.model)} ({_state_words(c)})"
              + (" [not in the default model]" if c["id"] in foreign else "") for c in missing]
-    return f"{not_ready} ({choice.label}). Missing: {'; '.join(parts)}."
+    # one short sentence per missing practice, so the line stays plain however many are missing
+    return " ".join([f"{not_ready} ({choice.label}).", *(f"Missing: {part}." for part in parts)])
 
 
 def model_lines(level: LevelResult, choice: ModelChoice | None) -> list[str]:
