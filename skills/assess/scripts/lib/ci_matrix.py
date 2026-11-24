@@ -27,6 +27,11 @@ masking (``continue-on-error``, ``|| true``, the step's ``shell:``), as each mat
   (null) for the three CI signals when no other line settles them. Masked, the step reads
   false for ``enforced_check_runs`` and ``lint_runs``; ``test_or_lint_configured`` stays null.
   A matrix of more than ``MAX_COMBOS`` (256) combinations is not built and reads unknown.
+- **continue-on-error (#1165).** ``continue-on-error: ${{ matrix.<key> }}`` on a copied
+  step takes each copy's own value. On the job, or on a step that is not copied, it reads
+  ``true`` when any literal combination sets the key true (the leg may fail without failing
+  the workflow) and ``false`` when every one sets it false or leaves it unset. A value that
+  is not literal stays as it is: ``lib.ci_expressions`` reads it as ``check_may_pass``.
 - **Consumed axes.** A block-list axis whose values a copy now runs has its ``- value``
   lines blanked, so ``- ruff check .`` under ``matrix:`` is not counted again outside the
   step, where the step's masking cannot reach it.
@@ -51,6 +56,7 @@ from lib.ci_masking import IndentTree, parse_lines
 CMD_EXPR = re.compile(r"""(?:^|[;&|({]\s*|\b(?:then|do|else)\s+)["']?\$\{\{([^}]*)\}\}""")
 _MATRIX_REF = re.compile(r"\$\{\{\s*matrix\.([\w-]+)\s*\}\}")
 _QUOTED_RUN = re.compile(r"""^(\s*(?:-\s+)?[\w.-]+:\s+)(["'])(.*\$\{\{\s*matrix\..*)\2\s*$""")
+_COE_MATRIX = re.compile(r"^(\s*(?:-\s+)?continue-on-error:\s*)[\"']?\$\{\{\s*matrix\.([\w-]+)\s*\}\}[\"']?\s*$")
 _KEY_ONLY = re.compile(r"^\s*matrix\.([\w-]+)\s*$")
 
 Combo = dict[str, str]
@@ -175,7 +181,7 @@ def _matrix(tree: IndentTree, job: int) -> _Matrix:
     return _Matrix(_combine(axes, extra["exclude"], extra["include"]), items)
 
 
-def _body_lines(tree: IndentTree, item: list[int]) -> list[int]:
+def body_lines(tree: IndentTree, item: list[int]) -> list[int]:
     """The run-value lines of one step: its ``run:`` and any shell-like ``with:`` input."""
     keys = [k for k in item if tree.lines[k].key == "run"]
     for k in item:
@@ -209,6 +215,23 @@ def _substitute(line: str, combo: Combo) -> str:
     return _MATRIX_REF.sub(lambda m: combo.get(m.group(1), m.group(0)), line)
 
 
+def _coe_lines(tree: IndentTree, keys: list[int]) -> list[int]:
+    return [k for k in keys if tree.lines[k].key == "continue-on-error"]
+
+
+def _any_true(line: str, combos: list[Combo] | None) -> str | None:
+    """A ``continue-on-error: ${{ matrix.<key> }}`` line made literal (#1165): ``true`` when any
+    combination sets the key true, ``false`` when every one sets it false or leaves it unset,
+    else None (a value that is not a boolean, or a matrix that is not literal)."""
+    match = _COE_MATRIX.match(line)
+    if match is None or combos is None:
+        return None
+    values = {c.get(match.group(2), "false").lower() for c in combos}
+    if "true" in values:
+        return match.group(1) + "true"
+    return match.group(1) + "false" if values <= {"false"} else None
+
+
 def _variants(lines: list[str], span: range, body: set[int], combos: list[Combo],
               needed: set[str]) -> list[list[str]]:
     """One copy of the step lines per combination that sets every ``needed`` key, deduplicated."""
@@ -217,12 +240,13 @@ def _variants(lines: list[str], span: range, body: set[int], combos: list[Combo]
         if not needed <= combo.keys():
             continue
         copy = [(_substitute(lines[j], combo) if j in body else lines[j]) for j in span]
+        copy = [_any_true(line, [combo]) or line for line in copy]   # a step's own continue-on-error
         if copy not in out:
             out.append(copy)
     return out
 
 
-def _jobs(tree: IndentTree) -> list[int]:
+def jobs(tree: IndentTree) -> list[int]:
     tops = [i for i, line in enumerate(tree.lines) if line.structural and line.level == 0 and line.key == "jobs"]
     return [k for top in tops for k in tree.children(top)]
 
@@ -235,13 +259,14 @@ def expand_matrix(text: str, unknown_in: frozenset[int] = frozenset()) -> Expand
     replace: dict[int, tuple[int, list[list[str]]]] = {}   # step start -> (end, copies)
     unknown: set[int] = set(unknown_in)   # original indexes
     blank: set[int] = set()
-    for job in _jobs(tree):
+    literal: dict[int, str] = {}   # continue-on-error lines made literal (#1165)
+    for job in jobs(tree):
         steps = next((k for k in tree.children(job) if tree.lines[k].key == "steps"), None)
-        if steps is None:
-            continue
         matrix: _Matrix | None = None
-        for item in tree.items(steps):
-            body = _body_lines(tree, item)
+        coe = _coe_lines(tree, tree.children(job))
+        for item in tree.items(steps) if steps is not None else []:
+            coe += _coe_lines(tree, item)
+            body = body_lines(tree, item)
             needed = _command_keys([_value(tree, lines, j) for j in body])
             if needed == set():
                 continue
@@ -254,6 +279,12 @@ def expand_matrix(text: str, unknown_in: frozenset[int] = frozenset()) -> Expand
                 continue
             replace[span.start] = (span.stop, copies)
             blank.update(j for key in needed for j in matrix.axis_items.get(key, []))
+        for k in coe:   # job-level, and steps not copied: masked when any combination is true
+            if _COE_MATRIX.match(lines[k]):
+                matrix = matrix or _matrix(tree, job)
+                made = _any_true(lines[k], matrix.combos)
+                if made is not None:
+                    literal[k] = made
     out: list[str] = []
     found: set[int] = set()
     i = 0
@@ -267,6 +298,6 @@ def expand_matrix(text: str, unknown_in: frozenset[int] = frozenset()) -> Expand
             continue
         if i in unknown:
             found.add(len(out))
-        out.append("" if i in blank else lines[i])
+        out.append("" if i in blank else literal.get(i, lines[i]))
         i += 1
     return Expanded("\n".join(out) + ("\n" if text.endswith("\n") else ""), frozenset(found))
