@@ -235,6 +235,7 @@ on one that is not linked.
 | Module | Reference | What it covers |
 |---|---|---|
 | `lib.check_command` | [check_command.md](docs/check_command.md) | Whether a command line runs tests, lint or a type check |
+| `lib.ci_includes` | [ci_includes.md](docs/ci_includes.md) | GitLab CI `include:` items, `extends:` parents and the merged configuration view |
 | `lib.ci_model_jobs` | [ci_model_jobs.md](docs/ci_model_jobs.md) | CI jobs that call a model, and the block they produce |
 | `lib.docs.doc_graph` | [doc_graph.md](docs/doc_graph.md) | The doc link graph: orphans, reachability, entry points and link parents |
 | `lib.keyhole.keyhole_signals` | [keyhole_signals.md](docs/keyhole_signals.md) | How the signal modules become the five run-context blocks and the named findings |
