@@ -285,7 +285,7 @@ def render_html(catalog: Catalog, version: str, profiles_shipped: bool = False) 
             f'<a href="#findings">Findings<span class="n">{len(catalog["findings"])}</span></a>',
             f'<a href="#scans">Scans<span class="n">{len(catalog["scans"])}</span></a>',
             '<a href="#configure">Configure the checks</a>']
-    source = (f'Generated from <code>skills/assess/references/measures.json</code> (catalog version '
+    source = (f'Generated from the measures catalog, the same data as <code>skills/assess/references/measures.json</code> (catalog version '
               f'{catalog["catalog_version"]}, toolkit {_e(version)}) by <code>make regen</code>. '
               f'{len(levels)} conditions.')
     header = (f'<header><span class="eyebrow">AI Native Toolkit · /assess</span><h1>{TITLE}</h1>'

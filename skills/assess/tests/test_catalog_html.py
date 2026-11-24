@@ -45,7 +45,7 @@ def _parse(page: str) -> _Ids:
     return parser
 
 
-def test_every_condition_has_exactly_one_card_in_model_order() -> None:
+def test_every_condition_has_exactly_one_card() -> None:
     catalog = build_catalog()
     conditions = [lv["id"] for r in catalog["rows"] for lv in r["levels"]]
     cards = _parse(_page(catalog)).cards
