@@ -128,6 +128,7 @@ EXTRA_FIELD_NAMES: Final = frozenset({
     "diff_trend_reset", "instruction_file_size", "interactive", "log_integrity",
     "prior_stats_exists", "skills_count", "skills_present", "churn_degenerate",
     "reoffer_mutation", "capability_offers", "available", "assess_method_version",
+    "pack",  # the --pack signals (#1273): an identifier-keyed map with no privacy rule of its own
     # accretion_ratchet
     "reliable", "deletion_fraction_threshold", "total_in_band", "net_additions",
     "commit_count", "deletion_fraction", "time_span_months",

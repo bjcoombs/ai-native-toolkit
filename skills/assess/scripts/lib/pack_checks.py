@@ -26,9 +26,14 @@ the glob (``*`` and ``?`` within one segment, ``**`` across any number, ``[...]`
 the loader does (``.toml`` ``tomllib``, ``.json`` ``json``, ``.yaml``/``.yml`` ``pack_yaml``),
 and a missing file is false. It never runs a program.
 
+A path the ``.assess/config.toml`` excludes is outside the assessment, so it reads as absent:
+``exists`` and ``key_exists`` false, and no file counted. A ``[...]`` class is a plain set or
+range (``[!...]`` negates); a ``]`` cannot be its first member.
+
 Privacy: no path, file name or file text reaches the run context; the values are booleans,
 counts and reason codes, and the counts-only copy keeps the pack and check names as
-identifier keys (``counts_only_rules.IDENTIFIER_KEYED_MAPS``). Tests:
+identifier keys (``counts_only_rules.IDENTIFIER_KEYED_MAPS``). Counts-only drops an
+unavailable check's reason code (the global ``reason`` rule) and keeps ``available: false``. Tests:
 ``tests/test_pack_collector.py``.
 """
 from __future__ import annotations

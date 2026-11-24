@@ -899,8 +899,6 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 
 | Field | Kept as |
 |---|---|
-| `pack.reason` | reason code |
-| `packs.reason` | reason code |
 | `packs.name` | token |
 | `packs.version` | token |
 | `packs.sha256` | external id (hashed when hashing is on) |

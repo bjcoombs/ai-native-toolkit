@@ -14,8 +14,6 @@ stage = "post_offers"
 spread = true
 revision = 1
   [entries.privacy]
-  "pack.reason" = "reason"
-  "packs.reason" = "reason"
   "packs.name" = "token"
   "packs.version" = "token"
   "packs.sha256" = "id"
