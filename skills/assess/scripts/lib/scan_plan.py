@@ -12,7 +12,8 @@ step's inputs, plus `FRAME_SCANS`: the headline, the level with its owner exclus
 offers, the decline markers and the anomalies), the collector of every block in `blocks`,
 and every entry those read, transitively. `MODEL_READERS` (`level`) read whatever the model
 names, so their declared reads (the default model's blocks) are not followed: the blocks
-passed in stand for them. `model_plan(model, label)` is that set for a model's blocks, as a
+passed in stand for them; `OPTIONAL_READS` (the top card's unit roll-up) are not followed
+either. `model_plan(model, label)` is that set for a model's blocks, as a
 `ScanPlan`; `extra_signals` and `extra_scans` let a collector add the blocks or scans it
 needs (a practice pack, #1273) without editing this module. `run_plan(choice, all_scans)` is
 the plan a single-repository run uses: None (every scan) for the default model or
@@ -56,6 +57,12 @@ FRAME_SCANS: tuple[str, ...] = (
 
 # Entries whose reads are the model's blocks, not a fixed list: the model decides.
 MODEL_READERS: frozenset[str] = frozenset({"level"})
+
+# Reads a plan does not follow: the top card (``headline``, #1252) reads the monorepo unit
+# roll-up only for its "copy it from <unit>" hint, and the unit pass costs one scoped run per
+# unit. Under a plan the roll-up is a not-run marker and the card leaves the hint out; no card
+# fact reads it as zero or unmet.
+OPTIONAL_READS: dict[str, frozenset[str]] = {"headline": frozenset({"unit_rollup"})}
 
 
 class ScanPlanError(ValueError):
@@ -148,8 +155,9 @@ def plan_scans(blocks: Iterable[str], table: Sequence[ScanSpec] | None = None, *
         planned.add(key)
         if key in MODEL_READERS:
             continue
-        todo.extend(name if name in by_key else publisher[name]
-                    for name in by_key[key].reads if name in by_key or name in publisher)
+        optional = OPTIONAL_READS.get(key, frozenset())
+        todo.extend(name if name in by_key else publisher[name] for name in by_key[key].reads
+                    if (name in by_key or name in publisher) and name not in optional)
     return frozenset(planned)
 
 

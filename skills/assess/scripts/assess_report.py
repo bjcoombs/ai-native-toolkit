@@ -604,12 +604,27 @@ GLOSSARY_LINE = (
 
 
 def render_summary_section(ctx: dict[str, Any]) -> str:
-    """The top card (``lib/top_card.py``, #1252), then the glossary line (``GLOSSARY_LINE``),
+    """The top card (``lib/top_card.py``, #1252), with a line naming the scans a profile's plan left
+    out (``_narrowed_line``, #1268), then the glossary line (``GLOSSARY_LINE``),
     ending in a blank line, all before the first ``## `` heading. The card is left out when the
     headline has none (unavailable, or a context written before it); the glossary line always
     renders."""
     markdown = as_headline(ctx.get("headline"))["summary_markdown"]
+    narrowed = _narrowed_line(ctx)
+    if markdown and narrowed:
+        markdown = f"{markdown}\n\n{narrowed}"
     return f"{markdown}\n\n{GLOSSARY_LINE}\n\n" if markdown else f"{GLOSSARY_LINE}\n\n"
+
+
+def _narrowed_line(ctx: dict[str, Any]) -> str:
+    """The card's last line on a run a scan plan narrowed (``lib/scan_plan.py``, #1268): the
+    scans the model does not read, the unit roll-up among them, were not run, never zero."""
+    plan = ctx.get("scan_plan")
+    model = plan.get("model") if isinstance(plan, dict) else None
+    if not isinstance(model, str):
+        return ""
+    return (f"_Scans this model does not read were not run under {model}; their sections say so. "
+            "Run with `--all-scans` for every scan._")
 
 
 def _headline_markdown(ctx: dict[str, Any]) -> str:

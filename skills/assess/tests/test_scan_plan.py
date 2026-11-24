@@ -67,7 +67,8 @@ def test_the_citizen_plan_is_its_blocks_their_reads_and_the_frame() -> None:
     assert {"level", "headline", "since_last_run", "instruction_placement"} <= plan.scans
     assert frame_keys(SCANS) <= plan.scans
     # nothing the model does not read
-    for skipped in ("keyhole", "doc_staleness", "promissory", "unit_readings", "liveness", "ai_usage"):
+    for skipped in ("keyhole", "doc_staleness", "promissory", "unit_readings", "unit_rollup", "liveness",
+                    "ai_usage"):
         assert skipped not in plan.scans and skipped in plan.not_run
     assert set(plan.not_run) | plan.scans == {s.key for s in SCANS}
 
@@ -141,6 +142,12 @@ def test_a_section_whose_scan_did_not_run_reads_not_run_never_zero(ci2: Path) ->
     from assess_report import render_report
 
     report = render_report(_core(ci2, "--profile", "citizen"), "ci2")
+    # the top card (#1252) reads only blocks the plan ran, and says the rest were not run
+    card = report.split("## Catalogue Coverage", 1)[0]
+    assert ("_Scans this model does not read were not run under profile citizen; their sections say so. "
+            "Run with `--all-scans` for every scan._") in card
+    assert "not known" not in card
+    assert "Scans this model" not in render_report(_core(ci2, "--profile", "citizen", "--all-scans"), "ci2")
     keyhole = report.split("## Keyhole Readiness", 1)[1].split("\n## ", 1)[0]
     assert "_Not run under profile citizen._" in keyhole
     assert "No cross-practice findings" not in keyhole and " 0 " not in keyhole
