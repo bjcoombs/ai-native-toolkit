@@ -69,10 +69,11 @@ evidence is static, read from the files at HEAD:
   ``actions/github-script`` is not read; any other action's input counts in
   ``test_or_lint_configured`` and reads ``check_target`` (null) for the enforced signals.
 - A step ``uses:`` of a local composite action (#923, ``lib.ci_composite``) has the
-  action's ``run:`` steps copied in after it, one level and repo-local only, with the
+  action's ``run:`` and known lint action steps copied in after it (#1194: a nested local
+  action followed with cycle protection), repo-local only, with the
   caller's ``continue-on-error`` and ``if:`` on each copy and its literal ``with:`` values
-  substituted for ``${{ inputs.<name> }}`` (a nested local action, or an input left in
-  command position, reads unknown as below); a step whose command is a
+  substituted for ``${{ inputs.<name> }}`` (a nested local action it cannot read, or an
+  input left in command position, reads unknown as below); a step whose command is a
   ``${{ matrix.<key> }}`` expression is copied once per literal matrix value
   (``lib.ci_matrix``, ``include`` / ``exclude`` applied), and a block-list axis it
   consumes is not read again. A matrix command that cannot be expanded reads as a
