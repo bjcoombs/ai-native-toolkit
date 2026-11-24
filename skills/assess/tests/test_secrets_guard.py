@@ -91,6 +91,7 @@ def test_a_gitlab_repository_without_a_ci_scan_reads_level_2_unmet(tmp_path: Pat
      "steps:\n  - run: detect-secrets-hook --baseline .secrets.baseline $(git ls-files)\n", ["detect-secrets"]),
     (".github/workflows/scan.yml", "steps:\n  - run: echo \"build #1\" && gitleaks detect\n", ["gitleaks"]),
     (".github/workflows/scan.yml", "steps:\n  - run: gitleaks detect || exit 1\n", ["gitleaks"]),
+    (".gitlab-ci.yml", "scan:\n  script:\n    - |\n      trufflehog git file://. \\\n        --fail\n", ["trufflehog"]),
     (".github/workflows/scan.yml", "steps:\n  - name: scan\n    run: |\n      gitleaks detect --source .\n",
      ["gitleaks"]),
     (".github/workflows/scan.yml", "steps:\n  - run: >\n      trufflehog git file://. --fail\n", ["trufflehog"]),
@@ -137,6 +138,7 @@ def test_a_ci_scan_meets_level_2_measured(tmp_path: Path, rel: str, text: str, t
     (".github/workflows/x.yml", "steps:\n  - run: trufflehog git file://.\n"),  # no --fail: exits 0
     (".github/workflows/x.yml", "steps:\n  - run: gitleaks detect --exit-code 0\n"),  # cannot fail
     (".github/workflows/x.yml", "steps:\n  - run: gitleaks protect --staged\n"),  # nothing staged in CI
+    (".gitlab-ci.yml", "scan:\n  script:\n    - |\n      gitleaks detect \\\n        --exit-code 0\n"),  # continued
     (".github/workflows/x.yml", "steps:\n  - run: gitleaks version\n"),
     (".github/workflows/x.yml", "steps:\n  - run: gitleaks --help\n"),
     (".github/workflows/x.yml", "steps:\n  - run: echo Secret-Detection.gitlab-ci.yml\n"),  # a GitHub file

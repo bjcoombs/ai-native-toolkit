@@ -228,7 +228,16 @@ def _ci_files(root: Path) -> list[Path]:
 
 def _code_lines(text: str) -> list[str]:
     """The lines with comments removed, a whole-line comment as an empty line so line numbers hold."""
-    return ["" if _COMMENT.match(line) else _TRAILING_COMMENT.sub(r"\1", line) for line in text.splitlines()]
+    lines = ["" if _COMMENT.match(line) else _TRAILING_COMMENT.sub(r"\1", line) for line in text.splitlines()]
+    # A shell command continued with a trailing backslash is judged whole: join it onto its first
+    # line and leave the continued lines empty, so masks and line numbers hold.
+    for i in range(len(lines)):
+        j = i
+        while lines[i].rstrip().endswith("\\") and j + 1 < len(lines):
+            j += 1
+            lines[i] = lines[i].rstrip()[:-1].rstrip() + " " + lines[j].strip()
+            lines[j] = ""
+    return lines
 
 
 def _list_block_end(lines: list[str], start: int, indent: int) -> int:
