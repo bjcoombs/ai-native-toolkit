@@ -202,7 +202,9 @@ def critical_words(text: str, words: tuple[str, ...] = CRITICAL_WORDS) -> list[s
     """Each of ``words`` that ``text`` holds, as a substring, case-insensitively, in order.
 
     A substring catches every inflection ("failed", "regressed", "falling behind"). The exact
-    text of each ``CRITICAL_WORD_EXEMPT`` entry is removed first, wherever it is quoted."""
+    text of each ``CRITICAL_WORD_EXEMPT`` entry is removed first, wherever it is quoted. A word
+    that only contains a stem ("badge" holds "bad") is a false match: give it an exemption,
+    never shorten the tuple."""
     lower = text.lower()
     for exempt in CRITICAL_WORD_EXEMPT.values():
         lower = lower.replace(exempt["text"].lower(), " ")

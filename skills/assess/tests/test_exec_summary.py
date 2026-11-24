@@ -211,3 +211,6 @@ def test_below_the_first_step_the_summary_names_step_1_by_the_models_name() -> N
     assert [i for text in (*lines, action) for i in lint(text)] == []
     block = summarised(headline(level, model), level, None, model)
     assert block["summary_markdown"].startswith(f"Not yet at [Step]({GLOSSARY_URL}#step) 1 of 2.")
+    # one rule: Step 1 reads the same once the repository reaches it
+    at_one: Any = _level(step=1, next_step={"step": 2, "blockers": [gate]})
+    assert summary_lines(at_one, None, model)[0] == "Step 1 of 2: agents open reviewed pull requests."
