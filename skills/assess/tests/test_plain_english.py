@@ -62,9 +62,10 @@ def test_every_manifest_prose_string_except_the_whys_is_plain_english() -> None:
     assert {k: [i["reason"] for i in lint(v)] for k, v in lines.items() if lint(v)} == {}
 
 
-def test_critical_words_match_whole_words() -> None:
+def test_critical_words_catch_inflections_but_not_check_forms() -> None:
     from lib.plain_english import critical_words
     assert critical_words("We lost ground and fell behind.") == ["lost", "behind"]
+    assert critical_words("the gate failed; coverage regressed; the team is ranked") == ["regress", "fail", "rank"]
     assert critical_words("CI turns red on a broken check; CI fails when a check fails.") == []
 
 

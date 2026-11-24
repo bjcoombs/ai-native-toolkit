@@ -32,8 +32,8 @@ backticked spans (ids, paths, commands, code), the link targets, and the bare fi
 paths (a word with a ``/`` or a file extension).
 
 ``CRITICAL_WORDS`` (#744, #889) are the words of blame or loss the report and the fleet pages
-never use about a team's progress; ``critical_words(text)`` returns those ``text`` uses as
-whole words. The fleet credit tests and the engine-text test (the headline, the Next line, the
+never use about a team's progress; ``critical_words(text)`` returns those ``text`` starts a
+word with, except the check-describing forms in ``CHECK_FORMS``. The fleet credit tests and the engine-text test (the headline, the Next line, the
 gate notes and reason words) read the one tuple. Tests: ``tests/test_plain_english.py``.
 """
 from __future__ import annotations
@@ -43,7 +43,7 @@ from typing import TypedDict, cast
 
 from lib.level_result_types import LevelResult
 
-__all__ = ["APPROVED_WHYS", "CRITICAL_WORDS", "IDIOMS", "MAX_WORDS", "MANIFEST_PROSE", "PlainIssue", "fixed_lines", "lint",
+__all__ = ["APPROVED_WHYS", "CHECK_FORMS", "CRITICAL_WORDS", "IDIOMS", "MAX_WORDS", "MANIFEST_PROSE", "PlainIssue", "fixed_lines", "lint",
            "critical_words", "manifest_lines", "untranslated_tokens"]
 
 # Long sentences are the first thing a reader in a second language loses track of.
@@ -184,10 +184,16 @@ def manifest_lines() -> dict[str, str]:
 CRITICAL_WORDS = ("regress", "lost", "broke", "behind", "worst", "fail", "bad", "rank")
 
 
-def critical_words(text: str, words: tuple[str, ...] = CRITICAL_WORDS) -> list[str]:
-    """Each of ``words`` that ``text`` uses as a whole word, case-insensitively, in order.
+# Forms of a critical stem that describe a check, not a team's progress: the ``ci_runs_tests``
+# gate reads "CI turns red on a broken check", and a check "fails".
+CHECK_FORMS = frozenset({"broken", "fails"})
 
-    Whole words, so a check that is "broken" or that "fails" describes the check, not the team;
-    the fleet credit tests use the stricter substring form on their own sections."""
+
+def critical_words(text: str, words: tuple[str, ...] = CRITICAL_WORDS) -> list[str]:
+    """Each of ``words`` that ``text`` uses as the start of a word, case-insensitively, in order.
+
+    A stem catches its inflections ("failed", "regressed", "ranked"); a word in ``CHECK_FORMS``
+    is let through. The fleet credit tests use the stricter substring form on their own sections."""
     lower = text.lower()
-    return [w for w in words if re.search(rf"(?<![\w-]){re.escape(w)}(?![\w-])", lower)]
+    return [w for w in words
+            if any(m.group(0) not in CHECK_FORMS for m in re.finditer(rf"(?<![\w-]){re.escape(w)}[\w-]*", lower))]
