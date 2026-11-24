@@ -590,7 +590,7 @@ The SECURITY file in the owner's public .github repository, which GitHub shows o
 
 A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.
 
-GitHub's own secret scanning and push protection settings, read through gh. They are returned only to a caller with admin rights on the repository.
+GitHub's own secret scanning and push protection settings, read through gh. They are returned only to a repository admin, organization owner or security manager.
 
 - Collector: `core.github_secret_scanning`, reading `repo_root`.
 - Network: yes, GitHub or GitLab (with --platform).
@@ -600,7 +600,7 @@ GitHub's own secret scanning and push protection settings, read through gh. They
 - Evidence: `unclassified`.
 - Not measured when:
   - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
-  - `settings_not_readable`: GitHub returns a repository's secret scanning and push protection settings only to a caller with admin rights on it. Run /assess with gh signed in as a repository admin, or add a secrets scan to CI.
+  - `settings_not_readable`: GitHub returns a repository's secret scanning and push protection settings only to a repository admin, organization owner or security manager. Run /assess with gh signed in as a repository admin, organization owner or security manager, or add a secrets scan to CI.
 
 ### `secrets_guard`: Secrets guard
 
@@ -615,7 +615,7 @@ A secrets hook in the pre-commit config and a secrets scan in CI, such as gitlea
 - Used by: row `secrets-guard`.
 - Evidence: `secrets_guard.configured` config_text (config_only), `secrets_guard.enforcement.present` head_structure (measured).
 - Not measured when:
-  - `secret_scanning_not_read`: No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read. Run /assess with gh signed in as a repository admin, or a headless run with --platform. Or add a secrets scan step to CI (gitleaks or trufflehog).
+  - `secret_scanning_not_read`: No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read. Run /assess with gh signed in as a repository admin, organization owner or security manager, or a headless run with --platform. Or add a secrets scan step to CI (gitleaks or trufflehog).
   - `gitlab_rules_unevaluated`: A GitLab job holds a secrets scan but runs under rules, only/except or a when that is not evaluated. So it is not known whether the scan runs on each change. Nothing to change for the reading: a plain job with no rules, or a GitHub workflow, is read in full.
   - `ci_includes_unresolved`: No secrets scan was found in the CI read. A GitLab include that could hold one, a local, project or remote file, was not read. Clone the included project beside this one (/ghsync), or add the secrets scan to the repository's own .gitlab-ci.yml.
 

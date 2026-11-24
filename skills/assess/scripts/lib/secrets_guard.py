@@ -70,7 +70,7 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   it: a CI scan, or GitHub push protection (source ``platform``). Secret scanning alone only
   alerts after the secret has landed, so it meets level 1, not level 2. Graded ``measured`` and
   counted. With no CI scan on a github.com remote and the settings not read (no ``--platform``,
-  no admin rights), push protection could still guard the repository, so the reading is not
+  no admin, owner or security manager rights), push protection could still guard the repository, so the reading is not
   measured (``secret_scanning_not_read``), never unmet; read and off, it is unmet; likewise
   (``ci_includes_unresolved``) when a GitLab include that could hold a scan was not read, since
   ``.gitlab-ci.yml``'s includes are read through ``lib.ci_includes``;
@@ -108,7 +108,7 @@ import re
 import subprocess
 from pathlib import Path
 from collections.abc import Mapping
-from typing import Any, TypedDict
+from typing import TypedDict
 
 from lib.ci_includes import SETTLED, resolve_includes
 
@@ -678,9 +678,9 @@ def _on_github(root: Path) -> bool:
 _GRADES = {"pre_commit": "config_only", "ci": "measured", "platform": "measured"}
 
 
-def _platform(block: Mapping[str, Any] | None) -> tuple[bool, bool] | None:
+def _platform(block: Mapping[str, object] | None) -> tuple[bool, bool] | None:
     """(secret scanning on, push protection on) from the ``github_secret_scanning`` platform block
-    (``lib.hosting.github_secret_scanning``); None when it was not read (offline, no admin rights,
+    (``lib.hosting.github_secret_scanning``); None when it was not read (offline, no admin, owner or security manager rights,
     not GitHub)."""
     if not isinstance(block, Mapping) or block.get("available") is not True:
         return None
@@ -711,7 +711,7 @@ def _enforcement(root: Path, ci: CiGuard, platform: tuple[bool, bool] | None) ->
 
 
 def scan_secrets_guard(repo_root: Path, scope: Path | None = None, ghsync_root: Path | None = None,
-                       github_secret_scanning: Mapping[str, Any] | None = None) -> SecretsGuardBlock:
+                       github_secret_scanning: Mapping[str, object] | None = None) -> SecretsGuardBlock:
     """Build the ``secrets_guard`` block (see the module doc). The pre-commit config and CI are the
     repository's, so a ``scope`` reads the root's, as ``guardrails`` reads the root pre-commit config."""
     root = repo_root.resolve()

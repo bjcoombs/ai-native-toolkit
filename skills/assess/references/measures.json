@@ -2902,7 +2902,7 @@
     {
       "name": "github_secret_scanning",
       "title": "GitHub secret scanning",
-      "summary": "GitHub's own secret scanning and push protection settings, read through gh. They are returned only to a caller with admin rights on the repository.",
+      "summary": "GitHub's own secret scanning and push protection settings, read through gh. They are returned only to a repository admin, organization owner or security manager.",
       "collector": "core.github_secret_scanning",
       "reads": [
         "repo_root"
@@ -2929,8 +2929,8 @@
         },
         {
           "code": "settings_not_readable",
-          "means": "GitHub returns a repository's secret scanning and push protection settings only to a caller with admin rights on it.",
-          "next_step": "Run /assess with gh signed in as a repository admin, or add a secrets scan to CI."
+          "means": "GitHub returns a repository's secret scanning and push protection settings only to a repository admin, organization owner or security manager.",
+          "next_step": "Run /assess with gh signed in as a repository admin, organization owner or security manager, or add a secrets scan to CI."
         }
       ],
       "evidence": [],
@@ -2982,7 +2982,7 @@
         {
           "code": "secret_scanning_not_read",
           "means": "No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read.",
-          "next_step": "Run /assess with gh signed in as a repository admin, or a headless run with --platform. Or add a secrets scan step to CI (gitleaks or trufflehog)."
+          "next_step": "Run /assess with gh signed in as a repository admin, organization owner or security manager, or a headless run with --platform. Or add a secrets scan step to CI (gitleaks or trufflehog)."
         },
         {
           "code": "gitlab_rules_unevaluated",

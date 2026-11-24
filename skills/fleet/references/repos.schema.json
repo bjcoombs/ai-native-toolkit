@@ -1297,7 +1297,7 @@
                 "properties": {
                   "reason": {
                     "type": "string",
-                    "description": "'code: sentence'. The codes name the missing piece: settings_not_readable (gitHub returns a repository's secret scanning and push protection settings only to a caller with admin rights on it). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                    "description": "'code: sentence'. The codes name the missing piece: settings_not_readable (gitHub returns a repository's secret scanning and push protection settings only to a repository admin, organization owner or security manager). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
                   }
                 },
                 "required": [
