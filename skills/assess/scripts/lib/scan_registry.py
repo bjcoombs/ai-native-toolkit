@@ -110,6 +110,7 @@ from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.skill_disclosure import scan_skill_disclosure
 from lib.skill_script_tests import scan_skill_script_tests
+from lib.skill_personal_data import scan_skill_personal_data
 from lib.hosting.org_security_policy import scan_org_security_policy
 from lib.layer_grades import scan_layer_grades
 from lib.level_tally import LEVEL_READS
@@ -619,6 +620,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # Skill script tests (issue #1045): whether each skill's scripts have tests beside them in
     # its own folder (presence, not coverage). Scoped per skill unit (unit_kinds = ["skill"]).
     _spec("skill_script_tests", scan_skill_script_tests),
+    # Personal data in skill text (issue #1045): the kinds found in each skill and agent file and
+    # its skill's references/, never the data. Scoped per skill unit (unit_kinds = ["skill"]).
+    _spec("skill_personal_data", scan_skill_personal_data),
     # Contributor files (issue #1045): a contributing guide and a security policy (or a link to
     # GitHub private vulnerability reporting), with issue and change templates as evidence.
     # Feeds the contributor-files row; not measured for a knowledge base (reads archetype).

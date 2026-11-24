@@ -743,6 +743,14 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `skill_script_tests.skills.path` | path (hashed when hashing is on) |
 | `skill_script_tests.skills.tested_elsewhere` | path (hashed when hashing is on) |
 
+## skill_personal_data
+
+| Field | Kept as |
+|---|---|
+| `skill_personal_data.files.path` | path (hashed when hashing is on) |
+| `skill_personal_data.files.kinds` | token |
+| `skill_personal_data.kinds_detected` | token |
+
 ## org_security_policy
 
 | Field | Kept as |
