@@ -179,3 +179,19 @@ def test_a_wide_diamond_stops_at_the_read_budget() -> None:
     got = inline_composites("jobs:\n  t:\n    steps:\n      - uses: ./a0\n", chain.get)
     assert got.unknown   # the reads past the budget stay unknown, never credited
     assert len(got.text.splitlines()) < 2_000
+
+
+_FORWARD = "inputs:\n  run:\n    required: true\n"
+_FORWARD_STEP = "    - shell: bash\n      run: ${{ inputs.run }}\n"
+
+
+@pytest.mark.parametrize(("value", "reading"), [
+    ("ruff check .", _LINT),
+    ("echo hi", _NO_LINT),
+    ("${{ matrix.c }}", _NULL),
+])
+def test_a_forwarded_run_through_a_nested_composite_keeps_its_command(
+        tmp_path: Path, value: str, reading: tuple[object, object]) -> None:
+    outer = _composite(_CALL_INNER + f"      with:\n        run: {value}\n")
+    files = _wf() | {_ACT: outer, _INNER: _composite(_FORWARD_STEP, _FORWARD)}
+    assert _lint(tmp_path, files) == reading

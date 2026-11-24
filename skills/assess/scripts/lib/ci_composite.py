@@ -36,10 +36,11 @@ steps of the same job:
   caller's literal ``with:`` scalar for that name, else, only when the caller's ``with:``
   omits the name, the action's literal ``inputs.<name>.default``. One left in command position (no value, a block or
   ``${{ }}`` value) makes that line unknown. A whole ``run: ${{ inputs.run }}`` (or
-  ``script`` / ``command``) the caller passes is emptied (``run: ''``):
+  ``script`` / ``command``) the workflow's calling step passes is emptied (``run: ''``):
   ``lib.ci_action_inputs`` already reads the caller's ``with:`` value for it (#799), so it is
   neither counted twice nor read as an unknown command; one the caller omits takes the
-  default like any other input. The step's other lines (an ``env:`` value such as ``CMD:
+  default like any other input. Below the top level the nested step is not kept, so its
+  value is filled in like any other input (#1194). The step's other lines (an ``env:`` value such as ``CMD:
   ${{ inputs.cmd }}``) take the literal values too, never marked unknown, so
   ``lib.ci_expressions`` can read ``run: $CMD`` (#1164).
 - **Unknown, never 0.** ``inline_composites`` returns ``(text, unknown)``
@@ -54,7 +55,7 @@ Only GitHub workflow text is read. Inward-only imports: ``lib.ci_action_inputs``
 from __future__ import annotations
 
 import re
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 from lib.ci_action_inputs import INPUT_KEYS, ReadLocal, local_action_paths
 from lib.ci_continuations import join_continued
@@ -77,12 +78,15 @@ _INPUT_ONLY = re.compile(r"^\s*inputs\.([\w-]+)\s*$")
 _FORWARD = re.compile(r"""^["']?\$\{\{\s*inputs\.([\w-]+)\s*\}\}["']?$""")
 
 
+_Kind = Literal["run", "lint", "local"]   # a run: step, a known lint action, a nested local action
+
+
 class _Step(NamedTuple):
     dash: int                  # the step's dash indent in the action
     gap: int                   # its key column less its dash indent (``-   run:`` is 4)
     lines: list[str]
     body: frozenset[int]       # run-value lines, relative to the step
-    kind: str                  # "run", "lint" (a known lint action) or "local" (a nested local action)
+    kind: _Kind
 
 
 def _shift(line: str, delta: int) -> str:
@@ -127,9 +131,9 @@ def _run_steps(action: str) -> tuple[list[_Step], dict[str, str]] | None:
         run = next((k for k in item if tree.lines[k].key == "run"), None)
         uses = next((k for k in item if tree.lines[k].key == "uses"), None)
         local = uses is not None and tree.lines[uses].value.strip("\"'").startswith("./")
-        kind = ("local" if local else "run" if run is not None
-                else "lint" if uses is not None and lint_step_action(lines[uses]) else "")
-        if not kind:
+        kind: _Kind | None = ("local" if local else "run" if run is not None
+                else "lint" if uses is not None and lint_step_action(lines[uses]) else None)
+        if kind is None:
             continue   # any other remote action: not read, as at the top level
         start, end = item[0], max(tree.subtree(k).stop for k in item)
         body = frozenset(j - start for j in tree.subtree(run)) if run is not None else frozenset()
@@ -213,6 +217,9 @@ def _copies(action: str, passed: dict[str, str | None], read_local: ReadLocal, i
     steps, defaults = read
     # A caller's value replaces the default whatever it is: a non-literal one stays unknown.
     given = {k: v for k, v in (defaults | passed).items() if v is not None}
+    # Only the workflow's own calling step stays in the text for lib.ci_action_inputs to read
+    # a forwarded run: from; a nested step is replaced by its copies, so its value is filled in.
+    supplied = frozenset(passed) if len(path) == 1 else frozenset()
     copied: list[tuple[str, bool]] = []
     for step in steps:
         shifted = [_shift(raw, indent - step.dash) for raw in step.lines]
@@ -227,7 +234,7 @@ def _copies(action: str, passed: dict[str, str | None], read_local: ReadLocal, i
         else:
             for j, line in enumerate(shifted):
                 if j in step.body:
-                    copied.append(_settle(line, given, frozenset(passed)))
+                    copied.append(_settle(line, given, supplied))
                 else:   # an env: value (CMD: ${{ inputs.cmd }}) takes its literal too (#1164)
                     copied.append((_fill(line, given), False))
         copied += [(" " * (indent + step.gap) + key, False) for key in caller]
