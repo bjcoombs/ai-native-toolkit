@@ -474,3 +474,17 @@ def test_a_plain_template_job_counts(tmp_path: Path, job: str) -> None:
 def test_docker_uses_args_that_cannot_fail_are_not_a_scan(tmp_path: Path) -> None:
     text = "steps:\n  - uses: docker://zricethezav/gitleaks:latest\n    with:\n      args: detect --exit-code 0\n"
     assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": text}))["ci"]["present"] is False
+
+
+@pytest.mark.parametrize("text", [
+    ".mr-only:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\nsecrets:\n  extends: .mr-only\n  script:\n    - gitleaks detect\n",
+    ".sched: &sched\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\nsecrets:\n  <<: *sched\n  script:\n    - gitleaks detect\n",
+])
+def test_a_job_that_inherits_its_rules_is_not_measured(tmp_path: Path, text: str) -> None:
+    block = scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))
+    assert block["ci"]["present"] is False and block["ci"]["rules_unevaluated"] == ["gitleaks"]
+
+
+def test_a_template_override_that_extends_is_not_measured(tmp_path: Path) -> None:
+    text = TEMPLATE + ".mr-only:\n  rules:\n    - if: $CI_MERGE_REQUEST_IID\nsecret_detection:\n  extends: .mr-only\n"
+    assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["rules_unevaluated"] == ["secret_detection"]

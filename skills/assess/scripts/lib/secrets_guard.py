@@ -42,7 +42,7 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   pre-commit stage is not selected.
 - A GitLab job is judged from its direct keys only, and GitLab ``rules:`` are not evaluated. A job
   with no ``rules:``, ``only:`` or ``except:``, and a job-level ``when:`` of ``always``,
-  ``on_success`` or none, runs: its scan counts. A job-level ``when: never`` or ``manual`` is off:
+  ``on_success`` or none, and no ``extends:`` or YAML merge key ``<<:`` (either can bring rules in), runs: its scan counts. A job-level ``when: never`` or ``manual`` is off:
   its scan does not count, and level 2 can read unmet. Any other job (``rules:``,
   ``only:``/``except:``, ``when: delayed``) is unevaluated: its scan is held in
   ``ci.rules_unevaluated`` and level 2 reads not measured (``gitlab_rules_unevaluated``), never
@@ -159,10 +159,11 @@ _WORD = re.compile(r"[\w-]+")
 # GitLab's documented switch for the template (a pipeline or job variable): the scan never runs.
 _DETECTION_DISABLED = re.compile(r"^\s*SECRET_DETECTION_DISABLED\s*:\s*['\"]?(?:true|1|yes)\b",
                                  re.IGNORECASE | re.MULTILINE)
-# A GitLab job's run condition, read from its direct keys only. ``rules:``, ``only:`` and ``except:``
-# are not evaluated: a job with any of them is unevaluated (``gitlab_rules_unevaluated``), never
+# A GitLab job's run condition, read from its direct keys only. ``rules:``, ``only:``, ``except:``,
+# and ``extends:`` or a YAML merge key ``<<:`` (which can bring rules in from elsewhere), are not
+# evaluated: a job with any of them is unevaluated (``gitlab_rules_unevaluated``), never
 # met. A job-level ``when:`` is certain: ``always``/``on_success`` run, ``never``/``manual`` do not.
-_JOB_CONDITION_KEYS = frozenset({"rules", "only", "except"})
+_JOB_CONDITION_KEYS = frozenset({"rules", "only", "except", "extends", "<<"})
 _JOB_WHEN = re.compile(r"^when\s*:\s*['\"]?([\w-]+)")
 _RUNS = frozenset({"always", "on_success"})
 _OFF = frozenset({"never", "manual"})
