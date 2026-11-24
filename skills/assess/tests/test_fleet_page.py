@@ -222,3 +222,25 @@ def test_fleet_writes_the_page_and_names_no_repository_outside_full(froot: Path,
     assert fleet_cli.main([str(froot), "--levels", str(DEFAULT_LEVELS), *history, "--out", str(out), *mode,
                            "--no-diagrams"]) == 0
     assert not (out / PAGE_FILE).exists()
+
+
+def test_every_achievement_kind_and_the_recount_take_the_page_labels() -> None:
+    data = dict(fx.run(fx.DATES[-1], fx.VARIANTS["counts-only"]))
+    key = data["repos"][0]["key"]
+    ev = {"row": "docs", "from_level": 0, "to_level": 1, "level": 1, "from_step": 1, "to_step": 2,
+          "target_step": 2, "runs": 3, "moves": []}
+    ach = {"run": "r2", "runs": ["r1", "r2"], "note": None, "targets": [],
+           "achievements": [{"kind": k, "view": "repo", "unit": key, "unit_kind": "repo", "run": "r2", "evidence": ev}
+                            for k in ("level_up", "first", "target_hit", "streak")]
+           + [{"kind": "streak", "view": "repo", "unit": key, "unit_kind": "repo", "run": "r1", "evidence": ev}],
+           "recount": {"from_version": "a", "to_version": "b", "run": "r1",
+                       "lines": [{"repo": key, "row": "docs", "cause": "Now checked", "from_level": 1, "to_level": 0}]}}
+    from lib.fleet.fleet_page_data import page_bundle
+    bundle = page_bundle(data, ach, fdf.model())
+    assert [a["text"] for a in bundle["achievements"]] == [
+        "repository 1 reached level 1 of 2 on Instruction docs.",
+        "A first for this fleet: repository 1 is the first repository at level 1 on Instruction docs.",
+        "repository 1 reached its target of Step 2: Step 1 to Step 2.",
+        "repository 1 held every level for 3 runs in a row."]
+    assert bundle["recount"] is not None and bundle["recount"]["lines"][0]["repo"] == "repository 1"
+    assert key not in embed(bundle)
