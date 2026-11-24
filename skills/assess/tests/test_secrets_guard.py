@@ -356,3 +356,19 @@ def test_default_stages_apply_to_a_hook_with_none(tmp_path: Path, default: str, 
     root = _repo(tmp_path, {".pre-commit-config.yaml": default + PRE_COMMIT,
                             ".github/workflows/x.yml": "steps:\n  - run: pre-commit run --all-files\n"})
     assert scan_secrets_guard(root)["ci"]["present"] is runs
+
+
+@pytest.mark.parametrize("url", ["https://github.com/o/r.git", "git@github.com:o/r.git", "ssh://git@github.com/o/r",
+                                 "ssh://git@github.com:22/o/r", "org-123@github.com:o/r", "github.com:o/r",
+                                 "https://gitlab.com/o/r.git", "git@example.com:o/r.git"])
+def test_the_remote_match_agrees_with_gh_cli(url: str) -> None:
+    from lib.hosting.gh_cli import parse_github_remote
+    from lib.secrets_guard import _GITHUB_REMOTE
+    assert bool(_GITHUB_REMOTE.match(url)) is (parse_github_remote(url) is not None)
+
+
+def test_a_manual_variant_does_not_drop_a_selected_hook(tmp_path: Path) -> None:
+    cfg = PRE_COMMIT + "      - id: gitleaks-docker\n        stages: [manual]\n"
+    root = _repo(tmp_path, {".pre-commit-config.yaml": cfg,
+                            ".github/workflows/x.yml": "steps:\n  - run: pre-commit run --all-files\n"})
+    assert scan_secrets_guard(root)["ci"]["tools"] == ["gitleaks"]

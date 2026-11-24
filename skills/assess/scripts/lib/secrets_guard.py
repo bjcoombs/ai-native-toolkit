@@ -386,6 +386,7 @@ def _hooks_run_in_ci(root: Path, hook: PreCommitGuard) -> frozenset[str]:
                 and re.match(r"default_stages\s*:", ln)), None)
     default = _stage_values(lines, top) if top is not None else None
     skipped: set[str] = set()
+    selected: set[str] = set()  # a tool another of its hooks still runs (``gitleaks`` beside a manual ``gitleaks-docker``)
     for i, line in enumerate(lines):  # each list item; a hook item has its own ``id:`` key
         item = _STEP_START.match(line)
         if not item:
@@ -399,9 +400,12 @@ def _hooks_run_in_ci(root: Path, hook: PreCommitGuard) -> frozenset[str]:
         if hook_id is None:
             continue
         stages = _stage_values(lines, stages_at) if stages_at is not None else default
+        tool = _hook_tool(hook_id.lower())
         if stages is not None and not _DEFAULT_STAGES & stages:
-            skipped.add(_hook_tool(hook_id.lower()))
-    return frozenset(hook["tools"]) - skipped
+            skipped.add(tool)
+        else:
+            selected.add(tool)
+    return frozenset(hook["tools"]) - (skipped - selected)
 
 
 def _hook_id(tokens: list[str]) -> str | None:
@@ -509,10 +513,11 @@ def ci_guard(root: Path, ghsync_root: Path | None = None, hooks: frozenset[str] 
 
 REASON_NOT_READ = "secret_scanning_not_read"
 REASON_INCLUDES = "ci_includes_unresolved"
-# A github.com remote, HTTPS or SSH (the shape lib.hosting.gh_cli parses; read here with plain git
-# so this offline scan never imports a platform client).
-_GITHUB_REMOTE = re.compile(r"^(?:https?://(?:[^@/]+@)?github\.com/|git@github\.com:|ssh://git@github\.com/)",
-                            re.IGNORECASE)
+# A github.com remote, HTTPS or SSH: the same prefixes as ``lib.hosting.gh_cli._REMOTE_RE`` (any
+# SSH user, an ``ssh://`` port), pinned by a parity test. Read here with plain git rather than
+# imported, so this offline scan never imports a platform client and is not flagged as network.
+_GITHUB_REMOTE = re.compile(r"^(?:https?://(?:[^@/]+@)?github\.com/|(?:[^@/]+@)?github\.com:"
+                            r"|ssh://(?:[^@/]+@)?github\.com(?::\d+)?/)")
 
 
 def _on_github(root: Path) -> bool:
