@@ -18,9 +18,10 @@ is any shape other than ``PriorLevel`` (a version this reader does not know, a t
 an unreadable earlier run is never drawn, and the strip says it could not be read.
 ``write_prior_level`` writes nothing when the level result has no ``tags`` (a degraded level
 block) and leaves the previous good run's file as it was (#1158), so its baseline and pruning
-ledger survive one failed run; it writes nothing under a profile or ``--levels`` model either
-(``default_level``, #1150), so the file only ever holds the default model's baseline; the strip still compares only runs counted under the same model
-(``same_model``).
+ledger survive one failed run. A custom ``--levels`` run writes nothing (``model_key`` None,
+#1150); a profile run writes only its own record (#1184, below), and leaves a file it cannot
+read untouched, so it never drops the default record the CI gate reads. The strip still
+compares only runs counted under the same model (``same_model``).
 The strip draws the earlier run only when its ``levels_version`` equals this run's
 (``same_model``); otherwise it says why in one line.
 
@@ -295,7 +296,10 @@ def _content(assess_dir: Path, level: Any, baseline: Baseline | None,
     built = build_prior_level(level, baseline, pruning if key == "default" else None)
     if key is None or built is None:
         return None
-    existing = as_prior_level(load_prior_level(assess_dir))
+    raw = load_prior_level(assess_dir)
+    existing = as_prior_level(raw)
+    if key != "default" and raw is not None and existing is None:
+        return None  # an unreadable file: a profile run never replaces the default record in it
     models: dict[str, ModelRecord] = dict(existing.get("models", {})) if existing is not None else {}
     if key == "default":
         out: PriorLevel = {**built}
@@ -319,8 +323,8 @@ def write_prior_level(assess_dir: Path, level: Any, baseline: Baseline | None = 
     (#1158): it holds the previous good run's baseline and pruning ledger, which the next good
     run compares with. A run writes only its own model's record (#1184): a default run the top
     level, keeping every profile record; a profile run ``models[<name>]``, keeping the default
-    record and the pruning ledger, which only a default run writes. A custom ``--levels`` run
-    writes nothing (#1150). A symlink in the file's place is removed, never written through. A file
+    record and the pruning ledger, which only a default run writes, and leaving a file it cannot
+    read as it is. A custom ``--levels`` run writes nothing (#1150). A symlink in the file's place is removed, never written through. A file
     that cannot be written (``OSError``) is named on stderr and skipped, as
     ``assess_diagrams.write_diagrams`` does: the record never stops a run. Returns the path
     written, or None."""

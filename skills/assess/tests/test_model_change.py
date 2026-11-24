@@ -208,6 +208,16 @@ def test_a_profile_run_writes_only_its_own_record(tmp_path: Path) -> None:
     assert load_baseline(tmp_path, _level(CITIZEN)) == citizen
 
 
+def test_a_profile_run_leaves_an_unreadable_file_as_it_is(tmp_path: Path) -> None:
+    """The default record in it is what the CI gate reads; only a default run replaces it."""
+    path = tmp_path / "prior-level.json"
+    path.write_text('{"prior_level_version": 4}', encoding="utf-8")
+    citizen = {"run_id": "c", "head_sha": "c" * 40, "held_gates": []}
+    assert write_prior_level(tmp_path, _level(CITIZEN), citizen) is None
+    assert path.read_text(encoding="utf-8") == '{"prior_level_version": 4}'
+    assert write_prior_level(tmp_path, _level(None), citizen) == path  # a default run rewrites it, as before
+
+
 def test_a_profile_only_file_reads(tmp_path: Path) -> None:
     from lib.prior_level import load_baseline, load_prior_level
 
