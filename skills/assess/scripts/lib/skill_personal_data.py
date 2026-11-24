@@ -111,7 +111,7 @@ _VERSION_BEFORE = re.compile(r"(?:(?:\bv|\bversion|\brelease|\bbuild)\s*[:=]?|[=
 # secret held elsewhere (``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X``, ``os.environ[...]``) is
 # not a committed secret, and telling a team to rotate it would be wrong.
 _CREDENTIAL = re.compile(r"\b(?:password|passwd|secret|api[_-]?key|access[_-]?key|auth[_-]?token|token)\b"
-                         r"\s*[:=]\s*(\"[^\"]*\"|'[^']*'|\S+)(?:\s*=\s*(\"[^\"]*\"|'[^']*'|\S+))?", re.IGNORECASE)
+                         r"\s*([:=])\s*(\"[^\"]*\"|'[^']*'|\S+)(?:\s*=\s*(\"[^\"]*\"|'[^']*'|\S+))?", re.IGNORECASE)
 _REFERENCE = re.compile(r"^(?:\$\{?\{?|\$\w|%\w+%|\{\{|<|process\.env\b|os\.environ\b|os\.getenv\b|getenv\b|"
                         r"env\.|env\[|ENV\[|secrets\.|vars\.|System\.getenv\b|Environment\.|import\.meta\.env\b)",
                         re.IGNORECASE)
@@ -188,12 +188,12 @@ _PROSE_AFTER = re.compile(r"[ \t]+[A-Za-z]")
 def _assigned_secret(m: re.Match[str]) -> bool:
     """Whether a credential assignment holds a literal secret. A typed field is decided by its default:
     ``password: str = "hunter2"`` and ``secret: bool=hunter2`` hold one, ``token: str`` does not."""
-    value = m.group(1).strip("\"'")
-    if m.group(1)[:1] not in "\"'" and _PROSE_AFTER.match(m.string, m.end(1)):
-        return False  # ``Token: The value from step 2``: a label then prose, not a secret
+    value = m.group(2).strip("\"'")
+    if m.group(1) == ":" and m.group(2)[:1] not in "\"'" and _PROSE_AFTER.match(m.string, m.end(2)):
+        return False  # ``Token: The value from step 2``: a label then prose; ``=`` stays an assignment
     if not _SCHEMA_VALUE.match(value):
         return _literal_secret(value)
-    default = m.group(2) or (value.split("=", 1)[1] if "=" in value else None)
+    default = m.group(3) or (value.split("=", 1)[1] if "=" in value else None)
     return default is not None and _literal_secret(default.strip("\"'"))
 
 
