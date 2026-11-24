@@ -94,15 +94,18 @@ SCRIPT = r"""
   }
   function since(bundle, state) {
     var keys = subtree(bundle, state.view, state.unit);
-    members(bundle, state.view, state.unit).forEach(function (r) { keys.push(r.key); });
-    var mine = bundle.achievements.filter(function (a) { return keys.indexOf(a.unit) >= 0; });
+    var repoKeys = members(bundle, state.view, state.unit).map(function (r) { return r.key; });
+    // unit labels are unique only within a view: a unit's credit matches on its view too
+    var mine = bundle.achievements.filter(function (a) {
+      return a.view === "repo" ? repoKeys.indexOf(a.unit) >= 0 : a.view === state.view && keys.indexOf(a.unit) >= 0;
+    });
     var out = "<h2>Since last run</h2>";
     if (bundle.note) { out += "<p class=\"muted\">" + esc(bundle.note) + "</p>"; }
     out += mine.length ? "<ul>" + mine.map(function (a) { return "<li>" + esc(a.text) + "</li>"; }).join("") + "</ul>"
       : "<p>Nothing new was credited to this unit since the last run.</p>";
     var rc = bundle.recount;
     if (rc) {
-      var lines = rc.lines.filter(function (l) { return keys.indexOf(l.repo) >= 0; });
+      var lines = rc.lines.filter(function (l) { return repoKeys.indexOf(l.repo) >= 0; });
       out += "<div class=\"panel\"><p>Rules changed: this run reads the maturity model under new rules. "
         + "These moves come from the rules, not from the repositories.</p>"
         + (lines.length ? "<ul>" + lines.map(function (l) {

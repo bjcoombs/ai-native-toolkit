@@ -288,3 +288,35 @@ def test_the_next_level_comes_from_the_bundle() -> None:
     assert all(c["next_level"] == (c["level"] + 1 if c["status"] == "level" and c["signal"] else None) for c in cells)
     script, _ = _parts(fx.goldens()["expected-full.html"])
     assert "cell.level + 1" not in script
+
+
+def test_a_credit_shows_only_in_its_own_view_when_two_views_share_a_unit_path() -> None:
+    """--full labels are unique within a view only: a system unit and an ownership unit both
+    called ``payments`` keep their own credits."""
+    if NODE is None:
+        pytest.skip("node is not on PATH")
+    script, _ = _parts(fx.goldens()["expected-full.html"])
+    unit = {"kind": "team", "parent": None, "repos": 1, "measured": 1, "lowest_step": 1, "next": None,
+            "tags": [], "tags_measured": 1}
+    bundle = {"scan_date": "d", "rows": [], "steps": [], "tags": [], "note": None, "recount": None, "targets": [],
+              "pictures": [], "repos": [{"key": "r", "units": {"ownership": "payments", "system": "payments"},
+                                         "cells": [], "step": 1, "next": None, "exclusions": []}],
+              "views": [{"view": "ownership", "units": [{**unit, "key": "payments"}]},
+                        {"view": "system", "units": [{**unit, "key": "payments"}]}],
+              "achievements": [{"kind": "level_up", "view": "ownership", "unit": "payments", "run": "d",
+                                "text": "OWNERSHIP CREDIT"},
+                               {"kind": "level_up", "view": "system", "unit": "payments", "run": "d",
+                                "text": "SYSTEM CREDIT"},
+                               {"kind": "level_up", "view": "repo", "unit": "r", "run": "d", "text": "REPO CREDIT"}]}
+    runner = """
+const vm = require("node:vm"); const fs = require("node:fs");
+const input = JSON.parse(fs.readFileSync(0, "utf8")); const ctx = {}; vm.createContext(ctx);
+vm.runInContext(input.script, ctx); const b = input.bundle;
+process.stdout.write(JSON.stringify(["ownership", "system"].map(function (v) {
+  return ctx.FleetView.renderPage(b, {view: v, unit: "payments", repo: null}, [], false); })));
+"""
+    done = subprocess.run([NODE, "-e", runner], input=json.dumps({"script": script, "bundle": bundle}),
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
+    ownership, system = json.loads(done.stdout)
+    assert "OWNERSHIP CREDIT" in ownership and "SYSTEM CREDIT" not in ownership and "REPO CREDIT" in ownership
+    assert "SYSTEM CREDIT" in system and "OWNERSHIP CREDIT" not in system and "REPO CREDIT" in system
