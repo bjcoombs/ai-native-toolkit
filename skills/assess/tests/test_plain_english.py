@@ -60,3 +60,39 @@ def test_every_manifest_prose_string_except_the_whys_is_plain_english() -> None:
     assert len(lines) > 300
     assert not [k for k in lines if (k.endswith(".why") or ".whys." in k) and k not in APPROVED_WHYS]
     assert {k: [i["reason"] for i in lint(v)] for k, v in lines.items() if lint(v)} == {}
+
+
+def test_critical_words_match_whole_words() -> None:
+    from lib.plain_english import critical_words
+    assert critical_words("We lost ground and fell behind.") == ["lost", "behind"]
+    assert critical_words("CI turns red on a broken check; CI fails when a check fails.") == []
+
+
+def test_the_engine_text_holds_no_critical_word() -> None:
+    """#889: the headline, the Next line, gate notes, reason words and the since line, over every
+    Step of the default model and every blocker state, use no word of blame or loss."""
+    from lib.exec_summary import since_line
+    from lib.headline import REASON_WORDS, headline
+    from lib.level_tally import default_model
+    from lib.plain_english import critical_words
+    model = default_model()
+    texts = list(fixed_lines().values())
+    states = [{"state": "unmet"}, {"state": "excluded", "exclusion_kind": "not_applicable"},
+              *({"state": "not_measured", "reason": code} for code in REASON_WORDS)]
+    for step in model.get("steps", []):
+        for gate in step["gates"]:
+            for state in states:
+                blocker = {"kind": "gate", "gate": gate["id"], "condition": f"{gate['row']}.{gate['level']}",
+                           **state}
+                level = {"level_result_version": 1, "levels_version": model["version"],
+                         "tally": {"met": 1, "measured": 2, "not_measured": 1}, "counted": [], "listed": [],
+                         "not_measured": [], "conditions": [], "step": step["step"] - 1 or None,
+                         "next_step": {"step": step["step"], "blockers": [blocker]}}
+                texts += headline(level, model)["lines"]
+    for since in ({"available": True, "first_run": True},
+                  {"available": True, "closed_count": 2, "gates_gained": ["coverage_gate"],
+                   "gates_lost": ["ci_runs_tests"]},
+                  {"available": True, "closed_count": None, "gates_gained": None, "gates_lost": None}, None):
+        texts.append(since_line(since))
+    assert len(texts) > 50
+    assert {t: critical_words(t) for t in texts if critical_words(t)} == {}

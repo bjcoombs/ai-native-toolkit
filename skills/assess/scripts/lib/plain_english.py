@@ -29,7 +29,12 @@ one is proposed and joins the lint only once approved, by its key in ``APPROVED_
 (the labelled translation under the English summary, #1174): it returns each token of the
 English that must appear unchanged in the translation and does not, in order. Those are the
 backticked spans (ids, paths, commands, code), the link targets, and the bare file names and
-paths (a word with a ``/`` or a file extension). Tests: ``tests/test_plain_english.py``.
+paths (a word with a ``/`` or a file extension).
+
+``CRITICAL_WORDS`` (#744, #889) are the words of blame or loss the report and the fleet pages
+never use about a team's progress; ``critical_words(text)`` returns those ``text`` uses as
+whole words. The fleet credit tests and the engine-text test (the headline, the Next line, the
+gate notes and reason words) read the one tuple. Tests: ``tests/test_plain_english.py``.
 """
 from __future__ import annotations
 
@@ -38,8 +43,8 @@ from typing import TypedDict, cast
 
 from lib.level_result_types import LevelResult
 
-__all__ = ["APPROVED_WHYS", "IDIOMS", "MAX_WORDS", "MANIFEST_PROSE", "PlainIssue", "fixed_lines", "lint",
-           "manifest_lines", "untranslated_tokens"]
+__all__ = ["APPROVED_WHYS", "CRITICAL_WORDS", "IDIOMS", "MAX_WORDS", "MANIFEST_PROSE", "PlainIssue", "fixed_lines", "lint",
+           "critical_words", "manifest_lines", "untranslated_tokens"]
 
 # Long sentences are the first thing a reader in a second language loses track of.
 MAX_WORDS = 25
@@ -171,3 +176,18 @@ def manifest_lines() -> dict[str, str]:
     for entry in core_manifest()["entries"]:
         walk({k: v for k, v in entry.items() if k != "id"}, (str(entry.get("id")),))
     return out
+
+
+# Words that read as blame or loss, kept out of what the report and the fleet pages say about a
+# team's progress (#744, #889): the fleet credit section and the engine's own text (the headline,
+# the Next line, gate notes and reason words) are tested against them.
+CRITICAL_WORDS = ("regress", "lost", "broke", "behind", "worst", "fail", "bad", "rank")
+
+
+def critical_words(text: str, words: tuple[str, ...] = CRITICAL_WORDS) -> list[str]:
+    """Each of ``words`` that ``text`` uses as a whole word, case-insensitively, in order.
+
+    Whole words, so a check that is "broken" or that "fails" describes the check, not the team;
+    the fleet credit tests use the stricter substring form on their own sections."""
+    lower = text.lower()
+    return [w for w in words if re.search(rf"(?<![\w-]){re.escape(w)}(?![\w-])", lower)]

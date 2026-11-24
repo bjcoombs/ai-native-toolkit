@@ -11,7 +11,8 @@ the maturity model as one condition, `<row id>.<level>`, and reports:
 
 - `conditions[]`: `id`, `row`, `level`, `grade`, `counted`, `state` (`met`, `unmet`,
   `not_measured`; `not_applicable` and `declined` are reserved) and a `reason` code when
-  not measured (`needs_full_run`, `needs_platform`, a block's own code, `block_absent`,
+  not measured, or `requires:<id>` when a condition it requires is not met, whether it reads
+  unmet or not measured (`needs_full_run`, `needs_platform`, a block's own code, `block_absent`,
   `no_value`, `type_mismatch`, `degenerate_history`, `no_scored_files` (no file scored,
   so the file-size percentile is not a measurement), `no_manifests` (no dependency manifest
   read, so there is nothing to lock), or `requires:<id>`);

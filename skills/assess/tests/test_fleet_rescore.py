@@ -21,6 +21,7 @@ from lib.fleet.fleet_data import FLEET_DATA_FILE, Cell, FleetData, Privacy, buil
 from lib.fleet.fleet_stamp import RUN_FILE, FleetStamp
 from lib.fleet.fleet_units import build_trees, empty_map
 from lib.levels import MaturityModel, parse_levels
+from lib.plain_english import CRITICAL_WORDS
 
 
 def _model(text: str) -> MaturityModel:
@@ -346,7 +347,7 @@ def test_report_recount_section_renders_after_earned(tmp_path: Path) -> None:
     recount = section[section.index("### Recount"):section.index("### Next level-ups")]
     # raised moves first
     assert recount.index("No longer checked") < recount.index("Now checked")
-    for word in ("regress", "lost", "broke", "behind", "worst", "fail", "bad", "rank", "lapse"):
+    for word in (*CRITICAL_WORDS, "lapse"):
         assert word not in section.lower(), word
 
 

@@ -16,7 +16,9 @@ lines that lead name gates, never a count. The lines, in order:
    not-measured gate says so with its reason, and a gate whose condition the owner
    excluded (#910) says "excluded by owner: <kind>; the Step waits while the exclusion
    stands" (``gate_change``, public so the Step ladder's caption words gates the same
-   way). At the top Step it says the Step holds while its gates hold;
+   way). At the top Step it says the Step holds while its gates hold. Below the first
+   Step (a custom model whose Step 1 has a gate the repository does not meet, #889) there
+   is no Step line, and the Next line names Step 1 and its gates;
 3. catalogue coverage: ``Catalogue coverage: N of M measured, V verified · K not measured
    (reasons) · model <version>``. N is ``tally.met``, M is ``tally.measured`` (measured
    conditions only), V the share of N graded ``verified``, K is ``tally.not_measured``
@@ -248,6 +250,7 @@ def headline(value: Any, model: MaturityModel) -> Headline:
     step = level["step"]
     if step is not None:
         lines.append(f"Step {step} · {names.get(step, '')} · contracts in place")
+    if step is not None or level["next_step"] is not None:  # below Step 1 the Next line still names it (#889)
         lines.append(_next_line(level, names))
     lines.append(_tally_line(level))
     cells = tag_cells(level, model)
