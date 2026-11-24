@@ -33,8 +33,10 @@ snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
   "no baseline yet", as a default first run does. Without the opt-in each is a warn line. A
   ``--profile`` run whose scan plan left the findings out (``lib/scan_plan.py``, #1268) prints
   "warn findings not checked: not run under profile <name>", never "clean snapshot"; with a
-  findings-based threshold set (``fail_on`` or ``containment_min``) it fails instead, "FAIL scans
-  not run", naming the fix: re-run with ``--all-scans`` or without ``--profile`` / ``--levels``.
+  findings-based threshold set (``fail_on`` or ``containment_min``) whose own scans the plan left
+  out (``THRESHOLD_BLOCKS``, #1281) it fails instead, "FAIL scans not run", naming the fix: re-run
+  with ``--all-scans`` or without ``--profile`` / ``--levels``. A plan that ran them (a custom
+  ``--levels`` model reading ``structure``) evaluates the threshold as a full run does.
   Printed output is ASCII apart from the
   headline's own text: a model pair reads ``->``, which a cp1252 console can encode.
 
@@ -76,6 +78,7 @@ from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
 # scripts/ is on sys.path (pyproject pythonpath); lib is a package under it.
+import lib.manifest.check_manifest as cm
 from lib.assess_config import GateConfig, load_gate_config, load_gate_config_file
 from lib.findings_snapshot import committed_prior, method_change
 from lib.gate_loss import (held_at_baseline, model_change_reason, no_baseline, not_compared, split_lost,
@@ -255,15 +258,36 @@ def check_gate_loss(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
     return [breach]
 
 
+# The run-context blocks each findings-based threshold reads (#1281): ``fail_on`` names
+# findings in ``derived_findings`` and ``containment_min`` reads ``keyhole_summary``.
+THRESHOLD_BLOCKS: dict[str, tuple[str, ...]] = {
+    "fail_on": ("derived_findings",),
+    "containment_min": ("keyhole_summary",),
+}
+
+
+def _block_not_run(ctx: JsonDict, not_run: object, block: str) -> bool:
+    """True unless the plan shows ``block``'s scan ran: its publisher (from the check
+    catalogue) is in the plan's ``not_run``, the block holds a skipped scan's marker, or the
+    plan or the catalogue cannot say. Fails closed, so a threshold never passes unread."""
+    if not isinstance(not_run, list) or not_run_text(ctx.get(block)) is not None:
+        return True
+    collector = cm.block_collectors(cm.core_manifest()).get(block)
+    return collector is None or collector.split(".", 1)[-1] in not_run
+
+
 def check_narrowed_run(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
     """A blocking breach when a findings-based threshold (``fail_on``, ``containment_min``) is
-    set and a ``--profile`` / ``--levels`` scan plan narrowed the run (#1268): the scans those
-    thresholds read did not run, so the gate cannot pass on them. Otherwise nothing."""
+    set and a ``--profile`` / ``--levels`` scan plan (#1268) left out a scan that threshold
+    reads (``THRESHOLD_BLOCKS``, #1281), so the gate cannot pass on it. A plan that ran those
+    scans, as a custom model reading ``structure`` does, is evaluated as a full run is."""
     plan = ctx.get("scan_plan")
     if not isinstance(plan, dict):
         return []
-    thresholds = (["fail_on"] if gate.get("fail_on") else []) + (
+    configured = (["fail_on"] if gate.get("fail_on") else []) + (
         ["containment_min"] if gate.get("containment_min") is not None else [])
+    thresholds = [t for t in configured
+                  if any(_block_not_run(ctx, plan.get("not_run"), b) for b in THRESHOLD_BLOCKS[t])]
     if not thresholds:
         return []
     return [{"metric": "scans_not_run", "count": 0, "paths": thresholds,

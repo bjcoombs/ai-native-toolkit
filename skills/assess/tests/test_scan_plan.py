@@ -298,3 +298,74 @@ def test_a_gate_without_a_findings_threshold_only_warns_on_a_narrowed_run(
     out = capsys.readouterr().out
     assert "warn findings not checked: not run under profile citizen" in out
     assert "FAIL" not in out and "RESULT: PASS" in out
+
+
+# --- per-threshold narrowed-run check (#1281) ----------------------------------------
+
+STRUCTURE_MODEL = """version = "custom-structure-2026.11.24"
+
+[[rows]]
+id = "layer-2-design"
+title = "Code design (module structure)"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["structure"]
+  criteria = [{ signal = "structure.modularity_q", op = "gte", value = 0.3 }]
+"""
+
+
+def test_a_levels_plan_that_ran_the_findings_scans_evaluates_fail_on(
+        ci2: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:  # noqa: F811
+    from assess_gate import evaluate
+    from assess_gate import main as gate_main
+
+    model = tmp_path / "structure.toml"
+    model.write_text(STRUCTURE_MODEL, encoding="utf-8")
+    ctx = _core(ci2, "--levels", str(model))
+    assert "keyhole_blocks" in ctx["scan_plan"]["ran"] and ctx["scan_plan"]["not_run"]
+    (ci2 / ".assess" / "config.toml").write_text('[gate]\nfail_on = ["lying_map"]\n', encoding="utf-8")
+    capsys.readouterr()
+    assert gate_main([str(ci2)]) == 0
+    out = capsys.readouterr().out
+    assert "scans not run" not in out and "RESULT: PASS" in out
+    # the threshold is evaluated, not waved through: a fired finding fails it as a full run does
+    ctx["derived_findings"] = [{"name": "lying_map", "paths": ["README.md"]}]
+    verdict = evaluate(ctx, {"enabled": True, "fail_on": ["lying_map"], "warn_on": []})
+    assert verdict["failed"] and verdict["failures"][0]["finding"] == "lying_map"
+    assert verdict["threshold_breaches"] == []
+
+
+def _narrowed(not_run: object, **blocks: object) -> dict[str, Any]:
+    ctx: dict[str, Any] = {"scan_plan": {"model": "model custom", "ran": [], "not_run": not_run},
+                           "derived_findings": [], "keyhole_summary": {}}
+    ctx.update(blocks)
+    return ctx
+
+
+@pytest.mark.parametrize("ctx", [
+    _narrowed(["keyhole_blocks"]),  # the plan left the publisher out
+    _narrowed(None),  # an unreadable plan fails closed
+    _narrowed([], derived_findings=ScanPlan("model custom", frozenset(), ()).marker(),
+              keyhole_summary=ScanPlan("model custom", frozenset(), ()).marker()),  # a marker
+])
+def test_a_threshold_whose_scans_did_not_run_fails(ctx: dict[str, Any]) -> None:
+    from assess_gate import check_narrowed_run
+
+    gate: Any = {"fail_on": ["lying_map"], "containment_min": 0.5}
+    (breach,) = check_narrowed_run(ctx, gate)
+    assert breach["metric"] == "scans_not_run" and breach["paths"] == ["fail_on", "containment_min"]
+
+
+def test_each_threshold_reads_only_its_own_block() -> None:
+    from assess_gate import check_narrowed_run
+
+    marker = ScanPlan("model custom", frozenset(), ()).marker()
+    gate: Any = {"fail_on": ["lying_map"], "containment_min": 0.5}
+    assert check_narrowed_run(_narrowed(["ci_checks"]), gate) == []
+    (only_fail_on,) = check_narrowed_run(_narrowed([], derived_findings=marker), gate)
+    assert only_fail_on["paths"] == ["fail_on"]
+    (only_containment,) = check_narrowed_run(_narrowed([], keyhole_summary=marker), gate)
+    assert only_containment["paths"] == ["containment_min"]

@@ -90,9 +90,25 @@ class AgentOpsSummary(TypedDict):
 
     permissions_encoded: bool | None
     hooks_present: bool
-    routines_present: bool
+    routines_present: bool  # a routine dir file or a scheduled agent workflow (#815)
+    scheduled_agent_workflows: int
+    event_agent_workflows: int
+    agent_work_present: bool | None  # routines or event-triggered agents (#847); null: unread
     permissions_source: NotRequired[str]  # "repository" or "managed", when encoded
     permissions_encoded_reason: NotRequired[str]  # the not-measured code, when null
+    agent_work_present_reason: NotRequired[str]  # agent_workflows_unread, when null
+
+
+class AgentWorkflow(TypedDict):
+    """A committed workflow that runs an agent on a schedule or an issue, PR or discussion event
+    (``lib.agents.agent_ops.scan_agent_workflows``, #815, #847)."""
+
+    path: str
+    triggers: list[str]  # the workflow's ``on`` event names
+    signs: list[str]  # agent_action, agent_cli, model_name, gh_aw
+    via: list[str]  # local reusable workflows the signs came through
+    scheduled: bool
+    event: bool
 
 
 class AgentOpsBlock(TypedDict):
@@ -102,6 +118,8 @@ class AgentOpsBlock(TypedDict):
     settings: list[AgentOpsSettingsFile]
     hooks_dir: AgentOpsDir
     routine_dirs: list[AgentOpsDir]
+    agent_workflows: list[AgentWorkflow]
+    agent_workflows_unread: int
     managed: ManagedSettingsBlock
     summary: AgentOpsSummary
 
