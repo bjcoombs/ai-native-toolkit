@@ -145,11 +145,12 @@ def _templates(root: Path) -> tuple[bool, bool]:
     return bool(issue), bool(change)
 
 
-def _org_policy(org: Any) -> PolicyReading:
+def _org_policy(org: Mapping[str, object] | None) -> PolicyReading:
     """The policy reading when the tree holds none: the owner's shared one, or not measured."""
     if isinstance(org, Mapping) and org.get("available") is True:
         found = org.get("found") is True
-        return {"available": True, "present": found, "path": org.get("path") if found else None,
+        where = org.get("path")
+        return {"available": True, "present": found, "path": where if found and isinstance(where, str) else None,
                 "kind": "org_file" if found else None, "source": "org" if found else None}
     why = org.get("reason") if isinstance(org, Mapping) else None
     return {"available": False,
@@ -173,7 +174,7 @@ def tree_policy(repo_root: Path) -> tuple[str | None, PolicyKind | None]:
 
 
 def scan_contributor_files(repo_root: Path, archetype: Mapping[str, Any] | None = None,
-                           org_security_policy: Any = None) -> ContributorFilesBlock:
+                           org_security_policy: Mapping[str, object] | None = None) -> ContributorFilesBlock:
     """Build the ``contributor_files`` block (see the module doc)."""
     if isinstance(archetype, Mapping) and archetype.get("archetype") == KNOWLEDGE_BASE:
         return {"available": False,
