@@ -28,10 +28,9 @@ snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
   model (the ``since_last_run`` model-changed line names both) fails: "gates not compared: model
   changed (the default model -> profile handover); cannot confirm no gate was lost". With no
   committed baseline that change came from a ``run-context.json`` left on disk, so it is a warn
-  line beside "no baseline yet", as a lost gate read from it is. A profile or ``--levels`` run
-  that compared no gate fails too ("gates not compared under profile handover: no committed
-  per-profile baseline yet (#1184)"); one whose previous run used the same model compares
-  normally. Without the opt-in each is a warn line. Printed output is ASCII apart from the
+  line beside "no baseline yet", as a lost gate read from it is. A profile run compares with its
+  own committed record (#1184) and fails or passes on its own gates; with no record yet it reads
+  "no baseline yet", as a default first run does. Without the opt-in each is a warn line. Printed output is ASCII apart from the
   headline's own text: a model pair reads ``->``, which a cp1252 console can encode.
 
 A third, explanatory part: when the committed ``.assess/findings.json`` (read
@@ -75,7 +74,7 @@ from typing import Any, NotRequired, TypedDict, cast
 from lib.assess_config import GateConfig, load_gate_config, load_gate_config_file
 from lib.findings_snapshot import committed_prior, method_change
 from lib.gate_loss import (held_at_baseline, model_change_reason, no_baseline, not_compared, split_lost,
-                           step_change, uncompared_profile_run)
+                           step_change)
 from lib.reviewed_findings import open_findings
 from lib.run_context_types import DerivedFinding, JsonDict, MethodChange
 
@@ -237,9 +236,6 @@ def check_gate_loss(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
     changed = model_change_reason(ctx)
     if changed is not None and not no_baseline(ctx):
         return [{"metric": "gates_not_compared", "count": 0, "paths": [], "reason": changed}]
-    label = uncompared_profile_run(ctx)
-    if label is not None:
-        return [{"metric": "gates_not_compared", "count": 0, "paths": [], "model": label}]
     unmet = held_at_baseline(ctx, split_lost(ctx)[0])
     if not unmet:
         return []
@@ -302,12 +298,6 @@ def _breach_line(breach: JsonDict) -> str:
         return (
             f"  FAIL regression: {breach['count']} hotspot(s) worsened since "
             f"the prior snapshot ({sample})"
-        )
-    elif breach["metric"] == "gates_not_compared" and "model" in breach:
-        return (
-            f"  FAIL gates not compared under {breach['model']}: no committed per-profile "
-            "baseline yet (#1184). Turn off fail_on_gate_loss (the --fail-on-gate-loss flag or the "
-            "config key), or use the default model in CI"
         )
     elif breach["metric"] == "gates_not_compared":
         return (

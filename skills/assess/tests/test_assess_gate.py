@@ -579,8 +579,8 @@ def _changed(old: str, new: str) -> list[str]:
 
 
 def test_gates_not_compared_across_models_never_reads_clean(tmp_path):
-    """#1150: with fail_on_gate_loss on, a run that compared no gate because the model changed,
-    or a profile run with nothing to compare, fails with why; off, it is a warn line, never clean."""
+    """#1150: with fail_on_gate_loss on, a run that compared no gate because the model changed fails
+    with why; off, it is a warn line, never clean. #1184: a profile run reads its own record."""
     _write_config(tmp_path, "[gate]\nfail_on_gate_loss = true\n")
     gate, off = load_gate_config(tmp_path), load_gate_config(Path("/nonexistent"))
     ctx = _loss_ctx(None)
@@ -596,33 +596,34 @@ def test_gates_not_compared_across_models_never_reads_clean(tmp_path):
             "run of one maturity model so the next run compares gates") in text
     assert "clean snapshot" not in text and "RESULT: PASS" in text
 
+    # #1184: a profile run reads its own committed record under ``models``
     to_profile = _loss_ctx(None)
     to_profile["level"]["levels_version"] = "profile-handover-2026.11.23"
     to_profile["since_last_run"]["lines"] = _changed("default", "handover")
+    to_profile["prior_level"] = {"models": {"handover": to_profile["prior_level"]}}
     assert ("FAIL gates not compared: model changed (the default model -> profile handover)"
             in format_verdict(evaluate(to_profile, gate)))
-    assert ("the gate compares default-model runs only, so run it on a default /assess"
-            in format_verdict(evaluate(to_profile, off)))
+    assert ("warn gates not compared: model changed (the default model -> profile handover); commit a run "
+            "of one maturity model so the next run compares gates") in format_verdict(evaluate(to_profile, off))
 
-    profile = _loss_ctx(None)  # a profile run that compared nothing, e.g. on a CI checkout
+    profile = _loss_ctx(None)  # a profile run with no record of its own: no baseline yet, as a first run
     profile["level"]["levels_version"] = "profile-handover-2026.11.23"
     verdict = evaluate(profile, gate)
-    assert verdict["failed"] is True
-    assert ("FAIL gates not compared under profile handover: no committed per-profile baseline yet "
-            "(#1184). Turn off fail_on_gate_loss (the --fail-on-gate-loss flag or the config key), or "
-            "use the default model in CI") in format_verdict(verdict)
-    verdict = evaluate(profile, off)
-    assert verdict["failed"] is False
-    assert verdict["gates_not_compared"] == (
-        "no committed per-profile baseline yet for profile handover (#1184); the gate compares "
-        "default-model runs only, so run it on a default /assess")
-    custom = _loss_ctx(None)
-    custom["level"]["levels_version"] = "team-1"
-    assert "under model team-1:" in format_verdict(evaluate(custom, gate))
-    compared = _loss_ctx([])  # the previous run used the same profile: compared, nothing lost
-    compared["level"]["levels_version"] = "profile-handover-2026.11.23"
-    verdict = evaluate(compared, gate)
-    assert verdict["failed"] is False and "gates_not_compared" not in verdict
+    assert verdict["failed"] is False and verdict["no_baseline"] is True
+    assert "gates_not_compared" not in verdict and "no baseline yet" in format_verdict(verdict)
+
+    lost = _loss_ctx(["ci_runs_tests"], {"ci_runs_tests": "unmet"})  # its own record held the gate
+    lost["level"]["levels_version"] = "profile-handover-2026.11.23"
+    lost["prior_level"] = {"models": {"handover": lost["prior_level"]}}
+    verdict = evaluate(lost, gate)
+    assert verdict["failed"] is True and "FAIL gate lost: ci_runs_tests" in format_verdict(verdict)
+    lost["prior_level"]["models"] = {"citizen": lost["prior_level"]["models"]["handover"]}
+    assert evaluate(lost, gate)["failed"] is False  # another profile's record never confirms a loss
+
+    custom = _loss_ctx(["ci_runs_tests"], {"ci_runs_tests": "unmet"})
+    custom["level"]["levels_version"] = "team-1"  # a custom model keeps no committed record
+    verdict = evaluate(custom, gate)
+    assert verdict["failed"] is False and verdict["no_baseline"] is True
     default = _loss_ctx(None)
     default["level"]["levels_version"] = "default-2026.11.10"
     assert "gates_not_compared" not in evaluate(default, gate)
