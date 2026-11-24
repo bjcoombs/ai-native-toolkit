@@ -13,6 +13,10 @@ from transform_skill import (
     strip_frontmatter,
 )
 
+# Anchored to this file, not the cwd, so the suite reads the same sources when it
+# is collected from another directory alongside the other test trees (#1169).
+SKILLS_ROOT = Path(__file__).resolve().parents[2] / "skills"
+
 
 # ── strip_chat_skip ──────────────────────────────────────────────────────────
 
@@ -154,10 +158,9 @@ def test_config_has_required_keys():
 
 def test_assess_config_covers_all_markers():
     from standalone_skill_config import SKILLS
-    from pathlib import Path
     import re
     in_file: set[str] = set()
-    for md in Path("../skills/assess").rglob("*.md"):
+    for md in (SKILLS_ROOT / "assess").rglob("*.md"):
         in_file |= set(re.findall(r"<!-- chat-replace:(\S+?) -->", md.read_text()))
     in_config = set(SKILLS["assess"]["replacements"])
     uncovered = in_file - in_config
@@ -434,8 +437,7 @@ def test_huddle_plugin_source_retains_team_mode_infrastructure():
     deprecation), delete this test in the same PR with a note in the commit
     message explaining the deprecation path.
     """
-    from pathlib import Path
-    source = Path("../skills/huddle/SKILL.md").read_text("utf-8")
+    source = (SKILLS_ROOT / "huddle" / "SKILL.md").read_text("utf-8")
 
     required_tool_names = [
         "SendMessage",         # cross-agent messaging (the capability that gates team mode)
@@ -467,10 +469,9 @@ def test_huddle_config_covers_all_markers():
     """Every chat-replace marker in huddle sources must have a config entry,
     and every config entry must correspond to a marker in the source."""
     from standalone_skill_config import SKILLS
-    from pathlib import Path
     import re
     in_file: set[str] = set()
-    for md in Path("../skills/huddle").rglob("*.md"):
+    for md in (SKILLS_ROOT / "huddle").rglob("*.md"):
         in_file |= set(re.findall(r"<!-- chat-replace:(\S+?) -->", md.read_text()))
     in_config = set(SKILLS["huddle"]["replacements"])
     uncovered = in_file - in_config
