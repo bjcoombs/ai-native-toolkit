@@ -16,7 +16,7 @@ into a tree of plain dicts whose leaves are ``LEAF`` (a scalar, null or a list) 
 ``lookup(tree, key)`` walks a dotted key: True when it lands on any node, False when a segment
 is missing or a leaf is in the way, and ``YamlError`` (``unsupported_yaml``) when the walk would
 step into an ``OPAQUE`` node. A multi-line plain scalar's continuation lines are skipped, as is
-a block scalar (``|``, ``>``). The reader never evaluates a tag: ``!tag`` and ``&anchor``
+a scalar that starts on the line after its key and a block scalar (``|``, ``>``). The reader never evaluates a tag: ``!tag`` and ``&anchor``
 prefixes are read past. Tests: ``tests/test_pack_collector.py``.
 """
 from __future__ import annotations
@@ -131,6 +131,15 @@ def _value(value: str) -> str | None:
     return LEAF
 
 
+def _is_key_line(text: str) -> bool:
+    """A line that opens a mapping key (``key:`` or ``key: value``), as opposed to scalar text."""
+    try:
+        _split_key(text)
+    except YamlError:
+        return False
+    return True
+
+
 def _indent(raw: str) -> int:
     lead = raw[:len(raw) - len(raw.lstrip(" \t"))]
     if "\t" in lead:
@@ -185,6 +194,9 @@ class _Reader:
         if self.pending is not None:
             owner_indent, parent, key = self.pending
             self.pending = None
+            if indent > owner_indent and not _is_key_line(text):
+                self.scalar_indent = owner_indent  # a scalar that starts on the next line
+                return False
             if indent > owner_indent:
                 child: dict[str, Node] = {}
                 parent[key] = child

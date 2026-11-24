@@ -16,8 +16,12 @@ or 0: ``unreadable_file`` (a file the walk found but could not read), ``unparsab
 reader in ``lib/pack_yaml.py`` does not follow). The reason is a code alone, never a path.
 
 What it reads. The files under the repository root, walked once per run without following a
-symlinked directory, minus ``.git``, ``.assess`` and the ``.assess/config.toml`` excludes
-(``assess_config.is_user_excluded``). A symlinked file counts only when it resolves inside the
+symlinked directory, minus ``.git``, ``.assess``, the dependency and cache folders an install
+or a tool run writes (``SKIPPED_DIRS``: ``node_modules``, ``.venv``, ``__pycache__`` and the
+like, at any depth, so a check reads the same on a fresh clone as on a working checkout) and
+the ``.assess/config.toml`` excludes (``assess_config.is_user_excluded``). It does not ask git
+which files are tracked, since the collector runs no program; any other untracked file is read,
+and a pack author excludes it in ``.assess/config.toml``. A symlinked file counts only when it resolves inside the
 root, so a link pointing outside is never followed or read. ``exists`` is true for a file of
 the walk or a directory holding one; ``glob_count`` counts the walk's files whose path matches
 the glob (``*`` and ``?`` within one segment, ``**`` across any number, ``[...]`` a class);
@@ -57,6 +61,9 @@ UNREADABLE = "unreadable_file"
 UNPARSABLE = "unparsable_file"
 
 Excludes = tuple[set[str], list[str]]
+# Folders an install or a tool run writes, never part of a clone: skipped at any depth.
+SKIPPED_DIRS = frozenset({".git", "node_modules", ".venv", "venv", ".tox", ".nox", "__pycache__",
+                          ".mypy_cache", ".pytest_cache", ".ruff_cache", ".gradle", "mutants"})
 CheckValue = bool | int | dict[str, Any]
 
 
@@ -124,7 +131,7 @@ class _Tree:
         for dirpath, dirnames, filenames in os.walk(self.root):
             rel_dir = Path(dirpath).relative_to(self.root)
             dirnames[:] = sorted(d for d in dirnames
-                                 if d != ".git" and not (rel_dir == Path(".") and d == ASSESS_DIR)
+                                 if d not in SKIPPED_DIRS and not (rel_dir == Path(".") and d == ASSESS_DIR)
                                  and not is_user_excluded(rel_dir / d, dirs, patterns))
             for name in sorted(filenames):
                 rel = rel_dir / name

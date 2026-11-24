@@ -246,6 +246,14 @@ def test_a_symlink_outside_the_root_is_not_followed(repo: Path, pack_file: Path)
     assert team["money_type"] == 2  # secret.py outside the root holds the text too
 
 
+def test_dependency_and_cache_folders_are_not_walked(repo: Path, pack_file: Path) -> None:
+    """A check reads the same before and after an install: node_modules and .venv are skipped."""
+    before = collect(repo, _excludes(repo), [load_pack(pack_file)])
+    _write(repo, {"node_modules/pkg/money.py": f"m = {NEEDLE}1)\n",
+                  "src/.venv/lib/site.py": f"n = {NEEDLE}2)\n", "src/pay/__pycache__/x.py": ""})
+    assert collect(repo, _excludes(repo), [load_pack(pack_file)]) == before
+
+
 def test_a_symlink_inside_the_root_is_read(repo: Path, tmp_path: Path) -> None:
     (repo / "docs" / "alias.md").symlink_to(repo / "docs" / "glossary.md")
     path = tmp_path / "in.pack.toml"
@@ -282,6 +290,8 @@ def test_glob_semantics(glob: str, path: str, hit: bool) -> None:
     ("- a\n- b\n", "a", False),
     ("", "a", False),
     ("a:\n- x\n- y\nb: 1\n", "b", True),
+    ("description:\n  Long text\n  more text\nname: x\n", "name", True),
+    ("description:\n  Long text\nname: x\n", "description.Long", False),
 ])
 def test_yaml_reader_finds_keys(text: str, key: str, found: bool) -> None:
     assert lookup(parse(text), key) is found
