@@ -156,7 +156,9 @@ def test_without_a_maturity_model_there_are_no_opportunities() -> None:
 def test_counts_only_keeps_every_opportunity_field_and_names_no_rank() -> None:
     doc = json.loads(dumps_fleet_data(_data(fleet())))
     opps = doc["opportunities"]
-    assert set(opps) == {"measured", "in_place", "biggest_lift", "shared_templates"}
+    assert set(opps) == {"measured", "in_place", "biggest_lift", "shared_templates", "step_lifts"}
+    assert all(set(lift) == {"condition", "row", "title", "gate", "step", "repo_count"}
+               for lift in opps["step_lifts"])  # #941: counts only, no repository key
     assert set(opps["biggest_lift"]) == {"row", "level", "signal", "repo_count", "repos", "gate", "step",
                                          "change", "done_when", "why", "text"}
     assert set(opps["shared_templates"][0]) == {"source", "kind", "includers", "row", "level", "signal",

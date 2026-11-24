@@ -18,17 +18,17 @@ reads the run context; nothing writes a file or recomputes ``since_last_run``:
   is lower, else None. A lost Step is always a lost gate, so the Step only words the loss.
 - **Confirmed by the baseline.** ``since_last_run`` falls back to an earlier
   ``run-context.json`` left on disk when no baseline is committed; ``held_at_baseline`` keeps
-  only the gates the committed ``prior_level.baseline.held_gates`` lists, the only loss that
-  can fail the gate.
+  only the gates the committed baseline's ``held_gates`` lists, the only loss that can fail the
+  gate. The baseline is the run's own model's record (``prior_level.model_key``, #1184): the
+  default model's, or a shipped profile's under ``models``; Steps and gate states are read on
+  that model's Steps (``profiles.model_for_level``).
 - **No baseline.** ``no_baseline`` is True on a first run or when the run context carries no
-  committed baseline (``prior_level.baseline`` absent): there is nothing to compare with, so
-  the gate passes and the log says so.
+  committed baseline for the run's model: there is nothing to compare with, so the gate passes
+  and the log says so. A profile run in CI with no committed profile record reads the same.
 - **Not compared.** ``not_compared`` gives the reason no gate was compared across maturity
-  models (#1150): the ``since_last_run`` model-changed line, or, for a run under a profile or
-  ``--levels`` model that compared no gate (``uncompared_profile_run``), that there is no
-  committed per-profile baseline yet (#1184). The gate prints it as a warn line instead of
-  "clean snapshot", or fails under ``fail_on_gate_loss``, so a check that compared nothing
-  never reads clean.
+  models (#1150): the ``since_last_run`` model-changed line. The gate prints it as a warn line
+  instead of "clean snapshot", or fails under ``fail_on_gate_loss`` with a committed baseline,
+  so a check that compared nothing never reads clean.
 
 Tests: ``tests/test_gate_loss.py`` and ``tests/test_assess_gate.py``.
 """
@@ -39,28 +39,12 @@ from typing import Any
 
 from lib.level_tally import default_model, gate_blockers
 from lib.levels import StepDef
-from lib.model_change import changed_models, model_name
-from lib.profiles import profile_names
-from lib.prior_level import default_level
+from lib.model_change import changed_models
+from lib.prior_level import model_key
+from lib.profiles import model_for_level, profile_names
 
 __all__ = ["baseline_step", "held_at_baseline", "lost_gates", "model_change_reason", "no_baseline",
-           "non_default_label", "not_compared", "split_lost", "step_change", "uncompared_profile_run"]
-
-
-def non_default_label(level: Any) -> str | None:
-    """``profile handover`` or ``model <version>`` for a run under a non-default model, else None."""
-    if default_level(level) or not isinstance(level, Mapping):
-        return None
-    version = level["levels_version"]
-    return f"{'profile' if version.startswith('profile-') else 'model'} {model_name(version)}"
-
-
-def uncompared_profile_run(ctx: Mapping[str, Any]) -> str | None:
-    """The model label of a non-default run that compared no gate (``gates_lost`` not a list), or None."""
-    label = non_default_label(ctx.get("level"))
-    since = ctx.get("since_last_run")
-    compared = isinstance(since, Mapping) and isinstance(since.get("gates_lost"), list)
-    return None if label is None or compared else label
+           "not_compared", "split_lost", "step_change"]
 
 
 def _model_label(name: str) -> str:
@@ -78,22 +62,16 @@ def model_change_reason(ctx: Mapping[str, Any]) -> str | None:
 
 
 def not_compared(ctx: Mapping[str, Any]) -> str | None:
-    """Why this run compared no gate across maturity models, with what to do, or None. A profile
-    run leaves the committed baseline alone, so its advice is to gate a default run; a default run
-    after a model change (a ``run-context.json`` fallback or an older ``prior-level.json``) is
-    compared again once a run of one model is committed."""
+    """Why this run compared no gate across maturity models, with what to do, or None. Each model
+    keeps its own committed record (#1184), so a change means the previous state came from a
+    ``run-context.json`` of another model; it compares again once a run of this model is committed."""
     changed = model_change_reason(ctx)
-    label = uncompared_profile_run(ctx) if changed is None else non_default_label(ctx.get("level"))
-    if changed is None and label is None:
-        return None
-    why = changed or f"no committed per-profile baseline yet for {label} (#1184)"
-    if label is not None:
-        return f"{why}; the gate compares default-model runs only, so run it on a default /assess"
-    return f"{why}; commit a run of one maturity model so the next run compares gates"
+    return None if changed is None else f"{changed}; commit a run of one maturity model so the next run compares gates"
 
 
-def _steps() -> list[StepDef]:
-    return sorted(default_model().get("steps", []), key=lambda s: s["step"])
+def _steps(level: Any = None) -> list[StepDef]:
+    """The Steps of ``level``'s model (the default model's for None or a custom model)."""
+    return sorted((model_for_level(level) or default_model()).get("steps", []), key=lambda s: s["step"])
 
 
 def lost_gates(ctx: Mapping[str, Any]) -> list[str]:
@@ -113,7 +91,7 @@ def _states(ctx: Mapping[str, Any]) -> dict[str, str]:
     if not isinstance(conditions, list):
         return {}
     try:
-        blockers = gate_blockers(_steps(), conditions)
+        blockers = gate_blockers(_steps(level), conditions)
     except KeyError:
         return {}
     return {b["gate"]: b["state"] for b in blockers if "gate" in b and "state" in b}
@@ -130,8 +108,13 @@ def split_lost(ctx: Mapping[str, Any]) -> tuple[list[str], list[str]]:
 
 
 def _baseline(ctx: Mapping[str, Any]) -> Mapping[str, Any] | None:
-    prior = ctx.get("prior_level")
-    baseline = prior.get("baseline") if isinstance(prior, Mapping) else None
+    """The committed baseline of this run's model (#1184): the top-level record's for the default
+    model, ``models[<name>]``'s for a shipped profile, none for a custom model."""
+    prior, key = ctx.get("prior_level"), model_key(ctx.get("level"))
+    if isinstance(prior, Mapping) and key not in (None, "default"):
+        models = prior.get("models")
+        prior = models.get(key) if isinstance(models, Mapping) else None
+    baseline = prior.get("baseline") if isinstance(prior, Mapping) and key is not None else None
     if isinstance(baseline, Mapping) and isinstance(baseline.get("held_gates"), list):
         return baseline
     return None
@@ -155,7 +138,7 @@ def step_change(ctx: Mapping[str, Any]) -> tuple[int, int] | None:
     now = level.get("step") if isinstance(level, Mapping) else None
     if baseline is None or not isinstance(now, int):
         return None
-    before = baseline_step([g for g in baseline["held_gates"] if isinstance(g, str)])
+    before = baseline_step([g for g in baseline["held_gates"] if isinstance(g, str)], _steps(level))
     if before is None or before <= now:
         return None
     return before, now
