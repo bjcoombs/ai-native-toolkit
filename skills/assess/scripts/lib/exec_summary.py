@@ -101,7 +101,7 @@ def since_line(since: Any) -> str:
         if lost:
             parts.append(f"no longer in place: {_gate_words(lost)}")
         if not gained and not lost:
-            parts.append("nothing gained or lost")
+            parts.append("no gate changes")
     if not parts:
         return "Since last run: not known."
     if not isinstance(closed, int):

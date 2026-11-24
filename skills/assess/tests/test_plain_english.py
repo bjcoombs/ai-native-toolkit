@@ -102,6 +102,7 @@ def test_the_engine_text_holds_no_critical_word() -> None:
     for since in ({"available": True, "first_run": True},
                   {"available": True, "closed_count": 2, "gates_gained": ["coverage_gate"],
                    "gates_lost": ["ci_runs_tests"]},
+                  {"available": True, "closed_count": 0, "gates_gained": [], "gates_lost": []},
                   {"available": True, "closed_count": None, "gates_gained": None, "gates_lost": None}, None):
         texts.append(since_line(since))
     assert len(texts) > 50

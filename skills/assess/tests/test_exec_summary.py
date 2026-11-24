@@ -109,7 +109,7 @@ def test_since_last_run_not_known_says_not_known(since: Any) -> None:
 
 def test_since_last_run_words_each_part_and_says_which_part_is_not_known() -> None:
     assert since_line({**KNOWN, "closed_count": 0, "gates_gained": [], "gates_lost": []}) == \
-        "Since last run: no actions closed; nothing gained or lost."
+        "Since last run: no actions closed; no gate changes."
     assert since_line({**KNOWN, "closed_count": 1, "gates_gained": [], "gates_lost": ["coverage_gate"]}) == \
         f"Since last run: 1 action closed; no longer in place: {GATE_CHANGE['coverage_gate']}."
     assert since_line({**KNOWN, "closed_count": None}) == \
