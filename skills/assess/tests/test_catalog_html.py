@@ -139,7 +139,7 @@ def test_the_configure_section_covers_every_option() -> None:
     for needle in ("[checks]", "exclude = [", "--profile handover", "--profile citizen", "--levels FILE",
                    "--managed-settings", "managed_settings = true", "[gate]", "fail_on_gate_loss = true",
                    "--fail-on-gate-loss", "fail_on_gate_loss: &#x27;true&#x27;", "include:",
-                   "fail_on_gate_loss: true", "issues/1151"):
+                   "fail_on_gate_loss: true", "docs/build-your-own-practice.md"):
         assert needle in section, needle
     for o in options("9.9.9", True):
         assert o["references"], o["id"]

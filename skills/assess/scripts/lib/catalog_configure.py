@@ -70,7 +70,7 @@ def _profile(shipped: bool) -> ConfigureOption:
 
 def _levels(shipped: bool) -> ConfigureOption:
     refs = [("The default model", BLOB + "skills/assess/levels/default.toml"),
-            ("Build-your-own-practice guide, #1151", ISSUES + "1151")]
+            ("Build your own practice", BLOB + "docs/build-your-own-practice.md")]
     if not shipped:
         return {"id": "levels", "title": "Write your own model",
                 "paragraphs": [
