@@ -78,7 +78,7 @@ def mode_of(data: Mapping[str, Any]) -> str:
     return HASHED if run.get("paths_hashed") else COUNTS_ONLY
 
 
-def _labels(data: Mapping[str, Any], mode: str) -> dict[str, str]:
+def labels(data: Mapping[str, Any], mode: str) -> dict[str, str]:
     """Each repository and unit key's label under ``mode`` (see the module docstring)."""
     out: dict[str, str] = {}
     repos = sorted(r["key"] for r in data.get("repos") or [])
@@ -168,7 +168,7 @@ def page_bundle(data: Mapping[str, Any], achievements: Mapping[str, Any] | None,
                 pictures: Sequence[Picture] = ()) -> PageBundle:
     """The page's bundle (see the module docstring)."""
     mode = mode_of(data)
-    label = _labels(data, mode)
+    label = labels(data, mode)
     team = [r for r in model["rows"] if r["scope"] == "team"]
     rows = {r["id"]: i for i, r in enumerate(team)}
     titles = {r["id"]: r["title"] for r in model["rows"]}

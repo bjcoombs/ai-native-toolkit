@@ -173,7 +173,7 @@ def test_a_same_day_run_id_keys_history_without_a_dot() -> None:
 
 def test_the_manifest_matches_the_access_rules_exactly() -> None:
     assert fp.access_rules() == {"db": {"rules": [
-        {"path": "", "read": "view", "write": "owner"},
+        {"path": "", "read": "view", "write": "interact"},  # #949 option B: fp.ROOT_WRITE
         {"path": "runs", "read": "view", "write": "owner"},
         {"path": "units", "read": "view", "write": "owner"},
         {"path": "repos", "read": "view", "write": "owner"},
