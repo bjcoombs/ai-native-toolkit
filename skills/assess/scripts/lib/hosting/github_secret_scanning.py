@@ -16,7 +16,7 @@ unavailable block leaves it not measured.
 
 Block (``github_secret_scanning`` in run-context.json)::
 
-    {"available": True, "secret_scanning": bool, "push_protection": bool}
+    {"available": True, "secret_scanning": bool, "push_protection": bool, "delegated_bypass": bool}
     | {"available": False, "reason": "settings_not_readable: ..."}  # or a gh_cli reason
 
 GitHub secret scanning (#1173), network. `scan_github_secret_scanning(repo_root)` resolves the
@@ -44,6 +44,7 @@ class GithubSecretScanningBlock(TypedDict, total=False):
     reason: str
     secret_scanning: bool
     push_protection: bool
+    delegated_bypass: bool  # push protection bypass needs a reviewer's approval, not just a stated reason
 
 
 def _enabled(settings: dict[str, Any], key: str) -> bool:
@@ -62,4 +63,5 @@ def scan_github_secret_scanning(repo_root: Path) -> GithubSecretScanningBlock | 
     if not isinstance(settings, dict):
         return unavailable(REASON_NOT_READABLE)
     return {"available": True, "secret_scanning": _enabled(settings, "secret_scanning"),
-            "push_protection": _enabled(settings, "secret_scanning_push_protection")}
+            "push_protection": _enabled(settings, "secret_scanning_push_protection"),
+            "delegated_bypass": _enabled(settings, "secret_scanning_delegated_bypass")}

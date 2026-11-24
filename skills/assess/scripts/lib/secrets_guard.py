@@ -74,7 +74,10 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   no admin, owner or security manager rights), push protection could still guard the repository, so the reading is not
   measured (``secret_scanning_not_read``), never unmet; read and off, it is unmet. On a public
   repository GitHub also turns on push protection for each user by default; that does not show in
-  the repository's settings and a pusher can opt out of it, so it does not meet level 2; likewise
+  the repository's settings and a pusher can opt out of it, so it does not meet level 2.
+  Repository push protection does meet it, though by default a pusher can bypass a block by
+  stating a reason (``delegated_bypass`` false). That bypass is recorded and attributed, like an
+  admin overriding a failing CI check, so level 2 still counts it; likewise
   (``ci_includes_unresolved``) when a GitLab include that could hold a scan was not read, since
   ``.gitlab-ci.yml``'s includes are read through ``lib.ci_includes``;
   a GitHub Enterprise Server or ``*.ghe.com`` remote is not recognised as GitHub yet, so it reads

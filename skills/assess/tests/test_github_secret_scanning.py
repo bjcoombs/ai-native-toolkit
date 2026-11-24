@@ -32,7 +32,7 @@ def test_each_setting_is_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, s
     calls = _fake(monkeypatch, _settings(scanning, push))
     block = gss.scan_github_secret_scanning(tmp_path)
     assert block == {"available": True, "secret_scanning": scanning == "enabled",
-                     "push_protection": push == "enabled"}
+                     "push_protection": push == "enabled", "delegated_bypass": False}
     assert calls == ["repos/acme/widget"]
 
 
@@ -46,7 +46,8 @@ def test_an_unreadable_setting_is_not_measured(tmp_path: Path, monkeypatch: pyte
 def test_a_missing_setting_reads_off(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _fake(monkeypatch, {"security_and_analysis": {"dependabot_security_updates": {"status": "enabled"}}})
     block = gss.scan_github_secret_scanning(tmp_path)
-    assert block == {"available": True, "secret_scanning": False, "push_protection": False}
+    assert block == {"available": True, "secret_scanning": False, "push_protection": False,
+                     "delegated_bypass": False}
 
 
 def test_no_github_remote_or_gh_is_unavailable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -64,3 +65,10 @@ def test_an_api_error_is_unavailable(tmp_path: Path, monkeypatch: pytest.MonkeyP
         raise GhUnavailable("api_error: 502")
     monkeypatch.setattr(gss, "gh_api", fail)
     assert gss.scan_github_secret_scanning(tmp_path)["available"] is False
+
+
+def test_delegated_bypass_is_recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    meta = _settings("enabled", "enabled")
+    meta["security_and_analysis"]["secret_scanning_delegated_bypass"] = {"status": "enabled"}
+    _fake(monkeypatch, meta)
+    assert gss.scan_github_secret_scanning(tmp_path)["delegated_bypass"] is True
