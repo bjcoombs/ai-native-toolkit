@@ -9,7 +9,7 @@ import pytest
 
 from lib.check_command import is_check_command
 from lib.ci_checks import check_commands, enforced_check_commands, scan_ci_checks
-from lib.ci_continuations import join_continued
+from lib.ci_continuations import join_continued, join_folded
 from lib.command_flags import maven_skips_tests
 from lib.command_index import ci_line_text
 
@@ -292,3 +292,54 @@ def test_a_key_line_continuation_does_not_swallow_a_sibling_key() -> None:
 def test_a_swallowed_continue_on_error_still_masks() -> None:
     run = "      - run: pytest \\\n        continue-on-error: true\n"
     assert enforced_check_commands(run) == (0, 1)
+
+
+# Issue #893: folded and plain multi-line scalars are one command.
+@pytest.mark.parametrize(("text", "expected"), [
+    ("t:\n  script:\n    - >\n      ruff\n      --version\n",
+     "t:\n  script:\n    - >\n      ruff --version\n\n"),
+    ("t:\n  script:\n    - ruff\n      --version\n", "t:\n  script:\n    - ruff --version\n\n"),
+    ("s:\n  - run: >-\n      ruff\n      check .\n\n      pytest\n",
+     "s:\n  - run: >-\n      ruff check .\n\n\n      pytest\n"),
+    ("s:\n  - run: ruff\n      --version\n    shell: bash\n",
+     "s:\n  - run: ruff --version\n\n    shell: bash\n"),
+    ("s:\n  - run: >\n      ruff\n        --version\n      check\n",
+     "s:\n  - run: >\n      ruff\n        --version\n      check\n"),
+    # A # line inside a folded block is content: the shell then reads it as a comment.
+    ("s:\n  - run: >\n      pytest\n      # note\n      ruff check .\n",
+     "s:\n  - run: >\n      pytest # note ruff check .\n\n\n"),
+])
+def test_join_folded_joins_one_scalar(text: str, expected: str) -> None:
+    assert join_folded(text) == expected
+    assert join_folded(expected) == expected   # idempotent
+
+
+@pytest.mark.parametrize("text", [
+    "s:\n  - run: |\n      ruff\n      --version\n",              # a literal block: two lines
+    "s:\n  - run: |\n      cat <<EOF\n      a: b\n        c\n      EOF\n",   # not YAML inside
+    "t:\n  script:\n    - ruff check .\n    - pytest\n",          # sibling items
+    "s:\n  - name: lint\n    run: ruff check .\n",                   # a sibling key
+    "t:\n  script:\n    - 'ruff'\n      --version\n",             # a quoted scalar
+    "t:\n  script:\n    - ruff  # x\n      --version\n",          # a comment ends it
+    "t:\n  script:\n    - ruff\n    # c\n      --version\n",
+])
+def test_join_folded_leaves_other_shapes(text: str) -> None:
+    assert join_folded(text) == text
+
+
+@pytest.mark.parametrize(("files", "lint"), [
+    ({".gitlab-ci.yml": "t:\n  script:\n    - >\n      ruff\n      --version\n"}, (False, "no_lint_command")),
+    ({".gitlab-ci.yml": "t:\n  script:\n    - ruff\n      --help\n"}, (False, "no_lint_command")),
+    ({".gitlab-ci.yml": "t:\n  script:\n    - >\n      ruff\n      check .\n"}, (True, "lint_command")),
+    ({".gitlab-ci.yml": "t:\n  script:\n    - |\n      ruff --version\n      ruff check .\n"},
+     (True, "lint_command")),
+    ({".github/workflows/ci.yml": "on: [pull_request]\njobs:\n  t:\n    steps:\n"
+      "      - run: >\n          ruff\n          --version\n"}, (False, "no_lint_command")),
+    ({".github/workflows/ci.yml": "on: [pull_request]\njobs:\n  t:\n    steps:\n"
+      "      - run: >\n          pytest\n          # note\n          ruff check .\n"},
+     (False, "no_lint_command")),
+])
+def test_a_multi_line_item_is_read_whole(tmp_path: Path, files: dict[str, str],
+                                         lint: tuple[bool, str]) -> None:
+    block = scan_ci_checks(_repo(tmp_path, files))
+    assert (block["lint_runs"], block["lint_basis"]) == lint

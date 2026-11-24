@@ -233,6 +233,14 @@ def test_a_tangled_graph_does_not_count_front_door_imports():
     assert _default_state(modular, "layer-2-design.2") == ("met", None)
 
 
+def test_wide_review_waits_on_review_evidence():
+    """#934: layer-7-review.2 cannot count while layer-7-review.1 is unmet."""
+    wide = {"review_reality": {"reviewed_share": 0.9, "approved_share": 0.6}}
+    assert _default_state({**wide, "review_evidence": {"present": False}}, "layer-7-review.2") == (
+        "unmet", "requires:layer-7-review.1")
+    assert _default_state({**wide, "review_evidence": {"present": True}}, "layer-7-review.2") == ("met", None)
+
+
 def test_file_size_counts_only_beside_a_boundary_map():
     small = {"stats_summary": _sized(4, 40.0)}
     no_map = {**small, "structure_drift": {"available": False, "reason": "no_ownership_map: none"}}

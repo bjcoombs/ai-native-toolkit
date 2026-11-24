@@ -743,7 +743,9 @@
             "governance"
           ],
           "polarity": "positive",
-          "requires": [],
+          "requires": [
+            "layer-7-review.1"
+          ],
           "guarded_by": null,
           "predicted": null,
           "review": null,
@@ -1225,6 +1227,50 @@
       ]
     },
     {
+      "id": "skill-personal-data",
+      "title": "Personal data in skill text",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "skill-personal-data.1",
+          "truth": [
+            "governance"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "skill-personal-data.1:skill_personal_data.files_with_personal_data",
+              "signal": "skill_personal_data.files_with_personal_data",
+              "producer": {
+                "scan": "skill_personal_data",
+                "collector": "core.skill_personal_data"
+              },
+              "op": "eq",
+              "value": 0,
+              "eq_signal": null,
+              "text": "Skill and agent files holding a detected kind of personal data: is 0",
+              "title": "No skill file holds a detected kind of personal data (email, phone, home path, IP, SSH login, credential, key)",
+              "fix": "In each file the report names, remove the kind of data it lists, or replace it with a placeholder (user@example.com, /home/user/); a key or credential that was committed should also be rotated.",
+              "why": "Skill text is loaded into every session that triggers it and copied wherever it is published, so personal data in it leaks to every user.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "contributor-files",
       "title": "Contributor files",
       "scope": "team",
@@ -1414,12 +1460,14 @@
       "conditions": [
         "layer-7-review.1",
         "layer-7-review.2",
-        "layer-8-agent-ops.1"
+        "layer-8-agent-ops.1",
+        "skill-personal-data.1"
       ],
       "listed": [
         "layer-7-review.1",
         "layer-7-review.2",
-        "layer-8-agent-ops.1"
+        "layer-8-agent-ops.1",
+        "skill-personal-data.1"
       ],
       "shared": [],
       "why": "That people stay in the loop on what agents change, and that what agents may do is agreed and visible.",
@@ -1580,6 +1628,11 @@
       "kind": "requires",
       "source": "layer-6-coverage.2",
       "target": "layer-5-ci.1"
+    },
+    {
+      "kind": "requires",
+      "source": "layer-7-review.2",
+      "target": "layer-7-review.1"
     },
     {
       "kind": "requires",
@@ -2671,6 +2724,56 @@
       "why_source": ""
     },
     {
+      "name": "skill_personal_data",
+      "title": "Personal data in skill text",
+      "summary": "Each SKILL.md, agent definition and skill references/ file, scanned for emails, phone numbers, home paths, IP addresses, SSH logins, credentials and keys. A finding names the file and the kind, never the data. Personal names are not detected.",
+      "collector": "core.skill_personal_data",
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "skill_personal_data.files.kinds": "token",
+          "skill_personal_data.files.path": "path",
+          "skill_personal_data.kinds_detected": "token"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "skill-personal-data"
+        ],
+        "conditions": [
+          "skill-personal-data.1:skill_personal_data.files_with_personal_data"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "skill_files_unread",
+          "means": "A skill or agent file could not be read, and none of those read holds a detected kind.",
+          "next_step": "Check the file's permissions or encoding, then run /assess again."
+        }
+      ],
+      "evidence": [
+        {
+          "signal": "skill_personal_data.files_with_personal_data",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ],
+      "why": "Skill text is loaded into every session that triggers it and copied wherever it is published, so personal data in it leaks to every user.",
+      "why_source": ""
+    },
+    {
       "name": "org_security_policy",
       "title": "Owner's shared security policy",
       "summary": "The SECURITY file in the owner's public .github repository, which GitHub shows on every repository of the owner that has none, read through gh.",
@@ -3543,6 +3646,7 @@
         "layer_grades",
         "promissory_markers",
         "skill_disclosure",
+        "skill_personal_data",
         "skill_script_tests",
         "stats_summary",
         "structure",
@@ -5413,6 +5517,20 @@
       "private": false
     },
     {
+      "name": "skill_personal_data",
+      "title": "Personal data in skill text",
+      "publishes": [
+        "skill_personal_data"
+      ],
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "org_security_policy",
       "title": "Owner's shared security policy",
       "publishes": [
@@ -5553,6 +5671,7 @@
         "review_evidence",
         "review_reality",
         "skill_disclosure",
+        "skill_personal_data",
         "skill_script_tests",
         "stats_summary",
         "structure",
@@ -5606,6 +5725,7 @@
         "layer_grades",
         "promissory_markers",
         "skill_disclosure",
+        "skill_personal_data",
         "skill_script_tests",
         "stats_summary",
         "structure",
@@ -5640,6 +5760,7 @@
         "review_evidence",
         "review_reality",
         "skill_disclosure",
+        "skill_personal_data",
         "skill_script_tests",
         "stats_summary",
         "structure",
@@ -5925,6 +6046,15 @@
       "input_class": "head_structure",
       "grade": "measured",
       "null_means": "no_skill_scripts: no skill in the repository, or in the skill unit, holds a script (skills_with_scripts 0), so there is nothing to test"
+    },
+    {
+      "path": "skill_personal_data.files_with_personal_data",
+      "title": "Skill and agent files holding a detected kind of personal data",
+      "type": "number",
+      "collector": "core.skill_personal_data",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "no_skill_files: the repository, or the skill unit, holds no SKILL.md or agent definition (files_considered 0), so there is nothing to scan"
     },
     {
       "path": "contributor_files.guide.present",

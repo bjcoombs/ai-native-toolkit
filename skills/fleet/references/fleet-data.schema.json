@@ -525,6 +525,9 @@
                     "string",
                     "null"
                   ]
+                },
+                "floor": {
+                  "type": "integer"
                 }
               },
               "required": [

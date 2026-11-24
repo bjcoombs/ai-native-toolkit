@@ -16,7 +16,9 @@ lines that lead name gates, never a count. The lines, in order:
    not-measured gate says so with its reason, and a gate whose condition the owner
    excluded (#910) says "excluded by owner: <kind>; the Step waits while the exclusion
    stands" (``gate_change``, public so the Step ladder's caption words gates the same
-   way). At the top Step it says the Step holds while its gates hold;
+   way). At the top Step it says the Step holds while its gates hold. Below the first
+   Step (a custom model whose Step 1 has a gate the repository does not meet, #889) there
+   is no Step line, and the Next line names Step 1 and its gates;
 3. catalogue coverage: ``Catalogue coverage: N of M measured, V verified · K not measured
    (reasons) · model <version>``. N is ``tally.met``, M is ``tally.measured`` (measured
    conditions only), V the share of N graded ``verified``, K is ``tally.not_measured``
@@ -33,7 +35,8 @@ lines that lead name gates, never a count. The lines, in order:
 
 ``summary`` is the one-line form the badge and the ``log.md`` entry carry, with no count
 in it: ``Step 3 · next: coverage gate`` (``GATE_NOUN`` names the first blocking gate),
-``Step 4 · all gates held`` at the top Step, and ``no Steps defined`` for a model without
+``Step 4 · all gates held`` at the top Step, ``no Step yet · next: <gate>`` below the first
+Step of a model whose Step 1 has a gate (#889), and ``no Steps defined`` for a model without
 ``[[steps]]``. ``markdown`` is the lines, the first bold, pasted verbatim by the report and
 ``assess_report.py``; in it alone, "measured" and "verified" on the catalogue coverage line link
 ``docs/glossary.md`` (``GLOSSARY_URL``, #1102: the catalogue coverage and evidence grade
@@ -165,9 +168,11 @@ def _next_line(level: LevelResult, names: Mapping[int, str]) -> str:
 def _summary(level: LevelResult) -> str:
     """The badge message and the log.md readiness line: the Step and its next blocker, no count."""
     step, nxt = level["step"], level["next_step"]
-    if step is None:
+    if step is None and nxt is None:
         return "no Steps defined"
     gate = next((b.get("gate", "") for b in nxt["blockers"] if b["kind"] == "gate"), None) if nxt else None
+    if step is None:  # below Step 1 of a model whose Step 1 has a gate (#889)
+        return f"no Step yet · next: {GATE_NOUN.get(gate, gate)}" if gate else "no Step yet"
     if gate is None:
         return f"Step {step} · all gates held"
     return f"Step {step} · next: {GATE_NOUN.get(gate, gate)}"
@@ -248,6 +253,7 @@ def headline(value: Any, model: MaturityModel) -> Headline:
     step = level["step"]
     if step is not None:
         lines.append(f"Step {step} · {names.get(step, '')} · contracts in place")
+    if step is not None or level["next_step"] is not None:  # below Step 1 the Next line still names it (#889)
         lines.append(_next_line(level, names))
     lines.append(_tally_line(level))
     cells = tag_cells(level, model)

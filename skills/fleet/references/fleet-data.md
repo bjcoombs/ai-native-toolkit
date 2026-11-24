@@ -81,7 +81,9 @@ names the signal that could not be read and `reason` (`unavailable`, `type_misma
 `not_scanned` for a failed repository). `why` is the check manifest's why for that
 criterion at its level, the same text as the condition's `why` in `level.json`, or `null`
 when there is no `signal` or the maturity model is a caller's own (#1128); it is the
-toolkit's text, so counts-only output keeps it. `step`, `next_step` and `tally` are the
+toolkit's text, so counts-only output keeps it. An unknown cell whose confirmed criteria reach
+level 1 or more also carries `floor`, that low bound (#697, #889), so a badge can show "at least N";
+the key is absent otherwise, and achievements still count known levels only. `step`, `next_step` and `tally` are the
 repository's [`level.json`](level.md) entry for the same commit (`null` when failed or
 without `--levels`), and `exclusions` lists the conditions the owner excluded in its
 `.assess/config.toml` (#910): `id`, `kind`, `source` and `reason`, listed and never

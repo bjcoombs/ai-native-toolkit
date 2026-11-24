@@ -73,3 +73,10 @@ def test_write_badge_is_utf8_json(tmp_path: Path):
     raw = (tmp_path / "badge.json").read_bytes()
     assert "·".encode() in raw
     assert json.loads(raw)["schemaVersion"] == 1
+
+
+def test_a_measured_repository_below_the_first_step_is_not_grey() -> None:
+    """#889: a custom model whose Step 1 has a gate; below it the badge takes Step 1's colour."""
+    below = {**_headline(None, "no Step yet · next: own_gate"), "next_step": 1}
+    assert headline_badge(below)["color"] == step_color(1) != step_color(None)  # type: ignore[arg-type]
+    assert headline_badge(_headline(None, "no Steps defined"))["color"] == step_color(None)
