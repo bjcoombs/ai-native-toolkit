@@ -20,6 +20,7 @@ images); a repository with an unusual toolchain edits the file in review.
 from __future__ import annotations
 
 import json
+import re
 
 from lib.next_step_guidance import DENY_RULE_EXAMPLE
 from lib.run_context_types_fix import RepoFacts
@@ -34,6 +35,15 @@ _NODE_INSTALL = (("pnpm-lock.yaml", "corepack enable && pnpm install --frozen-lo
                  ("package-lock.json", "npm ci"))
 _JS = frozenset({"javascript", "typescript"})
 _JVM = frozenset({"java", "kotlin", "scala", "groovy"})
+
+
+_YAML_PLAIN = re.compile(r"^[A-Za-z0-9./_-][^#]*$")
+
+
+def _yaml(command: str) -> str:
+    """``command`` as a YAML scalar: plain when it is safe, else a JSON string (valid YAML)."""
+    plain = _YAML_PLAIN.match(command) and ": " not in command and not command.endswith(":")
+    return command if plain else json.dumps(command)
 
 
 def _uv(facts: RepoFacts) -> bool:
@@ -125,7 +135,7 @@ def github_workflow(facts: RepoFacts, name: str, command: str, installs: list[st
     lines = [f"name: {name}", "", "on:", "  pull_request:", "  push:",
              f"    branches: [{facts['default_branch']}]", "", "permissions:", "  contents: read", "",
              "jobs:", f"  {name}:", "    runs-on: ubuntu-latest", "    steps:",
-             "      - uses: actions/checkout@v4", *setup, f"      - run: {_wrapped(facts, command)}"]
+             "      - uses: actions/checkout@v4", *setup, f"      - run: {_yaml(_wrapped(facts, command))}"]
     return "\n".join(lines) + "\n"
 
 
@@ -140,7 +150,7 @@ def gitlab_job(facts: RepoFacts, name: str, command: str, installs: list[str] | 
         lines.append(f"  image: {image}")
     if before:
         lines += ["  before_script:", *(f"    - {cmd}" for cmd in before)]
-    lines += ["  script:", f"    - {_wrapped(facts, command)}"]
+    lines += ["  script:", f"    - {_yaml(_wrapped(facts, command))}"]
     return "\n".join(lines) + "\n"
 
 

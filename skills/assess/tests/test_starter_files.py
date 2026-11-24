@@ -19,6 +19,7 @@ from lib.next_step_guidance import DENY_RULE_EXAMPLE, guidance  # noqa: E402
 from lib.run_context_types_fix import RepoFacts  # noqa: E402
 from lib.starter_files import (  # noqa: E402
     GUARDRAIL,
+    remote_system,
     detect_facts,
     pick_check,
     plan_files,
@@ -130,3 +131,26 @@ def test_write_files_never_overwrites(tmp_path: Path) -> None:
     assert out[0]["state"] == "conflict" and out[0]["suggested"] and "pytest" in out[0]["suggested"]
     assert out[1]["state"] == "written" and (tmp_path / ".claude" / "settings.json").is_file()
     assert write_files(tmp_path, planned)[1]["state"] == "conflict"
+
+
+@pytest.mark.parametrize(("url", "system"), [
+    ("git@github.com:acme/gitlab-migration.git", "github"),
+    ("https://github.com/acme/pkg.git", "github"),
+    ("git@gitlab.example.com:team/pkg.git", "gitlab"),
+    ("https://gitlab.com/group/sub/pkg.git", "gitlab"),
+    ("https://git.example.com/github/pkg.git", None),
+    (None, None),
+])
+def test_remote_system_reads_the_host_not_the_path(url: str | None, system: str | None) -> None:
+    assert remote_system(url) == system
+
+
+def test_an_unusual_check_command_is_quoted_into_valid_yaml() -> None:
+    import yaml
+
+    command = 'echo "run: now" && pytest'
+    for text in (github_workflow(_facts(language=None), "tests", command), gitlab_job(_facts(language=None), "tests", command)):
+        data = yaml.safe_load(text)
+        steps = data["jobs"]["tests"]["steps"] if "jobs" in data else None
+        assert (steps[-1]["run"] if steps else data["tests"]["script"][0]) == command
+    assert "run: pytest\n" in github_workflow(_facts(), "tests", "pytest")  # a plain command stays plain

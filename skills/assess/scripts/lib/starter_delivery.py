@@ -19,6 +19,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from lib.run_context_types_fix import Delivery
+from lib.starter_files import remote_system
 
 Runner = Callable[[Sequence[str], Path], tuple[int, str]]
 
@@ -60,8 +61,8 @@ def _working(reason: str) -> Delivery:
 
 
 def _host_cli(url: str) -> str | None:
-    low = url.lower()
-    return "glab" if "gitlab" in low else "gh" if "github" in low else None
+    system = remote_system(url)
+    return "gh" if system == "github" else "glab" if system == "gitlab" else None
 
 
 def open_change(root: Path, branch: str, title: str, body: str, paths: Sequence[str], *, was_clean: bool,

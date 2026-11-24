@@ -26,6 +26,8 @@ from pathlib import Path
 from typing import Any
 
 from lib.graph.import_graph import dominant_language
+from lib.hosting.gh_cli import parse_github_remote
+from lib.hosting.gitlab_cli import parse_remote
 from lib.run_context_types_fix import CiSystem, FileOutcome, PlannedFile, RepoFacts
 from lib.starter_templates import (
     COVERAGE_THRESHOLD,
@@ -69,14 +71,16 @@ def pick_check(entry_points: Iterable[Mapping[str, Any]]) -> tuple[str, str] | N
     return rows[0] if rows else None
 
 
-def _host_system(url: str | None) -> CiSystem | None:
+def remote_system(url: str | None) -> CiSystem | None:
+    """The CI system a remote's host implies: github.com (``gh_cli.parse_github_remote``), a
+    host named ``gitlab`` (``gitlab_cli.parse_remote``), else None. Only the host is read, so a
+    GitHub repository named ``gitlab-migration`` stays GitHub."""
     if not url:
         return None
-    if "gitlab" in url.lower():
-        return "gitlab"
-    if "github" in url.lower():
+    if parse_github_remote(url) is not None:
         return "github"
-    return None
+    parsed = parse_remote(url)
+    return "gitlab" if parsed is not None and "gitlab" in parsed[0].lower() else None
 
 
 def ci_system(root: Path) -> tuple[CiSystem, str]:
@@ -87,7 +91,7 @@ def ci_system(root: Path) -> tuple[CiSystem, str]:
         return "github", "tracked"
     if GITLAB_CI in paths:
         return "gitlab", "tracked"
-    host = _host_system(_git(root, "remote", "get-url", "origin"))
+    host = remote_system(_git(root, "remote", "get-url", "origin"))
     return (host, "remote") if host else ("github", "default")
 
 

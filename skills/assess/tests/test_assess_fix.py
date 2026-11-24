@@ -189,6 +189,28 @@ def test_fix_opens_the_pull_request_through_the_runner(tmp_path: Path) -> None:
     assert "the checkout is now on assess/fix-instructions" in cli.render(report)
 
 
+@pytest.mark.parametrize(("reason", "words"), [
+    ("push_failed", "committed, not pushed,"),
+    ("pull_request_failed", "committed and pushed, with no pull request opened,"),
+])
+def test_render_says_the_files_are_committed_after_a_late_failure(tmp_path: Path, reason: str, words: str) -> None:
+    report = cli.fix(_repo(tmp_path, PYTHON), starter=False, open_pr=False)
+    report["delivery"] = {"mode": "working_tree", "branch": "assess/fix-instructions", "url": None, "reason": reason}
+    text = cli.render(report)
+    assert f"The files are {words} on branch assess/fix-instructions" in text and "staged in the working" not in text
+
+
+def test_github_repository_named_gitlab_asks_gh(tmp_path: Path) -> None:
+    runner = _Recorder(fail=("gh auth",))
+    runner_url = "git@github.com:acme/gitlab-migration.git"
+
+    def recorded(cmd: Sequence[str], cwd: Path) -> tuple[int, str]:
+        return (0, runner_url) if list(cmd[:3]) == ["git", "remote", "get-url"] else runner(cmd, cwd)
+
+    assert open_change(tmp_path, "b", "t", "body", ["CLAUDE.md"], was_clean=True,
+                       runner=recorded)["reason"] == "gh_not_authenticated"
+
+
 def test_assess_output_does_not_make_the_tree_dirty(tmp_path: Path) -> None:
     repo = _repo(tmp_path, {**PYTHON, ".assess/log.md": "old\n"})
     (repo / ".assess" / "log.md").write_text("new run\n", encoding="utf-8")

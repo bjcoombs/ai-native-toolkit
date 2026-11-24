@@ -163,6 +163,14 @@ _DELIVERY_WORDS = {
 }
 
 
+# A failure after ``git switch -c``: what state the files are in on the new branch.
+_COMMITTED = {
+    "commit_failed": "staged, not committed,",
+    "push_failed": "committed, not pushed,",
+    "pull_request_failed": "committed and pushed, with no pull request opened,",
+}
+
+
 def render(report: FixReport) -> str:
     """The terminal report: Step before and after, each file, each gate's proof, the delivery."""
     out = [f"/assess --{report['mode']}: Step {report['step_before']} -> Step {report['step_after']}"]
@@ -182,10 +190,13 @@ def render(report: FixReport) -> str:
     if d["mode"] == "pull_request":
         out.append(f"Opened {d['url'] or 'a pull request'} from branch {d['branch']}; "
                    f"the checkout is now on {d['branch']}.")
+    elif d["mode"] == "working_tree" and d["branch"]:
+        state = _COMMITTED.get(d["reason"], "committed")
+        out.append(f"The files are {state} on branch {d['branch']}, the current checkout "
+                   f"({d['reason'].replace('_', ' ')}).")
     elif d["mode"] == "working_tree":
         why = _DELIVERY_WORDS.get(d["reason"], d["reason"].replace("_", " "))
-        where = f" on branch {d['branch']}" if d["branch"] else ""
-        out.append(f"The files are staged in the working tree{where} for review ({why}).")
+        out.append(f"The files are staged in the working tree for review ({why}).")
     return "\n".join(out) + "\n"
 
 
