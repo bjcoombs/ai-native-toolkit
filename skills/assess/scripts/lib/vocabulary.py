@@ -61,7 +61,7 @@ practice yet", never implied credit. The guard checks it on every rendered page.
 
 **Step and gate on fleet pages (#1254).** The fleet pages use the /assess words for a
 maturity-model entry: its practice, the Step it gates, or the gate. The phrases in
-`ROW_PHRASES` ("which row", "team row", "this row", "row's", "rows'") are checked in every rendered fleet page
+`ROW_PHRASES` (the tuple below holds each one) are checked in every rendered fleet page
 (`row_hits`). A table row in the ordinary sense is not checked.
 
 **The model-written template (#1254).** The guard also reads the prose of

@@ -80,7 +80,7 @@ def test_the_repository_step_and_headline_are_untouched(run: dict[str, Any]) -> 
     from lib.headline import run_context_headline
     from lib.level_tally import run_context_level
     expected = summarised(run_context_headline(run["level"]), run["level"], run.get("since_last_run"),
-                          default_model())
+                          default_model(), None, run.get("unit_rollup"), run["measured_commit"].get("head_sha"))
     assert run["headline"] == expected
     assert run["level"]["step"] == run_context_level(run)["step"]
     assert "Units:" not in run["headline"]["markdown"]

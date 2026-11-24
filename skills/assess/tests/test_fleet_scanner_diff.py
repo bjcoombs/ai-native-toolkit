@@ -8,7 +8,7 @@ from typing import Any
 
 import lib.fleet.fleet_compare as fc
 import lib.fleet.fleet_scanner_diff as sd
-from lib.fleet.fleet_compare import FleetRun, compare, summary_lines
+from lib.fleet.fleet_compare import FleetRun, compare, comparison_lines
 from lib.fleet.fleet_groups import roll_up
 from lib.fleet.fleet_scanner_diff import ScannerDiff, scanner_diff
 from test_fleet_compare import _row, _row_move, _scans, _stamp
@@ -39,7 +39,7 @@ def test_changed_producer_module_tags_scanner_changed():
     row = _row_move(comparison, "grpa", "teamdocs")
     assert row["moved"] and row["cause"] == sd.CAUSE_SCANNER_CHANGED
     assert row["scanner"] == [{"block": "nested_instructions", "modules": [NESTED]}]
-    (line,) = [line for line in summary_lines(comparison) if "teamdocs" in line]
+    (line,) = [line for line in comparison_lines(comparison) if "teamdocs" in line]
     assert "scanner_changed" in line and NESTED in line and "not read as a repository move" in line
 
 
@@ -67,7 +67,7 @@ def test_missing_toolkit_commit_degrades_to_unknown_scope():
     assert _row_move(comparison, "grpa", "teamdocs")["cause"] == sd.CAUSE_UNKNOWN_SCOPE
     (note,) = comparison["notes"]
     assert note.startswith("scanner diff unavailable") and "toolkit_commit" in note
-    assert note in summary_lines(comparison)
+    assert note in comparison_lines(comparison)
 
 
 # --- scanner_diff --------------------------------------------------------------
@@ -165,7 +165,7 @@ def test_a_signal_absent_from_the_earlier_scans_is_measured_set_movement():
     assert row["then"]["status"] == "unknown" and row["now"] == {"status": "level", "level": 2}
     assert row["cause"] == fc.CAUSE_SET
     assert row["absent_signals"] == ["nested_instructions.budget.claude_code.lines"]
-    assert any("measured-set movement" in line for line in summary_lines(comparison))
+    assert any("measured-set movement" in line for line in comparison_lines(comparison))
     # the other way round (a later scanner dropped the signal) is the same kind of movement
     back = compare(_run(later), _run(earlier))
     assert _row_move(back, "grpa", "teamdocs")["cause"] == fc.CAUSE_SET
@@ -301,7 +301,7 @@ def test_a_set_and_level_row_keeps_its_set_movement_under_a_new_cause():
                          _changed(NESTED), PRODUCERS)
     row = _row_move(comparison, "grpa", "teamdocs")
     assert row["cause"] == sd.CAUSE_SCANNER_CHANGED and row["set_moved"] is True
-    (line,) = [line for line in summary_lines(comparison) if "teamdocs" in line]
+    (line,) = [line for line in comparison_lines(comparison) if "teamdocs" in line]
     assert "the measured set of repositories moved too" in line
 
 
