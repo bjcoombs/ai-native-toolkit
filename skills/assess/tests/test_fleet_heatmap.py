@@ -132,7 +132,7 @@ def test_counts_in_the_subtitle_agree_in_number():
     groups = _groups()[:1]
     columns = fh.columns_for(groups, None)[:1]
     svg = fh.render_heatmap(groups, columns)
-    assert "1 group \u00b7 1 maturity model row \u00b7" in svg
+    assert "1 group \u00b7 1 practice \u00b7" in svg
 
 
 def test_svg_parses_has_a_background_and_no_stylesheet_override(tmp_path):

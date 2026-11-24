@@ -274,7 +274,7 @@ def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
 
     body: list[str] = []
     subtitle = (f"maturity model {version} · {_count(len(groups), 'group')} · "
-                f"{_count(len(columns), 'maturity model row')} · darker = higher level reached")
+                f"{_count(len(columns), 'practice')} · darker = higher level reached")
     body.append(_text(PAD, PAD + 18, SVG_TITLE, size=18, weight="bold"))
     body.append(_text(PAD, PAD + 40, subtitle, fill=MUTED))
     for index, label in enumerate(col_labels):
@@ -314,7 +314,7 @@ def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
     if notes:
         y += 10
 
-    scale = ("level as a share of the row's top level" if all(c["top"] is not None for c in columns)
+    scale = ("level as a share of the practice's top level" if all(c["top"] is not None for c in columns)
              else "whole level (no maturity model file: not scaled to each row's top level)")
     body.append(_text(PAD, y, f"Legend: {scale}", weight="bold"))
     y += 10
@@ -341,7 +341,7 @@ def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
                 PAD * 2 + widest * CHAR_W, MIN_WIDTH)
     width = float(math.ceil(width))
     height = float(math.ceil(y + PAD))
-    desc = ("Heat map of fleet groups (rows) against maturity model rows (columns); each cell is the "
+    desc = ("Heat map of fleet groups (rows) against maturity-model practices (columns); each cell is the "
             "whole level reached, darker is higher; hatched cells are unknown, not level 0.")
     style = ('<style>text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", '
              'Helvetica, Arial, sans-serif; }</style>')

@@ -375,7 +375,7 @@ def render_trend(runs: Sequence[TrendRun]) -> str:
     bottom = PLOT_T + PLOT_H
     body = [svg.text(PAD, PAD + 18, TITLE, size=18, weight="bold", cls="fg"),
             svg.text(PAD, PAD + 40, f"{len(runs)} dated runs, {runs[0]['label']} to {runs[-1]['label']} "
-                     "· mean share of top level per group (team rows with a level)", cls="muted"),
+                     "· mean share of top level per group (practices with a level)", cls="muted"),
             svg.text(PAD, PAD + 58, svg.truncate(_versions_line(runs), WRAP), size=11.5, cls="muted")]
     for tick in Y_TICKS:
         ty = plan.y(tick)

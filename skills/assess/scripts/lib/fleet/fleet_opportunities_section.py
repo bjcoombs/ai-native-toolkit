@@ -43,7 +43,7 @@ def _names(keys: Sequence[str]) -> str:
 
 def _in_place(opps: Opportunities, titles: dict[str, str]) -> str:
     if not opps["in_place"]:
-        return f"{IN_PLACE} the maturity model has no team rows to hold."
+        return f"{IN_PLACE} the maturity model has no team practices to hold."
     parts = [f"{p['at_top']} of {p['measured']} measured on {text(titles.get(p['row'], p['row']))}"
              for p in opps["in_place"]]
     return f"{IN_PLACE} repositories at the top level, {'; '.join(parts)}."

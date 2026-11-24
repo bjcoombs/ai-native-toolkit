@@ -85,7 +85,7 @@ Not drawn: not measured here: no remote.
 
 ## Keyhole Readiness
 
-No structural concerns, 0 safe zones.
+No structural notes, 0 safe zones.
 
 ## Cross-Practice Findings (Keyhole Readiness)
 

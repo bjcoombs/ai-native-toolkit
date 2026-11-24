@@ -134,7 +134,7 @@ SKILLS: dict[str, dict[str, Any]] = {
                 "from `run-context.json` and its remaining verified entries, not from "
                 "the earlier prose. Delete both files once read. Assembling "
                 "`.assess/assess-report.md` - the scorecard, the snapshots, the verbatim "
-                "cross-practice findings, the lying signals, and the mandatory Top 3 "
+                "cross-practice findings, the findings where the repository says one thing and does another, and the mandatory Top 3 "
                 "Actions - is a reusable, mostly-deterministic procedure."
             ),
             "uv-emit-workflow": 'uv run scripts/assess_emit_workflow.py "$REPO_ROOT"',
@@ -178,7 +178,7 @@ SKILLS: dict[str, dict[str, Any]] = {
                 "Read the bundled `references/assess-findings.md` and follow it "
                 "inline, using the scorecard from the layer-scoring step, to "
                 "assemble `.assess/assess-report.md` from the data bus: the verbatim "
-                "findings section, the lying signals, and the mandatory Top 3 Actions."
+                "findings section, the findings where the repository says one thing and does another, and the mandatory Top 3 Actions."
             ),
             "pr-delegate": (
                 "Read the bundled `references/assess-pr.md` and follow it inline for "

@@ -7,7 +7,7 @@
 <rect x="0" y="0" width="760" height="550" class="f-bg"/>
 <text x="16.0" y="34.0" font-size="18" text-anchor="start" class="t-fg" font-weight="bold">Fleet activity and maturity</text>
 <text x="16.0" y="56.0" font-size="12" text-anchor="start" class="t-muted">15 repositories · commits in the 6mo window (non-merge) against mean maturity</text>
-<text x="16.0" y="74.0" font-size="11.5" text-anchor="start" class="t-muted">Maturity: each team row's level as a share of its top level, averaged over the rows that could be measured</text>
+<text x="16.0" y="74.0" font-size="11.5" text-anchor="start" class="t-muted">Maturity: each practice's level as a share of its top level, averaged over the practices that could be measured</text>
 <rect x="229.7" y="84.0" width="500.3" height="150.0" class="f-accent" opacity="0.06"/>
 <rect x="229.7" y="234.0" width="500.3" height="150.0" class="f-bad" opacity="0.08"/>
 <line x1="70.0" y1="84.0" x2="70.0" y2="384.0" class="s-rule" stroke-width="0.6"/>
@@ -40,30 +40,30 @@
 <text x="78.0" y="100.0" font-size="12.5" text-anchor="start" class="t-muted">Well along, little change</text>
 <text x="400.0" y="422.0" font-size="12" text-anchor="middle" class="t-muted">Commits in the 6mo window (split at the median, 121)</text>
 <text x="22.0" y="234.0" font-size="12" text-anchor="middle" class="t-muted" transform="rotate(-90 22 234.0)">Mean share of top level</text>
-<circle cx="349.8" cy="259.0" r="6.5" class="f-warn s-bg" stroke-width="1.5"><title>payments/api: 212 commits, maturity 0.42 (2 of 2 team rows measured)</title></circle>
+<circle cx="349.8" cy="259.0" r="6.5" class="f-warn s-bg" stroke-width="1.5"><title>payments/api: 212 commits, maturity 0.42 (2 of 2 practices measured)</title></circle>
 <text x="358.8" y="252.0" font-size="11.5" text-anchor="start" class="t-fg">payments/api</text>
-<circle cx="291.8" cy="259.0" r="6.5" class="f-warn s-bg" stroke-width="1.5"><title>payments/ledger: 168 commits, maturity 0.42 (2 of 2 team rows measured)</title></circle>
+<circle cx="291.8" cy="259.0" r="6.5" class="f-warn s-bg" stroke-width="1.5"><title>payments/ledger: 168 commits, maturity 0.42 (2 of 2 practices measured)</title></circle>
 <text x="282.8" y="252.0" font-size="11.5" text-anchor="end" class="t-fg">payments/ledger</text>
-<circle cx="229.7" cy="334.0" r="6.5" class="f-warn s-bg" stroke-width="1.5"><title>mobile/ios: 121 commits, maturity 0.17 (2 of 2 team rows measured)</title></circle>
+<circle cx="229.7" cy="334.0" r="6.5" class="f-warn s-bg" stroke-width="1.5"><title>mobile/ios: 121 commits, maturity 0.17 (2 of 2 practices measured)</title></circle>
 <text x="238.7" y="327.0" font-size="11.5" text-anchor="start" class="t-fg">mobile/ios</text>
-<circle cx="405.3" cy="159.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>web/storefront: 254 commits, maturity 0.75 (2 of 2 team rows measured)</title></circle>
+<circle cx="405.3" cy="159.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>web/storefront: 254 commits, maturity 0.75 (2 of 2 practices measured)</title></circle>
 <text x="414.3" y="152.0" font-size="11.5" text-anchor="start" class="t-fg">web/storefront</text>
-<circle cx="302.3" cy="209.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>data/pipeline: 176 commits, maturity 0.58 (2 of 2 team rows measured)</title></circle>
+<circle cx="302.3" cy="209.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>data/pipeline: 176 commits, maturity 0.58 (2 of 2 practices measured)</title></circle>
 <text x="311.3" y="202.0" font-size="11.5" text-anchor="start" class="t-fg">data/pipeline</text>
-<circle cx="254.8" cy="84.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>platform/gateway: 140 commits, maturity 1.00 (2 of 2 team rows measured)</title></circle>
+<circle cx="254.8" cy="84.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>platform/gateway: 140 commits, maturity 1.00 (2 of 2 practices measured)</title></circle>
 <text x="263.8" y="98.0" font-size="11.5" text-anchor="start" class="t-fg">platform/gateway</text>
-<circle cx="252.2" cy="84.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>platform/auth: 138 commits, maturity 1.00 (2 of 2 team rows measured)</title></circle>
-<circle cx="179.6" cy="384.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>web/admin: 83 commits, maturity 0.00 (2 of 2 team rows measured)</title></circle>
+<circle cx="252.2" cy="84.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>platform/auth: 138 commits, maturity 1.00 (2 of 2 practices measured)</title></circle>
+<circle cx="179.6" cy="384.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>web/admin: 83 commits, maturity 0.00 (2 of 2 practices measured)</title></circle>
 <text x="188.6" y="377.0" font-size="11.5" text-anchor="start" class="t-fg">web/admin</text>
-<circle cx="150.5" cy="134.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>payments/fraud: 61 commits, maturity 0.83 (2 of 2 team rows measured)</title></circle>
+<circle cx="150.5" cy="134.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>payments/fraud: 61 commits, maturity 0.83 (2 of 2 practices measured)</title></circle>
 <text x="159.5" y="127.0" font-size="11.5" text-anchor="start" class="t-fg">payments/fraud</text>
-<circle cx="132.0" cy="134.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>web/design&lt;&amp;&gt;"sys: 47 commits, maturity 0.83 (2 of 2 team rows measured)</title></circle>
+<circle cx="132.0" cy="134.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>web/design&lt;&amp;&gt;"sys: 47 commits, maturity 0.83 (2 of 2 practices measured)</title></circle>
 <text x="141.0" y="157.0" font-size="11.5" text-anchor="start" class="t-fg">web/design&lt;&amp;&gt;"sys</text>
-<circle cx="120.2" cy="184.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>platform/infra: 38 commits, maturity 0.67 (2 of 2 team rows measured)</title></circle>
+<circle cx="120.2" cy="184.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>platform/infra: 38 commits, maturity 0.67 (2 of 2 practices measured)</title></circle>
 <text x="129.2" y="177.0" font-size="11.5" text-anchor="start" class="t-fg">platform/infra</text>
-<circle cx="101.7" cy="234.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>data/warehouse: 24 commits, maturity 0.50 (2 of 2 team rows measured)</title></circle>
+<circle cx="101.7" cy="234.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>data/warehouse: 24 commits, maturity 0.50 (2 of 2 practices measured)</title></circle>
 <text x="110.7" y="227.0" font-size="11.5" text-anchor="start" class="t-fg">data/warehouse</text>
-<circle cx="85.8" cy="384.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>data/notebooks: 12 commits, maturity 0.00 (1 of 2 team rows measured)</title></circle>
+<circle cx="85.8" cy="384.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>data/notebooks: 12 commits, maturity 0.00 (1 of 2 practices measured)</title></circle>
 <circle cx="76.0" cy="436.0" r="5" class="f-warn"/>
 <text x="88.0" y="440.0" font-size="11.5" text-anchor="start" class="t-muted">Busy (at least 121 commits) and below half the top level</text>
 <circle cx="76.0" cy="454.0" r="5" class="f-accent"/>

@@ -6,7 +6,7 @@
 <defs><pattern id="fleet-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="f-bg"/><line x1="0" y1="0" x2="0" y2="6" class="s-unk" stroke-width="2.4"/></pattern></defs>
 <rect x="0" y="0" width="760" height="494" class="f-bg"/>
 <text x="16.0" y="34.0" font-size="18" text-anchor="start" class="t-fg" font-weight="bold">Group maturity over time</text>
-<text x="16.0" y="56.0" font-size="12" text-anchor="start" class="t-muted">3 dated runs, 2026-09-20 to 2026-11-20 · mean share of top level per group (team rows with a level)</text>
+<text x="16.0" y="56.0" font-size="12" text-anchor="start" class="t-muted">3 dated runs, 2026-09-20 to 2026-11-20 · mean share of top level per group (practices with a level)</text>
 <text x="16.0" y="74.0" font-size="11.5" text-anchor="start" class="t-muted">Maturity model levels-2 throughout</text>
 <line x1="56.0" y1="364.0" x2="520.0" y2="364.0" class="s-rule" stroke-width="0.6"/>
 <text x="46.0" y="368.0" font-size="11" text-anchor="end" class="t-muted">0</text>

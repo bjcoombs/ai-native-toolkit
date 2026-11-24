@@ -312,7 +312,7 @@ def test_skipped_diagrams_say_why_in_the_report():
     assert _quad(no_levels)["svg"] is None
     assert "no maturity model" in (_quad(no_levels)["skipped"] or "")
     org_only: MaturityModel = {**_levels(), "rows": [r for r in _levels()["rows"] if r["scope"] == "org"]}
-    assert "no team rows" in (_quad(fd.build_diagrams(org_only, _repos(), WINDOW))["skipped"] or "")
+    assert "no team practices" in (_quad(fd.build_diagrams(org_only, _repos(), WINDOW))["skipped"] or "")
     empty = fd.build_diagrams(_levels(), [], WINDOW)
     by_file = {d["file"]: d["skipped"] for d in empty}
     assert by_file["quadrant.svg"] == by_file["shared-tooling.svg"] == "skipped: no repositories in the run."

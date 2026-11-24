@@ -6,8 +6,8 @@
 <defs><pattern id="fleet-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="f-bg"/><line x1="0" y1="0" x2="0" y2="6" class="s-unk" stroke-width="2.4"/></pattern></defs>
 <rect x="0" y="0" width="860" height="469" class="f-bg"/>
 <text x="16.0" y="34.0" font-size="18" text-anchor="start" class="t-fg" font-weight="bold">Fleet maturity, before and after</text>
-<text x="16.0" y="56.0" font-size="12" text-anchor="start" class="t-muted">5 groups · mean maturity in 2026-10-20 and 2026-11-20, labelled with the row that moved most</text>
-<text x="16.0" y="74.0" font-size="11.5" text-anchor="start" class="t-muted">Maturity: each team row's level as a share of its top level, averaged over the team rows with a known level in both runs</text>
+<text x="16.0" y="56.0" font-size="12" text-anchor="start" class="t-muted">5 groups · mean maturity in 2026-10-20 and 2026-11-20, labelled with the practice that moved most</text>
+<text x="16.0" y="74.0" font-size="11.5" text-anchor="start" class="t-muted">Maturity: each practice's level as a share of its top level, averaged over the practices with a known level in both runs</text>
 <line x1="250.0" y1="352.0" x2="460.0" y2="352.0" class="s-rule" stroke-width="0.6"><title>0</title></line>
 <line x1="250.0" y1="292.0" x2="460.0" y2="292.0" class="s-rule" stroke-width="0.6"><title>0.25</title></line>
 <line x1="250.0" y1="232.0" x2="460.0" y2="232.0" class="s-rule" stroke-width="0.6"><title>0.5</title></line>
@@ -17,28 +17,28 @@
 <text x="250.0" y="96.0" font-size="11.5" text-anchor="middle" class="t-muted">2026-10-20</text>
 <line x1="460.0" y1="104.0" x2="460.0" y2="352.0" class="s-muted" stroke-width="1"/>
 <text x="460.0" y="96.0" font-size="11.5" text-anchor="middle" class="t-muted">2026-11-20</text>
-<line x1="250.0" y1="352.0" x2="460.0" y2="352.0" class="s-muted" stroke-width="2.4"><title>data: 0.00 → 0.00 (+0.00; 1 of 2 rows known in both runs)</title></line>
+<line x1="250.0" y1="352.0" x2="460.0" y2="352.0" class="s-muted" stroke-width="2.4"><title>data: 0.00 → 0.00 (+0.00; 1 of 2 practices known in both runs)</title></line>
 <circle cx="250.0" cy="352.0" r="4" class="f-muted"/>
 <circle cx="460.0" cy="352.0" r="4" class="f-muted"/>
 <text x="238.0" y="356.0" font-size="12.5" text-anchor="end" class="t-fg">data 0.00<title>data</title></text>
 <text x="472.0" y="356.0" font-size="12.5" text-anchor="start" class="t-fg" font-weight="600">0.00</text>
 <text x="510.0" y="356.0" font-size="11.5" text-anchor="start" class="t-muted">=</text>
-<text x="556.0" y="356.0" font-size="11.5" text-anchor="start" class="t-muted">data: no row moved</text>
-<line x1="250.0" y1="352.0" x2="460.0" y2="252.0" class="s-accent" stroke-width="2.4"><title>payments: 0.00 → 0.42 (+0.42; 2 of 2 rows known in both runs)</title></line>
+<text x="556.0" y="356.0" font-size="11.5" text-anchor="start" class="t-muted">data: no practice moved</text>
+<line x1="250.0" y1="352.0" x2="460.0" y2="252.0" class="s-accent" stroke-width="2.4"><title>payments: 0.00 → 0.42 (+0.42; 2 of 2 practices known in both runs)</title></line>
 <circle cx="250.0" cy="352.0" r="4" class="f-accent"/>
 <circle cx="460.0" cy="252.0" r="4" class="f-accent"/>
 <text x="238.0" y="373.0" font-size="12.5" text-anchor="end" class="t-fg">payments 0.00<title>payments</title></text>
 <text x="472.0" y="256.0" font-size="12.5" text-anchor="start" class="t-fg" font-weight="600">0.42</text>
 <text x="510.0" y="256.0" font-size="11.5" text-anchor="start" class="t-accent">+0.42</text>
 <text x="556.0" y="256.0" font-size="11.5" text-anchor="start" class="t-muted">payments: Agent instructions 0→1</text>
-<line x1="250.0" y1="112.0" x2="460.0" y2="192.0" class="s-bad" stroke-width="2.4"><title>platform: 1.00 → 0.67 (-0.33; 2 of 2 rows known in both runs)</title></line>
+<line x1="250.0" y1="112.0" x2="460.0" y2="192.0" class="s-bad" stroke-width="2.4"><title>platform: 1.00 → 0.67 (-0.33; 2 of 2 practices known in both runs)</title></line>
 <circle cx="250.0" cy="112.0" r="4" class="f-bad"/>
 <circle cx="460.0" cy="192.0" r="4" class="f-bad"/>
 <text x="238.0" y="116.0" font-size="12.5" text-anchor="end" class="t-fg">platform 1.00<title>platform</title></text>
 <text x="472.0" y="196.0" font-size="12.5" text-anchor="start" class="t-fg" font-weight="600">0.67</text>
 <text x="510.0" y="196.0" font-size="11.5" text-anchor="start" class="t-bad">-0.33</text>
 <text x="556.0" y="196.0" font-size="11.5" text-anchor="start" class="t-muted">platform: Agent use 3→1</text>
-<line x1="250.0" y1="212.0" x2="460.0" y2="352.0" class="s-bad" stroke-width="2.4"><title>web: 0.58 → 0.00 (-0.58; 2 of 2 rows known in both runs)</title></line>
+<line x1="250.0" y1="212.0" x2="460.0" y2="352.0" class="s-bad" stroke-width="2.4"><title>web: 0.58 → 0.00 (-0.58; 2 of 2 practices known in both runs)</title></line>
 <circle cx="250.0" cy="212.0" r="4" class="f-bad"/>
 <circle cx="460.0" cy="352.0" r="4" class="f-bad"/>
 <text x="238.0" y="216.0" font-size="12.5" text-anchor="end" class="t-fg">web 0.58<title>web</title></text>
@@ -46,7 +46,7 @@
 <text x="510.0" y="373.0" font-size="11.5" text-anchor="start" class="t-bad">-0.58</text>
 <text x="556.0" y="373.0" font-size="11.5" text-anchor="start" class="t-muted">web: Agent use 2→0 *</text>
 <text x="16.0" y="397.0" font-size="11.5" text-anchor="start" class="t-muted">* not a level change alone: the group's measured set of repositories moved too, or the scanner changed</text>
-<text x="16.0" y="417.0" font-size="11.5" text-anchor="start" class="t-muted">Rows left out of a mean, not known in both runs (left out/rows): data (1/2)</text>
+<text x="16.0" y="417.0" font-size="11.5" text-anchor="start" class="t-muted">Practices left out of a mean, not known in both runs (left out/practices): data (1/2)</text>
 <rect x="16.0" y="426.0" width="14.0" height="14.0" fill="url(#fleet-hatch)" class="s-muted" stroke-width="1"/>
 <text x="38.0" y="437.0" font-size="11.5" text-anchor="start" class="t-fg">Not plotted, unknown is not zero: mobile (new since the earlier run)</text>
 </svg>

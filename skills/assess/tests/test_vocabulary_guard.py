@@ -26,7 +26,8 @@ from assess_report import render_report
 import lib.keyhole.keyhole_signals as ks
 from lib.level_signals import DEFAULT_LEVELS
 from lib.run_context_types import KeyholeConcern
-from lib.vocabulary import BANNED_WORDS, IN_PLACE, RETIRED_LABELS, banned_hits, opening_lines, prose
+from lib.vocabulary import (BANNED_WORDS, IN_PLACE, RETIRED_LABELS, ROW_PHRASES, TEMPLATE_WORDS, banned_hits,
+                            opening_lines, prose, row_hits, template_prose)
 from test_decomposition_parity import _build_parity_fixture
 from test_fleet_cli import fleet_cli, froot  # noqa: F401 - froot is a fixture
 from test_fleet_heatmap import FIXTURES as HEATMAP_FIXTURES
@@ -95,6 +96,37 @@ def test_no_banned_word_or_retired_label_in_rendered_prose(outputs: dict[str, st
     assert not hits, "banned vocabulary (lib/vocabulary.py) in rendered output:\n" + "\n".join(hits)
 
 
+def _fleet_pages(outputs: dict[str, str]) -> dict[str, str]:
+    return {name: content for name, content in outputs.items()
+            if name.startswith(("fleet run", "diagrams fixture", "trends fixture", "heat map fixture",
+                                "next-steps fixture"))}
+
+
+def test_fleet_pages_name_steps_and_gates_not_rows(outputs: dict[str, str], fleet_out: Path) -> None:
+    """#1254: a maturity-model entry is a practice, Step or gate on every fleet page, never a row."""
+    pages = _fleet_pages(outputs)
+    assert any(name.endswith("report.md") for name in pages)
+    assert any("teams" in name for name in pages)
+    view = fleet_out / "fleet-view.html"
+    assert view.is_file()
+    pages["fleet run: fleet-view.html"] = re.sub(r"<[^>]+>", " ", view.read_text(encoding="utf-8"))
+    hits = [f"{phrase!r} in {name}, line {line}: {text}"
+            for name, content in pages.items() for phrase, line, text in row_hits(content)]
+    assert not hits, "'row' for a maturity-model entry on a fleet page:\n" + "\n".join(hits)
+
+
+_TEMPLATE = Path(__file__).resolve().parents[2] / "assess-findings" / "SKILL.md"
+
+
+def test_the_model_written_template_uses_the_shared_vocabulary() -> None:
+    """#1254: the report template the model fills, fenced blocks included, keeps out the
+    words the shared vocabulary replaced."""
+    text = template_prose(_TEMPLATE.read_text(encoding="utf-8"))
+    hits = [f"{term!r}, line {line}: {body}" for term, line, body in banned_hits(text)
+            if term in TEMPLATE_WORDS]
+    assert not hits, f"banned vocabulary in {_TEMPLATE.name}:\n" + "\n".join(hits)
+
+
 def test_every_fleet_report_and_next_steps_section_opens_with_what_is_in_place(
         outputs: dict[str, str]) -> None:
     pairs = []
@@ -151,6 +183,7 @@ def test_every_next_step_and_hint_the_shipped_model_can_render_is_supportive() -
 @pytest.mark.parametrize(("text", "found"), [
     ("Structure reads tangled.", ["tangled"]),
     ("A Lying map.", ["lying"]),
+    ("capped at Partly in place, and remains unproven: 68 structural concerns", ["capped", "unproven", "concerns"]),
     ("Rows say Missing.", ["missing"]),
     ("Score 7 / 8 - AI-Native", ["AI-Native"]),
     ("a failure", ["failure"]),
@@ -172,6 +205,23 @@ def test_every_next_step_and_hint_the_shipped_model_can_render_is_supportive() -
 ])
 def test_banned_hits_reads_prose_only(text: str, found: list[str]) -> None:
     assert [term for term, _, _ in banned_hits(text)] == found
+
+
+@pytest.mark.parametrize(("text", "found"), [
+    ("What moved, and which row moved it?", ["which row"]),
+    ("no team rows to measure", ["team row"]),
+    ("nothing confirmed on this row yet", ["this row"]),
+    ("one table row per repository", []),
+    ("`team_rows` stays", []),
+])
+def test_row_hits(text: str, found: list[str]) -> None:
+    assert [phrase for phrase, _, _ in row_hits(text)] == found
+    assert set(found) <= set(ROW_PHRASES)
+
+
+def test_template_prose_reads_fenced_template_text() -> None:
+    assert "lying" in prose(template_prose("```markdown\nlying signals\n```\n"))
+    assert set(TEMPLATE_WORDS) <= set(BANNED_WORDS)
 
 
 def test_prose_blanks_code_and_identifiers() -> None:
