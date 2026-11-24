@@ -122,7 +122,7 @@ Tag `agent_runtime`: 4 conditions, 1 shared with another tag.
 | `layer-1-liveness.2` Runtime telemetry reaches rung 3 | `observability` | Observability rung: is at least 3 (`observability.rung gte 3`) | `declared` | no, listed | - | positive | - | - | When an agent can query logs or metrics itself, it can check a change against the running system instead of handing that back to a person. | Give agents a way to read logs or metrics, such as a logs or metrics MCP server or skill. |
 | `layer-5-ci.2` Every dependency manifest has its lockfile (shared with Supply chain) | `agent_environment` | Dependency manifests without a committed lockfile: is 0 (`agent_environment.pinning.unlocked_total eq 0`) | `declared` | no, listed | - | positive | - | - | A committed lockfile means an agent installs the dependency versions CI tested, so a local test result matches CI's. | Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests. A Gradle version catalog or NuGet central package management pins direct versions only: turn on dependency locking. |
 | `layer-8-agent-ops.2` Agent hooks are committed | `agent_ops` | Agent hooks are committed: is true (`agent_ops.summary.hooks_present eq true`) | `config_only` | no, listed | - | positive | - | - | Committed hooks run around an agent's actions on every clone, so a check written once applies without the agent having to remember it. | Commit the hooks that run checks around agent actions. |
-| `layer-8-agent-ops.2` Agent routines are committed | `agent_ops` | Agent routines are committed: is true (`agent_ops.summary.routines_present eq true`) | `config_only` | no, listed | - | positive | - | - | Committed routines define the agent work the repository runs on a schedule or trigger, so it runs the same way each time and is reviewed like code. | Commit the routines agents run on a schedule or trigger. |
+| `layer-8-agent-ops.2` Agent routines or event-triggered agents are committed | `agent_ops` | Agent routines or event-triggered agents are committed: is true (`agent_ops.summary.agent_work_present eq true`) | `config_only` | no, listed | - | positive | - | - | Committed routines define the agent work the repository runs on a schedule or trigger, so it runs the same way each time and is reviewed like code. | Commit the agent work you run on a schedule or trigger. That can be a scheduled or issue workflow that runs an agent, or a file under .claude/routines/. |
 
 ### Governance
 
@@ -225,21 +225,22 @@ Every scan name `assess_signals.py --scans` accepts, in run order.
 
 Committed allowlists, hooks, sandbox rules and routines make an agent's limits and repeated work the same on every clone, and reviewable like code.
 
-Committed permission allowlists, hooks, sandbox rules and routine definitions.
+Committed permission allowlists, hooks, sandbox rules and routines. A routine is a routine file, or a workflow that runs an agent on a schedule or an issue or pull request event.
 
 - Collector: `core.agent_ops`, reading `repo_root`, `managed_settings`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_ops.managed.reason` token, `agent_ops.managed.sources.kind` token, `agent_ops.managed.state` token, `agent_ops.settings.default_mode` token, `agent_ops.summary.permissions_encoded_reason` token, `agent_ops.summary.permissions_source` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_ops.agent_workflows.path` path, `agent_ops.agent_workflows.signs` token, `agent_ops.agent_workflows.triggers` token, `agent_ops.agent_workflows.via` path, `agent_ops.managed.reason` token, `agent_ops.managed.sources.kind` token, `agent_ops.managed.state` token, `agent_ops.settings.default_mode` token, `agent_ops.summary.agent_work_present_reason` token, `agent_ops.summary.permissions_encoded_reason` token, `agent_ops.summary.permissions_source` token.
 - Used by: row `layer-8-agent-ops`.
-- Evidence: `agent_ops.summary.permissions_encoded` config_text (config_only), `agent_ops.summary.hooks_present` config_text (config_only), `agent_ops.summary.routines_present` config_text (config_only).
-- Not measured when: it cannot read its input; the block says why.
+- Evidence: `agent_ops.summary.permissions_encoded` config_text (config_only), `agent_ops.summary.hooks_present` config_text (config_only), `agent_ops.summary.agent_work_present` head_text (declared).
+- Not measured when:
+  - `agent_workflows_unread`: No committed routine or agent workflow was found. But a scheduled or event-triggered workflow calls a reusable workflow from another repository, and its path names an agent. Nothing to change: this reads as not measured until that workflow can be read.
 
 Why the signals named here matter:
 
 - `agent_ops.summary.permissions_encoded` feeds `layer-8-agent-ops.1:agent_ops.summary.permissions_encoded`: Deny rules and hooks keep an agent inside its limits in every permission mode, auto mode included. Committed to the repository or set in managed settings, they apply the same way to everyone and are reviewed like code.
 - `agent_ops.summary.hooks_present` feeds `layer-8-agent-ops.2:agent_ops.summary.hooks_present`: Committed hooks run around an agent's actions on every clone, so a check written once applies without the agent having to remember it.
-- `agent_ops.summary.routines_present` feeds `layer-8-agent-ops.2:agent_ops.summary.routines_present`: Committed routines define the agent work the repository runs on a schedule or trigger, so it runs the same way each time and is reviewed like code.
+- `agent_ops.summary.agent_work_present` feeds `layer-8-agent-ops.2:agent_ops.summary.agent_work_present`: Committed routines define the agent work the repository runs on a schedule or trigger, so it runs the same way each time and is reviewed like code.
 
 ### `config_drift`: Configuration drift
 
@@ -1153,6 +1154,7 @@ The scan registry in run order, including the private inputs other scans read.
 | `accretion_by_file` | Accretion by file | `accretion_scan` | private input | no |
 | `hot_test_index` | Repository test index | `repo_root`, `current` | private input | no |
 | `run_header` | Run header | `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized` | `run_id`, `artifact_schema_version`, `assess_method_version`, `run_date`, `scope`, `scope_slug`, `measured_commit`, `prior_stats_exists`, `stats_summary`, `instruction_files`, `instructions_grade`, `diff`, `diff_reliable`, `diff_version_note`, `diff_trend_reset`, `prior_plugin_version`, `schema_version`, `prior_schema_version`, `tool_versions`, `prior_tool_versions`, `diff_detail`, `pruned_hotspots`, `retired_excluded_hotspots`, `dropped_first_flagged`, `provisional_first_flagged`, `log_integrity`, `prior_findings_snapshot`, `prior_level` | no |
+| `scan_plan_stamp` | Scan plan | `plan` | `scan_plan` | no |
 | `working_notes` | Working notes | `repo_root` | private input | no |
 | `doc_graph` | Doc graph | `repo_root`, `excludes`, `scope`, `working_notes` | `doc_graph` | no |
 | `doc_staleness` | Doc staleness | `repo_root`, `doc_graph`, `excludes`, `scope` | `doc_staleness` | no |

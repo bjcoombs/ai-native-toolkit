@@ -90,7 +90,11 @@ deepest first, and the tree must still pass the three legs on its own. Two
 joins a tree at that path whatever its size or fingerprint, and no doc under a
 `working_notes_ignore` directory joins any tree (a misclassified `chapter-01` to
 `chapter-20` series stays counted); ignore wins where they overlap, and an outer
-tree absorbs any tree inside it. Only docs are classified, never
+tree absorbs any tree inside it. A release-note fragment directory (#1227) is a
+working-notes tree too: towncrier-style `<issue>.<kind>.md` files beside a
+`README.md`, unlinked until the release folds them. At least two fragments with no
+inbound link (a `.base` hub counts as one) must be present; only they leave the
+headline, and the README stays counted. Only docs are classified, never
 a `.base` hub. It runs on the headline graph (link and reference edges) after
 the raw pass. `doc_graph.py` excludes these trees too and reports
 `excluded_working_notes_trees`, `working_notes_doc_count`,
@@ -228,6 +232,48 @@ _DATE_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}[-_.]?(?:0[1-9]|1[0-2])[-_.]?(?:0[1
 _SEQUENCE_RE = re.compile(r"^([a-z]+(?:[-_ ][a-z]+)*)[-_ ]\d+$")
 
 
+# Release-note fragments (#1227): towncrier-style `<issue>.<kind>.md` files (or
+# `+<slug>.<kind>.md`, an orphan fragment, with an optional `.<n>` counter) in a
+# directory with a README that explains them. Each is written unlinked on purpose
+# and deleted when the release folds it, so an orphan fragment is a working note.
+# The issue number never has a leading zero: towncrier writes none, while chapter
+# series (`01.intro.md`) usually pad, and those pages are real orphans.
+FRAGMENT_TREE_MIN_FILES = 2  # a series, not one numbered page
+_FRAGMENT_RE = re.compile(
+    r"^(?:[1-9]\d*|\+[\w-]+)\.[a-z][a-z0-9_-]*(?:\.\d+)?\.(?:md|mdx|markdown)$", re.IGNORECASE,
+)
+
+
+def _fragment_trees(doc_signals: dict[str, DocSignal]) -> dict[str, list[str]]:
+    """Release-note fragment directories, each mapped to its unlinked fragments.
+
+    A directory qualifies when it holds a ``README.md`` and at least
+    ``FRAGMENT_TREE_MIN_FILES`` fragments nothing links to, a `.base` hub
+    included. Only those fragments leave the headline: the README, any other doc
+    and a linked fragment stay counted. The floor keeps one unlinked
+    ``01.setup.md`` beside a README counted as the orphan it is."""
+    readme_dirs: set[str] = set()
+    fragments: dict[str, list[str]] = {}
+    for rel in sorted(doc_signals):
+        head, _, name = rel.rpartition("/")
+        if not head:
+            continue  # a root-level doc never anchors a tree
+        if name.lower() == "readme.md":
+            readme_dirs.add(head)
+        elif _FRAGMENT_RE.match(name) and not _linked(doc_signals[rel]):
+            fragments.setdefault(head, []).append(rel)
+    return {
+        d: f for d, f in fragments.items()
+        if d in readme_dirs and len(f) >= FRAGMENT_TREE_MIN_FILES
+    }
+
+
+def _linked(signal: DocSignal) -> bool:
+    """True when anything links to the doc: another doc, or a `.base` hub,
+    which ``graph_in_degree`` counts and the doc-only ``in_degree`` does not."""
+    return max(int(signal.get("graph_in_degree", 0)), int(signal.get("in_degree", 0))) > 0
+
+
 def _name_key(rel: str) -> str | None:
     """The sequence family a doc's name belongs to, or None when it has none.
 
@@ -319,7 +365,9 @@ def classify_working_notes_trees(
     so ignoring a directory never qualifies its parent; a fingerprint tree
     whose remaining docs no longer pass the size and fingerprint tests is
     dropped whole, so its index returns to the headline with the ignored notes.
-    A forced directory holding no doc is not reported.
+    A forced directory holding no doc is not reported. A release-note fragment
+    directory (``_fragment_trees``, #1227) joins as a tree of its unlinked
+    fragments, under the same ``ignore`` rule.
 
     Returns ``{"path", "file_count", "docs"}`` per outermost tree, sorted by
     path; an outer tree absorbs the docs of any tree inside it.
@@ -338,6 +386,8 @@ def classify_working_notes_trees(
         left = sorted(set(docs) & kept_docs)
         if len(left) >= WORKING_NOTES_MIN_FILES and _is_working_notes(left, doc_signals):
             trees[d] = set(left)
+    for d, fragments in _fragment_trees(doc_signals).items():
+        trees[d] = trees.get(d, set()) | (set(fragments) & kept_docs)
     for d in force:
         trees[d] = trees.get(d, set()) | {r for r in kept_docs if _is_ancestor_path(d, r)}
     trees = {d: docs for d, docs in trees.items() if docs}

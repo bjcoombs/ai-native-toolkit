@@ -440,3 +440,21 @@ def test_pack_flag_is_repeatable_in_pass_order(pack_file: Path, tmp_path: Path) 
     packs = assess_core.load_packs([str(second), str(pack_file)])
     assert [p["name"] for p in packs] == ["second", "team"]
 
+
+
+def test_a_narrowed_run_plans_the_pack_checks(repo: Path, pack_file: Path, tmp_path: Path) -> None:
+    """#1268's scan plan (a --levels run) always runs pack_checks: with --pack it evaluates the
+    checks, and without it writes no pack or packs key, never a not-run marker."""
+    from lib.scan_plan import run_plan
+    packs = (load_pack(pack_file),)
+    choice = _model(tmp_path, packs)
+    plan = run_plan(choice)
+    assert plan is not None and plan.runs("pack_checks")
+    ctx = assess_core.build_run_context(repo_root=repo, run_date="2026-11-24", non_interactive=True,
+                                        model=choice, plan=plan, packs=packs)
+    assert ctx["pack"]["team"]["glossary"] is True
+    assert next(c for c in ctx["level"]["conditions"] if c["id"] == "glossary.1")["state"] == "met"
+    bare = assess_core.build_run_context(repo_root=repo, run_date="2026-11-24", non_interactive=True,
+                                         model=single_repo_choice("citizen", None), plan=run_plan(
+                                             single_repo_choice("citizen", None)))
+    assert "pack" not in bare and "packs" not in bare and "scan_plan" in bare

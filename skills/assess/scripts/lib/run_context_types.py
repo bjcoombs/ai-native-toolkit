@@ -128,6 +128,7 @@ class DocSignal(TypedDict, total=False):
     out_degree: int
     machine_links: int
     inbound_sources: list[str]
+    graph_in_degree: int  # every predecessor, `.base` hubs included (#1227)
 
 
 class DocGraphBlock(TypedDict):
@@ -593,6 +594,7 @@ class FnCcnBlock(Distribution):
     basis: str
     source: list[FnBackendSource]
     backend_by_language: dict[str, str | None]
+    file_level_by_language: dict[str, int]
     function_count: int
 
 

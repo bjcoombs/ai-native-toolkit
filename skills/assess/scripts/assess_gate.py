@@ -30,7 +30,14 @@ snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
   committed baseline that change came from a ``run-context.json`` left on disk, so it is a warn
   line beside "no baseline yet", as a lost gate read from it is. A profile run compares with its
   own committed record (#1184) and fails or passes on its own gates; with no record yet it reads
-  "no baseline yet", as a default first run does. Without the opt-in each is a warn line. Printed output is ASCII apart from the
+  "no baseline yet", as a default first run does. Without the opt-in each is a warn line. A
+  ``--profile`` run whose scan plan left the findings out (``lib/scan_plan.py``, #1268) prints
+  "warn findings not checked: not run under profile <name>", never "clean snapshot"; with a
+  findings-based threshold set (``fail_on`` or ``containment_min``) whose own scans the plan left
+  out (``THRESHOLD_BLOCKS``, #1281) it fails instead, "FAIL scans not run", naming the fix: re-run
+  with ``--all-scans`` or without ``--profile`` / ``--levels``. A plan that ran them (a custom
+  ``--levels`` model reading ``structure``) evaluates the threshold as a full run does.
+  Printed output is ASCII apart from the
   headline's own text: a model pair reads ``->``, which a cp1252 console can encode.
 
 A third, explanatory part: when the committed ``.assess/findings.json`` (read
@@ -71,12 +78,14 @@ from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
 # scripts/ is on sys.path (pyproject pythonpath); lib is a package under it.
+import lib.manifest.check_manifest as cm
 from lib.assess_config import GateConfig, load_gate_config, load_gate_config_file
 from lib.findings_snapshot import committed_prior, method_change
 from lib.gate_loss import (held_at_baseline, model_change_reason, no_baseline, not_compared, split_lost,
                            step_change)
 from lib.reviewed_findings import open_findings
 from lib.run_context_types import DerivedFinding, JsonDict, MethodChange
+from lib.scan_plan import not_run_text
 
 
 class FindingHit(TypedDict):
@@ -112,6 +121,9 @@ class GateVerdict(TypedDict):
     gates_not_compared: NotRequired[str]
     # fail_on_gate_loss is on but there is no committed baseline to compare with.
     no_baseline: NotRequired[bool]
+    # A --profile or --levels run left the findings out (#1268): what it says in their place,
+    # "not run under profile citizen". A warn line; the run never reads as clean.
+    findings_not_run: NotRequired[str]
 
 
 def _findings_by_name(ctx: JsonDict) -> dict[str, JsonDict]:
@@ -246,6 +258,42 @@ def check_gate_loss(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
     return [breach]
 
 
+# The run-context blocks each findings-based threshold reads (#1281): ``fail_on`` names
+# findings in ``derived_findings`` and ``containment_min`` reads ``keyhole_summary``.
+THRESHOLD_BLOCKS: dict[str, tuple[str, ...]] = {
+    "fail_on": ("derived_findings",),
+    "containment_min": ("keyhole_summary",),
+}
+
+
+def _block_not_run(ctx: JsonDict, not_run: object, block: str) -> bool:
+    """True unless the plan shows ``block``'s scan ran: its publisher (from the check
+    catalogue) is in the plan's ``not_run``, the block holds a skipped scan's marker, or the
+    plan or the catalogue cannot say. Fails closed, so a threshold never passes unread."""
+    if not isinstance(not_run, list) or not_run_text(ctx.get(block)) is not None:
+        return True
+    collector = cm.block_collectors(cm.core_manifest()).get(block)
+    return collector is None or collector.split(".", 1)[-1] in not_run
+
+
+def check_narrowed_run(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
+    """A blocking breach when a findings-based threshold (``fail_on``, ``containment_min``) is
+    set and a ``--profile`` / ``--levels`` scan plan (#1268) left out a scan that threshold
+    reads (``THRESHOLD_BLOCKS``, #1281), so the gate cannot pass on it. A plan that ran those
+    scans, as a custom model reading ``structure`` does, is evaluated as a full run is."""
+    plan = ctx.get("scan_plan")
+    if not isinstance(plan, dict):
+        return []
+    configured = (["fail_on"] if gate.get("fail_on") else []) + (
+        ["containment_min"] if gate.get("containment_min") is not None else [])
+    thresholds = [t for t in configured
+                  if any(_block_not_run(ctx, plan.get("not_run"), b) for b in THRESHOLD_BLOCKS[t])]
+    if not thresholds:
+        return []
+    return [{"metric": "scans_not_run", "count": 0, "paths": thresholds,
+             "reason": f"not run under {plan.get('model', 'a profile')}"}]
+
+
 def evaluate(ctx: JsonDict, gate: GateConfig) -> GateVerdict:
     """Run every check and return a structured verdict.
 
@@ -259,6 +307,7 @@ def evaluate(ctx: JsonDict, gate: GateConfig) -> GateVerdict:
         + check_containment_threshold(ctx, gate)
         + check_diff_regression(ctx, gate)
         + check_gate_loss(ctx, gate)
+        + check_narrowed_run(ctx, gate)
     )
     blocking = bool(failures or threshold_breaches)
     verdict: GateVerdict = {
@@ -288,6 +337,9 @@ def evaluate(ctx: JsonDict, gate: GateConfig) -> GateVerdict:
     reason = not_compared(ctx)
     if reason is not None:
         verdict["gates_not_compared"] = reason
+    not_run = not_run_text(ctx.get("derived_findings"))
+    if not_run is not None:
+        verdict["findings_not_run"] = not_run
     return verdict
 
 
@@ -298,6 +350,12 @@ def _breach_line(breach: JsonDict) -> str:
         return (
             f"  FAIL regression: {breach['count']} hotspot(s) worsened since "
             f"the prior snapshot ({sample})"
+        )
+    elif breach["metric"] == "scans_not_run":
+        return (
+            f"  FAIL scans not run: the findings scans were {breach['reason']}, and the gate needs "
+            f"the scans its {' and '.join(breach['paths'])} threshold reads; re-run /assess with "
+            "--all-scans, or without --profile / --levels"
         )
     elif breach["metric"] == "gates_not_compared":
         return (
@@ -349,13 +407,16 @@ def format_verdict(verdict: GateVerdict) -> str:
     failing_skip = any(b["metric"] == "gates_not_compared" for b in verdict["threshold_breaches"])
     if skipped and not failing_skip:
         lines.append(f"  warn gates not compared: {skipped}")
+    not_run = verdict.get("findings_not_run")
+    if not_run and not any(b["metric"] == "scans_not_run" for b in verdict["threshold_breaches"]):
+        lines.append(f"  warn findings not checked: {not_run}; run /assess with --all-scans to check them")
     if verdict.get("no_baseline"):
         lines.append(
             "  no baseline yet: commit .assess/prior-level.json from an /assess run "
             "so the next run can compare gates and Steps"
         )
     if (not verdict["failures"] and not verdict["threshold_breaches"]
-            and not verdict["warnings"] and not lost and not unread and not skipped):
+            and not verdict["warnings"] and not lost and not unread and not skipped and not not_run):
         lines.append("  no findings fired - clean snapshot")
     disclosure = _format_exclusion_disclosure(verdict.get("excluded_by_config"))
     if disclosure:

@@ -1,0 +1,21 @@
+# Check manifest fragment: the scan_plan_stamp collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.scan_plan_stamp"
+kind = "collector"
+title = "Scan plan"
+summary = "The scans a --profile or --levels run ran and the ones it left out, so a narrowed run is never read as a full one. Absent from a full run."
+issues = [1268]
+callable = "lib.run_setup:scan_plan_stamp"
+publishes = ["scan_plan"]
+reads = ["plan"]
+stage = "setup"
+spread = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+  [entries.privacy]
+  "scan_plan.model" = "drop"
+  "scan_plan.ran" = "token"
+  "scan_plan.not_run" = "token"

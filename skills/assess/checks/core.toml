@@ -40,6 +40,7 @@ fragments = [
   "accretion_by_file",
   "hot_test_index",
   "run_header",
+  "scan_plan_stamp",
   "working_notes",
   "doc_graph",
   "doc_staleness",

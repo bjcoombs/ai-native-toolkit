@@ -48,6 +48,7 @@ from typing import Any
 
 from lib.run_context_types import FindingPaths, FindingsSnapshot, MethodChange, PathMove
 from lib.run_scope import assess_dir_for
+from lib.scan_plan import not_run_text
 
 FINDINGS_SNAPSHOT_FILE = "findings.json"
 
@@ -260,7 +261,8 @@ def method_change(ctx: dict[str, Any]) -> MethodChange | None:
     """The finding moves a method-version change explains, or ``None``.
 
     ``None`` when there is no prior snapshot (a first run, or the snapshot was
-    never committed) or when the versions match. Otherwise every
+    never committed), when the versions match, or when a ``--profile`` scan plan left the
+    findings out (#1268), so no committed finding reads as cleared. Otherwise every
     ``(finding, path)`` present now and not in the snapshot is ``appeared``, and
     every one in the snapshot and gone now is ``cleared``; both are sorted by
     finding, then path. ``downgrade`` is set when this run's method version
@@ -271,6 +273,8 @@ def method_change(ctx: dict[str, Any]) -> MethodChange | None:
     current_version = ctx.get("assess_method_version")
     if not isinstance(prior, dict) or not isinstance(current_version, int):
         return None
+    if not_run_text(ctx.get("derived_findings")) is not None:
+        return None  # a --profile scan plan left the findings out (#1268): nothing moved, nothing known
     prior_version = prior.get("assess_method_version")
     if not isinstance(prior_version, int) or prior_version == current_version:
         return None

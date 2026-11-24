@@ -15,11 +15,21 @@ list (issue #556). Its other readers see every scored file too: `candidate_dead_
 (through `understanding_analysis._extract_file_ccn`). Adding `files` moved `STATS_SCHEMA_VERSION` to 6, which disarms the
 cross-run diff once (`diff_reliability.py`). Stdlib only. Tests:
 `tests/test_stats_rows.py`.
+
+`code_band` is the same three top-10 lists ranked over code files alone: the files a
+per-function backend scored (`CodeBand`: the band's `population` and its `paths`). The
+full lists rank every scored file, so installing scc, which adds Markdown and data files,
+moved code files out of them and cleared `self_referential_tests` on code scc never reads
+(issue #1234). A lizard file's row does not depend on which other files were scored, so the
+code band of a commit is the same with and without scc unless the churn window widens.
+`code_band_paths` reads it back for `keyhole_signals._self_referential_test_paths`, None for
+a sidecar that predates it.
 """
 
 from __future__ import annotations
 
-from typing import cast
+from collections.abc import Mapping, Set
+from typing import Any, TypedDict, cast
 
 from lib.run_context_types import FileCcnRow, HotspotRow, ScoredHotspotRow
 
@@ -58,3 +68,31 @@ def file_ccn_rows(enriched: list[ScoredHotspotRow]) -> list[FileCcnRow]:
     """
     return [{"path": r["path"], "ccn": r["ccn"]}
             for r in sorted(enriched, key=lambda r: r["path"])]
+
+
+class CodeBand(TypedDict):
+    """``code_band``: the top-list paths ranked over code files alone."""
+
+    population: int
+    paths: list[str]
+
+
+def code_band(enriched: list[ScoredHotspotRow], code_paths: Set[str]) -> CodeBand:
+    """The union of ``top_lists`` over the rows whose path is in ``code_paths``.
+
+    ``population`` counts those rows, so a reader sees how many files the band
+    was ranked over; ``paths`` is sorted.
+    """
+    rows = [r for r in enriched if r["path"] in code_paths]
+    tops = top_lists(rows).values()
+    return {"population": len(rows),
+            "paths": sorted({r["path"] for rows_ in tops for r in rows_})}
+
+
+def code_band_paths(stats: Mapping[str, Any]) -> list[str] | None:
+    """``code_band.paths`` from a stats sidecar, or None when it has none."""
+    band = stats.get("code_band")
+    paths = band.get("paths") if isinstance(band, Mapping) else None
+    if not isinstance(paths, list):
+        return None
+    return sorted(p for p in paths if isinstance(p, str) and p)

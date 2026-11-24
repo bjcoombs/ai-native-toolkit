@@ -872,8 +872,8 @@
               "counts": false
             },
             {
-              "key": "layer-8-agent-ops.2:agent_ops.summary.routines_present",
-              "signal": "agent_ops.summary.routines_present",
+              "key": "layer-8-agent-ops.2:agent_ops.summary.agent_work_present",
+              "signal": "agent_ops.summary.agent_work_present",
               "producer": {
                 "scan": "agent_ops",
                 "collector": "core.agent_ops"
@@ -881,13 +881,13 @@
               "op": "eq",
               "value": true,
               "eq_signal": null,
-              "text": "Agent routines are committed: is true",
-              "title": "Agent routines are committed",
-              "fix": "Commit the routines agents run on a schedule or trigger.",
+              "text": "Agent routines or event-triggered agents are committed: is true",
+              "title": "Agent routines or event-triggered agents are committed",
+              "fix": "Commit the agent work you run on a schedule or trigger. That can be a scheduled or issue workflow that runs an agent, or a file under .claude/routines/.",
               "why": "Committed routines define the agent work the repository runs on a schedule or trigger, so it runs the same way each time and is reviewed like code.",
               "why_source": "",
-              "input_class": "config_text",
-              "grade": "config_only",
+              "input_class": "head_text",
+              "grade": "declared",
               "counts": false
             }
           ]
@@ -1779,7 +1779,7 @@
     {
       "name": "agent_ops",
       "title": "Agent-operations guardrails",
-      "summary": "Committed permission allowlists, hooks, sandbox rules and routine definitions.",
+      "summary": "Committed permission allowlists, hooks, sandbox rules and routines. A routine is a routine file, or a workflow that runs an agent on a schedule or an issue or pull request event.",
       "collector": "core.agent_ops",
       "reads": [
         "repo_root",
@@ -1791,10 +1791,15 @@
       "privacy": {
         "written": true,
         "strings_kept": {
+          "agent_ops.agent_workflows.path": "path",
+          "agent_ops.agent_workflows.signs": "token",
+          "agent_ops.agent_workflows.triggers": "token",
+          "agent_ops.agent_workflows.via": "path",
           "agent_ops.managed.reason": "token",
           "agent_ops.managed.sources.kind": "token",
           "agent_ops.managed.state": "token",
           "agent_ops.settings.default_mode": "token",
+          "agent_ops.summary.agent_work_present_reason": "token",
           "agent_ops.summary.permissions_encoded_reason": "token",
           "agent_ops.summary.permissions_source": "token"
         }
@@ -1806,11 +1811,17 @@
         "conditions": [
           "layer-8-agent-ops.1:agent_ops.summary.permissions_encoded",
           "layer-8-agent-ops.2:agent_ops.summary.hooks_present",
-          "layer-8-agent-ops.2:agent_ops.summary.routines_present"
+          "layer-8-agent-ops.2:agent_ops.summary.agent_work_present"
         ],
         "findings": []
       },
-      "unknown_reasons": [],
+      "unknown_reasons": [
+        {
+          "code": "agent_workflows_unread",
+          "means": "No committed routine or agent workflow was found. But a scheduled or event-triggered workflow calls a reusable workflow from another repository, and its path names an agent.",
+          "next_step": "Nothing to change: this reads as not measured until that workflow can be read."
+        }
+      ],
       "evidence": [
         {
           "signal": "agent_ops.summary.permissions_encoded",
@@ -1823,13 +1834,14 @@
           "grade": "config_only"
         },
         {
-          "signal": "agent_ops.summary.routines_present",
-          "input_class": "config_text",
-          "grade": "config_only"
+          "signal": "agent_ops.summary.agent_work_present",
+          "input_class": "head_text",
+          "grade": "declared"
         }
       ],
       "grades": [
-        "config_only"
+        "config_only",
+        "declared"
       ],
       "why": "Committed allowlists, hooks, sandbox rules and routines make an agent's limits and repeated work the same on every clone, and reviewable like code.",
       "why_source": ""
@@ -5045,6 +5057,18 @@
       "private": false
     },
     {
+      "name": "scan_plan_stamp",
+      "title": "Scan plan",
+      "publishes": [
+        "scan_plan"
+      ],
+      "reads": [
+        "plan"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "working_notes",
       "title": "Working notes",
       "publishes": [],
@@ -6368,13 +6392,13 @@
       "null_means": ""
     },
     {
-      "path": "agent_ops.summary.routines_present",
-      "title": "Agent routines are committed",
+      "path": "agent_ops.summary.agent_work_present",
+      "title": "Agent routines or event-triggered agents are committed",
       "type": "bool",
       "collector": "core.agent_ops",
-      "input_class": "config_text",
-      "grade": "config_only",
-      "null_means": ""
+      "input_class": "head_text",
+      "grade": "declared",
+      "null_means": "no routine or agent workflow was found. But a workflow calls an agent-named reusable workflow in another repository (agent_workflows_unread)"
     },
     {
       "path": "doc_staleness.summary.stale_pct",

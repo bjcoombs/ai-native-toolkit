@@ -64,4 +64,7 @@ writer read `.doc_graph` into model context, so both drop the key with
 block that does not. One reader sits outside that guard: `skills/assess/SKILL.md`
 tells the orchestrator to read `run-context.json` before writing the report,
 which takes the whole file, `link_parents` included. Link syntax and the link pass
-live in `doc_links.py`; the SVG's render-side helpers live in `doc_graph_layout.py`.
+live in `doc_links.py`, with the `missing_xrefs` scan: a filename several docs share
+(`SKILL.md`) names only the doc of that name in the naming doc's own directory (#1229).
+A release-note fragment directory (`<issue>.<kind>.md` files beside a `README.md`) is a
+working-notes tree of its unlinked fragments (#1227). The SVG's render-side helpers live in `doc_graph_layout.py`.

@@ -355,6 +355,7 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
         "non_interactive": True,
         "maturity_model": None,  # the headless runner reports no level (/fleet --levels scores the rows)
         "managed_settings": managed_settings,
+        "plan": None,  # the headless runner selects scans by name (--scans), never by plan
         "packs": (),  # no --pack on the headless runner yet: /fleet per pack is #1276
         "instruction_files": instruction_files,
         "scope": scope,

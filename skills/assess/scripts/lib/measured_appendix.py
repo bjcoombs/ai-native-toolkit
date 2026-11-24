@@ -8,7 +8,8 @@ headless runner accepts (``signals.known_scans()``):
   itself unavailable, the line says in how many repositories and gives the reason codes.
 - **Skipped**: the scan did not run in any repository, with the reason: only a full
   ``/assess`` run builds it (``not_registered``), it needs the network
-  (``network``, with or without a ``--platform`` remedy), it exists only on the platform
+  (``network``, with or without a ``--platform`` remedy), a ``--profile`` or ``--levels``
+  run's scan plan left it out ("not run under profile citizen", #1268), it exists only on the platform
   (``signals.PLATFORM_ONLY_SCANS``), or a ``--scans`` selection left it out.
 
 The section opens with an ``In place:`` line (``vocabulary.IN_PLACE``, #743) and names the
@@ -20,7 +21,8 @@ their codes (``counts_only.reason_code``), so counts-only and full rows read ali
 `{block: block}` mapping per repository (a fleet row's `scans`, or a run-context); for each
 known scan, **Ran** when its block exists without a `not_registered` or `network` reason in at
 least one repository (with "not measured in k of n" and the reason codes where the block is
-unavailable), else **Skipped** with why (full `/assess` only, needs the network with or without
+unavailable), else **Skipped** with why (not run under a `--profile` / `--levels` scan plan, #1268;
+full `/assess` only, needs the network with or without
 a `--platform` remedy, platform only, or `absent`: "not selected by --scans" for a fleet,
 `assess_report.py` instead passes `absent_code="no_block"`: a full run runs every scan, so a
 missing block, such as `structure_drift` with no ownership map, is listed under Ran as not
@@ -36,16 +38,20 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 from lib.counts_only.content_free import reason_code
+from lib.scan_plan import NOT_RUN_CODE, not_run_text
 from lib.signals import PLATFORM_ONLY_SCANS, PLATFORM_SCANS, known_scans
 from lib.vocabulary import IN_PLACE
 
 HEADING = "## How this was measured"
 CATALOG_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md"
 # Reason codes meaning the scan did not run at all (signals.UNREGISTERED_REASON, NETWORK_REASON).
-SKIP_CODES = frozenset({"not_registered", "network"})
+# A --profile or --levels run's plan left the scan out (lib/scan_plan.py, #1268): skipped too.
+SKIP_CODES = frozenset({"not_registered", "network", NOT_RUN_CODE})
 
 
-def _skip_reason(name: str, codes: set[str], absent: str) -> str:
+def _skip_reason(name: str, codes: set[str], absent: str, not_run: str | None = None) -> str:
+    if not_run is not None:
+        return not_run
     if "network" in codes:
         if name in PLATFORM_SCANS:
             return "it reads GitHub or GitLab; run with --platform to measure it"
@@ -105,7 +111,8 @@ def measured_section(documents: Sequence[Mapping[str, object]],
         run = [s for s in states if s not in SKIP_CODES and s != "absent"]
         if not run:
             codes = {s for s in states if s is not None}
-            skipped.append(f"- `{name}`: {_skip_reason(name, codes, absent)}.")
+            not_run = next((t for doc in documents if (t := not_run_text(doc.get(name)))), None)
+            skipped.append(f"- `{name}`: {_skip_reason(name, codes, absent, not_run)}.")
             continue
         unmeasured = sorted({s for s in run if s is not None})
         missing = sum(1 for s in run if s is not None)

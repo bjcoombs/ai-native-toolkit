@@ -85,6 +85,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 - `prior_tool_versions`
 - `promissory_markers.families`
 - `stats_summary.fn_ccn.backend_by_language`
+- `stats_summary.fn_ccn.file_level_by_language`
 - `tool_versions`
 - `unit_readings.units.blocks`
 - `unit_readings.units.blocks.promissory_markers.families`
@@ -160,6 +161,14 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `prior_level.models.*.baseline.run_id` | token |
 | `prior_level.models.*.baseline.head_sha` | token |
 | `prior_level.models.*.baseline.held_gates` | token |
+
+## scan_plan_stamp
+
+| Field | Kept as |
+|---|---|
+| `scan_plan.model` | dropped |
+| `scan_plan.ran` | token |
+| `scan_plan.not_run` | token |
 
 ## doc_graph
 
@@ -348,6 +357,11 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `agent_ops.managed.sources.kind` | token |
 | `agent_ops.summary.permissions_source` | token |
 | `agent_ops.summary.permissions_encoded_reason` | token |
+| `agent_ops.summary.agent_work_present_reason` | token |
+| `agent_ops.agent_workflows.path` | path (hashed when hashing is on) |
+| `agent_ops.agent_workflows.triggers` | token |
+| `agent_ops.agent_workflows.signs` | token |
+| `agent_ops.agent_workflows.via` | path (hashed when hashing is on) |
 
 ## config_drift
 
