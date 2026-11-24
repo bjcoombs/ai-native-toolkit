@@ -157,7 +157,25 @@ def test_a_cycle_with_a_lint_step_still_credits_the_step(tmp_path: Path) -> None
 
 
 def test_a_deep_chain_stops_at_the_depth_limit() -> None:
+    # The workflow calls ./a0; ./a1 .. ./a8 are the eight nested levels followed, ./a9 is not.
     chain = {f"a{n}/action.yml": _composite(f"    - uses: ./a{n + 1}\n") for n in range(20)}
     text = "jobs:\n  t:\n    steps:\n      - uses: ./a0\n"
     got = inline_composites(text, chain.get)
-    assert len(got.unknown) == 1
+    lines = got.text.splitlines()
+    assert [lines[i].strip() for i in got.unknown] == ["- uses: ./a9"]
+
+
+def test_an_eight_level_chain_reaching_ruff_is_credited(tmp_path: Path) -> None:
+    chain = {f".github/actions/a{n}/action.yml": _composite(f"    - uses: ./.github/actions/a{n + 1}\n")
+             for n in range(8)} | {".github/actions/a8/action.yml": _composite(_RUFF)}
+    assert _lint(tmp_path, _wf("      - uses: ./.github/actions/a0\n") | chain) == _LINT
+
+
+def test_a_wide_diamond_stops_at_the_read_budget() -> None:
+    # Each action calls the next ten times: without a budget this is 10**8 copies.
+    calls = "".join("    - uses: ./a{n}\n" for _ in range(10))
+    chain = {f"a{n}/action.yml": _composite(calls.format(n=n + 1)) for n in range(8)}
+    chain["a8/action.yml"] = _composite(_RUFF)
+    got = inline_composites("jobs:\n  t:\n    steps:\n      - uses: ./a0\n", chain.get)
+    assert got.unknown   # the reads past the budget stay unknown, never credited
+    assert len(got.text.splitlines()) < 2_000

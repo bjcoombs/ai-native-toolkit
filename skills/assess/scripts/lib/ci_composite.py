@@ -19,11 +19,13 @@ steps of the same job:
   workflow: ``args: --version`` is install only, an unfilled input is unsure (null). Any other
   remote action is dropped: its code is not read, so it is never credited, as at the top level.
 - **Nested local actions (#1194).** A step that ``uses:`` another local action is followed the
-  same way, its copies placed at the calling step's indent, up to ``_MAX_DEPTH`` levels. Its
+  same way, its copies placed at the calling step's indent, up to ``_MAX_DEPTH`` (8) levels
+  below the action the workflow calls and ``_MAX_READS`` (64) nested reads per calling step,
+  so a diamond of actions each calling the next many times cannot blow up the text. Its
   ``with:`` values (filled from the outer action's inputs first) are the inner action's
   inputs, and its own ``if:`` / ``continue-on-error`` join the caller's on every inner copy.
   One that cannot be read (missing, not a composite, an action already on the path, or past
-  the depth limit) is copied with its ``uses:`` line in ``unknown``.
+  the depth or read limit) is copied with its ``uses:`` line in ``unknown``.
 - **Masking and triggers.** Each copy is the whole step item, re-indented, so its own
   ``shell:`` (pipefail, errexit) and ``continue-on-error`` apply. The calling step's
   ``continue-on-error`` and ``if:`` lines are added to every copy at the copy's own key
@@ -61,7 +63,15 @@ from lib.ci_masking import IndentTree, parse_lines
 from lib.ci_matrix import CMD_EXPR, Expanded, scalar
 
 _CALLER_KEYS = frozenset({"continue-on-error", "if"})
-_MAX_DEPTH = 8   # nested local actions followed below the one a workflow calls
+_MAX_DEPTH = 8   # nested levels followed below the action a workflow calls
+_MAX_READS = 64  # nested actions read for one calling step (bounds a diamond's fan-out)
+
+
+class _Budget:
+    """The nested reads one calling step has left."""
+
+    def __init__(self) -> None:
+        self.reads = _MAX_READS
 _INPUT_REF = re.compile(r"\$\{\{\s*inputs\.([\w-]+)\s*\}\}")
 _INPUT_ONLY = re.compile(r"^\s*inputs\.([\w-]+)\s*$")
 _FORWARD = re.compile(r"""^["']?\$\{\{\s*inputs\.([\w-]+)\s*\}\}["']?$""")
@@ -175,24 +185,26 @@ def _caller_keys(tree: IndentTree, lines: list[str], item: list[int]) -> list[st
 
 
 def _nested(step: list[str], read_local: ReadLocal, indent: int, caller: list[str],
-            path: tuple[str, ...]) -> list[tuple[str, bool]] | None:
+            path: tuple[str, ...], budget: _Budget) -> list[tuple[str, bool]] | None:
     """The copies of a nested local action ``step`` (its lines already shifted and filled),
-    or None when it cannot be read: unresolvable, not composite, a cycle or too deep."""
+    or None when it cannot be read: unresolvable, not composite, a cycle, too deep or past
+    the read budget. ``path`` holds the action the workflow calls and each one below it."""
     tree = IndentTree(parse_lines(step))
     uses = next((i for i, line in enumerate(tree.lines)
                  if line.structural and line.key == "uses" and i in tree.mapping_of), None)
-    if uses is None or len(path) >= _MAX_DEPTH:
+    if uses is None or len(path) > _MAX_DEPTH or budget.reads <= 0:
         return None
     found = _read_action(tree.lines[uses].value.strip("\"'"), read_local)
     if found is None or found[0] in path:
         return None
+    budget.reads -= 1
     item = tree.siblings[tree.mapping_of[uses]]
     return _copies(found[1], _with_values(tree, item), read_local, indent,
-                   caller + _caller_keys(tree, step, item), (*path, found[0]))
+                   caller + _caller_keys(tree, step, item), (*path, found[0]), budget)
 
 
 def _copies(action: str, passed: dict[str, str | None], read_local: ReadLocal, indent: int,
-            caller: list[str], path: tuple[str, ...]) -> list[tuple[str, bool]] | None:
+            caller: list[str], path: tuple[str, ...], budget: _Budget) -> list[tuple[str, bool]] | None:
     """``(line, unknown)`` copies of a composite action's steps at dash ``indent``, or None
     when ``action`` is not a composite."""
     read = _run_steps(action)
@@ -205,7 +217,7 @@ def _copies(action: str, passed: dict[str, str | None], read_local: ReadLocal, i
     for step in steps:
         shifted = [_shift(raw, indent - step.dash) for raw in step.lines]
         if step.kind == "local":
-            inner = _nested([_fill(line, given) for line in shifted], read_local, indent, caller, path)
+            inner = _nested([_fill(line, given) for line in shifted], read_local, indent, caller, path, budget)
             if inner is not None:
                 copied += inner   # each inner copy carries the caller keys already
                 continue
@@ -238,7 +250,7 @@ def inline_composites(text: str, read_local: ReadLocal) -> Expanded:
             continue
         item = tree.siblings[tree.mapping_of[i]]
         copied = _copies(found[1], _with_values(tree, item), read_local, tree.lines[item[0]].indent,
-                         _caller_keys(tree, lines, item), (found[0],))
+                         _caller_keys(tree, lines, item), (found[0],), _Budget())
         if copied:
             after.setdefault(max(tree.subtree(k).stop for k in item) - 1, []).extend(copied)
     out: list[str] = []
