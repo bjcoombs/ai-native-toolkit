@@ -13,7 +13,8 @@ so its Start here and Done when read the ``actions.json`` the previous run left.
    (``summary_lines``, ``call_to_action``, ``summary_markdown``; ``refreshed``);
 4. replaces the card in ``<assess_dir>/assess-report.md`` (``refreshed_report``): the whole
    pasted ``summary_markdown`` when it is there verbatim, else the old Start here and Done when
-   lines where each stands as a paragraph of its own.
+   lines where each stands as a paragraph of its own, only when both are there: a report with
+   one of the two is left unchanged and warned about, never half swapped.
 
 It returns a warning for the caller to print when the report is missing or does not hold the
 run context's card, on every call (a second finalize after a failed match still warns), and
@@ -69,12 +70,20 @@ def _paragraph_swap(text: str, old: str, new: str) -> str | None:
 
 def refreshed_report(text: str, old: Mapping[str, Any], new: Mapping[str, Any]) -> str | None:
     """``text`` with the ``old`` card replaced by the ``new`` one; None when ``text`` holds
-    neither the old ``summary_markdown`` nor its Start here and Done when lines."""
+    neither the old ``summary_markdown`` nor both its Start here and Done when lines (one
+    without the other is left unchanged, never half swapped)."""
     before, after = old.get("summary_markdown"), new.get("summary_markdown")
     if isinstance(before, str) and isinstance(after, str) and before and before in text:
         return text.replace(before, after, 1)
-    pairs = [(o, n) for o, n in zip(old.get("summary_lines") or [], new.get("summary_lines") or [])
-             if isinstance(o, str) and o.startswith((_START, _DONE)) and o != n]
+    both = [(o, n) for o, n in zip(old.get("summary_lines") or [], new.get("summary_lines") or [])
+            if isinstance(o, str) and o.startswith((_START, _DONE))]
+    present = text.split("\n")
+    # Swap only a whole pair: a Start here from the new action beside a Done when from the old
+    # one would tell the reader to do one thing and stop at another.
+    if not any(o.startswith(_START) for o, _ in both) or not any(o.startswith(_DONE) for o, _ in both) \
+            or any(o not in present for o, _ in both):
+        return None
+    pairs = [(o, n) for o, n in both if o != n]
     for o, n in pairs:
         swapped = _paragraph_swap(text, o, n)
         if swapped is None:

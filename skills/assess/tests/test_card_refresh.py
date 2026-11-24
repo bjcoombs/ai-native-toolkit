@@ -160,3 +160,16 @@ def test_an_unmatched_card_warns_on_every_finalize_and_a_missing_report_warns(tm
     (assess_dir / "assess-report.md").unlink()
     warning = refresh_card(assess_dir)
     assert warning is not None and "not found" in warning
+
+
+def test_a_card_with_start_here_but_no_done_when_is_left_unchanged_and_warned(tmp_path: Path) -> None:
+    """#1288 review: a half-swapped card would pair the new Start here with the old Done when."""
+    lines = _block()["summary_lines"]
+    half = "\n\n".join(["**Moved lead**", *(line for line in lines[1:] if not line.startswith("Done when"))])
+    assess_dir, _ = _run(tmp_path, half)
+    before = (assess_dir / "assess-report.md").read_text(encoding="utf-8")
+    warning = refresh_card(assess_dir)
+    assert warning is not None and "headline.summary_markdown" in warning
+    assert (assess_dir / "assess-report.md").read_text(encoding="utf-8") == before
+    assert "Start here: `old step`" in before and "new step" not in before
+    assert refreshed_report(before, _block(), _block({"start": "`x`", "done_when": "y"})) is None
