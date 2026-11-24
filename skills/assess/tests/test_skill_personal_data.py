@@ -53,6 +53,10 @@ def _state(block: Any) -> tuple[str, str | None]:
     ("Pass --host=10.20." + "30.40 here.", ["ip_address"]),
     ("postgres://app@10.20." + "30.40:5432/db", ["ip_address"]),
     ("Run ssh deploy@" + "build-01 to deploy.", ["ssh_or_host"]),
+    ('password: "Straw' + 'berry42"', ["credential"]),  # a literal that starts with a schema word
+    ("password: nosfer" + "atu77", ["credential"]),
+    ("token: object" + "9x8y", ["credential"]),
+    ("token: abc" + "[1]", ["credential"]),
     ("token = " + "ghp" + "_abc123def456", ["credential"]),
     ("token: ${{ secrets.X }} and password = " + "hunter" + "2abc", ["credential"]),  # one literal is enough
     ("AKIA" + "ABCDEFGHIJKLMNOP is the key.", ["cloud_key"]),
@@ -84,6 +88,7 @@ def test_each_kind_is_detected(text: str, kinds: list[str]) -> None:
     "It saves +1000000000 tokens.",
     "Run ssh git@github.com to test auth.",
     "Run ssh deploy@example.com to try it.",
+    "Log in as root@example.com first.",
     "def login(token: str) -> None: ...",
     "api_key: Optional[str] = None",
     "secret: true\npassword: required\ntoken: string",

@@ -101,7 +101,7 @@ _DOC_RANGE = re.compile(r"^(?:192\.0\.2|198\.51\.100|203\.0\.113)\.")
 # An ``ssh git@host`` test of a Git host's auth is no login detail, nor is a login on a reserved
 # domain (``deploy@example.com``, as for email); any other user and host is.
 _SSH = re.compile(r"\bssh\s+([A-Za-z0-9._-]+)@([A-Za-z0-9._-]+)")
-_ROOT_LOGIN = re.compile(r"\broot@[A-Za-z0-9._-]+")
+_ROOT_LOGIN = re.compile(r"\broot@([A-Za-z0-9._-]+)")
 _VERSION_BEFORE = re.compile(r"(?:(?:\bv|\bversion|\brelease|\bbuild)\s*[:=]?|[=~!<>]=)\s*$", re.IGNORECASE)
 # A credential assignment, as the grader reads it, re-checked here: a value that only refers to a
 # secret held elsewhere (``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X``, ``os.environ[...]``) is
@@ -114,8 +114,9 @@ _REFERENCE = re.compile(r"^(?:\$\{?\{?|\$\w|%\w+%|\{\{|<|process\.env\b|os\.envi
 # A type annotation or schema field, not a value: ``token: str``, ``api_key: Optional[str] = None``,
 # ``secret: true``, ``password: required``.
 _SCHEMA_VALUE = re.compile(
-    r"^(?:str|string|bytes|int|integer|number|float|bool|boolean|true|false|yes|no|required|optional|"
-    r"Optional\[|Union\[|SecretStr|list|dict|object|any|unknown|\w+\[)", re.IGNORECASE)
+    r"^(?:(?:str|string|bytes|int|integer|number|float|bool|boolean|true|false|yes|no|required|optional|"
+    r"SecretStr|list|dict|object|any|unknown)(?![\w-])|"
+    r"(?:Optional|Union|List|Dict|Annotated|Literal)\[)", re.IGNORECASE)
 # A date inside an international-number match: a timezone offset then a date, not a phone number.
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 # A file name, not a mail domain: a retina asset (``logo@2x.png``) or any name ending in a file
@@ -186,7 +187,8 @@ def kinds_in(text: str) -> list[str]:
            and m.group(1) != "127" and m.group(0) != "0.0.0.0" and not _DOC_RANGE.match(m.group(0))
            and m.group(1) != "255" and not text.startswith("/", m.end())):  # a netmask or a CIDR range
         found.add("ip_address")
-    if "ssh_or_host" in found and not _ROOT_LOGIN.search(text) \
+    if "ssh_or_host" in found and not any(not _RESERVED_DOMAIN.search(m.group(1).lower())
+                                          for m in _ROOT_LOGIN.finditer(text)) \
             and all(m.group(1).lower() == "git" or _RESERVED_DOMAIN.search(m.group(2).lower())
                     for m in _SSH.finditer(text)):
         found.discard("ssh_or_host")
