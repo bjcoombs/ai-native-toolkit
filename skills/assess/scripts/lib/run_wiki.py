@@ -5,7 +5,8 @@ placeholders the LLM fills later through ``assess_finalize``.
 
 Writes this run's wiki through `wiki_writer`: `write_run_wiki` writes a page per current
 top hotspot (status from the stats diff, first-flagged date, the `Has test file` row
-from `_has_sibling_test`, marker debt and accretion in the briefing), retires orphan and
+from `_has_sibling_test`, marker debt and accretion in the briefing; "Stale promissory
+markers: not run under profile <name>" when a scan plan left that scan out, #1268), retires orphan and
 excluded-before-finalize pages, adds graduated hotspots to `index.md` with their current
 metrics, saves `first-flagged.json`, replaces a superseded unfinalized log entry and
 appends this run's (opening with the `since_last_run` bullets when given, #1083),
@@ -68,9 +69,12 @@ def _has_sibling_test(
 
 
 def _marker_debt_sentence(debt: dict[str, Any] | None) -> str:
-    """One briefing sentence accusing a hotspot of its own stale promises."""
+    """One briefing sentence accusing a hotspot of its own stale promises, or saying the scan
+    did not run (``{"not_run": "not run under profile citizen"}``, #1268): never none."""
     if not debt:
         return ""
+    if "not_run" in debt:
+        return f"Stale promissory markers: {debt['not_run']}. "
     families = ", ".join(debt["families"])
     return (
         f"Carries {debt['count']} stale promissory marker(s) "

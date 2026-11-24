@@ -18,7 +18,8 @@ block's bullets, #1083), writes `badge.json` from the `headline` block
 `prior-level.json` into `prior_level` (`lib/prior_level.py`, #940) before drawing the diagrams and then
 rewrites it from the `level` block, reads the previous
 `findings.json` into `prior_findings_snapshot` and rewrites it
-(`findings_snapshot`; kept as it is when a `--profile` scan plan left the findings out, #1268), and then writes `run-context.json`. Tests: `tests/test_run_setup.py`.
+(`findings_snapshot`; kept as it is when a `--profile` scan plan left the findings out, #1268; the
+hotspot pages then say the promissory-marker scan did not run), and then writes `run-context.json`. Tests: `tests/test_run_setup.py`.
 """
 from __future__ import annotations
 
@@ -46,6 +47,16 @@ def _since_markdown(ctx: Mapping[str, Any]) -> str:
     return ""
 
 
+def _marker_debt(promissory: Mapping[str, Any], current: Mapping[str, Any]) -> dict[str, Any]:
+    """Each hotspot's stale promissory markers; when a scan plan left the scan out (#1268), a
+    ``not_run`` note per current hotspot, so its page never reads as carrying none."""
+    not_run = not_run_text(promissory)
+    if not_run is not None:
+        return {h["path"]: {"not_run": not_run} for h in current.get("top_hotspots", [])
+                if isinstance(h, Mapping) and "path" in h}
+    return dict(promissory.get("stale_by_file", {})) if promissory.get("available") else {}
+
+
 def publish_run(ctx: dict[str, Any], state: Mapping[str, Any]) -> None:
     """Write the wiki, badge and run-context.json for a finished scan.
 
@@ -61,9 +72,7 @@ def publish_run(ctx: dict[str, Any], state: Mapping[str, Any]) -> None:
         state["current"], assess_dir=assess_dir, repo_root=state["repo_root"],
         run_date=state["run_date"], run_id=state["run_id"], diff=state["diff"],
         first_flagged_map=state["first_flagged"], superseded=state["superseded"],
-        marker_debt_by_file=(
-            promissory.get("stale_by_file", {}) if promissory.get("available") else {}
-        ),
+        marker_debt_by_file=_marker_debt(promissory, state["current"]),
         accretion_by_file=state["accretion_by_file"],
         excluded_unfinalized=provisional_and_excluded[1],
         excluded_as_generated=state["excluded_as_generated"], scope_rel=scope_rel,

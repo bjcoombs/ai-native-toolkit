@@ -30,7 +30,9 @@ snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
   committed baseline that change came from a ``run-context.json`` left on disk, so it is a warn
   line beside "no baseline yet", as a lost gate read from it is. A profile run compares with its
   own committed record (#1184) and fails or passes on its own gates; with no record yet it reads
-  "no baseline yet", as a default first run does. Without the opt-in each is a warn line. Printed output is ASCII apart from the
+  "no baseline yet", as a default first run does. Without the opt-in each is a warn line. A
+  ``--profile`` run whose scan plan left the findings out (``lib/scan_plan.py``, #1268) prints
+  "warn findings not checked: not run under profile <name>", never "clean snapshot". Printed output is ASCII apart from the
   headline's own text: a model pair reads ``->``, which a cp1252 console can encode.
 
 A third, explanatory part: when the committed ``.assess/findings.json`` (read
@@ -77,6 +79,7 @@ from lib.gate_loss import (held_at_baseline, model_change_reason, no_baseline, n
                            step_change)
 from lib.reviewed_findings import open_findings
 from lib.run_context_types import DerivedFinding, JsonDict, MethodChange
+from lib.scan_plan import not_run_text
 
 
 class FindingHit(TypedDict):
@@ -112,6 +115,9 @@ class GateVerdict(TypedDict):
     gates_not_compared: NotRequired[str]
     # fail_on_gate_loss is on but there is no committed baseline to compare with.
     no_baseline: NotRequired[bool]
+    # A --profile or --levels run left the findings out (#1268): what it says in their place,
+    # "not run under profile citizen". A warn line; the run never reads as clean.
+    findings_not_run: NotRequired[str]
 
 
 def _findings_by_name(ctx: JsonDict) -> dict[str, JsonDict]:
@@ -288,6 +294,9 @@ def evaluate(ctx: JsonDict, gate: GateConfig) -> GateVerdict:
     reason = not_compared(ctx)
     if reason is not None:
         verdict["gates_not_compared"] = reason
+    not_run = not_run_text(ctx.get("derived_findings"))
+    if not_run is not None:
+        verdict["findings_not_run"] = not_run
     return verdict
 
 
@@ -349,13 +358,16 @@ def format_verdict(verdict: GateVerdict) -> str:
     failing_skip = any(b["metric"] == "gates_not_compared" for b in verdict["threshold_breaches"])
     if skipped and not failing_skip:
         lines.append(f"  warn gates not compared: {skipped}")
+    not_run = verdict.get("findings_not_run")
+    if not_run:
+        lines.append(f"  warn findings not checked: {not_run}; run /assess with --all-scans to check them")
     if verdict.get("no_baseline"):
         lines.append(
             "  no baseline yet: commit .assess/prior-level.json from an /assess run "
             "so the next run can compare gates and Steps"
         )
     if (not verdict["failures"] and not verdict["threshold_breaches"]
-            and not verdict["warnings"] and not lost and not unread and not skipped):
+            and not verdict["warnings"] and not lost and not unread and not skipped and not not_run):
         lines.append("  no findings fired - clean snapshot")
     disclosure = _format_exclusion_disclosure(verdict.get("excluded_by_config"))
     if disclosure:

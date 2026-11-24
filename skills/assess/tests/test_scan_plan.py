@@ -197,3 +197,31 @@ def test_fleet_profile_runs_the_plan_and_stamps_it(tmp_path: Path) -> None:
     assert fleet_cli.main([str(root), "--profile", "citizen", "--all-scans", "--out", str(full),
                            "--no-history", "--no-diagrams", "--jobs", "1"]) == 0
     assert json.loads((full / "run.json").read_text(encoding="utf-8"))["scans"] is None
+
+
+# --- readers of a skipped block (review on #1279) ----------------------------------
+
+
+def test_the_gate_says_the_findings_were_not_checked_never_clean(ci2: Path) -> None:  # noqa: F811
+    from assess_gate import evaluate, format_verdict
+
+    ctx = _core(ci2, "--profile", "citizen")
+    verdict = evaluate(ctx, {"enabled": True, "fail_on": [], "warn_on": []})
+    out = format_verdict(verdict)
+    assert verdict["findings_not_run"] == "not run under profile citizen"
+    assert "warn findings not checked: not run under profile citizen; run /assess with --all-scans" in out
+    assert "clean snapshot" not in out
+    assert "findings_not_run" not in evaluate(_core(ci2, "--profile", "citizen", "--all-scans"),
+                                              {"enabled": True, "fail_on": [], "warn_on": []})
+
+
+def test_a_hotspot_page_says_the_marker_scan_did_not_run(ci2: Path) -> None:  # noqa: F811
+    stats = ci2 / ".assess" / "complexity-stats.json"
+    data = json.loads(stats.read_text(encoding="utf-8"))
+    data["top_hotspots"] = [{"path": "README.md", "loc": 3, "ccn": 1, "churn": 2, "score": 1.0}]
+    stats.write_text(json.dumps(data), encoding="utf-8")
+    _core(ci2, "--profile", "citizen")
+    pages = list((ci2 / ".assess" / "hotspots").glob("*.md"))
+    assert pages, "the fixture's hotspot gets a page"
+    text = pages[0].read_text(encoding="utf-8")
+    assert "Stale promissory markers: not run under profile citizen." in text
