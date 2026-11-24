@@ -8,9 +8,14 @@ The script computes no level, Step or achievement: it filters the bundle to the 
 words what it finds. Its parts:
 
 - **Data interface.** ``staticSource(bundle)`` returns ``{load, subscribeTargets}``; a page
-  that defines ``window.FleetViewSource`` before the script (the live artifact, #949) supplies
-  its own, and may add ``setTarget(view, unit, step)``. Target entry is drawn only when
-  ``setTarget`` is a function, so a static page has none.
+  that defines ``window.FleetViewSource`` before the script (the live artifact, #949,
+  ``lib/fleet/fleet_page_live.py``) supplies its own, and may add ``setTarget(view, unit, step)``,
+  ``canSetTarget()`` (a promise; the entry is drawn only when it resolves ``true``) and
+  ``history(docId)`` (a promise of ``[{run, step}]``, the unit's published runs). Target entry is
+  drawn only when ``setTarget`` is a function, ``canSetTarget`` says yes and the unit carries a
+  ``target_id``, so a static page has none. A target the source reports with ``pending: true``
+  (set on the page, not yet read by a run) is shown as set, with its progress to come; a
+  ``target_note`` in the bundle says why a page offers no entry.
 - **Sections.** ``SECTIONS`` lists the section renderers in page order: Since last run, Where
   this unit stands, Your target, Drill-down, Fleet pictures (the #705 design order). A front
   screen goes first in that list; nothing else moves.
@@ -18,7 +23,7 @@ words what it finds. Its parts:
   page opens on the ownership root without it.
 - **Order.** Units and repositories are listed by label, never by rank.
 
-``renderPage(bundle, state, targets, canSet)`` returns the HTML of the whole app and
+``renderPage(bundle, state, targets, canSet, extra)`` returns the HTML of the whole app and
 ``cellTitle(bundle, repo, cell)`` a heatmap cell's hover text, both pure, so a Node test
 (``tests/test_fleet_page.py``) runs them on the fixture without a browser.
 """
@@ -114,7 +119,14 @@ SCRIPT = r"""
     }
     return out;
   }
-  function stands(bundle, state) {
+  function historyLine(extra, docId) {
+    var h = extra && extra.history && docId ? extra.history[docId] : null;
+    if (!h || !h.length) { return ""; }
+    return "<p class=\"muted\">Published runs: " + h.map(function (e) {
+      return esc(e.run + ": " + (e.step === null || e.step === undefined ? "no measured Step" : "Step " + e.step));
+    }).join(" · ") + "</p>";
+  }
+  function stands(bundle, state, extra) {
     var u = unitOf(bundle, state.view, state.unit);
     var out = "<h2>Where this unit stands</h2>";
     if (u.lowest_step === null || u.lowest_step === undefined) {
@@ -135,12 +147,19 @@ SCRIPT = r"""
     out += "<p class=\"muted\">Practices met by truth tag: " + u.tags.map(function (c) {
       return esc(titles[c.tag] || c.tag) + " " + (c.measured ? esc(c.met + " of " + c.measured) : "not measured");
     }).join(" · ") + "</p>";
-    return out;
+    return out + historyLine(extra, u.doc_id);
   }
   function target(bundle, state, targets, canSet) {
-    var t = (targets || []).filter(function (x) { return x.view === state.view && x.unit === state.unit; })[0];
+    var mine = (targets || []).filter(function (x) { return x.view === state.view && x.unit === state.unit; });
+    var t = mine.filter(function (x) { return !x.pending; })[0];
+    var p = mine.filter(function (x) { return x.pending; })[0];
+    var u = unitOf(bundle, state.view, state.unit);
     var out = "<h2>Your target</h2>";
-    if (!t) {
+    if (p && (!t || t.step !== p.step)) {
+      out += "<p>A target of " + esc(stepName(bundle, p.step)) + " was set on this page. Its progress shows after "
+        + "the next run.</p>";
+    }
+    if (!t && !p) {
       out += "<p>No Step target is set for this unit.</p>";
     } else if (t.distance === 0) {
       out += "<p>Target " + esc(stepName(bundle, t.step)) + " is reached.</p>";
@@ -152,9 +171,10 @@ SCRIPT = r"""
         out += "<p>Gates not yet held:</p><ul>" + t.missing.map(gateLine).join("") + "</ul>";
       }
     }
-    if (canSet) {
+    if (bundle.target_note) { out += "<p class=\"muted\">" + esc(bundle.target_note) + "</p>"; }
+    if (canSet && u.target_id) {
       out += "<p><label>Set a Step target <select id=\"target-step\">" + bundle.steps.map(function (s) {
-        return "<option value=\"" + s.step + "\">" + esc(stepName(bundle, s.step)) + "</option>";
+        return s.step < 2 ? "" : "<option value=\"" + s.step + "\">" + esc(stepName(bundle, s.step)) + "</option>";
       }).join("") + "</select></label> <button data-act=\"set-target\">Set</button> "
         + "<button data-act=\"clear-target\">Clear</button></p>";
     }
@@ -246,17 +266,17 @@ SCRIPT = r"""
   }
   var SECTIONS = [
     function (b, s) { return since(b, s); },
-    function (b, s) { return stands(b, s); },
+    function (b, s, t, c, x) { return stands(b, s, x); },
     function (b, s, t, c) { return target(b, s, t, c); },
     function (b, s) { return drill(b, s); },
     function (b) { return pictures(b); }
   ];
-  function renderPage(bundle, state, targets, canSet) {
+  function renderPage(bundle, state, targets, canSet, extra) {
     var u = unitOf(bundle, state.view, state.unit);
     var head = "<h1>Fleet view</h1><p class=\"muted\">Run of " + esc(bundle.scan_date) + ". Every number here comes "
       + "from the run's own files; nothing is worked out in the page.</p><p>Showing <strong>" + esc(u.key)
       + "</strong> (" + esc(u.kind) + ") <button class=\"pin\" data-act=\"pin\">Open on this unit next time</button></p>";
-    return head + SECTIONS.map(function (f) { return f(bundle, state, targets, canSet); }).join("");
+    return head + SECTIONS.map(function (f) { return f(bundle, state, targets, canSet, extra); }).join("");
   }
   function readPin(bundle) {
     try {
@@ -276,9 +296,21 @@ SCRIPT = r"""
       var r = root(bundle, "ownership") || bundle.views[0].units[0];
       var state = readPin(bundle) || {view: "ownership", unit: r.key, repo: null};
       var targets = bundle.targets;
-      var canSet = typeof source.setTarget === "function";
-      function draw() { app.innerHTML = renderPage(bundle, state, targets, canSet); }
+      var canSet = false, extra = {history: {}};
+      function draw() {
+        app.innerHTML = renderPage(bundle, state, targets, canSet, extra);
+        var u = unitOf(bundle, state.view, state.unit);
+        if (source.history && u && u.doc_id && !(u.doc_id in extra.history)) {
+          extra.history[u.doc_id] = null;
+          source.history(u.doc_id).then(function (h) { extra.history[u.doc_id] = h; draw(); });
+        }
+      }
       source.subscribeTargets(function (t) { targets = t; draw(); });
+      if (typeof source.setTarget === "function") {
+        Promise.resolve(source.canSetTarget ? source.canSetTarget() : true).then(function (ok) {
+          canSet = ok === true; draw();
+        });
+      }
       app.addEventListener("click", function (ev) {
         var el = ev.target.closest("button");
         if (!el) { return; }

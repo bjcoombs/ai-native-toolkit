@@ -164,7 +164,7 @@ list file, and pass it with `--from-list`.
 - [`fleet-data.json`](references/fleet-data.md): units, roll-ups, repositories and opportunities.
 - [`achievements.json`](references/achievements.md): achievements, next steps and the targets file.
 - [`condition_effect.json` and `demotions.json`](references/condition-effect.md): each condition's estimated effect on agent outcomes, and the exit rule's demotions.
-- [Database projection](references/publish.md): the artifact database writes, access rules and size guard.
+- [Database projection and publishing](references/publish.md): the artifact database writes, access rules, size guard and the publish step.
 - [`agent_clusters.json`](references/agent-clusters.md): agent clusters.
 - [`run.json`](references/run.md): the run stamp.
 - [`--fleet-config`](references/fleet-config.md): the `--fleet-config` sections and keys.
@@ -311,6 +311,50 @@ Pages are counts-only (ids, counts, numbers, booleans and short tokens; any
 other value prints as `set`) and byte-identical when rerendered from the same
 run. Exit codes: `0` pages written; `2` a missing or malformed output file, an
 invalid maturity model or settings, or inputs that disagree with the run.
+
+## Publish the fleet page (opt-in)
+
+<!-- chat-skip:start -->
+Publish only when the user asks. `fleet.py` never publishes and never calls a network. This
+step runs in a signed-in session with the `Artifact` and `ArtifactData` tools. Details:
+[publish.md](references/publish.md#publishing-the-page).
+
+1. **Say who will see it.** Before the first publish, tell the user that everyone the artifact
+   is shared with can read the run: Step counts, unit names or hashed ids, and the conditions
+   behind each cell. Ask them to confirm.
+2. **Pick the run.** A `--full` run is always refused. The default needs a run made with
+   `--hash-paths` or `--hash-salt`. A plain counts-only run names repositories and units; publish it
+   only if the user asks for names, with `--allow-names`. Only such a run lets people set Step
+   targets on the page, because the next run reads targets by plain unit names.
+3. **Read what is stored.** On a later publish, read the artifact URL from
+   `<history>/<org>/publish.json`. List the `runs`, `units` and `repos` collections with
+   `ArtifactData` `list`, paging with `cursor`. Save each as a JSON list of
+   `{doc_id, version, data}` in one folder as `runs.json`, `units.json` and `repos.json`. On a
+   first publish there is nothing to read.
+4. **Plan.** Run the planner. It refuses a mode the user did not ask for, a run that does not fit
+   one artifact (#950 shards it) and a changed republish of a run id.
+
+   ```bash
+   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_publish_plan.py" plan out --exports exports [--allow-names]
+   ```
+
+5. **Publish the page.** Load the `artifact-capabilities` skill first. Publish
+   `out/publish/page.html` with `capabilities` set to the object in
+   `out/publish/capabilities.json` and `contract` set to `0.2.96`. On a later run, pass the
+   recorded `url` so the same artifact is updated.
+6. **Write the data.** Send each `out/publish/batch-NNN.json` in order as one `ArtifactData`
+   `batch` call. Each write already carries its `if_version` pin. If a pinned write is refused, read again
+   and plan again; never drop a pin.
+7. **Record the URL.**
+
+   ```bash
+   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_publish_plan.py" record "<history>/<org>" --url URL --run-id RUN
+   ```
+
+8. **Before the next run,** if the page allows targets: list the `targets` collection to a JSON
+   file, run `fleet_targets_import.py` ([publish.md](references/publish.md#targets-read-back)),
+   and pass the file to `fleet.py --targets`.
+<!-- chat-skip:end -->
 
 ## Guarantees
 
