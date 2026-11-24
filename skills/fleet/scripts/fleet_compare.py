@@ -50,7 +50,7 @@ from lib.fleet.fleet_compare import (
     dumps_comparison,
     load_run,
     not_comparable,
-    summary_lines,
+    comparison_lines,
     write_comparison_file,
 )
 from lib.fleet.fleet_scanner_diff import scanner_diff
@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     else:
         sys.stdout.write(text)
-    for line in summary_lines(comparison):
+    for line in comparison_lines(comparison):
         print(f"fleet compare: {line}", file=sys.stderr)
     return 0 if comparison["comparable"] else EXIT_NOT_COMPARABLE
 

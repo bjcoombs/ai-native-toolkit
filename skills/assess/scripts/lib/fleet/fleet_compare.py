@@ -58,7 +58,7 @@ adds maturity-model version, window, output mode, scan selection, path hashing a
 `--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config) and
 `platform` (a pre-#714 stamp is false), and the rules hash (`rules_sha256`, #952,
 `lib/fleet/fleet_method.py`: a reason only when both stamps recorded one; an unrecorded side
-or a collector revision change is a note, printed by `summary_lines` too); any reason
+or a collector revision change is a note, printed by `comparison_lines` too); any reason
 gives `comparable: false` with no deltas. `compare` reports the measured-set movement
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
 the row's `active`) apart from level movement: each group's maturity model rows then and now with
@@ -561,7 +561,7 @@ def dumps_comparison(comparison: Comparison) -> str:
     return json.dumps(comparison, sort_keys=True, indent=2) + "\n"
 
 
-def summary_lines(comparison: Comparison) -> list[str]:
+def comparison_lines(comparison: Comparison) -> list[str]:
     """A short human summary for stderr."""
     if not comparison["comparable"]:
         return ["not comparable: " + "; ".join(comparison["reasons"])]

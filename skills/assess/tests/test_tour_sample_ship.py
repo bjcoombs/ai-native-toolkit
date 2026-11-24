@@ -90,6 +90,9 @@ def readings(tmp_path_factory: pytest.TempPathFactory) -> dict[str, dict[str, An
         root = _project(tmp_path_factory.mktemp(label) / "project", with_tour)
         build_and_publish_run(repo_root=root, run_date="2026-10-01", non_interactive=True)
         ctx = json.loads((root / ".assess" / "run-context.json").read_text(encoding="utf-8"))
+        # the top card names the measured commit (#1252), which differs with the tree: mask it
+        short = ctx["measured_commit"]["head_sha"][:7]
+        ctx = json.loads(json.dumps(ctx).replace(f"`{short}`", "`<sha>`"))
         out[label] = normalize_run_context(ctx)
     return out
 
