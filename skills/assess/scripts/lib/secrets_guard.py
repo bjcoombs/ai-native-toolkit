@@ -150,6 +150,7 @@ _DETECTION_DISABLED = re.compile(r"^\s*SECRET_DETECTION_DISABLED\s*:\s*['\"]?(?:
 _JOB_RUN_KEY = re.compile(r"^\s+(?:rules|when)\s*:")
 _RULE_CONDITION = re.compile(r"^\s*-?\s*(?:if|changes|exists)\s*:")
 _WHEN_NEVER = re.compile(r"^\s*-?\s*when:\s*['\"]?never\b", re.IGNORECASE)
+_HIDDEN_JOB = re.compile(r"^\.[\w.-]+\s*:")
 _AFTER_SCRIPT = re.compile(r"^\s*after_script\s*:")
 _WHEN_MANUAL = re.compile(r"^\s*-?\s*when:\s*['\"]?manual\b", re.IGNORECASE)
 _STEP_START = re.compile(r"^(\s*)-\s")
@@ -284,6 +285,9 @@ def _masked_lines(lines: list[str], gitlab: bool = False) -> set[int]:
     masks run only on GitLab files (``gitlab``): in a GitHub workflow ``when:`` is an action input."""
     masked: set[int] = set()
     for i, line in enumerate(lines):
+        if gitlab and _HIDDEN_JOB.match(line):  # a hidden job runs only through a visible job's ``extends:``
+            masked.update(range(i, _block_end(lines, i, 0)))
+            continue
         if gitlab and _AFTER_SCRIPT.match(line):  # GitLab ignores after_script failures for the job status
             masked.update(range(i, _list_block_end(lines, i, len(line) - len(line.lstrip()))))
             continue
@@ -381,6 +385,20 @@ _VALUED_FLAGS = frozenset({"--from-ref", "--to-ref", "--source", "--origin", "-s
                            "--color", "--config", "-c", "--remote-name", "--remote-url"})
 
 
+def _step_value(lines: list[str], i: int, key: str) -> str | None:
+    """The value of ``key`` (under ``with:``) in the step that opens at or above line ``i``."""
+    indent = len(lines[i]) - len(lines[i].lstrip())
+    for k in range(i + 1, len(lines)):
+        ln = lines[k]
+        if ln.strip() and (len(ln) - len(ln.lstrip()) < indent or
+                           (len(ln) - len(ln.lstrip()) == indent and _STEP_START.match(ln))):
+            break
+        m = re.match(rf"\s*{re.escape(key)}\s*:\s*['\"]?(.*?)['\"]?\s*$", ln)
+        if m:
+            return m.group(1)
+    return None
+
+
 def _hook_tool(hook_id: str) -> str:
     """The tool a hook id runs: ``gitleaks-docker`` and ``gitleaks-system`` run gitleaks."""
     return next((t for t in SECRET_TOOLS if hook_id == t or hook_id.startswith(f"{t}-")), hook_id)
@@ -400,9 +418,10 @@ def _stage_values(lines: list[str], at: int) -> set[str]:
 
 
 def _hooks_run_in_ci(root: Path, hook: PreCommitGuard) -> frozenset[str]:
-    """The secrets hooks a plain ``pre-commit run`` selects: a hook whose ``stages:`` (or, with none,
-    the top-level ``default_stages:``) leaves out the pre-commit stage (``[manual]``,
-    ``[pre-push]``) is skipped, so CI does not run it."""
+    """The ids of the secrets hooks a plain ``pre-commit run`` selects: a hook whose ``stages:`` (or,
+    with none, the top-level ``default_stages:``) leaves out the pre-commit stage (``[manual]``,
+    ``[pre-push]``) is skipped, so CI does not run it. Ids, not tools: ``pre-commit run gitleaks``
+    selects the hook whose id is ``gitleaks``, never a configured ``gitleaks-docker``."""
     if not hook["file"]:
         return frozenset()
     lines = _code_lines(_read(root / hook["file"]) or "")
@@ -410,8 +429,7 @@ def _hooks_run_in_ci(root: Path, hook: PreCommitGuard) -> frozenset[str]:
     top = next((k for k, ln in enumerate(lines) if ln.startswith("default_stages")
                 and re.match(r"default_stages\s*:", ln)), None)
     default = _stage_values(lines, top) if top is not None else None
-    skipped: set[str] = set()
-    selected: set[str] = set()  # a tool another of its hooks still runs (``gitleaks`` beside a manual ``gitleaks-docker``)
+    selected: set[str] = set()
     for i, line in enumerate(lines):  # each list item; a hook item has its own ``id:`` key
         item = _STEP_START.match(line)
         if not item:
@@ -425,12 +443,9 @@ def _hooks_run_in_ci(root: Path, hook: PreCommitGuard) -> frozenset[str]:
         if hook_id is None:
             continue
         stages = _stage_values(lines, stages_at) if stages_at is not None else default
-        tool = _hook_tool(hook_id.lower())
-        if stages is not None and not _DEFAULT_STAGES & stages:
-            skipped.add(tool)
-        else:
-            selected.add(tool)
-    return frozenset(hook["tools"]) - (skipped - selected)
+        if (stages is None or _DEFAULT_STAGES & stages) and _hook_tool(hook_id.lower()) in hook["tools"]:
+            selected.add(hook_id.lower())
+    return frozenset(selected)
 
 
 def _hook_id(tokens: list[str]) -> str | None:
@@ -484,14 +499,16 @@ def _ci_tools(text: str, hooks: frozenset[str] = frozenset(), gitlab: bool = Fal
     for i, line in enumerate(lines):
         if i in masked or not line.strip() or _MASKED.search(line):
             continue
-        if _PRE_COMMIT_ACTION.match(line):  # the action runs every hook over every file
-            tools.update(hooks)
+        if _PRE_COMMIT_ACTION.match(line):  # every hook over every file, or the hook ``extra_args`` names
+            extra = _step_value(lines, i, "extra_args")
+            named = _hook_id(extra.split()) if extra else None
+            tools.update(_hook_tool(h) for h in (hooks if named is None else hooks & {named}))
             continue
         run_hooks = _PRE_COMMIT_RUN.match(line)
         if run_hooks:  # the pre-commit secrets hooks, run where they cannot be skipped
             if _PRE_COMMIT_SCOPE.search(run_hooks.group(1)):
                 hook_id = _hook_id(run_hooks.group(1).split())
-                tools.update(hooks if hook_id is None else hooks & {_hook_tool(hook_id)})
+                tools.update(_hook_tool(h) for h in (hooks if hook_id is None else hooks & {hook_id}))
             continue
         uses = _USES.match(line)
         if uses:

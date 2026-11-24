@@ -441,3 +441,22 @@ def test_a_nested_when_does_not_decide_for_the_job(tmp_path: Path) -> None:
                  remote="https://gitlab.com/g/p.git")
     subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
     assert scan_secrets_guard(root)["ci"]["present"] is False
+
+
+def test_pre_commit_action_extra_args_select_one_hook(tmp_path: Path) -> None:
+    cfg = PRE_COMMIT + "  - repo: https://github.com/astral-sh/ruff-pre-commit\n    hooks:\n      - id: ruff\n"
+    wf = "steps:\n  - uses: pre-commit/action@v3.0.1\n    with:\n      extra_args: ruff --all-files\n"
+    root = _repo(tmp_path, {".pre-commit-config.yaml": cfg, ".github/workflows/x.yml": wf})
+    assert scan_secrets_guard(root)["ci"]["present"] is False
+
+
+def test_a_named_hook_must_match_a_configured_id(tmp_path: Path) -> None:
+    cfg = "repos:\n  - repo: https://github.com/gitleaks/gitleaks\n    hooks:\n      - id: gitleaks-docker\n"
+    root = _repo(tmp_path, {".pre-commit-config.yaml": cfg,
+                            ".github/workflows/x.yml": "steps:\n  - run: pre-commit run gitleaks --all-files\n"})
+    assert scan_secrets_guard(root)["ci"]["present"] is False
+
+
+def test_a_hidden_gitlab_job_is_not_a_scan(tmp_path: Path) -> None:
+    text = ".secret_scan:\n  script:\n    - gitleaks detect\nbuild:\n  script:\n    - make\n"
+    assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["present"] is False
