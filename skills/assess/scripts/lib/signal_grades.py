@@ -65,4 +65,6 @@ EMPTY_DENOMINATORS: dict[str, tuple[str, str]] = {
     "skill_script_tests.skills_untested": ("skill_script_tests.skills_with_scripts", "no_skill_scripts"),
     # No skill file scanned is not a skill free of personal data (#1045).
     "skill_personal_data.files_with_personal_data": ("skill_personal_data.files_considered", "no_skill_files"),
+    # No model-backed CI job is not a gated one (#1242).
+    "ci_model_jobs.ungated": ("ci_model_jobs.model_jobs", "no_model_jobs"),
 }
