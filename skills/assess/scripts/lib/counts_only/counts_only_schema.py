@@ -59,6 +59,7 @@ from lib.gap_actions import GapAction
 from lib.guardrails import GuardrailsBlock
 from lib.instruction_placement import InstructionPlacementBlock
 from lib.skill_disclosure import SkillDisclosureBlock
+from lib.secrets_guard import SecretsGuardBlock
 from lib.skill_script_tests import SkillScriptTestsBlock
 from lib.skill_personal_data import SkillPersonalDataBlock
 from lib.contributor_files import ContributorFilesBlock
@@ -154,6 +155,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("ai_usage", AiUsageBlock),
     ("agent_outcome", AgentOutcomeBlock),
     ("skill_disclosure", SkillDisclosureBlock),
+    ("secrets_guard", SecretsGuardBlock),
     ("skill_script_tests", SkillScriptTestsBlock),
     ("skill_personal_data", SkillPersonalDataBlock),
     ("contributor_files", ContributorFilesBlock),

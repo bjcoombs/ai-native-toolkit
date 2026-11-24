@@ -1227,6 +1227,86 @@
       ]
     },
     {
+      "id": "secrets-guard",
+      "title": "Secrets guard",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "secrets-guard.1",
+          "truth": [
+            "governance"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "grade": "config_only",
+          "counts": false,
+          "criteria": [
+            {
+              "key": "secrets-guard.1:secrets_guard.configured",
+              "signal": "secrets_guard.configured",
+              "producer": {
+                "scan": "secrets_guard",
+                "collector": "core.secrets_guard"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "A secrets guard is configured (pre-commit hook or CI scan): is true",
+              "title": "A secrets guard is configured (a pre-commit hook counts; listed, not counted)",
+              "fix": "Add a secrets hook to .pre-commit-config.yaml (gitleaks or detect-secrets), or a secrets scan step to CI.",
+              "why": "A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.",
+              "why_source": "",
+              "input_class": "config_text",
+              "grade": "config_only",
+              "counts": false
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "id": "secrets-guard.2",
+          "truth": [
+            "governance"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "secrets-guard.2:secrets_guard.enforcement.present",
+              "signal": "secrets_guard.enforcement.present",
+              "producer": {
+                "scan": "secrets_guard",
+                "collector": "core.secrets_guard"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "A secrets scan runs where an agent cannot skip it (CI): is true",
+              "title": "A secrets scan runs where an agent cannot skip it",
+              "fix": "Add a secrets scan step to CI that runs on each push or pull request (gitleaks/gitleaks-action, trufflehog, or GitLab's Secret-Detection template); a pre-commit hook alone can be skipped with --no-verify.",
+              "why": "A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "skill-personal-data",
       "title": "Personal data in skill text",
       "scope": "team",
@@ -1461,12 +1541,16 @@
         "layer-7-review.1",
         "layer-7-review.2",
         "layer-8-agent-ops.1",
+        "secrets-guard.1",
+        "secrets-guard.2",
         "skill-personal-data.1"
       ],
       "listed": [
         "layer-7-review.1",
         "layer-7-review.2",
         "layer-8-agent-ops.1",
+        "secrets-guard.1",
+        "secrets-guard.2",
         "skill-personal-data.1"
       ],
       "shared": [],
@@ -2813,6 +2897,79 @@
         "unclassified"
       ],
       "why": "A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue.",
+      "why_source": ""
+    },
+    {
+      "name": "secrets_guard",
+      "title": "Secrets guard",
+      "summary": "A secrets hook in the pre-commit config and a secrets scan in CI, such as gitleaks, trufflehog or GitLab Secret-Detection. Each is recorded with its own evidence grade.",
+      "collector": "core.secrets_guard",
+      "reads": [
+        "repo_root",
+        "scope",
+        "ghsync_root"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "secrets_guard.ci.files": "path",
+          "secrets_guard.ci.rules_unevaluated": "token",
+          "secrets_guard.ci.tools": "token",
+          "secrets_guard.enforcement.reason": "reason",
+          "secrets_guard.enforcement.source": "token",
+          "secrets_guard.pre_commit.file": "path",
+          "secrets_guard.pre_commit.tools": "token",
+          "secrets_guard.sources.grade": "token",
+          "secrets_guard.sources.source": "token"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "secrets-guard"
+        ],
+        "conditions": [
+          "secrets-guard.1:secrets_guard.configured",
+          "secrets-guard.2:secrets_guard.enforcement.present"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "secret_scanning_not_read",
+          "means": "No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read.",
+          "next_step": "Add a secrets scan step to CI (gitleaks or trufflehog); GitHub's own settings are not read yet."
+        },
+        {
+          "code": "gitlab_rules_unevaluated",
+          "means": "A GitLab job holds a secrets scan but runs under rules, only/except or a when that is not evaluated. So it is not known whether the scan runs on each change.",
+          "next_step": "Nothing to change for the reading: a plain job with no rules, or a GitHub workflow, is read in full."
+        },
+        {
+          "code": "ci_includes_unresolved",
+          "means": "No secrets scan was found in the CI read. A GitLab include that could hold one, a local, project or remote file, was not read.",
+          "next_step": "Clone the included project beside this one (/ghsync), or add the secrets scan to the repository's own .gitlab-ci.yml."
+        }
+      ],
+      "evidence": [
+        {
+          "signal": "secrets_guard.configured",
+          "input_class": "config_text",
+          "grade": "config_only"
+        },
+        {
+          "signal": "secrets_guard.enforcement.present",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "config_only",
+        "measured"
+      ],
+      "why": "A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.",
       "why_source": ""
     },
     {
@@ -5557,6 +5714,20 @@
       "private": false
     },
     {
+      "name": "secrets_guard",
+      "title": "Secrets guard",
+      "publishes": [
+        "secrets_guard"
+      ],
+      "reads": [
+        "repo_root",
+        "scope",
+        "ghsync_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "gap_actions",
       "title": "Gap actions",
       "publishes": [
@@ -5670,6 +5841,7 @@
         "promissory_markers",
         "review_evidence",
         "review_reality",
+        "secrets_guard",
         "skill_disclosure",
         "skill_personal_data",
         "skill_script_tests",
@@ -5761,6 +5933,7 @@
         "promissory_markers",
         "review_evidence",
         "review_reality",
+        "secrets_guard",
         "skill_disclosure",
         "skill_personal_data",
         "skill_script_tests",
@@ -6049,6 +6222,24 @@
       "input_class": "head_structure",
       "grade": "measured",
       "null_means": "no_skill_scripts: no skill in the repository, or in the skill unit, holds a script (skills_with_scripts 0), so there is nothing to test"
+    },
+    {
+      "path": "secrets_guard.configured",
+      "title": "A secrets guard is configured (pre-commit hook or CI scan)",
+      "type": "bool",
+      "collector": "core.secrets_guard",
+      "input_class": "config_text",
+      "grade": "config_only",
+      "null_means": ""
+    },
+    {
+      "path": "secrets_guard.enforcement.present",
+      "title": "A secrets scan runs where an agent cannot skip it (CI)",
+      "type": "bool",
+      "collector": "core.secrets_guard",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "No secrets scan was found in the CI read, and level 2 cannot be settled. The reason is secret_scanning_not_read, ci_includes_unresolved or gitlab_rules_unevaluated."
     },
     {
       "path": "skill_personal_data.files_with_personal_data",

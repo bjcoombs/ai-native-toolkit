@@ -779,6 +779,20 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `contributor_files.policy.source` | token |
 | `contributor_files.policy.reason` | reason code |
 
+## secrets_guard
+
+| Field | Kept as |
+|---|---|
+| `secrets_guard.pre_commit.file` | path (hashed when hashing is on) |
+| `secrets_guard.pre_commit.tools` | token |
+| `secrets_guard.ci.files` | path (hashed when hashing is on) |
+| `secrets_guard.ci.rules_unevaluated` | token |
+| `secrets_guard.ci.tools` | token |
+| `secrets_guard.enforcement.reason` | reason code |
+| `secrets_guard.enforcement.source` | token |
+| `secrets_guard.sources.source` | token |
+| `secrets_guard.sources.grade` | token |
+
 ## gap_actions
 
 | Field | Kept as |
