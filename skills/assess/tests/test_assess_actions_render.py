@@ -188,3 +188,31 @@ def test_readiness_prefers_headline_lines_then_badge(tmp_path: Path, capsys: pyt
     )
     (assess / "assess-report.md").unlink()
     assert "Step 3" in _run(repo, "readiness", capsys=capsys)
+
+
+def test_markdown_punctuation_is_escaped_outside_code_spans(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    entry = {"rank": 1, "action": "Split it", "first_step": 'rg -n "^[a-z_]+\\(\\)" x.sh, then `a_b\\c`',
+             "done_when": "__init__.py stays <100 lines", "scope_fence": "*only* x.sh"}
+    body = render.render_item_body(entry)
+    # Outside code spans every \ * _ [ ] < > is escaped, so GitHub shows the text as written.
+    assert 'rg -n "^\\[a-z\\_\\]+\\\\(\\\\)" x.sh, then `a_b\\c`' in body
+    assert "- \\_\\_init\\_\\_.py stays \\<100 lines" in body
+    assert "\\*only\\* x.sh" in body
+    row = render.render_table([entry]).splitlines()[2]
+    assert "`a_b\\c`" in row and "\\_\\_init" in row
+    assert render.render_items([entry])[0]["title"] == "Split it"  # titles are plain text, not Markdown
+
+
+def test_an_earlier_runs_actions_are_refused(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = _repo(tmp_path)
+    context = repo / ".assess" / "run-context.json"
+    context.write_text(json.dumps({"run_id": "r1"}), encoding="utf-8")
+    assert render.main([str(repo), "table"]) == 0  # same run
+    capsys.readouterr()
+    context.write_text(json.dumps({"run_id": "r2"}), encoding="utf-8")
+    for command in ("table", "items"):
+        assert render.main([str(repo), command]) == 1
+        captured = capsys.readouterr()
+        assert captured.out == "" and "'r1'" in captured.err and "'r2'" in captured.err
+    context.write_text(json.dumps({}), encoding="utf-8")  # a context without a run_id is not a mismatch
+    assert render.main([str(repo), "table"]) == 0
