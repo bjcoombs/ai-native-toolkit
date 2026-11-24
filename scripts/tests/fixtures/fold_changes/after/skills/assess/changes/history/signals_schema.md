@@ -1,0 +1,12 @@
+# `SIGNALS_SCHEMA_VERSION` history
+
+Fixture history of `SIGNALS_SCHEMA_VERSION`, newest entry first.
+
+<!-- make fold writes each new entry below this line, newest first. -->
+
+3 (3.0.0 release): one change since 2.
+- layer_grades.instruction_file_present reads true, and instructions_grade a letter,
+  for a repository whose only instruction files are nested (instruction_presence
+  nested_only, issue #821). instruction_file_present, documented as never null before,
+  now reads null (with instruction_presence) when there is no root file and the
+  nested_instructions scan did not run.

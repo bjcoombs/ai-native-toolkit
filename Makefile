@@ -106,7 +106,7 @@ lint:
 	cd scripts && uv run --locked mypy
 
 # Release PR only (#1011): write the version notes in skills/assess/changes/ into
-# each counter's history comment, bump each counter once and delete the notes,
+# each counter's history file (skills/assess/changes/history/), bump each counter once and delete the notes,
 # then regenerate, because schemas, the catalog and goldens stamp the counter
 # values. Not part of regen: regen is safe after any conflict, the fold runs once
 # per release. FOLD_ARGS passes --date or --set counter=value to fold_changes.py.

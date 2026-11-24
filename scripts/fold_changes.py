@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fold the pending version notes into each counter's history (issue #1011).
+"""Fold the pending version notes into each counter's history file (issues #1011, #1262).
 
 During a version freeze a PR that would bump a version counter adds one file,
 ``skills/assess/changes/<issue>.<counter>.md``, holding its note as one or more
@@ -9,12 +9,19 @@ The release PR runs ``make fold RELEASE=3.0.0`` from the repository root, which
 runs ``fold_changes.py --release 3.0.0`` here and then ``make regen``, since the
 generated schemas, catalog and goldens stamp the counter values.
 
-For each counter with notes it writes one history entry directly above the
-counter's assignment line, ``# <new> (<release> release): <n> changes since
-<old>.`` followed by the bullets in issue order, sets the counter to ``<new>``
-and deletes the notes. ``<new>`` is the next minor for a semver counter, the
-next integer for an integer one and ``default-<date>`` for the maturity
-model; ``--set counter=value`` overrides it. ``--check`` only validates the notes.
+Each counter's history lives in its own file, ``skills/assess/changes/history/<counter>.md``,
+newest entry first. The source file keeps one comment line directly above the
+counter that points to it, so a fold changes only the counter's value there and
+the source file's length never grows with the history.
+
+For each counter with notes the fold writes one history entry at the top of the
+history file, below its marker line: ``<new> (<release> release): <n> changes
+since <old>.`` followed by the bullets in issue order. It sets the counter to
+``<new>`` and deletes the notes. ``<new>`` is the next minor for a semver
+counter, the next integer for an integer one and ``default-<date>`` for the
+maturity model; ``--set counter=value`` overrides it. ``--check`` validates the
+notes and the layout (pointer line, no history comment left in a source file,
+history file with one marker) and writes nothing.
 """
 from __future__ import annotations
 
@@ -27,23 +34,26 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CHANGES_DIR = Path("skills/assess/changes")
+HISTORY_DIR = CHANGES_DIR / "history"
 FRAGMENT_NAME = re.compile(r"^(?P<issue>[1-9][0-9]*)\.(?P<counter>[a-z_]+)\.md$")
-# Files in the changes directory that are not notes.
-NOT_NOTES = frozenset({"README.md"})
+# Entries in the changes directory that are not notes.
+NOT_NOTES = frozenset({"README.md", HISTORY_DIR.name})
 NUMBER_WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
+# The fold writes each new entry directly below this line of a history file.
+MARKER = "<!-- make fold writes each new entry below this line, newest first. -->"
+# A history entry left as a comment in a source file: ``# 1.4.0 (also): ...``,
+# ``# 39 (4.0.0 release): ...``, ``# default-2026.11.24 (...): ...``, ``# 2: ...``.
+HISTORY_COMMENT = re.compile(r"^#\s*(default-[0-9.]+|[0-9]+(\.[0-9]+\.[0-9]+)?)( \([^)]*\))?:\s")
 
 
 @dataclass(frozen=True)
 class Counter:
-    """A version counter and the file whose comment holds its history."""
+    """A version counter, the file that assigns it and how its next value is picked."""
 
     path: Path
     assignment: re.Pattern[str]  # group "value" is the counter's current value
     kind: str  # "semver", "int" or "dated"
     noun: str = "changes"
-    lead: tuple[str, ...] = ()  # comment lines written before a new entry
-    # A comment line that closes the history (the bump rule); the entry goes above it.
-    before: re.Pattern[str] | None = None
     # Why the fold will not pick this counter's next value: the release must pass --set.
     explicit: str = ""
 
@@ -74,19 +84,16 @@ COUNTERS: dict[str, Counter] = {
         Path("skills/assess/levels/default.toml"),
         re.compile(r'^version = "(?P<value>default-[0-9.]+)"$'),
         "dated",
-        lead=("#",),
     ),
     "fleet_data": Counter(
         Path("skills/assess/scripts/lib/fleet/fleet_data.py"),
         re.compile(r"^FLEET_DATA_VERSION = (?P<value>[0-9]+)$"),
         "int",
-        before=re.compile(r"^# Bump on any change"),
     ),
     "achievements": Counter(
         Path("skills/assess/scripts/lib/fleet/fleet_achievements.py"),
         re.compile(r"^ACHIEVEMENTS_VERSION = (?P<value>[0-9]+)$"),
         "int",
-        before=re.compile(r"^# Bump on any change"),
     ),
     "fleet_row": Counter(
         Path("skills/assess/scripts/lib/fleet/runner.py"),
@@ -98,8 +105,18 @@ COUNTERS: dict[str, Counter] = {
 }
 
 
+def history_path(name: str) -> Path:
+    """The history file of counter ``name``, relative to the repository root."""
+    return HISTORY_DIR / f"{name}.md"
+
+
+def pointer(name: str) -> str:
+    """The comment line directly above counter ``name`` that points to its history file."""
+    return f"# History: {history_path(name).as_posix()}, newest entry first."
+
+
 class FoldError(Exception):
-    """A note or a history file the fold cannot read."""
+    """A note, a source file or a history file the fold cannot read."""
 
 
 @dataclass(frozen=True)
@@ -153,6 +170,55 @@ def read_notes(root: Path) -> list[Note]:
     return sorted(notes, key=lambda n: (n.issue, n.path.name))
 
 
+def _read_lines(root: Path, path: Path) -> list[str]:
+    if not (root / path).is_file():
+        raise FoldError(f"{path.as_posix()}: missing")
+    return (root / path).read_text(encoding="utf-8").split("\n")
+
+
+def _assignment(lines: list[str], name: str) -> int:
+    counter = COUNTERS[name]
+    hits = [i for i, line in enumerate(lines) if counter.assignment.match(line)]
+    if len(hits) != 1:
+        raise FoldError(f"{counter.path.as_posix()}: expected one {name} assignment line, found {len(hits)}")
+    return hits[0]
+
+
+def _marker(lines: list[str], name: str) -> int:
+    hits = [i for i, line in enumerate(lines) if line == MARKER]
+    if len(hits) != 1:
+        raise FoldError(f"{history_path(name).as_posix()}: expected one marker line {MARKER!r}, found {len(hits)}")
+    return hits[0]
+
+
+def layout_errors(root: Path, name: str) -> list[str]:
+    """What is wrong with counter ``name``'s source and history files under ``root``."""
+    counter = COUNTERS[name]
+    shown = counter.path.as_posix()
+    errors: list[str] = []
+    try:
+        lines = _read_lines(root, counter.path)
+        at = _assignment(lines, name)
+    except FoldError as exc:
+        errors.append(str(exc))
+    else:
+        if at == 0 or lines[at - 1] != pointer(name):
+            errors.append(f"{shown}: the line above the {name} assignment must read {pointer(name)!r}")
+        # The comment block above the counter, blank lines included: no history entry stays there.
+        top = at
+        while top > 0 and (lines[top - 1].startswith("#") or not lines[top - 1].strip()):
+            top -= 1
+        left = [line for line in lines[top:at] if HISTORY_COMMENT.match(line)]
+        if left:
+            errors.append(f"{shown}: history comment above {name}; move it to "
+                          f"{history_path(name).as_posix()}: {left[0]!r}")
+    try:
+        _marker(_read_lines(root, history_path(name)), name)
+    except FoldError as exc:
+        errors.append(str(exc))
+    return errors
+
+
 def next_value(counter: Counter, value: str, date: datetime.date) -> str:
     if counter.kind == "semver":
         major, minor, _ = value.split(".")
@@ -167,43 +233,28 @@ def _count(n: int, noun: str) -> str:
     return f"{word} {noun[:-1] if n == 1 else noun}"
 
 
-def fold_counter(lines: list[str], name: str, notes: list[Note], release: str, new: str | None,
-                 date: datetime.date) -> list[str]:
-    """``lines`` with the history entry for ``name`` written and the counter set."""
+def fold_counter(source: list[str], history: list[str], name: str, notes: list[Note], release: str,
+                 new: str | None, date: datetime.date) -> tuple[list[str], list[str]]:
+    """``source`` with counter ``name`` set, and ``history`` with the new entry on top."""
     counter = COUNTERS[name]
-    hits = [i for i, line in enumerate(lines) if counter.assignment.match(line)]
-    if len(hits) != 1:
-        raise FoldError(f"{counter.path}: expected one {name} assignment line, found {len(hits)}")
-    at = hits[0]
-    match = counter.assignment.match(lines[at])
+    at = _assignment(source, name)
+    match = counter.assignment.match(source[at])
     assert match is not None
     old = match.group("value")
     if new is None and counter.explicit:
         raise FoldError(f"{name} needs --set {name}=<value>: {counter.explicit}")
     new = new or next_value(counter, old, date)
+    start, end = match.span("value")
+    assigned = source[at][:start] + new + source[at][end:]
+    if not counter.assignment.match(assigned):
+        raise FoldError(f"--set {name}={new} is not a value {name} takes ({counter.assignment.pattern})")
     bullets = [b for note in notes for b in note.bullets]
     count = _count(len(bullets), counter.noun)
     tail = f"{count}, without a bump." if new == old else f"{count} since {old}."
-    entry = [*counter.lead, f"# {new} ({release} release): {tail}"]
-    entry += ["# " + line for bullet in bullets for line in bullet]
-    insert = at
-    while insert > 0 and not lines[insert - 1].strip():
-        insert -= 1
-    if counter.before is not None:
-        # The entry goes above the closing comment line (the bump rule), not below it.
-        block = insert
-        while block > 0 and lines[block - 1].startswith("#"):
-            block -= 1
-        closing = [i for i in range(block, insert) if counter.before.match(lines[i])]
-        if len(closing) != 1:
-            raise FoldError(f"{counter.path}: expected one line matching {counter.before.pattern!r} "
-                            f"in the comment above {name}, found {len(closing)}")
-        insert = closing[0]
-    start, end = match.span("value")
-    assigned = lines[at][:start] + new + lines[at][end:]
-    if not counter.assignment.match(assigned):
-        raise FoldError(f"--set {name}={new} is not a value {name} takes ({counter.assignment.pattern})")
-    return lines[:insert] + entry + lines[insert:at] + [assigned] + lines[at + 1:]
+    entry = [f"{new} ({release} release): {tail}", *(line for bullet in bullets for line in bullet)]
+    top = _marker(history, name) + 1
+    return (source[:at] + [assigned] + source[at + 1:],
+            history[:top] + ["", *entry] + history[top:])
 
 
 def fold(root: Path, release: str, date: datetime.date, overrides: dict[str, str]) -> list[str]:
@@ -218,17 +269,30 @@ def fold(root: Path, release: str, date: datetime.date, overrides: dict[str, str
     unused = sorted(set(overrides) - set(by_counter))
     if unused:
         raise FoldError(f"--set names counters with no notes to fold: {', '.join(unused)}")
+    errors = [error for name in sorted(by_counter) for error in layout_errors(root, name)]
+    if errors:
+        raise FoldError("\n".join(errors))
     texts: dict[Path, list[str]] = {}
     for name, group in by_counter.items():
-        path = COUNTERS[name].path
-        lines = texts.get(path) or (root / path).read_text(encoding="utf-8").split("\n")
-        texts[path] = fold_counter(lines, name, group, release, overrides.get(name), date)
+        source, history = COUNTERS[name].path, history_path(name)
+        texts[source], texts[history] = fold_counter(
+            texts.get(source) or _read_lines(root, source), _read_lines(root, history),
+            name, group, release, overrides.get(name), date)
     for path, lines in texts.items():
         # LF on every platform: a Windows fold must not turn the files into CRLF.
         (root / path).write_text("\n".join(lines), encoding="utf-8", newline="\n")
     for note in notes:
         note.path.unlink()
     return sorted(by_counter)
+
+
+def check(root: Path) -> int:
+    """Validate the notes and every counter's layout under ``root``; return the note count."""
+    notes = read_notes(root)
+    errors = [error for name in COUNTERS for error in layout_errors(root, name)]
+    if errors:
+        raise FoldError("\n".join(errors))
+    return len(notes)
 
 
 def _overrides(pairs: list[str]) -> dict[str, str]:
@@ -248,13 +312,13 @@ def main(argv: list[str] | None = None) -> int:
                         help="release date for the maturity model version (default: today)")
     parser.add_argument("--set", action="append", default=[], metavar="COUNTER=VALUE",
                         help="the new value of a counter, in place of the next one")
-    parser.add_argument("--check", action="store_true", help="validate the notes and write nothing")
+    parser.add_argument("--check", action="store_true",
+                        help="validate the notes and the history layout, and write nothing")
     parser.add_argument("--root", type=Path, default=REPO_ROOT, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     try:
         if args.check:
-            notes = read_notes(args.root)
-            print(f"{len(notes)} notes valid")
+            print(f"{check(args.root)} notes valid; history layout valid")
             return 0
         if not args.release:
             parser.error("--release is required unless --check is given")
