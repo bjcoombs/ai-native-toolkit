@@ -7,7 +7,7 @@ name: Windows
 # before a Windows user hits them (#701, #713, #752, #753).
 #
 # Parallel matrix legs (#938), each on its own windows-latest runner with the
-# same setup: assess in four shards (skills/assess pytest; shard 1 also runs
+# same setup: assess in five shards (skills/assess pytest; shard 1 also runs
 # the fleet golden run and the CPU-budget tests), scripts-contract (scripts/
 # pytest and plugin contract pytest), ghsync in two shards (the ghsync/ghreport
 # suites behind the #971 path gate) and smoke (the CRLF check, standalone ZIPs,
@@ -70,10 +70,11 @@ jobs:
       # full collection. shard is 1-based; every value 1..shards appears once.
       matrix:
         include:
-          - {suite: assess, shard: 1, shards: 4}
-          - {suite: assess, shard: 2, shards: 4}
-          - {suite: assess, shard: 3, shards: 4}
-          - {suite: assess, shard: 4, shards: 4}
+          - {suite: assess, shard: 1, shards: 5}
+          - {suite: assess, shard: 2, shards: 5}
+          - {suite: assess, shard: 3, shards: 5}
+          - {suite: assess, shard: 4, shards: 5}
+          - {suite: assess, shard: 5, shards: 5}
           - {suite: scripts-contract}
           - {suite: ghsync, shard: 1, shards: 2}
           - {suite: ghsync, shard: 2, shards: 2}
@@ -252,7 +253,7 @@ jobs:
           pytest -ra -p no:cacheprovider -n auto --dist loadfile tests/
           --ignore-glob='tests/test_ghsync*.py' --ignore-glob='tests/test_ghreport*.py'
 
-      # The ghsync/ghreport suites take about 12 minutes and test only these
+      # The ghsync/ghreport suites take about 7 minutes and test only these
       # paths (#971). A step-level gate, not a workflow `paths:` filter or a
       # job-level `if:`: the required aggregator must always report, and it
       # treats a skipped leg as a failure. A push to main always runs them; so

@@ -27,7 +27,7 @@ REPO = Path(__file__).resolve().parent.parent
 WORKFLOW = REPO / ".github" / "workflows" / "windows.yml"
 REQUIRED_NAME = "windows suites + smoke runs"
 LEGS = {"assess", "scripts-contract", "ghsync", "smoke"}
-SHARDS = {"assess": 4, "ghsync": 2}
+SHARDS = {"assess": 5, "ghsync": 2}
 SHARD_ARG = "-p pytest_shard --shard ${{ matrix.shard }}/${{ matrix.shards }}"
 # Steps that run in one shard of their leg: the golden run and the serial
 # CPU-budget pass each run once.
@@ -212,7 +212,7 @@ def test_no_step_names_an_unknown_leg() -> None:
         if "matrix.suite" in cond:
             assert step.get("name") in STEP_LEG, f"leg step missing from STEP_LEG: {step.get('name')}"
         else:
-            # A step with no leg guard runs in all four legs: only shared setup may.
+            # A step with no leg guard runs in every leg: only shared setup may.
             label = step.get("name", step.get("uses", ""))
             assert label in SETUP_STEPS | {SHARD_UPLOAD} or str(label).startswith("actions/checkout@"), (
                 f"{label!r} has no matrix.suite guard, so it runs in every leg"

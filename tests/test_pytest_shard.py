@@ -1,6 +1,6 @@
 """The `--shard K/N` plugin (tests/pytest_shard.py) drops no test and runs none twice.
 
-The Windows workflow splits `skills/assess` into four legs and the ghsync and
+The Windows workflow splits `skills/assess` into five legs and the ghsync and
 ghreport suites into two. Each leg keeps one shard, so a shard plan that left a
 file out would drop it from Windows CI with every leg green. These tests pin
 the guard: over real collections, the N shards are disjoint and their union is
@@ -74,10 +74,10 @@ def test_measured_weights_fall_back_to_the_median(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "files, n",
     [
-        (sorted((REPO / "skills" / "assess" / "tests").glob("test_*.py")), 4),
+        (sorted((REPO / "skills" / "assess" / "tests").glob("test_*.py")), 5),
         (sorted(TESTS.glob("test_ghsync*.py")) + sorted(TESTS.glob("test_ghreport*.py")), 2),
     ],
-    ids=["assess-4", "ghsync-2"],
+    ids=["assess-5", "ghsync-2"],
 )
 def test_real_suites_split_into_non_empty_disjoint_shards(files: list[Path], n: int) -> None:
     weights = _sizes(files)
