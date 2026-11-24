@@ -509,8 +509,14 @@ def test_a_make_target_that_runs_nothing_is_unknown(tmp_path: Path) -> None:
     pytest.param("test:\n\techo pytest | sh\n", id="echo-pipe"),
     pytest.param("test:\nifeq ($(CI),1)\n\tpytest --ci\nelse\n\tpytest\nendif\n", id="conditional"),
     pytest.param("test:\n# run the suite\n\tpytest\n", id="column-0-comment"),
+    pytest.param("test: ## Run tests\n\tpytest\n", id="help-comment"),
 ])
 def test_a_make_target_that_runs_something_still_resolves(tmp_path: Path, makefile: str) -> None:
     """Forms a no-op reader could misread: each runs a check, so it resolves (#922)."""
     index = build_index(_repo(tmp_path, {"Makefile": makefile}))
     assert resolve("make test", index=index).resolved
+
+
+def test_a_help_commented_target_that_runs_nothing_is_unknown(tmp_path: Path) -> None:
+    index = build_index(_repo(tmp_path, {"Makefile": "test: ## Run tests\n\t@echo \"no tests yet\"\n"}))
+    assert resolve("make test", index=index).verdict == "unknown"

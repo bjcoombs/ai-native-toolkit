@@ -188,6 +188,8 @@ def test_noop_make_targets(tmp_path: Path) -> None:
         "check: test lint\n"
         "all:\n\t@echo building\n\tpytest\n"
         "build:\n\techo $(shell pytest)\n"
+        "help-noop: ## Run tests\n\t@echo \"no tests yet\"\n"
+        "help-real: ## Run tests\n\tpytest\n"
         "real:\n\ttrue\n"
         "real:\n\tpytest\n"
         "TOOLS = x\n"
@@ -195,7 +197,7 @@ def test_noop_make_targets(tmp_path: Path) -> None:
     ), "mk/extra.mk": "lint:\n\t@printf 'x'\n"})
     targets = build_index(root).make_targets
     assert targets is not None
-    assert targets.noop == frozenset({"test", "lint", "fmt", "empty"})
+    assert targets.noop == frozenset({"test", "lint", "fmt", "empty", "help-noop"})
     assert targets.runs_nothing("test") and not targets.runs_nothing("check")
     assert targets.has("test")  # it exists: the resolver reads it unknown, never missing
 

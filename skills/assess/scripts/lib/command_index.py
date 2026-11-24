@@ -268,7 +268,11 @@ def _make_targets(text: str) -> tuple[set[str], bool, set[str]]:
             if rules and not line.startswith("#") and line.split()[0] not in _MAKE_CONDITIONALS:
                 rules.append(([], False))
             continue
-        prereqs, _, inline = line[match.end():].partition(";")
+        rest = line[match.end():]
+        hash_at, semi_at = rest.find("#"), rest.find(";")
+        if hash_at >= 0 and (semi_at < 0 or hash_at < semi_at):
+            rest = rest[:hash_at]  # `test: ## Run tests`: a help comment, not a prerequisite
+        prereqs, _, inline = rest.partition(";")
         quiet = not prereqs.strip() and (not inline or noop_recipe_line(inline))
         rule_names: list[str] = []
         for name in match.group(1).split():
