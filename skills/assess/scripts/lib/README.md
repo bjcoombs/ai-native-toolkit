@@ -59,7 +59,7 @@ Its helpers live in seven modules, one per seam: `instruction_files.py`
 pages, index and log for one run), `context_blocks.py` (scan results serialised into
 run-context blocks), `mutation_cap.py` (the `test_pressure` shape and the Layer 6 cap)
 and `run_scope.py` (`--scope` and the artifact directory), plus the
-`artifact_schema.py` constant. A change to one of these concerns edits its module and
+`artifact_schema.py` and `assess_method.py` constants. A change to one of these concerns edits its module and
 its test; `assess_core.py` moves only when the order of the pipeline or the
 run-context key order changes.
 
@@ -158,7 +158,7 @@ Issue #917 moves `lib/` modules into subpackages, one group per pull request. A 
 `counts_only/__init__.py` also hold a lazy forward until 4.0.0 (to `fleet.runner` and
 `counts_only.content_free`), and `test_pressure/__init__.py`, which predates the rule, is a
 facade that re-exports its package's names. The shared core (`run_context_types`,
-`assess_config`, `artifact_schema`, `tool_lookup`, `vocabulary`, `agent_identity` and
+`assess_config`, `artifact_schema`, `assess_method`, `tool_lookup`, `vocabulary`, `agent_identity` and
 `fleet_config`) stays at the root of `lib/`, and so does every module whose group has not
 moved yet. A moved module keeps its filename.
 
