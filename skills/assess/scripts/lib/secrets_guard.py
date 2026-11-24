@@ -23,8 +23,12 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   hidden ``.secret_detection`` job is a template GitLab never runs). Comments, whole-line or
   trailing, never count, so neither does a ``gitleaks:allow`` note or a ``.gitleaks.toml`` path.
   A masked scan does not count, since it guards nothing: a line ending ``|| true``, or a GitHub
-  step or job with ``continue-on-error: true`` or ``if: false``, or a GitLab ``secret_detection``
-  job with ``when: never``. A GitHub workflow counts only when its ``on:`` names a change event
+  step or job with ``continue-on-error: true`` or ``if: false``, a GitLab job with
+  ``allow_failure: true`` that runs a tool command, or a GitLab ``secret_detection`` job with
+  ``when: never``. GitLab's Secret-Detection template and its ``secret_detection`` job count even
+  though the template sets ``allow_failure: true``: that job never reports by failing; its
+  findings reach the merge request through its report artifact, where an approval policy can
+  require them, so ``allow_failure`` masks nothing it reports. A GitHub workflow counts only when its ``on:`` names a change event
   (``CHANGE_EVENTS``: push, pull_request, pull_request_target, merge_group): a schedule-only
   workflow scans nothing before it lands.
 
@@ -82,13 +86,14 @@ ACTION_SLUGS = ("gitleaks/gitleaks-action", "trufflesecurity/trufflehog", "gitgu
                 "secretlint/secretlint-action", "zricethezav/gitleaks-action")
 _USES = re.compile(r"^\s*-?\s*uses:\s*['\"]?([\w.-]+/[\w.-]+)", re.IGNORECASE)
 # A tool run as a command: its name as a word, then a subcommand or flag or the end of the line,
-# at the start of a shell line, after ``run:``/``script:``/``- ``, after a pipe or ``&&``, or after
+# at the start of a shell line (indented, as inside a ``run: |`` or ``script:`` block), after ``run:``/``script:``/``- ``, after a pipe or ``&&``, or after
 # ``docker run <image>`` (so a path such as ``.gitleaks.toml`` or a ``gitleaks:allow`` note is not).
 _COMMAND = re.compile(
-    r"(?:^|[;&|]\s*|(?:run|script):\s*|-\s+|docker run\s+(?:--?\S+\s+)*\S*/)(?:[\w./-]*/)?("
+    r"(?:^\s*|[;&|]\s*|(?:run|script):\s*|-\s+|docker run\s+(?:--?\S+\s+)*\S*/)(?:[\w./-]*/)?("
     + "|".join(re.escape(t) for t in SECRET_TOOLS) + r")(?=\s|$|@)", re.IGNORECASE)
-# A step or job that cannot fail the run (``continue-on-error: true``) or never runs (``if: false``).
-_CONTINUE_ON_ERROR = re.compile(r"^\s*(?:continue-on-error:\s*['\"]?true\b|if:\s*(?:\$\{\{\s*)?false\s*(?:\}\})?\s*$)",
+# A step or job that cannot fail the run (GitHub ``continue-on-error: true``, GitLab
+# ``allow_failure: true``) or never runs (``if: false``).
+_CONTINUE_ON_ERROR = re.compile(r"^\s*(?:(?:continue-on-error|allow_failure):\s*['\"]?true\b|if:\s*(?:\$\{\{\s*)?false\s*(?:\}\})?\s*$)",
                                 re.IGNORECASE)
 # The events that run a GitHub workflow on each change, before or as it lands.
 CHANGE_EVENTS = frozenset({"push", "pull_request", "pull_request_target", "merge_group"})
@@ -255,7 +260,7 @@ def ci_guard(root: Path) -> CiGuard:
     for path in _ci_files(root):
         text = _read(path)
         found = _ci_tools(text) if text is not None else []
-        if found and path.suffix in (".yml", ".yaml") and path.parent.name == "workflows" \
+        if found and path.relative_to(root).parts[:2] == (".github", "workflows") \
                 and not _runs_on_change(_code_lines(text or "")):
             found = []
         if found:
