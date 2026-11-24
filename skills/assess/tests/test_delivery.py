@@ -19,17 +19,17 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-import lib.hosting.merged_sample as ms  # noqa: E402
-from lib.hosting.delivery import (  # noqa: E402
+import lib.hosting.merged_sample as ms
+from lib.hosting.delivery import (
     AI_REVIEWERS, DeliveryBlock, agent_authored, ai_reviewed, first_human_comment, percentile,
     scan_delivery,
 )
-from lib.counts_only.content_free import counts_only_scans  # noqa: E402
-from lib.fleet_config import parse_fleet_config  # noqa: E402
-from lib.hosting.gh_cli import GhUnavailable, GithubRepo  # noqa: E402
-from lib.hosting.gitlab_cli import GitlabProject  # noqa: E402
-from lib.hosting.gitlab_notes import NoteFacts  # noqa: E402
-from lib.hosting.merged_sample import BotClassifier, MergedSample  # noqa: E402
+from lib.counts_only.content_free import counts_only_scans
+from lib.fleet_config import parse_fleet_config
+from lib.hosting.gh_cli import GhUnavailable, GithubRepo
+from lib.hosting.gitlab_cli import GitlabProject
+from lib.hosting.gitlab_notes import NoteFacts
+from lib.hosting.merged_sample import BotClassifier, MergedSample
 
 RECORDED = Path(__file__).resolve().parent / "fixtures" / "platform" / "github_merged_prs.json"
 REPO = GithubRepo("acme", "widget")

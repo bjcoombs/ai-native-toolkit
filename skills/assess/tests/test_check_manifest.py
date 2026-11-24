@@ -286,7 +286,7 @@ def test_every_finding_has_a_path_derivation() -> None:
     """The manifest's finding names are the derivation's keys (a missing key would read empty)."""
     from lib.keyhole.keyhole_signals import _finding_path_inputs
     inputs = _finding_path_inputs(
-        behaviour={}, documentation={}, understanding={}, drift_hidden_dirs=[],  # type: ignore[typeddict-item]
+        behaviour={}, documentation={}, understanding={}, drift_hidden_dirs=[],  # type: ignore[typeddict-item]  # empty dicts stand in for the scan blocks
         churn_degenerate=False, untrusted=[], self_ref_paths=[], unactioned=[],
         accreting_paths=[], dead_weight=[], override_contradiction_paths=[])
     assert list(inputs) == FINDING_ORDER

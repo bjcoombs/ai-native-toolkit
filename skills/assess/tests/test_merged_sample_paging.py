@@ -19,14 +19,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-import lib.hosting.gh_cli as gh_cli  # noqa: E402
-import lib.hosting.gitlab_cli as gitlab_cli  # noqa: E402
-import lib.hosting.merged_sample as ms  # noqa: E402
-from lib.hosting.delivery import scan_delivery  # noqa: E402
-from lib.external_ci import CALLS_PER_CHANGE, read_external_ci  # noqa: E402
-from lib.hosting.gh_cli import GhUnavailable, GithubRepo  # noqa: E402
-from lib.hosting.gitlab_cli import GitlabProject  # noqa: E402
-from lib.hosting.platform_cli import CliResult  # noqa: E402
+import lib.hosting.gh_cli as gh_cli
+import lib.hosting.gitlab_cli as gitlab_cli
+import lib.hosting.merged_sample as ms
+from lib.hosting.delivery import scan_delivery
+from lib.external_ci import CALLS_PER_CHANGE, read_external_ci
+from lib.hosting.gh_cli import GhUnavailable, GithubRepo
+from lib.hosting.gitlab_cli import GitlabProject
+from lib.hosting.platform_cli import CliResult
 
 REPO = GithubRepo("kubernetes", "kubernetes")
 PROJECT = GitlabProject("gitlab.example.com", "estate/app")

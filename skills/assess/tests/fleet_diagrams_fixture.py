@@ -13,16 +13,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow, write_rows  # noqa: E402
-from lib.fleet.fleet_compare import Comparison, FleetRun, compare  # noqa: E402
-from lib.fleet.fleet_diagrams import build_diagrams, report_markdown  # noqa: E402
-from lib.fleet.fleet_data import level_results, tag_fields  # noqa: E402
-from lib.fleet.fleet_tag_profile import tag_profile  # noqa: E402
-from lib.fleet.fleet_groups import roll_up  # noqa: E402
-from lib.fleet.fleet_stamp import build_stamp  # noqa: E402
-from lib.fleet.fleet_view import read_repos  # noqa: E402
-from lib.levels import MaturityModel, load_levels  # noqa: E402
-from lib.run_context_types import JsonDict  # noqa: E402
+from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow, write_rows
+from lib.fleet.fleet_compare import Comparison, FleetRun, compare
+from lib.fleet.fleet_diagrams import build_diagrams, report_markdown
+from lib.fleet.fleet_data import level_results, tag_fields
+from lib.fleet.fleet_tag_profile import tag_profile
+from lib.fleet.fleet_groups import roll_up
+from lib.fleet.fleet_stamp import build_stamp
+from lib.fleet.fleet_view import read_repos
+from lib.levels import MaturityModel, load_levels
+from lib.run_context_types import JsonDict
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_diagrams"
 

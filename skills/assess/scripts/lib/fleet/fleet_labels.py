@@ -58,8 +58,8 @@ from typing import Any, TypedDict
 if __package__ in (None, ""):  # run as a script to regenerate the schema: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from lib.fleet.runner import REPOS_FILE, FleetRow  # noqa: E402
-from lib.run_context_types import JsonDict  # noqa: E402
+from lib.fleet.runner import REPOS_FILE, FleetRow
+from lib.run_context_types import JsonDict
 
 LABELS_FILE = "labels.jsonl"
 OTHER = "other"

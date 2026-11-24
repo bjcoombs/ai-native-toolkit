@@ -28,7 +28,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "scripts"))
 
-from lib.manifest.check_manifest import collectors, core_manifest  # noqa: E402
+from lib.manifest.check_manifest import collectors, core_manifest  # noqa: E402 - imports follow the sys.path bootstrap
 
 GOLDEN = HERE / "fixtures" / "fleet_golden" / "repos.jsonl"
 FINGERPRINTS = HERE / "fixtures" / "fleet_golden" / "collector_fingerprints.json"

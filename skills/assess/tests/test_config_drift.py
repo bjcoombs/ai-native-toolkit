@@ -19,8 +19,8 @@ from assess_test_support import skip_without_posix_shell
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.hosting.config_drift import diff_values, find_snapshots, scan_config_drift  # noqa: E402
-from lib.hosting.gh_cli import (  # noqa: E402
+from lib.hosting.config_drift import diff_values, find_snapshots, scan_config_drift
+from lib.hosting.gh_cli import (
     GhUnavailable,
     gh_json,
     open_github,

@@ -159,14 +159,14 @@ def test_repository_lists_extend_the_fleet_lists_and_keep_fleet_indices():
     assert merged.config["ai_usage"] == {
         "agent_identities": [f"^{SENTINEL}", "^bot", "^local"],
         "rules": [{"pattern": "^x"}, {"pattern": "^y", "field": "name"}, {"pattern": "^z"}]}
-    assert fleet["ai_usage"]["agent_identities"] == [f"^{SENTINEL}", "^bot"]  # type: ignore[typeddict-item]
+    assert fleet["ai_usage"]["agent_identities"] == [f"^{SENTINEL}", "^bot"]  # type: ignore[typeddict-item]  # ai_usage is set in the FULL fixture
 
 
 def test_a_fleet_scalar_is_never_replaced_silently_and_an_unset_one_takes_the_repo_value():
     fleet = _parse(FULL)
     merged = fcfg.merge_repo_sections(
         fleet, {"review": {"enabled": False}, "platform": {"sample": 25, "host": "gl.example"}}, SCHEMA)
-    assert merged.config["review"]["enabled"] is True  # type: ignore[typeddict-item]
+    assert merged.config["review"]["enabled"] is True  # type: ignore[typeddict-item]  # review is set in the FULL fixture
     assert merged.config["platform"] == {"sample": 25, "host": "gl.example"}
     assert merged.warnings == ["review.enabled: set in the fleet config; the repository value is ignored"]
 
@@ -318,7 +318,7 @@ def test_fleet_gives_every_scan_the_same_copy_and_stamps_the_hash(tmp_path, monk
     seen: list[tuple[Path | None, str]] = []
     real = fleet_cli.run_fleet
 
-    def spy(targets, options, jobs, **kwargs):  # type: ignore[no-untyped-def]
+    def spy(targets, options, jobs, **kwargs):  # type: ignore[no-untyped-def]  # a spy that forwards to run_fleet untouched
         path = options.fleet_config
         seen.append((path, path.read_text(encoding="utf-8") if path else ""))
         return real(targets, options, jobs, **kwargs)

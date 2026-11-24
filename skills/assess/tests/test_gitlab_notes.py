@@ -8,8 +8,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.fleet_config import parse_fleet_config  # noqa: E402
-from lib.hosting.gitlab_notes import NoteClassifier, NoteFacts, classifier_from_config, note_facts  # noqa: E402
+from lib.fleet_config import parse_fleet_config
+from lib.hosting.gitlab_notes import NoteClassifier, NoteFacts, classifier_from_config, note_facts
 
 AUTHOR = "alice"
 TOKEN = "project_42_bot_4ffc0de1a2b3"
@@ -124,10 +124,10 @@ def test_malformed_entries_are_skipped() -> None:
 
 # ---- the registry entry and the GitLab delivery figures ----------------------
 
-from lib.hosting.delivery import scan_delivery  # noqa: E402
-from lib.hosting.gitlab_cli import GitlabProject  # noqa: E402
-from lib.hosting.gitlab_notes import gitlab_note_facts  # noqa: E402
-from lib.hosting.merged_sample import MergedSample  # noqa: E402
+from lib.hosting.delivery import scan_delivery  # noqa: E402 - imported beside the delivery tests that use them
+from lib.hosting.gitlab_cli import GitlabProject  # noqa: E402 - imported beside the delivery tests that use them
+from lib.hosting.gitlab_notes import gitlab_note_facts  # noqa: E402 - imported beside the delivery tests that use them
+from lib.hosting.merged_sample import MergedSample  # noqa: E402 - imported beside the delivery tests that use them
 
 _MRS = ({"iid": 1, "created_at": "2026-09-01T00:00:00Z", "merged_at": "2026-09-02T00:00:00Z"},
         {"iid": 2, "created_at": "2026-09-01T00:00:00Z", "merged_at": "2026-09-03T00:00:00Z"})

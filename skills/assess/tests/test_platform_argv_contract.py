@@ -23,7 +23,7 @@ from assess_test_support import skip_without_posix_shell
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib import signals  # noqa: E402
+from lib import signals
 
 RECORDED = Path(__file__).resolve().parent / "fixtures" / "platform" / "github_merged_prs.json"
 

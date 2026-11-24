@@ -21,15 +21,15 @@ from pathlib import Path
 if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from lib.fleet.fleet_group_schema import type_schema  # noqa: E402
-from lib.fleet.runner import RepoCommit  # noqa: E402
-from lib.fleet.fleet_level import FleetLevels  # noqa: E402
-from lib.level_result_types import LevelResult  # noqa: E402
-from lib.level_tally import COUNTED_GRADES, DEMOTED, EXCLUDED_BY_OWNER, LEVEL_RESULT_VERSION, STATES  # noqa: E402
-from lib.owner_exclusions import KINDS, SOURCE_REPO  # noqa: E402
-from lib.level_signals import INPUT_GRADES  # noqa: E402
-from lib.levels_fields import TRUTH_TAGS  # noqa: E402
-from lib.run_context_types import JsonDict  # noqa: E402
+from lib.fleet.fleet_group_schema import type_schema
+from lib.fleet.runner import RepoCommit
+from lib.fleet.fleet_level import FleetLevels
+from lib.level_result_types import LevelResult
+from lib.level_tally import COUNTED_GRADES, DEMOTED, EXCLUDED_BY_OWNER, LEVEL_RESULT_VERSION, STATES
+from lib.owner_exclusions import KINDS, SOURCE_REPO
+from lib.level_signals import INPUT_GRADES
+from lib.levels_fields import TRUTH_TAGS
+from lib.run_context_types import JsonDict
 
 SCHEMA_PATH = Path(__file__).resolve().parents[4] / "fleet" / "references" / "level.schema.json"
 SCHEMA_ID = "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/level.schema.json"

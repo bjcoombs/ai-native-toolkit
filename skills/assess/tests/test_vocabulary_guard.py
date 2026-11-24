@@ -42,7 +42,7 @@ def _svg_prose(svg: str) -> str:
 
 
 @pytest.fixture(scope="module")
-def fleet_out(froot: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:  # noqa: F811
+def fleet_out(froot: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:  # noqa: F811 - froot is a pytest fixture imported by name
     """A real fleet run with diagrams, then the heat map and the next-steps pages on it."""
     base = tmp_path_factory.mktemp("vocabulary")
     out = base / "out"

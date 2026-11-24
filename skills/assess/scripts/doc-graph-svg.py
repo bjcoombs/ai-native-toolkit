@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-# ruff: noqa: E402 - without uv the PEP 723 dependencies may be absent: print the
+# Without uv the PEP 723 dependencies may be absent: print the
 # install line and exit 1 before the first third-party import, not a traceback (#752).
 from lib.tool_lookup import require_packages
 require_packages((("networkx", "networkx"), ("numpy", "numpy"), ("matplotlib", "matplotlib")))

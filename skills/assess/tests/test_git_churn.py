@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.git_churn import churn_is_degenerate  # noqa: E402
+from lib.git_churn import churn_is_degenerate
 
 
 def test_all_ones_is_degenerate() -> None:

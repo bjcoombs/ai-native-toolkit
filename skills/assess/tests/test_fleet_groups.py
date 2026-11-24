@@ -249,7 +249,7 @@ def test_schema_mapper_rejects_an_unknown_type():
 # --- end to end ------------------------------------------------------------------
 
 
-def test_fleet_run_writes_group_rows_byte_identically(froot, tmp_path):  # noqa: F811
+def test_fleet_run_writes_group_rows_byte_identically(froot, tmp_path):  # noqa: F811 - froot is a pytest fixture imported by name
     maturity_model = tmp_path / "rub.toml"
     maturity_model.write_text(LEVELS_TOML, encoding="utf-8")
     settings = tmp_path / "settings.json"
@@ -272,7 +272,7 @@ def test_fleet_run_writes_group_rows_byte_identically(froot, tmp_path):  # noqa:
         jsonschema.validate(group, build_schema())
 
 
-def test_bad_settings_exit_2(froot, tmp_path, capsys):  # noqa: F811
+def test_bad_settings_exit_2(froot, tmp_path, capsys):  # noqa: F811 - froot is a pytest fixture imported by name
     assert fleet_cli.main([str(froot), "--settings", str(tmp_path / "absent.json"),
                            "--out", str(tmp_path / "o")]) == 2
     assert "settings" in capsys.readouterr().err
@@ -291,7 +291,7 @@ def test_a_settings_dir_with_no_fragment_files_is_an_error(tmp_path, layout):
         fg.load_settings(folder)
 
 
-def test_empty_settings_dir_exits_2(froot, tmp_path, capsys):  # noqa: F811
+def test_empty_settings_dir_exits_2(froot, tmp_path, capsys):  # noqa: F811 - froot is a pytest fixture imported by name
     (tmp_path / "empty").mkdir()
     assert fleet_cli.main([str(froot), "--settings", str(tmp_path / "empty"),
                            "--out", str(tmp_path / "o")]) == 2

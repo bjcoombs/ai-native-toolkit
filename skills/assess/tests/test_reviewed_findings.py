@@ -170,7 +170,7 @@ def test_entries_that_do_not_clear(git_repo: Any) -> None:
 
 def test_a_sha_that_is_not_an_ancestor_does_not_clear(git_repo: Any) -> None:
     repo, commit, _ = _self_ref_repo(git_repo)
-    run = lambda *a: subprocess.run(["git", "-C", str(repo), *a],  # noqa: E731
+    run = lambda *a: subprocess.run(["git", "-C", str(repo), *a],  # noqa: E731 - a one-line local helper
                                     check=True, capture_output=True)
     run("checkout", "-q", "-b", "side")
     (repo / "side.txt").write_text("s\n", encoding="utf-8")

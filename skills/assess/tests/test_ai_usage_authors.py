@@ -20,8 +20,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib import agent_identity  # noqa: E402
-from lib.agent_identity import (  # noqa: E402
+from lib import agent_identity
+from lib.agent_identity import (
     AGENT,
     DEPENDENCY_BOT,
     OTHER,
@@ -30,18 +30,18 @@ from lib.agent_identity import (  # noqa: E402
     is_gitlab_token_user,
     username_from_email,
 )
-from lib.ai_usage import AiUsageBlock, scan_ai_usage  # noqa: E402
-from lib.counts_only.content_free import counts_only_scans  # noqa: E402
-from lib.fleet_config import (  # noqa: E402
+from lib.ai_usage import AiUsageBlock, scan_ai_usage
+from lib.counts_only.content_free import counts_only_scans
+from lib.fleet_config import (
     FleetConfig,
     FleetConfigError,
     empty_config,
     merge_repo_sections,
     parse_fleet_config,
 )
-from lib.level_signals import signal_path_validator  # noqa: E402
-from lib.signals import collect  # noqa: E402
-from lib.levels import load_levels  # noqa: E402
+from lib.level_signals import signal_path_validator
+from lib.signals import collect
+from lib.levels import load_levels
 
 RECENT = (datetime.now(timezone.utc) - timedelta(days=30)).replace(microsecond=0).isoformat()
 

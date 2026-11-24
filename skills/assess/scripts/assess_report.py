@@ -56,10 +56,10 @@ from typing import Any
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.assess_diagrams import diagrams_section  # noqa: E402
-from lib.assess_diagrams_review import build_all  # noqa: E402
-from lib.headline import GLOSSARY_URL, as_headline  # noqa: E402
-from lib.measured_appendix import measured_section  # noqa: E402
+from lib.assess_diagrams import diagrams_section
+from lib.assess_diagrams_review import build_all
+from lib.headline import GLOSSARY_URL, as_headline
+from lib.measured_appendix import measured_section
 
 # Caps on rows rendered so a pathological repo can't bloat the frozen report.
 # The structured arrays in run-context.json keep the full lists.

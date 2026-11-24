@@ -19,8 +19,8 @@ from pathlib import Path
 # Make the sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.levels_starter import StarterError, write_starter  # noqa: E402
-from lib.profiles import profile_names  # noqa: E402
+from lib.levels_starter import StarterError, write_starter
+from lib.profiles import profile_names
 
 
 def main(argv: list[str] | None = None) -> int:

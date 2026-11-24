@@ -402,7 +402,7 @@ def test_default_levels_toml_parses():
 # --- end to end --------------------------------------------------------------
 
 
-def test_real_fleet_run_with_the_default_levels_renders_pages(froot, tmp_path):  # noqa: F811
+def test_real_fleet_run_with_the_default_levels_renders_pages(froot, tmp_path):  # noqa: F811 - froot is a pytest fixture imported by name
     out = tmp_path / "out"
     assert fleet_cli.main([str(froot), "--levels", str(DEFAULT_LEVELS), "--out", str(out)]) == 0
     assert cli.main([str(out)]) == 0
@@ -420,7 +420,7 @@ def test_real_fleet_run_with_the_default_levels_renders_pages(froot, tmp_path): 
         p.read_text(encoding="utf-8") for p in out.rglob("*.md"))
 
 
-def test_a_run_without_a_maturity_model_says_so(froot, tmp_path, capsys):  # noqa: F811
+def test_a_run_without_a_maturity_model_says_so(froot, tmp_path, capsys):  # noqa: F811 - froot is a pytest fixture imported by name
     out = tmp_path / "out"
     assert fleet_cli.main([str(froot), "--out", str(out)]) == 0
     assert cli.main([str(out)]) == 2
@@ -429,7 +429,7 @@ def test_a_run_without_a_maturity_model_says_so(froot, tmp_path, capsys):  # noq
 
 def test_index_links_are_percent_encoded():
     group = {"group": "my team", "repos": 1, "levels": []}
-    page = ns.index_page(LEVELS, [group])  # type: ignore[list-item]
+    page = ns.index_page(LEVELS, [group])  # type: ignore[list-item]  # a plain dict group stands in for GroupRow
     assert "(teams/my%20team.md)" in page
 
 

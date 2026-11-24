@@ -15,9 +15,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.assess_diagrams import diagrams_section  # noqa: E402
-from lib.assess_diagrams_review import DRIFT_FILE, STRIP_FILE, review_diagrams  # noqa: E402
-from lib.run_context_types import JsonDict  # noqa: E402
+from lib.assess_diagrams import diagrams_section
+from lib.assess_diagrams_review import DRIFT_FILE, STRIP_FILE, review_diagrams
+from lib.run_context_types import JsonDict
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "assess_diagrams"
 

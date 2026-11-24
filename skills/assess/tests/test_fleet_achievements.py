@@ -44,7 +44,7 @@ def _row(repo: str, docs: int | None, ci: bool) -> FleetRow:
                 "status": "failed", "reason": "scan_timeout", "signals_schema_version": None, "scans": None,
                 "active": None}
     return {"fleet_row_version": FLEET_ROW_VERSION, "repo": repo, "group": repo.rsplit("/", 1)[0], "status": "ok",
-            "reason": None, "signals_schema_version": 1, "scans": _scans(docs, ci), "active": True}  # type: ignore[typeddict-item]
+            "reason": None, "signals_schema_version": 1, "scans": _scans(docs, ci), "active": True}  # type: ignore[typeddict-item]  # the scans fixture is a partial block map
 
 
 def _data(date: str, spec: Spec, privacy: Privacy = Privacy()) -> FleetData:
@@ -68,7 +68,7 @@ def _runs(history: list[tuple[str, Spec]] = HISTORY, privacy: Privacy = Privacy(
 
 def _build(history: list[tuple[str, Spec]] = HISTORY, **kw: object) -> fa.Achievements:
     runs = _runs(history)
-    return fa.build_achievements(runs[-1], runs[:-1], MODEL, **kw)  # type: ignore[arg-type]
+    return fa.build_achievements(runs[-1], runs[:-1], MODEL, **kw)  # type: ignore[arg-type]  # kw passes build_achievements' keyword options
 
 
 def _earned(doc: fa.Achievements, kind: str | None = None, run: str | None = None) -> list[tuple[str, str, str, str | None]]:
@@ -208,7 +208,7 @@ def test_no_history_note_and_baseline() -> None:
     doc = fa.build_achievements(runs[0], [], MODEL, note="this run is not kept in the run history")
     assert doc["runs"] == ["2026-11-01"] and doc["note"] == "this run is not kept in the run history"
     assert doc["achievements"] == [] and doc["nearest_level_ups"]
-    assert fa.build_achievements(runs[0], [], MODEL)["note"].startswith("no earlier comparable run")  # type: ignore[union-attr]
+    assert fa.build_achievements(runs[0], [], MODEL)["note"].startswith("no earlier comparable run")  # type: ignore[union-attr]  # note is set on a run with no history
     assert fa.build_achievements(runs[0], [], None)["nearest_level_ups"] == []
 
 
@@ -380,7 +380,7 @@ def test_a_malformed_history_entry_is_passed_over(tmp_path: Path, break_it: obje
     org = tmp_path / "grp"
     _entry(org, "2026-11-01", BASE)
     bad = json.loads(dumps_fleet_data(_data("2026-11-08", BASE)))
-    break_it(bad)  # type: ignore[operator]
+    break_it(bad)  # type: ignore[operator]  # break_it is a parametrized callable
     _entry(org, "2026-11-08", BASE)
     (org / "2026-11-08" / FLEET_DATA_FILE).write_text(json.dumps(bad), encoding="utf-8")
     current: FleetStamp = {**STAMP, "scan_date": "2026-11-15"}

@@ -355,7 +355,7 @@ def _cond(cid: str, state: str, grade: str = "measured", counted: bool = True, *
 
 
 def _tagged_model() -> dict[str, Any]:
-    level = lambda n, truth, **x: {"level": n, "criteria": [], "truth": truth, **x}  # noqa: E731
+    level = lambda n, truth, **x: {"level": n, "criteria": [], "truth": truth, **x}  # noqa: E731 - a one-line local helper
     return {"version": "t-1", "rows": [
         {"id": "r", "title": "R", "scope": "repo", "aggregation": None,
          "levels": [level(1, ["behaviour", "docs"]), level(2, ["behaviour"]), level(3, ["docs"])]},
@@ -375,7 +375,7 @@ def _tagged_level() -> dict[str, Any]:
 
 
 def test_tally_line_shows_the_verified_share_of_n():
-    h = headline(_tagged_level(), _tagged_model())  # type: ignore[arg-type]
+    h = headline(_tagged_level(), _tagged_model())  # type: ignore[arg-type]  # a plain dict model stands in for MaturityModel
     assert h["lines"][0] == ("Catalogue coverage: 2 of 2 measured, 1 verified · 1 not measured "
                              "(no remote: 1) · model t-1")
     assert h["verified"] == 1
@@ -383,7 +383,7 @@ def test_tally_line_shows_the_verified_share_of_n():
 
 
 def test_strip_counts_a_multi_tagged_condition_in_each_cell_and_once_in_n():
-    h = headline(_tagged_level(), _tagged_model())  # type: ignore[arg-type]
+    h = headline(_tagged_level(), _tagged_model())  # type: ignore[arg-type]  # a plain dict model stands in for MaturityModel
     assert h["lines"][1] == ("By tag: behaviour 2 of 2 · docs 1 of 1 (NOT MEASURED: 1) · "
                              "governance 0 of 0 (HAZARD: 1, DECLINED: 1)")
     cells = {c["tag"]: c for c in h["tags"]}
@@ -404,7 +404,7 @@ def test_no_tagged_condition_gives_no_strip_line():
 def test_counts_only_keeps_the_strip_numbers_and_tag_tokens():
     from lib.counts_only.content_free import counts_only
 
-    head = headline(_tagged_level(), _tagged_model())  # type: ignore[arg-type]
+    head = headline(_tagged_level(), _tagged_model())  # type: ignore[arg-type]  # a plain dict model stands in for MaturityModel
     kept = counts_only({"headline": head})["headline"]
     assert kept["verified"] == 1
     assert kept["tags"] == head["tags"]

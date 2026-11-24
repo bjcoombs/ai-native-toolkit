@@ -21,18 +21,18 @@ from pathlib import Path
 if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from lib.fleet.fleet_achievements import (  # noqa: E402
+from lib.fleet.fleet_achievements import (
     ACHIEVEMENTS_VERSION,
     KINDS,
     NEAREST_LEVEL_UP,
     REPO_VIEW,
     Achievements,
 )
-from lib.fleet.fleet_data import FLEET_DATA_VERSION  # noqa: E402
-from lib.fleet.fleet_group_schema import type_schema  # noqa: E402
-from lib.fleet.fleet_rescore import DIRECTIONS, RULES  # noqa: E402
-from lib.fleet.fleet_units import KINDS as UNIT_KINDS, VIEWS  # noqa: E402
-from lib.run_context_types import JsonDict  # noqa: E402
+from lib.fleet.fleet_data import FLEET_DATA_VERSION
+from lib.fleet.fleet_group_schema import type_schema
+from lib.fleet.fleet_rescore import DIRECTIONS, RULES
+from lib.fleet.fleet_units import KINDS as UNIT_KINDS, VIEWS
+from lib.run_context_types import JsonDict
 
 SCHEMA_PATH = Path(__file__).resolve().parents[4] / "fleet" / "references" / "achievements.schema.json"
 SCHEMA_ID = "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/achievements.schema.json"

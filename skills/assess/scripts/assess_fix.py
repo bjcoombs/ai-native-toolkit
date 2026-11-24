@@ -49,13 +49,13 @@ from typing import Any
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.exec_summary import GATE_TASK  # noqa: E402
-from lib.level_tally import default_model, level_result  # noqa: E402
-from lib.levels import MaturityModel, condition_id  # noqa: E402
-from lib.run_context_types_fix import CiSystem, Delivery, FileOutcome, FixReport, GateProof  # noqa: E402
-from lib.signals import collect  # noqa: E402
-from lib.starter_delivery import Runner, deliver, ignored, is_git_repo, run, stage, tree_clean  # noqa: E402
-from lib.starter_files import GUARDRAIL, detect_facts, plan_files, write_files  # noqa: E402
+from lib.exec_summary import GATE_TASK
+from lib.level_tally import default_model, level_result
+from lib.levels import MaturityModel, condition_id
+from lib.run_context_types_fix import CiSystem, Delivery, FileOutcome, FixReport, GateProof
+from lib.signals import collect
+from lib.starter_delivery import Runner, deliver, ignored, is_git_repo, run, stage, tree_clean
+from lib.starter_files import GUARDRAIL, detect_facts, plan_files, write_files
 
 # The blocks the Step gates, the guardrail and the fact detectors read.
 SCANS = ("layer_grades", "ci_checks", "coverage_gate", "agent_environment", "agent_ops")

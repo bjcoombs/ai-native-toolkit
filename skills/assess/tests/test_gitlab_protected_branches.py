@@ -16,12 +16,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.hosting.config_drift import find_snapshots, scan_config_drift  # noqa: E402
-from lib.hosting.gh_cli import GhUnavailable  # noqa: E402
-from lib.hosting.gitlab_cli import GitlabProject, branch_protection  # noqa: E402
-from lib.hosting.review_reality import gitlab_review_required  # noqa: E402
-import test_review_reality_gitlab as _stubs  # noqa: E402
-from test_review_reality_gitlab import ENC, PROJECT, World, _git  # noqa: E402
+from lib.hosting.config_drift import find_snapshots, scan_config_drift
+from lib.hosting.gh_cli import GhUnavailable
+from lib.hosting.gitlab_cli import GitlabProject, branch_protection
+from lib.hosting.review_reality import gitlab_review_required
+import test_review_reality_gitlab as _stubs
+from test_review_reality_gitlab import ENC, PROJECT, World, _git
 
 world = _stubs.world  # the offline glab/gh stub fixture
 
@@ -234,7 +234,7 @@ def test_matching_gitlab_snapshot_has_no_drift(world: World) -> None:
     _track(world, ".gitlab/main.json", _rule("main"))
     live = _rule("main")
     live["id"] = 999
-    live["merge_access_levels"] = [{**lv, "id": 1} for lv in _levels(30)]  # type: ignore[dict-item]
+    live["merge_access_levels"] = [{**lv, "id": 1} for lv in _levels(30)]  # type: ignore[dict-item]  # adds the id GitLab returns on a live rule
     world.serve(LIST, [live])
     assert scan_config_drift(world.root) == {
         "available": True, "entries": [], "dropped": 0,

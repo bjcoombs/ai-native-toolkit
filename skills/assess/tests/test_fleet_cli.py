@@ -178,10 +178,10 @@ class _MidnightClock(datetime):
     reads = 0
 
     @classmethod
-    def now(cls, tz: object = None) -> _MidnightClock:  # type: ignore[override]
+    def now(cls, tz: object = None) -> _MidnightClock:  # type: ignore[override]  # a datetime.now stub that ignores tz
         cls.reads += 1
         late = cls(2026, 11, 22, 23, 59, 59, tzinfo=timezone.utc)
-        return late if cls.reads == 1 else late + timedelta(seconds=2)  # type: ignore[return-value]
+        return late if cls.reads == 1 else late + timedelta(seconds=2)  # type: ignore[return-value]  # the stub returns its own subclass
 
 
 def _stamped_dates(froot: Path, tmp_path: Path, *outs: str) -> list[str]:
