@@ -7,6 +7,7 @@
 # (skills/assess/tests/test_catalog.py, #794), so it stays LF on Windows too.
 docs/what-we-measure.md text eol=lf
 skills/assess/references/measures.json text eol=lf
+docs/checks.html text eol=lf
 
 # Generated files and goldens: never hand-edit or hand-merge them. On a merge
 # conflict in any of them, take either side, then run `make regen`, which
@@ -14,6 +15,7 @@ skills/assess/references/measures.json text eol=lf
 # this list: it overwrites each file below and checks `make regen` restores it.
 docs/what-we-measure.md linguist-generated
 skills/assess/references/measures.json linguist-generated
+docs/checks.html linguist-generated
 skills/assess/references/counts-only.md linguist-generated
 skills/assess/references/signals.schema.json linguist-generated
 skills/fleet/references/*.schema.json linguist-generated

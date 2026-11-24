@@ -79,6 +79,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 - `doc_staleness.association.methods`
 - `instruction_files.{}.subscores`
 - `nested_instructions.files.subscores`
+- `prior_level.models`
 - `prior_tool_versions`
 - `promissory_markers.families`
 - `stats_summary.fn_ccn.backend_by_language`
@@ -148,6 +149,15 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `prior_level.pruning.gates` | token |
 | `prior_level.pruning.credited_at` | token |
 | `prior_level.pruning.merged` | token |
+| `prior_level.models.*.levels_version` | token |
+| `prior_level.models.*.tags.tag` | token |
+| `prior_level.models.*.tags.not_measured.id` | token |
+| `prior_level.models.*.tags.not_measured.reason` | token |
+| `prior_level.models.*.tags.countable_not_measured.id` | token |
+| `prior_level.models.*.tags.countable_not_measured.reason` | token |
+| `prior_level.models.*.baseline.run_id` | token |
+| `prior_level.models.*.baseline.head_sha` | token |
+| `prior_level.models.*.baseline.held_gates` | token |
 
 ## doc_graph
 

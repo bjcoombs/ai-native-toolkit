@@ -10,7 +10,8 @@ major version and the stamp version must match. A comparison is also refused
 in maturity-model version, window, output mode, scan selection, path hashing or
 ``--fleet-config`` (its ``fleet_config_sha256``; a stamp from before #706 reads as
 no fleet config) or ``--platform`` (``platform``; a stamp from before #714 reads
-as ``false``), or when
+as ``false``) or in the rules of the maturity model (``rules_sha256``, #952, when both
+stamps record one; a stamp from before #952 compares with a note), or when
 the earlier run's files are at another envelope version (``RunVersionError``
 from ``load_run`` becomes such a reason in ``not_comparable``).
 
@@ -55,7 +56,9 @@ turn into a not-comparable result). `comparability` reuses
 `diff_reliability._diff_is_reliable` for the plugin major version and stamp version and
 adds maturity-model version, window, output mode, scan selection, path hashing and the
 `--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config) and
-`platform` (a pre-#714 stamp is false); any reason
+`platform` (a pre-#714 stamp is false), and the rules hash (`rules_sha256`, #952,
+`lib/fleet/fleet_method.py`: a reason only when both stamps recorded one; an unrecorded side
+or a collector revision change is a note, printed by `summary_lines` too); any reason
 gives `comparable: false` with no deltas. `compare` reports the measured-set movement
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
 the row's `active`) apart from level movement: each group's maturity model rows then and now with
@@ -69,7 +72,9 @@ plus the groups whose set moved), so the level-only view and `compare.json` shar
 A level state carries `floor` when the row has one (#697); `moved` still compares status and level only, so a floor appearing against an entry written before #697 is not a move.
 `compare` takes an optional `scanner` (`fleet_scanner_diff.scanner_diff` of the two stamps,
 passed by both CLIs) and re-attributes moved team rows through `fleet_scanner_diff.attribute`;
-`FleetRun.row_signals` carries the signals each row's `fleet-data.json` cells name (#774).
+`FleetRun.row_signals` carries the signals each row's `fleet-data.json` cells name (#774), and
+`FleetRun.steps` each repository's stored Step from the run's `level.json` (`stored_steps`, #941;
+None for a run without one), which the Step movement grid reads (`lib/fleet/fleet_step_movement.py`).
 """
 from __future__ import annotations
 
@@ -84,8 +89,10 @@ from typing import Any, NotRequired, TypedDict, cast
 from lib.complexity.diff_reliability import _diff_is_reliable
 from lib.fleet.runner import FLEET_ROW_VERSION, REPOS_FILE, STATUS_OK, FleetRow
 from lib.fleet.fleet_data import FLEET_DATA_FILE
+from lib.fleet.fleet_level import LEVEL_FILE
 from lib.fleet.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow, RowLevel
 from lib.fleet.fleet_legacy import stamp_value, upgrade
+from lib.fleet.fleet_method import METHOD_PREFIXES, method_notes, rule_reasons
 from lib.levels import floor_of
 from lib.signal_aliases import renamed
 from lib.fleet.fleet_view import FleetViewError, load_groups, read_repos
@@ -123,6 +130,8 @@ class FleetRun:
     groups: list[GroupRow]
     # row id -> the signals its fleet-data.json cells name (#774); None without that file
     row_signals: Mapping[str, frozenset[str]] | None = None
+    # repository id -> its stored Step from the run's level.json (#941); None without that file
+    steps: Mapping[str, int | None] | None = None
 
 
 class LevelState(TypedDict):
@@ -255,7 +264,20 @@ def load_run(run_dir: Path) -> FleetRun:
         if found is not None and found != version:
             raise RunVersionError(f"{name} {key} {found!r}, this toolkit reads {version}")
     return FleetRun(cast(FleetStamp, stamp), read_repos(run_dir), load_groups(run_dir),
-                    _row_signals(run_dir / FLEET_DATA_FILE))
+                    _row_signals(run_dir / FLEET_DATA_FILE), stored_steps(run_dir / LEVEL_FILE))
+
+
+def stored_steps(path: Path) -> dict[str, int | None] | None:
+    """Each repository's Step as a run's ``level.json`` stored it (#941); None when the file is
+    absent, unreadable or not that shape (a run kept before #941, or one without ``--levels``)."""
+    try:
+        repos = json.loads(path.read_text(encoding="utf-8")).get("repos")
+    except (OSError, ValueError, AttributeError):
+        return None
+    if not isinstance(repos, dict):
+        return None
+    return {k: v.get("step") if isinstance(v, dict) and isinstance(v.get("step"), int) else None
+            for k, v in repos.items() if isinstance(k, str)}
 
 
 def _row_signals(path: Path) -> dict[str, frozenset[str]] | None:
@@ -284,8 +306,9 @@ def comparability(earlier: FleetStamp, later: FleetStamp) -> tuple[list[str], li
         then, now = stamp_value(earlier, key), stamp_value(later, key)
         if then != now:
             reasons.append(f"{label} changed {then!r}->{now!r}")
+    reasons += rule_reasons(earlier, later)  # the rules hash (#952): only when both recorded one
     notes = [HASH_NOTE] if earlier.get("paths_hashed") and later.get("paths_hashed") else []
-    return reasons, notes
+    return reasons, notes + method_notes(earlier, later)
 
 
 def _summary(stamp: FleetStamp) -> StampSummary:
@@ -560,7 +583,7 @@ def summary_lines(comparison: Comparison) -> list[str]:
 
 
 def _scanner_notes(comparison: Comparison) -> list[str]:
-    return [note for note in comparison["notes"] if note.startswith(UNAVAILABLE_PREFIX)]
+    return [note for note in comparison["notes"] if note.startswith((UNAVAILABLE_PREFIX, *METHOD_PREFIXES))]
 
 
 def _why(row: RowMove) -> str:

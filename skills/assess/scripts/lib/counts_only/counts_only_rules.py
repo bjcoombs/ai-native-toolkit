@@ -103,6 +103,7 @@ KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")
 IDENTIFIER_KEYED_MAPS: Final = frozenset({
     "tool_versions",
     "prior_tool_versions",
+    "prior_level.models",  # profile names (#1184)
     "agent_harness.executes_by_kind",
     "agent_harness.counts_by_kind",
     "claude_config.counts_by_kind",
@@ -269,7 +270,7 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
 # field in neither this set nor FLEET_DATA_RULES.
 FLEET_DATA_KEPT: Final = frozenset({
     "run.toolkit_commit", "run.plugin_version", "run.scan_date", "run.window",
-    "run.levels_version", "run.scans", "run.fleet_config_sha256",
+    "run.levels_version", "run.scans", "run.fleet_config_sha256", "run.rules_sha256",
     "model.id", "model.title", "model.scope",
     "repos.rows.row", "repos.rows.signal", "views.units.levels.row",
     # #746: maturity-model ids and the run's own wording (counts and model titles only)
@@ -286,6 +287,9 @@ FLEET_DATA_KEPT: Final = frozenset({
     "repos.exclusions.id", "views.units.step.next_step.gates.gate", "views.units.step.next_step.gates.row",
     # #1128: a criterion's why, the check manifest's own text (lib.fleet.fleet_why.criterion_why)
     "repos.rows.why", "opportunities.biggest_lift.why",
+    # #941: one change away, model ids and titles only (lib/fleet/fleet_step_lifts.py)
+    "opportunities.step_lifts.condition", "opportunities.step_lifts.row", "opportunities.step_lifts.title",
+    "opportunities.step_lifts.gate",
 })
 
 

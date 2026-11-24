@@ -21,7 +21,8 @@ Writes are narrow and fail closed:
   existing directory on the way from the root to the entry may be a symlink;
 - a same-day entry is replaced only when it is this tool's (a readable
   ``run.json`` at the stamp version this code writes) and its stamp agrees on
-  maturity-model version, window, output mode, scan selection, path hashing and
+  maturity-model version and rules hash (``rules_sha256``, #952: an entry from before it
+  differs from a run that records one), window, output mode, scan selection, path hashing and
   ``--fleet-config`` hash and ``--platform`` (absent before #714: ``false``), and
   holds the same repository set (so a partial ``--from-list`` rerun never
   replaces the full-fleet entry); otherwise ``entry_conflict`` names why, the entry is kept, and
@@ -30,24 +31,25 @@ Writes are narrow and fail closed:
 
 ``latest_matching`` finds the newest entry (by date, then suffix) whose stamp
 matches a planned run, preferring one with the same repository set: the
-default earlier run for ``--compare``.
+default earlier run for ``--compare``. There an unrecorded rules hash matches, so an entry from
+before #952 is still a baseline.
 
 The fleet run history (issue #552): each counts-only run's `repos.jsonl`, `groups.jsonl`
-and `run.json` kept in `<root>/<org>/<scan_date>/`, plus `doc_freshness.jsonl` and `fleet-data.json` when the
-run wrote them (`OPTIONAL_HISTORY_FILES`, #664 and #703; a same-day replacement without it removes
+and `run.json` kept in `<root>/<org>/<scan_date>/`, plus `doc_freshness.jsonl`, `fleet-data.json` and `level.json` when the
+run wrote them (`OPTIONAL_HISTORY_FILES`, #664, #703 and #941; a same-day replacement without it removes
 the old copy so an entry never mixes runs). `history_root` is
 `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet` (a relative or empty
 `XDG_DATA_HOME` ignored); `default_org` is the first segment every repository id shares,
 or the distinct ones sorted and joined by `+`. Fails closed: `safe_component` rejects a
 name that is not one plain path component, `entry_dir` refuses a symlinked directory on
 the way, and `entry_conflict` keeps a same-day entry that is not this tool's (no readable
-`run.json` at the current stamp version) or whose stamp differs in maturity-model version,
-window, output mode, scan selection, path hashing or `--fleet-config` hash, or that holds a different
+`run.json` at the current stamp version) or whose stamp differs in maturity-model version or
+rules hash (#952), window, output mode, scan selection, path hashing or `--fleet-config` hash, or that holds a different
 repository set (`entry_repos`), so a partial rerun never replaces a full-fleet entry;
 `choose_entry` then moves to
 `<date>.2`, `<date>.3`, ... (the first free or matching, up to `MAX_SAME_DAY`).
 `latest_matching` finds the newest matching entry, preferring one over the same
-repository set, the default for a bare `--compare`. `dated_entries` lists the
+repository set, the default for a bare `--compare` (an unrecorded rules hash matches there). `dated_entries` lists the
 `<date>[.<n>]` directories oldest first; `one_per_date` keeps one accepted entry per date
 before a run's (the entry over its repository set, else the highest suffix), shared by
 `fleet_trends` and `fleet_achievements_runs`.
@@ -71,6 +73,7 @@ from lib.fleet.runner import REPOS_FILE
 from lib.fleet.fleet_data import FLEET_DATA_FILE
 from lib.fleet.fleet_doc_freshness import FRESHNESS_FILE
 from lib.fleet.fleet_groups import GROUPS_FILE
+from lib.fleet.fleet_level import LEVEL_FILE
 from lib.fleet.fleet_legacy import stamp_value, upgrade
 from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 
@@ -80,10 +83,14 @@ HISTORY_FILES = (REPOS_FILE, GROUPS_FILE, RUN_FILE)  # written in this order: ru
 # a same-day entry's stale copy is removed when the new run wrote none.
 # ``fleet-data.json`` (#703) is optional so entries written before it still load.
 # demotions.json: the exit rule's record with its evidence, kept with the run (#1086)
-OPTIONAL_HISTORY_FILES = (FRESHNESS_FILE, FLEET_DATA_FILE, "demotions.json")
+# level.json: each repository's stored Step, which the Step movement grid reads (#941)
+OPTIONAL_HISTORY_FILES = (FRESHNESS_FILE, FLEET_DATA_FILE, "demotions.json", LEVEL_FILE)
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$")
-_MATCH_KEYS = ("levels_version", "window", "counts_only", "scans", "paths_hashed", "fleet_config_sha256",
+_MATCH_KEYS = ("levels_version", "rules_sha256", "window", "counts_only", "scans", "paths_hashed", "fleet_config_sha256",
                "platform", "managed_settings")
+# Keys a bare --compare baseline may leave unrecorded: an entry from before #952 is still a
+# baseline, and compare.json then says its rules were not recorded.
+_UNRECORDED_OK = frozenset({"rules_sha256"})
 _ENTRY = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\.([1-9][0-9]*))?$")
 MAX_SAME_DAY = 99
 
@@ -136,10 +143,13 @@ def entry_repos(entry: Path) -> frozenset[str] | None:
     return frozenset(row["repo"] for row in rows)
 
 
-def entry_conflict(entry: Path, stamp: Mapping[str, Any], repos: frozenset[str] | None = None) -> str | None:
+def entry_conflict(entry: Path, stamp: Mapping[str, Any], repos: frozenset[str] | None = None, *,
+                   unrecorded_matches: bool = False) -> str | None:
     """Why the same-day ``entry`` must be kept rather than replaced; None when it may be.
 
-    With ``repos``, the entry must also hold exactly that repository set.
+    With ``repos``, the entry must also hold exactly that repository set. With
+    ``unrecorded_matches`` (``latest_matching``), a rules hash one side did not record
+    (#952) does not count as a difference.
     """
     if not entry.exists():
         return None
@@ -156,7 +166,9 @@ def entry_conflict(entry: Path, stamp: Mapping[str, Any], repos: frozenset[str] 
     if not isinstance(earlier, dict) or earlier.get("fleet_stamp_version") != FLEET_STAMP_VERSION:
         return f"{run} is not a run stamp this toolkit writes"
     earlier = upgrade(earlier)  # an entry written before the 2.0.0 rename
-    differs = [key for key in _MATCH_KEYS if stamp_value(earlier, key) != stamp_value(stamp, key)]
+    differs = [key for key in _MATCH_KEYS if stamp_value(earlier, key) != stamp_value(stamp, key)
+               and not (unrecorded_matches and key in _UNRECORDED_OK
+                        and None in (stamp_value(earlier, key), stamp_value(stamp, key)))]
     if differs:
         return f"{entry} is a same-day run with a different {', '.join(differs)}"
     if repos is not None:
@@ -235,7 +247,7 @@ def latest_matching(org_dir: Path, stamp: Mapping[str, Any], repos: frozenset[st
     when there is one, so a partial rerun is not taken as the baseline.
     """
     matching = [entry for _order, entry in reversed(dated_entries(org_dir))
-                if (entry / RUN_FILE).is_file() and entry_conflict(entry, stamp) is None]
+                if (entry / RUN_FILE).is_file() and entry_conflict(entry, stamp, unrecorded_matches=True) is None]
     same_set = [entry for entry in matching if repos is not None and entry_repos(entry) == repos]
     if same_set:
         return same_set[0]

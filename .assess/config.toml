@@ -1,0 +1,2 @@
+# Images are not source: scc would score the committed example SVGs as data.
+exclude_patterns = ["*.svg"]
