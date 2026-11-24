@@ -334,3 +334,11 @@ def test_the_levels_carry_their_grades_and_gate_no_step() -> None:
     assert signals["secrets_guard.configured"]["evidence"] == "config_text"  # type: ignore[typeddict-item]
     assert signals["secrets_guard.enforcement.present"]["evidence"] == "head_structure"  # type: ignore[typeddict-item]
     assert not [c for c in lt.gate_conditions(lt.default_model()) if c.startswith("secrets-guard.")]
+
+
+def test_stages_before_the_id_is_read(tmp_path: Path) -> None:
+    cfg = ("repos:\n  - repo: https://github.com/gitleaks/gitleaks\n    hooks:\n"
+           "      - stages: [manual]\n        id: gitleaks\n")
+    root = _repo(tmp_path, {".pre-commit-config.yaml": cfg,
+                            ".github/workflows/x.yml": "steps:\n  - run: pre-commit run --all-files\n"})
+    assert scan_secrets_guard(root)["ci"]["present"] is False

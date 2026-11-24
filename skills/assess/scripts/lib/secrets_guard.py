@@ -347,8 +347,6 @@ def _hook_tool(hook_id: str) -> str:
     return next((t for t in SECRET_TOOLS if hook_id == t or hook_id.startswith(f"{t}-")), hook_id)
 
 
-_STAGES = re.compile(r"^\s*stages\s*:\s*(.*)$")
-_HOOK_ID = re.compile(r"^(\s*)-?\s*id\s*:\s*(\S+)")
 _DEFAULT_STAGES = frozenset({"pre-commit", "commit"})
 
 
@@ -359,24 +357,26 @@ def _hooks_run_in_ci(root: Path, hook: PreCommitGuard) -> frozenset[str]:
         return frozenset()
     lines = _code_lines(_read(root / hook["file"]) or "")
     skipped: set[str] = set()
-    for i, line in enumerate(lines):
-        m = _HOOK_ID.match(line)
-        if not m:
+    for i, line in enumerate(lines):  # each list item; a hook item has its own ``id:`` key
+        item = _STEP_START.match(line)
+        if not item:
             continue
-        indent = len(m.group(1))
-        for k in range(i + 1, len(lines)):
-            ln = lines[k]
-            if ln.strip() and (len(ln) - len(ln.lstrip()) <= indent or _HOOK_ID.match(ln)):
-                break
-            stages = _STAGES.match(ln)
-            if not stages:
-                continue
-            values = stages.group(1).strip()
-            if not values:  # a block list: ``stages:`` then ``- pre-commit`` lines below it
-                key_indent = len(ln) - len(ln.lstrip())
-                values = " ".join(x.strip().lstrip("- ") for x in lines[k + 1:_list_block_end(lines, k, key_indent)])
-            if not _DEFAULT_STAGES & set(re.findall(r"[\w-]+", values)):
-                skipped.add(_hook_tool(m.group(2).lower()))
+        dash = len(item.group(1))
+        end = _block_end(lines, i, dash)
+        keys = [(i, line[dash + 1:].strip())] + [(k, lines[k].strip()) for k in range(i + 1, end)
+                                                  if len(lines[k]) - len(lines[k].lstrip()) == dash + 2]
+        hook_id = next((re.match(r"id\s*:\s*(\S+)", v).group(1) for _, v in keys  # type: ignore[union-attr]
+                        if re.match(r"id\s*:\s*\S", v)), None)
+        stages_at = next((k for k, v in keys if re.match(r"stages\s*:", v)), None)
+        if hook_id is None or stages_at is None:
+            continue
+        values = lines[stages_at].split(":", 1)[1].strip()
+        if not values:  # a block list: ``stages:`` then ``- pre-commit`` lines below it
+            key_indent = len(lines[stages_at]) - len(lines[stages_at].lstrip())
+            values = " ".join(x.strip().lstrip("- ")
+                              for x in lines[stages_at + 1:_list_block_end(lines, stages_at, key_indent)])
+        if not _DEFAULT_STAGES & set(re.findall(r"[\w-]+", values)):
+            skipped.add(_hook_tool(hook_id.lower()))
     return frozenset(hook["tools"]) - skipped
 
 
