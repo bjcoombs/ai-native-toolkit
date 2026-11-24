@@ -416,8 +416,11 @@ def _hooks_run_in_ci(root: Path, hook: PreCommitGuard) -> frozenset[str]:
             continue
         dash = len(item.group(1))
         end = _block_end(lines, i, dash)
+        # The item's keys sit at the column of its first key, after the dash: ``- id:`` (dash + 2)
+        # or the ``-   id:`` that ``pre-commit sample-config`` writes (dash + 4).
+        key_col = len(line) - len(line[dash + 1:].lstrip())
         keys = [(i, line[dash + 1:].strip())] + [(k, lines[k].strip()) for k in range(i + 1, end)
-                                                  if len(lines[k]) - len(lines[k].lstrip()) == dash + 2]
+                                                  if len(lines[k]) - len(lines[k].lstrip()) == key_col]
         hook_id = next((m.group(1) for _, v in keys if (m := re.match(r"id\s*:\s*(\S+)", v))), None)
         stages_at = next((k for k, v in keys if re.match(r"stages\s*:", v)), None)
         if hook_id is None:
@@ -630,8 +633,10 @@ def ci_guard(root: Path, ghsync_root: Path | None = None, hooks: frozenset[str] 
             tools.add("secret_detection")
             if ".gitlab-ci.yml" not in files:
                 files.append(".gitlab-ci.yml")
-        elif template == "unevaluated" or (template == "runs" and unresolved):
-            held.add("secret_detection")  # an unread include could override the template's job
+        elif template == "unevaluated":
+            held.add("secret_detection")
+        # A template that runs beside an unread include is neither: the include could override its
+        # job, so it is left to ``includes_unresolved`` (``ci_includes_unresolved``).
     return {"present": bool(files), "files": files, "tools": sorted(tools), "includes_unresolved": unresolved,
             "rules_unevaluated": sorted(held - tools)}
 

@@ -524,8 +524,9 @@ def test_a_root_template_with_an_unread_include_is_not_measured(tmp_path: Path) 
                  remote="https://gitlab.com/g/p.git")
     subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
     block = scan_secrets_guard(root)
-    assert block["ci"]["present"] is False and block["ci"]["rules_unevaluated"] == ["secret_detection"]
+    assert block["ci"]["present"] is False and block["ci"]["rules_unevaluated"] == []
     assert block["enforcement"]["available"] is False
+    assert block["enforcement"]["reason"].startswith("ci_includes_unresolved:")
 
 
 @pytest.mark.parametrize("command", ["gitleaks protect", "gitleaks detect --pre-commit", "ggshield secret scan pre-commit",
@@ -540,3 +541,11 @@ def test_a_command_that_scans_nothing_in_ci_is_not_a_scan(tmp_path: Path, comman
                                   "  - run: docker run --rm zricethezav/gitleaks:latest\n"])
 def test_a_gitleaks_container_with_no_subcommand_is_not_a_scan(tmp_path: Path, step: str) -> None:
     assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": "steps:\n" + step}))["ci"]["present"] is False
+
+
+def test_sample_config_style_stages_are_read(tmp_path: Path) -> None:
+    cfg = ("repos:\n-   repo: https://github.com/gitleaks/gitleaks\n    rev: v8.18.0\n    hooks:\n"
+           "    -   id: gitleaks\n        stages: [manual]\n")
+    root = _repo(tmp_path, {".pre-commit-config.yaml": cfg,
+                            ".github/workflows/x.yml": "steps:\n  - run: pre-commit run --all-files\n"})
+    assert scan_secrets_guard(root)["ci"]["present"] is False
