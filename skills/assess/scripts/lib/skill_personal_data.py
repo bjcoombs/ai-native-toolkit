@@ -76,7 +76,9 @@ _PLACEHOLDER_LOCAL = frozenset({"user", "username", "you", "your", "yourname", "
                                 "bar", "test", "noreply", "no-reply", "donotreply", "git"})
 # A home path whose user name holds a letter or digit and is not a placeholder: the grader's
 # pattern also takes ``/Users/.../``, which a skill writes as an example, so it is checked again.
-_HOME = re.compile(r"(?:/Users/|/home/|[A-Za-z]:\\Users\\)([A-Za-z0-9][A-Za-z0-9._-]*)[/\\]")
+# The Windows branch takes the grader's class (any name up to the next separator, spaces and
+# accented letters included), less a leading dot so ``C:\Users\...\`` stays a placeholder.
+_HOME = re.compile(r"(?:/Users/|/home/)([A-Za-z0-9][A-Za-z0-9._-]*)/|[A-Za-z]:\\Users\\([^\\/\r\n.][^\\/\r\n]*)\\")
 _PLACEHOLDER_HOME = frozenset({"user", "username", "you", "your", "yourname", "name", "me", "shared",
                                "public", "default", "runner", "someone", "example", "jdoe", "alice", "bob"})
 # An IPv4-shaped number that follows a version word is a version, not an address (``v1.2.3.4``,
@@ -133,7 +135,8 @@ def _has_phone(text: str) -> bool:
 def kinds_in(text: str) -> list[str]:
     """The ``KINDS`` found in ``text``, in ``KINDS`` order; the data itself is never returned."""
     found = {f["category"] for f in scan_sensitive_content(text)}
-    if "home_path" in found and not any(m.group(1).lower() not in _PLACEHOLDER_HOME for m in _HOME.finditer(text)):
+    if "home_path" in found and not any((m.group(1) or m.group(2)).lower() not in _PLACEHOLDER_HOME
+                                         for m in _HOME.finditer(text)):
         found.discard("home_path")
     if "credential" in found and all(_REFERENCE.match(m.group(1).strip("\"'")) for m in _CREDENTIAL.finditer(text)):
         found.discard("credential")

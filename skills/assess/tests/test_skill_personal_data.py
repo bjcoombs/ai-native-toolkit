@@ -45,6 +45,8 @@ def _state(block: Any) -> tuple[str, str | None]:
     (f"Call {PHONE} out of hours.", ["phone"]),
     ("Call (415) 555-" + "2671.", ["phone"]),
     ("Logs live in /Users/" + "jsmith/logs.", ["home_path"]),
+    ("C:\\Users\\" + "John Smith\\Documents", ["home_path"]),  # a space, as the grader allows
+    ("C:\\Users\\" + "Jos\u00e9\\x", ["home_path"]),             # an accented letter
     ("Reach the box at 10.20." + "30.40 first.", ["ip_address"]),
     ("Run ssh deploy@" + "build-01 to deploy.", ["ssh_or_host"]),
     ("token = " + "ghp" + "_abc123def456", ["credential"]),
