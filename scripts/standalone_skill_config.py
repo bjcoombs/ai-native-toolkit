@@ -138,6 +138,8 @@ SKILLS: dict[str, dict[str, Any]] = {
                 "Actions - is a reusable, mostly-deterministic procedure."
             ),
             "uv-emit-workflow": 'uv run scripts/assess_emit_workflow.py "$REPO_ROOT"',
+            # assess-pr Steps 5 and 6 render the Top 3 from actions.json (#1251).
+            "uv-actions-render": 'RENDER="scripts/assess_actions_render.py"',
             # The bundled layer scorer points plugin users at /doc-contradictions,
             # a plugin-only skill; the standalone ZIP keeps the generic advice.
             "contradictions-handoff": (
