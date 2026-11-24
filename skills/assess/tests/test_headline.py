@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from lib.headline import GATE_CHANGE, GATE_NOUN, GLOSSARY_URL, as_headline, gate_change, headline, run_context_headline
+from lib.headline import GATE_CHANGE, GATE_NOUN, as_headline, gate_change, headline, run_context_headline
 from lib.level_tally import default_model
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
@@ -44,37 +44,27 @@ def _level(**over: Any) -> dict[str, Any]:
     return base
 
 
-def test_three_lines_step_next_and_coverage():
+def test_coverage_line_and_summary():
+    """#1252: the Step and the next gate are the top card's; the headline keeps the not-measured
+    count and the model, and the badge summary."""
     h = headline(_level(), default_model())
-    assert h["lines"] == [
-        "Step 3 · Unattended agent PRs · contracts in place",
-        "Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced",
-        "Catalogue coverage: 4 of 6 measured, 0 verified · 3 not measured (needs a full run: 1, no remote: 2)"
-        " · model m-1",
-    ]
+    assert h["lines"] == ["Catalogue coverage: 3 not measured (needs a full run: 1, no remote: 2) · model m-1"]
     assert h["summary"] == "Step 3 · next: coverage gate"
-    assert h["markdown"].startswith("**Step 3 · Unattended agent PRs · contracts in place**\n\n")
+    assert h["markdown"] == h["lines"][0]
     assert (h["step"], h["next_step"], h["levels_version"], h["available"]) == (3, 4, "m-1", True)
 
 
-def test_the_markdown_links_measured_and_verified_once_and_the_lines_stay_plain():
-    """#1102: the catalogue coverage line in the markdown links each grade word to the
-    glossary once; ``lines``, the badge summary and the log entry stay plain text."""
+def test_the_lines_stay_plain():
     h = headline(_level(), default_model())
-    coverage, grade = f"{GLOSSARY_URL}#catalogue-coverage", f"{GLOSSARY_URL}#evidence-grade"
-    assert (f"Catalogue coverage: 4 of 6 [measured]({coverage}), 0 [verified]({grade})"
-            " · 3 not measured (needs a full run: 1, no remote: 2) · model m-1") in h["markdown"]
-    assert h["markdown"].count("](") == 2
-    assert all("](" not in line for line in [*h["lines"], h["summary"]])
+    assert all("](" not in line for line in [*h["lines"], h["summary"], h["markdown"]])
 
 
-def test_the_summary_and_next_line_carry_no_count():
-    """#1083: the badge and log.md summary, and the Next line, name gates and never an "of" count."""
+def test_the_summary_carries_no_count():
+    """#1083: the badge and log.md summary name gates and never an "of" count."""
     for lvl in (_level(), _level(step=4, next_step=None), _level(step=1, next_step={"step": 2, "blockers": [
             {"kind": "gate", "gate": "instructions", "condition": "layer-0-instructions.1", "state": "unmet"}]})):
         h = headline(lvl, default_model())
         assert not re.search(r"\d+ (of|in place of) \d+", h["summary"]), h["summary"]
-        assert "practice" not in h["lines"][1] and " of " not in h["lines"][1]
     assert headline(_level(step=4, next_step=None), default_model())["summary"] == "Step 4 · all gates held"
     assert headline(_level(step=1, next_step={"step": 2, "blockers": [
         {"kind": "gate", "gate": "instructions", "condition": "layer-0-instructions.1", "state": "unmet"}]}),
@@ -97,40 +87,34 @@ def test_a_model_without_steps_says_so_with_no_count():
     assert h["lines"][0].startswith("Catalogue coverage: ")
 
 
-def test_below_the_first_step_the_next_line_names_step_1():
-    """#889: under a custom model whose Step 1 has a gate, a repository below it still reads Next."""
+def test_below_the_first_step_the_summary_names_the_gate():
+    """#889: under a custom model whose Step 1 has a gate, the badge names it."""
     model = {**default_model(), "steps": [{"step": 1, "name": "First", "gates": [
         {"id": "own_gate", "row": "c", "level": 1}]}]}
     gate = {"kind": "gate", "gate": "own_gate", "condition": "c.1", "state": "unmet"}
     h = headline(_level(step=None, next_step={"step": 1, "blockers": [gate]}), model)
-    assert h["lines"][0] == "Next: Step 1 · First unlocks when the own_gate gate holds"
-    assert h["lines"][1].startswith("Catalogue coverage: ") and h["markdown"].startswith("**Next: Step 1")
-    assert h["summary"] == "no Step yet · next: own_gate"  # the badge agrees with the headline
+    assert h["lines"][0].startswith("Catalogue coverage: ")
+    assert h["summary"] == "no Step yet · next: own_gate"
 
 
-def test_not_measured_gate_says_so():
+def test_gate_change_words_a_gate_not_measured():
     gate = {"kind": "gate", "gate": "ci_runs_tests", "condition": "layer-5-ci.1",
             "state": "not_measured", "reason": "needs_platform"}
-    h = headline(_level(step=2, next_step={"step": 3, "blockers": [gate]}), default_model())
-    assert h["lines"][1] == ("Next: Step 3 · Unattended agent PRs unlocks when CI turns red on a broken check "
-                             "(not measured here: needs GitHub or GitLab access)")
+    assert gate_change(gate) == ("CI turns red on a broken check "
+                                 "(not measured here: needs GitHub or GitLab access)")
+    assert gate_change({"kind": "gate", "gate": "own_gate"}) == "the own_gate gate holds"
 
 
 def test_top_step_and_zero_not_measured():
     h = headline(_level(step=4, next_step=None, not_measured=[],
                         tally={"met": 9, "measured": 9, "not_measured": 0}), default_model())
-    assert h["lines"][1] == "Next: Step 4 is the top Step; it holds while its gates hold"
-    assert h["lines"][2] == "Catalogue coverage: 9 of 9 measured, 0 verified · 0 not measured · model m-1"
+    assert h["lines"][0] == "Catalogue coverage: 0 not measured · model m-1"
     assert h["next_step"] is None
 
 
-def test_unknown_gate_and_requires_reason_fall_back_to_their_ids():
-    lvl = _level(not_measured=[{"id": "x.1", "reason": "requires:layer-5-ci.1"}],
-                 next_step={"step": 4, "blockers": [
-                     {"kind": "gate", "gate": "own_gate", "condition": "x.1", "state": "unmet"}]})
-    h = headline(lvl, default_model())
-    assert h["lines"][1].endswith("unlocks when the own_gate gate holds")
-    assert "waits on layer-5-ci.1: 1" in h["lines"][2]
+def test_a_requires_reason_falls_back_to_its_id():
+    lvl = _level(not_measured=[{"id": "x.1", "reason": "requires:layer-5-ci.1"}])
+    assert "waits on layer-5-ci.1: 1" in headline(lvl, default_model())["lines"][0]
 
 
 def test_every_default_gate_has_wording():
@@ -230,8 +214,8 @@ def test_ci2_headline_badge_report_and_log_agree(ci2: Path):
     badge1 = json.loads((ci2 / ".assess" / "badge.json").read_text(encoding="utf-8"))
     second = _run(ci2, "2026-11-22")
     badge2 = json.loads((ci2 / ".assess" / "badge.json").read_text(encoding="utf-8"))
-    # the executive summary's last line reads the since-last-run block, which differs by run (#1102)
-    commit_only = ("summary_lines", "summary_markdown")
+    # the top card reads the since-last-run block, which differs by run (#1102, #1252)
+    commit_only = ("summary_lines", "summary_markdown", "call_to_action")
     assert ({k: v for k, v in first["headline"].items() if k not in commit_only}
             == {k: v for k, v in second["headline"].items() if k not in commit_only})
     assert first["headline"]["summary_lines"][:2] == second["headline"]["summary_lines"][:2]
@@ -239,10 +223,10 @@ def test_ci2_headline_badge_report_and_log_agree(ci2: Path):
     level, head = second["level"], second["headline"]
     assert badge2["message"] == head["summary"]
     assert badge2["message"].startswith(f"Step {level['step']} · ") and " of " not in badge2["message"]
-    assert head["lines"][0].startswith(f"Step {level['step']} · ") and "contracts in place" in head["lines"][0]
-    assert head["lines"][1].startswith(f"Next: Step {level['next_step']['step']} · ")
-    assert f"{level['tally']['not_measured']} not measured" in head["lines"][2]
-    assert f"model {level['levels_version']}" in head["lines"][2]
+    assert head["summary_lines"][0].startswith(f"Step {level['step']} of 4: ")
+    assert head["summary_lines"][2].startswith(f"Blocks Step {level['next_step']['step']}: ")
+    assert f"{level['tally']['not_measured']} not measured" in head["lines"][0]
+    assert f"model {level['levels_version']}" in head["lines"][0]
     report = subprocess.run([sys.executable, str(SCRIPTS / "assess_report.py"), str(ci2), "--stdout"],
                             capture_output=True, encoding="utf-8", errors="replace", check=True).stdout
     assert head["markdown"] in report
@@ -376,8 +360,7 @@ def _tagged_level() -> dict[str, Any]:
 
 def test_tally_line_shows_the_verified_share_of_n():
     h = headline(_tagged_level(), _tagged_model())  # type: ignore[arg-type]  # a plain dict model stands in for MaturityModel
-    assert h["lines"][0] == ("Catalogue coverage: 2 of 2 measured, 1 verified · 1 not measured "
-                             "(no remote: 1) · model t-1")
+    assert h["lines"][0] == "Catalogue coverage: 1 not measured (no remote: 1) · model t-1"
     assert h["verified"] == 1
     assert h["summary"] == "no Steps defined"
 
@@ -392,7 +375,7 @@ def test_strip_counts_a_multi_tagged_condition_in_each_cell_and_once_in_n():
                                   "not_measured": 0, "hazards": 0, "declined": 0}
     assert cells["docs"]["verified"] == 1 and cells["docs"]["not_measured"] == 1
     # r.1 sits in two cells; the tally counts it once
-    assert sum(c["met"] for c in h["tags"]) == 3 and h["lines"][0].startswith("Catalogue coverage: 2 of")
+    assert sum(c["met"] for c in h["tags"]) == 3
 
 
 def test_no_tagged_condition_gives_no_strip_line():
@@ -418,14 +401,7 @@ def test_ci2_strip_and_verified_total_match_the_conditions(ci2: Path):
     verified = [c for c in level["conditions"]
                 if c["counted"] and c["state"] == "met" and c["grade"] == "verified"]
     assert head["verified"] == len(verified)
-    assert f"measured, {len(verified)} verified · " in head["lines"][2]
-    assert head["lines"][3].startswith("By tag: ") and head["tags"]
+    assert f"catalogue conditions measured, {len(verified)} verified." in head["summary_lines"][1]
+    assert head["lines"][1].startswith("By tag: ") and head["tags"]
     for cell in head["tags"]:
-        assert f"{cell['tag']} {cell['met']} of {cell['measured']}" in head["lines"][3]
-
-
-def test_gate_change_is_public_and_words_a_gate_like_the_next_line():
-    """The Step ladder imports it (#1104, #1099): the caption and the Next line agree."""
-    blocker = {"kind": "gate", "gate": "coverage_gate", "condition": "layer-6-coverage.1", "state": "unmet"}
-    assert gate_change(blocker) == "a coverage gate is enforced"
-    assert headline(_level(), default_model())["lines"][1].endswith(gate_change(blocker))
+        assert f"{cell['tag']} {cell['met']} of {cell['measured']}" in head["lines"][1]

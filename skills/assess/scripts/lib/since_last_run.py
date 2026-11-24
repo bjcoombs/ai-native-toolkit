@@ -1,7 +1,7 @@
-"""What changed since the previous /assess run: actions closed, gates gained or lost, the next blocker (#1083).
+"""What changed since the previous /assess run: actions closed, gates gained or lost, the next blocker as data (#1083).
 
-The report and the ``log.md`` entry open with this section, so the credit a team sees is
-the work it closed, not a count of catalogue entries. It reads three things, all before
+The ``log.md`` entry opens with this section and the report's top card (``lib/top_card.py``,
+#1252) states what moved in one line, so the credit a team sees is the work it closed, not a count of catalogue entries. It reads three things, all before
 this run's publish step overwrites any of them:
 
 - **the previous run**: for the default model and the shipped profiles, the committed
@@ -55,8 +55,10 @@ so ``prior-level.json`` is left as it was, #1158), the section adds "Baseline ke
 the run whose stored baseline the next run will compare with.
 
 ``next_blocker`` is the first gate blocking this run's next Step (``None`` at the top Step,
-or when this run's level result is unavailable, which the line says rather than claiming
-every gate is held). A shallow clone, or a git that cannot answer an ancestry check, reads
+or when this run's level result is unavailable). It is data only: no line words it, because
+the report's top card (``lib/top_card.py``, #1252) and the ``log.md`` readiness line state the
+next gate once. A first run's lines are ``FIRST_RUN`` alone, the wording the top card uses.
+A shallow clone, or a git that cannot answer an ancestry check, reads
 the closed actions as unknown (``shallow_clone``, ``ancestry_unknown``), never as zero.
 ``lines`` and ``markdown`` word the block (``GATE_NOUN`` names each gate, as the badge
 does); counts-only output keeps the counts, ids and shas and drops the action text and the
@@ -87,8 +89,8 @@ from lib.run_context_types_since import ClosedAction, SinceLastRun
 __all__ = ["ClosedAction", "SinceLastRun", "closed_actions", "gate_changes", "since_last_run"]
 
 _SHA = re.compile(r"[0-9a-f]{7,40}")
-# #1256: a run with no committed baseline becomes the baseline; #1252 owns the top card's wording
-FIRST_RUN = "This run is your baseline."
+# #1256: a run with no committed baseline becomes the baseline; the top card states it once (#1252)
+FIRST_RUN = "This run is your baseline; the next run reports what moved."
 # Why ``closed`` is unknown, as the line words each ``closed_reason`` code.
 UNKNOWN_CLOSED = {
     "no_previous_commit": "the previous run recorded no commit",
@@ -250,7 +252,7 @@ def _next_blocker(level: Mapping[str, Any]) -> str | None:
     return next((b["gate"] for b in blockers if b.get("kind") == "gate" and b.get("gate")), None)
 
 
-def _words(block: SinceLastRun, has_steps: bool, level_known: bool, kept_run_id: str | None = None) -> list[str]:
+def _words(block: SinceLastRun, kept_run_id: str | None = None) -> list[str]:
     """The section's lines; a closed action is an indented line under its count."""
     if block["first_run"]:
         lines = [FIRST_RUN]
@@ -272,12 +274,7 @@ def _words(block: SinceLastRun, has_steps: bool, level_known: bool, kept_run_id:
         # that wrote it: name that run, not whichever run this one compared with
         lines.append(f"Baseline kept: this run's level result could not be recorded, so the baseline "
                      f"stays the previous good run, `{kept_run_id}`")
-    if block["next_blocker"] is not None:
-        lines.append(f"Next blocker: {_noun(block['next_blocker'])}")
-    else:
-        lines.append("Next blocker: not known (the level result is unavailable for this run)"
-                     if not level_known else "Next blocker: none, every gate is held" if has_steps
-                     else "Next blocker: none, the model defines no Steps")
+    # the next blocker is the top card's Blocks line and the log.md readiness line (#1252)
     return lines
 
 
@@ -438,9 +435,8 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
         "gates_lost": lost if isinstance(lost, list) else None,
         "next_blocker": _next_blocker(current), "pruned": pruned, "pruning": pruning,
         "lines": [], "markdown": ""}
-    known = isinstance(level, Mapping) and isinstance(level.get("conditions"), list)
     # the line follows the write side's own rule: the file is kept exactly when it is not rebuilt
     kept = build_prior_level(level) is None and stored is not None
-    block["lines"] = _words(block, bool(steps), known, stored.get("run_id") if kept and stored is not None else None)
+    block["lines"] = _words(block, stored.get("run_id") if kept and stored is not None else None)
     block["markdown"] = _markdown(block["lines"])
     return block

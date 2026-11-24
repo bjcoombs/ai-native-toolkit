@@ -146,13 +146,16 @@ body { margin: 0; }
 
   <section>
     <h2>What the report says first</h2>
-    <p>Three plain lines, before anything else. Read those and you know where you are and what to do next.</p>
-    <div class="card summary" aria-label="Example report summary">
-      <div>Step 2 of 4: an agent opens pull requests, a person reviews each one.</div>
-      <div>Next: make CI turn red when a check breaks. Then you reach Step 3: agents open pull requests nobody has to watch.</div>
-      <div>Since last run: 1 action closed; no gate changes.</div>
+    <p>One short card, before anything else. Each fact appears once: where you are, what holds, what blocks the next Step, what moved, and the one command to run.</p>
+    <div class="card summary" aria-label="Example report top card">
+      <div>Step 2 of 4: supervised agent PRs.</div>
+      <div>Holding: 1 of 2 Step 3 gates held · 1 of 3 catalogue conditions measured, 0 verified.</div>
+      <div>Blocks Step 3: CI does not turn red when a check breaks.</div>
+      <div>Since last run: 1 action closed.</div>
+      <div>Start here: add <code>pytest</code> to the <code>test</code> job in <code>.github/workflows/ci.yml</code></div>
+      <div>Done when: a failing test turns the <code>test</code> job red.</div>
     </div>
-    <p class="note">Example for a repository at Step 2 that closed one action since its last run. Under these lines the report links the one change to make, then shows what changed since the last run in full and the headline with its catalogue coverage.</p>
+    <p class="note">Example for a repository at Step 2 that closed one action since its last run. Under the card the report shows the conditions not measured, the per-tag strip and the Top 3 Actions in full.</p>
   </section>
 
   <section>

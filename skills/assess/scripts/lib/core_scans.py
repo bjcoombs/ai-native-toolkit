@@ -419,12 +419,14 @@ def level(*reads: Any) -> LevelResult:
     return run_level(dict(zip(LEVEL_READS, blocks)), choice)
 
 
-def headline(level_block: Any, since_block: Any, choice: ModelChoice | None) -> Headline:
-    """The run context's ``headline`` block (#747): the Step, its next unlock and the
-    verified tally, worded from the ``level`` block under the run's model (the default when
-    ``choice`` is None), with the executive summary (#1102) that also reads the
-    ``since_last_run`` block and, for a profile or ``--levels`` model, names it (#1150)."""
-    return run_headline(level_block, since_block, choice)
+def headline(level_block: Any, since_block: Any, choice: ModelChoice | None, rollup: Any = None,
+             measured: Any = None, assess_dir: Path | None = None) -> Headline:
+    """The run context's ``headline`` block (#747): catalogue coverage and the per-tag strip,
+    worded from the ``level`` block under the run's model (the default when ``choice`` is None),
+    with the report's top card (#1252) that also reads the ``since_last_run`` and ``unit_rollup``
+    blocks, the measured commit and ``<assess_dir>/actions.json``, and, for a profile or
+    ``--levels`` model, names it (#1150)."""
+    return run_headline(level_block, since_block, choice, rollup, measured, assess_dir)
 
 
 def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path, superseded: Any,

@@ -33,7 +33,7 @@ def test_a_polish_translation_keeps_ids_paths_and_links_and_the_template_puts_it
     """#1174: the English stays first and verbatim; ids, paths, commands and links stay as written."""
     from pathlib import Path
     from lib.plain_english import untranslated_tokens
-    english = fixed_lines()["summary.step1.1"] + "\n\n" + fixed_lines()["call_to_action.step1"]
+    english = fixed_lines()["card.step1.2"] + "\n\n" + fixed_lines()["card.step1.4"]
     polish = ("Dalej: dodaj do repozytorium plik instrukcji, który czytają agenci, na przykład AGENTS.md "
               "lub CLAUDE.md. Wtedy osiągniesz Step 2: agent otwiera pull requesty, a człowiek przegląda każdy z nich."
               "\n\n**Zacznij tutaj:** [Dodaj plik instrukcji, na przykład AGENTS.md lub CLAUDE.md]"
@@ -79,10 +79,10 @@ def test_each_exemption_still_matches_its_text() -> None:
 
 
 def test_the_engine_text_holds_no_critical_word() -> None:
-    """#889: the headline, the Next line, gate notes, reason words and the since line, over every
+    """#889, #1252: the headline, the top card, gate notes, reason words and the since line, over every
     Step of the default model and every blocker state, use no word of blame or loss."""
-    from lib.exec_summary import since_line
     from lib.headline import REASON_WORDS, headline
+    from lib.top_card import card_lines, since_line
     from lib.level_tally import default_model
     from lib.plain_english import critical_words
     model = default_model()
@@ -99,11 +99,12 @@ def test_the_engine_text_holds_no_critical_word() -> None:
                          "not_measured": [], "conditions": [], "step": step["step"] - 1 or None,
                          "next_step": {"step": step["step"], "blockers": [blocker]}}
                 texts += headline(level, model)["lines"]
+                texts += card_lines(level, model, None)
     for since in ({"available": True, "first_run": True},
                   {"available": True, "closed_count": 2, "gates_gained": ["coverage_gate"],
                    "gates_lost": ["ci_runs_tests"]},
                   {"available": True, "closed_count": 0, "gates_gained": [], "gates_lost": []},
                   {"available": True, "closed_count": None, "gates_gained": None, "gates_lost": None}, None):
-        texts.append(since_line(since))
+        texts.append(since_line(since) or "")
     assert len(texts) > 50
     assert {t: critical_words(t) for t in texts if critical_words(t)} == {}
