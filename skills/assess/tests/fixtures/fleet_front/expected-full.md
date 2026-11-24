@@ -27,6 +27,8 @@ How many repositories sit at each Step, what moved since the last run, and which
 - [grp/other](./teams/grp/other.md)
 - [grp/sub](./teams/grp/sub.md)
 
+`fleet_next_steps.py` writes these pages.
+
 Drawn from this run's output with no model call; unknown is hatched and named, never drawn as zero.
 
 ## What changed and who earned it

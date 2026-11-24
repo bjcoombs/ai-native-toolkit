@@ -45,7 +45,7 @@ built from the ok rows' `scans`). `write_diagrams` first removes every file in `
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
 stale picture. `RETIRED_FILES` names a diagram the fleet no longer draws (`layer-bars.svg`,
 retired with the layer framing in #1073: the fleet rolls up by truth tag; `quadrant.svg`, dropped in #1255
-because it ranked groups against each other, #806), which `clear_diagrams`
+because it placed repositories against each other, #806), which `clear_diagrams`
 also removes, so a picture from before never sits beside new data. A new diagram (#676) adds its module, its `FILE` with its
 report heading and question to `HEADINGS` (one source for a drawn, skipped or failed diagram,
 #684; `DIAGRAM_FILES` follows it) and an entry to `build_diagrams`. Golden renders: `tests/fixtures/fleet_diagrams/` (regenerate with
@@ -96,7 +96,7 @@ HEADINGS: dict[str, tuple[str, str]] = {
 DIAGRAM_FILES = tuple(HEADINGS)
 # Diagrams no longer drawn, removed with the others so an earlier run's picture never stays:
 # the per-layer bars, retired when the fleet moved from layers to truth tags (#1073), and the
-# activity and maturity quadrant, dropped because it placed groups against each other (#806, #1255).
+# activity and maturity quadrant, dropped because it placed repositories against each other (#806, #1255).
 RETIRED_FILES = ("layer-bars.svg", "quadrant.svg")
 
 

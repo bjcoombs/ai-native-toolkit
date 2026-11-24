@@ -241,7 +241,7 @@ def test_skipped_diagrams_say_why_in_the_report():
     by_file = {d["file"]: d["skipped"] for d in empty}
     assert by_file["shared-tooling.svg"] == "skipped: no repositories in the run."
     assert "layer-bars.svg" not in by_file  # retired with the layer framing (#1073)
-    assert "quadrant.svg" not in by_file  # dropped: it placed groups against each other (#1255)
+    assert "quadrant.svg" not in by_file  # dropped: it placed repositories against each other (#1255)
     assert by_file["slope.svg"] == (
         "skipped: no earlier run compared (no --compare, or no history entry matched this run).")
     report = fd.report_markdown(no_levels)

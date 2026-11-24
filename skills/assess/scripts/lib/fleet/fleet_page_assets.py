@@ -268,7 +268,7 @@ SCRIPT = r"""
   }
   function movedLine(m) {
     if (!m) { return "This run is the baseline: no earlier run was compared, so no Step moves are counted yet."; }
-    if (!m.comparable) { return "Not compared with the earlier run, which differs: " + m.reasons.join("; ") + "."; }
+    if (!m.comparable) { return "Not compared with the earlier run: " + m.reasons.join("; ") + "."; }
     var line = repos(m.up) + " moved up a Step and " + repos(m.down) + " moved down; " + m.same
       + " stayed at the same Step.";
     if (m.rule_only) { line += " " + plural(m.rule_only, "move", "moves") + " came from rule changes alone."; }

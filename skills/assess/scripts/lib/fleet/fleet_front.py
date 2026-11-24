@@ -150,7 +150,7 @@ def _moved_line(moved: Movement | None) -> str:
     if moved is None:
         return "This run is the baseline: no earlier run was compared, so no Step moves are counted yet."
     if not moved["comparable"]:
-        return ("Not compared with the earlier run, which differs: " + "; ".join(moved["reasons"]) + ".")
+        return ("Not compared with the earlier run: " + "; ".join(moved["reasons"]) + ".")
     line = (f"{_plural(moved['up'])} moved up a Step and {_plural(moved['down'])} moved down; "
             f"{moved['same']} stayed at the same Step.")
     if moved["rule_only"]:
@@ -190,6 +190,7 @@ def front_section(front: FrontScreen, repos: int) -> str:
         lines += ["**Team pages**, by name:", ""]
         lines += [f"- [{t['label']}](./{t['href']})" if t["href"] else f"- {t['label']}" for t in front["teams"]]
         lines.append("")
+        lines += ["`fleet_next_steps.py` writes these pages.", ""]
     elif front["teams_index"]:
         lines += [f"**Team pages** are listed in [`{front['teams_index']}`](./{front['teams_index']}), "
                   "which `fleet_next_steps.py` writes.", ""]

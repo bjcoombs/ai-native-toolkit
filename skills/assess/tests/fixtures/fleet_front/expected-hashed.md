@@ -27,6 +27,8 @@ How many repositories sit at each Step, what moved since the last run, and which
 - [h:1fa196fcb1befa90](./teams/h-1fa196fcb1befa90.md)
 - [h:3286863be2e341a9](./teams/h-3286863be2e341a9.md)
 
+`fleet_next_steps.py` writes these pages.
+
 Drawn from this run's output with no model call; unknown is hatched and named, never drawn as zero.
 
 ## What changed and who earned it

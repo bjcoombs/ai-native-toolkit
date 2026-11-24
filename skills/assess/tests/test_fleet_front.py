@@ -86,7 +86,7 @@ def test_movement_counts_up_down_and_same_and_leaves_the_lanes_out() -> None:
     assert (moved["up"], moved["down"], moved["same"], moved["rule_only"]) == (1, 1, 1, 1)
     apart: StepMoves = {**fpf.MOVES, "comparable": False, "reasons": ["the window differs"], "cells": []}
     front = front_screen(fdf.model(), fpf.run(fpf.DATES[-1], fpf.VARIANTS["full"]), apart)
-    assert "Not compared with the earlier run, which differs: the window differs." in front_section(front, 4)
+    assert "Not compared with the earlier run: the window differs." in front_section(front, 4)
 
 
 @pytest.mark.parametrize(("model", "data", "why"), [

@@ -53,7 +53,7 @@ module docstring of `skills/assess/scripts/lib/vocabulary.py`.
 same mean: each `team` row's level as a share of the row's top level, averaged over the rows
 with a known level (unknown rows are left out, never counted as 0). `org` rows are left out of
 both: an org row reads the group's settings, not a single repository. The activity and maturity
-quadrant (`quadrant.svg`) was dropped in #1255, because it placed groups against each other
+quadrant (`quadrant.svg`) was dropped in #1255, because it placed repositories against each other
 (#806); a run removes any copy an earlier run left. The per-layer bars (`layer-bars.svg`) were retired in #1073: the fleet rolls up by truth
 tag, and `fleet-data.json` carries the per-tag tally each tag drawing reads.
 
