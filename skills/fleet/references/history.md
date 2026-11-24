@@ -56,7 +56,11 @@ mode, scan selection, path hashing or `--fleet-config` (`fleet_config_sha256`; a
 with no config and a run from before the key read alike) or `--platform` (`platform`; a run
 from before #714 reads as without it), in the plugin's major version (the
 `/assess` stats-diff rule), or in file versions (a run from before `run.json`)
-give `comparable: false` with every reason in `reasons` and no deltas.
+give `comparable: false` with every reason in `reasons` and no deltas. So do runs under
+one maturity-model version whose rules differ (`rules_sha256`, #952), for example two
+`--levels` files with the same `version`. A run from before #952 recorded no rules hash: it
+compares by maturity-model version alone, and `notes` says so. A change in a collector's
+`revision` is a note, never a refusal.
 
 **`compare.json`** (keys sorted, no absolute paths):
 
