@@ -20,7 +20,6 @@ shapes = [
 ]
 revision = 1
 unknown_reasons = [
-  { code = "network", means = "A headless run without --platform makes no GitHub read.", next_step = "Run fleet or assess_signals.py with --platform, or /assess, with gh signed in." },
   { code = "no_remote", means = "The repository has no github.com remote, so there is no owner .github repository to read.", next_step = "Nothing to change: the shared-policy fallback is GitHub's; commit a SECURITY.md in the repository." },
 ]
   [entries.privacy]

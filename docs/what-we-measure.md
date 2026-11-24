@@ -547,7 +547,6 @@ The SECURITY file in the owner's public .github repository, which GitHub shows o
 - Evidence: `unclassified`.
 - Not measured when:
   - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
-  - `network`: A headless run without --platform makes no GitHub read. Run fleet or assess_signals.py with --platform, or /assess, with gh signed in.
   - `no_remote`: The repository has no github.com remote, so there is no owner .github repository to read. Nothing to change: the shared-policy fallback is GitHub's; commit a SECURITY.md in the repository.
 
 ### `agent_consistency`: Cross-agent instruction consistency

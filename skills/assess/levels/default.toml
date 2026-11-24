@@ -243,7 +243,9 @@
 #   policy is unknown (org_policy_not_read), never missing. Issue and pull or merge request
 #   templates are recorded, not required. A knowledge base (archetype knowledge-base) takes
 #   no code patches: the row is unknown (knowledge_base), never unmet. It gates no Step.
-#   Graded measured: it reads the files' names at the commit.
+#   Graded measured (head_structure) for both sources: the guide and a policy in the tree
+#   are read at the commit, an owner's policy by a live GitHub read, and policy.source
+#   (repo or org) names which.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures.
 #
