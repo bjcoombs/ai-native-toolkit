@@ -342,9 +342,24 @@ def test_every_lib_docs_file_is_one_modules_reference() -> None:
     for module in _lib_modules():
         for name in _POINTER.findall(ast.get_docstring(_parse(module)) or ""):
             pointed.setdefault(name, []).append(module.relative_to(LIB_DIR).as_posix())
-    docs = sorted(p.name for p in (LIB_DIR / "docs").glob("*.md"))
+    docs = _module_references()
     assert docs, "expected the long module references under lib/docs/"
     assert [d for d in docs if len(pointed.get(d, [])) != 1] == [], pointed
+
+
+def _module_references() -> list[str]:
+    """The long module references under ``lib/docs/``: every ``.md`` there but the
+    folder's own ``README.md``, which describes the folder rather than one module."""
+    return sorted(p.name for p in (LIB_DIR / "docs").glob("*.md") if p.name != "README.md")
+
+
+def test_every_lib_docs_reference_is_linked_from_the_lib_readme() -> None:
+    """``lib/README.md`` links every module reference under ``lib/docs/`` (issue
+    #1212). A docstring pointer is plain text, so without the link a reference is an
+    orphan in the doc graph and a reader starting at ``docs/index.md`` never reaches it."""
+    readme = (LIB_DIR / "README.md").read_text(encoding="utf-8")
+    linked = set(re.findall(r"\]\(docs/([\w.-]+\.md)\)", readme))
+    assert [d for d in _module_references() if d not in linked] == []
 
 
 def test_the_docstring_check_fails_on_a_missing_or_run_on_summary(tmp_path: Path) -> None:

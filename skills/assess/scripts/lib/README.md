@@ -188,7 +188,7 @@ New code imports the new path.
   name (`lib.counts_only.render_doc`) to `lib.counts_only.content_free` on first use, without
   importing it eagerly. Files: `__init__.py`, `block_shapes.py`, `content_free.py`,
   `counts_only_rules.py`, `counts_only_schema.py`, `reason_codes.py`.
-- **`docs/`**: the doc graph and the Layer 0 doc signals: links, claims, ownership,
+- **`docs/`** ([README](docs/README.md)): the doc graph and the Layer 0 doc signals: links, claims, ownership,
   provenance, staleness and its generator directives, the doc-to-complexity join and the
   vault queries. `doc_graph` imports `ownership_parser` inside a function, because
   `ownership_parser` imports `doc_graph`. The folder holds two kinds of file: the doc-scan
@@ -196,7 +196,7 @@ New code imports the new path.
   Files: `__init__.py`, `doc_claims.py`, `doc_complexity_join.py`, `doc_directives.py`,
   `doc_graph.py`, `doc_graph_layout.py`, `doc_links.py`, `doc_ownership.py`,
   `doc_provenance.py`, `doc_staleness.py`, `ownership_parser.py`, `vault_queries.py`.
-- **`fleet/`**: the `/fleet` runner, roll-ups, run history, published fleet schemas and
+- **`fleet/`** ([README](fleet/README.md)): the `/fleet` runner, roll-ups, run history, published fleet schemas and
   diagrams. `lib/fleet.py` became `fleet/runner.py`, because the package now holds that
   name; until 5.0.0 the package `__init__.py` forwards each runner name (`lib.fleet.FleetRow`)
   to `lib.fleet.runner` on first use, without importing it eagerly. `fleet_config` and
@@ -207,7 +207,7 @@ New code imports the new path.
   imports it inside a function, because each builder imports `import_graph`.
   Files: `__init__.py`, `import_graph.py`, `import_graph_go.py`, `import_graph_python.py`,
   `import_graph_typescript.py`, `structure_graph.py`.
-- **`hosting/`**: the `gh` and `glab` reads and the platform blocks built from them: the
+- **`hosting/`** ([README](hosting/README.md)): the `gh` and `glab` reads and the platform blocks built from them: the
   shared merged sample, delivery, review reality, GitLab notes and CI lint, and config drift.
   Named `hosting`, not `platform`, because a `lib/platform/` package would shadow the standard
   library's `platform` module for any script run by path from `lib/` (decision 9 on #917).
@@ -215,7 +215,7 @@ New code imports the new path.
   #917 module map and stay at the root. Files: `__init__.py`, `config_drift.py`, `delivery.py`,
   `gh_cli.py`, `gitlab_ci_lint.py`, `gitlab_cli.py`, `gitlab_notes.py`, `merged_sample.py`,
   `platform_cli.py`, `review_reality.py`.
-- **`keyhole/`**: the keyhole-readiness signals and findings, and the Layer 1 liveness
+- **`keyhole/`** ([README](keyhole/README.md)): the keyhole-readiness signals and findings, and the Layer 1 liveness
   inputs: accretion, promissory markers, structure drift, hidden coupling, understanding,
   archetype and the Dart and JVM capability entries. `promissory_markers` and
   `accretion_ratchet` also run as scripts: run the moved file,
@@ -228,7 +228,7 @@ New code imports the new path.
   (#939). Files: `__init__.py`, `check_manifest.py`, `check_validation.py`, `manifest_whys.py`.
 - **`test_pressure/`** (predates #917): write-side truth pressure, with a facade
   `__init__.py` that re-exports the package's names. Files: `__init__.py`, `aggregate.py`, `common.py`, `heuristics.py`, `mutation.py`, `mutmut3.py`, `reason_paths.py`.
-- **`testing/`**: the Layer 6 test signals outside `test_pressure/`: the coverage gate and
+- **`testing/`** ([README](testing/README.md)): the Layer 6 test signals outside `test_pressure/`: the coverage gate and
   the readings it combines (coverage activation, CI coverage runs, the root coverage.py
   config), the coverage report, test focus, sibling tests, import credit, the mutation cap
   and refresh, and untrusted hotspots. Files: `__init__.py`, `ci_workdir.py`, `coverage_activation.py`,
@@ -242,6 +242,23 @@ There is no per-module index here: each module documents itself in its own modul
 a one-line summary followed by the details (`tests/test_self_architecture.py` enforces it).
 A module too long to hold its whole reference within its file-size limit keeps a summary
 and points at its own `docs/<module>.md`.
+
+These modules have a long reference. Read the docstring first, then the reference when you
+need the detail. A new reference gets a row here: `tests/test_self_architecture.py` fails
+on one that is not linked.
+
+| Module | Reference | What it covers |
+|---|---|---|
+| `lib.check_command` | [check_command.md](docs/check_command.md) | Whether a command line runs tests, lint or a type check |
+| `lib.ci_model_jobs` | [ci_model_jobs.md](docs/ci_model_jobs.md) | CI jobs that call a model, and the block they produce |
+| `lib.docs.doc_graph` | [doc_graph.md](docs/doc_graph.md) | The doc link graph: orphans, reachability, entry points and link parents |
+| `lib.keyhole.keyhole_signals` | [keyhole_signals.md](docs/keyhole_signals.md) | How the signal modules become the five run-context blocks and the named findings |
+| `lib.keyhole.liveness_scan` | [liveness_scan.md](docs/liveness_scan.md) | The dead-code, test and runtime inputs to liveness |
+| `lib.keyhole.promissory_markers` | [promissory_markers.md](docs/promissory_markers.md) | TODO, deprecation, lint-suppression and disabled-test markers |
+| `lib.levels` | [levels.md](docs/levels.md) | Loading a maturity model and evaluating it from signals |
+| `lib.manifest.check_manifest` | [check_manifest.md](docs/check_manifest.md) | The check manifest loader and its schema |
+| `lib.testing.coverage_gate` | [coverage_gate.md](docs/coverage_gate.md) | Whether a line-coverage threshold is configured |
+| `lib.wiki_writer` | [wiki_writer.md](docs/wiki_writer.md) | Writing the `.assess/` wiki pages |
 
 Windows portability (#712, #752): every text-mode `subprocess.run` names
 `encoding="utf-8"` (with `errors="replace"`, or `surrogateescape` on every `git ls-files -z` listing, whose paths must

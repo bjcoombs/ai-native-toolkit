@@ -41,7 +41,7 @@ Team-orchestration library skills (invoked by the workflow skills, not standalon
 - [`assess-findings`](../skills/assess-findings/SKILL.md) - renders the report from the deterministic `run-context.json` and the practice scorecard.
 - [`assess-pr`](../skills/assess-pr/SKILL.md) - the end-of-run offers (open a PR, track the Top 3 Actions, freeze a CI gate), including the [uninstall steps](../skills/assess/references/uninstall.md) that remove what a run wrote.
 
-The deterministic core's per-module reference is each module's docstring under `skills/assess/scripts/lib/`, and its seam map is [`skills/assess/scripts/lib/README.md`](../skills/assess/scripts/lib/README.md); its test suites are mapped to the modules they pin in [`skills/assess/tests/README.md`](../skills/assess/tests/README.md).
+The deterministic core's command-line entry points are listed in [`skills/assess/scripts/README.md`](../skills/assess/scripts/README.md). Its per-module reference is each module's docstring under `skills/assess/scripts/lib/`, and its seam map, with a link to every long module reference, is [`skills/assess/scripts/lib/README.md`](../skills/assess/scripts/lib/README.md); its test suites are mapped to the modules they pin in [`skills/assess/tests/README.md`](../skills/assess/tests/README.md).
 
 The [glossary](glossary.md) gives the report's words (Step, gate, practice, level, evidence grade and more) in plain English, a sentence or two each.
 
@@ -87,6 +87,7 @@ The Six Thinking Hats team, orchestrated by [`/huddle`](../skills/huddle/SKILL.m
 - [`FLOOR.md`](../FLOOR.md) - the constitutional floor: four clauses no automated step may rewrite, enforced by the required `floor enforcement` and `floor self-anchor` checks. Floor changes need the maintainer's out-of-band `floor-signoff` approval.
 - [External-anchor proof](./floor-anchor-proof.md) - why the floor checks cannot be silently disarmed.
 - [Acceptance contract verification](../skills/README.md#acceptance-contract-verification) - the map of the gates, from start gate to complete gate.
+- [`scripts/`](../scripts/README.md) - the repository tooling: the floor-core scripts (what not to touch without sign-off), the acceptance-contract gates and the standalone build. Its tests are mapped in [`scripts/tests/README.md`](../scripts/tests/README.md).
 - [Readiness check prompt](../scripts/contract/readiness_check_prompt.md) - the fixed prompt for the one-pass, document-only readiness check.
 - [Canary fixtures](../tests/canaries/README.md) - the contract-file format and the ground-truth fixtures the canary harness runs: `known-good` ([spec](../tests/canaries/known-good/spec.md), [contract](../tests/canaries/known-good/contract.md), [expected result](../tests/canaries/known-good/expected_result.md)), `known-good-interactive` ([spec](../tests/canaries/known-good-interactive/spec.md), [contract](../tests/canaries/known-good-interactive/contract.md), [expected result](../tests/canaries/known-good-interactive/expected_result.md)), `vacuous-contract` ([spec](../tests/canaries/vacuous-contract/spec.md), [contract](../tests/canaries/vacuous-contract/contract.md), [expected result](../tests/canaries/vacuous-contract/expected_result.md)) and `jet-fighters` ([PRD](../tests/canaries/jet-fighters/prd.md), [contract](../tests/canaries/jet-fighters/contract.md), [expected result](../tests/canaries/jet-fighters/expected_result.md)).
 
@@ -105,6 +106,7 @@ The Six Thinking Hats team, orchestrated by [`/huddle`](../skills/huddle/SKILL.m
 - [Testing a branch locally](./testing-a-branch-locally.md) - run an unmerged branch's `SKILL.md` and scripts as a real plugin against a target repo.
 - [Design history](./superpowers/README.md) - the plans and specs behind the skills as they were built.
 - [Modernization programme (2026-09)](./design/2026-09-modernization/README.md) - intent, recorded probes, and the eleven workstream specs behind the multi-plugin split.
+- [Repository test suite](../tests/README.md) - what the plugin contract suite (`make test-contract`) pins, starting with `test_plugin_contract.py`.
 - [Code review instructions](../.github/claude-review-instructions.md) - the guidelines the automated reviewer follows on pull requests.
 - [How to build a narrated skill explainer](./huddle-explainer/README.md) - the repeatable Claude Code + Claude Design + ElevenLabs pipeline, worked through end to end on `/huddle`.
 
