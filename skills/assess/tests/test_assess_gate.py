@@ -582,10 +582,16 @@ def test_gates_not_compared_across_models_never_reads_clean(tmp_path):
     ctx = _loss_ctx(None)
     ctx["since_last_run"]["lines"] = [
         "Model changed since last run (handover → default); gates not compared"]
-    text = format_verdict(evaluate(ctx, gate))
-    assert ("warn gates not compared: Model changed since last run (handover → default); gates not "
+    verdict = evaluate(ctx, gate)
+    assert verdict["failed"] is True  # opted in: a default run that compared nothing fails
+    text = format_verdict(verdict)
+    assert ("FAIL gates not compared: Model changed since last run (handover → default); gates not "
             "compared. fail_on_gate_loss compares runs of one maturity model") in text
-    assert "clean snapshot" not in text
+    assert "warn gates not compared" not in text and "clean snapshot" not in text
+    off = evaluate(ctx, load_gate_config(Path("/nonexistent")))
+    assert off["failed"] is False
+    assert "warn gates not compared: Model changed since last run (handover → default)" in format_verdict(off)
+    assert "clean snapshot" not in format_verdict(off)
     profile = _loss_ctx(None)
     profile["level"]["levels_version"] = "profile-handover-2026.11.23"
     verdict = evaluate(profile, gate)

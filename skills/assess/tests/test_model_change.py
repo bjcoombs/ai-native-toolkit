@@ -213,7 +213,8 @@ def test_a_profile_run_never_writes_the_committed_baseline(tmp_path: Path) -> No
     assert not (tmp_path / "prior-level.json").exists()
 
 
-def test_a_profile_run_keeps_the_default_baseline_so_ci_still_catches_a_lost_gate(ci2: Path) -> None:  # noqa: F811
+@pytest.mark.parametrize("removed", ["CLAUDE.md", ".github/workflows/ci.yml"])
+def test_a_profile_run_keeps_the_default_baseline_so_ci_still_catches_a_lost_gate(removed: str, ci2: Path) -> None:  # noqa: F811
     """Default baseline, then a --profile run, then a default run that lost a gate: the gate fails."""
     from assess_core import build_and_publish_run
     from assess_gate import evaluate, format_verdict
@@ -225,13 +226,13 @@ def test_a_profile_run_keeps_the_default_baseline_so_ci_still_catches_a_lost_gat
     baseline = (assess / "prior-level.json").read_bytes()
     build_and_publish_run(repo_root=ci2, run_date="2026-11-23", non_interactive=True, model=HANDOVER)
     assert (assess / "prior-level.json").read_bytes() == baseline
-    (ci2 / ".github" / "workflows" / "ci.yml").unlink()
-    _commit(ci2, "2026-11-05T10:00:00Z", "no CI")
+    (ci2 / removed).unlink()
+    _commit(ci2, "2026-11-05T10:00:00Z", f"drop {removed}")
     (assess / "run-context.json").unlink()  # a CI checkout has the committed baseline only
     ctx = build_and_publish_run(repo_root=ci2, run_date="2026-11-24", non_interactive=True)
-    assert "ci_runs_tests" in ctx["since_last_run"]["gates_lost"]
-    assert model_changed_line(ctx["since_last_run"]) is None
+    lost = ctx["since_last_run"]["gates_lost"]
+    assert lost and model_changed_line(ctx["since_last_run"]) is None
     (assess / "config.toml").write_text("[gate]\nfail_on_gate_loss = true\n", encoding="utf-8")
     verdict = evaluate(ctx, load_gate_config(ci2))
     assert verdict["failed"] is True
-    assert "FAIL gate lost: ci_runs_tests" in format_verdict(verdict)
+    assert f"FAIL gate lost: {lost[0]}" in format_verdict(verdict)

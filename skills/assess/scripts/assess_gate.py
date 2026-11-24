@@ -23,7 +23,10 @@ snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
   A loss counts only against the committed baseline: one ``since_last_run`` read from an
   earlier ``run-context.json`` left on disk is a warn line. Without the opt-in a lost
   gate is a warn line only. A run whose gates were not compared across maturity models
-  (``gate_loss.not_compared``, #1150) prints a warn line naming why, never "clean snapshot".
+  (``gate_loss.not_compared``, #1150) prints a warn line naming why, never "clean snapshot";
+  with ``fail_on_gate_loss`` on, a default-model run whose previous run used another model
+  (the ``since_last_run`` model-changed line names both) fails with that reason. A profile run
+  against the default baseline stays a warn line: it is never compared with that baseline.
 
 A third, explanatory part: when the committed ``.assess/findings.json`` (read
 from disk, or the prior the run recorded before rewriting it) was
@@ -66,6 +69,8 @@ from typing import Any, NotRequired, TypedDict, cast
 from lib.assess_config import GateConfig, load_gate_config, load_gate_config_file
 from lib.findings_snapshot import committed_prior, method_change
 from lib.gate_loss import held_at_baseline, no_baseline, not_compared, split_lost, step_change
+from lib.model_change import model_changed_line
+from lib.prior_level import default_level
 from lib.reviewed_findings import open_findings
 from lib.run_context_types import DerivedFinding, JsonDict, MethodChange
 
@@ -220,6 +225,11 @@ def check_gate_loss(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
     baseline held now reads unmet."""
     if not gate.get("fail_on_gate_loss"):
         return []
+    # A default run that compared no gate because the previous run used another model cannot
+    # show a loss, so it fails with that reason rather than passing unchecked (#1150).
+    uncompared = model_changed_line(ctx.get("since_last_run"))
+    if uncompared is not None and default_level(ctx.get("level")):
+        return [{"metric": "gates_not_compared", "count": 0, "paths": [], "reason": uncompared}]
     unmet = held_at_baseline(ctx, split_lost(ctx)[0])
     if not unmet:
         return []
@@ -288,6 +298,11 @@ def format_verdict(verdict: GateVerdict) -> str:
                 f"  FAIL regression: {breach['count']} hotspot(s) worsened since "
                 f"the prior snapshot ({sample})"
             )
+        elif breach["metric"] == "gates_not_compared":
+            lines.append(
+                f"  FAIL gates not compared: {breach['reason']}. fail_on_gate_loss compares runs of "
+                "one maturity model, so commit a default-model run to re-arm it"
+            )
         elif breach["metric"] == "gates_lost":
             step = (f" (Step {breach['step_from']} -> Step {breach['step_to']})"
                     if "step_from" in breach else "")
@@ -320,7 +335,8 @@ def format_verdict(verdict: GateVerdict) -> str:
             "baseline and could not be read this run, so it is not counted as lost"
         )
     skipped = verdict.get("gates_not_compared")
-    if skipped:
+    failing_skip = any(b["metric"] == "gates_not_compared" for b in verdict["threshold_breaches"])
+    if skipped and not failing_skip:
         lines.append(
             f"  warn gates not compared: {skipped}. fail_on_gate_loss compares runs of one "
             "maturity model, so commit a default-model run to re-arm it"
