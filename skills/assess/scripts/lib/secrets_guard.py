@@ -3,8 +3,9 @@
 A token committed once lives in the history of every clone. A guard catches it before it lands:
 a secrets hook in the pre-commit config, which a contributor can skip with ``--no-verify``, or a
 secrets scan in CI, which runs on every change whoever sends it. This module reads both from the
-commit; GitHub's own secret scanning and push protection are repository settings, which a
-platform collector will read (part B of #1173). No model is involved and no scanner runs.
+commit; GitHub's own secret scanning and push protection are repository settings, read on the
+platform pass by ``lib.hosting.github_secret_scanning`` and passed in as ``github_secret_scanning``.
+No model is involved and no scanner runs.
 
 The tendency it compensates for is guardrail erosion: a token pasted into a config or a skill
 "just for now" is never removed, and nothing at the door stops the next one.
@@ -65,17 +66,26 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   read: an unread GitLab include leaves level 2 not measured (``ci_includes_unresolved``) but
   level 1 unmet. The asymmetry is deliberate: level 1 is listed and moves no count, so an unmet
   there costs nothing, while level 2 is counted and must not read unmet on evidence it lacks.
-- ``enforcement`` (level 2): a guard runs where an agent cannot skip it, a CI scan (and, once
-  read, GitHub's secret scanning or push protection). Graded ``measured`` and counted. With no CI
-  scan on a github.com remote, GitHub's own settings could still guard the repository, so the
-  reading is not measured (``secret_scanning_not_read``), never unmet; likewise
+- ``enforcement`` (level 2): a guard that can stop the change, where an agent cannot skip it. A
+  CI scan fails a check that can gate the merge; GitHub push protection (source ``platform``)
+  rejects the push. Secret scanning alone raises an alert that gates nothing, so it meets level
+  1, not level 2. Graded ``measured`` and
+  counted. With no CI scan on a github.com remote and the settings not read (no ``--platform``,
+  no admin, owner or security manager rights), push protection could still guard the repository, so the reading is not
+  measured (``secret_scanning_not_read``), never unmet; read and off, it is unmet. On a public
+  repository GitHub also turns on push protection for each user by default; that does not show in
+  the repository's settings and a pusher can opt out of it, so it does not meet level 2.
+  Repository push protection does meet it, though by default a pusher can bypass a block by
+  stating a reason (``delegated_bypass`` false). That bypass is recorded and attributed, like an
+  admin overriding a failing CI check, so level 2 still counts it; likewise
   (``ci_includes_unresolved``) when a GitLab include that could hold a scan was not read, since
   ``.gitlab-ci.yml``'s includes are read through ``lib.ci_includes``;
   a GitHub Enterprise Server or ``*.ghe.com`` remote is not recognised as GitHub yet, so it reads
-  unmet with no CI scan although those platforms offer secret scanning (part B reads the setting); on any other remote, or
+  unmet with no CI scan although those platforms offer secret scanning; on any other remote, or
   none, there is no such setting, and no CI scan reads unmet.
 - ``sources`` records each source that shows a guard with its own grade (``pre_commit``
-  config_only, ``ci`` measured), since a condition's grade is fixed per signal.
+  config_only, ``ci`` measured, ``platform`` measured: secret scanning or push protection on),
+  since a condition's grade is fixed per signal.
 
 Block (``secrets_guard`` in run-context.json)::
 
@@ -103,6 +113,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
+from collections.abc import Mapping
 from typing import TypedDict
 
 from lib.ci_includes import SETTLED, resolve_includes
@@ -220,11 +231,11 @@ class Enforcement(TypedDict, total=False):
     available: bool  # false: GitHub's own scanning was not read (secret_scanning_not_read)
     reason: str
     present: bool
-    source: str | None  # "ci" (and "platform" once the GitHub setting is read)
+    source: str | None  # "ci", or "platform" (GitHub push protection)
 
 
 class SourceGrade(TypedDict):
-    source: str  # pre_commit | ci
+    source: str  # pre_commit | ci | platform
     grade: str  # the source's own evidence grade (lib.signal_grades): config_only | measured
 
 
@@ -670,14 +681,26 @@ def _on_github(root: Path) -> bool:
     return bool(_GITHUB_REMOTE.match(url))
 
 
-_GRADES = {"pre_commit": "config_only", "ci": "measured"}
+_GRADES = {"pre_commit": "config_only", "ci": "measured", "platform": "measured"}
 
 
-def _enforcement(root: Path, ci: CiGuard) -> Enforcement:
-    """Level 2: a CI scan is present; else, on a github.com remote, GitHub's own secret scanning
-    could still guard the repository and is not read here, so the reading is not measured."""
+def _platform(block: Mapping[str, object] | None) -> tuple[bool, bool] | None:
+    """(secret scanning on, push protection on) from the ``github_secret_scanning`` platform block
+    (``lib.hosting.github_secret_scanning``); None when it was not read (offline, no admin, owner or security manager rights,
+    not GitHub)."""
+    if not isinstance(block, Mapping) or block.get("available") is not True:
+        return None
+    return bool(block.get("secret_scanning")), bool(block.get("push_protection"))
+
+
+def _enforcement(root: Path, ci: CiGuard, platform: tuple[bool, bool] | None) -> Enforcement:
+    """Level 2: a guard that can stop the change. A CI scan fails a check that can gate the merge;
+    push protection rejects the push; secret scanning alone raises an alert that gates nothing, so it
+    does not meet level 2. With neither, a setting that was not read leaves it not measured."""
     if ci["present"]:
         return {"available": True, "present": True, "source": "ci"}
+    if platform is not None and platform[1]:
+        return {"available": True, "present": True, "source": "platform"}
     if ci["rules_unevaluated"]:
         return {"available": False,
                 "reason": f"{REASON_RULES}: a GitLab scan ({', '.join(ci['rules_unevaluated'])}) runs under "
@@ -686,21 +709,23 @@ def _enforcement(root: Path, ci: CiGuard) -> Enforcement:
         return {"available": False,
                 "reason": f"{REASON_INCLUDES}: no secrets scan in the CI read, and "
                           f"{ci['includes_unresolved']} GitLab include(s) that could hold one were not read"}
-    if _on_github(root):
+    if _on_github(root) and platform is None:
         return {"available": False,
                 "reason": f"{REASON_NOT_READ}: no secrets scan in CI, and GitHub's own secret scanning "
                           "and push protection, repository settings, were not read"}
     return {"available": True, "present": False, "source": None}
 
 
-def scan_secrets_guard(repo_root: Path, scope: Path | None = None,
-                       ghsync_root: Path | None = None) -> SecretsGuardBlock:
+def scan_secrets_guard(repo_root: Path, scope: Path | None = None, ghsync_root: Path | None = None,
+                       github_secret_scanning: Mapping[str, object] | None = None) -> SecretsGuardBlock:
     """Build the ``secrets_guard`` block (see the module doc). The pre-commit config and CI are the
     repository's, so a ``scope`` reads the root's, as ``guardrails`` reads the root pre-commit config."""
     root = repo_root.resolve()
     hook = pre_commit_guard(root)
     ci = ci_guard(root, ghsync_root, _hooks_run_in_ci(root, hook))
+    platform = _platform(github_secret_scanning)
     sources = [SourceGrade(source=name, grade=_GRADES[name])
-               for name, found in (("pre_commit", hook["present"]), ("ci", ci["present"])) if found]
+               for name, found in (("pre_commit", hook["present"]), ("ci", ci["present"]),
+                                   ("platform", platform is not None and any(platform))) if found]
     return {"available": True, "pre_commit": hook, "ci": ci, "configured": bool(sources),
-            "enforcement": _enforcement(root, ci), "sources": sources}
+            "enforcement": _enforcement(root, ci, platform), "sources": sources}

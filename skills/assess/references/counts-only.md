@@ -761,12 +761,32 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `skill_personal_data.files.kinds` | token |
 | `skill_personal_data.kinds_detected` | token |
 
+## ci_model_jobs
+
+| Field | Kept as |
+|---|---|
+| `ci_model_jobs.ungated_reason` | token |
+| `ci_model_jobs.jobs.path` | path (hashed when hashing is on) |
+| `ci_model_jobs.jobs.job` | dropped |
+| `ci_model_jobs.jobs.platform` | token |
+| `ci_model_jobs.jobs.signs` | token |
+| `ci_model_jobs.jobs.triggers` | token |
+| `ci_model_jobs.jobs.gates` | token |
+| `ci_model_jobs.jobs.state` | token |
+| `ci_model_jobs.jobs.reason` | token |
+
 ## org_security_policy
 
 | Field | Kept as |
 |---|---|
 | `org_security_policy.reason` | reason code |
 | `org_security_policy.path` | dropped |
+
+## github_secret_scanning
+
+| Field | Kept as |
+|---|---|
+| `github_secret_scanning.reason` | reason code |
 
 ## contributor_files
 

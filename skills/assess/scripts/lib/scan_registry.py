@@ -114,7 +114,9 @@ from lib.skill_disclosure import scan_skill_disclosure
 from lib.secrets_guard import scan_secrets_guard
 from lib.skill_script_tests import scan_skill_script_tests
 from lib.skill_personal_data import scan_skill_personal_data
+from lib.ci_model_jobs import scan_ci_model_jobs
 from lib.hosting.org_security_policy import scan_org_security_policy
+from lib.hosting.github_secret_scanning import scan_github_secret_scanning
 from lib.layer_grades import scan_layer_grades
 from lib.hosting.merged_sample import merged_sample, offline_merged_sample
 from lib.hosting.gitlab_ci_lint import no_merged_ci, read_merged_ci
@@ -625,12 +627,18 @@ SCANS: tuple[ScanSpec, ...] = (
     # Personal data in skill text (issue #1045): the kinds found in each skill and agent file and
     # its skill's references/, never the data. Scoped per skill unit (unit_kinds = ["skill"]).
     _spec("skill_personal_data", scan_skill_personal_data),
+    # Model-backed CI jobs (issue #1242): each job that calls a model API (an eval harness, an
+    # agent action or CLI, a model-provider secret) and whether a gate limits it. Feeds the
+    # model-ci-gated row.
+    _spec("ci_model_jobs", scan_ci_model_jobs),
     # Contributor files (issue #1045): a contributing guide and a security policy (or a link to
     # GitHub private vulnerability reporting), with issue and change templates as evidence.
     # Feeds the contributor-files row; not measured for a knowledge base (reads archetype).
     # The owner's shared security policy (issue #1045): the SECURITY file of the owner's
     # public .github repository, which GitHub shows on a repository that has none. Network.
     _spec("org_security_policy", scan_org_security_policy),
+    # GitHub's own secret scanning and push protection settings (issue #1173), admin-only. Network.
+    _spec("github_secret_scanning", scan_github_secret_scanning),
     _spec("contributor_files", cs.contributor_files),
     # Secrets guard (issue #1173): a secrets hook in the pre-commit config and a secrets scan in CI,
     # each with its own grade; level 1 any guard (listed), level 2 one an agent cannot skip (counted).

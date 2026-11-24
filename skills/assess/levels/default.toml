@@ -90,7 +90,9 @@
 #   to source code in a module directory (#874):
 #   a catch-all or extension glob (`*`, `/**`, `*.py`), a dot-directory
 #   (`/.github/`), a root file (`README.md`, `LICENSE`) or a docs-only
-#   path leaves the code with one owner, so it does not count. Level 2 adds a
+#   path leaves the code with one owner, so it does not count. Architecture
+#   docs count only when they name two or more distinct module paths (#922):
+#   one path is a pointer, not a map. A CODEOWNERS line counts on its own. Level 2 adds a
 #   file-size outcome (95% of production source files at 500 lines or
 #   fewer) and requires layer-4-architecture.1 (#906). The percentile reads
 #   stats_summary.loc_by_class.source (#820): test, fixture, example,
@@ -124,7 +126,12 @@
 #   the size of the always-loaded Claude Code instruction text (root
 #   CLAUDE.md or, without one, AGENTS.md, its imports, unscoped
 #   .claude/rules); a repository whose only instruction file is for another
-#   tool (.cursorrules, Copilot) reaches level 1 with that size 0.
+#   tool (.cursorrules, Copilot) reaches level 1 with that size 0. Level 2
+#   also needs a named check command that resolves
+#   (agent_environment.check.named_total): a Makefile target with no
+#   prerequisite whose recipe runs only true, :, exit 0 or echo lines (with
+#   nothing chained after the echo) exists but runs nothing, so it does not
+#   count (#922).
 # - Layer 1 reads the observability rung from committed files (telemetry
 #   dependencies, a runbook or OBSERVABILITY.md, a logs or metrics MCP server
 #   or skill). A headless run builds it too (lib/headless_static.py, #699), so
@@ -244,9 +251,9 @@
 # - Secrets guard (lib/secrets_guard.py, #1173). Level 1 reads secrets_guard.configured: a
 #   secrets hook in the pre-commit config or a secrets scan in CI. Graded config_only (a hook
 #   can be skipped with --no-verify), so it is listed, not counted. Level 2 reads
-#   secrets_guard.enforcement.present: a secrets scan in CI, where an agent cannot skip it.
-#   Graded measured and counted. With no CI scan on a GitHub repository, GitHub's own secret
-#   scanning could still guard it and is not read, so level 2 is unknown
+#   secrets_guard.enforcement.present: a guard nobody can skip, a secrets scan in CI or GitHub
+#   push protection (read on the platform pass). Graded measured and counted. With no CI scan on
+#   a GitHub repository and the settings not read, level 2 is unknown
 #   (secret_scanning_not_read), never unmet, and so is a GitLab repository whose CI includes a
 #   file that could hold the scan and was not read (ci_includes_unresolved), and so is a GitLab
 #   scan job under rules, only/except or an uncertain when (gitlab_rules_unevaluated): GitLab rules
@@ -270,8 +277,22 @@
 #   Graded measured (head_structure) for both sources: the guide and a policy in the tree
 #   are read at the commit, an owner's policy by a live GitHub read, and policy.source
 #   (repo or org) names which.
+# - Model-backed CI jobs are gated reads ci_model_jobs.ungated (lib/ci_model_jobs.py,
+#   #1242): no CI job that calls a model API (an eval harness, an agent action or the Claude
+#   Code CLI, a model-provider secret, pytest -m eval or an evals/ path) runs on every
+#   default-branch push or every pull request update without a gate: a paths filter, a
+#   schedule or manual trigger only, a label, pull request types without synchronize, or
+#   GitLab rules:changes. cancel-in-progress is recorded, not a gate. A positive condition,
+#   not a hazard: met when every model-backed job is gated. With no model-backed job the row
+#   is unknown (no_model_jobs); with none ungated but a trigger this reader cannot settle,
+#   or a job it cannot read, unknown (trigger_unresolved, ci_jobs_unread), never met. It
+#   gates no Step. Graded measured (head_structure), read from the committed CI files.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
-#   of repeated AI work cycles, which no scan measures.
+#   of repeated AI work cycles, which no scan measures. A settings hook event
+#   counts toward hooks_present only when it holds a hook that does
+#   something: a prompt, agent, http or mcp_tool hook, or a command other
+#   than true, : or exit 0. An empty event list or a hook with no type does
+#   not count (#922).
 #
 # Conditions, the verified tally and Steps (lib/level_tally.py, #744): each
 # row level is also one condition, <row id>.<level>. Only conditions whose
@@ -307,8 +328,51 @@
 # - layer-5-ci.2 reads not measured (no_manifests) on a repository with no
 #   dependency manifest, where it read met (#927, the empty-set rule). The
 #   criteria text is unchanged; the Layer 5 comment names the rule.
+#
+# default-2026.11.24 (4.0.0 release): ten changes since default-2026.11.23.
+# - layer-4-architecture.2 reads stats_summary.loc_by_class.source.p95, the 95th-percentile
+#   file size of production source only, where it read stats_summary.loc.p95 over every scored
+#   file (#820). Test, fixture, example, vendored and generated paths (lib/path_classes.py) are
+#   set aside, so a repository can move either way: many small fixtures no longer hide a large
+#   source file, and large tests no longer fail clean source. With no source file scored the
+#   condition reads not measured (no_source_files), where it read no_scored_files.
+# - `layer-7-review.2` (wide review on merged pull requests) requires `layer-7-review.1` (review
+#   evidence present), so it cannot be met and counted while review evidence is unmet (#934).
+# - a `skill-disclosure` row (issue #1045): level 1 reads
+#   `skill_disclosure.files_breaking eq 0`, tagged `agent_context`, unknown (`no_skill_files`)
+#   with no skill or agent file. Read per skill unit; it gates no Step.
+# - a `contributor-files` row (issue #1045): level 1 reads `contributor_files.guide.present`
+#   and `contributor_files.policy.present` `eq true`,
+#   tagged `docs`, unknown (`knowledge_base`) for a knowledge base. It gates no Step.
+# - a `skill-script-tests` row (issue #1045): level 1 reads
+#   `skill_script_tests.skills_untested eq 0`, tagged `behaviour`, unknown
+#   (`no_skill_scripts`) with no skill holding a script. Read per skill unit; it gates no Step.
+# - a `skill-personal-data` row (issue #1045): level 1 reads
+#   `skill_personal_data.files_with_personal_data eq 0`, tagged `governance`, unknown
+#   (`no_skill_files`) with no skill or agent file. Read per skill unit; it gates no Step.
+# - Steps read gates only (issue #1083): the `[[steps]]` tables drop `threshold` (0, 1, 3, 5),
+#   so a Step needs its gates and nothing else and a condition added to the model never moves
+#   a Step. A repository held back only by the count now reaches the Step its gates allow.
+#   A `--levels` model with a `threshold` key fails to load with a message naming the removal.
+# - A `--levels` model whose Step after 1 adds no gate over the Step below now fails to load
+#   (issue #1083): with no count threshold, gates are all that tell two Steps apart, so such a
+#   Step would always be held with the one below. Breaking for custom models; the default
+#   model adds one gate per Step and is unaffected.
+# - Row titles name the practice only (issue #1099): "Layer 0: agent instructions" reads
+#   "Agent instructions", and so on for the nine former layer rows. No row id, condition id,
+#   gate or criterion changes, so results are the same; only the printed titles move.
+# - a `secrets-guard` row (issue #1173): level 1 reads `secrets_guard.configured`, level 2
+#   `secrets_guard.enforcement.present`, both `eq true`, tagged `governance`.
+#
+# default-2026.11.24 (4.0.0 release): two changes, without a bump.
+# - the Layer 0, Layer 4 and Layer 8 comments name the #922 rules; the criteria text is
+#   unchanged. layer-0-instructions.2 reads unmet on a named Make target that runs
+#   nothing, layer-4-architecture.1 on an architecture doc naming one module path, and
+#   layer-8-agent-ops.2 on settings hooks that run only true, :, exit 0 or nothing.
+# - a `model-ci-gated` row (issue #1242): level 1 reads `ci_model_jobs.ungated eq 0`, tagged
+#   `governance`, unknown (`no_model_jobs`) with no model-backed CI job. It gates no Step.
 
-version = "default-2026.11.23"
+version = "default-2026.11.24"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -576,6 +640,17 @@ aggregation = "min"
   level = 1
   truth = ["governance"]
   criteria = [{ signal = "skill_personal_data.files_with_personal_data", op = "eq", value = 0 }]
+
+[[rows]]
+id = "model-ci-gated"
+title = "Model-backed CI jobs are gated"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["governance"]
+  criteria = [{ signal = "ci_model_jobs.ungated", op = "eq", value = 0 }]
 
 [[rows]]
 id = "contributor-files"

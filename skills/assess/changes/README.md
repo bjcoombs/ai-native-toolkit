@@ -9,7 +9,7 @@ During a version freeze, a PR that would bump a version counter adds one file he
 | Counter | Constant | History comment in |
 |---------|----------|--------------------|
 | `artifact_schema` | `ARTIFACT_SCHEMA_VERSION` | `skills/assess/scripts/lib/artifact_schema.py` |
-| `assess_method` | `ASSESS_METHOD_VERSION` | `skills/assess/scripts/lib/artifact_schema.py` |
+| `assess_method` | `ASSESS_METHOD_VERSION` | `skills/assess/scripts/lib/assess_method.py` |
 | `level_result` | `LEVEL_RESULT_VERSION` | `skills/assess/scripts/lib/level_tally.py` |
 | `signals_schema` | `SIGNALS_SCHEMA_VERSION` | `skills/assess/scripts/lib/signals.py` |
 | `levels_default` | `version` | `skills/assess/levels/default.toml` |

@@ -88,6 +88,14 @@
       },
       "revision": 6
     },
+    "core.ci_model_jobs": {
+      "repos": {
+        "grpa/sub/deep/svc2": "721e25a2845388dc28bcd6d275b2baa9f2710c73102d570385e5185752dc88b8",
+        "grpa/svc1": "ffbe7850dcb718b992f28b87a16cfe17373eb0a6429d007e96fd12c58c73ff25",
+        "grpb/lib1": "721e25a2845388dc28bcd6d275b2baa9f2710c73102d570385e5185752dc88b8"
+      },
+      "revision": 1
+    },
     "core.claude_config": {
       "repos": {
         "grpa/sub/deep/svc2": "0358077663ec93bfc9ad761b8edb6123d4c4ab735b535120bc2d9844e4c2c385",
@@ -165,6 +173,14 @@
         "grpa/sub/deep/svc2": "0fb852ee405905bb9e02bff05806076c16ccdfadc5e32fd0e0059fd9ba7dddc0",
         "grpa/svc1": "0fb852ee405905bb9e02bff05806076c16ccdfadc5e32fd0e0059fd9ba7dddc0",
         "grpb/lib1": "0fb852ee405905bb9e02bff05806076c16ccdfadc5e32fd0e0059fd9ba7dddc0"
+      },
+      "revision": 1
+    },
+    "core.github_secret_scanning": {
+      "repos": {
+        "grpa/sub/deep/svc2": "dfac5a20120b3f6470dcd3a200c1b207d7621e7b893d270dd7ccb7a2d8b024f3",
+        "grpa/svc1": "dfac5a20120b3f6470dcd3a200c1b207d7621e7b893d270dd7ccb7a2d8b024f3",
+        "grpb/lib1": "dfac5a20120b3f6470dcd3a200c1b207d7621e7b893d270dd7ccb7a2d8b024f3"
       },
       "revision": 1
     },
@@ -286,7 +302,7 @@
         "grpa/svc1": "5d414f0fbba509293ca58f0c4a35e645f0b3c31e66454eacc01fa7d6ce1f1f3d",
         "grpb/lib1": "5d414f0fbba509293ca58f0c4a35e645f0b3c31e66454eacc01fa7d6ce1f1f3d"
       },
-      "revision": 2
+      "revision": 3
     },
     "core.shared_tooling": {
       "repos": {

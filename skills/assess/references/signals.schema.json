@@ -100,6 +100,7 @@
           "archetype",
           "behaviour",
           "ci_checks",
+          "ci_model_jobs",
           "claude_config",
           "config_drift",
           "contributor_files",
@@ -115,6 +116,7 @@
           "documentation",
           "gap_actions",
           "gate_cost_estimate",
+          "github_secret_scanning",
           "guardrails",
           "instruction_claims",
           "instruction_placement",
@@ -1316,6 +1318,30 @@
             }
           }
         },
+        "ci_model_jobs": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: no_model_jobs (no committed CI job calls a model API, so there is nothing to gate); trigger_unresolved (no model-backed job is ungated, but one could not be settled. Examples are an unreadable on: key, a label if: joined with ||, or a job that only names a provider secret); ci_jobs_unread (every model-backed job found is gated. But a job calls a reusable workflow from another repository, or a GitLab include was not read. An ungated job may sit there). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
         "contributor_files": {
           "type": "object",
           "if": {
@@ -1333,6 +1359,30 @@
               "reason": {
                 "type": "string",
                 "description": "'code: sentence'. The codes name the missing piece: knowledge_base (the repository is a knowledge base (archetype knowledge-base), which takes no code patches); org_policy_not_read (the repository holds no security policy. The owner's shared .github repository, whose policy GitHub shows on this one, was not read. The cause is offline use, no --platform, a remote not on github.com, or gh not signed in). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "github_secret_scanning": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: settings_not_readable (only a repository admin, organization owner or security manager can read GitHub's secret scanning and push protection settings). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [

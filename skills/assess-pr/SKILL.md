@@ -176,20 +176,29 @@ If the user **selected the PR offer** (no-contributions flow, `NO_CONTRIBUTIONS=
 3. Suggest disabling Actions on the fork: the fork carries the upstream's workflow files, so if the user ever enables Actions there, this PR and later pushes would start CI runs the fork's owner pays for on a private fork or self-hosted runners. Disabling them up front keeps the fork an inert place to share the report. Offer the command, never run it unasked: `gh api -X PUT "repos/$FORK_SLUG/actions/permissions" -F enabled=false`.
 4. Commit message, PR title, and body are unchanged from the direct flow.
 
-**Every PR flow (direct, fork, and no-contributions): the PR body leads with the findings and ends with the plugin reference** so reviewers can install the tool that generated the report. Use this body template:
+**Every PR flow (direct, fork, and no-contributions): the PR body leads with the findings and ends with the plugin reference** so reviewers can install the tool that generated the report. The Readiness line and the Top 3 table come from `assess_actions_render.py`, which reads `.assess/actions.json` and `.assess/run-context.json` (relative to the repo root) and never the report, so the report's Top 3 section can change shape without changing the PR body. Pass `--assess-dir "$REPO_ROOT/.assess/<slug>"` for a `--scope` run:
+
+```bash
+<!-- chat-replace:uv-actions-render -->
+RENDER="${CLAUDE_SKILL_DIR}/../assess/scripts/assess_actions_render.py"
+uv run "$RENDER" "$REPO_ROOT" readiness   # the Readiness value
+uv run "$RENDER" "$REPO_ROOT" table       # the Top 3 table, one row per actions.json entry in rank order
+```
+
+A missing or unreadable `actions.json` exits 1 with a message: say so in the PR body in place of the table, and never rebuild the table from the report. Use this body template:
 
    ```markdown
    ## Summary
 
    Snapshot of this codebase's AI-agent readiness, complexity hotspots, and doc navigability as of <YYYY-MM-DD>.
 
-   - **Readiness:** <paste `headline.lines` from run-context.json verbatim, joined with " / ">
+   - **Readiness:** <the output of `assess_actions_render.py <repo> readiness`, verbatim>
    - **Hotspot leader:** `<top hotspot path>` (<loc> LOC, ccn <N>, <M> commits in window) - write `ccn ~<N> (approximate)` when the row is scc-only (`source` `scc`, `max_fn_ccn` null), and `ccn ~<N> (unreliable)` when its path is in `stats_summary.complexity_unreliable`
    - **Top lying map:** `<top stale-hub doc>` (<N>d stale, subject churn <M>)
 
    ## Top 3 Actions
 
-   <paste the Top 3 Actions table from .assess/assess-report.md verbatim>
+   <the output of `assess_actions_render.py <repo> table`, verbatim>
 
    Full report: [`.assess/assess-report.md`](./.assess/assess-report.md) (the heatmap and doc graph render inline).
 
@@ -207,7 +216,7 @@ If the user **did not select the PR offer**: skip it. Files stay in `.assess/` f
 
 This is the second item in the batched Phase 2 question (its wording there: _"track the Top 3 Actions in your issue tracker - each becomes a closeable, assignable work item rather than a bullet buried in a PR description"_). Execute this step only if the user **selected the issue-tracking offer**, or the upstream-issues offer (which is the issue-tracking offer on a read-only target, run after Step 5 hosts the report in the fork).
 
-If the user **did not select** it: skip. The Top 3 Actions table in the PR/report still lists everything inline.
+If the user **did not select** it: skip. The Top 3 Actions table in the PR and the report still lists everything inline.
 
 When selected, proceed agnostically - **don't assume GitHub** (or any specific tracker). Use your judgment based on what's actually in front of you.
 
@@ -263,37 +272,44 @@ Once the tracker is known, use its native tooling. The skill doesn't enumerate e
 | Linear (via CLI) | `linear issue create ...` |
 | Anything else | follow the user's documented convention |
 
-**One concern per item.** Each item carries one change a maintainer can accept or decline on its own. Before filing, read each Top 3 row and any sub-items the report lists under it (`3a`, `3b`, ...): every sub-item becomes its own item. If a row still bundles independent changes (an instruction-file stub *and* a lockfile *and* a CI step), split it into one item per change rather than filing the bundle; the parts a maintainer would accept separately must be tracked separately, or the declined part takes the accepted ones down with it.
+**Build the items from `actions.json`, never from the report.** One command renders every item, one per `actions` entry in `rank` order, as a JSON array of `{rank, title, body}`:
 
-For each item, the item should contain:
+```bash
+<!-- chat-replace:uv-actions-render -->
+RENDER="${CLAUDE_SKILL_DIR}/../assess/scripts/assess_actions_render.py"   # set again here: Step 6 runs when the PR offer was declined
+uv run "$RENDER" "$REPO_ROOT" items --report-link "<full-report link>"   # omit --report-link when there is none
+```
 
-- **Title**: the action title verbatim from the Top 3 table, or, for a split-off change, that change's one-line title
-- **Body**: the finding first (what was observed, the hotspot files), then the change (Command / First Step), the **Done when** criteria, a small metadata block (Layer, Effort, the full-report link), and last a one-line footer linking back to the plugin. Never open with the footer or the install instructions.
+- **Title**: the entry's `action`, as `title` gives it.
+- **Body**: `body` as given: the finding and its files first (the `condition` when the entry has no `finding`), then the First step, the **Done when** criterion, the Scope fence, a Context block (Layer, Effort, the full-report link) and last a one-line footer linking back to the plugin. Write each body to a file and pass it with `--body-file` (or the tracker's equivalent); do not reword it.
 - **Tag / Label / Category** that supports idempotency (see 6c)
 
-**Done when, in the repository's own terms.** List first what a maintainer without the plugin can check: a command that passes (`bats tests/`, `make lint` exits 0), a file state (`AGENTS.md` exists and names the check command), a CI result (the `lint` job runs `actionlint` and is green). The `/assess` re-run criterion (a finding clears, a layer field changes) comes after, marked optional. Rewrite the report's "Done when" cell into these terms when it names toolkit internals.
+**One concern per item.** Each item carries one change a maintainer can accept or decline on its own. `actions.json` holds one entry per rank. If an entry's `action` still bundles independent changes (an instruction-file stub *and* a lockfile *and* a CI step), file each change as its own item with its own one-line title. Start each split item from the entry's body and narrow its First step, Done when and Scope fence to that one change, so each item closes on its own change alone; keep the finding line and the Context block as rendered. The parts a maintainer would accept separately must be tracked separately, or the declined part takes the accepted ones down with it. List every reference for that rank in its Issue cell (6d).
+
+**Done when** is the entry's `done_when`, written in the repository's own terms when the report was assembled (`assess-findings`): a command that passes, a file state or a CI result first, the `/assess` re-run criterion after it, marked optional.
 
 **Full-report link.** Use the assessment PR when one was opened, `$REPORT_URL` from Step 5's upstream-issues flow when the report is hosted in the user's fork, and omit the line when neither exists.
 
-A ccn figure in the body follows the report's caveat (issue #590): an scc-only figure (`source` `scc`, `max_fn_ccn` null) is written `ccn ~N (approximate)`, a path in `stats_summary.complexity_unreliable` gets `ccn ~N (unreliable)` instead, and neither is offered as the reason the item is prioritised.
+A ccn figure in an entry's text follows the report's caveat (issue #590): an scc-only figure (`source` `scc`, `max_fn_ccn` null) is written `ccn ~N (approximate)`, a path in `stats_summary.complexity_unreliable` gets `ccn ~N (unreliable)` instead, and neither is offered as the reason the item is prioritised. The entry carries that wording from `finalize-input.json`; the renderer copies it as written.
 
-Example minimal body shape (adapt to the tracker's conventions):
+The body the renderer writes:
 
 ```markdown
-<what was observed: the finding, with the hotspot files it names>
+**Finding:** `<finding>` in `<file>`, `<file>`   (without a finding: **Condition:** `<condition>`, else **Files:** alone)
 
-<the one change: Command / First Step>
-
-<Why-this-action reasoning>
+### First step
+<first_step>
 
 ### Done when
-- <repository-native check: a command that passes, a file state, or a CI result>
-- Optional: <the /assess re-run criterion, e.g. the finding no longer lists this path>
+- <done_when>
+
+### Scope fence
+<scope_fence>
 
 ### Context
-- Layer: <N>: <name>
-- Effort: <small | medium | large>
-- Full report: <assessment PR or fork-hosted report link; omit if neither>
+- Layer: <layer> (`<condition>`)
+- Effort: <effort>
+- Full report: <the --report-link value; the line is left out without one>
 
 ---
 Generated by /assess - https://github.com/bjcoombs/ai-native-toolkit
@@ -318,9 +334,9 @@ In all cases, before creating: search first. If a match is found (open or closed
 
 How the link is recorded depends on the tracker, but the goal is the same: someone reading the assessment PR / report can click through to the items, and someone reading an item can click back to the assessment.
 
-- **GitHub PR + GitHub Issues** (the original flow): edit the PR body so the `Issue` column in the Top 3 Actions table replaces `—` with `#N` references (a row split into several items lists every reference, e.g. `#43, #44`). Update `.assess/assess-report.md` locally so the on-disk report stays in sync (commit the change if you're working in a worktree before pushing).
-- **GitHub PR + Task Master tasks**: include the task IDs in the `Issue` column (e.g. `TM #1.2`). Reference the assessment PR URL in each task's body.
-- **GitHub PR + Jira**: include the Jira keys (e.g. `PROJ-1234`) in the `Issue` column. Set the assessment PR URL as a Jira link.
+- **GitHub PR + GitHub Issues** (the original flow): re-render the table with one `--issue` per filed rank, `uv run "$RENDER" "$REPO_ROOT" table --issue 1='#42' --issue 2='#43, #44'` (a rank split into several items lists every reference), and replace the table in the PR body with the output. Update `.assess/assess-report.md` locally so the on-disk report stays in sync (commit the change if you're working in a worktree before pushing).
+- **GitHub PR + Task Master tasks**: include the task IDs in the `Issue` column through `--issue` (e.g. `--issue 1='TM #1.2'`). Reference the assessment PR URL in each task's body.
+- **GitHub PR + Jira**: include the Jira keys in the `Issue` column through `--issue` (e.g. `--issue 1=PROJ-1234`). Set the assessment PR URL as a Jira link.
 - **No PR was opened**: update only `.assess/assess-report.md` locally with the item references. With the upstream-issues flow, upstream references read `<owner>/<repo>#N`; push the updated report to the fork branch so `$REPORT_URL` shows them.
 - **Other trackers**: do whatever makes the cross-link work; if the tracker doesn't support links back, include the assessment date + PR URL (if any) in each item's body so a human can trace it.
 

@@ -55,7 +55,7 @@ COUNTERS: dict[str, Counter] = {
         "semver",
     ),
     "assess_method": Counter(
-        Path("skills/assess/scripts/lib/artifact_schema.py"),
+        Path("skills/assess/scripts/lib/assess_method.py"),
         re.compile(r"^ASSESS_METHOD_VERSION = (?P<value>[0-9]+)$"),
         "int",
         noun="rule changes",

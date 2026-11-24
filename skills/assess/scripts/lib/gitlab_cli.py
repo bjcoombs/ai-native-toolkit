@@ -1,4 +1,4 @@
-"""Moved to ``lib.hosting.gitlab_cli`` (#917). This path is removed in 4.0.0."""
+"""Moved to ``lib.hosting.gitlab_cli`` (#917). This path is removed in 5.0.0."""
 import sys
 
 import lib.hosting.gitlab_cli as _moved

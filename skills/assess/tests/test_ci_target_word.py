@@ -149,7 +149,7 @@ def _repo(root: Path, files: dict[str, str]) -> Path:
 def test_a_claude_md_naming_only_make_ci_keeps_layer_zero(tmp_path: Path) -> None:
     """Layer 0 level 2 reads ``agent_environment.check.named_total``: a named ``make ci``
     still counts, and the Makefile's ``ci`` target is still an entry point."""
-    root = _repo(tmp_path, {"Makefile": "ci:\n\techo hi\n",
+    root = _repo(tmp_path, {"Makefile": "ci:\n\tpytest\n",
                             "CLAUDE.md": "# Repo\n\n```bash\nmake ci\n```\n"})
     check = scan_agent_environment(root, {"CLAUDE.md": {"grade": "B"}}, None, probe_ci=False)["check"]
     assert check["named_total"] == 1

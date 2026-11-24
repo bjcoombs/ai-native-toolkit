@@ -8,16 +8,17 @@ constant each.
 writes (run-context.json, the badge, the wiki pages); the version history is in the
 module comment. `complexity-treemap.py` carries a copy that
 `tests/test_complexity_treemap_schema_versions.py` holds equal to it.
-It also holds `ASSESS_METHOD_VERSION`, the finding method version: an integer,
-independent of plugin releases, bumped by one in any change that moves which findings
-a run produces on unchanged code. `assess_core` stamps it in run-context.json and in
-`findings.json`.
+It re-exports `ASSESS_METHOD_VERSION`, the finding method version, from
+`lib/assess_method.py`, which holds that counter and its history (moved there in the 4.0.0
+release, when the two histories together passed the file-size limit).
 
-During a version freeze a change to either counter, or to another counter
+During a version freeze a change to this counter, or to another counter
 `scripts/fold_changes.py` knows, adds a note file under `skills/assess/changes/`
 instead of editing the history comment; the release PR folds the notes in with
 `make fold` (#1011).
 """
+
+from lib.assess_method import ASSESS_METHOD_VERSION as ASSESS_METHOD_VERSION
 
 # Artifact schema version, stamped on every artifact the run produces
 # (run-context.json, the badge, the wiki pages, complexity-stats). Distinct from
@@ -370,351 +371,167 @@ instead of editing the history comment; the release PR folds the notes in with
 #   pnpm-workspace.yaml, go.work or settings.gradle(.kts)) is skipped with it, and
 #   units.unit_count stays known where it read null with `unreadable_manifest`.
 #   Additive.
-ARTIFACT_SCHEMA_VERSION = "1.43.0"
-
-# The finding method version: which rules decide the findings a run produces.
-# Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
-# artifact shape, not finding semantics). Bump it, by one, in any change that
-# moves which findings a run produces on unchanged code; the CI gate compares it
-# with the version in the committed .assess/findings.json and explains the
-# finding moves instead of failing on them unexplained.
-# 1: the baseline (issue #554).
-# 2: churn counts follow renames, moving staleness ratios, lying_map and hotspot
-# ranks for files renamed inside the churn window (issue #425).
-# 3: the doc-complexity join reads complexity-stats.json's uncapped `files` list,
-#    so a complex file outside every top-10 list can now produce lying_map,
-#    unexplained_complexity or good_contract (issue #556). The same list reaches
-#    candidate_dead_weight (keyhole_signals._high_complexity_paths) and
-#    orphaned_understanding (understanding_analysis._extract_file_ccn), which
-#    now also see every scored file.
-# 4: the complexity join takes doc ownership from the doc-staleness rule
-#    (lib.docs.doc_ownership, issue #555): a README beside a design doc owns the
-#    directory's code, and a non-base doc owns none by directory.
-# 5: a CLAUDE.md identical to its AGENTS.md below the header (H1 and leading
-#    HTML comments) is the informational mirrored_instruction_files, not the
-#    capping claude_shadows_agents (issue #589).
-# 6: on a shallow clone every doc-staleness row is confidence "low", which keeps
-#    it out of lying_map and halves its stale-hub priority (issue #544). A full
-#    clone's findings do not move.
-# 7: instruction files are graded on always-on size and share instead of the
-#    whole-file size curve (issue #560), which moves instruction grades.
-# 8: a bats suite is a test file and credits its shell script (issue #593), so a
-#    co-located ``<stem>.bats`` can now produce self_referential_tests (E2).
-# 9: a parallel-tree ``run.bats`` equally close to a ``run.sh`` and an
-#    extensionless ``run`` credits neither (issue #635), so a test_focus signal or a
-#    hotspot "Has test file" row can move.
-# 10: a skill's SKILL.md is a base doc ranked after README.md (issue #614), so it
-#     owns its skill directory's code in doc staleness and the complexity join,
-#     and can move doc_staleness.modularity (base_doc_dir_ratio).
-# 11: a leading HTML comment only one of a CLAUDE.md / AGENTS.md pair carries is
-#     compared, not stripped, so it turns a mirrored_instruction_files into a
-#     claude_shadows_agents; text after a header comment's ``-->`` (an H1
-#     included) is body (issue #632).
-# 12: wording and padding inside an instruction-file section no longer lower its
-#     penalty (issue #619): command_reference is an absolute fenced count, a size
-#     signal beats always-on wording, fetch lines past the relocatable cap count
-#     as always-on, and the B cap reads the whole loaded file. Instruction grades
-#     can move.
-# 13: doc_claims compares pins per (pinned file, tool) (issue #610), so a Node pin
-#     no longer contradicts a Python pin in one ``.tool-versions``; the L0
-#     "conflicting doc claims" row and scorer evidence can move.
-# 14: a tracked source's rival shell spelling no longer hides an untracked
-#     ``run.sh`` beside it, so the pair ties for ``run.bats`` (issue #648); and a
-#     GitLab exact protected-branch rule combines with every matching wildcard,
-#     so a config_drift snapshot of the exact rule can report the wildcards'
-#     looser levels as drift; and a rename-only commit (no content change) is
-#     no longer churn or a content change (contract I425-2), so doc and code
-#     churn, doc ages, staleness ratios and lying_map can move.
-# 15: a repository with no importable Python package reports ``structure``
-#     ``available: false`` instead of an empty graph (issue #663), so keyhole
-#     static metrics and structure_drift tier 1 skip it; findings that read the
-#     static graph can move on such repositories.
-# 16: a root ``agents/*.md`` shaped as an agent definition is reported in
-#     ``instruction_placement.loaded_in_full`` even without a plugin manifest
-#     (issue #662), so that list and the scorer evidence drawn from it can move.
-# 17: an import graph with no edges reports ``structure.modularity_q`` null with
-#     ``modularity_reason: no_import_edges`` instead of 0.0 (issue #682), so the
-#     scorer's Layer 2 evidence on such repositories can move.
-# 18: a Go module (a go.mod with packages) is graphed from its import blocks
-#     (issue #710) instead of reporting no_import_graph_go, so structure, the
-#     Layer 2 evidence, and hidden_coupling / refactor_boundary on Go directories
-#     can move on Go repositories; structure_drift tier 1 empties its static-derived
-#     lists for a graph that maps no module to a file, and the behaviour block projects the
-#     static metrics only onto directories in the graphed language.
-# 19: TypeScript and JavaScript sources get an import graph (issue #709), and
-#     ``select_graph`` measures the dominant source language's graph: a builder
-#     that covers it decides with its graph or its failure reason, and another
-#     language's graph stands in when no builder covers it or that builder
-#     found nothing to graph. Files a builder
-#     skips (minified bundles, declarations, tests) do not count toward the
-#     dominant language. A TypeScript- or JavaScript-dominant repository now
-#     reports ``structure`` available instead of ``no_import_graph_typescript``,
-#     so keyhole static metrics, structure_drift tier 1, hidden_coupling and the
-#     scorer's Layer 2 evidence can move there.
-# 20: on a GitLab remote ``review_reality`` reads each sampled merge request's notes
-#     (issue #716), so ``reviewed_share`` and ``bot_review_share`` are measured
-#     instead of null and the L7 "hollow required review" row can now fire there.
-# 21: every git-history window and day count is counted back from HEAD's committer
-#     time instead of today (issue #773): churn windows, ``doc_staleness`` ages and
-#     window ratios, instruction ``freshness_days`` (and so the grader's freshness
-#     penalty), ``ai_usage`` counts and the keyhole velocity clock. On a repository
-#     whose HEAD is old, ages shrink and windows cover the history before HEAD.
-# 22: ``structure.front_door_ratio`` is null when no import crosses a package
-#     boundary (issue #760), so a single-package repository no longer reads as
-#     modular through a vacuous 1.0: ``hidden_coupling`` there rests on
-#     modularity alone, and a ``structure.front_door_ratio`` criterion is unknown.
-# 23: ``ci_checks`` no longer counts a bare list item that only names an
-#     always-check program (``- pytest``, ``- tox``) unless its parent key is a
-#     GitLab ``script:`` / ``before_script:`` / ``after_script:`` (issue #725), so
-#     a workflow whose only mention is ``needs: - pytest`` or a ``matrix:`` axis
-#     ``- tox`` reads ``check_commands`` 0 and Layer 5 level 1 can drop to 0.
-# 24: GitLab includes resolve offline (issue #766): ``ci_checks.test_or_lint_runs``
-#     reads a check in an included local file or a template cloned in the fleet root
-#     (true), or false when every include resolved without one, where it was null;
-#     ``review_automation`` credits a review component inside a resolved template;
-#     a workflow whose ``on`` key reads ``true:`` (YAML 1.1) has its events read, so
-#     an issue_comment-only review action is no longer credited.
-# 25: ``agent_environment`` adds ``setup_ready`` (the setup half of ``layer5_cap``)
-#     and ``pinning.unlocked_total`` (issue #786). Layer 5 level 2 reads
-#     ``unlocked_total eq 0`` instead of the cap: a repository whose instruction
-#     file names no check can now read level 2, and one with committed setup
-#     but an unlocked manifest no longer can. ``layer5_cap`` is unchanged.
-# 26: Layer 4 level 1 reads structure_drift.tier_0.boundary_patterns instead of
-#     matched_patterns (issue #785), so a CODEOWNERS whose lines own no module
-#     source (`*`, `*.py`, `/.github/`, `README.md`, `docs/`) no longer credits a
-#     declared boundary.
-# 27: under --platform (and in a full /assess run) GitLab's CI lint API gives the
-#     merged CI configuration of a repository whose includes did not all resolve
-#     offline (issue #796): ``ci_checks.test_or_lint_runs`` reads true or false
-#     where it was null, and ``review_automation`` credits a review component the
-#     merge pulled in. Offline headless runs are unchanged.
-# 28: a masked CI check (``|| true``, ``continue-on-error: true``,
-#     ``allow_failure: true``, ``set +e`` without a re-raise) or one that does
-#     not run on ordinary changes (a ``workflow_dispatch``-only workflow, a
-#     manual GitLab job) no longer meets Layer 5 level 1 (issue #775): it reads
-#     ``ci_checks.enforced_check_runs``, so the Layer 5 row and the scorer's
-#     Layer 5 evidence can move.
-# 29: coverage_gate reads go-test-coverage's .testcoverage.yml, cargo tarpaulin
-#     --fail-under and cargo llvm-cov --fail-under-lines (issue #788), and a
-#     repository holding a go.mod or Cargo.toml with no gate found reads Layer 6
-#     level 1 as not measured (threshold_meets_minimum null) where it read 0.
-# 30: a self_referential_tests path whose done review is recorded in the committed
-#     .assess/actions.json (status done, completed_sha an ancestor of HEAD, the path
-#     in files) and untouched since that commit leaves the attention list,
-#     prescribed_actions and the keyhole summary (issue #721), so the Top 3 can move.
-#     It stays in derived_findings with a reviewed note; a later change re-flags it.
-# 31: ``ai_usage`` buckets an account confirmed in the ``[identities]`` section of
-#     ``.assess/config.toml`` or ``--fleet-config`` (issue #765) before any pinned
-#     rule: a confirmed agent counts in ``agent_authored_commits``, a confirmed bot
-#     or person never does. The same matcher serves ``delivery`` and the GitLab
-#     note classifier (``gitlab_notes``) under --platform, so a confirmed account
-#     moves their agent counts too. Without the section nothing changes.
-# 32: Layer 3 level 1 reads ``ci_checks.lint_runs`` (issue #782): a linter run
-#     in CI, not a suppression comment. One suppression comment no longer earns the row,
-#     and a clean repository that lints in CI reads at least 1 where it was
-#     unknown, so the Layer 3 row can move.
-# 33: a repository with no readable CI check whose tree tracks a CI file of a
-#     system the scan does not parse (Jenkins, CircleCI, Azure Pipelines,
-#     Bitbucket Pipelines, Travis CI, Buildkite) reads
-#     ``ci_checks.enforced_check_runs`` null (``basis: unread_ci_system``), so
-#     its Layer 5 row moves from level 0 to unknown (issue #787).
-# 34: the displayed headline changes (issue #747): the layered "X / 8" score and
-#     its band names are retired for the deterministic Step, its next unlock and
-#     "Verified practices: N of M measured"; the badge and the log.md entry carry
-#     the Step and the tally, and the scorer returns per-layer verdicts only.
-# 35: the guardrails block and its stated_pct signal (issue #767): the default
-#     maturity model gains the guardrails-stated row (half of the configured
-#     gates stated is level 1, all of them level 2, none found is unknown).
-#     Existing rows are unchanged.
-# 36: the agent_consistency block and its conflicts and unlinked signals (issue
-#     #768): the default maturity model gains the agent-consistency row (no
-#     conflict is level 1, every system linked to the canonical file level 2,
-#     fewer than two systems unknown). Existing rows are unchanged.
-# 37 (2.2.0 release): four rule changes since 36.
-# - the empty-set rule and two requires (issue #906): a file-size condition
-#   reads not measured (no_scored_files) when no file is scored, layer-2-design.2
-#   requires layer-2-design.1 and layer-4-architecture.2 requires
-#   layer-4-architecture.1. Fewer conditions count on docs-only repositories
-#   and tangled import graphs; no shape changes. The default maturity model's
-#   version moves with it.
-# - ci_checks closes five false-credit holes (issue #919). A version or usage
-#   query (`ruff --version`) runs no check; an exit-zero flag (`--exit-zero`,
-#   `--issues-exit-code=0`), a later top-level `exit 0` in a GitHub run: body
-#   without errexit (pwsh, a Windows runner, set +e) and a literal `if: false`
-#   step or job are masked; a workflow in a subfolder of .github/workflows/ is
-#   not a CI file. Layer 3 level 1 and Layer 5 level 1 can move from met to unmet.
-# - Layer 6 level 1, and so the Step 4 coverage_gate gate, reads
-#   coverage_gate.enforced_meets_minimum (issue #921): a threshold of at least 50
-#   percent that no enforced CI line runs is level 0, where it read 1, and CI the
-#   scan cannot read is unknown. A JaCoCo MISSEDCOUNT maximum reads unknown, not 0.
-# - ci_checks recognises common test runners and reads unread targets as unknown
-#   (issue #920): dotnet test, swift test, mix test, deno test, bazel test, ctest,
-#   phpunit, pest, rspec, Gradle test tasks, xcodebuild test, php artisan test and
-#   check-named make, just, task, rake, turbo and nx targets run a check, and a
-#   wrapper (docker compose run, bundle exec, uv run, poetry run, npx, pnpm exec,
-#   hatch run) is read by the program it runs, for Layer 3 lint runs as well as
-#   Layer 5. A target whose recipe is not read (make foo, npm run foo,
-#   ./scripts/foo.sh, docker run img) reads enforced_check_runs null
-#   (check_target) where it read false; setup-named targets (make build) still
-#   read false. Layer 5 level 1 can move from 0 to met or unknown.
-# 38 (3.0.0 release): 22 rule changes since 37.
-# - the displayed headline changes (issue #844): the tally line reads "Practices in
-#   place: N of M measured, V verified" instead of "Verified practices", the Next
-#   line's shortfall reads "N more practices are in place", a per-tag strip line
-#   follows the tally with NOT MEASURED, HAZARD and DECLINED badges, and the badge
-#   and log.md summary read "Step S · N in place of M measured".
-# - structure_drift.tier_0.boundary_patterns counts an architecture-doc reference
-#   only when its resolved files hold module source under a non-dot directory, the
-#   CODEOWNERS predicate ownership_parser.is_boundary_pattern (issue #874). An
-#   ARCHITECTURE.md naming only `CONTRIBUTING.md`, `docs/` or `.github/workflows/ci.yml`
-#   no longer meets Layer 4 level 1, which can move from met to unmet.
-# - GitLab `rules:` are read as GitLab runs them (issue #884): the first matching rule
-#   decides, `if:` expressions are evaluated per merge request and branch push pipeline,
-#   and a top-level `workflow: rules:` gates every job of its file. A job gated by
-#   `$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH` or
-#   `$CI_COMMIT_TAG && ...` no longer runs a check (enforced_check_runs can move from
-#   true to false); a custom variable, inline, anchored or multi-line rules and `exists:`
-#   read unknown. Layer 5 level 1 can move from met to unmet or unknown.
-# - the empty lockfile set (issue #927): layer-5-ci.2 reads not measured
-#   (no_manifests) when agent_environment.pinning.manifests_total is 0, where it
-#   read met. Fewer conditions count on repositories with no dependency manifest.
-# - the lockfile check reads Mix, Pub, SwiftPM, .NET, Gradle, vcpkg and Conan
-#   manifests (issue #927 part B). Libraries that by convention commit no lock
-#   (Composer type library, a published Pub package, a SwiftPM library) are
-#   left out of the count; a Gradle version catalog or NuGet central package
-#   management reads unlocked. layer-5-ci.2 can move from met to unmet on
-#   repositories with those manifests, and from unmet to not measured on
-#   library-only ones.
-# - ci_checks masks a check in an errexit-exempt position before a top-level `exit 0`
-#   under the default `bash -e` (issue #936): `pytest && echo ok; exit 0`, `pytest | tee
-#   log; exit 0` without pipefail, an `if` / `while` condition or a `!` pipeline.
-#   `ruff check . --exit-zero || pytest` drops `pytest`, a folded `run: >` block is read
-#   folded, a quoted `{` or `<<EOF` no longer hides a later `exit 0`, and `hatch run
-#   pytest -V` / `--co` are info calls. Layer 3 and Layer 5 level 1 can move from met to
-#   unmet; a folded pwsh `pytest` / `exit 0` can move from unmet to met.
-# - issue #937, two false readings. A coverage gate below 50 percent beside a
-#   go.mod or Cargo.toml with no gate read for that language reads
-#   threshold_meets_minimum null (go_rust_gate_form_not_read) where it read
-#   false, so Layer 6 level 1 and the Step 4 coverage_gate gate read unknown,
-#   not unmet. A CI check or lint step that runs a committed script no tracked
-#   file matches (run: ./ci.sh with no ci.sh) reads enforced_check_runs and
-#   lint_runs null (script_not_found) where it read true: Layer 3 and Layer 5
-#   level 1 can move from met to unknown.
-# - `ci` is no longer a trusted check word (issue #951): `make ci`, `npm run ci`, `pnpm ci`,
-#   `yarn ci` and `./ci.sh` can run a build, a deploy or a test suite, and the recipe is not
-#   read, so a CI line naming only one reads null with basis `check_target`, like `make foo`;
-#   so does a `ci` name behind `python`, `source`, `cargo`, Gradle, Maven or `go`
-#   (`python ci.py`, `cargo ci`, `./gradlew ci`), never a false 0.
-#   Layer 5 level 1 (`enforced_check_runs`, the Step 3 `ci_runs_tests` gate) and Layer 3
-#   level 1 (`lint_runs`) can move from met to not measured. `bun ci` and `npm ci` stay
-#   installs, and a name that also carries a check word (`make ci-test`, `npm run test:ci`)
-#   still counts. Instruction files keep `ci` (`lib.named_check`): a CLAUDE.md that names
-#   `make ci` still counts at Layer 0 (`agent_environment.check.named_total`), unchanged.
-#   A committed `./ci.sh` was credited by its name (`lib.ci_scripts` checks that the file
-#   is there and never reads its body), so it now reads null `check_target` too; a missing
-#   one keeps `script_not_found` (#937), and a masked one keeps `not_enforced`.
-# - issue #954, coverage-gate CI credit edge cases. enforced_meets_minimum (Layer 6
-#   level 1, the Step 4 coverage_gate gate) no longer credits a CI run that does not
-#   enforce the gate: a threshold named only in echo or printf text beside a run with
-#   another threshold, pytest with --no-cov (on the line or in addopts), a Gradle run
-#   that excludes jacocoTestCoverageVerification (or test, leaving it no execution data)
-#   with -x or --exclude-task, and a Gradle dry run (-m, also in a cluster such as -qm,
-#   --dry-run, --task-graph) now read false. pytest -c FILE reads FILE's addopts as the
-#   run's own, and reads null when FILE was not read. A pytest addopts --cov or Jest
-#   collectCoverage: true switches on only the gates in its own directory or below, so a
-#   sibling package's config gate reads false or null where it read true. A threshold
-#   outside a pytest section of pyproject.toml or setup.cfg (a hatch, pdm or poe script, a
-#   tox command) is a task-runner gate: indirect_run when CI runs hatch run, pdm, poe (also
-#   through uv run or poetry run) or tox, and not_run_in_ci when it runs none, where it
-#   read unread_ci_system. pdm run is read through to the program it runs, so pdm run
-#   pytest --cov credits a coverage.py gate where it read not_run_in_ci. A second
-#   --cov-fail-under on one CI line is read as its own gate.
-# - guardrails reads the run scope (issue #956): a scoped run walks the scope
-#   only, as coverage_gate does, and a scope root with no ruff, flake8 or mypy
-#   config is gated by the tool's nearest config at or above it, as each tool
-#   resolves it (ruff from each file, mypy and flake8 from the directory they
-#   run in). Ruff's C901 selection resolves select and ignore by specificity (C9
-#   ranks with C90, an ignore wins a tie), so `select = ["C901"]` beside
-#   `ignore = ["C"]` is a complexity gate. A threshold states a gate only as a
-#   standalone number (no letter, digit or underscore on either side, no dot
-#   before it, so "80th" and "15x" state nothing), and a
-#   coverage floor's ratio form needs a decimal point, so "step 1" and "v1.0" no
-#   longer state a floor of 100.
-# - CI reader edge cases (issue #958): a GitHub workflow whose `on:` block list sits at
-#   the key's own column (`on:` then `- push`) is read, so ci_checks.enforced_check_runs
-#   can move from null (`unknown_trigger`) to true or false. A top-level GitLab job named
-#   `trigger` after a blank line is no longer read as a child pipeline, so a merged
-#   configuration with no check can move test_or_lint_configured from null
-#   (`merged_config_partial`) to false. A lint-API include source with surrounding
-#   whitespace is recorded once.
-# - agent_consistency drops a leading heading or list ordinal before reading
-#   threshold numbers (issue #960): `## 2. Coverage` beside a stated 90 is no
-#   conflict, so agent-consistency level 1 can move from unmet to met. A
-#   next step for an unlinked system names its primary file (CLAUDE.md) before
-#   a supplementary rule file.
-# - The two 2.1.0 signal paths renamed in 2.2.0 load again (issue #970):
-#   a `--levels` model naming `ci_checks.test_or_lint_runs` or
-#   `coverage_gate.enforced` reads `ci_checks.test_or_lint_configured` or
-#   `coverage_gate.configured` and scores the same, with one deprecation line
-#   on stderr per old path, where it exited 2. Fleet compare reads both sides
-#   under the new paths, so a 2.1.0 run against a 2.2.0 run lists no added or
-#   removed leaf for them. `SIGNAL_ALIASES` moves to `lib/signal_aliases.py`.
-# - issue #1008, a check inside a ( ) subshell that ends in a no-op is masked. A
-#   || true, || :, || /bin/true or || exit 0 inside a subshell masks the segments
-#   before it back to the subshell's start, as at top level, so (pytest || true) and
-#   (cd sub && pytest || true) read as masked, not enforced: enforced_check_runs and
-#   lint_runs (Layer 5 and Layer 3 level 1) and the coverage-gate CI run can move from
-#   met to unmet. (pytest && echo ok) and pytest && (echo x || true) keep their check.
-# - ci_checks.enforced_check_runs resolves a GitLab job's same-file `extends:` chain
-#   (a name or a list, multi-level, the last parent winning and the job's own keys
-#   overriding) before it reads `rules:`, `when:`, `only:` and `except:`, and reads
-#   `except:` with `only:` semantics (issue #1021). A job inheriting schedule-only or
-#   tag-only rules from a hidden template no longer counts as running on ordinary
-#   changes, and a job whose `extends:` target is not in the file (an `include:`),
-#   a cycle, or a job given `rules:` beside `only:` / `except:` reads null. Layer 5
-#   can move from met to unmet or unknown; no reading moves to met.
-# - A flow-map `only:` or `except:` (`only: {refs: [tags]}`) reads null instead of
-#   having its map keys read as ref names (issue #1021); an `only: {refs: [tags]}` job
-#   moves from running on ordinary changes to unknown.
-# - three rare lockfile readings (issue #1025): a SwiftPM package with a
-#   `.library(` product and no `.executable(` product reads skipped_library even
-#   when it declares an `.executableTarget(` (as a library that ships a build-tool
-#   or command plugin does), where it read an unlocked app; a Kotlin
-#   Multiplatform `commonMain.dependencies { ... }` block counts the build, where
-#   it gave no row; a `package.json`, `composer.json` or `vcpkg.json` with a
-#   byte-order mark parses, where it gave no row. layer-5-ci.2 can move from unmet
-#   to not measured on such Swift packages, and from met or not measured to
-#   unmet on repositories with the other two.
-# - On a CI line the `.` builtin runs a script like `source` (issue #1033); instruction files
-#   (Layer 0) read `.` as before. `. ./test.sh` read as no check, a
-#   false 0; it now reads as `source ./test.sh` does, at Layer 5 (`enforced_check_runs`) and
-#   Layer 3 (`lint_runs`). A sourced script the tree does not hold reads `script_not_found`
-#   (null), as `./x` does since #937, where `source ./test.sh` with no file was credited.
-#   Any other sourced script whose body is not shown reads null (`check_target`), not false
-#   (`source ./scripts/common.sh`). Sourcing an environment (`. venv/bin/activate`, `source
-#   .env`, `. ./env.sh`, `. ~/.nvm/nvm.sh`) runs no check and stays false.
-# - A committed CI script's body is read where it is tracked at the exact path the line runs,
-#   and for a `./x` run only when git records it executable (mode 100755) (`lib.script_body`): a body that provably fails when its check fails (`set -e` before the
-#   check, the check as the last top-level statement, or `|| exit 1` after it) reads true,
-#   so an executable `./ci.sh` ending in `pytest` moves from not measured to met. A body the reader does not
-#   model, or one whose check cannot fail the script, keeps the name's reading. The only
-#   reading that moves down is the missing sourced script above.
-# - A target whose name pairs `ci` with a setup or build word (`make deploy-ci`, `npm run
-#   build:ci`, `make ci-deploy`, `./scripts/deploy-ci.sh`) reads false (no check), not null,
-#   unless its body shows a check.
-# - One `on:` reader for GitHub workflows (issue #1036): shared_tooling.workflow_events
-#   now reads through ci_triggers.workflow_events. A column-0 `on:` list (`on:` then
-#   `- issue_comment`) was unread and so credited as running on changes; it is now
-#   read, so review_automation can move from credited to not credited for a review
-#   action wired only to `issue_comment`, `issues` or `workflow_dispatch`. Nested list
-#   items (`branches: - main`, `types: - created`) are no longer read as events. A flow
-#   list or mapping that runs onto later lines (`on: [workflow_dispatch,` then
-#   `push]`) is joined in both readers, so ci_checks.enforced_check_runs can move from
-#   false to true and review_automation from not credited to credited.
-# - ci_triggers moves on flow collections (issue #1036): a flow list or mapping opened on
-#   the `on:` line and continued below (`on: {` then `issue_comment: {}` then `}`) reads
-#   its events where it read `unknown`, so ci_checks.enforced_check_runs can move from
-#   null to true or false; one that never closes (invalid YAML) reads `unknown`, where
-#   it read its first line's events, so enforced_check_runs can move to null. Such an
-#   unclosed `on:` is never credited by review_automation (`ci_triggers.unclosed_on`).
-ASSESS_METHOD_VERSION = 38
+# 1.44.0 (4.0.0 release): 36 changes since 1.43.0.
+# - ci_checks.basis gains check_target (issue #799): test_or_lint_configured reads null
+#   when the only check-shaped CI line is a Maven run with its tests skipped
+#   (mvn -DskipTests verify), whose verify phase may still run a lint plugin.
+# - run-context.json doc_staleness rows gain directive_only (issue #816): true on a page of
+#   only mkdocstrings `:::` generator directives with no declared provenance, whose ratio
+#   is then 0. summary gains generator_directive_docs, the count of those pages. Additive:
+#   no existing key moves, and complexity-stats.json is unchanged.
+# - run-context.json doc_staleness rows gain subject_match (issue #817) on a parallel-docs-tree
+#   row: the key and tie-break that picked its root, `<key>:<rule>` with key stem or
+#   parent-name and rule only-match, longest-suffix, shallowest or path-order. Its
+#   subject_roots may now name one module file as well as a directory. Additive: no
+#   existing key moves.
+# - run-context.json stats_summary gains loc_by_class (issue #820): per path class (source,
+#   test, fixture, example, vendored, generated), files_scored and the p50, p95 and max of
+#   its line counts, null with no file. A stats sidecar from before it reads loc_by_class
+#   unavailable (no_class_split). Additive: no existing key moves.
+# - run-context.json observability.instrumented gains `kinds` (issue #823): the kinds of
+#   evidence behind rung 1, sorted tokens from `code` (a standard-library logger or logging
+#   facade in use in production source), `config` (a committed collector or scrape config)
+#   and `dependency` (a telemetry or logging dependency in a build manifest); empty when
+#   nothing matched. Additive: no existing key moves.
+# - run-context.json promissory_markers gains fixture_files_excluded (issue #824): the distinct
+#   fixture files in scope that held a candidate marker line, counted before the family
+#   filters. Additive: no existing key moves.
+# - run-context.json gains `unit_rollup` (issue #865, core-only, after `unit_levels`): the
+#   lowest unit's Step (`lowest_step`), `units` and `measured` (units with a Step), the Step
+#   above (`next_step`) and the measured units at or above it (`at_next_step`), and
+#   `unlocks`, the Step gates that hold units back ranked by the units one change lifts to
+#   their next Step: `gate`, `scope` (`repo_wide` when every held unit inherits the gate's
+#   reading, else `unit`), `changes`, `held`, `lifted` and `lift_per_change`. `lines` and
+#   `markdown` hold the roll-up text for two or more units and are empty otherwise, so the
+#   repository's Step and headline are unchanged. Additive.
+# - coverage_gate.enforced_basis gains status_check_unconfirmed, and
+#   coverage_gate.unmeasured_reason gains codecov_target_not_read and codecov_patch_only
+#   (issue #882); gates may
+#   carry tool codecov with metric project or patch.
+# - run-context.json delivery gains unconfirmed_ai_accounts (issue #883): the distinct sampled
+#   accounts that are name-only AI matches awaiting confirmation in [identities] (hinted
+#   change authors, and GitLab note authors). Additive: no existing key moves. A share such an
+#   account would decide (agent_authored_share, and on GitLab ai_review_share and the human
+#   comment figures) now reads null where it read a number.
+# - the run context's `level` block gains `tags` and the run header gains `prior_level` (#940):
+#   the earlier run's `prior-level.json` (its maturity-model version and tag rows), read before
+#   this run writes its own; null when there is no such file, and
+#   `{"available": false, "reason": "unreadable"}` when it exists but cannot be read (counts-only
+#   keeps both: `reason` is a fixed token). Each run writes `prior-level.json` beside
+#   `run-context.json` and draws `tag-profile.svg`, the tag profile strip. Additive.
+# - ci_checks.enforced_basis, ci_checks.lint_basis and coverage_gate.enforced_basis
+#   gain check_may_pass (issue #1008): a check whose failure the step may hide
+#   (lib/ci_unsure.py) reads null with it.
+# - `instruction_placement` file records gain `est_tokens` (issue #1045), the whole file at
+#   `instruction_budget.CHARS_PER_TOKEN`, and `thresholds` gains `loaded_in_full_min_tokens`
+#   (5000). Additive.
+# - run-context.json gains `skill_disclosure` (issue #1045): each SKILL.md and agent definition
+#   with its body lines, estimated tokens, name and description, description length,
+#   references (resolved, depth, lines, table of contents) and the rules it breaks;
+#   `files_considered` and `files_breaking`. Read per skill unit: `unit_readings` gives a
+#   `skill` unit its own `skill_disclosure`, and the check manifest gains `unit_kinds`.
+# - run-context.json gains `contributor_files` (issue #1045): `ready` (null while the policy
+#   is not measured), `guide` (`present`, `path`), `policy` (`present`, `path`, `kind`
+#   `file` | `private_reporting` | `org_file`, `source` `repo` | `org`, or `available: false`
+#   with `org_policy_not_read`), and `issue_template` and `change_template` as evidence;
+#   `available: false` with `knowledge_base` for a knowledge base.
+# - run-context.json gains `org_security_policy` (issue #1045, network): whether the owner's
+#   public `.github` repository holds a SECURITY file, which GitHub shows on a repository with
+#   none. `contributor_files.policy` reads it when the tree holds no policy, and is
+#   `available: false` (`org_policy_not_read`) when it was not read.
+# - run-context.json gains `skill_script_tests` (issue #1045): per skill folder its script and
+#   test counts, `untested` (null with no script) and `tested_elsewhere` (outside test files
+#   that reference its scripts, information only); `skills_with_scripts` and
+#   `skills_untested`. Read per skill unit.
+# - run-context.json gains `skill_personal_data` (issue #1045): the skill and agent files, and
+#   their skills' `references/` files, that hold a detected kind of personal data, each with
+#   its `kinds` only (never the data); `files_considered`, `files_with_personal_data` and
+#   `kinds_detected`. Read per skill unit.
+# - `skill_personal_data.files_unread`: files that could not be read; with none of the files read
+#   holding a kind, the block reads `available: false` (`skill_files_unread`), not a clean pass.
+# - `skill_personal_data.credential_candidates`: files with a credential-shaped assignment,
+#   information only until a precision check passes (#1196); `kinds_detected` leaves out
+#   `credential`.
+# - Steps read gates only (issue #1083). Breaking: run-context.json loses
+#   `level.next_step.threshold` and the same key under `unit_levels[].next_step`, and the
+#   `threshold` blocker kind is gone with its `threshold` and `met` fields, so every blocker is
+#   `kind: "gate"`. The `headline` block keeps its keys; its `summary` and lines change wording.
+# - A run-context block `since_last_run` (issue #1083): `first_run`, `previous_run_id`,
+#   `previous_commit`, `closed` (each `action`, `condition`, `finding`, `completed_sha`),
+#   `closed_reason`, `closed_count`, `unresolved`, `gates_gained`, `gates_lost`, `next_blocker`, `lines`, `markdown`.
+#   Additive. Counts-only keeps the counts, ids and shas and drops the text.
+# - `gap_actions` entries may carry `finding`, `mode` and `cost` (issue #1084): an
+#   `instruction_placement` removal proposal has `finding: "instruction_always_on"`,
+#   `mode: "remove"` and `cost: {metric, path, value}`. `actions.json` gains the `remove`
+#   mode and an optional `cost` on an action. Additive.
+# - `since_last_run` gains `pruned` and `pruning`, and `prior-level.json` gains `pruning`
+#   (issue #1084): the pruning ledger's removals, each `{path, completed_sha, cost_before,
+#   runs_held, credited, saved, gates, credited_at}`. Additive.
+# - run-context.json gains agent_outcome (issue #1085): of the agent commits ai_usage
+#   counts (trailer or agent author) in the run window, the share later reverted (a
+#   "This reverts commit" message naming the commit, or a later inverse diff by patch-id)
+#   and the share with an added line rewritten within rework_days (14) by git blame,
+#   with the counts and the window. Informational: no Step, count or headline reads it.
+#   Unknown reads null with a token reason; a shallow clone or a git failure is
+#   available: false with a code counts-only output keeps.
+# - `units.units[]` gains `kind` (issue #1098): `skill` for a folder holding a `SKILL.md`,
+#   `agents` and `commands` for a plugin root's components, `package` for a build-manifest
+#   unit; `origin` gains `component` for the first three. Skill and plugin-component
+#   folders are units, found before the build manifests, so a skills repository lists one
+#   unit per skill. Additive: a reader that ignores `kind` sees more units.
+# - `unit_readings.units[]` gains `kind` (issue #1098), copied from the unit's `units` entry
+#   (`package` when the entry has none), kept as a token in counts-only output. Additive.
+# - The `headline` block gains `summary_lines`, `call_to_action` and `summary_markdown`
+#   (issue #1102): the three-line executive summary (the Step and what an agent can do there,
+#   the next gate as a task and what the next Step allows, what changed since the last run)
+#   and one linked call to action, from `lib/exec_summary.py`. Additive. The `headline` scan
+#   now reads `since_last_run`, so it runs after it. Counts-only drops the text and keeps
+#   `summary_lines` as its length. `HEADLINE_VERSION` moves to 4 in the release PR.
+# - `prior-level.json` version 2 and the run context's `prior_level` gain an optional
+#   `baseline` (issue #1122): `{run_id, head_sha, held_gates}`, the run's measured commit and
+#   the Step gates it held. Version-1 files still read, without one. "Since last run" reads
+#   this committed baseline first, so a fresh clone or CI gets its credit.
+# - run-context.json ci_checks.includes[].status gains `toolkit_gate` (issue #1152): the
+#   toolkit's own regression gate template, known to run no project tests. It counts in
+#   `resolved_includes`, not `unresolved_includes`. Additive: no existing key moves.
+# - run-context.json agent_ops (issue #1153) gains `managed` (`state` not_read, found, absent
+#   or unreadable; `sources[]` by kind token with allow, deny and ask counts and hook events;
+#   `reason`), each settings entry gains `default_mode` (a documented mode token or `other`,
+#   information only), and the summary gains `permissions_source` (`repository` or `managed`).
+#   `managed.state` is `not_read` unless the run opted in (`--managed-settings`, or
+#   `[agent_ops] managed_settings = true` in `.assess/config.toml`), so it also records whether
+#   the machine was read. Under the option `summary.permissions_encoded` may be null, with
+#   `permissions_encoded_reason` `managed_settings_unreadable`, which the tally reports as not
+#   measured. Additive.
+# - `unit_rollup` gains `learn_from` (issue #1155) and reads the `units` block: per unit held
+#   back by an unmet gate the owner did not exclude, the sibling units that already hold it:
+#   `unit`, `gate`, `holders` (every sibling holding it) and `names` (up to three, the same
+#   ecosystem and kind first, then by folder). Unit folders are written only hashed in
+#   counts-only output, under `--hash-paths`. Additive.
+# - A pruning-ledger entry may carry `merged` (issue #1168): the commits of earlier removals
+#   of the same file folded into it. Additive.
+# - run-context.json gains `secrets_guard` (issue #1173): the pre-commit config's secrets
+#   hooks and the CI files' secrets scan steps (file and tool tokens), `configured`,
+#   `enforcement` (present from CI, or `available: false` with `secret_scanning_not_read` on
+#   a GitHub repository with no CI scan) and `sources`, each with its own evidence grade.
+# - `secrets_guard.ci.includes_unresolved`: GitLab includes that could hold a scan and were
+#   not read; level 2 reads not measured (`ci_includes_unresolved`) when it is above 0 and no
+#   scan was found.
+# - `secrets_guard.ci.rules_unevaluated`: GitLab scans in a job with `rules:`, `only:`/`except:` or
+#   an uncertain `when:`; level 2 reads not measured (`gitlab_rules_unevaluated`) with any and no
+#   counted scan.
+# - `prior-level.json` version 3 and the run context's `prior_level` gain an optional `models`
+#   map (issue #1184): one record per shipped profile, keyed by its name, each
+#   `{levels_version, tags, baseline}`. The top-level record stays the default model's and may
+#   be absent when only profiles have run. Version-1 and version-2 files still read.
+# 1.44.0 (4.0.0 release): one change, without a bump.
+# - run-context.json gains `ci_model_jobs` (issue #1242): each CI job that calls a model API
+#   (`path`, `line`, `job`, `platform`, `signs`, `triggers`, `gates`, `state` gated | ungated |
+#   unknown, `reason` when unknown, `cancel_superseded`), with `files_read`, `model_jobs`,
+#   `gated`, `unknown`, `unread` and `ungated` (null with `ungated_reason` `trigger_unresolved`
+#   or `ci_jobs_unread` when none is ungated but one could not be settled or read).
+# 1.44.0 (4.0.0 release): one change, without a bump.
+# - run-context.json gains `github_secret_scanning` (platform pass): `secret_scanning`,
+#   `push_protection` and `delegated_bypass`, or `available: false` (`settings_not_readable` without admin rights).
+#   `secrets_guard.sources` and `enforcement.source` can read `platform`.
+ARTIFACT_SCHEMA_VERSION = "1.44.0"

@@ -59,7 +59,7 @@ Its helpers live in seven modules, one per seam: `instruction_files.py`
 pages, index and log for one run), `context_blocks.py` (scan results serialised into
 run-context blocks), `mutation_cap.py` (the `test_pressure` shape and the Layer 6 cap)
 and `run_scope.py` (`--scope` and the artifact directory), plus the
-`artifact_schema.py` constant. A change to one of these concerns edits its module and
+`artifact_schema.py` and `assess_method.py` constants. A change to one of these concerns edits its module and
 its test; `assess_core.py` moves only when the order of the pipeline or the
 run-context key order changes.
 
@@ -155,14 +155,14 @@ them from `measures.json` by id.
 Issue #917 moves `lib/` modules into subpackages, one group per pull request. A package
 `__init__.py` holds only its docstring, so importing a package imports none of its modules;
 `tests/test_self_architecture.py` enforces it. Three exceptions: `fleet/__init__.py` and
-`counts_only/__init__.py` also hold a lazy forward until 4.0.0 (to `fleet.runner` and
+`counts_only/__init__.py` also hold a lazy forward until 5.0.0 (to `fleet.runner` and
 `counts_only.content_free`), and `test_pressure/__init__.py`, which predates the rule, is a
 facade that re-exports its package's names. The shared core (`run_context_types`,
-`assess_config`, `artifact_schema`, `tool_lookup`, `vocabulary`, `agent_identity` and
+`assess_config`, `artifact_schema`, `assess_method`, `tool_lookup`, `vocabulary`, `agent_identity` and
 `fleet_config`) stays at the root of `lib/`, and so does every module whose group has not
 moved yet. A moved module keeps its filename.
 
-Each old path `lib/<stem>.py` is a shim until 4.0.0: it sets `sys.modules[__name__]` to the
+Each old path `lib/<stem>.py` is a shim until 5.0.0: it sets `sys.modules[__name__]` to the
 moved module, so the old and new dotted paths name one module object, and a module that runs
 as a script gets a `runpy` `__main__` branch. Run as `python scripts/lib/<stem>.py`, Python
 puts `lib/` first on `sys.path`, not `scripts/`, so such a shim first inserts `scripts/`
@@ -184,7 +184,7 @@ New code imports the new path.
 - **`counts_only/`**: the content-free copy of a run-context and its allow-list: the engine,
   the field rules and their schema, the reason codes it keeps and the typed block shapes a
   default criterion reads. `lib/counts_only.py` became `counts_only/content_free.py`, because
-  the package now holds that name; until 4.0.0 the package `__init__.py` forwards each old
+  the package now holds that name; until 5.0.0 the package `__init__.py` forwards each old
   name (`lib.counts_only.render_doc`) to `lib.counts_only.content_free` on first use, without
   importing it eagerly. Files: `__init__.py`, `block_shapes.py`, `content_free.py`,
   `counts_only_rules.py`, `counts_only_schema.py`, `reason_codes.py`.
@@ -198,7 +198,7 @@ New code imports the new path.
   `doc_provenance.py`, `doc_staleness.py`, `ownership_parser.py`, `vault_queries.py`.
 - **`fleet/`**: the `/fleet` runner, roll-ups, run history, published fleet schemas and
   diagrams. `lib/fleet.py` became `fleet/runner.py`, because the package now holds that
-  name; until 4.0.0 the package `__init__.py` forwards each runner name (`lib.fleet.FleetRow`)
+  name; until 5.0.0 the package `__init__.py` forwards each runner name (`lib.fleet.FleetRow`)
   to `lib.fleet.runner` on first use, without importing it eagerly. `fleet_config` and
   `fleet_activity` keep their prefix but are not fleet modules: `fleet_config` is shared core,
   and `fleet_activity` waits for the `history` group. Files: `__init__.py`, `fleet_achievements.py`, `fleet_achievements_runs.py`, `fleet_achievements_schema.py`, `fleet_agent_building.py`, `fleet_cleanup.py`, `fleet_compare.py`, `fleet_coverage.py`, `fleet_credit.py`, `fleet_data.py`, `fleet_data_schema.py`, `fleet_data_steps.py`, `fleet_data_tags.py`, `fleet_diagrams.py`, `fleet_doc_freshness.py`, `fleet_group_schema.py`, `fleet_groups.py`, `fleet_hashed.py`, `fleet_heatmap.py`, `fleet_history.py`, `fleet_labels.py`, `fleet_legacy.py`, `fleet_level.py`, `fleet_level_schema.py`, `fleet_maturity.py`, `fleet_method.py`, `fleet_next_steps.py`, `fleet_opportunities.py`, `fleet_opportunities_section.py`, `fleet_platform.py`, `fleet_publish.py`, `fleet_quadrant.py`, `fleet_repo_facts.py`, `fleet_rescore.py`, `fleet_scanner_diff.py`, `fleet_schema.py`, `fleet_slope.py`, `fleet_stamp.py`, `fleet_step_targets.py`, `fleet_svg.py`, `fleet_targets.py`, `fleet_tooling_map.py`, `fleet_trends.py`, `fleet_units.py`, `fleet_view.py`, `runner.py`.
