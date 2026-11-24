@@ -360,3 +360,24 @@ def test_the_kept_line_follows_the_write_side_rule(repo: Path) -> None:
     assert any(line.startswith("Baseline kept") for line in since_last_run(untagged, repo / ".assess", repo)["lines"])
     assert not any(line.startswith("Baseline kept")
                    for line in since_last_run(recorded, repo / ".assess", repo)["lines"])
+
+
+def test_a_profile_run_keeps_the_pruning_ledger_as_stored(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#1184: the ledger is the default record's alone, so a profile run neither advances nor
+    credits it; only a default run writes it."""
+    import lib.since_last_run as sl
+
+    entry = {"path": "CLAUDE.md", "completed_sha": "b" * 40, "cost_before": 3, "runs_held": 1,
+             "credited": False, "saved": None, "gates": None, "credited_at": None}
+    (repo / ".assess" / "prior-level.json").write_text(json.dumps({
+        "prior_level_version": 3, "levels_version": "default-2026.11.10", "tags": [],
+        "baseline": {"run_id": "p", "head_sha": _git(repo, "rev-parse", "HEAD"), "held_gates": []},
+        "pruning": [entry]}), encoding="utf-8")
+    called: list[bool] = []
+    real = sl.update_ledger
+    monkeypatch.setattr(sl, "update_ledger", lambda *a, **k: (called.append(True), real(*a, **k))[1])
+    profile = {**_level("met", "met"), "levels_version": "profile-citizen-2026.11.23"}
+    block = since_last_run(profile, repo / ".assess", repo)
+    assert (block["pruned"], block["pruning"], called) == ([], [entry], [])
+    since_last_run(_level("met", "met"), repo / ".assess", repo)
+    assert called == [True]

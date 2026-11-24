@@ -144,8 +144,12 @@ def tag_whys() -> dict[str, str]:
 
 def _record(raw: Any, level: Mapping[str, Any]) -> PriorLevel | None:
     """The earlier record this run's strip compares with: its model's own (``record_for``), or
-    the top-level record for a custom model, which ``same_model`` then compares by version."""
-    return record_for(raw, level) if model_key(level) is not None else as_prior_level(raw)
+    the top-level record for a custom model, which ``same_model`` then compares by version; None
+    when there is none (a version-3 file holding only profile records)."""
+    if model_key(level) is not None:
+        return record_for(raw, level)
+    prior = as_prior_level(raw)
+    return prior if prior is not None and "levels_version" in prior else None
 
 
 def earlier_shares(raw: Any, level: Mapping[str, Any]) -> dict[str, tuple[int, int]]:
@@ -169,7 +173,7 @@ def prior_note(raw: Any, level: Mapping[str, Any]) -> str:
     if prior is None:
         return "No earlier run under this maturity model is recorded here, so no earlier dots are drawn."
     if not same_model(prior, level):
-        return (f"Earlier dots not drawn: the earlier run used maturity model {prior['levels_version']} "
+        return (f"Earlier dots not drawn: the earlier run used maturity model {prior.get('levels_version')} "
                 f"and this run {level.get('levels_version')}, so the two do not compare.")
     if not earlier_shares(raw, level):
         return "No earlier dots: the earlier run, under the same maturity model, measured no tag."

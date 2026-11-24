@@ -37,7 +37,8 @@ this run's publish step overwrites any of them:
   ``None`` when the previous run has no level result or one that lacks a gate's
   condition (an older model), so the rest of the block still reads.
 
-The **pruning ledger** (``lib/pruning_ledger.py``, #1084) runs here too: each done removal
+The **pruning ledger** (``lib/pruning_ledger.py``, #1084) runs here too, on a default-model run
+only (a profile run keeps it as stored and credits nothing, since only a default run writes it, #1184): each done removal
 action in the committed ``actions.json`` is tracked in ``pruning``, stored in ``prior-level.json``
 beside the baseline (``pruning_record``), and ``pruned`` lists the removals this run credits
 ("Pruned: ..."), counted once per measured commit against the commit that wrote the stored
@@ -70,7 +71,7 @@ from typing import Any
 from lib.headline import GATE_NOUN
 from lib.level_tally import default_model, gate_blockers
 from lib.levels import StepDef
-from lib.prior_level import Baseline, PruningEntry, build_prior_level, load_baseline, load_pruning
+from lib.prior_level import Baseline, PruningEntry, build_prior_level, default_level, load_baseline, load_pruning
 from lib.profiles import model_for_level
 from lib.pruning_ledger import ledger_lines, removal, update_ledger
 from lib.reviewed_findings import action_entries
@@ -399,12 +400,16 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
     head_sha = head.stdout.strip() if head is not None and head.returncode == 0 else None
     # a hold counts once per measured commit: compare with the commit that wrote the stored
     # ledger (the committed baseline), not the "since" baseline a superseding run inherits
-    stored = load_baseline(assess_dir)
-    ledger_commit = stored["head_sha"] if stored is not None else previous_commit
-    pruning, pruned = update_ledger(load_pruning(assess_dir), _done_removals(repo_root), instruction_placement,
-                                    held_now=_held(steps, level), held_before=held_before, head_sha=head_sha,
-                                    new_commit=head_sha is not None and head_sha != ledger_commit,
-                                    repo_root=repo_root)
+    stored = load_baseline(assess_dir, level)
+    if default_level(level):
+        ledger_commit = stored["head_sha"] if stored is not None else previous_commit
+        pruning, pruned = update_ledger(load_pruning(assess_dir), _done_removals(repo_root), instruction_placement,
+                                        held_now=_held(steps, level), held_before=held_before, head_sha=head_sha,
+                                        new_commit=head_sha is not None and head_sha != ledger_commit,
+                                        repo_root=repo_root)
+    else:
+        # the ledger is the default record's alone (#1184): a profile run neither advances nor credits it
+        pruning, pruned = load_pruning(assess_dir), []
     block: SinceLastRun = {
         "available": True, "first_run": first,
         "previous_run_id": run_id if isinstance(run_id, str) else None,

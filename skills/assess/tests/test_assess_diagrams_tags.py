@@ -253,3 +253,7 @@ def test_the_strip_reads_the_runs_own_model_record() -> None:
     with_citizen = {**default_only, "models": {"citizen": {**citizen, "tags": [row]}}}
     assert earlier_shares(with_citizen, citizen) == {"behaviour": (1, 1)}
     assert earlier_shares(with_citizen, {"levels_version": "default-2026.11.10"}) == {"behaviour": (1, 1)}
+    profile_only = {"prior_level_version": 3, "models": {"citizen": {**citizen, "tags": [row]}}}
+    custom = {"levels_version": "team-1"}
+    assert earlier_shares(profile_only, custom) == {}
+    assert prior_note(profile_only, custom).startswith("No earlier run under this maturity model")
