@@ -60,6 +60,8 @@ def _state(block: Any) -> tuple[str, str | None]:
     ("password: no." + "way.42", ["credential"]),
     ("password: yes!" + "please9", ["credential"]),
     ("password: str/" + "abc123", ["credential"]),
+    ('password: str = "hun' + 'ter2"', ["credential"]),  # a typed field with a literal default
+    ("secret: bool=hun" + "ter2", ["credential"]),
     ("token = " + "ghp" + "_abc123def456", ["credential"]),
     ("token: ${{ secrets.X }} and password = " + "hunter" + "2abc", ["credential"]),  # one literal is enough
     ("AKIA" + "ABCDEFGHIJKLMNOP is the key.", ["cloud_key"]),

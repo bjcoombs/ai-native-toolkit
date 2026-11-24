@@ -107,7 +107,7 @@ _VERSION_BEFORE = re.compile(r"(?:(?:\bv|\bversion|\brelease|\bbuild)\s*[:=]?|[=
 # secret held elsewhere (``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X``, ``os.environ[...]``) is
 # not a committed secret, and telling a team to rotate it would be wrong.
 _CREDENTIAL = re.compile(r"\b(?:password|passwd|secret|api[_-]?key|access[_-]?key|auth[_-]?token|token)\b"
-                         r"\s*[:=]\s*(\"[^\"]*\"|'[^']*'|\S+)", re.IGNORECASE)
+                         r"\s*[:=]\s*(\"[^\"]*\"|'[^']*'|\S+)(?:\s*=\s*(\"[^\"]*\"|'[^']*'|\S+))?", re.IGNORECASE)
 _REFERENCE = re.compile(r"^(?:\$\{?\{?|\$\w|%\w+%|\{\{|<|process\.env\b|os\.environ\b|os\.getenv\b|getenv\b|"
                         r"env\.|env\[|ENV\[|secrets\.|vars\.|System\.getenv\b|Environment\.|import\.meta\.env\b)",
                         re.IGNORECASE)
@@ -173,13 +173,23 @@ def _literal_secret(value: str) -> bool:
             and not _SCHEMA_VALUE.match(value))
 
 
+def _assigned_secret(m: re.Match[str]) -> bool:
+    """Whether a credential assignment holds a literal secret. A typed field is decided by its default:
+    ``password: str = "hunter2"`` and ``secret: bool=hunter2`` hold one, ``token: str`` does not."""
+    value = m.group(1).strip("\"'")
+    if not _SCHEMA_VALUE.match(value):
+        return _literal_secret(value)
+    default = m.group(2) or (value.split("=", 1)[1] if "=" in value else None)
+    return default is not None and _literal_secret(default.strip("\"'"))
+
+
 def kinds_in(text: str) -> list[str]:
     """The ``KINDS`` found in ``text``, in ``KINDS`` order; the data itself is never returned."""
     found = {f["category"] for f in scan_sensitive_content(text)}
     if "home_path" in found and not any((m.group(1) or m.group(2)).lower() not in _PLACEHOLDER_HOME
                                          for m in _HOME.finditer(text)):
         found.discard("home_path")
-    if "credential" in found and not any(_literal_secret(m.group(1).strip("\"'")) for m in _CREDENTIAL.finditer(text)):
+    if "credential" in found and not any(_assigned_secret(m) for m in _CREDENTIAL.finditer(text)):
         found.discard("credential")
     found.discard("ip_address")
     if any(not _VERSION_BEFORE.search(text[max(0, m.start() - 12):m.start()])
