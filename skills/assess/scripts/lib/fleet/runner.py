@@ -132,16 +132,7 @@ from lib.signals import offline_scans
 
 # Bumped when a row's envelope (the keys below) changes. Scan blocks carry
 # their own shapes, versioned by ``signals_schema_version``.
-# 2 (#569): ``active``. ``head_sha`` and ``dirty`` (#907) were added without a
-# bump: the history readers reject any other version, and a row written before
-# them reads both as None through ``.get``.
-# 2 (3.0.0 release): two changes, without a bump.
-# - ``dirty_reason`` (#932): a row written before it reads it as None through
-#   ``.get``.
-# - ``dirty_reason`` gains ``submodule_dirty`` (#1017), the one reason on a non-null
-#   ``dirty``: the row reads ``dirty: false`` and was scanned in place, but a
-#   submodule held uncommitted tracked edits. Additive: a row written before it
-#   reads that case as ``dirty_reason: null``.
+# History: skills/assess/changes/history/fleet_row.md, newest entry first.
 FLEET_ROW_VERSION = 2
 REPOS_FILE = "repos.jsonl"
 SIGNALS_SCRIPT = Path(__file__).resolve().parents[2] / "assess_signals.py"
