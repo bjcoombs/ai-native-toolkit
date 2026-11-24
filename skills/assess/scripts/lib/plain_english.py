@@ -76,7 +76,8 @@ def lint(text: str) -> list[PlainIssue]:
             issues.append({"sentence": shown, "reason": "too_long"})
         prose = _CODE.sub(" ", shown).lower()
         for idiom in IDIOMS:
-            if re.search(rf"(?<![\w-]){re.escape(idiom)}(?![\w-])", prose):
+            words = r"\s+".join(re.escape(w) for w in idiom.split())  # a line wrap is still a space
+            if re.search(rf"(?<![\w-]){words}(?![\w-])", prose):
                 issues.append({"sentence": shown, "reason": f"idiom:{idiom}"})
     return issues
 
@@ -130,4 +131,6 @@ def untranslated_tokens(english: str, translation: str) -> list[str]:
     tokens += [m.group(1) for m in _LINK_TARGET.finditer(english)]
     prose = _LINK_TARGET.sub("](", _CODE.sub(" ", english))
     tokens += [m.group(1) for m in _PATHLIKE.finditer(prose)]
-    return [t for t in dict.fromkeys(tokens) if t not in translation]
+    # a whole token: AGENTS.md inside OLD_AGENTS.md is not the same file
+    return [t for t in dict.fromkeys(tokens)
+            if not re.search(rf"(?<![\w./-]){re.escape(t)}(?![\w/-])", translation)]

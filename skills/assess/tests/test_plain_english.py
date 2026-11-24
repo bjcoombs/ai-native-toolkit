@@ -25,6 +25,7 @@ def test_an_idiom_or_a_phrasal_verb_fails_as_a_whole_word() -> None:
     assert lint("The setup is done.") == []  # "setup" is not "set up"
     assert lint("Run `make set up` once.") == []  # code is not prose
     assert lint("Run `cd x; set up` now.") == []  # a ; inside code ends no sentence
+    assert [i["reason"] for i in lint("Set\nup the CI job.")] == ["idiom:set up"]  # across a line wrap
     assert "set up" in IDIOMS
 
 
@@ -40,6 +41,7 @@ def test_a_polish_translation_keeps_ids_paths_and_links_and_the_template_puts_it
     assert untranslated_tokens(english, polish) == []
     # a translation that renames a file or drops the link fails
     assert untranslated_tokens(english, polish.replace("AGENTS.md", "AGENCI.md")) == ["AGENTS.md"]
+    assert untranslated_tokens(english, polish.replace("AGENTS.md", "OLD_AGENTS.md")) == ["AGENTS.md"]
     assert untranslated_tokens(english, polish.split("(https")[0]) == [
         "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates"]
     template = (Path(__file__).resolve().parents[2] / "assess-findings" / "SKILL.md").read_text(encoding="utf-8")
