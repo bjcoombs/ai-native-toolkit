@@ -62,7 +62,7 @@ Not drawn: skipped: the run is not kept in the run history (--no-history or --fu
 
 In place: 4 groups with a known level in both runs.
 
-What moved since the earlier run, and which row moved it?
+What moved since the earlier run, and which practice moved it?
 
 [![Before and after](./slope.svg)](./slope.svg)
 

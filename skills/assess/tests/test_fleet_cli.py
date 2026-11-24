@@ -128,7 +128,7 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
         assert drawn == (tmp_path / "out3" / name).read_bytes()
     report = (tmp_path / "out1" / "report.md").read_text(encoding="utf-8")
     assert "[![Shared tooling](./shared-tooling.svg)](./shared-tooling.svg)" in report
-    assert "Not drawn: skipped: the maturity model has no team rows" in report
+    assert "Not drawn: skipped: the maturity model has no team practices" in report
     groups = (tmp_path / "out1" / "groups.jsonl").read_bytes()
     assert groups == (tmp_path / "out2" / "groups.jsonl").read_bytes()
     assert groups == (tmp_path / "out3" / "groups.jsonl").read_bytes()

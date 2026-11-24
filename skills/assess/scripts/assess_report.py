@@ -22,7 +22,9 @@ It renders:
   not drawn,
 - a metrics dashboard (complexity profile, churn window, total LOC),
 - the top-hotspots table,
-- the keyhole-readiness summary + the six cross-practice findings, and
+- the keyhole-readiness summary + the six cross-practice findings (the generated-files
+  disclosure follows them, so its ``<details>`` fold never sits above a ``lying_map``
+  finding, #1254), and
 - the regression deltas (graduated / new / regressed / restructured / persistent), and
 - "How this was measured": the scans that ran and were skipped, with the catalog link
   (``lib/measured_appendix.py``, #794).
@@ -633,19 +635,23 @@ def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None =
     stats = ctx.get("stats_summary", {})
     loc = stats.get("loc", {})
     ccn = stats.get("ccn", {})
-    # The keyhole summary line, with two disclosures appended when they apply:
-    # findings suppressed by config excludes, and files excluded from scoring as
-    # generated (each empty otherwise, so a clean run renders exactly as before).
+    # The keyhole summary line, with disclosures appended when they apply: findings
+    # suppressed by config excludes and declared cross-repo mappings (each empty
+    # otherwise, so a clean run renders exactly as before).
     keyhole_summary = render_keyhole_summary(ctx)
     disclosure = render_exclusion_disclosure(ctx)
     if disclosure:
         keyhole_summary = f"{keyhole_summary}\n\n{disclosure}"
-    generated = render_generated_disclosure(ctx)
-    if generated:
-        keyhole_summary = f"{keyhole_summary}\n\n{generated}"
     declared = render_declared_cross_repo(ctx)
     if declared:
         keyhole_summary = f"{keyhole_summary}\n\n{declared}"
+    # The generated-files disclosure folds its long tail in a <details> block, so it
+    # follows the findings: a doc that says one thing while the code does another
+    # (lying_map) is never below a fold (#1254).
+    findings_section = render_findings_section(ctx)
+    generated = render_generated_disclosure(ctx)
+    if generated:
+        findings_section = f"{findings_section}\n\n### Excluded as generated\n\n{generated}"
     report = REPORT_TEMPLATE.substitute(
         repo_name=repo_name,
         run_date=ctx.get("run_date", "unknown"),
@@ -665,7 +671,7 @@ def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None =
         churn_window=_render_churn_window(ctx),
         hotspots_table=render_hotspots_table(ctx),
         keyhole_summary=keyhole_summary,
-        findings_section=render_findings_section(ctx),
+        findings_section=findings_section,
         structure_drift_section=_structure_drift_section(ctx, repo_name),
         diff_section=render_diff_section(ctx),
     )

@@ -62,7 +62,7 @@ Is each team improving?
 
 In place: this run, the baseline a later comparison starts from.
 
-What moved since the earlier run, and which row moved it?
+What moved since the earlier run, and which practice moved it?
 
 Not drawn: skipped: no earlier run compared (no --compare, or no history entry matched this run).
 

@@ -171,7 +171,7 @@ def test_unknown_names_unmeasured_signals_and_reads_as_a_measurement_gap(tmp_pat
     assert "`grpa/svc3` (scan did not complete: `scan_timeout`)" in section
     assert "Holding the group back" not in section
     instructions = page.split("## Agent instructions\n", 1)[1].split("\n## ", 1)[0]
-    assert "In place: nothing confirmed on this row yet; the level is not measured (between 0 and 1 of 2 once measured)" in instructions
+    assert "In place: nothing confirmed for this practice yet; the level is not measured (between 0 and 1 of 2 once measured)" in instructions
     assert "The repository scan did not complete in each of them" in instructions
     assert "cap the group at level 1" in instructions and "`grpa/svc2` (now 340)" in instructions
     grpb = _pages(tmp_path / "b")["teams/grpb.md"]
@@ -475,7 +475,7 @@ def test_a_level_0_row_opens_with_nothing_confirmed_in_team_and_org_branches(tmp
     """Level 0 confirms nothing, so its opening line says so instead of reading as a level held (#743)."""
     pages = _pages(tmp_path)
     org = pages["teams/grpc/sub.md"].split("## Group settings\n", 1)[1].split("\n## ", 1)[0]
-    assert org.startswith("\nIn place: nothing confirmed on this row yet (level 0 of ")
+    assert org.startswith("\nIn place: nothing confirmed for this practice yet (level 0 of ")
     team = pages["teams/grpb.md"].split("## Shared tooling\n", 1)[1].split("\n## ", 1)[0]
-    assert team.startswith("\nIn place: nothing confirmed on this row yet (level 0 of ")
+    assert team.startswith("\nIn place: nothing confirmed for this practice yet (level 0 of ")
     assert not any(re.search(r"^In place: level 0 ", page, flags=re.M) for page in pages.values())

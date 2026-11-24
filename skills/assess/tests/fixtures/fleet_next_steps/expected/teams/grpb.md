@@ -1,6 +1,6 @@
 # Next steps: `grpb`
 
-In place: 1 of 7 rows at the top level and 2 at level 1 or above, across 1 repository.
+In place: 1 of 7 practices at the top level and 2 at level 1 or above, across 1 repository.
 
 Maturity model `next-steps-fixture-1`. 1 repository: 1 scanned, 0 could not be scanned.
 
@@ -8,10 +8,10 @@ Each numbered step is one change: take or leave it on its own. "Done when" is ch
 
 ## Levels
 
-In place: 5 of 7 rows measured for this group, each with the roll-up rule it uses.
+In place: 5 of 7 practices measured for this group, each with the roll-up rule it uses.
 
-| Row | Level | Roll-up |
-|-----|-------|---------|
+| Practice | Level | Roll-up |
+|----------|-------|---------|
 | Group settings | unknown | group settings |
 | Agent instructions | 1 of 2 | every repository (min) |
 | Coverage \| mutation | 0 of 2 | 50% of repositories (share) |
@@ -22,7 +22,7 @@ In place: 5 of 7 rows measured for this group, each with the roll-up rule it use
 
 ## Group settings
 
-In place: nothing confirmed on this row yet; the level is not measured. This is a measurement gap: the run could not measure every signal the level depends on.
+In place: nothing confirmed for this practice yet; the level is not measured. This is a measurement gap: the run could not measure every signal the level depends on.
 
 - No ghreport settings matched this group: pass ghreport's settings to the fleet run with `--settings`.
 
@@ -39,7 +39,7 @@ To reach level 2: the rule needs 1.
 
 ## Coverage \| mutation
 
-In place: nothing confirmed on this row yet (level 0 of 2); 0 of 1 repository already at level 1.
+In place: nothing confirmed for this practice yet (level 0 of 2); 0 of 1 repository already at level 1.
 
 To reach level 1: the rule needs 1.
 
@@ -50,7 +50,7 @@ To reach level 1: the rule needs 1.
 
 ## Runtime legibility
 
-In place: nothing confirmed on this row yet; the level is not measured (between 0 and 1 of 1 once measured). This is a measurement gap: the run could not measure every signal the level depends on.
+In place: nothing confirmed for this practice yet; the level is not measured (between 0 and 1 of 1 once measured). This is a measurement gap: the run could not measure every signal the level depends on.
 
 - `observability.rung`: not measured in 1 of 1 repository. Read from committed files by a full `/assess` run and a headless scan alike; unavailable when the scan raised (`scan_failed`) or the scan came from an older toolkit, which measured it in a full run only.
 - Repositories whose own level is undetermined (1): `grpb/lib1`.
@@ -61,7 +61,7 @@ In place: level 1 of 1, the top level. No next step.
 
 ## Shared tooling
 
-In place: nothing confirmed on this row yet (level 0 of 1); 0 of 1 repository already at level 1.
+In place: nothing confirmed for this practice yet (level 0 of 1); 0 of 1 repository already at level 1.
 
 To reach level 1: the rule needs 1.
 
@@ -71,7 +71,7 @@ To reach level 1: the rule needs 1.
 
 ## Agent environment
 
-In place: nothing confirmed on this row yet (level 0 of 1); 0 of 1 repository already at level 1.
+In place: nothing confirmed for this practice yet (level 0 of 1); 0 of 1 repository already at level 1.
 
 To reach level 1: the rule needs 1.
 

@@ -35,13 +35,16 @@ names, JSON keys, finding names, signal paths (`lying_map`, `instruction_claims.
 | `penalty` | name the size or share the grade reads |
 | `weakest` | the row with the most room to grow |
 | `weak` | room to grow |
-| `lying` | stale, or reads better than it measures |
+| `lying` | says one thing, does another |
 | `missing` | not measured yet, or not in place yet |
 | `fail` | stop, or turn the job red |
 | `fails` | stops |
 | `failed` | could not be scanned, or did not run |
 | `failing` | erroring |
 | `failure` | an error, or a gap |
+| `capped` | held at |
+| `unproven` | not yet measured |
+| `concerns` | notes |
 | `Not Ready` | the Step the repository is ready for |
 | `Basic` | the Step name |
 | `Solid` | the Step name |
@@ -53,8 +56,18 @@ The last four are the retired maturity band labels (`RETIRED_LABELS`); the Step 
 **Opening line.** Every `## ` section of the fleet `report.md` and every heading of a team
 next-steps page (`teams.md` and `teams/<group>.md`) opens with a line that starts
 `In place:` (`IN_PLACE`) and says what is already in place before any next step: counts of
-what is measured or reached, and at level 0 or unknown a plain "nothing confirmed on this row
-yet", never implied credit. The guard checks it on every rendered page.
+what is measured or reached, and at level 0 or unknown a plain "nothing confirmed for this
+practice yet", never implied credit. The guard checks it on every rendered page.
+
+**Step and gate on fleet pages (#1254).** The fleet pages use the /assess words for a
+maturity-model entry: its practice, the Step it gates, or the gate. The phrases in
+`ROW_PHRASES` ("which row", "team row", "this row", "row's", "rows'") are checked in every rendered fleet page
+(`row_hits`). A table row in the ordinary sense is not checked.
+
+**The model-written template (#1254).** The guard also reads the prose of
+`skills/assess-findings/SKILL.md`, fenced template included, and of `agents/assess-layer-scorer.md`,
+whose Evidence cells reach the report, and of the repository `README.md`, and fails on the #1254 words there (`TEMPLATE_WORDS`:
+lying, capped, unproven, concerns).
 
 **Wording elsewhere.** The quadrant names its shaded corner "Most room to grow: busy, early
 levels" in the amber `warn` role, not the red `bad` one; the keyhole summary shows `lying_map` as
@@ -79,14 +92,23 @@ BANNED_WORDS: dict[str, str] = {
     "penalty": "name the size or share the grade reads",
     "weakest": "the row with the most room to grow",
     "weak": "room to grow",
-    "lying": "stale, or reads better than it measures",
+    "lying": "says one thing, does another",
     "missing": "not measured yet, or not in place yet",
     "fail": "stop, or turn the job red",
     "fails": "stops",
     "failed": "could not be scanned, or did not run",
     "failing": "erroring",
     "failure": "an error, or a gap",
+    # #1254: the shared /assess and /fleet report vocabulary.
+    "capped": "held at",
+    "unproven": "not yet measured",
+    "concerns": "notes",
 }
+
+#: Fleet pages name a maturity-model entry by its Step, gate or practice, as /assess does,
+#: never as a "row" (#1254). A table row in the ordinary sense is unaffected, so only these
+#: phrases are checked, on the fleet outputs.
+ROW_PHRASES: tuple[str, ...] = ("which row", "team row", "this row", "row's", "rows'", "no row", "unknown rows")
 
 #: The old maturity band labels (#740, #747): the Step names replace them.
 RETIRED_LABELS: tuple[str, ...] = ("Not Ready", "Basic", "Solid", "AI-Native")
@@ -120,6 +142,10 @@ def _pattern(term: str) -> re.Pattern[str]:
 
 
 _TERMS = tuple((term, _pattern(term)) for term in (*BANNED_WORDS, *RETIRED_LABELS))
+_ROWS = tuple((phrase, re.compile(r"\b" + re.escape(phrase) + r"(?:s\b|(?!\w))", re.I)) for phrase in ROW_PHRASES)
+
+#: The #1254 words the guard checks in the model-written report template.
+TEMPLATE_WORDS: tuple[str, ...] = ("lying", "capped", "unproven", "concerns")
 
 
 def banned_hits(text: str) -> list[tuple[str, int, str]]:
@@ -130,6 +156,19 @@ def banned_hits(text: str) -> list[tuple[str, int, str]]:
             if pattern.search(line):
                 hits.append((term, number, line.strip()))
     return hits
+
+
+def row_hits(text: str) -> list[tuple[str, int, str]]:
+    """Each (phrase, 1-based line, line text) where a ``ROW_PHRASES`` phrase is in the prose."""
+    return [(phrase, number, line.strip())
+            for number, line in enumerate(prose(text).splitlines(), start=1)
+            for phrase, pattern in _ROWS if pattern.search(line)]
+
+
+def template_prose(text: str) -> str:
+    """A skill template's text with only its fence lines removed, so the report template a
+    fenced block holds is read as the prose it renders to."""
+    return re.sub(r"(?m)^[ \t]*```.*$", "", text)
 
 
 def opening_lines(markdown: str, level: str = "#") -> list[tuple[str, str]]:

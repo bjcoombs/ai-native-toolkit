@@ -132,7 +132,7 @@ def test_counts_in_the_subtitle_agree_in_number():
     groups = _groups()[:1]
     columns = fh.columns_for(groups, None)[:1]
     svg = fh.render_heatmap(groups, columns)
-    assert "1 group \u00b7 1 maturity model row \u00b7" in svg
+    assert "1 group \u00b7 1 practice \u00b7" in svg
 
 
 def test_svg_parses_has_a_background_and_no_stylesheet_override(tmp_path):
@@ -163,7 +163,7 @@ def test_without_a_levels_file_levels_index_the_ramp(tmp_path):
     out = tmp_path / "plain.svg"
     assert cli.main([str(FIXTURES / "groups.jsonl"), "--output", str(out)]) == 0
     svg = out.read_text(encoding="utf-8")
-    assert "not scaled to each row" in svg
+    assert "not scaled to each practice" in svg
     assert _cells(svg)["grpa · teamdocs"] == fh.LEVEL_RAMP[2]
 
 

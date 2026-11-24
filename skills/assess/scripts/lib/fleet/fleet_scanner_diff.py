@@ -188,7 +188,7 @@ UNAVAILABLE_PREFIX = "scanner diff unavailable"
 
 
 def unavailable_note(diff: ScannerDiff) -> str:
-    return (f"{UNAVAILABLE_PREFIX}: {diff['reason']}; every moved team row is tagged "
+    return (f"{UNAVAILABLE_PREFIX}: {diff['reason']}; every moved practice is tagged "
             f"{CAUSE_UNKNOWN_SCOPE}, not read as a repository move")
 
 
