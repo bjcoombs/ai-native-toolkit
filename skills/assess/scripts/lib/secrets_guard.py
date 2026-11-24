@@ -332,8 +332,11 @@ def _unconditional(lines: list[str], i: int, job: int) -> bool:
     first_key = next((len(ln) - len(ln.lstrip()) for ln in lines[job + 1:] if ln.strip()), indent)
     if not _STEP_START.match(lines[i]) and indent <= first_key:  # a key of the job, any indent width
         return True
+    # The rule this ``when:`` belongs to: the nearest list item less indented than it, so a path in a
+    # block-list ``changes:`` or ``exists:`` above it is not taken for the rule's start.
     start = i if _STEP_START.match(lines[i]) else next(
-        (k for k in range(i, job, -1) if _STEP_START.match(lines[k])), i)
+        (k for k in range(i - 1, job, -1)
+         if _STEP_START.match(lines[k]) and len(lines[k]) - len(lines[k].lstrip()) < indent), i)
     item_indent = len(lines[start]) - len(lines[start].lstrip())
     item = lines[start:_block_end(lines, start, item_indent)]
     # GitLab rules are first-match: a rule after another one is a fallback, so the job still runs

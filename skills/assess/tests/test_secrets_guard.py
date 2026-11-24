@@ -380,3 +380,10 @@ def test_a_trailing_when_rule_is_a_fallback(tmp_path: Path, fallback: str) -> No
             "secret_detection:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"merge_request_event\"\n"
             f"    - when: {fallback}\n")
     assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["tools"] == ["secret_detection"]
+
+
+@pytest.mark.parametrize("key", ["changes", "exists"])
+def test_a_block_list_condition_keeps_when_never_conditional(tmp_path: Path, key: str) -> None:
+    text = ("include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n"
+            f"secret_detection:\n  rules:\n    - {key}:\n        - docs/**\n      when: never\n")
+    assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["tools"] == ["secret_detection"]
