@@ -5,7 +5,7 @@
 id = "core.headline"
 kind = "collector"
 title = "Deterministic headline"
-summary = "The Step with the gate that blocks the next one, 'Catalogue coverage: N of M measured, V verified' and the per-tag strip, worded from the level block, and the three-line executive summary with one call to action (Step and what it means, the next gate as a task, what changed since the last run); the report pastes it and the badge and log entry carry its summary, which names the next gate and no count."
+summary = "The Step and the gate that blocks the next one, worded from the level block. It also gives 'Catalogue coverage: N of M measured, V verified' and the per-tag strip. It adds the three-line executive summary and one call to action. The summary gives the Step and what it means, the next gate as a task, and what changed since the last run. The report pastes it. The badge and the log entry carry its summary, which names the next gate and no count."
 issues = [747, 844, 1083, 1102]
 callable = "lib.core_scans:headline"
 publishes = ["headline"]

@@ -173,7 +173,11 @@ a GitHub ``uses:`` step of a known lint action (``LINT_ACTIONS``:
 golangci-lint-action, ruff-action, super-linter, ``reviewdog/action-*`` apart
 from action-setup and action-suggester, lint-action, markdownlint-cli2-action;
 an unknown third-party action is not read), masked by ``continue-on-error`` and
-kept off by triggers like any step. A lone ``- flake8`` item counts under a
+kept off by triggers like any step. A step whose literal ``with:`` input makes it
+install only (``ruff-action`` ``args: --version``, ``golangci-lint-action`` v9+
+``install-only: true``; ``lib.ci_lint_inputs``, #893) is no lint run, and one whose
+deciding input is not a literal it reads (a ``${{ }}`` expression) reads as a step that
+may lint: ``check_target`` (null) unless another line settles it. A lone ``- flake8`` item counts under a
 GitLab ``script:`` key and nowhere else. ``pre-commit/action`` runs
 ``pre-commit run --all-files`` and reads as that line does (below). A check
 target or script may run a linter inside it, and the line alone cannot show
@@ -338,7 +342,11 @@ The per-line tests named above (`_line_runs_check`, `_line_runs_lint`, `_line_ma
 `_line_may_check`, `_script_items`, `lint_action`, `count_check_lines`) live in
 `lib.ci_lines` (#1061); this module re-exports `count_check_lines`, `lint_action`,
 `LINT_ACTIONS` and `MAY_LINT_ACTIONS`.
+Issue #893: `lib.ci_lint_inputs.read_lint_inputs` reads each ruff-action and
+golangci-lint-action step's `with:` block; `_trigger_tally(lint_inputs=)` drops an
+install-only step from the lint count and counts an unsettled one for `_line_may_lint`.
 Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture table),
+`tests/test_ci_lint_inputs.py` (#893),
 `tests/test_external_ci.py` (#928), `tests/test_ci_lint_gates.py` (the #926 fixtures),
 `tests/test_gitlab_ci_lint.py`, and the Layer 3 and Layer 5 rows in
 `tests/test_level_signals.py`.
@@ -357,6 +365,7 @@ from lib.ci_matrix import expand_matrix
 from lib.ci_continuations import join_continued
 from lib.ci_includes import SETTLED, IncludeRecord, Resolution, resolve_includes
 from lib.ci_lint_gates import line_compiler_gate, line_dotnet_build, lint_gate, rewrite_gated
+from lib.ci_lint_inputs import NO_INPUTS, LintInputs, read_lint_inputs
 from lib.ci_lines import (
     LINT_ACTIONS as LINT_ACTIONS, MAY_LINT_ACTIONS as MAY_LINT_ACTIONS, LineTest,
     _line_may_check, _line_may_lint, _line_runs_check, _line_runs_lint, _skipped_check,
@@ -468,7 +477,8 @@ def _declared_check(line: str, *, script_item: bool = True) -> bool:
 def _trigger_tally(text: str, workflow: Trigger | None,
                    tests: Sequence[LineTest] = (_line_runs_check,),
                    declared: frozenset[int] = frozenset(),
-                   unknown: frozenset[int] = frozenset()) -> list[Tally]:
+                   unknown: frozenset[int] = frozenset(),
+                   lint_inputs: LintInputs = NO_INPUTS) -> list[Tally]:
     """Per line test: ``(ordinary, unknown trigger, off trigger, masked, may pass)`` lines of one CI file.
 
     ``workflow`` is a GitHub workflow's settled trigger; None reads GitLab job triggers.
@@ -476,7 +486,8 @@ def _trigger_tally(text: str, workflow: Trigger | None,
     A ``declared`` line (an unread action's ``with:`` input, ``lib.ci_action_inputs``) counts
     for no test but ``_line_may_check``, which counts it when it runs or may run a check (#799).
     An ``unknown`` line (a matrix command not expanded, ``lib.ci_matrix``, #923) counts for
-    ``_line_may_check`` whatever it holds, unless masked.
+    ``_line_may_check`` whatever it holds, unless masked. A ``lint_inputs`` step
+    (``lib.ci_lint_inputs``, #893) is no lint run; an unsure one counts for ``_line_may_lint``.
     """
     text = join_continued(text)
     lines = text.splitlines()
@@ -490,14 +501,17 @@ def _trigger_tally(text: str, workflow: Trigger | None,
     may = [keep(unsure, triggers, t) for t in ("ordinary", "unknown")]
     held_kept = [keep(held, triggers, t) for t in ("ordinary", "unknown", "not_ordinary")]
     out: list[Tally] = []
+    steps = lint_inputs.install_only | lint_inputs.unsure
     for test in tests:
-        extra = gated if _is_lint_test(test) else unknown if test is _line_may_check else frozenset()
-        counts = [count_check_lines(k, context=lines, test=test, extra=extra) for k in kept]
+        skip = steps if _is_lint_test(test) else frozenset()
+        extra = (gated if _is_lint_test(test) else unknown if test is _line_may_check
+                 else lint_inputs.unsure if test is _line_may_lint else frozenset())
+        counts = [count_check_lines(_drop(k, skip), context=lines, test=test, extra=extra) for k in kept]
         if test is _line_may_check and declared:
             counts = [c + count_check_lines(h, context=lines, test=_declared_check, extra=unknown)
                       for c, h in zip(counts, held_kept, strict=True)]
-        may_pass = sum(count_check_lines(k, context=lines, test=test) for k in may)
-        total = count_check_lines(_drop(lines, declared), context=lines, test=test, extra=extra)
+        may_pass = sum(count_check_lines(_drop(k, skip), context=lines, test=test) for k in may)
+        total = count_check_lines(_drop(lines, declared | skip), context=lines, test=test, extra=extra)
         masked = max(total - sum(counts) - may_pass, 0)
         out.append((counts[0], counts[1], counts[2], masked, may_pass))
     return out
@@ -594,7 +608,9 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
                                               runs_missing(_line_runs_lint))
     ) + (_line_may_lint, _line_may_check, line_compiler_gate, line_dotnet_build)
     tallies = [_trigger_tally(texts[rel], workflows.get(rel), tests, inputs[rel].declared,
-                              unexpanded.get(rel, frozenset())) for rel in files]
+                              unexpanded.get(rel, frozenset()),
+                              NO_INPUTS if rel in CI_CONFIG_FILES else read_lint_inputs(texts[rel]))
+               for rel in files]
     tallies += [_trigger_tally(f.text, None, tests) for f in resolution.files] if resolution else []
     check_t, lint_t, miss_t, lint_miss_t, may_t, may_check_t, gate_t, dotnet_t = (
         _sum(t[i] for t in tallies) for i in range(len(tests)))

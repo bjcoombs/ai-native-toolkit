@@ -91,6 +91,7 @@ revision = 1
   "prior_level.pruning.completed_sha" = "token"
   "prior_level.pruning.gates" = "token"
   "prior_level.pruning.credited_at" = "token"
+  "prior_level.pruning.merged" = "token"
 
 [[entries]]
 id = "core:stats_summary.loc_by_class.source.p95"

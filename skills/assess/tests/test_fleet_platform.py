@@ -52,7 +52,7 @@ BLOCK: JsonDict = {"available": True, "merged_count": 3}
 
 def test_platform_scans_is_the_explicit_list_narrowed_by_scans():
     assert PLATFORM_SCANS == ("review_reality", "delivery", "review_evidence", "review_automation",
-                              "ci_checks")
+                              "ci_checks", "org_security_policy")
     assert platform_scans(None) == list(PLATFORM_SCANS)
     # review_reality brings its companions review_automation and review_evidence (#696),
     # rebuilt by the pass; ci_checks and review_automation read the merged CI config (#796).

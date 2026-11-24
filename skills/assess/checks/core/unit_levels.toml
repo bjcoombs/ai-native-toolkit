@@ -5,11 +5,11 @@
 id = "core.unit_levels"
 kind = "collector"
 title = "Monorepo unit Steps"
-summary = "Each unit's Step, verified tally and not-measured count from the default maturity model, with each unit's own readings in place and every condition labelled unit or inherited."
+summary = "Each unit's Step, verified tally and not-measured count from the default maturity model. Each unit's own readings are in place, and every condition is labelled unit or inherited."
 issues = [800, 864]
 callable = "lib.core_scans:unit_levels"
 publishes = ["unit_levels"]
-reads = ["unit_readings", "agent_consistency", "agent_environment", "agent_ops", "ci_checks", "coverage_gate", "doc_staleness", "guardrails", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "review_evidence", "review_reality", "stats_summary", "structure", "structure_drift", "test_pressure", "owner_exclusions"]
+reads = ["unit_readings", "agent_consistency", "agent_environment", "agent_ops", "ci_checks", "contributor_files", "coverage_gate", "doc_staleness", "guardrails", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "review_evidence", "review_reality", "skill_disclosure", "skill_script_tests", "stats_summary", "structure", "structure_drift", "test_pressure", "owner_exclusions"]
 stage = "post_offers"
 shapes = [
   { path = "unit_levels", type = "lib.unit_levels:UnitLevelsBlock" },

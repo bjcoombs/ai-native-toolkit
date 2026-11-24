@@ -47,6 +47,10 @@ from typing import Any, TypedDict
 
 from lib.levels import Scalar
 
+# The guardrail deny rule the permissions wording names (#1153); ``/assess --fix`` writes it,
+# with the repository's default branch in place of ``main`` (``lib/starter_templates.py``, #1154).
+DENY_RULE_EXAMPLE = "Bash(git push origin main)"
+
 
 class Guidance(TypedDict):
     change: str
@@ -415,6 +419,30 @@ _WORDING: dict[str, Wording] = {
     "guardrails.stated_pct": _guardrails_stated,
     "agent_consistency.conflicts": _agents_agree,
     "agent_consistency.unlinked": _agents_linked,
+    "contributor_files.guide.present": _flag(
+        "Commit a `CONTRIBUTING.md` that says how to build, test and shape a change, at the root, "
+        "in `.github/` or in `docs/`.",
+        "`git ls-files` lists a `CONTRIBUTING` file at the root, in `.github/` or in `docs/`."),
+    "contributor_files.policy.present": _flag(
+        "Commit a `SECURITY.md` that says how to report a vulnerability privately (or link GitHub "
+        "private vulnerability reporting), at the root, in `.github/` or in `docs/`.",
+        "`git ls-files` lists a `SECURITY` file at the root, in `.github/` or in `docs/`, or the "
+        "owner's public `.github` repository holds one."),
+    "skill_script_tests.skills_untested": _none_left(
+        "Add tests for each named skill's scripts in that skill's own folder (`tests/` or "
+        "`test_*.py` beside them). Where the report finds them elsewhere, move or copy them in: "
+        "tests outside the folder do not ship with the skill. This checks that tests exist, not "
+        "how much they cover.",
+        "Every skill folder that holds a script also holds a test file (`tests/`, `test_*.py`, "
+        "`*_test.py`, `*.test.ts` or similar)."),
+    "skill_disclosure.files_breaking": _none_left(
+        "In each `SKILL.md` or agent definition the report names, fix the rule it breaks: give "
+        "each a `name` and a `description` of at most 1024 characters, move detail only some "
+        "tasks need into `references/` files linked from `SKILL.md`, and link each reference "
+        "from `SKILL.md` to a file that exists.",
+        "Every `SKILL.md` and agent definition has a body of 500 lines or fewer, about 5000 tokens "
+        "(20,000 characters) or fewer, a `name` and a `description` of 1024 characters or fewer, "
+        "and every `references/` link resolves straight from it."),
     "coverage_gate.configured": _flag(
         "Make the test run exit non-zero when line coverage drops below a floor.",
         "The test command CI runs enforces a coverage threshold (`fail_under` in `pyproject.toml`, "
@@ -449,7 +477,7 @@ _WORDING: dict[str, Wording] = {
     "review_reality.approved_share": _approved,
     "agent_ops.summary.permissions_encoded": _flag(
         "Commit a guardrail as a deny rule, such as `\"permissions\": {\"deny\": "
-        "[\"Bash(git push origin main)\"]}` in `.claude/settings.json`. Deny rules hold in every "
+        f"[\"{DENY_RULE_EXAMPLE}\"]}}` in `.claude/settings.json`. Deny rules hold in every "
         "permission mode, auto mode included. If your organisation sets this centrally, run with "
         "`--managed-settings`.",
         "`.claude/settings.json` is tracked in git and its `permissions` lists at least one entry, "
@@ -515,6 +543,14 @@ _MEASURE_HINTS = {
                       "calls, so this is not measured there.",
     "review_evidence": "Unknown when no AI review step is committed to CI and review on merged "
                        "changes is not read: a headless fleet scan reads it with `--platform`.",
+    "contributor_files": "Not measured (`knowledge_base`) for a knowledge base, which takes no "
+                         "code patches. The policy is not measured (`org_policy_not_read`) when the "
+                         "repository holds none and the owner's shared `.github` repository was not "
+                         "read: run with `--platform`, or `/assess` with `gh` signed in.",
+    "skill_script_tests": "Not measured (`no_skill_scripts`) when no skill in the repository, or in "
+                          "the skill unit, holds a script: there is nothing to test.",
+    "skill_disclosure": "Not measured (`no_skill_files`) when the repository, or the skill unit, "
+                        "holds no `SKILL.md` or agent definition: there is nothing to disclose.",
     "agent_environment": "The `agent_environment` scan reported it unavailable or did not run: "
                          "check the fleet run's `--scans` and its `logs/` directory. The lockfile "
                          "check (`unlocked_total`) is also not measured with no dependency manifest "

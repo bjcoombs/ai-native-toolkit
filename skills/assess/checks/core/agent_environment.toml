@@ -5,7 +5,7 @@
 id = "core.agent_environment"
 kind = "collector"
 title = "Agent working environment"
-summary = "Committed agent setup, the check command an instruction file names, lockfiles per manifest and the CI cap; the CI-duration probe is off in headless runs. A manifest row's note is skipped_library (a library whose ecosystem commits no lock: listed, not counted in manifests_total or unlocked_total) or direct_pins_only (a Gradle version catalog or NuGet central package management with no lock: unlocked)."
+summary = "Committed agent setup, the check command an instruction file names, lockfiles per manifest, and the CI cap. The CI-duration probe is off in headless runs. A manifest row's note is skipped_library or direct_pins_only. skipped_library is a library whose ecosystem commits no lock: it is listed, and not counted in manifests_total or unlocked_total. direct_pins_only is a Gradle version catalog or NuGet central package management with no lock: it counts as unlocked."
 issues = [514]
 callable = "lib.agents.agent_environment:scan_agent_environment"
 offline_callable = "lib.agents.agent_environment:scan_agent_environment"

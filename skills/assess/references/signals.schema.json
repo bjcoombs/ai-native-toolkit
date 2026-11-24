@@ -102,6 +102,7 @@
           "ci_checks",
           "claude_config",
           "config_drift",
+          "contributor_files",
           "coverage_gate",
           "coverage_report",
           "dead_code",
@@ -120,6 +121,7 @@
           "layer_grades",
           "nested_instructions",
           "observability",
+          "org_security_policy",
           "owner_exclusions",
           "promissory_markers",
           "review_automation",
@@ -127,6 +129,8 @@
           "review_reality",
           "runtime",
           "shared_tooling",
+          "skill_disclosure",
+          "skill_script_tests",
           "stats_summary",
           "structure",
           "structure_drift",
@@ -753,7 +757,7 @@
                 "boolean",
                 "null"
               ],
-              "description": "Layer 3 level 1 (issue #782): true when a CI line runs a linter that can fail its job on ordinary changes (not --version or --help), or a step uses a known lint action (golangci-lint-action, ruff-action, super-linter, reviewdog), null when none does but included jobs, unsettled triggers, a lint script the tree does not hold or a check target or script that may lint inside it could hold one, or when the only static gate is a compiler run with warnings as errors or a .NET build's analysers (issue #926), else false. A formatter that rewrites files counts only when a later line of its job runs git diff --exit-code."
+              "description": "Layer 3 level 1 (issue #782): true when a CI line runs a linter that can fail its job on ordinary changes (not --version or --help), or a step uses a known lint action (golangci-lint-action, ruff-action, super-linter, reviewdog) not set to install only (issue #893: ruff-action args --version, golangci-lint-action install-only true), null when none does but included jobs, unsettled triggers, a lint script the tree does not hold or a check target or script that may lint inside it could hold one, or when the only static gate is a compiler run with warnings as errors or a .NET build's analysers (issue #926), else false. A formatter that rewrites files counts only when a later line of its job runs git diff --exit-code."
             },
             "lint_basis": {
               "enum": [
@@ -1308,6 +1312,54 @@
               ],
               "description": "Best letter grade (A to F) of the files instruction_presence counts: the root files, else the always-loaded or nested ones. Null only for none."
             }
+          }
+        },
+        "contributor_files": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: knowledge_base (the repository is a knowledge base (archetype knowledge-base), which takes no code patches); org_policy_not_read (the repository holds no security policy. The owner's shared .github repository, whose policy GitHub shows on this one, was not read. The cause is offline use, no --platform, a remote not on github.com, or gh not signed in). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "org_security_policy": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: no_remote (the repository has no github.com remote, so there is no owner .github repository to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
           }
         },
         "review_evidence": {
