@@ -20,14 +20,16 @@ a test that would catch the change, because nothing in the folder asks for one.
   ``.mjs``, ``.cjs``, ``.ts``, ``.rb``) that is not itself a test file;
 - a **test** is a file named like a test anywhere in it (``test_*.py``, ``*_test.py``,
   ``*_test.go``, ``*.test.[jt]s``, ``*.spec.[jt]s``, ``*.bats``), or a code file
-  (``TEST_CODE_EXTENSIONS``) under a ``tests``/``test`` folder; nothing under test data
+  (``TEST_CODE_EXTENSIONS``) under a ``tests``/``test`` folder other than package and fixture
+  plumbing (``TEST_SUPPORT_NAMES``: ``__init__.py``, ``conftest.py``, ...); nothing under test data
   (``TEST_DATA_DIRS``: fixtures, goldens, snapshots) is a test, so a README or a fixture tree
   there counts for nothing.
 
 A skill with scripts and no test beside them is ``untested``. **Tested elsewhere** (information
-only): a test file outside the skill folder whose text names one of the skill's script file names
-together with the skill folder's name as a path segment (``"fleet" / "scripts" / "fleet.py"``,
-``skills/ghsync/scripts/ghsync.sh``) is listed under ``tested_elsewhere``, up to
+only): a test file outside the skill folder with a line that names the skill folder's name as a
+path segment and, after it on the same line, one of the skill's script file names
+(``"fleet" / "scripts" / "fleet.py"``, ``skills/ghsync/scripts/ghsync.sh``) is listed under
+``tested_elsewhere``, up to
 ``ELSEWHERE_MAX``. It changes nothing: those tests do not ship with the skill, so the skill still
 reads untested, and the report says where its tests are and to move or copy them into the folder.
 
@@ -54,6 +56,7 @@ name as a path segment (information only, up to `ELSEWHERE_MAX`). Tests:
 """
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Iterator
 from pathlib import Path, PurePosixPath
@@ -70,6 +73,12 @@ TEST_DIRS = frozenset({"tests", "test"})
 # a README, a fixture tree or a golden JSON there is test data, not a test.
 TEST_CODE_EXTENSIONS = SCRIPT_EXTENSIONS | {".go", ".bats", ".tsx", ".jsx"}
 TEST_DATA_DIRS = frozenset({"fixtures", "golden", "goldens", "data", "snapshots", "__snapshots__"})
+# Package and fixture plumbing under a tests folder: on its own it tests nothing.
+TEST_SUPPORT_NAMES = frozenset({"__init__.py", "conftest.py", "setup.py", "jest.config.js", "jest.config.ts",
+                                "vitest.config.ts", "vitest.config.js"})
+# Folders the repository-wide walk never enters.
+WALK_SKIP = frozenset({".git", "node_modules", ".venv", "__pycache__", ".pytest_cache", ".mypy_cache",
+                       ".ruff_cache", "dist", "build"})
 ELSEWHERE_MAX = 3
 _TEST_NAME = re.compile(r"^(test_.+\.py|.+_test\.(py|go)|.+\.(test|spec)\.[cm]?[jt]sx?|.+\.bats)$")
 _READ_MAX_BYTES = 512_000  # a test file larger than this is not read for references
@@ -100,18 +109,20 @@ def is_test_file(rel: PurePosixPath) -> bool:
         return False
     if _TEST_NAME.match(rel.name):
         return True
-    return rel.suffix in TEST_CODE_EXTENSIONS and any(part in TEST_DIRS for part in folders)
+    return (rel.suffix in TEST_CODE_EXTENSIONS and rel.name not in TEST_SUPPORT_NAMES
+            and any(part in TEST_DIRS for part in folders))
 
 
 def _files(folder: Path, dirs: set[str], pats: list[str], repo: Path) -> Iterator[Path]:
-    for path in sorted(folder.rglob("*")):
-        if not path.is_file() or path.is_symlink():
-            continue
-        rel = path.relative_to(repo)
-        if any(part in {"__pycache__", "node_modules", ".venv", ".git"} for part in rel.parts):
-            continue
-        if not is_user_excluded(rel, dirs, pats):
-            yield path
+    """The files under ``folder``, pruning ``WALK_SKIP`` and excluded folders as it walks."""
+    for here, subdirs, names in os.walk(folder):
+        base = Path(here)
+        subdirs[:] = sorted(d for d in subdirs if d not in WALK_SKIP and not (base / d).is_symlink()
+                            and not is_user_excluded((base / d).relative_to(repo), dirs, pats))
+        for name in sorted(names):
+            path = base / name
+            if path.is_file() and not path.is_symlink() and not is_user_excluded(path.relative_to(repo), dirs, pats):
+                yield path
 
 
 def _count(folder: Path, repo: Path, dirs: set[str], pats: list[str]) -> tuple[list[str], int]:
@@ -128,10 +139,11 @@ def _count(folder: Path, repo: Path, dirs: set[str], pats: list[str]) -> tuple[l
 
 
 def _elsewhere(repo: Path, folder: Path, scripts: list[str], outside: list[Path]) -> list[str]:
-    """Outside test files naming one of ``scripts`` with the skill folder's name as a path segment."""
+    """Outside test files with a line that names one of ``scripts`` after the skill folder's name
+    as a path segment (``"fleet" / "scripts" / "fleet.py"``, ``skills/ghsync/scripts/ghsync.sh``)."""
     name = re.escape(folder.name)
-    segment = re.compile(rf"(?:[\"'/\\]){name}(?:[\"'/\\])")
-    names = [re.compile(rf"(?<![\w.-]){re.escape(s)}(?![\w-])") for s in sorted(set(scripts))]
+    alternatives = "|".join(re.escape(s) for s in sorted(set(scripts)))
+    path_like = re.compile(rf"[\"'/\\]{name}[\"'/\\].*?(?<![\w.-])(?:{alternatives})(?![\w-])")
     found: list[str] = []
     for path in outside:
         if path.is_relative_to(folder):
@@ -142,7 +154,7 @@ def _elsewhere(repo: Path, folder: Path, scripts: list[str], outside: list[Path]
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        if segment.search(text) and any(n.search(text) for n in names):
+        if any(path_like.search(line) for line in text.splitlines()):
             found.append(path.relative_to(repo).as_posix())
             if len(found) == ELSEWHERE_MAX:
                 break

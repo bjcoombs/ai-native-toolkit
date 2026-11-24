@@ -41,6 +41,7 @@ def _state(block: Any) -> tuple[str, str | None]:
     ("web/app.test.ts", True), ("web/app.spec.js", True), ("t/x.bats", True), ("tests/helpers.py", True),
     ("tests/README.md", False), ("tests/fixtures/sample/run.py", False), ("tests/golden/out.json", False),
     ("scripts/run.py", False), ("README.md", False),
+    ("tests/__init__.py", False), ("tests/conftest.py", False), ("tests/test_init.py", True),
 ])
 def test_what_is_a_test_file(rel: str, test: bool) -> None:
     assert is_test_file(PurePosixPath(rel)) is test
@@ -54,6 +55,20 @@ def test_a_skill_with_scripts_and_tests_beside_them_reads_met(tmp_path: Path) ->
                                 "tested_elsewhere": []}]
     assert (block["skills_with_scripts"], block["skills_untested"]) == (1, 0)
     assert _state(block) == ("met", None)
+
+
+def test_an_init_or_conftest_alone_is_not_a_test(tmp_path: Path) -> None:
+    repo = _plugin(tmp_path, {"skills/a/SKILL.md": SKILL.format("a"), "skills/a/scripts/run.py": "print(1)\n",
+                              "skills/a/tests/__init__.py": "", "skills/a/tests/conftest.py": "import pytest\n"})
+    assert scan_skill_script_tests(repo)["skills"][0]["untested"] is True
+
+
+def test_the_walk_skips_vendored_and_excluded_folders(tmp_path: Path) -> None:
+    repo = _plugin(tmp_path, {"skills/a/SKILL.md": SKILL.format("a"), "skills/a/scripts/run.py": "x\n",
+                              "node_modules/pkg/tests/test_a.py": '"skills/a/scripts/run.py"\n',
+                              "vendor/tests/test_a.py": '"skills/a/scripts/run.py"\n'})
+    (skill,) = scan_skill_script_tests(repo, excludes=({"vendor"}, []))["skills"]
+    assert skill["tested_elsewhere"] == []
 
 
 def test_a_skill_with_scripts_and_no_tests_reads_unmet(tmp_path: Path) -> None:
@@ -79,6 +94,7 @@ def test_tests_elsewhere_are_named_but_do_not_count(tmp_path: Path) -> None:
         "skills/fleet/SKILL.md": SKILL.format("fleet"), "skills/fleet/scripts/fleet.py": "print(1)\n",
         "tests/test_fleet.py": 'SCRIPT = ROOT / "skills" / "fleet" / "scripts" / "fleet.py"\n',
         "tests/test_other.py": 'print("fleet.py")\n',       # the name without the folder segment
+        "tests/test_split.py": 'X = "fleet"\nY = "fleet.py"\n',  # segment and name on different lines
         "tests/fixtures/notes.py": '"fleet/scripts/fleet.py"\n',  # test data, not a test
     })
     (skill,) = scan_skill_script_tests(repo)["skills"]
