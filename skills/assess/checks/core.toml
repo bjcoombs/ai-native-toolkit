@@ -104,6 +104,7 @@ fragments = [
   "ci_model_jobs",
   "org_security_policy",
   "contributor_files",
+  "secrets_guard",
   "gap_actions",
   "agent_consistency",
   "ai_usage",

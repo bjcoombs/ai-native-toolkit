@@ -436,6 +436,16 @@ _WORDING: dict[str, Wording] = {
         "No CI job that calls a model API runs on every push to the default branch or every pull "
         "request update without a `paths:` filter, a schedule or manual trigger, a label, or GitLab "
         "`rules:changes:`."),
+    "secrets_guard.configured": _flag(
+        "Add a secrets hook to `.pre-commit-config.yaml` (gitleaks or detect-secrets), or a secrets "
+        "scan step to CI.",
+        "`.pre-commit-config.yaml` names a secrets hook, or a CI file runs a secrets scan."),
+    "secrets_guard.enforcement.present": _flag(
+        "Add a secrets scan step to CI that runs on each push or pull request (`gitleaks/gitleaks-action`, "
+        "`trufflesecurity/trufflehog`, or GitLab's `Secret-Detection` template); a pre-commit hook "
+        "alone can be skipped with `--no-verify`.",
+        "A workflow in `.github/workflows/` that runs on a push or pull request, or a plain job in "
+        "`.gitlab-ci.yml`, runs a secrets scan that can stop the run when it finds a secret."),
     "skill_personal_data.files_with_personal_data": _none_left(
         "In each skill or agent file the report names, remove the kind of data it lists (an email, "
         "phone number, home path, IP address, SSH login or key), or replace it with a placeholder "
@@ -565,6 +575,12 @@ _MEASURE_HINTS = {
     "ci_model_jobs": "Not measured (`no_model_jobs`) when no committed CI job calls a model API. "
                      "Not measured (`trigger_unresolved`, `ci_jobs_unread`) when none is ungated but a "
                      "trigger, a condition or a job this reader cannot read could still run one on every change.",
+    "secrets_guard": "Level 2 is not measured (`secret_scanning_not_read`) on a GitHub repository with "
+                     "no secrets scan in CI: GitHub's own secret scanning could guard it, and those "
+                     "repository settings are not read yet. A CI scan settles it. It is also not measured "
+                     "(`ci_includes_unresolved`) when a GitLab include that could hold the scan was not read, or "
+                     "(`gitlab_rules_unevaluated`) when a GitLab scan job runs under rules, only/except or a "
+                     "when that is not evaluated.",
     "skill_personal_data": "Not measured (`no_skill_files`) when the repository, or the skill unit, "
                            "holds no `SKILL.md` or agent definition: there is nothing to scan.",
     "skill_script_tests": "Not measured (`no_skill_scripts`) when no skill in the repository, or in "

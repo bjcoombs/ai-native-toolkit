@@ -129,6 +129,7 @@
           "review_evidence",
           "review_reality",
           "runtime",
+          "secrets_guard",
           "shared_tooling",
           "skill_disclosure",
           "skill_personal_data",
@@ -1405,6 +1406,30 @@
               "reason": {
                 "type": "string",
                 "description": "'code: sentence'. The codes name the missing piece: network (no AI review step is committed in CI, and a headless run without --platform makes no GitHub or GitLab read); no_remote (no AI review step is committed in CI and the repository has no GitHub or GitLab remote, so there are no merged changes to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "secrets_guard": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: secret_scanning_not_read (no secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read); gitlab_rules_unevaluated (a GitLab job holds a secrets scan but runs under rules, only/except or a when that is not evaluated. So it is not known whether the scan runs on each change); ci_includes_unresolved (no secrets scan was found in the CI read. A GitLab include that could hold one, a local, project or remote file, was not read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [

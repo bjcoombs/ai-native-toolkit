@@ -309,11 +309,11 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "doc-freshness": 2,          # docs and code committed together: none stale
             "guardrails-stated": None,   # no configured gate: nothing to state
             "agent-consistency": None,   # no instruction file: nothing to agree with
-            "skill-disclosure": None,    # no SKILL.md or agent definition: no_skill_files
+            "skill-disclosure": None, "skill-personal-data": None,  # no SKILL.md or agent file: no_skill_files
             "skill-script-tests": None,  # no skill holds a script: no_skill_scripts
-            "skill-personal-data": None,  # no SKILL.md or agent definition: no_skill_files
             "model-ci-gated": None,      # no CI job calls a model: no_model_jobs
             "contributor-files": 0,      # no CONTRIBUTING or SECURITY file
+            "secrets-guard": 0,          # no secrets hook or CI scan, and no remote
         }
     for scans in golden_repos.values():   # measured headless, each unknown for a named reason
         assert scans["structure"]["reason"].startswith("no_python_packages:")
@@ -348,9 +348,8 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "agent-consistency": None,  # the capture predates agent_consistency
         "skill-disclosure": None,  # the capture predates skill_disclosure
         "skill-script-tests": None,  # the capture predates skill_script_tests
-        "skill-personal-data": None,  # the capture predates skill_personal_data
-        "model-ci-gated": None,  # the capture predates ci_model_jobs
-        "contributor-files": None,  # the capture predates contributor_files
+        "skill-personal-data": None, "contributor-files": None,  # the capture predates both blocks
+        "secrets-guard": None, "model-ci-gated": None,  # the capture predates both blocks
     }
     assert "layer_grades.instruction_file_present" in _row(
         result, "layer-0-instructions")["missing_signals"]

@@ -241,6 +241,16 @@
 #   named (tested_elsewhere) but do not count, since they do not ship with the skill. With no
 #   skill holding a script the row is unknown (no_skill_scripts), never met. Read per skill
 #   unit only (unit_kinds = ["skill"]); it gates no Step. Graded measured.
+# - Secrets guard (lib/secrets_guard.py, #1173). Level 1 reads secrets_guard.configured: a
+#   secrets hook in the pre-commit config or a secrets scan in CI. Graded config_only (a hook
+#   can be skipped with --no-verify), so it is listed, not counted. Level 2 reads
+#   secrets_guard.enforcement.present: a secrets scan in CI, where an agent cannot skip it.
+#   Graded measured and counted. With no CI scan on a GitHub repository, GitHub's own secret
+#   scanning could still guard it and is not read, so level 2 is unknown
+#   (secret_scanning_not_read), never unmet, and so is a GitLab repository whose CI includes a
+#   file that could hold the scan and was not read (ci_includes_unresolved), and so is a GitLab
+#   scan job under rules, only/except or an uncertain when (gitlab_rules_unevaluated): GitLab rules
+#   are not evaluated, so such a job is never read met. It gates no Step.
 # - Personal data in skill text reads skill_personal_data.files_with_personal_data
 #   (lib/skill_personal_data.py, #1045): no SKILL.md, agent definition or skill references/
 #   file holds a detected kind: email, phone, home path, IP address, SSH login or key. A
@@ -549,6 +559,22 @@ aggregation = "min"
   level = 1
   truth = ["behaviour"]
   criteria = [{ signal = "skill_script_tests.skills_untested", op = "eq", value = 0 }]
+
+[[rows]]
+id = "secrets-guard"
+title = "Secrets guard"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["governance"]
+  criteria = [{ signal = "secrets_guard.configured", op = "eq", value = true }]
+
+  [[rows.levels]]
+  level = 2
+  truth = ["governance"]
+  criteria = [{ signal = "secrets_guard.enforcement.present", op = "eq", value = true }]
 
 [[rows]]
 id = "skill-personal-data"
