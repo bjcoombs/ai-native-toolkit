@@ -4,7 +4,7 @@
 # `ruff check ../fleet/scripts` from skills/assess with its locked ruff.
 extend = "../assess/pyproject.toml"
 
-[lint.per-file-ignores]
+[lint.extend-per-file-ignores]
 # Every script here puts skills/assess/scripts on sys.path before importing
 # lib/ (the plugin ships both skills side by side, and no package install
 # joins them), so its lib imports must follow that bootstrap and E402
