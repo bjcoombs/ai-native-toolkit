@@ -32,8 +32,10 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   workflow scans nothing before it lands.
 - A command counts only when it can fail the job: ``detect-secrets scan`` always exits 0, so
   only ``detect-secrets-hook`` counts; ``trufflehog`` needs ``--fail``; ``gitleaks`` with
-  ``--exit-code 0``, ``--staged`` (a CI checkout has nothing staged), ``version`` or ``--help``
-  does not count. A ``||`` whose right side is not a non-zero exit or ``false``, and a pipe, mask
+  ``--exit-code 0`` does not count. For every tool, a command that scans nothing in a CI checkout
+  does not count: help and version, a staged-only or pre-commit scan (``--staged``, ``gitleaks
+  protect``, ``--pre-commit``, ``ggshield secret scan pre-commit``) and git-secrets setup
+  (``--install``, ``--register-aws``). A ``||`` whose right side is not a non-zero exit or ``false``, and a pipe, mask
   the command; a command continued with a trailing backslash is judged whole.
 - CI that runs the pre-commit hooks counts for the secrets hooks it selects: ``uses:
   pre-commit/action``, or ``pre-commit run`` with ``--all-files``/``-a``, ``--from-ref`` or
@@ -139,7 +141,13 @@ _COMMAND_NAMES = sorted((*SECRET_TOOLS, "detect-secrets-hook"), key=len, reverse
 # A command that cannot fail the job guards nothing: ``detect-secrets scan`` writes a baseline and
 # exits 0, ``trufflehog`` exits 0 on findings without ``--fail``, ``gitleaks --exit-code 0``.
 _TRUFFLEHOG_FAIL = re.compile(r"(?<![\w-])--fail(?![\w-])")  # not --fail-on-scan-errors
-_STAGED_OR_INFO = re.compile(r"--staged\b|\bgitleaks\s+(?:version|help)\b|(?<!\S)(?:--help|-h|--version)(?!\S)")
+# Commands that scan nothing in a CI checkout, for every tool: help and version; a staged-only or
+# pre-commit scan (a CI checkout has nothing staged: ``--staged``, ``gitleaks protect``,
+# ``--pre-commit``, ``ggshield secret scan pre-commit``); git-secrets setup (``--install``,
+# ``--register-aws``, ``--add``, ``--list``).
+_NO_SCAN = re.compile(
+    r"(?<!\S)(?:--help|-h|--version|--staged|--pre-commit|--install|--register-aws|--add|--add-provider|--list)(?!\S)"
+    r"|\bgitleaks\s+(?:version|help|protect)\b|\bggshield\s+secret\s+scan\s+pre-commit\b")
 # A bare ``gitleaks`` shell call prints usage. Only for a command: a ``uses: docker://...gitleaks``
 # step ends its line too, with its arguments under ``with:`` below.
 _BARE_CALL = re.compile(r"\bgitleaks\s*['\"]?\s*$")
@@ -437,15 +445,16 @@ def _hook_id(tokens: list[str]) -> str | None:
 
 def _tool_that_can_fail(name: str, line: str, command: bool = True) -> str | None:
     """The tool a command on ``line`` runs, if the command can fail the job; else None."""
+    if _NO_SCAN.search(line):
+        return None  # help, version, setup, or a staged-only scan: nothing in a CI checkout
     if name == "detect-secrets-hook":
         return "detect-secrets"
     if name == "detect-secrets":
         return None  # ``detect-secrets scan`` and ``audit`` always exit 0
     if name == "trufflehog" and not _TRUFFLEHOG_FAIL.search(line):
         return None
-    if name == "gitleaks" and (_GITLEAKS_NO_FAIL.search(line) or _STAGED_OR_INFO.search(line)
-                               or (command and _BARE_CALL.search(line))):
-        return None  # a CI checkout has nothing staged; version and help scan nothing
+    if name == "gitleaks" and (_GITLEAKS_NO_FAIL.search(line) or (command and _BARE_CALL.search(line))):
+        return None
     return name
 
 
