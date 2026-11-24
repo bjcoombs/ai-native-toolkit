@@ -282,9 +282,10 @@ def _boundary_map(op: str, value: Operand) -> Guidance | None:
     if not (op == "gt" and value == 0 or op == "gte" and value == 1):
         return None
     return {"change": "Declare module boundaries: a `CODEOWNERS` line per module path, or an "
-                      "`ARCHITECTURE.md` that names module paths.",
-            "done_when": "A committed `CODEOWNERS` line or `ARCHITECTURE.md` reference names "
-                         "a module path that matches a tracked, non-excluded source file (not "
+                      "`ARCHITECTURE.md` that names two or more module paths.",
+            "done_when": "A committed `CODEOWNERS` line, or two or more `ARCHITECTURE.md` "
+                         "references, name a module path that matches a tracked, non-excluded "
+                         "source file (not "
                          "a catch-all such as `*` or `/**`, an extension glob such as `*.py`, "
                          "`.github/`, or a docs-only path)."}
 
@@ -428,6 +429,14 @@ _WORDING: dict[str, Wording] = {
         "private vulnerability reporting), at the root, in `.github/` or in `docs/`.",
         "`git ls-files` lists a `SECURITY` file at the root, in `.github/` or in `docs/`, or the "
         "owner's public `.github` repository holds one."),
+    "ci_model_jobs.ungated": _none_left(
+        "Gate each CI job the report names that calls a model: run it only when prompts, skills or "
+        "instruction files change (a `paths:` filter), or nightly, or on a label. Cancel superseded "
+        "runs, sample the eval cases or cache results by content hash, use the cheapest model that "
+        "still tells a good result from a bad one, and move rule-checkable assertions into ordinary tests.",
+        "No CI job that calls a model API runs on every push to the default branch or every pull "
+        "request update without a `paths:` filter, a schedule or manual trigger, a label, or GitLab "
+        "`rules:changes:`."),
     "secrets_guard.configured": _flag(
         "Add a secrets hook to `.pre-commit-config.yaml` (gitleaks or detect-secrets), or a secrets "
         "scan step to CI.",
@@ -564,6 +573,9 @@ _MEASURE_HINTS = {
                          "code patches. The policy is not measured (`org_policy_not_read`) when the "
                          "repository holds none and the owner's shared `.github` repository was not "
                          "read: run with `--platform`, or `/assess` with `gh` signed in.",
+    "ci_model_jobs": "Not measured (`no_model_jobs`) when no committed CI job calls a model API. "
+                     "Not measured (`trigger_unresolved`, `ci_jobs_unread`) when none is ungated but a "
+                     "trigger, a condition or a job this reader cannot read could still run one on every change.",
     "secrets_guard": "Level 2 is not measured (`secret_scanning_not_read`) on a GitHub repository with "
                      "no secrets scan in CI when its push protection setting was not read: run with "
                      "`--platform`, or `/assess` with `gh` signed in, as a repository admin, organization owner or security "

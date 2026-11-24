@@ -25,7 +25,9 @@ guardrails - `.claude/settings.json` / `.claude/settings.local.json` permission
 `allow`/`deny`/`ask` counts, hook events, sandbox config; scripts under
 `.claude/hooks/`; routine definitions under `.claude/workflows/` /
 `.claude/routines/`. Summary booleans (`permissions_encoded`, `hooks_present`,
-`routines_present`) credit **git-tracked** evidence only, mirroring the Layer 0
+`routines_present`) credit **git-tracked** evidence only (a hook event counts only when
+it holds a hook that does something: a `prompt`, `agent`, `http` or `mcp_tool` hook, or a command other than
+`true`, `:` or `exit 0`; an empty event list or a typeless hook does not count, #922), mirroring the Layer 0
 rule (an uncommitted settings file reaches no clone). Deliberately excludes
 `.claude/agents/` and `.claude/skills/` - those are Layer 0's evidence - so the
 two layers never double-count. Pure stdlib JSON/filesystem reads plus
@@ -51,6 +53,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from lib.command_index import NOOP_COMMANDS
 from lib.agents.managed_settings import managed_permissions, not_read, read_managed_settings
 from lib.git_churn import is_tracked, tracked_files
 
@@ -74,10 +77,35 @@ _DEFAULT_MODES = frozenset({
     "default", "manual", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions",
 })
 UNREADABLE_MANAGED = "managed_settings_unreadable"
+# Hook types other than command that act on their own (#922); a typeless hook does not.
+_ACTING_TYPES = frozenset({"prompt", "agent", "http", "mcp_tool"})
 
 
 def _count_list(value: Any) -> int:
     return len(value) if isinstance(value, list) else 0
+
+
+def _hook_acts(hook: Any) -> bool:
+    """A hook that does something: a known non-command type (``prompt``, ``agent``, ``http``,
+    ``mcp_tool``), or a
+    command other than ``true``, ``:`` or ``exit 0``. An echo counts: a hook's output can add
+    context or a decision. A hook with no or an unknown ``type`` does not count."""
+    if not isinstance(hook, dict):
+        return False
+    if hook.get("type") in _ACTING_TYPES:
+        return True
+    if hook.get("type") != "command":
+        return False
+    command = hook.get("command")
+    parts = command.replace("&&", ";").split(";") if isinstance(command, str) else []
+    return not all(not p.strip() or p.strip() in NOOP_COMMANDS for p in parts)
+
+
+def _event_acts(groups: Any) -> bool:
+    """An event whose matcher groups hold at least one hook that does something (#922)."""
+    return isinstance(groups, list) and any(
+        isinstance(g, dict) and isinstance(g.get("hooks"), list) and any(map(_hook_acts, g["hooks"]))
+        for g in groups)
 
 
 def _scan_settings_file(
@@ -114,7 +142,7 @@ def _scan_settings_file(
             entry["default_mode"] = mode if mode in _DEFAULT_MODES else "other"
     hooks = data.get("hooks")
     if isinstance(hooks, dict):
-        entry["hook_events"] = len(hooks)
+        entry["hook_events"] = sum(1 for groups in hooks.values() if _event_acts(groups))
     entry["sandbox_configured"] = "sandbox" in data
     return entry
 
@@ -156,8 +184,9 @@ def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str,
       ``repository``), or a managed source does (``managed``); null with
       ``permissions_encoded_reason`` ``managed_settings_unreadable`` when neither does and
       a managed source could not be read, since a central rule may sit there.
-    - ``hooks_present``: a tracked settings file configures hook events, or
-      ``.claude/hooks/`` holds at least one tracked script.
+    - ``hooks_present``: a tracked settings file configures a hook event that
+      does something (``hook_events`` counts those, #922), or
+      ``.claude/hooks/`` holds at least one tracked script (its body is not read).
     - ``routines_present``: a routine dir holds at least one tracked file.
     """
     repo_root = repo_root.resolve()

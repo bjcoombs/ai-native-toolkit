@@ -54,7 +54,8 @@ a JSON-serialisable `structure_drift` run-context block (`empty_ownership_patter
 coverage ratio, `boundary_patterns` - the CODEOWNERS lines and architecture-doc references
 `ownership_parser.is_boundary_pattern` accepts (a literal path segment and at least one
 matched source file under a non-dot directory, so `*`, `*.py`, `/.github/`, `README.md`,
-`CONTRIBUTING.md` and `docs/` are left out); Layer 4 level 1 reads it (#785, #874) - and
+`CONTRIBUTING.md` and `docs/` are left out; architecture docs count from two distinct ones,
+#922); Layer 4 level 1 reads it (#785, #874) - and
 legacy-shape `empty_globs` mirrors for the orchestrator's enumerate-both-sides view), degrades to `available: False` reason `"no ownership map"`, and
 sorts every list by `(pattern, declared_in)`. **Tier 1** - `detect_grouping_disagreement()` -
 is the next cut up: not "does the boundary still match any file?" but "do the files a
@@ -93,6 +94,7 @@ from lib.docs.ownership_parser import (
     _HEADER_RE,
     _resolve_ref,
     _tracked_rel_paths,
+    architecture_boundaries,
     find_empty_globs,
     is_boundary_pattern,
     parse_architecture_md,
@@ -255,6 +257,7 @@ def _count_declared_and_matched(repo_root: Path) -> tuple[int, int, int]:
     boundary = sum(1 for pat, files in codeowners.items() if is_boundary_pattern(pat, files))
 
     docs = _discover_arch_docs(repo_root)
+    refs: list[str] = []
     if docs:
         tracked = tracked_files(repo_root)
         rel_paths = set(_tracked_rel_paths(repo_root, tracked))
@@ -266,14 +269,14 @@ def _count_declared_and_matched(repo_root: Path) -> tuple[int, int, int]:
             d, m, b = _declared_refs_in_doc(text, repo_root, rel_paths)
             declared += d
             matched += m
-            boundary += b
-    return declared, matched, boundary
+            refs += b
+    return declared, matched, boundary + architecture_boundaries(refs)
 
 
 def _declared_refs_in_doc(
     text: str, repo_root: Path, rel_paths: set[str],
-) -> tuple[int, int, int]:
-    """(declared, matched, boundary) path-reference counts for one architecture doc.
+) -> tuple[int, int, list[str]]:
+    """(declared, matched, boundary refs) for one architecture doc.
 
     Same sectioning as ``_empty_refs_in_doc`` - one declaration per (boundary,
     distinct reference) - but counts resolution outcomes instead of collecting the
@@ -285,10 +288,10 @@ def _declared_refs_in_doc(
     buffer: list[str] = []
     declared = 0
     matched = 0
-    boundary = 0
+    boundary: list[str] = []
 
     def flush(lines: list[str]) -> None:
-        nonlocal declared, matched, boundary
+        nonlocal declared, matched
         if not lines:
             return
         segment = "\n".join(lines)
@@ -298,7 +301,7 @@ def _declared_refs_in_doc(
             if files:
                 matched += 1
             if is_boundary_pattern(ref, files):
-                boundary += 1
+                boundary.append(ref)
 
     for line in body.splitlines():
         if _HEADER_RE.match(line):

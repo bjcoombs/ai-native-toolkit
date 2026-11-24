@@ -28,7 +28,7 @@ A scan that feeds no maturity-model criterion is `unclassified` until its eviden
 
 ## Conditions by truth tag
 
-Each condition carries one or more truth tags: the truth it keeps honest. A condition holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. A condition with several tags is listed under its first tag and named under the others as shared; it counts once. There are 30 conditions, 2 of them with more than one tag.
+Each condition carries one or more truth tags: the truth it keeps honest. A condition holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. A condition with several tags is listed under its first tag and named under the others as shared; it counts once. There are 31 conditions, 2 of them with more than one tag.
 
 | Tag | Conditions | Listed here | Shared |
 |---|---|---|---|
@@ -38,7 +38,7 @@ Each condition carries one or more truth tags: the truth it keeps honest. A cond
 | Structure (`structure`) | 6 | 6 | 0 |
 | Agent context (`agent_context`) | 7 | 7 | 1 |
 | Agent runtime (`agent_runtime`) | 4 | 4 | 1 |
-| Governance (`governance`) | 6 | 6 | 0 |
+| Governance (`governance`) | 7 | 7 | 0 |
 | Supply chain (`supply_chain`) | 1 | 0 | 1 |
 
 ### Behaviour
@@ -128,7 +128,7 @@ Tag `agent_runtime`: 4 conditions, 1 shared with another tag.
 
 That people stay in the loop on what agents change, and that what agents may do is agreed and visible.
 
-Tag `governance`: 6 conditions, none shared with another tag.
+Tag `governance`: 7 conditions, none shared with another tag.
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -139,6 +139,7 @@ Tag `governance`: 6 conditions, none shared with another tag.
 | `secrets-guard.1` A secrets guard is configured (a pre-commit hook counts; listed, not counted) | `secrets_guard` | A secrets guard is configured (pre-commit hook or CI scan): is true (`secrets_guard.configured eq true`) | `config_only` | no, listed | - | positive | - | - | A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one. | Add a secrets hook to .pre-commit-config.yaml (gitleaks or detect-secrets), or a secrets scan step to CI. |
 | `secrets-guard.2` A secrets scan runs where an agent cannot skip it | `secrets_guard` | A secrets scan runs where an agent cannot skip it (CI): is true (`secrets_guard.enforcement.present eq true`) | `measured` | yes | - | positive | - | - | A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one. | Add a secrets scan step to CI that runs on each push or pull request (gitleaks/gitleaks-action, trufflehog, or GitLab's Secret-Detection template); a pre-commit hook alone can be skipped with --no-verify. |
 | `skill-personal-data.1` No skill file holds a detected kind of personal data (email, phone, home path, IP, SSH login, key) | `skill_personal_data` | Skill and agent files holding a detected kind of personal data: is 0 (`skill_personal_data.files_with_personal_data eq 0`) | `measured` | yes | - | positive | - | - | Skill text is loaded into every session that triggers it and copied wherever it is published, so personal data in it leaks to every user. | In each file the report names, remove the kind of data it lists, or replace it with a placeholder (user@example.com, /home/user/); a key that was committed should also be rotated. |
+| `model-ci-gated.1` Model-backed CI jobs are gated | `ci_model_jobs` | Model-backed CI jobs that run on every change without a gate: is 0 (`ci_model_jobs.ungated eq 0`) | `measured` | yes | - | positive | - | - | A CI job that calls a model costs money on every run. If it runs on every merge and every pull request update, the cost grows with the number of changes agents make, not with changes to the prompts it tests. | Run each named job only when prompts, skills or instruction files change, or nightly, or on a label. Cancel superseded runs, sample the eval cases, and use the cheapest model that still tells good from bad. Move rule-checkable assertions into ordinary tests. |
 
 ### Supply chain
 
@@ -162,7 +163,7 @@ How many conditions each pair of tags shares. The diagonal is the tag's own coun
 | `structure` | 0 | 0 | 0 | 6 | 0 | 0 | 0 | 0 |
 | `agent_context` | 0 | 0 | 1 | 0 | 7 | 0 | 0 | 0 |
 | `agent_runtime` | 0 | 0 | 0 | 0 | 0 | 4 | 0 | 1 |
-| `governance` | 0 | 0 | 0 | 0 | 0 | 0 | 6 | 0 |
+| `governance` | 0 | 0 | 0 | 0 | 0 | 0 | 7 | 0 |
 | `supply_chain` | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 |
 
 - `docs` and `agent_context`: `layer-0-instructions.2`.
@@ -213,6 +214,7 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | `skill-script-tests` | Skill script tests | team | `min` | `skill-script-tests.1` |
 | `secrets-guard` | Secrets guard | team | `min` | `secrets-guard.1`, `secrets-guard.2` |
 | `skill-personal-data` | Personal data in skill text | team | `min` | `skill-personal-data.1` |
+| `model-ci-gated` | Model-backed CI jobs are gated | team | `min` | `model-ci-gated.1` |
 | `contributor-files` | Contributor files | team | `min` | `contributor-files.1` |
 
 ## Scans
@@ -569,6 +571,23 @@ Each SKILL.md, agent definition and skill references/ file, scanned for emails, 
 - Evidence: `skill_personal_data.files_with_personal_data` head_structure (measured).
 - Not measured when:
   - `skill_files_unread`: A skill or agent file could not be read, and none of those read holds a detected kind. Check the file's permissions or encoding, then run /assess again.
+
+### `ci_model_jobs`: Model-backed CI jobs
+
+A CI job that calls a model costs money on every run. If it runs on every merge and every pull request update, the cost grows with the number of changes agents make, not with changes to the prompts it tests.
+
+Each GitHub Actions or GitLab CI job that calls a model API. Signs are an eval harness, an agent action, the Claude Code CLI, a model-provider secret, pytest -m eval or an evals/ path. For each job, whether a gate stops it running on every push or pull request update. Gates are a paths filter, a schedule or manual trigger only, a label, or GitLab rules:changes.
+
+- Collector: `core.ci_model_jobs`, reading `repo_root`, `ghsync_root`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `ci_model_jobs.jobs.gates` token, `ci_model_jobs.jobs.job` drop, `ci_model_jobs.jobs.path` path, `ci_model_jobs.jobs.platform` token, `ci_model_jobs.jobs.reason` token, `ci_model_jobs.jobs.signs` token, `ci_model_jobs.jobs.state` token, `ci_model_jobs.jobs.triggers` token, `ci_model_jobs.ungated_reason` token.
+- Used by: row `model-ci-gated`.
+- Evidence: `ci_model_jobs.ungated` head_structure (measured).
+- Not measured when:
+  - `no_model_jobs`: No committed CI job calls a model API, so there is nothing to gate. Nothing to change.
+  - `trigger_unresolved`: No model-backed job is ungated, but one could not be settled. Examples are an unreadable on: key, a label if: joined with ||, or a job that only names a provider secret. Nothing to change if the job is gated; a plain paths:, schedule: or label condition lets the scan read it.
+  - `ci_jobs_unread`: Every model-backed job found is gated. But a job calls a reusable workflow from another repository, or a GitLab include was not read. An ungated job may sit there. Nothing to change: this reads as not measured until those files can be read.
 
 ### `org_security_policy`: Owner's shared security policy
 
@@ -1195,6 +1214,7 @@ The scan registry in run order, including the private inputs other scans read.
 | `skill_disclosure` | Skill disclosure | `repo_root`, `scope`, `excludes` | `skill_disclosure` | no |
 | `skill_script_tests` | Skill script tests | `repo_root`, `scope`, `excludes` | `skill_script_tests` | no |
 | `skill_personal_data` | Personal data in skill text | `repo_root`, `scope`, `excludes` | `skill_personal_data` | no |
+| `ci_model_jobs` | Model-backed CI jobs | `repo_root`, `ghsync_root` | `ci_model_jobs` | no |
 | `org_security_policy` | Owner's shared security policy | `repo_root` | `org_security_policy` | yes |
 | `github_secret_scanning` | GitHub secret scanning | `repo_root` | `github_secret_scanning` | yes |
 | `contributor_files` | Contributor files | `repo_root`, `archetype`, `org_security_policy` | `contributor_files` | no |
@@ -1205,9 +1225,9 @@ The scan registry in run order, including the private inputs other scans read.
 | `agent_outcome` | Agent commit outcomes | `repo_root`, `scope`, `history_window`, `fleet_config` | `agent_outcome` | no |
 | `doc_claims` | Doc claims | `repo_root`, `instruction_files`, `scope`, `excludes` | `doc_claims` | no |
 | `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope` | `guardrails` | no |
-| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions`, `maturity_model` | `level` | no |
+| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions`, `maturity_model` | `level` | no |
 | `since_last_run` | Since last run | `level`, `assess_dir`, `repo_root`, `superseded`, `instruction_placement` | `since_last_run` | no |
 | `headline` | Deterministic headline | `level`, `since_last_run`, `maturity_model` | `headline` | no |
 | `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
-| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
+| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
 | `unit_rollup` | Monorepo unit roll-up | `unit_levels`, `units`, `maturity_model` | `unit_rollup` | no |
