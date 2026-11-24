@@ -72,6 +72,8 @@ def _repo(root: Path, files: dict[str, str]) -> Path:
                  2, id="architecture-two-modules"),
     pytest.param({"ARCHITECTURE.md": _ARCH + "\nThe entry point is `src/a.py` again.\n"}, 0,
                  id="architecture-one-path-twice"),
+    pytest.param({"ARCHITECTURE.md": "# A\n\n## Core\n\n`src/core/`\n\n## Again\n\n`./src/core`\n",
+                  "src/core/m.py": "x = 1\n"}, 0, id="architecture-one-path-two-spellings"),
     pytest.param({"ARCHITECTURE.md": _ARCH, "DESIGN.md": "# Design\n\n`src/b.py` parses.\n",
                   "src/b.py": "x = 1\n"}, 2, id="two-docs-one-path-each"),
     pytest.param({".github/CODEOWNERS": "src/ @team\n", "ARCHITECTURE.md": _ARCH}, 1,
@@ -129,6 +131,9 @@ def test_is_boundary_pattern(pattern: str, files: set[str], expected: bool) -> N
 @pytest.mark.parametrize(("refs", "expected"), [
     ([], 0), (["src/a.py"], 0), (["src/a.py", "src/a.py"], 0), (["src/a.py", "src/b.py"], 2),
     (["a/", "b/", "a/"], 3),
+    # The same path in two spellings is one path (#922).
+    (["src/core", "src/core/"], 0), (["./src/a.py", "src/a.py"], 0), (["src//a.py", "/src/a.py"], 0),
+    (["./src/core/", "src/cli"], 2),
 ])
 def test_architecture_boundaries_needs_two(refs: list[str], expected: int) -> None:
     assert architecture_boundaries(refs) == expected

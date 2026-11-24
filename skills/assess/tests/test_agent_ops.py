@@ -111,6 +111,12 @@ _NOOP = {"type": "command", "command": "true"}
                  id="echo-adds-context"),
     pytest.param({"Stop": [{"hooks": [{"type": "prompt", "prompt": "Check the tests ran."}]}]}, 1,
                  id="prompt-hook"),
+    pytest.param({"Stop": [{"hooks": [{"type": "http", "url": "https://example.com/hook"}]}]}, 1,
+                 id="http-hook"),
+    pytest.param({"PreToolUse": [{"hooks": [{"type": "mcp_tool", "server": "s", "tool": "t"}]}]}, 1,
+                 id="mcp-tool-hook"),
+    pytest.param({"Stop": [{"hooks": [{"type": "agent", "prompt": "Verify the tests ran."}]}]}, 1,
+                 id="agent-hook"),
     pytest.param({"Stop": [{"hooks": [{"command": "make test"}]}]}, 0, id="typeless-hook"),
     pytest.param({"Stop": [{"hooks": [{"type": "webhook", "url": "x"}]}]}, 0, id="unknown-type"),
     pytest.param({"Stop": [{"hooks": [_NOOP]}], "PostToolUse": [{"hooks": [

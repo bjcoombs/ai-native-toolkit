@@ -280,8 +280,9 @@
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures. A settings hook event
 #   counts toward hooks_present only when it holds a hook that does
-#   something: a prompt or agent hook, or a command other than true, : or
-#   exit 0. An empty event list or a hook with no type does not count (#922).
+#   something: a prompt, agent, http or mcp_tool hook, or a command other
+#   than true, : or exit 0. An empty event list or a hook with no type does
+#   not count (#922).
 #
 # Conditions, the verified tally and Steps (lib/level_tally.py, #744): each
 # row level is also one condition, <row id>.<level>. Only conditions whose

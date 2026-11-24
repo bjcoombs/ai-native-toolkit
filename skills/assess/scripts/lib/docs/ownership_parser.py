@@ -53,6 +53,7 @@ consume; it owns no drift logic itself.
 from __future__ import annotations
 
 import fnmatch
+import posixpath
 import re
 import sys
 from pathlib import Path
@@ -217,11 +218,13 @@ def architecture_boundaries(refs: list[str]) -> int:
 
     ``refs`` holds one entry per (section, reference), as the drift walk counts them.
     A boundary has two sides, so the docs must name ``MIN_ARCHITECTURE_BOUNDARIES``
-    distinct module paths: one backticked path is a pointer, not a map (#922). Fewer
+    distinct module paths, compared normalised (``./src/a.py`` is ``src/a.py``, ``src/core/``
+    is ``src/core``): one backticked path is a pointer, not a map (#922). Fewer
     count 0; otherwise every entry counts, as before. A CODEOWNERS line is not held to
     this: it assigns an owner on its own.
     """
-    return len(refs) if len(set(refs)) >= MIN_ARCHITECTURE_BOUNDARIES else 0
+    distinct = {posixpath.normpath(r.strip().lstrip("/")) for r in refs}
+    return len(refs) if len(distinct) >= MIN_ARCHITECTURE_BOUNDARIES else 0
 
 
 def parse_codeowners(repo_root: Path) -> dict[str, set[Path]]:
