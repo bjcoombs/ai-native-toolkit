@@ -164,7 +164,7 @@ from lib.fleet.fleet_compare import (
     compare,
     load_run,
     not_comparable,
-    summary_lines,
+    comparison_lines,
     write_comparison,
 )
 from lib.fleet.fleet_diagrams import REPORT_FILE, build_diagrams, clear_diagrams, write_diagrams
@@ -349,7 +349,7 @@ def _keep_and_compare(out_dir: Path, entry: Path | None, later: FleetRun,
                   if isinstance(earlier, FleetRun)
                   else not_comparable(later.stamp, [earlier]))
     write_comparison(out_dir, comparison)
-    for line in summary_lines(comparison):
+    for line in comparison_lines(comparison):
         print(f"fleet: compare: {line}", file=sys.stderr)
     return comparison
 

@@ -707,11 +707,6 @@ SCANS = (*SCANS, pinned_reads(_spec("level", cs.level), cs.LEVEL_ENTRY_READS))
 # commits, gates gained or lost, the next blocker. Reads the run-context the previous run left,
 # so it runs before the publish step overwrites it; the report and the log.md entry open with it.
 SCANS = (*SCANS, _spec("since_last_run", cs.since_last_run))
-# The deterministic headline (lib/headline.py, #747, #844, #1083): the Step, the gate that blocks the next one,
-# "Catalogue coverage: N of M measured" and the per-tag strip, worded from the level block. The report
-# pastes it verbatim and the badge and log entry carry its summary. It reads since_last_run for the
-# executive summary that opens the report (lib/exec_summary.py, #1102), so it runs after that block.
-SCANS = (*SCANS, _spec("headline", cs.headline))
 # Monorepo unit readings (lib/unit_readings.py, #863): the scoped and override scans again
 # for each unit of the units block, every condition tagged unit or inherited. The headless
 # runner reports it under --units (signals.UNIT_SCANS, #866).
@@ -725,6 +720,11 @@ SCANS = (*SCANS, pinned_reads(_spec("unit_levels", cs.unit_levels), UNIT_LEVEL_R
 # #865): the lowest unit's Step plus "N of M measured", and the changes ranked by the
 # units they lift. Core-only.
 SCANS = (*SCANS, _spec("unit_rollup", cs.unit_rollup))
+# The deterministic headline (lib/headline.py, #747, #844, #1083): catalogue coverage and the per-tag
+# strip, worded from the level block, and the badge and log entry summary. It carries the report's top
+# card (lib/top_card.py, #1252), which reads since_last_run, unit_rollup and measured_commit, so it
+# runs after the unit roll-up.
+SCANS = (*SCANS, _spec("headline", cs.headline))
 
 validate(SCANS)
 

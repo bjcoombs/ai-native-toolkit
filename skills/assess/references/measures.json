@@ -6071,20 +6071,6 @@
       "private": false
     },
     {
-      "name": "headline",
-      "title": "Deterministic headline",
-      "publishes": [
-        "headline"
-      ],
-      "reads": [
-        "level",
-        "since_last_run",
-        "maturity_model"
-      ],
-      "network": false,
-      "private": false
-    },
-    {
       "name": "unit_readings",
       "title": "Monorepo unit readings",
       "publishes": [
@@ -6156,6 +6142,23 @@
         "unit_levels",
         "units",
         "maturity_model"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "headline",
+      "title": "Deterministic headline",
+      "publishes": [
+        "headline"
+      ],
+      "reads": [
+        "level",
+        "since_last_run",
+        "maturity_model",
+        "unit_rollup",
+        "measured_commit",
+        "assess_dir"
       ],
       "network": false,
       "private": false
