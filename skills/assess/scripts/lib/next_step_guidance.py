@@ -47,6 +47,10 @@ from typing import Any, TypedDict
 
 from lib.levels import Scalar
 
+# The guardrail deny rule the permissions wording names (#1153); ``/assess --fix`` writes it,
+# with the repository's default branch in place of ``main`` (``lib/starter_templates.py``, #1154).
+DENY_RULE_EXAMPLE = "Bash(git push origin main)"
+
 
 class Guidance(TypedDict):
     change: str
@@ -466,7 +470,7 @@ _WORDING: dict[str, Wording] = {
     "review_reality.approved_share": _approved,
     "agent_ops.summary.permissions_encoded": _flag(
         "Commit a guardrail as a deny rule, such as `\"permissions\": {\"deny\": "
-        "[\"Bash(git push origin main)\"]}` in `.claude/settings.json`. Deny rules hold in every "
+        f"[\"{DENY_RULE_EXAMPLE}\"]}}` in `.claude/settings.json`. Deny rules hold in every "
         "permission mode, auto mode included. If your organisation sets this centrally, run with "
         "`--managed-settings`.",
         "`.claude/settings.json` is tracked in git and its `permissions` lists at least one entry, "

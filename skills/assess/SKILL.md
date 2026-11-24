@@ -56,13 +56,14 @@ This is intentionally **one** archetype (knowledge base), structured as an exten
 <!-- chat-replace:tour-arguments -->
 Arguments: **$ARGUMENTS**. **`--tour` (the guided first run):** when the arguments contain `--tour`, skip every step below. Do not assess the current repository. Follow `references/tour.md` (relative to this skill dir) instead: it builds a small sample repository in a temporary directory, walks the report one section at a time, has the newcomer make one fix and re-runs so they see the Step move.
 
+
 ## Step 1: Determine Repo Root and Output Directory
 
 ```bash
 git rev-parse --show-toplevel   # from the arg path if given, else pwd
 ```
 
-Set `$REPO_ROOT` to the result. All scanning happens from here.
+Set `$REPO_ROOT` to the result. All scanning happens from here. **`--fix` and `--starter` (#1154)** are the only arguments that write starter files into the target (`/fleet` never does): when the arguments contain either, follow `references/fix.md` (relative to this skill dir); they commit to a local `assess/fix-<gate>` branch and never push, and only an added `--pr`, which an interactive run asks the user about first, pushes and opens a pull request.
 
 **Scoping a subtree (`/assess <path>`).** When the argument is a directory under the repo root, scope the whole run to it - metrics, score, badge, wiki, and gate all computed for and labelled with the scope, artifacts under `.assess/<scope-slug>/`, no signal from a sibling. Pass `--scope "$SCOPE"` to `complexity-treemap.py` and `assess_core.py` and swap `.assess/` for `.assess/<slug>/` throughout. Full recipe: `references/monorepo-scoping.md` (relative to this skill dir). A no-path run is whole-repo, unchanged.
 
