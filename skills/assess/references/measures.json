@@ -1271,6 +1271,50 @@
       ]
     },
     {
+      "id": "model-ci-gated",
+      "title": "Model-backed CI jobs are gated",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "model-ci-gated.1",
+          "truth": [
+            "governance"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "model-ci-gated.1:ci_model_jobs.ungated",
+              "signal": "ci_model_jobs.ungated",
+              "producer": {
+                "scan": "ci_model_jobs",
+                "collector": "core.ci_model_jobs"
+              },
+              "op": "eq",
+              "value": 0,
+              "eq_signal": null,
+              "text": "Model-backed CI jobs that run on every change without a gate: is 0",
+              "title": "Model-backed CI jobs are gated",
+              "fix": "Run each named job only when prompts, skills or instruction files change, or nightly, or on a label. Cancel superseded runs, sample the eval cases, and use the cheapest model that still tells good from bad. Move rule-checkable assertions into ordinary tests.",
+              "why": "A CI job that calls a model costs money on every run. If it runs on every merge and every pull request update, the cost grows with the number of changes agents make, not with changes to the prompts it tests.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "contributor-files",
       "title": "Contributor files",
       "scope": "team",
@@ -1461,13 +1505,15 @@
         "layer-7-review.1",
         "layer-7-review.2",
         "layer-8-agent-ops.1",
-        "skill-personal-data.1"
+        "skill-personal-data.1",
+        "model-ci-gated.1"
       ],
       "listed": [
         "layer-7-review.1",
         "layer-7-review.2",
         "layer-8-agent-ops.1",
-        "skill-personal-data.1"
+        "skill-personal-data.1",
+        "model-ci-gated.1"
       ],
       "shared": [],
       "why": "That people stay in the loop on what agents change, and that what agents may do is agreed and visible.",
@@ -2771,6 +2817,71 @@
         "measured"
       ],
       "why": "Skill text is loaded into every session that triggers it and copied wherever it is published, so personal data in it leaks to every user.",
+      "why_source": ""
+    },
+    {
+      "name": "ci_model_jobs",
+      "title": "Model-backed CI jobs",
+      "summary": "Each GitHub Actions or GitLab CI job that calls a model API. Signs are an eval harness, an agent action, the Claude Code CLI, a model-provider secret, pytest -m eval or an evals/ path. For each job, whether a gate stops it running on every push or pull request update. Gates are a paths filter, a schedule or manual trigger only, a label, or GitLab rules:changes.",
+      "collector": "core.ci_model_jobs",
+      "reads": [
+        "repo_root",
+        "ghsync_root"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "ci_model_jobs.jobs.gates": "token",
+          "ci_model_jobs.jobs.job": "drop",
+          "ci_model_jobs.jobs.path": "path",
+          "ci_model_jobs.jobs.platform": "token",
+          "ci_model_jobs.jobs.reason": "token",
+          "ci_model_jobs.jobs.signs": "token",
+          "ci_model_jobs.jobs.state": "token",
+          "ci_model_jobs.jobs.triggers": "token",
+          "ci_model_jobs.ungated_reason": "token"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "model-ci-gated"
+        ],
+        "conditions": [
+          "model-ci-gated.1:ci_model_jobs.ungated"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "no_model_jobs",
+          "means": "No committed CI job calls a model API, so there is nothing to gate.",
+          "next_step": "Nothing to change."
+        },
+        {
+          "code": "trigger_unresolved",
+          "means": "No model-backed job is ungated, but the trigger or condition of at least one could not be read. Examples are an on: key this reader cannot list, a reusable workflow called from elsewhere, or an if: that joins a label test with ||.",
+          "next_step": "Nothing to change if the job is gated; a plain paths:, schedule: or label condition lets the scan read it."
+        },
+        {
+          "code": "ci_jobs_unread",
+          "means": "Every model-backed job found is gated. But a job calls a reusable workflow from another repository, or a GitLab include was not read. An ungated job may sit there.",
+          "next_step": "Nothing to change: this reads as not measured until those files can be read."
+        }
+      ],
+      "evidence": [
+        {
+          "signal": "ci_model_jobs.ungated",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ],
+      "why": "A CI job that calls a model costs money on every run. If it runs on every merge and every pull request update, the cost grows with the number of changes agents make, not with changes to the prompts it tests.",
       "why_source": ""
     },
     {
@@ -5531,6 +5642,19 @@
       "private": false
     },
     {
+      "name": "ci_model_jobs",
+      "title": "Model-backed CI jobs",
+      "publishes": [
+        "ci_model_jobs"
+      ],
+      "reads": [
+        "repo_root",
+        "ghsync_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "org_security_policy",
       "title": "Owner's shared security policy",
       "publishes": [
@@ -5659,6 +5783,7 @@
         "agent_environment",
         "agent_ops",
         "ci_checks",
+        "ci_model_jobs",
         "contributor_files",
         "coverage_gate",
         "doc_staleness",
@@ -5750,6 +5875,7 @@
         "agent_environment",
         "agent_ops",
         "ci_checks",
+        "ci_model_jobs",
         "contributor_files",
         "coverage_gate",
         "doc_staleness",
@@ -6058,6 +6184,15 @@
       "input_class": "head_structure",
       "grade": "measured",
       "null_means": "no_skill_files: the repository, or the skill unit, holds no SKILL.md or agent definition (files_considered 0), so there is nothing to scan"
+    },
+    {
+      "path": "ci_model_jobs.ungated",
+      "title": "Model-backed CI jobs that run on every change without a gate",
+      "type": "number",
+      "collector": "core.ci_model_jobs",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "trigger_unresolved or ci_jobs_unread: no model-backed job is ungated, but one could not be settled or read; no_model_jobs when model_jobs is 0"
     },
     {
       "path": "contributor_files.guide.present",

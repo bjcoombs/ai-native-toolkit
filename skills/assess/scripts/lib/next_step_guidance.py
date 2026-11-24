@@ -428,6 +428,14 @@ _WORDING: dict[str, Wording] = {
         "private vulnerability reporting), at the root, in `.github/` or in `docs/`.",
         "`git ls-files` lists a `SECURITY` file at the root, in `.github/` or in `docs/`, or the "
         "owner's public `.github` repository holds one."),
+    "ci_model_jobs.ungated": _none_left(
+        "Gate each CI job the report names that calls a model: run it only when prompts, skills or "
+        "instruction files change (a `paths:` filter), or nightly, or on a label. Cancel superseded "
+        "runs, sample the eval cases or cache results by content hash, use the cheapest model that "
+        "still tells a good result from a bad one, and move rule-checkable assertions into ordinary tests.",
+        "No CI job that calls a model API runs on every push to the default branch or every pull "
+        "request update without a `paths:` filter, a schedule or manual trigger, a label, or GitLab "
+        "`rules:changes:`."),
     "skill_personal_data.files_with_personal_data": _none_left(
         "In each skill or agent file the report names, remove the kind of data it lists (an email, "
         "phone number, home path, IP address, SSH login or key), or replace it with a placeholder "
@@ -554,6 +562,9 @@ _MEASURE_HINTS = {
                          "code patches. The policy is not measured (`org_policy_not_read`) when the "
                          "repository holds none and the owner's shared `.github` repository was not "
                          "read: run with `--platform`, or `/assess` with `gh` signed in.",
+    "ci_model_jobs": "Not measured (`no_model_jobs`) when no committed CI job calls a model API. "
+                     "Not measured (`trigger_unresolved`, `ci_jobs_unread`) when none is ungated but a "
+                     "trigger, a condition or a job this reader cannot read could still run one on every change.",
     "skill_personal_data": "Not measured (`no_skill_files`) when the repository, or the skill unit, "
                            "holds no `SKILL.md` or agent definition: there is nothing to scan.",
     "skill_script_tests": "Not measured (`no_skill_scripts`) when no skill in the repository, or in "

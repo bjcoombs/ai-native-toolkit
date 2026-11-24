@@ -250,7 +250,7 @@ def test_default_levels_loads_against_the_schema() -> None:
     maturity_model = load_default_levels()
     assert maturity_model["version"].startswith("default-")
     assert all(row["scope"] == "team" for row in maturity_model["rows"])
-    one = {"skill-disclosure", "skill-script-tests", "skill-personal-data", "contributor-files"}  # #1045; else 2
+    one = {"skill-disclosure", "skill-script-tests", "skill-personal-data", "model-ci-gated", "contributor-files"}  # #1045; else 2
     assert all(len(row["levels"]) == (1 if row["id"] in one else 2) for row in maturity_model["rows"])
     assert "disagree" in DEFAULT_LEVELS.read_text(encoding="utf-8").lower()
 
@@ -312,6 +312,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "skill-disclosure": None,    # no SKILL.md or agent definition: no_skill_files
             "skill-script-tests": None,  # no skill holds a script: no_skill_scripts
             "skill-personal-data": None,  # no SKILL.md or agent definition: no_skill_files
+            "model-ci-gated": None,      # no CI job calls a model: no_model_jobs
             "contributor-files": 0,      # no CONTRIBUTING or SECURITY file
         }
     for scans in golden_repos.values():   # measured headless, each unknown for a named reason
@@ -348,6 +349,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "skill-disclosure": None,  # the capture predates skill_disclosure
         "skill-script-tests": None,  # the capture predates skill_script_tests
         "skill-personal-data": None,  # the capture predates skill_personal_data
+        "model-ci-gated": None,  # the capture predates ci_model_jobs
         "contributor-files": None,  # the capture predates contributor_files
     }
     assert "layer_grades.instruction_file_present" in _row(
