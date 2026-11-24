@@ -129,8 +129,9 @@
 #   tool (.cursorrules, Copilot) reaches level 1 with that size 0. Level 2
 #   also needs a named check command that resolves
 #   (agent_environment.check.named_total): a Makefile target with no
-#   prerequisite whose recipe runs only true, :, exit 0 or echo lines exists
-#   but runs nothing, so it does not count (#922).
+#   prerequisite whose recipe runs only true, :, exit 0 or echo lines (with
+#   nothing chained after the echo) exists but runs nothing, so it does not
+#   count (#922).
 # - Layer 1 reads the observability rung from committed files (telemetry
 #   dependencies, a runbook or OBSERVABILITY.md, a logs or metrics MCP server
 #   or skill). A headless run builds it too (lib/headless_static.py, #699), so
@@ -261,8 +262,8 @@
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures. A settings hook event
 #   counts toward hooks_present only when it holds a hook that does
-#   something: a hook that is not a command, or a command other than true, :
-#   or exit 0. An empty event list does not count (#922).
+#   something: a prompt or agent hook, or a command other than true, : or
+#   exit 0. An empty event list or a hook with no type does not count (#922).
 #
 # Conditions, the verified tally and Steps (lib/level_tally.py, #744): each
 # row level is also one condition, <row id>.<level>. Only conditions whose

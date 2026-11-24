@@ -210,4 +210,14 @@ def test_noop_recipe_line() -> None:
     assert all(map(command_index.noop_recipe_line, ["", "\t", "\ttrue", "\t@:", "\t-exit 0",
                                                     "\t@echo hi", "\tprintf x", "\t# note"]))
     assert not any(map(command_index.noop_recipe_line, ["\tpytest", "\techo `pytest`",
-                                                        "\techo ${X}", "\texit 1", "\ttrue; pytest"]))
+                                                        "\techo ${X}", "\texit 1", "\ttrue; pytest",
+                                                        "\t@echo a && pytest", "\techo a; pytest",
+                                                        "\techo pytest | sh",
+                                                        "\techo x > out.txt"]))
+
+
+def test_noop_targets_union_across_makefiles(tmp_path: Path) -> None:
+    """The lenient union: a root no-op ``test`` beside a real one elsewhere is not a no-op."""
+    root = _write(tmp_path, {"Makefile": "test:\n\t@true\n", "sub/Makefile": "test:\n\tpytest\n"})
+    targets = build_index(root).make_targets
+    assert targets is not None and not targets.runs_nothing("test")

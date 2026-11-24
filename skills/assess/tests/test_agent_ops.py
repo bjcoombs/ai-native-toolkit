@@ -111,6 +111,8 @@ _NOOP = {"type": "command", "command": "true"}
                  id="echo-adds-context"),
     pytest.param({"Stop": [{"hooks": [{"type": "prompt", "prompt": "Check the tests ran."}]}]}, 1,
                  id="prompt-hook"),
+    pytest.param({"Stop": [{"hooks": [{"command": "make test"}]}]}, 0, id="typeless-hook"),
+    pytest.param({"Stop": [{"hooks": [{"type": "webhook", "url": "x"}]}]}, 0, id="unknown-type"),
     pytest.param({"Stop": [{"hooks": [_NOOP]}], "PostToolUse": [{"hooks": [
         {"type": "command", "command": "true && ruff format"}]}]}, 1, id="noop-and-real-events"),
 ])

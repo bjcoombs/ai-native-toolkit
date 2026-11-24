@@ -12,8 +12,12 @@ repository, without running anything:
   (``$(VAR)``) or a pattern rule (``%``) could match anything. A Makefile
   target whose every rule has no prerequisite and only no-op recipe lines
   (blank, a comment, ``true``, ``:``, ``exit 0``, ``echo``, ``printf``; none
-  holding ``$(``, ``${`` or a backtick) is in ``TargetSet.noop``: it exists but
-  runs nothing, so the resolver reads it ``unknown``, never a check (#922);
+  holding ``$(``, ``${`` or a backtick, and no echo with a command chained after
+  it by ``;``, ``&&``, ``||`` or ``|``, nor redirected by ``>``) is in ``TargetSet.noop``: it exists but
+  runs nothing, so the resolver reads it ``unknown``, never a check (#922). A
+  column-0 comment or conditional (``ifeq`` ... ``endif``) does not end a recipe.
+  Makefiles are unioned, so a target that runs something in any Makefile is not
+  a no-op, even when another Makefile's rule for it is (the lenient union);
 - ``pyproject.toml``: declared dependencies, ``[project.scripts]`` and the
   ``[tool.*]`` tables (``[tool.ruff]`` means ``ruff`` is the repo's tool);
   whether pytest is configured; tox environments and nox sessions;
@@ -74,6 +78,7 @@ _REQUIREMENT_NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 # Recipe lines that run nothing (#922): a target made only of these is not a check.
 NOOP_COMMANDS = frozenset({"true", ":", "exit 0", "exit"})
 _ECHO_WORDS = frozenset({"echo", "printf"})
+_MAKE_CONDITIONALS = frozenset({"ifeq", "ifneq", "ifdef", "ifndef", "else", "endif"})
 
 
 @dataclass(frozen=True)
@@ -233,13 +238,14 @@ def _npm(root: Path, files: frozenset[str]) -> tuple[TargetSet | None, frozenset
 
 
 def noop_recipe_line(line: str) -> bool:
-    """A recipe line that runs nothing: blank, a comment, ``true``, ``:``, ``exit 0`` or an echo."""
+    """A recipe line that runs nothing: blank, a comment, ``true``, ``:``, ``exit 0``, or an
+    ``echo`` / ``printf`` with nothing chained or redirected (no ``;``, ``&``, ``|`` or ``>``)."""
     text = line.strip().lstrip("@-+").strip()
     if "$(" in text or "${" in text or "`" in text:
         return False
     word = text.split(maxsplit=1)[0] if text else ""
     return (not text or text.startswith("#") or text in NOOP_COMMANDS
-            or word in _ECHO_WORDS)
+            or (word in _ECHO_WORDS and not any(c in text for c in ";&|>")))
 
 
 def _make_targets(text: str) -> tuple[set[str], bool, set[str]]:
@@ -257,8 +263,10 @@ def _make_targets(text: str) -> tuple[set[str], bool, set[str]]:
             continue
         match = _MAKE_RULE.match(line)
         if not match:
-            if rules:
-                rules.append(([], False))  # a variable or directive ends the recipe
+            # A variable or other directive ends the recipe; a column-0 comment or a
+            # conditional (ifeq ... endif) inside a recipe does not.
+            if rules and not line.startswith("#") and line.split()[0] not in _MAKE_CONDITIONALS:
+                rules.append(([], False))
             continue
         prereqs, _, inline = line[match.end():].partition(";")
         quiet = not prereqs.strip() and (not inline or noop_recipe_line(inline))

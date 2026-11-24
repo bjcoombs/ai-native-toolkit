@@ -26,8 +26,8 @@ guardrails - `.claude/settings.json` / `.claude/settings.local.json` permission
 `.claude/hooks/`; routine definitions under `.claude/workflows/` /
 `.claude/routines/`. Summary booleans (`permissions_encoded`, `hooks_present`,
 `routines_present`) credit **git-tracked** evidence only (a hook event counts only when
-it holds a hook that does something: a non-command hook, or a command other than `true`,
-`:` or `exit 0`; an empty event list does not count, #922), mirroring the Layer 0
+it holds a hook that does something: a `prompt` or `agent` hook, or a command other than
+`true`, `:` or `exit 0`; an empty event list or a typeless hook does not count, #922), mirroring the Layer 0
 rule (an uncommitted settings file reaches no clone). Deliberately excludes
 `.claude/agents/` and `.claude/skills/` - those are Layer 0's evidence - so the
 two layers never double-count. Pure stdlib JSON/filesystem reads plus
@@ -77,6 +77,8 @@ _DEFAULT_MODES = frozenset({
     "default", "manual", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions",
 })
 UNREADABLE_MANAGED = "managed_settings_unreadable"
+# Hook types other than command that act on their own (#922); a typeless hook does not.
+_ACTING_TYPES = frozenset({"prompt", "agent"})
 
 
 def _count_list(value: Any) -> int:
@@ -84,12 +86,15 @@ def _count_list(value: Any) -> int:
 
 
 def _hook_acts(hook: Any) -> bool:
-    """A hook that does something: any non-command type, or a command other than ``true``,
-    ``:`` or ``exit 0``. An echo counts: a hook's output can add context or a decision."""
+    """A hook that does something: a known non-command type (``prompt``, ``agent``), or a
+    command other than ``true``, ``:`` or ``exit 0``. An echo counts: a hook's output can add
+    context or a decision. A hook with no or an unknown ``type`` does not count."""
     if not isinstance(hook, dict):
         return False
-    if hook.get("type") != "command":
+    if hook.get("type") in _ACTING_TYPES:
         return True
+    if hook.get("type") != "command":
+        return False
     command = hook.get("command")
     parts = command.replace("&&", ";").split(";") if isinstance(command, str) else []
     return not all(not p.strip() or p.strip() in NOOP_COMMANDS for p in parts)

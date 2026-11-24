@@ -501,3 +501,16 @@ def test_a_make_target_that_runs_nothing_is_unknown(tmp_path: Path) -> None:
     assert resolve("make test lint", index=index).resolved  # one target still runs something
     assert resolve("make check", index=index).resolved  # a prerequisite is the recipe
     assert resolve("make nosuch", index=index).verdict == "missing"
+
+
+@pytest.mark.parametrize("makefile", [
+    pytest.param("test:\n\t@echo running && pytest\n", id="echo-and-and"),
+    pytest.param("test:\n\techo running; pytest -q\n", id="echo-semicolon"),
+    pytest.param("test:\n\techo pytest | sh\n", id="echo-pipe"),
+    pytest.param("test:\nifeq ($(CI),1)\n\tpytest --ci\nelse\n\tpytest\nendif\n", id="conditional"),
+    pytest.param("test:\n# run the suite\n\tpytest\n", id="column-0-comment"),
+])
+def test_a_make_target_that_runs_something_still_resolves(tmp_path: Path, makefile: str) -> None:
+    """Forms a no-op reader could misread: each runs a check, so it resolves (#922)."""
+    index = build_index(_repo(tmp_path, {"Makefile": makefile}))
+    assert resolve("make test", index=index).resolved
