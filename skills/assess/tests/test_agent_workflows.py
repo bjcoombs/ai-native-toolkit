@@ -320,6 +320,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: claude -p 'install the deps and add tests'
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - run: claude -p --add-dir ../docs "triage this issue"
 """
     repo = _repo(git_repo, {".github/workflows/triage.yml": text})
     assert scan_agent_ops(repo)["agent_workflows"][0]["signs"] == ["agent_cli"]
@@ -374,3 +378,15 @@ def test_counts_only_keeps_the_unread_reason(git_repo) -> None:
     out = counts_only({"agent_ops": scan_agent_ops(repo)})["agent_ops"]
     assert (out["summary"]["agent_work_present"], out["summary"]["agent_work_present_reason"]) == (
         None, "agent_workflows_unread")
+
+
+def test_an_add_dir_flag_is_not_an_install_line(git_repo) -> None:
+    text = """on: issues
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - run: claude -p --add-dir ../docs "triage this issue"
+"""
+    repo = _repo(git_repo, {".github/workflows/triage.yml": text})
+    assert scan_agent_ops(repo)["agent_workflows"][0]["signs"] == ["agent_cli"]

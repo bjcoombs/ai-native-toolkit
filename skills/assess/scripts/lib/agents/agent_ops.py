@@ -216,7 +216,7 @@ _AGENT_CLI = re.compile(_CMD + r"""(?:(?:codex|@openai/codex)(?:@\S+)?\s+(?:exec
 # A model named in a command, an env or a with: value (``OZ_MODEL=claude-4-8-opus-high``).
 _MODEL = re.compile(r"(?<![\w.-])(?:claude-(?:\d|opus|sonnet|haiku|instant)|gpt-(?:\d|o\b|oss\b)"
                     r"|gemini-(?:\d|pro\b|flash\b|ultra\b))", re.IGNORECASE)
-_INSTALL = re.compile(r"\b(?:install|add)\b")
+_INSTALL = re.compile(r"(?<![-\w])(?:install|add)\b")  # never a flag fragment (--add-dir)
 # A quoted string (a prompt): an install verb inside one is prompt text, not an install.
 _QUOTED = re.compile(r"\"[^\"]*\"|'[^']*'")
 # A reusable workflow in another repository whose path names an agent: only such a call may hide
@@ -362,8 +362,9 @@ def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str,
     """Build the run-context ``agent_ops`` block.
 
     Returns ``settings`` (one entry per settings file found), ``hooks_dir``,
-    ``routine_dirs``, and a ``summary`` of three booleans - each True only on
-    **tracked** evidence:
+    ``routine_dirs``, ``agent_workflows`` and ``agent_workflows_unread``
+    (``scan_agent_workflows``), and a ``summary`` of four booleans, each True only on
+    **tracked** evidence, plus ``scheduled_agent_workflows`` and ``event_agent_workflows``:
 
     - ``permissions_encoded``: a tracked settings file carries at least one
       permission ``allow`` / ``deny`` / ``ask`` entry (``permissions_source``
@@ -373,7 +374,12 @@ def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str,
     - ``hooks_present``: a tracked settings file configures a hook event that
       does something (``hook_events`` counts those, #922), or
       ``.claude/hooks/`` holds at least one tracked script (its body is not read).
-    - ``routines_present``: a routine dir holds at least one tracked file.
+    - ``routines_present``: a routine dir holds at least one tracked file, or a scheduled
+      workflow runs an agent (#815).
+    - ``agent_work_present``: ``routines_present``, or an issue, pull request, review or
+      discussion workflow runs an agent (#847); the maturity model reads this one. Null with
+      ``agent_work_present_reason`` ``agent_workflows_unread`` when false but such a workflow
+      calls an agent-named reusable workflow in another repository.
     """
     repo_root = repo_root.resolve()
     tracked = tracked_files(repo_root)
