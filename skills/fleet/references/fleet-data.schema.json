@@ -1084,6 +1084,41 @@
                 ],
                 "additionalProperties": false
               }
+            },
+            "step_lifts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "condition": {
+                    "type": "string"
+                  },
+                  "row": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "gate": {
+                    "type": "string"
+                  },
+                  "step": {
+                    "type": "integer"
+                  },
+                  "repo_count": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "condition",
+                  "gate",
+                  "repo_count",
+                  "row",
+                  "step",
+                  "title"
+                ],
+                "additionalProperties": false
+              }
             }
           },
           "required": [

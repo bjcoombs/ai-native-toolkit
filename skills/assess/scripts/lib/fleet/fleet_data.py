@@ -528,7 +528,7 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
         "model": model_rows(maturity_model),
         "views": [build_view(tree, team_rows, cells, privacy, steps, repo_step, repo_tag) for tree in trees],
         "repos": sorted(repos, key=lambda r: r["key"]),
-        "opportunities": build_opportunities(maturity_model, rows, privacy.key),
+        "opportunities": build_opportunities(maturity_model, rows, privacy.key, results),
         "tag_profile": tag_profile(maturity_model, repo_tag.values()),
     }
 

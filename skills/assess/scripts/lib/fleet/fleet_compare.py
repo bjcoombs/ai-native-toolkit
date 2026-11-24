@@ -69,7 +69,9 @@ plus the groups whose set moved), so the level-only view and `compare.json` shar
 A level state carries `floor` when the row has one (#697); `moved` still compares status and level only, so a floor appearing against an entry written before #697 is not a move.
 `compare` takes an optional `scanner` (`fleet_scanner_diff.scanner_diff` of the two stamps,
 passed by both CLIs) and re-attributes moved team rows through `fleet_scanner_diff.attribute`;
-`FleetRun.row_signals` carries the signals each row's `fleet-data.json` cells name (#774).
+`FleetRun.row_signals` carries the signals each row's `fleet-data.json` cells name (#774), and
+`FleetRun.steps` each repository's stored Step from the run's `level.json` (`stored_steps`, #941;
+None for a run without one), which the Step movement grid reads (`lib/fleet/fleet_step_movement.py`).
 """
 from __future__ import annotations
 
@@ -84,6 +86,7 @@ from typing import Any, NotRequired, TypedDict, cast
 from lib.complexity.diff_reliability import _diff_is_reliable
 from lib.fleet.runner import FLEET_ROW_VERSION, REPOS_FILE, STATUS_OK, FleetRow
 from lib.fleet.fleet_data import FLEET_DATA_FILE
+from lib.fleet.fleet_level import LEVEL_FILE
 from lib.fleet.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow, RowLevel
 from lib.fleet.fleet_legacy import stamp_value, upgrade
 from lib.levels import floor_of
@@ -123,6 +126,8 @@ class FleetRun:
     groups: list[GroupRow]
     # row id -> the signals its fleet-data.json cells name (#774); None without that file
     row_signals: Mapping[str, frozenset[str]] | None = None
+    # repository id -> its stored Step from the run's level.json (#941); None without that file
+    steps: Mapping[str, int | None] | None = None
 
 
 class LevelState(TypedDict):
@@ -255,7 +260,20 @@ def load_run(run_dir: Path) -> FleetRun:
         if found is not None and found != version:
             raise RunVersionError(f"{name} {key} {found!r}, this toolkit reads {version}")
     return FleetRun(cast(FleetStamp, stamp), read_repos(run_dir), load_groups(run_dir),
-                    _row_signals(run_dir / FLEET_DATA_FILE))
+                    _row_signals(run_dir / FLEET_DATA_FILE), stored_steps(run_dir / LEVEL_FILE))
+
+
+def stored_steps(path: Path) -> dict[str, int | None] | None:
+    """Each repository's Step as a run's ``level.json`` stored it (#941); None when the file is
+    absent, unreadable or not that shape (a run kept before #941, or one without ``--levels``)."""
+    try:
+        repos = json.loads(path.read_text(encoding="utf-8")).get("repos")
+    except (OSError, ValueError, AttributeError):
+        return None
+    if not isinstance(repos, dict):
+        return None
+    return {k: v.get("step") if isinstance(v, dict) and isinstance(v.get("step"), int) else None
+            for k, v in repos.items() if isinstance(k, str)}
 
 
 def _row_signals(path: Path) -> dict[str, frozenset[str]] | None:

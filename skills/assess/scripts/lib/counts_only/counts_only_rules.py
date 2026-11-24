@@ -286,6 +286,9 @@ FLEET_DATA_KEPT: Final = frozenset({
     "repos.exclusions.id", "views.units.step.next_step.gates.gate", "views.units.step.next_step.gates.row",
     # #1128: a criterion's why, the check manifest's own text (lib.fleet.fleet_why.criterion_why)
     "repos.rows.why", "opportunities.biggest_lift.why",
+    # #941: one change away, model ids and titles only (lib/fleet/fleet_step_lifts.py)
+    "opportunities.step_lifts.condition", "opportunities.step_lifts.row", "opportunities.step_lifts.title",
+    "opportunities.step_lifts.gate",
 })
 
 

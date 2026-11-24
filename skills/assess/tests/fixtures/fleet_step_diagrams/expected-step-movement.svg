@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 356" width="720" height="356" role="img">
+<title>Step movement since the earlier run</title>
+<desc>In place: 6 repositories in both runs, 5 of them at the same Step. Each cell counts repositories by their Step in the earlier run and in this one. A dashed cell with a hatched mark holds moves that rule changes alone explain.</desc>
+<style>text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }.t-bg,.f-bg{fill:#ffffff}.s-bg{stroke:#ffffff}.t-fg,.f-fg{fill:#1d2321}.s-fg{stroke:#1d2321}.t-muted,.f-muted{fill:#5d6763}.s-muted{stroke:#5d6763}.t-rule,.f-rule{fill:#d9dedb}.s-rule{stroke:#d9dedb}.t-accent,.f-accent{fill:#1f6f6b}.s-accent{stroke:#1f6f6b}.t-bad,.f-bad{fill:#b33a2e}.s-bad{stroke:#b33a2e}.t-warn,.f-warn{fill:#b7791f}.s-warn{stroke:#b7791f}.t-unk,.f-unk{fill:#9aa39f}.s-unk{stroke:#9aa39f}.t-same,.f-same{fill:#eef1ef}.s-same{stroke:#eef1ef}.t-up,.f-up{fill:#dcefe0}.s-up{stroke:#dcefe0}.t-down,.f-down{fill:#f4ead8}.s-down{stroke:#f4ead8}.t-lane,.f-lane{fill:#f6f7f6}.s-lane{stroke:#f6f7f6}@media (prefers-color-scheme: dark){.t-bg,.f-bg{fill:#1a201e}.s-bg{stroke:#1a201e}.t-fg,.f-fg{fill:#e6ebe8}.s-fg{stroke:#e6ebe8}.t-muted,.f-muted{fill:#9aa5a0}.s-muted{stroke:#9aa5a0}.t-rule,.f-rule{fill:#2c3532}.s-rule{stroke:#2c3532}.t-accent,.f-accent{fill:#5fb8b1}.s-accent{stroke:#5fb8b1}.t-bad,.f-bad{fill:#ec7a6c}.s-bad{stroke:#ec7a6c}.t-warn,.f-warn{fill:#e0a84a}.s-warn{stroke:#e0a84a}.t-unk,.f-unk{fill:#5f6a66}.s-unk{stroke:#5f6a66}.t-same,.f-same{fill:#262e2b}.s-same{stroke:#262e2b}.t-up,.f-up{fill:#1f3b2a}.s-up{stroke:#1f3b2a}.t-down,.f-down{fill:#3d3322}.s-down{stroke:#3d3322}.t-lane,.f-lane{fill:#20262a}.s-lane{stroke:#20262a}}</style>
+<defs><pattern id="fleet-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="f-bg"/><line x1="0" y1="0" x2="0" y2="6" class="s-unk" stroke-width="2.4"/></pattern></defs>
+<rect x="0" y="0" width="720" height="356" class="f-bg"/>
+<text x="16.0" y="28.0" font-size="15" text-anchor="start" class="t-fg" font-weight="600">Step movement since the earlier run</text>
+<text x="16.0" y="48.0" font-size="12" text-anchor="start" class="t-muted">Rows: Step in the earlier run. Columns: Step in this run.</text>
+<text x="208.0" y="76.0" font-size="11.5" text-anchor="middle" class="t-fg" font-weight="600">Step 1</text>
+<text x="292.0" y="76.0" font-size="11.5" text-anchor="middle" class="t-fg" font-weight="600">Step 2</text>
+<text x="376.0" y="76.0" font-size="11.5" text-anchor="middle" class="t-fg" font-weight="600">Step 3</text>
+<text x="460.0" y="76.0" font-size="11.5" text-anchor="middle" class="t-fg" font-weight="600">Not measured</text>
+<text x="544.0" y="76.0" font-size="11.5" text-anchor="middle" class="t-fg" font-weight="600">Not in this run</text>
+<text x="156.0" y="112.0" font-size="11.5" text-anchor="end" class="t-fg" font-weight="600">Step 1</text>
+<g data-then="1" data-now="1"><rect x="167.0" y="87.0" width="82.0" height="40.0" class="f-same s-rule" stroke-width="1"/><text x="208.0" y="112.0" font-size="13" text-anchor="middle" class="t-fg" font-weight="600">3</text></g>
+<g data-then="1" data-now="2"><rect x="251.0" y="87.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<g data-then="1" data-now="3"><rect x="335.0" y="87.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<g data-then="1" data-now="not_measured"><rect x="419.0" y="87.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<g data-then="1" data-now="removed"><rect x="503.0" y="87.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<text x="156.0" y="154.0" font-size="11.5" text-anchor="end" class="t-fg" font-weight="600">Step 2</text>
+<g data-then="2" data-now="1"><rect x="167.0" y="129.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<g data-then="2" data-now="2"><rect x="251.0" y="129.0" width="82.0" height="40.0" class="f-same s-rule" stroke-width="1"/><text x="292.0" y="154.0" font-size="13" text-anchor="middle" class="t-fg" font-weight="600">1</text></g>
+<g data-then="2" data-now="3"><rect x="335.0" y="129.0" width="82.0" height="40.0" class="f-up s-rule" stroke-width="1"/><text x="376.0" y="154.0" font-size="13" text-anchor="middle" class="t-fg" font-weight="600">1</text></g>
+<g data-then="2" data-now="not_measured"><rect x="419.0" y="129.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<g data-then="2" data-now="removed"><rect x="503.0" y="129.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<text x="156.0" y="196.0" font-size="11.5" text-anchor="end" class="t-fg" font-weight="600">Step 3</text>
+<g data-then="3" data-now="1"><rect x="167.0" y="171.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<g data-then="3" data-now="2"><rect x="251.0" y="171.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<g data-then="3" data-now="3"><rect x="335.0" y="171.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<g data-then="3" data-now="not_measured"><rect x="419.0" y="171.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<g data-then="3" data-now="removed"><rect x="503.0" y="171.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/><text x="544.0" y="196.0" font-size="13" text-anchor="middle" class="t-fg" font-weight="600">1</text></g>
+<text x="156.0" y="238.0" font-size="11.5" text-anchor="end" class="t-fg" font-weight="600">Not measured</text>
+<g data-then="not_measured" data-now="1"><rect x="167.0" y="213.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<g data-then="not_measured" data-now="2"><rect x="251.0" y="213.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<g data-then="not_measured" data-now="3"><rect x="335.0" y="213.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<g data-then="not_measured" data-now="not_measured"><rect x="419.0" y="213.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/><text x="460.0" y="238.0" font-size="13" text-anchor="middle" class="t-fg" font-weight="600">1</text></g>
+<g data-then="not_measured" data-now="removed"><rect x="503.0" y="213.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<text x="156.0" y="280.0" font-size="11.5" text-anchor="end" class="t-fg" font-weight="600">New in this run</text>
+<g data-then="added" data-now="1"><rect x="167.0" y="255.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/><text x="208.0" y="280.0" font-size="13" text-anchor="middle" class="t-fg" font-weight="600">1</text></g>
+<g data-then="added" data-now="2"><rect x="251.0" y="255.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<g data-then="added" data-now="3"><rect x="335.0" y="255.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<g data-then="added" data-now="not_measured"><rect x="419.0" y="255.0" width="82.0" height="40.0" class="f-lane s-rule" stroke-width="1"/></g>
+<text x="16.0" y="322.0" font-size="12" text-anchor="start" class="t-fg">Each cell counts repositories by their Step in the earlier run and in this one. A dashed cell with</text>
+<text x="16.0" y="340.0" font-size="12" text-anchor="start" class="t-fg">a hatched mark holds moves that rule changes alone explain.</text>
+</svg>

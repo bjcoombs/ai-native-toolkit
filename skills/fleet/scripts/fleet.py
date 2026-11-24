@@ -39,7 +39,7 @@ lost (``lib/fleet/fleet_cleanup.py``). Every run also writes the run stamp
 It also draws the fleet diagrams (``lib/fleet/fleet_diagrams.py``): ``<out>/report.md``
 embedding ``quadrant.svg``, ``shared-tooling.svg``, ``trend.svg`` (group trend lines
 over the run history, ``lib/fleet/fleet_trends.py``), and ``slope.svg`` (from the ``--compare``
-result), or the reason each was skipped;
+result; and the Step diagrams of #941), or the reason each was skipped;
 ``--no-diagrams`` turns them off. ``report.md`` opens with the coverage line: with
 ``--discovered FILE`` (ghsync's ``--porcelain`` or ``--porcelain-json`` listing) how many of
 the discoverable repositories were assessed and each gap counted, also in ``run.json``
@@ -576,14 +576,14 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
               window: str, *, history: list[TrendRun] | None = None,
               comparison: Comparison | None = None, credit: str | None = None,
               coverage: str | None = None, opportunities: Callable[[], str | None] | None = None,
-              data: FleetData | None = None) -> None:
+              data: FleetData | None = None, earlier: FleetRun | str | None = None) -> None:
     """Draw the diagrams and their report, or clear them; a failure never changes the exit code."""
     try:
         if no_diagrams:
             clear_diagrams(out_dir)
             return
         diagrams = build_diagrams(maturity_model, rows, window, history=history, comparison=comparison,
-                                  data=data)
+                                  data=data, earlier=earlier)
         ok = [row["scans"] for row in rows if row["status"] == "ok" and row["scans"] is not None]
         write_diagrams(out_dir, diagrams, credit, coverage, opportunities() if opportunities else None,
                        measured_section(ok))
@@ -842,7 +842,7 @@ def main(argv: list[str] | None = None) -> int:
     history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, public, maturity_model)
     _diagrams(out_dir, args.no_diagrams, maturity_model, public, window, history=history, comparison=comparison,
               credit=credit, coverage=coverage_line(coverage, len(rows)),
-              opportunities=lambda: opportunities_section(data, achieved), data=data)
+              opportunities=lambda: opportunities_section(data, achieved), data=data, earlier=earlier)
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
           file=sys.stderr)

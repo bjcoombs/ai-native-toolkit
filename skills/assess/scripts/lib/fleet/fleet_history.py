@@ -33,8 +33,8 @@ matches a planned run, preferring one with the same repository set: the
 default earlier run for ``--compare``.
 
 The fleet run history (issue #552): each counts-only run's `repos.jsonl`, `groups.jsonl`
-and `run.json` kept in `<root>/<org>/<scan_date>/`, plus `doc_freshness.jsonl` and `fleet-data.json` when the
-run wrote them (`OPTIONAL_HISTORY_FILES`, #664 and #703; a same-day replacement without it removes
+and `run.json` kept in `<root>/<org>/<scan_date>/`, plus `doc_freshness.jsonl`, `fleet-data.json` and `level.json` when the
+run wrote them (`OPTIONAL_HISTORY_FILES`, #664, #703 and #941; a same-day replacement without it removes
 the old copy so an entry never mixes runs). `history_root` is
 `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet` (a relative or empty
 `XDG_DATA_HOME` ignored); `default_org` is the first segment every repository id shares,
@@ -71,6 +71,7 @@ from lib.fleet.runner import REPOS_FILE
 from lib.fleet.fleet_data import FLEET_DATA_FILE
 from lib.fleet.fleet_doc_freshness import FRESHNESS_FILE
 from lib.fleet.fleet_groups import GROUPS_FILE
+from lib.fleet.fleet_level import LEVEL_FILE
 from lib.fleet.fleet_legacy import stamp_value, upgrade
 from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 
@@ -80,7 +81,8 @@ HISTORY_FILES = (REPOS_FILE, GROUPS_FILE, RUN_FILE)  # written in this order: ru
 # a same-day entry's stale copy is removed when the new run wrote none.
 # ``fleet-data.json`` (#703) is optional so entries written before it still load.
 # demotions.json: the exit rule's record with its evidence, kept with the run (#1086)
-OPTIONAL_HISTORY_FILES = (FRESHNESS_FILE, FLEET_DATA_FILE, "demotions.json")
+# level.json: each repository's stored Step, which the Step movement grid reads (#941)
+OPTIONAL_HISTORY_FILES = (FRESHNESS_FILE, FLEET_DATA_FILE, "demotions.json", LEVEL_FILE)
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$")
 _MATCH_KEYS = ("levels_version", "window", "counts_only", "scans", "paths_hashed", "fleet_config_sha256",
                "platform", "managed_settings")
