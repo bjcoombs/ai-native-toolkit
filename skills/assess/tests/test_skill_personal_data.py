@@ -62,6 +62,8 @@ def _state(block: Any) -> tuple[str, str | None]:
     ("password: str/" + "abc123", ["credential"]),
     ('password: str = "hun' + 'ter2"', ["credential"]),  # a typed field with a literal default
     ("secret: bool=hun" + "ter2", ["credential"]),
+    ('password: "correct horse ' + 'battery"', ["credential"]),  # quoted: still a value
+    ("password: hunter" + "2  # rotate me", ["credential"]),  # a comment after the value
     ("token = " + "ghp" + "_abc123def456", ["credential"]),
     ("token: ${{ secrets.X }} and password = " + "hunter" + "2abc", ["credential"]),  # one literal is enough
     ("AKIA" + "ABCDEFGHIJKLMNOP is the key.", ["cloud_key"]),
@@ -104,6 +106,9 @@ def test_each_kind_is_detected(text: str, kinds: list[str]) -> None:
     "Example servers 192.0.2.10, 198.51.100.7 and 203.0.113.99",  # RFC 5737
     "Weights: +0.5 - 0.25 - 0.125",
     "Diff: +1234 -5678 lines",
+    "Token: The value from step 2",
+    "Password: Use the one in 1Password",
+    "token: see below",
 ])
 def test_placeholders_and_lookalikes_are_not_findings(text: str) -> None:
     assert kinds_in(text) == []
