@@ -101,9 +101,9 @@ _Deterministic portion of the assessment: headline, metrics, hotspots, and cross
 
 ## How this was measured
 
-In place: over 1 repository, 36 scans were measured everywhere, 18 ran but were not measured everywhere, and 0 were skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
+In place: over 1 repository, 36 scans were measured everywhere, 19 ran but were not measured everywhere, and 0 were skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
 
-### Ran (54)
+### Ran (55)
 
 - `agent_ops`
 - `config_drift`
@@ -129,6 +129,7 @@ In place: over 1 repository, 36 scans were measured everywhere, 18 ran but were 
 - `skill_personal_data`
 - `ci_model_jobs`
 - `org_security_policy`: not measured in 1 of 1 (no_remote)
+- `github_secret_scanning`: not measured in 1 of 1 (no_remote)
 - `secrets_guard`
 - `agent_consistency`
 - `ai_usage`: not measured in 1 of 1 (unavailable)

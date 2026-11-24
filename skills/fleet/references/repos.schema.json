@@ -1305,6 +1305,30 @@
                 ]
               }
             },
+            "github_secret_scanning": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'. The codes name the missing piece: settings_not_readable (only a repository admin, organization owner or security manager can read GitHub's secret scanning and push protection settings). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
             "org_security_policy": {
               "type": "object",
               "if": {

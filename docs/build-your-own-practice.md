@@ -12,7 +12,7 @@ Start from a model that is close to what you want. The toolkit ships three:
 |-------|------|---------------|
 | default | `skills/assess/levels/default.toml` | Every practice `/assess` scores, with the autonomy Steps. |
 | handover | `skills/assess/levels/profiles/handover.toml` | Six practices a team expects before it takes a repository over. |
-| citizen | `skills/assess/levels/profiles/citizen.toml` | A lighter bar while a citizen developer builds. |
+| citizen | `skills/assess/levels/profiles/citizen.toml` | A lighter bar while a citizen developer builds; one example of a profile turning on general practices such as the secrets guard. |
 
 The starter command writes a copy you can edit. Run it from `skills/assess` in a toolkit checkout, and give it a path in your own repository:
 
