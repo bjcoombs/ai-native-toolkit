@@ -130,6 +130,7 @@
           "runtime",
           "shared_tooling",
           "skill_disclosure",
+          "skill_script_tests",
           "stats_summary",
           "structure",
           "structure_drift",

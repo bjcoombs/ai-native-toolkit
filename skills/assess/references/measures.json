@@ -1181,6 +1181,50 @@
       ]
     },
     {
+      "id": "skill-script-tests",
+      "title": "Skill script tests",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "skill-script-tests.1",
+          "truth": [
+            "behaviour"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "skill-script-tests.1:skill_script_tests.skills_untested",
+              "signal": "skill_script_tests.skills_untested",
+              "producer": {
+                "scan": "skill_script_tests",
+                "collector": "core.skill_script_tests"
+              },
+              "op": "eq",
+              "value": 0,
+              "eq_signal": null,
+              "text": "Skills whose scripts have no tests beside them: is 0",
+              "title": "Each skill's scripts have tests beside them (presence, not coverage)",
+              "fix": "Add tests for each named skill's scripts in that skill's own folder (tests/ or test_*.py beside them); where the report finds them elsewhere, move or copy them in, since tests outside the folder do not ship with the skill.",
+              "why": "A skill's scripts run with an agent's permissions every time it triggers; tests beside them are the only check that a change still does what the SKILL.md promises.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "contributor-files",
       "title": "Contributor files",
       "scope": "team",
@@ -1251,12 +1295,14 @@
       "conditions": [
         "layer-5-ci.1",
         "layer-6-coverage.1",
-        "layer-6-coverage.2"
+        "layer-6-coverage.2",
+        "skill-script-tests.1"
       ],
       "listed": [
         "layer-5-ci.1",
         "layer-6-coverage.1",
-        "layer-6-coverage.2"
+        "layer-6-coverage.2",
+        "skill-script-tests.1"
       ],
       "shared": [],
       "why": "That the code's behaviour is checked by something that runs on every change, not taken on trust.",
@@ -2582,6 +2628,49 @@
       "why_source": "https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices"
     },
     {
+      "name": "skill_script_tests",
+      "title": "Skill script tests",
+      "summary": "Whether each skill's scripts have tests beside them in the skill's own folder: presence, not coverage, since no suite runs. Tests found only outside the folder are named, as information.",
+      "collector": "core.skill_script_tests",
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "skill_script_tests.skills.path": "path",
+          "skill_script_tests.skills.tested_elsewhere": "path"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "skill-script-tests"
+        ],
+        "conditions": [
+          "skill-script-tests.1:skill_script_tests.skills_untested"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "skill_script_tests.skills_untested",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ],
+      "why": "A skill's scripts run with an agent's permissions every time it triggers; tests beside them are the only check that a change still does what the SKILL.md promises.",
+      "why_source": ""
+    },
+    {
       "name": "org_security_policy",
       "title": "Owner's shared security policy",
       "summary": "The SECURITY file in the owner's public .github repository, which GitHub shows on every repository of the owner that has none, read through gh.",
@@ -3454,6 +3543,7 @@
         "layer_grades",
         "promissory_markers",
         "skill_disclosure",
+        "skill_script_tests",
         "stats_summary",
         "structure",
         "excludes",
@@ -5309,6 +5399,20 @@
       "private": false
     },
     {
+      "name": "skill_script_tests",
+      "title": "Skill script tests",
+      "publishes": [
+        "skill_script_tests"
+      ],
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "org_security_policy",
       "title": "Owner's shared security policy",
       "publishes": [
@@ -5449,6 +5553,7 @@
         "review_evidence",
         "review_reality",
         "skill_disclosure",
+        "skill_script_tests",
         "stats_summary",
         "structure",
         "structure_drift",
@@ -5501,6 +5606,7 @@
         "layer_grades",
         "promissory_markers",
         "skill_disclosure",
+        "skill_script_tests",
         "stats_summary",
         "structure",
         "excludes",
@@ -5534,6 +5640,7 @@
         "review_evidence",
         "review_reality",
         "skill_disclosure",
+        "skill_script_tests",
         "stats_summary",
         "structure",
         "structure_drift",
@@ -5809,6 +5916,15 @@
       "input_class": "head_structure",
       "grade": "measured",
       "null_means": "no_skill_files: the repository, or the skill unit, holds no SKILL.md or agent definition (files_considered 0), so there is nothing to measure"
+    },
+    {
+      "path": "skill_script_tests.skills_untested",
+      "title": "Skills whose scripts have no tests beside them",
+      "type": "number",
+      "collector": "core.skill_script_tests",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "no_skill_scripts: no skill in the repository, or in the skill unit, holds a script (skills_with_scripts 0), so there is nothing to test"
     },
     {
       "path": "contributor_files.guide.present",

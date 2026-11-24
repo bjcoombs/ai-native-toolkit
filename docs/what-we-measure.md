@@ -28,11 +28,11 @@ A scan that feeds no maturity-model criterion is `unclassified` until its eviden
 
 ## Conditions by truth tag
 
-Each condition carries one or more truth tags: the truth it keeps honest. A condition holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. A condition with several tags is listed under its first tag and named under the others as shared; it counts once. There are 26 conditions, 2 of them with more than one tag.
+Each condition carries one or more truth tags: the truth it keeps honest. A condition holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. A condition with several tags is listed under its first tag and named under the others as shared; it counts once. There are 27 conditions, 2 of them with more than one tag.
 
 | Tag | Conditions | Listed here | Shared |
 |---|---|---|---|
-| Behaviour (`behaviour`) | 3 | 3 | 0 |
+| Behaviour (`behaviour`) | 4 | 4 | 0 |
 | Contracts (`contracts`) | 0 | 0 | 0 |
 | Docs (`docs`) | 4 | 3 | 1 |
 | Structure (`structure`) | 6 | 6 | 0 |
@@ -45,13 +45,14 @@ Each condition carries one or more truth tags: the truth it keeps honest. A cond
 
 That the code's behaviour is checked by something that runs on every change, not taken on trust.
 
-Tag `behaviour`: 3 conditions, none shared with another tag.
+Tag `behaviour`: 4 conditions, none shared with another tag.
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `layer-5-ci.1` CI runs your tests or linters, and an error stops the job | `ci_checks` | A CI check runs on ordinary changes and can stop its job: is true (`ci_checks.enforced_check_runs eq true`) | `verified` | yes | `ci_runs_tests` | positive | - | - | This turns "the agent says it works" into "CI says it works": a check that can stop its job runs on ordinary changes, so a broken change turns the job red where everyone can see it. | Add a CI step that runs your test or lint command on pull requests, without \|\| true, continue-on-error or allow_failure. |
 | `layer-6-coverage.1` CI runs a coverage gate of at least 50 percent | `coverage_gate` | CI runs a coverage gate of at least 50 percent: is true (`coverage_gate.enforced_meets_minimum eq true`) | `verified` | yes | `coverage_gate` | positive | - | - | An enforced floor turns the job red when a change takes coverage below it, so tests an agent removes or skips show in CI instead of passing quietly. | Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage. Run the coverage check in a CI step on pull requests (pytest --cov, not plain pytest), without \|\| true or continue-on-error. Then CI keeps coverage at the level you have reached. |
 | `layer-6-coverage.2` A mutation run has completed | `test_pressure` | A mutation run completed: is true (`test_pressure.mutation_run eq true`) | `measured` | yes | - | positive | requires `layer-5-ci.1` | - | Coverage shows tests run the code; a mutation run shows whether they notice it changing. A completed run names the surviving mutants, which are the tests an agent cannot yet rely on. | Run the opt-in mutation pass to see which tests pin behaviour. |
+| `skill-script-tests.1` Each skill's scripts have tests beside them (presence, not coverage) | `skill_script_tests` | Skills whose scripts have no tests beside them: is 0 (`skill_script_tests.skills_untested eq 0`) | `measured` | yes | - | positive | - | - | A skill's scripts run with an agent's permissions every time it triggers; tests beside them are the only check that a change still does what the SKILL.md promises. | Add tests for each named skill's scripts in that skill's own folder (tests/ or test_*.py beside them); where the report finds them elsewhere, move or copy them in, since tests outside the folder do not ship with the skill. |
 
 ### Contracts
 
@@ -152,7 +153,7 @@ How many conditions each pair of tags shares. The diagonal is the tag's own coun
 
 | Tag | `behaviour` | `contracts` | `docs` | `structure` | `agent_context` | `agent_runtime` | `governance` | `supply_chain` |
 |---|---|---|---|---|---|---|---|---|
-| `behaviour` | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `behaviour` | 4 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `contracts` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `docs` | 0 | 0 | 4 | 0 | 1 | 0 | 0 | 0 |
 | `structure` | 0 | 0 | 0 | 6 | 0 | 0 | 0 | 0 |
@@ -205,6 +206,7 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | `guardrails-stated` | Guardrails stated | team | `min` | `guardrails-stated.1`, `guardrails-stated.2` |
 | `agent-consistency` | Cross-agent instruction consistency | team | `min` | `agent-consistency.1`, `agent-consistency.2` |
 | `skill-disclosure` | Skill disclosure | team | `min` | `skill-disclosure.1` |
+| `skill-script-tests` | Skill script tests | team | `min` | `skill-script-tests.1` |
 | `contributor-files` | Contributor files | team | `min` | `contributor-files.1` |
 
 ## Scans
@@ -533,6 +535,20 @@ Each SKILL.md and agent definition against Anthropic's skill authoring guidance:
 - Evidence: `skill_disclosure.files_breaking` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.
 
+### `skill_script_tests`: Skill script tests
+
+A skill's scripts run with an agent's permissions every time it triggers; tests beside them are the only check that a change still does what the SKILL.md promises.
+
+Whether each skill's scripts have tests beside them in the skill's own folder: presence, not coverage, since no suite runs. Tests found only outside the folder are named, as information.
+
+- Collector: `core.skill_script_tests`, reading `repo_root`, `scope`, `excludes`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `skill_script_tests.skills.path` path, `skill_script_tests.skills.tested_elsewhere` path.
+- Used by: row `skill-script-tests`.
+- Evidence: `skill_script_tests.skills_untested` head_structure (measured).
+- Not measured when: it cannot read its input; the block says why.
+
 ### `org_security_policy`: Owner's shared security policy
 
 A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue.
@@ -800,7 +816,7 @@ A unit inherits root CI and review but not the root's suppressions, stale docs o
 
 Each unit's own readings of the scope-sensitive scans: suppressions, doc staleness, structure, size, and its own coverage gate or instruction file. Every condition is tagged unit or inherited.
 
-- Collector: `core.unit_readings`, reading `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes`.
+- Collector: `core.unit_readings`, reading `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes`.
 - Network: no.
 - Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `unit_readings.unit_blocks` token, `unit_readings.unit_count_reason` token, `unit_readings.units.conditions.id` token, `unit_readings.units.conditions.origin` token, `unit_readings.units.kind` token, `unit_readings.units.path` hashed_path.
@@ -1123,6 +1139,7 @@ The scan registry in run order, including the private inputs other scans read.
 | `layer_grades` | Deterministic layer grades | `instruction_grading`, `nested_instructions` | `layer_grades` | no |
 | `instruction_placement` | Instruction placement | `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes` | `instruction_placement` | no |
 | `skill_disclosure` | Skill disclosure | `repo_root`, `scope`, `excludes` | `skill_disclosure` | no |
+| `skill_script_tests` | Skill script tests | `repo_root`, `scope`, `excludes` | `skill_script_tests` | no |
 | `org_security_policy` | Owner's shared security policy | `repo_root` | `org_security_policy` | yes |
 | `contributor_files` | Contributor files | `repo_root`, `archetype`, `org_security_policy` | `contributor_files` | no |
 | `gap_actions` | Gap actions | `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`, `instruction_placement` | `gap_actions` | no |
@@ -1131,9 +1148,9 @@ The scan registry in run order, including the private inputs other scans read.
 | `agent_outcome` | Agent commit outcomes | `repo_root`, `scope`, `history_window`, `fleet_config` | `agent_outcome` | no |
 | `doc_claims` | Doc claims | `repo_root`, `instruction_files`, `scope`, `excludes` | `doc_claims` | no |
 | `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope` | `guardrails` | no |
-| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `skill_disclosure`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `level` | no |
+| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `skill_disclosure`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `level` | no |
 | `since_last_run` | Since last run | `level`, `assess_dir`, `repo_root`, `superseded`, `instruction_placement` | `since_last_run` | no |
 | `headline` | Deterministic headline | `level`, `since_last_run` | `headline` | no |
-| `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
-| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `skill_disclosure`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
+| `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
+| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `skill_disclosure`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
 | `unit_rollup` | Monorepo unit roll-up | `unit_levels`, `units` | `unit_rollup` | no |

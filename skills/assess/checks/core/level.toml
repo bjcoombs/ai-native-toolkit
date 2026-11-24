@@ -9,7 +9,7 @@ summary = "The default maturity model's conditions with state, grade and reason,
 issues = [744]
 callable = "lib.core_scans:level"
 publishes = ["level"]
-reads = ["agent_consistency", "agent_environment", "agent_ops", "ci_checks", "contributor_files", "coverage_gate", "doc_staleness", "guardrails", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "review_evidence", "review_reality", "skill_disclosure", "stats_summary", "structure", "structure_drift", "test_pressure", "owner_exclusions"]
+reads = ["agent_consistency", "agent_environment", "agent_ops", "ci_checks", "contributor_files", "coverage_gate", "doc_staleness", "guardrails", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "review_evidence", "review_reality", "skill_disclosure", "skill_script_tests", "stats_summary", "structure", "structure_drift", "test_pressure", "owner_exclusions"]
 stage = "post_offers"
 shapes = [
   { path = "level", type = "lib.level_result_types:LevelResult" },
