@@ -54,7 +54,9 @@ merge order and whose `Resolution.root` holds the repository's own file.
 - A reader that must never credit an unread override (the secrets guard, #1204; model-backed
   jobs, #1249) checks `unresolved is None and not open` before reading a job's keys, and reads
   a key's value from `keys[key][-1]` (or the deep merge of the chain for a map).
-- `TOOLKIT_GATE_JOBS` and `is_toolkit_gate` are where #1179 narrows what counts as the gate.
+- What counts as the toolkit's gate (#1179): `is_toolkit_gate` matches only the exact `remote:`
+  URL; a `component:` settles only through `is_toolkit_gate_text`, below. Its slot defines
+  `TOOLKIT_GATE_JOBS`, so a same-named job stays `include_order`.
 
 ## Include resolution (#766)
 
@@ -89,9 +91,17 @@ disk, returns its text so those scans read the included jobs too:
 - ``template:`` and ``remote:`` name files offline reading cannot hold
   (``not_offline``).
 - **The toolkit's own regression gate** (#1152) is ``toolkit_gate``: a ``remote:`` of
-  exactly ``https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/<ref>/templates/assess-gate.yml``,
-  or a ``component:`` whose project path ends ``/ai-native-toolkit`` and whose name is
-  ``assess-gate``. That template's one job runs the AI-readiness gate and never the
+  exactly ``https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/<ref>/templates/assess-gate.yml``
+  (the include the template documents), or a ``component:`` whose file, read from its clone as
+  above, runs what the toolkit ships: after the ``spec:`` header's ``---``, its lines (blank and
+  comment lines dropped) equal those of ``GATE_TEMPLATE`` (``templates/assess-gate.yml`` at the
+  repository root). Input defaults may differ, as a mirror pins its own version and clone URL.
+  A component's name is no evidence (#1179): any host or group can publish an
+  ``ai-native-toolkit/assess-gate`` that runs tests. One with no clone (``no_root``,
+  ``not_cloned``), a pin the clone lacks (``ref_missing``) or a build without the template
+  stays unread, so the test signal reads null, never a false 0; one whose file differs (another
+  job, an added ``before_script:``, a gate from another release) is ``resolved`` and read like
+  any template. That template's one job runs the AI-readiness gate and never the
   project's tests, so it does not leave the test signal unknown. It counts as read
   (``Resolution.unresolved`` and ``ci_checks.unresolved_includes`` skip it) with no file
   and no ``ref_basis``. Every other ``remote:`` stays ``not_offline``.

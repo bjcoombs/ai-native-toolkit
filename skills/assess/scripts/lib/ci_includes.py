@@ -6,7 +6,9 @@ top-level ``include:`` and, where the included file is on disk, returns its text
 ``local:`` from the checkout, ``project:`` and ``component:`` from the clone
 ``<ghsync_root>/<path>/<last>-main`` at ``ref:`` (a pin the clone does not hold is
 ``ref_missing``), ``template:`` / ``remote:`` are ``not_offline``. The toolkit's own regression
-gate (#1152) is ``toolkit_gate`` and counts as read. Nested includes are walked to
+gate (#1152) is ``toolkit_gate`` and counts as read: its exact ``remote:`` URL, or a ``component:``
+whose file, read from the clone, runs what ``GATE_TEMPLATE`` runs; a lookalike name alone is read
+like any component (#1179). Nested includes are walked to
 ``MAX_DEPTH`` (5) and ``MAX_FILES`` (50). Each include item gets one ``IncludeRecord`` (kind,
 id, status, ref_basis, depth), published by ``ci_checks`` as ``includes``; template text is
 never published. ``resolve_includes(repo_root, ghsync_root)`` returns a ``Resolution``:
@@ -110,20 +112,51 @@ SETTLED: frozenset[str] = frozenset({"resolved", "toolkit_gate"})
 _TOOLKIT_GATE_REMOTE = re.compile(
     r"^https://raw\.githubusercontent\.com/bjcoombs/ai-native-toolkit/[^/\s]+"
     r"/templates/assess-gate\.yml$")
-_TOOLKIT_GATE_COMPONENT = re.compile(r"^[^@\s]+/ai-native-toolkit/assess-gate@[^@\s/]+$")
 # The jobs that template defines (templates/assess-gate.yml): a same-named job is not settled (#1180).
 TOOLKIT_GATE_JOBS = frozenset({"assess-gate"})
+# That template as this toolkit ships it, the reference a component's file is compared with (#1179).
+# A copy outside the repository layout (a standalone build) has none, and recognises no component.
+_UP = Path(__file__).resolve().parents
+GATE_TEMPLATE = (_UP[4] if len(_UP) > 4 else _UP[0]) / "templates" / "assess-gate.yml"
 
 
 def is_toolkit_gate(kind: str, source: str) -> bool:
-    """True for an include of the toolkit's own regression gate template (#1152)."""
+    """True for an include that names the toolkit's own gate template by its one known source,
+    the ``remote:`` raw URL of this repository (#1152). A ``component:`` is never the gate by its
+    name: any host or group can hold an ``ai-native-toolkit/assess-gate`` (#1179). It is the gate
+    only when the file read from its clone is the template (``is_toolkit_gate_text``)."""
     source = source.strip().strip("\"'")
-    if kind == "remote":
-        return bool(_TOOLKIT_GATE_REMOTE.match(source)) and ".." not in source
-    if kind == "component":  # GitLab project paths match ignoring case (#859)
-        path, at, version = source.partition("@")
-        return bool(_TOOLKIT_GATE_COMPONENT.match(path.lower() + at + version))
-    return False
+    return kind == "remote" and bool(_TOOLKIT_GATE_REMOTE.match(source)) and ".." not in source
+
+
+def _gate_body(text: str) -> tuple[str, ...] | None:
+    """The lines a gate template runs: those after its ``spec:`` header's ``---``, blank and
+    comment lines dropped. None when the text does not open with a ``spec:`` header alone."""
+    lines = text.splitlines()
+    cut = next((i for i, line in enumerate(lines) if line.rstrip() == "---"), None)
+    if cut is None:
+        return None
+    tops = [line.split(":", 1)[0] for line in lines[:cut] if _content(line) and line[:1] not in " \t"]
+    if tops != ["spec"]:
+        return None
+    return tuple(line.rstrip() for line in lines[cut + 1:] if _content(line))
+
+
+@functools.lru_cache(maxsize=1)
+def _shipped_gate() -> tuple[str, ...] | None:
+    try:
+        return _gate_body(GATE_TEMPLATE.read_text(encoding="utf-8"))
+    except OSError:
+        return None  # a build without the template: no component is recognised as the gate
+
+
+def is_toolkit_gate_text(text: str) -> bool:
+    """True when ``text`` (a component's template file) runs exactly what the toolkit's own
+    gate template runs: the lines after the ``spec:`` header match ``GATE_TEMPLATE``. Input
+    defaults may differ (a mirror pins its own version); a job, key or command that differs
+    does not match, and the file is then read like any other (#1179)."""
+    shipped = _shipped_gate()
+    return shipped is not None and _gate_body(text) == shipped
 
 
 EMPTY = Resolution((), ())
@@ -260,6 +293,11 @@ class _Walk:
         if status not in SETTLED:   # an include not read may define any job (#1180)
             self.slots.append(Slot(None, self.conditional))
 
+    def gate(self, item: IncludeItem, ident: str | None, depth: int, conditional: bool) -> None:
+        """The toolkit's gate template: settled, except for the jobs it defines (#1152, #1180)."""
+        self.record(item, ident, "toolkit_gate", None, depth)
+        self.slots.append(Slot(None, conditional, TOOLKIT_GATE_JOBS))
+
     def read_all(self, source: _Source, paths: list[str], depth: int,
                  line: int) -> IncludeStatus:
         """Read every file of one item: ``resolved``, or the reason it could not."""
@@ -296,10 +334,7 @@ class _Walk:
                                  "ref_basis": None, "depth": depth})
         for item in items:
             if is_toolkit_gate(item.kind, item.source) and depth <= MAX_DEPTH:
-                ident = (f"gitlab_component:{component_source(item.source).lower()}"
-                         if item.kind == "component" else None)
-                self.record(item, ident, "toolkit_gate", None, depth)
-                self.slots.append(Slot(None, self.conditional or item.conditional, TOOLKIT_GATE_JOBS))
+                self.gate(item, None, depth, self.conditional or item.conditional)
                 continue
             outer, self.conditional = self.conditional, self.conditional or item.conditional
             self.one(item, here, depth, item.line if top_line is None else top_line)
@@ -351,13 +386,25 @@ class _Walk:
             self.record(item, ident, source, None, depth)
             return
         if item.kind == "component":
-            found = next((p for p in (f"templates/{name}.yml", f"templates/{name}/template.yml")
-                          if source.read(p) is not None), None)
+            found = self.component(item, ident, source, name, depth)
             if found is None:
-                self.record(item, ident, "file_missing", None, depth)
                 return
             paths = [found]
         self.finish(item, ident, source, paths, depth, line)
+
+    def component(self, item: IncludeItem, ident: str | None, source: _Source, name: str,
+                  depth: int) -> str | None:
+        """The file a component reads, or None once it is recorded: ``file_missing``, or
+        ``toolkit_gate`` for a mirror of the gate, its file read from the clone (#1179)."""
+        found = next(((p, text) for p in (f"templates/{name}.yml", f"templates/{name}/template.yml")
+                      if (text := source.read(p)) is not None), None)
+        if found is None:
+            self.record(item, ident, "file_missing", None, depth)
+            return None
+        if is_toolkit_gate_text(found[1]):
+            self.gate(item, ident, depth, self.conditional)
+            return None
+        return found[0]
 
     def finish(self, item: IncludeItem, ident: str | None, source: _Source, paths: list[str],
                depth: int, line: int) -> None:

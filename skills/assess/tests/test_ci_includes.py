@@ -425,9 +425,10 @@ GATE_REMOTE = "https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v3.0
     ("remote", GATE_REMOTE, True),
     ("remote", f"'{GATE_REMOTE}'", True),
     ("remote", GATE_REMOTE.replace("v3.0.0", "main"), True),
-    ("component", "gitlab.example.com/tools/ai-native-toolkit/assess-gate@3.0.0", True),
-    ("component", "$CI_SERVER_FQDN/grp/sub/ai-native-toolkit/assess-gate@~latest", True),
-    ("component", "gl.test/Grp/AI-Native-Toolkit/assess-gate@3.0.0", True),
+    # A component is never the gate by its name alone (#1179): any host or group can hold one.
+    ("component", "gitlab.example.com/tools/ai-native-toolkit/assess-gate@3.0.0", False),
+    ("component", "$CI_SERVER_FQDN/grp/sub/ai-native-toolkit/assess-gate@~latest", False),
+    ("component", "gl.test/Grp/AI-Native-Toolkit/assess-gate@3.0.0", False),
     # Every other include stays as it was.
     ("remote", GATE_REMOTE.replace("bjcoombs", "someone"), False),
     ("remote", GATE_REMOTE.replace("assess-gate.yml", "other.yml"), False),
@@ -467,11 +468,12 @@ def test_another_remote_include_still_leaves_tests_unknown(tmp_path: Path) -> No
     assert block["test_or_lint_configured"] is None
 
 
-def test_a_gate_component_needs_no_root(tmp_path: Path) -> None:
+def test_a_gate_named_component_without_a_root_is_not_read(tmp_path: Path) -> None:
+    """Without a clone to compare, a component named like the gate is unread, not settled (#1179)."""
     app = tmp_path / "app"
     _commit(app, {".gitlab-ci.yml": "include:\n  - component: gl.test/grp/ai-native-toolkit/assess-gate@3.0.0\n"
                                     "test:\n  script:\n    - pytest\n"})
     block = scan_ci_checks(app, None)
-    assert block["includes"][0]["status"] == "toolkit_gate"
+    assert block["includes"][0]["status"] == "no_root"
     assert block["includes"][0]["id"] == "gitlab_component:grp/ai-native-toolkit/assess-gate"
     assert block["test_or_lint_configured"] is True
