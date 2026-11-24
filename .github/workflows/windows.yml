@@ -6,11 +6,14 @@ name: Windows
 # Separator, encoding, line-ending and path-conversion regressions show up here
 # before a Windows user hits them (#701, #713, #752, #753).
 #
-# Four parallel matrix legs (#938), each on its own windows-latest runner with
-# the same setup: assess (the fleet golden run and skills/assess pytest),
-# scripts-contract (scripts/ pytest and plugin contract pytest), ghsync (the
-# ghsync/ghreport suites behind the #971 path gate) and smoke (the CRLF check,
-# standalone ZIPs, eval scaffolds and the smoke runs). fail-fast is off, so one
+# Parallel matrix legs (#938), each on its own windows-latest runner with the
+# same setup: assess in four shards (skills/assess pytest; shard 1 also runs
+# the fleet golden run and the CPU-budget tests), scripts-contract (scripts/
+# pytest and plugin contract pytest), ghsync in two shards (the ghsync/ghreport
+# suites behind the #971 path gate) and smoke (the CRLF check, standalone ZIPs,
+# eval scaffolds and the smoke runs). A shard keeps whole test files
+# (tests/pytest_shard.py), and the shards of a suite are disjoint and together
+# hold its full collection (tests/test_pytest_shard.py). fail-fast is off, so one
 # red leg does not cancel the others. Branch protection requires only the
 # aggregator job, "windows suites + smoke runs": it always runs (`always()`)
 # and passes only when the matrix result is success, so a failed, cancelled or
@@ -56,13 +59,25 @@ concurrency:
 
 jobs:
   suites:
-    name: windows / ${{ matrix.suite }}
+    name: windows / ${{ matrix.suite }}${{ matrix.shards && format(' {0}/{1}', matrix.shard, matrix.shards) || '' }}
     runs-on: windows-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
+      # assess and ghsync run as shards (tests/pytest_shard.py): each leg keeps
+      # whole test files, so --dist loadfile still holds a file on one worker
+      # (#831), and the N legs of a suite hold disjoint shards whose union is the
+      # full collection. shard is 1-based; every value 1..shards appears once.
       matrix:
-        suite: [assess, scripts-contract, ghsync, smoke]
+        include:
+          - {suite: assess, shard: 1, shards: 4}
+          - {suite: assess, shard: 2, shards: 4}
+          - {suite: assess, shard: 3, shards: 4}
+          - {suite: assess, shard: 4, shards: 4}
+          - {suite: scripts-contract}
+          - {suite: ghsync, shard: 1, shards: 2}
+          - {suite: ghsync, shard: 2, shards: 2}
+          - {suite: smoke}
     steps:
       # Without this, checkout converts every text file to CRLF and fixture
       # byte and line counts stop matching the Linux goldens. The step "Shell
@@ -188,23 +203,30 @@ jobs:
       # repos.jsonl compared with the one committed from Linux
       # (tests/fixtures/fleet_golden/repos.jsonl): field-level differences are
       # listed by dotted path, then the bytes (LF endings) are compared.
+      # Shard 1 alone runs it.
       - name: Fleet golden run against the committed Linux repos.jsonl
-        if: ${{ !cancelled() && matrix.suite == 'assess' }}
+        if: ${{ !cancelled() && matrix.suite == 'assess' && matrix.shard == 1 }}
         run: uv run --locked --python 3.11 pytest -ra -p no:cacheprovider tests/test_fleet_golden.py
         working-directory: skills/assess
 
+      # One shard of the suite, balanced by file size. --shard-record keeps the
+      # seconds each file took, uploaded below.
       - name: skills/assess pytest
         if: ${{ !cancelled() && matrix.suite == 'assess' }}
+        env:
+          PYTHONPATH: ${{ github.workspace }}/tests
         run: >-
           uv run --locked --python 3.11
           pytest -ra -p no:cacheprovider -n auto --dist loadfile
           --ignore=tests/test_fleet_golden.py
+          -p pytest_shard --shard ${{ matrix.shard }}/${{ matrix.shards }}
+          --shard-record "${{ runner.temp }}/shard-seconds.json"
         working-directory: skills/assess
 
       # The cpu_budget tests skip in the xdist pool above (tests/conftest.py,
-      # CPU_BUDGET_SKIP) and run here, serially, as in tests.yml.
+      # CPU_BUDGET_SKIP) and run here, serially, as in tests.yml, in shard 1 only.
       - name: skills/assess CPU-budget tests
-        if: ${{ !cancelled() && matrix.suite == 'assess' }}
+        if: ${{ !cancelled() && matrix.suite == 'assess' && matrix.shard == 1 }}
         run: >-
           uv run --locked --python 3.11
           pytest -ra -p no:cacheprovider -p no:xdist -m cpu_budget --no-cov
@@ -254,7 +276,7 @@ jobs:
           hit=""
           while IFS= read -r f; do
             case "$f" in
-              skills/ghsync/*|skills/ghreport/*|tests/gitbash.py|tests/conftest.py|tests/test_ghsync*.py|tests/test_ghreport*.py|.github/workflows/windows.yml)
+              skills/ghsync/*|skills/ghreport/*|tests/gitbash.py|tests/conftest.py|tests/pytest_shard.py|tests/test_ghsync*.py|tests/test_ghreport*.py|.github/workflows/windows.yml)
                 hit="$f"; break ;;
             esac
           done <<< "$changed"
@@ -263,16 +285,33 @@ jobs:
             echo "ghsync/ghreport suites: run ($hit changed)"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "ghsync/ghreport suites: skipped (no change under skills/ghsync, skills/ghreport, tests/gitbash.py, tests/conftest.py, tests/test_ghsync*.py, tests/test_ghreport*.py or windows.yml)"
+            echo "ghsync/ghreport suites: skipped (no change under skills/ghsync, skills/ghreport, tests/gitbash.py, tests/conftest.py, tests/pytest_shard.py, tests/test_ghsync*.py, tests/test_ghreport*.py or windows.yml)"
           fi
 
+      # One shard of the six files, balanced by file size, as above.
       - name: ghsync and ghreport suites under Git Bash
         if: ${{ !cancelled() && matrix.suite == 'ghsync' && steps.ghsync_gate.outputs.run != 'false' }}
         shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/tests
         run: >-
           uv run --python 3.11 --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4"
           pytest -ra -p no:cacheprovider -n auto --dist loadfile
+          -p pytest_shard --shard ${{ matrix.shard }}/${{ matrix.shards }}
+          --shard-record "${{ runner.temp }}/shard-seconds.json"
           tests/test_ghsync*.py tests/test_ghreport*.py
+
+      # The seconds per test file a shard took on Windows: the measurements a
+      # --shard-weights file would be built from (tests/pytest_shard.py). Not a
+      # test result, so an artifact outage or a skipped suite leaves the leg green.
+      - name: Upload the shard's seconds per test file
+        if: ${{ !cancelled() && matrix.shards > 1 }}
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: shard-seconds-${{ matrix.suite }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/shard-seconds.json
+          if-no-files-found: ignore
 
       - name: Standalone skill ZIPs
         if: ${{ !cancelled() && matrix.suite == 'smoke' }}
@@ -409,8 +448,8 @@ jobs:
 
   # The required check. `always()` makes it report on every run, including one
   # where a leg failed or was cancelled; the result test makes it pass only
-  # when every leg succeeded. needs.suites.result is success only if all four
-  # legs are; failure, cancelled and skipped all fail here.
+  # when every leg succeeded. needs.suites.result is success only if every
+  # leg and shard is; failure, cancelled and skipped all fail here.
   windows:
     name: windows suites + smoke runs
     needs: suites

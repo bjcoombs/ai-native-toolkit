@@ -10,6 +10,12 @@ inside its leg, so no leg is ever skipped at job level on purpose.
 The shared `Install ripgrep` step retries choco, then falls back to the pinned
 ripgrep GitHub release zip, checked against a pinned SHA256, so a Chocolatey
 outage cannot turn every leg red. Both paths install the same version.
+
+The assess and ghsync legs run as shards (tests/pytest_shard.py). Every shard
+number 1..N appears once per suite, each sharded suite step passes that leg's
+`--shard`, and the steps that must run once (the fleet golden run and the
+CPU-budget tests) run in shard 1 alone. tests/test_pytest_shard.py checks that
+the N shards of a collection are disjoint and cover it.
 """
 import re
 from pathlib import Path
@@ -21,6 +27,14 @@ REPO = Path(__file__).resolve().parent.parent
 WORKFLOW = REPO / ".github" / "workflows" / "windows.yml"
 REQUIRED_NAME = "windows suites + smoke runs"
 LEGS = {"assess", "scripts-contract", "ghsync", "smoke"}
+SHARDS = {"assess": 4, "ghsync": 2}
+SHARD_ARG = "-p pytest_shard --shard ${{ matrix.shard }}/${{ matrix.shards }}"
+# Steps that run in one shard of their leg: the golden run and the serial
+# CPU-budget pass each run once.
+SHARD_ONE_STEPS = {
+    "Fleet golden run against the committed Linux repos.jsonl",
+    "skills/assess CPU-budget tests",
+}
 # The shared setup every leg runs (plus the unnamed actions/checkout step).
 SETUP_STEPS = {
     "Keep LF line endings",
@@ -32,6 +46,8 @@ SETUP_STEPS = {
     "Python version",
 }
 GHSYNC_SUITE ="ghsync and ghreport suites under Git Bash"
+# Runs in every sharded leg; it only uploads timings.
+SHARD_UPLOAD = "Upload the shard's seconds per test file"
 # Every non-setup step and the one leg it runs in.
 STEP_LEG = {
     "Shell scripts are LF in a CRLF checkout": "smoke",
@@ -82,7 +98,8 @@ def test_matrix_runs_every_leg_without_fail_fast() -> None:
     _, job = _matrix_job(_jobs())
     strategy = job["strategy"]
     assert strategy["fail-fast"] is False
-    assert set(strategy["matrix"]["suite"]) == LEGS
+    assert set(strategy["matrix"]) == {"include"}
+    assert {leg["suite"] for leg in strategy["matrix"]["include"]} == LEGS
     assert job["timeout-minutes"] == 45
     assert job["runs-on"] == "windows-latest"
     assert "if" not in job, "a job-level if could skip every leg"
@@ -130,8 +147,57 @@ def test_every_suite_step_runs_in_exactly_its_leg() -> None:
     assert not missing, f"steps the map expects but the workflow lacks: {missing}"
     for name, leg in STEP_LEG.items():
         extra = " && steps.ghsync_gate.outputs.run != 'false'" if name == GHSYNC_SUITE else ""
+        if name in SHARD_ONE_STEPS:
+            extra = " && matrix.shard == 1"
         expected = f"${{{{ !cancelled() && matrix.suite == '{leg}'{extra} }}}}"
         assert steps[name].get("if") == expected, name
+
+
+def test_every_shard_of_a_suite_is_a_leg() -> None:
+    # A missing shard number would drop its files from Windows CI while every
+    # leg stayed green; a repeat would run them twice.
+    _, job = _matrix_job(_jobs())
+    legs = job["strategy"]["matrix"]["include"]
+    for suite in LEGS:
+        mine = [leg for leg in legs if leg["suite"] == suite]
+        n = SHARDS.get(suite)
+        if n is None:
+            assert mine == [{"suite": suite}], suite
+            continue
+        assert sorted(leg["shard"] for leg in mine) == list(range(1, n + 1)), suite
+        assert {leg["shards"] for leg in mine} == {n}, suite
+        assert all(set(leg) == {"suite", "shard", "shards"} for leg in mine), suite
+
+
+def test_sharded_suite_steps_pass_the_leg_shard() -> None:
+    _, job = _matrix_job(_jobs())
+    steps = {s.get("name"): s for s in job["steps"]}
+    for name in ("skills/assess pytest", GHSYNC_SUITE):
+        run = " ".join(steps[name]["run"].split())
+        assert SHARD_ARG in run, name
+        assert "--dist loadfile" in run, name
+        assert steps[name]["env"]["PYTHONPATH"] == "${{ github.workspace }}/tests", name
+        assert '--shard-record "${{ runner.temp }}/shard-seconds.json"' in run, name
+    # No other step shards: an unsharded leg runs its whole suite.
+    for name, step in steps.items():
+        if name not in ("skills/assess pytest", GHSYNC_SUITE):
+            assert "--shard" not in str(step.get("run", "")), name
+
+
+def test_shard_seconds_upload_never_fails_a_leg() -> None:
+    _, job = _matrix_job(_jobs())
+    step = next(s for s in job["steps"] if s.get("name") == SHARD_UPLOAD)
+    assert step["if"] == "${{ !cancelled() && matrix.shards > 1 }}"
+    assert step["continue-on-error"] is True
+    assert step["with"]["if-no-files-found"] == "ignore"
+
+
+def test_leg_names_carry_the_shard() -> None:
+    _, job = _matrix_job(_jobs())
+    assert job["name"] == (
+        "windows / ${{ matrix.suite }}"
+        "${{ matrix.shards && format(' {0}/{1}', matrix.shard, matrix.shards) || '' }}"
+    )
 
 
 def test_no_step_names_an_unknown_leg() -> None:
@@ -145,7 +211,7 @@ def test_no_step_names_an_unknown_leg() -> None:
         else:
             # A step with no leg guard runs in all four legs: only shared setup may.
             label = step.get("name", step.get("uses", ""))
-            assert label in SETUP_STEPS or str(label).startswith("actions/checkout@"), (
+            assert label in SETUP_STEPS | {SHARD_UPLOAD} or str(label).startswith("actions/checkout@"), (
                 f"{label!r} has no matrix.suite guard, so it runs in every leg"
             )
 
