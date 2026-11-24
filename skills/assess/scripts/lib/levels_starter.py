@@ -112,7 +112,7 @@ def write_starter(out: Path, profile: str | None = None, version: str | None = N
     except ProfileError as exc:  # name the user's file, never the temporary one
         raise StarterError(f"the copy does not load: {str(exc).replace(temporary.name, out.name)}") from exc
     except OSError as exc:
-        raise StarterError(f"cannot write {out}: {exc}") from exc
+        raise StarterError(f"cannot write {out}: {exc.strerror or exc}") from exc  # never the temporary name
     finally:
         temporary.unlink(missing_ok=True)
     return out

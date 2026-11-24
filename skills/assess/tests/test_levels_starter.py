@@ -122,3 +122,10 @@ def test_the_copy_keeps_the_usual_file_mode(tmp_path: Path) -> None:
     finally:
         os.umask(mask)
     assert out.stat().st_mode & 0o777 == 0o644
+
+
+def test_a_file_system_error_names_the_users_file_not_the_temporary_one(tmp_path: Path) -> None:
+    with pytest.raises(StarterError) as caught:
+        write_starter(tmp_path / "no" / "m.toml")
+    assert str(caught.value).startswith(f"cannot write {tmp_path / 'no' / 'm.toml'}: ")
+    assert "levels-new" not in str(caught.value)
