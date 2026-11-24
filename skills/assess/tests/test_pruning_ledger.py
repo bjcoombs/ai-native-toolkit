@@ -143,27 +143,19 @@ def test_unflagged_by_share_alone_saves_nothing_and_is_not_held() -> None:
     assert (entries[0]["runs_held"], credited) == (0, [])
 
 
-def test_a_file_trimmed_in_two_rounds_is_credited_once_for_the_whole_drop() -> None:
+def test_a_file_trimmed_in_two_rounds_is_credited_once_for_the_whole_drop(tmp_path: Path) -> None:
     """#1168: 261 -> 150 (still flagged) -> 60 credits one removal of 201 lines, not 201 + 90."""
-    def done(sha: str, value: int) -> PruningEntry:
-        found = removal({**_done(value), "completed_sha": sha})
-        assert found is not None
-        return found
-    first, second = done("1" * 40, 261), done("2" * 40, 150)
-
-    def step(prior: list[PruningEntry], removals: list[PruningEntry], placement: Any,
-             head: str) -> tuple[list[PruningEntry], list[PruningEntry]]:
-        return update_ledger(prior, removals, placement, held_now=GATES, held_before=GATES, head_sha=head,
-                             new_commit=True, repo_root=ROOT)
-    entries, _ = step([], [first], _placement(True, 150), "c1")  # round one: still flagged
+    repo, older, newer = _two_commits(tmp_path)
+    first, second = _round(older, 261), _round(newer, 150)
+    entries, _ = _step([], [first], _placement(True, 150), "c1", repo)  # round one: still flagged
     assert entries[0]["runs_held"] == 0
-    entries, _ = step(entries, [first, second], _placement(False, 60), "c2")  # round two lands
-    assert len(entries) == 1 and entries[0]["cost_before"] == 261 and entries[0]["merged"] == ["1" * 40]
-    entries, credited = step(entries, [first, second], _placement(False, 60), "c3")
-    assert [(e["saved"], e["completed_sha"]) for e in credited] == [(201, "2" * 40)]
+    entries, _ = _step(entries, [first, second], _placement(False, 60), "c2", repo)  # round two lands
+    assert len(entries) == 1 and entries[0]["cost_before"] == 261 and entries[0]["merged"] == [older]
+    entries, credited = _step(entries, [first, second], _placement(False, 60), "c3", repo)
+    assert [(e["saved"], e["completed_sha"]) for e in credited] == [(201, newer)]
     assert ledger_lines(entries, credited) == ["Pruned: always-on text in `CLAUDE.md`, saved 201 always-on lines"]
     # the folded round is never added again
-    later, credited = step(entries, [first, second], _placement(False, 60), "c4")
+    later, credited = _step(entries, [first, second], _placement(False, 60), "c4", repo)
     assert (later, credited) == (entries, [])
 
 
@@ -174,9 +166,9 @@ def _round(sha: str, value: int) -> PruningEntry:
 
 
 def _step(prior: list[PruningEntry], removals: list[PruningEntry], placement: Any,
-          head: str) -> tuple[list[PruningEntry], list[PruningEntry]]:
+          head: str, root: Path = ROOT) -> tuple[list[PruningEntry], list[PruningEntry]]:
     return update_ledger(prior, removals, placement, held_now=GATES, held_before=GATES, head_sha=head,
-                         new_commit=True, repo_root=ROOT)
+                         new_commit=True, repo_root=root)
 
 
 def test_a_folded_round_no_longer_done_unfolds_the_entry() -> None:
@@ -189,13 +181,14 @@ def test_a_folded_round_no_longer_done_unfolds_the_entry() -> None:
     assert [(e["completed_sha"], e["cost_before"], e.get("merged", [])) for e in entries] == [("2" * 40, 150, [])]
 
 
-def test_a_file_that_regrows_between_rounds_is_measured_from_the_first_start() -> None:
+def test_a_file_that_regrows_between_rounds_is_measured_from_the_first_start(tmp_path: Path) -> None:
     """Review of #1183: 261 -> 150 (flagged), regrows to 300, then 300 -> 60: credit 201, not 240."""
-    a, c = _round("1" * 40, 261), _round("3" * 40, 300)
-    entries, _ = _step([], [a], _placement(True, 150), "c1")
-    entries, _ = _step(entries, [a, c], _placement(False, 60), "c2")
-    assert (entries[0]["completed_sha"], entries[0]["cost_before"]) == ("3" * 40, 261)
-    _, credited = _step(entries, [a, c], _placement(False, 60), "c3")
+    repo, older, newer = _two_commits(tmp_path)
+    a, c = _round(older, 261), _round(newer, 300)
+    entries, _ = _step([], [a], _placement(True, 150), "c1", repo)
+    entries, _ = _step(entries, [a, c], _placement(False, 60), "c2", repo)
+    assert (entries[0]["completed_sha"], entries[0]["cost_before"]) == (newer, 261)
+    _, credited = _step(entries, [a, c], _placement(False, 60), "c3", repo)
     assert [e["saved"] for e in credited] == [201]
 
 
@@ -248,3 +241,10 @@ def test_several_stored_rounds_from_an_older_ledger_are_ordered_by_ancestry(tmp_
     entries, _ = update_ledger([c, a], [a, c], _placement(False, 60), held_now=GATES, held_before=GATES,
                                head_sha="h1", new_commit=True, repo_root=repo)
     assert [(e["completed_sha"], e["cost_before"], e["merged"]) for e in entries] == [(newer, 261, [older])]
+
+
+def test_a_new_round_that_does_not_descend_from_the_stored_one_takes_the_smaller_start(tmp_path: Path) -> None:
+    """Review of #1183: a stored round git cannot place before the new one gives no order."""
+    stored, _ = _step([], [_round("1" * 40, 300)], _placement(True, 280), "c1")
+    entries, _ = _step(stored, [_round("1" * 40, 300), _round("2" * 40, 261)], _placement(False, 60), "c2")
+    assert entries[0]["cost_before"] == 261

@@ -113,6 +113,10 @@ def _first_and_newest(old: list[PruningEntry], new: list[PruningEntry],
     new_order = _by_ancestry(new, repo_root) if len(new) > 1 else new
     if old:
         first = old_order[0] if old_order is not None else _smallest(old)
+        # a new round that does not descend from the stored one (a parallel branch, a backfilled
+        # entry) gives no order either: the smallest start of all, so an error only under-credits
+        if any(_git_order(repo_root, first["completed_sha"], e["completed_sha"]) is not True for e in new):
+            first = _smallest([*old, *new])
     else:
         first = new_order[0] if new_order is not None else _smallest(new)
     if new:
