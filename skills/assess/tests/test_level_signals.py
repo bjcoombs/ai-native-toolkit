@@ -250,8 +250,7 @@ def test_default_levels_loads_against_the_schema() -> None:
     maturity_model = load_default_levels()
     assert maturity_model["version"].startswith("default-")
     assert all(row["scope"] == "team" for row in maturity_model["rows"])
-    # Partial, Present; skill-disclosure and contributor-files are one condition each (#1045)
-    one = {"skill-disclosure", "skill-script-tests", "contributor-files"}
+    one = {"skill-disclosure", "skill-script-tests", "contributor-files"}  # one condition each (#1045); else 2
     assert all(len(row["levels"]) == (1 if row["id"] in one else 2) for row in maturity_model["rows"])
     assert "disagree" in DEFAULT_LEVELS.read_text(encoding="utf-8").lower()
 

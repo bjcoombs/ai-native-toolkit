@@ -1225,6 +1225,86 @@
       ]
     },
     {
+      "id": "secrets-guard",
+      "title": "Secrets guard",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "secrets-guard.1",
+          "truth": [
+            "governance"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "grade": "config_only",
+          "counts": false,
+          "criteria": [
+            {
+              "key": "secrets-guard.1:secrets_guard.configured",
+              "signal": "secrets_guard.configured",
+              "producer": {
+                "scan": "secrets_guard",
+                "collector": "core.secrets_guard"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "A secrets guard is configured (pre-commit hook or CI scan): is true",
+              "title": "A secrets guard is configured (a pre-commit hook counts; listed, not counted)",
+              "fix": "Add a secrets hook to .pre-commit-config.yaml (gitleaks or detect-secrets), or a secrets scan step to CI.",
+              "why": "A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.",
+              "why_source": "",
+              "input_class": "config_text",
+              "grade": "config_only",
+              "counts": false
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "id": "secrets-guard.2",
+          "truth": [
+            "governance"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "secrets-guard.2:secrets_guard.enforcement.present",
+              "signal": "secrets_guard.enforcement.present",
+              "producer": {
+                "scan": "secrets_guard",
+                "collector": "core.secrets_guard"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "A secrets scan runs where an agent cannot skip it (CI): is true",
+              "title": "A secrets scan runs where an agent cannot skip it",
+              "fix": "Add a secrets scan step to CI that runs on every change (gitleaks/gitleaks-action, trufflehog, or GitLab's Secret-Detection template); a pre-commit hook alone can be skipped with --no-verify.",
+              "why": "A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "contributor-files",
       "title": "Contributor files",
       "scope": "team",
@@ -1414,12 +1494,16 @@
       "conditions": [
         "layer-7-review.1",
         "layer-7-review.2",
-        "layer-8-agent-ops.1"
+        "layer-8-agent-ops.1",
+        "secrets-guard.1",
+        "secrets-guard.2"
       ],
       "listed": [
         "layer-7-review.1",
         "layer-7-review.2",
-        "layer-8-agent-ops.1"
+        "layer-8-agent-ops.1",
+        "secrets-guard.1",
+        "secrets-guard.2"
       ],
       "shared": [],
       "why": "That people stay in the loop on what agents change, and that what agents may do is agreed and visible.",
@@ -2710,6 +2794,67 @@
         "unclassified"
       ],
       "why": "A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue.",
+      "why_source": ""
+    },
+    {
+      "name": "secrets_guard",
+      "title": "Secrets guard",
+      "summary": "A secrets hook in the pre-commit config and a secrets scan in CI (gitleaks, detect-secrets, trufflehog, ggshield and others, GitLab Secret-Detection), each recorded with its own evidence grade.",
+      "collector": "core.secrets_guard",
+      "reads": [
+        "repo_root",
+        "scope"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "secrets_guard.ci.files": "path",
+          "secrets_guard.ci.tools": "token",
+          "secrets_guard.enforcement.reason": "reason",
+          "secrets_guard.enforcement.source": "token",
+          "secrets_guard.pre_commit.file": "path",
+          "secrets_guard.pre_commit.tools": "token",
+          "secrets_guard.sources.grade": "token",
+          "secrets_guard.sources.source": "token"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "secrets-guard"
+        ],
+        "conditions": [
+          "secrets-guard.1:secrets_guard.configured",
+          "secrets-guard.2:secrets_guard.enforcement.present"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "secret_scanning_not_read",
+          "means": "No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read.",
+          "next_step": "Add a secrets scan step to CI (gitleaks or trufflehog), or run with --platform so GitHub's settings are read."
+        }
+      ],
+      "evidence": [
+        {
+          "signal": "secrets_guard.configured",
+          "input_class": "config_text",
+          "grade": "config_only"
+        },
+        {
+          "signal": "secrets_guard.enforcement.present",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "config_only",
+        "measured"
+      ],
+      "why": "A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.",
       "why_source": ""
     },
     {
@@ -5439,6 +5584,19 @@
       "private": false
     },
     {
+      "name": "secrets_guard",
+      "title": "Secrets guard",
+      "publishes": [
+        "secrets_guard"
+      ],
+      "reads": [
+        "repo_root",
+        "scope"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "gap_actions",
       "title": "Gap actions",
       "publishes": [
@@ -5552,6 +5710,7 @@
         "promissory_markers",
         "review_evidence",
         "review_reality",
+        "secrets_guard",
         "skill_disclosure",
         "skill_script_tests",
         "stats_summary",
@@ -5639,6 +5798,7 @@
         "promissory_markers",
         "review_evidence",
         "review_reality",
+        "secrets_guard",
         "skill_disclosure",
         "skill_script_tests",
         "stats_summary",
@@ -5925,6 +6085,24 @@
       "input_class": "head_structure",
       "grade": "measured",
       "null_means": "no_skill_scripts: no skill in the repository, or in the skill unit, holds a script (skills_with_scripts 0), so there is nothing to test"
+    },
+    {
+      "path": "secrets_guard.configured",
+      "title": "A secrets guard is configured (pre-commit hook or CI scan)",
+      "type": "bool",
+      "collector": "core.secrets_guard",
+      "input_class": "config_text",
+      "grade": "config_only",
+      "null_means": ""
+    },
+    {
+      "path": "secrets_guard.enforcement.present",
+      "title": "A secrets scan runs where an agent cannot skip it (CI)",
+      "type": "bool",
+      "collector": "core.secrets_guard",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "secret_scanning_not_read: no secrets scan in CI on a GitHub repository whose own secret scanning was not read"
     },
     {
       "path": "contributor_files.guide.present",
