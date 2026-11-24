@@ -71,6 +71,7 @@ does not count). Tests: `tests/test_secrets_guard.py`.
 """
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -114,13 +115,17 @@ _CONTINUE_ON_ERROR = re.compile(r"^\s*(?:-\s+)?(?:(?:continue-on-error|allow_fai
 CHANGE_EVENTS = frozenset({"push", "pull_request", "pull_request_target", "merge_group"})
 _ON = re.compile(r"""^(?:on|"on"|'on'|true)\s*:\s*(.*)$""")
 _WORD = re.compile(r"[\w-]+")
+_RULE_CONDITION = re.compile(r"^\s*-?\s*(?:if|changes|exists)\s*:")
 _WHEN_NEVER = re.compile(r"^\s*-?\s*when:\s*['\"]?never\b", re.IGNORECASE)
 _STEP_START = re.compile(r"^(\s*)-\s")
+# CI that runs the repository's own pre-commit hooks over the checkout, in a command position:
+# ``pre-commit run [<hook>] --all-files`` (or ``--from-ref``/``--files``), or ``uses: pre-commit/action``.
+# A bare ``pre-commit run`` checks staged files only, which a CI checkout has none of.
+_PRE_COMMIT_RUN = re.compile(r"(?:^\s*(?:-\s+)?(?:run:\s*)?|[;&|]\s*)pre-commit run\b([^\n]*)")
+_PRE_COMMIT_ACTION = re.compile(r"^\s*-?\s*uses:\s*['\"]?pre-commit/action@")
+_PRE_COMMIT_SCOPE = re.compile(r"(?:^|\s)--(?:all-files|from-ref|files)\b")
 # A list of names, not commands: jobs (``needs:``), stages, runner tags, branches and paths. A
 # ``needs: [- gitleaks]`` names a job called gitleaks; a ``paths: [- trufflehog]`` a folder.
-# CI that runs the repository's own pre-commit hooks: every hook (``pre-commit run --all-files``,
-# ``uses: pre-commit/action``), or one by id (``pre-commit run gitleaks``).
-_PRE_COMMIT_RUN = re.compile(r"\bpre-commit run(?:\s+([\w-]+))?|^\s*-?\s*uses:\s*['\"]?pre-commit/action@")
 _NAME_LIST = re.compile(r"^\s*(?:needs|dependencies|extends|stages|tags|tags-ignore|paths|paths-ignore|"
                         r"branches|branches-ignore|only|except)\s*:\s*$")
 # A tool's container image, tag allowed: ``docker run -v $PWD:/p zricethezav/gitleaks:latest detect``,
@@ -255,16 +260,31 @@ def _runs_on_change(lines: list[str]) -> bool:
 
 
 def _gitlab_job_disabled(lines: list[str]) -> bool:
-    """Whether the visible ``secret_detection`` job sets ``when: never``, which switches off the job
-    and the template's job it overrides."""
+    """Whether the visible ``secret_detection`` job never runs: an unconditional ``when: never``, on
+    the job or as a rule with no ``if:``, ``changes:`` or ``exists:``. That switches off the job and
+    the template's job it overrides. A ``when: never`` under a condition skips some pipelines only."""
     for i, line in enumerate(lines):
-        if _GITLAB_JOB.match(line):
-            return any(_WHEN_NEVER.match(ln) for ln in lines[i + 1:_block_end(lines, i, 0)])
+        if not _GITLAB_JOB.match(line):
+            continue
+        end = _block_end(lines, i, 0)
+        for j in range(i + 1, end):
+            if not _WHEN_NEVER.match(lines[j]):
+                continue
+            indent = len(lines[j]) - len(lines[j].lstrip())
+            if not _STEP_START.match(lines[j]) and indent <= 2:
+                return True  # ``when: never`` on the job itself
+            start = j if _STEP_START.match(lines[j]) else next(
+                (k for k in range(j, i, -1) if _STEP_START.match(lines[k])), j)
+            item_indent = len(lines[start]) - len(lines[start].lstrip())
+            item = lines[start:_block_end(lines, start, item_indent)]
+            if not any(_RULE_CONDITION.match(ln) for ln in item):
+                return True
+        return False
     return False
 
 
 def _in_name_list(lines: list[str], i: int) -> bool:
-    """Whether list item ``i`` sits under a ``needs:``, ``dependencies:``, ``extends:`` or ``stages:`` key."""
+    """Whether list item ``i`` sits under a key that lists names, not commands (``_NAME_LIST``)."""
     indent = len(lines[i]) - len(lines[i].lstrip())
     for j in range(i - 1, -1, -1):
         line = lines[j]
@@ -284,10 +304,15 @@ def _ci_tools(text: str, hooks: frozenset[str] = frozenset()) -> list[str]:
     for i, line in enumerate(lines):
         if i in masked or not line.strip() or _MASKED.search(line):
             continue
-        run_hooks = _PRE_COMMIT_RUN.search(line)
+        if _PRE_COMMIT_ACTION.match(line):  # the action runs every hook over every file
+            tools.update(hooks)
+            continue
+        run_hooks = _PRE_COMMIT_RUN.match(line)
         if run_hooks:  # the pre-commit secrets hooks, run where they cannot be skipped
-            hook_id = run_hooks.group(1)
-            tools.update(hooks if hook_id is None or hook_id.startswith("-") else hooks & {hook_id.lower()})
+            rest = run_hooks.group(1).split()
+            if _PRE_COMMIT_SCOPE.search(run_hooks.group(1)):
+                hook_id = rest[0].lower() if rest and not rest[0].startswith("-") else None
+                tools.update(hooks if hook_id is None else hooks & {hook_id})
             continue
         uses = _USES.match(line)
         if uses:
@@ -344,7 +369,8 @@ def _on_github(root: Path) -> bool:
     def remote(*args: str) -> str:
         try:
             proc = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True,
-                                  encoding="utf-8", errors="replace", timeout=10)
+                                  encoding="utf-8", errors="replace", timeout=10,
+                                  env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"})  # read only
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return ""
         return proc.stdout.strip() if proc.returncode == 0 else ""

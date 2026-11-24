@@ -148,6 +148,13 @@ def test_a_github_workflow_counts_only_when_it_runs_on_a_change(tmp_path: Path, 
     assert block["ci"]["present"] is counts
 
 
+def test_a_conditional_when_never_rule_still_runs_the_scan(tmp_path: Path) -> None:
+    text = ("include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n"
+            "secret_detection:\n  rules:\n    - if: $CI_COMMIT_BRANCH == \"dev\"\n      when: never\n"
+            "    - when: on_success\n")
+    assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["tools"] == ["secret_detection"]
+
+
 @pytest.mark.parametrize(("rel", "text"), [
     (".github/workflows/x.yml", "jobs:\n  s:\n    if: false\n    steps:\n      - run: gitleaks detect\n"),
     (".github/workflows/x.yml", "jobs:\n  s:\n    if: ${{ false }}\n    steps:\n      - run: gitleaks detect\n"),
@@ -201,6 +208,8 @@ PRE_COMMIT = "repos:\n  - repo: https://github.com/gitleaks/gitleaks\n    hooks:
     ("  - run: pre-commit run --all-files\n", ["gitleaks"]),
     ("  - run: pre-commit run gitleaks --all-files\n", ["gitleaks"]),
     ("  - run: pre-commit run eslint --all-files\n", []),  # another hook by id
+    ("  - run: pre-commit run gitleaks\n", []),  # staged files only: none in CI
+    ("  - name: pre-commit run --all-files\n    run: echo hi\n", []),  # a step label
 ])
 def test_ci_that_runs_the_pre_commit_secrets_hooks_is_a_scan(tmp_path: Path, step: str, tools: list[str]) -> None:
     root = _repo(tmp_path, {".pre-commit-config.yaml": PRE_COMMIT, ".github/workflows/x.yml": "steps:\n" + step})
