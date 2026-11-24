@@ -80,13 +80,13 @@ def _actions(repo: Path, *entries: dict[str, Any]) -> None:
                                                    encoding="utf-8")
 
 
-def test_a_first_run_says_so_and_names_the_next_blocker(repo: Path) -> None:
+def test_a_first_run_says_so_and_keeps_the_next_blocker_as_data(repo: Path) -> None:
     block = since_last_run(_level("met", "unmet"), repo / ".assess", repo)
     assert block["first_run"] is True and block["previous_commit"] is None
     assert (block["closed"], block["closed_count"], block["gates_gained"], block["gates_lost"]) == (
         None, None, None, None)
-    assert block["lines"] == [FIRST_RUN, "Next blocker: CI runs tests"]
-    assert block["markdown"].startswith(f"- {FIRST_RUN}\n")
+    assert block["lines"] == [FIRST_RUN] and block["next_blocker"] == "ci_runs_tests"
+    assert block["markdown"] == f"- {FIRST_RUN}"
 
 
 def test_only_actions_closed_after_the_previous_commit_are_credited(repo: Path) -> None:
@@ -112,7 +112,7 @@ def test_only_actions_closed_after_the_previous_commit_are_credited(repo: Path) 
     assert "  1 more done action(s) name a commit not in this clone, so they were not checked" in block["lines"]
     assert f"  - `{after[:7]}` Run the tests in CI" in block["markdown"]
     assert "Gates gained: CI runs tests" in block["lines"] and "Gates lost: none" in block["lines"]
-    assert block["lines"][-1] == "Next blocker: coverage gate"
+    assert block["lines"][-1] == "Gates lost: none" and block["next_blocker"] == "coverage_gate"
 
 
 def test_actions_json_is_read_at_head_not_from_the_working_tree(repo: Path) -> None:
@@ -135,7 +135,7 @@ def test_unknown_previous_state_reads_null_not_zero(repo: Path) -> None:
     assert block["closed_reason"] == "no_previous_commit"
     assert "Closed since last run: not known (the previous run recorded no commit)" in block["lines"]
     assert "Gates gained: not known (the previous run has no level result this model can compare)" in block["lines"]
-    assert block["lines"][-1] == "Next blocker: none, every gate is held"
+    assert not any(line.startswith("Next blocker") for line in block["lines"])
     (repo / ".assess" / "run-context.json").write_text("{not json", encoding="utf-8")
     block = since_last_run(_custom(_level("met", "met")), repo / ".assess", repo)
     assert block["first_run"] is False and block["closed_reason"] == "previous_unreadable"
@@ -157,7 +157,7 @@ def test_a_lost_gate_is_listed() -> None:
 def test_counts_only_keeps_counts_and_tokens_and_drops_the_words(repo: Path) -> None:
     block = since_last_run(_level("met", "unmet"), repo / ".assess", repo)
     kept = counts_only({"since_last_run": block})["since_last_run"]
-    assert kept["lines"] == 2 and "markdown" not in kept  # dropped text: a list reads as its length
+    assert kept["lines"] == 1 and "markdown" not in kept  # dropped text: a list reads as its length
     assert kept["first_run"] is True and kept["next_blocker"] == "ci_runs_tests"
 
 
@@ -176,9 +176,8 @@ def test_an_action_closed_between_two_runs_opens_the_report_and_the_log(ci2: Pat
     assert block["previous_run_id"] == first["run_id"]
     report = subprocess.run([sys.executable, str(SCRIPTS / "assess_report.py"), str(ci2), "--stdout"],
                             capture_output=True, encoding="utf-8", errors="replace", check=True).stdout
-    since = report.index("## Since Last Run")
-    assert since < report.index("## Headline")
-    assert "- Closed since last run: 1" in report and f"`{sha[:7]}` Enforce a coverage gate" in report
+    card = report.split("\n## ", 1)[0]
+    assert f"Since last run: 1 action closed (`{sha[:7]}`)." in card
     log = (ci2 / ".assess" / "log.md").read_text(encoding="utf-8")
     latest = log[log.rindex("## "):]
     assert "- Closed since last run: 1" in latest
@@ -295,8 +294,8 @@ def test_a_log_without_a_committed_baseline_makes_this_run_the_baseline(repo: Pa
             (repo / ".assess" / "prior-level.json").write_text(json.dumps(prior), encoding="utf-8")
         block = since_last_run(_level("met", "unmet"), repo / ".assess", repo)
         assert (block["first_run"], block["closed_reason"]) == (True, None)
-        assert block["lines"] == [FIRST_RUN, "Next blocker: CI runs tests"]
-        assert FIRST_RUN == "This run is your baseline."
+        assert block["lines"] == [FIRST_RUN]
+        assert FIRST_RUN == "This run is your baseline; the next run reports what moved."
         assert not any("not known" in line for line in block["lines"])
 
 
@@ -354,7 +353,7 @@ def test_a_custom_models_log_with_earlier_runs_but_no_context_is_not_a_first_run
 def test_an_unavailable_level_never_claims_every_gate_is_held(repo: Path) -> None:
     block = since_last_run({"available": False, "reason": "boom"}, repo / ".assess", repo)
     assert block["next_blocker"] is None
-    assert block["lines"][-1] == "Next blocker: not known (the level result is unavailable for this run)"
+    assert not any("every gate is held" in line for line in block["lines"])
 
 
 def test_a_malformed_actions_json_and_a_shallow_clone_read_not_known(repo: Path, tmp_path: Path) -> None:
@@ -394,7 +393,7 @@ def test_the_committed_baseline_survives_a_deleted_run_context(ci2: Path) -> Non
     assert (block["gates_gained"], block["gates_lost"]) == ([], [])
     report = subprocess.run([sys.executable, str(SCRIPTS / "assess_report.py"), str(ci2), "--stdout"],
                             capture_output=True, encoding="utf-8", errors="replace", check=True).stdout
-    assert "- Closed since last run: 1" in report and f"`{sha[:7]}`" in report
+    assert f"Since last run: 1 action closed (`{sha[:7]}`)." in report
 
 
 def test_a_committed_baseline_compares_the_held_gates(repo: Path) -> None:

@@ -7,15 +7,14 @@ tokens and produces the same report for the same context, on every PR forever.
 It renders:
 - the header: the run date, the `/assess` version (left out when the run read none,
   ``made_by``, #1166) and the measured commit,
-- the executive summary first (``lib/exec_summary.py``, #1102): the Step and what an
-  agent can do there, the next gate as a task, what changed since the last run, and one
-  linked call to action, pasted from the ``headline`` block's ``summary_markdown``,
-  then the fixed glossary line (``GLOSSARY_LINE``) linking each term to ``docs/glossary.md``,
-- the "Since Last Run" section (``lib/since_last_run.py``, #1083): actions closed
-  since the previous run with their commits, gates gained or lost and the next blocker,
-- the headline (``lib/headline.py``, #747, #844, #1083): the Step, the gate that
-  blocks the next one, "Catalogue coverage: N of M measured" and the per-tag strip,
-  pasted from the run context's ``headline`` block,
+- the top card first, before any ``## `` heading (``lib/top_card.py``, #1252): the Step, the
+  gates held, the gate that blocks the next Step, what moved since the last run, and one
+  Start here and Done when, each fact once, pasted from the ``headline`` block's
+  ``summary_markdown``, then the fixed glossary line (``GLOSSARY_LINE``) linking each term
+  to ``docs/glossary.md``,
+- "Catalogue Coverage" (``lib/headline.py``, #747, #844, #1083): the conditions not measured
+  with their reasons, the model version and the per-tag strip, pasted from the run context's
+  ``headline`` block, then the monorepo unit roll-up,
 - the diagram sections (``lib/assess_diagrams.py``, #942, and
   ``lib/assess_diagrams_review.py``, #943): the evidence waffle, the doc-drift map and
   the review strip the publish step wrote beside the report, linked, or why each was
@@ -112,7 +111,7 @@ REPORT_TEMPLATE = Template("""# Deterministic Assessment Snapshot: $repo_name
 
 _Generated $run_date by $made_by.${commit_note}_
 
-${summary_section}${since_section}## Headline
+${summary_section}## Catalogue Coverage
 
 $headline
 
@@ -579,21 +578,7 @@ def _render_loc_split(loc: dict[str, Any]) -> str:
     return f"; code {_fmt(loc['max_code'])}, data {_fmt(loc['max_data'])}"
 
 
-def render_since_section(ctx: dict[str, Any]) -> str:
-    """The "Since Last Run" section that opens the report (#1083), ending in a blank line.
-
-    Empty for a run-context written before the block existed; a degraded block says it
-    was not measured, with its reason.
-    """
-    block = ctx.get("since_last_run")
-    if not isinstance(block, dict):
-        return ""
-    if block.get("available") is not True or not isinstance(block.get("markdown"), str):
-        return f"## Since Last Run\n\n_Not measured: {block.get('reason') or 'unavailable'}._\n\n"
-    return f"## Since Last Run\n\n{block['markdown']}\n\n"
-
-
-# The fixed line under the executive summary (#1102 part B): each term the summary
+# The fixed line under the top card (#1102 part B, #1252): each term the card
 # introduces links to its plain-English entry. skills/assess-findings/SKILL.md carries it
 # verbatim, so both report paths match (tests/test_glossary.py).
 GLOSSARY_LINE = (
@@ -605,10 +590,10 @@ GLOSSARY_LINE = (
 
 
 def render_summary_section(ctx: dict[str, Any]) -> str:
-    """The executive summary and its call to action (#1102), then the glossary line
-    (``GLOSSARY_LINE``), ending in a blank line. The summary is left out when the headline
-    has none (unavailable, no Steps, or a context written before it); the glossary line
-    always renders."""
+    """The top card (``lib/top_card.py``, #1252), then the glossary line (``GLOSSARY_LINE``),
+    ending in a blank line, all before the first ``## `` heading. The card is left out when the
+    headline has none (unavailable, or a context written before it); the glossary line always
+    renders."""
     markdown = as_headline(ctx.get("headline"))["summary_markdown"]
     return f"{markdown}\n\n{GLOSSARY_LINE}\n\n" if markdown else f"{GLOSSARY_LINE}\n\n"
 
@@ -658,7 +643,6 @@ def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None =
         made_by=made_by(ctx),
         commit_note=_render_commit_note(ctx),
         summary_section=render_summary_section(ctx),
-        since_section=render_since_section(ctx),
         headline=_headline_markdown(ctx),
         diagrams_section=diagrams_section(build_all(ctx), assess_dir),
         files_scored=_fmt(stats.get("files_scored", 0)),

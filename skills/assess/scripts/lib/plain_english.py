@@ -11,10 +11,10 @@ and no phrasal verb. ``lint(text)`` returns a ``PlainIssue`` per sentence that b
   their words, matched as whole words, case-insensitively.
 
 ``fixed_lines()`` names every fixed line by source and key: ``headline.GATE_CHANGE`` and
-``GATE_NOUN``, ``exec_summary.GATE_TASK``, ``assess_diagrams_ladder.STEP_MEANING``,
+``GATE_NOUN``, ``top_card.GATE_TASK`` and ``GATE_GAP``, ``assess_diagrams_ladder.STEP_MEANING``,
 ``keyhole_signals.FINDING_ACTIONS``, and the summary lines and call to action rendered for
-every Step of the default model (``exec_summary.summary_lines``, ``call_to_action``), so the
-words as printed are checked, not only the tables. ``tests/test_plain_english.py`` asserts the
+every Step of the default model (``top_card.card_lines``, #1252), so the words as printed
+are checked, not only the tables. ``tests/test_plain_english.py`` asserts the
 lint passes on all of them. Machine-read output (run-context keys, reason codes, the badge)
 is not prose and is not linted.
 
@@ -39,9 +39,8 @@ gate notes and reason words) read the one tuple. Tests: ``tests/test_plain_engli
 from __future__ import annotations
 
 import re
-from typing import TypedDict, cast
+from typing import TypedDict
 
-from lib.level_result_types import LevelResult
 
 __all__ = ["APPROVED_WHYS", "CRITICAL_WORDS", "CRITICAL_WORD_EXEMPT", "IDIOMS", "MAX_WORDS", "MANIFEST_PROSE", "PlainIssue", "fixed_lines", "lint",
            "critical_words", "manifest_lines", "untranslated_tokens"]
@@ -96,38 +95,40 @@ def lint(text: str) -> list[PlainIssue]:
 
 
 def _rendered() -> dict[str, str]:
-    """The summary lines and call to action as printed, for each Step of the default model."""
-    from lib.exec_summary import call_to_action, summary_lines
+    """The top card's lines as printed, for each Step of the default model (#1252)."""
     from lib.level_tally import default_model
+    from lib.top_card import card_lines
     model = default_model()
     steps = model.get("steps", [])
+    tally = {"met": 0, "measured": 0, "not_measured": 0}
     out: dict[str, str] = {}
     for s in steps:
         gates = [g for g in s["gates"] if g["id"] not in
                  {x["id"] for p in steps if p["step"] == s["step"] - 1 for x in p["gates"]}]
         blockers = [{"kind": "gate", "gate": g["id"], "condition": f"{g['row']}.{g['level']}", "state": "unmet"}
                     for g in gates]
-        level = cast(LevelResult, {"step": s["step"] - 1 or None,
-                                   "next_step": {"step": s["step"], "blockers": blockers}})
+        level: dict[str, object] = {"step": s["step"] - 1 or None, "next_step": {"step": s["step"], "blockers": blockers},
+                 "tally": tally, "conditions": []}
         if s["step"] > 1:
-            for i, line in enumerate(summary_lines(level, None, model)):
-                out[f"summary.step{s['step'] - 1}.{i}"] = line
-            out[f"call_to_action.step{s['step'] - 1}"] = call_to_action(level)
+            for i, line in enumerate(card_lines(level, model, None)):
+                out[f"card.step{s['step'] - 1}.{i}"] = line
     top = max((s["step"] for s in steps), default=0)
     if top:
-        for i, line in enumerate(summary_lines(cast(LevelResult, {"step": top, "next_step": None}), None, model)):
-            out[f"summary.step{top}.{i}"] = line
+        level = {"step": top, "next_step": None, "tally": tally, "conditions": []}
+        for i, line in enumerate(card_lines(level, model, {"available": True, "first_run": True})):
+            out[f"card.step{top}.{i}"] = line
     return out
 
 
 def fixed_lines() -> dict[str, str]:
     """Every fixed user-facing line, keyed ``<source>.<key>``."""
     from lib.assess_diagrams_ladder import STEP_MEANING
-    from lib.exec_summary import GATE_TASK
     from lib.headline import GATE_CHANGE, GATE_NOUN
     from lib.keyhole.keyhole_signals import FINDING_ACTIONS
+    from lib.top_card import GATE_GAP, GATE_TASK
     out: dict[str, str] = {}
     for source, table in (("GATE_CHANGE", GATE_CHANGE), ("GATE_NOUN", GATE_NOUN), ("GATE_TASK", GATE_TASK),
+                          ("GATE_GAP", GATE_GAP),
                           ("STEP_MEANING", STEP_MEANING), ("FINDING_ACTIONS", FINDING_ACTIONS)):
         out.update({f"{source}.{k}": str(v) for k, v in table.items()})
     out.update(_rendered())

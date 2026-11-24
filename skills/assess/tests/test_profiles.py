@@ -109,7 +109,7 @@ def test_handover_met_reads_ready_for_handover() -> None:
     lines = _summary(_blocks(), resolve("handover", None))
     assert lines[:2] == ["Maturity model: profile handover, not the default.",
                          "Ready for handover (profile: handover)."]
-    assert lines[2].startswith("Step 4 of 4: ")
+    assert lines[2].startswith("Holding Step 4 of 4")
 
 
 def test_without_ci_running_the_tests_the_one_gap_is_named() -> None:
@@ -302,7 +302,7 @@ def test_the_step_line_keeps_its_glossary_link_under_a_profile() -> None:
     level = core_scans.level(*(_blocks().get(k) for k in LEVEL_READS), choice)
     paragraphs = core_scans.headline(level, None, choice)["summary_markdown"].split("\n\n")
     assert paragraphs[0] == "Maturity model: profile handover, not the default."
-    assert paragraphs[2].startswith("[Step](") and "#step) 4 of 4: " in paragraphs[2]
+    assert paragraphs[2].startswith("**Holding [Step](") and "#step) 4 of 4" in paragraphs[2]
 
 
 def test_a_custom_model_may_not_take_a_shipped_version(tmp_path: Path) -> None:
@@ -326,9 +326,10 @@ def test_an_unmeasured_hazard_is_missing() -> None:
 def test_a_custom_steps_own_name_words_the_summary(tmp_path: Path) -> None:
     path = tmp_path / "named.toml"
     path.write_text(CUSTOM.replace('name = "Supervised agent PRs"', 'name = "Handover ready"'), encoding="utf-8")
+    # at the top Step the card holds the Step (below it, tests/test_top_card.py pins the name)
     lines = _summary(_blocks(), resolve(None, path))
-    assert any(line.startswith("Step 2 of 2: Handover ready.") for line in lines)
-    assert any(line.startswith("Step 4 of 4: ") and "Handover" not in line
+    assert any(line.startswith("Holding Step 2 of 2") for line in lines)
+    assert any(line.startswith("Holding Step 4 of 4") and "Handover" not in line
                for line in _summary(_blocks(), resolve("handover", None)))
 
 

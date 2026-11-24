@@ -14,7 +14,7 @@ import pytest
 
 from lib import core_scans
 from lib.assess_diagrams import build_diagrams
-from lib.exec_summary import since_line
+from lib.top_card import since_line
 from lib.level_tally import LEVEL_READS, default_model
 from lib.model_change import (CUSTOM_NOT_DRAWN, across_models, custom_run, model_changed_line, model_for_level,
                               model_name, previous_levels_version, units_label)
@@ -68,7 +68,7 @@ def test_a_gate_is_never_compared_across_models() -> None:
                               "Next blocker: coverage gate"]
     assert block["markdown"].splitlines()[1] == "- Model changed since last run (default → handover); gates not compared"
     assert model_changed_line(block) == block["lines"][1]
-    assert since_line(block) == ("Since last run: no actions closed; "
+    assert since_line(block) == ("Since last run: "
                                  "model changed (default → handover); gates not compared.")
 
 
