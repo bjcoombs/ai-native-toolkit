@@ -49,6 +49,8 @@ When `.claude-plugin/plugin.json` moves, move the GitLab gate pin with it in the
 
 `skills/assess/tests/test_gitlab_gate.py::test_toolkit_pin_follows_the_plugin_version` fails until all three match `plugin.json`.
 
+After the hand bump of `plugin.json`, run `make catalog` once more: `docs/checks.html` stamps the plugin version into its header and CI examples, and `make fold` ran `make regen` before the bump. `tests/test_catalog.py` reports the page stale until then.
+
 ## Marketplace listing (manual, web-only)
 
 The repo also publishes the [AI-Readiness Assess Gate action](https://github.com/marketplace/actions/ai-readiness-assess-gate). The listing's "latest version" does **not** advance with `gh release create`, and no API exists for the Marketplace flag. To refresh it: edit the release in the web UI, tick "Publish this Action to the GitHub Marketplace", update. Do this on marathon releases. Consumers are unaffected either way: their `uses:` pins and Dependabot bumps read git tags, not the listing.
