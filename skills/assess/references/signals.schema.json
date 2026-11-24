@@ -115,6 +115,7 @@
           "documentation",
           "gap_actions",
           "gate_cost_estimate",
+          "github_secret_scanning",
           "guardrails",
           "instruction_claims",
           "instruction_placement",
@@ -1333,6 +1334,30 @@
               "reason": {
                 "type": "string",
                 "description": "'code: sentence'. The codes name the missing piece: knowledge_base (the repository is a knowledge base (archetype knowledge-base), which takes no code patches); org_policy_not_read (the repository holds no security policy. The owner's shared .github repository, whose policy GitHub shows on this one, was not read. The cause is offline use, no --platform, a remote not on github.com, or gh not signed in). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "github_secret_scanning": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: settings_not_readable (gitHub returns a repository's secret scanning and push protection settings only to a caller with admin rights on it). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [

@@ -768,6 +768,12 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `org_security_policy.reason` | reason code |
 | `org_security_policy.path` | dropped |
 
+## github_secret_scanning
+
+| Field | Kept as |
+|---|---|
+| `github_secret_scanning.reason` | reason code |
+
 ## contributor_files
 
 | Field | Kept as |

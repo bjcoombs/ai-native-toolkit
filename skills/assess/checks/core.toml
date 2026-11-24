@@ -102,6 +102,7 @@ fragments = [
   "skill_script_tests",
   "skill_personal_data",
   "org_security_policy",
+  "github_secret_scanning",
   "contributor_files",
   "secrets_guard",
   "gap_actions",

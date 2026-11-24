@@ -586,6 +586,22 @@ The SECURITY file in the owner's public .github repository, which GitHub shows o
   - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
   - `no_remote`: The repository has no github.com remote, so there is no owner .github repository to read. Nothing to change: the shared-policy fallback is GitHub's; commit a SECURITY.md in the repository.
 
+### `github_secret_scanning`: GitHub secret scanning
+
+A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.
+
+GitHub's own secret scanning and push protection settings, read through gh. They are returned only to a caller with admin rights on the repository.
+
+- Collector: `core.github_secret_scanning`, reading `repo_root`.
+- Network: yes, GitHub or GitLab (with --platform).
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `github_secret_scanning.reason` reason.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
+  - `settings_not_readable`: GitHub returns a repository's secret scanning and push protection settings only to a caller with admin rights on it. Run /assess with gh signed in as a repository admin, or add a secrets scan to CI.
+
 ### `secrets_guard`: Secrets guard
 
 A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.
@@ -1180,6 +1196,7 @@ The scan registry in run order, including the private inputs other scans read.
 | `skill_script_tests` | Skill script tests | `repo_root`, `scope`, `excludes` | `skill_script_tests` | no |
 | `skill_personal_data` | Personal data in skill text | `repo_root`, `scope`, `excludes` | `skill_personal_data` | no |
 | `org_security_policy` | Owner's shared security policy | `repo_root` | `org_security_policy` | yes |
+| `github_secret_scanning` | GitHub secret scanning | `repo_root` | `github_secret_scanning` | yes |
 | `contributor_files` | Contributor files | `repo_root`, `archetype`, `org_security_policy` | `contributor_files` | no |
 | `secrets_guard` | Secrets guard | `repo_root`, `scope`, `ghsync_root` | `secrets_guard` | no |
 | `gap_actions` | Gap actions | `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`, `instruction_placement` | `gap_actions` | no |

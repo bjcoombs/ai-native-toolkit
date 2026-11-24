@@ -2900,6 +2900,47 @@
       "why_source": ""
     },
     {
+      "name": "github_secret_scanning",
+      "title": "GitHub secret scanning",
+      "summary": "GitHub's own secret scanning and push protection settings, read through gh. They are returned only to a caller with admin rights on the repository.",
+      "collector": "core.github_secret_scanning",
+      "reads": [
+        "repo_root"
+      ],
+      "network": true,
+      "platform": true,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "github_secret_scanning.reason": "reason"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "network",
+          "means": "It reads GitHub or GitLab, and a run makes no network call without --platform.",
+          "next_step": "Run the fleet or assess_signals.py with --platform, with gh or glab signed in."
+        },
+        {
+          "code": "settings_not_readable",
+          "means": "GitHub returns a repository's secret scanning and push protection settings only to a caller with admin rights on it.",
+          "next_step": "Run /assess with gh signed in as a repository admin, or add a secrets scan to CI."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ],
+      "why": "A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.",
+      "why_source": ""
+    },
+    {
       "name": "secrets_guard",
       "title": "Secrets guard",
       "summary": "A secrets hook in the pre-commit config and a secrets scan in CI, such as gitleaks, trufflehog or GitLab Secret-Detection. Each is recorded with its own evidence grade.",
@@ -5692,6 +5733,18 @@
       "title": "Owner's shared security policy",
       "publishes": [
         "org_security_policy"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": true,
+      "private": false
+    },
+    {
+      "name": "github_secret_scanning",
+      "title": "GitHub secret scanning",
+      "publishes": [
+        "github_secret_scanning"
       ],
       "reads": [
         "repo_root"

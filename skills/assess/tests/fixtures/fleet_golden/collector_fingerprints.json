@@ -168,6 +168,14 @@
       },
       "revision": 1
     },
+    "core.github_secret_scanning": {
+      "repos": {
+        "grpa/sub/deep/svc2": "dfac5a20120b3f6470dcd3a200c1b207d7621e7b893d270dd7ccb7a2d8b024f3",
+        "grpa/svc1": "dfac5a20120b3f6470dcd3a200c1b207d7621e7b893d270dd7ccb7a2d8b024f3",
+        "grpb/lib1": "dfac5a20120b3f6470dcd3a200c1b207d7621e7b893d270dd7ccb7a2d8b024f3"
+      },
+      "revision": 1
+    },
     "core.guardrails": {
       "repos": {
         "grpa/sub/deep/svc2": "f95fa40b5ea87163e00c690f987a07bd1370aca476695c2f4782afd89217a551",
