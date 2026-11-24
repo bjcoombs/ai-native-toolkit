@@ -593,7 +593,7 @@ def test_gates_not_compared_across_models_never_reads_clean(tmp_path):
     assert "warn gates not compared" not in text and "clean snapshot" not in text
     text = format_verdict(evaluate(ctx, off))
     assert ("warn gates not compared: model changed (profile handover -> the default model); commit a "
-            "run of one maturity model to re-arm fail_on_gate_loss") in text
+            "run of one maturity model so the next run compares gates") in text
     assert "clean snapshot" not in text and "RESULT: PASS" in text
 
     to_profile = _loss_ctx(None)

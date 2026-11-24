@@ -81,7 +81,7 @@ def not_compared(ctx: Mapping[str, Any]) -> str | None:
     """Why this run compared no gate across maturity models, with what to do, or None. A profile
     run leaves the committed baseline alone, so its advice is to gate a default run; a default run
     after a model change (a ``run-context.json`` fallback or an older ``prior-level.json``) is
-    re-armed by committing a run of one model."""
+    compared again once a run of one model is committed."""
     changed = model_change_reason(ctx)
     label = uncompared_profile_run(ctx) if changed is None else non_default_label(ctx.get("level"))
     if changed is None and label is None:
@@ -89,7 +89,7 @@ def not_compared(ctx: Mapping[str, Any]) -> str | None:
     why = changed or f"no committed per-profile baseline yet for {label} (#1184)"
     if label is not None:
         return f"{why}; the gate compares default-model runs only, so run it on a default /assess"
-    return f"{why}; commit a run of one maturity model to re-arm fail_on_gate_loss"
+    return f"{why}; commit a run of one maturity model so the next run compares gates"
 
 
 def _steps() -> list[StepDef]:

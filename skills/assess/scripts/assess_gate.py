@@ -24,12 +24,15 @@ snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
   earlier ``run-context.json`` left on disk is a warn line. Without the opt-in a lost
   gate is a warn line only. A run whose gates were not compared across maturity models
   (``gate_loss.not_compared``, #1150) prints a warn line naming why, never "clean snapshot";
-  with ``fail_on_gate_loss`` on, a run whose previous run used another model (the
-  ``since_last_run`` model-changed line names both) fails: "gates not compared: model changed
-  (default → handover); cannot confirm no gate was lost". So does a profile or ``--levels`` run
-  that compared no gate ("gates not compared under profile handover: no committed per-profile
-  baseline yet (#1184)"); one whose previous run used the same model compares normally.
-  Without the opt-in each is a warn line.
+  with ``fail_on_gate_loss`` on and a committed baseline, a run whose previous run used another
+  model (the ``since_last_run`` model-changed line names both) fails: "gates not compared: model
+  changed (the default model -> profile handover); cannot confirm no gate was lost". With no
+  committed baseline that change came from a ``run-context.json`` left on disk, so it is a warn
+  line beside "no baseline yet", as a lost gate read from it is. A profile or ``--levels`` run
+  that compared no gate fails too ("gates not compared under profile handover: no committed
+  per-profile baseline yet (#1184)"); one whose previous run used the same model compares
+  normally. Without the opt-in each is a warn line. Printed output is ASCII apart from the
+  headline's own text: a model pair reads ``->``, which a cp1252 console can encode.
 
 A third, explanatory part: when the committed ``.assess/findings.json`` (read
 from disk, or the prior the run recorded before rewriting it) was
