@@ -364,11 +364,18 @@ def _hooks_run_in_ci(root: Path, hook: PreCommitGuard) -> frozenset[str]:
         if not m:
             continue
         indent = len(m.group(1))
-        for ln in lines[i + 1:]:
+        for k in range(i + 1, len(lines)):
+            ln = lines[k]
             if ln.strip() and (len(ln) - len(ln.lstrip()) <= indent or _HOOK_ID.match(ln)):
                 break
             stages = _STAGES.match(ln)
-            if stages and not _DEFAULT_STAGES & set(re.findall(r"[\w-]+", stages.group(1))):
+            if not stages:
+                continue
+            values = stages.group(1).strip()
+            if not values:  # a block list: ``stages:`` then ``- pre-commit`` lines below it
+                key_indent = len(ln) - len(ln.lstrip())
+                values = " ".join(x.strip().lstrip("- ") for x in lines[k + 1:_list_block_end(lines, k, key_indent)])
+            if not _DEFAULT_STAGES & set(re.findall(r"[\w-]+", values)):
                 skipped.add(_hook_tool(m.group(2).lower()))
     return frozenset(hook["tools"]) - skipped
 

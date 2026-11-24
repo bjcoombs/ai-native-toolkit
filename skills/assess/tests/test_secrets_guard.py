@@ -270,6 +270,17 @@ def test_a_hook_id_variant_maps_to_its_tool(tmp_path: Path) -> None:
     assert scan_secrets_guard(root)["ci"]["tools"] == ["gitleaks"]
 
 
+@pytest.mark.parametrize(("stages", "runs"), [
+    ("        stages:\n          - pre-commit\n", True),
+    ("        stages:\n        - pre-commit\n        - pre-push\n", True),
+    ("        stages:\n          - manual\n", False),
+])
+def test_a_block_style_stages_list_is_read(tmp_path: Path, stages: str, runs: bool) -> None:
+    root = _repo(tmp_path, {".pre-commit-config.yaml": PRE_COMMIT + stages,
+                            ".github/workflows/x.yml": "steps:\n  - run: pre-commit run --all-files\n"})
+    assert scan_secrets_guard(root)["ci"]["present"] is runs
+
+
 def test_a_manual_stage_hook_is_not_run_by_ci(tmp_path: Path) -> None:
     cfg = PRE_COMMIT + "        stages: [manual]\n"
     root = _repo(tmp_path, {".pre-commit-config.yaml": cfg,
