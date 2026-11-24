@@ -1866,7 +1866,7 @@
       "unknown_reasons": [
         {
           "code": "go_rust_gate_form_not_read",
-          "means": "The repository holds a go.mod or Cargo.toml with no coverage gate found for it. No gate of at least 50 percent exists for another language either (a low Python gate beside go.mod is not unmet). Its gate may be a script that compares go tool cover to a number, which this scan does not read.",
+          "means": "A go.mod or Cargo.toml has no coverage gate found for it. No gate of at least 50 percent exists for another language either (a low Python gate beside go.mod is not unmet). Its gate may be a script that compares go tool cover (or a report) to a number, which this scan does not read.",
           "next_step": "Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines.",
           "carried_in": "unmeasured_reason"
         },
@@ -2394,7 +2394,7 @@
         },
         {
           "code": "check_may_pass",
-          "means": "In enforced_basis and lint_basis: the check's exit status may not reach its job. Causes are a || fallback that can pass (pytest || echo failed), an if or while condition, or an until loop that breaks. Or a check sits before && with more of the step after it, or in a { } group.",
+          "means": "In enforced_basis and lint_basis: the check's exit status may not reach its job. Causes are a || fallback that can pass (pytest || echo failed), an if or while condition, or an until loop that breaks. Or a check sits before && with more of the step after it, or in a { } group or function.",
           "next_step": "Let the check's exit status reach the step. Run the check on its own line, or end the fallback with exit 1 (pytest || { echo failed; exit 1; }).",
           "carried_in": "enforced_basis"
         },
