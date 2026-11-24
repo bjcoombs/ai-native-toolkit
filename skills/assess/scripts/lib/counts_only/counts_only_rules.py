@@ -99,8 +99,11 @@ KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")
 # KEY_RE. Every other dict is a record: a key survives there only when it is a
 # known field name (``EXTRA_FIELD_NAMES``, a rule segment, or a field of a
 # typed block shape), so a map keyed by a login, a function name or a
-# one-segment directory is dropped rather than kept unhashed.
+# one-segment directory is dropped rather than kept unhashed. A ``*`` last segment
+# stands for any key of the map above it: ``pack.*`` is each pack's map of check ids.
 IDENTIFIER_KEYED_MAPS: Final = frozenset({
+    "pack",  # the --pack names (#1273); each pack's checks below, as pack.*
+    "pack.*",
     "tool_versions",
     "prior_tool_versions",
     "prior_level.models",  # profile names (#1184)
@@ -126,6 +129,7 @@ EXTRA_FIELD_NAMES: Final = frozenset({
     "diff_trend_reset", "instruction_file_size", "interactive", "log_integrity",
     "prior_stats_exists", "skills_count", "skills_present", "churn_degenerate",
     "reoffer_mutation", "capability_offers", "available", "assess_method_version",
+    "pack",  # the --pack signals (#1273): an identifier-keyed map with no privacy rule of its own
     # accretion_ratchet
     "reliable", "deletion_fraction_threshold", "total_in_band", "net_additions",
     "commit_count", "deletion_fraction", "time_span_months",

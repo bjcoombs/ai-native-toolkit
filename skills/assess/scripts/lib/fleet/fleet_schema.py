@@ -49,6 +49,7 @@ from lib.fleet.fleet_doc_freshness import (
     FreshnessRow,
 )
 from lib.fleet.fleet_method import CollectorRevision
+from lib.packs import PackIdentity
 from lib.fleet.fleet_stamp import FleetStamp
 from lib.history_window import WINDOW_PATTERN
 from lib.review_automation import KINDS
@@ -130,13 +131,14 @@ def build_schema() -> JsonDict:
 
 
 def build_stamp_schema() -> JsonDict:
-    """The ``run.json`` schema. ``scans`` (a name list) and ``collectors`` (#952) are mapped here;
-    ``type_schema`` has no list mapping."""
+    """The ``run.json`` schema. ``scans`` (a name list), ``collectors`` (#952) and ``packs``
+    (#1273) are mapped here; ``type_schema`` has no list mapping."""
     hints = get_type_hints(FleetStamp)
-    lists = ("scans", "collectors")
+    lists = ("scans", "collectors", "packs")
     props: JsonDict = {name: type_schema(hint) for name, hint in hints.items() if name not in lists}
     props["scans"] = {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]}
     props["collectors"] = {"anyOf": [{"type": "array", "items": type_schema(CollectorRevision)}, {"type": "null"}]}
+    props["packs"] = {"type": "array", "items": type_schema(PackIdentity)}
     props["scan_date"] = {"type": "string", "pattern": r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
     props["window"] = {"type": "string", "pattern": f"^{WINDOW_PATTERN}$"}
     return {
