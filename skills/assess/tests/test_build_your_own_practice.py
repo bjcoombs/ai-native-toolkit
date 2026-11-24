@@ -48,8 +48,9 @@ def model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.chdir(tmp_path)
     argv = shlex.split(examples()["copy"].strip())
     assert argv[:3] == ["uv", "run", "scripts/levels_new.py"]
-    assert levels_new.main(argv[3:]) == 0
-    path = tmp_path / argv[3]
+    assert argv[3].startswith("/path/to/your-repo/")  # the reader's repository: here, tmp_path
+    path = tmp_path / Path(argv[3]).name
+    assert levels_new.main([str(path), *argv[4:]]) == 0
     path.write_text(path.read_text(encoding="utf-8") + "\n" + examples()["practice"], encoding="utf-8")
     return path
 

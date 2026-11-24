@@ -2,7 +2,7 @@
 
 `/assess` scores a repository against a maturity model. The model is a TOML file of practices, and each practice reads signals that `/assess` already measures. Your team may hold a practice of its own, such as "a coverage gate of at least 80". You can add it to a copy of the model yourself.
 
-This guide adds that one practice, runs it and reads the result. Every command and result below is checked by a test (`skills/assess/tests/test_build_your_own_practice.py`), so they match the code.
+This guide adds that one practice, runs it and reads the result. Each example file, result and error below is checked by a test (`skills/assess/tests/test_build_your_own_practice.py`), so they match the code.
 
 ## 1. Make a copy
 
@@ -14,11 +14,11 @@ Start from a model that is close to what you want. The toolkit ships three:
 | handover | `skills/assess/levels/profiles/handover.toml` | Six practices a team expects before it takes a repository over. |
 | citizen | `skills/assess/levels/profiles/citizen.toml` | A lighter bar while a citizen developer builds. |
 
-The starter command writes a copy you can edit. Run it from `skills/assess` in a toolkit checkout:
+The starter command writes a copy you can edit. Run it from `skills/assess` in a toolkit checkout, and give it a path in your own repository:
 
 <!-- guide-example: copy -->
 ```sh
-uv run scripts/levels_new.py my-team.toml --profile handover
+uv run scripts/levels_new.py /path/to/your-repo/my-team.toml --profile handover
 ```
 
 Leave out `--profile handover` to copy the default model. The copy opens with a comment on each field. Its `version` is `my-team-1`, the file name with `-1` added. A custom model may not use a version that starts with `default-` or `profile-`, because the report uses those to name the shipped models. Change the version after each edit, so two results from different editions never look the same.
@@ -78,7 +78,7 @@ error: unknown signal path(s): team:coverage_gate.threshold (row 'coverage-80') 
 
 ## 4. Run it
 
-Pass the file to `/assess` with `--levels`:
+In your repository, pass the file to `/assess` with `--levels`:
 
 ```sh
 /assess --levels my-team.toml
