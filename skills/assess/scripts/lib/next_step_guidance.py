@@ -433,10 +433,11 @@ _WORDING: dict[str, Wording] = {
         "scan step to CI.",
         "`.pre-commit-config.yaml` names a secrets hook, or a CI file runs a secrets scan."),
     "secrets_guard.enforcement.present": _flag(
-        "Add a secrets scan step to CI that runs on every change (`gitleaks/gitleaks-action`, "
+        "Add a secrets scan step to CI that runs on each push or pull request (`gitleaks/gitleaks-action`, "
         "`trufflesecurity/trufflehog`, or GitLab's `Secret-Detection` template); a pre-commit hook "
         "alone can be skipped with `--no-verify`.",
-        "A workflow in `.github/workflows/` or `.gitlab-ci.yml` runs a secrets scan, unmasked."),
+        "A workflow in `.github/workflows/` that runs on a push or pull request, or a plain job in "
+        "`.gitlab-ci.yml`, runs a secrets scan that can stop the run when it finds a secret."),
     "skill_personal_data.files_with_personal_data": _none_left(
         "In each skill or agent file the report names, remove the kind of data it lists (an email, "
         "phone number, home path, IP address, SSH login or key), or replace it with a placeholder "

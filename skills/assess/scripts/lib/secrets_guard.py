@@ -143,7 +143,7 @@ _STAGED_OR_INFO = re.compile(r"--staged\b|\bgitleaks\s+(?:version|help)\b|(?<!\S
 # A bare ``gitleaks`` shell call prints usage. Only for a command: a ``uses: docker://...gitleaks``
 # step ends its line too, with its arguments under ``with:`` below.
 _BARE_CALL = re.compile(r"\bgitleaks\s*['\"]?\s*$")
-_GITLEAKS_NO_FAIL = re.compile(r"--exit-code[= ]0\b")
+_GITLEAKS_NO_FAIL = re.compile(r"--exit-code(?:=|\s+)0\b")
 _COMMAND = re.compile(
     r"(?:^\s*|[;&|]\s*|(?<![\w-])(?:run|script):\s*|^\s*-\s+|"
     r"(?:npx|bunx|uvx|pipx run|pnpm (?:exec|dlx)|yarn dlx)\s+(?:--?\S+\s+)*|docker run\s+(?:--?\S+\s+)*\S*/)(?:[\w./-]*/)?("
@@ -170,6 +170,8 @@ _OFF = frozenset({"never", "manual"})
 # Top-level GitLab keys that are not jobs.
 _GITLAB_GLOBAL_KEYS = frozenset({"include", "variables", "stages", "default", "workflow", "image",
                                  "services", "before_script", "after_script", "cache", "spec"})
+_DATA_BLOCK = re.compile(r"^\s*-?\s*(?:env|variables)\s*:\s*$")
+_SKIP_VAR = re.compile(r"^\s*-?\s*['\"]?SKIP['\"]?\s*:\s*['\"]?([^'\"#]*)")
 _HIDDEN_JOB = re.compile(r"^\.[\w.-]+\s*:")
 _AFTER_SCRIPT = re.compile(r"^\s*after_script\s*:")
 _STEP_START = re.compile(r"^(\s*)-\s")
@@ -305,6 +307,9 @@ def _masked_lines(lines: list[str], gitlab: bool = False) -> set[int]:
     files (``gitlab``); a GitLab job's own run condition is ``_job_shape``'s."""
     masked: set[int] = set()
     for i, line in enumerate(lines):
+        if _DATA_BLOCK.match(line):  # ``env:``/``variables:`` values are data, never run as a command
+            masked.update(range(i, _block_end(lines, i, len(line) - len(line.lstrip()))))
+            continue
         if gitlab and _HIDDEN_JOB.match(line):  # a hidden job runs only through a visible job's ``extends:``
             masked.update(range(i, _block_end(lines, i, 0)))
             continue
@@ -509,6 +514,10 @@ def _ci_scan(text: str, hooks: frozenset[str] = frozenset(),
             elif shape == "unevaluated":
                 held.update(range(start, end))
     found: dict[int, set[str]] = {}
+    # pre-commit skips a hook whose id is in the SKIP variable; read file-wide, so a skip set on
+    # another job under-counts rather than credits a hook that does not run.
+    skipped = {h.strip().lower() for ln in lines if (m := _SKIP_VAR.match(ln)) for h in m.group(1).split(",")}
+    hooks = hooks - skipped
     for i, line in enumerate(lines):
         if i in masked or not line.strip() or _MASKED.search(line):
             continue
@@ -589,15 +598,16 @@ def ci_guard(root: Path, ghsync_root: Path | None = None, hooks: frozenset[str] 
             if found:
                 files.append(f".gitlab-ci.yml include (line {included.line})")
                 tools.update(found)
+        # GitLab's own secret-detection component is the scan, read by its path; it hides nothing.
         unresolved = sum(r["status"] not in SETTLED and r["kind"] in _HIDING_KINDS
-                         for r in resolution.includes)
+                         and "/secret-detection" not in (r["id"] or "") for r in resolution.includes)
         template = _gitlab_template_state([_read(root / ".gitlab-ci.yml") or "", *(f.text for f in resolution.files)])
-        if template == "runs":
+        if template == "runs" and not unresolved:
             tools.add("secret_detection")
             if ".gitlab-ci.yml" not in files:
                 files.append(".gitlab-ci.yml")
-        elif template == "unevaluated":
-            held.add("secret_detection")
+        elif template == "unevaluated" or (template == "runs" and unresolved):
+            held.add("secret_detection")  # an unread include could override the template's job
     return {"present": bool(files), "files": files, "tools": sorted(tools), "includes_unresolved": unresolved,
             "rules_unevaluated": sorted(held - tools)}
 

@@ -500,3 +500,28 @@ def test_a_quoted_job_level_when_never_is_off(tmp_path: Path) -> None:
     text = "secrets:\n  \"when\": never\n  script:\n    - gitleaks detect\n"
     block = scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))
     assert block["ci"]["present"] is False and block["ci"]["rules_unevaluated"] == []
+
+
+def test_gitleaks_exit_code_zero_with_extra_spaces_cannot_fail(tmp_path: Path) -> None:
+    text = "steps:\n  - run: gitleaks detect --exit-code  0\n"
+    assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": text}))["ci"]["present"] is False
+
+
+def test_a_scanner_named_in_env_data_is_not_a_scan(tmp_path: Path) -> None:
+    text = "env:\n  SCAN_EXAMPLE: |\n    gitleaks detect\njobs:\n  s:\n    steps:\n      - run: echo ready\n"
+    assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": text}))["ci"]["present"] is False
+
+
+def test_a_hook_in_skip_is_not_run_by_ci(tmp_path: Path) -> None:
+    wf = "steps:\n  - run: pre-commit run --all-files\n    env:\n      SKIP: gitleaks\n"
+    root = _repo(tmp_path, {".pre-commit-config.yaml": PRE_COMMIT, ".github/workflows/x.yml": wf})
+    assert scan_secrets_guard(root)["ci"]["present"] is False
+
+
+def test_a_root_template_with_an_unread_include_is_not_measured(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {".gitlab-ci.yml": TEMPLATE + "include:\n  - project: group/ci\n    file: sec.yml\n"},
+                 remote="https://gitlab.com/g/p.git")
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
+    block = scan_secrets_guard(root)
+    assert block["ci"]["present"] is False and block["ci"]["rules_unevaluated"] == ["secret_detection"]
+    assert block["enforcement"]["available"] is False

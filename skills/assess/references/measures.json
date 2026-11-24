@@ -1295,7 +1295,7 @@
               "eq_signal": null,
               "text": "A secrets scan runs where an agent cannot skip it (CI): is true",
               "title": "A secrets scan runs where an agent cannot skip it",
-              "fix": "Add a secrets scan step to CI that runs on every change (gitleaks/gitleaks-action, trufflehog, or GitLab's Secret-Detection template); a pre-commit hook alone can be skipped with --no-verify.",
+              "fix": "Add a secrets scan step to CI that runs on each push or pull request (gitleaks/gitleaks-action, trufflehog, or GitLab's Secret-Detection template); a pre-commit hook alone can be skipped with --no-verify.",
               "why": "A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.",
               "why_source": "",
               "input_class": "head_structure",
