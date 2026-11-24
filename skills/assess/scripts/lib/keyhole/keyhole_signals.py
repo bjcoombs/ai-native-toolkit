@@ -899,19 +899,20 @@ def structure_drift_hidden_coupling_dirs(
 # Deterministic markdown / summary renderers (the report-skeleton products)
 # --------------------------------------------------------------------------
 
-# Cap on paths-per-finding and attention rows in the rendered markdown so a
-# pathological repo can't bloat the report skeleton. The structured arrays in
-# run-context.json keep the full (already-capped) lists.
+# Cap on paths-per-finding and attention rows in the rendered markdown so a pathological repo
+# can't bloat the report skeleton. findings.json and run-context.json keep the full lists.
 MAX_FINDING_PATHS_RENDERED = 10
 MAX_ATTENTION_ROWS_RENDERED = 5
+# No committed file holds the attention list: name the local one and how to regenerate it (#1256)
+ATTENTION_SOURCE = "`.assess/run-context.json` `attention` (local, not committed; re-run `/assess` to regenerate it)"
 
 
 def _omitted_row(count: int, where: str, what: str = "full list") -> str:
     """Disclosure row for a rendered list truncated at its cap.
 
-    ``where`` is the exact key in ``.assess/run-context.json`` holding the
-    list and ``what`` says how much of it that key holds, so the row never
-    claims more than the stored array contains. The row is italic, not a
+    ``where`` names the file holding the list (a finding's paths: the committed
+    ``.assess/findings.json``, #1256) and ``what`` says how much of it that file
+    holds, so the row never claims more than it contains. The row is italic, not a
     ``- `` bullet, so it never reads (or parses) as one more listed path.
     """
     return f"_... {count} more omitted; {what} in {where}_"
@@ -946,7 +947,7 @@ def render_findings_markdown(
             omitted = len(paths) - MAX_FINDING_PATHS_RENDERED
             lines.append(_omitted_row(
                 omitted,
-                f"`.assess/run-context.json` `derived_findings` (`{f['name']}`) `paths`",
+                f"`.assess/findings.json` (`{f['name']}`) `paths`",
             ))
         lines.append("")
     if not rendered_any:
@@ -969,7 +970,7 @@ def render_findings_markdown(
                 if len(attention) >= MAX_ATTENTION_UNITS else "full list"
             )
             lines.append(_omitted_row(
-                omitted, "`.assess/run-context.json` `attention`", what=stored,
+                omitted, ATTENTION_SOURCE, what=stored,
             ))
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"

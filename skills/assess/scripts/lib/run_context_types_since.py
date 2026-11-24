@@ -23,7 +23,7 @@ class SinceLastRun(TypedDict):
     """What changed between the previous run and this one: credit, gates and the next blocker."""
 
     available: bool
-    first_run: bool  # true when no earlier run-context.json was found
+    first_run: bool  # true when this run is the baseline: no committed baseline to compare with (#1256)
     previous_run_id: str | None
     previous_commit: str | None  # the commit the previous run measured; None when unknown
     closed: list[ClosedAction] | None  # None: unknown, ``closed_reason`` says why

@@ -4,17 +4,20 @@ The report and the ``log.md`` entry open with this section, so the credit a team
 the work it closed, not a count of catalogue entries. It reads three things, all before
 this run's publish step overwrites any of them:
 
-- **the previous run**: first the committed baseline in ``prior-level.json``
-  (``prior_level.load_baseline``, #1122: the run id, its measured commit and the gates it
-  held, written by ``baseline_record`` at publish), so a fresh clone or a CI checkout has
-  one; else ``run-context.json`` in the run's ``.assess/`` directory as the previous run left
-  it (gitignored, so often only on the machine that ran it). The committed baseline read is
-  the run's own model's record (#1184): the default model's, or a shipped profile's under
-  ``models``; a custom ``--levels`` run has none and reads ``run-context.json``. None there, and no earlier run in ``log.md``, means this is the
-  first run, and the section says so; a log with earlier runs but no context (it is often
-  gitignored, so a fresh clone or CI has none) is unknown, ``previous_state_missing``.
-  A file that cannot be read gives unknowns (``None``, ``previous_unreadable``), never a
-  first run. A run that supersedes a same-day run on the same commit (the ``superseded``
+- **the previous run**: for the default model and the shipped profiles, the committed
+  baseline in ``prior-level.json`` only (``prior_level.load_baseline``, #1122: the run id,
+  its measured commit and the gates it held, written by ``baseline_record`` at publish), the
+  run's own model's record (#1184): the default model's, or a profile's under ``models``.
+  A fresh clone or a CI checkout has it, so the block reads the same there as on the
+  machine that ran the last run. No baseline there makes this run the baseline (#1256):
+  ``first_run`` is true and the section reads ``FIRST_RUN`` once, whatever ``log.md`` and
+  the local, gitignored ``run-context.json`` hold. A ``prior-level.json`` that cannot be
+  read gives unknowns (``None``, ``baseline_unreadable``), never a first run. A custom
+  ``--levels`` run keeps no committed record, so it keeps the older order:
+  ``run-context.json`` in the run's ``.assess/`` directory as the previous run left it,
+  else a first run when ``log.md`` records no earlier run either, else unknown
+  (``previous_state_missing``); an unreadable context is ``previous_unreadable``.
+  A run that supersedes a same-day run on the same commit (the ``superseded``
   scan input) takes that run's own baseline from its ``since_last_run`` block instead, so
   the credit that run showed survives its log entry being replaced;
 - **closed actions**: the entries of the whole-repo ``.assess/actions.json`` *as committed
@@ -71,7 +74,8 @@ from typing import Any
 from lib.headline import GATE_NOUN
 from lib.level_tally import default_model, gate_blockers
 from lib.levels import StepDef
-from lib.prior_level import Baseline, PruningEntry, build_prior_level, default_level, load_baseline, load_pruning
+from lib.prior_level import (Baseline, PruningEntry, as_prior_level, build_prior_level, default_level,
+                             load_baseline, load_prior_level, load_pruning, model_key)
 from lib.profiles import model_for_level
 from lib.pruning_ledger import ledger_lines, removal, update_ledger
 from lib.reviewed_findings import action_entries
@@ -80,15 +84,18 @@ from lib.run_context_types_since import ClosedAction, SinceLastRun
 __all__ = ["ClosedAction", "SinceLastRun", "closed_actions", "gate_changes", "since_last_run"]
 
 _SHA = re.compile(r"[0-9a-f]{7,40}")
-FIRST_RUN = "This is the first run, so there is no earlier run to compare with."
+# #1256: a run with no committed baseline becomes the baseline; #1252 owns the top card's wording
+FIRST_RUN = "This run is your baseline."
 # Why ``closed`` is unknown, as the line words each ``closed_reason`` code.
 UNKNOWN_CLOSED = {
     "no_previous_commit": "the previous run recorded no commit",
     "previous_commit_absent": "the previous run's commit is not in this clone",
     "actions_unreadable": "the committed actions.json could not be read",
     "actions_not_committed": "no .assess/actions.json is committed; commit it for closed actions to count",
-    "previous_unreadable": "the previous run-context.json could not be read",
-    "previous_state_missing": "log.md records an earlier run, but its run-context.json is not here",
+    "baseline_unreadable": "the committed .assess/prior-level.json could not be read",
+    "previous_unreadable": "the previous run's local record could not be read; re-run /assess to rebuild it",
+    "previous_state_missing": ("log.md records an earlier run, but a custom --levels run keeps no committed "
+                               "baseline and this machine holds no record of it"),
     "shallow_clone": "this is a shallow clone, so commit ancestry cannot be checked",
     "previous_not_ancestor": "the previous run measured a commit that is not in this branch's history",
     "ancestry_unknown": "git could not check a commit's ancestry",
@@ -226,7 +233,8 @@ def _noun(gate: str) -> str:
 
 def _gates_line(word: str, gates: list[str] | None, reason: str | None) -> str:
     if gates is None:
-        why = (UNKNOWN_CLOSED[reason] if reason in ("previous_unreadable", "previous_state_missing")
+        why = (UNKNOWN_CLOSED[reason] if reason in ("baseline_unreadable", "previous_unreadable",
+                                                    "previous_state_missing")
                else "the previous run has no level result this model can compare")
         return f"Gates {word}: not known ({why})"
     return f"Gates {word}: " + (", ".join(_noun(g) for g in gates) if gates else "none")
@@ -284,16 +292,15 @@ def _baseline(assess_dir: Path, superseded: Any, level: Any = None
     """``(first_run, why the previous state is unknown, previous context, inherited block)``.
 
     Read order: the superseded run's own block (below), then the committed baseline in
-    ``prior-level.json`` (#1122, returned as ``{run_id, head_sha, held_gates}``), then
-    ``run-context.json``, then ``log.md``. Inheriting a superseded run's block needs that run's
-    ``run-context.json``; without it a same-day re-run on the same commit reads the committed
-    baseline, whose commit is HEAD, and so credits nothing new: the superseded run's own entry
-    in ``log.md`` stays as the record of what it credited.
-
-    No ``run-context.json`` is a first run only when ``log.md`` records no earlier run either:
-    the context is often gitignored, so a fresh clone or a CI checkout has the log and not the
-    context, and that is an unknown previous state (``previous_state_missing``), never a first
-    run written into the committed log.
+    ``prior-level.json`` (#1122, returned as ``{run_id, head_sha, held_gates}``). For the
+    default model and the shipped profiles that is all (#1256): no baseline there makes this
+    run the baseline, and an unreadable file is ``baseline_unreadable``. Only a custom
+    ``--levels`` model, which keeps no committed record, goes on to ``run-context.json`` and
+    then ``log.md``: no context is a first run only when ``log.md`` records no earlier run
+    either, else ``previous_state_missing``. Inheriting a superseded run's block needs that
+    run's ``run-context.json``; without it a same-day re-run on the same commit reads the
+    committed baseline, whose commit is HEAD, and so credits nothing new: the superseded run's
+    own entry in ``log.md`` stays as the record of what it credited.
 
     A run that supersedes a same-day run on the same commit (``superseded``) takes that run's
     own baseline from its ``since_last_run`` block, so the credit it showed is not lost when
@@ -305,10 +312,15 @@ def _baseline(assess_dir: Path, superseded: Any, level: Any = None
         inherited = superseded.get("since_last_run")
         if isinstance(inherited, Mapping) and inherited.get("available") is True:
             return bool(inherited.get("first_run")), None, None, inherited
+    prior = load_prior_level(assess_dir)
     stored = load_baseline(assess_dir, level)  # the committed baseline first (#1122)
     if stored is not None:
         return False, None, {"run_id": stored.get("run_id"), "head_sha": stored["head_sha"],
                              "held_gates": stored["held_gates"]}, None
+    if model_key(level) is not None:  # the default model or a shipped profile: committed record only (#1256)
+        if prior is not None and as_prior_level(prior) is None:
+            return False, "baseline_unreadable", None, None
+        return True, None, None, None
     path = assess_dir / "run-context.json"
     if not path.is_file():
         return ((False, "previous_state_missing", None, None) if (assess_dir / "log.md").is_file()

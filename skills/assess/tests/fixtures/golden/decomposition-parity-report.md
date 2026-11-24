@@ -14,7 +14,7 @@ _New to these words? The [glossary](https://github.com/bjcoombs/ai-native-toolki
 
 ## Since Last Run
 
-- This is the first run, so there is no earlier run to compare with.
+- This run is your baseline.
 - Next blocker: CI runs tests
 
 ## Headline

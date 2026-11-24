@@ -91,10 +91,12 @@ def test_render_findings_markdown_discloses_omitted_paths() -> None:
     md = ks.render_findings_markdown(findings, [])
     listed = [ln for ln in md.splitlines() if ln.startswith("- docs/")]
     assert len(listed) + 7 == n
+    # #1256: the committed findings.json holds the full list; run-context.json is gitignored
     assert (
-        "_... 7 more omitted; full list in `.assess/run-context.json` "
-        "`derived_findings` (`lying_map`) `paths`_"
+        "_... 7 more omitted; full list in `.assess/findings.json` "
+        "(`lying_map`) `paths`_"
     ) in md
+    assert "derived_findings" not in md
 
 
 def test_render_findings_markdown_path_bullets_are_exactly_the_paths() -> None:
@@ -116,6 +118,10 @@ def test_render_findings_markdown_path_bullets_are_exactly_the_paths() -> None:
     expected += [a["path"] for a in attention[:ks.MAX_ATTENTION_ROWS_RENDERED]]
     assert bullets == expected
     assert md.count("more omitted") == 4  # three findings plus attention
+    # #1256: every omission row that names run-context.json says it is local and how to regenerate it
+    for row in (ln for ln in md.splitlines() if "run-context.json" in ln):
+        assert "(local, not committed; re-run `/assess` to regenerate it)" in row
+    assert md.count("`.assess/findings.json`") == 3
 
 
 def test_render_findings_markdown_attention_no_marker_at_cap() -> None:
@@ -140,7 +146,8 @@ def test_render_findings_markdown_attention_discloses_omitted_rows() -> None:
     assert omitted > 0
     assert (
         f"_... {omitted} more omitted; full list in "
-        "`.assess/run-context.json` `attention`_"
+        "`.assess/run-context.json` `attention` (local, not committed; "
+        "re-run `/assess` to regenerate it)_"
     ) in md
     assert "ranked rows" not in md
 
@@ -156,7 +163,8 @@ def test_render_findings_markdown_attention_at_unit_cap_says_top_n() -> None:
     omitted = ks.MAX_ATTENTION_UNITS - ks.MAX_ATTENTION_ROWS_RENDERED
     assert (
         f"_... {omitted} more omitted; top {ks.MAX_ATTENTION_UNITS} "
-        "ranked rows in `.assess/run-context.json` `attention`_"
+        "ranked rows in `.assess/run-context.json` `attention` (local, not "
+        "committed; re-run `/assess` to regenerate it)_"
     ) in md
     assert "full list in `.assess/run-context.json` `attention`" not in md
 
