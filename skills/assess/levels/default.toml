@@ -244,9 +244,9 @@
 # - Secrets guard (lib/secrets_guard.py, #1173). Level 1 reads secrets_guard.configured: a
 #   secrets hook in the pre-commit config or a secrets scan in CI. Graded config_only (a hook
 #   can be skipped with --no-verify), so it is listed, not counted. Level 2 reads
-#   secrets_guard.enforcement.present: a secrets scan in CI, where an agent cannot skip it.
-#   Graded measured and counted. With no CI scan on a GitHub repository, GitHub's own secret
-#   scanning could still guard it and is not read, so level 2 is unknown
+#   secrets_guard.enforcement.present: a guard nobody can skip, a secrets scan in CI or GitHub
+#   push protection (read on the platform pass). Graded measured and counted. With no CI scan on
+#   a GitHub repository and the settings not read, level 2 is unknown
 #   (secret_scanning_not_read), never unmet, and so is a GitLab repository whose CI includes a
 #   file that could hold the scan and was not read (ci_includes_unresolved), and so is a GitLab
 #   scan job under rules, only/except or an uncertain when (gitlab_rules_unevaluated): GitLab rules
