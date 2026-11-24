@@ -32,6 +32,10 @@ the glob (``*`` and ``?`` within one segment, ``**`` across any number, ``[...]`
 the loader does (``.toml`` ``tomllib``, ``.json`` ``json``, ``.yaml``/``.yml`` ``pack_yaml``),
 and a missing file is false. It never runs a program.
 
+A folder the walk cannot list (no permission) makes every count and every absence unknown:
+``glob_count`` and ``contains`` read ``unreadable_file``, and so do an ``exists`` or
+``key_exists`` whose path was not found; a path that was found still reads true.
+
 A path the ``.assess/config.toml`` excludes is outside the assessment, so it reads as absent:
 ``exists`` and ``key_exists`` false, and no file counted. A ``[...]`` class is a plain set or
 range (``[!...]`` negates); a ``]`` cannot be its first member.
@@ -118,6 +122,16 @@ class _Tree:
         self.root = root
         self.real_root = root.resolve()
         self.excludes = excludes
+        self._unlisted_folder = False
+
+    def _unlisted(self, _error: OSError) -> None:
+        self._unlisted_folder = True
+
+    @property
+    def incomplete(self) -> bool:
+        """True when the walk met a folder it could not list, so an absence is not known."""
+        _ = self.files  # the walk sets the flag
+        return self._unlisted_folder
 
     def _inside(self, path: Path) -> Path | None:
         try:
@@ -130,7 +144,7 @@ class _Tree:
     def files(self) -> dict[str, Path]:
         dirs, patterns = self.excludes
         found: dict[str, Path] = {}
-        for dirpath, dirnames, filenames in os.walk(self.root):
+        for dirpath, dirnames, filenames in os.walk(self.root, onerror=self._unlisted):
             rel_dir = Path(dirpath).relative_to(self.root)
             dirnames[:] = sorted(d for d in dirnames
                                  if d not in SKIPPED_DIRS and not (rel_dir == Path(".") and d == ASSESS_DIR)
@@ -168,7 +182,7 @@ def _contains(tree: _Tree, glob: str, text: str) -> CheckValue:
 def _key_exists(tree: _Tree, file: str, key: str) -> CheckValue:
     real = tree.files.get(file)
     if real is None:
-        return False
+        return _unavailable(UNREADABLE) if tree.incomplete else False
     try:
         text = real.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
@@ -192,7 +206,10 @@ def _key_exists(tree: _Tree, file: str, key: str) -> CheckValue:
 def evaluate(rule: Rule, tree: _Tree) -> CheckValue:
     """One check's value: a boolean, a count, or the unavailable marker with a reason code."""
     if rule["kind"] == "exists":
-        return rule["path"] in tree.files or rule["path"] in tree.dirs
+        found = rule["path"] in tree.files or rule["path"] in tree.dirs
+        return _unavailable(UNREADABLE) if tree.incomplete and not found else found
+    if rule["kind"] in ("glob_count", "contains") and tree.incomplete:
+        return _unavailable(UNREADABLE)
     if rule["kind"] == "glob_count":
         return len(tree.matching(rule["glob"]))
     if rule["kind"] == "contains":

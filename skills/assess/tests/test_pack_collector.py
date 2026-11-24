@@ -8,6 +8,7 @@ directly; none runs anything from the repository.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -458,3 +459,18 @@ def test_a_narrowed_run_plans_the_pack_checks(repo: Path, pack_file: Path, tmp_p
                                          model=single_repo_choice("citizen", None), plan=run_plan(
                                              single_repo_choice("citizen", None)))
     assert "pack" not in bare and "packs" not in bare and "scan_plan" in bare
+
+
+@pytest.mark.skipif(not hasattr(os, "geteuid") or os.geteuid() == 0, reason="needs a non-root POSIX user")
+def test_an_unlistable_folder_makes_absences_unknown(repo: Path, pack_file: Path) -> None:
+    """A folder the walk cannot list: counts and absences read unreadable_file, never 0 or false."""
+    locked = repo / "docs" / "adr"
+    locked.chmod(0)
+    try:
+        team = collect(repo, _excludes(repo), [load_pack(pack_file)])["pack"]["team"]
+    finally:
+        locked.chmod(0o755)
+    marker = {"available": False, "reason": "unreadable_file"}
+    assert team["adrs"] == marker and team["money_type"] == marker
+    assert team["missing"] == marker and team["no_file"] == marker
+    assert team["glossary"] is True  # found, so still known
