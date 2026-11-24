@@ -60,7 +60,7 @@ import re
 from pathlib import Path
 from typing import TypedDict
 
-from lib.agent_instructions_grader import _CREDENTIAL_PLACEHOLDERS, scan_sensitive_content
+from lib.agent_instructions_grader import CREDENTIAL_PLACEHOLDERS, scan_sensitive_content
 from lib.instruction_placement import skill_and_agent_files
 
 GRADER_KINDS = ("private_key", "cloud_key", "credential", "ssh_or_host", "ip_address", "home_path")
@@ -92,6 +92,9 @@ _PLACEHOLDER_HOME = frozenset({"user", "username", "you", "your", "yourname", "n
 # before it (``foo==1.2.3.4``, ``~=``, ``>=``) is a version. A plain ``=`` or a
 # ``user@`` before an address is not: ``DB_HOST=10.20.30.40`` and ``deploy@10.1.2.3`` are findings.
 _IPV4 = re.compile(r"(?<![\w.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\w|\.\d)")
+# RFC 5737's documentation ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24): example
+# addresses, as ``example.com`` is for email.
+_DOC_RANGE = re.compile(r"^(?:192\.0\.2|198\.51\.100|203\.0\.113)\.")
 # An ``ssh git@host`` test of a Git host's auth is no login detail; any other user is.
 _SSH = re.compile(r"\bssh\s+([A-Za-z0-9._-]+)@[A-Za-z0-9._-]+")
 _ROOT_LOGIN = re.compile(r"\broot@[A-Za-z0-9._-]+")
@@ -154,7 +157,7 @@ def _literal_secret(value: str) -> bool:
     """Whether a credential value is a literal secret: not empty, not a placeholder the grader skips,
     and not a reference to a secret held elsewhere. Decided per value, so a placeholder beside a
     reference reads clean, as each does alone."""
-    return bool(value) and not _CREDENTIAL_PLACEHOLDERS.match(value) and not _REFERENCE.match(value)
+    return bool(value) and not CREDENTIAL_PLACEHOLDERS.match(value) and not _REFERENCE.match(value)
 
 
 def kinds_in(text: str) -> list[str]:
@@ -168,7 +171,7 @@ def kinds_in(text: str) -> list[str]:
     found.discard("ip_address")
     if any(not _VERSION_BEFORE.search(text[max(0, m.start() - 12):m.start()])
            for m in _IPV4.finditer(text) if all(int(g) <= 255 for g in m.groups())
-           and m.group(1) != "127" and m.group(0) != "0.0.0.0"):
+           and m.group(1) != "127" and m.group(0) != "0.0.0.0" and not _DOC_RANGE.match(m.group(0))):
         found.add("ip_address")
     if "ssh_or_host" in found and not _ROOT_LOGIN.search(text) \
             and all(m.group(1).lower() == "git" for m in _SSH.finditer(text)):

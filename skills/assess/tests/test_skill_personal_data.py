@@ -86,6 +86,7 @@ def test_each_kind_is_detected(text: str, kinds: list[str]) -> None:
     "Email: support@" + "anthropic.com for help.",  # a role address
     "pip install foo==1.2.3.4",
     "pin foo>=1.2.3.4 or foo~=1.2.3.4",
+    "Example servers 192.0.2.10, 198.51.100.7 and 203.0.113.99",  # RFC 5737
     "Weights: +0.5 - 0.25 - 0.125",
 ])
 def test_placeholders_and_lookalikes_are_not_findings(text: str) -> None:
