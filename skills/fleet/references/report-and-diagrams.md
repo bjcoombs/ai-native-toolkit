@@ -62,3 +62,34 @@ viewer's light or dark scheme. The SVGs have no script and no external font or l
 same run draws the same bytes. Logic: `lib/fleet/fleet_diagrams.py`, `lib/fleet/fleet_quadrant.py`,
 `lib/fleet/fleet_tooling_map.py`, `lib/fleet/fleet_trends.py`, `lib/fleet/fleet_slope.py`,
 on the shared helpers in `lib/fleet/fleet_svg.py`.
+
+## The fleet page: `fleet-view.html`
+
+With `--levels`, the run also writes `fleet-view.html` beside `report.md` (#946,
+`lib/fleet/fleet_page.py`). It is one file that works offline. Its CSS and JavaScript are
+inline, the run's data is embedded as JSON, and the tag and Step pictures are embedded as
+images. It makes no network request and works out no level, Step or achievement: every number
+comes from `fleet-data.json` and `achievements.json`. Two runs over the same inputs write the
+same bytes. `--no-diagrams` removes it.
+
+The page opens on the ownership root, or on the unit a viewer pinned in this browser. Its
+sections, in order:
+
+1. **Since last run**: what this run credited to the unit and its repositories, and the
+   Recount when the rules changed.
+2. **Where this unit stands**: the lowest Step over its measured repositories, "N of M
+   measured", the gates the next Step waits on, and the practices met by truth tag.
+3. **Your target**: the unit's Step target, the gates not yet held and how many repositories
+   each holds back. The static page has no target entry.
+4. **Drill-down**: the units below (by name, never by rank), a table of the unit's own
+   repositories with a cell per maturity-model row, and a repository's detail. Hovering a cell
+   names its state, the next condition and what the next Step needs. A not-measured cell is
+   hatched with its reason, never 0.
+5. **Fleet pictures**: the drawn tag and Step SVGs.
+
+Names follow the run's output mode. `--full` names repositories and units by their keys and
+paths and shows an exclusion's reason. A hashed run shows hashed ids. Plain counts-only shows
+`repository N` and `<kind> N` (such as `group N` or `team N`). No page shows a person or an
+owner, and only a `--full` page shows a path. The page's data layer has one interface
+(`load`, `subscribeTargets`, and `setTarget` only on a live source), so a published page can
+read a database instead of the embedded data.
