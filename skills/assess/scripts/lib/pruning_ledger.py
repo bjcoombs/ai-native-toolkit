@@ -102,6 +102,27 @@ def _by_ancestry(rounds: list[PruningEntry], repo_root: Path) -> list[PruningEnt
     return ordered
 
 
+def _smallest(rounds: list[PruningEntry]) -> PruningEntry:
+    return min(rounds, key=lambda e: (e["cost_before"], e["completed_sha"]))
+
+
+def _first_and_newest(old: list[PruningEntry], new: list[PruningEntry],
+                      repo_root: Path) -> tuple[PruningEntry, PruningEntry]:
+    """The first round (whose start the credit is measured from) and the newest (kept) round."""
+    old_order = _by_ancestry(old, repo_root) if len(old) > 1 else old
+    new_order = _by_ancestry(new, repo_root) if len(new) > 1 else new
+    if old:
+        first = old_order[0] if old_order is not None else _smallest(old)
+    else:
+        first = new_order[0] if new_order is not None else _smallest(new)
+    if new:
+        newest = new_order[-1] if new_order is not None else _smallest(new)
+    else:
+        newest = old_order[-1] if old_order is not None else _smallest(old)
+    # first and newest can be one entry (an order git cannot tell): only its start and gates are read
+    return first, newest
+
+
 def _merge_rounds(entries: dict[tuple[str, str], PruningEntry], stored: set[tuple[str, str]],
                   repo_root: Path) -> None:
     """Fold several pending removals of one file into one entry (#1168), so one continuous drop
@@ -125,15 +146,12 @@ def _merge_rounds(entries: dict[tuple[str, str], PruningEntry], stored: set[tupl
             continue
         old = [entries[k] for k in keys if k in stored]
         new = [entries[k] for k in keys if k not in stored]
-        ordered = _by_ancestry(new, repo_root)
-        if ordered is not None:
-            first = old[0] if old else ordered[0]
-            newest = ordered[-1] if ordered else old[-1]
-        else:
-            smallest = min(new, key=lambda e: (e["cost_before"], e["completed_sha"]))
-            first, newest = (old[0] if old else smallest), smallest
+        # stored rounds come before new ones; within each group, oldest first by ancestry. A
+        # ledger written before #1168 can hold several stored rounds for one file, so they are
+        # ordered the same way. An order git cannot tell falls back to the smallest start.
+        first, newest = _first_and_newest(old, new, repo_root)
         rounds = [e for e in (*old, *new) if e is not newest]
-        start = first["cost_before"] if ordered is not None or old else smallest["cost_before"]
+        start = first["cost_before"]
         folded = sorted({sha for e in rounds for sha in (e["completed_sha"], *e.get("merged", []))}
                         | set(newest.get("merged", [])))
         newest["cost_before"], newest["gates"] = start, first["gates"]

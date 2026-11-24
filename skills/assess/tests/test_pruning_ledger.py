@@ -239,3 +239,12 @@ def test_rounds_whose_order_git_cannot_tell_take_the_smaller_start(tmp_path: Pat
     entries, _ = update_ledger([], [a, c], _placement(False, 60), held_now=GATES, held_before=GATES,
                                head_sha="h1", new_commit=True, repo_root=tmp_path)
     assert (entries[0]["completed_sha"], entries[0]["cost_before"]) == ("1" * 40, 261)
+
+
+def test_several_stored_rounds_from_an_older_ledger_are_ordered_by_ancestry(tmp_path: Path) -> None:
+    """Review of #1183: a ledger written before #1168 can store two pending rounds for one file."""
+    repo, older, newer = _two_commits(tmp_path)
+    a, c = _round(older, 261), _round(newer, 300)
+    entries, _ = update_ledger([c, a], [a, c], _placement(False, 60), held_now=GATES, held_before=GATES,
+                               head_sha="h1", new_commit=True, repo_root=repo)
+    assert [(e["completed_sha"], e["cost_before"], e["merged"]) for e in entries] == [(newer, 261, [older])]
