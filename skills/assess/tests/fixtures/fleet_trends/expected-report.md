@@ -18,6 +18,22 @@ Which tags have the most room to grow across the estate, and on which repositori
 
 Not drawn: skipped: the run wrote no fleet-data.json to read the per-tag tallies from.
 
+## Repositories at each Step
+
+In place: 0 repositories in this run, scanned with no model call.
+
+Where does each repository stand, and which gate holds it there?
+
+Not drawn: skipped: the maturity model defines no Steps.
+
+## One change away from the next Step
+
+In place: 0 repositories in this run, scanned with no model call.
+
+Which single change would take the most repositories to their next Step?
+
+Not drawn: skipped: the maturity model defines no Steps.
+
 ## Activity and maturity
 
 In place: 0 repositories in this run, scanned with no model call.
@@ -47,5 +63,13 @@ Is each team improving?
 In place: this run, the baseline a later comparison starts from.
 
 What moved since the earlier run, and which row moved it?
+
+Not drawn: skipped: no earlier run compared (no --compare, or no history entry matched this run).
+
+## Step movement since the earlier run
+
+In place: this run, the baseline a later comparison starts from.
+
+How many repositories changed Step since the earlier run, and how many moved only because the rules changed?
 
 Not drawn: skipped: no earlier run compared (no --compare, or no history entry matched this run).

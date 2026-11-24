@@ -8,7 +8,9 @@ this run's publish step overwrites any of them:
   (``prior_level.load_baseline``, #1122: the run id, its measured commit and the gates it
   held, written by ``baseline_record`` at publish), so a fresh clone or a CI checkout has
   one; else ``run-context.json`` in the run's ``.assess/`` directory as the previous run left
-  it (gitignored, so often only on the machine that ran it). None there, and no earlier run in ``log.md``, means this is the
+  it (gitignored, so often only on the machine that ran it). The committed baseline read is
+  the run's own model's record (#1184): the default model's, or a shipped profile's under
+  ``models``; a custom ``--levels`` run has none and reads ``run-context.json``. None there, and no earlier run in ``log.md``, means this is the
   first run, and the section says so; a log with earlier runs but no context (it is often
   gitignored, so a fresh clone or CI has none) is unknown, ``previous_state_missing``.
   A file that cannot be read gives unknowns (``None``, ``previous_unreadable``), never a
@@ -35,7 +37,8 @@ this run's publish step overwrites any of them:
   ``None`` when the previous run has no level result or one that lacks a gate's
   condition (an older model), so the rest of the block still reads.
 
-The **pruning ledger** (``lib/pruning_ledger.py``, #1084) runs here too: each done removal
+The **pruning ledger** (``lib/pruning_ledger.py``, #1084) runs here too, on a default-model run
+only (a profile run keeps it as stored and credits nothing, since only a default run writes it, #1184): each done removal
 action in the committed ``actions.json`` is tracked in ``pruning``, stored in ``prior-level.json``
 beside the baseline (``pruning_record``), and ``pruned`` lists the removals this run credits
 ("Pruned: ..."), counted once per measured commit against the commit that wrote the stored
@@ -68,7 +71,8 @@ from typing import Any
 from lib.headline import GATE_NOUN
 from lib.level_tally import default_model, gate_blockers
 from lib.levels import StepDef
-from lib.prior_level import Baseline, PruningEntry, build_prior_level, load_baseline, load_pruning
+from lib.prior_level import Baseline, PruningEntry, build_prior_level, default_level, load_baseline, load_pruning
+from lib.profiles import model_for_level
 from lib.pruning_ledger import ledger_lines, removal, update_ledger
 from lib.reviewed_findings import action_entries
 from lib.run_context_types_since import ClosedAction, SinceLastRun
@@ -122,7 +126,7 @@ def baseline_record(ctx: Mapping[str, Any]) -> Baseline | None:
     measured and the gates it held; None with no measured commit or no level result."""
     commit = ctx.get("measured_commit")
     sha = commit.get("head_sha") if isinstance(commit, Mapping) else None
-    held = _held(default_model().get("steps", []), ctx.get("level"))
+    held = _held(_steps(ctx.get("level")), ctx.get("level"))
     if not isinstance(sha, str) or not sha or held is None:
         return None
     run_id = ctx.get("run_id")
@@ -269,8 +273,14 @@ def _markdown(lines: list[str]) -> str:
     return "\n".join(f"  - {line.strip()}" if line.startswith("  ") else f"- {line}" for line in lines)
 
 
-def _baseline(assess_dir: Path, superseded: Any) -> tuple[bool, str | None, Mapping[str, Any] | None,
-                                                         Mapping[str, Any] | None]:
+def _steps(level: Any) -> list[StepDef]:
+    """The Steps of ``level``'s model (``profiles.model_for_level``), the default model's for a
+    custom ``--levels`` model the run cannot load (#1184)."""
+    return (model_for_level(level) or default_model()).get("steps", [])
+
+
+def _baseline(assess_dir: Path, superseded: Any, level: Any = None
+              ) -> tuple[bool, str | None, Mapping[str, Any] | None, Mapping[str, Any] | None]:
     """``(first_run, why the previous state is unknown, previous context, inherited block)``.
 
     Read order: the superseded run's own block (below), then the committed baseline in
@@ -287,15 +297,18 @@ def _baseline(assess_dir: Path, superseded: Any) -> tuple[bool, str | None, Mapp
 
     A run that supersedes a same-day run on the same commit (``superseded``) takes that run's
     own baseline from its ``since_last_run`` block, so the credit it showed is not lost when
-    its log entry is replaced; the commit is the same, so its gate changes still hold."""
+    its log entry is replaced; the commit is the same, so its gate changes still hold.
+
+    The committed baseline read is ``level``'s model's record (``prior_level.load_baseline``,
+    #1184); a custom ``--levels`` model has none."""
     if isinstance(superseded, Mapping):
         inherited = superseded.get("since_last_run")
         if isinstance(inherited, Mapping) and inherited.get("available") is True:
             return bool(inherited.get("first_run")), None, None, inherited
-    committed = load_baseline(assess_dir)  # the committed baseline first (#1122)
-    if committed is not None:
-        return False, None, {"run_id": committed.get("run_id"), "head_sha": committed["head_sha"],
-                             "held_gates": committed["held_gates"]}, None
+    stored = load_baseline(assess_dir, level)  # the committed baseline first (#1122)
+    if stored is not None:
+        return False, None, {"run_id": stored.get("run_id"), "head_sha": stored["head_sha"],
+                             "held_gates": stored["held_gates"]}, None
     path = assess_dir / "run-context.json"
     if not path.is_file():
         return ((False, "previous_state_missing", None, None) if (assess_dir / "log.md").is_file()
@@ -343,8 +356,8 @@ def pruning_record(ctx: Mapping[str, Any]) -> list[PruningEntry] | None:
 def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: Any = None,
                    instruction_placement: Any = None) -> SinceLastRun:
     """The ``since_last_run`` block for this run's ``level`` block (see the module docstring)."""
-    steps = default_model().get("steps", [])
-    first, unknown, prev, inherited = _baseline(assess_dir, superseded)
+    steps = _steps(level)
+    first, unknown, prev, inherited = _baseline(assess_dir, superseded, level)
     held_before: list[str] | None = None  # the gates held at the previous run, for the ledger
     if inherited is not None:
         previous_commit, run_id = inherited.get("previous_commit"), inherited.get("previous_run_id")
@@ -387,12 +400,16 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
     head_sha = head.stdout.strip() if head is not None and head.returncode == 0 else None
     # a hold counts once per measured commit: compare with the commit that wrote the stored
     # ledger (the committed baseline), not the "since" baseline a superseding run inherits
-    stored = load_baseline(assess_dir)
-    ledger_commit = stored["head_sha"] if stored is not None else previous_commit
-    pruning, pruned = update_ledger(load_pruning(assess_dir), _done_removals(repo_root), instruction_placement,
-                                    held_now=_held(steps, level), held_before=held_before, head_sha=head_sha,
-                                    new_commit=head_sha is not None and head_sha != ledger_commit,
-                                    repo_root=repo_root)
+    stored = load_baseline(assess_dir, level)
+    if default_level(level):
+        ledger_commit = stored["head_sha"] if stored is not None else previous_commit
+        pruning, pruned = update_ledger(load_pruning(assess_dir), _done_removals(repo_root), instruction_placement,
+                                        held_now=_held(steps, level), held_before=held_before, head_sha=head_sha,
+                                        new_commit=head_sha is not None and head_sha != ledger_commit,
+                                        repo_root=repo_root)
+    else:
+        # the ledger is the default record's alone (#1184): a profile run neither advances nor credits it
+        pruning, pruned = load_pruning(assess_dir), []
     block: SinceLastRun = {
         "available": True, "first_run": first,
         "previous_run_id": run_id if isinstance(run_id, str) else None,

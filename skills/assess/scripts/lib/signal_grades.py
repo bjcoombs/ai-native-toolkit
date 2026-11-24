@@ -63,4 +63,6 @@ EMPTY_DENOMINATORS: dict[str, tuple[str, str]] = {
     "skill_disclosure.files_breaking": ("skill_disclosure.files_considered", "no_skill_files"),
     # No skill holding a script is not a tested skill (#1045).
     "skill_script_tests.skills_untested": ("skill_script_tests.skills_with_scripts", "no_skill_scripts"),
+    # No skill file scanned is not a skill free of personal data (#1045).
+    "skill_personal_data.files_with_personal_data": ("skill_personal_data.files_considered", "no_skill_files"),
 }

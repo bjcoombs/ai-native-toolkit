@@ -63,7 +63,9 @@ both private and spread, or a run-context key written twice, so a mis-declared s
 fails before any run. `run_scans` resolves reads outside the wrapper: an input the
 core did not pass raises `ScanRegistryError` and stops the run, while a failure inside
 the scan degrades. The core provides the `build_run_context` arguments
-(`repo_root`, `requested_scope`, `run_date`, `non_interactive`); `scope` (the
+(`repo_root`, `requested_scope`, `run_date`, `non_interactive`, and `maturity_model`: the
+`--profile` or `--levels` choice, `lib.profiles.ModelChoice`, or None for the default model,
+which the `level` and `headline` entries read, #1150); `scope` (the
 absolute `--scope` path, or None), `instruction_files`, `excludes` (the
 `(dirs, patterns)` pair from `.assess/config.toml`) and `history_window` (the stats
 sidecar's churn window via `git_churn.window_from_churn_label`, or None) and
@@ -109,10 +111,11 @@ from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.skill_disclosure import scan_skill_disclosure
+from lib.secrets_guard import scan_secrets_guard
 from lib.skill_script_tests import scan_skill_script_tests
+from lib.skill_personal_data import scan_skill_personal_data
 from lib.hosting.org_security_policy import scan_org_security_policy
 from lib.layer_grades import scan_layer_grades
-from lib.level_tally import LEVEL_READS
 from lib.hosting.merged_sample import merged_sample, offline_merged_sample
 from lib.hosting.gitlab_ci_lint import no_merged_ci, read_merged_ci
 from lib.guardrails import scan_guardrails
@@ -130,7 +133,7 @@ from lib.unit_readings import bind as bind_unit_pass
 # before it (``instruction_files``, ``scope``, ``excludes``, ``history_window`` and
 # ``fleet_config`` are setup specs).
 PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive",
-                             "managed_settings"})
+                             "maturity_model", "managed_settings"})
 
 STAGE_SETUP = "setup"
 STAGE_READ_SIDE = "read_side"
@@ -619,6 +622,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # Skill script tests (issue #1045): whether each skill's scripts have tests beside them in
     # its own folder (presence, not coverage). Scoped per skill unit (unit_kinds = ["skill"]).
     _spec("skill_script_tests", scan_skill_script_tests),
+    # Personal data in skill text (issue #1045): the kinds found in each skill and agent file and
+    # its skill's references/, never the data. Scoped per skill unit (unit_kinds = ["skill"]).
+    _spec("skill_personal_data", scan_skill_personal_data),
     # Contributor files (issue #1045): a contributing guide and a security policy (or a link to
     # GitHub private vulnerability reporting), with issue and change templates as evidence.
     # Feeds the contributor-files row; not measured for a knowledge base (reads archetype).
@@ -626,6 +632,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # public .github repository, which GitHub shows on a repository that has none. Network.
     _spec("org_security_policy", scan_org_security_policy),
     _spec("contributor_files", cs.contributor_files),
+    # Secrets guard (issue #1173): a secrets hook in the pre-commit config and a secrets scan in CI,
+    # each with its own grade; level 1 any guard (listed), level 2 one an agent cannot skip (counted).
+    _spec("secrets_guard", scan_secrets_guard),
     # Top 3 candidates read from measured gaps. Post-offers since #821: the
     # root-instructions gap reads layer_grades; the removal proposal (#1084)
     # reads instruction_placement, so it runs after it.
@@ -661,12 +670,13 @@ SCANS: tuple[ScanSpec, ...] = (
 )
 
 
-# The verified tally and the autonomy Step (lib/level_tally.py, #744): the
-# default maturity model over the finished run context. Core-only: the
+# The verified tally and the autonomy Step (lib/level_tally.py, #744): the run's
+# maturity model (the default, or the --profile / --levels choice, #1150) over the
+# finished run context. Core-only: the
 # headless runner never reports it; /fleet computes the same from each row.
 # core_scans.level zips its blocks with LEVEL_READS, so checks/core/level.toml must list
-# exactly those reads in that order: checked here, at import, on every run.
-SCANS = (*SCANS, pinned_reads(_spec("level", cs.level), LEVEL_READS))
+# exactly those reads in that order, then maturity_model: checked here, at import, on every run.
+SCANS = (*SCANS, pinned_reads(_spec("level", cs.level), cs.LEVEL_ENTRY_READS))
 # What changed since the previous run (lib/since_last_run.py, #1083): actions closed with their
 # commits, gates gained or lost, the next blocker. Reads the run-context the previous run left,
 # so it runs before the publish step overwrites it; the report and the log.md entry open with it.

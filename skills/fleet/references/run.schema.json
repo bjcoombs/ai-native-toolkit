@@ -51,6 +51,38 @@
     "managed_settings": {
       "type": "boolean"
     },
+    "rules_sha256": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "collectors": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "fleet_stamp_version": {
       "type": "integer"
     },

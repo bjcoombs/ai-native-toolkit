@@ -79,6 +79,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 - `doc_staleness.association.methods`
 - `instruction_files.{}.subscores`
 - `nested_instructions.files.subscores`
+- `prior_level.models`
 - `prior_tool_versions`
 - `promissory_markers.families`
 - `stats_summary.fn_ccn.backend_by_language`
@@ -148,6 +149,15 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `prior_level.pruning.gates` | token |
 | `prior_level.pruning.credited_at` | token |
 | `prior_level.pruning.merged` | token |
+| `prior_level.models.*.levels_version` | token |
+| `prior_level.models.*.tags.tag` | token |
+| `prior_level.models.*.tags.not_measured.id` | token |
+| `prior_level.models.*.tags.not_measured.reason` | token |
+| `prior_level.models.*.tags.countable_not_measured.id` | token |
+| `prior_level.models.*.tags.countable_not_measured.reason` | token |
+| `prior_level.models.*.baseline.run_id` | token |
+| `prior_level.models.*.baseline.head_sha` | token |
+| `prior_level.models.*.baseline.held_gates` | token |
 
 ## doc_graph
 
@@ -743,6 +753,14 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `skill_script_tests.skills.path` | path (hashed when hashing is on) |
 | `skill_script_tests.skills.tested_elsewhere` | path (hashed when hashing is on) |
 
+## skill_personal_data
+
+| Field | Kept as |
+|---|---|
+| `skill_personal_data.files.path` | path (hashed when hashing is on) |
+| `skill_personal_data.files.kinds` | token |
+| `skill_personal_data.kinds_detected` | token |
+
 ## org_security_policy
 
 | Field | Kept as |
@@ -760,6 +778,20 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `contributor_files.policy.kind` | token |
 | `contributor_files.policy.source` | token |
 | `contributor_files.policy.reason` | reason code |
+
+## secrets_guard
+
+| Field | Kept as |
+|---|---|
+| `secrets_guard.pre_commit.file` | path (hashed when hashing is on) |
+| `secrets_guard.pre_commit.tools` | token |
+| `secrets_guard.ci.files` | path (hashed when hashing is on) |
+| `secrets_guard.ci.rules_unevaluated` | token |
+| `secrets_guard.ci.tools` | token |
+| `secrets_guard.enforcement.reason` | reason code |
+| `secrets_guard.enforcement.source` | token |
+| `secrets_guard.sources.source` | token |
+| `secrets_guard.sources.grade` | token |
 
 ## gap_actions
 

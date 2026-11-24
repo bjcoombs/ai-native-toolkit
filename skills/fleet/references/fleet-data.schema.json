@@ -63,6 +63,12 @@
         "managed_settings": {
           "type": "boolean"
         },
+        "rules_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "repositories": {
           "type": "object",
           "properties": {
@@ -97,6 +103,7 @@
         "platform",
         "plugin_version",
         "repositories",
+        "rules_sha256",
         "scan_date",
         "scans",
         "toolkit_commit",
@@ -518,6 +525,9 @@
                     "string",
                     "null"
                   ]
+                },
+                "floor": {
+                  "type": "integer"
                 }
               },
               "required": [
@@ -1081,6 +1091,41 @@
                   "signal",
                   "source",
                   "text"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "step_lifts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "condition": {
+                    "type": "string"
+                  },
+                  "row": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "gate": {
+                    "type": "string"
+                  },
+                  "step": {
+                    "type": "integer"
+                  },
+                  "repo_count": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "condition",
+                  "gate",
+                  "repo_count",
+                  "row",
+                  "step",
+                  "title"
                 ],
                 "additionalProperties": false
               }

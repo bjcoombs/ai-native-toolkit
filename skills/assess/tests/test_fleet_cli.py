@@ -118,11 +118,11 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
     assert first == (tmp_path / "out3" / "repos.jsonl").read_bytes()
     assert sorted(p.name for p in (tmp_path / "out1").iterdir()) == [
         "achievements.json", "agent_clusters.json", "condition_effect.json", "demotions.json", "fleet-data.json",
-        "groups.jsonl", "level.json", "report.md", "repos.jsonl", "run.json", "shared-tooling.svg", "tag-heatmap.svg",
+        "fleet-view.html", "groups.jsonl", "level.json", "report.md", "repos.jsonl", "run.json", "shared-tooling.svg", "tag-heatmap.svg",
         "tag-profile.svg"]
     for name in ("report.md", "shared-tooling.svg", "tag-profile.svg", "tag-heatmap.svg", "agent_clusters.json",
                  "fleet-data.json", "achievements.json", "level.json",
-                 "condition_effect.json", "demotions.json"):  # byte-identical across runs
+                 "condition_effect.json", "demotions.json", "fleet-view.html"):  # byte-identical across runs
         drawn = (tmp_path / "out1" / name).read_bytes()
         assert drawn == (tmp_path / "out2" / name).read_bytes()
         assert drawn == (tmp_path / "out3" / name).read_bytes()

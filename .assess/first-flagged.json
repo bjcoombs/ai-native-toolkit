@@ -20,5 +20,10 @@
   "skills/assess/scripts/lib/git_churn.py": "2026-11-20",
   "skills/assess/scripts/lib/scan_registry.py": "2026-11-20",
   "skills/assess/scripts/assess_report.py": "2026-11-20",
-  "scripts/floor_check.py": "2026-11-20"
+  "scripts/floor_check.py": "2026-11-20",
+  "skills/ghsync/scripts/ghsync.sh": "2026-11-24",
+  "skills/fleet/scripts/fleet.py": "2026-11-24",
+  "skills/assess/scripts/lib/ci_checks.py": "2026-11-24",
+  "skills/ghreport/scripts/ghreport.sh": "2026-11-24",
+  "skills/assess/scripts/lib/check_command.py": "2026-11-24"
 }

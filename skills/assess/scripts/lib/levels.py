@@ -106,7 +106,7 @@ missing version, an unset or invalid scope, a gap or duplicate in level
 numbering, an unknown operator or key, a team row with no aggregation rule,
 a ``requires`` naming a condition that does not exist (or itself, or a cycle),
 a missing, empty or unknown ``truth`` (``MixedTruthError`` when only some conditions
-carry it), a bad ``polarity``, ``guarded_by``, ``eq_signal``, ``predicted`` or ``review``, a malformed Step, or a signal path the pluggable ``PathValidator`` rejects. A renamed 2.1.0 path loads under its new
+carry it), a bad ``polarity``, ``guarded_by``, ``eq_signal``, ``predicted`` or ``review``, a malformed Step, or a signal path the pluggable ``PathValidator`` rejects (``UnknownSignalError``: its line and the closest signals, ``lib/levels_hints.py``). A renamed 2.1.0 path loads under its new
 name with one stderr line (``lib.signal_aliases.dealias_model``, #970). ``dumps_result`` gives
 byte-identical JSON for identical inputs.
 
@@ -125,6 +125,7 @@ from typing import Any, Callable, Iterable, Literal, Mapping, NotRequired, Typed
 from lib.levels_fields import LevelsError as LevelsError, MixedTruthError as MixedTruthError
 from lib.levels_fields import check_guards, check_truth, legacy_truth, parse_eq_signal, parse_guard
 from lib.levels_fields import ModelDemotions, ReviewFields, apply_review, parse_polarity, parse_truth
+from lib.levels_hints import UnknownSignalError as UnknownSignalError
 from lib.signal_aliases import dealias_model
 from lib.signal_grades import EMPTY_DENOMINATORS
 
@@ -297,10 +298,13 @@ def known_paths(org: Iterable[str], team: Iterable[str]) -> PathValidator:
 def load_levels(path: Path, validator: PathValidator | None = None) -> MaturityModel:
     """Read and validate a TOML maturity model file; raise ``LevelsError`` on any fault."""
     try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        data = tomllib.loads(text := path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         raise LevelsError(f"cannot read maturity model {path.name}: {exc}") from exc
-    return parse_levels(data, validator, source=str(path))
+    try:
+        return parse_levels(data, validator, source=str(path))
+    except UnknownSignalError as exc:  # name the line of each unknown path (#1151)
+        raise exc.located(text) from None
 
 
 def parse_levels(data: Mapping[str, Any], validator: PathValidator | None = None, *,
@@ -553,18 +557,11 @@ def _parse_steps(raw: Any, rows: list[Row]) -> list[StepDef]:
 
 
 def _validate_paths(rows: list[Row], validator: PathValidator) -> None:
-    bad = sorted(
-        {
-            f"{row['scope']}:{signal} (row {row['id']!r})"
-            for row in rows
-            for level in row["levels"]
-            for c in level["criteria"]
-            for signal in (c["signal"], *([c["eq_signal"]] if "eq_signal" in c else []))
-            if not validator(row["scope"], signal)
-        }
-    )
+    bad = {(row["scope"], signal, row["id"]) for row in rows for level in row["levels"] for c in level["criteria"]
+           for signal in (c["signal"], *([c["eq_signal"]] if "eq_signal" in c else []))
+           if not validator(row["scope"], signal)}
     if bad:
-        raise LevelsError(f"unknown signal path(s): {'; '.join(bad)}")
+        raise UnknownSignalError(list(bad))
 
 
 # --------------------------------------------------------------------------

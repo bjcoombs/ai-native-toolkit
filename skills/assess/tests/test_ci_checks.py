@@ -459,7 +459,7 @@ def _uses(action: str, extra: str = "", on: str = "[pull_request]") -> dict[str,
 @pytest.mark.parametrize("action", [
     "golangci/golangci-lint-action@v6", "astral-sh/ruff-action@v3", "chartboost/ruff-action@v1",
     "github/super-linter@v5", "super-linter/super-linter/slim@v7",
-    "reviewdog/action-eslint@v1", "wearerequired/lint-action@v2",
+    "wearerequired/lint-action@v2",   # reviewdog/action-eslint@v1 moved to check_may_pass (#893)
     "DavidAnson/markdownlint-cli2-action@v16", "'astral-sh/ruff-action@v3'",
     "golangci/golangci-lint-action@3a919529898de77ec3da873e3063ca4b10e7f5cc",
 ])

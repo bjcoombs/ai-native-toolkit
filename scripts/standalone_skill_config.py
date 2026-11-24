@@ -95,6 +95,7 @@ SKILLS: dict[str, dict[str, Any]] = {
             "uv-core": 'uv run scripts/assess_core.py "$REPO_ROOT"',
             "uv-core-mutation": (
                 'uv run scripts/assess_core.py "$REPO_ROOT" --opt-in-mutation'
+                "  # plus the run's --profile NAME or --levels FILE, if it had one"
             ),
             # The opt-in mutation pass is offered via AskUserQuestion in plugin
             # mode (stripped here). Standalone keeps the capability as a manual

@@ -28,7 +28,7 @@ A scan that feeds no maturity-model criterion is `unclassified` until its eviden
 
 ## Conditions by truth tag
 
-Each condition carries one or more truth tags: the truth it keeps honest. A condition holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. A condition with several tags is listed under its first tag and named under the others as shared; it counts once. There are 27 conditions, 2 of them with more than one tag.
+Each condition carries one or more truth tags: the truth it keeps honest. A condition holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. A condition with several tags is listed under its first tag and named under the others as shared; it counts once. There are 30 conditions, 2 of them with more than one tag.
 
 | Tag | Conditions | Listed here | Shared |
 |---|---|---|---|
@@ -38,7 +38,7 @@ Each condition carries one or more truth tags: the truth it keeps honest. A cond
 | Structure (`structure`) | 6 | 6 | 0 |
 | Agent context (`agent_context`) | 7 | 7 | 1 |
 | Agent runtime (`agent_runtime`) | 4 | 4 | 1 |
-| Governance (`governance`) | 3 | 3 | 0 |
+| Governance (`governance`) | 6 | 6 | 0 |
 | Supply chain (`supply_chain`) | 1 | 0 | 1 |
 
 ### Behaviour
@@ -128,14 +128,17 @@ Tag `agent_runtime`: 4 conditions, 1 shared with another tag.
 
 That people stay in the loop on what agents change, and that what agents may do is agreed and visible.
 
-Tag `governance`: 3 conditions, none shared with another tag.
+Tag `governance`: 6 conditions, none shared with another tag.
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `layer-7-review.1` Changes get reviewed | `review_evidence` | Review evidence exists: is true (`review_evidence.present eq true`) | `declared` | no, listed | - | positive | - | - | A second reader, a person or a review agent, catches what an agent misunderstood about intent, which tests and linters do not look for. | Commit an AI review step in CI, or review merged changes before they land. |
-| `layer-7-review.2` Most merged changes are reviewed | `review_reality` | Share of merged changes reviewed: is at least 0.8 (`review_reality.reviewed_share gte 0.8`) | `verified` | yes | - | positive | - | - | Review protects only the changes it reaches. At four in five merged changes, most of what lands, an agent's work included, has had a second reader. | Aim for a review on at least four in five merged changes. |
-| `layer-7-review.2` Half of merged changes are approved | `review_reality` | Share of merged changes approved: is at least 0.5 (`review_reality.approved_share gte 0.5`) | `verified` | yes | - | positive | - | - | An explicit approval records that someone accepted the change, not just that it was looked at. | Approve changes explicitly when you review them. |
+| `layer-7-review.2` Most merged changes are reviewed | `review_reality` | Share of merged changes reviewed: is at least 0.8 (`review_reality.reviewed_share gte 0.8`) | `verified` | yes | - | positive | requires `layer-7-review.1` | - | Review protects only the changes it reaches. At four in five merged changes, most of what lands, an agent's work included, has had a second reader. | Aim for a review on at least four in five merged changes. |
+| `layer-7-review.2` Half of merged changes are approved | `review_reality` | Share of merged changes approved: is at least 0.5 (`review_reality.approved_share gte 0.5`) | `verified` | yes | - | positive | requires `layer-7-review.1` | - | An explicit approval records that someone accepted the change, not just that it was looked at. | Approve changes explicitly when you review them. |
 | `layer-8-agent-ops.1` Agent permissions are committed | `agent_ops` | Agent permissions are committed: is true (`agent_ops.summary.permissions_encoded eq true`) | `config_only` | no, listed | - | positive | - | - | Deny rules and hooks keep an agent inside its limits in every permission mode, auto mode included. Committed to the repository or set in managed settings, they apply the same way to everyone and are reviewed like code. | Commit a deny rule for an action no agent should take, such as `"deny": ["Bash(git push origin main)"]` under `permissions` in `.claude/settings.json`. It holds under auto mode too. If your organisation sets this centrally, run with --managed-settings. |
+| `secrets-guard.1` A secrets guard is configured (a pre-commit hook counts; listed, not counted) | `secrets_guard` | A secrets guard is configured (pre-commit hook or CI scan): is true (`secrets_guard.configured eq true`) | `config_only` | no, listed | - | positive | - | - | A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one. | Add a secrets hook to .pre-commit-config.yaml (gitleaks or detect-secrets), or a secrets scan step to CI. |
+| `secrets-guard.2` A secrets scan runs where an agent cannot skip it | `secrets_guard` | A secrets scan runs where an agent cannot skip it (CI): is true (`secrets_guard.enforcement.present eq true`) | `measured` | yes | - | positive | - | - | A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one. | Add a secrets scan step to CI that runs on each push or pull request (gitleaks/gitleaks-action, trufflehog, or GitLab's Secret-Detection template); a pre-commit hook alone can be skipped with --no-verify. |
+| `skill-personal-data.1` No skill file holds a detected kind of personal data (email, phone, home path, IP, SSH login, key) | `skill_personal_data` | Skill and agent files holding a detected kind of personal data: is 0 (`skill_personal_data.files_with_personal_data eq 0`) | `measured` | yes | - | positive | - | - | Skill text is loaded into every session that triggers it and copied wherever it is published, so personal data in it leaks to every user. | In each file the report names, remove the kind of data it lists, or replace it with a placeholder (user@example.com, /home/user/); a key that was committed should also be rotated. |
 
 ### Supply chain
 
@@ -159,7 +162,7 @@ How many conditions each pair of tags shares. The diagonal is the tag's own coun
 | `structure` | 0 | 0 | 0 | 6 | 0 | 0 | 0 | 0 |
 | `agent_context` | 0 | 0 | 1 | 0 | 7 | 0 | 0 | 0 |
 | `agent_runtime` | 0 | 0 | 0 | 0 | 0 | 4 | 0 | 1 |
-| `governance` | 0 | 0 | 0 | 0 | 0 | 0 | 3 | 0 |
+| `governance` | 0 | 0 | 0 | 0 | 0 | 0 | 6 | 0 |
 | `supply_chain` | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 |
 
 - `docs` and `agent_context`: `layer-0-instructions.2`.
@@ -182,6 +185,7 @@ The autonomy Steps in order. A Step needs every gate, whatever the gate's grade,
 - `layer-3-linters.2` requires `layer-3-linters.1`.
 - `layer-4-architecture.2` requires `layer-4-architecture.1`.
 - `layer-6-coverage.2` requires `layer-5-ci.1`.
+- `layer-7-review.2` requires `layer-7-review.1`.
 - `guardrails-stated.2` requires `guardrails-stated.1`.
 - `agent-consistency.2` requires `agent-consistency.1`.
 
@@ -207,6 +211,8 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | `agent-consistency` | Cross-agent instruction consistency | team | `min` | `agent-consistency.1`, `agent-consistency.2` |
 | `skill-disclosure` | Skill disclosure | team | `min` | `skill-disclosure.1` |
 | `skill-script-tests` | Skill script tests | team | `min` | `skill-script-tests.1` |
+| `secrets-guard` | Secrets guard | team | `min` | `secrets-guard.1`, `secrets-guard.2` |
+| `skill-personal-data` | Personal data in skill text | team | `min` | `skill-personal-data.1` |
 | `contributor-files` | Contributor files | team | `min` | `contributor-files.1` |
 
 ## Scans
@@ -549,6 +555,21 @@ Whether each skill's scripts have tests beside them in the skill's own folder: p
 - Evidence: `skill_script_tests.skills_untested` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.
 
+### `skill_personal_data`: Personal data in skill text
+
+Skill text is loaded into every session that triggers it and copied wherever it is published, so personal data in it leaks to every user.
+
+Each SKILL.md, agent definition and skill references/ file, scanned for emails, phone numbers, home paths, IP addresses, SSH logins and keys. A finding names the file and the kind, never the data. Credential-shaped assignments are counted for information only. Personal names are not detected.
+
+- Collector: `core.skill_personal_data`, reading `repo_root`, `scope`, `excludes`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `skill_personal_data.files.kinds` token, `skill_personal_data.files.path` path, `skill_personal_data.kinds_detected` token.
+- Used by: row `skill-personal-data`.
+- Evidence: `skill_personal_data.files_with_personal_data` head_structure (measured).
+- Not measured when:
+  - `skill_files_unread`: A skill or agent file could not be read, and none of those read holds a detected kind. Check the file's permissions or encoding, then run /assess again.
+
 ### `org_security_policy`: Owner's shared security policy
 
 A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue.
@@ -564,6 +585,23 @@ The SECURITY file in the owner's public .github repository, which GitHub shows o
 - Not measured when:
   - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
   - `no_remote`: The repository has no github.com remote, so there is no owner .github repository to read. Nothing to change: the shared-policy fallback is GitHub's; commit a SECURITY.md in the repository.
+
+### `secrets_guard`: Secrets guard
+
+A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.
+
+A secrets hook in the pre-commit config and a secrets scan in CI, such as gitleaks, trufflehog or GitLab Secret-Detection. Each is recorded with its own evidence grade.
+
+- Collector: `core.secrets_guard`, reading `repo_root`, `scope`, `ghsync_root`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `secrets_guard.ci.files` path, `secrets_guard.ci.rules_unevaluated` token, `secrets_guard.ci.tools` token, `secrets_guard.enforcement.reason` reason, `secrets_guard.enforcement.source` token, `secrets_guard.pre_commit.file` path, `secrets_guard.pre_commit.tools` token, `secrets_guard.sources.grade` token, `secrets_guard.sources.source` token.
+- Used by: row `secrets-guard`.
+- Evidence: `secrets_guard.configured` config_text (config_only), `secrets_guard.enforcement.present` head_structure (measured).
+- Not measured when:
+  - `secret_scanning_not_read`: No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read. Add a secrets scan step to CI (gitleaks or trufflehog); GitHub's own settings are not read yet.
+  - `gitlab_rules_unevaluated`: A GitLab job holds a secrets scan but runs under rules, only/except or a when that is not evaluated. So it is not known whether the scan runs on each change. Nothing to change for the reading: a plain job with no rules, or a GitHub workflow, is read in full.
+  - `ci_includes_unresolved`: No secrets scan was found in the CI read. A GitLab include that could hold one, a local, project or remote file, was not read. Clone the included project beside this one (/ghsync), or add the secrets scan to the repository's own .gitlab-ci.yml.
 
 ### `agent_consistency`: Cross-agent instruction consistency
 
@@ -816,7 +854,7 @@ A unit inherits root CI and review but not the root's suppressions, stale docs o
 
 Each unit's own readings of the scope-sensitive scans: suppressions, doc staleness, structure, size, and its own coverage gate or instruction file. Every condition is tagged unit or inherited.
 
-- Collector: `core.unit_readings`, reading `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes`.
+- Collector: `core.unit_readings`, reading `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes`.
 - Network: no.
 - Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `unit_readings.unit_blocks` token, `unit_readings.unit_count_reason` token, `unit_readings.units.conditions.id` token, `unit_readings.units.conditions.origin` token, `unit_readings.units.kind` token, `unit_readings.units.path` hashed_path.
@@ -1140,17 +1178,19 @@ The scan registry in run order, including the private inputs other scans read.
 | `instruction_placement` | Instruction placement | `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes` | `instruction_placement` | no |
 | `skill_disclosure` | Skill disclosure | `repo_root`, `scope`, `excludes` | `skill_disclosure` | no |
 | `skill_script_tests` | Skill script tests | `repo_root`, `scope`, `excludes` | `skill_script_tests` | no |
+| `skill_personal_data` | Personal data in skill text | `repo_root`, `scope`, `excludes` | `skill_personal_data` | no |
 | `org_security_policy` | Owner's shared security policy | `repo_root` | `org_security_policy` | yes |
 | `contributor_files` | Contributor files | `repo_root`, `archetype`, `org_security_policy` | `contributor_files` | no |
+| `secrets_guard` | Secrets guard | `repo_root`, `scope`, `ghsync_root` | `secrets_guard` | no |
 | `gap_actions` | Gap actions | `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`, `instruction_placement` | `gap_actions` | no |
 | `agent_consistency` | Cross-agent instruction consistency | `repo_root`, `excludes` | `agent_consistency` | no |
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |
 | `agent_outcome` | Agent commit outcomes | `repo_root`, `scope`, `history_window`, `fleet_config` | `agent_outcome` | no |
 | `doc_claims` | Doc claims | `repo_root`, `instruction_files`, `scope`, `excludes` | `doc_claims` | no |
 | `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope` | `guardrails` | no |
-| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `skill_disclosure`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `level` | no |
+| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions`, `maturity_model` | `level` | no |
 | `since_last_run` | Since last run | `level`, `assess_dir`, `repo_root`, `superseded`, `instruction_placement` | `since_last_run` | no |
-| `headline` | Deterministic headline | `level`, `since_last_run` | `headline` | no |
-| `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
-| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `skill_disclosure`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
-| `unit_rollup` | Monorepo unit roll-up | `unit_levels`, `units` | `unit_rollup` | no |
+| `headline` | Deterministic headline | `level`, `since_last_run`, `maturity_model` | `headline` | no |
+| `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
+| `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
+| `unit_rollup` | Monorepo unit roll-up | `unit_levels`, `units`, `maturity_model` | `unit_rollup` | no |

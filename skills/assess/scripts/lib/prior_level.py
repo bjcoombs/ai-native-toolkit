@@ -18,8 +18,10 @@ is any shape other than ``PriorLevel`` (a version this reader does not know, a t
 an unreadable earlier run is never drawn, and the strip says it could not be read.
 ``write_prior_level`` writes nothing when the level result has no ``tags`` (a degraded level
 block) and leaves the previous good run's file as it was (#1158), so its baseline and pruning
-ledger survive one failed run; the strip still compares only runs counted under the same model
-(``same_model``).
+ledger survive one failed run. A custom ``--levels`` run writes nothing (``model_key`` None,
+#1150); a profile run writes only its own record (#1184, below), and leaves a file it cannot
+read untouched, so it never drops the default record the CI gate reads. The strip still
+compares only runs counted under the same model (``same_model``).
 The strip draws the earlier run only when its ``levels_version`` equals this run's
 (``same_model``); otherwise it says why in one line.
 
@@ -31,6 +33,16 @@ the file has none (a version-1 file, which this reader still accepts, a run with
 or a malformed baseline, which is dropped while the tags still read). ``pruning`` (#1084)
 holds the pruning ledger's removals beside it (``PruningEntry``, ``load_pruning``), so the
 hold count survives a fresh clone too; a malformed ledger is dropped the same way.
+
+Version 3 (#1184) keeps one record per model. The top-level ``levels_version``, ``tags``,
+``baseline`` and ``pruning`` are the default model's record, as before; ``models`` maps a
+shipped profile's name to its own ``ModelRecord`` (``levels_version``, ``tags``, ``baseline``),
+and the top-level record may be absent when only profiles have run. ``model_key(level)`` names
+the record a run reads and writes (``default``, a profile name, or None for a custom
+``--levels`` model, which keeps none), and ``record_for(prior, level)`` returns that record as
+a ``PriorLevel`` view, so ``load_baseline(assess_dir, level)``, the gate and the tag strip each
+read the run's own model. ``write_prior_level`` replaces only that record and keeps every other;
+the pruning ledger is the default record's alone.
 
 Every value is a tag token, a condition id, a reason code, a version token, a count, a
 commit sha (``baseline.head_sha``, ``pruning[].completed_sha``), a run id token, a gate id or,
@@ -52,8 +64,10 @@ from lib.levels_fields import TRUTH_TAGS
 PRIOR_LEVEL_FILE = "prior-level.json"
 # 1 (#940): the first version.
 # 2 (#1122): adds the optional ``baseline``. Version-1 files are still read, without one.
-PRIOR_LEVEL_VERSION = 2
-READABLE_VERSIONS = (1, 2)
+# 3 (#1184): adds the optional ``models``, one record per shipped profile keyed by its name, and
+#   lets the default model's top-level record be absent when only profiles have run.
+PRIOR_LEVEL_VERSION = 3
+READABLE_VERSIONS = (1, 2, 3)
 _COUNTS = ("conditions", "countable", "set_aside", "met", "measured")
 
 
@@ -79,14 +93,24 @@ class PruningEntry(TypedDict):
     merged: NotRequired[list[str]]  # earlier removals of the same file folded into this one (#1168)
 
 
+class ModelRecord(TypedDict):
+    """One shipped profile's record under ``models`` (#1184): its tags and committed baseline."""
+
+    levels_version: str  # the profile version the tags were counted under
+    tags: list[TagRow]
+    baseline: NotRequired[Baseline]  # absent with no measured commit
+
+
 class PriorLevel(TypedDict):
-    """``prior-level.json`` and the run context's ``prior_level`` (#940)."""
+    """``prior-level.json`` and the run context's ``prior_level`` (#940). The top-level record
+    is the default model's; ``models`` holds each shipped profile's (#1184)."""
 
     prior_level_version: int
-    levels_version: str  # the maturity-model version the tags were counted under
-    tags: list[TagRow]  # the level block's tags, in TRUTH_TAGS order
+    levels_version: NotRequired[str]  # the maturity-model version the tags were counted under
+    tags: NotRequired[list[TagRow]]  # the level block's tags, in TRUTH_TAGS order
     baseline: NotRequired[Baseline]  # version 2 (#1122); absent with no measured commit
-    pruning: NotRequired[list[PruningEntry]]  # the pruning ledger's removals (#1084)
+    pruning: NotRequired[list[PruningEntry]]  # the pruning ledger's removals (#1084), default only
+    models: NotRequired[dict[str, ModelRecord]]  # version 3 (#1184): profile name -> its record
 
 
 class PriorLevelUnread(TypedDict):
@@ -165,18 +189,71 @@ def _valid_tags(tags: Any) -> bool:
     return isinstance(tags, list) and all(_valid_row(row) for row in tags)
 
 
+def _valid_record(value: Any) -> bool:
+    return isinstance(value, Mapping) and isinstance(value.get("levels_version"), str) \
+        and _valid_tags(value.get("tags"))
+
+
+def _models(value: Any) -> dict[str, ModelRecord]:
+    """The readable profile records of a ``models`` value; a malformed record is dropped alone,
+    and a malformed baseline inside a record is dropped from it."""
+    if not isinstance(value, Mapping):
+        return {}
+    out: dict[str, ModelRecord] = {}
+    for name, record in value.items():
+        if isinstance(name, str) and _valid_record(record):
+            kept = dict(record)
+            if "baseline" in kept and not _valid_baseline(kept["baseline"]):
+                del kept["baseline"]
+            out[name] = cast(ModelRecord, kept)
+    return out
+
+
 def as_prior_level(value: Any) -> PriorLevel | None:
-    """``value`` when it is a ``PriorLevel`` this reader knows, else None."""
+    """``value`` when it is a ``PriorLevel`` this reader knows, else None. The default record may
+    be absent only in a version-3 file that holds a profile record."""
     if not isinstance(value, Mapping) or value.get("prior_level_version") not in READABLE_VERSIONS:
         return None
-    if not isinstance(value.get("levels_version"), str) or not _valid_tags(value.get("tags")):
-        return None
     out = dict(value)
+    raw_models = out.pop("models", None)  # only version 3 defines it: an older file's is dropped
+    models = _models(raw_models) if value.get("prior_level_version") == 3 else {}
+    has_default = "levels_version" in out or "tags" in out
+    if has_default and not _valid_record(out):
+        return None
+    if not has_default and not models:
+        return None
     if "baseline" in out and not _valid_baseline(out["baseline"]):
         del out["baseline"]  # a malformed baseline is dropped alone: the tags still draw
     if "pruning" in out and not _valid_pruning(out["pruning"]):
         del out["pruning"]  # so is a malformed ledger
+    if models:
+        out["models"] = models
     return cast(PriorLevel, out)
+
+
+def model_key(level: Any) -> str | None:
+    """The record a ``level`` block reads and writes: ``default`` for a default-model version (or a
+    level that names none), a profile's name for ``profile-<name>-<date>``, None for a custom
+    ``--levels`` model, which keeps no committed record."""
+    version = level.get("levels_version") if isinstance(level, Mapping) else None
+    if not isinstance(version, str) or version.startswith("default-"):
+        return "default"
+    name = version[len("profile-"):].rpartition("-")[0] if version.startswith("profile-") else ""
+    return name or None
+
+
+def record_for(prior: Any, level: Any) -> PriorLevel | None:
+    """The record of ``level``'s model in a read ``prior-level.json`` (``as_prior_level``), as a
+    ``PriorLevel`` view: the top level for the default model, ``models[<name>]`` for a profile;
+    None when that model has no record, for a custom model, or for an unreadable file."""
+    found = as_prior_level(prior)
+    key = model_key(level)
+    if found is None or key is None:
+        return None
+    if key == "default":
+        return found if "levels_version" in found else None
+    record = found.get("models", {}).get(key)
+    return None if record is None else cast(PriorLevel, {"prior_level_version": found["prior_level_version"], **record})
 
 
 def load_pruning(assess_dir: Path) -> list[PruningEntry]:
@@ -186,11 +263,11 @@ def load_pruning(assess_dir: Path) -> list[PruningEntry]:
     return cast(list[PruningEntry], found) if isinstance(found, list) else []
 
 
-def load_baseline(assess_dir: Path) -> Baseline | None:
-    """The committed baseline in the earlier run's ``prior-level.json``, or None (#1122)."""
-    prior = load_prior_level(assess_dir)
-    found = prior.get("baseline") if isinstance(prior, Mapping) else None
-    return cast(Baseline, found) if isinstance(found, Mapping) else None
+def load_baseline(assess_dir: Path, level: Any = None) -> Baseline | None:
+    """The committed baseline of ``level``'s model (the default model when None) in the earlier
+    run's ``prior-level.json``, or None (#1122, #1184)."""
+    prior = record_for(load_prior_level(assess_dir), level)
+    return None if prior is None else prior.get("baseline")
 
 
 def load_prior_level(assess_dir: Path) -> PriorLevel | PriorLevelUnread | None:
@@ -206,18 +283,55 @@ def load_prior_level(assess_dir: Path) -> PriorLevel | PriorLevelUnread | None:
     return prior if prior is not None else {**UNREADABLE}
 
 
+def default_level(level: Any) -> bool:
+    """True when ``level`` was counted under the default model (a ``default-<date>`` version)
+    or names no model (a degraded level, which ``build_prior_level`` already keeps out)."""
+    return model_key(level) == "default"
+
+
+def _content(assess_dir: Path, level: Any, baseline: Baseline | None,
+             pruning: list[PruningEntry] | None) -> PriorLevel | None:
+    """The file to write for this run: its own model's record replaced, every other kept."""
+    key = model_key(level)
+    built = build_prior_level(level, baseline, pruning if key == "default" else None)
+    if key is None or built is None:
+        return None
+    raw = load_prior_level(assess_dir)
+    existing = as_prior_level(raw)
+    if key != "default" and raw is not None and existing is None:
+        return None  # an unreadable file: a profile run never replaces the default record in it
+    models: dict[str, ModelRecord] = dict(existing.get("models", {})) if existing is not None else {}
+    if key == "default":
+        out: PriorLevel = {**built}
+    else:
+        record: ModelRecord = {"levels_version": built["levels_version"], "tags": built["tags"]}
+        if "baseline" in built:
+            record["baseline"] = built["baseline"]
+        models[key] = record
+        kept = {k: v for k, v in (existing or {}).items() if k != "models"}
+        out = cast(PriorLevel, {**kept, "prior_level_version": PRIOR_LEVEL_VERSION})
+    if models:
+        out["models"] = models
+    return out
+
+
 def write_prior_level(assess_dir: Path, level: Any, baseline: Baseline | None = None,
                       pruning: list[PruningEntry] | None = None) -> Path | None:
     """Write this run's ``prior-level.json`` (sorted keys, LF).
 
     A run whose level block has no tags (a degraded level) leaves the existing file untouched
     (#1158): it holds the previous good run's baseline and pruning ledger, which the next good
-    run compares with. A symlink in the file's place is removed, never written through. A file
+    run compares with. A run writes only its own model's record (#1184): a default run the top
+    level, keeping every profile record; a profile run ``models[<name>]``, keeping the default
+    record and the pruning ledger, which only a default run writes, and leaving a file it cannot
+    read as it is. A custom ``--levels`` run writes nothing (#1150). A symlink in the file's place is removed, never written through. A file
     that cannot be written (``OSError``) is named on stderr and skipped, as
     ``assess_diagrams.write_diagrams`` does: the record never stops a run. Returns the path
     written, or None."""
     path = assess_dir / PRIOR_LEVEL_FILE
-    content = build_prior_level(level, baseline, pruning)
+    if model_key(level) is None:
+        return None
+    content = _content(assess_dir, level, baseline, pruning)
     try:
         if path.is_symlink():
             path.unlink(missing_ok=True)

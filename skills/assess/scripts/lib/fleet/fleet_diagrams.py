@@ -18,7 +18,11 @@ The fleet median tag profile strip (#940, ``lib/fleet/fleet_tag_profile.py``) co
 summary view, drawn from ``fleet-data.json``'s ``tag_profile`` (``build_diagrams(...,
 tag_profile=)``) and skipped without it; the estate tag heatmap
 (``lib/fleet/fleet_tag_heatmap.py``) follows it as the drill-down, from the repositories'
-per-tag tallies in the same document (``data=``). The slope chart (#675) follows the trend; it reads
+per-tag tallies in the same document (``data=``). The Step funnel and one change away (#941,
+``lib/fleet/fleet_step_funnel.py``, ``lib/fleet/fleet_step_lifts.py``) follow, from the same
+document's Step fields and ``opportunities.step_lifts``; the Step movement grid
+(``lib/fleet/fleet_step_movement.py``) comes last, from the ``--compare`` run (``earlier=``).
+All three are skipped without a model with Steps or without ``fleet-data.json``. The slope chart (#675) follows the trend; it reads
 the ``--compare`` result (``comparison``) and is skipped without one; the trend
 (#676, ``lib/fleet/fleet_trends.py``) reads the run history. A new diagram adds its file,
 report heading and question to ``HEADINGS`` (the one source a drawn, skipped or failed diagram
@@ -56,13 +60,17 @@ from typing import Any, TypedDict
 import lib.fleet.fleet_maturity as fleet_maturity
 import lib.fleet.fleet_quadrant as fleet_quadrant
 import lib.fleet.fleet_slope as fleet_slope
+import lib.fleet.fleet_step_funnel as fleet_step_funnel
+import lib.fleet.fleet_step_lifts as fleet_step_lifts
+import lib.fleet.fleet_step_movement as fleet_step_movement
 import lib.fleet.fleet_tag_heatmap as fleet_tag_heatmap
 import lib.fleet.fleet_tag_profile as fleet_tag_profile
 import lib.fleet.fleet_tooling_map as fleet_tooling_map
 import lib.fleet.fleet_trends as fleet_trends
 from lib.vocabulary import IN_PLACE
 from lib.fleet.runner import FleetRow
-from lib.fleet.fleet_compare import Comparison
+from lib.fleet.fleet_compare import Comparison, FleetRun
+from lib.fleet.fleet_page import PAGE_FILE
 from lib.fleet.fleet_tag_profile import FleetTagRow
 from lib.fleet.fleet_trends import TrendRun
 from lib.levels import MaturityModel
@@ -74,11 +82,14 @@ HEADINGS: dict[str, tuple[str, str]] = {
     fleet_tag_profile.FILE: (fleet_tag_profile.TITLE,
                              "Which truth tags hold across the estate, and how far apart are the repositories on each?"),
     fleet_tag_heatmap.FILE: (fleet_tag_heatmap.TITLE, fleet_tag_heatmap.QUESTION),
+    fleet_step_funnel.FILE: (fleet_step_funnel.TITLE, fleet_step_funnel.QUESTION),
+    fleet_step_lifts.FILE: (fleet_step_lifts.TITLE, fleet_step_lifts.QUESTION),
     fleet_quadrant.FILE: ("Activity and maturity", "Which busy repositories have the most room to grow?"),
     fleet_tooling_map.FILE: ("Shared tooling",
                              "What does a shared template change reach, and which pins differ from the fleet's?"),
     fleet_trends.FILE: ("Group trends", "Is each team improving?"),
     fleet_slope.FILE: ("Before and after", "What moved since the earlier run, and which row moved it?"),
+    fleet_step_movement.FILE: (fleet_step_movement.TITLE, fleet_step_movement.QUESTION),
 }
 
 
@@ -101,6 +112,49 @@ NO_LEVELS = "skipped: the run had no maturity model (--levels), so no levels."
 NO_HISTORY = "skipped: the run is not kept in the run history (--no-history or --full), so no earlier runs."
 NO_TEAM_ROWS = "skipped: the maturity model has no team rows to measure maturity by."
 NO_REPOS = "skipped: no repositories in the run."
+NO_STEPS = "skipped: the maturity model defines no Steps."
+NO_DATA = "skipped: the run wrote no fleet-data.json to read the Steps from."
+
+
+def _step_ready(entry: Diagram, levels: MaturityModel | None, data: Mapping[str, Any] | None) -> bool:
+    """True when a Step diagram can draw; otherwise sets the entry's skip line (#941)."""
+    if levels is None:
+        entry["skipped"] = NO_LEVELS
+    elif not levels.get("steps"):
+        entry["skipped"] = NO_STEPS
+    elif data is None:
+        entry["skipped"] = NO_DATA
+    return entry["skipped"] is None
+
+
+def _step_funnel(levels: MaturityModel | None, data: Mapping[str, Any] | None, repos: int) -> Diagram:
+    entry = _entry(fleet_step_funnel.FILE, repos)
+    if _step_ready(entry, levels, data) and levels is not None and data is not None:
+        entry["in_place"] = fleet_step_funnel.in_place(fleet_step_funnel.funnel_view(levels, data))
+        entry["svg"] = fleet_step_funnel.render(levels, data)
+    return entry
+
+
+def _step_lifts(levels: MaturityModel | None, data: Mapping[str, Any] | None, repos: int) -> Diagram:
+    entry = _entry(fleet_step_lifts.FILE, repos)
+    if _step_ready(entry, levels, data) and data is not None:
+        entry["in_place"] = fleet_step_lifts.in_place(data)
+        entry["svg"] = fleet_step_lifts.render(data)
+    return entry
+
+
+def _step_movement(levels: MaturityModel | None, data: Mapping[str, Any] | None,
+                   earlier: FleetRun | str | None, comparison: Comparison | None, repos: int) -> Diagram:
+    entry = _entry(fleet_step_movement.FILE, repos)
+    if earlier is None:
+        entry["in_place"] = f"{IN_PLACE} this run, the baseline a later comparison starts from."
+        entry["skipped"] = "skipped: no earlier run compared (no --compare, or no history entry matched this run)."
+    elif _step_ready(entry, levels, data) and levels is not None and data is not None:
+        moves = fleet_step_movement.step_moves(levels, earlier, data,
+                                               comparison["reasons"] if comparison else ())
+        entry["in_place"] = fleet_step_movement.in_place(moves)
+        entry["svg"] = fleet_step_movement.render(moves)
+    return entry
 
 
 def _repos(count: int) -> str:
@@ -245,7 +299,8 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
                    history: Sequence[TrendRun] | None = None,
                    comparison: Comparison | None = None,
                    tag_profile: Sequence[FleetTagRow] | None = None,
-                   data: Mapping[str, Any] | None = None) -> list[Diagram]:
+                   data: Mapping[str, Any] | None = None,
+                   earlier: FleetRun | str | None = None) -> list[Diagram]:
     """Every diagram for one run, in report order; never raises for a diagram's sake.
 
     ``data`` is this run's ``fleet-data.json`` (#940): its ``tag_profile`` (the per-tag roll-up,
@@ -255,17 +310,23 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
 
     ``history`` is the trend's runs, oldest first and this run last
     (``fleet_trends.history_runs`` and ``series_runs``); None when no history was read.
-    ``comparison`` is this run's ``--compare`` result, None without ``--compare``.
+    ``comparison`` is this run's ``--compare`` result, None without ``--compare``; ``earlier``
+    is the run it compared against (or the reason it could not be read), for the Step
+    movement grid (#941).
     """
     count = len(repos)
     profile = tag_profile if tag_profile is not None else (data or {}).get("tag_profile")
     return [
         _guarded(lambda: _tag_profile(levels, profile, count), fleet_tag_profile.FILE, count),
         _guarded(lambda: _tag_heatmap(levels, data, count), fleet_tag_heatmap.FILE, count),
+        _guarded(lambda: _step_funnel(levels, data, count), fleet_step_funnel.FILE, count),
+        _guarded(lambda: _step_lifts(levels, data, count), fleet_step_lifts.FILE, count),
         _guarded(lambda: _quadrant(levels, repos, window), fleet_quadrant.FILE, count),
         _guarded(lambda: _tooling(repos), fleet_tooling_map.FILE, count),
         _guarded(lambda: _trend(levels, history, count), fleet_trends.FILE, count),
         _guarded(lambda: _slope(levels, comparison, count), fleet_slope.FILE, count),
+        _guarded(lambda: _step_movement(levels, data, earlier, comparison, count), fleet_step_movement.FILE,
+                 count),
     ]
 
 
@@ -298,8 +359,9 @@ def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None,
 
 
 def clear_diagrams(out_dir: Path) -> None:
-    """Remove the report and every diagram file a run writes (regular files only)."""
-    for name in (REPORT_FILE, *DIAGRAM_FILES, *RETIRED_FILES):
+    """Remove the report, every diagram file a run writes and ``fleet-view.html`` (#946, written
+    after the diagrams by ``lib/fleet/fleet_page.py``; regular files only)."""
+    for name in (REPORT_FILE, *DIAGRAM_FILES, *RETIRED_FILES, PAGE_FILE):
         path = out_dir / name
         if path.is_file() and not path.is_symlink():
             path.unlink()

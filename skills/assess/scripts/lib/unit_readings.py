@@ -116,7 +116,7 @@ SECTION = "unit_readings"
 # The repository-wide unit blocks, which the root unit (``.``) reads as its own instead of
 # running the same scans again on the same tree (pinned to ``unit_blocks`` by a test).
 REPO_BLOCKS = ("coverage_gate", "doc_staleness", "layer_grades", "promissory_markers",
-               "skill_disclosure", "skill_script_tests", "stats_summary", "structure")
+               "skill_disclosure", "skill_personal_data", "skill_script_tests", "stats_summary", "structure")
 # The registry entry's own reads, before UNIT_EXTERNAL_READS.
 OWN_READS = ("units", "nested_instructions", *REPO_BLOCKS)
 # The repository-wide values the unit pass reads (pinned to ``unit_table`` by a test).
