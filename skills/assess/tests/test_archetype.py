@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.keyhole.archetype import (  # noqa: E402
+from lib.keyhole.archetype import (
     KARPATHY_GIST_URL,
     KB_APPLICABLE_LAYERS,
     SOFTWARE_DENOMINATOR,

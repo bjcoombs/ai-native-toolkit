@@ -12,9 +12,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.agents.agent_environment import scan_agent_environment  # noqa: E402
-from lib.counts_only.content_free import counts_only_scans  # noqa: E402
-from lib.level_tally import default_model, level_result  # noqa: E402
+from lib.agents.agent_environment import scan_agent_environment
+from lib.counts_only.content_free import counts_only_scans
+from lib.level_tally import default_model, level_result
 
 GRADLE_DEPS = 'plugins { id("java") }\ndependencies {\n    implementation(libs.guava)\n}\n'
 CSPROJ = ('<Project Sdk="Microsoft.NET.Sdk"><ItemGroup>'

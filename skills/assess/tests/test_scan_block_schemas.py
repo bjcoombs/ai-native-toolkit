@@ -12,20 +12,20 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.agent_consistency import AgentConsistencyBlock  # noqa: E402
-from lib.agent_outcome import AgentOutcomeBlock  # noqa: E402
-from lib.ai_usage import AiUsageBlock  # noqa: E402
-from lib.counts_only.block_shapes import ReviewRealityBlock  # noqa: E402
-from lib.ci_checks import CiChecksBlock  # noqa: E402
-from lib.counts_only.content_free import counts_only_scans  # noqa: E402
-from lib.testing.coverage_gate import CoverageGateBlock  # noqa: E402
-from lib.hosting.delivery import DeliveryBlock  # noqa: E402
-from lib.guardrails import GuardrailsBlock  # noqa: E402
-from lib.layer_grades import LayerGradesBlock  # noqa: E402
-from lib.fleet.fleet_schema import build_schema as build_row_schema  # noqa: E402
-from lib.scan_block_schemas import BLOCK_SCHEMAS  # noqa: E402
-from lib.signals import collect  # noqa: E402
-from lib.signals_schema import REASON_KEPT, build_schema, described_block  # noqa: E402
+from lib.agent_consistency import AgentConsistencyBlock
+from lib.agent_outcome import AgentOutcomeBlock
+from lib.ai_usage import AiUsageBlock
+from lib.counts_only.block_shapes import ReviewRealityBlock
+from lib.ci_checks import CiChecksBlock
+from lib.counts_only.content_free import counts_only_scans
+from lib.testing.coverage_gate import CoverageGateBlock
+from lib.hosting.delivery import DeliveryBlock
+from lib.guardrails import GuardrailsBlock
+from lib.layer_grades import LayerGradesBlock
+from lib.fleet.fleet_schema import build_schema as build_row_schema
+from lib.scan_block_schemas import BLOCK_SCHEMAS
+from lib.signals import collect
+from lib.signals_schema import REASON_KEPT, build_schema, described_block
 
 TYPED = {"ai_usage": AiUsageBlock, "ci_checks": CiChecksBlock, "coverage_gate": CoverageGateBlock,
          "delivery": DeliveryBlock, "guardrails": GuardrailsBlock,

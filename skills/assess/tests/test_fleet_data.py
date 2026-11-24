@@ -130,7 +130,7 @@ def test_run_details_copy_every_stamp_field_but_the_documented_exclusions() -> N
     assert set(fd.run_details(STAMP)) == stamp_keys - fd.RUN_EXCLUDED
     older = {k: v for k, v in STAMP.items()
              if k not in ("platform", "fleet_config_sha256", "managed_settings")}
-    run = fd.run_details(older)  # type: ignore[arg-type]
+    run = fd.run_details(older)  # type: ignore[arg-type]  # an older stamp lacks the newer keys on purpose
     assert (run["platform"], run["fleet_config_sha256"], run["managed_settings"]) == (False, None, False)
 
 
@@ -209,7 +209,7 @@ def test_a_type_mismatch_reads_as_unknown_with_its_reason() -> None:
         "levels": [{"level": 1, "criteria": [{"signal": "b.n", "op": "gt", "value": 0}]}]}]})
     row = dict(ROWS[0])
     row["scans"] = {"b": {"available": True, "n": "many"}}
-    (cell,) = fd.repo_cells(levels["rows"], row)  # type: ignore[arg-type]
+    (cell,) = fd.repo_cells(levels["rows"], row)  # type: ignore[arg-type]  # a row whose signal value is the wrong type on purpose
     assert (cell["status"], cell["reason"], cell["signal"]) == ("unknown", "type_mismatch", "b.n")
     assert model()["version"] == "fleet-data-1"
 

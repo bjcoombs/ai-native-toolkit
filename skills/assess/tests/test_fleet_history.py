@@ -184,11 +184,11 @@ def test_persist_replaces_only_its_three_files(tmp_path):
     entry = tmp_path / "hist" / "org" / "2026-11-20"
     entry.mkdir(parents=True)
     (entry / "notes.txt").write_text("mine", encoding="utf-8")
-    persist(out, entry, STAMP, frozenset())  # type: ignore[arg-type]
+    persist(out, entry, STAMP, frozenset())  # type: ignore[arg-type]  # STAMP is a plain dict standing in for FleetStamp
     assert sorted(p.name for p in entry.iterdir()) == ["groups.jsonl", "notes.txt", "repos.jsonl", "run.json"]
     assert (entry / "notes.txt").read_text(encoding="utf-8") == "mine"
     with pytest.raises(HistoryError):
-        persist(out, entry, {**STAMP, "window": "1y"}, frozenset())  # type: ignore[arg-type]
+        persist(out, entry, {**STAMP, "window": "1y"}, frozenset())  # type: ignore[arg-type]  # STAMP is a plain dict standing in for FleetStamp
 
 
 def test_persist_leaves_no_temp_file_on_failure(tmp_path, monkeypatch):
@@ -202,14 +202,14 @@ def test_persist_leaves_no_temp_file_on_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(fh.os, "rename", boom)
     entry = tmp_path / "org" / "entry"
     with pytest.raises(OSError):
-        persist(out, entry, STAMP, frozenset())  # type: ignore[arg-type]
+        persist(out, entry, STAMP, frozenset())  # type: ignore[arg-type]  # STAMP is a plain dict standing in for FleetStamp
     assert list(entry.parent.iterdir()) == []
 
 
 def test_a_new_entry_is_staged_and_renamed_in_whole(tmp_path):
     out = _out(tmp_path / "out", REPOS)
     entry = tmp_path / "org" / "2026-11-20"
-    assert persist(out, entry, STAMP, REPOS) == entry  # type: ignore[arg-type]
+    assert persist(out, entry, STAMP, REPOS) == entry  # type: ignore[arg-type]  # STAMP is a plain dict standing in for FleetStamp
     assert sorted(p.name for p in entry.parent.iterdir()) == ["2026-11-20"]
     assert sorted(p.name for p in entry.iterdir()) == ["groups.jsonl", "repos.jsonl", "run.json"]
 
@@ -234,10 +234,10 @@ def test_a_failed_same_day_replace_never_leaves_a_mixed_entry_that_is_selected(t
     def flaky(src: object, dst: object) -> None:
         if Path(str(dst)) == entry / fail_at:
             raise OSError("disk full")
-        real_replace(src, dst)  # type: ignore[arg-type]
+        real_replace(src, dst)  # type: ignore[arg-type]  # the os.replace stub types its paths as object
     monkeypatch.setattr(fh.os, "replace", flaky)
     with pytest.raises(OSError):
-        persist(out, entry, STAMP, REPOS)  # type: ignore[arg-type]
+        persist(out, entry, STAMP, REPOS)  # type: ignore[arg-type]  # STAMP is a plain dict standing in for FleetStamp
     monkeypatch.undo()
     assert [p.name for p in org.iterdir()] == ["2026-11-20"]  # no staging directory left
     groups = (entry / "groups.jsonl").read_text(encoding="utf-8")
@@ -257,7 +257,7 @@ def test_a_replaced_same_day_entry_is_the_new_run_in_whole(tmp_path):
     org = tmp_path / "org"
     entry = _put(org / "2026-11-20", {**STAMP, "marker": "old"})
     (entry / "notes.txt").write_text("mine", encoding="utf-8")
-    persist(_out(tmp_path / "out", REPOS), entry, STAMP, REPOS)  # type: ignore[arg-type]
+    persist(_out(tmp_path / "out", REPOS), entry, STAMP, REPOS)  # type: ignore[arg-type]  # STAMP is a plain dict standing in for FleetStamp
     assert json.loads((entry / "run.json").read_text(encoding="utf-8"))["marker"] == "new"
     assert (entry / "groups.jsonl").read_text(encoding="utf-8") == "new\n"
     assert (entry / "notes.txt").read_text(encoding="utf-8") == "mine"

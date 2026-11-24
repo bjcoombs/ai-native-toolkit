@@ -54,7 +54,7 @@ def _row(repo: str, lines: int | None, grade: str | None, ci: bool) -> FleetRow:
                                {"available": True, "lines": lines, "grade": grade})
     return {"fleet_row_version": FLEET_ROW_VERSION, "repo": repo, "group": repo.rsplit("/", 1)[0], "status": "ok",
             "reason": None, "signals_schema_version": 1, "active": True,
-            "scans": {"docs": docs, "ci": {"available": True, "required": ci}}}  # type: ignore[typeddict-item]
+            "scans": {"docs": docs, "ci": {"available": True, "required": ci}}}  # type: ignore[typeddict-item]  # the scans fixture is a partial block map
 
 
 def _rows(spec: Spec) -> list[FleetRow]:
@@ -62,7 +62,7 @@ def _rows(spec: Spec) -> list[FleetRow]:
 
 
 def _stamp(date: str, model: MaturityModel, **extra: object) -> FleetStamp:
-    return {**STAMP, "scan_date": date, "levels_version": model["version"], **extra}  # type: ignore[typeddict-item]
+    return {**STAMP, "scan_date": date, "levels_version": model["version"], **extra}  # type: ignore[typeddict-item]  # extra adds stamp keys per test
 
 
 def _data(date: str, spec: Spec, model: MaturityModel, privacy: Privacy = Privacy()) -> FleetData:
@@ -164,7 +164,7 @@ def test_a_model_reading_a_renamed_signal_gives_no_recount_over_scans_stored_und
     monkeypatch.undo()
     rows = _rows(BASE)
     for row in rows:  # a scan stored before #783: the gate under its old name
-        scans: dict[str, Any] = row["scans"]  # type: ignore[assignment]
+        scans: dict[str, Any] = row["scans"]  # type: ignore[assignment]  # widened to edit an old-format scan in place
         scans["coverage_gate"] = {"available": True, "enforced": scans["ci"]["required"]}
     stored = build_fleet_data(_stamp(DATES[0], old), rows, old,
                               build_trees(sorted(BASE), empty_map(), {}, {}), privacy=Privacy())

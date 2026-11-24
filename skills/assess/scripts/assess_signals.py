@@ -71,17 +71,17 @@ sys.dont_write_bytecode = True
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.counts_only.content_free import (  # noqa: E402
+from lib.counts_only.content_free import (
     add_cli_arguments,
     counts_only_scans,
     hash_options,
     hash_value,
     validate_cli_args,
 )
-from lib.fleet_config import FleetConfig, FleetConfigError, load_fleet_config  # noqa: E402
-from lib.run_context_types import SignalsDocument  # noqa: E402
-from lib.run_scope import resolve_scope  # noqa: E402
-from lib.signals import (  # noqa: E402
+from lib.fleet_config import FleetConfig, FleetConfigError, load_fleet_config
+from lib.run_context_types import SignalsDocument
+from lib.run_scope import resolve_scope
+from lib.signals import (
     DEFAULT_WINDOW,
     UnknownScanError,
     build_document,
@@ -91,7 +91,7 @@ from lib.signals import (  # noqa: E402
     scope_units_error,
     select_scans,
 )
-from lib.tool_lookup import warn_missing_packages  # noqa: E402
+from lib.tool_lookup import warn_missing_packages
 
 
 # A scoped counts-only run's stamp ``scope`` without --hash-paths: the folder is hidden,

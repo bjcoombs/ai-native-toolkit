@@ -17,8 +17,8 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.fleet.fleet_tag_heatmap import FILE, heatmap_rows, render, uncarried  # noqa: E402
-from lib.level_result_types import TagCell  # noqa: E402
+from lib.fleet.fleet_tag_heatmap import FILE, heatmap_rows, render, uncarried
+from lib.level_result_types import TagCell
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_diagrams"
 NAMES = ("acme/payments-api", "acme/web-frontend", "acme/infra-terraform", "acme/data-pipeline",

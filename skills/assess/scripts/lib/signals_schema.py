@@ -47,11 +47,11 @@ from typing import Any, Union, get_args, get_origin, get_type_hints, is_typeddic
 if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from lib.manifest.check_manifest import core_manifest, reason_codes  # noqa: E402
-from lib.run_context_types import JsonDict, SignalsDocument  # noqa: E402
-from lib.scan_block_schemas import BLOCK_SCHEMAS  # noqa: E402
-from lib.scan_registry import ScanSpec  # noqa: E402
-from lib.signals import SIGNAL_SCANS, known_scans  # noqa: E402
+from lib.manifest.check_manifest import core_manifest, reason_codes
+from lib.run_context_types import JsonDict, SignalsDocument
+from lib.scan_block_schemas import BLOCK_SCHEMAS
+from lib.scan_registry import ScanSpec
+from lib.signals import SIGNAL_SCANS, known_scans
 
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "references" / "signals.schema.json"
 SCHEMA_ID = "https://github.com/bjcoombs/ai-native-toolkit/skills/assess/references/signals.schema.json"

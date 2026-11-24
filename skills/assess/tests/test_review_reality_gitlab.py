@@ -24,17 +24,17 @@ from assess_test_support import skip_without_posix_shell
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-import lib.hosting.gitlab_cli as gitlab_cli  # noqa: E402
-from lib.hosting.gh_cli import GhUnavailable  # noqa: E402
-from lib.hosting.gitlab_cli import (  # noqa: E402
+import lib.hosting.gitlab_cli as gitlab_cli
+from lib.hosting.gh_cli import GhUnavailable
+from lib.hosting.gitlab_cli import (
     GitlabProject, glab_api, normalize_host, open_gitlab, parse_remote,
 )
-from lib.fleet_config import parse_fleet_config  # noqa: E402
-from lib.hosting.platform_cli import CACHE_ENV  # noqa: E402
-from lib.hosting.review_reality import scan_review_reality  # noqa: E402
-import lib.hosting.merged_sample as merged_sample_module  # noqa: E402
-from lib.hosting.merged_sample import merged_sample  # noqa: E402
-from lib.counts_only.reason_codes import reason_code  # noqa: E402
+from lib.fleet_config import parse_fleet_config
+from lib.hosting.platform_cli import CACHE_ENV
+from lib.hosting.review_reality import scan_review_reality
+import lib.hosting.merged_sample as merged_sample_module
+from lib.hosting.merged_sample import merged_sample
+from lib.counts_only.reason_codes import reason_code
 
 FAKE_GLAB = """#!/bin/sh
 echo "$*" >> "$FAKE_GLAB/log"

@@ -51,8 +51,8 @@ from typing import NotRequired, TypedDict, cast
 # Make sibling lib package and orchestrators importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import assess_core  # noqa: E402
-import assess_report  # noqa: E402
+import assess_core
+import assess_report
 
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "tour"
 SAMPLE_FILE = "sample.toml"

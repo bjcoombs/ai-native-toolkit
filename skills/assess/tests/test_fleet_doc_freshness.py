@@ -46,7 +46,7 @@ def _commit(repo: Path, files: dict[str, str], msg: str, at: int, **kw: object) 
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text, encoding="utf-8")
     _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "-m", msg, at=at, **kw)  # type: ignore[arg-type]
+    _git(repo, "commit", "-q", "-m", msg, at=at, **kw)  # type: ignore[arg-type]  # kw passes _git's optional committed and author
 
 
 def _checkout(root: Path, slug: str) -> Path:
@@ -282,7 +282,7 @@ def test_cost_one_git_log_per_mapping_on_the_service(tmp_path, monkeypatch):
     calls: list[list[str]] = []
     real = subprocess.run
 
-    def spy(cmd, *a, **kw):  # type: ignore[no-untyped-def]
+    def spy(cmd, *a, **kw):  # type: ignore[no-untyped-def]  # a spy that forwards to subprocess.run untouched
         calls.append(list(cmd))
         return real(cmd, *a, **kw)
 

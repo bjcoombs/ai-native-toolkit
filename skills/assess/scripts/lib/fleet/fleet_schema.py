@@ -37,10 +37,10 @@ from typing import get_type_hints
 if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from lib.fleet.runner import (  # noqa: E402
+from lib.fleet.runner import (
     DIRTY_REASONS, DIRTY_UNKNOWN_REASONS, FAILURE_REASONS, STATUS_FAILED, STATUS_OK, SUBMODULE_DIRTY, FleetRow,
 )
-from lib.fleet.fleet_doc_freshness import (  # noqa: E402
+from lib.fleet.fleet_doc_freshness import (
     METHOD,
     REASONS,
     STATUSES,
@@ -48,13 +48,13 @@ from lib.fleet.fleet_doc_freshness import (  # noqa: E402
     CommitRef,
     FreshnessRow,
 )
-from lib.fleet.fleet_method import CollectorRevision  # noqa: E402
-from lib.fleet.fleet_stamp import FleetStamp  # noqa: E402
-from lib.history_window import WINDOW_PATTERN  # noqa: E402
-from lib.review_automation import KINDS  # noqa: E402
-from lib.run_context_types import JsonDict  # noqa: E402
-from lib.signals import known_scans  # noqa: E402
-from lib.signals_schema import described_blocks, type_schema  # noqa: E402
+from lib.fleet.fleet_method import CollectorRevision
+from lib.fleet.fleet_stamp import FleetStamp
+from lib.history_window import WINDOW_PATTERN
+from lib.review_automation import KINDS
+from lib.run_context_types import JsonDict
+from lib.signals import known_scans
+from lib.signals_schema import described_blocks, type_schema
 
 # skills/assess/scripts/lib/fleet -> skills/
 SCHEMA_PATH = Path(__file__).resolve().parents[4] / "fleet" / "references" / "repos.schema.json"

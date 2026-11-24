@@ -17,10 +17,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib import agent_identity, ai_usage, change_coupling  # noqa: E402
-from lib.ai_usage import LIMITS, resolve_window, scan_ai_usage  # noqa: E402
-from lib.git_churn import CHURN_WINDOWS, window_from_churn_label  # noqa: E402
-from lib.scan_registry import SCANS  # noqa: E402
+from lib import agent_identity, ai_usage, change_coupling
+from lib.ai_usage import LIMITS, resolve_window, scan_ai_usage
+from lib.git_churn import CHURN_WINDOWS, window_from_churn_label
+from lib.scan_registry import SCANS
 
 HUMAN = "Ada Person <ada.person@example.org>"
 CLAUDE = "Claude Helper <noreply@anthropic.com>"

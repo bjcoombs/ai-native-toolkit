@@ -236,7 +236,7 @@ def test_counts_only_keeps_ids_and_kinds_and_drops_the_reason_and_owner():
 
 # --- end to end ---------------------------------------------------------------
 
-def test_assess_applies_a_committed_exclusion_and_the_recount_agrees(estate: Path, tmp_path: Path):  # noqa: F811
+def test_assess_applies_a_committed_exclusion_and_the_recount_agrees(estate: Path, tmp_path: Path):  # noqa: F811 - estate is a pytest fixture imported by name
     fleet = _fleet(estate, "e4")["repos"]["ci2/r"]
     target = fleet["counted"][0]
     repo = tmp_path / "ci2"

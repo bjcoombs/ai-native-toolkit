@@ -86,7 +86,7 @@ from pathlib import Path
 # heatmap, the docs heatmap, and the Layer 0 staleness metric reuse one
 # implementation. Only the colour mapping differs per heatmap and stays local.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-# ruff: noqa: E402 - without uv the PEP 723 dependencies may be absent: print the
+# Without uv the PEP 723 dependencies may be absent: print the
 # install line and exit 1 before the first third-party import, not a traceback (#752).
 from lib.tool_lookup import require_packages
 require_packages((("lizard", "lizard==1.23.0"), ("squarify", "squarify"), ("matplotlib", "matplotlib"), ("numpy", "numpy")))

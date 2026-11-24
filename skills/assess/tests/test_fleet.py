@@ -41,7 +41,7 @@ def make_repo(root: Path, slug: str, **kwargs: object) -> Path:
     """A ghsync-layout repository ``<root>/<slug>/<name>-main`` plus ``worktree/``."""
     repo_dir = root / slug
     (repo_dir / "worktree").mkdir(parents=True, exist_ok=True)
-    return make_checkout(repo_dir / f"{repo_dir.name}-main", **kwargs)  # type: ignore[arg-type]
+    return make_checkout(repo_dir / f"{repo_dir.name}-main", **kwargs)  # type: ignore[arg-type]  # kwargs are make_checkout's files and remote
 
 
 # --- discovery -------------------------------------------------------------

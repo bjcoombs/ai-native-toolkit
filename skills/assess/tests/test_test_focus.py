@@ -15,7 +15,7 @@ from pathlib import Path
 # scripts/ on the path so ``lib`` imports resolve the same way the orchestrator does.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.testing.test_focus import (  # noqa: E402
+from lib.testing.test_focus import (
     MUTABLE_SUFFIXES,
     compute_test_focus,
     mutation_scope,

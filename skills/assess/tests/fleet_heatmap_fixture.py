@@ -12,10 +12,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-import lib.fleet.fleet_groups as fg  # noqa: E402
-from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow  # noqa: E402
-from lib.levels import load_levels  # noqa: E402
-from lib.run_context_types import JsonDict  # noqa: E402
+import lib.fleet.fleet_groups as fg
+from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
+from lib.levels import load_levels
+from lib.run_context_types import JsonDict
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_heatmap"
 LONG_GROUP = "platform/payments/settlement-and-reconciliation/batch-services"

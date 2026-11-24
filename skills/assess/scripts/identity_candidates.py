@@ -46,10 +46,10 @@ from typing import TypedDict
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.ai_usage import ALL_TIME, matcher_from_config, resolve_window, window_commits  # noqa: E402
-from lib.fleet_config import FleetConfig, FleetConfigError, load_fleet_config, repo_fleet_config  # noqa: E402
-from lib.account_discovery import EVIDENCE, Candidate, discover  # noqa: E402
-from lib.signals import DEFAULT_WINDOW  # noqa: E402
+from lib.ai_usage import ALL_TIME, matcher_from_config, resolve_window, window_commits
+from lib.fleet_config import FleetConfig, FleetConfigError, load_fleet_config, repo_fleet_config
+from lib.account_discovery import EVIDENCE, Candidate, discover
+from lib.signals import DEFAULT_WINDOW
 
 CLASSES = {"agent": "agents", "bot": "bots", "person": "people"}
 _HEADER = re.compile(r"^\s*\[\s*identities\s*\]\s*(#.*)?$")

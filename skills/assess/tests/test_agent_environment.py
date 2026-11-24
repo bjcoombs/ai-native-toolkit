@@ -20,15 +20,15 @@ from assess_test_support import skip_without_posix_shell
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.agents.agent_environment import (  # noqa: E402
+from lib.agents.agent_environment import (
     COPILOT_PATH,
     check_copilot_setup,
     ci_duration,
     scan_agent_environment,
 )
-from lib.counts_only.content_free import counts_only_scans  # noqa: E402
-from lib.named_check import is_named_check  # noqa: E402
-from lib.scan_registry import SCANS  # noqa: E402
+from lib.counts_only.content_free import counts_only_scans
+from lib.named_check import is_named_check
+from lib.scan_registry import SCANS
 
 CI = "name: Tests\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: make test\n"
 COPILOT_OK = """name: Copilot Setup Steps

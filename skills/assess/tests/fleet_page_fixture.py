@@ -17,18 +17,18 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import fleet_data_fixture as fdf  # noqa: E402
-from lib.fleet.fleet_achievements import Achievements, HistoryRun, build_achievements  # noqa: E402
-from lib.fleet.fleet_data import FleetData, Privacy, build_fleet_data  # noqa: E402
-from lib.fleet.fleet_page import build_page  # noqa: E402
-from lib.fleet.fleet_page_data import PageBundle, page_bundle, picture  # noqa: E402
-from lib.fleet.fleet_step_funnel import FILE as FUNNEL_FILE, QUESTION as FUNNEL_Q, TITLE as FUNNEL_T  # noqa: E402
-from lib.fleet.fleet_step_funnel import render as funnel  # noqa: E402
-from lib.fleet.fleet_step_targets import Target  # noqa: E402
-from lib.fleet.fleet_units import build_trees, parse_units, repo_owners  # noqa: E402
-from lib.fleet.runner import FleetRow  # noqa: E402
+import fleet_data_fixture as fdf
+from lib.fleet.fleet_achievements import Achievements, HistoryRun, build_achievements
+from lib.fleet.fleet_data import FleetData, Privacy, build_fleet_data
+from lib.fleet.fleet_page import build_page
+from lib.fleet.fleet_page_data import PageBundle, page_bundle, picture
+from lib.fleet.fleet_step_funnel import FILE as FUNNEL_FILE, QUESTION as FUNNEL_Q, TITLE as FUNNEL_T
+from lib.fleet.fleet_step_funnel import render as funnel
+from lib.fleet.fleet_step_targets import Target
+from lib.fleet.fleet_units import build_trees, parse_units, repo_owners
+from lib.fleet.runner import FleetRow
 
-import tomllib  # noqa: E402
+import tomllib
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_page"
 DATES = ("2026-10-30", "2026-11-06", "2026-11-13", "2026-11-20")

@@ -19,8 +19,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.account_discovery import EVIDENCE, STRONG_EVIDENCE, HistoryCommit, discover, evidence_for  # noqa: E402
-from lib.agent_identity import (  # noqa: E402
+from lib.account_discovery import EVIDENCE, STRONG_EVIDENCE, HistoryCommit, discover, evidence_for
+from lib.agent_identity import (
     AGENT,
     AGENT_HINT_RULES,
     AGENT_RULES,
@@ -31,13 +31,13 @@ from lib.agent_identity import (  # noqa: E402
     compile_config_rules,
     is_agent_hint,
 )
-from lib.ai_usage import scan_ai_usage  # noqa: E402
-from lib.counts_only.content_free import counts_only_scans  # noqa: E402
-from lib.hosting.delivery import agent_authored, hinted_author, scan_delivery  # noqa: E402
-from lib.hosting.gitlab_cli import GitlabProject  # noqa: E402
-from lib.hosting.merged_sample import MergedSample  # noqa: E402
-from lib.fleet_config import parse_fleet_config  # noqa: E402
-from lib.hosting.gitlab_notes import NoteClassifier, NoteFacts, classifier_from_config, note_facts  # noqa: E402
+from lib.ai_usage import scan_ai_usage
+from lib.counts_only.content_free import counts_only_scans
+from lib.hosting.delivery import agent_authored, hinted_author, scan_delivery
+from lib.hosting.gitlab_cli import GitlabProject
+from lib.hosting.merged_sample import MergedSample
+from lib.fleet_config import parse_fleet_config
+from lib.hosting.gitlab_notes import NoteClassifier, NoteFacts, classifier_from_config, note_facts
 
 HINTS = (
     ("noreply@anthropic.com", None),

@@ -22,12 +22,12 @@ from pathlib import Path
 if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from lib.fleet.fleet_data import FLEET_DATA_VERSION, FleetData  # noqa: E402
-from lib.fleet.fleet_group_schema import type_schema  # noqa: E402
-from lib.fleet.fleet_units import KINDS, VIEWS  # noqa: E402
-from lib.level_tally import EXCLUDED_BY_OWNER, STATES  # noqa: E402
-from lib.owner_exclusions import KINDS as EXCLUSION_KINDS, SOURCE_REPO  # noqa: E402
-from lib.run_context_types import JsonDict  # noqa: E402
+from lib.fleet.fleet_data import FLEET_DATA_VERSION, FleetData
+from lib.fleet.fleet_group_schema import type_schema
+from lib.fleet.fleet_units import KINDS, VIEWS
+from lib.level_tally import EXCLUDED_BY_OWNER, STATES
+from lib.owner_exclusions import KINDS as EXCLUSION_KINDS, SOURCE_REPO
+from lib.run_context_types import JsonDict
 
 SCHEMA_PATH = Path(__file__).resolve().parents[4] / "fleet" / "references" / "fleet-data.schema.json"
 SCHEMA_ID = "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/fleet-data.schema.json"

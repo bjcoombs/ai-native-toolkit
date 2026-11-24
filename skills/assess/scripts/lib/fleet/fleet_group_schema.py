@@ -28,8 +28,8 @@ from typing import Any, Literal, NotRequired, Union, get_args, get_origin, get_t
 if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from lib.fleet.fleet_groups import GroupRow  # noqa: E402
-from lib.run_context_types import JsonDict  # noqa: E402
+from lib.fleet.fleet_groups import GroupRow
+from lib.run_context_types import JsonDict
 
 # skills/assess/scripts/lib/fleet -> skills/
 SCHEMA_PATH = Path(__file__).resolve().parents[4] / "fleet" / "references" / "groups.schema.json"

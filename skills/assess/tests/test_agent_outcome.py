@@ -18,16 +18,16 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib import agent_outcome  # noqa: E402
-from lib.agent_outcome import (  # noqa: E402
+from lib import agent_outcome
+from lib.agent_outcome import (
     LIMITS,
     REWORK_DAYS,
     AgentOutcomeBlock,
     scan_agent_outcome,
 )
-from lib.ai_usage import scan_ai_usage  # noqa: E402
-from lib.counts_only.content_free import counts_only_scans  # noqa: E402
-from lib.scan_registry import SCANS  # noqa: E402
+from lib.ai_usage import scan_ai_usage
+from lib.counts_only.content_free import counts_only_scans
+from lib.scan_registry import SCANS
 
 CLAUDE = "Claude Helper <noreply@anthropic.com>"
 DAY = 86400

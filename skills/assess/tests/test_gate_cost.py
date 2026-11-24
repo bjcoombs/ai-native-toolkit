@@ -20,7 +20,7 @@ from assess_test_support import skip_without_posix_shell
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.gate_cost import MINUTES_PER_RUN, estimate_gate_cost  # noqa: E402
+from lib.gate_cost import MINUTES_PER_RUN, estimate_gate_cost
 
 FAKE_GH = """#!/bin/sh
 echo "$*" >> "$FAKE_GH/log"

@@ -14,15 +14,15 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-import lib.fleet.fleet_step_funnel as funnel  # noqa: E402
-import lib.fleet.fleet_step_lifts as lifts  # noqa: E402
-import lib.fleet.fleet_step_movement as movement  # noqa: E402
-from lib.fleet.fleet_compare import FleetRun, comparability  # noqa: E402
-from lib.fleet.fleet_data import level_results, step_fields  # noqa: E402
-from lib.fleet.fleet_stamp import build_stamp  # noqa: E402
-from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow  # noqa: E402
-from lib.levels import MaturityModel, load_levels  # noqa: E402
-from lib.run_context_types import JsonDict  # noqa: E402
+import lib.fleet.fleet_step_funnel as funnel
+import lib.fleet.fleet_step_lifts as lifts
+import lib.fleet.fleet_step_movement as movement
+from lib.fleet.fleet_compare import FleetRun, comparability
+from lib.fleet.fleet_data import level_results, step_fields
+from lib.fleet.fleet_stamp import build_stamp
+from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
+from lib.levels import MaturityModel, load_levels
+from lib.run_context_types import JsonDict
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_step_diagrams"
 MODEL: MaturityModel = load_levels(FIXTURES / "levels.toml")

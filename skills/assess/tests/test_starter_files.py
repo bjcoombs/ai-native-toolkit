@@ -15,9 +15,9 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from lib.next_step_guidance import DENY_RULE_EXAMPLE, guidance  # noqa: E402
-from lib.run_context_types_fix import RepoFacts  # noqa: E402
-from lib.starter_files import (  # noqa: E402
+from lib.next_step_guidance import DENY_RULE_EXAMPLE, guidance  # noqa: E402 - a path constant precedes the sys.path bootstrap
+from lib.run_context_types_fix import RepoFacts  # noqa: E402 - a path constant precedes the sys.path bootstrap
+from lib.starter_files import (  # noqa: E402 - a path constant precedes the sys.path bootstrap
     GUARDRAIL,
     remote_system,
     detect_facts,
@@ -25,7 +25,7 @@ from lib.starter_files import (  # noqa: E402
     plan_files,
     write_files,
 )
-from lib.starter_templates import coverage_command, deny_rules, github_workflow, gitlab_job  # noqa: E402
+from lib.starter_templates import coverage_command, deny_rules, github_workflow, gitlab_job  # noqa: E402 - a path constant precedes the sys.path bootstrap
 
 
 def _facts(**over: object) -> RepoFacts:

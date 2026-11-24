@@ -16,12 +16,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.hosting.config_drift import find_snapshots, scan_config_drift  # noqa: E402
-from lib.hosting.gh_cli import GhUnavailable  # noqa: E402
-from lib.hosting.gitlab_cli import GitlabProject, branch_protection  # noqa: E402
-from lib.hosting.review_reality import gitlab_review_required  # noqa: E402
-import test_review_reality_gitlab as _stubs  # noqa: E402
-from test_review_reality_gitlab import ENC, PROJECT, World, _git  # noqa: E402
+from lib.hosting.config_drift import find_snapshots, scan_config_drift
+from lib.hosting.gh_cli import GhUnavailable
+from lib.hosting.gitlab_cli import GitlabProject, branch_protection
+from lib.hosting.review_reality import gitlab_review_required
+import test_review_reality_gitlab as _stubs
+from test_review_reality_gitlab import ENC, PROJECT, World, _git
 
 world = _stubs.world  # the offline glab/gh stub fixture
 
@@ -100,9 +100,9 @@ def test_merged_levels_keep_every_user_and_group_grant(world: World) -> None:
     user = {"access_level": 40, "user_id": 7, "group_id": None, "deploy_key_id": None}
     group = {"access_level": 30, "user_id": None, "group_id": 9, "deploy_key_id": None}
     a, b = _rule("release/*", push=0), _rule("*-stable", push=0)
-    a["push_access_levels"] = _levels(0) + [user]  # type: ignore[operator]
+    a["push_access_levels"] = _levels(0) + [user]  # type: ignore[operator]  # user and group grants are untyped dicts
     dup = {**user, "id": 5}  # the same grant on the other rule carries its own id
-    b["push_access_levels"] = _levels(0) + [group, dup]  # type: ignore[operator]
+    b["push_access_levels"] = _levels(0) + [group, dup]  # type: ignore[operator]  # user and group grants are untyped dicts
     b["code_owner_approval_required"] = True
     world.serve(LIST, [a, b])
     got = branch_protection(P, "release/1-stable")
@@ -234,7 +234,7 @@ def test_matching_gitlab_snapshot_has_no_drift(world: World) -> None:
     _track(world, ".gitlab/main.json", _rule("main"))
     live = _rule("main")
     live["id"] = 999
-    live["merge_access_levels"] = [{**lv, "id": 1} for lv in _levels(30)]  # type: ignore[dict-item]
+    live["merge_access_levels"] = [{**lv, "id": 1} for lv in _levels(30)]  # type: ignore[dict-item]  # adds the id GitLab returns on a live rule
     world.serve(LIST, [live])
     assert scan_config_drift(world.root) == {
         "available": True, "entries": [], "dropped": 0,

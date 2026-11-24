@@ -23,9 +23,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.catalog import build_catalog, render_json  # noqa: E402
-from lib.catalog_html import render_html  # noqa: E402
-from lib.catalog_md import render_markdown  # noqa: E402
+from lib.catalog import build_catalog, render_json
+from lib.catalog_html import render_html
+from lib.catalog_md import render_markdown
 
 # skills/assess/scripts/gen_catalog.py -> the toolkit checkout root.
 ROOT = Path(__file__).resolve().parents[3]

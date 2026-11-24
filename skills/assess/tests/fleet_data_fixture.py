@@ -14,12 +14,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow  # noqa: E402
-from lib.fleet.fleet_data import FleetData, Privacy, build_fleet_data, dumps_fleet_data  # noqa: E402
-from lib.fleet.fleet_stamp import FleetStamp  # noqa: E402
-from lib.fleet.fleet_units import build_trees, parse_units, repo_owners  # noqa: E402
-from lib.levels import MaturityModel, parse_levels  # noqa: E402
-from lib.run_context_types import JsonDict  # noqa: E402
+from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
+from lib.fleet.fleet_data import FleetData, Privacy, build_fleet_data, dumps_fleet_data
+from lib.fleet.fleet_stamp import FleetStamp
+from lib.fleet.fleet_units import build_trees, parse_units, repo_owners
+from lib.levels import MaturityModel, parse_levels
+from lib.run_context_types import JsonDict
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_data"
 SALT = "fixture-salt"

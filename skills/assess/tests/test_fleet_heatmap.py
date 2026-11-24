@@ -331,11 +331,11 @@ def test_check_levels_names_a_run_without_a_levels():
 
 def test_comparison_against_a_run_without_a_maturity_model_says_so():
     bare = [dict(g, levels_version=None, levels=[]) for g in _groups()]
-    then_bare = fv.compare_levels(_groups(), bare)  # type: ignore[arg-type]
+    then_bare = fv.compare_levels(_groups(), bare)  # type: ignore[arg-type]  # plain dict groups stand in for GroupRow
     assert not then_bare["comparable"]
     assert then_bare["note"] == ("change not shown: the earlier run had no maturity model, "
                                  "this run used maturity model fixture-1")
-    now_bare = fv.compare_levels(bare, _groups())  # type: ignore[arg-type]
+    now_bare = fv.compare_levels(bare, _groups())  # type: ignore[arg-type]  # plain dict groups stand in for GroupRow
     assert now_bare["note"] == ("change not shown: the earlier run used maturity model fixture-1, "
                                 "this run had no maturity model")
 

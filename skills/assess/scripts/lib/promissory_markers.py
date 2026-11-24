@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import lib.keyhole.promissory_markers as _moved  # noqa: E402
+import lib.keyhole.promissory_markers as _moved
 
 sys.modules[__name__] = _moved
 
