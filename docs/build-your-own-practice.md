@@ -84,7 +84,7 @@ In your repository, pass the file to `/assess` with `--levels`:
 /assess --levels my-team.toml
 ```
 
-For many repositories at once, `/fleet --levels my-team.toml` reads the same file. A single-repository run reads only the blocks the default model reads. A model that reads another block stops with an error that names the block, and that model runs with `/fleet --levels` instead.
+For many repositories at once, `/fleet --levels my-team.toml` reads the same file. A single-repository run reads only the default model's blocks, such as `coverage_gate`; a model reading another block stops with an error naming it. Run such a model with `/fleet --levels` instead.
 
 ## 5. Read the result
 
