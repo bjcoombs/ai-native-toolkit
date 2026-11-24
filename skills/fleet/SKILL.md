@@ -327,10 +327,11 @@ step runs in a signed-in session with the `Artifact` and `ArtifactData` tools. D
    only if the user asks for names, with `--allow-names`. Only such a run lets people set Step
    targets on the page, because the next run reads targets by plain unit names.
 3. **Read what is stored.** On a later publish, read the artifact URL from
-   `<history>/<org>/publish.json`. List the `runs`, `units` and `repos` collections with
-   `ArtifactData` `list`, paging with `cursor`. Save each as a JSON list of
-   `{doc_id, version, data}` in one folder as `runs.json`, `units.json` and `repos.json`. On a
-   first publish there is nothing to read.
+   `<history>/<org>/publish.json`. List the `runs`, `units`, `repos` and `targets` collections
+   with `ArtifactData` `list`, paging with `cursor`. Save each as a JSON list of
+   `{doc_id, version, data}` in one folder, named `<collection>.json`. Save any other collection
+   you find too: the planner reports its documents as strays. On a first publish there is
+   nothing to read.
 4. **Plan.** Run the planner. It refuses a mode the user did not ask for, a run that does not fit
    one artifact (#950 shards it) and a changed republish of a run id.
 

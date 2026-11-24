@@ -22,6 +22,14 @@ existing document) and ``previous`` (what this run id already holds, so a change
 refused with ``RepublishConflict``, never merged). Rows are viewer-shared data: a row that is
 not that shape stops the plan, naming the collection and the row index only.
 
+**Strays** (``strays``, AR-148). The root rule lets Contributors write (#949 option B), so a
+document can appear outside what the fleet writes and count against the document cap. The plan
+counts every row of an exported collection other than ``runs``, ``units``, ``repos`` and
+``targets``, and every ``targets`` row whose id is not a target id, and adds them and the valid
+targets to the document count. The database tool lists one named collection at a time, so a
+stray in a collection nobody exported is not seen; the session also exports ``targets`` and any
+collection the artifact lists.
+
 **Contract** (``CONTRACT``, ``LIMITS_PINNED``). The page is published pinned to runtime contract
 0.2.96, whose ``db`` states at most 25,000 documents per artifact; the plan uses that cap. The
 only declared capability is ``db`` (``fleet_publish.access_rules``, #947's rules with the root
@@ -38,15 +46,18 @@ the same bytes. ``record_url`` keeps the artifact's URL in the fleet's history d
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final, TypedDict
 
+from lib.fleet.fleet_page_live import TARGET_ID_RE
 from lib.fleet.fleet_publish import (
     HISTORY,
     LIMITS,
     REPOS,
     RUNS,
+    TARGETS,
     UNITS,
     FullRunRefused,
     Limits,
@@ -86,12 +97,21 @@ class StoredState(TypedDict):
     previous: dict[str, object]  # "<collection>/<doc id>" -> what this run id already holds
 
 
+class Strays(TypedDict):
+    """Documents outside what the fleet writes (AR-148): the root lets Contributors write."""
+
+    count: int  # stray documents in the exports the session saved
+    collections: list[str]  # the collections they are in, sorted
+    targets: int  # stored targets documents (each counts against the document cap)
+
+
 class PlanSummary(TypedDict):
     run_id: str
     mode: str  # "hashed" | "counts_only"
     targets_enabled: bool
     contract: str
     size: SizeReport
+    strays: Strays
     batches: list[str]  # the batch files, in send order
 
 
@@ -150,6 +170,27 @@ def stored_state(exports: Mapping[str, Sequence[StoredDoc]], run_id: str) -> Sto
     return state
 
 
+def strays(exports: Mapping[str, Sequence[StoredDoc]]) -> Strays:
+    """The documents the fleet did not write: every row of a collection other than ``runs``,
+    ``units``, ``repos`` and ``targets``, and every ``targets`` row whose id is not a target id
+    (``TARGET_ID_RE``)."""
+    pattern = re.compile(TARGET_ID_RE)
+    out: Strays = {"count": 0, "collections": [], "targets": 0}
+    for collection in sorted(exports):
+        rows = exports[collection]
+        if collection in STORED_COLLECTIONS:
+            continue
+        if collection == TARGETS:
+            bad = [row for row in rows if not pattern.fullmatch(row["doc_id"])]
+            out["targets"] = len(rows) - len(bad)
+        else:
+            bad = list(rows)
+        if bad:
+            out["count"] += len(bad)
+            out["collections"].append(collection)
+    return out
+
+
 def pinned(plan: PublishPlan, versions: Mapping[str, int]) -> list[list[PinnedWrite]]:
     """The plan's batches, each write pinned to its document's stored version when it has one."""
     out: list[list[PinnedWrite]] = []
@@ -179,8 +220,12 @@ def plan_publish(data: Mapping[str, Any], exports: Mapping[str, Sequence[StoredD
     state = stored_state(exports, run_id)
     plan = project(data, run_id, stored=state["stored"], previous=state["previous"], limits=limits)  # type: ignore[arg-type]
     batches = pinned(plan, state["versions"])
+    extra = strays(exports)
+    size = plan["size"]
+    documents = size["documents"] + extra["count"] + extra["targets"]  # every document counts against the cap
+    size = {**size, "documents": documents, "fits": documents <= size["document_limit"]}
     summary: PlanSummary = {"run_id": run_id, "mode": mode, "targets_enabled": targets_enabled(mode),
-                            "contract": CONTRACT, "size": plan["size"],
+                            "contract": CONTRACT, "size": size, "strays": extra,
                             "batches": [f"batch-{i:03d}.json" for i in range(1, len(batches) + 1)]}
     return summary, batches
 

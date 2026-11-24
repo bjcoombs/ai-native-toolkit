@@ -326,3 +326,25 @@ def test_record_keeps_one_artifact_url_per_org(tmp_path: Path) -> None:
     assert _cli().main(["record", str(org), "--url", "https://claude.ai/artifact/other", "--run-id", "x"]) == 2
     assert _cli().main(["record", str(org), "--url", "http://example.com/a", "--run-id", "x"]) == 2
     assert ps.recorded_url(tmp_path / "none") is None
+
+
+def test_strays_outside_the_fleet_collections_are_reported_and_counted(tmp_path: Path,
+                                                                     capsys: pytest.CaptureFixture[str]) -> None:
+    """AR-148: the root lets Contributors write, so the guard reports documents the fleet did not write."""
+    own = target_doc_id("ownership", "ownership/grp")
+    exports: dict[str, list[ps.StoredDoc]] = {
+        "targets": [{"doc_id": own, "version": 1, "data": {"step": 3}},
+                    {"doc_id": "junk", "version": 1, "data": {}}],
+        "notes": [{"doc_id": "a", "version": 1, "data": {}}, {"doc_id": "b", "version": 2, "data": {}}]}
+    assert ps.strays(exports) == {"count": 3, "collections": ["notes", "targets"], "targets": 1}
+    clean, _ = ps.plan_publish(_data("hashed"), {}, run_id="r")
+    summary, _ = ps.plan_publish(_data("hashed"), exports, run_id="r")
+    assert summary["strays"]["count"] == 3
+    assert summary["size"]["documents"] == clean["size"]["documents"] + 4  # three strays and one target
+    assert ps.strays({}) == {"count": 0, "collections": [], "targets": 0}
+    out = _out(tmp_path, "hashed")
+    folder = tmp_path / "exports"
+    folder.mkdir()
+    (folder / "notes.json").write_text(json.dumps(exports["notes"]), encoding="utf-8")
+    assert _cli().main(["plan", str(out), "--exports", str(folder)]) == 0
+    assert "2 document(s) outside what the fleet writes, in notes" in capsys.readouterr().err

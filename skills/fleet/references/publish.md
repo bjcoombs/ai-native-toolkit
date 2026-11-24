@@ -185,6 +185,13 @@ database answers:
   `(ownership|system)~` plus up to 190 id characters.
 - For the unit shown, it reads `units/<doc id>` once and lists each published run's lowest Step.
 
+**Strays.** Because Contributors can write at the root, a document can appear outside what the
+fleet writes. The planner counts every document of an exported collection other than `runs`,
+`units`, `repos` and `targets`, and every `targets` document whose id is not a target id. It
+reports them in `plan.json` (`strays`) and on stderr, and adds them and the targets to the
+document count. The database tool lists one named collection at a time, so a stray in a
+collection nobody exported is not seen.
+
 **Stored state.** The planner reads the `runs`, `units` and `repos` exports for three things:
 each document's size (the size guard), its version (the `if_version` pin) and what this run
 id already holds (`previous`, so a changed republish is refused). `publish.json` in the

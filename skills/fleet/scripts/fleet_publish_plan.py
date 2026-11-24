@@ -8,8 +8,10 @@ never publishes.
     fleet_publish_plan.py record ORG_DIR --url URL --run-id ID
 
 ``plan`` reads ``OUT/fleet-data.json`` and ``OUT/fleet-view.html`` and, in ``--exports``, the
-artifact's stored documents as ``runs.json``, ``units.json`` and ``repos.json`` (each a JSON list
-of ``{doc_id, version, data}``; a missing file is an empty collection, as on a first publish).
+artifact's stored documents as ``<collection>.json`` (``runs``, ``units``, ``repos``, ``targets``
+and any other the artifact lists; each a JSON list of ``{doc_id, version, data}``; a missing
+file is an empty collection, as on a first publish). Documents outside what the fleet writes
+are reported as strays.
 It writes ``OUT/publish/``: ``page.html`` (the page with its database source),
 ``capabilities.json``, ``plan.json`` and ``batch-NNN.json`` (the ``ArtifactData`` ``batch``
 writes, pinned with ``if_version``). A ``--full`` run is refused; a plain counts-only run is
@@ -42,6 +44,7 @@ from lib.fleet.fleet_page_live import live_page  # noqa: E402
 from lib.fleet.fleet_publish import PublishError  # noqa: E402
 from lib.fleet.fleet_publish_session import (  # noqa: E402
     STORED_COLLECTIONS,
+    StoredDoc,
     plan_publish,
     read_export,
     record_url,
@@ -82,8 +85,9 @@ def _plan(args: argparse.Namespace) -> int:
         page = (out / PAGE_FILE).read_text(encoding="utf-8")
     except OSError as e:
         raise PublishError(f"cannot read {PAGE_FILE}: rerun /fleet with --levels ({e.strerror})") from e
-    exports = {c: read_export(_json(Path(args.exports) / f"{c}.json"), c) if (Path(args.exports) / f"{c}.json").is_file()
-               else [] for c in STORED_COLLECTIONS}
+    exports: dict[str, list[StoredDoc]] = {c: [] for c in STORED_COLLECTIONS}  # a first publish has nothing stored
+    for path in sorted(Path(args.exports).glob("*.json")):
+        exports[path.stem] = read_export(_json(path), path.stem)
     run_id = args.run_id or str(data["run"].get("scan_date") or "")
     summary, batches = plan_publish(data, exports, run_id=run_id, allow_names=args.allow_names)
     folder = write_plan(out, summary, batches, live_page(page, data, summary["mode"], run_id))
@@ -91,6 +95,10 @@ def _plan(args: argparse.Namespace) -> int:
     print(f"fleet_publish_plan: run {run_id}, {summary['mode']}, {len(batches)} batch(es), {size['documents']} of "
           f"{size['document_limit']} documents, targets {'on' if summary['targets_enabled'] else 'off'} -> {folder}",
           file=sys.stderr)
+    strays = summary["strays"]
+    if strays["count"]:
+        print(f"fleet_publish_plan: {strays['count']} document(s) outside what the fleet writes, in "
+              f"{', '.join(strays['collections'])}; they count against the document cap", file=sys.stderr)
     for warning in size["warnings"]:
         print(f"fleet_publish_plan: {warning['document']} is {warning['bytes']} bytes, near the limit", file=sys.stderr)
     if not size["fits"]:
