@@ -39,7 +39,7 @@ lost (``lib/fleet/fleet_cleanup.py``). Every run also writes the run stamp
 It also draws the fleet diagrams (``lib/fleet/fleet_diagrams.py``): ``<out>/report.md``
 embedding ``quadrant.svg``, ``shared-tooling.svg``, ``trend.svg`` (group trend lines
 over the run history, ``lib/fleet/fleet_trends.py``), and ``slope.svg`` (from the ``--compare``
-result; and the Step diagrams of #941), or the reason each was skipped;
+result; and the Step diagrams of #941), or the reason each was skipped, and ``fleet-view.html`` (#946);
 ``--no-diagrams`` turns them off. ``report.md`` opens with the coverage line: with
 ``--discovered FILE`` (ghsync's ``--porcelain`` or ``--porcelain-json`` listing) how many of
 the discoverable repositories were assessed and each gap counted, also in ``run.json``
@@ -169,12 +169,8 @@ from lib.fleet.fleet_compare import (  # noqa: E402
     summary_lines,
     write_comparison,
 )
-from lib.fleet.fleet_diagrams import (  # noqa: E402
-    REPORT_FILE,
-    build_diagrams,
-    clear_diagrams,
-    write_diagrams,
-)
+from lib.fleet.fleet_diagrams import REPORT_FILE, build_diagrams, clear_diagrams, write_diagrams  # noqa: E402
+from lib.fleet.fleet_page import write_page  # noqa: E402
 from lib.fleet.fleet_achievements import (  # noqa: E402
     ACHIEVEMENTS_FILE,
     Achievements,
@@ -587,8 +583,8 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
               window: str, *, history: list[TrendRun] | None = None,
               comparison: Comparison | None = None, credit: str | None = None,
               coverage: str | None = None, opportunities: Callable[[], str | None] | None = None,
-              data: FleetData | None = None, earlier: FleetRun | str | None = None) -> None:
-    """Draw the diagrams and their report, or clear them; a failure never changes the exit code."""
+              data: FleetData | None = None, earlier: FleetRun | str | None = None, achieved: Achievements | None = None) -> None:
+    """Draw the diagrams, their report and fleet-view.html (#946), or clear them; a failure never changes the exit code."""
     try:
         if no_diagrams:
             clear_diagrams(out_dir)
@@ -598,6 +594,7 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
         ok = [row["scans"] for row in rows if row["status"] == "ok" and row["scans"] is not None]
         write_diagrams(out_dir, diagrams, credit, coverage, opportunities() if opportunities else None,
                        measured_section(ok))
+        write_page(out_dir, data, achieved, maturity_model, diagrams)
     except Exception as e:  # noqa: BLE001 - a diagram never fails a completed run
         print(f"fleet: diagrams: not written ({type(e).__name__}: {e})", file=sys.stderr)
         return
@@ -854,7 +851,7 @@ def main(argv: list[str] | None = None) -> int:
     history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, public, maturity_model)
     _diagrams(out_dir, args.no_diagrams, maturity_model, public, window, history=history, comparison=comparison,
               credit=credit, coverage=coverage_line(coverage, len(rows)),
-              opportunities=lambda: opportunities_section(data, achieved), data=data, earlier=earlier)
+              opportunities=lambda: opportunities_section(data, achieved), data=data, earlier=earlier, achieved=achieved)
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
           file=sys.stderr)

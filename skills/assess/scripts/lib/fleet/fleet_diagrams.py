@@ -70,6 +70,7 @@ import lib.fleet.fleet_trends as fleet_trends
 from lib.vocabulary import IN_PLACE
 from lib.fleet.runner import FleetRow
 from lib.fleet.fleet_compare import Comparison, FleetRun
+from lib.fleet.fleet_page import PAGE_FILE
 from lib.fleet.fleet_tag_profile import FleetTagRow
 from lib.fleet.fleet_trends import TrendRun
 from lib.levels import MaturityModel
@@ -358,8 +359,9 @@ def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None,
 
 
 def clear_diagrams(out_dir: Path) -> None:
-    """Remove the report and every diagram file a run writes (regular files only)."""
-    for name in (REPORT_FILE, *DIAGRAM_FILES, *RETIRED_FILES):
+    """Remove the report, every diagram file a run writes and ``fleet-view.html`` (#946, written
+    after the diagrams by ``lib/fleet/fleet_page.py``; regular files only)."""
+    for name in (REPORT_FILE, *DIAGRAM_FILES, *RETIRED_FILES, PAGE_FILE):
         path = out_dir / name
         if path.is_file() and not path.is_symlink():
             path.unlink()
