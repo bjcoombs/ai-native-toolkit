@@ -20,10 +20,10 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import identity_candidates as cli  # noqa: E402 - imports follow the sys.path bootstrap
-from lib.agent_identity import AGENT, DEPENDENCY_BOT, OTHER, AuthorMatcher, ConfirmedIdentities  # noqa: E402 - imports follow the sys.path bootstrap
-from lib.counts_only.content_free import counts_only_scans  # noqa: E402 - imports follow the sys.path bootstrap
-from lib.fleet_config import (  # noqa: E402 - imports follow the sys.path bootstrap
+import identity_candidates as cli  # noqa: E402 - a path constant precedes the sys.path bootstrap
+from lib.agent_identity import AGENT, DEPENDENCY_BOT, OTHER, AuthorMatcher, ConfirmedIdentities  # noqa: E402 - a path constant precedes the sys.path bootstrap
+from lib.counts_only.content_free import counts_only_scans  # noqa: E402 - a path constant precedes the sys.path bootstrap
+from lib.fleet_config import (  # noqa: E402 - a path constant precedes the sys.path bootstrap
     FleetConfigError,
     config_sha256,
     empty_config,
@@ -31,8 +31,8 @@ from lib.fleet_config import (  # noqa: E402 - imports follow the sys.path boots
     parse_fleet_config,
     section_entries,
 )
-from lib.account_discovery import EVIDENCE, HistoryCommit, discover, evidence_for  # noqa: E402 - imports follow the sys.path bootstrap
-from lib.signals import collect  # noqa: E402 - imports follow the sys.path bootstrap
+from lib.account_discovery import EVIDENCE, HistoryCommit, discover, evidence_for  # noqa: E402 - a path constant precedes the sys.path bootstrap
+from lib.signals import collect  # noqa: E402 - a path constant precedes the sys.path bootstrap
 
 CLAUDE = ("claude[bot]", "209825114+claude[bot]@users.noreply.github.com")
 CODECOV = ("codecov[bot]", "22429695+codecov[bot]@users.noreply.github.com")
