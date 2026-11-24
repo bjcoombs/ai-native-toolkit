@@ -9,6 +9,8 @@ decomposition work depends on it.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import golden
 import lib.keyhole.keyhole_signals as ks
 
@@ -165,37 +167,34 @@ def test_opening_summary_is_bespoke_not_boilerplate() -> None:
     assert boilerplate in folded, "the non-verdict framing should remain in the 'How to read' fold"
 
 
-def test_not_a_verdict_frame_adjacent_to_score() -> None:
-    """A short 'not a verdict' frame sits on the score line above the fold, so a
-    reader never mistakes the LLM score for a pass/fail gate (task 20). The full
-    'improvement roadmap, not a verdict' framing still lives in the 'How to read'
-    fold - guarded by test_opening_summary_is_bespoke_not_boilerplate - so this
-    short frame must use different wording and must not reintroduce the boiler-
-    plate onto the surface.
-    """
-    report = golden.load_golden_report()
-    surface, sep, _ = report.partition("<details>")
-    assert sep
-    score_line = next(
-        line for line in surface.splitlines() if line.startswith("_A readiness snapshot")
-    )
-    assert "not a verdict" in score_line
-    # The compact frame is not the folded boilerplate sentence.
-    assert "This is an improvement roadmap, not a verdict" not in score_line
+_TEMPLATE = Path(__file__).resolve().parents[2] / "assess-findings" / "SKILL.md"
 
 
-def test_agents_start_here_pointer_above_the_fold() -> None:
-    """The deterministic 'agents start here -> .assess/actions.json' pointer sits
-    above the first fold and names the durable machine-readable Top-3 contract
-    (actions.json schema v2, task 16), so an executing agent - even a smaller
-    model - picks up the prioritized work without parsing the report prose."""
-    report = golden.load_golden_report()
-    surface, sep, _ = report.partition("<details>")
-    assert sep
-    assert "Agents start here" in surface
-    assert "`.assess/actions.json`" in surface
-    # It points at the Top 3 and therefore precedes the Top 3 Actions table.
-    assert surface.index("Agents start here") < surface.index("## Top 3 Actions")
+def _template_surface() -> str:
+    """The findings template's report, up to its first fold."""
+    report = _TEMPLATE.read_text(encoding="utf-8").split("```markdown\n", 1)[1]
+    return report.split("\n<details>\n", 1)[0]
+
+
+def test_the_template_surface_pastes_the_card_once_and_no_other_summary() -> None:
+    """#1252: above the first fold the model pastes one block, the top card. The Since Last
+    Run list, the headline lines, the model-written summary paragraph, the short not-a-verdict
+    line and the "Agents start here" preamble all restated the card; the golden report above
+    predates the card and keeps them."""
+    surface = _template_surface()
+    assert surface.count("<paste ") == 1 and "<paste `headline.summary_markdown`" in surface
+    for retired in ("## Since Last Run", "since_last_run.markdown", "headline.markdown",
+                    "Agents start here", "Bespoke summary", "A readiness snapshot"):
+        assert retired not in surface, retired
+    # the actions.json pointer lives in the machine-readable fold
+    machine = _TEMPLATE.read_text(encoding="utf-8").split("Machine-readable data (for agents)", 1)[1]
+    assert "`.assess/actions.json`" in machine.split("</details>", 1)[0]
+
+
+def test_the_template_sections_follow_the_card_in_order() -> None:
+    """#1252: no section holds the card or the coverage lines; the visible sections follow it."""
+    headings = [line for line in _template_surface().splitlines() if line.startswith("## ")]
+    assert headings == ["## Top 3 Actions", "## Says one thing, does another", "## Snapshots"]
 
 
 def test_mutation_caveat_present_when_mutation_not_run() -> None:
