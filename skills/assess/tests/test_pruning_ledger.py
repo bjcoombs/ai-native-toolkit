@@ -197,3 +197,45 @@ def test_a_file_that_regrows_between_rounds_is_measured_from_the_first_start() -
     assert (entries[0]["completed_sha"], entries[0]["cost_before"]) == ("3" * 40, 261)
     _, credited = _step(entries, [a, c], _placement(False, 60), "c3")
     assert [e["saved"] for e in credited] == [201]
+
+
+def _two_commits(tmp_path: Path) -> tuple[Path, str, str]:
+    import subprocess
+    repo = tmp_path / "r"
+    repo.mkdir()
+    git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com"]
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True, capture_output=True)
+    shas = []
+    for n in (1, 2):
+        (repo / "f.txt").write_text(f"{n}\n", encoding="utf-8")
+        subprocess.run([*git, "add", "-A"], check=True, capture_output=True)
+        subprocess.run([*git, "commit", "-qm", str(n)], check=True, capture_output=True)
+        shas.append(subprocess.run([*git, "rev-parse", "HEAD"], check=True, capture_output=True,
+                                   encoding="utf-8").stdout.strip())
+    return repo, shas[0], shas[1]
+
+
+def test_rounds_first_seen_in_one_run_take_the_oldest_rounds_start_by_ancestry(tmp_path: Path) -> None:
+    """Lead's #1183 change: order same-run rounds by commit ancestry, not by size."""
+    repo, older, newer = _two_commits(tmp_path)
+    # 261 -> 150 at the older commit, the file regrew, 300 -> 60 at the newer: credit 201, not 240
+    a, c = _round(older, 261), _round(newer, 300)
+    entries, _ = update_ledger([], [c, a], _placement(False, 60), held_now=GATES, held_before=GATES,
+                               head_sha="h1", new_commit=True, repo_root=repo)
+    assert [(e["completed_sha"], e["cost_before"], e["merged"]) for e in entries] == [(newer, 261, [older])]
+    _, credited = update_ledger(entries, [c, a], _placement(False, 60), held_now=GATES, held_before=GATES,
+                                head_sha="h2", new_commit=True, repo_root=repo)
+    assert [e["saved"] for e in credited] == [201]
+    # the order, not the size, decides: a larger first round is the start when it is the older one
+    x, y = _round(older, 300), _round(newer, 261)
+    entries, _ = update_ledger([], [y, x], _placement(False, 60), held_now=GATES, held_before=GATES,
+                               head_sha="h1", new_commit=True, repo_root=repo)
+    assert (entries[0]["completed_sha"], entries[0]["cost_before"]) == (newer, 300)
+
+
+def test_rounds_whose_order_git_cannot_tell_take_the_smaller_start(tmp_path: Path) -> None:
+    """Unknown order (shas git cannot read): the smaller start, so an error only under-credits."""
+    a, c = _round("1" * 40, 261), _round("3" * 40, 300)
+    entries, _ = update_ledger([], [a, c], _placement(False, 60), held_now=GATES, held_before=GATES,
+                               head_sha="h1", new_commit=True, repo_root=tmp_path)
+    assert (entries[0]["completed_sha"], entries[0]["cost_before"]) == ("1" * 40, 261)
