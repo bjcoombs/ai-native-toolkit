@@ -12,7 +12,7 @@ stage = "setup"
 private = true
 degrade = false
 gate_reason = "setup"
-revision = 1
+revision = 2
 
 [[entries]]
 id = "core.finding.untrusted_hotspot"

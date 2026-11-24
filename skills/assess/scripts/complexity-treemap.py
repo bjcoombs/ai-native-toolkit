@@ -55,8 +55,9 @@ Output is a single self-contained SVG with hover tooltips on every block
 Build artifacts (main.dart.js, *.min.js, *.bundle.js, *.map, files under
 node_modules/dist/build/.next/.nuxt/etc.) and generated code (*.pb.go,
 *.connect.go, *_pb.ts, wire_gen.go, zz_generated_*.go, *.freezed.dart,
-*.designer.cs, etc.), and generated test reports (Playwright html-report/,
-Lighthouse, ZAP, *.jsonl under a nested fixtures/) are filtered by default
+*.designer.cs, etc.), generated test reports (Playwright html-report/,
+Lighthouse, ZAP, *.jsonl under a nested fixtures/) and SVG images, which scc
+scores as XML (#1232), are filtered by default
 so compiled bundles and protoc-emitted bindings don't dominate the "most
 complex" lists with code nobody wrote by hand. If a single remaining file
 still holds >30% of total LOC, a warning prints to stderr suggesting it
@@ -103,8 +104,10 @@ from lib.run_context_types import (
     Distribution, FnCcnBlock, GeneratedExclusion, KeyholeBudget,
     ScoredHotspotRow, SizeBlock, SubtreeTokens,
 )
-from lib.complexity.scc_coverage import DATA_LANGUAGES, backend_by_language, complexity_unreliable
-from lib.complexity.stats_rows import file_ccn_rows, top_lists
+from lib.complexity.scc_coverage import (
+    DATA_LANGUAGES, backend_by_language, complexity_unreliable, file_level_by_language,
+)
+from lib.complexity.stats_rows import code_band, file_ccn_rows, top_lists
 from lib.complexity.treemap_render import (
     ColoredFile, Rect, Rgba, adaptive_cap, blend_to_grey, build_tree, layout, plural, write_svg,
 )
@@ -191,6 +194,8 @@ EXCLUDE_FILE_PATTERNS = [
     "lighthouse-report.html", "lighthouse-results.json",
     "zap-report.*",
     "zap_report.html", "zap_report.json", "zap_report.xml", "zap_report.md",
+    # --- images scc reads as text (#1232): a committed diagram is not source ---
+    "*.svg",
 ]
 
 # Path-aware defaults: (directory name, basename glob). A file matches when the
@@ -782,13 +787,14 @@ def _read_plugin_version() -> str:
 # is a structural change to the sidecar shape (a metric added/removed/redefined)
 # that voids the diff against an older snapshot until the next clean run
 # re-seeds the baseline (lib.complexity.diff_reliability._diff_is_reliable reads it).
-STATS_SCHEMA_VERSION = 8  # 2: generated-file content excludes + excluded_generated
+STATS_SCHEMA_VERSION = 9  # 2: generated-file content excludes + excluded_generated
                           # 3: generated test-report excludes + loc/est_tokens max_code/max_data
                           # 4: fn_ccn.source list + backend_by_language, rows max_fn_name
                           # 5: dart-scanner fills max_fn_ccn for Dart rows, moving their score
                           # 6: files key, every scored file's {path, ccn} (#556)
                           # 7: complexity_unreliable, scc-only files with implausibly low ccn (#590)
                           # 8: loc_by_class, the size split by path class (#820)
+                          # 9: code_band, fn_ccn.file_level_by_language, *.svg dropped (#1232-5)
 
 # Per-function complexity backends, by name, with whether their counts are
 # approximate. `fn_ccn.source` in the stats file lists the ones that scored a
@@ -1077,6 +1083,7 @@ def _fn_ccn_block(files: list[tuple[Path, int, float, str]],
         "source": [{"name": n, "approximate": FN_BACKENDS.get(n, False)}
                    for n in backends_used],
         "backend_by_language": dict(sorted(by_language.items())),
+        "file_level_by_language": file_level_by_language(files, langs, backend_of),
         "function_count": len(fn_population),
         **_distribution(fn_population),
     }
@@ -1158,8 +1165,9 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     ``fn_ccn.source`` lists the backends that scored a file, as
     ``{name, approximate}`` objects from ``FN_BACKENDS``, and
     ``fn_ccn.backend_by_language`` maps each scc language to its backend, or to
-    null when any of its files with decision points was scored by scc at file
-    level only (so partial coverage reads as null). A language gets a key when a
+    null when no backend scored a file of it; ``fn_ccn.file_level_by_language``
+    counts the files with decision points scc alone scored, so partial coverage
+    reads as the backend plus that count (#1235). A language gets a key when a
     backend scored one of its files or scc counted a decision point in one;
     data and markup (JSON, YAML, Markdown), where scc counts none, get no key,
     but CSS maps to null because scc counts decision points in it.
@@ -1173,15 +1181,9 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     Their rows still rank on the scc figure, which the report labels approximate.
 
     ``top_hotspots``, ``top_complex`` and ``top_large`` each rank on their own
-    key (composite score, aggregate ccn, loc) and break ties on the
-    repository-relative path, ascending. Files tie often - many share a
-    complexity or a line count - and without the tie-break the ten that make a
-    list depend on the order lizard and scc emitted them in, so a tied file can
-    swap in and out between runs on the same commit (issue #426). The
-    tie-break adds and removes no key, so it does not move
-    ``STATS_SCHEMA_VERSION``: a bump would make ``_diff_is_reliable`` reject
-    every stored snapshot and discard each repository's cross-run diff for a
-    run, which a pure ordering change has not earned.
+    key (composite score, aggregate ccn, loc) and break ties on the path
+    (``lib.complexity.stats_rows``, #426). ``code_band`` is the union of the
+    same lists over the files a per-function backend scored (#1234).
     """
     fn_ccn_by_path = fn_ccn_by_path or {}
     fn_names = fn_name_by_path or {}
@@ -1240,6 +1242,8 @@ def write_stats(files: list[tuple[Path, int, float, str]],
                                 langs),
         "churn": (_distribution(churns) if aux_data is not None else None),
         **top_lists(enriched),
+        # The same lists over per-function-backend files alone (#1234).
+        "code_band": code_band(enriched, {_rel_path(p, root) for p in fn_ccn_by_path}),
         # Every scored file as {path, ccn}, uncapped and sorted by path: the
         # doc-complexity join reads it so a complex file outside every top-10
         # list still reaches the join (issue #556).

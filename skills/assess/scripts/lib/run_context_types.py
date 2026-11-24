@@ -593,6 +593,7 @@ class FnCcnBlock(Distribution):
     basis: str
     source: list[FnBackendSource]
     backend_by_language: dict[str, str | None]
+    file_level_by_language: dict[str, int]
     function_count: int
 
 
