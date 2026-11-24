@@ -16,7 +16,8 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   per filed rank (``--issue 2='#44, #45'`` for a rank filed as two items).
 - ``items [--report-link URL]`` prints a JSON array, one object per entry in ``rank``
   order: ``rank``, ``title`` (the ``action`` text) and ``body`` (Markdown: the ``finding``
-  and ``files``, then ``first_step``, ``done_when``, ``scope_fence``, and a Context block
+  and ``files``, or the ``condition`` when there is no ``finding``, or the ``files`` alone,
+  or nothing when the entry has none of them; then ``first_step``, ``done_when``, ``scope_fence``, and a Context block
   with ``layer``, ``effort`` and the full-report link when given, then a one-line footer).
 - ``readiness`` prints the PR summary's Readiness value: ``headline.lines`` of
   ``run-context.json`` joined with `` / ``; the ``badge.json`` ``message`` when the run
@@ -137,15 +138,22 @@ def render_table(entries: Sequence[Entry], issues: Mapping[int, str] | None = No
 
 
 def _finding_line(entry: Entry) -> str:
-    finding = _text(entry, "finding")
+    """What the item addresses: the finding, else the condition it moves, else its files; ``""`` with none."""
+    finding, condition = _text(entry, "finding"), _text(entry, "condition")
     files = ", ".join(f"`{f}`" for f in _files(entry))
-    head = f"**Finding:** `{finding}`" if finding else "**Finding:** not recorded"
+    if finding:
+        head = f"**Finding:** `{finding}`"
+    elif condition:
+        head = f"**Condition:** `{condition}`"
+    else:
+        return f"**Files:** {files}" if files else ""
     return f"{head} in {files}" if files else head
 
 
 def render_item_body(entry: Entry, report_link: str | None = None) -> str:
     """One tracker item's body: the finding first, then the change, its exit and fence, then context."""
-    parts = [_finding_line(entry), ""]
+    lead = _finding_line(entry)
+    parts = [lead, ""] if lead else []
     first_step = _text(entry, "first_step")
     if first_step:
         parts += ["### First step", first_step, ""]

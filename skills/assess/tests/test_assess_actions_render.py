@@ -110,8 +110,20 @@ def test_items_one_per_entry_with_the_contract_fields(tmp_path: Path, capsys: py
     assert body.index("**Finding:**") < body.index("### First step") < body.index("### Done when")
     assert body.rstrip().endswith("https://github.com/bjcoombs/ai-native-toolkit")
     sparse = items[1]["body"]
-    assert sparse.startswith("**Finding:** not recorded")
+    assert sparse.startswith("### Done when")  # no finding, condition or files: no lead line
+    assert "not recorded" not in sparse
     assert "### First step" not in sparse and "Full report" in sparse
+
+
+@pytest.mark.parametrize(("extra", "lead"), [
+    ({"condition": "layer-5-ci.1", "files": ["ci.yml"]}, "**Condition:** `layer-5-ci.1` in `ci.yml`"),
+    ({"condition": "layer-5-ci.1"}, "**Condition:** `layer-5-ci.1`"),
+    ({"files": ["ci.yml"]}, "**Files:** `ci.yml`"),
+    ({"finding": "lying_map"}, "**Finding:** `lying_map`"),
+])
+def test_item_without_a_finding_leads_with_what_it_has(extra: dict[str, object], lead: str) -> None:
+    entry = {"rank": 1, "action": "a", "done_when": "d", "scope_fence": "s", **extra}
+    assert render.render_item_body(entry).splitlines()[0] == lead
 
 
 def test_items_omit_the_report_link_when_none_given(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
