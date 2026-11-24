@@ -825,7 +825,7 @@ def main(argv: list[str] | None = None) -> int:
         today=today, window=window, levels_version=maturity_model["version"] if maturity_model is not None else None,
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
         fleet_config=fleet_config, platform=platform_ran, coverage=coverage,
-        managed_settings=options.managed_settings,
+        managed_settings=options.managed_settings, model=maturity_model,
     )
     write_stamp(out_dir, stamp)
     demoted = _condition_effect(out_dir, maturity_model, stamp, public, org_dir, entry)

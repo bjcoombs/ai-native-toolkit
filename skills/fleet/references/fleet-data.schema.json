@@ -63,6 +63,12 @@
         "managed_settings": {
           "type": "boolean"
         },
+        "rules_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "repositories": {
           "type": "object",
           "properties": {
@@ -97,6 +103,7 @@
         "platform",
         "plugin_version",
         "repositories",
+        "rules_sha256",
         "scan_date",
         "scans",
         "toolkit_commit",

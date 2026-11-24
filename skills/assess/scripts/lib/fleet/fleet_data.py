@@ -227,9 +227,10 @@ class DataRepo(TypedDict):
 
 # The stamp fields RunDetails leaves out: the stamp's own envelope version, the
 # --fleet-config section counts (the sha256 is the comparability key) and the --discovered
-# coverage counts (#745; run.json and report.md carry them). A test fails when FleetStamp
+# coverage counts (#745; run.json and report.md carry them) and the collector revisions (#952;
+# run.json carries them, the rules hash is copied). A test fails when FleetStamp
 # gains a field that is neither copied below nor listed here.
-RUN_EXCLUDED = frozenset({"fleet_stamp_version", "fleet_config_entries", "coverage"})
+RUN_EXCLUDED = frozenset({"fleet_stamp_version", "fleet_config_entries", "coverage", "collectors"})
 
 
 class RunDetails(TypedDict):
@@ -247,6 +248,7 @@ class RunDetails(TypedDict):
     fleet_config_sha256: str | None  # the --fleet-config comparability key (#706)
     platform: bool  # --platform ran the platform pass (#714); False for a stamp without it
     managed_settings: bool  # --managed-settings read the machine's policy (#1153); False without it
+    rules_sha256: str | None  # the rules scored with (#952, lib/fleet/fleet_method.py); None: none or unrecorded
     repositories: RepositoryCounts
 
 
@@ -405,6 +407,7 @@ def run_details(stamp: FleetStamp) -> RunDetails:
         "fleet_config_sha256": stamp.get("fleet_config_sha256"),
         "platform": stamp.get("platform", False),
         "managed_settings": stamp.get("managed_settings", False),
+        "rules_sha256": stamp.get("rules_sha256"),
         "repositories": {"selected": counts["selected"], "scanned_ok": counts["scanned_ok"],
                          "failed": counts["failed"], "qualifying": counts["qualifying"]},
     }

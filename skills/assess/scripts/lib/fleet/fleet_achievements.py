@@ -240,6 +240,7 @@ class HistoryRun(NamedTuple):
     data: FleetData
     rescored_from: str | None = None  # a re-scored entry's stored maturity-model version (None: none stamped)
     stored: FleetData | None = None  # a re-scored entry's cells as stored, under its own rules; set iff re-scored
+    rescored_rules: str | None = None  # a re-scored entry's stored rules hash (#952; None: not recorded)
 
 
 @dataclass(frozen=True)
@@ -636,7 +637,8 @@ def build_achievements(current: HistoryRun, earlier: Sequence[HistoryRun], model
         then_caused = caused[i]
         # both runs re-scored from one earlier version: the step keeps its native-model credit
         native = (runs[i].stored is not None and runs[i + 1].stored is not None
-                  and runs[i].rescored_from == runs[i + 1].rescored_from)
+                  and runs[i].rescored_from == runs[i + 1].rescored_from
+                  and runs[i].rescored_rules == runs[i + 1].rescored_rules)
         rescored = (then_caused | (caused[i + 1] or frozenset())
                     if then_caused is not None and not native else None)
         replay.step(run_id, prev_id, prev, now, prev_cells, now_cells, rescored)

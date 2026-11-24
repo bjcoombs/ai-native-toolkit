@@ -14,7 +14,8 @@ directory (``lib/fleet/fleet_history.py``) and keeps each entry that:
   engine reads decodes, so one malformed entry is passed over rather than costing
   every later run its achievements).
 
-**Re-score (#771).** An entry whose only refusal is the maturity-model version is not
+**Re-score (#771).** An entry whose only refusals are rule reasons (the maturity-model
+version, or the rules hash ``rules_sha256`` of #952, ``fleet_method.RULE_KEYS``) is not
 passed over when the caller gives this run's model and key function: its ``repos.jsonl``
 scans are re-scored under this run's model (``lib/fleet/fleet_rescore.py``) and it replays as
 ``HistoryRun(..., rescored_from=<its version, or None>, stored=<its fleet-data.json>)``; a set
@@ -41,8 +42,8 @@ fields, #944, #945; every version from 1 to `FLEET_DATA_VERSION`, so a bump keep
 one per date before this run's (`fleet_history.one_per_date`). An entry is dated by its
 `run.json` `scan_date`, not the stamp copy in `fleet-data.json`, which is read only when
 the entry has no `run.json` (#780). Unreadable entries are passed over. With the run's
-model and key function (`model=`, `key=`), an entry whose only refusal is the
-maturity-model version is re-scored from its `repos.jsonl` (`fleet_view.read_repos`,
+model and key function (`model=`, `key=`), an entry whose only refusals are the
+maturity-model version or the rules hash (#952) is re-scored from its `repos.jsonl` (`fleet_view.read_repos`,
 `fleet_rescore.rescore`) and returned as a `HistoryRun` with `rescored_from` (its stored
 version) and `stored` (its `fleet-data.json`) set (#771).
 """
@@ -60,6 +61,7 @@ from lib.fleet.fleet_compare import comparability
 from lib.fleet.fleet_data import FLEET_DATA_FILE, FLEET_DATA_VERSION, FleetData
 from lib.fleet.fleet_history import one_per_date
 from lib.fleet.fleet_legacy import upgrade
+from lib.fleet.fleet_method import RULE_KEYS
 from lib.fleet.fleet_rescore import rescore
 from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 from lib.fleet.fleet_view import FleetViewError, read_repos
@@ -95,8 +97,10 @@ class Rescorer(NamedTuple):
 
 
 def _version_only(stamp: FleetStamp, current: FleetStamp) -> bool:
-    """Whether the maturity-model version is the only difference ``comparability`` refuses."""
-    return not comparability({**stamp, "levels_version": current["levels_version"]}, current)[0]
+    """Whether the rules (the maturity-model version, or the rules hash of #952) are the only
+    difference ``comparability`` refuses."""
+    return not comparability(cast(FleetStamp, {**stamp, **{key: current.get(key) for key in RULE_KEYS}}),
+                             current)[0]
 
 
 def _rescored(entry: Path, data: FleetData, stamp: FleetStamp, current: FleetStamp,
@@ -118,7 +122,7 @@ def _rescored(entry: Path, data: FleetData, stamp: FleetStamp, current: FleetSta
         return None  # a stored row an older scanner wrote that the evaluator cannot read
     if again is None:
         return None
-    return HistoryRun(stamp["scan_date"], again, stamp["levels_version"], data)
+    return HistoryRun(stamp["scan_date"], again, stamp["levels_version"], data, stamp.get("rules_sha256"))
 
 
 def _read(entry: Path, date: str, current: FleetStamp, rescorer: Rescorer | None = None) -> HistoryRun | None:
