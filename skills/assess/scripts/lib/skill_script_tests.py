@@ -138,23 +138,32 @@ def _count(folder: Path, repo: Path, dirs: set[str], pats: list[str]) -> tuple[l
     return scripts, tests
 
 
-def _elsewhere(repo: Path, folder: Path, scripts: list[str], outside: list[Path]) -> list[str]:
+def _outside_tests(repo: Path, dirs: set[str], pats: list[str]) -> list[tuple[Path, list[str]]]:
+    """Every test file in the repository with its lines, read once per scan."""
+    out: list[tuple[Path, list[str]]] = []
+    for path in _files(repo, dirs, pats, repo):
+        if not is_test_file(PurePosixPath(path.relative_to(repo).as_posix())):
+            continue
+        try:
+            if path.stat().st_size > _READ_MAX_BYTES:
+                continue
+            out.append((path, path.read_text(encoding="utf-8", errors="replace").splitlines()))
+        except OSError:
+            continue
+    return out
+
+
+def _elsewhere(repo: Path, folder: Path, scripts: list[str], outside: list[tuple[Path, list[str]]]) -> list[str]:
     """Outside test files with a line that names one of ``scripts`` after the skill folder's name
     as a path segment (``"fleet" / "scripts" / "fleet.py"``, ``skills/ghsync/scripts/ghsync.sh``)."""
     name = re.escape(folder.name)
     alternatives = "|".join(re.escape(s) for s in sorted(set(scripts)))
     path_like = re.compile(rf"[\"'/\\]{name}[\"'/\\].*?(?<![\w.-])(?:{alternatives})(?![\w-])")
     found: list[str] = []
-    for path in outside:
+    for path, lines in outside:
         if path.is_relative_to(folder):
             continue
-        try:
-            if path.stat().st_size > _READ_MAX_BYTES:
-                continue
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        if any(path_like.search(line) for line in text.splitlines()):
+        if any(path_like.search(line) for line in lines):
             found.append(path.relative_to(repo).as_posix())
             if len(found) == ELSEWHERE_MAX:
                 break
@@ -174,16 +183,15 @@ def scan_skill_script_tests(
     repo = repo_root.resolve()
     dirs, pats = excludes or (set(), [])
     folders = _skill_folders(repo, scope, excludes)
-    outside: list[Path] | None = None
+    outside: list[tuple[Path, list[str]]] | None = None
     skills: list[SkillTests] = []
     for folder in folders:
         scripts, tests = _count(folder, repo, dirs, pats)
         untested = None if not scripts else tests == 0
         elsewhere: list[str] = []
         if untested:
-            if outside is None:  # read once, only when some skill needs it
-                outside = [p for p in _files(repo, dirs, pats, repo)
-                           if is_test_file(PurePosixPath(p.relative_to(repo).as_posix()))]
+            if outside is None:  # walked and read once per scan, only when some skill needs it
+                outside = _outside_tests(repo, dirs, pats)
             elsewhere = _elsewhere(repo, folder, scripts, outside)
         skills.append(SkillTests(path=folder.relative_to(repo).as_posix(), scripts=len(scripts), tests=tests,
                                  untested=untested, tested_elsewhere=elsewhere))
