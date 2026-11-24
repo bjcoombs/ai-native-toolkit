@@ -51,7 +51,7 @@ from lib.testing.coverage_report import load_coverage_data
 from lib.level_signals import signal_path_validator
 from lib.model_change import model_name
 from lib.profiles import ModelChoice, ProfileError, add_model_arguments, chosen_model, run_level
-from lib.profiles import single_repo_choice
+from lib.profiles import profile_names, single_repo_choice
 from lib.testing.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.testing.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.run_publish import publish_run
@@ -138,6 +138,17 @@ def _model_differs(level_block: Any, model: ModelChoice | None) -> bool:
     return isinstance(recorded, str) and model_name(recorded) != model_name(version)
 
 
+def _model_hint(level_block: dict[str, Any]) -> str:
+    """The flag that reruns under the model ``level_block`` names: ``the run used profile
+    handover: pass --profile handover``, the default model, or a custom file's version."""
+    name = model_name(level_block["levels_version"])
+    if name == "default":
+        return "the run used the default model: pass neither flag"
+    if name in profile_names():
+        return f"the run used profile {name}: pass --profile {name}"
+    return f"the run used the custom model {name}: pass --levels with that file"
+
+
 def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
                         model: ModelChoice | None = None) -> int:
     """Re-run the Layer-1 test-pressure scan with the bounded mutation pass ON.
@@ -162,7 +173,8 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
 
     ``model`` is the run's ``--profile`` / ``--levels`` choice (None for the default
     model), which the recount uses; a model other than the one the ``level`` block names
-    returns 2 before any mutation runs, so a refresh never recounts a profile run under
+    returns 2 before any mutation runs, naming the flag that model needs (``_model_hint``),
+    so a refresh never recounts a profile run under
     another model (#1150).
 
     The treemap overlay (regenerated separately by the orchestrator) then reads
@@ -187,7 +199,8 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
         return 1
     # Before any mutation runs: the recount must use the model the run used (#1150).
     if _model_differs(ctx.get("level"), model):
-        print("--opt-in-mutation needs the --profile or --levels the run used", file=sys.stderr)
+        print(f"--opt-in-mutation needs the --profile or --levels the run used; {_model_hint(ctx['level'])}",
+              file=sys.stderr)
         return 2
 
     # Only focus entries with test evidence: mutating a file with no test yields

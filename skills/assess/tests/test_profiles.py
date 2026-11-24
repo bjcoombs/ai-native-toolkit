@@ -333,3 +333,45 @@ def test_each_missing_practice_is_its_own_short_sentence() -> None:
     assert sentences[0] == "Not ready for handover (profile: handover)"
     assert len(sentences) == 1 + 6 and all(x.startswith("Missing: ") for x in sentences[1:])
     assert max(len(x.split()) for x in sentences) <= 25
+
+
+@pytest.mark.parametrize("name", ["handover", "citizen"])
+def test_a_profile_run_never_writes_an_unlabelled_badge(name: str, ci2: Path) -> None:  # noqa: F811
+    import json
+
+    from assess_core import build_and_publish_run
+
+    choice = single_repo_choice(name, None, signal_path_validator())
+    ctx = build_and_publish_run(repo_root=ci2, run_date="2026-11-23", non_interactive=True, model=choice)
+    summary = ctx["headline"]["summary"]
+    assert summary.startswith(f"Step {ctx['level']['step']} · ") and summary.endswith(f" (profile: {name})")
+    badge = json.loads((ci2 / ".assess" / "badge.json").read_text(encoding="utf-8"))
+    assert badge["message"] == summary
+    assert f"- **Readiness:** {summary}\n" in (ci2 / ".assess" / "log.md").read_text(encoding="utf-8")
+
+
+def test_a_custom_model_labels_the_summary(tmp_path: Path) -> None:
+    choice = resolve(None, _custom(tmp_path))
+    level = core_scans.level(*(_blocks().get(k) for k in LEVEL_READS), choice)
+    assert core_scans.headline(level, None, choice)["summary"].endswith(f" ({choice.label})")
+
+
+def test_the_default_runs_summary_is_unchanged() -> None:
+    from lib.headline import headline
+
+    level = core_scans.level(*(_blocks().get(k) for k in LEVEL_READS), None)
+    plain = headline(level, default_model())["summary"]
+    assert core_scans.headline(level, None, None)["summary"] == plain
+    assert core_scans.headline(level, None, resolve(None, None))["summary"] == plain
+    assert "(" not in plain
+
+
+@pytest.mark.parametrize(("version", "hint"), [
+    ("profile-handover-1", "the run used profile handover: pass --profile handover"),
+    ("default-2026.11.10", "the run used the default model: pass neither flag"),
+    ("team-1", "the run used the custom model team-1: pass --levels with that file"),
+])
+def test_the_mutation_refresh_error_names_the_runs_model(version: str, hint: str) -> None:
+    from assess_core import _model_hint
+
+    assert _model_hint({"levels_version": version}) == hint

@@ -36,7 +36,11 @@ it cannot import the Step sentences without an import cycle):
 
 The lines name no layer, no condition id and no count of practices: the only "N of M" is the
 Step's place on the ladder. A headline that is unavailable, or a model without Steps, keeps
-the fields empty. Under counts-only the three fields are dropped. Tests:
+the fields empty. Under counts-only the three fields are dropped.
+
+``run_headline`` also suffixes the one-line ``summary`` with the model's label under a profile
+or a ``--levels`` model (``Step 3 · all gates held (profile: citizen)``), because the badge and
+the ``log.md`` readiness line carry only that line; a default run's summary is unchanged. Tests:
 ``tests/test_exec_summary.py``.
 """
 from __future__ import annotations
@@ -172,4 +176,8 @@ def run_headline(level: Any, since: Any, choice: ModelChoice | None) -> Headline
     """The run context's ``headline`` block: the headline of ``level`` under the run's model
     (``choice``, the default when None), summarised with ``since`` and the model lines."""
     model = chosen_model(choice)
-    return summarised(headline(level, model), level, since, model, choice)
+    block = summarised(headline(level, model), level, since, model, choice)
+    if choice is None or choice.kind == "default":
+        return block
+    # the badge and the log.md line carry only the summary: it names the model it came from
+    return {**block, "summary": f"{block['summary']} ({choice.label})"}
