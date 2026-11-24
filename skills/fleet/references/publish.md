@@ -45,6 +45,9 @@ so this is how it offers target entry to Contributors and hides it from Viewers.
 Contributor can create stray documents outside the collections, and each counts against the
 document cap. #1044 set the root to `owner` to prevent that; going back is the one constant.
 The root rule also covers each viewer's `data/users/` subtree; the page keeps no state there.
+With `runs`, `units` and `repos` at `write: owner`, only the artifact's own owner can publish
+the data. An Editor, or a person granted Owner in the share menu, can publish page versions but
+not the data.
 
 | Path | Read | Write |
 |---|---|---|

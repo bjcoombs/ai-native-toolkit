@@ -179,7 +179,9 @@ function collection(name) {
       set: function (d) { writes.push(["set", name, id, d]); return Promise.resolve(); },
       delete: function () { writes.push(["delete", name, id]); return Promise.resolve(); },
       get: function () { return Promise.resolve({exists: false, data: function () { return null; }}); } }; },
-    onSnapshot: function (next) { next({docs: rows.map(function (r) { return {id: r.id, data: function () { return r.data; }}; })}); return function () {}; }
+    onSnapshot: function (next, err) {
+      if (input.snapError) { err({code: "unavailable"}); return function () {}; }
+      next({docs: rows.map(function (r) { return {id: r.id, data: function () { return r.data; }}; })}); return function () {}; }
   };
 }
 const db = input.db ? {collection: collection} : null;
@@ -205,7 +207,7 @@ setTimeout(async function () {
 
 
 def _run(mode: str, *, db: bool = True, can: object = True, rows: list[dict[str, Any]] | None = None,
-         target: tuple[str, str, object] | None = None) -> dict[str, Any]:
+         target: tuple[str, str, object] | None = None, snap_error: bool = False) -> dict[str, Any]:
     if NODE is None:
         pytest.skip("node is not on PATH")
     name = "hashed" if mode == "hashed" else "counts-only"
@@ -214,7 +216,7 @@ def _run(mode: str, *, db: bool = True, can: object = True, rows: list[dict[str,
     assert bundle is not None
     scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
     payload = {"bundle": bundle.group(1).replace("\\u003c", "<"), "scripts": scripts, "db": db, "can": can,
-               "rows": rows or [], "set": list(target) if target else None}
+               "rows": rows or [], "set": list(target) if target else None, "snapError": snap_error}
     done = subprocess.run([NODE, "-e", HARNESS], input=json.dumps(payload), capture_output=True, text=True,
                           encoding="utf-8", errors="replace", check=True, timeout=60)
     out: dict[str, Any] = json.loads(done.stdout)
@@ -348,3 +350,9 @@ def test_strays_outside_the_fleet_collections_are_reported_and_counted(tmp_path:
     (folder / "notes.json").write_text(json.dumps(exports["notes"]), encoding="utf-8")
     assert _cli().main(["plan", str(out), "--exports", str(folder)]) == 0
     assert "2 document(s) outside what the fleet writes, in notes" in capsys.readouterr().err
+
+
+def test_a_refused_targets_read_says_so_instead_of_looking_like_no_targets() -> None:
+    out = _run("counts_only", snap_error=True)
+    assert "targets could not be read" in out["page"]
+    assert "could not be reached yet" not in _run("counts_only")["page"]

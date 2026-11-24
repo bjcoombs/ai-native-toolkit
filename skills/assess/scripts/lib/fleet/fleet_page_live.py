@@ -24,7 +24,9 @@ contract 0.2.96 (``claude.use``; ``null`` means absent):
   collection and adds each valid row as a ``pending`` target. A row is viewer-written: it is
   read only when its id is one of this page's ``target_id`` values and its ``step`` is a whole
   number from 2 to the top Step; the page renders it through ``esc()`` like everything else. A
-  10 s timer notes when the database has not answered; data or an error clears it.
+  10 s timer notes when the database has not answered; a snapshot clears the note, and an error
+  replaces it with one saying the targets could not be read, so a refused read never looks like
+  no targets.
 - ``canSetTarget`` resolves ``true`` only when ``db`` is present, the page carries target ids
   and ``user.can("data.write")`` is ``true``; ``null`` (not told) and ``false`` hide the entry.
 - ``setTarget(view, unit, step)`` writes ``{step}`` to ``targets/<target_id>``, or deletes it for
@@ -57,6 +59,8 @@ LIVE_SCRIPT = r"""
 (function () {
   "use strict";
   var TARGET_ID = new RegExp(%(re)s);
+  var SLOW = "The page's targets could not be reached yet.";
+  var UNREAD = "The page's targets could not be read, so targets set here may not show.";
   var bundle = JSON.parse(document.getElementById("fleet-bundle").textContent);
   var ids = {}, units = {};
   bundle.views.forEach(function (v) {
@@ -87,11 +91,16 @@ LIVE_SCRIPT = r"""
       var stop = function () {};
       dbP.then(function (db) {
         if (!db || !Object.keys(ids).length) { return; }
-        var timer = setTimeout(function () { bundle.target_note = "The page's targets could not be reached yet."; cb(bundle.targets); }, 10000);
+        var timer = setTimeout(function () { bundle.target_note = SLOW; cb(bundle.targets); }, 10000);
         stop = db.collection("targets").onSnapshot(function (snap) {
           clearTimeout(timer);
+          if (bundle.target_note === SLOW) { bundle.target_note = null; }
           cb(bundle.targets.concat(pendingFrom(snap.docs)));
-        }, function () { clearTimeout(timer); });
+        }, function () {
+          clearTimeout(timer);
+          bundle.target_note = UNREAD;
+          cb(bundle.targets);
+        });
       });
       return function () { stop(); };
     },
