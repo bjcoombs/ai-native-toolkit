@@ -11,18 +11,23 @@
 # difference). The Steps are the default model's first three; Step 4 needs the
 # coverage gate, which this bar does not ask for.
 #
+# The secrets guard is a general practice in the check catalogue, carried by
+# the default model at both levels; this profile is one working example of a
+# profile that turns it on.
+#
 # Why each practice is in the bar:
 # - layer-0-instructions.1: an instruction file is the cheapest way to tell
 #   the agent building the app how to build and test it.
 # - layer-5-ci.1: CI running the tests is the one check that catches a broken
 #   change before anyone else depends on it.
-#
-# Not in the bar: a secrets guard. No practice in the default model measures
-# one, and a profile never adds a signal of its own.
+# - secrets-guard.1: a committed secret is the commonest way a credential
+#   leaks, and a configured guard catches one before it lands.
+# - secrets-guard.2: a secret committed once stays in every clone, so the
+#   guard must run where nobody can skip it: CI or push protection.
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "profile-citizen-2026.11.23"
+version = "profile-citizen-2026.11.24"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -47,6 +52,22 @@ aggregation = "min"
   level = 1
   truth = ["behaviour"]
   criteria = [{ signal = "ci_checks.enforced_check_runs", op = "eq", value = true }]
+
+[[rows]]
+id = "secrets-guard"
+title = "Secrets guard"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["governance"]
+  criteria = [{ signal = "secrets_guard.configured", op = "eq", value = true }]
+
+  [[rows.levels]]
+  level = 2
+  truth = ["governance"]
+  criteria = [{ signal = "secrets_guard.enforcement.present", op = "eq", value = true }]
 
 [[steps]]
 step = 1

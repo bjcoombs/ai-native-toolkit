@@ -65,6 +65,7 @@ from lib.skill_personal_data import SkillPersonalDataBlock
 from lib.ci_model_jobs import CiModelJobsBlock
 from lib.contributor_files import ContributorFilesBlock
 from lib.hosting.org_security_policy import OrgSecurityPolicyBlock
+from lib.hosting.github_secret_scanning import GithubSecretScanningBlock
 from lib.keyhole.liveness_scan import ObservabilityBlock
 from lib.testing.mutation_cap import MutationNotRunCap
 from lib.run_context_types_size import LocByClass
@@ -162,6 +163,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("ci_model_jobs", CiModelJobsBlock),
     ("contributor_files", ContributorFilesBlock),
     ("org_security_policy", OrgSecurityPolicyBlock),
+    ("github_secret_scanning", GithubSecretScanningBlock),
     ("delivery", DeliveryBlock),
     ("doc_claims", DocClaimsBlock),
     ("guardrails", GuardrailsBlock),

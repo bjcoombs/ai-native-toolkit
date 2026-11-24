@@ -530,4 +530,8 @@ from lib.assess_method import ASSESS_METHOD_VERSION as ASSESS_METHOD_VERSION
 #   unknown, `reason` when unknown, `cancel_superseded`), with `files_read`, `model_jobs`,
 #   `gated`, `unknown`, `unread` and `ungated` (null with `ungated_reason` `trigger_unresolved`
 #   or `ci_jobs_unread` when none is ungated but one could not be settled or read).
+# 1.44.0 (4.0.0 release): one change, without a bump.
+# - run-context.json gains `github_secret_scanning` (platform pass): `secret_scanning`,
+#   `push_protection` and `delegated_bypass`, or `available: false` (`settings_not_readable` without admin rights).
+#   `secrets_guard.sources` and `enforcement.source` can read `platform`.
 ARTIFACT_SCHEMA_VERSION = "1.44.0"

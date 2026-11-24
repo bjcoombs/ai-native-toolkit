@@ -37,7 +37,7 @@ case "$all" in
   *"--json mergedAt") cat "$FAKE_DIR/light.json"; exit 0 ;;
   "pr list"*) cat "$FAKE_DIR/prs.json"; exit 0 ;;
   "api users/claude%5Bbot%5D"|"api users/coderabbitai%5Bbot%5D") echo '{"type":"Bot"}'; exit 0 ;;
-  "api repos/acme/widget") echo '{"default_branch":"main"}'; exit 0 ;;
+  "api repos/acme/widget") echo '{"default_branch":"main","security_and_analysis":{"secret_scanning":{"status":"enabled"}}}'; exit 0 ;;
   "api repos/acme/.github") echo '{"private":false}'; exit 0 ;;
   "api repos/acme/widget/rules/branches/main") echo '[]'; exit 0 ;;
   "api repos/acme/widget/branches/main/protection") echo 'gh: Branch not protected (HTTP 404)' >&2; exit 1 ;;
@@ -95,7 +95,7 @@ def _calls(data: Path) -> list[list[str]]:
 
 
 # The platform scans that read GitHub only: on a GitLab remote they are unavailable (no_remote).
-GITHUB_ONLY = ("org_security_policy",)
+GITHUB_ONLY = ("org_security_policy", "github_secret_scanning")
 
 
 def _names_target(argv: list[str], slug: str) -> bool:
@@ -145,7 +145,8 @@ def test_every_gitlab_platform_read_names_its_target(stubs: Path, tmp_path: Path
                  "include:\n  - project: grp/ci-templates\n    file: /t.yml\n")
     assert all(scans[name].get("available") for name in signals.PLATFORM_SCANS
                if name not in GITHUB_ONLY), scans
-    # The owner's shared .github policy is GitHub's fallback: on GitLab it is not read (#1045).
+    # The owner's shared .github policy and GitHub's secret scanning settings are GitHub's: on GitLab
+    # neither is read (#1045, #1173).
     assert all(str(scans[name].get("reason", "")).startswith("no_remote") for name in GITHUB_ONLY)
     calls = _calls(stubs)
     assert [c for c in calls if not _names_target(c, "grp/app")] == []

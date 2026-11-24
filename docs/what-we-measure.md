@@ -605,20 +605,36 @@ The SECURITY file in the owner's public .github repository, which GitHub shows o
   - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
   - `no_remote`: The repository has no github.com remote, so there is no owner .github repository to read. Nothing to change: the shared-policy fallback is GitHub's; commit a SECURITY.md in the repository.
 
+### `github_secret_scanning`: GitHub secret scanning
+
+A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.
+
+GitHub's own secret scanning and push protection settings, read through gh. They are returned only to a repository admin, organization owner or security manager.
+
+- Collector: `core.github_secret_scanning`, reading `repo_root`.
+- Network: yes, GitHub or GitLab (with --platform).
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `github_secret_scanning.reason` reason.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
+  - `settings_not_readable`: Only a repository admin, organization owner or security manager can read GitHub's secret scanning and push protection settings. Run /assess with gh signed in as a repository admin, organization owner or security manager, or add a secrets scan to CI.
+
 ### `secrets_guard`: Secrets guard
 
 A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.
 
 A secrets hook in the pre-commit config and a secrets scan in CI, such as gitleaks, trufflehog or GitLab Secret-Detection. Each is recorded with its own evidence grade.
 
-- Collector: `core.secrets_guard`, reading `repo_root`, `scope`, `ghsync_root`.
+- Collector: `core.secrets_guard`, reading `repo_root`, `scope`, `ghsync_root`, `github_secret_scanning`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `secrets_guard.ci.files` path, `secrets_guard.ci.rules_unevaluated` token, `secrets_guard.ci.tools` token, `secrets_guard.enforcement.reason` reason, `secrets_guard.enforcement.source` token, `secrets_guard.pre_commit.file` path, `secrets_guard.pre_commit.tools` token, `secrets_guard.sources.grade` token, `secrets_guard.sources.source` token.
 - Used by: row `secrets-guard`.
 - Evidence: `secrets_guard.configured` config_text (config_only), `secrets_guard.enforcement.present` head_structure (measured).
 - Not measured when:
-  - `secret_scanning_not_read`: No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read. Add a secrets scan step to CI (gitleaks or trufflehog); GitHub's own settings are not read yet.
+  - `secret_scanning_not_read`: No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read. Run /assess with gh signed in as a repository admin, organization owner or security manager, or a headless run with --platform. Or add a secrets scan step to CI (gitleaks or trufflehog).
   - `gitlab_rules_unevaluated`: A GitLab job holds a secrets scan but runs under rules, only/except or a when that is not evaluated. So it is not known whether the scan runs on each change. Nothing to change for the reading: a plain job with no rules, or a GitHub workflow, is read in full.
   - `ci_includes_unresolved`: No secrets scan was found in the CI read. A GitLab include that could hold one, a local, project or remote file, was not read. Clone the included project beside this one (/ghsync), or add the secrets scan to the repository's own .gitlab-ci.yml.
 
@@ -1200,8 +1216,9 @@ The scan registry in run order, including the private inputs other scans read.
 | `skill_personal_data` | Personal data in skill text | `repo_root`, `scope`, `excludes` | `skill_personal_data` | no |
 | `ci_model_jobs` | Model-backed CI jobs | `repo_root`, `ghsync_root` | `ci_model_jobs` | no |
 | `org_security_policy` | Owner's shared security policy | `repo_root` | `org_security_policy` | yes |
+| `github_secret_scanning` | GitHub secret scanning | `repo_root` | `github_secret_scanning` | yes |
 | `contributor_files` | Contributor files | `repo_root`, `archetype`, `org_security_policy` | `contributor_files` | no |
-| `secrets_guard` | Secrets guard | `repo_root`, `scope`, `ghsync_root` | `secrets_guard` | no |
+| `secrets_guard` | Secrets guard | `repo_root`, `scope`, `ghsync_root`, `github_secret_scanning` | `secrets_guard` | no |
 | `gap_actions` | Gap actions | `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`, `instruction_placement` | `gap_actions` | no |
 | `agent_consistency` | Cross-agent instruction consistency | `repo_root`, `excludes` | `agent_consistency` | no |
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |

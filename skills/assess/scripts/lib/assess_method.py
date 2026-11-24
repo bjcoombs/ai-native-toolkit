@@ -741,4 +741,8 @@ release, when the two histories together passed the file-size limit.
 #   recorded, not a gate. Not measured (`no_model_jobs`) with no such job, and
 #   (`trigger_unresolved`, `ci_jobs_unread`) when none is ungated but one could not be settled.
 #   It gates no Step.
+# 39 (4.0.0 release): one rule change, without a bump.
+# - secrets-guard level 2 is also met by GitHub push protection, read on the platform pass
+#   (`github_secret_scanning`); secret scanning alone meets level 1 only. Read and off on a
+#   github.com remote with no CI scan, level 2 reads unmet instead of `secret_scanning_not_read`.
 ASSESS_METHOD_VERSION = 39

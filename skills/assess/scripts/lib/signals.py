@@ -155,6 +155,8 @@ from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
 # - a new headless block, `ci_model_jobs` (issue #1242): paths dropped in counts-only output or
 #   hashed under `--hash-paths`, job names dropped, signs, triggers, gates and states kept as
 #   tokens.
+# 4 (4.0.0 release): one change, without a bump.
+# - a new network block, `github_secret_scanning` (platform pass only), three booleans.
 SIGNALS_SCHEMA_VERSION = 4
 
 # Run-context blocks ``assess_core`` assembles through its own table entries in
@@ -254,8 +256,11 @@ FULL_RUN_ONLY_REASONS: frozenset[str] = frozenset(
 # ``review_automation`` and ``ci_checks`` are offline too, but read the private network
 # spec ``gitlab_merged_ci`` (lib/hosting/gitlab_ci_lint.py, #796): GitLab's merged CI
 # configuration where an include did not resolve offline.
+# ``secrets_guard`` (lib/secrets_guard.py, #1173) is offline too, but reads
+# ``github_secret_scanning``, so the pass rebuilds it from the read setting.
 PLATFORM_SCANS: tuple[str, ...] = ("review_reality", "delivery", "review_evidence",
-                                   "review_automation", "ci_checks", "org_security_policy")
+                                   "review_automation", "ci_checks", "org_security_policy",
+                                   "github_secret_scanning", "secrets_guard")
 
 # The PLATFORM_SCANS blocks that exist only on the platform (#779): without
 # ``--platform`` the document leaves them out (absent, never a ``network``

@@ -103,6 +103,7 @@ fragments = [
   "skill_personal_data",
   "ci_model_jobs",
   "org_security_policy",
+  "github_secret_scanning",
   "contributor_files",
   "secrets_guard",
   "gap_actions",
