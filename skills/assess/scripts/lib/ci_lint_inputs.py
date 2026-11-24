@@ -30,23 +30,33 @@ Each step comes back in one of two index sets of its ``uses:`` line:
   unsure step is false either way, and since it is not a lint line it reads
   ``no_lint_command``, not ``not_enforced``.
 
+A deciding input whose only expression is one ``${{ matrix.<key> }}`` (``args: ${{ matrix.a }}``,
+``args: check --select ${{ matrix.rule }}``) is read once per value of that axis
+of the job's literal ``strategy.matrix`` (``_axis_values``: a flow or block list of scalars,
+plus the values ``include`` entries set; an ``exclude`` that names the key, a non-literal
+matrix or a key that is no axis is not read). Each leg is read as above: any leg that lints
+keeps the credit, every leg install only reads install only, and anything else is unsure.
+
 A step with no deciding input keeps the #782 credit. A ``with:`` this module cannot read
 keeps it too, as the issue asks: a merge key (``<<: *defaults``) or quoted key that may set
 the input, an alias value, or a flow mapping that is not plain ``key: value`` items
 (``with: {args: --version}`` and ``{src: "./src"}`` are read).
 The structure comes from ``lib.ci_masking``'s indentation model, run on the final workflow
 text ``lib.ci_checks`` tallies, so indexes match. Inward-only imports: ``lib.check_command``,
-``lib.ci_lines`` and ``lib.ci_masking``. Tests: ``tests/test_ci_lint_inputs.py``.
+``lib.ci_lines``, ``lib.ci_masking`` and ``lib.ci_matrix`` (``scalar``). Tests: ``tests/test_ci_lint_inputs.py``.
 """
 from __future__ import annotations
 
 import re
 import shlex
+from collections.abc import Callable
+from functools import partial
 from typing import NamedTuple
 
 from lib.check_command import is_info_invocation
 from lib.ci_lines import lint_action
 from lib.ci_masking import IndentTree, parse_lines
+from lib.ci_matrix import scalar
 
 _RUFF_ACTIONS = frozenset({"astral-sh/ruff-action", "chartboost/ruff-action"})
 _GOLANGCI = "golangci/golangci-lint-action"
@@ -57,6 +67,7 @@ _RUFF_INFO_COMMANDS = frozenset({"version", "help"})
 _USES_VALUE = re.compile(r"^([\w.-]+/[\w.-]+)(?:/[^@\s]*)?@(\S+)$")
 _TAG = re.compile(r"^v(\d+)(?:\.\d+){0,2}$")
 _FLOW_ITEM = re.compile(r"^\s*([\w.-]+)\s*:\s*(.*?)\s*$")
+_MATRIX_REF = re.compile(r"\$\{\{\s*matrix\.([\w-]+)\s*\}\}")
 
 
 class LintInputs(NamedTuple):
@@ -160,6 +171,73 @@ def _golangci_reading(ref: str, install_only: Value) -> str:
     return "install_only"
 
 
+def _list_values(tree: IndentTree, key: int) -> list[str] | None:
+    """A matrix axis's scalars: a one-line flow list without quoted commas, or a block list."""
+    value = tree.lines[key].value.strip()
+    if value:
+        if not (value.startswith("[") and value.endswith("]")):
+            return None
+        items = [scalar(v) for v in value[1:-1].split(",") if v.strip()]
+    else:
+        lines = tree.children(key)
+        if not lines or any(tree.lines[k].key or not tree.lines[k].dash for k in lines):
+            return None
+        items = [scalar(tree.lines[k].value) for k in lines]
+    return None if not items or any(v is None for v in items) else [v for v in items if v is not None]
+
+
+def _axis_values(tree: IndentTree, uses: int, name: str) -> list[str] | None:
+    """The values ``${{ matrix.<name> }}`` takes in the job holding line ``uses``, or None."""
+    job = next((a for a in tree.ancestors(uses) if (p := tree.parent[tree.mapping_of[a]]) is not None
+                and tree.lines[p].key == "jobs" and tree.lines[p].level == 0), None)
+    strategy = next((k for k in tree.children(job) if tree.lines[k].key == "strategy"), None) \
+        if job is not None else None
+    matrix = next((k for k in tree.children(strategy) if tree.lines[k].key == "matrix"), None) \
+        if strategy is not None else None
+    if matrix is None or tree.lines[matrix].value:
+        return None
+    values: list[str] | None = None
+    included: list[str] = []
+    for k in tree.children(matrix):
+        key = tree.lines[k].key
+        if key in ("include", "exclude"):
+            if tree.lines[k].value:
+                return None
+            for item in tree.items(k):
+                entry: dict[str, str] = {}
+                for j in item:
+                    leg = scalar(tree.lines[j].value)
+                    if not tree.lines[j].key or leg is None or tree.children(j):
+                        return None
+                    entry[tree.lines[j].key] = leg
+                if name in entry and key == "exclude":
+                    return None   # an exclude may drop this axis's legs
+                if name in entry:
+                    included.append(entry[name])
+        elif key == name:
+            values = _list_values(tree, k)
+            if values is None:
+                return None
+    return None if values is None else values + included
+
+
+def _matrix_reading(tree: IndentTree, uses: int, value: Value, read: Callable[[Value], str]) -> str:
+    """``read`` once per matrix value when ``value`` is one ``${{ matrix.<key> }}`` expression."""
+    reading = read(value)
+    if reading != "unsure" or not isinstance(value, str):
+        return reading
+    keys = set(_MATRIX_REF.findall(value))
+    if len(keys) != 1 or "${{" in _MATRIX_REF.sub("", value):
+        return reading
+    legs = _axis_values(tree, uses, keys.pop())
+    if not legs:
+        return reading
+    readings = {read(_MATRIX_REF.sub(leg, value)) for leg in legs}
+    if "lint" in readings:
+        return "lint"
+    return "install_only" if readings == {"install_only"} else "unsure"
+
+
 def read_lint_inputs(text: str) -> LintInputs:
     """Sort the known lint action steps of one workflow file (module docstring)."""
     raw = text.splitlines()
@@ -178,8 +256,9 @@ def read_lint_inputs(text: str) -> LintInputs:
         step = tree.siblings[tree.mapping_of[i]]
         with_line = next((k for k in step if tree.lines[k].key == "with"), None)
         inputs = {} if with_line is None else _with_inputs(tree, raw, with_line)
-        reading = (_ruff_reading(_input(inputs, "args")) if name in _RUFF_ACTIONS
-                   else _golangci_reading(ref, _input(inputs, "install-only")))
+        reading = (_matrix_reading(tree, i, _input(inputs, "args"), _ruff_reading) if name in _RUFF_ACTIONS
+                   else _matrix_reading(tree, i, _input(inputs, "install-only"),
+                                        partial(_golangci_reading, ref)))
         if reading == "install_only":
             install_only.add(i)
         elif reading == "unsure":

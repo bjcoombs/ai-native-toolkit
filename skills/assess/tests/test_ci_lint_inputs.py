@@ -170,3 +170,59 @@ def test_layer_5_and_the_configured_reading_do_not_move(tmp_path: Path) -> None:
         block = scan_ci_checks(root)
         assert (block["test_or_lint_configured"], block["basis"]) == (False, "no_check_command")
         assert (block["enforced_check_runs"], block["enforced_basis"]) == (False, "no_check_command")
+
+
+def _matrix_step(matrix: str, uses: str, with_block: str) -> str:
+    return (f"on: [pull_request]\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    strategy:\n"
+            f"      matrix:\n{matrix}    steps:\n      - uses: {uses}\n{with_block}")
+
+
+_MATRIX_USES = 8   # the uses: line in _matrix_step with a one-line matrix
+
+
+@pytest.mark.parametrize(("matrix", "uses", "with_block", "expected"), [
+    ("        a: [check]\n", "astral-sh/ruff-action@v3", _with(args="${{ matrix.a }}"), "lint"),
+    ("        a: [check, --version]\n", "astral-sh/ruff-action@v3", _with(args="${{ matrix.a }}"), "lint"),
+    ("        a: [--version, '-V']\n", "astral-sh/ruff-action@v3", _with(args="${{ matrix.a }}"),
+     "install_only"),
+    ("        a: [true, false]\n", "golangci/golangci-lint-action@v9",
+     _with(**{"install-only": "${{ matrix.a }}"}), "lint"),
+    ("        a: [true]\n", "golangci/golangci-lint-action@v9",
+     _with(**{"install-only": "${{ matrix.a }}"}), "install_only"),
+    ("        r: [I, E]\n", "astral-sh/ruff-action@v3", _with(args='"check --select ${{ matrix.r }}"'), "lint"),
+    ("        a: [--version, '']\n", "astral-sh/ruff-action@v3", _with(args="${{ matrix.a }}"), "unsure"),
+    ("        b: [check]\n", "astral-sh/ruff-action@v3", _with(args="${{ matrix.a }}"), "unsure"),
+    ("        a: ${{ fromJSON(needs.s.outputs.m) }}\n", "astral-sh/ruff-action@v3",
+     _with(args="${{ matrix.a }}"), "unsure"),
+    ("        a: [check]\n", "astral-sh/ruff-action@v3", _with(args="${{ matrix.a }} ${{ env.X }}"), "unsure"),
+])
+def test_a_matrix_input_is_read_per_leg(matrix: str, uses: str, with_block: str, expected: str) -> None:
+    got = read_lint_inputs(_matrix_step(matrix, uses, with_block))
+    reading = ("install_only" if _MATRIX_USES in got.install_only
+               else "unsure" if _MATRIX_USES in got.unsure else "lint")
+    assert reading == expected
+
+
+@pytest.mark.parametrize(("matrix", "expected"), [
+    ("        a:\n          - --version\n          - check\n", "lint"),
+    ("        a:\n          - --version\n        include:\n          - a: check\n", "lint"),
+    ("        a: [--version]\n        include:\n          - a: --help\n", "install_only"),
+    ("        a: [--version, check]\n        exclude:\n          - a: check\n", "unsure"),
+    ("        a: [--version]\n        include: ${{ fromJSON(x) }}\n", "unsure"),
+])
+def test_a_block_matrix_and_include_exclude(matrix: str, expected: str) -> None:
+    text = _matrix_step(matrix, "astral-sh/ruff-action@v3", _with(args="${{ matrix.a }}"))
+    got = read_lint_inputs(text)
+    uses = next(i for i, line in enumerate(text.splitlines()) if "ruff-action" in line)
+    reading = "install_only" if uses in got.install_only else "unsure" if uses in got.unsure else "lint"
+    assert reading == expected
+
+
+@pytest.mark.parametrize(("matrix", "expected"), [
+    ("        a: [check]\n", (True, "lint_command")),
+    ("        a: [--version]\n", (False, "no_lint_command")),
+    ("        a: ${{ fromJSON(x) }}\n", (None, "check_target")),
+])
+def test_scan_reads_a_matrix_input(tmp_path: Path, matrix: str, expected: tuple[bool | None, str]) -> None:
+    text = _matrix_step(matrix, "astral-sh/ruff-action@v3", _with(args="${{ matrix.a }}"))
+    assert _scan(tmp_path, text) == expected
