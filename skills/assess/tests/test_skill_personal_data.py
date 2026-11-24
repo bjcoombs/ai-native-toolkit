@@ -48,6 +48,7 @@ def _state(block: Any) -> tuple[str, str | None]:
     ("C:\\Users\\" + "John Smith\\Documents", ["home_path"]),  # a space, as the grader allows
     ("C:\\Users\\" + "Jos\u00e9\\x", ["home_path"]),             # an accented letter
     ("Reach the box at 10.20." + "30.40 first.", ["ip_address"]),
+    ("The box is at 10.20." + "30.40.", ["ip_address"]),  # an address ending a sentence
     ("Run ssh deploy@" + "build-01 to deploy.", ["ssh_or_host"]),
     ("token = " + "ghp" + "_abc123def456", ["credential"]),
     ("token: ${{ secrets.X }} and password = " + "hunter" + "2abc", ["credential"]),  # one literal is enough
@@ -78,6 +79,7 @@ def test_each_kind_is_detected(text: str, kinds: list[str]) -> None:
     "Released 2024-01-01 +0000 2024-01-02",
     "Use logo@2x.png and icon@3x.webp for retina screens.",
     "It saves +1000000000 tokens.",
+    "Run ssh git@github.com to test auth.",
     "Weights: +0.5 - 0.25 - 0.125",
 ])
 def test_placeholders_and_lookalikes_are_not_findings(text: str) -> None:

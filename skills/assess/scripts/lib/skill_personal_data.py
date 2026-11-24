@@ -83,8 +83,12 @@ _HOME = re.compile(r"(?:/Users/|/home/)([A-Za-z0-9][A-Za-z0-9._-]*)/|[A-Za-z]:\\
 _PLACEHOLDER_HOME = frozenset({"user", "username", "you", "your", "yourname", "name", "me", "shared",
                                "public", "default", "runner", "someone", "example", "jdoe", "alice", "bob"})
 # An IPv4-shaped number that follows a version word is a version, not an address (``v1.2.3.4``,
-# ``version 10.0.19041.1``); the grader's IP check is re-run here without those.
-_IPV4 = re.compile(r"(?<![\w.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?![\w.])")
+# ``version 10.0.19041.1``); the grader's IP check is decided again here without those, and with
+# a lookahead that also takes an address ending a sentence (``at 10.20.30.40.``).
+_IPV4 = re.compile(r"(?<![\w.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\w|\.\d)")
+# An ``ssh git@host`` test of a Git host's auth is no login detail; any other user is.
+_SSH = re.compile(r"\bssh\s+([A-Za-z0-9._-]+)@[A-Za-z0-9._-]+")
+_ROOT_LOGIN = re.compile(r"\broot@[A-Za-z0-9._-]+")
 _VERSION_BEFORE = re.compile(r"(?:\bv|\bversion|\brelease|\bbuild)\s*[:=]?\s*$", re.IGNORECASE)
 # A credential assignment, as the grader reads it, re-checked here: a value that only refers to a
 # secret held elsewhere (``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X``, ``os.environ[...]``) is
@@ -155,10 +159,14 @@ def kinds_in(text: str) -> list[str]:
         found.discard("home_path")
     if "credential" in found and not any(_literal_secret(m.group(1).strip("\"'")) for m in _CREDENTIAL.finditer(text)):
         found.discard("credential")
-    if "ip_address" in found and all(_VERSION_BEFORE.search(text[max(0, m.start() - 12):m.start()])
-                                     for m in _IPV4.finditer(text) if all(int(g) <= 255 for g in m.groups())
-                                     and m.group(1) != "127" and m.group(0) != "0.0.0.0"):
-        found.discard("ip_address")
+    found.discard("ip_address")
+    if any(not _VERSION_BEFORE.search(text[max(0, m.start() - 12):m.start()])
+           for m in _IPV4.finditer(text) if all(int(g) <= 255 for g in m.groups())
+           and m.group(1) != "127" and m.group(0) != "0.0.0.0"):
+        found.add("ip_address")
+    if "ssh_or_host" in found and not _ROOT_LOGIN.search(text) \
+            and all(m.group(1).lower() == "git" for m in _SSH.finditer(text)):
+        found.discard("ssh_or_host")
     if _has_email(text):
         found.add("email")
     if _has_phone(text):
