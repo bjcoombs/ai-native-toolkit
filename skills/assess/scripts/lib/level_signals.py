@@ -22,7 +22,7 @@ one. A maturity model row's ``scope`` picks the namespace:
   names ``layer_grades.instructions_grade`` instead; a typed block, so an
   unknown field under it fails at load.
 - ``org`` paths read one group's settings fragment from ``ghreport``
-  (``skills/ghreport/scripts/ghreport.sh``, "org / group settings"):
+  (``skills/ghreport/scripts/ghreport_settings.sh``, "org / group settings"):
   ``scope``, ``provider``, and ``value`` / ``reason`` under each setting.
 
 ``DEFAULT_LEVELS`` (``skills/assess/levels/default.toml``) is a deterministic
