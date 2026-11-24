@@ -14,7 +14,7 @@ one fact function in ``lib/card_facts.py``; this module only words them.
    - below the first Step of a model whose Step 1 has a gate (#889): ``Not yet at Step 1 of 3.``;
    - a model without Steps: ``This maturity model defines no Steps.``;
 
-2. ``Holding: 3 of 3 gates held at `600cca4` · 9 of 15 catalogue conditions measured, 3 verified.``
+2. ``Holding: 3 of 3 gates held at `600cca4` · 9 of 15 measured catalogue conditions met, 3 verified.``
    At the top Step the gates are the top Step's; below it, the next Step's
    (``2 of 3 Step 4 gates held``). The commit is left out when the run recorded none;
 3. below the top Step only, the blocking gates, which lead every gate line:
@@ -33,12 +33,16 @@ one fact function in ``lib/card_facts.py``; this module only words them.
    ``.assess/actions.json`` by rank (``first_action``; its ``first_step``, in backticks unless
    it already holds some, else its ``action``, and its ``done_when``). With no open action:
    below the top Step, the first blocking gate as a task (``GATE_TASK``), linked to its
-   catalog entry; at the top Step, the next run of ``/assess``.
+   catalog entry; at the top Step, the next run of ``/assess``. The core reads ``actions.json``
+   as it stands when the run starts, the file the previous run's finalize step wrote (or the
+   committed one), because this run's finalize writes its own Top 3 later: the card's Start here
+   is the open action carried into this run, and it can differ from rank 1 of the Top 3 table the
+   same run writes until a run refreshes the card after finalize (#1252, subtask 2c).
 
 A profile or ``--levels`` run leads the card with ``profiles.model_lines`` (``lib/exec_summary.py``
 adds them). ``card_markdown(lines)`` joins the lines into paragraphs with the lead line bold and
-its first "Step" linked to the glossary (``headline.GLOSSARY_URL``, #1102), as are "catalogue
-conditions measured" and "verified" on the Holding line; ``lines`` stay plain text.
+its first "Step" linked to the glossary (``headline.GLOSSARY_URL``, #1102), as are "measured
+catalogue conditions" and "verified" on the Holding line; ``lines`` stay plain text.
 The badge message and the ``log.md`` readiness line (``headline.summary``) read the same
 ``card_facts`` functions.
 Tests: ``tests/test_top_card.py``.
@@ -155,13 +159,15 @@ def _holding(level: Mapping[str, Any], model: MaturityModel, head_sha: str | Non
     at = f" at `{head_sha[:7]}`" if head_sha else ""
     tally = level["tally"]
     return (f"Holding: {held} of {len(gates)} {which} held{at} · {tally['met']} of {tally['measured']} "
-            f"catalogue conditions measured, {verified_count(level['conditions'])} verified.")
+            f"measured catalogue conditions met, {verified_count(level['conditions'])} verified.")
 
 
 def _sibling(gate: str, rollup: Any) -> str | None:
     entries = rollup.get("learn_from") if isinstance(rollup, Mapping) else None
     for entry in entries if isinstance(entries, list) else []:
-        names = entry.get("names") if isinstance(entry, Mapping) else None
+        if not isinstance(entry, Mapping):
+            continue
+        names = entry.get("names")
         if entry.get("gate") == gate and isinstance(names, list) and names and isinstance(names[0], str):
             return names[0]
     return None
@@ -200,7 +206,7 @@ def since_line(since: Any) -> str | None:
     if isinstance(lost, list) and lost:
         parts.append(f"no longer in place: {_gate_words(lost)}")
     for entry in pruned if isinstance(pruned, list) else []:
-        if isinstance(entry, Mapping) and isinstance(entry.get("path"), str):
+        if isinstance(entry, Mapping) and isinstance(entry.get("path"), str) and isinstance(entry.get("saved"), int):
             parts.append(f"pruned always-on text in `{entry['path']}`, saved {entry.get('saved')} always-on lines")
     changed = model_changed_line(since)
     if changed is not None and not isinstance(gained, list):
@@ -247,15 +253,15 @@ def card_lines(level: Any, model: MaturityModel, since: Any, rollup: Any = None,
 
 def card_markdown(lines: Sequence[str], lead_at: int = 0) -> str:
     """The lines as paragraphs: the lead line (index ``lead_at``) bold, its first "Step" linked
-    to the glossary, and "catalogue conditions measured" and "verified" on the Holding line linked
+    to the glossary, and "measured catalogue conditions" and "verified" on the Holding line linked
     to the catalogue coverage and evidence grade entries."""
     out: list[str] = []
     for i, line in enumerate(lines):
         if i == lead_at:
             line = f"**{line.replace('Step', f'[Step]({GLOSSARY_URL}#step)', 1)}**"
         elif line.startswith("Holding: "):
-            line = line.replace(" catalogue conditions measured,",
-                                f" [catalogue conditions measured]({GLOSSARY_URL}#catalogue-coverage),", 1)
+            line = line.replace(" measured catalogue conditions met,",
+                                f" [measured catalogue conditions]({GLOSSARY_URL}#catalogue-coverage) met,", 1)
             line = line.replace(" verified.", f" [verified]({GLOSSARY_URL}#evidence-grade).", 1)
         out.append(line)
     return "\n\n".join(out)

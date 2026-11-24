@@ -4,7 +4,7 @@ _Generated <<normalized>>._
 
 **[Step](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#step) 2 of 4: supervised agent PRs.**
 
-Holding: 1 of 2 Step 3 gates held · 0 of 5 [catalogue conditions measured](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage), 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade).
+Holding: 1 of 2 Step 3 gates held · 0 of 5 [measured catalogue conditions](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage) met, 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade).
 
 Blocks Step 3: CI does not turn red when a check breaks.
 

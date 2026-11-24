@@ -401,7 +401,7 @@ def test_ci2_strip_and_verified_total_match_the_conditions(ci2: Path):
     verified = [c for c in level["conditions"]
                 if c["counted"] and c["state"] == "met" and c["grade"] == "verified"]
     assert head["verified"] == len(verified)
-    assert f"catalogue conditions measured, {len(verified)} verified." in head["summary_lines"][1]
+    assert f"measured catalogue conditions met, {len(verified)} verified." in head["summary_lines"][1]
     assert head["lines"][1].startswith("By tag: ") and head["tags"]
     for cell in head["tags"]:
         assert f"{cell['tag']} {cell['met']} of {cell['measured']}" in head["lines"][1]

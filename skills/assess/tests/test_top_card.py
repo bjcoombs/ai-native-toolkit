@@ -72,7 +72,7 @@ def test_the_top_step_card_holds_the_step_and_counts_advisories() -> None:
     text = "\n".join(lines)
     assert lines[0] == "Holding Step 4 of 4 · 2 advisories, none blocks the Step."
     assert text.count("Holding Step 4 of 4") == 1 and text.count("none blocks the Step") == 1
-    assert lines[1] == "Holding: 3 of 3 gates held at `600cca4` · 3 of 5 catalogue conditions measured, 3 verified."
+    assert lines[1] == "Holding: 3 of 3 gates held at `600cca4` · 3 of 5 measured catalogue conditions met, 3 verified."
     assert lines[2:] == [FIRST_RUN, f"Start here: {ACTION['start']}",
                          "Done when: cd skills/assess && uv run --locked ruff check . passes."]
 
@@ -85,14 +85,14 @@ def test_the_top_step_lead_with_no_or_one_advisory(k: int, tail: str) -> None:
 def test_below_the_top_step_the_blocking_gate_leads_and_names_the_sibling() -> None:
     lines = card_lines(_below(), MODEL, KNOWN, ROLLUP, None, ACTION)  # type: ignore[arg-type]
     assert lines[0] == "Step 3 of 4: unattended agent PRs."
-    assert lines[1] == "Holding: 2 of 3 Step 4 gates held · 2 of 3 catalogue conditions measured, 0 verified."
+    assert lines[1] == "Holding: 2 of 3 Step 4 gates held · 2 of 3 measured catalogue conditions met, 0 verified."
     gate_lines = [line for line in lines if "gate" in line.lower() and not line.startswith("Holding")]
     assert gate_lines[0] == ("Blocks Step 4: no coverage gate is enforced. "
                              "`skills/assess` already does this; copy it.")
     assert "already does this; copy it" in gate_lines[0]
     # no sibling in the roll-up: the line names the gate alone
     assert card_lines(_below(), MODEL, KNOWN)[2] == "Blocks Step 4: no coverage gate is enforced."  # type: ignore[arg-type]
-    other = {"learn_from": [{"unit": "a", "gate": "ci_runs_tests", "holders": 1, "names": ["b"]}]}
+    other = {"learn_from": ["not a mapping", {"unit": "a", "gate": "ci_runs_tests", "holders": 1, "names": ["b"]}]}
     assert "copy it" not in "\n".join(card_lines(_below(), MODEL, KNOWN, other))  # type: ignore[arg-type]
 
 
@@ -122,6 +122,7 @@ def test_the_since_line_follows_the_dark_cockpit_rule() -> None:
         "no longer in place: a coverage gate is enforced."]
     assert since(pruned=[{"path": "CLAUDE.md", "saved": 40}]) == [
         "Since last run: pruned always-on text in `CLAUDE.md`, saved 40 always-on lines."]
+    assert since(pruned=[{"path": "CLAUDE.md"}]) == []  # no measured saving: no credit line
     shas = [{"completed_sha": f"{n}" * 40} for n in range(1, 5)]
     assert since(closed_count=4, closed=shas) == [
         "Since last run: 4 actions closed (`1111111`, `2222222`, `3333333`, ...)."]
@@ -174,7 +175,7 @@ def test_below_step_one_and_a_model_without_steps() -> None:
                                                   "state": "unmet"}]}, [_cond("c.1", "unmet")])
     lines = card_lines(level, model, FIRST)  # type: ignore[arg-type]
     assert lines[:3] == ["Not yet at Step 1 of 1.",
-                         "Holding: 0 of 1 Step 1 gates held · 0 of 1 catalogue conditions measured, 0 verified.",
+                         "Holding: 0 of 1 Step 1 gates held · 0 of 1 measured catalogue conditions met, 0 verified.",
                          "Blocks Step 1: the own gate does not hold yet."]
     flat = {**MODEL, "steps": []}
     assert card_lines(_level(None, None), flat, FIRST)[0] == "This maturity model defines no Steps."  # type: ignore[arg-type]
@@ -185,7 +186,7 @@ def test_the_markdown_bolds_the_lead_and_links_the_glossary_terms_once() -> None
     lines = card_lines(_top(), MODEL, FIRST, None, SHA, ACTION)  # type: ignore[arg-type]
     md = card_markdown(lines)
     assert md.startswith(f"**Holding [Step]({GLOSSARY_URL}#step) 4 of 4 ·")
-    assert f"[catalogue conditions measured]({GLOSSARY_URL}#catalogue-coverage)" in md
+    assert f"[measured catalogue conditions]({GLOSSARY_URL}#catalogue-coverage) met" in md
     assert f"[verified]({GLOSSARY_URL}#evidence-grade)" in md
     assert all("](" not in line for line in lines)
 

@@ -29,7 +29,7 @@ The report opens with the top card (`lib/top_card.py`, https://github.com/bjcoom
 
 ```
 Step 3 of 4: unattended agent PRs.
-Holding: 2 of 3 Step 4 gates held at `600cca4` · 9 of 12 catalogue conditions measured, 2 verified.
+Holding: 2 of 3 Step 4 gates held at `600cca4` · 9 of 12 measured catalogue conditions met, 2 verified.
 Blocks Step 4: no coverage gate is enforced. `skills/assess` already does this; copy it.
 Since last run: 1 action closed.
 Start here: add `fail_under` under `[tool.coverage.report]` in `pyproject.toml`
