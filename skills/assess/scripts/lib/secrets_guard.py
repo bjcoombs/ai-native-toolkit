@@ -19,8 +19,9 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   (``ACTION_SLUGS``: ``gitleaks/gitleaks-action``, ``trufflesecurity/trufflehog``,
   ``GitGuardian/ggshield-action``, ...) or runs a secrets tool as a command (its name, then a
   subcommand, a flag or the end of the line), or that includes GitLab's
-  ``Secret-Detection.gitlab-ci.yml`` template or defines a visible ``secret_detection`` job (a
-  hidden ``.secret_detection`` job is a template GitLab never runs). Comments, whole-line or
+  ``Secret-Detection.gitlab-ci.yml`` template (or its component). A visible ``secret_detection``
+  job counts only as an override of that template, never alone; one that never runs on its own
+  (``when: never`` or ``when: manual`` on every pipeline) switches the template's job off. Comments, whole-line or
   trailing, never count, so neither does a ``gitleaks:allow`` note or a ``.gitleaks.toml`` path.
   A masked scan does not count, since it guards nothing: a line ending ``|| true``, or a GitHub
   step or job with ``continue-on-error: true`` or ``if: false``, a GitLab job with
@@ -93,7 +94,7 @@ _GITLAB_TEMPLATE = re.compile(r"(?:Secret-Detection(?:\.latest)?|Auto-DevOps)\.g
 _HIDING_KINDS = frozenset({"local", "project", "remote", "component", "unknown"})
 # A visible job: a hidden one (``.secret_detection:``) is a template GitLab never runs.
 _GITLAB_JOB = re.compile(r"^secret_detection\s*:", re.MULTILINE)
-_MASKED = re.compile(r"\|\|\s*(?:true|:|exit\s+0)\b")
+_MASKED = re.compile(r"\|\|\s*(?:true\b|:(?!\S)|exit\s+0\b)")
 _COMMENT = re.compile(r"^\s*#")
 # A trailing `` #`` comment outside quotes (``echo "build #1"`` keeps its ``#``).
 _TRAILING_COMMENT = re.compile(r"""^((?:[^'"#]|'[^']*'|"[^"]*"|(?<!\s)#)*?)\s+#.*$""")
@@ -369,7 +370,8 @@ def _in_name_list(lines: list[str], i: int) -> bool:
 
 def _ci_tools(text: str, hooks: frozenset[str] = frozenset(), gitlab: bool = False) -> list[str]:
     """The secrets tools a CI file uses or runs, unmasked; ``secret_detection`` for GitLab's template
-    or visible job. Comments never count, and neither does a masked step or job."""
+    or component (a ``secret_detection`` job only overrides it). Comments never count, and neither
+    does a masked step or job."""
     lines = _code_lines(text)
     masked = _masked_lines(lines, gitlab)
     tools: set[str] = set()

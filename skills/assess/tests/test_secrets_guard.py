@@ -114,6 +114,7 @@ def test_a_ci_scan_meets_level_2_measured(tmp_path: Path, rel: str, text: str, t
 
 @pytest.mark.parametrize(("rel", "text"), [
     (".github/workflows/x.yml", "steps:\n  - run: gitleaks detect || true\n"),       # masked: guards nothing
+    (".github/workflows/x.yml", "steps:\n  - run: gitleaks detect || :\n"),          # masked with the no-op
     (".github/workflows/x.yml", "steps:\n  # - uses: gitleaks/gitleaks-action@v2\n"),  # commented out
     (".github/workflows/x.yml", "steps:\n  - run: echo gitleaks-report.json\n"),       # a file name, not the tool
     (".github/workflows/x.yml", "env:\n  TOKEN: abc # gitleaks:allow\n"),              # an allowlist note
