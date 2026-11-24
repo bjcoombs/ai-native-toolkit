@@ -8,7 +8,7 @@ re-exports it, so `from lib.artifact_schema import ASSESS_METHOD_VERSION` still 
 
 During a version freeze a change to the counter adds a note file under
 `skills/assess/changes/` instead of editing the history comment; the release PR folds the
-notes in with `make fold` (#1011). It moved here from `artifact_schema.py` in the 3.1.0
+notes in with `make fold` (#1011). It moved here from `artifact_schema.py` in the 4.0.0
 release, when the two histories together passed the file-size limit.
 """
 
@@ -357,7 +357,7 @@ release, when the two histories together passed the file-size limit.
 #   null to true or false; one that never closes (invalid YAML) reads `unknown`, where
 #   it read its first line's events, so enforced_check_runs can move to null. Such an
 #   unclosed `on:` is never credited by review_automation (`ci_triggers.unclosed_on`).
-# 39 (3.1.0 release): 53 rule changes since 38.
+# 39 (4.0.0 release): 53 rule changes since 38.
 # - issue #799, a CI command continued with a trailing backslash is joined onto its first
 #   line before it is read, so mvn ${MVN_ARGS} -T8 \ ... verify reads verify and credits
 #   test_or_lint_configured and enforced_check_runs (Layer 5 level 1), where it read
@@ -720,7 +720,7 @@ release, when the two histories together passed the file-size limit.
 #   meanings and next steps, and scan summaries are split into sentences of 25 words or fewer,
 #   and the plain-English lint now runs over every manifest prose field except the whys. The
 #   whys are unchanged; shorter versions await the maintainer's approval.
-# 39 (3.1.0 release): two rule changes, without a bump.
+# 39 (4.0.0 release): two rule changes, without a bump.
 # - issue #922, three hollow cases read unmet. A Makefile target with no prerequisite whose
 #   recipe runs only true, :, exit 0, or echo or printf lines with nothing chained after
 #   them (no ;, &&, ||, | or >) resolves unknown ("runs nothing"), so a named make test with

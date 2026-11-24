@@ -168,7 +168,7 @@ from lib.signal_grades import DEFAULT_LEVELS, EMPTY_DENOMINATORS, INPUT_GRADES, 
 #   unchanged.
 # - each condition may carry `why`, the check manifest whys of its criteria joined by one
 #   space (#939); absent for a criterion with no manifest entry. Additive: no key moves.
-# 4 (3.1.0 release): three changes since 3.
+# 4 (4.0.0 release): three changes since 3.
 # - each result gains `tags` (#940): one row per truth tag, every tag of `TRUTH_TAGS` in that
 #   order, with `conditions`, `countable` (by grade, not a hazard), `set_aside` (countable and
 #   excluded by the owner or declined), `met` and `measured` (the headline strip cell's, one

@@ -116,7 +116,7 @@ from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
 #   nested_only, issue #821). instruction_file_present, documented as never null before,
 #   now reads null (with instruction_presence) when there is no root file and the
 #   nested_instructions scan did not run.
-# 4 (3.1.0 release): 12 changes since 3.
+# 4 (4.0.0 release): 12 changes since 3.
 # - observability.rung can read differently on unchanged code (issue #823): standard-library
 #   loggers in production source and the Rust `tracing` / `log` crates now count as
 #   instrumented, manifest names match whole, and test and fixture paths no longer credit
@@ -151,7 +151,7 @@ from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
 #   `summary.permissions_encoded` may be null under the option.
 # - a new headless block, `secrets_guard` (issue #1173): file paths dropped in counts-only
 #   output or hashed under `--hash-paths`, tool and source tokens kept.
-# 4 (3.1.0 release): one change, without a bump.
+# 4 (4.0.0 release): one change, without a bump.
 # - a new headless block, `ci_model_jobs` (issue #1242): paths dropped in counts-only output or
 #   hashed under `--hash-paths`, job names dropped, signs, triggers, gates and states kept as
 #   tokens.

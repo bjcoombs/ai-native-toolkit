@@ -150,7 +150,7 @@ from lib.levels import Evaluation, MaturityModel, Row, StepDef, evaluate_row, fl
 # - repositories gain ``gate_blockers`` (#945): every Step gate that does not hold, as the level
 #   result's blocker for it, so a Step target above the next Step reads its missing gates.
 #   Additive.
-# 5 (3.1.0 release): 14 changes since 4.
+# 5 (4.0.0 release): 14 changes since 4.
 # - repositories gain ``unit_rows`` (#866): under ``fleet --monorepo-units``, one row per
 #   monorepo unit with its ``step``, ``next_step``, ``next_blocker`` (the first gate of that Step
 #   that does not hold) and ``tags``; ``key`` is the unit's folder in ``--full``, its salted hash

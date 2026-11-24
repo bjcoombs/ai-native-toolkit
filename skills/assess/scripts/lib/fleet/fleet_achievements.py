@@ -160,7 +160,7 @@ from lib.next_step_guidance import guidance
 #   PR bumps ``ACHIEVEMENTS_VERSION`` (frozen during run 4). ``target_hit`` compares with the
 #   latest earlier run measuring the same repositories, so a failed scan before the crossing
 #   never loses the hit.
-# 6 (3.1.0 release): two changes since 5.
+# 6 (4.0.0 release): two changes since 5.
 # - `recount.from_version` is `string | null` (issue #860): null when the re-scored entry
 #   stamped no maturity-model version, where it read the string `"none"` before; the
 #   Recount line then has no "(was ...)" clause.

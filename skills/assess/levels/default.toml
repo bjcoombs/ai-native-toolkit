@@ -329,7 +329,7 @@
 #   dependency manifest, where it read met (#927, the empty-set rule). The
 #   criteria text is unchanged; the Layer 5 comment names the rule.
 #
-# default-2026.11.24 (3.1.0 release): ten changes since default-2026.11.23.
+# default-2026.11.24 (4.0.0 release): ten changes since default-2026.11.23.
 # - layer-4-architecture.2 reads stats_summary.loc_by_class.source.p95, the 95th-percentile
 #   file size of production source only, where it read stats_summary.loc.p95 over every scored
 #   file (#820). Test, fixture, example, vendored and generated paths (lib/path_classes.py) are
@@ -364,7 +364,7 @@
 # - a `secrets-guard` row (issue #1173): level 1 reads `secrets_guard.configured`, level 2
 #   `secrets_guard.enforcement.present`, both `eq true`, tagged `governance`.
 #
-# default-2026.11.24 (3.1.0 release): two changes, without a bump.
+# default-2026.11.24 (4.0.0 release): two changes, without a bump.
 # - the Layer 0, Layer 4 and Layer 8 comments name the #922 rules; the criteria text is
 #   unchanged. layer-0-instructions.2 reads unmet on a named Make target that runs
 #   nothing, layer-4-architecture.1 on an architecture doc naming one module path, and

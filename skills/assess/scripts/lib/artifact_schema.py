@@ -9,7 +9,7 @@ writes (run-context.json, the badge, the wiki pages); the version history is in 
 module comment. `complexity-treemap.py` carries a copy that
 `tests/test_complexity_treemap_schema_versions.py` holds equal to it.
 It re-exports `ASSESS_METHOD_VERSION`, the finding method version, from
-`lib/assess_method.py`, which holds that counter and its history (moved there in the 3.1.0
+`lib/assess_method.py`, which holds that counter and its history (moved there in the 4.0.0
 release, when the two histories together passed the file-size limit).
 
 During a version freeze a change to this counter, or to another counter
@@ -371,7 +371,7 @@ from lib.assess_method import ASSESS_METHOD_VERSION as ASSESS_METHOD_VERSION
 #   pnpm-workspace.yaml, go.work or settings.gradle(.kts)) is skipped with it, and
 #   units.unit_count stays known where it read null with `unreadable_manifest`.
 #   Additive.
-# 1.44.0 (3.1.0 release): 36 changes since 1.43.0.
+# 1.44.0 (4.0.0 release): 36 changes since 1.43.0.
 # - ci_checks.basis gains check_target (issue #799): test_or_lint_configured reads null
 #   when the only check-shaped CI line is a Maven run with its tests skipped
 #   (mvn -DskipTests verify), whose verify phase may still run a lint plugin.
@@ -524,7 +524,7 @@ from lib.assess_method import ASSESS_METHOD_VERSION as ASSESS_METHOD_VERSION
 #   map (issue #1184): one record per shipped profile, keyed by its name, each
 #   `{levels_version, tags, baseline}`. The top-level record stays the default model's and may
 #   be absent when only profiles have run. Version-1 and version-2 files still read.
-# 1.44.0 (3.1.0 release): one change, without a bump.
+# 1.44.0 (4.0.0 release): one change, without a bump.
 # - run-context.json gains `ci_model_jobs` (issue #1242): each CI job that calls a model API
 #   (`path`, `line`, `job`, `platform`, `signs`, `triggers`, `gates`, `state` gated | ungated |
 #   unknown, `reason` when unknown, `cancel_superseded`), with `files_read`, `model_jobs`,
