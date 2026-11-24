@@ -226,9 +226,10 @@ class DataRepo(TypedDict):
 # The stamp fields RunDetails leaves out: the stamp's own envelope version, the
 # --fleet-config section counts (the sha256 is the comparability key) and the --discovered
 # coverage counts (#745; run.json and report.md carry them) and the collector revisions (#952;
-# run.json carries them, the rules hash is copied). A test fails when FleetStamp
+# run.json carries them, the rules hash is copied) and the practice packs (#1273; run.json
+# carries them until /fleet reports per pack, #1276). A test fails when FleetStamp
 # gains a field that is neither copied below nor listed here.
-RUN_EXCLUDED = frozenset({"fleet_stamp_version", "fleet_config_entries", "coverage", "collectors"})
+RUN_EXCLUDED = frozenset({"fleet_stamp_version", "fleet_config_entries", "coverage", "collectors", "packs"})
 
 
 class RunDetails(TypedDict):

@@ -64,7 +64,8 @@ runs in either, ``not_ordinary`` when it runs in neither and ``unknown`` otherwi
 - A job limited to some branches inside a workflow limited to some branches is
   ``unknown``: the two limits are not compared.
 
-Known limits: ``extends:`` across ``include:`` reads ``unknown``; rules and ``when``
+Known limits: ``extends:`` across ``include:`` reads ``unknown`` here (``ci_checks`` reads a
+merged job through ``lib.ci_merged_view``, #1180); rules and ``when``
 inherited through ``default:`` or a YAML anchor are not read; ``workflow: rules:`` is read only
 in the file that holds it, not across ``include:``; hidden
 jobs (``.name:``) are read like any job; GitHub branch and path filters and

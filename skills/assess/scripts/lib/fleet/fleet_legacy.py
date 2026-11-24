@@ -64,7 +64,7 @@ def upgrade(data: dict[str, Any]) -> dict[str, Any]:
 # Stamp key -> the value a stamp written before the key existed means. The #952 method keys
 # read as None: unrecorded, which lib/fleet/fleet_method.py never reads as the same rules.
 STAMP_DEFAULTS: Mapping[str, Any] = {"platform": False, "managed_settings": False,
-                                     "rules_sha256": None, "collectors": None}
+                                     "rules_sha256": None, "collectors": None, "packs": []}
 
 
 def stamp_value(stamp: Mapping[str, Any], key: str) -> Any:

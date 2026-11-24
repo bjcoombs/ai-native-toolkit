@@ -79,6 +79,8 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 - `doc_staleness.association.methods`
 - `instruction_files.{}.subscores`
 - `nested_instructions.files.subscores`
+- `pack`
+- `pack.*`
 - `prior_level.models`
 - `prior_tool_versions`
 - `promissory_markers.families`
@@ -906,6 +908,14 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `guardrails.gates.stated_in` | path (hashed when hashing is on) |
 | `guardrails.gates.snippet` | dropped |
 | `guardrails.not_read` | dropped |
+
+## pack_checks
+
+| Field | Kept as |
+|---|---|
+| `packs.name` | token |
+| `packs.version` | token |
+| `packs.sha256` | external id (hashed when hashing is on) |
 
 ## level
 
