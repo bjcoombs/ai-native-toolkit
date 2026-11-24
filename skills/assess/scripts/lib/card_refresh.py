@@ -27,7 +27,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from lib.level_result_types import Headline
 from lib.top_card import CardAction, read_first_action, start_lines
@@ -54,8 +54,8 @@ def refreshed(block: Any, level: Any, action: CardAction | None) -> Headline | N
     if new_lines == lines:
         return None
     new_markdown = "\n\n".join(_swap(markdown.split("\n\n"), start, done))
-    return {**block, "summary_lines": new_lines, "call_to_action": start,  # type: ignore[return-value]
-            "summary_markdown": new_markdown}
+    return cast(Headline, {**block, "summary_lines": new_lines, "call_to_action": start,
+                           "summary_markdown": new_markdown})
 
 
 def _paragraph_swap(text: str, old: str, new: str) -> str | None:
