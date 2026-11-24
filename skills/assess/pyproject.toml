@@ -85,9 +85,11 @@ select = ["E4", "E7", "E9", "F", "C901"]
 # code by design. Ruff already exempts a bare sys.path call; these scripts
 # also set sys.dont_write_bytecode, or check the PEP 723 dependencies before
 # the first third-party import (#752), which E402 does not exempt. One ignore
-# here in place of an inline noqa on every import (#1206). Only the top level
-# of scripts/: lib/ modules import normally.
-"scripts/*.py" = ["E402"]
+# here in place of an inline noqa on every import (#1206). The five scripts are
+# named because a ruff glob's `*` also matches `/`: `scripts/*.py` would switch
+# E402 off for all of lib/. A new script joins the list by decision, not by
+# default.
+"scripts/{assess_fix,assess_signals,identity_candidates,complexity-treemap,doc-graph-svg}.py" = ["E402"]
 
 [tool.ruff.lint.mccabe]
 # Per-function cyclomatic complexity. 15 fences current reality: every function
