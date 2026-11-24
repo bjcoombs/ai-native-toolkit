@@ -98,6 +98,16 @@ def test_one_numbered_page_beside_a_readme_stays_an_orphan() -> None:
     assert classify_working_notes_trees(_fragment_signals("01.setup.md")) == []
 
 
+def test_zero_padded_chapter_pages_beside_a_readme_stay_orphans(tmp_path: Path) -> None:
+    _write(tmp_path, "README.md", "# Home\n[The book](book/README.md)\n")
+    _write(tmp_path, "book/README.md", "# The book\n")
+    _write(tmp_path, "book/01.intro.md", "# Intro\n")
+    _write(tmp_path, "book/02.setup.md", "# Setup\n")
+    d = _graph(tmp_path)
+    assert d["excluded_working_notes_trees"] == []
+    assert d["orphans"] == ["book/01.intro.md", "book/02.setup.md"]
+
+
 def test_fragment_a_base_hub_selects_stays_counted() -> None:
     signals = _fragment_signals("1.feature.md", "2.bugfix.md", "3.misc.md")
     signals["changes/3.misc.md"]["graph_in_degree"] = 1  # a `.base` view selects it

@@ -56,7 +56,7 @@ reason = "raised by #468: mypy strict type annotations; lowered to 1517 after #5
 
 [ceilings."skills/assess/scripts/lib/docs/doc_graph.py"]
 lines = 1066
-reason = "raised by #468: mypy strict type annotations; +3 for the run_context_types import (disallow_any_generics ratchet)"
+reason = "raised by #468: mypy strict type annotations; +3 for the run_context_types import (disallow_any_generics ratchet); lowered to 1066 by #1282: missing_xrefs moved to doc_links.py"
 
 [ceilings."skills/assess/scripts/lib/keyhole/keyhole_signals.py"]
 lines = 1556

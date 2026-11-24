@@ -236,9 +236,11 @@ _SEQUENCE_RE = re.compile(r"^([a-z]+(?:[-_ ][a-z]+)*)[-_ ]\d+$")
 # `+<slug>.<kind>.md`, an orphan fragment, with an optional `.<n>` counter) in a
 # directory with a README that explains them. Each is written unlinked on purpose
 # and deleted when the release folds it, so an orphan fragment is a working note.
+# The issue number never has a leading zero: towncrier writes none, while chapter
+# series (`01.intro.md`) usually pad, and those pages are real orphans.
 FRAGMENT_TREE_MIN_FILES = 2  # a series, not one numbered page
 _FRAGMENT_RE = re.compile(
-    r"^(?:\d+|\+[\w-]+)\.[a-z][a-z0-9_-]*(?:\.\d+)?\.(?:md|mdx|markdown)$", re.IGNORECASE,
+    r"^(?:[1-9]\d*|\+[\w-]+)\.[a-z][a-z0-9_-]*(?:\.\d+)?\.(?:md|mdx|markdown)$", re.IGNORECASE,
 )
 
 
