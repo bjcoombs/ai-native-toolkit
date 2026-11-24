@@ -94,7 +94,11 @@ _GITLAB_TEMPLATE = re.compile(r"(?:Secret-Detection(?:\.latest)?|Auto-DevOps)\.g
 _HIDING_KINDS = frozenset({"local", "project", "remote", "component", "unknown"})
 # A visible job: a hidden one (``.secret_detection:``) is a template GitLab never runs.
 _GITLAB_JOB = re.compile(r"^secret_detection\s*:", re.MULTILINE)
-_MASKED = re.compile(r"\|\|\s*(?:true\b|:(?!\S)|exit\s+0\b)")
+# A command whose failure is swallowed: an ``||`` whose right side is not a non-zero exit or ``false``
+# (``|| true``, ``|| :``, ``|| echo leaks found``), or a pipe (``| tee out.txt``: without
+# ``pipefail``, the default in GitLab and in a GitHub step with no ``shell: bash``, the last
+# command's status wins). A pipe under ``set -o pipefail`` reads masked too: listed as a follow-up.
+_MASKED = re.compile(r"\|\|(?!\s*(?:exit\s+[1-9]|false\b))|(?<!\|)\|(?![|])")
 _COMMENT = re.compile(r"^\s*#")
 # A trailing `` #`` comment outside quotes (``echo "build #1"`` keeps its ``#``).
 _TRAILING_COMMENT = re.compile(r"""^((?:[^'"#]|'[^']*'|"[^"]*"|(?<!\s)#)*?)\s+#.*$""")

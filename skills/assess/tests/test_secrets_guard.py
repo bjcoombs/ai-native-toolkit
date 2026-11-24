@@ -90,6 +90,7 @@ def test_a_gitlab_repository_without_a_ci_scan_reads_level_2_unmet(tmp_path: Pat
     (".github/workflows/scan.yml",
      "steps:\n  - run: detect-secrets-hook --baseline .secrets.baseline $(git ls-files)\n", ["detect-secrets"]),
     (".github/workflows/scan.yml", "steps:\n  - run: echo \"build #1\" && gitleaks detect\n", ["gitleaks"]),
+    (".github/workflows/scan.yml", "steps:\n  - run: gitleaks detect || exit 1\n", ["gitleaks"]),
     (".github/workflows/scan.yml", "steps:\n  - name: scan\n    run: |\n      gitleaks detect --source .\n",
      ["gitleaks"]),
     (".github/workflows/scan.yml", "steps:\n  - run: >\n      trufflehog git file://. --fail\n", ["trufflehog"]),
@@ -115,6 +116,8 @@ def test_a_ci_scan_meets_level_2_measured(tmp_path: Path, rel: str, text: str, t
 @pytest.mark.parametrize(("rel", "text"), [
     (".github/workflows/x.yml", "steps:\n  - run: gitleaks detect || true\n"),       # masked: guards nothing
     (".github/workflows/x.yml", "steps:\n  - run: gitleaks detect || :\n"),          # masked with the no-op
+    (".github/workflows/x.yml", "steps:\n  - run: gitleaks detect || echo leaks found\n"),
+    (".gitlab-ci.yml", "scan:\n  script:\n    - gitleaks detect | tee out.txt\n"),  # no pipefail
     (".github/workflows/x.yml", "steps:\n  # - uses: gitleaks/gitleaks-action@v2\n"),  # commented out
     (".github/workflows/x.yml", "steps:\n  - run: echo gitleaks-report.json\n"),       # a file name, not the tool
     (".github/workflows/x.yml", "env:\n  TOKEN: abc # gitleaks:allow\n"),              # an allowlist note
