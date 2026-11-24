@@ -241,6 +241,13 @@
 #   named (tested_elsewhere) but do not count, since they do not ship with the skill. With no
 #   skill holding a script the row is unknown (no_skill_scripts), never met. Read per skill
 #   unit only (unit_kinds = ["skill"]); it gates no Step. Graded measured.
+# - Personal data in skill text reads skill_personal_data.files_with_personal_data
+#   (lib/skill_personal_data.py, #1045): no SKILL.md, agent definition or skill references/
+#   file holds a detected kind: email, phone, home path, IP address, SSH login, credential or
+#   key. Precision first, so met means none of these kinds was found, not that the text holds
+#   no personal data of any kind; personal names are not detected. A finding names the file
+#   and the kind, never the data. With no skill or agent file the row is unknown
+#   (no_skill_files), never met. Read per skill unit only; it gates no Step. Graded measured.
 # - Contributor files reads contributor_files.guide.present and policy.present
 #   (lib/contributor_files.py, #1045): a CONTRIBUTING guide and a SECURITY policy (or a link
 #   to GitHub private vulnerability reporting) at the root, in .github/ or in docs/, or the
@@ -531,6 +538,17 @@ aggregation = "min"
   level = 1
   truth = ["behaviour"]
   criteria = [{ signal = "skill_script_tests.skills_untested", op = "eq", value = 0 }]
+
+[[rows]]
+id = "skill-personal-data"
+title = "Personal data in skill text"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["governance"]
+  criteria = [{ signal = "skill_personal_data.files_with_personal_data", op = "eq", value = 0 }]
 
 [[rows]]
 id = "contributor-files"
