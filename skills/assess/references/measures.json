@@ -645,7 +645,7 @@
               "eq_signal": null,
               "text": "CI runs a coverage gate of at least 50 percent: is true",
               "title": "CI runs a coverage gate of at least 50 percent",
-              "fix": "Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage, and run the coverage check in a CI step on pull requests (pytest --cov, not plain pytest), without || true or continue-on-error, so CI holds the line you have reached.",
+              "fix": "Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage. Run the coverage check in a CI step on pull requests (pytest --cov, not plain pytest), without || true or continue-on-error. Then CI keeps coverage at the level you have reached.",
               "why": "An enforced floor turns the job red when a change takes coverage below it, so tests an agent removes or skips show in CI instead of passing quietly.",
               "why_source": "",
               "input_class": "ci_executed",
@@ -1005,7 +1005,7 @@
               "eq_signal": null,
               "text": "Share of configured gates an instruction file states: is at least 50",
               "title": "Half the configured gates are stated",
-              "fix": "Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md, so the next session knows the rule before it runs into it.",
+              "fix": "Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md. Then the next session knows the rule before it meets the gate.",
               "why": "A gate an agent does not know about turns its job red after the work is done. Stated with its threshold, the gate is a constraint it can plan for.",
               "why_source": "",
               "input_class": "head_structure",
@@ -1087,7 +1087,7 @@
               "eq_signal": null,
               "text": "Commands and thresholds the agent systems disagree on: is 0",
               "title": "Every agent system names the same checks",
-              "fix": "Make the instruction files agree: name the same test and lint commands and the same thresholds in each, or replace each tool's file with the pointer line the report gives.",
+              "fix": "Make the instruction files agree. Name the same test and lint commands and the same thresholds in each. Or replace each tool's file with the pointer line the report gives.",
               "why": "When agent systems are told different check commands or thresholds, one agent's change passes checks another agent was told to run differently.",
               "why_source": "",
               "input_class": "head_structure",
@@ -1125,7 +1125,7 @@
               "eq_signal": null,
               "text": "Agent systems not linked to the canonical instruction file: is 0",
               "title": "Every agent system reads one canonical file",
-              "fix": "Keep AGENTS.md as the one source and make each other tool's file a thin pointer or a symlink to it, using the exact line the report gives for that tool.",
+              "fix": "Keep AGENTS.md as the one source. Make each other tool's file a short pointer or a symlink to it, with the exact line the report gives for that tool.",
               "why": "One source of instructions keeps every agent's picture of the repository the same, and keeps it maintained in one place.",
               "why_source": "",
               "input_class": "head_structure",
@@ -1169,7 +1169,7 @@
               "eq_signal": null,
               "text": "Skill and agent files that break a disclosure rule: is 0",
               "title": "Skills load only what the task needs",
-              "fix": "For each file the report names, fix the rule it breaks: give each SKILL.md and agent definition a name and a description of at most 1024 characters, move detail only some tasks need into references/ linked from SKILL.md, and link each reference to a file that exists.",
+              "fix": "For each file the report names, fix the rule it breaks. Give each SKILL.md and agent definition a name, and a description of at most 1024 characters. Move detail that only some tasks need into references/, linked from SKILL.md. Link each reference to a file that exists.",
               "why": "A skill loads its whole SKILL.md every time it triggers, so detail that only one branch needs spends an agent's context before work starts; keeping the body small, the description within its limit and references one level deep keeps that cost to what the task uses.",
               "why_source": "https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices",
               "input_class": "head_structure",
@@ -1866,31 +1866,31 @@
       "unknown_reasons": [
         {
           "code": "go_rust_gate_form_not_read",
-          "means": "The repository holds a go.mod or Cargo.toml with no coverage gate found for it, and no gate of at least 50 percent for another language (a low Python gate beside go.mod is not unmet): its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read.",
+          "means": "A go.mod or Cargo.toml has no coverage gate found for it. No gate of at least 50 percent exists for another language either (a low Python gate beside go.mod is not unmet). Its gate may be a script that compares go tool cover (or a report) to a number, which this scan does not read.",
           "next_step": "Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines.",
           "carried_in": "unmeasured_reason"
         },
         {
           "code": "codecov_target_not_read",
-          "means": "The only coverage gate that could reach 50 percent is a Codecov project status whose target is auto, missing (Codecov's default is auto) or not a number, so the floor it holds is the base commit's coverage, not a number this scan can compare.",
-          "next_step": "To have the coverage gate measured, run a coverage threshold of at least 50 percent in a CI step (pytest --cov --cov-fail-under=80, or a fail_under your CI runs). A numeric Codecov target (target: 80%) makes the threshold readable, but whether branch protection requires the status is not read.",
+          "means": "The only coverage gate that could reach 50 percent is a Codecov project status. Its target is auto, missing (Codecov's default is auto) or not a number. So the floor it holds is the base commit's coverage, not a number this scan can compare.",
+          "next_step": "Run a coverage threshold of at least 50 percent in a CI step, such as pytest --cov --cov-fail-under=80 or a fail_under your CI runs. A numeric Codecov target (target: 80%) makes the threshold readable. Whether branch protection requires the status is not read.",
           "carried_in": "unmeasured_reason"
         },
         {
           "code": "codecov_patch_only",
           "means": "The only coverage gate that could reach 50 percent is a Codecov patch status. It bounds coverage of the changed lines only, and removing a test changes none, so it says nothing about the floor on total coverage.",
-          "next_step": "To have the coverage gate measured, run a coverage threshold of at least 50 percent in a CI step (pytest --cov --cov-fail-under=80, or a fail_under your CI runs), or add a numeric target to a Codecov project status.",
+          "next_step": "To have the coverage gate measured, run a coverage threshold of at least 50 percent in a CI step. Examples are pytest --cov --cov-fail-under=80, or a fail_under your CI runs. Or add a numeric target to a Codecov project status.",
           "carried_in": "unmeasured_reason"
         },
         {
           "code": "status_check_unconfirmed",
-          "means": "The coverage gate of at least 50 percent is a Codecov status target, which no CI line runs: Codecov posts it as a commit status, and it holds a merge only when branch protection requires it, which this scan does not read.",
+          "means": "The coverage gate of at least 50 percent is a Codecov status target, and no CI line runs it. Codecov posts it as a commit status. It holds a merge only when branch protection requires it, and this scan does not read branch protection.",
           "next_step": "Nothing to change if the Codecov status is a required check. To have the coverage gate measured, also run the threshold in a CI step (pytest --cov --cov-fail-under=80).",
           "carried_in": "enforced_basis"
         },
         {
           "code": "root_coverage_config_unresolved",
-          "means": "A scoped run found a fail_under in the root coverage.py config for a Python package with none of its own, but not where CI runs coverage: coverage.py reads the config of the directory it runs in, so the root floor governs the package only when CI runs coverage from the root or names that config.",
+          "means": "A scoped run found a fail_under in the root coverage.py config for a Python package with none of its own, not where CI runs coverage. coverage.py reads the config of the directory it runs in. So the root floor counts only when CI runs coverage from the root or names that config.",
           "next_step": "Run coverage in CI from the repository root (pytest --cov, coverage report), or pass the root config with --cov-config or --rcfile; or give the package its own fail_under and run coverage from its directory or with --cov-config naming that config.",
           "carried_in": "unmeasured_reason"
         }
@@ -1911,7 +1911,7 @@
     {
       "name": "units",
       "title": "Monorepo units",
-      "summary": "The repository's units: each skill folder (a SKILL.md) and a plugin's agents/ and commands/, then the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped.",
+      "summary": "The repository's units. First each skill folder (a SKILL.md), and a plugin's agents/ and commands/. Then the shallowest build-manifest folders, with each workspace root's declared members in its place, or the [[units]] of .assess/config.toml. Folders with only a manifest are skipped.",
       "collector": "core.units",
       "reads": [
         "repo_root",
@@ -2133,7 +2133,7 @@
     {
       "name": "agent_environment",
       "title": "Agent working environment",
-      "summary": "Committed agent setup, the check command an instruction file names, lockfiles per manifest and the CI cap; the CI-duration probe is off in headless runs. A manifest row's note is skipped_library (a library whose ecosystem commits no lock: listed, not counted in manifests_total or unlocked_total) or direct_pins_only (a Gradle version catalog or NuGet central package management with no lock: unlocked).",
+      "summary": "Committed agent setup, the check command an instruction file names, lockfiles per manifest, and the CI cap. The CI-duration probe is off in headless runs. A manifest row's note is skipped_library or direct_pins_only. skipped_library is a library whose ecosystem commits no lock: it is listed, and not counted in manifests_total or unlocked_total. direct_pins_only is a Gradle version catalog or NuGet central package management with no lock: it counts as unlocked.",
       "collector": "core.agent_environment",
       "reads": [
         "repo_root",
@@ -2336,7 +2336,7 @@
     {
       "name": "ci_checks",
       "title": "CI runs a test or lint command",
-      "summary": "Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether one can fail its job on ordinary changes (not masked, not off the ordinary triggers), and whether such a line runs a linter; null when no check is found but a CI file pulls its jobs from elsewhere. Null too when no check is found and the tree tracks a CI file the scan does not parse, when under --platform most sampled merged pull requests carry an external CI check, or when a root Prow OWNERS_ALIASES is the only CI evidence.",
+      "summary": "Whether a GitHub Actions or GitLab CI line runs a test or lint command. Whether such a line can fail its job on ordinary changes: not masked, and not outside the ordinary triggers. Whether such a line runs a linter. The value is null when no check is found but a CI file pulls its jobs from elsewhere. It is also null when no check is found and the tree tracks a CI file the scan does not parse. It is null under --platform when most sampled merged pull requests carry an external CI check. It is null when a root Prow OWNERS_ALIASES is the only CI evidence.",
       "collector": "core.ci_checks",
       "reads": [
         "repo_root",
@@ -2382,49 +2382,49 @@
         },
         {
           "code": "merged_config_partial",
-          "means": "GitLab's merged CI configuration was read and runs no check, but it may lack jobs: an include under rules: or a trigger: child pipeline is not expanded by the lint API.",
+          "means": "GitLab's merged CI configuration was read and runs no check, but jobs may be missing from it. The lint API does not expand an include under rules: or a trigger: child pipeline.",
           "next_step": "Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false.",
           "carried_in": "basis"
         },
         {
           "code": "unknown_trigger",
-          "means": "In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle (no on: key, a rules: if: on a custom variable).",
+          "means": "In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle. Examples are a missing on: key, or a rules: if: on a custom variable.",
           "next_step": "Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it.",
           "carried_in": "enforced_basis"
         },
         {
           "code": "check_may_pass",
-          "means": "In enforced_basis and lint_basis: the check's exit status may not reach its job: a || fallback that can pass (pytest || echo failed), an if or while condition, an until loop that breaks, a check before && with more of the step after it, or a { } group or function called that way.",
-          "next_step": "Let the check's exit status reach the step: run it on its own line, or end the fallback with exit 1 (pytest || { echo failed; exit 1; }).",
+          "means": "In enforced_basis and lint_basis: the check's exit status may not reach its job. Causes are a || fallback that can pass (pytest || echo failed), an if or while condition, or an until loop that breaks. Or a check sits before && with more of the step after it, or in a { } group or function.",
+          "next_step": "Let the check's exit status reach the step. Run the check on its own line, or end the fallback with exit 1 (pytest || { echo failed; exit 1; }).",
           "carried_in": "enforced_basis"
         },
         {
           "code": "script_not_found",
-          "means": "In enforced_basis and lint_basis: the only CI line that would settle the signal runs a committed script (./ci.sh, bash scripts/test.sh, ./scripts/lint.sh) that no tracked file matches, so it is not credited; an earlier step may still create it.",
-          "next_step": "Commit the script the CI step runs, or call the test or lint command in its own CI step (pytest, ruff check .), so the scan can read it.",
+          "means": "In enforced_basis and lint_basis: the only CI line that would settle the signal runs a committed script (./ci.sh, bash scripts/test.sh, ./scripts/lint.sh). No tracked file matches that script, so it is not credited. An earlier step may still create it.",
+          "next_step": "Commit the script the CI step runs. Or call the test or lint command in its own CI step (pytest, ruff check .), so the scan can read it.",
           "carried_in": "enforced_basis"
         },
         {
           "code": "check_target",
-          "means": "No CI line runs the linter (lint_basis) or the check (enforced_basis), but one runs a target whose recipe is not read and may run it: make check or npm test for a linter; make foo, npm run foo or ./scripts/foo.sh for a check.",
+          "means": "No CI line runs the linter (lint_basis) or the check (enforced_basis). But one runs a target whose recipe is not read, and that target may run it. Examples: make check or npm test for a linter; make foo, npm run foo or ./scripts/foo.sh for a check.",
           "next_step": "Nothing to change if the target runs the check; calling the test or lint command in its own CI step (make test, pytest, ruff check .) lets the scan read it.",
           "carried_in": "enforced_basis"
         },
         {
           "code": "unread_ci_system",
-          "means": "No readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure Pipelines, Buildkite, LUCI, Prow, Zuul and others; the lib/unread_ci.py docstring lists the paths); unread_ci_files counts them.",
+          "means": "No readable GitHub Actions or GitLab CI line settles the signal. The tree tracks a CI file of a system this scan does not parse, such as Jenkins, CircleCI, Azure Pipelines, Buildkite, LUCI, Prow or Zuul. The lib/unread_ci.py docstring lists the paths, and unread_ci_files counts them.",
           "next_step": "Nothing to change: the scanner cannot read those systems' configuration, so their checks read as not measured rather than absent.",
           "carried_in": "enforced_basis"
         },
         {
           "code": "external_ci",
-          "means": "Under --platform only: no readable CI line settles the signal, and over half of the sampled merged pull requests carry a check run or status of a known external CI system (Buildkite, LUCI, Prow tide, Azure Pipelines). A check ran; that earns no credit.",
+          "means": "Under --platform only: no readable CI line settles the signal. Over half of sampled merged pull requests carry a check run or status from a known external CI system (Buildkite, LUCI, Prow tide, Azure Pipelines). A check ran; that earns no credit.",
           "next_step": "Nothing to change: the checks run on a CI system configured outside the repository, so they read as not measured rather than absent.",
           "carried_in": "enforced_basis"
         },
         {
           "code": "external_ci_marker",
-          "means": "The tree tracks no CI file of any kind and the root holds a Prow OWNERS_ALIASES file, so presubmits likely run on Prow, configured in another repository. An OWNERS file alone is not a marker.",
+          "means": "The tree tracks no CI file of any kind, and the root holds a Prow OWNERS_ALIASES file. So presubmits likely run on Prow, configured in another repository. An OWNERS file alone is not a marker.",
           "next_step": "Nothing to change: run with --platform to read the checks on merged pull requests instead.",
           "carried_in": "enforced_basis"
         },
@@ -2436,7 +2436,7 @@
         },
         {
           "code": "compiler_gate_only",
-          "means": "In lint_basis: no CI line runs a linter, and the only static gate is a compiler run with warnings as errors (mix compile --warnings-as-errors, -Werror, dotnet build -warnaserror, TreatWarningsAsErrors in Directory.Build.props). It is not counted as a lint run.",
+          "means": "In lint_basis: no CI line runs a linter, and the only static gate is a compiler run with warnings as errors. Examples are mix compile --warnings-as-errors, -Werror, dotnet build -warnaserror and TreatWarningsAsErrors in Directory.Build.props. It is not counted as a lint run.",
           "next_step": "Running a linter or analyser in its own CI step (mix credo, clang-tidy, dotnet format --verify-no-changes) lets the scan read a lint run.",
           "carried_in": "basis"
         }
@@ -2715,7 +2715,7 @@
     {
       "name": "agent_consistency",
       "title": "Cross-agent instruction consistency",
-      "summary": "Compares the root instruction files of every agent system present (Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue, Zed): check commands one names and another does not, conflicting thresholds, and whether each links to one canonical file, with the pointer line for each unlinked system.",
+      "summary": "Compares the root instruction files of every agent system present: Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue and Zed. It finds check commands one file names and another does not, and thresholds that conflict. It checks whether each file links to one canonical file, and gives the pointer line for each system that does not.",
       "collector": "core.agent_consistency",
       "reads": [
         "repo_root",
@@ -2924,7 +2924,7 @@
     {
       "name": "guardrails",
       "title": "Guardrails stated",
-      "summary": "Lists the gates the repository configures (a ruff or flake8 complexity limit, the coverage floor, pre-commit hooks, mypy strict) and whether a graded instruction file states each one's rule and threshold; an unstated gate carries a ready one-line snippet.",
+      "summary": "Lists the gates the repository configures: a ruff or flake8 complexity limit, the coverage floor, pre-commit hooks and mypy strict. It checks whether a graded instruction file states each gate's rule and threshold. An unstated gate carries a ready one-line snippet.",
       "collector": "core.guardrails",
       "reads": [
         "repo_root",
@@ -3469,7 +3469,7 @@
     {
       "name": "contributor_files",
       "title": "Contributor files",
-      "summary": "A contributing guide and a security policy (a SECURITY file or a link to GitHub private vulnerability reporting) at the root, in .github/ or in docs/; issue and pull or merge request templates as evidence.",
+      "summary": "A contributing guide and a security policy at the root, in .github/ or in docs/. The policy is a SECURITY file or a link to GitHub private vulnerability reporting. Issue and pull or merge request templates count as evidence.",
       "collector": "core.contributor_files",
       "reads": [
         "repo_root",
@@ -3508,7 +3508,7 @@
         },
         {
           "code": "org_policy_not_read",
-          "means": "The repository holds no security policy, and the owner's shared .github repository, whose policy GitHub shows on it, was not read (offline, no --platform, a remote not on github.com, or gh not signed in).",
+          "means": "The repository holds no security policy. The owner's shared .github repository, whose policy GitHub shows on this one, was not read. The cause is offline use, no --platform, a remote not on github.com, or gh not signed in.",
           "next_step": "Commit a SECURITY.md, or run /assess with gh signed in (or fleet with --platform) so the owner's shared policy is read."
         }
       ],
@@ -3533,7 +3533,7 @@
     {
       "name": "unit_readings",
       "title": "Monorepo unit readings",
-      "summary": "Each unit's own readings of the scope-sensitive scans (suppressions, doc staleness, structure, size, its own coverage gate or instruction file), with every condition tagged unit or inherited.",
+      "summary": "Each unit's own readings of the scope-sensitive scans: suppressions, doc staleness, structure, size, and its own coverage gate or instruction file. Every condition is tagged unit or inherited.",
       "collector": "core.unit_readings",
       "reads": [
         "units",
@@ -5950,7 +5950,7 @@
       "name": "hidden_coupling",
       "title": "Hidden coupling",
       "order": 0,
-      "action": "investigate the seam",
+      "action": "check why these files change together",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [
@@ -5981,7 +5981,7 @@
       "name": "unexplained_complexity",
       "title": "Unexplained complexity",
       "order": 2,
-      "action": "write the contract the code needs (do NOT auto-generate)",
+      "action": "write the contract the code needs (write it by hand; do not generate it)",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [
@@ -5996,7 +5996,7 @@
       "name": "untrusted_hotspot",
       "title": "Untrusted hotspot",
       "order": 3,
-      "action": "strengthen tests to pin observable behaviour (not internal state)",
+      "action": "make the tests check what the code does, as a caller sees it (not its internal state)",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [
@@ -6012,7 +6012,7 @@
       "name": "self_referential_tests",
       "title": "Self-referential tests",
       "order": 4,
-      "action": "request human review - tests verify internal consistency, not truth",
+      "action": "ask a person to review: the tests check that the code agrees with itself, not that it is right",
       "mode": "verify_then_retire",
       "concern": true,
       "inputs": [
@@ -6027,7 +6027,7 @@
       "name": "unactioned_intent",
       "title": "Unactioned intent",
       "order": 5,
-      "action": "action the promise: fix it, ticket it, or delete the marker/skip",
+      "action": "keep the promise: fix it, open a ticket for it, or delete the marker or skip",
       "mode": "verify_then_retire",
       "concern": true,
       "inputs": [
@@ -6042,7 +6042,7 @@
       "name": "accretion_ratchet",
       "title": "Accretion ratchet",
       "order": 6,
-      "action": "refactor down: extract, delete dead code, or split the file",
+      "action": "make the file smaller: move code out, delete dead code, or split the file",
       "mode": "refactor_safe",
       "concern": true,
       "inputs": [
@@ -6057,7 +6057,7 @@
       "name": "orphaned_understanding",
       "title": "Orphaned understanding",
       "order": 7,
-      "action": "assign a human anchor before further change",
+      "action": "name a person who owns this code before it changes again",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [
@@ -6072,7 +6072,7 @@
       "name": "candidate_dead_weight",
       "title": "Candidate dead weight",
       "order": 8,
-      "action": "verify liveness, then delete if dead",
+      "action": "check that the code is used, and delete it if it is not",
       "mode": "verify_then_retire",
       "concern": true,
       "inputs": [
@@ -6087,7 +6087,7 @@
       "name": "override_contradicts_signals",
       "title": "Archetype override contradicts the signals",
       "order": 9,
-      "action": "Review archetype marker - deterministic signals suggest a different classification",
+      "action": "Review the archetype marker: the measured signals suggest a different kind of repository",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [

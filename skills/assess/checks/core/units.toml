@@ -5,7 +5,7 @@
 id = "core.units"
 kind = "collector"
 title = "Monorepo units"
-summary = "The repository's units: each skill folder (a SKILL.md) and a plugin's agents/ and commands/, then the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped."
+summary = "The repository's units. First each skill folder (a SKILL.md), and a plugin's agents/ and commands/. Then the shallowest build-manifest folders, with each workspace root's declared members in its place, or the [[units]] of .assess/config.toml. Folders with only a manifest are skipped."
 issues = [800, 862, 1098]
 callable = "lib.core_scans:units"
 publishes = ["units"]
