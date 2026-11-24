@@ -96,10 +96,14 @@ def ci_system(root: Path) -> tuple[CiSystem, str]:
 
 
 def default_branch(root: Path) -> str:
-    """``origin``'s HEAD branch, else the checked-out branch, else ``main``."""
+    """``origin``'s HEAD branch, else a local ``main`` or ``master``, else the checked-out branch,
+    else ``main``: a feature branch is never taken for the default while ``main`` exists."""
     head = _git(root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
     if head and "/" in head:
         return head.split("/", 1)[1]
+    for name in ("main", "master"):
+        if _git(root, "rev-parse", "--verify", "-q", f"refs/heads/{name}"):
+            return name
     return _git(root, "branch", "--show-current") or "main"
 
 

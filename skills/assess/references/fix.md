@@ -12,7 +12,7 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/assess_fix.py" "$REPO_ROOT" --starter --lang
 ```
 <!-- chat-skip:end -->
 
-Without `--no-pr` the script pushes a branch and opens a pull (merge) request when it can. In an interactive run, ask the user first whether to open one or keep the files staged locally, and pass `--no-pr` for local. A non-interactive run passes `--no-pr` unless the caller asked for a pull request. `--json` gives a machine-readable report.
+The script never pushes on its own: it commits to a local branch and prints the exact command that pushes it and opens the pull request. `--pr` (opt-in) also pushes and opens the pull (merge) request. In an interactive run, offer to open one after the files are written and rerun with `--pr` only after the user says yes; a non-interactive run adds `--pr` only when its caller asked for a pull request. `--json` gives a machine-readable report.
 
 ## What it writes
 
@@ -31,4 +31,4 @@ It never overwrites a file. An existing one is reported as a conflict, with the 
 
 The script stages the files, reads the Step again and reports, per gate, whether it now holds or the one manual step left: an `include:` line, a check command to name, or a coverage threshold for a language with no coverage form it knows. Exit 0 means every targeted gate holds; exit 1 means a manual step is left.
 
-When the tree was clean before the run (the assessment's own `.assess/` output aside; it is never committed) and `gh` or `glab` is authenticated for `origin`, it commits to a new `assess/fix-<gate>` branch, leaves the checkout on that branch, and opens a pull (merge) request. Otherwise the files stay staged in the working tree for review and the report says why. Relay the report to the user as written.
+When the tree was clean before the run (the assessment's own `.assess/` output aside; it is never committed), it commits the files to a new local `assess/fix-<gate>` branch, leaves the checkout on that branch, and ends its report with the command to push it and open the pull request. On a dirty tree it commits nothing and the files stay staged. With `--pr` it also pushes and opens the pull (merge) request, but only when `gh` or `glab` is authenticated for `origin` and the run started on the default branch's tip. On any other branch it refuses with "run from <default> to open a fix PR", so no other branch's commits reach the fix PR. Relay the report to the user as written.

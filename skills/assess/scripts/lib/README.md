@@ -10,9 +10,9 @@ with a reason, never to a clean result. The opt-in mutation pass's uv
 runner (`test_pressure/mutmut3.py`) may fetch mutmut, pytest and the assessed package's
 dependencies from the package index on first use, into a scratch environment; it runs
 only on explicit consent and degrades to a named `reason`. The `/assess --fix` delivery
-(`starter_delivery.py`, #1154) is the one network write: with `--fix` or `--starter`, a clean
-tree and an authenticated `gh` or `glab`, it pushes a branch and opens a pull (merge) request;
-any failed precondition leaves the files staged, with a named `reason`. The LLM reads
+(`starter_delivery.py`, #1154) is the one network write: only with the opt-in `--pr`, a clean
+tree, an authenticated `gh` or `glab` and a run from the default branch's tip, it pushes a branch and opens a pull (merge) request;
+any failed precondition leaves the commit on the local branch, with a named `reason`. The LLM reads
 `run-context.json` after the core finishes; it does not call into these modules.
 
 ## The assess_core.py -> lib seam

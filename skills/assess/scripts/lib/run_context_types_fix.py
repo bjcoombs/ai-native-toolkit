@@ -49,10 +49,11 @@ class GateProof(TypedDict):
 
 
 class Delivery(TypedDict):
-    mode: Literal["pull_request", "working_tree", "none"]
+    mode: Literal["pull_request", "local_branch", "working_tree", "none"]
     branch: str | None
     url: str | None  # the pull or merge request, when one was opened
-    reason: str  # why this mode: "opened", "no_host_cli", "dirty_tree", "not_a_git_repo", ...
+    reason: str  # why this mode: "opened", "committed_locally", "not_on_default_branch", "dirty_tree", ...
+    next_command: str | None  # on a local branch: the exact command that pushes it and opens the request
 
 
 class FixReport(TypedDict):

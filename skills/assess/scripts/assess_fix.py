@@ -15,14 +15,17 @@ language, the check command its build exposes and its CI system.
 It never overwrites a file: an existing one is a conflict, reported with the text to add by
 hand. The written files are staged; the scans then run again and the report says, per gate,
 whether it now holds or the one manual step left. When the tree was clean before the run
-(``.assess/``, the assessment's own output, aside) and ``gh`` or ``glab`` is authenticated for
-the ``origin`` remote, the change becomes a branch and a pull (merge) request (``lib/starter_delivery.py``); ``--no-pr`` keeps it staged in the working
-tree, as does any failed precondition, with the reason in the report.
+(``.assess/``, the assessment's own output, aside), the files are committed to a new local
+``assess/fix-<gate>`` branch and the report ends with the exact command to push it and open the
+pull request; nothing is pushed. ``--pr`` (opt-in) also pushes and opens the pull (merge)
+request, only when ``gh`` or ``glab`` is authenticated for ``origin`` and the run started on the
+default branch's tip (``lib/starter_delivery.py``). A dirty tree commits nothing: the files
+stay staged.
 
 Run:
-    uv run assess_fix.py <repo> --fix [--no-pr] [--json]
+    uv run assess_fix.py <repo> --fix [--pr] [--json]
     uv run assess_fix.py <repo> --starter [--language python] [--check-command "pytest"]
-        [--ci github|gitlab] [--no-pr] [--json]
+        [--ci github|gitlab] [--pr] [--json]
 
 Exit codes:
     0  ran: files written, or nothing to do (every targeted gate already held)
@@ -51,7 +54,7 @@ from lib.level_tally import default_model, level_result  # noqa: E402
 from lib.levels import MaturityModel, condition_id  # noqa: E402
 from lib.run_context_types_fix import CiSystem, Delivery, FileOutcome, FixReport, GateProof  # noqa: E402
 from lib.signals import collect  # noqa: E402
-from lib.starter_delivery import Runner, ignored, is_git_repo, open_change, run, stage, tree_clean  # noqa: E402
+from lib.starter_delivery import Runner, deliver, ignored, is_git_repo, run, stage, tree_clean  # noqa: E402
 from lib.starter_files import GUARDRAIL, detect_facts, plan_files, write_files  # noqa: E402
 
 # The blocks the Step gates, the guardrail and the fact detectors read.
@@ -119,7 +122,7 @@ def _pr_body(report_files: Sequence[FileOutcome], proofs: Sequence[GateProof]) -
 
 
 def fix(root: Path, *, starter: bool, language: str | None = None, check_command: str | None = None,
-        ci: CiSystem | None = None, open_pr: bool = True, runner: Runner = run) -> FixReport:
+        ci: CiSystem | None = None, open_pr: bool = False, runner: Runner = run) -> FixReport:
     """Plan, write, stage, prove and deliver; the report of what happened."""
     model = default_model()
     git = is_git_repo(root, runner)
@@ -146,18 +149,17 @@ def fix(root: Path, *, starter: bool, language: str | None = None, check_command
     proofs = [_proof(g, gate_held(model, before, g), gate_held(model, after, g), files) for g in gates]
     if guard:
         proofs.append(_proof(GUARDRAIL, False, guardrail_held(after_scans), files))
-    delivery: Delivery = {"mode": "none", "branch": None, "url": None,
-                          "reason": "nothing_staged" if any(f["state"] == "written" for f in files)
-                          else "nothing_written"}
-    if written and not git:
-        delivery = {"mode": "working_tree", "branch": None, "url": None, "reason": "not_a_git_repo"}
-    elif written and not open_pr:
-        delivery = {"mode": "working_tree", "branch": None, "url": None, "reason": "no_pr_requested"}
+    delivery: Delivery = {"mode": "none", "branch": None, "url": None, "next_command": None,
+                          "reason": "nothing_staged" if wrote else "nothing_written"}
+    if wrote and not git:
+        delivery = {"mode": "working_tree", "branch": None, "url": None, "reason": "not_a_git_repo",
+                    "next_command": None}
     elif written:
         label = "-".join(g for g in gates) or GUARDRAIL
         title = f"chore: Add the /assess starter files for the {label.replace('-', ' and ')} gate"
-        delivery = open_change(root, f"assess/fix-{label}", title, _pr_body(files, proofs), written,
-                               was_clean=was_clean, runner=runner)
+        delivery = deliver(root, f"assess/fix-{label}", title, _pr_body(files, proofs), written,
+                           was_clean=was_clean, default_branch=facts["default_branch"], open_pr=open_pr,
+                           runner=runner)
     return {"mode": "starter" if starter else "fix", "step_before": before["step"], "step_after": after["step"],
             "facts": facts, "files": files, "gates": proofs, "delivery": delivery,
             "nothing_to_do": not gates and not guard}
@@ -169,16 +171,19 @@ _DELIVERY_WORDS = {
     "gh_not_authenticated": "`gh` is not authenticated",
     "glab_not_authenticated": "`glab` is not authenticated",
     "not_a_git_repo": "the target is not a git checkout",
-    "no_pr_requested": "`--no-pr` was given",
+}
+
+# Why a local branch was not pushed.
+_LOCAL_WORDS = {
+    "committed_locally": "nothing was pushed; `--pr` pushes and opens the pull request",
+    "no_supported_remote": "no GitHub or GitLab `origin` remote, so nothing was pushed",
+    "gh_not_authenticated": "`gh` is not authenticated, so nothing was pushed",
+    "glab_not_authenticated": "`glab` is not authenticated, so nothing was pushed",
+    "push_failed": "the push failed",
+    "pull_request_failed": "the branch was pushed, but opening the pull request failed",
 }
 
 
-# A failure after ``git switch -c``: what state the files are in on the new branch.
-_COMMITTED = {
-    "commit_failed": "staged, not committed,",
-    "push_failed": "committed, not pushed,",
-    "pull_request_failed": "committed and pushed, with no pull request opened,",
-}
 
 
 def render(report: FixReport) -> str:
@@ -200,9 +205,14 @@ def render(report: FixReport) -> str:
     if d["mode"] == "pull_request":
         out.append(f"Opened {d['url'] or 'a pull request'} from branch {d['branch']}; "
                    f"the checkout is now on {d['branch']}.")
-    elif d["mode"] == "working_tree" and d["branch"]:
-        state = _COMMITTED.get(d["reason"], "committed")
-        out.append(f"The files are {state} on branch {d['branch']}, the current checkout "
+    elif d["mode"] == "local_branch":
+        why = (f"run from {facts['default_branch']} to open a fix PR" if d["reason"] == "not_on_default_branch"
+               else _LOCAL_WORDS.get(d["reason"], d["reason"].replace("_", " ")))
+        out.append(f"Committed on the local branch {d['branch']}, now the current checkout ({why}).")
+        if d["next_command"]:
+            out.append(f"To push it and open the pull request: {d['next_command']}")
+    elif d["mode"] == "working_tree" and d["branch"]:  # the commit failed after the branch was cut
+        out.append(f"The files are staged, not committed, on branch {d['branch']}, the current checkout "
                    f"({d['reason'].replace('_', ' ')}).")
     elif d["mode"] == "working_tree":
         why = _DELIVERY_WORDS.get(d["reason"], d["reason"].replace("_", " "))
@@ -219,13 +229,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--language", help="the language, when the repository has no source yet")
     parser.add_argument("--check-command", help="the command that runs the tests")
     parser.add_argument("--ci", choices=("github", "gitlab"), help="the CI system, when none is detected")
-    parser.add_argument("--no-pr", action="store_true", help="leave the files staged; open no pull request")
+    parser.add_argument("--pr", action="store_true", help="also push the fix branch and open a pull request")
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
     args = parser.parse_args(argv)
     if not args.repo.is_dir():
         parser.error(f"{args.repo} is not a directory")
     report = fix(args.repo.resolve(), starter=args.starter, language=args.language,
-                 check_command=args.check_command, ci=args.ci, open_pr=not args.no_pr)
+                 check_command=args.check_command, ci=args.ci, open_pr=args.pr)
     sys.stdout.write(json.dumps(report, indent=2) + "\n" if args.json else render(report))
     return 0 if all(p["held_after"] for p in report["gates"]) else 1
 
