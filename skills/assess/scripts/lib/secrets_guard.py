@@ -66,9 +66,10 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   read: an unread GitLab include leaves level 2 not measured (``ci_includes_unresolved``) but
   level 1 unmet. The asymmetry is deliberate: level 1 is listed and moves no count, so an unmet
   there costs nothing, while level 2 is counted and must not read unmet on evidence it lacks.
-- ``enforcement`` (level 2): a guard stops a secret before it lands, where an agent cannot skip
-  it: a CI scan, or GitHub push protection (source ``platform``). Secret scanning alone only
-  alerts after the secret has landed, so it meets level 1, not level 2. Graded ``measured`` and
+- ``enforcement`` (level 2): a guard that can stop the change, where an agent cannot skip it. A
+  CI scan fails a check that can gate the merge; GitHub push protection (source ``platform``)
+  rejects the push. Secret scanning alone raises an alert that gates nothing, so it meets level
+  1, not level 2. Graded ``measured`` and
   counted. With no CI scan on a github.com remote and the settings not read (no ``--platform``,
   no admin, owner or security manager rights), push protection could still guard the repository, so the reading is not
   measured (``secret_scanning_not_read``), never unmet; read and off, it is unmet. On a public
@@ -690,9 +691,9 @@ def _platform(block: Mapping[str, object] | None) -> tuple[bool, bool] | None:
 
 
 def _enforcement(root: Path, ci: CiGuard, platform: tuple[bool, bool] | None) -> Enforcement:
-    """Level 2: a CI scan, or GitHub push protection, stops a secret before it lands. Push protection
-    blocks the push; secret scanning alone only alerts after the secret has landed, so it does not
-    meet level 2. With neither, a setting that was not read leaves the reading not measured."""
+    """Level 2: a guard that can stop the change. A CI scan fails a check that can gate the merge;
+    push protection rejects the push; secret scanning alone raises an alert that gates nothing, so it
+    does not meet level 2. With neither, a setting that was not read leaves it not measured."""
     if ci["present"]:
         return {"available": True, "present": True, "source": "ci"}
     if platform is not None and platform[1]:
