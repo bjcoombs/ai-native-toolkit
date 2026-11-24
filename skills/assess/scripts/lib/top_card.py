@@ -3,7 +3,10 @@
 The card replaces the three summaries that used to open the report (the executive summary,
 the Since Last Run list and the headline's Step and Next lines). Each fact on it comes from
 one fact function in ``lib/card_facts.py``; this module only words them.
-``card_lines(level, model, since, rollup=None, head_sha=None, action=None)`` returns, in order:
+``card_facts(level, model, since, rollup=None, head_sha=None, action=None)`` returns the lines
+as ``card_facts.CardFact`` entries, each with its ``fact_id`` (``lead``, ``holding``, ``blocks``,
+``since``, ``start_here``, ``done_when``: ``FACT_IDS``), and ``card_lines`` the same lines as
+plain text, in order:
 
 1. the lead line, bold in the markdown:
 
@@ -34,7 +37,8 @@ one fact function in ``lib/card_facts.py``; this module only words them.
    ``.assess/actions.json`` by rank (``first_action``; its ``first_step``, in backticks unless
    it already holds some, else its ``action``, and its ``done_when``). With no open action:
    below the top Step, the first blocking gate as a task (``GATE_TASK``), linked to its
-   catalog entry; at the top Step, the next run of ``/assess``. The core reads ``actions.json``
+   catalog entry; at the top Step, the next run of ``/assess`` (``Done when: the next `/assess`
+   run still holds every gate.``). The core reads ``actions.json``
    as it stands when the run starts, the file the previous run's finalize step wrote (or the
    committed one), because this run's finalize writes its own Top 3 later. ``assess_finalize.py``
    then re-renders these two lines from the Top 3 it has just written (``lib/card_refresh.py``,
@@ -45,8 +49,11 @@ one fact function in ``lib/card_facts.py``; this module only words them.
 
 A profile or ``--levels`` run leads the card with ``profiles.model_lines`` (``lib/exec_summary.py``
 adds them). ``card_markdown(lines)`` joins the lines into paragraphs with the lead line bold and
-its first "Step" linked to the glossary (``headline.GLOSSARY_URL``, #1102), as are "measured
-catalogue conditions" and "verified" on the Holding line; ``lines`` stay plain text.
+its first "Step" (or "Steps") linked to the glossary (``headline.GLOSSARY_URL``, #1102), as are
+"measured catalogue conditions" and "verified" on the Holding line and "not known" on the Since
+line (to the glossary's Not measured entry); the profile lines before the lead link the profile
+to its file and put a custom model's file name in backticks (``_model_markdown``). ``lines`` stay
+plain text. Every rendered line so carries a number, a link or a command (#1253).
 The badge message and the ``log.md`` readiness line (``headline.summary``) read the same
 ``card_facts`` functions.
 Tests: ``tests/test_top_card.py``.
@@ -59,13 +66,14 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, TypedDict
 
-from lib.card_facts import advisories, blocking_gates, step_gate_ids, step_name, top_step
+from lib.card_facts import CardFact, advisories, blocking_gates, step_gate_ids, step_name, top_step
 from lib.headline import GATE_CHANGE, GLOSSARY_URL, gate_note, verified_count
 from lib.levels import MaturityModel
 from lib.model_change import model_changed_line
 from lib.since_last_run import FIRST_RUN, UNKNOWN_CLOSED
 
-__all__ = ["GATE_GAP", "GATE_TASK", "STEP_GATES_URL", "CardAction", "card_lines",
+__all__ = ["FACT_IDS", "GATE_GAP", "GATE_TASK", "PROFILES_URL", "STEP_GATES_URL", "CardAction", "card_facts",
+           "card_lines",
            "card_markdown", "first_action", "since_line", "read_first_action", "start_lines"]
 
 # The catalog's Step gates entry: what each gate covers. measured_appendix.CATALOG_URL names the
@@ -89,8 +97,17 @@ GATE_GAP = {
 }
 
 
-# "Step" as a word, never inside "Steps" (the no-Steps lead)
-_STEP_WORD = re.compile(r"\bStep\b")
+# Where each shipped profile lives, linked from the profile lines before the lead.
+PROFILES_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/skills/assess/levels/profiles"
+DEFAULT_MODEL_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/skills/assess/levels/default.toml"
+
+# The card's facts, each stated by one line at most (tests/test_card_construction.py).
+FACT_IDS = ("lead", "holding", "blocks", "since", "start_here", "done_when")
+
+# "Step" or "Steps" as a word (the no-Steps lead links "Steps")
+_STEP_WORD = re.compile(r"\bSteps?\b")
+_PROFILE = re.compile(r"\bprofile(:?) ([A-Za-z0-9_.-]+)")
+_CUSTOM = re.compile(r"^(Maturity model: )(.+?)(, a custom file)|(\(model: )([^)]+)(\))")
 
 
 class CardAction(TypedDict):
@@ -246,40 +263,55 @@ def start_lines(level: Mapping[str, Any], action: CardAction | None) -> tuple[st
         return (f"Start here: [{task[:1].upper()}{task[1:]}]({STEP_GATES_URL}){gate_note(gates[0])}",
                 f"Done when: the next `/assess` run reads that {GATE_CHANGE.get(gate, f'the {gate} gate holds')}.")
     return ("Start here: run `/assess` again after your next change",
-            "Done when: that run still holds every gate.")
+            "Done when: the next `/assess` run still holds every gate.")
+
+
+def card_facts(level: Any, model: MaturityModel, since: Any, rollup: Any = None,
+               head_sha: str | None = None, action: CardAction | None = None) -> list[CardFact]:
+    """The card's lines in order, each with its fact id (see the module docstring); ``[]``
+    when ``level`` is not a level result."""
+    if not isinstance(level, Mapping) or "tally" not in level:
+        return []
+    start, done = start_lines(level, action)
+    texts = (_lead(level, model), _holding(level, model, head_sha) if top_step(model) is not None else None,
+             _blocks(level, rollup), since_line(since), start, done)
+    return [{"fact_id": fid, "text": text} for fid, text in zip(FACT_IDS, texts) if text]
 
 
 def card_lines(level: Any, model: MaturityModel, since: Any, rollup: Any = None,
                head_sha: str | None = None, action: CardAction | None = None) -> list[str]:
-    """The card's lines in order (see the module docstring); ``[]`` when ``level`` is not a level result."""
-    if not isinstance(level, Mapping) or "tally" not in level:
-        return []
-    lines = [_lead(level, model)]
-    if top_step(model) is not None:
-        lines.append(_holding(level, model, head_sha))
-    blocks = _blocks(level, rollup)
-    if blocks:
-        lines.append(blocks)
-    moved = since_line(since)
-    if moved:
-        lines.append(moved)
-    lines.extend(start_lines(level, action))
-    return lines
+    """The card's lines in order, as plain text; ``[]`` when ``level`` is not a level result."""
+    return [f["text"] for f in card_facts(level, model, since, rollup, head_sha, action)]
+
+
+def _model_markdown(line: str) -> str:
+    """A profile line before the lead: the profile linked to its file, a custom model's file
+    name in backticks, and "default model" linked to the default model's file."""
+    line = _PROFILE.sub(lambda m: f"[profile{m.group(1)} {m.group(2)}]({PROFILES_URL}/{m.group(2)}.toml)",
+                        line, count=1)
+    line = _CUSTOM.sub(lambda m: f"{m.group(1)}`{m.group(2)}`{m.group(3)}" if m.group(1)
+                       else f"{m.group(4)}`{m.group(5)}`{m.group(6)}", line, count=1)
+    return line.replace("Not in the default model:", f"Not in the [default model]({DEFAULT_MODEL_URL}):", 1)
 
 
 def card_markdown(lines: Sequence[str], lead_at: int = 0) -> str:
     """The lines as paragraphs: the lead line (index ``lead_at``) bold, its first "Step" linked
-    to the glossary, and "measured catalogue conditions" and "verified" on the Holding line linked
-    to the catalogue coverage and evidence grade entries."""
+    to the glossary, "measured catalogue conditions" and "verified" on the Holding line linked
+    to the catalogue coverage and evidence grade entries, "not known" on the Since line to the
+    Not measured entry, and the profile lines before the lead through ``_model_markdown``."""
     out: list[str] = []
     for i, line in enumerate(lines):
-        if i == lead_at:
-            linked = _STEP_WORD.sub(f"[Step]({GLOSSARY_URL}#step)", line, count=1)
+        if i < lead_at:
+            line = _model_markdown(line)
+        elif i == lead_at:
+            linked = _STEP_WORD.sub(lambda m: f"[{m.group(0)}]({GLOSSARY_URL}#step)", line, count=1)
             line = f"**{linked}**"
         elif line.startswith("Holding: "):
             line = line.replace(" measured catalogue conditions met,",
                                 f" [measured catalogue conditions]({GLOSSARY_URL}#catalogue-coverage) met,", 1)
             line = line.replace(" verified.", f" [verified]({GLOSSARY_URL}#evidence-grade).", 1)
+        elif line.startswith("Since last run: "):
+            line = line.replace("not known", f"[not known]({GLOSSARY_URL}#not-measured)", 1)
         out.append(line)
     return "\n\n".join(out)
 

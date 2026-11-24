@@ -22,7 +22,9 @@ it, rather than reporting its criteria as not measured; over those blocks the ru
 the same Step as ``/fleet --levels`` for the same repository.
 
 ``model_lines(level, choice)`` are the lines the executive summary (``lib/exec_summary.py``)
-adds for a model that is not the default, ``[]`` for the default:
+adds for a model that is not the default, ``[]`` for the default; ``model_facts`` returns the
+same lines as ``card_facts.CardFact`` entries with the fact ids ``model``, ``model_holds`` and
+``model_extra`` (#1253):
 
 1. ``Maturity model: profile handover, not the default.`` (``Maturity model: my.toml, a
    custom file, not the default.`` for ``--levels``). A custom file's ``version`` may not
@@ -58,6 +60,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from lib.card_facts import CardFact
 from lib.headline import reason_word
 from lib.level_result_types import ConditionResult, LevelResult
 from lib.level_tally import DEFAULT_BLOCKS, default_model, level_result, model_blocks, run_context_level
@@ -67,7 +70,7 @@ from lib.prior_level import model_key
 from lib.signal_grades import DEFAULT_LEVELS
 
 __all__ = ["CUSTOM_MODEL_SUFFIX", "PROFILES_DIR", "RESERVED_PREFIXES", "READY_WORDS", "ModelChoice", "ProfileError", "add_model_arguments",
-           "chosen_model", "model_for_level", "model_lines", "non_default_ids", "profile_names", "profile_path", "resolve",
+           "chosen_model", "model_for_level", "model_facts", "model_lines", "non_default_ids", "profile_names", "profile_path", "resolve",
            "run_level", "single_repo_choice"]
 
 PROFILES_DIR = DEFAULT_LEVELS.parent / "profiles"
@@ -246,14 +249,22 @@ def _readiness(level: LevelResult, choice: ModelChoice, foreign: set[str]) -> st
     return " ".join([f"{not_ready} ({choice.label}).", *(f"Missing: {part}." for part in parts)])
 
 
-def model_lines(level: LevelResult, choice: ModelChoice | None) -> list[str]:
-    """The summary lines naming a non-default model and whether it holds; ``[]`` for the default."""
+def model_facts(level: LevelResult, choice: ModelChoice | None) -> list[CardFact]:
+    """The summary lines naming a non-default model and whether it holds, each with its fact
+    id; ``[]`` for the default."""
     if choice is None or choice.kind == "default":
         return []
     first = (f"Maturity model: profile {choice.name}, not the default." if choice.kind == "profile"
              else f"Maturity model: {choice.name}{CUSTOM_MODEL_SUFFIX}")
     foreign = non_default_ids(choice.model)
-    lines = [first, _readiness(level, choice, set(foreign))]
+    facts: list[CardFact] = [{"fact_id": "model", "text": first},
+                             {"fact_id": "model_holds", "text": _readiness(level, choice, set(foreign))}]
     if foreign:
-        lines.append(f"Not in the default model: {'; '.join(_practice(c, choice.model) for c in foreign)}.")
-    return lines
+        facts.append({"fact_id": "model_extra", "text": "Not in the default model: "
+                      f"{'; '.join(_practice(c, choice.model) for c in foreign)}."})
+    return facts
+
+
+def model_lines(level: LevelResult, choice: ModelChoice | None) -> list[str]:
+    """``model_facts`` as plain text."""
+    return [f["text"] for f in model_facts(level, choice)]
