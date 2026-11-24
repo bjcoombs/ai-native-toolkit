@@ -90,7 +90,9 @@
 #   to source code in a module directory (#874):
 #   a catch-all or extension glob (`*`, `/**`, `*.py`), a dot-directory
 #   (`/.github/`), a root file (`README.md`, `LICENSE`) or a docs-only
-#   path leaves the code with one owner, so it does not count. Level 2 adds a
+#   path leaves the code with one owner, so it does not count. Architecture
+#   docs count only when they name two or more distinct module paths (#922):
+#   one path is a pointer, not a map. A CODEOWNERS line counts on its own. Level 2 adds a
 #   file-size outcome (95% of production source files at 500 lines or
 #   fewer) and requires layer-4-architecture.1 (#906). The percentile reads
 #   stats_summary.loc_by_class.source (#820): test, fixture, example,
@@ -124,7 +126,12 @@
 #   the size of the always-loaded Claude Code instruction text (root
 #   CLAUDE.md or, without one, AGENTS.md, its imports, unscoped
 #   .claude/rules); a repository whose only instruction file is for another
-#   tool (.cursorrules, Copilot) reaches level 1 with that size 0.
+#   tool (.cursorrules, Copilot) reaches level 1 with that size 0. Level 2
+#   also needs a named check command that resolves
+#   (agent_environment.check.named_total): a Makefile target with no
+#   prerequisite whose recipe runs only true, :, exit 0 or echo lines (with
+#   nothing chained after the echo) exists but runs nothing, so it does not
+#   count (#922).
 # - Layer 1 reads the observability rung from committed files (telemetry
 #   dependencies, a runbook or OBSERVABILITY.md, a logs or metrics MCP server
 #   or skill). A headless run builds it too (lib/headless_static.py, #699), so
@@ -271,7 +278,11 @@
 #   are read at the commit, an owner's policy by a live GitHub read, and policy.source
 #   (repo or org) names which.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
-#   of repeated AI work cycles, which no scan measures.
+#   of repeated AI work cycles, which no scan measures. A settings hook event
+#   counts toward hooks_present only when it holds a hook that does
+#   something: a prompt, agent, http or mcp_tool hook, or a command other
+#   than true, : or exit 0. An empty event list or a hook with no type does
+#   not count (#922).
 #
 # Conditions, the verified tally and Steps (lib/level_tally.py, #744): each
 # row level is also one condition, <row id>.<level>. Only conditions whose

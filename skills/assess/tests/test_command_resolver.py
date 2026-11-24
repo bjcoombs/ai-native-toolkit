@@ -318,7 +318,7 @@ def test_gitignored_script_path_is_unknown(git_repo) -> None:
 
 def test_inherited_git_dir_does_not_redirect_the_index(git_repo, tmp_path: Path, monkeypatch) -> None:
     repo, commit = git_repo
-    _repo(repo, {"Makefile": "check:\n\ttrue\n"})
+    _repo(repo, {"Makefile": "check:\n\tpytest\n"})
     commit("init")
     other = tmp_path / "other"
     other.mkdir()
@@ -490,3 +490,33 @@ def test_npm_subcommand_naming_a_script_is_missing(full: Path) -> None:
     assert "npm run build" in result.reason
     assert resolve("npm ci", full).resolved
     assert resolve("npm whoami", full).resolved
+
+
+def test_a_make_target_that_runs_nothing_is_unknown(tmp_path: Path) -> None:
+    """A named target whose recipe is only no-ops exists but is no check (#922)."""
+    index = build_index(_repo(tmp_path, {"Makefile": "test:\n\ttrue\nlint:\n\truff check .\n"
+                                                      "check: test\n"}))
+    noop = resolve("make test", index=index)
+    assert (noop.verdict, noop.reason) == ("unknown", "target `test` in a Makefile runs nothing")
+    assert resolve("make test lint", index=index).resolved  # one target still runs something
+    assert resolve("make check", index=index).resolved  # a prerequisite is the recipe
+    assert resolve("make nosuch", index=index).verdict == "missing"
+
+
+@pytest.mark.parametrize("makefile", [
+    pytest.param("test:\n\t@echo running && pytest\n", id="echo-and-and"),
+    pytest.param("test:\n\techo running; pytest -q\n", id="echo-semicolon"),
+    pytest.param("test:\n\techo pytest | sh\n", id="echo-pipe"),
+    pytest.param("test:\nifeq ($(CI),1)\n\tpytest --ci\nelse\n\tpytest\nendif\n", id="conditional"),
+    pytest.param("test:\n# run the suite\n\tpytest\n", id="column-0-comment"),
+    pytest.param("test: ## Run tests\n\tpytest\n", id="help-comment"),
+])
+def test_a_make_target_that_runs_something_still_resolves(tmp_path: Path, makefile: str) -> None:
+    """Forms a no-op reader could misread: each runs a check, so it resolves (#922)."""
+    index = build_index(_repo(tmp_path, {"Makefile": makefile}))
+    assert resolve("make test", index=index).resolved
+
+
+def test_a_help_commented_target_that_runs_nothing_is_unknown(tmp_path: Path) -> None:
+    index = build_index(_repo(tmp_path, {"Makefile": "test: ## Run tests\n\t@echo \"no tests yet\"\n"}))
+    assert resolve("make test", index=index).verdict == "unknown"

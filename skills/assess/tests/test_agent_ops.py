@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from lib.agents.agent_ops import scan_agent_ops
 
 
@@ -62,7 +64,8 @@ def test_tracked_settings_credit_summary(git_repo) -> None:
     repo, commit = git_repo
     _write_settings(repo, ".claude/settings.json", {
         "permissions": {"allow": ["Bash(ls:*)", "Read"], "deny": ["WebFetch"]},
-        "hooks": {"PreToolUse": [], "PostToolUse": []},
+        "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "./guard.sh"}]}],
+                  "PostToolUse": [{"hooks": [{"type": "command", "command": "ruff format"}]}]},
         "sandbox": {"enabled": True},
     })
     commit("add settings")
@@ -90,6 +93,43 @@ def test_untracked_settings_reported_not_credited(git_repo) -> None:
     assert [s["path"] for s in block["settings"]] == [".claude/settings.local.json"]
     assert block["settings"][0]["tracked"] is False
     assert block["summary"]["permissions_encoded"] is False
+
+
+_NOOP = {"type": "command", "command": "true"}
+
+
+@pytest.mark.parametrize(("hooks", "events"), [
+    pytest.param({"PreToolUse": [], "PostToolUse": []}, 0, id="empty-event-lists"),
+    pytest.param({"Stop": [{"hooks": [_NOOP]}]}, 0, id="true"),
+    pytest.param({"Stop": [{"hooks": [{"type": "command", "command": " : ; exit 0 "}]}]}, 0, id="colon-exit-0"),
+    pytest.param({"Stop": [{"hooks": [{"type": "command", "command": ""}]}]}, 0, id="empty-command"),
+    pytest.param({"Stop": [{"hooks": [{"type": "command"}]}]}, 0, id="no-command"),
+    pytest.param({"Stop": [{"hooks": []}], "PreToolUse": [{"matcher": "Bash"}]}, 0, id="no-hooks"),
+    pytest.param({"Stop": [{"hooks": [_NOOP, {"type": "command", "command": "make test"}]}]}, 1,
+                 id="one-real-beside-a-noop"),
+    pytest.param({"SessionStart": [{"hooks": [{"type": "command", "command": "echo 'Run make test'"}]}]}, 1,
+                 id="echo-adds-context"),
+    pytest.param({"Stop": [{"hooks": [{"type": "prompt", "prompt": "Check the tests ran."}]}]}, 1,
+                 id="prompt-hook"),
+    pytest.param({"Stop": [{"hooks": [{"type": "http", "url": "https://example.com/hook"}]}]}, 1,
+                 id="http-hook"),
+    pytest.param({"PreToolUse": [{"hooks": [{"type": "mcp_tool", "server": "s", "tool": "t"}]}]}, 1,
+                 id="mcp-tool-hook"),
+    pytest.param({"Stop": [{"hooks": [{"type": "agent", "prompt": "Verify the tests ran."}]}]}, 1,
+                 id="agent-hook"),
+    pytest.param({"Stop": [{"hooks": [{"command": "make test"}]}]}, 0, id="typeless-hook"),
+    pytest.param({"Stop": [{"hooks": [{"type": "webhook", "url": "x"}]}]}, 0, id="unknown-type"),
+    pytest.param({"Stop": [{"hooks": [_NOOP]}], "PostToolUse": [{"hooks": [
+        {"type": "command", "command": "true && ruff format"}]}]}, 1, id="noop-and-real-events"),
+])
+def test_hook_events_count_hooks_that_act(git_repo, hooks: object, events: int) -> None:
+    """A hook event counts only when it holds a hook that does something (#922)."""
+    repo, commit = git_repo
+    _write_settings(repo, ".claude/settings.json", {"hooks": hooks})
+    commit("add settings")
+    block = scan_agent_ops(repo)
+    assert block["settings"][0]["hook_events"] == events
+    assert block["summary"]["hooks_present"] is (events > 0)
 
 
 def test_hooks_dir_scripts(git_repo) -> None:

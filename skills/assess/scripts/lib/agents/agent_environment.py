@@ -30,7 +30,10 @@ at HEAD (``lib.command_index.repo_files``):
   program after ``uv run``), so an install command such as ``npm ci`` or
   ``uv sync --extra test`` is never a check. Instruction files are read with
   ``lib.named_check`` (#951), so a named ``make ci`` counts here though a CI line
-  running it reads null at Layer 5.
+  running it reads null at Layer 5. A Makefile target that runs nothing
+  (``command_index.TargetSet.noop``: no prerequisite, only ``true``, ``:``,
+  ``exit 0`` or echo lines) is neither an entry point nor a resolved named
+  check: the resolver reads it ``unknown`` (#922).
 - ``pinning``: one row per dependency manifest and the lockfile found for it,
   built by ``lib.pinning`` (the manifest table, the ``skipped_library`` and
   ``direct_pins_only`` notes). ``manifests_total`` counts the manifests the lock
@@ -416,7 +419,8 @@ def _entry_points(index: RepoIndex) -> list[CheckEntry]:
                 (index.tox_envs, "tox -e", "tox"),
                 (index.nox_sessions, "nox -s", "noxfile.py"))
     for family, runner, source in families:
-        for name in sorted(n for n in (family.names if family else frozenset()) if is_named_check_name(n)):
+        names = family.names - family.noop if family else frozenset()  # a no-op target is no check (#922)
+        for name in sorted(n for n in names if is_named_check_name(n)):
             out.append({"command": f"{runner} {name}", "source": source})
     if index.tox_envs is not None:
         out.append({"command": "tox", "source": "tox"})

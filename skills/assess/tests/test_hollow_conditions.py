@@ -68,7 +68,8 @@ def _case(case_id: str, row: str, level: int, files: dict[str, str], fixed_by: s
 CASES = [
     # Declared, not counted under #744; no issue changes the criterion.
     _case("l0-1-stub-instructions", "layer-0-instructions", 1, {"CLAUDE.md": "# x\n"}, _NONE_FILED),
-    _case("l0-2-noop-check", "layer-0-instructions", 2, _NOOP_CHECK, _NONE_FILED),
+    # #922: a Make target whose recipe runs nothing is no check.
+    _case("l0-2-noop-check", "layer-0-instructions", 2, _NOOP_CHECK, None),
     _case("l1-1-telemetry-dependency", "layer-1-liveness", 1, {
         "pyproject.toml": "[project]\nname = 'x'\nversion = '0'\ndependencies = ['opentelemetry-api']\n",
     }, _NONE_FILED),
@@ -78,10 +79,10 @@ CASES = [
     _case("l4-1-codeowners-star", "layer-4-architecture", 1, {
         ".github/CODEOWNERS": "* @x\n", "src/a.py": "x = 1\n",
     }, None),
-    # The Layer 4 recovery step is as cheap as `* @x`.
+    # #922: an architecture doc must name two or more module paths; one is a pointer.
     _case("l4-1-architecture-one-path", "layer-4-architecture", 1, {
         "ARCHITECTURE.md": "# Architecture\n\nThe entry point is `src/a.py`.\n", "src/a.py": "x = 1\n",
-    }, _NONE_FILED),
+    }, None),
     _case("l5-1-pytest-or-true", "layer-5-ci", 1,
           {".github/workflows/ci.yml": _workflow("pytest || true")}, None),
     _case("l5-1-linter-version", "layer-5-ci", 1,
@@ -109,14 +110,14 @@ CASES = [
           {".github/workflows/ci.yml": _workflow("pytest --cov-fail-under=${{ env.COV_MIN }}")}, None),
     _case("l6-1-jacoco-ratio", "layer-6-coverage", 1, {"pom.xml": _JACOCO_POM}, None),
     _case("l7-1-review-config-file", "layer-7-review", 1, {".coderabbit.yaml": "reviews: {}\n"}, _NONE_FILED),
-    # Layer 8 has no fixing child of #776.
+    # Layer 8 level 1 has no fixing issue; #922 asks the maintainer.
     _case("l8-1-one-allow-entry", "layer-8-agent-ops", 1,
           {".claude/settings.json": json.dumps(_ALLOW)}, _NONE_FILED),
     _case("l8-2-one-hook-one-routine", "layer-8-agent-ops", 2, {
         ".claude/settings.json": json.dumps(
             {**_ALLOW, "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "true"}]}]}}),
         ".claude/routines/x.md": "# x\n",
-    }, _NONE_FILED),
+    }, None),  # #922: a hook that runs only `true` is no hook.
 ]
 
 
