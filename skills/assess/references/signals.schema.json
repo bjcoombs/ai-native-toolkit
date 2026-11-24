@@ -757,7 +757,7 @@
                 "boolean",
                 "null"
               ],
-              "description": "Layer 3 level 1 (issue #782): true when a CI line runs a linter that can fail its job on ordinary changes (not --version or --help), or a step uses a known lint action (golangci-lint-action, ruff-action, super-linter, reviewdog) not set to install only (issue #893: ruff-action args --version, golangci-lint-action install-only true), null when none does but included jobs, unsettled triggers, a lint script the tree does not hold or a check target or script that may lint inside it could hold one, or when the only static gate is a compiler run with warnings as errors or a .NET build's analysers (issue #926), else false. A formatter that rewrites files counts only when a later line of its job runs git diff --exit-code."
+              "description": "Layer 3 level 1 (issue #782): true when a CI line runs a linter that can fail its job on ordinary changes (not --version or --help), or a step uses a known lint action (golangci-lint-action, ruff-action, super-linter, reviewdog) not set to install only (issue #893: ruff-action args --version, golangci-lint-action install-only true), null when none does but included jobs, a reviewdog step with no failing fail_level (it cannot fail its job), unsettled triggers, a lint script the tree does not hold or a check target or script that may lint inside it could hold one, or when the only static gate is a compiler run with warnings as errors or a .NET build's analysers (issue #926), else false. A formatter that rewrites files counts only when a later line of its job runs git diff --exit-code."
             },
             "lint_basis": {
               "enum": [
