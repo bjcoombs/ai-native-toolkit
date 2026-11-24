@@ -10,12 +10,17 @@ path(s): team:coverage.gate (row 'coverage-80')``, and adds two things to each p
   coverage_gate.available?``. With no close path it points at ``docs/what-we-measure.md``,
   which lists every signal.
 - **the line.** ``UnknownSignalError.located(text)`` adds ``line N``: the first line of the
-  model file at or after the row's ``id = "..."`` line that holds the quoted path.
+  model file at or after the row's ``id`` line that holds the path in double or single
+  quotes (a TOML basic or literal string).
   ``lib.levels.load_levels`` calls it, since only it holds the file text; a model passed to
   ``parse_levels`` as a table has no lines to name.
 
-``lib.level_signals`` imports ``lib.levels``, so this module reads it only when an error is
-built, never at import.
+The names come from ``register_names``: ``lib.level_signals`` registers ``published_paths`` when
+it is imported, which every run that loads a model with the real validator does. This module never
+imports ``lib.level_signals`` itself: that module imports ``lib.levels``, and through
+``lib.signals`` the platform clients, so an import here, even inside a function, would make every
+importer of ``lib.levels`` reach the network (``tests/test_signals.py``). With nothing registered,
+an error points at the catalog.
 
 Tests: ``tests/test_levels_hints.py``.
 """
@@ -23,10 +28,11 @@ from __future__ import annotations
 
 import difflib
 import re
+from typing import Callable
 
 from lib.levels_fields import LevelsError
 
-__all__ = ["CATALOG", "UnknownSignalError", "closest"]
+__all__ = ["CATALOG", "UnknownSignalError", "closest", "register_names"]
 
 # Where a reader finds every signal a criterion can name, relative to the repository root.
 CATALOG = "docs/what-we-measure.md"
@@ -34,14 +40,20 @@ CATALOG = "docs/what-we-measure.md"
 # (scope, signal path, row id) for each refused path.
 BadPath = tuple[str, str, str]
 
+# ``scope -> paths``: the signal paths a criterion can name in that scope, once registered.
+_names: list[Callable[[str], tuple[str, ...]]] = []
+
+
+def register_names(names: Callable[[str], tuple[str, ...]]) -> None:
+    """Use ``names`` for the "did you mean" hint; the last registration wins."""
+    _names[:] = [names]
+
 
 def closest(scope: str, path: str, limit: int = 3) -> list[str]:
     """Up to ``limit`` published signal paths of ``scope`` close to ``path``, closest first."""
-    from lib.level_signals import published_paths  # lib.level_signals imports lib.levels
-
-    if scope not in ("org", "team"):
+    if scope not in ("org", "team") or not _names:
         return []
-    return difflib.get_close_matches(path, published_paths(scope), n=limit, cutoff=0.6)
+    return difflib.get_close_matches(path, _names[0](scope), n=limit, cutoff=0.6)
 
 
 def _fix(scope: str, path: str) -> str:
@@ -53,14 +65,14 @@ def _fix(scope: str, path: str) -> str:
 
 
 def _line(text: str, row_id: str, path: str) -> int | None:
-    """The 1-based line holding ``"path"`` at or after the line that declares ``row_id``."""
+    """The 1-based line holding the quoted ``path`` at or after the line that declares ``row_id``."""
     lines = text.splitlines()
-    declares = re.compile(r'^\s*id\s*=\s*"' + re.escape(row_id) + '"')
+    declares = re.compile(r'^\s*id\s*=\s*(["\'])' + re.escape(row_id) + r'\1')
     start: int = next((i for i, line in enumerate(lines) if declares.match(line)), 0)
-    quoted = f'"{path}"'
+    quoted = (f'"{path}"', f"'{path}'")
     order: list[int] = [*range(start, len(lines)), *range(0, start)]
     for index in order:
-        if quoted in lines[index]:
+        if any(q in lines[index] for q in quoted):
             return index + 1
     return None
 

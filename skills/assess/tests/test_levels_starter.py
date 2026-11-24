@@ -77,3 +77,30 @@ def test_the_command_prints_the_next_step_and_exits_2_on_error(tmp_path: Path,
     assert capsys.readouterr().out == f"Wrote {out}. Run it with: /assess --levels {out}\n"
     assert levels_new.main([str(out)]) == 2
     assert "already exists" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("version", ["profile-x", "default", "handover"])
+def test_a_forced_copy_that_does_not_load_keeps_the_existing_file(tmp_path: Path, version: str) -> None:
+    out = tmp_path / "x.toml"
+    out.write_text("mine", encoding="utf-8")
+    with pytest.raises(StarterError, match="does not load"):
+        write_starter(out, version=version, force=True)
+    assert out.read_text(encoding="utf-8") == "mine"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["x.toml"]  # no temporary file is left
+
+
+@pytest.mark.parametrize(("name", "version"), [("default.toml", "custom-default-1"),
+                                               ("profile-team.toml", "custom-profile-team-1"),
+                                               ("handover.toml", "handover-1")])
+def test_a_reserved_file_name_still_gets_a_version_that_loads(tmp_path: Path, name: str, version: str) -> None:
+    out = write_starter(tmp_path / name)
+    assert single_repo_choice(None, out, signal_path_validator()).model["version"] == version
+
+
+def test_a_folder_that_does_not_exist_is_a_starter_error_and_exit_2(tmp_path: Path,
+                                                                   capsys: pytest.CaptureFixture[str]) -> None:
+    out = tmp_path / "no" / "x.toml"
+    with pytest.raises(StarterError, match="cannot write"):
+        write_starter(out)
+    assert levels_new.main([str(out)]) == 2
+    assert "cannot write" in capsys.readouterr().err

@@ -6,27 +6,32 @@ changes:
 
 - ``FIELD_GUIDE`` goes first: one comment line or two for each field of the format, so a
   newcomer can edit the copy without opening ``lib/levels.py``;
-- the ``version`` line becomes ``V``, by default ``<OUT stem>-1``. The shipped versions
-  start ``default-`` or ``profile-``, and ``lib.profiles.resolve`` refuses those in a
-  custom file, so a copy that kept them would not load with ``--levels``.
+- the ``version`` line becomes ``V``, by default ``<OUT stem>-1`` (``custom-<OUT stem>-1``
+  when that would start with a reserved prefix, as for ``default.toml``). The shipped
+  versions start ``default-`` or ``profile-``, and ``lib.profiles.resolve`` refuses those in
+  a custom file, so a copy that kept them would not load with ``--levels``.
 
 The copy must load with ``--levels`` before the command reports success: ``write_starter``
-loads it through ``lib.profiles.single_repo_choice`` and removes it on any error. It never
-overwrites an existing file unless ``force`` is set. The guide that uses it is
+writes a temporary file beside ``OUT``, loads it through ``lib.profiles.single_repo_choice``
+and moves it onto ``OUT`` only when it loads. On any error the temporary file is removed and
+``OUT`` is left as it was. It never replaces an existing file unless ``force`` is set. A file
+system error (a folder that does not exist, no permission) is a ``StarterError`` too. The guide that uses it is
 ``docs/build-your-own-practice.md`` at the repository root.
 
 Tests: ``tests/test_levels_starter.py``.
 """
 from __future__ import annotations
 
+import os
 import re
+import tempfile
 from pathlib import Path
 
 from lib.level_signals import signal_path_validator
-from lib.profiles import ProfileError, profile_path, single_repo_choice
+from lib.profiles import RESERVED_PREFIXES, ProfileError, profile_path, single_repo_choice
 from lib.signal_grades import DEFAULT_LEVELS
 
-__all__ = ["FIELD_GUIDE", "StarterError", "source_path", "starter_text", "write_starter"]
+__all__ = ["FIELD_GUIDE", "StarterError", "default_version", "source_path", "starter_text", "write_starter"]
 
 FIELD_GUIDE = """\
 # Your own maturity model, written by scripts/levels_new.py.
@@ -98,11 +103,27 @@ def write_starter(out: Path, profile: str | None = None, version: str | None = N
         raise StarterError(f"{out} already exists; pass --force to replace it")
     if version is not None and (not version.strip() or '"' in version or "\\" in version):
         raise StarterError(f"version {version!r} must be a non-empty string without quotes or backslashes")
-    text = starter_text(source_path(profile), out.name, version or f"{out.stem}-1")
-    out.write_text(text, encoding="utf-8")
+    text = starter_text(source_path(profile), out.name, version or default_version(out))
     try:
-        single_repo_choice(None, out, signal_path_validator())
+        handle, name = tempfile.mkstemp(prefix=f".{out.stem}-", suffix=".toml", dir=out.parent)
+    except OSError as exc:
+        raise StarterError(f"cannot write {out}: {exc}") from exc
+    temporary = Path(name)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            stream.write(text)
+        single_repo_choice(None, temporary, signal_path_validator())
+        os.replace(temporary, out)
     except ProfileError as exc:
-        out.unlink()
         raise StarterError(f"the copy does not load: {exc}") from exc
+    except OSError as exc:
+        raise StarterError(f"cannot write {out}: {exc}") from exc
+    finally:
+        temporary.unlink(missing_ok=True)
     return out
+
+
+def default_version(out: Path) -> str:
+    """``<stem>-1``, or ``custom-<stem>-1`` when the stem would give a reserved version."""
+    version = f"{out.stem}-1"
+    return f"custom-{version}" if version.startswith(RESERVED_PREFIXES) else version

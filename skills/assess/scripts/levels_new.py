@@ -5,7 +5,7 @@
 
 The copy opens with a comment on each field of the format, and its ``version`` is
 ``<file stem>-1`` unless ``--version`` names another. It refuses to replace an existing file
-without ``--force``. On success it prints one line naming the file and the command that runs
+without ``--force``, and a copy that does not load leaves an existing file as it was. On success it prints one line naming the file and the command that runs
 it; on any error it prints the reason to stderr and exits 2. The logic is
 ``lib/levels_starter.py``; the guide is ``docs/build-your-own-practice.md`` at the repository
 root.

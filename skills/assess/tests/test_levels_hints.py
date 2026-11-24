@@ -89,3 +89,27 @@ def test_a_parsed_table_has_no_line_to_name() -> None:
 def test_a_path_not_in_the_text_keeps_no_line() -> None:
     error = UnknownSignalError([("team", "a.b", "r")]).located('id = "r"\n')
     assert " at line" not in str(error)
+
+
+def test_with_no_names_registered_the_error_points_at_the_catalog(monkeypatch: pytest.MonkeyPatch) -> None:
+    import lib.levels_hints as hints
+    monkeypatch.setattr(hints, "_names", [])
+    assert closest("team", "coverage_gate.threshold") == []
+    assert str(UnknownSignalError([("team", "coverage_gate.threshold", "r")])).endswith(f"{CATALOG} lists them all")
+
+
+def test_levels_hints_never_imports_level_signals() -> None:
+    """lib.level_signals reaches the platform clients; importing it here would mark every
+    importer of lib.levels as a network scan (tests/test_signals.py)."""
+    import lib.levels_hints as hints
+    assert "level_signals" not in Path(hints.__file__).read_text(encoding="utf-8").split('"""', 2)[2]
+
+
+def test_a_literal_string_path_still_gets_its_line(tmp_path: Path) -> None:
+    path = tmp_path / "t.toml"
+    path.write_text(MODEL.replace('"coverage_gate.enforcd"', "'coverage_gate.enforcd'").replace('id = "second"', "id = 'second'"),
+                    encoding="utf-8")
+    with pytest.raises(UnknownSignalError) as caught:
+        load_levels(path, signal_path_validator())
+    assert "(row 'first') at line 12," in str(caught.value)
+    assert "(row 'second') at line 23," in str(caught.value)

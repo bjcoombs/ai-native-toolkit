@@ -56,7 +56,7 @@ What each line does:
 
 This practice has two tests. The first test asks that CI enforces a coverage gate of at least 50 percent. The second asks that the highest threshold in the repository is at least 80. Read together, CI enforces a gate, and some gate is set at 80 or more.
 
-The operators are `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in` and `not_in`. `in` and `not_in` take a list, such as `["A", "B"]`. The other operators take one number, string, `true` or `false`.
+The operators are `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in` and `not_in`. `lt`, `lte`, `gt` and `gte` take a number, such as `80`, never a string such as `"80"`. `eq` and `ne` take one number, string, `true` or `false`. `in` and `not_in` take a list of one type, such as `["A", "B"]`.
 
 ## 3. Find the signal
 

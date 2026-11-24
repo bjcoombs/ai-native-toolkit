@@ -149,7 +149,7 @@ Tests: `tests/test_signal_inputs.py`, one case per default criterion signal.
 
 `published_paths(scope)` (#1151) lists the paths a criterion can name: `ORG_PATHS` for `org`; for `team`,
 every scalar field of a typed block plus each block's `available`. A load error's "did you mean"
-hint reads it (`lib/levels_hints.py`). Tests: `tests/test_levels_hints.py`.
+hint reads it: this module registers it with `lib/levels_hints.py` on import. Tests: `tests/test_levels_hints.py`.
 """
 from __future__ import annotations
 
@@ -161,6 +161,7 @@ from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 from lib.counts_only.counts_only_schema import ROOTS
 from lib.levels import Criterion, PathValidator, MaturityModel, Scope, load_levels
+from lib.levels_hints import register_names
 from lib.signals_schema import SCHEMA_PATH
 from lib.signal_grades import DEFAULT_LEVELS as DEFAULT_LEVELS
 from lib.signal_grades import EMPTY_DENOMINATORS as EMPTY_DENOMINATORS
@@ -256,7 +257,7 @@ def _leaves(tp: Any, prefix: str, depth: int = 0) -> set[str]:
 
 
 @lru_cache(maxsize=2)
-def published_paths(scope: Scope) -> tuple[str, ...]:
+def published_paths(scope: str) -> tuple[str, ...]:
     """The signal paths a criterion can name in ``scope``, sorted: the ``ORG_PATHS`` for ``org``;
     for ``team``, every scalar field of a typed block plus each block's ``available``.
 
@@ -271,6 +272,9 @@ def published_paths(scope: Scope) -> tuple[str, ...]:
             for shape in shapes:
                 paths |= _leaves(shape, root)
     return tuple(sorted(p for p in paths if team_path_ok(p)))
+
+
+register_names(published_paths)  # the "did you mean" names of a load error
 
 
 def signal_path_validator() -> PathValidator:
