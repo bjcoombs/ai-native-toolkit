@@ -585,14 +585,22 @@ def test_gates_not_compared_across_models_never_reads_clean(tmp_path):
     verdict = evaluate(ctx, gate)
     assert verdict["failed"] is True  # opted in: a default run that compared nothing fails
     text = format_verdict(verdict)
-    assert ("FAIL gates not compared: Model changed since last run (handover → default); gates not "
-            "compared. fail_on_gate_loss compares runs of one maturity model") in text
+    assert ("FAIL gates not compared: model changed (handover → default); cannot confirm no gate "
+            "was lost") in text
     assert "warn gates not compared" not in text and "clean snapshot" not in text
     off = evaluate(ctx, load_gate_config(Path("/nonexistent")))
     assert off["failed"] is False
     assert "warn gates not compared: Model changed since last run (handover → default)" in format_verdict(off)
     assert "clean snapshot" not in format_verdict(off)
-    profile = _loss_ctx(None)
+    to_profile = _loss_ctx(None)
+    to_profile["level"]["levels_version"] = "profile-handover-2026.11.23"
+    to_profile["since_last_run"]["lines"] = [
+        "Model changed since last run (default → handover); gates not compared"]
+    verdict = evaluate(to_profile, gate)
+    assert verdict["failed"] is True
+    assert ("FAIL gates not compared: model changed (default → handover); cannot confirm no gate "
+            "was lost") in format_verdict(verdict)
+    profile = _loss_ctx(None)  # a profile run with no model-changed line: a warn line only
     profile["level"]["levels_version"] = "profile-handover-2026.11.23"
     verdict = evaluate(profile, gate)
     assert verdict["failed"] is False
