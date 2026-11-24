@@ -600,13 +600,23 @@ def test_gates_not_compared_across_models_never_reads_clean(tmp_path):
     assert verdict["failed"] is True
     assert ("FAIL gates not compared: model changed (default → handover); cannot confirm no gate "
             "was lost") in format_verdict(verdict)
-    profile = _loss_ctx(None)  # a profile run with no model-changed line: a warn line only
+    profile = _loss_ctx(None)  # a profile run that compared nothing, e.g. on a CI checkout
     profile["level"]["levels_version"] = "profile-handover-2026.11.23"
     verdict = evaluate(profile, gate)
-    assert verdict["failed"] is False
-    assert verdict["gates_not_compared"] == (
-        "this run used handover, and the committed baseline holds the default model's gates only")
-    assert "clean snapshot" not in format_verdict(verdict)
+    assert verdict["failed"] is True
+    assert ("FAIL gates not compared under profile handover: no committed per-profile baseline yet "
+            "(#1184). Run without --fail-on-gate-loss, or use the default model in CI") in format_verdict(verdict)
+    off = evaluate(profile, load_gate_config(Path("/nonexistent")))
+    assert off["failed"] is False
+    assert off["gates_not_compared"] == "no committed per-profile baseline yet for profile handover (#1184)"
+    assert "clean snapshot" not in format_verdict(off)
+    custom = _loss_ctx(None)
+    custom["level"]["levels_version"] = "team-1"
+    assert "under model team-1:" in format_verdict(evaluate(custom, gate))
+    compared = _loss_ctx([])  # the previous run used the same profile: compared, nothing lost
+    compared["level"]["levels_version"] = "profile-handover-2026.11.23"
+    verdict = evaluate(compared, gate)
+    assert verdict["failed"] is False and "gates_not_compared" not in verdict
     default = _loss_ctx(None)
     default["level"]["levels_version"] = "default-2026.11.10"
     assert "gates_not_compared" not in evaluate(default, gate)

@@ -236,3 +236,21 @@ def test_a_profile_run_keeps_the_default_baseline_so_ci_still_catches_a_lost_gat
     verdict = evaluate(ctx, load_gate_config(ci2))
     assert verdict["failed"] is True
     assert f"FAIL gate lost: {lost[0]}" in format_verdict(verdict)
+
+
+def test_a_profile_run_under_the_gate_loss_opt_in_fails_only_when_it_compared_nothing(ci2: Path) -> None:  # noqa: F811
+    from assess_core import build_and_publish_run
+    from assess_gate import evaluate, format_verdict
+    from lib.assess_config import load_gate_config
+
+    assess = ci2 / ".assess"
+    build_and_publish_run(repo_root=ci2, run_date="2026-11-22", non_interactive=True)
+    (assess / "run-context.json").unlink()  # a CI checkout: the committed default baseline only
+    (assess / "config.toml").write_text("[gate]\nfail_on_gate_loss = true\n", encoding="utf-8")
+    first = build_and_publish_run(repo_root=ci2, run_date="2026-11-23", non_interactive=True, model=HANDOVER)
+    verdict = evaluate(first, load_gate_config(ci2))
+    assert verdict["failed"] is True
+    assert "FAIL gates not compared under profile handover: no committed per-profile baseline" in format_verdict(verdict)
+    again = build_and_publish_run(repo_root=ci2, run_date="2026-11-24", non_interactive=True, model=HANDOVER)
+    assert again["since_last_run"]["gates_lost"] == []  # compared with the run-context.json of the same profile
+    assert evaluate(again, load_gate_config(ci2))["failed"] is False
