@@ -26,6 +26,9 @@ Writes (when the input carries an ``actions`` array):
                                           v2 - carries per-action status/mode and
                                           preserves done state across re-runs)
 
+Then re-renders the top card's Start here and Done when from that actions.json
+(lib/card_refresh.py, #1252) in run-context.json and assess-report.md.
+
 Run:
     uv run assess_finalize.py <repo_root>
     uv run assess_finalize.py <repo_root> --drop-entry <run_id>
@@ -47,6 +50,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.action_conditions import condition_errors
+from lib.card_refresh import refresh_card
 from lib.headline import as_headline
 from lib.evidence_check import check_evidence, describe
 from lib.gap_actions import action_mode
@@ -656,6 +660,10 @@ def finalize_run(*, assess_dir: Path) -> None:
     actions = data.get("actions")
     if isinstance(actions, list) and actions:
         _write_actions_contract(assess_dir, actions, run_id=ctx.get("run_id"))
+    # The core worded the card before this run's Top 3 existed: name its first open action now.
+    card_warning = refresh_card(assess_dir)
+    if card_warning:
+        print(f"finalize: warning: {card_warning}", file=sys.stderr)
     for e in tolerated:
         print(
             f"finalize: warning: layer {e['layer']} evidence rejected, verdict kept on "
