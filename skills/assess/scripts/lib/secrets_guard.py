@@ -327,14 +327,23 @@ def _runs_on_change(lines: list[str]) -> bool:
 
 def _unconditional(lines: list[str], i: int, job: int) -> bool:
     """Whether the ``when:`` on line ``i`` of the job opening at ``job`` holds on every pipeline: set on
-    the job itself, or in a rule with no ``if:``, ``changes:`` or ``exists:``."""
+    the job itself, or in the first rule, with no ``if:``, ``changes:`` or ``exists:``."""
     indent = len(lines[i]) - len(lines[i].lstrip())
     first_key = next((len(ln) - len(ln.lstrip()) for ln in lines[job + 1:] if ln.strip()), indent)
     if not _STEP_START.match(lines[i]) and indent <= first_key:  # a key of the job, any indent width
         return True
     start = i if _STEP_START.match(lines[i]) else next(
         (k for k in range(i, job, -1) if _STEP_START.match(lines[k])), i)
-    item = lines[start:_block_end(lines, start, len(lines[start]) - len(lines[start].lstrip()))]
+    item_indent = len(lines[start]) - len(lines[start].lstrip())
+    item = lines[start:_block_end(lines, start, item_indent)]
+    # GitLab rules are first-match: a rule after another one is a fallback, so the job still runs
+    # wherever an earlier rule matches. Only a first rule with no condition holds on every pipeline.
+    for k in range(start - 1, job, -1):
+        ind = len(lines[k]) - len(lines[k].lstrip())
+        if lines[k].strip() and ind < item_indent:
+            break  # the ``rules:`` key: no earlier rule
+        if ind == item_indent and _STEP_START.match(lines[k]):
+            return False
     return not any(_RULE_CONDITION.match(ln) for ln in item)
 
 

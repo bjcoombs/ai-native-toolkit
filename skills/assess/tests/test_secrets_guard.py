@@ -372,3 +372,11 @@ def test_a_manual_variant_does_not_drop_a_selected_hook(tmp_path: Path) -> None:
     root = _repo(tmp_path, {".pre-commit-config.yaml": cfg,
                             ".github/workflows/x.yml": "steps:\n  - run: pre-commit run --all-files\n"})
     assert scan_secrets_guard(root)["ci"]["tools"] == ["gitleaks"]
+
+
+@pytest.mark.parametrize("fallback", ["never", "manual"])
+def test_a_trailing_when_rule_is_a_fallback(tmp_path: Path, fallback: str) -> None:
+    text = ("include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n"
+            "secret_detection:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"merge_request_event\"\n"
+            f"    - when: {fallback}\n")
+    assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["tools"] == ["secret_detection"]
