@@ -122,7 +122,7 @@ def test_a_removal_that_keeps_every_gate_for_two_runs_is_credited_in_the_ledger(
     assert f"- Pruned: always-on text in `CLAUDE.md`, saved {before - 41} always-on lines" in third["markdown"]
     report = subprocess.run([sys.executable, str(SCRIPTS / "assess_report.py"), str(repo), "--stdout"],
                             capture_output=True, encoding="utf-8", errors="replace", check=True).stdout
-    assert "Pruned: always-on text in `CLAUDE.md`" in report
+    assert "pruned always-on text in `CLAUDE.md`" in report.split("\n## ", 1)[0]
 
 
 def test_a_degraded_run_keeps_the_baseline_and_the_ledger(tmp_path: Path, monkeypatch: Any) -> None:

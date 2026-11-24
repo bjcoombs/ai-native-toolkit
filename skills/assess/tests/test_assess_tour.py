@@ -35,9 +35,9 @@ def test_sample_lands_on_step_2_with_one_gate_next(walked: dict[str, object]) ->
     report = walked["before_report"]
     assert isinstance(report, str)
     assert "#step) 2 of 4:" in report  # "Step" links the glossary (#1102)
-    # The gate's task wording belongs to lib/exec_summary.py (#1142 rewords it); pin only the line.
-    assert "\nNext: " in report
-    assert "First run." in report
+    # The gate's wording belongs to lib/top_card.py (#1252); pin only the line.
+    assert "\nBlocks Step 3: " in report
+    assert "This run is your baseline" in report
 
 
 def test_the_fix_moves_the_step_by_exactly_one(walked: dict[str, object]) -> None:
@@ -49,7 +49,7 @@ def test_the_fix_moves_the_step_by_exactly_one(walked: dict[str, object]) -> Non
     assert isinstance(report, str)
     assert "#step) 3 of 4:" in report
     # The re-run credits the gate the fix closed.
-    assert "- Gates gained: CI runs tests" in report
+    assert "now in place: CI turns red on a broken check" in report
 
 
 def test_a_second_fix_commits_nothing(walked: dict[str, object]) -> None:
