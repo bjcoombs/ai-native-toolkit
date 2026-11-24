@@ -50,7 +50,11 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   The template follows the same rule over every ``secret_detection`` definition in the merged
   pipeline (root and includes); definitions that disagree leave it unevaluated, and
   ``SECRET_DETECTION_DISABLED: "true"`` switches it off. An ``after_script:`` scan and a hidden
-  job do not count, since neither fails the pipeline.
+  job do not count, since neither fails the pipeline. Two assumptions are stated rather than
+  evaluated (#1204): a pipeline-level GitLab ``workflow: rules:`` is assumed to let the pipeline
+  run, and a GitHub step or job ``if:`` expression is assumed to hold (only a literal ``if:
+  false`` masks it). GitLab job ``rules:`` are held back because they commonly gate a scan job;
+  ``workflow:`` and ``if:`` gate whole pipelines or are rarely set on a scan step.
 
 **The two levels** (maintainer decision on #1173):
 
@@ -75,10 +79,12 @@ Block (``secrets_guard`` in run-context.json)::
 
     {"available": True,
      "pre_commit": {"present": bool, "file": str | None, "tools": [str, ...]},
-     "ci": {"present": bool, "files": [str, ...], "tools": [str, ...], "includes_unresolved": int},
+     "ci": {"present": bool, "files": [str, ...], "tools": [str, ...], "includes_unresolved": int,
+            "rules_unevaluated": [str, ...]},
      "configured": bool,
      "enforcement": {"available": True, "present": bool, "source": "ci" | None}
-                    | {"available": False, "reason": "secret_scanning_not_read: ..."},
+                    | {"available": False, "reason": "<code>: ..."},  # secret_scanning_not_read,
+                    # ci_includes_unresolved or gitlab_rules_unevaluated
      "sources": [{"source": "pre_commit" | "ci", "grade": str}, ...]}
 
 Counts-only output drops the file paths, or hashes them under ``--hash-paths``, and keeps the
@@ -525,7 +531,9 @@ def _ci_scan(text: str, hooks: frozenset[str] = frozenset(),
         commands = {m.group(1).lower() for m in _COMMAND.finditer(line)}
         images = {m.group(1).lower() for m in _DOCKER_IMAGE.finditer(line)} - commands
         tools.update(t for t in (_tool_that_can_fail(n, line) for n in commands) if t)
-        tools.update(t for t in (_tool_that_can_fail(n, line, command=False) for n in images) if t)
+        # A ``uses: docker://`` step takes its arguments from ``with: args:`` on later lines.
+        image_line = f"{line} {_step_value(lines, i, 'args') or ''}" if "docker://" in line else line
+        tools.update(t for t in (_tool_that_can_fail(n, image_line, command=False) for n in images) if t)
     counted = {t for i, ts in found.items() if i not in held for t in ts}
     unevaluated = {t for i, ts in found.items() if i in held for t in ts} - counted
     return sorted(counted), sorted(unevaluated)

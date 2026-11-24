@@ -469,3 +469,8 @@ def test_a_job_level_never_or_manual_is_certainly_off(tmp_path: Path, job: str) 
                                  "secret_detection:\n  when: always\n"])
 def test_a_plain_template_job_counts(tmp_path: Path, job: str) -> None:
     assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": TEMPLATE + job}))["ci"]["tools"] == ["secret_detection"]
+
+
+def test_docker_uses_args_that_cannot_fail_are_not_a_scan(tmp_path: Path) -> None:
+    text = "steps:\n  - uses: docker://zricethezav/gitleaks:latest\n    with:\n      args: detect --exit-code 0\n"
+    assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": text}))["ci"]["present"] is False
