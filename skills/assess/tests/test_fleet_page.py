@@ -46,6 +46,9 @@ b.repos.forEach(function (r) {
   r.cells.forEach(function (c) { out.titles.push({repo: r.key, row: c.row, status: c.status, title: api.cellTitle(b, r, c)}); });
 });
 out.withSet = api.renderPage(b, {view: "ownership", unit: b.views[0].units[0].key, repo: null}, b.targets, true);
+out.withSetNoId = out.withSet;
+b.views[0].units[0].target_id = "ownership~x";
+out.withSet = api.renderPage(b, {view: "ownership", unit: b.views[0].units[0].key, repo: null}, b.targets, true);
 out.staticHasSet = typeof api.staticSource(b).setTarget;
 out.sections = api.SECTIONS.length;
 process.stdout.write(JSON.stringify(out));
@@ -158,7 +161,8 @@ def test_sections_come_in_the_design_order_and_target_entry_is_static_hidden() -
     heads = re.findall(r"<h2>(.*?)</h2>", page)
     assert heads == ["Since last run", "Where this unit stands", "Your target", "Drill-down", "Fleet pictures"]
     assert out["staticHasSet"] == "undefined" and "set-target" not in page
-    assert "set-target" in out["withSet"]  # a live source with setTarget draws the entry
+    assert "set-target" in out["withSet"]  # a live source with setTarget draws the entry for a unit with a target id
+    assert "set-target" not in out["withSetNoId"]  # and none for a unit without one (#949)
     assert out["sections"] == 5
 
 

@@ -39,14 +39,19 @@ refuses the whole publish. Only an unhashed key can be that long.
 ### Access rules
 
 The artifact's `db` capability declares exactly these rules (`access_rules()`). The root
-rule (path `""`) means no viewer writes documents outside the collections below. Each such
-document would count against the document cap. The root rule also covers each viewer's
-`data/users/` subtree, so a page that keeps per-viewer state there needs its own
-`data/users/{self}` rule.
+rule (path `""`) lets Contributors (`interact`) write (#949, `ROOT_WRITE`). At runtime contract
+0.2.96 the page can only ask whether a viewer may write at the root (`user.can("data.write")`),
+so this is how it offers target entry to Contributors and hides it from Viewers. The cost: a
+Contributor can create stray documents outside the collections, and each counts against the
+document cap. #1044 set the root to `owner` to prevent that; going back is the one constant.
+The root rule also covers each viewer's `data/users/` subtree; the page keeps no state there.
+With `runs`, `units` and `repos` at `write: owner`, only the artifact's own owner can publish
+the data. An Editor, or a person granted Owner in the share menu, can publish page versions but
+not the data.
 
 | Path | Read | Write |
 |---|---|---|
-| `""` (root) | `view` | `owner` |
+| `""` (root) | `view` | `interact` |
 | `runs` | `view` | `owner` |
 | `units` | `view` | `owner` |
 | `repos` | `view` | `owner` |
@@ -149,3 +154,48 @@ same bytes. The file is rewritten on every import, and an empty export writes it
 targets, so a cleared target does not linger. Exit 2 means the export, the bundle or the
 maturity model is unreadable, the model has no `[[steps]]` above Step 1, or no row of a
 non-empty export was accepted. On exit 2 the targets file is not touched.
+
+### Publishing the page
+
+The `/fleet` session publishes ([SKILL.md](../SKILL.md#publish-the-fleet-page-opt-in)).
+`scripts/fleet_publish_plan.py plan` writes everything it sends into `out/publish/`
+(`lib/fleet/fleet_publish_session.py`, `lib/fleet/fleet_page_live.py`). Nothing in it, or in
+the tests, publishes.
+
+| File | What it is |
+|---|---|
+| `page.html` | `fleet-view.html` with a database source. |
+| `capabilities.json` | `{"db": {"rules": [...]}}`, the rules above. No `user` declaration: the page only asks `can("data.write")`, which needs none, and it stores no viewer id. |
+| `batch-NNN.json` | The `ArtifactData` `batch` writes, in order, each pinned with `if_version` when its document exists. |
+| `plan.json` | The run id, the mode (`hashed` or `counts_only`), whether targets are on, the runtime contract (`0.2.96`, 25,000 documents) and the size report. |
+
+**Modes.** A `--full` run is refused. The default needs a hashed run. A plain counts-only run
+is planned only with `--allow-names`, since its documents and target ids carry repository and
+unit names. Only that mode turns on target entry: the read-back matches plain unit names, so
+a hashed page shows its data and says why it offers no targets.
+
+**The page's source.** The page draws from its embedded data at once, then lights up when the
+database answers:
+
+- It subscribes once to `targets`. A row counts only when its id is one of the page's own
+  target ids and its `step` is a whole number from 2 to the top Step. The page then shows that
+  target as set, with its progress to come after the next run.
+- It offers target entry only when the database is present, the page carries target ids and
+  `can("data.write")` is `true`. A Viewer, or a viewer the platform says nothing about, sees
+  none.
+- A target is written as `{"step": N}` to `targets/<target id>`, or deleted to clear it. The id
+  comes from the page's own data, never from what a viewer types, and must match
+  `(ownership|system)~` plus up to 190 id characters.
+- For the unit shown, it reads `units/<doc id>` once and lists each published run's lowest Step.
+
+**Strays.** Because Contributors can write at the root, a document can appear outside what the
+fleet writes. The planner counts every document of an exported collection other than `runs`,
+`units`, `repos` and `targets`, and every `targets` document whose id is not a target id. It
+reports them in `plan.json` (`strays`) and on stderr, and adds them and the targets to the
+document count. The database tool lists one named collection at a time, so a stray in a
+collection nobody exported is not seen.
+
+**Stored state.** The planner reads the `runs`, `units` and `repos` exports for three things:
+each document's size (the size guard), its version (the `if_version` pin) and what this run
+id already holds (`previous`, so a changed republish is refused). `publish.json` in the
+fleet's history directory for the org keeps the artifact URL and the runs published to it.

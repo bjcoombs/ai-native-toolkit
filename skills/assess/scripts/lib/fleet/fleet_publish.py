@@ -56,8 +56,9 @@ Writes carry no ``if_version``: the ``ArtifactData`` tool refuses a write to an 
 document without one, so the publisher reads the versions and pins each write (#949).
 
 ``access_rules`` is the ``db`` capability's rules manifest: a root rule (``path`` ``""``) of
-read ``view`` and write ``owner``, so no viewer writes documents outside the collections
-(each would count against the document cap), then ``runs``, ``units`` and ``repos`` read
+read ``view`` and write ``ROOT_WRITE`` (``interact`` since #949, so the page can tell a
+Contributor from a Viewer; ``owner``, #1044's choice, kept every viewer from writing documents
+outside the collections, where each counts against the document cap), then ``runs``, ``units`` and ``repos`` read
 ``view`` and write ``owner``, and ``targets`` read ``view`` and write ``interact``.
 
 Reference for the fleet's readers: ``skills/fleet/references/publish.md``.
@@ -116,9 +117,16 @@ class AccessRule(TypedDict):
     write: str
 
 
+# The root's write level (#949, option B). At runtime contract 0.2.96 ``user.can("data.write")``
+# answers for the root rule only, so the page can offer target entry to a Contributor only when
+# the root lets ``interact`` write. The cost: a Contributor can create stray documents outside the
+# collections, against the document cap (#1044 chose "owner" to close that). "owner" (option A) is
+# this one constant; the maintainer's call is recorded on #949's PR.
+ROOT_WRITE: Final = "interact"
+
 # #705's proposal, "Access rules": read view; runs, units and repos write owner; targets write interact.
 ACCESS_RULES: Final[tuple[AccessRule, ...]] = (
-    {"path": "", "read": "view", "write": "owner"},  # db.d.ts: the root is a rule path ("")
+    {"path": "", "read": "view", "write": ROOT_WRITE},  # db.d.ts: the root is a rule path ("")
     {"path": RUNS, "read": "view", "write": "owner"},
     {"path": UNITS, "read": "view", "write": "owner"},
     {"path": REPOS, "read": "view", "write": "owner"},
