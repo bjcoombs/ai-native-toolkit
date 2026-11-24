@@ -147,6 +147,7 @@ _WORD = re.compile(r"[\w-]+")
 # GitLab's documented switch for the template (a pipeline or job variable): the scan never runs.
 _DETECTION_DISABLED = re.compile(r"^\s*SECRET_DETECTION_DISABLED\s*:\s*['\"]?(?:true|1|yes)\b",
                                  re.IGNORECASE | re.MULTILINE)
+_JOB_RUN_KEY = re.compile(r"^\s+(?:rules|when)\s*:")
 _RULE_CONDITION = re.compile(r"^\s*-?\s*(?:if|changes|exists)\s*:")
 _WHEN_NEVER = re.compile(r"^\s*-?\s*when:\s*['\"]?never\b", re.IGNORECASE)
 _AFTER_SCRIPT = re.compile(r"^\s*after_script\s*:")
@@ -358,13 +359,17 @@ def _unconditional(lines: list[str], i: int, job: int) -> bool:
 
 def _gitlab_job_disabled(lines: list[str]) -> bool:
     """Whether the visible ``secret_detection`` job never runs on its own: an unconditional ``when: never``
-    or ``when: manual``, on
-    the job or as a rule with no ``if:``, ``changes:`` or ``exists:``. That switches off the job and
-    the template's job it overrides. A ``when: never`` under a condition skips some pipelines only."""
+    or ``when: manual``, on the job or as a rule with no ``if:``, ``changes:`` or ``exists:``. That
+    switches off the job and the template's job it overrides. A ``when: never`` under a condition
+    skips some pipelines only. GitLab deep-merges every definition of the job, root over includes,
+    so the first block (``lines`` puts the root first) with its own ``rules:`` or ``when:`` decides;
+    a block that only sets ``variables:`` leaves the decision to the next one."""
     for i, line in enumerate(lines):
         if not _GITLAB_JOB.match(line):
             continue
         end = _block_end(lines, i, 0)
+        if not any(_JOB_RUN_KEY.match(lines[j]) for j in range(i + 1, end)):
+            continue  # this definition leaves rules and when to another one
         return any((_WHEN_NEVER.match(lines[j]) or _WHEN_MANUAL.match(lines[j])) and _unconditional(lines, j, i)
                    for j in range(i + 1, end))
     return False
