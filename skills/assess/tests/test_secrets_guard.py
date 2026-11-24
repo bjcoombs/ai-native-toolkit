@@ -99,7 +99,8 @@ def test_a_gitlab_repository_without_a_ci_scan_reads_level_2_unmet(tmp_path: Pat
      ["gitleaks"]),
     (".github/workflows/scan.yml", "steps:\n  - run: docker run --rm ghcr.io/gitleaks/gitleaks:v8.18.0 detect\n",
      ["gitleaks"]),
-    (".github/workflows/scan.yml", "steps:\n  - uses: docker://zricethezav/gitleaks:latest\n", ["gitleaks"]),
+    (".github/workflows/scan.yml", "steps:\n  - uses: docker://zricethezav/gitleaks:latest\n    with:\n      args: detect\n",
+     ["gitleaks"]),
     (".github/workflows/scan.yml", "steps:\n  - run: npx secretlint '**/*'\n", ["secretlint"]),
     (".github/workflows/scan.yml", "steps:\n  - run: pipx run detect-secrets-hook --baseline b\n", ["detect-secrets"]),
     (".gitlab-ci.yml", "scan:\n  script:\n    - echo start\n    - gitleaks detect --source .\n", ["gitleaks"]),
@@ -533,3 +534,9 @@ def test_a_root_template_with_an_unread_include_is_not_measured(tmp_path: Path) 
 def test_a_command_that_scans_nothing_in_ci_is_not_a_scan(tmp_path: Path, command: str) -> None:
     text = f"steps:\n  - run: {command}\n"
     assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": text}))["ci"]["present"] is False
+
+
+@pytest.mark.parametrize("step", ["  - uses: docker://zricethezav/gitleaks:latest\n",
+                                  "  - run: docker run --rm zricethezav/gitleaks:latest\n"])
+def test_a_gitleaks_container_with_no_subcommand_is_not_a_scan(tmp_path: Path, step: str) -> None:
+    assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": "steps:\n" + step}))["ci"]["present"] is False

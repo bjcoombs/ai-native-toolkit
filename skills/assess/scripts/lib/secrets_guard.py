@@ -550,11 +550,19 @@ def _ci_scan(text: str, hooks: frozenset[str] = frozenset(),
         if _STEP_START.match(line) and _in_name_list(lines, i):
             continue
         commands = {m.group(1).lower() for m in _COMMAND.finditer(line)}
-        images = {m.group(1).lower() for m in _DOCKER_IMAGE.finditer(line)} - commands
         tools.update(t for t in (_tool_that_can_fail(n, line) for n in commands) if t)
-        # A ``uses: docker://`` step takes its arguments from ``with: args:`` on later lines.
-        image_line = f"{line} {_step_value(lines, i, 'args') or ''}" if "docker://" in line else line
-        tools.update(t for t in (_tool_that_can_fail(n, image_line, command=False) for n in images) if t)
+        for m in _DOCKER_IMAGE.finditer(line):
+            name = m.group(1).lower()
+            if name in commands:
+                continue
+            # The container's arguments: after the image on the line, or a ``uses: docker://`` step's
+            # ``with: args:`` on later lines. A gitleaks container with none only prints its usage.
+            args = (_step_value(lines, i, "args") or "") if "docker://" in line else line[m.end():]
+            if name == "gitleaks" and not args.strip():
+                continue
+            tool = _tool_that_can_fail(name, f"{line} {args}", command=False)
+            if tool:
+                tools.add(tool)
     counted = {t for i, ts in found.items() if i not in held for t in ts}
     unevaluated = {t for i, ts in found.items() if i in held for t in ts} - counted
     return sorted(counted), sorted(unevaluated)
