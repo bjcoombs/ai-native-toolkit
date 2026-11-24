@@ -47,8 +47,8 @@ sys.dont_write_bytecode = True
 ASSESS_SCRIPTS = Path(__file__).resolve().parents[2] / "assess" / "scripts"
 sys.path.insert(0, str(ASSESS_SCRIPTS))
 
-from lib.fleet.runner import REPOS_FILE  # noqa: E402
-from lib.fleet.fleet_labels import (  # noqa: E402
+from lib.fleet.runner import REPOS_FILE
+from lib.fleet.fleet_labels import (
     DEFAULT_BATCH_SIZE,
     LABELS_FILE,
     LabelsError,

@@ -43,7 +43,7 @@ sys.dont_write_bytecode = True
 ASSESS_SCRIPTS = Path(__file__).resolve().parents[2] / "assess" / "scripts"
 sys.path.insert(0, str(ASSESS_SCRIPTS))
 
-from lib.fleet.fleet_compare import (  # noqa: E402
+from lib.fleet.fleet_compare import (
     FleetRun,
     RunVersionError,
     compare,
@@ -53,8 +53,8 @@ from lib.fleet.fleet_compare import (  # noqa: E402
     summary_lines,
     write_comparison_file,
 )
-from lib.fleet.fleet_scanner_diff import scanner_diff  # noqa: E402
-from lib.fleet.fleet_view import FleetViewError  # noqa: E402
+from lib.fleet.fleet_scanner_diff import scanner_diff
+from lib.fleet.fleet_view import FleetViewError
 
 EXIT_NOT_COMPARABLE = 3
 

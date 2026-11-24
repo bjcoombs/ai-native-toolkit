@@ -520,3 +520,15 @@ def test_hashing_keeps_paths_with_spaces(tmp_path):
 
     assert str(row["path"]).startswith("h:")
     assert len(row["scope"]) == 2 and all(str(s).startswith("h:") for s in row["scope"])
+
+
+def test_freshness_rows_takes_the_runner_targets(tmp_path):
+    # fleet.py passes its lib.fleet.runner.Target list straight in (#1208): any RepoCheckout fits.
+    from lib.fleet.runner import Target
+
+    root, _docs, _svc = _fleet(tmp_path)
+    checkouts = _targets(root, "grp/docs", "grp/billing")
+    as_targets = [Target(c.repo, c.checkout) for c in checkouts]
+
+    assert (freshness_rows(as_targets, full=False, hash_salt=None)
+            == freshness_rows(checkouts, full=False, hash_salt=None))

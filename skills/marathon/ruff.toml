@@ -1,0 +1,5 @@
+# Ruff config for skills/marathon/scripts (#1208): the rules, the target
+# version and the complexity threshold of skills/assess, so the scripts meet
+# the same gate. `make lint` and the `ruff + mypy gates` CI job run
+# `ruff check ../marathon/scripts` from skills/assess with its locked ruff.
+extend = "../assess/pyproject.toml"

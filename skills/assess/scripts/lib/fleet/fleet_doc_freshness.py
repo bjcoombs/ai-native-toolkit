@@ -65,7 +65,9 @@ the doc edit, or a git failure is `unknown` with a reason token. Counts-only row
 subjects or shas (`--full` adds up to five); `--hash-paths` hashes doc and scope paths with
 `counts_only.hash_path`. `assess_config.declared_block` gives standalone `/assess` the
 `doc_staleness.declared_cross_repo` list (declared, not measured); `fleet.py` calls the join
-before any scan so `--delete-after` cannot remove a checkout it needs. Tests:
+before any scan so `--delete-after` cannot remove a checkout it needs, passing its
+`runner.Target` list: `freshness_rows` takes any `RepoCheckout` (a `repo` id and a
+`checkout` path), so the call type-checks without a copy. Tests:
 `tests/test_fleet_doc_freshness.py`.
 """
 from __future__ import annotations
@@ -76,7 +78,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import NamedTuple, TypedDict
+from typing import NamedTuple, Protocol, TypedDict
 
 from lib.agent_identity import is_ai_assistant
 from lib.assess_config import DescribesMapping, load_describes
@@ -165,9 +167,19 @@ class FreshnessResult(NamedTuple):
     errors: list[str]  # "<docs repo>: <message>" per rejected entry, for stderr
 
 
+class RepoCheckout(Protocol):
+    """What ``freshness_rows`` reads from each target: ``Checkout`` and ``lib.fleet.runner.Target`` both fit."""
+
+    @property
+    def repo(self) -> str: ...
+
+    @property
+    def checkout(self) -> Path: ...
+
+
 @dataclass(frozen=True)
 class Checkout:
-    """A fleet repository: its id and the checkout path (structurally a ``fleet.Target``)."""
+    """A fleet repository: its id and the checkout path (a ``RepoCheckout``, as ``lib.fleet.runner.Target`` is)."""
 
     repo: str
     checkout: Path
@@ -324,7 +336,7 @@ def _hashed(row: FreshnessRow, salt: str) -> FreshnessRow:
             "scope": [h for s in row["scope"] if (h := hash_path(s, salt)) is not None]}
 
 
-def freshness_rows(targets: Iterable[Checkout], *, full: bool,
+def freshness_rows(targets: Iterable[RepoCheckout], *, full: bool,
                    hash_salt: str | None) -> FreshnessResult:
     """Every declared mapping across ``targets``, sorted by docs repo then declaration order."""
     by_repo = {t.repo: Checkout(t.repo, t.checkout) for t in targets}

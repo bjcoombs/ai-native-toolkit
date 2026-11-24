@@ -33,10 +33,10 @@ sys.dont_write_bytecode = True
 ASSESS_SCRIPTS = Path(__file__).resolve().parents[2] / "assess" / "scripts"
 sys.path.insert(0, str(ASSESS_SCRIPTS))
 
-from lib.fleet.fleet_compare import view_check  # noqa: E402
-from lib.fleet.fleet_heatmap import columns_for, render_heatmap  # noqa: E402
-from lib.fleet.fleet_groups import GroupRow  # noqa: E402
-from lib.fleet.fleet_view import (  # noqa: E402
+from lib.fleet.fleet_compare import view_check
+from lib.fleet.fleet_heatmap import columns_for, render_heatmap
+from lib.fleet.fleet_groups import GroupRow
+from lib.fleet.fleet_view import (
     Comparison,
     FleetViewError,
     check_levels,
@@ -44,7 +44,7 @@ from lib.fleet.fleet_view import (  # noqa: E402
     groups_file,
     load_groups,
 )
-from lib.levels import add_renamed_flag, LevelsError, load_levels, MaturityModel  # noqa: E402
+from lib.levels import add_renamed_flag, LevelsError, load_levels, MaturityModel
 
 HEATMAP_FILE = "heatmap.svg"
 
