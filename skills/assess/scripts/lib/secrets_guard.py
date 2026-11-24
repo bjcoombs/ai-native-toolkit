@@ -143,11 +143,13 @@ _COMMAND_NAMES = sorted((*SECRET_TOOLS, "detect-secrets-hook"), key=len, reverse
 _TRUFFLEHOG_FAIL = re.compile(r"(?<![\w-])--fail(?![\w-])")  # not --fail-on-scan-errors
 # Commands that scan nothing in a CI checkout, for every tool: help and version; a staged-only or
 # pre-commit scan (a CI checkout has nothing staged: ``--staged``, ``gitleaks protect``,
-# ``--pre-commit``, ``ggshield secret scan pre-commit``); git-secrets setup (``--install``,
-# ``--register-aws``, ``--add``, ``--list``).
+# ``--pre-commit``, ``ggshield secret scan pre-commit``); setup and auth (git-secrets
+# ``--install``, ``--register-aws``, ``--add``, ``--list``; ``ggshield auth``/``install``/``config``;
+# ``--init``; talisman ``--githook``).
 _NO_SCAN = re.compile(
     r"(?<!\S)(?:--help|-h|--version|--staged|--pre-commit|--install|--register-aws|--add|--add-provider|--list)(?!\S)"
-    r"|\bgitleaks\s+(?:version|help|protect)\b|\bggshield\s+secret\s+scan\s+pre-commit\b")
+    r"|\bgitleaks\s+(?:version|help|protect)\b|\bggshield\s+secret\s+scan\s+pre-commit\b"
+    r"|\bggshield\s+(?:auth|install|config)\b|(?<!\S)(?:--init|--githook)(?!\S)")
 # A bare ``gitleaks`` shell call prints usage. Only for a command: a ``uses: docker://...gitleaks``
 # step ends its line too, with its arguments under ``with:`` below.
 _BARE_CALL = re.compile(r"\bgitleaks\s*['\"]?\s*$")

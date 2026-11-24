@@ -531,7 +531,8 @@ def test_a_root_template_with_an_unread_include_is_not_measured(tmp_path: Path) 
 
 @pytest.mark.parametrize("command", ["gitleaks protect", "gitleaks detect --pre-commit", "ggshield secret scan pre-commit",
                                      "git-secrets --register-aws", "git-secrets --install", "talisman --help",
-                                     "ggshield --version"])
+                                     "ggshield --version", "ggshield auth login", "ggshield install -m local",
+                                     "npx secretlint --init", "talisman --githook pre-commit"])
 def test_a_command_that_scans_nothing_in_ci_is_not_a_scan(tmp_path: Path, command: str) -> None:
     text = f"steps:\n  - run: {command}\n"
     assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": text}))["ci"]["present"] is False
