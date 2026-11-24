@@ -293,7 +293,7 @@ def test_the_committed_baseline_survives_a_deleted_run_context(ci2: Path) -> Non
     """#1122: a fresh clone or CI has prior-level.json (committed) and no run-context.json."""
     first = _run(ci2, "2026-11-21")
     prior = json.loads((ci2 / ".assess" / "prior-level.json").read_text(encoding="utf-8"))
-    assert prior["prior_level_version"] == 2
+    assert prior["prior_level_version"] == 3
     assert prior["baseline"]["head_sha"] == first["measured_commit"]["head_sha"]
     assert prior["baseline"]["run_id"] == first["run_id"]
     (ci2 / "b.txt").write_text("closed\n", encoding="utf-8")

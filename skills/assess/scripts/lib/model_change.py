@@ -26,15 +26,6 @@ module keeps the parts of the report that compare or redraw the level on that sa
   (default → handover); gates not compared``: a gate is never reported gained or lost across
   models. Closed actions stay, because they are commits, not gates. ``model_changed_line``
   gives that line back for the executive summary (``lib/exec_summary.py``).
-- ``on_own_steps(block, level, previous)`` compares the gates of two runs of one model on
-  that model's own Steps when ``since_last_run`` (which reads the default Steps) left them
-  unknown: a profile with fewer Steps, such as ``citizen``. ``previous`` is the level block
-  of the ``run-context.json`` the earlier run left (``previous_level``). Two runs of one
-  profile then read their gains and losses as two default runs do. A default-model run is
-  never refilled (``since_last_run`` already reads its Steps), nor a run that inherited a
-  superseded same-day run's block (``previous_level`` gives None). A block ``across_models``
-  already marked as a model change stays as it is, even when ``run-context.json`` names the
-  same model (the baseline in ``prior-level.json`` decided it, as for ``since_last_run``).
 - ``units_label(block, choice)`` marks the monorepo unit roll-up "(default model)" when the
   run's own model is not the default, since the unit pass still reads the default model.
 
@@ -47,17 +38,14 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
-from lib.headline import GATE_NOUN
-from lib.levels import LevelsError, MaturityModel, load_levels
 from lib.level_tally import default_model
-from lib.prior_level import default_level, load_prior_level
-from lib.profiles import CUSTOM_MODEL_SUFFIX, ModelChoice, profile_names, profile_path
+from lib.prior_level import load_prior_level, record_for
+from lib.profiles import CUSTOM_MODEL_SUFFIX, ModelChoice, model_for_level
 from lib.run_context_types_since import SinceLastRun
-from lib.since_last_run import gate_changes
 from lib.unit_rollup import UnitRollUpBlock
 
 __all__ = ["CUSTOM_NOT_DRAWN", "MODEL_CHANGED", "across_models", "changed_models", "custom_run", "model_changed_line",
-           "model_for_level", "on_own_steps", "previous_level",
+           "model_for_level",
            "model_name", "previous_levels_version", "units_label"]
 
 MODEL_CHANGED = "Model changed since last run ({} → {}); gates not compared"
@@ -73,22 +61,6 @@ def model_name(version: str) -> str:
     if version.startswith("profile-") and "-" in version[len("profile-"):]:
         return version[len("profile-"):].rpartition("-")[0]
     return version
-
-
-def model_for_level(level: Any) -> MaturityModel | None:
-    """The model a ``level`` block was computed with, when it is the default or a shipped profile."""
-    version = level.get("levels_version") if isinstance(level, Mapping) else None
-    if not isinstance(version, str):
-        return None
-    name = model_name(version)
-    if name == "default":
-        return default_model()
-    if version.startswith("profile-") and name in profile_names():
-        try:
-            return load_levels(profile_path(name))
-        except LevelsError:
-            return None
-    return None
 
 
 def custom_run(ctx: Mapping[str, Any]) -> bool:
@@ -117,14 +89,14 @@ def _version(level: Any) -> str | None:
 
 
 def previous_levels_version(assess_dir: Path, superseded: Any, level: Any = None) -> str | None:
-    """The previous run's ``levels_version``, read in ``since_last_run``'s baseline order; under a
-    profile or ``--levels`` ``level`` that order skips ``prior-level.json``, as it does."""
+    """The previous run's ``levels_version``, read in ``since_last_run``'s baseline order: the
+    committed record of ``level``'s model in ``prior-level.json`` (#1184), then ``run-context.json``."""
     if isinstance(superseded, Mapping):
         inherited = superseded.get("since_last_run")
         if isinstance(inherited, Mapping) and inherited.get("available") is True:
             return _version(superseded.get("level"))
-    prior = load_prior_level(assess_dir) if default_level(level) else None
-    if isinstance(prior, Mapping) and isinstance(prior.get("baseline"), Mapping):
+    prior = record_for(load_prior_level(assess_dir), level)
+    if prior is not None and "baseline" in prior:
         return _version(prior)
     try:
         data = json.loads((assess_dir / "run-context.json").read_text(encoding="utf-8"))
@@ -149,41 +121,6 @@ def across_models(block: SinceLastRun, level: Any, previous: str | None) -> Sinc
 
 def _markdown(lines: list[str]) -> str:
     return "\n".join(f"  - {e.strip()}" if e.startswith("  ") else f"- {e}" for e in lines)
-
-
-def previous_level(assess_dir: Path, superseded: Any = None) -> Mapping[str, Any] | None:
-    """The ``level`` block of the ``run-context.json`` the previous run left, or None; None
-    too when ``since_last_run`` inherited a superseded same-day run's block, since that file
-    is the superseded run itself, not the run before it."""
-    if isinstance(superseded, Mapping):
-        inherited = superseded.get("since_last_run")
-        if isinstance(inherited, Mapping) and inherited.get("available") is True:
-            return None
-    try:
-        data = json.loads((assess_dir / "run-context.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    level = data.get("level") if isinstance(data, Mapping) else None
-    return level if isinstance(level, Mapping) else None
-
-
-def on_own_steps(block: SinceLastRun, level: Any, previous: Any) -> SinceLastRun:
-    """``block`` with the gates compared on the run's own Steps, when two runs of one
-    non-default model left them unknown (``since_last_run`` reads the default Steps, which a
-    profile with fewer Steps, such as ``citizen``, cannot fill)."""
-    model, version, before = model_for_level(level), _version(level), _version(previous)
-    if (block.get("available") is not True or block.get("first_run") or block.get("gates_gained") is not None
-            or model_changed_line(block) is not None or model is None or version is None or before is None
-            or model_name(version) == "default" or model_name(before) != model_name(version)):
-        return block
-    gained, lost = gate_changes(model.get("steps", []), level, previous)
-    if gained is None or lost is None:
-        return block
-    gates = {"Gates gained:": gained, "Gates lost:": lost}
-    lines = [next((f"{k} {', '.join(GATE_NOUN.get(g, g) for g in v) or 'none'}"
-                   for k, v in gates.items() if e.startswith(k)), e) for e in block["lines"]]
-    return cast(SinceLastRun, {**block, "gates_gained": gained, "gates_lost": lost,
-                               "lines": lines, "markdown": _markdown(lines)})
 
 
 def changed_models(since: Any) -> tuple[str, str] | None:

@@ -40,6 +40,10 @@ adds for a model that is not the default, ``[]`` for the default:
    in the default model: <practice>; ...``; a missing practice among them carries ``[not in
    the default model]`` on line 2 too.
 
+``model_for_level(level)`` is the model a ``level`` block names, the default or a shipped profile
+(None for a custom model); ``since_last_run``, the committed baseline and the gate read a run's
+own Steps through it (#1184).
+
 ``run_level(ctx, choice)`` is the ``level`` block under the choice and ``chosen_model`` its
 model; the ``level`` scan and the ``--opt-in-mutation`` recount both call them, as
 ``exec_summary.run_headline`` for the headline.
@@ -59,10 +63,11 @@ from lib.level_result_types import ConditionResult, LevelResult
 from lib.level_tally import DEFAULT_BLOCKS, default_model, level_result, model_blocks, run_context_level
 from lib.level_tally import run_exclusions
 from lib.levels import LevelsError, MaturityModel, PathValidator, load_levels
+from lib.prior_level import model_key
 from lib.signal_grades import DEFAULT_LEVELS
 
 __all__ = ["CUSTOM_MODEL_SUFFIX", "PROFILES_DIR", "RESERVED_PREFIXES", "READY_WORDS", "ModelChoice", "ProfileError", "add_model_arguments",
-           "chosen_model", "model_lines", "non_default_ids", "profile_names", "profile_path", "resolve",
+           "chosen_model", "model_for_level", "model_lines", "non_default_ids", "profile_names", "profile_path", "resolve",
            "run_level", "single_repo_choice"]
 
 PROFILES_DIR = DEFAULT_LEVELS.parent / "profiles"
@@ -111,6 +116,21 @@ def run_level(ctx: Mapping[str, Any], choice: ModelChoice | None) -> LevelResult
     if choice is None:
         return run_context_level(ctx)
     return level_result(choice.model, ctx, run_exclusions(ctx))
+
+
+def model_for_level(level: Any) -> MaturityModel | None:
+    """The model a ``level`` block was computed with, when it is the default or a shipped profile
+    (``prior_level.model_key``); None for a custom ``--levels`` model or a profile not shipped."""
+    version = level.get("levels_version") if isinstance(level, Mapping) else None
+    key = model_key(level) if isinstance(version, str) else None
+    if key == "default":
+        return default_model()
+    if key is None or key not in profile_names():
+        return None
+    try:
+        return load_levels(profile_path(key))
+    except LevelsError:
+        return None
 
 
 def profile_names() -> tuple[str, ...]:

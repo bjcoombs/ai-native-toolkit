@@ -103,6 +103,7 @@ KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")
 IDENTIFIER_KEYED_MAPS: Final = frozenset({
     "tool_versions",
     "prior_tool_versions",
+    "prior_level.models",  # profile names (#1184)
     "agent_harness.executes_by_kind",
     "agent_harness.counts_by_kind",
     "claude_config.counts_by_kind",

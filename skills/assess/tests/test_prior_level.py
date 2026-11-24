@@ -236,3 +236,47 @@ def test_a_malformed_ledger_is_dropped_alone(tmp_path: Path) -> None:
     prior = load_prior_level(tmp_path)
     assert isinstance(prior, dict) and prior["tags"] == level["tags"] and "pruning" not in prior
     assert load_pruning(tmp_path) == [] and load_baseline(tmp_path) is not None
+
+
+# --- one record per model (#1184) ----------------------------------------------------------
+
+def test_model_key_names_the_record_a_level_reads() -> None:
+    from lib.prior_level import model_key
+
+    assert model_key({"levels_version": "default-2026.11.10"}) == "default"
+    assert model_key({"available": False}) == "default"  # a degraded level writes nothing anyway
+    assert model_key({"levels_version": "profile-citizen-2026.11.23"}) == "citizen"
+    assert model_key({"levels_version": "team-1"}) is None
+    assert model_key({"levels_version": "profile-"}) is None
+
+
+def test_a_version_three_file_keeps_readable_profile_records_and_drops_the_rest() -> None:
+    from lib.prior_level import as_prior_level, record_for
+
+    tags = _level()["tags"]
+    good = {"levels_version": "profile-citizen-2026.11.23", "tags": tags,
+            "baseline": {"run_id": None, "head_sha": "c" * 40, "held_gates": ["instructions"]}}
+    raw = {"prior_level_version": 3, "models": {
+        "citizen": good,
+        "handover": {"levels_version": "profile-handover-2026.11.23", "tags": [{"tag": "nope"}]},
+        "broken": {**good, "baseline": {"head_sha": ""}}}}
+    prior = as_prior_level(raw)
+    assert prior is not None and set(prior["models"]) == {"citizen", "broken"}
+    assert "baseline" not in prior["models"]["broken"]  # a malformed baseline is dropped alone
+    citizen = {"levels_version": "profile-citizen-2026.11.23"}
+    assert record_for(raw, citizen) == {"prior_level_version": 3, **good}
+    assert record_for(raw, {"levels_version": "default-2026.11.10"}) is None  # no default record
+    assert as_prior_level({"prior_level_version": 3}) is None  # neither record
+    assert as_prior_level({"prior_level_version": 2, "models": {"citizen": good}}) is None  # v2 has no models
+
+
+def test_an_older_file_still_reads_as_the_default_record(tmp_path: Path) -> None:
+    from lib.prior_level import load_baseline, record_for
+
+    baseline = {"run_id": "r", "head_sha": "a" * 40, "held_gates": ["instructions"]}
+    old = {"prior_level_version": 2, "levels_version": "default-2026.11.10", "tags": _level()["tags"],
+           "baseline": baseline}
+    (tmp_path / "prior-level.json").write_text(json.dumps(old), encoding="utf-8")
+    assert load_baseline(tmp_path) == baseline
+    assert load_baseline(tmp_path, {"levels_version": "profile-citizen-2026.11.23"}) is None
+    assert record_for(old, {"levels_version": "team-1"}) is None

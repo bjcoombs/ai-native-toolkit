@@ -238,3 +238,18 @@ def test_a_renderer_error_becomes_a_skip_line(monkeypatch: pytest.MonkeyPatch) -
         raise RuntimeError("x")
     monkeypatch.setattr(td, "render_strip", boom)
     assert td.tag_diagrams(SAME)[0]["skipped"] == "the renderer raised RuntimeError."
+
+
+def test_the_strip_reads_the_runs_own_model_record() -> None:
+    """#1184: a profile run draws its earlier dots from its own record under ``models``."""
+    from lib.assess_diagrams_tags import earlier_shares, prior_note
+
+    row = {"tag": "behaviour", "conditions": 1, "countable": 1, "set_aside": 0, "met": 1, "measured": 1,
+           "not_measured": [], "countable_not_measured": []}
+    citizen = {"levels_version": "profile-citizen-2026.11.23"}
+    default_only = {"prior_level_version": 3, "levels_version": "default-2026.11.10", "tags": [row]}
+    assert earlier_shares(default_only, citizen) == {}
+    assert prior_note(default_only, citizen).startswith("No earlier run under this maturity model")
+    with_citizen = {**default_only, "models": {"citizen": {**citizen, "tags": [row]}}}
+    assert earlier_shares(with_citizen, citizen) == {"behaviour": (1, 1)}
+    assert earlier_shares(with_citizen, {"levels_version": "default-2026.11.10"}) == {"behaviour": (1, 1)}
