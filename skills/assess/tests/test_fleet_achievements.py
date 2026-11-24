@@ -20,6 +20,7 @@ from lib.fleet.fleet_stamp import FleetStamp, RUN_FILE
 from lib.fleet.fleet_targets import TargetSpec, resolve
 from lib.fleet.fleet_units import build_trees, empty_map
 from lib.levels import MaturityModel, parse_levels
+from lib.plain_english import CRITICAL_WORDS
 
 MODEL: MaturityModel = parse_levels(tomllib.loads(LEVELS))
 REPOS = ("grp/sub/a", "grp/sub/b", "grp/c")
@@ -245,7 +246,7 @@ def test_report_with_nothing_new_and_no_history() -> None:
 def test_report_lines_are_credit_or_next_steps() -> None:
     sections = [credit_section(_build(h), MODEL) for h in (HISTORY, [*HISTORY[:2], ("2026-11-15", BASE)])]
     for section in sections:
-        for word in ("regress", "lost", "broke", "behind", "worst", "fail", "bad", "rank"):
+        for word in CRITICAL_WORDS:
             assert word not in section.lower(), word
 
 

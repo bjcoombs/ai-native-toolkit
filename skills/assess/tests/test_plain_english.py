@@ -60,3 +60,50 @@ def test_every_manifest_prose_string_except_the_whys_is_plain_english() -> None:
     assert len(lines) > 300
     assert not [k for k in lines if (k.endswith(".why") or ".whys." in k) and k not in APPROVED_WHYS]
     assert {k: [i["reason"] for i in lint(v)] for k, v in lines.items() if lint(v)} == {}
+
+
+def test_critical_words_catch_every_inflection_and_only_the_named_exemption() -> None:
+    from lib.plain_english import critical_words
+    assert critical_words("We lost ground and fell behind.") == ["lost", "behind"]
+    assert critical_words("the gate failed; coverage regressed; the team is ranked") == ["regress", "fail", "rank"]
+    assert critical_words("Next: CI turns red on a broken check.") == []  # the exempt text, quoted
+    assert critical_words("CI turns red on a broken test.") == ["broke"]  # not the exempt text
+
+
+def test_each_exemption_still_matches_its_text() -> None:
+    """#889: changing an exempt line (the maintainer's gate wording) fails here until the
+    exemption is looked at again."""
+    from lib.plain_english import CRITICAL_WORD_EXEMPT
+    lines = fixed_lines()
+    assert {k: lines.get(k) for k in CRITICAL_WORD_EXEMPT} == {k: e["text"] for k, e in CRITICAL_WORD_EXEMPT.items()}
+
+
+def test_the_engine_text_holds_no_critical_word() -> None:
+    """#889: the headline, the Next line, gate notes, reason words and the since line, over every
+    Step of the default model and every blocker state, use no word of blame or loss."""
+    from lib.exec_summary import since_line
+    from lib.headline import REASON_WORDS, headline
+    from lib.level_tally import default_model
+    from lib.plain_english import critical_words
+    model = default_model()
+    texts = list(fixed_lines().values())
+    states = [{"state": "unmet"}, {"state": "excluded", "exclusion_kind": "not_applicable"},
+              *({"state": "not_measured", "reason": code} for code in REASON_WORDS)]
+    for step in model.get("steps", []):
+        for gate in step["gates"]:
+            for state in states:
+                blocker = {"kind": "gate", "gate": gate["id"], "condition": f"{gate['row']}.{gate['level']}",
+                           **state}
+                level = {"level_result_version": 1, "levels_version": model["version"],
+                         "tally": {"met": 1, "measured": 2, "not_measured": 1}, "counted": [], "listed": [],
+                         "not_measured": [], "conditions": [], "step": step["step"] - 1 or None,
+                         "next_step": {"step": step["step"], "blockers": [blocker]}}
+                texts += headline(level, model)["lines"]
+    for since in ({"available": True, "first_run": True},
+                  {"available": True, "closed_count": 2, "gates_gained": ["coverage_gate"],
+                   "gates_lost": ["ci_runs_tests"]},
+                  {"available": True, "closed_count": 0, "gates_gained": [], "gates_lost": []},
+                  {"available": True, "closed_count": None, "gates_gained": None, "gates_lost": None}, None):
+        texts.append(since_line(since))
+    assert len(texts) > 50
+    assert {t: critical_words(t) for t in texts if critical_words(t)} == {}
