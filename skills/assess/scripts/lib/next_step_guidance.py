@@ -558,7 +558,8 @@ _MEASURE_HINTS = {
                          "read: run with `--platform`, or `/assess` with `gh` signed in.",
     "secrets_guard": "Level 2 is not measured (`secret_scanning_not_read`) on a GitHub repository with "
                      "no secrets scan in CI: GitHub's own secret scanning could guard it, and those "
-                     "repository settings are not read yet. A CI scan settles it.",
+                     "repository settings are not read yet. A CI scan settles it. It is also not measured "
+                     "(`ci_includes_unresolved`) when a GitLab include that could hold the scan was not read.",
     "skill_script_tests": "Not measured (`no_skill_scripts`) when no skill in the repository, or in "
                           "the skill unit, holds a script: there is nothing to test.",
     "skill_disclosure": "Not measured (`no_skill_files`) when the repository, or the skill unit, "

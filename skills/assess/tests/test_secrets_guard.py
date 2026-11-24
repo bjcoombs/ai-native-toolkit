@@ -113,7 +113,9 @@ def test_a_ci_scan_meets_level_2_measured(tmp_path: Path, rel: str, text: str, t
      "jobs:\n  s:\n    continue-on-error: true\n    steps:\n      - run: gitleaks detect\n"),
     (".github/workflows/x.yml", "steps:\n  - uses: someone/gitleaks-wrapper@v1\n"),   # not a known action
     (".gitlab-ci.yml", ".secret_detection:\n  script: echo hi\n"),
-    (".gitlab-ci.yml", "scan:\n  allow_failure: true\n  script:\n    - gitleaks detect\n"),  # masked job                    # a hidden job never runs
+    (".gitlab-ci.yml", "scan:\n  allow_failure: true\n  script:\n    - gitleaks detect\n"),  # masked job
+    (".github/workflows/x.yml", "steps:\n  - continue-on-error: true\n    run: gitleaks detect\n"),  # step-first mask
+    (".gitlab-ci.yml", "deploy:\n  needs:\n    - gitleaks\n  script:\n    - make deploy\n"),  # a job name                    # a hidden job never runs
     (".gitlab-ci.yml", "include:\n  # - template: Security/Secret-Detection.gitlab-ci.yml\n"),  # commented out
 ])
 def test_a_masked_commented_or_lookalike_line_is_not_a_scan(tmp_path: Path, rel: str, text: str) -> None:
@@ -141,6 +143,33 @@ def test_a_github_workflow_counts_only_when_it_runs_on_a_change(tmp_path: Path, 
 ])
 def test_a_job_that_never_runs_is_not_a_scan(tmp_path: Path, rel: str, text: str) -> None:
     assert scan_secrets_guard(_repo(tmp_path, {rel: text}))["ci"]["present"] is False
+
+
+@pytest.mark.parametrize("text", [
+    "include:\n  - component: $CI_SERVER_FQDN/components/secret-detection/secret-detection@1.1\n",
+    "include:\n  - template: Auto-DevOps.gitlab-ci.yml\n",
+])
+def test_gitlab_component_or_auto_devops_is_a_scan(tmp_path: Path, text: str) -> None:
+    assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["tools"] == ["secret_detection"]
+
+
+def test_a_scan_in_a_local_include_counts(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {".gitlab-ci.yml": "include:\n  - local: ci/scan.yml\n",
+                            "ci/scan.yml": "scan:\n  script:\n    - gitleaks detect\n"})
+    subprocess.run(["git", "init", "-q", str(root)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
+    ci = scan_secrets_guard(root)["ci"]
+    assert ci["tools"] == ["gitleaks"] and ci["includes_unresolved"] == 0
+
+
+def test_an_unread_include_leaves_level_2_not_measured(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {".gitlab-ci.yml": "include:\n  - project: group/ci\n    file: scan.yml\n"},
+                 remote="https://gitlab.com/g/p.git")
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
+    block = scan_secrets_guard(root)
+    assert block["ci"]["includes_unresolved"] == 1
+    assert block["enforcement"]["available"] is False
+    assert block["enforcement"]["reason"].startswith("ci_includes_unresolved")
 
 
 def test_a_root_gitlab_file_counts_in_a_directory_named_workflows(tmp_path: Path) -> None:

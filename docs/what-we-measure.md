@@ -582,6 +582,7 @@ A secrets hook in the pre-commit config and a secrets scan in CI (gitleaks, dete
 - Evidence: `secrets_guard.configured` config_text (config_only), `secrets_guard.enforcement.present` head_structure (measured).
 - Not measured when:
   - `secret_scanning_not_read`: No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read. Add a secrets scan step to CI (gitleaks or trufflehog); GitHub's own settings are not read yet.
+  - `ci_includes_unresolved`: No secrets scan was found in the CI read, and a GitLab include that could hold one (a local, project or remote file) was not read. Clone the included project beside this one (/ghsync), or add the secrets scan to the repository's own .gitlab-ci.yml.
 
 ### `agent_consistency`: Cross-agent instruction consistency
 
