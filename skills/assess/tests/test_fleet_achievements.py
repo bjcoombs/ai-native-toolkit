@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tomllib
 from pathlib import Path
 
@@ -13,7 +14,7 @@ import lib.fleet.fleet_achievements as fa
 from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
 from lib.fleet.fleet_achievements_runs import earlier_runs
 from lib.fleet.fleet_achievements_schema import SCHEMA_PATH, render
-from lib.fleet.fleet_credit import TITLE, credit_section
+from lib.fleet.fleet_credit import KIND_LABELS, TITLE, credit_section
 from lib.fleet.fleet_data import FLEET_DATA_FILE, FleetData, Privacy, build_fleet_data, dumps_fleet_data
 from lib.fleet.fleet_diagrams import report_markdown
 from lib.fleet.fleet_stamp import FleetStamp, RUN_FILE
@@ -227,10 +228,10 @@ def test_report_section_renders_first_with_credit_and_next_steps() -> None:
     section = credit_section(doc, MODEL)
     report = report_markdown([], section)
     assert report.index(f"## {TITLE}") < len(report) and report.startswith("# Fleet diagrams")
-    assert "**Level-ups**" in section and "**Firsts**" in section and "Personal best" not in section
-    assert "**Firsts**" not in credit_section(_build(), MODEL)  # off by default (#772)
-    assert "### Next level-ups" in section and "- Next for `ownership/grp/sub`" not in section  # grp/sub is at the top
-    assert "- Next for `ownership/grp`:" in section
+    assert "- Level-ups: " in section and "- Firsts: " in section and "Personal best" not in section
+    assert "- Firsts:" not in credit_section(_build(), MODEL)  # off by default (#772)
+    assert "### Next level-ups" in section and "- Next for " not in section  # counted, never listed (#1255)
+    assert re.search(r"^- \d+ units? (has|have) a measured next level-up", section, re.M)
     assert "- `grp/c`, Step 2: at Step 1 (1 of 1 measured); gates to go: `docs` holds back 1." in section
     assert "Since `2026-11-15`, over 4 comparable runs" in section
 
@@ -250,11 +251,23 @@ def test_report_lines_are_credit_or_next_steps() -> None:
             assert word not in section.lower(), word
 
 
-def test_report_caps_lines_per_kind() -> None:
+def test_the_credit_section_renders_one_count_line_per_kind_and_no_achievement_line() -> None:
+    """#1255: the front screen leads the report, so the credit lists shrink to counts plus links."""
     many = {f"grp/r{i:02d}": (0, True) for i in range(25)}
     runs = _runs([("2026-11-01", many), ("2026-11-08", {k: (1, True) for k in many})])
-    section = credit_section(fa.build_achievements(runs[1], runs[:1], MODEL), MODEL)
-    assert "more in `achievements.json`" in section
+    doc = fa.build_achievements(runs[1], runs[:1], MODEL)
+    section = credit_section(doc, MODEL)
+    earned = section.split("### Earned this run\n\n", 1)[1].split("\n### ", 1)[0]
+    mine = [a for a in doc["achievements"] if a["run"] == doc["run"]]
+    kinds = [k for k in fa.KINDS if any(a["kind"] == k for a in mine)]
+    lines = [line for line in earned.splitlines() if line]
+    assert len(lines) == len(kinds) and len(mine) > len(kinds)
+    for kind, line in zip(kinds, lines):
+        n = sum(1 for a in mine if a["kind"] == kind)
+        assert line.startswith(f"- {KIND_LABELS[kind]}: {n}, each listed in [`achievements.json`](./achievements.json)")
+    for a in mine:
+        assert a["credit"] not in section
+    assert "grp/r0" not in section
 
 
 # --- the history reader --------------------------------------------------------

@@ -3,8 +3,8 @@
 The fleet is ``fleet_data_fixture``'s: a three-level unit tree (group, subgroup, project), one
 owner exclusion (``grp/sub/proj1`` excludes ``ci.1``), one not-measured cell (``grp/other/proj3``
 docs) and one failed scan. Three earlier weekly runs lead up to it, so the replay credits level
-moves, and one Step target is set (``grp`` to Step 3). The goldens are the page in each output
-mode. Regenerate with ``uv run --locked python tests/fleet_page_fixture.py`` from
+moves, and one Step target is set (``grp`` to Step 3). The front screen (#1255) reads ``MOVES``, a
+fixed Step movement grid. The goldens are the page in each output mode. Regenerate with ``uv run --locked python tests/fleet_page_fixture.py`` from
 ``skills/assess``, then review the diff.
 """
 from __future__ import annotations
@@ -20,10 +20,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fleet_data_fixture as fdf
 from lib.fleet.fleet_achievements import Achievements, HistoryRun, build_achievements
 from lib.fleet.fleet_data import FleetData, Privacy, build_fleet_data
+from lib.fleet.fleet_front import front_screen
 from lib.fleet.fleet_page import build_page
 from lib.fleet.fleet_page_data import PageBundle, page_bundle, picture
 from lib.fleet.fleet_step_funnel import FILE as FUNNEL_FILE, QUESTION as FUNNEL_Q, TITLE as FUNNEL_T
 from lib.fleet.fleet_step_funnel import render as funnel
+from lib.fleet.fleet_step_movement import StepMoves
 from lib.fleet.fleet_step_targets import Target
 from lib.fleet.fleet_units import build_trees, parse_units, repo_owners
 from lib.fleet.runner import FleetRow
@@ -31,6 +33,15 @@ from lib.fleet.runner import FleetRow
 import tomllib
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_page"
+# The Step movement grid's counts against the earlier run, as fleet_step_movement.step_moves
+# returns them (#1255): one repository up from Step 1 to 2 (by rule change alone), one down from
+# 3 to 2, one held at Step 2, one new and one not measured in both runs.
+MOVES: StepMoves = {"comparable": True, "reasons": [], "steps": [1, 2, 3], "split": True, "rescored": True,
+                    "cells": [{"then": "1", "now": "2", "count": 1, "rule_only": 1},
+                              {"then": "2", "now": "2", "count": 1, "rule_only": 0},
+                              {"then": "3", "now": "2", "count": 1, "rule_only": 0},
+                              {"then": "not_measured", "now": "not_measured", "count": 1, "rule_only": 0},
+                              {"then": "added", "now": "1", "count": 1, "rule_only": 0}]}
 DATES = ("2026-10-30", "2026-11-06", "2026-11-13", "2026-11-20")
 VARIANTS = {"full": Privacy(full=True), "counts-only": Privacy(), "hashed": Privacy(salt=fdf.SALT)}
 NAMES = ("grp", "proj1", "proj2", "proj3", "proj4", "Checkout", "gitlab.example.com", "bob", "maintainers",
@@ -70,7 +81,8 @@ def bundle(name: str) -> PageBundle:
     privacy = VARIANTS[name]
     data: dict[str, Any] = dict(run(DATES[-1], privacy))
     pictures = [picture(FUNNEL_FILE, FUNNEL_T, FUNNEL_Q, funnel(fdf.model(), data))]
-    return page_bundle(data, dict(achievements(privacy)), fdf.model(), pictures)
+    return page_bundle(data, dict(achievements(privacy)), fdf.model(), pictures,
+                       dict(front_screen(fdf.model(), data, MOVES)))
 
 
 def goldens() -> dict[str, str]:

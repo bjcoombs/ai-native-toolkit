@@ -7,7 +7,6 @@ from __future__ import annotations
 import re
 
 import lib.fleet.fleet_diagrams as fd
-import lib.fleet.fleet_quadrant as fq
 import lib.fleet.fleet_slope as fs
 import lib.fleet.fleet_svg as svg
 from lib.fleet.runner import FleetRow
@@ -168,7 +167,7 @@ def test_a_raising_slope_renderer_is_a_skip_line(monkeypatch):
                               comparison=comparison(_levels(), _repos()))
     entry = next(d for d in drawn if d["file"] == fs.FILE)
     assert entry["skipped"] == "skipped: the renderer raised KeyError."
-    assert next(d for d in drawn if d["file"] == fq.FILE)["svg"] is not None
+    assert next(d for d in drawn if d["file"] == "shared-tooling.svg")["svg"] is not None
 
 
 def _text_boxes(text: str) -> list[svg.Box]:

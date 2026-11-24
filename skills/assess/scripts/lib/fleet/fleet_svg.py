@@ -21,11 +21,7 @@ same inputs. This module holds what they share, so no diagram copies it:
 - **Hatching.** ``hatch_pattern`` is the diagonal hatch that marks unknown,
   never zero. The heat map keeps its literal white-and-grey pattern; the
   themed diagrams use ``THEMED_HATCH``, coloured by class.
-- **Label spacing.** ``place_labels`` puts each point label at the first
-  candidate offset that collides with no placed label or point (in a fixed
-  order), returning the placed boxes, or ``None`` for a label that fits
-  nowhere, so a renderer and its overlap test read the same layout.
-  ``spread_vertical`` pushes end labels (trend and slope charts) apart to a
+- **Label spacing.** ``spread_vertical`` pushes end labels (trend and slope charts) apart to a
   minimum gap, keeping their order. ``overlaps`` is the box test both use.
 - **Theme.** ``theme_style`` writes the embedded ``<style>``: one class per
   role in ``THEME`` with its light colour, the dark colour under
@@ -39,7 +35,7 @@ same inputs. This module holds what they share, so no diagram copies it:
 
 Stdlib only; numbers are formatted with fixed precision; nothing iterates a set.
 
-Shared SVG helpers for every fleet diagram (#674; the heat map, the quadrant, the
+Shared SVG helpers for every fleet diagram (#674; the heat map, the
 shared-tooling map, and the slope and trend charts of #675/#676). The API:
 
 | Helper | Use |
@@ -51,7 +47,6 @@ shared-tooling map, and the slope and trend charts of #675/#676). The API:
 | `hatch_pattern(id, background, stroke, width, classes)`, `THEMED_HATCH`, `HATCH_FILL` | The diagonal hatch for unknown, never zero; themed diagrams put `THEMED_HATCH` in the defs and fill with `HATCH_FILL`. |
 | `LEVEL_RAMP`, `ramp_step(level, top)`, `STEP_TEXT` | The level ramp (#675 moved it here from the heat map): pale to dark by a level's share of its row's top level, and the fixed text colour that reads on each step. The heat map colours a level with it. |
 | `hatched_note(x, y, lines)` | The "unknown" key: a hatched swatch with wrapped lines naming what is unknown. |
-| `place_labels(points, bounds, *, size, radius, obstacles)` -> `PlacedLabel \\| None` per point | Greedy collision nudging: the first `LABEL_OFFSETS` candidate inside `bounds` that hits no disc, obstacle box or earlier label; `None` means "name it elsewhere". Renderer and overlap test read the same boxes. |
 | `spread_vertical(ys, min_gap)` | End labels (trend, slope) pushed apart to `min_gap`, order kept. |
 | `overlaps(a, b)`, `Box` | The box test. |
 | `THEME`, `theme_style(extra)` | Role -> (light, dark) colours (plus a diagram's `extra` roles, such as the trend's series colours) as `t-`/`f-` (fill) and `s-` (stroke) classes, dark under `prefers-color-scheme`. The only `text` rule sets `font-family`, so it never overrides a text's attributes (`tests/svg_cascade.py`). |
@@ -206,53 +201,6 @@ class Box:
 def overlaps(a: Box, b: Box) -> bool:
     """True when the boxes share any area (touching edges do not overlap)."""
     return a.x < b.x + b.w and b.x < a.x + a.w and a.y < b.y + b.h and b.y < a.y + a.h
-
-
-@dataclass(frozen=True)
-class PlacedLabel:
-    """Where a point label landed: the text anchor point, its anchor, and its box."""
-
-    x: float
-    y: float
-    anchor: str  # "start" | "end"
-    box: Box
-
-
-# (dx, dy, anchor) tried in order: right, right-below, left, left-below, above, below.
-LABEL_OFFSETS: tuple[tuple[float, float, str], ...] = (
-    (9.0, -7.0, "start"), (9.0, 14.0, "start"), (-9.0, -7.0, "end"),
-    (-9.0, 14.0, "end"), (9.0, -16.0, "start"), (9.0, 23.0, "start"),
-)
-
-
-def place_labels(points: Sequence[tuple[float, float, str]], bounds: Box, *, size: float = 11.5,
-                 radius: float = 6.5, obstacles: Sequence[Box] = ()) -> list[PlacedLabel | None]:
-    """A label per ``(x, y, label)`` point, placed greedily in input order.
-
-    Each label takes the first ``LABEL_OFFSETS`` candidate whose box stays inside
-    ``bounds`` and overlaps no point disc (as a box), no ``obstacles`` box (fixed
-    captions) and no label placed before it; a label that fits nowhere is ``None`` and the caller names it elsewhere.
-    The caller fixes the input order, so the layout is deterministic.
-    """
-    discs = [*obstacles, *(Box(x - radius, y - radius, 2 * radius, 2 * radius) for x, y, _ in points)]
-    height = size * 1.2
-    placed: list[PlacedLabel | None] = []
-    taken: list[Box] = []
-    for x, y, label in points:
-        width = text_width(label, size)
-        choice: PlacedLabel | None = None
-        for dx, dy, anchor in LABEL_OFFSETS:
-            left = x + dx if anchor == "start" else x + dx - width
-            box = Box(left, y + dy - size, width, height)
-            inside = (box.x >= bounds.x and box.y >= bounds.y and box.x + box.w <= bounds.x + bounds.w
-                      and box.y + box.h <= bounds.y + bounds.h)
-            if inside and not any(overlaps(box, other) for other in [*discs, *taken]):
-                choice = PlacedLabel(x + dx, y + dy, anchor, box)
-                break
-        placed.append(choice)
-        if choice is not None:
-            taken.append(choice.box)
-    return placed
 
 
 def text_box(x: float, y: float, content: str, size: float = 12, anchor: str = "start") -> Box:

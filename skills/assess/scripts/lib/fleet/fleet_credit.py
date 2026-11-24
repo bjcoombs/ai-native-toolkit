@@ -3,13 +3,12 @@
 Rendered from ``achievements.json`` (``lib/fleet/fleet_achievements.py``) and the maturity
 model, before the diagrams, so the report opens on credit and the next step:
 
-1. **Earned this run**: this run's achievements, by kind (level-ups, firsts when turned
-   on, targets hit, streaks), each its own credit line; within a kind, by view and
-   unit key. Nothing is ordered by score, and units are never compared with each other.
-   At most ``PER_KIND`` lines per kind; the rest are counted and stay in
-   ``achievements.json``.
-2. **Next level-ups**: each unit's (not repository's) nearest level-up: the row whose
-   step needs the fewest repositories, then maturity-model order. At most ``MAX_STEPS``.
+1. **Earned this run**: this run's achievements counted by kind (level-ups, firsts when turned
+   on, targets hit, streaks), one line per kind linking ``achievements.json`` and
+   ``fleet-view.html`` (each unit's "Since last run"), where each is listed (#1255: the front screen leads, so the credit lists shrink to
+   counts). Nothing is ordered by score, and units are never compared with each other.
+2. **Next level-ups**: the count of units (not repositories) with a nearest level-up (the row
+   whose step needs the fewest repositories, then maturity-model order), linked the same way.
 3. **Recount**, on the first run under a new maturity-model version (``recount`` in
    ``achievements.json``, ``lib/fleet/fleet_rescore.py``): each move the rule change alone caused,
    raised moves first. These are not achievements and take nothing away: every line says the
@@ -23,8 +22,8 @@ that says what is already earned or held before any next step. Every line is phr
 credit or as a next step. Deterministic; no date.
 
 `credit_section` renders `report.md`'s first section, "What changed and who earned it",
-from `achievements.json`, opening with an `In place:` line (#743): this run's credit lines by kind (capped per kind), each unit's
-nearest level-up (`team_steps`: fewest repositories needed, then row order) and each Step
+from `achievements.json`, opening with an `In place:` line (#743): this run's credit counted by kind, the count of units
+with a nearest level-up (`team_steps`: fewest repositories needed, then row order) and each Step
 target's progress, plus a `### Recount` subsection
 after the credit lines when `achievements.json` holds a `recount` (#771, raised moves
 first). `fleet_diagrams.report_markdown` places it before the diagrams.
@@ -41,8 +40,9 @@ from lib.levels import MaturityModel
 from lib.vocabulary import IN_PLACE
 
 TITLE = "What changed and who earned it"
-PER_KIND = 20
-MAX_STEPS = 30
+PER_KIND = 20  # Recount lines shown before the rest are counted
+DETAIL = "[`achievements.json`](./achievements.json)"
+PAGE = "[`fleet-view.html`](./fleet-view.html)"
 KIND_LABELS = {"level_up": "Level-ups", "first": "Firsts", "target_hit": "Targets hit", "streak": "Streaks"}
 
 
@@ -73,20 +73,16 @@ def _in_place(doc: Achievements) -> str:
 
 
 def _earned(doc: Achievements) -> list[str]:
+    """One count line per kind, linked to the detail; no achievement is listed here (#1255)."""
     mine = [a for a in doc["achievements"] if a["run"] == doc["run"]]
     if not mine:
         return ["Nothing new this run. The next level-ups below say what earns the next one."]
     lines: list[str] = []
     for kind in KINDS:
-        of_kind = [a for a in mine if a["kind"] == kind]
-        if not of_kind:
-            continue
-        lines += [f"**{KIND_LABELS[kind]}**", ""]
-        lines += [f"- {a['credit']}" for a in of_kind[:PER_KIND]]
-        if len(of_kind) > PER_KIND:
-            lines.append(f"- And {len(of_kind) - PER_KIND} more in `achievements.json`.")
-        lines.append("")
-    return lines[:-1]
+        n = sum(1 for a in mine if a["kind"] == kind)
+        if n:
+            lines.append(f"- {KIND_LABELS[kind]}: {n}, each listed in {DETAIL} and, per unit, in {PAGE}.")
+    return lines
 
 
 def _recount(doc: Achievements) -> list[str]:
@@ -125,13 +121,12 @@ def team_steps(steps: Sequence[NextStep], order: Mapping[str, int]) -> list[Next
 
 
 def _steps(doc: Achievements, order: Mapping[str, int]) -> list[str]:
+    """The count of units with a nearest level-up, linked to the detail (#1255)."""
     chosen = team_steps(doc["nearest_level_ups"], order)
     if not chosen:
         return ["No unit has a measured next level-up in this run."]
-    lines = [f"- {step['credit']}" for step in chosen[:MAX_STEPS]]
-    if len(chosen) > MAX_STEPS:
-        lines.append(f"- And {len(chosen) - MAX_STEPS} more units in `achievements.json`.")
-    return lines
+    return [f"- {len(chosen)} {'unit has' if len(chosen) == 1 else 'units have'} a measured next level-up, "
+            f"each listed in {DETAIL} (`nearest_level_ups`)."]
 
 
 def _target(t: TargetProgress) -> str:

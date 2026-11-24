@@ -1,4 +1,4 @@
-"""Tests for the fleet diagrams (issue #674): lib/fleet/fleet_svg.py, lib/fleet/fleet_quadrant.py,
+"""Tests for the fleet diagrams (issue #674): lib/fleet/fleet_svg.py,
 lib/fleet/fleet_tooling_map.py and lib/fleet/fleet_diagrams.py.
 
 The golden files under ``tests/fixtures/fleet_diagrams/`` lock the whole render; the
@@ -15,7 +15,6 @@ from pathlib import Path
 import pytest
 
 import lib.fleet.fleet_diagrams as fd
-import lib.fleet.fleet_quadrant as fq
 import lib.fleet.fleet_svg as svg
 import lib.fleet.fleet_tooling_map as ftm
 from lib.fleet.runner import FleetRow
@@ -27,9 +26,13 @@ from svg_cascade import overridden_text_attributes
 SVG_NS = "{http://www.w3.org/2000/svg}"
 
 
-def _quad(diagrams: list[fd.Diagram]) -> fd.Diagram:
-    """The quadrant entry, by file: the tag profile strip (#940) now leads the list."""
-    return next(d for d in diagrams if d["file"] == fq.FILE)
+def _tooling(diagrams: list[fd.Diagram]) -> fd.Diagram:
+    """The shared-tooling entry, by file: the tag profile strip (#940) leads the list."""
+    return next(d for d in diagrams if d["file"] == ftm.FILE)
+
+
+def _slope(diagrams: list[fd.Diagram]) -> fd.Diagram:
+    return next(d for d in diagrams if d["file"] == "slope.svg")
 
 
 def _levels() -> MaturityModel:
@@ -71,87 +74,8 @@ def test_svg_is_self_contained_and_well_formed(diagram):
     assert re.findall(r"https?://[^\s\"']+", text) == ["http://www.w3.org/2000/svg"]
     assert "prefers-color-scheme: dark" in text
     assert overridden_text_attributes(text) == []
-    if diagram["file"] in (fq.FILE, ftm.FILE):  # the diagrams that name repositories
+    if diagram["file"] == ftm.FILE:  # the diagram that names repositories
         assert "web/design&lt;&amp;&gt;\"sys" in text
-
-
-# --- quadrant -----------------------------------------------------------------
-
-
-def test_repo_points_measure_commits_and_mean_share_of_top_level():
-    points = {p["repo"]: p for p in fq.repo_points(_levels(), _repos())}
-    # instructions 1 of 2, agent use 1 of 3 (3 agent commits)
-    api = points["payments/api"]
-    assert (api["commits"], api["measured_rows"], api["team_rows"]) == (212, 2, 2)
-    assert math.isclose(api["maturity"] or 0, (1 / 2 + 1 / 3) / 2)
-    # no instruction signal: only agent use (level 0) is measured, so the mean is 0, not unknown
-    assert points["data/notebooks"]["measured_rows"] == 1
-    assert points["data/notebooks"]["maturity"] == 0.0
-    assert points["mobile/android"]["commits"] is None  # failed scan: unknown, never 0
-    assert points["mobile/android"]["maturity"] is None
-    assert points["mobile/watch"]["commits"] is None  # ai_usage unavailable
-
-
-def test_unknown_repositories_are_named_on_the_hatched_strip_not_plotted():
-    text = _quad(fd.build_diagrams(_levels(), _repos(), WINDOW))["svg"]
-    assert text is not None
-    assert "mobile/android (level and activity unknown)" in text
-    assert "mobile/watch (activity" in text
-    assert 'fill="url(#fleet-hatch)"' in text
-    circles = [c.find(f"{SVG_NS}title") for c in ET.fromstring(text).iter(f"{SVG_NS}circle")]
-    plotted = {t.text.split(":", 1)[0] for t in circles if t is not None and t.text}
-    assert "mobile/android" not in plotted and "mobile/watch" not in plotted
-    assert "payments/api" in plotted
-
-
-def test_busy_immature_repositories_take_the_alarm_colour():
-    points = fq.repo_points(_levels(), _repos())
-    plotted = [p for p in points if p["commits"] is not None and p["maturity"] is not None]
-    split = fq.median_commits(plotted)
-    risky = sorted(p["repo"] for p in plotted if fq.at_risk(p, split))
-    assert risky == ["mobile/ios", "payments/api", "payments/ledger"]
-    assert fq.median_commits([]) == 1
-
-
-def test_in_a_quiet_window_a_repository_with_no_commits_is_never_busy():
-    quiet: list[fq.RepoPoint] = [
-        {"repo": f"g/r{i}", "commits": c, "maturity": 0.0, "measured_rows": 1, "team_rows": 1}
-        for i, c in enumerate((0, 0, 3))]
-    split = fq.median_commits(quiet)
-    assert split == 1
-    assert [fq.at_risk(p, split) for p in quiet] == [False, False, True]
-
-
-@pytest.mark.parametrize(("busiest", "ticks"), [(0, ["0", "1"]), (1, ["0", "1"]), (2, ["0", "1", "2"]),
-                                               (4, ["0", "1", "2", "3", "4", "5"])])
-def test_a_quiet_window_has_whole_commit_ticks(busiest, ticks):
-    points: list[fq.RepoPoint] = [{"repo": "g/r", "commits": busiest, "maturity": 0.5,
-                                   "measured_rows": 1, "team_rows": 1}]
-    text = fq.render_quadrant(points, WINDOW)
-    # x tick labels sit 18px under the plot, centred
-    labels = re.findall(r'y="{:.1f}"[^>]*text-anchor="middle"[^>]*>([^<]*)<'.format(fq.PLOT_T + fq.PLOT_H + 18),
-                        text)
-    assert labels == ticks
-    assert fq.count_ticks(10.0) == 5
-
-
-def test_quadrant_labels_never_overlap_each_other_points_or_captions():
-    plotted, x, y, labels = fq.layout(fq.repo_points(_levels(), _repos()))
-    boxes = [label.box for label in labels if label is not None]
-    discs = [svg.Box(x(p["commits"] or 0) - 6.5, y(p["maturity"] or 0) - 6.5, 13, 13) for p in plotted]
-    captions = [svg.text_box(cx, cy, t, 12.5, a) for cx, cy, t, a, _, _ in fq.CAPTIONS]
-    for i, box in enumerate(boxes):
-        assert not any(svg.overlaps(box, other) for other in boxes[i + 1:])
-        assert not any(svg.overlaps(box, other) for other in [*discs, *captions])
-    assert len(boxes) >= len(plotted) - 2  # the crowded fixture still labels nearly every dot
-
-
-def test_a_label_that_fits_nowhere_is_named_under_the_plot():
-    text = _quad(fd.build_diagrams(_levels(), _repos(), WINDOW))["svg"]
-    assert text is not None
-    _, _, _, labels = fq.layout(fq.repo_points(_levels(), _repos()))
-    assert None in labels
-    assert "Not labelled (crowded): " in text
 
 
 # --- shared-tooling map -------------------------------------------------------
@@ -245,10 +169,10 @@ def test_counts_only_keeps_a_token_ref_and_drops_a_slash_ref_to_pin_unknown():
 def test_a_raising_renderer_is_a_skip_line_naming_the_error(monkeypatch):
     def bug(*_args: object) -> str:
         raise ValueError("render bug")
-    monkeypatch.setattr(fq, "render_quadrant", bug)
-    diagrams = fd.build_diagrams(_levels(), _repos(), WINDOW)
-    assert _quad(diagrams)["skipped"] == "skipped: the renderer raised ValueError."
-    assert next(d for d in diagrams if d["file"] == ftm.FILE)["svg"] is not None  # the others still draw
+    monkeypatch.setattr(ftm, "render_tooling_map", bug)
+    diagrams = fd.build_diagrams(_levels(), _repos(), WINDOW, comparison=comparison(_levels(), _repos()))
+    assert _tooling(diagrams)["skipped"] == "skipped: the renderer raised ValueError."
+    assert _slope(diagrams)["svg"] is not None  # the others still draw
     assert "Not drawn: skipped: the renderer raised ValueError." in fd.report_markdown(diagrams)
 
 
@@ -260,8 +184,7 @@ def test_drawn_skipped_and_failed_diagrams_share_one_heading(monkeypatch):
 
     def bug(*_args: object) -> str:
         raise ValueError("render bug")
-    for module, name in ((fq, "render_quadrant"), (ftm, "render_tooling_map")):
-        monkeypatch.setattr(module, name, bug)
+    monkeypatch.setattr(ftm, "render_tooling_map", bug)
     failed = {d["file"]: (d["title"], d["question"]) for d in fd.build_diagrams(_levels(), _repos(), WINDOW)}
     assert failed == fd.HEADINGS
 
@@ -309,14 +232,16 @@ def test_item_parts_names_the_kind():
 
 def test_skipped_diagrams_say_why_in_the_report():
     no_levels = fd.build_diagrams(None, _repos(), WINDOW)
-    assert _quad(no_levels)["svg"] is None
-    assert "no maturity model" in (_quad(no_levels)["skipped"] or "")
+    trend = next(d for d in no_levels if d["file"] == "trend.svg")
+    assert trend["svg"] is None and "no maturity model" in (trend["skipped"] or "")
     org_only: MaturityModel = {**_levels(), "rows": [r for r in _levels()["rows"] if r["scope"] == "org"]}
-    assert "no team practices" in (_quad(fd.build_diagrams(org_only, _repos(), WINDOW))["skipped"] or "")
+    with_org = fd.build_diagrams(org_only, _repos(), WINDOW, comparison=comparison(_levels(), _repos()))
+    assert "no team practices" in (_slope(with_org)["skipped"] or "")
     empty = fd.build_diagrams(_levels(), [], WINDOW)
     by_file = {d["file"]: d["skipped"] for d in empty}
-    assert by_file["quadrant.svg"] == by_file["shared-tooling.svg"] == "skipped: no repositories in the run."
+    assert by_file["shared-tooling.svg"] == "skipped: no repositories in the run."
     assert "layer-bars.svg" not in by_file  # retired with the layer framing (#1073)
+    assert "quadrant.svg" not in by_file  # dropped: it placed groups against each other (#1255)
     assert by_file["slope.svg"] == (
         "skipped: no earlier run compared (no --compare, or no history entry matched this run).")
     report = fd.report_markdown(no_levels)
@@ -325,22 +250,23 @@ def test_skipped_diagrams_say_why_in_the_report():
 
 
 def test_write_diagrams_replaces_stale_files_and_clear_removes_them(tmp_path):
-    (tmp_path / fq.FILE).write_text("stale", encoding="utf-8")
+    (tmp_path / "slope.svg").write_text("stale", encoding="utf-8")
     keep = tmp_path / "groups.jsonl"
     keep.write_text("{}", encoding="utf-8")
     written = fd.write_diagrams(tmp_path, fd.build_diagrams(None, list(ROWS), WINDOW))
     assert sorted(p.name for p in written) == ["report.md", "shared-tooling.svg"]
-    assert not (tmp_path / fq.FILE).exists()  # skipped this run: the old picture is gone
+    assert not (tmp_path / "slope.svg").exists()  # skipped this run: the old picture is gone
     fd.clear_diagrams(tmp_path)
     assert sorted(p.name for p in tmp_path.iterdir()) == ["groups.jsonl"]
 
 
-def test_a_retired_layer_bars_file_from_an_earlier_run_is_removed(tmp_path):
-    """#1073: the fleet no longer draws per-layer bars; an earlier run's picture never stays."""
-    (tmp_path / "layer-bars.svg").write_text("stale", encoding="utf-8")
+@pytest.mark.parametrize("retired", ["layer-bars.svg", "quadrant.svg"])
+def test_a_retired_diagram_from_an_earlier_run_is_removed(tmp_path, retired):
+    """#1073: no per-layer bars; #1255: no quadrant. An earlier run's picture never stays."""
+    (tmp_path / retired).write_text("stale", encoding="utf-8")
     fd.write_diagrams(tmp_path, fd.build_diagrams(None, list(ROWS), WINDOW))
-    assert not (tmp_path / "layer-bars.svg").exists()
-    assert "layer-bars.svg" not in fd.DIAGRAM_FILES and fd.RETIRED_FILES == ("layer-bars.svg",)
+    assert not (tmp_path / retired).exists()
+    assert retired not in fd.DIAGRAM_FILES and fd.RETIRED_FILES == ("layer-bars.svg", "quadrant.svg")
 
 
 # --- shared helpers -----------------------------------------------------------
@@ -353,18 +279,6 @@ def test_nice_ceiling_and_ticks():
     assert scale.ticks(4) == [0, 25, 50, 75, 100]
     assert svg.LinearScale(1, 1, 0, 10)(1) == 0
     assert [svg.tick_label(v) for v in (40.0, 0.25)] == ["40", "0.25"]
-
-
-def test_place_labels_falls_back_through_candidates_then_gives_up():
-    bounds = svg.Box(0, 0, 400, 200)
-    placed = svg.place_labels([(100, 100, "aaaa"), (100, 100, "bbbb"), (100, 100, "cccc"),
-                               (100, 100, "dddd"), (100, 100, "eeee"), (100, 100, "ffff"),
-                               (100, 100, "gggg")], bounds)
-    assert [p is not None for p in placed[:4]] == [True] * 4  # right, right-below, left, left-below
-    assert placed[-1] is None  # every candidate taken: the caller names it elsewhere
-    assert [p.anchor for p in placed[:4] if p] == ["start", "start", "end", "end"]
-    edge = svg.place_labels([(395, 100, "near the right edge")], bounds)[0]
-    assert edge is not None and edge.anchor == "end"
 
 
 def test_spread_vertical_keeps_order_and_minimum_gap():

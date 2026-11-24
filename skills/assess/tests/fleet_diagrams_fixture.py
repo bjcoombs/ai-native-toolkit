@@ -17,6 +17,7 @@ from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow, write_rows
 from lib.fleet.fleet_compare import Comparison, FleetRun, compare
 from lib.fleet.fleet_diagrams import build_diagrams, report_markdown
 from lib.fleet.fleet_data import level_results, tag_fields
+from lib.fleet.fleet_front import front_screen, front_section
 from lib.fleet.fleet_tag_profile import tag_profile
 from lib.fleet.fleet_groups import roll_up
 from lib.fleet.fleet_stamp import build_stamp
@@ -129,7 +130,8 @@ def goldens(out: Path) -> dict[str, str]:
                        "step": (results[r["repo"]] or {}).get("step")} for r in repos]}
     diagrams = build_diagrams(levels, repos, WINDOW, comparison=comparison(levels, repos), data=data)
     files = {f"expected-{d['file']}": d["svg"] for d in diagrams if d["svg"] is not None}
-    return {**files, "expected-report.md": report_markdown(diagrams)}
+    front = front_section(front_screen(levels, data), len(repos))  # #1255: this model has no Steps
+    return {**files, "expected-report.md": report_markdown(diagrams, front=front)}
 
 
 if __name__ == "__main__":

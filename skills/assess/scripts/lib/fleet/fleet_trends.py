@@ -5,8 +5,7 @@ left, this run on the right. ``--compare`` sees two runs; this sees the history.
 
 **Mean maturity.** A group's value in a run is ``lib.fleet.fleet_maturity.mean_share``
 over its ``team`` rows in ``groups.jsonl``: each known row level as a share of the
-row's ``top_level``, the unit and row set of the slope chart (#675) and the
-quadrant (#684). An entry written before ``groups.jsonl`` carried ``top_level``
+row's ``top_level``, the unit and row set of the slope chart (#675). An entry written before ``groups.jsonl`` carried ``top_level``
 takes each row's top level from this run's maturity model when the entry used the
 same version (same version, same rows). Any other run with a known team row
 lacking a top level (an entry on an older maturity-model version) is marked
@@ -49,7 +48,7 @@ path hashing and `--fleet-config` hash and records a maturity-model version; unr
 run per date: the entry over this run's repository set, else the highest suffix.
 `trend_run(stamp, groups, levels)` is one run's point per group: `group_mean`, the
 `fleet_maturity.mean_share` of the group's known team rows over their `top_level` (#684, the
-slope chart's and quadrant's unit and row set). An entry without `top_level` takes it from
+slope chart's unit and row set). An entry without `top_level` takes it from
 this run's maturity model (`levels`, passed through `history_runs`) when it used the same
 version (`with_top_levels`); otherwise a run with any known team row lacking it is marked
 `scaled: false` and not drawn (`share_runs`), so the axis is always 0 to 1, and `hidden_note`

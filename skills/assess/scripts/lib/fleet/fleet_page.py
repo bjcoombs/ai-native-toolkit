@@ -9,7 +9,7 @@ network request and loads nothing; it computes no level, Step or achievement.
 ``write_page`` builds it from this run's ``fleet-data.json`` document, ``achievements.json``
 document, the maturity model and the drawn diagrams (``fleet_diagrams.Diagram``: the tag
 profile and heatmap of #940 and the Step diagrams of #941 are embedded as drawn; a skipped
-one is left out), and writes it atomically. Without a maturity model or ``fleet-data.json``
+one is left out) and the front screen (``fleet_front.FrontScreen``, #1255), and writes it atomically. Without a maturity model or ``fleet-data.json``
 there is nothing to show, so it removes any page an earlier run left. ``clear_page`` removes
 it (``fleet.py --no-diagrams``). Deterministic: the same inputs give the same bytes.
 
@@ -67,7 +67,8 @@ def clear_page(out_dir: Path) -> None:
 
 
 def write_page(out_dir: Path, data: Mapping[str, Any] | None, achievements: Mapping[str, Any] | None,
-               model: MaturityModel | None, diagrams: Sequence[Mapping[str, Any]]) -> Path | None:
+               model: MaturityModel | None, diagrams: Sequence[Mapping[str, Any]],
+               front: Mapping[str, Any] | None = None) -> Path | None:
     """Write ``fleet-view.html``; None (and any stale page removed) without a model or data."""
     clear_page(out_dir)
     if data is None or model is None:
@@ -79,7 +80,7 @@ def write_page(out_dir: Path, data: Mapping[str, Any] | None, achievements: Mapp
     fd, tmp = tempfile.mkstemp(dir=out_dir, prefix=f".{PAGE_FILE}.", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(build_page(page_bundle(data, achievements, model, pictures)))
+            handle.write(build_page(page_bundle(data, achievements, model, pictures, front)))
         os.chmod(tmp, 0o644)
         os.replace(tmp, path)
     except BaseException:

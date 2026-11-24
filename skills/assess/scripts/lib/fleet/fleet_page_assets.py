@@ -16,9 +16,11 @@ words what it finds. Its parts:
   ``target_id``, so a static page has none. A target the source reports with ``pending: true``
   (set on the page, not yet read by a run) is shown as set, with its progress to come; a
   ``target_note`` in the bundle says why a page offers no entry.
-- **Sections.** ``SECTIONS`` lists the section renderers in page order: Since last run, Where
-  this unit stands, Your target, Drill-down, Fleet pictures (the #705 design order). A front
-  screen goes first in that list; nothing else moves.
+- **Sections.** ``SECTIONS`` lists the section renderers in page order: Fleet at a glance (the
+  front screen, #1255, from the bundle's ``front``: Step counts, moves, one change away, gates
+  ranked by the repositories each would move, team units by name, each a button that opens it in
+  the ownership view), then Since last run, Where this unit stands, Your target, Drill-down,
+  Fleet pictures (the #705 design order).
 - **Pinned unit.** A per-viewer ``localStorage`` key, read and written inside try/catch; the
   page opens on the ownership root without it.
 - **Order.** Units and repositories are listed by label, never by rank.
@@ -264,7 +266,46 @@ SCRIPT = r"""
         + "<img alt=\"" + esc(p.title) + "\" src=\"" + p.src + "\"></figure>";
     }).join("") + "</div>";
   }
+  function movedLine(m) {
+    if (!m) { return "This run is the baseline: no earlier run was compared, so no Step moves are counted yet."; }
+    if (!m.comparable) { return "Not compared with the earlier run, which differs: " + m.reasons.join("; ") + "."; }
+    var line = repos(m.up) + " moved up a Step and " + repos(m.down) + " moved down; " + m.same
+      + " stayed at the same Step.";
+    if (m.rule_only) { line += " " + plural(m.rule_only, "move", "moves") + " came from rule changes alone."; }
+    return line;
+  }
+  function glance(bundle) {
+    var f = bundle.front;
+    if (!f) { return ""; }
+    var out = "<h2>Fleet at a glance</h2>";
+    if (f.skipped) {
+      out += "<p>No Step counts: " + esc(f.skipped) + "</p>";
+    } else {
+      out += "<ul>" + f.steps.map(function (s) {
+        return "<li>" + esc(stepName(bundle, s.step)) + ": " + esc(repos(s.count)) + "</li>";
+      }).join("") + "</ul>";
+      if (f.not_measured) { out += "<p class=\"muted\">" + esc(repos(f.not_measured)) + " with no measured Step.</p>"; }
+    }
+    if (!f.skipped) {
+      out += "<p><strong>Since the last run.</strong> " + esc(movedLine(f.moved)) + "</p>";
+      out += "<p><strong>One change away.</strong> " + esc(repos(f.one_change) + (f.one_change === 1 ? " is" : " are"))
+        + " one change from the next Step.</p>";
+      out += f.gates.length ? "<p>The gates that would move the most repositories, most first:</p><ol>"
+        + f.gates.map(function (g) {
+          return "<li><code>" + esc(g.gate) + "</code>: " + esc(g.task + ". Moves " + repos(g.repos) + " to the next Step.")
+            + "</li>";
+        }).join("") + "</ol>" : "<p>No single gate takes a repository to its next Step in this run.</p>";
+    }
+    if (f.teams.length) {
+      out += "<p>Team pages, by name:</p><ul class=\"teams\">" + f.teams.map(function (t) {
+        return "<li><button class=\"link\" data-view=\"ownership\" data-unit=\"" + esc(t.label) + "\">"
+          + esc(t.label) + "</button></li>";
+      }).join("") + "</ul>";
+    }
+    return out;
+  }
   var SECTIONS = [
+    function (b) { return glance(b); },
     function (b, s) { return since(b, s); },
     function (b, s, t, c, x) { return stands(b, s, x); },
     function (b, s, t, c) { return target(b, s, t, c); },
@@ -314,7 +355,7 @@ SCRIPT = r"""
       app.addEventListener("click", function (ev) {
         var el = ev.target.closest("button");
         if (!el) { return; }
-        if (el.dataset.unit) { state = {view: state.view, unit: el.dataset.unit, repo: null}; }
+        if (el.dataset.unit) { state = {view: el.dataset.view || state.view, unit: el.dataset.unit, repo: null}; }
         else if (el.dataset.repo) { state = {view: state.view, unit: state.unit, repo: el.dataset.repo}; }
         else if (el.dataset.act === "pin") { writePin(state); return; }
         else if (el.dataset.act === "set-target" && canSet) {
