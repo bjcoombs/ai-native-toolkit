@@ -96,6 +96,8 @@ def test_a_gitlab_repository_without_a_ci_scan_reads_level_2_unmet(tmp_path: Pat
     (".github/workflows/scan.yml", "steps:\n  - run: docker run --rm ghcr.io/gitleaks/gitleaks:v8.18.0 detect\n",
      ["gitleaks"]),
     (".github/workflows/scan.yml", "steps:\n  - uses: docker://zricethezav/gitleaks:latest\n", ["gitleaks"]),
+    (".github/workflows/scan.yml", "steps:\n  - run: npx secretlint '**/*'\n", ["secretlint"]),
+    (".github/workflows/scan.yml", "steps:\n  - run: pipx run detect-secrets scan\n", ["detect-secrets"]),
     (".gitlab-ci.yml", "scan:\n  script:\n    - echo start\n    - gitleaks detect --source .\n", ["gitleaks"]),
     (".gitlab-ci.yml", "include:\n  - template: Security/Secret-Detection.gitlab-ci.yml\n"
                        "secret_detection:\n  allow_failure: true\n", ["secret_detection"]),  # reports by artifact
@@ -122,6 +124,7 @@ def test_a_ci_scan_meets_level_2_measured(tmp_path: Path, rel: str, text: str, t
     (".gitlab-ci.yml", ".secret_detection:\n  script: echo hi\n"),
     (".gitlab-ci.yml", "scan:\n  allow_failure: true\n  script:\n    - gitleaks detect\n"),  # masked job
     (".github/workflows/x.yml", "steps:\n  - continue-on-error: true\n    run: gitleaks detect\n"),  # step-first mask
+    (".github/workflows/x.yml", "steps:\n  - run: gitleaks detect\n    continue-on-error: ${{ true }}\n"),
     (".gitlab-ci.yml", "deploy:\n  needs:\n    - gitleaks\n  script:\n    - make deploy\n"),  # a job name
     (".github/workflows/x.yml", "steps:\n  - name: Secrets - gitleaks\n    run: echo skipped\n"),  # a step label
     (".gitlab-ci.yml", "build:\n  tags:\n    - gitleaks\n  script:\n    - make\n"),  # a runner tag
@@ -188,6 +191,25 @@ def test_a_project_include_resolves_from_a_ghsync_root(tmp_path: Path) -> None:
     assert scan_secrets_guard(app)["ci"]["includes_unresolved"] == 1  # without the root, unread
     ci_block = scan_secrets_guard(app, ghsync_root=root)["ci"]
     assert ci_block["tools"] == ["gitleaks"] and ci_block["includes_unresolved"] == 0
+
+
+PRE_COMMIT = "repos:\n  - repo: https://github.com/gitleaks/gitleaks\n    hooks:\n      - id: gitleaks\n"
+
+
+@pytest.mark.parametrize(("step", "tools"), [
+    ("  - uses: pre-commit/action@v3.0.1\n", ["gitleaks"]),
+    ("  - run: pre-commit run --all-files\n", ["gitleaks"]),
+    ("  - run: pre-commit run gitleaks --all-files\n", ["gitleaks"]),
+    ("  - run: pre-commit run eslint --all-files\n", []),  # another hook by id
+])
+def test_ci_that_runs_the_pre_commit_secrets_hooks_is_a_scan(tmp_path: Path, step: str, tools: list[str]) -> None:
+    root = _repo(tmp_path, {".pre-commit-config.yaml": PRE_COMMIT, ".github/workflows/x.yml": "steps:\n" + step})
+    assert scan_secrets_guard(root)["ci"]["tools"] == tools
+
+
+def test_pre_commit_run_without_a_secrets_hook_is_not_a_scan(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {".github/workflows/x.yml": "steps:\n  - run: pre-commit run --all-files\n"})
+    assert scan_secrets_guard(root)["ci"]["present"] is False
 
 
 def test_a_root_gitlab_file_counts_in_a_directory_named_workflows(tmp_path: Path) -> None:

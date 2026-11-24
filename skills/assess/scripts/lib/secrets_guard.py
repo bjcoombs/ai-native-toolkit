@@ -44,7 +44,9 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   scan on a github.com remote, GitHub's own settings could still guard the repository, so the
   reading is not measured (``secret_scanning_not_read``), never unmet; likewise
   (``ci_includes_unresolved``) when a GitLab include that could hold a scan was not read, since
-  ``.gitlab-ci.yml``'s includes are read through ``lib.ci_includes``; on any other remote, or
+  ``.gitlab-ci.yml``'s includes are read through ``lib.ci_includes``;
+  a GitHub Enterprise Server or ``*.ghe.com`` remote is not recognised as GitHub yet, so it reads
+  unmet with no CI scan although those platforms offer secret scanning (part B reads the setting); on any other remote, or
   none, there is no such setting, and no CI scan reads unmet.
 - ``sources`` records each source that shows a guard with its own grade (``pre_commit``
   config_only, ``ci`` measured), since a condition's grade is fixed per signal.
@@ -101,11 +103,12 @@ _USES = re.compile(r"^\s*-?\s*uses:\s*['\"]?([\w.-]+/[\w.-]+)", re.IGNORECASE)
 # at the start of a shell line (indented, as inside a ``run: |`` or ``script:`` block), after ``run:``/``script:``/``- ``, after a pipe or ``&&``, or after
 # ``docker run <image>`` (so a path such as ``.gitleaks.toml`` or a ``gitleaks:allow`` note is not).
 _COMMAND = re.compile(
-    r"(?:^\s*|[;&|]\s*|(?:run|script):\s*|^\s*-\s+|docker run\s+(?:--?\S+\s+)*\S*/)(?:[\w./-]*/)?("
+    r"(?:^\s*|[;&|]\s*|(?:run|script):\s*|^\s*-\s+|"
+    r"(?:npx|bunx|uvx|pipx run|pnpm (?:exec|dlx)|yarn dlx)\s+(?:--?\S+\s+)*|docker run\s+(?:--?\S+\s+)*\S*/)(?:[\w./-]*/)?("
     + "|".join(re.escape(t) for t in SECRET_TOOLS) + r")(?=\s|$|@)", re.IGNORECASE)
 # A step or job that cannot fail the run (GitHub ``continue-on-error: true``, GitLab
 # ``allow_failure: true``) or never runs (``if: false``).
-_CONTINUE_ON_ERROR = re.compile(r"^\s*(?:-\s+)?(?:(?:continue-on-error|allow_failure):\s*['\"]?true\b|if:\s*(?:\$\{\{\s*)?false\s*(?:\}\})?\s*$)",
+_CONTINUE_ON_ERROR = re.compile(r"^\s*(?:-\s+)?(?:(?:continue-on-error|allow_failure):\s*(?:['\"]?true\b|\$\{\{\s*true\s*\}\})|if:\s*(?:\$\{\{\s*)?false\s*(?:\}\})?\s*$)",
                                 re.IGNORECASE)
 # The events that run a GitHub workflow on each change, before or as it lands.
 CHANGE_EVENTS = frozenset({"push", "pull_request", "pull_request_target", "merge_group"})
@@ -115,6 +118,9 @@ _WHEN_NEVER = re.compile(r"^\s*-?\s*when:\s*['\"]?never\b", re.IGNORECASE)
 _STEP_START = re.compile(r"^(\s*)-\s")
 # A list of names, not commands: jobs (``needs:``), stages, runner tags, branches and paths. A
 # ``needs: [- gitleaks]`` names a job called gitleaks; a ``paths: [- trufflehog]`` a folder.
+# CI that runs the repository's own pre-commit hooks: every hook (``pre-commit run --all-files``,
+# ``uses: pre-commit/action``), or one by id (``pre-commit run gitleaks``).
+_PRE_COMMIT_RUN = re.compile(r"\bpre-commit run(?:\s+([\w-]+))?|^\s*-?\s*uses:\s*['\"]?pre-commit/action@")
 _NAME_LIST = re.compile(r"^\s*(?:needs|dependencies|extends|stages|tags|tags-ignore|paths|paths-ignore|"
                         r"branches|branches-ignore|only|except)\s*:\s*$")
 # A tool's container image, tag allowed: ``docker run -v $PWD:/p zricethezav/gitleaks:latest detect``,
@@ -269,7 +275,7 @@ def _in_name_list(lines: list[str], i: int) -> bool:
     return False
 
 
-def _ci_tools(text: str) -> list[str]:
+def _ci_tools(text: str, hooks: frozenset[str] = frozenset()) -> list[str]:
     """The secrets tools a CI file uses or runs, unmasked; ``secret_detection`` for GitLab's template
     or visible job. Comments never count, and neither does a masked step or job."""
     lines = _code_lines(text)
@@ -277,6 +283,11 @@ def _ci_tools(text: str) -> list[str]:
     tools: set[str] = set()
     for i, line in enumerate(lines):
         if i in masked or not line.strip() or _MASKED.search(line):
+            continue
+        run_hooks = _PRE_COMMIT_RUN.search(line)
+        if run_hooks:  # the pre-commit secrets hooks, run where they cannot be skipped
+            hook_id = run_hooks.group(1)
+            tools.update(hooks if hook_id is None or hook_id.startswith("-") else hooks & {hook_id.lower()})
             continue
         uses = _USES.match(line)
         if uses:
@@ -293,13 +304,14 @@ def _ci_tools(text: str) -> list[str]:
     return sorted(tools)
 
 
-def ci_guard(root: Path, ghsync_root: Path | None = None) -> CiGuard:
-    """The CI files with a secrets scan step, and the tools they use."""
+def ci_guard(root: Path, ghsync_root: Path | None = None, hooks: frozenset[str] = frozenset()) -> CiGuard:
+    """The CI files with a secrets scan step, and the tools they use. ``hooks`` are the pre-commit
+    secrets hooks, which a CI ``pre-commit run`` runs."""
     files: list[str] = []
     tools: set[str] = set()
     for path in _ci_files(root):
         text = _read(path)
-        found = _ci_tools(text) if text is not None else []
+        found = _ci_tools(text, hooks) if text is not None else []
         if found and path.relative_to(root).parts[:2] == (".github", "workflows") \
                 and not _runs_on_change(_code_lines(text or "")):
             found = []
@@ -310,7 +322,7 @@ def ci_guard(root: Path, ghsync_root: Path | None = None) -> CiGuard:
     if (root / ".gitlab-ci.yml").is_file():  # the files .gitlab-ci.yml includes (lib.ci_includes)
         resolution = resolve_includes(root, ghsync_root)  # a project include resolves from a ghsync clone
         for included in resolution.files:
-            found = _ci_tools(included.text)
+            found = _ci_tools(included.text, hooks)
             if found:
                 files.append(f".gitlab-ci.yml include (line {included.line})")
                 tools.update(found)
@@ -365,7 +377,8 @@ def scan_secrets_guard(repo_root: Path, scope: Path | None = None,
     """Build the ``secrets_guard`` block (see the module doc). The pre-commit config and CI are the
     repository's, so a ``scope`` reads the root's, as ``guardrails`` reads the root pre-commit config."""
     root = repo_root.resolve()
-    hook, ci = pre_commit_guard(root), ci_guard(root, ghsync_root)
+    hook = pre_commit_guard(root)
+    ci = ci_guard(root, ghsync_root, frozenset(hook["tools"]))
     sources = [SourceGrade(source=name, grade=_GRADES[name])
                for name, found in (("pre_commit", hook["present"]), ("ci", ci["present"])) if found]
     return {"available": True, "pre_commit": hook, "ci": ci, "configured": bool(sources),
