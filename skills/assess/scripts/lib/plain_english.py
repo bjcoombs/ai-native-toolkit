@@ -20,7 +20,8 @@ is not prose and is not linted.
 
 ``manifest_lines()`` (#1186) names every prose string of the check manifest the report or the
 catalog prints, keyed ``<entry id>.<field path>``: the ``MANIFEST_PROSE`` fields (titles,
-summaries, condition fixes, finding actions, reason-code meanings and next steps). The ``why``
+summaries, condition fixes, finding actions, reason-code meanings and next steps, and what a
+null reading means). The ``why``
 and ``whys`` texts are left out: each was approved by the maintainer under #939, so a shorter
 one is proposed and joins the lint only once approved, by its key in ``APPROVED_WHYS``.
 
@@ -144,7 +145,7 @@ def untranslated_tokens(english: str, translation: str) -> list[str]:
 
 
 # The manifest fields the report and the catalog print as prose (#1186).
-MANIFEST_PROSE = frozenset({"title", "summary", "fix", "action", "means", "next_step"})
+MANIFEST_PROSE = frozenset({"title", "summary", "fix", "action", "means", "null_means", "next_step"})
 # ``why`` and ``whys`` keys whose shorter text the maintainer approved (#939, #1186); each joins
 # the lint once approved. Empty until the first approval.
 APPROVED_WHYS: frozenset[str] = frozenset()
