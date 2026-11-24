@@ -22,6 +22,8 @@ same block with Tier 1 unavailable, or None with no map, for the headless runner
 baseline entries rank at half weight). `attach_liveness_blocks`,
 `coverage_report_block`, `attach_keyhole_blocks` and `attach_exclusion_disclosures`
 copy the liveness, coverage, keyhole and exclusion-disclosure blocks into the context.
+`point_at_artifact_dir` points the findings markdown's omission rows at a scoped run's
+`.assess/<slug>/` directory, where its `findings.json` and `run-context.json` live (#1256).
 Runs no scan of its own besides Tier 0. Tests: `tests/test_context_blocks.py`.
 """
 
@@ -350,6 +352,16 @@ def coverage_report_block(cov_detect: Any, coverage_data: Any) -> dict[str, Any]
             "parsed": coverage_data is not None,
         }
     return {"available": False, "source": "none found"}
+
+
+def point_at_artifact_dir(markdown: str, scope_slug: str | None) -> str:
+    """``markdown`` with its `.assess/findings.json` and `.assess/run-context.json` pointers
+    moved to ``.assess/<scope_slug>/`` for a scoped run; unchanged for a whole-repo run."""
+    if not scope_slug:
+        return markdown
+    for name in ("findings.json", "run-context.json"):
+        markdown = markdown.replace(f"`.assess/{name}`", f"`.assess/{scope_slug}/{name}`")
+    return markdown
 
 
 def attach_keyhole_blocks(ctx: dict[str, Any], keyhole: KeyholeIntegration) -> None:

@@ -64,6 +64,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from lib.assess_config import load_excludes
+from lib.context_blocks import point_at_artifact_dir
 from lib.keyhole.keyhole_signals import apply_config_excludes, assemble_findings, finding_products
 from lib.run_context_types import DerivedFinding, FindingPaths, FindingProducts
 from lib.testing.untrusted_hotspot import untrusted_hotspot_paths
@@ -189,6 +190,8 @@ def refresh_mutation_findings(
     ctx["derived_findings"] = rebuilt
     for key in _PRODUCT_KEYS:
         ctx[key] = products[key]
+    slug = ctx.get("scope_slug")  # a scoped run's pointers name its own directory (#1256)
+    ctx["findings_markdown"] = point_at_artifact_dir(ctx["findings_markdown"], slug if isinstance(slug, str) else None)
     archived = products["archived_finding_paths"]
     ctx["excluded_as_archive"] = {
         "affected_finding_paths": archived, "count": len(archived),

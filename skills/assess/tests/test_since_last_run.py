@@ -16,11 +16,12 @@ import pytest
 
 from lib.counts_only.content_free import counts_only
 from lib.level_tally import default_model
-from lib.since_last_run import FIRST_RUN, gate_changes, since_last_run
+from lib.since_last_run import FIRST_RUN, baseline_record, gate_changes, since_last_run
 from test_headline import _commit, _run, ci2  # noqa: F401  (ci2 is a fixture)
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 STEPS = default_model()["steps"]
+STEPS_VERSION = default_model()["version"]
 
 
 def _cond(cid: str, state: str) -> dict[str, Any]:
@@ -34,7 +35,9 @@ def _level(instr: str, ci: str, cov: str = "unmet") -> dict[str, Any]:
     blockers = [{"kind": "gate", "gate": g, "condition": c["id"], "state": c["state"]}
                 for g, c in zip(("instructions", "ci_runs_tests", "coverage_gate"), conditions)
                 if c["state"] != "met"]
-    return {"conditions": conditions, "next_step": {"step": 2, "blockers": blockers} if blockers else None}
+    # a level the run can record as its baseline: the default model's version and tags (#1256)
+    return {"levels_version": STEPS_VERSION, "tags": [], "conditions": conditions,
+            "next_step": {"step": 2, "blockers": blockers} if blockers else None}
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -53,10 +56,23 @@ def repo(tmp_path: Path) -> Path:
     return root
 
 
+CUSTOM = "custom-2026.11.24"  # a custom --levels model: no committed record, so it reads run-context.json
+
+
+def _custom(level: dict[str, Any]) -> dict[str, Any]:
+    return {**level, "levels_version": CUSTOM}
+
+
 def _previous(repo: Path, level: Any, sha: str | None) -> None:
+    """The previous run as the default model reads it, the committed baseline in prior-level.json
+    (#1256), and as a custom model reads it, the local run-context.json."""
     commit = {"available": True, "head_sha": sha} if sha else {"available": False, "reason": "x"}
-    (repo / ".assess" / "run-context.json").write_text(json.dumps(
-        {"run_id": "prev-run", "measured_commit": commit, "level": level}), encoding="utf-8")
+    ctx = {"run_id": "prev-run", "measured_commit": commit, "level": level}
+    (repo / ".assess" / "run-context.json").write_text(json.dumps(ctx), encoding="utf-8")
+    record = baseline_record(ctx)
+    if record is not None:
+        (repo / ".assess" / "prior-level.json").write_text(json.dumps(
+            {"prior_level_version": 2, "levels_version": "x", "tags": [], "baseline": record}), encoding="utf-8")
 
 
 def _actions(repo: Path, *entries: dict[str, Any]) -> None:
@@ -111,8 +127,9 @@ def test_actions_json_is_read_at_head_not_from_the_working_tree(repo: Path) -> N
 
 
 def test_unknown_previous_state_reads_null_not_zero(repo: Path) -> None:
+    """A custom --levels run reads the local run-context.json, so its gaps read not known."""
     _previous(repo, None, None)
-    block = since_last_run(_level("met", "met", "met"), repo / ".assess", repo)
+    block = since_last_run(_custom(_level("met", "met", "met")), repo / ".assess", repo)
     assert block["first_run"] is False
     assert (block["closed"], block["closed_count"], block["gates_gained"]) == (None, None, None)
     assert block["closed_reason"] == "no_previous_commit"
@@ -120,9 +137,17 @@ def test_unknown_previous_state_reads_null_not_zero(repo: Path) -> None:
     assert "Gates gained: not known (the previous run has no level result this model can compare)" in block["lines"]
     assert block["lines"][-1] == "Next blocker: none, every gate is held"
     (repo / ".assess" / "run-context.json").write_text("{not json", encoding="utf-8")
-    block = since_last_run(_level("met", "met"), repo / ".assess", repo)
+    block = since_last_run(_custom(_level("met", "met")), repo / ".assess", repo)
     assert block["first_run"] is False and block["closed_reason"] == "previous_unreadable"
-    assert "Gates gained: not known (the previous run-context.json could not be read)" in block["lines"]
+    assert ("Gates gained: not known (the previous run's local record could not be read; "
+            "re-run /assess to rebuild it)") in block["lines"]
+
+
+def test_an_unreadable_committed_baseline_reads_not_known_never_a_first_run(repo: Path) -> None:
+    (repo / ".assess" / "prior-level.json").write_text("{not json", encoding="utf-8")
+    block = since_last_run(_level("met", "met"), repo / ".assess", repo)
+    assert (block["first_run"], block["closed"], block["closed_reason"]) == (False, None, "baseline_unreadable")
+    assert "Gates lost: not known (the committed .assess/prior-level.json could not be read)" in block["lines"]
 
 
 def test_a_lost_gate_is_listed() -> None:
@@ -194,7 +219,7 @@ def test_an_older_models_level_leaves_the_gates_unknown_and_keeps_the_credit(rep
     _commit(repo, "2026-11-02T10:00:00Z", "fix")
     _actions(repo, {"action": "Done", "status": "done", "completed_sha": _git(repo, "rev-parse", "HEAD")})
     _commit(repo, "2026-11-03T10:00:00Z", "record")
-    block = since_last_run(_level("met", "met"), repo / ".assess", repo)
+    block = since_last_run(_custom(_level("met", "met")), repo / ".assess", repo)
     assert block["available"] is True and block["closed_count"] == 1
     assert (block["gates_gained"], block["gates_lost"]) == (None, None)
 
@@ -224,9 +249,9 @@ def test_a_scoped_run_reads_the_whole_repo_actions_json(repo: Path) -> None:
     scoped = repo / ".assess" / "svc"
     scoped.mkdir()
     before = _git(repo, "rev-parse", "HEAD")
-    (scoped / "run-context.json").write_text(json.dumps(
-        {"run_id": "p", "measured_commit": {"available": True, "head_sha": before}, "level": _level("met", "met")}),
-        encoding="utf-8")
+    (scoped / "prior-level.json").write_text(json.dumps(
+        {"prior_level_version": 2, "levels_version": "x", "tags": [],
+         "baseline": {"run_id": "p", "head_sha": before, "held_gates": []}}), encoding="utf-8")
     (repo / "b.txt").write_text("2\n", encoding="utf-8")
     _commit(repo, "2026-11-02T10:00:00Z", "fix")
     _actions(repo, {"action": "Scoped work", "status": "done", "completed_sha": _git(repo, "rev-parse", "HEAD")})
@@ -241,29 +266,89 @@ def test_a_superseding_run_keeps_the_superseded_runs_baseline(repo: Path) -> Non
     _commit(repo, "2026-11-02T10:00:00Z", "fix")
     _actions(repo, {"action": "Work", "status": "done", "completed_sha": _git(repo, "rev-parse", "HEAD")})
     _commit(repo, "2026-11-03T10:00:00Z", "record")
-    _previous(repo, _level("met", "unmet"), before)
-    replaced = since_last_run(_level("met", "met"), repo / ".assess", repo)
+    _previous(repo, _custom(_level("met", "unmet")), before)
+    current = _custom(_level("met", "met"))  # a custom model: the read order still reaches run-context.json
+    replaced = since_last_run(current, repo / ".assess", repo)
     head = _git(repo, "rev-parse", "HEAD")
     (repo / ".assess" / "run-context.json").write_text(json.dumps(
         {"run_id": "b", "measured_commit": {"available": True, "head_sha": head}, "since_last_run": replaced}),
         encoding="utf-8")
     superseded = json.loads((repo / ".assess" / "run-context.json").read_text(encoding="utf-8"))
-    again = since_last_run(_level("met", "met"), repo / ".assess", repo, superseded)
+    again = since_last_run(current, repo / ".assess", repo, superseded)
     assert (again["closed_count"], again["previous_commit"], again["previous_run_id"]) == (1, before, "prev-run")
     assert (again["gates_gained"], again["lines"]) == (["ci_runs_tests"], replaced["lines"])
     # without the supersede input the same files would compare against run b: nothing closed
-    assert since_last_run(_level("met", "met"), repo / ".assess", repo)["closed_count"] == 0
+    assert since_last_run(current, repo / ".assess", repo)["closed_count"] == 0
 
 
-def test_a_log_with_earlier_runs_but_no_context_is_not_a_first_run(repo: Path) -> None:
-    """run-context.json is often gitignored: a fresh clone has log.md and no context."""
+def _log(repo: Path) -> None:
     (repo / ".assess" / "log.md").write_text("# Assessment log\n\n## 2026-11-01\n\n- **Files scored:** 3\n",
                                              encoding="utf-8")
-    block = since_last_run(_level("met", "met"), repo / ".assess", repo)
+
+
+def test_a_log_without_a_committed_baseline_makes_this_run_the_baseline(repo: Path) -> None:
+    """#1256: log.md and no prior-level.json baseline (a fresh clone, CI, or the run that first
+    commits one) is a baseline run, read once, never four "not known" lines."""
+    _log(repo)
+    for prior in (None, {"prior_level_version": 2, "levels_version": "x", "tags": []}):  # no file; no baseline
+        if prior is not None:
+            (repo / ".assess" / "prior-level.json").write_text(json.dumps(prior), encoding="utf-8")
+        block = since_last_run(_level("met", "unmet"), repo / ".assess", repo)
+        assert (block["first_run"], block["closed_reason"]) == (True, None)
+        assert block["lines"] == [FIRST_RUN, "Next blocker: CI runs tests"]
+        assert FIRST_RUN == "This run is your baseline."
+        assert not any("not known" in line for line in block["lines"])
+
+
+def test_a_run_that_cannot_record_a_baseline_never_claims_to_be_one(repo: Path, tmp_path: Path) -> None:
+    """Review of #1256: with no level tags, no gate conditions or no HEAD commit, publish writes
+    no baseline, so "This run is your baseline." would repeat on every run: unknown instead."""
+    untagged = {k: v for k, v in _level("met", "met").items() if k != "tags"}
+    no_conditions = {**_level("met", "met"), "conditions": []}
+    empty = tmp_path / "empty"
+    subprocess.run(["git", "init", "-q", str(empty)], check=True, capture_output=True)
+    (empty / ".assess").mkdir()
+    for level, root in ((untagged, repo), (no_conditions, repo), (_level("met", "met"), empty)):
+        block = since_last_run(level, root / ".assess", root)
+        assert (block["first_run"], block["closed_reason"]) == (False, "baseline_not_recorded")
+        assert FIRST_RUN not in block["lines"]
+        assert ("Gates gained: not known (no baseline is committed yet, and this run's result cannot be "
+                "recorded as one)") in block["lines"]
+
+
+def test_a_local_run_context_is_never_the_default_models_baseline(repo: Path) -> None:
+    """#1256: the default model reads the committed prior-level.json only, so a run-context.json
+    left on one machine cannot make its report differ from a fresh clone's."""
+    _log(repo)
+    (repo / ".assess" / "run-context.json").write_text(json.dumps(
+        {"run_id": "local", "measured_commit": {"available": True, "head_sha": _git(repo, "rev-parse", "HEAD")},
+         "level": _level("met", "met")}), encoding="utf-8")
+    block = since_last_run(_level("met", "unmet"), repo / ".assess", repo)
+    assert (block["first_run"], block["previous_run_id"], block["gates_lost"]) == (True, None, None)
+    profile = {**_level("met", "unmet"), "levels_version": "profile-citizen-2026.11.23"}
+    assert since_last_run(profile, repo / ".assess", repo)["first_run"] is True
+
+
+def test_a_committed_baseline_without_a_run_context_compares_the_gates(repo: Path) -> None:
+    """#1256 success criterion: prior-level.json alone (no run-context.json) gives the gate changes."""
+    _log(repo)
+    _previous(repo, _level("met", "met"), _git(repo, "rev-parse", "HEAD"))
+    (repo / ".assess" / "run-context.json").unlink()
+    block = since_last_run(_level("unmet", "met"), repo / ".assess", repo)
+    assert (block["first_run"], block["previous_run_id"]) == (False, "prev-run")
+    assert (block["gates_gained"], block["gates_lost"]) == ([], ["instructions"])
+    assert "Gates lost: instruction file" in block["lines"]
+
+
+def test_a_custom_models_log_with_earlier_runs_but_no_context_is_not_a_first_run(repo: Path) -> None:
+    """A custom --levels run keeps no committed record, so it keeps the older read order (#1256)."""
+    _log(repo)
+    block = since_last_run(_custom(_level("met", "met")), repo / ".assess", repo)
     assert block["first_run"] is False and block["closed_reason"] == "previous_state_missing"
     assert (block["closed"], block["gates_gained"]) == (None, None)
     assert FIRST_RUN not in block["lines"]
     assert any("log.md records an earlier run" in line for line in block["lines"])
+    assert not any("run-context.json" in line for line in block["lines"])
 
 
 def test_an_unavailable_level_never_claims_every_gate_is_held(repo: Path) -> None:
@@ -282,9 +367,10 @@ def test_a_malformed_actions_json_and_a_shallow_clone_read_not_known(repo: Path,
     _commit(repo, "2026-11-03T10:00:00Z", "record")
     shallow = tmp_path / "shallow"
     subprocess.run(["git", "clone", "-q", "--depth", "1", repo.as_uri(), str(shallow)], check=True, capture_output=True)
-    (shallow / ".assess" / "run-context.json").write_text(
-        json.dumps({"run_id": "p", "measured_commit": {"available": True, "head_sha": _git(shallow, "rev-parse", "HEAD")},
-                    "level": _level("met", "met")}), encoding="utf-8")
+    (shallow / ".assess" / "prior-level.json").write_text(json.dumps(
+        {"prior_level_version": 2, "levels_version": "x", "tags": [],
+         "baseline": {"run_id": "p", "head_sha": _git(shallow, "rev-parse", "HEAD"), "held_gates": []}}),
+        encoding="utf-8")
     block = since_last_run(_level("met", "met"), shallow / ".assess", shallow)
     assert (block["closed"], block["closed_reason"]) == (None, "shallow_clone")
 
@@ -338,7 +424,8 @@ def test_a_baseline_from_another_branch_or_without_a_run_id_reads_safely(repo: P
 
 def test_the_kept_baseline_line_names_the_stored_run_only(repo: Path) -> None:
     """#1158 review: with no stored baseline, a degraded run names no kept run; with one, that run."""
-    _previous(repo, _level("met", "met"), _git(repo, "rev-parse", "HEAD"))  # run-context only
+    _previous(repo, _level("met", "met"), _git(repo, "rev-parse", "HEAD"))
+    (repo / ".assess" / "prior-level.json").unlink()  # run-context only
     lines = since_last_run({"available": False, "reason": "x"}, repo / ".assess", repo)["lines"]
     assert not any(line.startswith("Baseline kept") for line in lines)
     (repo / ".assess" / "prior-level.json").write_text(json.dumps({
@@ -355,8 +442,8 @@ def test_the_kept_line_follows_the_write_side_rule(repo: Path) -> None:
         "prior_level_version": 2, "levels_version": "x", "tags": [],
         "baseline": {"run_id": "stored-run", "head_sha": _git(repo, "rev-parse", "HEAD"), "held_gates": []}}),
         encoding="utf-8")
-    untagged = _level("met", "unmet")  # conditions but no tags: the writer keeps the file
-    recorded = {**untagged, "levels_version": "x", "tags": []}  # the writer rebuilds the file
+    recorded = _level("met", "unmet")  # the writer rebuilds the file
+    untagged = {k: v for k, v in recorded.items() if k != "tags"}  # conditions but no tags: the writer keeps the file
     assert any(line.startswith("Baseline kept") for line in since_last_run(untagged, repo / ".assess", repo)["lines"])
     assert not any(line.startswith("Baseline kept")
                    for line in since_last_run(recorded, repo / ".assess", repo)["lines"])

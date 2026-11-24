@@ -722,7 +722,7 @@ Why the signals named here matter:
 
 It measures module structure and how packages import one another, which decides how much code an agent must read to change one part.
 
-- Collector: `core.keyhole_blocks`, reading `keyhole`.
+- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
 - Counts-only: numbers, booleans and nulls kept; strings by field: `structure.breakup_candidates.clusters` path, `structure.breakup_candidates.package` path, `structure.footprints.module` path, `structure.internal_burrow_edges.imported` path, `structure.internal_burrow_edges.importer` path, `structure.language` token, `structure.modularity_reason` token, `structure.name_collisions.name` path, `structure.name_collisions.paths` path, `structure.package_edges.from` path, `structure.package_edges.to` path, `structure.packages.id` path, `structure.reason` reason, `structure.sccs` path.
@@ -940,7 +940,7 @@ Instruction files above the repository root load in a local session but never re
 
 It reads which files change together in history, so coupling the import graph does not show, and modules safe to change in isolation, are both found.
 
-- Collector: `core.keyhole_blocks`, reading `keyhole`.
+- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `behaviour.hidden_coupling_findings.finding` token, `behaviour.hidden_coupling_findings.recommendation` drop, `behaviour.reason` drop, `behaviour.refactor_boundaries.finding` token, `behaviour.refactor_boundaries.recommendation` drop, `behaviour.static_history_disagreement.finding` token, `behaviour.static_history_disagreement.recommendation` drop, `behaviour.static_modularity_projection` drop.
@@ -960,7 +960,7 @@ It reads which files change together in history, so coupling the import graph do
 
 It joins doc freshness with code complexity, so the places where an agent most needs a true doc, and has none or a stale one, are named.
 
-- Collector: `core.keyhole_blocks`, reading `keyhole`.
+- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `documentation.good_contracts.confidence` token, `documentation.good_contracts.finding` token, `documentation.good_contracts.recommendation` drop, `documentation.reason` drop, `documentation.stale_doc_on_complexity.confidence` token, `documentation.stale_doc_on_complexity.finding` token, `documentation.stale_doc_on_complexity.recommendation` drop, `documentation.unexplained_complexity.confidence` token, `documentation.unexplained_complexity.finding` token, `documentation.unexplained_complexity.recommendation` drop.
@@ -980,7 +980,7 @@ It joins doc freshness with code complexity, so the places where an agent most n
 
 For each complex module it reads whether a person authored it and whether a doc states its intent, so an agent knows whether there is anyone or anything to check its reading against.
 
-- Collector: `core.keyhole_blocks`, reading `keyhole`.
+- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `understanding.authorship_class_by_path.{}` token, `understanding.modules.authorship_class` token, `understanding.modules.finding` token, `understanding.modules.recommendation` drop, `understanding.orphaned_understanding` path, `understanding.reason` drop.
@@ -1000,7 +1000,7 @@ For each complex module it reads whether a person authored it and whether a doc 
 
 Run plumbing: no row or finding reads this scan.
 
-- Collector: `core.keyhole_blocks`, reading `keyhole`.
+- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `runtime.reason` drop, `runtime.static_reachability.candidates.kind` token, `runtime.static_reachability.candidates.symbol` drop, `runtime.static_reachability.caveat` drop, `runtime.static_reachability.tools.consent` drop, `runtime.static_reachability.tools.language` token, `runtime.static_reachability.tools.reason` drop, `runtime.static_reachability.tools.status` token, `runtime.static_reachability.tools.tool` token.
@@ -1020,7 +1020,7 @@ Run plumbing: no row or finding reads this scan.
 
 Run plumbing: no row or finding reads this scan.
 
-- Collector: `core.keyhole_blocks`, reading `keyhole`.
+- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `derived_findings.action` drop, `derived_findings.name` token, `derived_findings.paths` path, `derived_findings.reviewed.completed_sha` drop, `derived_findings.reviewed.note` drop, `derived_findings.reviewed.path` path.
@@ -1186,7 +1186,7 @@ The scan registry in run order, including the private inputs other scans read.
 | `coverage_gate` | Coverage gate | `repo_root`, `scope`, `excludes` | `coverage_gate` | no |
 | `accretion_ratchet` | Accretion ratchet | `accretion_scan`, `current` | `accretion_ratchet` | no |
 | `keyhole` | Keyhole integration | `repo_root`, `current`, `doc_staleness`, `liveness_blocks`, `structure_scan`, `test_pressure`, `promissory`, `accretion_ratchet`, `archetype`, `excludes`, `scope`, `rename_map`, `doc_join` | private input | no |
-| `keyhole_blocks` | Keyhole blocks | `keyhole` | `structure`, `behaviour`, `documentation`, `understanding`, `runtime`, `derived_findings`, `attention`, `attention_low_signal`, `findings_markdown`, `keyhole_summary`, `prescribed_actions` | no |
+| `keyhole_blocks` | Keyhole blocks | `keyhole`, `run_scope` | `structure`, `behaviour`, `documentation`, `understanding`, `runtime`, `derived_findings`, `attention`, `attention_low_signal`, `findings_markdown`, `keyhole_summary`, `prescribed_actions` | no |
 | `exclusion_disclosures` | Exclusion disclosures | `keyhole`, `excludes` | `excluded_by_config`, `excluded_as_archive`, `pruned_finding_paths` | no |
 | `excluded_generated` | Excluded generated files | `current` | `excluded_generated` | no |
 | `structure_drift_block` | Structure drift | `repo_root`, `keyhole` | `structure_drift` | no |

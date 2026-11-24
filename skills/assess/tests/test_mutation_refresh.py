@@ -426,3 +426,15 @@ def test_missing_disclosure_block_stays_absent_when_nothing_is_suppressed() -> N
     del ctx["excluded_by_config"]
     refresh_mutation_findings(ctx, _stats("src/hot.py"), {"vendor"}, [])
     assert "excluded_by_config" not in ctx
+
+
+@pytest.mark.parametrize(("slug", "pointer"), [("svc", "`.assess/svc/findings.json`"), (None, "`.assess/findings.json`")])
+def test_refreshed_findings_markdown_points_at_the_runs_artifact_dir(slug: str | None, pointer: str) -> None:
+    """#1256 review: a scoped run's re-rendered omission rows name `.assess/<slug>/findings.json`."""
+    findings = _empty_findings()
+    next(f for f in findings if f["name"] == "lying_map")["paths"] = [f"docs/{i}.md" for i in range(15)]
+    ctx = _ctx(findings, [{"file": "src/hot.py", "survived": 5, "total": 10}])
+    if slug:
+        ctx["scope_slug"] = slug
+    assert refresh_mutation_findings(ctx, _stats("src/hot.py"), set(), []) is True
+    assert f"full list in {pointer} (`lying_map`) `paths`" in ctx["findings_markdown"]

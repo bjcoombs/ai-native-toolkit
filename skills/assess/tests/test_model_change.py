@@ -134,16 +134,33 @@ def test_the_unit_rollup_names_the_default_model_under_a_profile() -> None:
 
 
 def test_a_profile_run_after_a_default_run_compares_no_gate(ci2: Path) -> None:  # noqa: F811
+    """A profile's first run after a default run has no committed record of its own, so it is
+    that profile's baseline (#1256): no gate is compared with the default run's."""
     from assess_core import build_and_publish_run
 
     build_and_publish_run(repo_root=ci2, run_date="2026-11-22", non_interactive=True)
     ctx = build_and_publish_run(repo_root=ci2, run_date="2026-11-23", non_interactive=True, model=HANDOVER)
     since = ctx["since_last_run"]
+    assert since["first_run"] is True
     assert since["gates_gained"] is None and since["gates_lost"] is None
-    assert "Model changed since last run (default → handover); gates not compared" in since["lines"]
-    assert "model changed (default → handover); gates not compared" in ctx["headline"]["summary_lines"][-1]
     again = build_and_publish_run(repo_root=ci2, run_date="2026-11-24", non_interactive=True, model=HANDOVER)
+    assert again["since_last_run"]["first_run"] is False
     assert model_changed_line(again["since_last_run"]) is None
+
+
+def test_a_custom_run_after_a_default_run_compares_no_gate(tmp_path: Path) -> None:
+    """A custom --levels run reads the local run-context.json, so a default run before it names
+    another model and the gates are not compared (#1150)."""
+    level = {"levels_version": "my-1", "conditions": []}
+    previous = previous_levels_version_from(tmp_path, {"levels_version": DEFAULT_VERSION})
+    block = across_models(_since(), level, previous)
+    assert (block["gates_gained"], block["gates_lost"]) == (None, None)
+    assert "Model changed since last run (default → my-1); gates not compared" in block["lines"]
+
+
+def previous_levels_version_from(assess_dir: Path, level: Any) -> str | None:
+    (assess_dir / "run-context.json").write_text(json.dumps({"level": level}), encoding="utf-8")
+    return previous_levels_version(assess_dir, None, {"levels_version": "my-1"})
 
 
 def test_a_degraded_headline_still_keeps_a_custom_level_off_the_default_diagrams() -> None:

@@ -42,6 +42,7 @@ from lib.context_blocks import (
     accretion_lookup,
     attach_exclusion_disclosures,
     attach_keyhole_blocks,
+    point_at_artifact_dir,
     attach_liveness_blocks,
     attach_structure_drift,
     build_stale_hubs,
@@ -299,10 +300,13 @@ def keyhole(
     )
 
 
-def keyhole_blocks(integration: KeyholeIntegration) -> dict[str, Any]:
-    """The eleven keyhole keys copied into the run context."""
+def keyhole_blocks(integration: KeyholeIntegration,
+                   run_scope: tuple[Path | None, str | None, str] | None = None) -> dict[str, Any]:
+    """The eleven keyhole keys copied into the run context, the findings markdown's pointers
+    naming this run's artifact directory (``context_blocks.point_at_artifact_dir``, #1256)."""
     blocks: dict[str, Any] = {}
     attach_keyhole_blocks(blocks, integration)
+    blocks["findings_markdown"] = point_at_artifact_dir(blocks["findings_markdown"], run_scope[2] if run_scope else None)
     return blocks
 
 
