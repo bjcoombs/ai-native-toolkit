@@ -53,16 +53,24 @@ test-named) and its tests (`is_test_file`); a skill with scripts and no test is 
 `tested_elsewhere` names outside test files that reference a script file name with the skill folder
 name as a path segment (information only, up to `ELSEWHERE_MAX`). Tests:
 `tests/test_skill_script_tests.py`.
+
+**Read once per run (#1189).** The unit pass calls the scan once per skill unit, and each untested
+skill needs the repository's test files. ``_outside_tests`` is cached per (repository root, HEAD,
+excludes), the ``doc_staleness`` pattern, so a run reads them once however many units it scans.
+``assess_fix.clear_scan_caches`` clears it with the other ``lib`` caches before a re-read.
 """
 from __future__ import annotations
 
 import os
 import re
+import subprocess
 from collections.abc import Iterator
+from functools import lru_cache
 from pathlib import Path, PurePosixPath
 from typing import TypedDict
 
 from lib.assess_config import is_user_excluded
+from lib.git_churn import GIT_TIMEOUT_SECONDS
 from lib.instruction_placement import skill_and_agent_files
 
 SCRIPT_EXTENSIONS = frozenset({".py", ".sh", ".bash", ".js", ".mjs", ".cjs", ".ts", ".rb"})
@@ -138,22 +146,39 @@ def _count(folder: Path, repo: Path, dirs: set[str], pats: list[str]) -> tuple[l
     return scripts, tests
 
 
-def _outside_tests(repo: Path, dirs: set[str], pats: list[str]) -> list[tuple[Path, list[str]]]:
-    """Every test file in the repository with its lines, read once per scan."""
-    out: list[tuple[Path, list[str]]] = []
-    for path in _files(repo, dirs, pats, repo):
+def _head(repo: Path) -> str | None:
+    """HEAD's sha, the cache key of the test-file index; None outside git or on failure."""
+    try:
+        return subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True,
+                              encoding="utf-8", check=False, timeout=GIT_TIMEOUT_SECONDS).stdout.strip() or None
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+
+
+def _outside_tests(repo: Path, dirs: set[str], pats: list[str]) -> tuple[tuple[Path, tuple[str, ...]], ...]:
+    """Every test file in the repository with its lines, read once per run (see the module doc)."""
+    return _test_index(repo, _head(repo), frozenset(dirs), tuple(pats))
+
+
+@lru_cache(maxsize=4)
+def _test_index(repo: Path, head: str | None, dirs: frozenset[str],
+                pats: tuple[str, ...]) -> tuple[tuple[Path, tuple[str, ...]], ...]:
+    """The test-file index, built once per (repository, HEAD, excludes)."""
+    out: list[tuple[Path, tuple[str, ...]]] = []
+    for path in _files(repo, set(dirs), list(pats), repo):
         if not is_test_file(PurePosixPath(path.relative_to(repo).as_posix())):
             continue
         try:
             if path.stat().st_size > _READ_MAX_BYTES:
                 continue
-            out.append((path, path.read_text(encoding="utf-8", errors="replace").splitlines()))
+            out.append((path, tuple(path.read_text(encoding="utf-8", errors="replace").splitlines())))
         except OSError:
             continue
-    return out
+    return tuple(out)
 
 
-def _elsewhere(repo: Path, folder: Path, scripts: list[str], outside: list[tuple[Path, list[str]]]) -> list[str]:
+def _elsewhere(repo: Path, folder: Path, scripts: list[str],
+               outside: tuple[tuple[Path, tuple[str, ...]], ...]) -> list[str]:
     """Outside test files with a line that names one of ``scripts`` after the skill folder's name
     as a path segment (``"fleet" / "scripts" / "fleet.py"``, ``skills/ghsync/scripts/ghsync.sh``)."""
     name = re.escape(folder.name)
@@ -183,14 +208,14 @@ def scan_skill_script_tests(
     repo = repo_root.resolve()
     dirs, pats = excludes or (set(), [])
     folders = _skill_folders(repo, scope, excludes)
-    outside: list[tuple[Path, list[str]]] | None = None
+    outside: tuple[tuple[Path, tuple[str, ...]], ...] | None = None
     skills: list[SkillTests] = []
     for folder in folders:
         scripts, tests = _count(folder, repo, dirs, pats)
         untested = None if not scripts else tests == 0
         elsewhere: list[str] = []
         if untested:
-            if outside is None:  # walked and read once per scan, only when some skill needs it
+            if outside is None:  # only when some skill needs it; cached across the run's scans
                 outside = _outside_tests(repo, dirs, pats)
             elsewhere = _elsewhere(repo, folder, scripts, outside)
         skills.append(SkillTests(path=folder.relative_to(repo).as_posix(), scripts=len(scripts), tests=tests,
