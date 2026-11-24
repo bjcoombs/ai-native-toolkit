@@ -220,6 +220,17 @@ def test_assess_output_does_not_make_the_tree_dirty(tmp_path: Path) -> None:
     assert not tree_clean(repo)
 
 
+def test_an_ignored_settings_file_is_named_and_left_out_of_the_commit(tmp_path: Path) -> None:
+    repo = _repo(tmp_path, {**PYTHON, ".gitignore": ".claude/\n"})
+    report = cli.fix(repo, starter=False, open_pr=False)
+    guard = next(p for p in report["gates"] if p["gate"] == "guardrail")
+    assert not guard["held_after"] and "git add -f .claude/settings.json" in (guard["manual"] or "")
+    assert next(p for p in report["gates"] if p["gate"] == "instructions")["held_after"]
+    staged = subprocess.run(["git", "-C", str(repo), "diff", "--cached", "--name-only"], capture_output=True,
+                            text=True, encoding="utf-8", errors="replace", check=True).stdout.split()
+    assert staged == ["CLAUDE.md"]
+
+
 def test_main_needs_a_mode_and_writes_nothing_without_one(tmp_path: Path) -> None:
     with pytest.raises(SystemExit) as exc:
         cli.main([str(tmp_path)])

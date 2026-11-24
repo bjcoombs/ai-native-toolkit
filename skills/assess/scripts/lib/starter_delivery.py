@@ -1,6 +1,7 @@
 """Deliver the ``/assess --fix`` files as one reviewable change (#1154).
 
-``stage`` adds the written files to the git index, so the re-run that proves the gate reads
+``ignored`` names the written files ``.gitignore`` ignores; they stay out of the index and the
+commit, and the report names the manual step. ``stage`` adds the other written files to the git index, so the re-run that proves the gate reads
 them (several scans read ``git ls-files``) and the user reviews them as one staged change.
 
 ``open_change`` turns that staged change into a branch and a pull request (GitHub, through
@@ -48,6 +49,14 @@ def tree_clean(root: Path, runner: Runner = run) -> bool:
     """No change outside ``.assess/`` (the run's own output)."""
     code, out = runner(["git", "status", "--porcelain", "--", ".", f":(exclude){ASSESS_DIR}"], root)
     return code == 0 and not out
+
+
+def ignored(root: Path, paths: Sequence[str], runner: Runner = run) -> list[str]:
+    """The paths ``.gitignore`` ignores (``git check-ignore``), which ``git add`` would refuse."""
+    if not paths:
+        return []
+    code, out = runner(["git", "check-ignore", "--", *paths], root)
+    return [line for line in out.splitlines() if line] if code == 0 else []
 
 
 def stage(root: Path, paths: Sequence[str], runner: Runner = run) -> bool:

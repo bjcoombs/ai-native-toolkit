@@ -51,7 +51,7 @@ from lib.level_tally import default_model, level_result  # noqa: E402
 from lib.levels import MaturityModel, condition_id  # noqa: E402
 from lib.run_context_types_fix import CiSystem, Delivery, FileOutcome, FixReport, GateProof  # noqa: E402
 from lib.signals import collect  # noqa: E402
-from lib.starter_delivery import Runner, is_git_repo, open_change, run, stage, tree_clean  # noqa: E402
+from lib.starter_delivery import Runner, ignored, is_git_repo, open_change, run, stage, tree_clean  # noqa: E402
 from lib.starter_files import GUARDRAIL, detect_facts, plan_files, write_files  # noqa: E402
 
 # The blocks the Step gates, the guardrail and the fact detectors read.
@@ -132,13 +132,23 @@ def fix(root: Path, *, starter: bool, language: str | None = None, check_command
     files = write_files(root, plan_files(root, gates, facts, guard))
     written = [f["path"] for f in files if f["state"] == "written"]
     if git:
-        stage(root, written, runner)
-    after_scans = read_scans(root) if written else scans
-    after = level_result(model, after_scans) if written else before
+        skipped = set(ignored(root, written, runner))
+        for f in files:
+            if f["path"] in skipped:
+                f["manual"] = (f"`{f['path']}` is written but `.gitignore` ignores it; un-ignore it, "
+                               f"or add it with `git add -f {f['path']}`")
+        written = [p for p in written if p not in skipped]
+        if not stage(root, written, runner):
+            written = []
+    wrote = any(f["state"] == "written" for f in files)
+    after_scans = read_scans(root) if wrote else scans
+    after = level_result(model, after_scans) if wrote else before
     proofs = [_proof(g, gate_held(model, before, g), gate_held(model, after, g), files) for g in gates]
     if guard:
         proofs.append(_proof(GUARDRAIL, False, guardrail_held(after_scans), files))
-    delivery: Delivery = {"mode": "none", "branch": None, "url": None, "reason": "nothing_written"}
+    delivery: Delivery = {"mode": "none", "branch": None, "url": None,
+                          "reason": "nothing_staged" if any(f["state"] == "written" for f in files)
+                          else "nothing_written"}
     if written and not git:
         delivery = {"mode": "working_tree", "branch": None, "url": None, "reason": "not_a_git_repo"}
     elif written and not open_pr:
