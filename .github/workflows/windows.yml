@@ -209,8 +209,9 @@ jobs:
         run: uv run --locked --python 3.11 pytest -ra -p no:cacheprovider tests/test_fleet_golden.py
         working-directory: skills/assess
 
-      # One shard of the suite, balanced by file size. --shard-record keeps the
-      # seconds each file took, uploaded below.
+      # One shard of the suite, balanced by the Windows seconds per file in
+      # tests/shard-weights.json (a file missing from it counts as the median).
+      # --shard-record keeps this run's seconds per file, uploaded below.
       - name: skills/assess pytest
         if: ${{ !cancelled() && matrix.suite == 'assess' }}
         env:
@@ -220,6 +221,7 @@ jobs:
           pytest -ra -p no:cacheprovider -n auto --dist loadfile
           --ignore=tests/test_fleet_golden.py
           -p pytest_shard --shard ${{ matrix.shard }}/${{ matrix.shards }}
+          --shard-weights tests/shard-weights.json
           --shard-record "${{ runner.temp }}/shard-seconds.json"
         working-directory: skills/assess
 
@@ -276,7 +278,7 @@ jobs:
           hit=""
           while IFS= read -r f; do
             case "$f" in
-              skills/ghsync/*|skills/ghreport/*|tests/gitbash.py|tests/conftest.py|tests/pytest_shard.py|tests/test_ghsync*.py|tests/test_ghreport*.py|.github/workflows/windows.yml)
+              skills/ghsync/*|skills/ghreport/*|tests/gitbash.py|tests/conftest.py|tests/pytest_shard.py|tests/ghsync_gitlab_env.py|tests/ghreport_gitlab_env.py|tests/test_ghsync*.py|tests/test_ghreport*.py|.github/workflows/windows.yml)
                 hit="$f"; break ;;
             esac
           done <<< "$changed"
@@ -285,10 +287,10 @@ jobs:
             echo "ghsync/ghreport suites: run ($hit changed)"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "ghsync/ghreport suites: skipped (no change under skills/ghsync, skills/ghreport, tests/gitbash.py, tests/conftest.py, tests/pytest_shard.py, tests/test_ghsync*.py, tests/test_ghreport*.py or windows.yml)"
+            echo "ghsync/ghreport suites: skipped (no change under skills/ghsync, skills/ghreport, tests/gitbash.py, tests/conftest.py, tests/pytest_shard.py, tests/*_gitlab_env.py, tests/test_ghsync*.py, tests/test_ghreport*.py or windows.yml)"
           fi
 
-      # One shard of the six files, balanced by file size, as above.
+      # One shard of the files, balanced by file size.
       - name: ghsync and ghreport suites under Git Bash
         if: ${{ !cancelled() && matrix.suite == 'ghsync' && steps.ghsync_gate.outputs.run != 'false' }}
         shell: bash

@@ -178,6 +178,9 @@ def test_sharded_suite_steps_pass_the_leg_shard() -> None:
         assert "--dist loadfile" in run, name
         assert steps[name]["env"]["PYTHONPATH"] == "${{ github.workspace }}/tests", name
         assert '--shard-record "${{ runner.temp }}/shard-seconds.json"' in run, name
+    assessed = " ".join(steps["skills/assess pytest"]["run"].split())
+    assert "--shard-weights tests/shard-weights.json" in assessed
+    assert (REPO / "skills" / "assess" / "tests" / "shard-weights.json").is_file()
     # No other step shards: an unsharded leg runs its whole suite.
     for name, step in steps.items():
         if name not in ("skills/assess pytest", GHSYNC_SUITE):
