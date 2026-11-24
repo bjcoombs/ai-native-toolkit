@@ -78,6 +78,10 @@ evidence is static, read from the files at HEAD:
   consumes is not read again. A matrix command that cannot be expanded reads as a
   command it cannot settle: ``check_target`` (null) on all three signals when nothing
   else settles them, never false unless masked.
+- A command that is an expression or a shell variable (``${{ inputs.cmd }}``, ``$CMD``;
+  #1164) reads the same way unless a literal ``env:`` value settles it, and a
+  ``continue-on-error`` expression (#1165) that a literal matrix does not settle reads its
+  checks as ``check_may_pass`` (null), never enforced (``lib.ci_expressions``).
 - Triggers are not read: a check in a workflow that runs only on push counts
   the same as one on pull requests.
 
@@ -350,8 +354,7 @@ from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
 from lib.ci_action_inputs import Inputs, ReadLocal, read_inputs
-from lib.ci_composite import inline_composites
-from lib.ci_matrix import expand_matrix
+from lib.ci_expressions import follow_workflow
 from lib.ci_continuations import join_continued
 from lib.ci_includes import IncludeRecord, Resolution, resolve_includes
 from lib.ci_lint_gates import line_compiler_gate, line_dotnet_build, lint_gate, rewrite_gated
@@ -466,7 +469,8 @@ def _declared_check(line: str, *, script_item: bool = True) -> bool:
 def _trigger_tally(text: str, workflow: Trigger | None,
                    tests: Sequence[LineTest] = (_line_runs_check,),
                    declared: frozenset[int] = frozenset(),
-                   unknown: frozenset[int] = frozenset()) -> list[Tally]:
+                   unknown: frozenset[int] = frozenset(),
+                   may_pass_lines: frozenset[int] = frozenset()) -> list[Tally]:
     """Per line test: ``(ordinary, unknown trigger, off trigger, masked, may pass)`` lines of one CI file.
 
     ``workflow`` is a GitHub workflow's settled trigger; None reads GitLab job triggers.
@@ -474,12 +478,17 @@ def _trigger_tally(text: str, workflow: Trigger | None,
     A ``declared`` line (an unread action's ``with:`` input, ``lib.ci_action_inputs``) counts
     for no test but ``_line_may_check``, which counts it when it runs or may run a check (#799).
     An ``unknown`` line (a matrix command not expanded, ``lib.ci_matrix``, #923) counts for
-    ``_line_may_check`` whatever it holds, unless masked.
+    ``_line_may_check`` whatever it holds, unless masked. A ``may_pass_lines`` line (a job or
+    step under a ``continue-on-error`` expression, ``lib.ci_expressions``, #1165) that the
+    masking left unmasked reads as one whose failure may not fail the job.
     """
     text = join_continued(text)
     lines = text.splitlines()
     gated = rewrite_gated(text) if any(_is_lint_test(t) for t in tests) else frozenset()
     unmasked, unsure = mask_lines(text)
+    for i in may_pass_lines:
+        if unmasked[i].strip():
+            unsure[i], unmasked[i] = unmasked[i], ""
     held = [line if i in declared else "" for i, line in enumerate(unmasked)]
     unmasked, unsure = _drop(unmasked, declared), _drop(unsure, declared)
     triggers: list[Trigger] = (gitlab_line_triggers(text) if workflow is None
@@ -558,8 +567,8 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     partial_merge = False  # the merged configuration may lack jobs (a rules: include, a child pipeline)
     resolution = resolve_includes(root, ghsync_root) if any(f in CI_CONFIG_FILES for f in files) else None
     reader = _local_reader(root, tracked)
-    followed = {rel: expand_matrix(*inline_composites(join_continued(read_config(root, rel)), reader))
-                for rel in files if rel not in CI_CONFIG_FILES}   # #923
+    followed = {rel: follow_workflow(read_config(root, rel), reader)
+                for rel in files if rel not in CI_CONFIG_FILES}   # #923, #1164, #1165
     inputs = {rel: (Inputs(read_config(root, rel), frozenset()) if rel in CI_CONFIG_FILES
                     else read_inputs(followed[rel].text, reader)) for rel in files}
     # An unknown line read_inputs blanked (a github-script script:) is not shell: drop it.
@@ -592,7 +601,8 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
                                               runs_missing(_line_runs_lint))
     ) + (_line_may_lint, _line_may_check, line_compiler_gate, line_dotnet_build)
     tallies = [_trigger_tally(texts[rel], workflows.get(rel), tests, inputs[rel].declared,
-                              unexpanded.get(rel, frozenset())) for rel in files]
+                              unexpanded.get(rel, frozenset()),
+                              followed[rel].may_pass if rel in followed else frozenset()) for rel in files]
     tallies += [_trigger_tally(f.text, None, tests) for f in resolution.files] if resolution else []
     check_t, lint_t, miss_t, lint_miss_t, may_t, may_check_t, gate_t, dotnet_t = (
         _sum(t[i] for t in tallies) for i in range(len(tests)))
