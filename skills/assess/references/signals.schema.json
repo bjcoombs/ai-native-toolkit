@@ -758,7 +758,7 @@
                 "boolean",
                 "null"
               ],
-              "description": "Layer 3 level 1 (issue #782): true when a CI line runs a linter that can fail its job on ordinary changes (not --version or --help), or a step uses a known lint action (golangci-lint-action, ruff-action, super-linter, reviewdog), null when none does but included jobs, unsettled triggers, a lint script the tree does not hold or a check target or script that may lint inside it could hold one, or when the only static gate is a compiler run with warnings as errors or a .NET build's analysers (issue #926), else false. A formatter that rewrites files counts only when a later line of its job runs git diff --exit-code."
+              "description": "Layer 3 level 1 (issue #782): true when a CI line runs a linter that can fail its job on ordinary changes (not --version or --help), or a step uses a known lint action (golangci-lint-action, ruff-action, super-linter, reviewdog) not set to install only (issue #893: ruff-action args --version, golangci-lint-action install-only true), null when none does but included jobs, unsettled triggers, a lint script the tree does not hold or a check target or script that may lint inside it could hold one, or when the only static gate is a compiler run with warnings as errors or a .NET build's analysers (issue #926), else false. A formatter that rewrites files counts only when a later line of its job runs git diff --exit-code."
             },
             "lint_basis": {
               "enum": [
@@ -1331,7 +1331,7 @@
             "properties": {
               "reason": {
                 "type": "string",
-                "description": "'code: sentence'. The codes name the missing piece: knowledge_base (the repository is a knowledge base (archetype knowledge-base), which takes no code patches); org_policy_not_read (the repository holds no security policy, and the owner's shared .github repository, whose policy GitHub shows on it, was not read (offline, no --platform, a remote not on github.com, or gh not signed in)). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                "description": "'code: sentence'. The codes name the missing piece: knowledge_base (the repository is a knowledge base (archetype knowledge-base), which takes no code patches); org_policy_not_read (the repository holds no security policy. The owner's shared .github repository, whose policy GitHub shows on this one, was not read. The cause is offline use, no --platform, a remote not on github.com, or gh not signed in). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [

@@ -136,6 +136,18 @@ def test_test_tree_module_names_do_not_collide() -> None:
     assert clashes == []
 
 
+def test_test_tree_package_names_do_not_collide() -> None:
+    """A tree with an ``__init__.py`` imports its modules as ``<dir>.test_x``. Two
+    trees that are both packages named ``tests`` share one ``tests`` entry in
+    ``sys.modules``, so collecting both in one process fails with
+    ``No module named 'tests.test_x'`` (#1169)."""
+    packages: dict[str, list[str]] = {}
+    for root in TEST_TREES:
+        if (root / "__init__.py").exists():
+            packages.setdefault(root.name, []).append(root.relative_to(REPO).as_posix())
+    assert {name: trees for name, trees in packages.items() if len(trees) > 1} == {}
+
+
 def test_a_new_stand_in_is_a_leak() -> None:
     real = types.ModuleType("numpy")
     real.__spec__ = object()  # type: ignore[assignment]

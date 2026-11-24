@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 
 import floor_anchor
-from tests.test_floor_anchor import FLOOR_YML_WIRED, _floor_yml
-from tests import test_floor_pin_exempt as pin
-from tests.test_floor_pin_exempt import DEPENDABOT, _bump, _commit, _git, _run_filter
+from test_floor_anchor import FLOOR_YML_WIRED, _floor_yml
+import test_floor_pin_exempt as pin
+from test_floor_pin_exempt import DEPENDABOT, _bump, _commit, _git, _run_filter
 from floor_check import main
 
 # The pin-exemption suite's `repo` fixture: a base holding the floor core.

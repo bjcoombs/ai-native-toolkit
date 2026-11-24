@@ -5,7 +5,7 @@
 id = "core.contributor_files"
 kind = "collector"
 title = "Contributor files"
-summary = "A contributing guide and a security policy (a SECURITY file or a link to GitHub private vulnerability reporting) at the root, in .github/ or in docs/; issue and pull or merge request templates as evidence."
+summary = "A contributing guide and a security policy at the root, in .github/ or in docs/. The policy is a SECURITY file or a link to GitHub private vulnerability reporting. Issue and pull or merge request templates count as evidence."
 issues = [1045]
 callable = "lib.core_scans:contributor_files"
 publishes = ["contributor_files"]
@@ -23,7 +23,7 @@ shapes = [
 revision = 1
 unknown_reasons = [
   { code = "knowledge_base", means = "The repository is a knowledge base (archetype knowledge-base), which takes no code patches.", next_step = "Nothing to change: a contributing guide and a security policy are not measured for a knowledge base." },
-  { code = "org_policy_not_read", block = "contributor_files", means = "The repository holds no security policy, and the owner's shared .github repository, whose policy GitHub shows on it, was not read (offline, no --platform, a remote not on github.com, or gh not signed in).", next_step = "Commit a SECURITY.md, or run /assess with gh signed in (or fleet with --platform) so the owner's shared policy is read." },
+  { code = "org_policy_not_read", block = "contributor_files", means = "The repository holds no security policy. The owner's shared .github repository, whose policy GitHub shows on this one, was not read. The cause is offline use, no --platform, a remote not on github.com, or gh not signed in.", next_step = "Commit a SECURITY.md, or run /assess with gh signed in (or fleet with --platform) so the owner's shared policy is read." },
 ]
   [entries.privacy]
   "contributor_files.reason" = "reason"
