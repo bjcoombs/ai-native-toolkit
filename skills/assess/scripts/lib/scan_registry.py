@@ -108,6 +108,9 @@ from lib.hosting.gitlab_notes import gitlab_note_facts
 from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
+from lib.skill_disclosure import scan_skill_disclosure
+from lib.skill_script_tests import scan_skill_script_tests
+from lib.hosting.org_security_policy import scan_org_security_policy
 from lib.layer_grades import scan_layer_grades
 from lib.level_tally import LEVEL_READS
 from lib.hosting.merged_sample import merged_sample, offline_merged_sample
@@ -126,7 +129,8 @@ from lib.unit_readings import bind as bind_unit_pass
 # ``build_run_context``. A spec may read these, or the key of any spec declared
 # before it (``instruction_files``, ``scope``, ``excludes``, ``history_window`` and
 # ``fleet_config`` are setup specs).
-PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive"})
+PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive",
+                             "managed_settings"})
 
 STAGE_SETUP = "setup"
 STAGE_READ_SIDE = "read_side"
@@ -608,6 +612,20 @@ SCANS: tuple[ScanSpec, ...] = (
     # scores instruction files on the same split (#560). Reads
     # nested_instructions for the nested files.
     _spec("instruction_placement", scan_instruction_placement),
+    # Skill disclosure (issue #1045): each SKILL.md and agent definition against Anthropic's
+    # skill authoring guidance (body lines, tokens, name and description, references one level
+    # deep). Feeds the skill-disclosure row; scoped per skill unit (unit_kinds = ["skill"]).
+    _spec("skill_disclosure", scan_skill_disclosure),
+    # Skill script tests (issue #1045): whether each skill's scripts have tests beside them in
+    # its own folder (presence, not coverage). Scoped per skill unit (unit_kinds = ["skill"]).
+    _spec("skill_script_tests", scan_skill_script_tests),
+    # Contributor files (issue #1045): a contributing guide and a security policy (or a link to
+    # GitHub private vulnerability reporting), with issue and change templates as evidence.
+    # Feeds the contributor-files row; not measured for a knowledge base (reads archetype).
+    # The owner's shared security policy (issue #1045): the SECURITY file of the owner's
+    # public .github repository, which GitHub shows on a repository that has none. Network.
+    _spec("org_security_policy", scan_org_security_policy),
+    _spec("contributor_files", cs.contributor_files),
     # Top 3 candidates read from measured gaps. Post-offers since #821: the
     # root-instructions gap reads layer_grades; the removal proposal (#1084)
     # reads instruction_placement, so it runs after it.

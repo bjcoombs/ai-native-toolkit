@@ -72,6 +72,8 @@ Reason codes of a ``not_measured`` condition (the first unknown criterion's):
 - the block's own reason code (``lib.counts_only.content_free.reason_code``, or the code a
   known reason sentence maps to, ``reason_token``), when a block on
   the path reports ``available: false``;
+- the code in a null signal's sibling ``<leaf>_reason`` field, such as
+  ``agent_ops.summary.permissions_encoded_reason`` ``managed_settings_unreadable`` (#1153);
 - ``block_absent`` (the run has no such block, or it is null), ``no_value`` (the signal is
   missing or null) or ``type_mismatch``.
 
@@ -196,6 +198,9 @@ def _block_reason(data: Mapping[str, Any] | None, signal: str) -> str:
             return _RUN_KIND_REASONS.get(code, code)
         if not isinstance(node, Mapping) or part not in node:
             return "no_value"
+        if node[part] is None and isinstance(node.get(f"{part}_reason"), str):
+            # a null signal's sibling `<leaf>_reason` code (#1153)
+            return reason_code(node[f"{part}_reason"])
         node = node[part]
     return "no_value"
 

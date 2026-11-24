@@ -8,14 +8,21 @@ title = "Agent-operations guardrails"
 summary = "Committed permission allowlists, hooks, sandbox rules and routine definitions."
 callable = "lib.agents.agent_ops:scan_agent_ops"
 publishes = ["agent_ops"]
-reads = ["repo_root"]
+reads = ["repo_root", "managed_settings"]
 stage = "read_side"
 headless = { agent_ops = "registered" }
 whys.agent_ops = "Committed allowlists, hooks, sandbox rules and routines make an agent's limits and repeated work the same on every clone, and reviewable like code."
 shapes = [
   { path = "agent_ops", type = "lib.counts_only.block_shapes:AgentOpsBlock" },
 ]
-revision = 1
+revision = 2
+  [entries.privacy]
+  "agent_ops.settings.default_mode" = "token"
+  "agent_ops.managed.state" = "token"
+  "agent_ops.managed.reason" = "token"
+  "agent_ops.managed.sources.kind" = "token"
+  "agent_ops.summary.permissions_source" = "token"
+  "agent_ops.summary.permissions_encoded_reason" = "token"
 
 [[entries]]
 id = "core:agent_ops.summary.permissions_encoded"
@@ -25,6 +32,7 @@ collector = "core.agent_ops"
 path = "agent_ops.summary.permissions_encoded"
 type = "bool"
 evidence = "config_text"
+null_means = "the repository lists no permission entry and a managed settings source on the machine running the check could not be read (managed_settings_unreadable)"
 
 [[entries]]
 id = "core:agent_ops.summary.hooks_present"
@@ -49,8 +57,8 @@ id = "core.cond.layer-8-agent-ops.1.permissions_encoded"
 kind = "condition"
 title = "Agent permissions are committed"
 key = "layer-8-agent-ops.1:agent_ops.summary.permissions_encoded"
-why = "Committed permissions make what an agent may do the same for everyone, and reviewable like code."
-fix = "Commit the agent permission allowlist your team uses, so every clone shares it."
+why = "Deny rules and hooks keep an agent inside its limits in every permission mode, auto mode included. Committed to the repository or set in managed settings, they apply the same way to everyone and are reviewed like code."
+fix = "Commit a deny rule for an action no agent should take, such as `\"deny\": [\"Bash(git push origin main)\"]` under `permissions` in `.claude/settings.json`. It holds under auto mode too. If your organisation sets this centrally, run with --managed-settings."
 
 [[entries]]
 id = "core.cond.layer-8-agent-ops.2.hooks_present"

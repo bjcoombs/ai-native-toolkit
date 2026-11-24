@@ -1,0 +1,67 @@
+# The AI-readiness regression gate for GitLab CI (#1152).
+#
+# The GitLab twin of the composite GitHub Action (action.yml): the same
+# headless gate, run by skills/assess/scripts/gitlab_gate.sh from the toolkit
+# cloned at a pinned tag. Add it to a project's .gitlab-ci.yml:
+#
+#   include:
+#     - remote: https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v3.0.0/templates/assess-gate.yml
+#
+# This file sits at templates/<name>.yml with a spec:inputs header, the CI/CD
+# component layout, so a GitLab mirror of this repository can also publish it
+# to the CI/CD catalog and projects can include it with `component:`.
+#
+# The job runs on merge request pipelines only. It fails when a Step gate the
+# committed baseline (.assess/prior-level.json) held now reads unmet, and on
+# whatever .assess/config.toml opts into. A failed toolkit fetch, tool install
+# or render is a notice, never a red job.
+spec:
+  inputs:
+    config:
+      description: Path to the gate config, relative to the project. Missing or malformed config degrades to warn-only defaults.
+      default: .assess/config.toml
+    fail_on_gate_loss:
+      description: Fail the merge request when a Step gate the committed baseline held now reads unmet.
+      type: boolean
+      default: true
+    mr_note:
+      description: Post the summary as a merge request note when a token allows it.
+      type: boolean
+      default: true
+    toolkit_ref:
+      description: The ai-native-toolkit release tag the job runs (a tag or branch name, not a commit SHA). Keep it equal to the tag in the include line.
+      default: v3.0.0
+    toolkit_url:
+      description: Where to clone the toolkit from, for a mirror on a self-hosted GitLab.
+      default: https://github.com/bjcoombs/ai-native-toolkit.git
+    image:
+      description: The job image. It needs bash, git and python3; ripgrep and uv are installed at pinned versions when absent.
+      default: python:3.12-bookworm
+    stage:
+      description: The stage the job runs in.
+      default: test
+---
+assess-gate:
+  stage: $[[ inputs.stage ]]
+  image: $[[ inputs.image ]]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GIT_DEPTH: "0"  # full history: churn and the since-last-run baseline need it
+    ASSESS_CONFIG: "$[[ inputs.config ]]"
+    ASSESS_TOOLKIT_REF: "$[[ inputs.toolkit_ref ]]"
+    ASSESS_TOOLKIT_URL: "$[[ inputs.toolkit_url ]]"
+    ASSESS_FAIL_ON_GATE_LOSS: "$[[ inputs.fail_on_gate_loss ]]"
+    ASSESS_MR_NOTE: "$[[ inputs.mr_note ]]"
+  script:
+    - |
+      ASSESS_TOOLKIT_DIR="$(mktemp -d)/ai-native-toolkit"
+      if ! git clone --quiet --depth 1 --branch "$ASSESS_TOOLKIT_REF" "$ASSESS_TOOLKIT_URL" "$ASSESS_TOOLKIT_DIR"; then
+        echo "assess-gate: could not fetch the toolkit - skipping the assessment this run (warn-only contract; it runs again on the next push)."
+        exit 0
+      fi
+      if [ ! -f "$ASSESS_TOOLKIT_DIR/skills/assess/scripts/gitlab_gate.sh" ]; then
+        echo "assess-gate: toolkit $ASSESS_TOOLKIT_REF has no GitLab gate script - skipping the assessment this run."
+        exit 0
+      fi
+      bash "$ASSESS_TOOLKIT_DIR/skills/assess/scripts/gitlab_gate.sh"

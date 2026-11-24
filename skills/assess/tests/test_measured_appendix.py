@@ -55,6 +55,16 @@ def test_absent_reason_and_partial_lines() -> None:
     assert "### Skipped (0)\n\n- none" in measured_section([doc], ["ci_checks"])
 
 
+def test_a_central_permission_rule_gets_its_evidence_line() -> None:
+    """#1153: a run under --managed-settings that credited managed permissions says so."""
+    central = _doc(agent_ops={"summary": {"permissions_encoded": True, "permissions_source": "managed"}})
+    local = _doc(agent_ops={"summary": {"permissions_encoded": True, "permissions_source": "repository"}})
+    text = measured_section([central, local], ["agent_ops"])
+    assert ("- `agent_ops`: permissions set centrally (managed settings on this machine) in 1 of 2"
+            in text)
+    assert "set centrally" not in measured_section([local], ["agent_ops"])
+
+
 def test_no_repository_scanned() -> None:
     text = measured_section([])
     assert text.startswith(f"{HEADING}\n\nIn place: the catalog of every check. No repository was scanned")

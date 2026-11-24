@@ -298,6 +298,19 @@
           ],
           "description": "How a monorepo unit reads the collector's blocks (lib/unit_readings.py): scoped runs it again per unit; override inherits the repository-wide reading unless the unit holds its own evidence; absent is repo-wide"
         },
+        "unit_kinds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "package",
+              "skill",
+              "agents",
+              "commands"
+            ]
+          },
+          "description": "For a collector with a unit_scope (scoped or override): the unit kinds (units.units[].kind) that read its blocks as their own (lib/unit_readings.py, #1045); every other unit inherits them. Without a unit_scope the blocks are repo-wide and it has no effect. Absent: every kind"
+        },
         "headless": {
           "type": "object",
           "additionalProperties": {

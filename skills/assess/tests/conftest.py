@@ -41,6 +41,9 @@ os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
 # the real ~/.local/share.
 _XDG_DATA_HOME = tempfile.mkdtemp(prefix="assess-tests-xdg-")
 os.environ["XDG_DATA_HOME"] = _XDG_DATA_HOME
+# agent_ops reads the machine's Claude Code managed settings (#1153): point it at an
+# empty directory, so a developer machine's own policy never moves a result or golden.
+os.environ["ASSESS_MANAGED_SETTINGS_DIR"] = os.path.join(_XDG_DATA_HOME, "no-managed-settings")
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:

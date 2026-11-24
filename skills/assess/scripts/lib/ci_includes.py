@@ -28,6 +28,13 @@ disk, returns its text so those scans read the included jobs too:
   ``templates/<name>/template.yml``, at ``<version>`` when the clone holds it.
 - ``template:`` and ``remote:`` name files offline reading cannot hold
   (``not_offline``).
+- **The toolkit's own regression gate** (#1152) is ``toolkit_gate``: a ``remote:`` of
+  exactly ``https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/<ref>/templates/assess-gate.yml``,
+  or a ``component:`` whose project path ends ``/ai-native-toolkit`` and whose name is
+  ``assess-gate``. That template's one job runs the AI-readiness gate and never the
+  project's tests, so it does not leave the test signal unknown. It counts as read
+  (``Resolution.unresolved`` and ``ci_checks.unresolved_includes`` skip it) with no file
+  and no ``ref_basis``. Every other ``remote:`` stays ``not_offline``.
 
 Included files are read for their own ``include:`` in turn, to ``MAX_DEPTH``
 levels (the repository's own include is depth 1) and at most ``MAX_FILES``
@@ -76,7 +83,7 @@ published), and `Resolution.includes` one `IncludeRecord` per item, published as
 |-------|-------|
 | `kind` | `local`, `project`, `component`, `template`, `remote`, `unknown` (an `unparsed` entry: its kind is not known, so it never counts as `local`, #959) |
 | `id` | `gitlab_project:<path>` / `gitlab_component:<path>` (lowercased, the `shared_tooling` id); null for the other kinds. Kept in counts-only output (ID rule) |
-| `status` | `resolved`, or why not: `no_root` (no `--ghsync-root`), `not_cloned`, `file_missing`, `not_offline`, `glob`, `bad_path`, `depth_limit`, `file_limit`, `unparsed` (an `include:` entry naming no item this reader parses, including an unquoted YAML tag, anchor or alias such as `!reference [x]`), `ref_missing` |
+| `status` | `resolved`; `toolkit_gate` (the toolkit's own gate template, known to run no project tests, #1152); or why not: `no_root` (no `--ghsync-root`), `not_cloned`, `file_missing`, `not_offline`, `glob`, `bad_path`, `depth_limit`, `file_limit`, `unparsed` (an `include:` entry naming no item this reader parses, including an unquoted YAML tag, anchor or alias such as `!reference [x]`), `ref_missing` |
 | `ref_basis` | `ref`, `head`, `worktree`; null unless resolved |
 | `depth` | 1 for the repository's own include; nested records follow their parent |
 
@@ -111,11 +118,11 @@ IncludeKind = Literal["local", "project", "component", "template", "remote", "un
 KINDS: tuple[IncludeKind, ...] = ("local", "project", "component", "template", "remote", "unknown")
 RefBasis = Literal["ref", "head", "worktree"]
 IncludeStatus = Literal[
-    "resolved", "no_root", "not_cloned", "file_missing", "not_offline", "glob", "bad_path",
+    "resolved", "toolkit_gate", "no_root", "not_cloned", "file_missing", "not_offline", "glob", "bad_path",
     "depth_limit", "file_limit", "unparsed", "ref_missing",
 ]
 STATUSES: tuple[IncludeStatus, ...] = (
-    "resolved", "no_root", "not_cloned", "file_missing", "not_offline", "glob", "bad_path",
+    "resolved", "toolkit_gate", "no_root", "not_cloned", "file_missing", "not_offline", "glob", "bad_path",
     "depth_limit", "file_limit", "unparsed", "ref_missing",
 )
 
@@ -157,7 +164,27 @@ class Resolution:
 
     @property
     def unresolved(self) -> int:
-        return sum(r["status"] != "resolved" for r in self.includes)
+        return sum(r["status"] not in SETTLED for r in self.includes)
+
+
+# The statuses that leave no job unread: a file read, or the toolkit's gate template (#1152).
+SETTLED: frozenset[str] = frozenset({"resolved", "toolkit_gate"})
+# The toolkit's own regression gate template (#1152), matched exactly; no other remote.
+_TOOLKIT_GATE_REMOTE = re.compile(
+    r"^https://raw\.githubusercontent\.com/bjcoombs/ai-native-toolkit/[^/\s]+"
+    r"/templates/assess-gate\.yml$")
+_TOOLKIT_GATE_COMPONENT = re.compile(r"^[^@\s]+/ai-native-toolkit/assess-gate@[^@\s/]+$")
+
+
+def is_toolkit_gate(kind: str, source: str) -> bool:
+    """True for an include of the toolkit's own regression gate template (#1152)."""
+    source = source.strip().strip("\"'")
+    if kind == "remote":
+        return bool(_TOOLKIT_GATE_REMOTE.match(source)) and ".." not in source
+    if kind == "component":  # GitLab project paths match ignoring case (#859)
+        path, at, version = source.partition("@")
+        return bool(_TOOLKIT_GATE_COMPONENT.match(path.lower() + at + version))
+    return False
 
 
 EMPTY = Resolution((), ())
@@ -487,6 +514,11 @@ class _Walk:
             self.records.append({"kind": "unknown", "id": None, "status": "unparsed",
                                  "ref_basis": None, "depth": depth})
         for item in items:
+            if is_toolkit_gate(item.kind, item.source) and depth <= MAX_DEPTH:
+                ident = (f"gitlab_component:{component_source(item.source).lower()}"
+                         if item.kind == "component" else None)
+                self.record(item, ident, "toolkit_gate", None, depth)
+                continue
             self.one(item, here, depth, item.line if top_line is None else top_line)
 
     def one(self, item: IncludeItem, here: _Source, depth: int, line: int) -> None:

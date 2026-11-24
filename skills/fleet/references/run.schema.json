@@ -48,6 +48,9 @@
         }
       ]
     },
+    "managed_settings": {
+      "type": "boolean"
+    },
     "fleet_stamp_version": {
       "type": "integer"
     },

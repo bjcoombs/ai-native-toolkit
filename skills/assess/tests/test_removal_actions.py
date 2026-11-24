@@ -123,3 +123,49 @@ def test_a_removal_that_keeps_every_gate_for_two_runs_is_credited_in_the_ledger(
     report = subprocess.run([sys.executable, str(SCRIPTS / "assess_report.py"), str(repo), "--stdout"],
                             capture_output=True, encoding="utf-8", errors="replace", check=True).stdout
     assert "Pruned: always-on text in `CLAUDE.md`" in report
+
+
+def test_a_degraded_run_keeps_the_baseline_and_the_ledger(tmp_path: Path, monkeypatch: Any) -> None:
+    """#1158 success criterion: good, degraded, good. The third run still credits the action closed
+    since the first and continues the ledger's hold count from where the first run left it."""
+    import lib.core_scans as cs
+    from test_since_last_run import _git
+    repo = _repo(tmp_path, ALWAYS_ON_FLAG_LINES + 60)
+    proposal = _run(repo, "2026-11-20")
+    (gap,) = [g for g in proposal["gap_actions"] if g.get("mode") == REMOVE_MODE]
+    (repo / "CLAUDE.md").write_text("Run `make test` before every commit.\n" + "Keep functions small.\n" * 40,
+                                    encoding="utf-8")
+    _commit(repo, "2026-11-21T10:00:00Z", "trim")
+    trim = _git(repo, "rev-parse", "HEAD")
+    removal = {"rank": 1, "action": gap["action"], "status": "done", "completed_sha": trim,
+               "finding": gap["finding"], "files": gap["paths"], "cost": gap["cost"], "mode": REMOVE_MODE}
+    (repo / ".assess" / "actions.json").write_text(json.dumps({"schema": 2, "actions": [removal]}),
+                                                   encoding="utf-8")
+    _commit(repo, "2026-11-21T11:00:00Z", "mark the removal done")
+    first = _run(repo, "2026-11-21")  # good: the removal holds once
+    assert first["since_last_run"]["pruning"][0]["runs_held"] == 1
+    stored = (repo / ".assess" / "prior-level.json").read_bytes()
+    # one more action closed before the degraded run
+    (repo / "src" / "b.py").write_text("def g():\n    return 2\n", encoding="utf-8")
+    _commit(repo, "2026-11-22T10:00:00Z", "the fix")
+    fix = _git(repo, "rev-parse", "HEAD")
+    other = {"rank": 2, "action": "Add a helper", "status": "done", "completed_sha": fix}
+    (repo / ".assess" / "actions.json").write_text(json.dumps({"schema": 2, "actions": [removal, other]}),
+                                                   encoding="utf-8")
+    _commit(repo, "2026-11-22T11:00:00Z", "mark the fix done")
+
+    def boom(_ctx: Any) -> Any:
+        raise RuntimeError("scan timed out")
+    with monkeypatch.context() as m:
+        m.setattr(cs, "run_context_level", boom)
+        degraded = _run(repo, "2026-11-22")
+    assert (repo / ".assess" / "prior-level.json").read_bytes() == stored  # untouched
+    assert f"`{first['run_id']}`" in "\n".join(degraded["since_last_run"]["lines"])
+    (repo / "src" / "c.py").write_text("def h():\n    return 3\n", encoding="utf-8")
+    _commit(repo, "2026-11-23T10:00:00Z", "more work")
+    third = _run(repo, "2026-11-23")["since_last_run"]
+    assert third["previous_run_id"] == first["run_id"]
+    assert third["closed_count"] == 1 and third["closed"][0]["completed_sha"] == fix
+    assert "- Closed since last run: 1" in third["markdown"]
+    (credit,) = third["pruned"]  # the hold continued from 1 to 2: credited
+    assert credit["credited"] and credit["runs_held"] == 2

@@ -16,6 +16,7 @@
 dist/standalone-skills/
 !/.github/
 !/action.yml
+!/templates/
 !/.file-size-ratchet.toml
 !/Makefile
 !/evals/
@@ -30,6 +31,10 @@ evals/**/results/
 /.assess/run-context.counts-only.json
 /.assess/complexity-stats.prior.json
 /.assess/.cache/
+
+# The standalone skill build writes the assess version file into the ZIP only (#1166);
+# a copy in the tree would shadow nothing but could go stale, so it is never tracked.
+/skills/assess/plugin-version.json
 
 # Still ignore .DS_Store files everywhere
 **/.DS_Store

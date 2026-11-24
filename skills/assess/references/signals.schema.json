@@ -43,9 +43,13 @@
             "string",
             "null"
           ]
+        },
+        "managed_settings": {
+          "type": "boolean"
         }
       },
       "required": [
+        "managed_settings",
         "plugin_version",
         "scan_date",
         "scope",
@@ -98,6 +102,7 @@
           "ci_checks",
           "claude_config",
           "config_drift",
+          "contributor_files",
           "coverage_gate",
           "coverage_report",
           "dead_code",
@@ -116,6 +121,7 @@
           "layer_grades",
           "nested_instructions",
           "observability",
+          "org_security_policy",
           "owner_exclusions",
           "promissory_markers",
           "review_automation",
@@ -123,6 +129,8 @@
           "review_reality",
           "runtime",
           "shared_tooling",
+          "skill_disclosure",
+          "skill_script_tests",
           "stats_summary",
           "structure",
           "structure_drift",
@@ -638,6 +646,7 @@
                   "status": {
                     "enum": [
                       "resolved",
+                      "toolkit_gate",
                       "no_root",
                       "not_cloned",
                       "file_missing",
@@ -649,7 +658,7 @@
                       "unparsed",
                       "ref_missing"
                     ],
-                    "description": "resolved, or why not: no_root, not_cloned, file_missing, not_offline (template, remote), glob, bad_path, depth_limit, file_limit, unparsed, ref_missing (a pin the clone does not hold)."
+                    "description": "resolved; toolkit_gate (the toolkit's own regression gate template, known to run no project tests); or why not: no_root, not_cloned, file_missing, not_offline (template, remote), glob, bad_path, depth_limit, file_limit, unparsed, ref_missing (a pin the clone does not hold)."
                   },
                   "ref_basis": {
                     "enum": [
@@ -1303,6 +1312,54 @@
               ],
               "description": "Best letter grade (A to F) of the files instruction_presence counts: the root files, else the always-loaded or nested ones. Null only for none."
             }
+          }
+        },
+        "contributor_files": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: knowledge_base (the repository is a knowledge base (archetype knowledge-base), which takes no code patches); org_policy_not_read (the repository holds no security policy, and the owner's shared .github repository, whose policy GitHub shows on it, was not read (offline, no --platform, a remote not on github.com, or gh not signed in)). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "org_security_policy": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: no_remote (the repository has no github.com remote, so there is no owner .github repository to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
           }
         },
         "review_evidence": {

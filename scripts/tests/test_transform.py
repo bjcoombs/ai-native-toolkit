@@ -478,3 +478,31 @@ def test_huddle_config_covers_all_markers():
     unused = in_config - in_file
     assert not uncovered, f"huddle markers with no config entry: {uncovered}"
     assert not unused, f"huddle config keys with no marker in source: {unused}"
+
+
+# ── generated_files (#1166) ────────────────────────────────────────────────
+
+def test_generated_files_are_written_into_the_zip_with_lf(tmp_path):
+    src = _make_fake_skill(tmp_path)
+    (src / "plugin-version.json").write_text('{"version": "stale"}\n')
+    out_zip = tmp_path / "fake.zip"
+    issues = build_standalone_skill_zip(
+        skill_source_dir=src, out_zip=out_zip, standalone_name="fake",
+        standalone_description="fake desc", replacements={},
+        generated_files={"plugin-version.json": '{"version": "1.2.3"}\r\n'},
+    )
+    assert issues == []
+    with zipfile.ZipFile(out_zip) as zf:
+        # The generated text wins over a same-named source file, and keeps LF endings.
+        assert zf.read("fake/plugin-version.json") == b'{"version": "1.2.3"}\n'
+
+
+@pytest.mark.parametrize("dest", ["../escape.json", "/abs.json"])
+def test_generated_files_refuse_a_path_outside_the_skill(tmp_path, dest):
+    src = _make_fake_skill(tmp_path)
+    with pytest.raises(ValueError, match="generated_files dest"):
+        build_standalone_skill_zip(
+            skill_source_dir=src, out_zip=tmp_path / "fake.zip", standalone_name="fake",
+            standalone_description="fake desc", replacements={},
+            generated_files={dest: "x"},
+        )

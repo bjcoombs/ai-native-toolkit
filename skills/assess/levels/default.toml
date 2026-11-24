@@ -228,6 +228,30 @@
 #   fewer than two systems there is nothing to agree with: both signals are
 #   null and the row is unknown, never 0. Graded measured: it compares the
 #   files and their links at the commit, as instruction_claims.failed does.
+# - Skill disclosure reads skill_disclosure.files_breaking (lib/skill_disclosure.py,
+#   #1045): every SKILL.md and agent definition has a body of 500 lines or fewer, 5000
+#   estimated tokens or fewer, a name and a description of 1024 characters or fewer, and
+#   references that resolve one level deep. A repository with no such file has nothing to
+#   measure: the row is unknown (no_skill_files), never met. Read per skill unit only
+#   (unit_kinds = ["skill"]); it gates no Step. Graded measured: it reads the files'
+#   structure at the commit.
+# - Skill script tests reads skill_script_tests.skills_untested (lib/skill_script_tests.py,
+#   #1045): every skill that holds scripts has tests beside them in its own folder. It
+#   measures presence, not coverage: /assess runs no suite. Tests only outside the folder are
+#   named (tested_elsewhere) but do not count, since they do not ship with the skill. With no
+#   skill holding a script the row is unknown (no_skill_scripts), never met. Read per skill
+#   unit only (unit_kinds = ["skill"]); it gates no Step. Graded measured.
+# - Contributor files reads contributor_files.guide.present and policy.present
+#   (lib/contributor_files.py, #1045): a CONTRIBUTING guide and a SECURITY policy (or a link
+#   to GitHub private vulnerability reporting) at the root, in .github/ or in docs/, or the
+#   owner's shared policy in its .github repository, which GitHub shows on the repository.
+#   With no policy in the tree and the owner's not read (offline, a non-GitHub remote), the
+#   policy is unknown (org_policy_not_read), never missing. Issue and pull or merge request
+#   templates are recorded, not required. A knowledge base (archetype knowledge-base) takes
+#   no code patches: the row is unknown (knowledge_base), never unmet. It gates no Step.
+#   Graded measured (head_structure) for both sources: the guide and a policy in the tree
+#   are read at the commit, an owner's policy by a live GitHub read, and policy.source
+#   (repo or org) names which.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures.
 #
@@ -483,6 +507,42 @@ aggregation = "min"
   truth = ["agent_context"]
   requires = ["agent-consistency.1"]
   criteria = [{ signal = "agent_consistency.unlinked", op = "eq", value = 0 }]
+
+[[rows]]
+id = "skill-disclosure"
+title = "Skill disclosure"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["agent_context"]
+  criteria = [{ signal = "skill_disclosure.files_breaking", op = "eq", value = 0 }]
+
+[[rows]]
+id = "skill-script-tests"
+title = "Skill script tests"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["behaviour"]
+  criteria = [{ signal = "skill_script_tests.skills_untested", op = "eq", value = 0 }]
+
+[[rows]]
+id = "contributor-files"
+title = "Contributor files"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["docs"]
+  criteria = [
+    { signal = "contributor_files.guide.present", op = "eq", value = true },
+    { signal = "contributor_files.policy.present", op = "eq", value = true },
+  ]
 
 [[steps]]
 step = 1

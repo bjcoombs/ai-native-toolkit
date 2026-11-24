@@ -74,10 +74,12 @@ def test_a_malformed_file_reads_unreadable_not_absent(tmp_path: Path, content: s
     assert as_prior_level(load_prior_level(tmp_path)) is None
 
 
-def test_a_level_without_tags_writes_nothing_and_removes_a_stale_file(tmp_path: Path) -> None:
+def test_a_level_without_tags_writes_nothing_and_keeps_the_previous_good_file(tmp_path: Path) -> None:
+    """#1158: a degraded run leaves the previous good run's file, with its baseline and ledger."""
     write_prior_level(tmp_path, _level())
+    before = (tmp_path / PRIOR_LEVEL_FILE).read_bytes()
     assert write_prior_level(tmp_path, {"available": False, "reason": "x"}) is None
-    assert not (tmp_path / PRIOR_LEVEL_FILE).exists()
+    assert (tmp_path / PRIOR_LEVEL_FILE).read_bytes() == before
     assert build_prior_level({**_level(), "levels_version": None}) is None
     assert build_prior_level(None) is None
 

@@ -72,8 +72,11 @@ through `lib/hosting/gh_cli.py` (optional live GitHub reads via the `gh` CLI tha
 remote first and degrade to `available: false`) and the opt-in mutation pass's uv
 runner in `lib/test_pressure/mutmut3.py` (`uv run --project` in a scratch copy, which
 may download the assessed package's dependencies plus the pinned mutmut and pytest
-on first use); the LLM only writes prose via the `assess_finalize.py` write-back. Flag:
-- AI calls, nondeterminism, or network access outside those two paths creeping into
+on first use), plus one write: `lib/starter_delivery.py`, which under `/assess --fix` or
+`--starter` with the opt-in `--pr` only, with a clean tree, an authenticated `gh` or `glab` and a run from the default branch's tip, pushes a branch and
+opens a pull (merge) request, degrading to a local branch with a named `reason`; the LLM only
+writes prose via the `assess_finalize.py` write-back. Flag:
+- AI calls, nondeterminism, or network access outside those three paths creeping into
   `skills/assess/scripts/lib/`, and any `gh_cli` caller that reports a clean result
   when a read failed.
 - A change to a deterministic module **without a matching test** in

@@ -56,13 +56,14 @@ This is intentionally **one** archetype (knowledge base), structured as an exten
 <!-- chat-replace:tour-arguments -->
 Arguments: **$ARGUMENTS**. **`--tour` (the guided first run):** when the arguments contain `--tour`, skip every step below. Do not assess the current repository. Follow `references/tour.md` (relative to this skill dir) instead: it builds a small sample repository in a temporary directory, walks the report one section at a time, has the newcomer make one fix and re-runs so they see the Step move.
 
+
 ## Step 1: Determine Repo Root and Output Directory
 
 ```bash
 git rev-parse --show-toplevel   # from the arg path if given, else pwd
 ```
 
-Set `$REPO_ROOT` to the result. All scanning happens from here.
+Set `$REPO_ROOT` to the result. All scanning happens from here. **`--fix` and `--starter` (#1154)** are the only arguments that write starter files into the target (`/fleet` never does): when the arguments contain either, follow `references/fix.md` (relative to this skill dir); they commit to a local `assess/fix-<gate>` branch and never push, and only an added `--pr`, which an interactive run asks the user about first, pushes and opens a pull request.
 
 **Scoping a subtree (`/assess <path>`).** When the argument is a directory under the repo root, scope the whole run to it - metrics, score, badge, wiki, and gate all computed for and labelled with the scope, artifacts under `.assess/<scope-slug>/`, no signal from a sibling. Pass `--scope "$SCOPE"` to `complexity-treemap.py` and `assess_core.py` and swap `.assess/` for `.assess/<slug>/` throughout. Full recipe: `references/monorepo-scoping.md` (relative to this skill dir). A no-path run is whole-repo, unchanged.
 
@@ -320,7 +321,7 @@ $REPO_ROOT = git rev-parse --show-toplevel; python "${CLAUDE_SKILL_DIR}/scripts/
 Run each other `uv run` line in this skill as `python` with the same arguments. The full PowerShell sequence and the ripgrep lookup (`RG_PATH`, then `PATH`, then the WinGet package folder): `references/windows.md`. Installs, PATH notes and the make-free commands: the [Windows setup guide](../../docs/windows.md).
 <!-- chat-skip:end -->
 
-Interactivity is an explicit signal, never a stdin probe: pass `--non-interactive` only on a headless/CI run, otherwise the run is interactive by default. See `references/consent-lifecycle.md` for why (`isatty()` misreads a subprocess).
+Interactivity is an explicit signal, never a stdin probe: pass `--non-interactive` only on a headless/CI run, otherwise the run is interactive by default. See `references/consent-lifecycle.md` for why (`isatty()` misreads a subprocess). Managed settings are opt-in: append `--managed-settings` only when the user asks for this machine's Claude Code managed settings to count toward the agent permissions practice (a central deny rule then counts, graded listed), or set `managed_settings = true` under `[agent_ops]` in `.assess/config.toml`. Off, the practice reads the repository alone.
 
 Now `$REPO_ROOT/.assess/run-context.json` contains the structured data you need for the prose sections. Read it before writing the report. **The level result** is the `level` block of `run-context.json`: the default maturity model's conditions (`<row id>.<level>`) each with its `state`, `grade` and, when not measured, a `reason` code; the verified tally `tally.met` (measured and verified conditions met; config-only and declared ones are only `listed`), `tally.measured` and `tally.not_measured`; the autonomy `step` and the `next_step` with its `blockers`. It is computed by the deterministic core (`scripts/lib/level_tally.py`), never by you, and `/fleet` gives the same result on the same commit (its `level.json`). The shape is `$defs.level_result` in the fleet skill's `references/level.schema.json`; the `scripts/lib/level_tally.py` module docstring documents every field.
 

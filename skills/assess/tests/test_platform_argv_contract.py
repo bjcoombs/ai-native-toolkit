@@ -38,6 +38,7 @@ case "$all" in
   "pr list"*) cat "$FAKE_DIR/prs.json"; exit 0 ;;
   "api users/claude%5Bbot%5D"|"api users/coderabbitai%5Bbot%5D") echo '{"type":"Bot"}'; exit 0 ;;
   "api repos/acme/widget") echo '{"default_branch":"main"}'; exit 0 ;;
+  "api repos/acme/.github") echo '{"private":false}'; exit 0 ;;
   "api repos/acme/widget/rules/branches/main") echo '[]'; exit 0 ;;
   "api repos/acme/widget/branches/main/protection") echo 'gh: Branch not protected (HTTP 404)' >&2; exit 1 ;;
 esac
@@ -93,6 +94,10 @@ def _calls(data: Path) -> list[list[str]]:
     return [line.rstrip("\x1f").split("\x1f") for line in lines if line]
 
 
+# The platform scans that read GitHub only: on a GitLab remote they are unavailable (no_remote).
+GITHUB_ONLY = ("org_security_policy",)
+
+
 def _names_target(argv: list[str], slug: str) -> bool:
     if argv[0] == "glab":
         return "--hostname" in argv
@@ -100,7 +105,10 @@ def _names_target(argv: list[str], slug: str) -> bool:
         return True
     if "--repo" in argv:
         return argv[argv.index("--repo") + 1] == slug
-    return any(a.startswith(f"repos/{slug}") or a.startswith("users/") for a in argv)
+    owner = slug.split("/")[0]
+    # The owner's shared .github repository (lib/hosting/org_security_policy.py, #1045) is named too.
+    return any(a.startswith((f"repos/{slug}", f"repos/{owner}/.github/")) or a == f"repos/{owner}/.github"
+               or a.startswith("users/") for a in argv)
 
 
 def _run(tmp_path: Path, remote: str, gitlab_ci: str | None = None) -> dict[str, object]:
@@ -125,7 +133,7 @@ def test_every_github_platform_read_names_its_target(stubs: Path, tmp_path: Path
     assert [c for c in calls if not _names_target(c, "acme/widget")] == []
     joined = [" ".join(c) for c in calls]
     for needle in ("--json mergedAt", "--json author,", "api users/", "rules/branches",
-                   "/protection"):
+                   "/protection", "api repos/acme/.github/contents"):
         assert any(needle in c for c in joined), needle
     assert all(c[0] == "gh" for c in calls)
 
@@ -135,7 +143,10 @@ def test_every_gitlab_platform_read_names_its_target(stubs: Path, tmp_path: Path
     monkeypatch.chdir(tmp_path)
     scans = _run(tmp_path, "https://gitlab.com/grp/app.git",
                  "include:\n  - project: grp/ci-templates\n    file: /t.yml\n")
-    assert all(scans[name].get("available") for name in signals.PLATFORM_SCANS), scans
+    assert all(scans[name].get("available") for name in signals.PLATFORM_SCANS
+               if name not in GITHUB_ONLY), scans
+    # The owner's shared .github policy is GitHub's fallback: on GitLab it is not read (#1045).
+    assert all(str(scans[name].get("reason", "")).startswith("no_remote") for name in GITHUB_ONLY)
     calls = _calls(stubs)
     assert [c for c in calls if not _names_target(c, "grp/app")] == []
     joined = [" ".join(c) for c in calls]

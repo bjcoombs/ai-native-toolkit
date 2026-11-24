@@ -30,6 +30,7 @@ def _build(skill_name: str, tmp_path: Path) -> zipfile.ZipFile:
         replacements=cfg["replacements"],
         exclude_dirs=frozenset(cfg["exclude_dirs"]),
         bundle_files=bundle_files,
+        generated_files=cfg.get("generated_files"),
     )
     assert not issues, "Build produced issues:\n" + "\n".join(issues)
     assert out_zip.exists(), "ZIP not created despite no issues reported"
@@ -367,3 +368,15 @@ class TestSemanticCompressBuild:
         zf1 = _build("semantic-compress", tmp_path / "run1")
         zf2 = _build("semantic-compress", tmp_path / "run2")
         assert Path(zf1.filename).read_bytes() == Path(zf2.filename).read_bytes()
+
+
+def test_only_the_assess_zip_carries_the_version_file(tmp_path):
+    """The standalone /assess copy has no plugin.json, so its build writes the version (#1166)."""
+    import json
+
+    from standalone_skill_config import SKILLS, VERSION
+
+    for name, cfg in SKILLS.items():
+        assert ("generated_files" in cfg) == (name == "assess"), name
+    zf = _build("assess", tmp_path)
+    assert json.loads(zf.read("assess/plugin-version.json")) == {"version": VERSION}

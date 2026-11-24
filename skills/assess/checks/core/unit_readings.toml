@@ -9,7 +9,7 @@ summary = "Each unit's own readings of the scope-sensitive scans (suppressions, 
 issues = [800, 863]
 callable = "lib.core_scans:unit_readings"
 publishes = ["unit_readings"]
-reads = ["units", "nested_instructions", "coverage_gate", "doc_staleness", "layer_grades", "promissory_markers", "stats_summary", "structure", "excludes", "repo_root", "working_notes"]
+reads = ["units", "nested_instructions", "coverage_gate", "doc_staleness", "layer_grades", "promissory_markers", "skill_disclosure", "skill_script_tests", "stats_summary", "structure", "excludes", "repo_root", "working_notes"]
 stage = "post_offers"
 headless = { unit_readings = "registered" }
 whys.unit_readings = "A unit inherits root CI and review but not the root's suppressions, stale docs or structure. Reading those per unit, with each condition labelled, shows which change lifts which unit."

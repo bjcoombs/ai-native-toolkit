@@ -29,6 +29,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from lib.contributor_files import scan_contributor_files
 from lib.keyhole.accretion_ratchet import AccretionScan, scan_accretion_ratchet
 from lib.anomaly_detector import detect_anomalies
 from lib.keyhole.archetype import analyze_archetype
@@ -171,6 +172,12 @@ def sensitive_instruction_content(grading: tuple[Any, ...]) -> Any:
 def archetype(repo_root: Path) -> dict[str, Any]:
     """Software repo or knowledge base (#224); a knowledge base marks L2-L7 N/A."""
     return analyze_archetype(repo_root)
+
+
+def contributor_files(repo_root: Path, archetype: Any, org_security_policy: Any) -> dict[str, Any]:
+    """The contributing guide and security policy (#1045; ``lib.contributor_files``). A core entry,
+    as ``archetype`` is, so the headless variant (``lib.headless_static``) replaces it there."""
+    return dict(scan_contributor_files(repo_root, archetype, org_security_policy))
 
 
 def ancestor_instructions(repo_root: Path) -> list[str]:

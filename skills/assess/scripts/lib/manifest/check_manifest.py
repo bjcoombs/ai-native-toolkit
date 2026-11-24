@@ -71,7 +71,8 @@ KINDS: tuple[Kind, ...] = ("collector", "signal", "condition", "finding")
 # The registry's stages, in run order (``scan_registry.STAGES``; a test pins the copy).
 STAGES = ("setup", "read_side", "post_offers", "final")
 # The names the core passes to ``run_scans`` (``scan_registry.PROVIDED_INPUTS``).
-PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive"})
+PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive",
+                             "managed_settings"})
 # Tokens for ``scan_registry.GATE_REASONS``, the reasons a scan may opt out of degrading.
 GATE_REASONS = ("setup", "bad_scope", "self_degrading", "serialiser")
 PRIVACY_CLASSES = ("path", "token", "reason", "id", "drop", "hashed_path")
@@ -81,6 +82,8 @@ EVIDENCE = ("config_text", "head_text", "head_structure", "ci_executed",
 HEADLESS = ("registered", "headless_variant", "unregistered")
 # How a monorepo unit reads a collector's blocks (``lib.unit_readings``, #863); absent: repo-wide.
 UNIT_SCOPES = ("scoped", "override")
+# The unit kinds a collector names as owning its blocks (``unit_components.KINDS``, #1045); absent: every kind.
+UNIT_KINDS = ("package", "skill", "agents", "commands")
 SIGNAL_TYPES = ("bool", "number", "string", "enum")
 FINDING_MODES = ("characterize_first", "verify_then_retire", "refactor_safe")
 CarriedIn = Literal["reason", "basis", "enforced_basis", "unmeasured_reason"]
@@ -147,6 +150,7 @@ class CollectorEntry(_EntryBase):
     platform_pass: NotRequired[bool]
     platform_only: NotRequired[bool]
     unit_scope: NotRequired[Literal["scoped", "override"]]
+    unit_kinds: NotRequired[list[str]]  # the unit kinds that own its blocks (#1045); absent: every kind
     headless: NotRequired[dict[str, str]]
     headless_variants: NotRequired[list[HeadlessVariant]]
     whys: NotRequired[dict[str, str]]  # scan -> its why (#939, lib.manifest.manifest_whys)
@@ -291,7 +295,7 @@ _FIELDS: dict[str, dict[str, Check]] = {
         "publishes": _STRS, "reads": _STRS, "stage": _enum(STAGES), "revision": _int(1),
         "private": _bool, "spread": _bool, "degrade": _bool, "gate_reason": _enum(GATE_REASONS),
         "label": _str(_NAME_RE), "network": _bool, "platform_pass": _bool,
-        "platform_only": _bool, "unit_scope": _enum(UNIT_SCOPES),
+        "platform_only": _bool, "unit_scope": _enum(UNIT_SCOPES), "unit_kinds": _list(_enum(UNIT_KINDS), 1),
         "headless": _table(_enum(HEADLESS)),
         "headless_variants": _records(
             {"block": _str(_NAME_RE), "callable": _str(_CALLABLE_RE), "reads": _STRS,

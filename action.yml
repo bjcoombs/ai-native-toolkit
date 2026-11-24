@@ -39,6 +39,15 @@ inputs:
       malformed config degrades to warn-only defaults.
     required: false
     default: '.assess/config.toml'
+  fail_on_gate_loss:
+    description: >-
+      'true' fails the PR when a Step gate the base branch's committed
+      baseline (.assess/prior-level.json) held now reads unmet, as
+      `fail_on_gate_loss = true` in the config does. Default 'false' keeps the
+      action warn-only; the GitLab template (templates/assess-gate.yml)
+      defaults it to true.
+    required: false
+    default: 'false'
 
 outputs:
   rendered:
@@ -88,6 +97,21 @@ runs:
           echo "ok=false" >> "$GITHUB_OUTPUT"
         fi
 
+    - name: Compare with the base branch's gate baseline
+      # A pull request is measured against the .assess/prior-level.json at its
+      # base commit, never its own copy, so deleting or re-freezing the baseline
+      # cannot switch the gate-loss check off. It runs whenever a base is known,
+      # since config.toml can opt in as well as the input; without the opt-in
+      # the baseline only words the summary. Always exits 0: an unreadable base
+      # is a notice, never a red check.
+      if: steps.ensure-uv.outputs.ok == 'true' && github.base_ref != ''
+      shell: bash
+      env:
+        BASE_REF: ${{ github.base_ref }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        bash "${GITHUB_ACTION_PATH}/skills/assess/scripts/base_baseline.sh" "${GITHUB_WORKSPACE}" "$BASE_REF" "$BASE_SHA"
+
     - name: Render the deterministic snapshot
       id: render
       # continue-on-error keeps a mid-render crash (a tool install shortfall, a
@@ -124,6 +148,10 @@ runs:
       working-directory: ${{ github.action_path }}/skills/assess
       # The single step whose exit code can fail the consumer's PR - and only
       # per their own config.toml opt-ins.
+      env:
+        FAIL_ON_GATE_LOSS: ${{ inputs.fail_on_gate_loss }}
       run: |
+        extra=()
+        if [ "$FAIL_ON_GATE_LOSS" = "true" ]; then extra+=(--fail-on-gate-loss); fi
         uv run scripts/assess_gate.py "${GITHUB_WORKSPACE}" \
-          --config "${GITHUB_WORKSPACE}/${{ inputs.config }}"
+          --config "${GITHUB_WORKSPACE}/${{ inputs.config }}" "${extra[@]}"
