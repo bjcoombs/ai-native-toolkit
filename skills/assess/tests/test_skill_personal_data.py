@@ -80,6 +80,8 @@ def test_each_kind_is_detected(text: str, kinds: list[str]) -> None:
     "Use logo@2x.png and icon@3x.webp for retina screens.",
     "It saves +1000000000 tokens.",
     "Run ssh git@github.com to test auth.",
+    "Email: support@" + "anthropic.com for help.",  # a role address
+    "pip install foo==1.2.3.4",
     "Weights: +0.5 - 0.25 - 0.125",
 ])
 def test_placeholders_and_lookalikes_are_not_findings(text: str) -> None:
@@ -110,6 +112,16 @@ def test_a_finding_names_the_file_and_kind_never_the_data(tmp_path: Path) -> Non
     dumped = json.dumps(block)
     assert EMAIL not in dumped and "7946" not in dumped and "jane" not in dumped
     assert _state(block) == ("unmet", None)
+
+
+def test_a_references_symlink_out_of_the_repository_is_not_followed(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "notes.md").write_text(f"Escalate to {EMAIL}.\n", encoding="utf-8")
+    repo = _plugin(tmp_path / "repo", {"skills/a/SKILL.md": SKILL.format("a", "Clean text.")})
+    (repo / "skills/a/references").symlink_to(outside, target_is_directory=True)
+    block = scan_skill_personal_data(repo)
+    assert block["files"] == [] and _state(block) == ("met", None)
 
 
 def test_clean_skill_text_reads_met_and_no_skill_reads_not_measured(tmp_path: Path) -> None:

@@ -74,7 +74,11 @@ _RESERVED_DOMAIN = re.compile(r"(?:^|\.)(?:example\.(?:com|org|net)|example|test
 _NOREPLY_DOMAIN = re.compile(r"(?:^|\.)(?:no-?reply|donotreply)(?:\.|$)", re.IGNORECASE)
 _PLACEHOLDER_LOCAL = frozenset({"user", "username", "you", "your", "yourname", "name", "first.last",
                                 "firstname.lastname", "me", "someone", "somebody", "email", "foo",
-                                "bar", "test", "noreply", "no-reply", "donotreply", "git"})
+                                "bar", "test", "noreply", "no-reply", "donotreply", "git",
+                                # role addresses: a team's published contact, not a person's
+                                "support", "security", "help", "info", "contact", "privacy", "abuse",
+                                "admin", "hello", "team", "sales", "legal", "press", "feedback",
+                                "postmaster", "webmaster", "hostmaster", "careers", "jobs", "billing"})
 # A home path whose user name holds a letter or digit and is not a placeholder: the grader's
 # pattern also takes ``/Users/.../``, which a skill writes as an example, so it is checked again.
 # The Windows branch takes the grader's class (any name up to the next separator, spaces and
@@ -84,8 +88,9 @@ _PLACEHOLDER_HOME = frozenset({"user", "username", "you", "your", "yourname", "n
                                "public", "default", "runner", "someone", "example", "jdoe", "alice", "bob"})
 # An IPv4-shaped number that follows a version word is a version, not an address (``v1.2.3.4``,
 # ``version 10.0.19041.1``); the grader's IP check is decided again here without those, and with
-# a lookahead that also takes an address ending a sentence (``at 10.20.30.40.``).
-_IPV4 = re.compile(r"(?<![\w.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\w|\.\d)")
+# a lookahead that also takes an address ending a sentence (``at 10.20.30.40.``), and a lookbehind
+# that skips a pinned version (``foo==1.2.3.4``, ``pkg@1.2.3.4``).
+_IPV4 = re.compile(r"(?<![\w.=@])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\w|\.\d)")
 # An ``ssh git@host`` test of a Git host's auth is no login detail; any other user is.
 _SSH = re.compile(r"\bssh\s+([A-Za-z0-9._-]+)@[A-Za-z0-9._-]+")
 _ROOT_LOGIN = re.compile(r"\broot@[A-Za-z0-9._-]+")
@@ -184,8 +189,11 @@ def _files(repo: Path, scope: Path | None, excludes: tuple[set[str], list[str]] 
         out.add(path)
         refs = path.parent / "references"
         if kind == "skill" and refs.is_dir():
-            out.update(p.resolve() for p in refs.rglob("*")
-                       if p.is_file() and not p.is_symlink() and p.suffix.lower() in REFERENCE_SUFFIXES)
+            # A symlinked references/ folder can point outside the repository: keep only what resolves
+            # inside it, as for the skill file above.
+            out.update(r for r in (p.resolve() for p in refs.rglob("*")
+                                   if p.is_file() and not p.is_symlink() and p.suffix.lower() in REFERENCE_SUFFIXES)
+                       if r.is_relative_to(repo))
     return sorted(out)
 
 
