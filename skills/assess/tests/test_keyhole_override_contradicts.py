@@ -31,8 +31,7 @@ def test_override_contradicts_in_finding_order_and_actions() -> None:
     order = ks.FINDING_ORDER
     assert order.index("override_contradicts_signals") < order.index("refactor_boundary")
     assert ks.FINDING_ACTIONS["override_contradicts_signals"] == (
-        "Review archetype marker - deterministic signals suggest a different "
-        "classification"
+        "Review the archetype marker: the measured signals suggest a different kind of repository"
     )
 
 

@@ -77,7 +77,7 @@ def test_accretion_ratchet_finding_no_files_returns_empty() -> None:
 def test_accretion_ratchet_finding_action_text_matches_config() -> None:
     """The action string in FINDING_ACTIONS matches the requirement."""
     assert ks.FINDING_ACTIONS["accretion_ratchet"] == (
-        "refactor down: extract, delete dead code, or split the file"
+        "make the file smaller: move code out, delete dead code, or split the file"
     )
 
 

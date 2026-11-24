@@ -5834,7 +5834,7 @@
       "name": "hidden_coupling",
       "title": "Hidden coupling",
       "order": 0,
-      "action": "investigate the seam",
+      "action": "check why these files change together",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [
@@ -5865,7 +5865,7 @@
       "name": "unexplained_complexity",
       "title": "Unexplained complexity",
       "order": 2,
-      "action": "write the contract the code needs (do NOT auto-generate)",
+      "action": "write the contract the code needs (write it by hand; do not generate it)",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [
@@ -5880,7 +5880,7 @@
       "name": "untrusted_hotspot",
       "title": "Untrusted hotspot",
       "order": 3,
-      "action": "strengthen tests to pin observable behaviour (not internal state)",
+      "action": "make the tests check what the code does, as a caller sees it (not its internal state)",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [
@@ -5896,7 +5896,7 @@
       "name": "self_referential_tests",
       "title": "Self-referential tests",
       "order": 4,
-      "action": "request human review - tests verify internal consistency, not truth",
+      "action": "ask a person to review: the tests check that the code agrees with itself, not that it is right",
       "mode": "verify_then_retire",
       "concern": true,
       "inputs": [
@@ -5911,7 +5911,7 @@
       "name": "unactioned_intent",
       "title": "Unactioned intent",
       "order": 5,
-      "action": "action the promise: fix it, ticket it, or delete the marker/skip",
+      "action": "keep the promise: fix it, open a ticket for it, or delete the marker or skip",
       "mode": "verify_then_retire",
       "concern": true,
       "inputs": [
@@ -5926,7 +5926,7 @@
       "name": "accretion_ratchet",
       "title": "Accretion ratchet",
       "order": 6,
-      "action": "refactor down: extract, delete dead code, or split the file",
+      "action": "make the file smaller: move code out, delete dead code, or split the file",
       "mode": "refactor_safe",
       "concern": true,
       "inputs": [
@@ -5941,7 +5941,7 @@
       "name": "orphaned_understanding",
       "title": "Orphaned understanding",
       "order": 7,
-      "action": "assign a human anchor before further change",
+      "action": "name a person who owns this code before it changes again",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [
@@ -5956,7 +5956,7 @@
       "name": "candidate_dead_weight",
       "title": "Candidate dead weight",
       "order": 8,
-      "action": "verify liveness, then delete if dead",
+      "action": "check that the code is used, and delete it if it is not",
       "mode": "verify_then_retire",
       "concern": true,
       "inputs": [
@@ -5971,7 +5971,7 @@
       "name": "override_contradicts_signals",
       "title": "Archetype override contradicts the signals",
       "order": 9,
-      "action": "Review archetype marker - deterministic signals suggest a different classification",
+      "action": "Review the archetype marker: the measured signals suggest a different kind of repository",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [
