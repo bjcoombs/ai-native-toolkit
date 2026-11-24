@@ -1,8 +1,14 @@
 # scripts
 
-Repository tooling. Nothing here ships inside the plugin. The folder holds three things:
-the floor checks, the acceptance-contract gates, and the build for the standalone skill
-ZIPs. It is its own Python package, with its own `pyproject.toml`, lock file and test suite.
+Repository tooling, plus the acceptance-contract gates the plugin runs. The folder holds
+three things: the floor checks, the acceptance-contract gates, and the build for the
+standalone skill ZIPs. It is its own Python package, with its own `pyproject.toml`, lock
+file and test suite.
+
+The plugin installs from the repository root, so this folder ships with it. `/issues` and
+`marathon` run the gates in `contract/` at run time, from
+`${CLAUDE_PLUGIN_ROOT}/scripts/contract/`. The floor checks and the build run only in this
+repository's CI and on a contributor's machine.
 
 ## Floor core: do not edit without sign-off
 
@@ -29,8 +35,9 @@ check, not a sign-off.
   the one component that decides whether a run may claim PASS. The others feed it:
   `start_gate.py` and `complete_gate.py` open and close a run, `freeze.py` freezes the
   contract, `spawn_verifier.py` is the only code that writes verifier results, and
-  `verifier.py` and `tiers.py` hold the logic it calls. `contract_location.py` says where
-  the per-run files live. `readiness_check_prompt.md` is the fixed prompt for the readiness
+  `verifier.py` and `tiers.py` hold the logic it calls. `record_readiness.py` records the
+  readiness verdict in the completion record. `contract_location.py` says where the per-run
+  files live. `readiness_check_prompt.md` is the fixed prompt for the readiness
   check.
 - `canaries/` - `run_canaries.py` runs the real gates against the fixtures in
   [tests/canaries/](../tests/canaries/README.md). `drive_interactive.mjs` drives the
