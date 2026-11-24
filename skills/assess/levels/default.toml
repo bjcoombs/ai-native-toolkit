@@ -438,6 +438,8 @@ aggregation = "min"
     { signal = "review_reality.reviewed_share", op = "gte", value = 0.8 },
     { signal = "review_reality.approved_share", op = "gte", value = 0.5 },
   ]
+  # Wide review counts only once some review is evidenced at all (#934).
+  requires = ["layer-7-review.1"]
 
 [[rows]]
 id = "layer-8-agent-ops"
