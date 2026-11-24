@@ -19,7 +19,10 @@ split. A maturity-model version change alone is bridged by that re-score; any ot
 the comparison gives (window, scans, output mode, path hashing, fleet config and the rest,
 ``fleet_compare.comparability``) makes the pair not comparable, and the SVG shows the
 reasons in place of the grid. An earlier run that could not be read is named by a fixed
-sentence, never by its path.
+sentence, never by its path. Two hashed runs that share no repository id (another salt, or
+``--hash-paths`` with a fresh one) are not comparable either (``NO_JOIN``), never a grid of
+every repository added and removed. A stored Step this model lacks (an earlier model with more
+Steps) gets its own row and column, so the cells still sum to the repositories in both runs.
 
 No repository is named, so the SVG reads the same in ``--full``, counts-only and hashed
 output (a hashed run joins only under one ``--hash-salt``).
@@ -52,6 +55,8 @@ CAPTION = ("Each cell counts repositories by their Step in the earlier run and i
            "A dashed cell with a hatched mark holds moves that rule changes alone explain.")
 UNREADABLE = "the earlier run's files are at a version this toolkit does not read"
 VERSION_REASON = "maturity-model version"
+NO_JOIN = ("the two runs hashed repository ids under different salts, so no repository is in both "
+           "(compare runs that used one --hash-salt)")
 
 NOT_MEASURED, ADDED, REMOVED = "not_measured", "added", "removed"
 LANE_TEXT = {NOT_MEASURED: "Not measured", ADDED: "New in this run", REMOVED: "Not in this run"}
@@ -109,6 +114,9 @@ def step_moves(model: MaturityModel, earlier: FleetRun | str, data: Mapping[str,
                 "rescored": rescored, "cells": []}
     then_rows = {row["repo"]: row for row in earlier.repos}
     now = {repo["key"]: repo.get("step") for repo in data.get("repos") or []}
+    if earlier.stamp.get("paths_hashed") and then_rows and now and not set(then_rows) & set(now):
+        return {"comparable": False, "reasons": [NO_JOIN], "steps": steps, "split": False,
+                "rescored": rescored, "cells": []}
     stored = earlier.steps
     counts: Counter[tuple[str, str]] = Counter()
     rules: Counter[tuple[str, str]] = Counter()
@@ -124,6 +132,8 @@ def step_moves(model: MaturityModel, earlier: FleetRun | str, data: Mapping[str,
             counts[cell] += 1
             rules[cell] += (stored is not None and then is not None and now[key] is not None
                             and then != now[key] and again == now[key])
+    # a stored Step this model lacks (an earlier model had more Steps) gets its own row and column
+    steps = sorted(set(steps) | {int(lane) for cell in counts for lane in cell if lane.isdigit()})
     rows = [*map(str, steps), NOT_MEASURED, ADDED]
     cols = [*map(str, steps), NOT_MEASURED, REMOVED]
     cells: list[MoveCell] = [{"then": r, "now": c, "count": counts[(r, c)], "rule_only": rules[(r, c)]}

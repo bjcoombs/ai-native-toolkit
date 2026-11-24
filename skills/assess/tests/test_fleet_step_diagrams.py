@@ -245,3 +245,20 @@ def test_fleet_writes_the_step_diagrams_naming_no_repository(froot: Path, tmp_pa
             assert leak not in text, (name, leak)
         assert f"](./{name})" in report
     assert load_run(out).steps is not None
+
+
+def test_hashed_runs_that_share_no_id_are_not_comparable() -> None:
+    earlier = fx.earlier_run()
+    hashed = type(earlier)({**earlier.stamp, "paths_hashed": True}, [{**r, "repo": "h" + r["repo"]} for r in earlier.repos],
+                           [], None, None)
+    moves = movement.step_moves(fx.MODEL, hashed, fx.data())
+    assert not moves["comparable"] and moves["reasons"] == [movement.NO_JOIN]
+
+
+def test_a_stored_step_this_model_lacks_keeps_its_own_lane() -> None:
+    steps = {**fx.OLD_RULES_STEPS, "grp/alpha": 5}
+    moves = movement.step_moves(fx.MODEL, fx.earlier_run(levels_version="old", steps=steps), fx.data())
+    cells = _cells(moves)
+    assert moves["steps"] == [1, 2, 3, 5] and cells[("5", "3")] == (1, 0)
+    both = {r["repo"] for r in fx.EARLIER_ROWS} & {r["repo"] for r in fx.ROWS}
+    assert sum(n for (t, w), (n, _) in cells.items() if t != movement.ADDED and w != movement.REMOVED) == len(both)
