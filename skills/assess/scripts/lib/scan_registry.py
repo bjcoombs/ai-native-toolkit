@@ -109,6 +109,7 @@ from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.skill_disclosure import scan_skill_disclosure
+from lib.secrets_guard import scan_secrets_guard
 from lib.hosting.org_security_policy import scan_org_security_policy
 from lib.layer_grades import scan_layer_grades
 from lib.level_tally import LEVEL_READS
@@ -622,6 +623,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # public .github repository, which GitHub shows on a repository that has none. Network.
     _spec("org_security_policy", scan_org_security_policy),
     _spec("contributor_files", cs.contributor_files),
+    # Secrets guard (issue #1173): a secrets hook in the pre-commit config and a secrets scan in CI,
+    # each with its own grade; level 1 any guard (listed), level 2 one an agent cannot skip (counted).
+    _spec("secrets_guard", scan_secrets_guard),
     # Top 3 candidates read from measured gaps. Post-offers since #821: the
     # root-instructions gap reads layer_grades; the removal proposal (#1084)
     # reads instruction_placement, so it runs after it.

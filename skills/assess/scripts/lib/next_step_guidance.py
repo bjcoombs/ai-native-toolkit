@@ -428,6 +428,15 @@ _WORDING: dict[str, Wording] = {
         "private vulnerability reporting), at the root, in `.github/` or in `docs/`.",
         "`git ls-files` lists a `SECURITY` file at the root, in `.github/` or in `docs/`, or the "
         "owner's public `.github` repository holds one."),
+    "secrets_guard.configured": _flag(
+        "Add a secrets hook to `.pre-commit-config.yaml` (gitleaks or detect-secrets), or a secrets "
+        "scan step to CI.",
+        "`.pre-commit-config.yaml` names a secrets hook, or a CI file runs a secrets scan."),
+    "secrets_guard.enforcement.present": _flag(
+        "Add a secrets scan step to CI that runs on every change (`gitleaks/gitleaks-action`, "
+        "`trufflesecurity/trufflehog`, or GitLab's `Secret-Detection` template); a pre-commit hook "
+        "alone can be skipped with `--no-verify`.",
+        "A workflow in `.github/workflows/` or `.gitlab-ci.yml` runs a secrets scan, unmasked."),
     "skill_disclosure.files_breaking": _none_left(
         "In each `SKILL.md` or agent definition the report names, fix the rule it breaks: give "
         "each a `name` and a `description` of at most 1024 characters, move detail only some "
@@ -540,6 +549,9 @@ _MEASURE_HINTS = {
                          "code patches. The policy is not measured (`org_policy_not_read`) when the "
                          "repository holds none and the owner's shared `.github` repository was not "
                          "read: run with `--platform`, or `/assess` with `gh` signed in.",
+    "secrets_guard": "Level 2 is not measured (`secret_scanning_not_read`) on a GitHub repository with "
+                     "no secrets scan in CI: GitHub's own secret scanning could guard it and is not "
+                     "read without `--platform`.",
     "skill_disclosure": "Not measured (`no_skill_files`) when the repository, or the skill unit, "
                         "holds no `SKILL.md` or agent definition: there is nothing to disclose.",
     "agent_environment": "The `agent_environment` scan reported it unavailable or did not run: "

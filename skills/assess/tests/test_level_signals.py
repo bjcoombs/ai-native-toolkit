@@ -312,6 +312,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "agent-consistency": None,   # no instruction file: nothing to agree with
             "skill-disclosure": None,    # no SKILL.md or agent definition: no_skill_files
             "contributor-files": 0,      # no CONTRIBUTING or SECURITY file
+            "secrets-guard": 0,          # no secrets hook or CI scan, and no remote
         }
     for scans in golden_repos.values():   # measured headless, each unknown for a named reason
         assert scans["structure"]["reason"].startswith("no_python_packages:")
@@ -346,6 +347,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "agent-consistency": None,  # the capture predates agent_consistency
         "skill-disclosure": None,  # the capture predates skill_disclosure
         "contributor-files": None,  # the capture predates contributor_files
+        "secrets-guard": None,  # the capture predates secrets_guard
     }
     assert "layer_grades.instruction_file_present" in _row(
         result, "layer-0-instructions")["missing_signals"]

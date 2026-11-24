@@ -1,0 +1,214 @@
+"""Committed guards against secrets: a pre-commit hook and a CI scan step (#1173).
+
+A token committed once lives in the history of every clone. A guard catches it before it lands:
+a secrets hook in the pre-commit config, which a contributor can skip with ``--no-verify``, or a
+secrets scan in CI, which runs on every change whoever sends it. This module reads both from the
+commit; GitHub's own secret scanning and push protection are repository settings, read by a
+platform collector. No model is involved and no scanner runs.
+
+The tendency it compensates for is guardrail erosion: a token pasted into a config or a skill
+"just for now" is never removed, and nothing at the door stops the next one.
+
+**What counts** (the tool names in ``SECRET_TOOLS``):
+
+- ``pre_commit``: a root ``.pre-commit-config.yaml`` (or ``.yml``) whose ``repo:`` or ``id:``
+  names a secrets tool (gitleaks, detect-secrets, trufflehog, ggshield, talisman, secretlint,
+  git-secrets, ripsecrets).
+- ``ci``: a GitHub Actions workflow directly under ``.github/workflows/`` (the files GitHub runs)
+  or the root ``.gitlab-ci.yml`` with a step that uses a secrets action
+  (``gitleaks/gitleaks-action``, ``trufflesecurity/trufflehog``, ``GitGuardian/ggshield-action``)
+  or runs a secrets tool, or that includes GitLab's ``Secret-Detection.gitlab-ci.yml`` template
+  or defines a ``secret_detection`` job. A line whose failure is masked (``|| true``) does not
+  count, since it guards nothing.
+
+**The two levels** (maintainer decision on #1173):
+
+- ``configured`` (level 1): a guard is configured from any source. A pre-commit hook is enough,
+  so the condition is graded ``config_only``: listed, not counted.
+- ``enforcement`` (level 2): a guard runs where an agent cannot skip it, a CI scan (and, once
+  read, GitHub's secret scanning or push protection). Graded ``measured`` and counted. With no CI
+  scan on a github.com remote, GitHub's own settings could still guard the repository, so the
+  reading is not measured (``secret_scanning_not_read``), never unmet; on any other remote, or
+  none, there is no such setting, and no CI scan reads unmet.
+- ``sources`` records each source that shows a guard with its own grade (``pre_commit``
+  config_only, ``ci`` measured), since a condition's grade is fixed per signal.
+
+Block (``secrets_guard`` in run-context.json)::
+
+    {"available": True,
+     "pre_commit": {"present": bool, "file": str | None, "tools": [str, ...]},
+     "ci": {"present": bool, "files": [str, ...], "tools": [str, ...]},
+     "configured": bool,
+     "enforcement": {"available": True, "present": bool, "source": "ci" | None}
+                    | {"available": False, "reason": "secret_scanning_not_read: ..."},
+     "sources": [{"source": "pre_commit" | "ci", "grade": str}, ...]}
+
+Counts-only output drops the file paths, or hashes them under ``--hash-paths``, and keeps the
+booleans and tool tokens.
+
+Secrets guard (#1173), no model. `scan_secrets_guard(repo_root, scope)` reads the root pre-commit
+config for a `SECRET_TOOLS` hook and the GitHub workflows and `.gitlab-ci.yml` for a secrets action,
+command, the GitLab `Secret-Detection` template or a `secret_detection` job (a masked `|| true` line
+does not count). Tests: `tests/test_secrets_guard.py`.
+"""
+from __future__ import annotations
+
+import re
+import subprocess
+from pathlib import Path
+from typing import TypedDict
+
+# The secrets scanners a hook, an action or a command can name.
+SECRET_TOOLS = ("gitleaks", "detect-secrets", "trufflehog", "ggshield", "talisman", "secretlint",
+                "git-secrets", "ripsecrets")
+PRE_COMMIT_FILES = (".pre-commit-config.yaml", ".pre-commit-config.yml")
+_TOOL = re.compile(r"(?<![\w-])(" + "|".join(re.escape(t) for t in SECRET_TOOLS) + r")(?![\w-])", re.IGNORECASE)
+_PRE_COMMIT_KEY = re.compile(r"^\s*-?\s*(?:repo|id)\s*:\s*(.+)$")
+_GITLAB_TEMPLATE = re.compile(r"Secret-Detection(?:\.latest)?\.gitlab-ci\.yml", re.IGNORECASE)
+_GITLAB_JOB = re.compile(r"^(?:\.)?secret_detection\s*:", re.MULTILINE)
+_MASKED = re.compile(r"\|\|\s*(?:true|:|exit\s+0)\b")
+_COMMENT = re.compile(r"^\s*#")
+
+
+class PreCommitGuard(TypedDict):
+    present: bool
+    file: str | None
+    tools: list[str]
+
+
+class CiGuard(TypedDict):
+    present: bool
+    files: list[str]
+    tools: list[str]
+
+
+class Enforcement(TypedDict, total=False):
+    available: bool  # false: GitHub's own scanning was not read (secret_scanning_not_read)
+    reason: str
+    present: bool
+    source: str | None  # "ci" (and "platform" once the GitHub setting is read)
+
+
+class SourceGrade(TypedDict):
+    source: str  # pre_commit | ci
+    grade: str  # the source's own evidence grade (lib.signal_grades): config_only | measured
+
+
+class SecretsGuardBlock(TypedDict):
+    """``run-context.json`` ``secrets_guard`` (see the module doc)."""
+
+    available: bool
+    pre_commit: PreCommitGuard
+    ci: CiGuard
+    configured: bool  # level 1: a guard is configured, from any source
+    enforcement: Enforcement  # level 2: a guard runs where an agent cannot skip it
+    sources: list[SourceGrade]  # each source that shows a guard, with its own grade
+
+
+def _read(path: Path) -> str | None:
+    if not path.is_file() or path.is_symlink():
+        return None
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+def _tools_in(text: str) -> list[str]:
+    return sorted({m.group(1).lower() for m in _TOOL.finditer(text)})
+
+
+def pre_commit_guard(root: Path) -> PreCommitGuard:
+    """The root pre-commit config's secrets hooks (a ``repo:`` URL or an ``id:`` naming a tool)."""
+    for name in PRE_COMMIT_FILES:
+        text = _read(root / name)
+        if text is None:
+            continue
+        tools: set[str] = set()
+        for line in text.splitlines():
+            if _COMMENT.match(line):
+                continue
+            m = _PRE_COMMIT_KEY.match(line)
+            if m:
+                tools.update(_tools_in(m.group(1)))
+        return {"present": bool(tools), "file": name, "tools": sorted(tools)}
+    return {"present": False, "file": None, "tools": []}
+
+
+def _ci_files(root: Path) -> list[Path]:
+    workflows = root / ".github" / "workflows"
+    found = sorted(p for p in workflows.iterdir() if p.suffix in (".yml", ".yaml")) if workflows.is_dir() else []
+    gitlab = root / ".gitlab-ci.yml"
+    return [*found, *([gitlab] if gitlab.is_file() else [])]
+
+
+def _ci_tools(text: str) -> list[str]:
+    """The secrets tools a CI file runs or uses, unmasked; ``secret_detection`` for GitLab's template or job."""
+    tools: set[str] = set()
+    for line in text.splitlines():
+        if _COMMENT.match(line) or _MASKED.search(line):
+            continue
+        tools.update(_tools_in(line))
+    if _GITLAB_TEMPLATE.search(text) or _GITLAB_JOB.search(text):
+        tools.add("secret_detection")
+    return sorted(tools)
+
+
+def ci_guard(root: Path) -> CiGuard:
+    """The CI files with a secrets scan step, and the tools they use."""
+    files: list[str] = []
+    tools: set[str] = set()
+    for path in _ci_files(root):
+        text = _read(path)
+        found = _ci_tools(text) if text is not None else []
+        if found:
+            files.append(path.relative_to(root).as_posix())
+            tools.update(found)
+    return {"present": bool(files), "files": files, "tools": sorted(tools)}
+
+
+REASON_NOT_READ = "secret_scanning_not_read"
+# A github.com remote, HTTPS or SSH (the shape lib.hosting.gh_cli parses; read here with plain git
+# so this offline scan never imports a platform client).
+_GITHUB_REMOTE = re.compile(r"^(?:https?://(?:[^@/]+@)?github\.com/|git@github\.com:|ssh://git@github\.com/)",
+                            re.IGNORECASE)
+
+
+def _on_github(root: Path) -> bool:
+    """Whether ``origin`` (else the sole remote) is on github.com; false when git cannot tell."""
+    def remote(*args: str) -> str:
+        try:
+            proc = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace", timeout=10)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return ""
+        return proc.stdout.strip() if proc.returncode == 0 else ""
+    url = remote("remote", "get-url", "origin")
+    if not url:
+        names = remote("remote").split()
+        url = remote("remote", "get-url", names[0]) if len(names) == 1 else ""
+    return bool(_GITHUB_REMOTE.match(url))
+_GRADES = {"pre_commit": "config_only", "ci": "measured"}
+
+
+def _enforcement(root: Path, ci: CiGuard) -> Enforcement:
+    """Level 2: a CI scan is present; else, on a github.com remote, GitHub's own secret scanning
+    could still guard the repository and is not read here, so the reading is not measured."""
+    if ci["present"]:
+        return {"available": True, "present": True, "source": "ci"}
+    if _on_github(root):
+        return {"available": False,
+                "reason": f"{REASON_NOT_READ}: no secrets scan in CI, and GitHub's own secret scanning "
+                          "and push protection, repository settings, were not read"}
+    return {"available": True, "present": False, "source": None}
+
+
+def scan_secrets_guard(repo_root: Path, scope: Path | None = None) -> SecretsGuardBlock:
+    """Build the ``secrets_guard`` block (see the module doc). The pre-commit config and CI are the
+    repository's, so a ``scope`` reads the root's, as ``guardrails`` reads the root pre-commit config."""
+    root = repo_root.resolve()
+    hook, ci = pre_commit_guard(root), ci_guard(root)
+    sources = [SourceGrade(source=name, grade=_GRADES[name])
+               for name, found in (("pre_commit", hook["present"]), ("ci", ci["present"])) if found]
+    return {"available": True, "pre_commit": hook, "ci": ci, "configured": bool(sources),
+            "enforcement": _enforcement(root, ci), "sources": sources}
