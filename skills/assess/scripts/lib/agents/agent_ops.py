@@ -11,6 +11,19 @@ This module scans the repo-observable subset of those guardrails:
 - ``.claude/hooks/`` - hook scripts on disk.
 - ``.claude/workflows/`` and ``.claude/routines/`` - routine/loop definitions
   (evidence of repeated, encoded agent work cycles).
+- ``.github/workflows/`` - workflows that run an agent on a schedule (#815) or on an
+  issue, pull request, review or discussion event (#847): ``agent_workflows``, one entry per
+  workflow with its ``path``, ``triggers``, ``signs`` (``agent_action``, ``agent_cli``,
+  ``model_name``, ``gh_aw``) and ``via`` (the local reusable workflows followed to reach the
+  agent). A GitHub Agentic Workflows source (``.github/workflows/*.md`` with an ``on:`` in its
+  frontmatter) counts by construction and its ``.lock.yml`` is not counted again. A provider
+  secret alone, a comment, or an ``if:`` or ``name:`` mention is not a sign.
+  ``summary.routines_present`` is true on a routine dir file or a scheduled agent workflow;
+  ``summary.agent_work_present``, the maturity model's routines condition, is true on either or
+  on an event-triggered agent workflow, so the two kinds are one condition, never two. It is
+  null (``agent_workflows_unread``) when it would read false but a scheduled or event-triggered
+  workflow calls a reusable workflow in another repository (``agent_workflows_unread`` counts
+  those), since the agent may run there.
 
 Only **git-tracked** artifacts count toward the summary booleans, mirroring the
 Layer 0 rule: a settings file present on disk but uncommitted reaches no clone,
@@ -50,10 +63,16 @@ apply in every mode.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
-from lib.command_index import NOOP_COMMANDS
+from lib.ci_action_inputs import local_action_paths
+from lib.ci_masking import IndentTree, parse_lines, strip_comment
+from lib.ci_model_jobs import signs_in
+from lib.ci_triggers import workflow_events
+from lib.command_index import NOOP_COMMANDS, ci_config_files, read_config, repo_files
+from lib.counts_only.block_shapes import AgentWorkflow
 from lib.agents.managed_settings import managed_permissions, not_read, read_managed_settings
 from lib.git_churn import is_tracked, tracked_files
 
@@ -77,6 +96,7 @@ _DEFAULT_MODES = frozenset({
     "default", "manual", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions",
 })
 UNREADABLE_MANAGED = "managed_settings_unreadable"
+UNREAD_WORKFLOWS = "agent_workflows_unread"
 # Hook types other than command that act on their own (#922); a typeless hook does not.
 _ACTING_TYPES = frozenset({"prompt", "agent", "http", "mcp_tool"})
 
@@ -172,6 +192,156 @@ def _scan_dir(
     }
 
 
+# -- agent workflows (#815, #847) ----------------------------------------------
+
+# Events that start an agent on an issue, a pull request, a review or a discussion (#847).
+EVENT_TRIGGERS = frozenset({
+    "issues", "issue_comment", "pull_request", "pull_request_target", "pull_request_review",
+    "pull_request_review_comment", "discussion", "discussion_comment",
+})
+# GitHub Agentic Workflows (gh-aw) trigger names beyond GitHub's own: a slash command is a comment
+# event, and a bare frequency (``on: daily``) is a fuzzy schedule.
+_GH_AW_EVENTS = frozenset({"command", "slash_command"})
+_GH_AW_SCHEDULE = re.compile(r"^(?:hourly|daily|weekly|monthly|every\b)", re.IGNORECASE)
+_CMD = r"(?:^|[\s;&|(/=\"'])"
+# A headless agent CLI beyond ``claude -p`` (which ``ci_model_jobs.signs_in`` reads).
+_AGENT_CLI = re.compile(_CMD + r"""(?:(?:codex|@openai/codex)(?:@\S+)?\s+(?:exec|e)\b
+    |(?:gemini|copilot|cursor-agent|@google/gemini-cli|@github/copilot)(?:@\S+)?\s+(?:[^;&|]*\s)?(?:-p|--prompt|--print)(?:[\s=]|$)
+    |opencode(?:@\S+)?\s+run\b)""", re.X)
+# A model named in a command, an env or a with: value (``OZ_MODEL=claude-4-8-opus-high``).
+_MODEL = re.compile(r"(?<![\w.-])(?:claude-(?:\d|opus|sonnet|haiku|instant)|gpt-(?:\d|o\b|oss\b)"
+                    r"|gemini-(?:\d|pro\b|flash\b|ultra\b))", re.IGNORECASE)
+_INSTALL = re.compile(r"\b(?:install|add)\b")
+_SKIP_KEYS = frozenset({"if", "name", "description"})
+_LOCAL_WORKFLOW = re.compile(r"""^["']?\./(\.github/workflows/[\w.-]+\.ya?ml)""")
+_REMOTE_WORKFLOW = re.compile(r"""^["']?[\w.-]+/[\w.-]+/\.github/workflows/""")
+_WORKFLOWS = ".github/workflows/"
+
+
+def _frontmatter(text: str) -> str | None:
+    """A gh-aw source's YAML frontmatter, or None when ``text`` has none."""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    return "\n".join(lines[1:end]) if end is not None else None
+
+
+def _kinds(events: list[str], gh_aw: bool) -> tuple[bool, bool]:
+    """(scheduled, event-triggered) for a workflow's ``on`` event names."""
+    scheduled = "schedule" in events or (gh_aw and any(_GH_AW_SCHEDULE.match(e) for e in events))
+    event = bool(set(events) & EVENT_TRIGGERS) or (gh_aw and bool(set(events) & _GH_AW_EVENTS))
+    return scheduled, event
+
+
+class _Signs:
+    """The agent signs of one workflow, following repo-local actions and reusable workflows."""
+
+    def __init__(self, repo: Path, files: frozenset[str]) -> None:
+        self.repo, self.files = repo, files
+        self.cache: dict[str, tuple[frozenset[str], tuple[str, ...], bool]] = {}
+
+    def read(self, rel: str) -> str | None:
+        if rel not in self.files or not (self.repo / rel).resolve().is_relative_to(self.repo):
+            return None
+        return read_config(self.repo, rel)
+
+    def lines(self, text: str) -> set[str]:
+        """Signs on the lines of one YAML text: an agent action, an agent CLI or a model name.
+        Comments, ``if:`` and ``name:`` values and install lines are never read."""
+        tree = IndentTree(parse_lines(text.splitlines()))
+        found = {s for s in signs_in(tree, range(len(tree.lines))) if s in ("agent_action", "agent_cli")}
+        for i, line in enumerate(tree.lines):
+            owner = tree.lines[tree.body(i)]
+            if owner.key in _SKIP_KEYS or line.key in _SKIP_KEYS:
+                continue
+            value = line.value if line.structural else strip_comment(line.value)
+            if not value or _INSTALL.search(value):
+                continue
+            if _AGENT_CLI.search(value):
+                found.add("agent_cli")
+            if _MODEL.search(value):
+                found.add("model_name")
+        return found
+
+    def workflow(self, rel: str, text: str, seen: frozenset[str] = frozenset()) -> tuple[
+            frozenset[str], tuple[str, ...], bool]:
+        """(signs, local workflows the signs came through, calls a remote reusable workflow)."""
+        if rel in self.cache:
+            return self.cache[rel]
+        signs = self.lines(text)
+        via: list[str] = []
+        remote = False
+        for raw in text.splitlines():
+            stripped = strip_comment(raw.strip().removeprefix("- ").strip())
+            if not stripped.startswith("uses:"):
+                continue
+            uses = stripped[len("uses:"):].strip()
+            local = _LOCAL_WORKFLOW.match(uses)
+            if local and local.group(1) not in seen and local.group(1) != rel:
+                called = self.read(local.group(1))
+                if called is not None:
+                    more, deeper, far = self.workflow(local.group(1), called, seen | {rel})
+                    remote = remote or far
+                    if more:
+                        signs |= more
+                        via += [local.group(1), *deeper]
+            elif _REMOTE_WORKFLOW.match(uses):
+                remote = True
+            elif uses.strip("'\"").startswith("./"):
+                for action in local_action_paths(uses.strip("'\"")):
+                    action_text = self.read(action)
+                    if action_text is not None:
+                        signs |= self.lines(action_text)
+                        break
+        result = (frozenset(signs), tuple(sorted(set(via))), remote)
+        self.cache[rel] = result
+        return result
+
+
+def scan_agent_workflows(repo_root: Path) -> tuple[list[AgentWorkflow], int]:
+    """Committed scheduled and event-triggered agent workflows, and the count of such workflows
+    whose agent may sit in another repository's reusable workflow (not read, never counted).
+
+    A GitHub Actions workflow counts when its ``on`` names ``schedule`` (#815) or an event in
+    ``EVENT_TRIGGERS`` (#847) and it runs an agent: an agent action, a headless agent CLI or a
+    named model, in its own lines, a repo-local action it uses or a local reusable workflow it
+    calls (followed to any depth). A gh-aw source (``.github/workflows/*.md`` with an ``on:`` in
+    its frontmatter) is an agent workflow by construction (sign ``gh_aw``); its compiled
+    ``.lock.yml`` is not counted again. A model-provider secret alone is not a sign.
+    """
+    repo = repo_root.resolve()
+    files = repo_files(repo)
+    signs = _Signs(repo, files)
+    found: list[AgentWorkflow] = []
+    unread = 0
+    sources = sorted(f for f in files if f.startswith(_WORKFLOWS) and f.endswith(".md")
+                     and "/" not in f[len(_WORKFLOWS):])
+    for rel in sources:
+        front = _frontmatter(read_config(repo, rel))
+        events = workflow_events(front) if front is not None else None
+        if events:
+            scheduled, event = _kinds(events, gh_aw=True)
+            if scheduled or event:
+                found.append(AgentWorkflow(path=rel, triggers=sorted(set(events)), signs=["gh_aw"],
+                                           via=[], scheduled=scheduled, event=event))
+    for rel in ci_config_files(files):
+        if not rel.startswith(_WORKFLOWS) or rel.removesuffix(".lock.yml") + ".md" in sources:
+            continue
+        text = read_config(repo, rel)
+        scheduled, event = _kinds(workflow_events(text) or [], gh_aw=False)
+        if not (scheduled or event):
+            continue
+        agent, via, remote = signs.workflow(rel, text)
+        if agent:
+            found.append(AgentWorkflow(path=rel, triggers=sorted(set(workflow_events(text) or [])),
+                                       signs=sorted(agent), via=list(via), scheduled=scheduled,
+                                       event=event))
+        elif remote:
+            unread += 1
+    return sorted(found, key=lambda w: w["path"]), unread
+
+
 def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str, Any]:
     """Build the run-context ``agent_ops`` block.
 
@@ -210,13 +380,23 @@ def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str,
         any(s["hook_events"] > 0 for s in tracked_settings)
         or hooks_dir["tracked_count"] > 0
     )
-    routines_present = any(d["tracked_count"] > 0 for d in routine_dirs)
+    workflows, unread = scan_agent_workflows(repo_root)
+    scheduled = sum(w["scheduled"] for w in workflows)
+    triggered = sum(w["event"] for w in workflows)
+    routines_present = any(d["tracked_count"] > 0 for d in routine_dirs) or scheduled > 0
+    agent_work: bool | None = routines_present or triggered > 0
 
     summary: dict[str, Any] = {
         "permissions_encoded": in_repo,
         "hooks_present": hooks_present,
         "routines_present": routines_present,
+        "scheduled_agent_workflows": scheduled,
+        "event_agent_workflows": triggered,
+        "agent_work_present": agent_work,
     }
+    if not agent_work and unread:
+        summary["agent_work_present"] = None
+        summary["agent_work_present_reason"] = UNREAD_WORKFLOWS
     if in_repo:
         summary["permissions_source"] = "repository"
     elif managed_permissions(managed):
@@ -231,6 +411,8 @@ def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str,
         "settings": settings,
         "hooks_dir": hooks_dir,
         "routine_dirs": routine_dirs,
+        "agent_workflows": workflows,
+        "agent_workflows_unread": unread,
         "managed": managed,
         "summary": summary,
     }

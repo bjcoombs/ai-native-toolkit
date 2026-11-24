@@ -514,9 +514,13 @@ _WORDING: dict[str, Wording] = {
         "`.claude/hooks/`.",
         "`git ls-files .claude` lists a settings file with a `hooks` entry or a script under "
         "`.claude/hooks/`."),
-    "agent_ops.summary.routines_present": _flag(
-        "Commit an agent routine definition under `.claude/workflows/` or `.claude/routines/`.",
-        "`git ls-files .claude/workflows .claude/routines` lists at least one file."),
+    "agent_ops.summary.agent_work_present": _flag(
+        "Commit the agent work the repository runs on a schedule or trigger: a workflow with a "
+        "`schedule`, `issues`, `issue_comment` or `pull_request` trigger whose steps run an agent "
+        "(`anthropics/claude-code-action`, `claude -p`, `codex exec` or a named model), a GitHub "
+        "Agentic Workflows source in `.github/workflows/*.md`, or a file under `.claude/routines/`.",
+        "A tracked routine file, or a tracked scheduled or issue or pull request workflow that runs "
+        "an agent, directly or through a local reusable workflow."),
 }
 _WORDING.update({f"{name}.value": _setting(name) for name in SETTING_NAMES})
 

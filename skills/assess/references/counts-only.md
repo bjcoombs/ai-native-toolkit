@@ -346,6 +346,11 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `agent_ops.managed.sources.kind` | token |
 | `agent_ops.summary.permissions_source` | token |
 | `agent_ops.summary.permissions_encoded_reason` | token |
+| `agent_ops.summary.agent_work_present_reason` | token |
+| `agent_ops.agent_workflows.path` | path (hashed when hashing is on) |
+| `agent_ops.agent_workflows.triggers` | token |
+| `agent_ops.agent_workflows.signs` | token |
+| `agent_ops.agent_workflows.via` | path (hashed when hashing is on) |
 
 ## config_drift
 
