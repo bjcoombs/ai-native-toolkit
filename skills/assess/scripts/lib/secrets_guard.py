@@ -95,7 +95,8 @@ _HIDING_KINDS = frozenset({"local", "project", "remote", "unknown"})
 _GITLAB_JOB = re.compile(r"^secret_detection\s*:", re.MULTILINE)
 _MASKED = re.compile(r"\|\|\s*(?:true|:|exit\s+0)\b")
 _COMMENT = re.compile(r"^\s*#")
-_TRAILING_COMMENT = re.compile(r"\s+#.*$")
+# A trailing `` #`` comment outside quotes (``echo "build #1"`` keeps its ``#``).
+_TRAILING_COMMENT = re.compile(r"""^((?:[^'"#]|'[^']*'|"[^"]*"|(?<!\s)#)*?)\s+#.*$""")
 # The secrets actions a ``uses:`` step names (owner/name, any ref).
 ACTION_SLUGS = ("gitleaks/gitleaks-action", "trufflesecurity/trufflehog", "gitguardian/ggshield-action",
                 "secretlint/secretlint-action", "zricethezav/gitleaks-action")
@@ -103,10 +104,15 @@ _USES = re.compile(r"^\s*-?\s*uses:\s*['\"]?([\w.-]+/[\w.-]+)", re.IGNORECASE)
 # A tool run as a command: its name as a word, then a subcommand or flag or the end of the line,
 # at the start of a shell line (indented, as inside a ``run: |`` or ``script:`` block), after ``run:``/``script:``/``- ``, after a pipe or ``&&``, or after
 # ``docker run <image>`` (so a path such as ``.gitleaks.toml`` or a ``gitleaks:allow`` note is not).
+# The command names: the tools, and ``detect-secrets-hook``, the form of detect-secrets that fails.
+_COMMAND_NAMES = sorted((*SECRET_TOOLS, "detect-secrets-hook"), key=len, reverse=True)
+# A command that cannot fail the job guards nothing: ``detect-secrets scan`` writes a baseline and
+# exits 0, ``trufflehog`` exits 0 on findings without ``--fail``, ``gitleaks --exit-code 0``.
+_GITLEAKS_NO_FAIL = re.compile(r"--exit-code[= ]0\b")
 _COMMAND = re.compile(
     r"(?:^\s*|[;&|]\s*|(?:run|script):\s*|^\s*-\s+|"
     r"(?:npx|bunx|uvx|pipx run|pnpm (?:exec|dlx)|yarn dlx)\s+(?:--?\S+\s+)*|docker run\s+(?:--?\S+\s+)*\S*/)(?:[\w./-]*/)?("
-    + "|".join(re.escape(t) for t in SECRET_TOOLS) + r")(?=\s|$|@)", re.IGNORECASE)
+    + "|".join(re.escape(t) for t in _COMMAND_NAMES) + r")(?=\s|$|@)", re.IGNORECASE)
 # A step or job that cannot fail the run (GitHub ``continue-on-error: true``, GitLab
 # ``allow_failure: true``) or never runs (``if: false``).
 _CONTINUE_ON_ERROR = re.compile(r"^\s*(?:-\s+)?(?:(?:continue-on-error|allow_failure):\s*(?:['\"]?true\b|\$\{\{\s*true\s*\}\})|if:\s*(?:\$\{\{\s*)?false\s*(?:\}\})?\s*$)",
@@ -210,7 +216,7 @@ def _ci_files(root: Path) -> list[Path]:
 
 def _code_lines(text: str) -> list[str]:
     """The lines with comments removed, a whole-line comment as an empty line so line numbers hold."""
-    return ["" if _COMMENT.match(line) else _TRAILING_COMMENT.sub("", line) for line in text.splitlines()]
+    return ["" if _COMMENT.match(line) else _TRAILING_COMMENT.sub(r"\1", line) for line in text.splitlines()]
 
 
 def _block_end(lines: list[str], start: int, indent: int) -> int:
@@ -283,6 +289,19 @@ def _gitlab_job_disabled(lines: list[str]) -> bool:
     return False
 
 
+def _tool_that_can_fail(name: str, line: str) -> str | None:
+    """The tool a command on ``line`` runs, if the command can fail the job; else None."""
+    if name == "detect-secrets-hook":
+        return "detect-secrets"
+    if name == "detect-secrets":
+        return None  # ``detect-secrets scan`` and ``audit`` always exit 0
+    if name == "trufflehog" and "--fail" not in line:
+        return None
+    if name == "gitleaks" and _GITLEAKS_NO_FAIL.search(line):
+        return None
+    return name
+
+
 def _in_name_list(lines: list[str], i: int) -> bool:
     """Whether list item ``i`` sits under a key that lists names, not commands (``_NAME_LIST``)."""
     indent = len(lines[i]) - len(lines[i].lstrip())
@@ -321,8 +340,9 @@ def _ci_tools(text: str, hooks: frozenset[str] = frozenset()) -> list[str]:
             continue
         if _STEP_START.match(line) and _in_name_list(lines, i):
             continue
-        tools.update(m.group(1).lower() for m in _COMMAND.finditer(line))
-        tools.update(m.group(1).lower() for m in _DOCKER_IMAGE.finditer(line))
+        names = {m.group(1).lower() for m in _COMMAND.finditer(line)}
+        names |= {m.group(1).lower() for m in _DOCKER_IMAGE.finditer(line)}
+        tools.update(t for t in (_tool_that_can_fail(n, line) for n in names) if t)
     code = "\n".join(lines)
     if (_GITLAB_TEMPLATE.search(code) or _GITLAB_JOB.search(code)) and not _gitlab_job_disabled(lines):
         tools.add("secret_detection")

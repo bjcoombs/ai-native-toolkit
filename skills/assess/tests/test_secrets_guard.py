@@ -86,8 +86,9 @@ def test_a_gitlab_repository_without_a_ci_scan_reads_level_2_unmet(tmp_path: Pat
     (".gitlab-ci.yml", "secret_detection:\n  stage: test\n", ["secret_detection"]),
     (".github/workflows/scan.yml", "steps:\n  - uses: GitGuardian/ggshield-action@v1\n", ["ggshield"]),
     (".github/workflows/scan.yml", "steps:\n  - run: |\n      docker run zricethezav/gitleaks detect\n", ["gitleaks"]),
-    (".github/workflows/scan.yml", "steps:\n  - run: detect-secrets scan --baseline .secrets.baseline\n",
-     ["detect-secrets"]),
+    (".github/workflows/scan.yml",
+     "steps:\n  - run: detect-secrets-hook --baseline .secrets.baseline $(git ls-files)\n", ["detect-secrets"]),
+    (".github/workflows/scan.yml", "steps:\n  - run: echo \"build #1\" && gitleaks detect\n", ["gitleaks"]),
     (".github/workflows/scan.yml", "steps:\n  - name: scan\n    run: |\n      gitleaks detect --source .\n",
      ["gitleaks"]),
     (".github/workflows/scan.yml", "steps:\n  - run: >\n      trufflehog git file://. --fail\n", ["trufflehog"]),
@@ -97,7 +98,7 @@ def test_a_gitlab_repository_without_a_ci_scan_reads_level_2_unmet(tmp_path: Pat
      ["gitleaks"]),
     (".github/workflows/scan.yml", "steps:\n  - uses: docker://zricethezav/gitleaks:latest\n", ["gitleaks"]),
     (".github/workflows/scan.yml", "steps:\n  - run: npx secretlint '**/*'\n", ["secretlint"]),
-    (".github/workflows/scan.yml", "steps:\n  - run: pipx run detect-secrets scan\n", ["detect-secrets"]),
+    (".github/workflows/scan.yml", "steps:\n  - run: pipx run detect-secrets-hook --baseline b\n", ["detect-secrets"]),
     (".gitlab-ci.yml", "scan:\n  script:\n    - echo start\n    - gitleaks detect --source .\n", ["gitleaks"]),
     (".gitlab-ci.yml", "include:\n  - template: Security/Secret-Detection.gitlab-ci.yml\n"
                        "secret_detection:\n  allow_failure: true\n", ["secret_detection"]),  # reports by artifact
@@ -127,6 +128,9 @@ def test_a_ci_scan_meets_level_2_measured(tmp_path: Path, rel: str, text: str, t
     (".github/workflows/x.yml", "steps:\n  - run: gitleaks detect\n    continue-on-error: ${{ true }}\n"),
     (".gitlab-ci.yml", "deploy:\n  needs:\n    - gitleaks\n  script:\n    - make deploy\n"),  # a job name
     (".github/workflows/x.yml", "steps:\n  - name: Secrets - gitleaks\n    run: echo skipped\n"),  # a step label
+    (".github/workflows/x.yml", "steps:\n  - run: detect-secrets scan --baseline .secrets.baseline\n"),  # exits 0
+    (".github/workflows/x.yml", "steps:\n  - run: trufflehog git file://.\n"),  # no --fail: exits 0
+    (".github/workflows/x.yml", "steps:\n  - run: gitleaks detect --exit-code 0\n"),  # cannot fail
     (".gitlab-ci.yml", "build:\n  tags:\n    - gitleaks\n  script:\n    - make\n"),  # a runner tag
     (".github/workflows/x.yml", "on:\n  push:\n    paths:\n      - trufflehog\n"),  # a path filter                    # a hidden job never runs
     (".gitlab-ci.yml", "include:\n  # - template: Security/Secret-Detection.gitlab-ci.yml\n"),  # commented out
