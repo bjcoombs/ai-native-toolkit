@@ -65,6 +65,8 @@ def _state(block: Any) -> tuple[str, str | None]:
     ('password: "correct horse ' + 'battery"', ["credential"]),  # quoted: still a value
     ("password: hunter" + "2  # rotate me", ["credential"]),  # a comment after the value
     ("PASSWORD=hunter" + "2 mysql -u app", ["credential"]),  # an assignment before a command
+    ("password: hunter" + "2 then run", ["credential"]),  # secret-shaped, then prose
+    ("token: ghp_abc" + "defghijk and more", ["credential"]),
     ("token = " + "ghp" + "_abc123def456", ["credential"]),
     ("token: ${{ secrets.X }} and password = " + "hunter" + "2abc", ["credential"]),  # one literal is enough
     ("AKIA" + "ABCDEFGHIJKLMNOP is the key.", ["cloud_key"]),

@@ -183,13 +183,17 @@ def _literal_secret(value: str) -> bool:
 # An unquoted value followed by another word is prose after a label; a real secret is one token
 # or quoted. A ``#`` comment or the end of the line after the value keeps it a value.
 _PROSE_AFTER = re.compile(r"[ \t]+[A-Za-z]")
+# A word with a digit or an underscore is shaped like a secret (``ghp_abc``, ``hunter2``), so prose
+# after it does not hide it.
+_SECRET_SHAPED = re.compile(r"[\d_]")
 
 
 def _assigned_secret(m: re.Match[str]) -> bool:
     """Whether a credential assignment holds a literal secret. A typed field is decided by its default:
     ``password: str = "hunter2"`` and ``secret: bool=hunter2`` hold one, ``token: str`` does not."""
     value = m.group(2).strip("\"'")
-    if m.group(1) == ":" and m.group(2)[:1] not in "\"'" and _PROSE_AFTER.match(m.string, m.end(2)):
+    if m.group(1) == ":" and m.group(2)[:1] not in "\"'" and _PROSE_AFTER.match(m.string, m.end(2)) \
+            and not _SECRET_SHAPED.search(value):
         return False  # ``Token: The value from step 2``: a label then prose; ``=`` stays an assignment
     if not _SCHEMA_VALUE.match(value):
         return _literal_secret(value)
