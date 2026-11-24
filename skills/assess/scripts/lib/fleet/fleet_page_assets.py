@@ -159,8 +159,8 @@ SCRIPT = r"""
       out += "<p>A target of " + esc(stepName(bundle, p.step)) + " was set on this page. Its progress shows after "
         + "the next run.</p>";
     }
-    if (!t && !p) {
-      out += "<p>No Step target is set for this unit.</p>";
+    if (!t) {
+      if (!p) { out += "<p>No Step target is set for this unit.</p>"; }
     } else if (t.distance === 0) {
       out += "<p>Target " + esc(stepName(bundle, t.step)) + " is reached.</p>";
     } else {

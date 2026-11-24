@@ -212,9 +212,9 @@ def _run(mode: str, *, db: bool = True, can: object = True, rows: list[dict[str,
         pytest.skip("node is not on PATH")
     name = "hashed" if mode == "hashed" else "counts-only"
     html = live_page(_page(name), _data(name), mode, "2026-11-20")
-    bundle = re.search(r'id="fleet-bundle">(.*?)</script>', html, re.S)
+    bundle = re.search(r'id="fleet-bundle">(.*?)</script\s*>', html, re.S | re.I)
     assert bundle is not None
-    scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
+    scripts = re.findall(r"<script>(.*?)</script\s*>", html, re.S | re.I)
     payload = {"bundle": bundle.group(1).replace("\\u003c", "<"), "scripts": scripts, "db": db, "can": can,
                "rows": rows or [], "set": list(target) if target else None, "snapError": snap_error}
     done = subprocess.run([NODE, "-e", HARNESS], input=json.dumps(payload), capture_output=True, text=True,
@@ -356,3 +356,42 @@ def test_a_refused_targets_read_says_so_instead_of_looking_like_no_targets() -> 
     out = _run("counts_only", snap_error=True)
     assert "targets could not be read" in out["page"]
     assert "could not be reached yet" not in _run("counts_only")["page"]
+
+
+def test_a_pending_target_with_no_run_read_target_renders() -> None:
+    sub = target_doc_id("ownership", "ownership/grp/sub")
+    out = _run("counts_only", rows=[{"id": sub, "data": {"step": 2}}])
+    assert "Your target" in out["page"]  # the root page still draws with a pending target elsewhere
+    if NODE is None:
+        pytest.skip("node is not on PATH")
+    script, bundle = _parts_live()
+    runner = """
+const vm = require("node:vm"); const fs = require("node:fs");
+const input = JSON.parse(fs.readFileSync(0, "utf8")); const ctx = {}; vm.createContext(ctx);
+vm.runInContext(input.script, ctx); const b = input.bundle; const u = b.views[0].units[1];
+process.stdout.write(ctx.FleetView.renderPage(b, {view: "ownership", unit: u.key, repo: null},
+  [{view: "ownership", unit: u.key, step: 2, pending: true}], false));
+"""
+    done = subprocess.run([NODE, "-e", runner], input=json.dumps({"script": script, "bundle": bundle}),
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
+    assert "was set on this page" in done.stdout and "No Step target is set" not in done.stdout
+
+
+def _parts_live() -> tuple[str, dict[str, Any]]:
+    html = _page("counts-only")
+    script = re.findall(r"<script>(.*?)</script\s*>", html, re.S | re.I)[0]
+    return script, _bundle_of(html)
+
+
+def test_an_oversized_plan_writes_no_batch(tmp_path: Path, capsys: pytest.CaptureFixture[str],
+                                          monkeypatch: pytest.MonkeyPatch) -> None:
+    out = _out(tmp_path, "hashed")
+    exports = tmp_path / "exports"
+    exports.mkdir()
+    assert _cli().main(["plan", str(out), "--exports", str(exports)]) == 0
+    assert (out / "publish" / "batch-001.json").is_file()
+    monkeypatch.setattr(ps, "LIMITS_PINNED", ps.LIMITS_PINNED._replace(documents=1))
+    monkeypatch.setattr(ps.plan_publish, "__kwdefaults__", {"allow_names": False, "limits": ps.LIMITS_PINNED})
+    assert _cli().main(["plan", str(out), "--exports", str(exports)]) == 2
+    assert not list((out / "publish").glob("batch-*.json"))
+    assert "nothing was planned" in capsys.readouterr().err

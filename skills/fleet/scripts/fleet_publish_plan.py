@@ -43,6 +43,7 @@ from lib.fleet.fleet_page import PAGE_FILE  # noqa: E402
 from lib.fleet.fleet_page_live import live_page  # noqa: E402
 from lib.fleet.fleet_publish import PublishError  # noqa: E402
 from lib.fleet.fleet_publish_session import (  # noqa: E402
+    PUBLISH_DIR,
     STORED_COLLECTIONS,
     StoredDoc,
     plan_publish,
@@ -90,8 +91,14 @@ def _plan(args: argparse.Namespace) -> int:
         exports[path.stem] = read_export(_json(path), path.stem)
     run_id = args.run_id or str(data["run"].get("scan_date") or "")
     summary, batches = plan_publish(data, exports, run_id=run_id, allow_names=args.allow_names)
-    folder = write_plan(out, summary, batches, live_page(page, data, summary["mode"], run_id))
     size = summary["size"]
+    if not size["fits"]:  # nothing oversized is left to send: no batch, and an earlier plan's removed
+        for stale in (out / PUBLISH_DIR).glob("batch-*.json"):
+            stale.unlink()
+        print(f"fleet_publish_plan: the run needs {size['documents']} documents, over one artifact's "
+              f"{size['document_limit']}; it needs shards (#950), so nothing was planned", file=sys.stderr)
+        return 2
+    folder = write_plan(out, summary, batches, live_page(page, data, summary["mode"], run_id))
     print(f"fleet_publish_plan: run {run_id}, {summary['mode']}, {len(batches)} batch(es), {size['documents']} of "
           f"{size['document_limit']} documents, targets {'on' if summary['targets_enabled'] else 'off'} -> {folder}",
           file=sys.stderr)
@@ -101,9 +108,6 @@ def _plan(args: argparse.Namespace) -> int:
               f"{', '.join(strays['collections'])}; they count against the document cap", file=sys.stderr)
     for warning in size["warnings"]:
         print(f"fleet_publish_plan: {warning['document']} is {warning['bytes']} bytes, near the limit", file=sys.stderr)
-    if not size["fits"]:
-        print("fleet_publish_plan: the run does not fit one artifact; it needs shards (#950)", file=sys.stderr)
-        return 2
     return 0
 
 

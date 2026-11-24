@@ -40,7 +40,8 @@ which needs no ``user`` declaration, and it records no viewer id.
 ``ArtifactData`` ``batch`` writes, each pinned when its document exists), ``capabilities.json``,
 ``plan.json`` (the run id, mode, contract, size report and batch files) and ``page.html``
 (``fleet-view.html`` with the live data source, ``fleet_page_live.py``). The same inputs give
-the same bytes. ``record_url`` keeps the artifact's URL in the fleet's history directory
+the same bytes. A plan that does not fit one artifact writes no batch and removes an earlier
+plan's batches, so nothing oversized is left to send. ``record_url`` keeps the artifact's URL in the fleet's history directory
 (``<history>/<org>/publish.json``) so a later run publishes to the same artifact.
 """
 from __future__ import annotations
@@ -49,8 +50,9 @@ import json
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Final, TypedDict
+from typing import Any, Final, TypedDict, cast
 
+from lib.fleet.fleet_data import FleetData
 from lib.fleet.fleet_page_live import TARGET_ID_RE
 from lib.fleet.fleet_publish import (
     HISTORY,
@@ -218,7 +220,8 @@ def plan_publish(data: Mapping[str, Any], exports: Mapping[str, Sequence[StoredD
     """The checked, pinned plan for one run (see the module docstring)."""
     mode = check_mode(data, allow_names)
     state = stored_state(exports, run_id)
-    plan = project(data, run_id, stored=state["stored"], previous=state["previous"], limits=limits)  # type: ignore[arg-type]
+    # the caller passes a fleet-data.json document it read; project checks its strings itself
+    plan = project(cast(FleetData, data), run_id, stored=state["stored"], previous=state["previous"], limits=limits)
     batches = pinned(plan, state["versions"])
     extra = strays(exports)
     size = plan["size"]
