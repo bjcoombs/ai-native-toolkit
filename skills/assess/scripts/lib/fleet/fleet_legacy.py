@@ -30,7 +30,8 @@ entries) call it. A pre-rename run then loads, matches as a same-day or baseline
 entry, and counts in the trend history; `--compare` judges it by the usual rules, so a run
 from another plugin major (every 1.x run seen from 2.x) is refused for that reason alone,
 never as a malformed stamp. `stamp_value(stamp, key)` reads a stamp key added later with a
-non-null default (`STAMP_DEFAULTS`: `platform` is false before #714, `managed_settings` before #1153); every comparability
+non-null default (`STAMP_DEFAULTS`: `platform` is false before #714, `managed_settings` before #1153;
+`rules_sha256` and `collectors` are None, unrecorded, before #952); every comparability
 check (`fleet_compare.comparability`, `fleet_history.entry_conflict`, `fleet_trends`)
 reads its keys through it on both sides. `FLEET_STAMP_VERSION` and `FLEET_GROUP_VERSION`
 stay at 1 for this reason: their readers reject any other version. Tests:
@@ -60,8 +61,10 @@ def upgrade(data: dict[str, Any]) -> dict[str, Any]:
     return upgraded
 
 
-# Stamp key -> the value a stamp written before the key existed means.
-STAMP_DEFAULTS: Mapping[str, Any] = {"platform": False, "managed_settings": False}
+# Stamp key -> the value a stamp written before the key existed means. The #952 method keys
+# read as None: unrecorded, which lib/fleet/fleet_method.py never reads as the same rules.
+STAMP_DEFAULTS: Mapping[str, Any] = {"platform": False, "managed_settings": False,
+                                     "rules_sha256": None, "collectors": None}
 
 
 def stamp_value(stamp: Mapping[str, Any], key: str) -> Any:

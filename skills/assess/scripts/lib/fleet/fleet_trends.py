@@ -33,7 +33,8 @@ on or after this run's are dropped, since this run (from memory, not the
 history, so a failed history write still shows it) is the last point. At most
 ``MAX_RUNS`` of the newest are drawn.
 
-**Maturity-model version.** A change of version between two runs breaks every
+**Maturity-model version.** A change of version between two runs, or of the rules hash
+(``rules_sha256``, #952) when both runs recorded one, breaks every
 line there (``--compare`` refuses to compare across versions) and a dashed rule
 marks it. Each run's point is still drawn, so a one-run segment is a dot.
 
@@ -54,8 +55,8 @@ version (`with_top_levels`); otherwise a run with any known team row lacking it 
 `scaled: false` and not drawn (`share_runs`), so the axis is always 0 to 1, and `hidden_note`
 names it in the caption, or in the skip line when fewer than `MIN_RUNS` share runs remain;
 `series_runs` appends this run (from memory) and keeps the newest `MAX_RUNS`. `layout`
-splits each line at an unknown or absent value and at a maturity-model version change
-(marked by a dashed rule), and spaces end labels with `fleet_svg.spread_vertical`
+splits each line at an unknown or absent value and at a maturity-model version change or a
+rules-hash change both runs recorded (#952; marked by a dashed rule), and spaces end labels with `fleet_svg.spread_vertical`
 (`LABEL_GAP`); `render_trend` draws it, naming every gap on a hatched note, never at zero.
 `fleet_diagrams` skips it below `MIN_RUNS` (3). Golden render: `tests/fixtures/fleet_trends/`
 (regenerate with `uv run --locked python tests/fleet_trends_fixture.py` from `skills/assess`).
@@ -117,6 +118,7 @@ class TrendRun(TypedDict):
     means: dict[str, float | None]  # group -> mean share of top level; None: no team row at a level
     scaled: bool  # False: an entry without top levels on an older model version; not drawn
     floor_means: NotRequired[dict[str, float | None]]  # floor-inclusive lower bound (#697)
+    rules_sha256: NotRequired[str | None]  # the rules the run scored with (#952); None or absent: not recorded
 
 
 # --- reading the history ------------------------------------------------------
@@ -179,6 +181,7 @@ def trend_run(stamp: Mapping[str, Any], groups: Sequence[GroupRow],
     ordered = sorted(groups, key=lambda g: g["group"])
     run: TrendRun = {"label": stamp["scan_date"], "levels_version": version, "scaled": unit,
                      "means": {g["group"]: group_mean(g) if unit else None for g in ordered}}
+    run["rules_sha256"] = stamp.get("rules_sha256")
     if unit and any(has_floor(_floor_cells(g)) for g in ordered):
         run["floor_means"] = {g["group"]: group_floor_mean(g) for g in ordered}
     return run
@@ -256,8 +259,11 @@ class Layout:
 
 
 def _break_before(runs: Sequence[TrendRun], i: int) -> bool:
-    """Run ``i`` changes the maturity-model version."""
-    return runs[i]["levels_version"] != runs[i - 1]["levels_version"]
+    """Run ``i`` changes the rules: the maturity-model version, or the rules hash (#952) when both
+    runs recorded one (a run that recorded none is not read as a rule change)."""
+    then, now = runs[i - 1].get("rules_sha256"), runs[i].get("rules_sha256")
+    return runs[i]["levels_version"] != runs[i - 1]["levels_version"] or (
+        then is not None and now is not None and then != now)
 
 
 def _segments(runs: Sequence[TrendRun], group: str) -> list[list[int]]:

@@ -1,0 +1,123 @@
+{
+  "baseline": {
+    "head_sha": "600cca4ec653552f2e82d19d4dfd54fcab703ca4",
+    "held_gates": [
+      "instructions",
+      "ci_runs_tests",
+      "coverage_gate"
+    ],
+    "run_id": "20261124070603-7fa74e4a"
+  },
+  "levels_version": "default-2026.11.23",
+  "prior_level_version": 2,
+  "tags": [
+    {
+      "conditions": 4,
+      "countable": 4,
+      "countable_not_measured": [
+        {
+          "id": "layer-6-coverage.2",
+          "reason": "needs_full_run"
+        }
+      ],
+      "measured": 3,
+      "met": 2,
+      "not_measured": [
+        {
+          "id": "layer-6-coverage.2",
+          "reason": "needs_full_run"
+        }
+      ],
+      "set_aside": 0,
+      "tag": "behaviour"
+    },
+    {
+      "conditions": 0,
+      "countable": 0,
+      "countable_not_measured": [],
+      "measured": 0,
+      "met": 0,
+      "not_measured": [],
+      "set_aside": 0,
+      "tag": "contracts"
+    },
+    {
+      "conditions": 4,
+      "countable": 3,
+      "countable_not_measured": [],
+      "measured": 3,
+      "met": 2,
+      "not_measured": [],
+      "set_aside": 0,
+      "tag": "docs"
+    },
+    {
+      "conditions": 6,
+      "countable": 5,
+      "countable_not_measured": [],
+      "measured": 5,
+      "met": 3,
+      "not_measured": [],
+      "set_aside": 0,
+      "tag": "structure"
+    },
+    {
+      "conditions": 7,
+      "countable": 5,
+      "countable_not_measured": [
+        {
+          "id": "agent-consistency.1",
+          "reason": "no_value"
+        },
+        {
+          "id": "agent-consistency.2",
+          "reason": "no_value"
+        }
+      ],
+      "measured": 3,
+      "met": 2,
+      "not_measured": [
+        {
+          "id": "agent-consistency.1",
+          "reason": "no_value"
+        },
+        {
+          "id": "agent-consistency.2",
+          "reason": "no_value"
+        }
+      ],
+      "set_aside": 0,
+      "tag": "agent_context"
+    },
+    {
+      "conditions": 4,
+      "countable": 0,
+      "countable_not_measured": [],
+      "measured": 0,
+      "met": 0,
+      "not_measured": [],
+      "set_aside": 0,
+      "tag": "agent_runtime"
+    },
+    {
+      "conditions": 3,
+      "countable": 1,
+      "countable_not_measured": [],
+      "measured": 1,
+      "met": 0,
+      "not_measured": [],
+      "set_aside": 0,
+      "tag": "governance"
+    },
+    {
+      "conditions": 1,
+      "countable": 0,
+      "countable_not_measured": [],
+      "measured": 0,
+      "met": 0,
+      "not_measured": [],
+      "set_aside": 0,
+      "tag": "supply_chain"
+    }
+  ]
+}
