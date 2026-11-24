@@ -1,6 +1,6 @@
 """The "Configure the checks" section of ``docs/checks.html`` (#1236): fixed prose and examples.
 
-``CONFIGURE`` holds one ``ConfigureOption`` per way a team tunes the checks, in page order:
+``options(version, profiles_shipped)`` returns one ``ConfigureOption`` per way a team tunes the checks, in page order:
 owner exclusions, a named profile, a custom maturity model, managed settings and the
 regression gate in CI. Each has a title, its prose paragraphs, its copy-paste examples and the
 references it links. The prose is plain text with two marks, `` `code` `` and ``[text](url)``,
@@ -10,8 +10,12 @@ plain-English lint (``lib.plain_english.lint``) and the vocabulary guard over ev
 The syntax is taken from the code, not the issue text: ``[checks] exclude`` from
 ``lib/owner_exclusions.py``, ``[agent_ops] managed_settings`` and ``[gate] fail_on_gate_loss``
 from ``lib/assess_config.py``, the Action inputs from ``action.yml`` and the GitLab inputs
-from ``templates/assess-gate.yml``. ``options(version)`` stamps the toolkit version from
-``.claude-plugin/plugin.json`` into the CI pins, so the release PR's regen moves them.
+from ``templates/assess-gate.yml``. ``version`` is the toolkit version from ``.claude-plugin/plugin.json``, stamped into the CI
+pins, so the release PR's regen moves them. ``profiles_shipped`` says whether
+``skills/assess/levels/profiles/`` exists (#1150): until it does, ``--profile`` and a
+single-repository ``--levels`` are described as planned and ``--levels`` as a ``/fleet`` flag.
+The regen that lands the profiles flips the wording, so the page never names a flag the
+checkout does not have.
 ``EXAMPLE_EXCLUDED`` names the condition the exclusion example uses; the tests check it is
 still a condition id of the default model.
 """
@@ -43,7 +47,47 @@ INTRO = ("Each option below changes what a run checks or how CI acts on it. "
          "Settings in `.assess/config.toml` are committed, so every run and every teammate reads the same ones.")
 
 
-def options(version: str) -> list[ConfigureOption]:
+def _profile(shipped: bool) -> ConfigureOption:
+    if not shipped:
+        return {"id": "profile", "title": "Choose a profile",
+                "paragraphs": [
+                    "A run scores against the default maturity model.",
+                    "Named profiles are planned: `--profile handover` for the bar a production team expects "
+                    "before it owns a repository, and `--profile citizen` for a lighter bar. "
+                    "They are not in this release yet."],
+                "examples": [],
+                "references": [("Named profiles, #1150", ISSUES + "1150")]}
+    return {"id": "profile", "title": "Choose a profile",
+            "paragraphs": [
+                "A run scores against the default maturity model unless you name another.",
+                "`--profile handover` is the bar a production team expects before it owns a repository. "
+                "`--profile citizen` is a lighter bar while a citizen developer builds.",
+                "A profile run leaves the committed `.assess/prior-level.json` baseline as the default model's. "
+                "The CI gate keeps comparing default runs."],
+            "examples": [{"label": "Claude Code", "code": "/assess --profile handover"}],
+            "references": [("Named profiles, #1150", ISSUES + "1150")]}
+
+
+def _levels(shipped: bool) -> ConfigureOption:
+    refs = [("The default model", BLOB + "skills/assess/levels/default.toml"),
+            ("Build-your-own-practice guide, #1151", ISSUES + "1151")]
+    if not shipped:
+        return {"id": "levels", "title": "Write your own model",
+                "paragraphs": [
+                    "`/fleet --levels FILE` scores every repository against a maturity model you write, "
+                    "in the format of `levels/default.toml`.",
+                    "The same flag for a single-repository `/assess` run is planned in #1150."],
+                "examples": [{"label": "Claude Code", "code": "/fleet ~/src --levels our-model.toml --out fleet-out"}],
+                "references": [*refs, ("#1150", ISSUES + "1150")]}
+    return {"id": "levels", "title": "Write your own model",
+            "paragraphs": [
+                "`--levels FILE` scores against a maturity model you write, in the format of `levels/default.toml`.",
+                "`/fleet --levels FILE` reads the same file, so one repository gets the same Step from both."],
+            "examples": [{"label": "Claude Code", "code": "/assess --levels .assess/our-model.toml"}],
+            "references": refs}
+
+
+def options(version: str, profiles_shipped: bool) -> list[ConfigureOption]:
     """Every configure option, with ``version`` (``3.0.0``) in the CI pins."""
     tag = f"v{version}"
     return [
@@ -64,22 +108,8 @@ def options(version: str) -> list[ConfigureOption]:
              "]")}],
          "references": [("Owner exclusions in the scoring model", BLOB + "skills/assess/references/scoring-model.md"),
                         ("#910", ISSUES + "910")]},
-        {"id": "profile", "title": "Choose a profile",
-         "paragraphs": [
-             "A run scores against the default maturity model unless you name another.",
-             "`--profile handover` is the bar a production team expects before it owns a repository. "
-             "`--profile citizen` is a lighter bar while a citizen developer builds.",
-             "A profile run leaves the committed `.assess/prior-level.json` baseline as the default model's. "
-             "The CI gate keeps comparing default runs."],
-         "examples": [{"label": "Claude Code", "code": "/assess --profile handover"}],
-         "references": [("Named profiles, #1150", ISSUES + "1150")]},
-        {"id": "levels", "title": "Write your own model",
-         "paragraphs": [
-             "`--levels FILE` scores against a maturity model you write, in the format of `levels/default.toml`.",
-             "`/fleet --levels FILE` reads the same file, so one repository gets the same Step from both."],
-         "examples": [{"label": "Claude Code", "code": "/assess --levels .assess/our-model.toml"}],
-         "references": [("The default model", BLOB + "skills/assess/levels/default.toml"),
-                        ("Build-your-own-practice guide, #1151", ISSUES + "1151")]},
+        _profile(profiles_shipped),
+        _levels(profiles_shipped),
         {"id": "managed-settings", "title": "Count central guardrails",
          "paragraphs": [
              "Claude Code managed settings live on the machine, not in the repository, so a run leaves them out by default.",
@@ -100,7 +130,9 @@ def options(version: str) -> list[ConfigureOption]:
              "On the command line, `assess_gate.py --fail-on-gate-loss` is the same switch.",
              "The GitHub Action is warn-only by default; its `fail_on_gate_loss` input turns the gate on.",
              "The GitLab CI template turns the gate on by default. "
-             "Pass `fail_on_gate_loss: false` to report a lost gate and keep the job green."],
+             "Its `fail_on_gate_loss: false` input keeps the job green on a lost gate.",
+             "An input or the flag can only turn the gate on. "
+             "With `fail_on_gate_loss = true` in the config, `false` in an input changes nothing."],
          "examples": [
              {"label": ".assess/config.toml", "code": "[gate]\nfail_on_gate_loss = true"},
              {"label": ".github/workflows/assess-gate.yml (steps)", "code": (

@@ -18,8 +18,8 @@ from lib.plain_english import lint
 from lib.vocabulary import banned_hits
 
 
-def _page(catalog: Catalog | None = None, version: str = "9.9.9") -> str:
-    return render_html(catalog or build_catalog(), version)
+def _page(catalog: Catalog | None = None, version: str = "9.9.9", profiles: bool = True) -> str:
+    return render_html(catalog or build_catalog(), version, profiles)
 
 
 class _Ids(HTMLParser):
@@ -141,8 +141,19 @@ def test_the_configure_section_covers_every_option() -> None:
                    "--fail-on-gate-loss", "fail_on_gate_loss: &#x27;true&#x27;", "include:",
                    "fail_on_gate_loss: true", "issues/1151"):
         assert needle in section, needle
-    for o in options("9.9.9"):
+    for o in options("9.9.9", True):
         assert o["references"], o["id"]
+
+
+def test_profiles_are_planned_until_their_directory_ships() -> None:
+    """#1150 not merged: no --profile example, and --levels shown as the /fleet flag."""
+    page = _page(profiles=False)
+    section = page[page.index('id="configure"'):]
+    assert "/assess --profile" not in section and "/assess --levels" not in section
+    assert "not in this release yet" in section and "/fleet ~/src --levels" in section
+    assert "issues/1150" in section
+    committed = gen_catalog.outputs()[gen_catalog.HTML]
+    assert ("/assess --profile handover" in committed) is gen_catalog.PROFILES.is_dir()
 
 
 def test_the_configure_examples_match_the_code() -> None:
@@ -159,8 +170,9 @@ def test_the_configure_examples_match_the_code() -> None:
 
 def test_the_fixed_prose_is_plain_english_and_avoids_the_banned_words() -> None:
     texts = [LEDE, INTRO, *SECTION_LEDES.values()]
-    for o in options("9.9.9"):
-        texts += [o["title"], *o["paragraphs"]]
+    for shipped in (True, False):
+        for o in options("9.9.9", shipped):
+            texts += [o["title"], *o["paragraphs"]]
     assert {t: [i["reason"] for i in lint(t)] for t in texts if lint(t)} == {}
     assert [t for t in texts if banned_hits(t)] == []
 

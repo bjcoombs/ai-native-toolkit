@@ -33,6 +33,8 @@ MARKDOWN = ROOT / "docs" / "what-we-measure.md"
 JSON = ROOT / "skills" / "assess" / "references" / "measures.json"
 HTML = ROOT / "docs" / "checks.html"
 PLUGIN = ROOT / ".claude-plugin" / "plugin.json"
+# Named profiles (#1150): the page describes --profile as shipped once this directory exists.
+PROFILES = ROOT / "skills" / "assess" / "levels" / "profiles"
 
 
 def toolkit_version() -> str:
@@ -44,7 +46,7 @@ def outputs() -> dict[Path, str]:
     """Each catalog file and the content it should hold."""
     catalog = build_catalog()
     return {MARKDOWN: render_markdown(catalog), JSON: render_json(catalog),
-            HTML: render_html(catalog, toolkit_version())}
+            HTML: render_html(catalog, toolkit_version(), PROFILES.is_dir())}
 
 
 def stale(expected: dict[Path, str]) -> list[Path]:
