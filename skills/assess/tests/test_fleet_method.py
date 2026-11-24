@@ -11,7 +11,7 @@ import lib.fleet.fleet_achievements as fa
 import lib.fleet.fleet_method as fm
 from fleet_data_fixture import LEVELS
 from lib.fleet.fleet_achievements_runs import earlier_runs
-from lib.fleet.fleet_compare import FleetRun, compare, comparability, summary_lines
+from lib.fleet.fleet_compare import FleetRun, compare, comparability, comparison_lines
 from lib.fleet.condition_demotion import with_demotions
 from lib.fleet.fleet_stamp import FleetStamp, build_stamp
 from lib.manifest.check_manifest import collectors, core_manifest
@@ -119,14 +119,14 @@ def test_compare_keeps_the_note_and_the_summary_prints_it() -> None:
     earlier = FleetRun(_legacy(_method(V1)), rows, [])
     comparison = compare(earlier, FleetRun(_method(V1), rows, []))
     assert comparison["comparable"] and fm.RULES_NOTE in comparison["notes"]
-    assert fm.RULES_NOTE in summary_lines(comparison)
+    assert fm.RULES_NOTE in comparison_lines(comparison)
 
 
 def test_a_rules_change_is_a_refusal_in_compare() -> None:
     rows = _rows(BASE)
     comparison = compare(FleetRun(_method(V1), rows, []), FleetRun(_method(SAME_VERSION_NEW_RULES), rows, []))
     assert not comparison["comparable"]
-    assert summary_lines(comparison)[0].startswith("not comparable: maturity-model rules changed")
+    assert comparison_lines(comparison)[0].startswith("not comparable: maturity-model rules changed")
 
 
 # --- the achievements replay --------------------------------------------------------

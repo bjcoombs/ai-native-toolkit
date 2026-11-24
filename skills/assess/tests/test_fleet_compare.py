@@ -139,7 +139,7 @@ def test_an_unchanged_rerun_shows_no_movement():
     assert comparison["comparable"] and not comparison["movement"]
     assert comparison["repos"] == []
     assert all(not row["moved"] and row["cause"] is None for g in comparison["groups"] for row in g["rows"])
-    assert fc.summary_lines(comparison) == ["no movement"]
+    assert fc.comparison_lines(comparison) == ["no movement"]
 
 
 @pytest.mark.parametrize(("override", "reason"), [
@@ -156,7 +156,7 @@ def test_runs_that_differ_in_what_was_measured_are_not_comparable(override, reas
     assert not comparison["comparable"]
     assert any(reason in r for r in comparison["reasons"])
     assert comparison["groups"] == [] and comparison["repos"] == [] and not comparison["movement"]
-    assert fc.summary_lines(comparison)[0].startswith("not comparable: ")
+    assert fc.comparison_lines(comparison)[0].startswith("not comparable: ")
 
 
 def test_hashed_paths_on_both_sides_carry_a_note():
@@ -176,7 +176,7 @@ def test_signal_changes_report_leaves_and_absent_sides():
 
 
 def test_summary_lines_list_set_and_level_moves():
-    lines = fc.summary_lines(compare(_run(EARLIER), _run(LATER)))
+    lines = fc.comparison_lines(compare(_run(EARLIER), _run(LATER)))
     assert "removed: grpb/gone" in lines
     assert "grpa teamdocs: 0 -> 2 (level)" in lines
 

@@ -3,11 +3,10 @@
 A newcomer reading only the top of the report must be able to say where the repository is,
 what that means and what to do next, in one pass. CI has no model, so the cold reader here
 is a parser that knows nothing of the scoring: it reads the report's first screen (every line
-between the "Generated" stamp and the first ``## `` section, the summary and the call to
-action) and answers from the words alone. Its answers are checked against the level result
-the run computed and the tables the words come from (``STEP_MEANING``, ``GATE_TASK``), so a
-change of wording moves the expected answer with it, and a summary that stops answering
-fails.
+between the "Generated" stamp and the first ``## `` section: the top card, #1252) and answers
+from the words alone. Its answers are checked against the level result the run computed and
+the tables the words come from (the model's Step names, ``GATE_GAP``, ``GATE_TASK``), so a
+change of wording moves the expected answer with it, and a card that stops answering fails.
 
 The first screen must also hold no jargon a newcomer cannot read: no condition id, no layer,
 no snake_case gate id and no catalogue count. A term the glossary defines may appear only as
@@ -29,9 +28,10 @@ from typing import TypedDict
 import pytest
 
 import assess_tour
-from lib.assess_diagrams_ladder import STEP_MEANING
-from lib.exec_summary import GATE_TASK, STEP_GATES_URL
+from lib.card_facts import step_name, top_step
 from lib.headline import GLOSSARY_URL
+from lib.level_tally import default_model
+from lib.top_card import GATE_GAP, GATE_TASK, STEP_GATES_URL
 
 LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 # Terms a newcomer would need the glossary for, and the marks of an internal name. "gate"
@@ -49,9 +49,10 @@ class ColdReading(TypedDict):
     step: int
     of: int
     meaning: str
-    next_action: str
-    unlocks: str
+    next_step: int
+    blocked_by: str
     actions: int
+    done_when: int
     start_here: list[tuple[str, str]]
 
 
@@ -72,14 +73,16 @@ def cold_read(screen: list[str]) -> ColdReading:
     """Answer "where are we, what does that mean, what next" from the first screen's words."""
     where = re.fullmatch(r"Step (\d+) of (\d+): (.+)\.", visible(screen[0]))
     assert where, f"the first line does not say where we are: {screen[0]!r}"
-    nexts = [visible(line) for line in screen if visible(line).startswith("Next: ")]
-    assert len(nexts) == 1, f"one Next line expected, found {nexts}"
-    what = re.fullmatch(r"Next: (.+)\. Then you reach Step \d+: (.+)\.", nexts[0])
-    assert what, f"the Next line does not name one action and what it unlocks: {nexts[0]!r}"
+    blocks = [visible(line) for line in screen if visible(line).startswith("Blocks Step ")]
+    assert len(blocks) == 1, f"one Blocks line expected, found {blocks}"
+    what = re.fullmatch(r"Blocks Step (\d+): (.+?)\.", blocks[0])
+    assert what, f"the Blocks line does not name the next Step and its gate: {blocks[0]!r}"
     start = [line for line in screen if visible(line).startswith("Start here:")]
+    done = [line for line in screen if visible(line).startswith("Done when:")]
     return {
         "step": int(where.group(1)), "of": int(where.group(2)), "meaning": where.group(3),
-        "next_action": what.group(1), "unlocks": what.group(2), "actions": len(start),
+        "next_step": int(what.group(1)), "blocked_by": what.group(2), "actions": len(start),
+        "done_when": len(done),
         "start_here": [(m.group(1), m.group(2)) for line in start for m in LINK.finditer(line)],
     }
 
@@ -101,21 +104,22 @@ def test_the_first_screen_says_where_what_and_next(
     reading = cold_read(first_screen(report))
     step, gate = result["step"], result["next_gates"][0]
     assert step is not None and result["next_step"] == step + 1
-    assert (reading["step"], reading["of"]) == (step, max(STEP_MEANING))
-    assert reading["meaning"] == STEP_MEANING[step]
-    assert reading["next_action"] == GATE_TASK[gate]
-    assert reading["unlocks"] == STEP_MEANING[step + 1]
-    # One call to action: the same task, linked to how to do it.
-    assert reading["actions"] == 1
+    model = default_model()
+    name = step_name(model, step)
+    assert (reading["step"], reading["of"]) == (step, top_step(model))
+    assert reading["meaning"] == name[:1].lower() + name[1:]
+    assert (reading["next_step"], reading["blocked_by"]) == (step + 1, GATE_GAP[gate])
+    # One call to action: the gate as a task, linked to how to do it, and when it is done.
+    assert (reading["actions"], reading["done_when"]) == (1, 1)
     assert reading["start_here"] == [(GATE_TASK[gate][0].upper() + GATE_TASK[gate][1:], STEP_GATES_URL)]
 
 
 def test_the_sample_reads_step_2_with_ci_next(reports: dict[str, tuple[assess_tour.TourResult, str]]) -> None:
     # The values the tour promises the newcomer, pinned once beside the general rule above.
     reading = cold_read(first_screen(reports["sample"][1]))
-    assert (reading["step"], reading["next_action"]) == (2, GATE_TASK["ci_runs_tests"])
+    assert (reading["step"], reading["blocked_by"]) == (2, GATE_GAP["ci_runs_tests"])
     reading = cold_read(first_screen(reports["fixed"][1]))
-    assert (reading["step"], reading["next_action"]) == (3, GATE_TASK["coverage_gate"])
+    assert (reading["step"], reading["blocked_by"]) == (3, GATE_GAP["coverage_gate"])
 
 
 @pytest.mark.parametrize("label", ["sample", "fixed"])
@@ -147,7 +151,7 @@ def test_the_first_screen_points_to_the_glossary(
 def test_the_cold_reader_rejects_a_screen_that_does_not_answer() -> None:
     with pytest.raises(AssertionError, match="where we are"):
         cold_read(["Catalogue coverage: 1 of 5 measured"])
-    with pytest.raises(AssertionError, match="one Next line"):
+    with pytest.raises(AssertionError, match="one Blocks line"):
         cold_read(["Step 2 of 4: an agent opens pull requests, a person reviews each one."])
 
 
