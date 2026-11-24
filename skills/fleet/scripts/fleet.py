@@ -231,6 +231,7 @@ from lib.fleet.fleet_platform import (  # noqa: E402
 from lib.fleet.fleet_scanner_diff import row_signals, scanner_diff  # noqa: E402
 from lib.fleet.fleet_trends import TrendRun, history_runs, series_runs, trend_run  # noqa: E402
 from lib.fleet.fleet_view import FleetViewError  # noqa: E402
+from lib.fleet.fleet_method import rules_sha256  # noqa: E402
 from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp, build_stamp, write_stamp  # noqa: E402
 from lib.levels import add_renamed_flag, LevelsError, load_levels, MaturityModel  # noqa: E402
 from lib.profiles import ProfileError, add_model_arguments, profile_path  # noqa: E402
@@ -766,6 +767,7 @@ def main(argv: list[str] | None = None) -> int:
     planned: JsonDict = {
         "fleet_stamp_version": FLEET_STAMP_VERSION,
         "levels_version": maturity_model["version"] if maturity_model is not None else None, "window": window,
+        "rules_sha256": rules_sha256(maturity_model),  # a same-day rerun under edited rules is kept apart (#952)
         "counts_only": not args.full, "scans": sorted(scans) if scans is not None else None,
         "paths_hashed": hash_salt is not None,
         "fleet_config_sha256": config_sha256(fleet_config) if fleet_config is not None else None,
@@ -835,7 +837,7 @@ def main(argv: list[str] | None = None) -> int:
         today=today, window=window, levels_version=maturity_model["version"] if maturity_model is not None else None,
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
         fleet_config=fleet_config, platform=platform_ran, coverage=coverage,
-        managed_settings=options.managed_settings,
+        managed_settings=options.managed_settings, model=maturity_model,
     )
     write_stamp(out_dir, stamp)
     demoted = _condition_effect(out_dir, maturity_model, stamp, public, org_dir, entry)

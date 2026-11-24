@@ -18,7 +18,7 @@ whys.skill_personal_data = "Skill text is loaded into every session that trigger
 shapes = [
   { path = "skill_personal_data", type = "lib.skill_personal_data:SkillPersonalDataBlock" },
 ]
-revision = 1
+revision = 2
 unknown_reasons = [
   { code = "skill_files_unread", block = "skill_personal_data", means = "A skill or agent file could not be read, and none of those read holds a detected kind.", next_step = "Check the file's permissions or encoding, then run /assess again." },
 ]

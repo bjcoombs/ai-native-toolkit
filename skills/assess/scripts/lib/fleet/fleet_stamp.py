@@ -31,6 +31,12 @@ comparability key. A stamp written before #714 lacks it and reads as false
 each gap, counts only. It is null without a listing, and in a stamp written before
 #745. It is no comparability key, so the stamp version stays 1.
 
+``rules_sha256`` and ``collectors`` (#952, ``lib/fleet/fleet_method.py``) name the method:
+the sha256 of the rules of the maturity model the run scored with (None without
+``--levels``) and every core collector's ``{id, revision}``. A stamp written before #952
+lacks both and reads as unrecorded (None), never as the same rules, so the stamp version
+stays 1. A rules difference is a rule reason, re-scored like a ``levels_version`` one.
+
 The stamp holds no absolute path, salt, timing or input mode, so a root run,
 a list run and any ``--jobs`` value over unchanged checkouts on the same day
 write a byte-identical ``run.json`` (with ``--discovered``, a list run that leaves
@@ -45,7 +51,8 @@ without one, absent before #706 and read as null, so the stamp version stays 1),
 `platform` (#714: `--platform` ran the platform pass; absent before #714 and read as
 false through `fleet_legacy.stamp_value`), and `coverage` (#745: the `--discovered`
 counts from `fleet_coverage.py`; null without a listing, absent before #745, not a
-comparability key). No path,
+comparability key), and `rules_sha256` and `collectors` (#952: the rules hash and core
+collector revisions from `fleet_method.method_keys(model)`; absent before #952, unrecorded). No path,
 salt, timing or input mode, so a
 root run, a list run and any `--jobs` give the same bytes on the same day (with
 `--discovered`, `coverage` counts the checkouts a list run left out). `write_stamp`
@@ -62,6 +69,8 @@ from typing import TypedDict
 
 from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_coverage import Coverage
+from lib.fleet.fleet_method import CollectorRevision, method_keys
+from lib.levels import MaturityModel
 from lib.fleet_config import FleetConfig, FleetConfigEntries, config_sha256, section_entries
 
 # Bumped when the stamp's keys change, except for the 2.0.0 maturity-model key renames
@@ -84,6 +93,8 @@ class _LaterStampKeys(TypedDict, total=False):
 
     coverage: Coverage | None  # None without --discovered (unknown); absent before #745
     managed_settings: bool  # --managed-settings read this machine's managed settings; absent before #1153
+    rules_sha256: str | None  # the rules scored with (lib/fleet/fleet_method.py); None without --levels or before #952
+    collectors: list[CollectorRevision] | None  # every core collector's revision; None before #952
 
 
 class FleetStamp(_LaterStampKeys):
@@ -116,8 +127,10 @@ def build_stamp(
     rows: list[FleetRow], *, toolkit_commit: str | None, plugin_version: str,
     today: date, window: str, levels_version: str | None, counts_only: bool, paths_hashed: bool,
     scans: list[str] | None, fleet_config: FleetConfig | None = None, platform: bool = False,
-    coverage: Coverage | None = None, managed_settings: bool = False,
+    coverage: Coverage | None = None, managed_settings: bool = False, model: MaturityModel | None = None,
 ) -> FleetStamp:
+    """The run stamp; ``model`` is the maturity model the run scored with (before any demotion)."""
+    method = method_keys(model)
     return {
         "fleet_stamp_version": FLEET_STAMP_VERSION,
         "toolkit_commit": toolkit_commit,
@@ -134,6 +147,8 @@ def build_stamp(
         "repositories": count_repositories(rows),
         "coverage": coverage,
         "managed_settings": managed_settings,
+        "rules_sha256": method["rules_sha256"],
+        "collectors": method["collectors"],
     }
 
 
