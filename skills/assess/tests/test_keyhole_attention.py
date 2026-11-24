@@ -36,9 +36,9 @@ def test_assemble_findings_fixed_order_and_actions() -> None:
         assert f["action"] == ks.FINDING_ACTIONS[f["name"]]
     # spot-check the exact action strings the task contract requires
     by_name = {f["name"]: f for f in findings}
-    assert by_name["hidden_coupling"]["action"] == "investigate the seam"
+    assert by_name["hidden_coupling"]["action"] == "check why these files change together"
     assert by_name["unexplained_complexity"]["action"] == (
-        "write the contract the code needs (do NOT auto-generate)"
+        "write the contract the code needs (write it by hand; do not generate it)"
     )
     assert by_name["refactor_boundary"]["action"] == "safe to hand an agent in isolation"
 

@@ -13,7 +13,8 @@ leaves every other block to the single repository-wide run.
   the unit's folder as ``scope``, and its blocks are the unit's own reading (origin
   ``unit``). The scoped collectors are the suppressions (``promissory``,
   ``promissory_markers``), the doc graph and staleness (``doc_graph``, ``doc_staleness``),
-  skill disclosure (``skill_disclosure``, #1045: a ``skill`` unit's own only),
+  skill disclosure and skill script tests (``skill_disclosure``, ``skill_script_tests``, #1045:
+  a ``skill`` unit's own only),
   the import structure (``structure_scan``, and ``keyhole_blocks`` for ``structure``) and
   size and complexity (``run_header`` for ``stats_summary``).
 - ``override``: the repository-wide reading is inherited unless the unit holds its own
@@ -115,7 +116,7 @@ SECTION = "unit_readings"
 # The repository-wide unit blocks, which the root unit (``.``) reads as its own instead of
 # running the same scans again on the same tree (pinned to ``unit_blocks`` by a test).
 REPO_BLOCKS = ("coverage_gate", "doc_staleness", "layer_grades", "promissory_markers",
-               "skill_disclosure", "stats_summary", "structure")
+               "skill_disclosure", "skill_script_tests", "stats_summary", "structure")
 # The registry entry's own reads, before UNIT_EXTERNAL_READS.
 OWN_READS = ("units", "nested_instructions", *REPO_BLOCKS)
 # The repository-wide values the unit pass reads (pinned to ``unit_table`` by a test).

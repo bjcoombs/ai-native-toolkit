@@ -1181,52 +1181,16 @@
       ]
     },
     {
-      "id": "secrets-guard",
-      "title": "Secrets guard",
+      "id": "skill-script-tests",
+      "title": "Skill script tests",
       "scope": "team",
       "aggregation": "min",
       "levels": [
         {
           "level": 1,
-          "id": "secrets-guard.1",
+          "id": "skill-script-tests.1",
           "truth": [
-            "governance"
-          ],
-          "polarity": "positive",
-          "requires": [],
-          "guarded_by": null,
-          "predicted": null,
-          "review": null,
-          "step_gates": [],
-          "grade": "config_only",
-          "counts": false,
-          "criteria": [
-            {
-              "key": "secrets-guard.1:secrets_guard.configured",
-              "signal": "secrets_guard.configured",
-              "producer": {
-                "scan": "secrets_guard",
-                "collector": "core.secrets_guard"
-              },
-              "op": "eq",
-              "value": true,
-              "eq_signal": null,
-              "text": "A secrets guard is configured (pre-commit hook or CI scan): is true",
-              "title": "A secrets guard is configured (a pre-commit hook counts; listed, not counted)",
-              "fix": "Add a secrets hook to .pre-commit-config.yaml (gitleaks or detect-secrets), or a secrets scan step to CI.",
-              "why": "A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.",
-              "why_source": "",
-              "input_class": "config_text",
-              "grade": "config_only",
-              "counts": false
-            }
-          ]
-        },
-        {
-          "level": 2,
-          "id": "secrets-guard.2",
-          "truth": [
-            "governance"
+            "behaviour"
           ],
           "polarity": "positive",
           "requires": [],
@@ -1238,19 +1202,19 @@
           "counts": true,
           "criteria": [
             {
-              "key": "secrets-guard.2:secrets_guard.enforcement.present",
-              "signal": "secrets_guard.enforcement.present",
+              "key": "skill-script-tests.1:skill_script_tests.skills_untested",
+              "signal": "skill_script_tests.skills_untested",
               "producer": {
-                "scan": "secrets_guard",
-                "collector": "core.secrets_guard"
+                "scan": "skill_script_tests",
+                "collector": "core.skill_script_tests"
               },
               "op": "eq",
-              "value": true,
+              "value": 0,
               "eq_signal": null,
-              "text": "A secrets scan runs where an agent cannot skip it (CI): is true",
-              "title": "A secrets scan runs where an agent cannot skip it",
-              "fix": "Add a secrets scan step to CI that runs on every change (gitleaks/gitleaks-action, trufflehog, or GitLab's Secret-Detection template); a pre-commit hook alone can be skipped with --no-verify.",
-              "why": "A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.",
+              "text": "Skills whose scripts have no tests beside them: is 0",
+              "title": "Each skill's scripts have tests beside them (presence, not coverage)",
+              "fix": "Add tests for each named skill's scripts in that skill's own folder (tests/ or test_*.py beside them); where the report finds them elsewhere, move or copy them in, since tests outside the folder do not ship with the skill.",
+              "why": "A skill's scripts run with an agent's permissions every time it triggers; tests beside them are the only check that a change still does what the SKILL.md promises.",
               "why_source": "",
               "input_class": "head_structure",
               "grade": "measured",
@@ -1331,12 +1295,14 @@
       "conditions": [
         "layer-5-ci.1",
         "layer-6-coverage.1",
-        "layer-6-coverage.2"
+        "layer-6-coverage.2",
+        "skill-script-tests.1"
       ],
       "listed": [
         "layer-5-ci.1",
         "layer-6-coverage.1",
-        "layer-6-coverage.2"
+        "layer-6-coverage.2",
+        "skill-script-tests.1"
       ],
       "shared": [],
       "why": "That the code's behaviour is checked by something that runs on every change, not taken on trust.",
@@ -1448,16 +1414,12 @@
       "conditions": [
         "layer-7-review.1",
         "layer-7-review.2",
-        "layer-8-agent-ops.1",
-        "secrets-guard.1",
-        "secrets-guard.2"
+        "layer-8-agent-ops.1"
       ],
       "listed": [
         "layer-7-review.1",
         "layer-7-review.2",
-        "layer-8-agent-ops.1",
-        "secrets-guard.1",
-        "secrets-guard.2"
+        "layer-8-agent-ops.1"
       ],
       "shared": [],
       "why": "That people stay in the loop on what agents change, and that what agents may do is agreed and visible.",
@@ -2666,6 +2628,49 @@
       "why_source": "https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices"
     },
     {
+      "name": "skill_script_tests",
+      "title": "Skill script tests",
+      "summary": "Whether each skill's scripts have tests beside them in the skill's own folder: presence, not coverage, since no suite runs. Tests found only outside the folder are named, as information.",
+      "collector": "core.skill_script_tests",
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "skill_script_tests.skills.path": "path",
+          "skill_script_tests.skills.tested_elsewhere": "path"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "skill-script-tests"
+        ],
+        "conditions": [
+          "skill-script-tests.1:skill_script_tests.skills_untested"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "skill_script_tests.skills_untested",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ],
+      "why": "A skill's scripts run with an agent's permissions every time it triggers; tests beside them are the only check that a change still does what the SKILL.md promises.",
+      "why_source": ""
+    },
+    {
       "name": "org_security_policy",
       "title": "Owner's shared security policy",
       "summary": "The SECURITY file in the owner's public .github repository, which GitHub shows on every repository of the owner that has none, read through gh.",
@@ -2705,67 +2710,6 @@
         "unclassified"
       ],
       "why": "A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue.",
-      "why_source": ""
-    },
-    {
-      "name": "secrets_guard",
-      "title": "Secrets guard",
-      "summary": "A secrets hook in the pre-commit config and a secrets scan in CI (gitleaks, detect-secrets, trufflehog, ggshield and others, GitLab Secret-Detection), each recorded with its own evidence grade.",
-      "collector": "core.secrets_guard",
-      "reads": [
-        "repo_root",
-        "scope"
-      ],
-      "network": false,
-      "platform": false,
-      "headless": "registered",
-      "privacy": {
-        "written": true,
-        "strings_kept": {
-          "secrets_guard.ci.files": "path",
-          "secrets_guard.ci.tools": "token",
-          "secrets_guard.enforcement.reason": "reason",
-          "secrets_guard.enforcement.source": "token",
-          "secrets_guard.pre_commit.file": "path",
-          "secrets_guard.pre_commit.tools": "token",
-          "secrets_guard.sources.grade": "token",
-          "secrets_guard.sources.source": "token"
-        }
-      },
-      "used_by": {
-        "rows": [
-          "secrets-guard"
-        ],
-        "conditions": [
-          "secrets-guard.1:secrets_guard.configured",
-          "secrets-guard.2:secrets_guard.enforcement.present"
-        ],
-        "findings": []
-      },
-      "unknown_reasons": [
-        {
-          "code": "secret_scanning_not_read",
-          "means": "No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read.",
-          "next_step": "Add a secrets scan step to CI (gitleaks or trufflehog), or run with --platform so GitHub's settings are read."
-        }
-      ],
-      "evidence": [
-        {
-          "signal": "secrets_guard.configured",
-          "input_class": "config_text",
-          "grade": "config_only"
-        },
-        {
-          "signal": "secrets_guard.enforcement.present",
-          "input_class": "head_structure",
-          "grade": "measured"
-        }
-      ],
-      "grades": [
-        "config_only",
-        "measured"
-      ],
-      "why": "A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.",
       "why_source": ""
     },
     {
@@ -3599,6 +3543,7 @@
         "layer_grades",
         "promissory_markers",
         "skill_disclosure",
+        "skill_script_tests",
         "stats_summary",
         "structure",
         "excludes",
@@ -5454,6 +5399,20 @@
       "private": false
     },
     {
+      "name": "skill_script_tests",
+      "title": "Skill script tests",
+      "publishes": [
+        "skill_script_tests"
+      ],
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "org_security_policy",
       "title": "Owner's shared security policy",
       "publishes": [
@@ -5475,19 +5434,6 @@
         "repo_root",
         "archetype",
         "org_security_policy"
-      ],
-      "network": false,
-      "private": false
-    },
-    {
-      "name": "secrets_guard",
-      "title": "Secrets guard",
-      "publishes": [
-        "secrets_guard"
-      ],
-      "reads": [
-        "repo_root",
-        "scope"
       ],
       "network": false,
       "private": false
@@ -5606,8 +5552,8 @@
         "promissory_markers",
         "review_evidence",
         "review_reality",
-        "secrets_guard",
         "skill_disclosure",
+        "skill_script_tests",
         "stats_summary",
         "structure",
         "structure_drift",
@@ -5660,6 +5606,7 @@
         "layer_grades",
         "promissory_markers",
         "skill_disclosure",
+        "skill_script_tests",
         "stats_summary",
         "structure",
         "excludes",
@@ -5692,8 +5639,8 @@
         "promissory_markers",
         "review_evidence",
         "review_reality",
-        "secrets_guard",
         "skill_disclosure",
+        "skill_script_tests",
         "stats_summary",
         "structure",
         "structure_drift",
@@ -5971,22 +5918,13 @@
       "null_means": "no_skill_files: the repository, or the skill unit, holds no SKILL.md or agent definition (files_considered 0), so there is nothing to measure"
     },
     {
-      "path": "secrets_guard.configured",
-      "title": "A secrets guard is configured (pre-commit hook or CI scan)",
-      "type": "bool",
-      "collector": "core.secrets_guard",
-      "input_class": "config_text",
-      "grade": "config_only",
-      "null_means": ""
-    },
-    {
-      "path": "secrets_guard.enforcement.present",
-      "title": "A secrets scan runs where an agent cannot skip it (CI)",
-      "type": "bool",
-      "collector": "core.secrets_guard",
+      "path": "skill_script_tests.skills_untested",
+      "title": "Skills whose scripts have no tests beside them",
+      "type": "number",
+      "collector": "core.skill_script_tests",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": "secret_scanning_not_read: no secrets scan in CI on a GitHub repository whose own secret scanning was not read"
+      "null_means": "no_skill_scripts: no skill in the repository, or in the skill unit, holds a script (skills_with_scripts 0), so there is nothing to test"
     },
     {
       "path": "contributor_files.guide.present",
@@ -6012,7 +5950,7 @@
       "name": "hidden_coupling",
       "title": "Hidden coupling",
       "order": 0,
-      "action": "investigate the seam",
+      "action": "check why these files change together",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [
@@ -6043,7 +5981,7 @@
       "name": "unexplained_complexity",
       "title": "Unexplained complexity",
       "order": 2,
-      "action": "write the contract the code needs (do NOT auto-generate)",
+      "action": "write the contract the code needs (write it by hand; do not generate it)",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [
@@ -6058,7 +5996,7 @@
       "name": "untrusted_hotspot",
       "title": "Untrusted hotspot",
       "order": 3,
-      "action": "strengthen tests to pin observable behaviour (not internal state)",
+      "action": "make the tests check what the code does, as a caller sees it (not its internal state)",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [
@@ -6074,7 +6012,7 @@
       "name": "self_referential_tests",
       "title": "Self-referential tests",
       "order": 4,
-      "action": "request human review - tests verify internal consistency, not truth",
+      "action": "ask a person to review: the tests check that the code agrees with itself, not that it is right",
       "mode": "verify_then_retire",
       "concern": true,
       "inputs": [
@@ -6089,7 +6027,7 @@
       "name": "unactioned_intent",
       "title": "Unactioned intent",
       "order": 5,
-      "action": "action the promise: fix it, ticket it, or delete the marker/skip",
+      "action": "keep the promise: fix it, open a ticket for it, or delete the marker or skip",
       "mode": "verify_then_retire",
       "concern": true,
       "inputs": [
@@ -6104,7 +6042,7 @@
       "name": "accretion_ratchet",
       "title": "Accretion ratchet",
       "order": 6,
-      "action": "refactor down: extract, delete dead code, or split the file",
+      "action": "make the file smaller: move code out, delete dead code, or split the file",
       "mode": "refactor_safe",
       "concern": true,
       "inputs": [
@@ -6119,7 +6057,7 @@
       "name": "orphaned_understanding",
       "title": "Orphaned understanding",
       "order": 7,
-      "action": "assign a human anchor before further change",
+      "action": "name a person who owns this code before it changes again",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [
@@ -6134,7 +6072,7 @@
       "name": "candidate_dead_weight",
       "title": "Candidate dead weight",
       "order": 8,
-      "action": "verify liveness, then delete if dead",
+      "action": "check that the code is used, and delete it if it is not",
       "mode": "verify_then_retire",
       "concern": true,
       "inputs": [
@@ -6149,7 +6087,7 @@
       "name": "override_contradicts_signals",
       "title": "Archetype override contradicts the signals",
       "order": 9,
-      "action": "Review archetype marker - deterministic signals suggest a different classification",
+      "action": "Review the archetype marker: the measured signals suggest a different kind of repository",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [

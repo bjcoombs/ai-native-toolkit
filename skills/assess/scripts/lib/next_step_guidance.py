@@ -437,6 +437,13 @@ _WORDING: dict[str, Wording] = {
         "`trufflesecurity/trufflehog`, or GitLab's `Secret-Detection` template); a pre-commit hook "
         "alone can be skipped with `--no-verify`.",
         "A workflow in `.github/workflows/` or `.gitlab-ci.yml` runs a secrets scan, unmasked."),
+    "skill_script_tests.skills_untested": _none_left(
+        "Add tests for each named skill's scripts in that skill's own folder (`tests/` or "
+        "`test_*.py` beside them). Where the report finds them elsewhere, move or copy them in: "
+        "tests outside the folder do not ship with the skill. This checks that tests exist, not "
+        "how much they cover.",
+        "Every skill folder that holds a script also holds a test file (`tests/`, `test_*.py`, "
+        "`*_test.py`, `*.test.ts` or similar)."),
     "skill_disclosure.files_breaking": _none_left(
         "In each `SKILL.md` or agent definition the report names, fix the rule it breaks: give "
         "each a `name` and a `description` of at most 1024 characters, move detail only some "
@@ -552,6 +559,8 @@ _MEASURE_HINTS = {
     "secrets_guard": "Level 2 is not measured (`secret_scanning_not_read`) on a GitHub repository with "
                      "no secrets scan in CI: GitHub's own secret scanning could guard it and is not "
                      "read without `--platform`.",
+    "skill_script_tests": "Not measured (`no_skill_scripts`) when no skill in the repository, or in "
+                          "the skill unit, holds a script: there is nothing to test.",
     "skill_disclosure": "Not measured (`no_skill_files`) when the repository, or the skill unit, "
                         "holds no `SKILL.md` or agent definition: there is nothing to disclose.",
     "agent_environment": "The `agent_environment` scan reported it unavailable or did not run: "

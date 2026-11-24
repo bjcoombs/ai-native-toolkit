@@ -96,7 +96,7 @@ def test_a_root_skill_owns_only_the_files_outside_its_member_skills() -> None:
 
 def test_only_skill_units_own_the_block() -> None:
     kinds = ur.unit_kinds(cm.core_manifest())
-    assert kinds == {"skill_disclosure": frozenset({"skill"})}
+    assert kinds == {"skill_disclosure": frozenset({"skill"}), "skill_script_tests": frozenset({"skill"})}
     assert set(cm.UNIT_KINDS) == set(KINDS)  # the manifest's list is the units block's
     assert ur._kind_blocks(["skill_disclosure", "structure"], kinds, "package") == ["structure"]
     assert ur._kind_blocks(["skill_disclosure", "structure"], kinds, "skill") == ["skill_disclosure", "structure"]

@@ -40,7 +40,7 @@ def test_high_static_modularity_plus_low_containment_is_hidden_coupling():
     assert entry["finding"] == "hidden_coupling"
     assert entry["path"] == "pkg/a"
     assert entry["containment_ratio"] == 0.1
-    assert "seam" in entry["recommendation"].lower()
+    assert "change together" in entry["recommendation"].lower()
 
 
 def test_high_front_door_alone_triggers_hidden_coupling():

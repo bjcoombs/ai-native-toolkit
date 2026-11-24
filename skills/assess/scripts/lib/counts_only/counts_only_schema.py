@@ -60,6 +60,7 @@ from lib.guardrails import GuardrailsBlock
 from lib.instruction_placement import InstructionPlacementBlock
 from lib.skill_disclosure import SkillDisclosureBlock
 from lib.secrets_guard import SecretsGuardBlock
+from lib.skill_script_tests import SkillScriptTestsBlock
 from lib.contributor_files import ContributorFilesBlock
 from lib.hosting.org_security_policy import OrgSecurityPolicyBlock
 from lib.keyhole.liveness_scan import ObservabilityBlock
@@ -154,6 +155,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("agent_outcome", AgentOutcomeBlock),
     ("skill_disclosure", SkillDisclosureBlock),
     ("secrets_guard", SecretsGuardBlock),
+    ("skill_script_tests", SkillScriptTestsBlock),
     ("contributor_files", ContributorFilesBlock),
     ("org_security_policy", OrgSecurityPolicyBlock),
     ("delivery", DeliveryBlock),
