@@ -1,4 +1,4 @@
-"""Moved to ``lib.keyhole.coupling_analysis`` (#917). This path is removed in a later major release."""
+"""Moved to ``lib.keyhole.coupling_analysis`` (#917). This path is removed in 5.0.0."""
 import sys
 
 import lib.keyhole.coupling_analysis as _moved

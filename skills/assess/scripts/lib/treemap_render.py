@@ -1,4 +1,4 @@
-"""Moved to ``lib.complexity.treemap_render`` (#917). This path is removed in a later major release."""
+"""Moved to ``lib.complexity.treemap_render`` (#917). This path is removed in 5.0.0."""
 import sys
 
 import lib.complexity.treemap_render as _moved

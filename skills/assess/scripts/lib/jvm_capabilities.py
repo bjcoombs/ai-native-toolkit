@@ -1,4 +1,4 @@
-"""Moved to ``lib.keyhole.jvm_capabilities`` (#917). This path is removed in a later major release."""
+"""Moved to ``lib.keyhole.jvm_capabilities`` (#917). This path is removed in 5.0.0."""
 import sys
 
 import lib.keyhole.jvm_capabilities as _moved

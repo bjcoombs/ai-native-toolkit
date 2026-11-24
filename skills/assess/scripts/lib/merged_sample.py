@@ -1,4 +1,4 @@
-"""Moved to ``lib.hosting.merged_sample`` (#917). This path is removed in a later major release."""
+"""Moved to ``lib.hosting.merged_sample`` (#917). This path is removed in 5.0.0."""
 import sys
 
 import lib.hosting.merged_sample as _moved

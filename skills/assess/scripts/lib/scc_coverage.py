@@ -1,4 +1,4 @@
-"""Moved to ``lib.complexity.scc_coverage`` (#917). This path is removed in a later major release."""
+"""Moved to ``lib.complexity.scc_coverage`` (#917). This path is removed in 5.0.0."""
 import sys
 
 import lib.complexity.scc_coverage as _moved
