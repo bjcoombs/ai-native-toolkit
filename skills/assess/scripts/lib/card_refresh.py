@@ -15,7 +15,8 @@ so its Start here and Done when read the ``actions.json`` the previous run left.
    pasted ``summary_markdown`` when it is there verbatim, else the old Start here and Done when
    lines where each stands as a paragraph of its own.
 
-It returns a warning for the caller to print when the report holds no card to refresh, and
+It returns a warning for the caller to print when the report is missing or does not hold the
+run context's card, on every call (a second finalize after a failed match still warns), and
 None otherwise. A headline without card fields (counts-only, or an unavailable headline) and a
 card whose lines did not change are left alone, so a second finalize writes nothing new.
 A translation under the card (#1174) is the model's text and is not rewritten.
@@ -29,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.level_result_types import Headline
-from lib.top_card import read_first_action, start_lines
+from lib.top_card import CardAction, read_first_action, start_lines
 
 __all__ = ["refresh_card", "refreshed", "refreshed_report"]
 
@@ -40,7 +41,7 @@ def _swap(items: list[str], start: str, done: str) -> list[str]:
     return [start if i.startswith(_START) else done if i.startswith(_DONE) else i for i in items]
 
 
-def refreshed(block: Any, level: Any, action: Any) -> Headline | None:
+def refreshed(block: Any, level: Any, action: CardAction | None) -> Headline | None:
     """``block`` with the card's Start here and Done when reworded for ``action`` (a
     ``CardAction`` or None); None when ``block`` carries no card or nothing changes."""
     if not isinstance(block, Mapping) or not isinstance(level, Mapping) or "tally" not in level:
@@ -82,30 +83,41 @@ def refreshed_report(text: str, old: Mapping[str, Any], new: Mapping[str, Any]) 
     return text if pairs else None
 
 
+def _holds_card(text: str, card: Mapping[str, Any]) -> bool:
+    markdown, lines = card.get("summary_markdown"), card.get("summary_lines") or []
+    if isinstance(markdown, str) and markdown and markdown in text:
+        return True
+    pair = [line for line in lines if isinstance(line, str) and line.startswith((_START, _DONE))]
+    return bool(pair) and all(line in text.split("\n") for line in pair)
+
+
 def refresh_card(assess_dir: Path) -> str | None:
     """Re-render the card in ``<assess_dir>/run-context.json`` and ``assess-report.md`` from
-    ``<assess_dir>/actions.json``; a warning when the report holds no card to refresh."""
+    ``<assess_dir>/actions.json``; a warning while the report is missing or does not hold the
+    run context's card, on every call, so a repeated finalize still names the gap."""
     ctx_path = assess_dir / "run-context.json"
     try:
         ctx = json.loads(ctx_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    if not isinstance(ctx, dict):
+    old = ctx.get("headline") if isinstance(ctx, dict) else None
+    if not isinstance(old, Mapping) or not isinstance(old.get("summary_markdown"), str) \
+            or not old.get("summary_markdown"):
         return None
-    old = ctx.get("headline")
     new = refreshed(old, ctx.get("level"), read_first_action(assess_dir))
-    if new is None or not isinstance(old, Mapping):
-        return None
-    ctx["headline"] = new
-    ctx_path.write_text(json.dumps(ctx, indent=2), encoding="utf-8")
+    if new is not None:
+        ctx["headline"] = new
+        ctx_path.write_text(json.dumps(ctx, indent=2), encoding="utf-8")
     report = assess_dir / "assess-report.md"
+    missing = (f"{report.name}: the top card was not found, so its Start here may still name the "
+               "previous run's action; paste headline.summary_markdown from run-context.json")
     try:
         text = report.read_text(encoding="utf-8")
     except OSError:
-        return None
-    swapped = refreshed_report(text, old, new)
-    if swapped is None:
-        return (f"{report.name}: the top card was not found, so its Start here still names the "
-                "previous run's action; paste headline.summary_markdown from run-context.json")
-    report.write_text(swapped, encoding="utf-8")
-    return None
+        return f"{report.name} was not found, so the top card was not refreshed in it"
+    if new is not None:
+        swapped = refreshed_report(text, old, new)
+        if swapped is not None:
+            report.write_text(swapped, encoding="utf-8")
+            return None
+    return None if _holds_card(text, new or old) else missing

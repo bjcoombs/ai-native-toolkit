@@ -150,3 +150,13 @@ def test_finalize_rewrites_the_card_from_the_top_3_it_writes(tmp_path: Path) -> 
     assert "Start here: `new step`" in report and "old step" not in report
     refreshed_ctx = json.loads((tmp_path / "run-context.json").read_text(encoding="utf-8"))
     assert refreshed_ctx["headline"]["call_to_action"] == "Start here: `new step`"
+
+
+def test_an_unmatched_card_warns_on_every_finalize_and_a_missing_report_warns(tmp_path: Path) -> None:
+    """#1288 review: the run context is refreshed on the first call; a second call must still warn."""
+    assess_dir, _ = _run(tmp_path, "no card here")
+    assert refresh_card(assess_dir) is not None
+    assert refresh_card(assess_dir) is not None
+    (assess_dir / "assess-report.md").unlink()
+    warning = refresh_card(assess_dir)
+    assert warning is not None and "not found" in warning
