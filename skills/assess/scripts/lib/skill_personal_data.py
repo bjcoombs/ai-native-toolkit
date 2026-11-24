@@ -56,10 +56,11 @@ of the files read holds a kind, the block reads ``available: false`` with ``reas
 that limit.
 
 Skill personal data (#1045), no model. `scan_skill_personal_data(repo_root, scope, excludes)` reads
-each skill and agent file and its skill's `references/` files and records per file the `KINDS`
-found: `scan_sensitive_content`'s six plus `email` (not reserved, no-reply or placeholder) and
-`phone` (`+` country code, or `(NNN) NNN-NNNN`); the file and kind only, never the text. Personal
-names are not detected. Tests: `tests/test_skill_personal_data.py`.
+each skill and agent file and its skill's `references/` files and records per file the
+`FINDING_KINDS` found: `scan_sensitive_content`'s kinds less `credential`, plus `email` (not
+reserved, no-reply or placeholder) and `phone` (`+` country code, or `(NNN) NNN-NNNN`); the file
+and kind only, never the text. A `credential` match is counted in `credential_candidates`, never a
+finding (#1196). Personal names are not detected. Tests: `tests/test_skill_personal_data.py`.
 """
 from __future__ import annotations
 
@@ -145,7 +146,7 @@ _PHONE_NANP = re.compile(r"(?<!\w)\(\d{3}\)\s?\d{3}-\d{4}(?!\w)")
 
 class PersonalDataFile(TypedDict):
     path: str
-    kinds: list[str]  # from KINDS, in KINDS order
+    kinds: list[str]  # from FINDING_KINDS, in KINDS order
 
 
 class SkillPersonalDataBlock(TypedDict):
