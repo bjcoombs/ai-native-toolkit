@@ -160,8 +160,14 @@ from lib.next_step_guidance import guidance
 #   PR bumps ``ACHIEVEMENTS_VERSION`` (frozen during run 4). ``target_hit`` compares with the
 #   latest earlier run measuring the same repositories, so a failed scan before the crossing
 #   never loses the hit.
+# 6 (3.1.0 release): two changes since 5.
+# - `recount.from_version` is `string | null` (issue #860): null when the re-scored entry
+#   stamped no maturity-model version, where it read the string `"none"` before; the
+#   Recount line then has no "(was ...)" clause.
+# - Steps read gates only (issue #1083): `TargetProgress` drops `threshold` and
+#   `below_threshold`; the report's target line names the gates to go and no count.
 # Bump on any change to the shapes below; #705 and #744 read it.
-ACHIEVEMENTS_VERSION = 5
+ACHIEVEMENTS_VERSION = 6
 ACHIEVEMENTS_FILE = "achievements.json"
 REPO_VIEW = "repo"
 LEVEL_UP, FIRST, TARGET_HIT, STREAK = "level_up", "first", "target_hit", "streak"

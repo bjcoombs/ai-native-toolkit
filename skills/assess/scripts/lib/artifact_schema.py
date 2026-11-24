@@ -370,7 +370,160 @@ instead of editing the history comment; the release PR folds the notes in with
 #   pnpm-workspace.yaml, go.work or settings.gradle(.kts)) is skipped with it, and
 #   units.unit_count stays known where it read null with `unreadable_manifest`.
 #   Additive.
-ARTIFACT_SCHEMA_VERSION = "1.43.0"
+# 1.44.0 (3.1.0 release): 36 changes since 1.43.0.
+# - ci_checks.basis gains check_target (issue #799): test_or_lint_configured reads null
+#   when the only check-shaped CI line is a Maven run with its tests skipped
+#   (mvn -DskipTests verify), whose verify phase may still run a lint plugin.
+# - run-context.json doc_staleness rows gain directive_only (issue #816): true on a page of
+#   only mkdocstrings `:::` generator directives with no declared provenance, whose ratio
+#   is then 0. summary gains generator_directive_docs, the count of those pages. Additive:
+#   no existing key moves, and complexity-stats.json is unchanged.
+# - run-context.json doc_staleness rows gain subject_match (issue #817) on a parallel-docs-tree
+#   row: the key and tie-break that picked its root, `<key>:<rule>` with key stem or
+#   parent-name and rule only-match, longest-suffix, shallowest or path-order. Its
+#   subject_roots may now name one module file as well as a directory. Additive: no
+#   existing key moves.
+# - run-context.json stats_summary gains loc_by_class (issue #820): per path class (source,
+#   test, fixture, example, vendored, generated), files_scored and the p50, p95 and max of
+#   its line counts, null with no file. A stats sidecar from before it reads loc_by_class
+#   unavailable (no_class_split). Additive: no existing key moves.
+# - run-context.json observability.instrumented gains `kinds` (issue #823): the kinds of
+#   evidence behind rung 1, sorted tokens from `code` (a standard-library logger or logging
+#   facade in use in production source), `config` (a committed collector or scrape config)
+#   and `dependency` (a telemetry or logging dependency in a build manifest); empty when
+#   nothing matched. Additive: no existing key moves.
+# - run-context.json promissory_markers gains fixture_files_excluded (issue #824): the distinct
+#   fixture files in scope that held a candidate marker line, counted before the family
+#   filters. Additive: no existing key moves.
+# - run-context.json gains `unit_rollup` (issue #865, core-only, after `unit_levels`): the
+#   lowest unit's Step (`lowest_step`), `units` and `measured` (units with a Step), the Step
+#   above (`next_step`) and the measured units at or above it (`at_next_step`), and
+#   `unlocks`, the Step gates that hold units back ranked by the units one change lifts to
+#   their next Step: `gate`, `scope` (`repo_wide` when every held unit inherits the gate's
+#   reading, else `unit`), `changes`, `held`, `lifted` and `lift_per_change`. `lines` and
+#   `markdown` hold the roll-up text for two or more units and are empty otherwise, so the
+#   repository's Step and headline are unchanged. Additive.
+# - coverage_gate.enforced_basis gains status_check_unconfirmed, and
+#   coverage_gate.unmeasured_reason gains codecov_target_not_read and codecov_patch_only
+#   (issue #882); gates may
+#   carry tool codecov with metric project or patch.
+# - run-context.json delivery gains unconfirmed_ai_accounts (issue #883): the distinct sampled
+#   accounts that are name-only AI matches awaiting confirmation in [identities] (hinted
+#   change authors, and GitLab note authors). Additive: no existing key moves. A share such an
+#   account would decide (agent_authored_share, and on GitLab ai_review_share and the human
+#   comment figures) now reads null where it read a number.
+# - the run context's `level` block gains `tags` and the run header gains `prior_level` (#940):
+#   the earlier run's `prior-level.json` (its maturity-model version and tag rows), read before
+#   this run writes its own; null when there is no such file, and
+#   `{"available": false, "reason": "unreadable"}` when it exists but cannot be read (counts-only
+#   keeps both: `reason` is a fixed token). Each run writes `prior-level.json` beside
+#   `run-context.json` and draws `tag-profile.svg`, the tag profile strip. Additive.
+# - ci_checks.enforced_basis, ci_checks.lint_basis and coverage_gate.enforced_basis
+#   gain check_may_pass (issue #1008): a check whose failure the step may hide
+#   (lib/ci_unsure.py) reads null with it.
+# - `instruction_placement` file records gain `est_tokens` (issue #1045), the whole file at
+#   `instruction_budget.CHARS_PER_TOKEN`, and `thresholds` gains `loaded_in_full_min_tokens`
+#   (5000). Additive.
+# - run-context.json gains `skill_disclosure` (issue #1045): each SKILL.md and agent definition
+#   with its body lines, estimated tokens, name and description, description length,
+#   references (resolved, depth, lines, table of contents) and the rules it breaks;
+#   `files_considered` and `files_breaking`. Read per skill unit: `unit_readings` gives a
+#   `skill` unit its own `skill_disclosure`, and the check manifest gains `unit_kinds`.
+# - run-context.json gains `contributor_files` (issue #1045): `ready` (null while the policy
+#   is not measured), `guide` (`present`, `path`), `policy` (`present`, `path`, `kind`
+#   `file` | `private_reporting` | `org_file`, `source` `repo` | `org`, or `available: false`
+#   with `org_policy_not_read`), and `issue_template` and `change_template` as evidence;
+#   `available: false` with `knowledge_base` for a knowledge base.
+# - run-context.json gains `org_security_policy` (issue #1045, network): whether the owner's
+#   public `.github` repository holds a SECURITY file, which GitHub shows on a repository with
+#   none. `contributor_files.policy` reads it when the tree holds no policy, and is
+#   `available: false` (`org_policy_not_read`) when it was not read.
+# - run-context.json gains `skill_script_tests` (issue #1045): per skill folder its script and
+#   test counts, `untested` (null with no script) and `tested_elsewhere` (outside test files
+#   that reference its scripts, information only); `skills_with_scripts` and
+#   `skills_untested`. Read per skill unit.
+# - run-context.json gains `skill_personal_data` (issue #1045): the skill and agent files, and
+#   their skills' `references/` files, that hold a detected kind of personal data, each with
+#   its `kinds` only (never the data); `files_considered`, `files_with_personal_data` and
+#   `kinds_detected`. Read per skill unit.
+# - `skill_personal_data.files_unread`: files that could not be read; with none of the files read
+#   holding a kind, the block reads `available: false` (`skill_files_unread`), not a clean pass.
+# - `skill_personal_data.credential_candidates`: files with a credential-shaped assignment,
+#   information only until a precision check passes (#1196); `kinds_detected` leaves out
+#   `credential`.
+# - Steps read gates only (issue #1083). Breaking: run-context.json loses
+#   `level.next_step.threshold` and the same key under `unit_levels[].next_step`, and the
+#   `threshold` blocker kind is gone with its `threshold` and `met` fields, so every blocker is
+#   `kind: "gate"`. The `headline` block keeps its keys; its `summary` and lines change wording.
+# - A run-context block `since_last_run` (issue #1083): `first_run`, `previous_run_id`,
+#   `previous_commit`, `closed` (each `action`, `condition`, `finding`, `completed_sha`),
+#   `closed_reason`, `closed_count`, `unresolved`, `gates_gained`, `gates_lost`, `next_blocker`, `lines`, `markdown`.
+#   Additive. Counts-only keeps the counts, ids and shas and drops the text.
+# - `gap_actions` entries may carry `finding`, `mode` and `cost` (issue #1084): an
+#   `instruction_placement` removal proposal has `finding: "instruction_always_on"`,
+#   `mode: "remove"` and `cost: {metric, path, value}`. `actions.json` gains the `remove`
+#   mode and an optional `cost` on an action. Additive.
+# - `since_last_run` gains `pruned` and `pruning`, and `prior-level.json` gains `pruning`
+#   (issue #1084): the pruning ledger's removals, each `{path, completed_sha, cost_before,
+#   runs_held, credited, saved, gates, credited_at}`. Additive.
+# - run-context.json gains agent_outcome (issue #1085): of the agent commits ai_usage
+#   counts (trailer or agent author) in the run window, the share later reverted (a
+#   "This reverts commit" message naming the commit, or a later inverse diff by patch-id)
+#   and the share with an added line rewritten within rework_days (14) by git blame,
+#   with the counts and the window. Informational: no Step, count or headline reads it.
+#   Unknown reads null with a token reason; a shallow clone or a git failure is
+#   available: false with a code counts-only output keeps.
+# - `units.units[]` gains `kind` (issue #1098): `skill` for a folder holding a `SKILL.md`,
+#   `agents` and `commands` for a plugin root's components, `package` for a build-manifest
+#   unit; `origin` gains `component` for the first three. Skill and plugin-component
+#   folders are units, found before the build manifests, so a skills repository lists one
+#   unit per skill. Additive: a reader that ignores `kind` sees more units.
+# - `unit_readings.units[]` gains `kind` (issue #1098), copied from the unit's `units` entry
+#   (`package` when the entry has none), kept as a token in counts-only output. Additive.
+# - The `headline` block gains `summary_lines`, `call_to_action` and `summary_markdown`
+#   (issue #1102): the three-line executive summary (the Step and what an agent can do there,
+#   the next gate as a task and what the next Step allows, what changed since the last run)
+#   and one linked call to action, from `lib/exec_summary.py`. Additive. The `headline` scan
+#   now reads `since_last_run`, so it runs after it. Counts-only drops the text and keeps
+#   `summary_lines` as its length. `HEADLINE_VERSION` moves to 4 in the release PR.
+# - `prior-level.json` version 2 and the run context's `prior_level` gain an optional
+#   `baseline` (issue #1122): `{run_id, head_sha, held_gates}`, the run's measured commit and
+#   the Step gates it held. Version-1 files still read, without one. "Since last run" reads
+#   this committed baseline first, so a fresh clone or CI gets its credit.
+# - run-context.json ci_checks.includes[].status gains `toolkit_gate` (issue #1152): the
+#   toolkit's own regression gate template, known to run no project tests. It counts in
+#   `resolved_includes`, not `unresolved_includes`. Additive: no existing key moves.
+# - run-context.json agent_ops (issue #1153) gains `managed` (`state` not_read, found, absent
+#   or unreadable; `sources[]` by kind token with allow, deny and ask counts and hook events;
+#   `reason`), each settings entry gains `default_mode` (a documented mode token or `other`,
+#   information only), and the summary gains `permissions_source` (`repository` or `managed`).
+#   `managed.state` is `not_read` unless the run opted in (`--managed-settings`, or
+#   `[agent_ops] managed_settings = true` in `.assess/config.toml`), so it also records whether
+#   the machine was read. Under the option `summary.permissions_encoded` may be null, with
+#   `permissions_encoded_reason` `managed_settings_unreadable`, which the tally reports as not
+#   measured. Additive.
+# - `unit_rollup` gains `learn_from` (issue #1155) and reads the `units` block: per unit held
+#   back by an unmet gate the owner did not exclude, the sibling units that already hold it:
+#   `unit`, `gate`, `holders` (every sibling holding it) and `names` (up to three, the same
+#   ecosystem and kind first, then by folder). Unit folders are written only hashed in
+#   counts-only output, under `--hash-paths`. Additive.
+# - A pruning-ledger entry may carry `merged` (issue #1168): the commits of earlier removals
+#   of the same file folded into it. Additive.
+# - run-context.json gains `secrets_guard` (issue #1173): the pre-commit config's secrets
+#   hooks and the CI files' secrets scan steps (file and tool tokens), `configured`,
+#   `enforcement` (present from CI, or `available: false` with `secret_scanning_not_read` on
+#   a GitHub repository with no CI scan) and `sources`, each with its own evidence grade.
+# - `secrets_guard.ci.includes_unresolved`: GitLab includes that could hold a scan and were
+#   not read; level 2 reads not measured (`ci_includes_unresolved`) when it is above 0 and no
+#   scan was found.
+# - `secrets_guard.ci.rules_unevaluated`: GitLab scans in a job with `rules:`, `only:`/`except:` or
+#   an uncertain `when:`; level 2 reads not measured (`gitlab_rules_unevaluated`) with any and no
+#   counted scan.
+# - `prior-level.json` version 3 and the run context's `prior_level` gain an optional `models`
+#   map (issue #1184): one record per shipped profile, keyed by its name, each
+#   `{levels_version, tags, baseline}`. The top-level record stays the default model's and may
+#   be absent when only profiles have run. Version-1 and version-2 files still read.
+ARTIFACT_SCHEMA_VERSION = "1.44.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -717,4 +870,367 @@ ARTIFACT_SCHEMA_VERSION = "1.43.0"
 #   null to true or false; one that never closes (invalid YAML) reads `unknown`, where
 #   it read its first line's events, so enforced_check_runs can move to null. Such an
 #   unclosed `on:` is never credited by review_automation (`ci_triggers.unclosed_on`).
-ASSESS_METHOD_VERSION = 38
+# 39 (3.1.0 release): 53 rule changes since 38.
+# - issue #799, a CI command continued with a trailing backslash is joined onto its first
+#   line before it is read, so mvn ${MVN_ARGS} -T8 \ ... verify reads verify and credits
+#   test_or_lint_configured and enforced_check_runs (Layer 5 level 1), where it read
+#   no_check_command. A GitHub ${{ ... }} expression reads as one word, and a shell
+#   expansion before a make, mvn, gradle, go or cargo goal is not read as the goal.
+# - issue #799, a Maven run with -DskipTests or -Dmaven.test.skip and only lifecycle phases
+#   (mvn -DskipTests verify) reads enforced_basis check_target (null) on a CI line, where
+#   it read true. With no other check, test_or_lint_configured reads null with the new basis
+#   value check_target, since verify may still run a lint plugin. A plugin goal beside it
+#   (checkstyle:check) is read as before.
+# - issue #799, a run, script or command input under a uses: step's with: reads as a shell
+#   run only when the action runs it: a local action whose committed action.yml has a run:
+#   step of exactly ${{ inputs.<name> }}, or nick-fields/retry, reactivecircus/
+#   android-emulator-runner, coactions/setup-xvfb, gabrielbb/xvfb-action,
+#   uraimo/run-on-arch-action and the vmactions/<os>-vm family. An
+#   actions/github-script script is not read. Any other action's input still counts in
+#   test_or_lint_configured but reads check_target (null) for enforced_check_runs and
+#   lint_runs, where it read true.
+# - issue #799, xvfb-run [flags] and timeout [flags] DURATION are read through to the
+#   program they run, and a committed CI script reached through a tracked symlink that
+#   leaves the checkout is never read.
+# - Doc freshness leaves generator-directive pages out of the staleness share (issue #816):
+#   a mkdocstrings `::: pkg.mod` stub renders from code at build time, so it leaves
+#   doc_staleness.summary.measured_docs and no longer reads as a stale hand-written doc.
+#   A hand-written page that embeds one directive is still measured.
+# - A parallel docs/ page maps to one production module (issue #817): never to test or
+#   fixture code, by its stem (a module file or directory) before its parent directory's
+#   name, with ties broken by the longest shared path suffix, then depth, then path. A page
+#   that once mapped to a mirrored tests/ directory or to a whole parent-named sibling
+#   directory is now measured against the module it documents, or falls back to its
+#   explicit links or the repo baseline when only test code matches.
+#   A stem common to many modules (setup, config, main) matches only a directory, and a
+#   top-level docs/ page never maps to the docs/ directory itself.
+#   A module file that shares only its stem with the page yields to the page's explicit
+#   code links.
+# - Layer 4 level 2 measures file size over production source, not over every scored file
+#   (issue #820): stats_summary.loc_by_class.source.p95 replaces stats_summary.loc.p95, and
+#   the test set is reported apart in stats_summary.loc_by_class.test.
+# - observability.rung reads instrumentation from code as well as manifests, and the
+#   runbook name pattern no longer matches ordinary words (issue #823). A Python
+#   `logging.getLogger`, Go `log/slog`, `java.util.logging`, SLF4J, Android `Log`, Apple
+#   `OSLog`, Erlang/Elixir `:telemetry` or `ActiveSupport::Notifications` call in
+#   production source counts as instrumented, as do the Rust `tracing` and `log` crates in
+#   a Cargo.toml runtime dependency table and `mix.exs`, `Package.swift`, `pubspec.yaml`
+#   and `gradle/libs.versions.toml` manifests. Manifest names match whole (no letter or
+#   digit either side), so `hotel-booking` no longer reads as OpenTelemetry. A manifest,
+#   logger or config under a test, fixture, example, vendored or generated path
+#   (lib/path_classes.py) is not credited, and a doc under a test or fixture path is not a
+#   runbook. On-call in a doc name needs a word or path-segment boundary, so
+#   `function-call-in-default-argument.md` is not a runbook. The rung can move either way.
+# - Promissory markers set aside unambiguous fixture trees (issue #824): testdata/, test_data/,
+#   test-data/, __fixtures__/, __snapshots__/, mdtest/ and resources/test/ at any depth, and
+#   fixture/, fixtures/ or snapshots/ below a test directory, not only tests/fixtures/. A
+#   production tree named like one (core/snapshots/, a packages/fixtures package) still counts,
+#   and a scoped run reads the path relative to the unit. A linter's fixture noqa no longer
+#   counts toward promissory_markers.families.suppression.total or .stale (Layer 3 levels 1
+#   and 2), so both can fall on a repository with fixtures outside tests/fixtures/.
+# - issue #859, GitLab `project:` and `component:` includes match the ghsync clone ignoring
+#   case, as GitLab paths do. `project: Grp/CI-Templates` reads the clone `grp/ci-templates`
+#   on Linux too, where it read `not_cloned` (and `test_or_lint_configured` null); macOS and
+#   Windows already found it. Two clones differing only in case are ambiguous and read
+#   `not_cloned`.
+# - A monorepo run with two or more units shows the unit roll-up under the headline (issue
+#   #865): the lowest unit's Step with the measured units at the next Step, then the change
+#   that moves the most units to their next Step, a change at the root ranked first on a tie.
+#   The repository's Step and headline are unchanged; a single-unit run renders as before.
+# - coverage_gate reads Codecov status targets (issue #882, lib/testing/coverage_codecov.py): each
+#   coverage.status.project / .patch status in the first codecov.yml Codecov reads is a gate
+#   with tool codecov. A project `target: auto` (or no target) makes
+#   threshold_meets_minimum null with unmeasured_reason `codecov_target_not_read` where it
+#   read false; a numeric project target counts (80% is a gate at 80) and
+#   enforced_meets_minimum reads null with enforced_basis `status_check_unconfirmed` where
+#   it read false, since whether branch protection requires the status is not read. A
+#   patch status is left out of threshold_meets_minimum and of the CI-run reading (an
+#   `auto` target is left out of the CI-run reading too, so neither nulls an unrun floor's
+#   false), so the
+#   other gates decide (project 20% beside patch 100% reads false); when patch statuses
+#   are the only gates, the reading is null with `codecov_patch_only` where it read false.
+#   Repositories with no Codecov status section are unchanged.
+# - Name-only pinned agent matches are hints that need confirmation (issue #883, decision on
+#   #883 of 2026-11-22). A pinned match with no `[bot]` suffix or verified app identity
+#   (`noreply@anthropic.com`, `copilot@` addresses, the `copilot` login, `cursoragent@cursor.com`,
+#   OpenHands' address and `openhands-agent`) no longer counts as an agent author until it is
+#   confirmed in `[identities]` or matched by an `[[ai_usage.agent_identities]]` rule:
+#   - `ai_usage.agent_authored_*` and `agent_either_*` can fall, and
+#     `identities_awaiting_confirmation` can rise (new `pinned_agent_hint` evidence);
+#     `covered_author_agents` names only the `[bot]` apps, and `limits` gains one line.
+#   - `delivery.agent_authored_share` reads null while a sampled change author is an
+#     unconfirmed name-only login (such as `copilot`); `delivery.unconfirmed_ai_accounts`
+#     counts those accounts.
+#   - GitLab notes: a note by a `delivery.AI_REVIEWERS` username or a hinted login leaves AI
+#     review undecided (and a human comment it precedes), so `delivery.ai_review_share`,
+#     the human comment figures and `review_reality`'s GitLab shares read null until the
+#     account is confirmed, where they read a number. A note by an account confirmed as a
+#     bot is no longer a human comment (#765 semantics).
+#   - Unchanged: `[bot]`-suffix apps, AI co-author trailers, GitHub AI review (a bot-gated
+#     `AI_REVIEWERS` login) and the Copilot coding agent's commit address
+#     `198982749+Copilot@users.noreply.github.com`, now pinned by its GitHub id in
+#     `AGENT_RULES` (it counted before through the `copilot` login rule).
+# - Under a caller's own maturity model whose Step 1 has a gate the repository does not meet,
+#   the headline now carries the Next line naming Step 1 and its gates (#889). The default model
+#   is unchanged: its Step 1 has no gate.
+# - Below the first Step of a caller's own model whose Step 1 has a gate, the executive summary
+#   reads `Not yet at Step 1 of M.` with a Next line and a call to action, instead of nothing (#889).
+# - Under a caller's own model, a Step whose name differs from the default model's now reads
+#   the model's own Step name in the executive summary, not the default ladder sentence (#889).
+# - The badge of a measured repository below Step 1 takes Step 1's colour, not the not-measured
+#   grey (#889).
+# - issue #893, a known lint action step whose literal with: input makes it install only is
+#   no lint run: astral-sh/ruff-action and chartboost/ruff-action with args: --version (or
+#   -V, --help, version, help), and golangci/golangci-lint-action at v9 or later with
+#   install-only: true, read lint_runs false (no_lint_command) where they read true. A ruff
+#   args or golangci install-only value set but not settled (a ${{ }} expression, an empty
+#   args, an install-only value other than true or false, install-only: true on a SHA or
+#   branch ref) reads check_target (null). A value whose only expression is one
+#   ${{ matrix.<key> }} is read per value of the job's literal matrix axis: any leg that
+#   lints keeps the credit, all legs install only read false. install-only: false,
+#   install-mode, only-new-issues, a golangci ref before v9 (where install-only is not an
+#   input) and a with: the reader cannot read (a merge key, a quoted key, an alias) keep the
+#   credit. Layer 5 and test_or_lint_configured do not move.
+# - issue #893, a reviewdog/action-* step reads lint_runs null (check_may_pass) where it read
+#   true: every listed action defaults to fail_level none and fail_on_error false, so the step
+#   never fails its job. Only a literal fail_level of any, info, warning or error keeps the
+#   credit; fail_on_error: true alone reads null (reviewdog ignores it when a fail level is
+#   passed), apart from action-tfsec, which passes only -fail-on-error. An expression or
+#   another casing (Error) reads null.
+# - issue #893, a folded (- >, run: >) or plain multi-line CI scalar is read as the one
+#   command YAML makes of it: a GitLab item - > / ruff / --version runs ruff --version and
+#   is no lint run. A literal block (run: |) still reads one command per line.
+# - issue #923, a GitHub step that uses a local composite action (uses: ./.github/actions/x)
+#   is read through the action's run: steps, one level and repo-local only, never executed:
+#   a composite that runs ruff check . and pytest credits test_or_lint_configured,
+#   enforced_check_runs and lint_runs, where it read no_check_command. The caller's
+#   continue-on-error and if: false mask every copied step, and each step keeps its own
+#   shell:, continue-on-error and || true masking. ${{ inputs.<name> }} in a copied run: takes
+#   the caller's literal with: value or the action's literal default; one left in command
+#   position, and a nested local action (not followed), read check_target (null). A run: whose command is
+#   ${{ matrix.<key> }} is read once per literal matrix value (include and exclude applied),
+#   so cmd: ['ruff check .', 'pytest'] is credited; a matrix command that cannot be expanded
+#   (a fromJSON matrix, an unset key) reads check_target (null) on all three signals where
+#   it read false. A block-list matrix value such as - ruff check . that a step runs is no
+#   longer counted again outside that step.
+# - Shell, make and hatch commands are parsed per program (issue #955, `lib.command_flags`), at
+#   Layer 3 (`lint_runs`) and Layer 5 (`enforced_check_runs`):
+#   - A shell's `-e` takes no value, so `sh -e ./ci/run.sh` and `bash -e scripts/test.sh` run
+#     their script (false before; now null and true). `-o`, `--rcfile` and `--init-file` take one.
+#     `--norc` is not `-c`.
+#   - `bash -c "<cmd>"` reads its string as the command when it is one plain command (`bash -c
+#     "make test"` reads true). A list, pipeline, redirection or substitution in the string, or
+#     a string that cannot be split, reads null rather than false.
+#   - make's `-j N`, `-l N`, `-o` and `-W` values are no longer targets, for checks and lint
+#     alike, so `make -j 4 build` reads false (was null) and `make -j 4 lint` is a lint run.
+#   - A make run whose recipes cannot fail it runs no check and no linter: a dry run (`-n`,
+#     `--dry-run`, `--just-print`, `--recon`, `-t`, `-q`, or a cluster such as `-kn`) or
+#     `-i` / `--ignore-errors`. Real make exits 0 with a failing recipe, so `make -n test` moves
+#     from met to false. `-k` still exits 2 and still counts.
+#   - `hatch run lint` has the name trust of `make lint`: it is a lint command and a lint run
+#     (Layer 3 true, was null).
+# - Layer 0: instruction files are read by the same classifier, so a CLAUDE.md that names
+#   `bash -e scripts/test.sh`, `bash -c "make test"` or `bash --rcfile rc ./test.sh` now names
+#   a check (`agent_environment.check.named_total` can move from 0 to 1), as CI reads it.
+# - issue #1008, a check whose failure the step may hide reads not measured. On a CI
+#   line the scan reads as a check, a || fallback that can pass (pytest || echo failed),
+#   a check before && with more of the step after it, and a check inside a multi-line
+#   { } group or function body called before && or in a condition read
+#   enforced_check_runs and lint_runs (Layer 5 and Layer 3 level 1) null with the new
+#   basis check_may_pass, where they read true, and the coverage gate's CI run reads
+#   enforced_meets_minimum null with enforced_basis check_may_pass. || false, || exit 1,
+#   a check as the last statement and a plain group or function call keep their credit.
+#   The masking rules also cover if, while and until conditions and one-line groups and
+#   functions, but the scan reads no check on a line that opens with if, while, until,
+#   { or f(), so those read as before.
+# - issue #1008, a GitHub ${{ ... }} expression on a run line holds no shell operator:
+#   pytest -n ${{ matrix.workers || 'auto' }} is no longer split at its ||, so the new
+#   fallback rule does not read it as pytest || 'auto' (it stays credited).
+# - A scoped coverage_gate run reads the root coverage.py config (issue #1032): a Python
+#   scope with no coverage.py config of its own counts the root `fail_under` when CI runs
+#   coverage from the repository root (or names the root config with `--rcfile` /
+#   `--cov-config`), so coverage_gate.threshold_meets_minimum and enforced_meets_minimum
+#   can move from false to true. When where CI runs coverage is not resolved and the root
+#   floor would change the reading, threshold_meets_minimum reads null with
+#   unmeasured_reason `root_coverage_config_unresolved`, where it read false. Whole-repo
+#   runs are unchanged.
+# - `instruction_placement.loaded_in_full` lists an agent or `SKILL.md` file over 200 lines
+#   or over 5000 estimated tokens, most tokens first (issue #1045); it was over 200 lines,
+#   longest first, so a long-line file under 200 lines (about 20k tokens in this repository)
+#   was left out. Informational: no condition or Step reads it.
+# - a new counted condition, `skill-disclosure.1` (issue #1045): every SKILL.md and agent
+#   definition within 500 body lines and 5000 estimated tokens, with a name, a description
+#   of 1024 characters or fewer, and references that resolve one level deep. Not measured
+#   (`no_skill_files`) with none. It gates no Step, so no Step moves; "Practices in place"
+#   can.
+# - a new counted condition, `contributor-files.1` (issue #1045, tag `docs`): a CONTRIBUTING
+#   guide and a SECURITY policy (or a link to GitHub private vulnerability reporting) at the
+#   root, in `.github/` or in `docs/`, or the owner's shared policy in its `.github` repository
+#   (read with gh); with none in the tree and the owner's not read, the policy is not measured
+#   (`org_policy_not_read`), never missing. Not measured (`knowledge_base`) for a knowledge base.
+#   It gates no Step.
+# - a new counted condition, `skill-script-tests.1` (issue #1045, tag `behaviour`): every skill
+#   that holds scripts has tests beside them in its own folder (presence, not coverage; tests
+#   only outside the folder are named but do not count). Not measured (`no_skill_scripts`)
+#   with no skill holding a script. It gates no Step.
+# - a new counted condition, `skill-personal-data.1` (issue #1045, tag `governance`): no skill
+#   or agent file holds an email, phone number, home path, IP address, SSH login or key (names
+#   are not detected; a credential-shaped assignment is counted for information only). Not measured (`no_skill_files`) with none. It gates no
+#   Step.
+# - issue #1046, Gradle dry runs and exclusions and pdm / poe read-through on the CI reader.
+#   ./gradlew -m check (and -qm, --dry-run, --task-graph) runs nothing: it reads no check and
+#   no lint run where it read enforced_check_runs true and may_lint. -Pm and -Dmode=x are no
+#   dry run. A task named after -x / --exclude-task is not run (check -x check, test -x test
+#   and ktlintCheck -x ktlintCheck read false), and check -x test reads null (check_target),
+#   as mvn -DskipTests verify does. pdm run <program>, pdm [run] <script> and poe <task> are
+#   read like hatch run: pdm run ruff check . is a lint run and pdm run pytest a check, where
+#   both read nothing. A [tool.pdm.scripts] entry that shadows the program reads null in
+#   ci_checks and indirect_run in coverage_gate, and a bare pdm <word> with no such script
+#   reads false (pdm exits 2). The Gradle and pdm parsing is one module, lib.runner_args,
+#   shared with the coverage gate.
+#   pdm scripts are read from every tracked pyproject.toml; with none tracked, pdm run <word>
+#   and poe <word> read null (check_target), since pdm run test falls back to the shell's test.
+# - issue #1061, the CI-line reader reads five forms by what the shell runs. A line that
+#   opens a compound command is read from the command it runs: (pytest), if ! pytest; then
+#   exit 1; fi, { pytest; } and f() { pytest; }; f read enforced_check_runs true where they
+#   read no check, and if pytest; then echo ok; fi, while and until loops that break and
+#   groups called before && read null (check_may_pass), as the #1008 masking rules say.
+#   In a GitHub bash or sh run: body with pipefail off (the default bash -e {0}, shell: sh),
+#   a check piped into another command (pytest | tee log), or inside a { } or ( ) group piped
+#   on ({ pytest; } 2>&1 | tee log), is masked, since the step takes
+#   the last command's status: it reads false (not_enforced) where it read true, or null
+#   (check_may_pass) when a later statement reads PIPESTATUS or re-raises a status.
+#   shell: bash, set -o pipefail and GitLab keep the credit. A function no statement of
+#   its run: body calls (f() { pytest; } alone, or named only in echo f) is masked too;
+#   one named only as another command's argument (retry 3 f) reads null. dash ci.sh runs a script
+#   as sh ci.sh does. A || fallback is judged by the commands that run, not its words:
+#   pytest || echo false, pytest || echo exit and pytest || echo failed || exit 1 read
+#   null (check_may_pass) where they read true.
+# - The headline and badge name gates, never a count (issue #1083): `headline.summary`, the
+#   badge message and the log.md readiness line read "Step N · next: <gate>" or "Step N · all
+#   gates held"; the Next line names blocking gates only; the tally line is relabelled
+#   "Catalogue coverage". `HEADLINE_VERSION` is 3.
+# - The report and the log.md entry open with "Since last run" (issue #1083): the actions
+#   closed since the previous run, each with its commit (a done action in the committed
+#   actions.json whose completed_sha is on HEAD's history and not an ancestor of the previous
+#   run's measured commit),
+#   the gates gained or lost, and the next blocker; a first run says it is the first run.
+# - /assess proposes removals (issue #1084): an instruction file whose always-on text
+#   `instruction_placement` flags (over 200 lines and over half the file, the scan's own
+#   thresholds) gets a `remove` gap action with its measured always-on line count. It is
+#   advice only; the number of practices is never scored.
+# - The pruning ledger (issue #1084): "since last run" credits a done `remove` action as
+#   "Pruned: always-on text in <file>, saved N always-on lines" (the measured drop) once the
+#   file has stayed unflagged and no gate lost for two runs on new commits; a flag or a
+#   lost gate resets the count. Nothing is scored.
+# - Each skill folder and each plugin `agents/` and `commands/` folder is a unit (issue
+#   #1098), with its own readings, Step and place in the unit roll-up. A repository without
+#   `SKILL.md` files or a `.claude-plugin/plugin.json` finds the same units as before.
+# - The report opens with a three-line executive summary and one call to action (issue
+#   #1102): "Step N of M: <what an agent can do here>.", "Next: <the blocking gate as a
+#   task>. Then you reach Step N+1: <what it allows>.", "Since last run: ..." (or "First
+#   run." / "not known"), then "Start here:" with the gate's task linked to its catalog
+#   entry. Plain words: no layer, no condition id and no count of practices.
+# - issues #1124 and #1126, Gradle option values, build and project-path tasks.
+#   A Gradle option that takes a separate value (--warning-mode all, --console plain,
+#   --max-workers 2, -I init.gradle, -F off, -M sha256 and the rest of Gradle 9.4's list,
+#   plus -b, -c and the --tests filter) no longer has its value read as the task, so
+#   ./gradlew --warning-mode all check credits Layer 5 where it read false. Every task a
+#   Gradle line names counts (./gradlew clean check), not only the first.
+#   ./gradlew build reads as a check where a tracked build file applies a JVM or Android
+#   plugin (java, java-library, application, Kotlin JVM, Android), and null (check_target)
+#   where none is read; build -x check, -m build and --dry-run build read false.
+#   In the coverage gate, a project-path task (./gradlew :app:jacocoTestCoverageVerification,
+#   :app:check) credits only a gate in that project's build file (app/build.gradle[.kts]);
+#   a gate in another project's or the root build file reads null (indirect_run). The project
+#   path is read under the Gradle root, the nearest tracked settings.gradle[.kts] at or above
+#   the -p start or the gate (cd android && ./gradlew :app:... credits android/app/build.gradle);
+#   -b / -c read null.
+# - `assess_core.py` takes `--profile NAME` or `--levels FILE` (issue #1150): the `level` and
+#   `headline` blocks evaluate that maturity model instead of the default. Two profiles ship
+#   under `levels/profiles/`: `handover` (every gate plus linters in CI, review evidence and
+#   documentation freshness at level 1) and `citizen` (instructions and CI running the
+#   tests); each row is a default row, unchanged. Under a profile or a custom model the
+#   executive summary opens with the model's name and "Ready for handover (profile:
+#   handover)" or the practices still missing, and marks any practice the default model does
+#   not define. The Step ladder and the evidence waffle draw the run's model (neither is
+#   drawn for a custom file), the since-last-run section compares no gate across two models
+#   ("Model changed since last run (default → handover); gates not compared"), and the unit
+#   roll-up line says it reads the default model. A default run is unchanged.
+#   `/fleet --profile NAME` passes the profile's file as `--levels`.
+# - ci_checks reads the toolkit's own regression gate include as running no project tests
+#   (issue #1152): a `remote:` of exactly
+#   `https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/<ref>/templates/assess-gate.yml`,
+#   or a `component:` ending `/ai-native-toolkit/assess-gate@<version>`, is the include status
+#   `toolkit_gate` and counts as read, so a GitLab project whose only include is the gate reads
+#   `test_or_lint_configured` false when no job runs a check, where it read null. Every other
+#   `remote:` include stays `not_offline`.
+# - issue #1153: under the opt-in `--managed-settings` (`assess_core.py`, `assess_signals.py`,
+#   `fleet.py`) or a single repository's `[agent_ops] managed_settings = true`,
+#   `agent_ops.summary.permissions_encoded` also reads true when a managed settings source on
+#   the machine running the check (managed-settings.json, managed-settings.d/, the macOS
+#   com.anthropic.claudecode plist, the Windows Policies\ClaudeCode registry value) lists a
+#   permission entry, and null (not measured, `managed_settings_unreadable`) when the
+#   repository has none and a managed source exists but cannot be read. Without the option the
+#   reading is unchanged: the repository alone.
+# - A monorepo run with two or more units adds a "Learn from:" line to the unit roll-up for
+#   each unit whose next gate a sibling unit already holds (issue #1155), naming up to three
+#   such siblings. Counts-only output drops the lines. The Steps and the headline are unchanged.
+# - A run whose level result is unavailable leaves `prior-level.json` untouched (issue #1158),
+#   where it used to delete it: the previous good run's baseline and pruning ledger survive,
+#   and "since last run" says the baseline was kept, naming that run.
+# - issues #1162 and #1163, a Gradle run's working directory selects the project it runs in.
+#   In the coverage gate, an unqualified task run from a known directory (-p app,
+#   --project-dir app, cd app && ../gradlew ..., or the step's working-directory: app)
+#   credits only a gate at or under app (app/build.gradle, app/sub/build.gradle). A gate in
+#   another project (lib/build.gradle) reads null (indirect_run) where it read true, since
+#   allprojects {} or a projectDir override can still reach it. A -p value that is a shell
+#   expansion, an absolute path or above the root, or a -p in a directory that is not
+#   resolved (a defaults: working-directory), also reads null. With no -p and no
+#   cd, at the repository root, the reading is unchanged.
+#   The Gradle root is now the nearest tracked settings.gradle[.kts] at or above that
+#   working directory, falling back to the gate's own directory only when the directory is
+#   not resolved. In a repository with two Gradle builds (a root settings.gradle and
+#   android/settings.gradle), ./gradlew :app:jacocoTestCoverageVerification at the root no
+#   longer credits a gate only in android/app/build.gradle: it reads null (indirect_run).
+#   cd android && ./gradlew :app:... and ./gradlew -p android :app:... keep their credit.
+#   The working directory is left unresolved (today's reading) where a cd sits on a line
+#   that runs Gradle twice, or after a quote (bash -c "cd app && ../gradlew ...").
+# - issue #1164, a GitHub step whose command is an expression or a shell variable
+#   (run: ${{ inputs.cmd }} in a reusable workflow, ${{ env.CMD }}, $CMD, ${CMD}) reads
+#   check_target (null) on test_or_lint_configured, enforced_check_runs and lint_runs where it
+#   read no_check_command (false), unless another line settles them; masked, it reads false.
+#   A literal env: value of the step, job or workflow is read in its place, so env CMD set to
+#   ruff check . with run: $CMD is credited. A variable only as an argument (pytest $ARGS) or
+#   part of a word ($GITHUB_WORKSPACE/ci.sh) reads as before. A shell $NAME is not read
+#   from env: when the run value assigns NAME itself, when an earlier step writes NAME to
+#   $GITHUB_ENV (either form), or when its value holds ;&|()<> (word splitting runs no
+#   operator). A composite action's env: values
+#   take the caller's literal with: inputs too.
+# - issue #1165, a job- or step-level continue-on-error given as an expression reads
+#   check_may_pass (null) for the checks it covers where it read enforced_check (true).
+#   ${{ matrix.<key> }} is resolved from a literal matrix: on a step copied per value each copy
+#   takes its own value; on the job, or a step not copied, any true value masks (not_enforced)
+#   and all false keeps the credit. ${{ true }} and ${{ false }} read as the literals.
+# - The pruning ledger credits a file trimmed in several removal rounds once, for the whole
+#   drop from the first round's starting size (issue #1168), where it credited each round from
+#   its own starting size and double-counted the overlap.
+# - a new `secrets-guard` row (issue #1173, tag `governance`): level 1, a secrets hook or CI
+#   scan (graded config_only, listed, not counted); level 2, a CI scan an agent cannot skip
+#   (graded measured, counted), not measured (`secret_scanning_not_read`) on a GitHub
+#   repository with no CI scan. It gates no Step.
+# - The finding actions read in plain English (issue #1174): "investigate the seam" reads
+#   "check why these files change together", and so on for nine of the eleven actions. An
+#   action matched to an earlier run only by its directive text (no `finding`) starts again as
+#   pending once; one with a `finding` and files keeps its status.
+# - A `--profile` run keeps its own committed since-last-run baseline in `prior-level.json`
+#   (issue #1184) and compares gates on its own Steps, so `citizen` and `handover` show gates
+#   gained and lost on a fresh clone or in CI. A profile run writes only its own record; a
+#   default run keeps every profile record; a custom `--levels` run keeps none. The CI gate's
+#   `fail_on_gate_loss` reads the run's own record, so a profile run with no record yet reads
+#   "no baseline yet" instead of failing.
+# - Manifest text reads in plain English (issue #1186): 33 condition fixes, reason-code
+#   meanings and next steps, and scan summaries are split into sentences of 25 words or fewer,
+#   and the plain-English lint now runs over every manifest prose field except the whys. The
+#   whys are unchanged; shorter versions await the maintainer's approval.
+ASSESS_METHOD_VERSION = 39

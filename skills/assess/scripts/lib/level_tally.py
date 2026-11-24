@@ -168,7 +168,21 @@ from lib.signal_grades import DEFAULT_LEVELS, EMPTY_DENOMINATORS, INPUT_GRADES, 
 #   unchanged.
 # - each condition may carry `why`, the check manifest whys of its criteria joined by one
 #   space (#939); absent for a criterion with no manifest entry. Additive: no key moves.
-LEVEL_RESULT_VERSION = 3
+# 4 (3.1.0 release): three changes since 3.
+# - each result gains `tags` (#940): one row per truth tag, every tag of `TRUTH_TAGS` in that
+#   order, with `conditions`, `countable` (by grade, not a hazard), `set_aside` (countable and
+#   excluded by the owner or declined), `met` and `measured` (the headline strip cell's, one
+#   tally), `not_measured` (`{id, reason}`) and `countable_not_measured` (its countable subset,
+#   which says why a row has no share). Additive: no key moves, and a reader treats a result
+#   without `tags` as written before them.
+# - Steps read gates only (issue #1083): `next_step` drops `threshold`, and a blocker is always
+#   `kind: "gate"`; the `threshold` kind and its `threshold` and `met` fields are gone.
+#   Breaking: a reader of the threshold blocker finds none.
+# - a condition may carry `disposition: "demoted_by_exit_rule"` (#1086): the fleet exit
+#   rule demoted it, so it keeps its state and is listed, never counted. Only `fleet.py`
+#   sets the model's `demoted` ids (`with_demotions`), which every fleet result of the run
+#   reads; a gate condition is never demoted, so no Step moves. `/assess` results are unchanged.
+LEVEL_RESULT_VERSION = 4
 
 STATES = ("met", "unmet", "not_applicable", "not_measured", "declined")
 COUNTED_GRADES = frozenset({"measured", "verified"})

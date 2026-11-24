@@ -6,7 +6,7 @@
   "type": "object",
   "properties": {
     "fleet_data_version": {
-      "const": 4
+      "const": 5
     },
     "run": {
       "type": "object",

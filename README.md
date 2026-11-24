@@ -216,7 +216,7 @@ The same gate runs on GitLab merge request pipelines. Add these three lines to y
 
 ```yaml
 include:
-  - remote: https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v3.0.0/templates/assess-gate.yml
+  - remote: https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v3.1.0/templates/assess-gate.yml
     inputs: { config: .assess/config.toml }
 ```
 
