@@ -469,7 +469,7 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/assess_finalize.py" "$REPO_ROOT"
 
 This replaces:
 - The `**Top action:** (LLM fills in)` placeholder in this run's `log.md` entry (found by its `assess:run_id` stamp) with your Top 1 action; the log chain is re-computed. The entry's `**Readiness:**` line is the headline summary the core already wrote (`headline.summary`); you never set it.
-- Each `hotspots/<slug>.md`'s `Suggested actions` section with the actions you derived for that file.
+- Each `hotspots/<slug>.md`'s `Suggested actions` section with the actions you derived for that file, and the top card's Start here and Done when (in `run-context.json` and `assess-report.md`) with the first open action of the `actions.json` it has just written, so the card names this run's Top 3 rank 1 rather than the previous run's.
 
 **The minimal input** is `run_id` and `top_action`; every other field is optional. If finalize exits 1 because an earlier same-date entry is still unfilled (a run on an older commit that was never finalized), run the `--drop-entry <run_id>` command its message prints (it leaves a one-line tombstone), then re-run finalize. Never delete a log entry by hand: it breaks the chain.
 
