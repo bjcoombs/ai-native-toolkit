@@ -600,7 +600,7 @@ GitHub's own secret scanning and push protection settings, read through gh. They
 - Evidence: `unclassified`.
 - Not measured when:
   - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
-  - `settings_not_readable`: GitHub returns a repository's secret scanning and push protection settings only to a repository admin, organization owner or security manager. Run /assess with gh signed in as a repository admin, organization owner or security manager, or add a secrets scan to CI.
+  - `settings_not_readable`: Only a repository admin, organization owner or security manager can read GitHub's secret scanning and push protection settings. Run /assess with gh signed in as a repository admin, organization owner or security manager, or add a secrets scan to CI.
 
 ### `secrets_guard`: Secrets guard
 

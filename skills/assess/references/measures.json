@@ -2929,7 +2929,7 @@
         },
         {
           "code": "settings_not_readable",
-          "means": "GitHub returns a repository's secret scanning and push protection settings only to a repository admin, organization owner or security manager.",
+          "means": "Only a repository admin, organization owner or security manager can read GitHub's secret scanning and push protection settings.",
           "next_step": "Run /assess with gh signed in as a repository admin, organization owner or security manager, or add a secrets scan to CI."
         }
       ],
