@@ -37,6 +37,7 @@ from lib.change_coupling import (
 from lib.keyhole.coupling_analysis import (
     StaticModularity, detect_hidden_coupling, find_refactor_boundaries)
 from lib.docs.doc_complexity_join import _extract_file_ccn, _high_ccn_threshold, analyze_doc_complexity_join
+from lib.complexity.stats_rows import code_band_paths
 from lib.graph.import_graph import is_graph_source
 from lib.keyhole.liveness_scan import STATIC_REACHABILITY_CAVEAT
 from lib.reviewed_findings import mark_reviewed, open_findings, render_reviewed_markdown
@@ -1151,9 +1152,7 @@ def _structure_drift_tier1(
 def _paths_from_stats(complexity_stats: JsonDict, cap: int = MAX_AUTHORSHIP_PATHS) -> list[str]:
     """The ranked-list paths to run authorship analysis over (capped).
 
-    Union of the three top-N lists; these are the high-complexity / high-churn
-    units the understanding + dead-weight findings care about. Capped so a huge
-    repo doesn't trigger dozens of per-path git calls.
+    Union of the three top-N lists, the units the understanding findings read; capped.
     """
     seen: list[str] = []
     s: set[str] = set()
@@ -1271,11 +1270,12 @@ def _self_referential_test_paths(
 ) -> list[str]:
     """E2 trust axis: tests co-located AND co-committed with the code they cover.
 
-    The suite may verify internal consistency, not truth. Filesystem + git
-    work, wrapped so a parse failure degrades to no finding.
+    Reads the code band (``code_band``, #1234), so scc's extra files cannot move a code
+    file out of it; only a sidecar with no band reads the full top lists. Degrades to [].
     """
     try:
-        source_paths = _paths_from_stats(complexity_stats)
+        band = code_band_paths(complexity_stats)
+        source_paths = band if band is not None else _paths_from_stats(complexity_stats)
         test_to_code = build_test_to_code_map(repo_root, source_paths)
         self_ref = find_self_referential_tests(repo_root, test_to_code, commit_sets)
         return sorted({sr["source_file"] for sr in self_ref})
