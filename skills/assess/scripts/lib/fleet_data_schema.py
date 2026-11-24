@@ -1,4 +1,4 @@
-"""Moved to ``lib.fleet.fleet_data_schema`` (#917). This path is removed in 4.0.0."""
+"""Moved to ``lib.fleet.fleet_data_schema`` (#917). This path is removed in a later major release."""
 import runpy
 import sys
 from pathlib import Path

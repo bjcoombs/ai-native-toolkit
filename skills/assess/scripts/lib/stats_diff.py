@@ -1,4 +1,4 @@
-"""Moved to ``lib.complexity.stats_diff`` (#917). This path is removed in 4.0.0."""
+"""Moved to ``lib.complexity.stats_diff`` (#917). This path is removed in a later major release."""
 import sys
 
 import lib.complexity.stats_diff as _moved

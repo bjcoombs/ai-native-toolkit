@@ -1,4 +1,4 @@
-"""Moved to ``lib.testing.coverage_ci`` (#917). This path is removed in 4.0.0."""
+"""Moved to ``lib.testing.coverage_ci`` (#917). This path is removed in a later major release."""
 import sys
 
 import lib.testing.coverage_ci as _moved

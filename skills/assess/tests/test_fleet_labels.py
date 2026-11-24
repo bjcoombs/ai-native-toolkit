@@ -346,7 +346,7 @@ def _imports(path: Path) -> set[str]:
 
 
 def test_no_gathering_or_scoring_module_imports_labels():
-    # lib/fleet_labels.py is the #917 old-path shim (removed in 4.0.0), which imports the module.
+    # lib/fleet_labels.py is the #917 old-path shim (removed in a later major release), which imports the module.
     allowed = {LIB / "fleet" / "fleet_labels.py", LIB / "fleet_labels.py", LABELS_SCRIPT}
     sources = [*LIB.rglob("*.py"), *(SKILLS / "fleet" / "scripts").glob("*.py"),
                *(SKILLS / "assess" / "scripts").glob("*.py")]

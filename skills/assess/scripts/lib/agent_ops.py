@@ -1,4 +1,4 @@
-"""Moved to ``lib.agents.agent_ops`` (#917). This path is removed in 4.0.0."""
+"""Moved to ``lib.agents.agent_ops`` (#917). This path is removed in a later major release."""
 import sys
 
 import lib.agents.agent_ops as _moved

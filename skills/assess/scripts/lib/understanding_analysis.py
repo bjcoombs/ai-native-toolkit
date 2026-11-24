@@ -1,4 +1,4 @@
-"""Moved to ``lib.keyhole.understanding_analysis`` (#917). This path is removed in 4.0.0."""
+"""Moved to ``lib.keyhole.understanding_analysis`` (#917). This path is removed in a later major release."""
 import sys
 
 import lib.keyhole.understanding_analysis as _moved

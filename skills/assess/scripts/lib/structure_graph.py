@@ -1,4 +1,4 @@
-"""Moved to ``lib.graph.structure_graph`` (#917). This path is removed in 4.0.0."""
+"""Moved to ``lib.graph.structure_graph`` (#917). This path is removed in a later major release."""
 import sys
 
 import lib.graph.structure_graph as _moved

@@ -51,7 +51,7 @@ SHIM_DOC = re.compile(r"Moved to ``(lib(?:\.\w+)+)``")
 REMOVAL_RELEASE = "4.0.0"
 # A shim whose target runs as a script puts ``scripts/`` on ``sys.path`` before it
 # imports ``lib``, so ``python scripts/lib/<stem>.py`` (where Python puts ``lib/``
-# first instead) still runs until the shim goes in 4.0.0. Only that line is allowed.
+# first instead) still runs until the shim goes in a later major release. Only that line is allowed.
 SHIM_BOOTSTRAP = "sys.path.insert(0, str(Path(__file__).resolve().parents[1]))"
 
 
