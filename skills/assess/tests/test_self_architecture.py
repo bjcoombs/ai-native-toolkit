@@ -258,7 +258,7 @@ def test_core_does_not_import_orchestrators() -> None:
                   if _is_shim(tree := _parse(module)) for p in _shim_problems(module, tree)]
     assert not structure, "lib subpackage rules (#917) broken:\n  " + "\n  ".join(structure)
 
-    # A script shim still loads by its old file path until 4.0.0: run as
+    # A script shim still loads by its old file path until 5.0.0: run as
     # ``python scripts/lib/<stem>.py``, Python puts lib/ first on sys.path, not
     # scripts/, and the bootstrap adds scripts/ back. Each shim is loaded by path
     # from lib/ (not as __main__, because the fleet schema scripts rewrite the
@@ -272,7 +272,7 @@ def test_core_does_not_import_orchestrators() -> None:
         assert load.returncode == 0, f"{shim.name} does not load by path: {load.stderr[-400:]}"
     # Each package forward (decision 1) is lazy, and every public name of the moved
     # module reads through it as the same object, so ``import lib.<pkg>`` keeps the
-    # old module's attributes until 4.0.0. A fresh interpreter, so no earlier import
+    # old module's attributes until 5.0.0. A fresh interpreter, so no earlier import
     # hides an eager one.
     for package, target in FORWARDS.items():
         code = (f"import importlib, sys; import lib.{package} as p; "
