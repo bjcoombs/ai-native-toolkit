@@ -237,3 +237,16 @@ def test_an_unrecorded_rules_hash_is_not_native_credit_across_two_rescored_entri
     fa.build_achievements(fa.HistoryRun(NOW, _data(NOW, BASE, V2)), runs, V2)
     # rescored cells are passed (not native) only on the step whose two entries' rules differ
     assert seen[:2] == [(DATES[1], True), (DATES[2], False)]
+
+
+def test_a_profile_resolved_model_changes_the_hash() -> None:
+    # fleet.py turns --profile into its --levels file (lib/profiles.py, #1170) and hashes the loaded model
+    from lib.levels import load_levels
+    from lib.profiles import profile_path
+
+    default = load_levels(Path(__file__).resolve().parents[1] / "levels" / "default.toml")
+    handover = load_levels(profile_path("handover"))
+    citizen = load_levels(profile_path("citizen"))
+    hashes = {fm.rules_sha256(default), fm.rules_sha256(handover), fm.rules_sha256(citizen)}
+    assert len(hashes) == 3 and None not in hashes
+    assert _method(handover)["rules_sha256"] == fm.rules_sha256(handover)

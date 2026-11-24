@@ -10,7 +10,7 @@ import pytest
 import lib.level_tally as lt
 import lib.manifest.check_manifest as cm
 import lib.unit_readings as ur
-from lib.skill_personal_data import KINDS, kinds_in, scan_skill_personal_data
+from lib.skill_personal_data import FINDING_KINDS, KINDS, kinds_in, scan_skill_personal_data
 from test_unit_readings import _read, _write
 
 CID = "skill-personal-data.1"
@@ -137,7 +137,7 @@ def test_a_finding_names_the_file_and_kind_never_the_data(tmp_path: Path) -> Non
     assert block["files"] == [{"path": "skills/a/references/contacts.md", "kinds": ["email"]},
                               {"path": "skills/b/SKILL.md", "kinds": ["phone"]}]
     assert (block["files_considered"], block["files_with_personal_data"]) == (3, 2)
-    assert block["kinds_detected"] == list(KINDS)
+    assert block["kinds_detected"] == list(FINDING_KINDS) and "credential" not in block["kinds_detected"]
     dumped = json.dumps(block)
     assert EMAIL not in dumped and "7946" not in dumped and "jane" not in dumped
     assert _state(block) == ("unmet", None)
@@ -189,6 +189,19 @@ def test_a_reference_outside_the_scope_or_excluded_is_not_read(tmp_path: Path) -
     assert excluded["files"] == []
 
 
+def test_a_credential_is_information_only_and_never_unmet(tmp_path: Path) -> None:
+    repo = _plugin(tmp_path, {"skills/a/SKILL.md": SKILL.format("a", "Set password = " + "hunter" + "2abc.")})
+    block = scan_skill_personal_data(repo)
+    assert block["files"] == [] and block["credential_candidates"] == 1
+    assert _state(block) == ("met", None)
+
+
+@pytest.mark.parametrize("value", ["xxxxxxxx", "******", "<your-token>", "${API_KEY}", "your_token_here",
+                                   "your-key", "example123", "dummy-pass", "placeholder_value", "sk-abc123"])
+def test_a_placeholder_credential_value_is_not_a_candidate(value: str) -> None:
+    assert kinds_in(f"token = {value}") == []
+
+
 def test_clean_skill_text_reads_met_and_no_skill_reads_not_measured(tmp_path: Path) -> None:
     repo = _plugin(tmp_path, {"skills/a/SKILL.md": SKILL.format("a", "Write to user@example.com.")})
     assert _state(scan_skill_personal_data(repo)) == ("met", None)
@@ -201,8 +214,9 @@ def test_the_condition_carries_the_approved_why_and_names_the_kinds() -> None:
     cond = next(e for e in manifest["entries"]
                 if e.get("key") == f"{CID}:skill_personal_data.files_with_personal_data")
     assert cond["why"] == WHY  # type: ignore[typeddict-item]
-    for kind in ("email", "phone", "home path", "IP", "SSH login", "credential", "key"):
+    for kind in ("email", "phone", "home path", "IP", "SSH login", "key"):
         assert kind in cond["title"]  # type: ignore[typeddict-item]
+    assert "credential" not in cond["title"]  # type: ignore[typeddict-item]  # information only (#1196)
     assert not [c for c in lt.gate_conditions(lt.default_model()) if c.startswith("skill-personal-data.")]
 
 
