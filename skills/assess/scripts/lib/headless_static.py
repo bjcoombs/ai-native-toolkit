@@ -1,4 +1,4 @@
-"""Headless observability, doc graph, doc staleness, archetype and owner exclusions blocks (issue #699).
+"""Headless observability, doc graph, doc staleness, archetype, owner exclusions and contributor files blocks (issue #699).
 
 ``assess_core`` publishes these five blocks through its own table entries in
 ``lib.core_scans`` (``signals.CORE_MODULES``), so the headless runner
@@ -20,18 +20,20 @@ per block here, outside the core, as ``lib.headless_layers`` does for the layer
 - ``owner_exclusions`` is the core's ``[checks] exclude`` block (#910), so a fleet
   row's level result applies the owner's exclusions as ``/assess`` does (#944). It
   never degrades: a bad entry is listed under ``skipped``.
+- ``contributor_files`` is the core's scan (#1045), run here because it reads the
+  headless ``archetype`` (a knowledge base reads not measured).
 
 Each block degrades to the bare ``{"available": false, "reason": ...}`` marker
 with a ``code: sentence`` reason (``scan_failed`` when the scan raises), so
 counts-only keeps a named code and a maturity-model row reads unknown.
 
-The headless runner's entries for the five static blocks the core publishes from
+The headless runner's entries for the six static blocks the core publishes from
 `core_scans.py` (#699): `observability` (`liveness_scan.scan_observability` called
 directly, so the dead-code tools `scan_liveness` also runs stay full-run only),
 `doc_graph` (needs networkx: `no_networkx`), `doc_staleness` (over the doc graph's
 doc->code edges; needs a git work tree: `not_git_root`), `archetype` and `owner_exclusions`
 (#944: `owner_exclusions.owner_exclusions_block`, so a fleet row's level applies the
-owner's exclusions). A scan that
+owner's exclusions) and `contributor_files` (#1045, after the headless `archetype` it reads). A scan that
 raises is the bare marker `scan_failed: <error>`, so counts-only keeps a code and a
 maturity-model row reads `unknown`. `dead_code`, `understanding` and `runtime` stay in
 `signals.UNREGISTERED_SCANS` (`not_registered`). Tests: `tests/test_headless_static.py`.
@@ -51,7 +53,8 @@ from lib.docs.doc_staleness import analyze_doc_staleness
 from lib.keyhole.liveness_scan import scan_observability
 from lib.owner_exclusions import owner_exclusions_block
 from lib.run_context_types import JsonDict
-from lib.scan_registry import STAGE_READ_SIDE, STAGE_SETUP, ScanSpec
+from lib.contributor_files import scan_contributor_files
+from lib.scan_registry import STAGE_POST_OFFERS, STAGE_READ_SIDE, STAGE_SETUP, ScanSpec
 
 Excludes = tuple[set[str], list[str]]
 
@@ -128,12 +131,18 @@ def archetype(repo_root: Path) -> JsonDict:
     return _guarded("archetype", lambda: analyze_archetype(repo_root))
 
 
+def contributor_files(repo_root: Path, archetype: Any, org_security_policy: Any) -> JsonDict:
+    """The contributing guide and security policy (#1045), after the headless archetype."""
+    return _guarded("contributor_files",
+                    lambda: dict(scan_contributor_files(repo_root, archetype, org_security_policy)))
+
+
 def owner_exclusions(repo_root: Path) -> JsonDict:
     """The owner's ``[checks] exclude`` entries (#910), so a fleet row's level applies them (#944)."""
     return dict(owner_exclusions_block(repo_root))
 
 
-# The headless runner's entries for the five blocks. Each replaces the core
+# The headless runner's entries for the six blocks. Each replaces the core
 # entry that publishes the same name (``signals.signal_scans``). The doc graph
 # runs at the setup stage, as in the core, so doc staleness can read it.
 HEADLESS_SCANS: tuple[ScanSpec, ...] = (
@@ -143,4 +152,7 @@ HEADLESS_SCANS: tuple[ScanSpec, ...] = (
              STAGE_READ_SIDE),
     ScanSpec("archetype", archetype, ("repo_root",), STAGE_READ_SIDE),
     ScanSpec("owner_exclusions", owner_exclusions, ("repo_root",), STAGE_READ_SIDE),
+    # Reads the headless archetype above, so it is a variant too (#1045).
+    ScanSpec("contributor_files", contributor_files, ("repo_root", "archetype", "org_security_policy"),
+             STAGE_POST_OFFERS),
 )
