@@ -424,6 +424,13 @@ _WORDING: dict[str, Wording] = {
         "private vulnerability reporting), at the root, in `.github/` or in `docs/`.",
         "`git ls-files` lists a `SECURITY` file at the root, in `.github/` or in `docs/`, or the "
         "owner's public `.github` repository holds one."),
+    "skill_script_tests.skills_untested": _none_left(
+        "Add tests for each named skill's scripts in that skill's own folder (`tests/` or "
+        "`test_*.py` beside them). Where the report finds them elsewhere, move or copy them in: "
+        "tests outside the folder do not ship with the skill. This checks that tests exist, not "
+        "how much they cover.",
+        "Every skill folder that holds a script also holds a test file (`tests/`, `test_*.py`, "
+        "`*_test.py`, `*.test.ts` or similar)."),
     "skill_disclosure.files_breaking": _none_left(
         "In each `SKILL.md` or agent definition the report names, fix the rule it breaks: give "
         "each a `name` and a `description` of at most 1024 characters, move detail only some "
@@ -536,6 +543,8 @@ _MEASURE_HINTS = {
                          "code patches. The policy is not measured (`org_policy_not_read`) when the "
                          "repository holds none and the owner's shared `.github` repository was not "
                          "read: run with `--platform`, or `/assess` with `gh` signed in.",
+    "skill_script_tests": "Not measured (`no_skill_scripts`) when no skill in the repository, or in "
+                          "the skill unit, holds a script: there is nothing to test.",
     "skill_disclosure": "Not measured (`no_skill_files`) when the repository, or the skill unit, "
                         "holds no `SKILL.md` or agent definition: there is nothing to disclose.",
     "agent_environment": "The `agent_environment` scan reported it unavailable or did not run: "

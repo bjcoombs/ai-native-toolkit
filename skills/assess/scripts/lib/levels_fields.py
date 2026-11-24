@@ -13,7 +13,7 @@ and the cause.
 anywhere. The alias applies only when **no condition in the model carries
 ``truth``**: every condition then resolves its tags from its row
 (``legacy_truth``). A row id ``layer-<n>-...`` takes ``LEGACY_LAYER_TRUTH[n]``;
-the default model's five rows outside the layers take ``LEGACY_ROW_TRUTH``; any
+the default model's six rows outside the layers take ``LEGACY_ROW_TRUTH``; any
 other row (a caller's own model) resolves to no tag, ``[]``, since it names no
 layer. A model where some conditions carry ``truth`` and others do not is
 rejected with ``MixedTruthError``, whose message starts with that name and gives
@@ -27,7 +27,7 @@ Layer to truth, the documented mapping of the alias:
 | 0 (`layer-0-...`) | `agent_context` |
 | 1 | `agent_runtime` |
 | 2, 3, 4 | `structure` |
-| 5, 6 | `behaviour` |
+| 5, 6, `skill-script-tests` | `behaviour` |
 | 7, 8 | `governance` |
 | `doc-freshness`, `contributor-files` | `docs` |
 | `guardrails-stated`, `agent-consistency`, `skill-disclosure` | `agent_context` |
@@ -81,7 +81,7 @@ calls them, and the module docstring is the reference.
   when **no condition in the model carries `truth`**. Each condition then takes
   `legacy_truth(row id)`: a `layer-<n>-...` row takes `LEGACY_LAYER_TRUTH[n]` (0
   `agent_context`; 1 `agent_runtime`; 2, 3, 4 `structure`; 5, 6 `behaviour`; 7, 8
-  `governance`), the default model's `doc-freshness` and `contributor-files` take `docs`; `guardrails-stated`,
+  `governance`), the default model's `skill-script-tests` takes `behaviour`, `doc-freshness` and `contributor-files` take `docs`; `guardrails-stated`,
   `agent-consistency` and `skill-disclosure` take `agent_context` (`LEGACY_ROW_TRUTH`), and any other row `[]`. A
   model where some conditions carry `truth` and others do not raises **`MixedTruthError`**
   (a `LevelsError`), whose message starts `MixedTruthError:` and names the model file, the
@@ -140,6 +140,7 @@ LEGACY_ROW_TRUTH: dict[str, tuple[str, ...]] = {
     "guardrails-stated": ("agent_context",),
     "agent-consistency": ("agent_context",),
     "skill-disclosure": ("agent_context",),
+    "skill-script-tests": ("behaviour",),
     "contributor-files": ("docs",),
 }
 

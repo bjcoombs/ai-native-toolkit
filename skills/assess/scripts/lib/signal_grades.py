@@ -61,4 +61,6 @@ EMPTY_DENOMINATORS: dict[str, tuple[str, str]] = {
     "agent_environment.pinning.unlocked_total": ("agent_environment.pinning.manifests_total", "no_manifests"),
     # No skill or agent file is not a skill that follows the guidance (#1045).
     "skill_disclosure.files_breaking": ("skill_disclosure.files_considered", "no_skill_files"),
+    # No skill holding a script is not a tested skill (#1045).
+    "skill_script_tests.skills_untested": ("skill_script_tests.skills_with_scripts", "no_skill_scripts"),
 }
