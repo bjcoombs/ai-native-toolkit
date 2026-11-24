@@ -305,6 +305,9 @@ def test_a_swallowed_continue_on_error_still_masks() -> None:
      "s:\n  - run: ruff --version\n\n    shell: bash\n"),
     ("s:\n  - run: >\n      ruff\n        --version\n      check\n",
      "s:\n  - run: >\n      ruff\n        --version\n      check\n"),
+    # A # line inside a folded block is content: the shell then reads it as a comment.
+    ("s:\n  - run: >\n      pytest\n      # note\n      ruff check .\n",
+     "s:\n  - run: >\n      pytest # note ruff check .\n\n\n"),
 ])
 def test_join_folded_joins_one_scalar(text: str, expected: str) -> None:
     assert join_folded(text) == expected
@@ -332,6 +335,9 @@ def test_join_folded_leaves_other_shapes(text: str) -> None:
      (True, "lint_command")),
     ({".github/workflows/ci.yml": "on: [pull_request]\njobs:\n  t:\n    steps:\n"
       "      - run: >\n          ruff\n          --version\n"}, (False, "no_lint_command")),
+    ({".github/workflows/ci.yml": "on: [pull_request]\njobs:\n  t:\n    steps:\n"
+      "      - run: >\n          pytest\n          # note\n          ruff check .\n"},
+     (False, "no_lint_command")),
 ])
 def test_a_multi_line_item_is_read_whole(tmp_path: Path, files: dict[str, str],
                                          lint: tuple[bool, str]) -> None:

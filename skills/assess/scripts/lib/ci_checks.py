@@ -182,9 +182,9 @@ install only (``ruff-action`` ``args: --version``, ``golangci-lint-action`` v9+
 ``install-only: true``; ``lib.ci_lint_inputs``, #893) is no lint run, and one whose
 deciding input is not a literal it reads (a ``${{ }}`` expression) reads as a step that
 may lint: ``check_target`` (null) unless another line settles it. A reviewdog step
-without a literal ``fail_level`` that can fail (``any`` / ``info`` / ``warning`` / ``error``) or
-``fail_on_error: true`` never fails its job (the default is ``fail_level: none``), so it
-reads ``check_may_pass`` (null). A lone ``- flake8`` item counts under a
+without a literal failing ``fail_level`` (``any`` / ``info`` / ``warning`` / ``error``) never
+fails its job (the default is ``fail_level: none``; ``fail_on_error: true`` alone counts
+only for action-tfsec), so it reads ``check_may_pass`` (null). A lone ``- flake8`` item counts under a
 GitLab ``script:`` key and nowhere else. ``pre-commit/action`` runs
 ``pre-commit run --all-files`` and reads as that line does (below). A check
 target or script may run a linter inside it, and the line alone cannot show
@@ -518,7 +518,7 @@ def _trigger_tally(text: str, workflow: Trigger | None,
     steps = lint_inputs.install_only | lint_inputs.unsure
     for test in tests:
         skip = steps if _is_lint_test(test) else frozenset()
-        passing = lint_inputs.may_pass if skip is steps else frozenset()
+        passing = lint_inputs.may_pass if _is_lint_test(test) else frozenset()
         extra = (gated if _is_lint_test(test) else unknown if test is _line_may_check
                  else lint_inputs.unsure if test is _line_may_lint else frozenset())
         counts = [count_check_lines(_drop(k, skip | (passing if n < 2 else frozenset())), context=lines,

@@ -21,10 +21,14 @@ and runs nothing, and the reviewdog actions never fail by default, so
 - ``reviewdog/action-*`` (apart from action-setup and action-suggester, which
   ``lint_action`` never credits) passes ``-fail-level`` and ``-fail-on-error`` to reviewdog.
   Every listed action defaults to ``fail_level: none`` (always exit 0) and the deprecated
-  ``fail_on_error: false``; older releases have only ``fail_on_error``. A literal
-  ``fail_level`` of ``any``, ``info``, ``warning`` or ``error``, or ``fail_on_error: true``,
-  can fail the step and keeps the credit. Anything else (the defaults, ``none``, ``false``,
-  an expression, an unknown value) is a lint run whose failure may not fail the job.
+  ``fail_on_error: false``. Only a literal ``fail_level`` of ``any``, ``info``, ``warning`` or
+  ``error`` (reviewdog's exact lowercase names) can fail the step and keeps the credit.
+  ``fail_on_error: true`` alone does not: reviewdog applies it only when the fail level is
+  its default, and these actions always pass ``-fail-level`` (``none`` by default). The
+  exception is ``reviewdog/action-tfsec`` (``_FAIL_ON_ERROR_ONLY``), whose ``script.sh``
+  passes ``-fail-on-error`` alone, so ``fail_on_error: true`` credits it. Anything else
+  (the defaults, ``none``, ``Error``, an expression) is a lint run whose failure may not
+  fail the job.
 
 Each step comes back in one of three index sets of its ``uses:`` line:
 
@@ -79,7 +83,9 @@ _TRUE = frozenset({"true", "True", "TRUE"})
 _FALSE = frozenset({"false", "False", "FALSE"})
 _RUFF_INFO_COMMANDS = frozenset({"version", "help"})
 _REVIEWDOG = "reviewdog/action-"
-_FAILING_LEVELS = frozenset({"any", "info", "warning", "error"})
+_FAILING_LEVELS = frozenset({"any", "info", "warning", "error"})   # reviewdog rejects other casings
+# reviewdog actions whose script passes -fail-on-error without -fail-level.
+_FAIL_ON_ERROR_ONLY = frozenset({"reviewdog/action-tfsec"})
 _USES_VALUE = re.compile(r"^([\w.-]+/[\w.-]+)(?:/[^@\s]*)?@(\S+)$")
 _TAG = re.compile(r"^v(\d+)(?:\.\d+){0,2}$")
 _FLOW_ITEM = re.compile(r"^\s*([\w.-]+)\s*:\s*(.*?)\s*$")
@@ -262,13 +268,13 @@ def _matrix_reading(tree: IndentTree, uses: int, value: Value, read: Callable[[V
     return "install_only" if readings == {"install_only"} else "unsure"
 
 
-def _reviewdog_reading(fail_level: Value, fail_on_error: Value) -> str:
+def _reviewdog_reading(name: str, fail_level: Value, fail_on_error: Value) -> str:
     """``lint`` when a literal input lets reviewdog fail the step, else ``may_pass``."""
     if isinstance(fail_level, _Unread) or isinstance(fail_on_error, _Unread):
         return "lint"   # an unread with: keeps today's answer
-    if fail_level is not None and fail_level.lower() in _FAILING_LEVELS:
+    if fail_level is not None and fail_level in _FAILING_LEVELS:
         return "lint"
-    if fail_on_error is not None and fail_on_error in _TRUE:
+    if name in _FAIL_ON_ERROR_ONLY and fail_on_error is not None and fail_on_error in _TRUE:
         return "lint"
     return "may_pass"
 
@@ -295,6 +301,6 @@ def read_lint_inputs(text: str) -> LintInputs:
         reading = (_matrix_reading(tree, i, _input(inputs, "args"), _ruff_reading) if name in _RUFF_ACTIONS
                    else _matrix_reading(tree, i, _input(inputs, "install-only"),
                                         partial(_golangci_reading, ref)) if name == _GOLANGCI
-                   else _reviewdog_reading(_input(inputs, "fail_level"), _input(inputs, "fail_on_error")))
+                   else _reviewdog_reading(name, _input(inputs, "fail_level"), _input(inputs, "fail_on_error")))
         {"install_only": install_only, "unsure": unsure, "may_pass": may_pass}.get(reading, set()).add(i)
     return LintInputs(frozenset(install_only), frozenset(unsure), frozenset(may_pass))

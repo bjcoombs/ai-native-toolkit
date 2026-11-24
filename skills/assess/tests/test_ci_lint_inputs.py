@@ -103,8 +103,14 @@ def _reading(text: str) -> str:
     ("reviewdog/action-shellcheck@v1", _with(fail_level="'any'"), "lint"),
     ("reviewdog/action-eslint@v1", _with(fail_level="warning"), "lint"),
     ("reviewdog/action-eslint@v1", _with(fail_level="info"), "lint"),
-    ("reviewdog/action-tfsec@v1", _with(fail_on_error="true"), "lint"),
-    ("reviewdog/action-eslint@v1", _with(fail_level="none", fail_on_error="true"), "lint"),
+    ("reviewdog/action-tfsec@v1", _with(fail_on_error="true"), "lint"),   # only -fail-on-error
+    ("reviewdog/action-tfsec@v1", "", "may_pass"),
+    # fail_on_error applies only at reviewdog's default level; these actions pass -fail-level.
+    ("reviewdog/action-eslint@v1", _with(fail_on_error="true"), "may_pass"),
+    ("reviewdog/action-eslint@v1", _with(fail_level="none", fail_on_error="true"), "may_pass"),
+    ("reviewdog/action-eslint@v1", _with(fail_level="error", fail_on_error="false"), "lint"),
+    ("reviewdog/action-eslint@v1", _with(fail_level="Error"), "may_pass"),   # an invalid name
+    ("reviewdog/action-eslint@v1", _with(fail_level="ANY"), "may_pass"),
     ("reviewdog/action-eslint@v1", "        with:\n          <<: *rd\n", "lint"),
     # Other lint actions are not read here: their #782 credit stands.
     ("super-linter/super-linter@v7", _with(**{"install-only": "true"}), "lint"),
@@ -151,7 +157,8 @@ def _scan(tmp_path: Path, text: str) -> tuple[bool | None, str]:
     ("reviewdog/action-eslint@v1", "", (None, "check_may_pass")),
     ("reviewdog/action-eslint@v1", _with(fail_level="${{ inputs.level }}"), (None, "check_may_pass")),
     ("reviewdog/action-eslint@v1", _with(fail_level="error"), (True, "lint_command")),
-    ("reviewdog/action-eslint@v1", _with(fail_on_error="true"), (True, "lint_command")),
+    ("reviewdog/action-eslint@v1", _with(fail_on_error="true"), (None, "check_may_pass")),
+    ("reviewdog/action-tfsec@v1", _with(fail_on_error="true"), (True, "lint_command")),
 ])
 def test_scan_reads_the_inputs(tmp_path: Path, uses: str, with_block: str,
                                expected: tuple[bool | None, str]) -> None:

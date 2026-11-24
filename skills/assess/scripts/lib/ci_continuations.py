@@ -84,11 +84,13 @@ def _structural(line: str) -> bool:
 
 
 def _fold_block(lines: list[str], out: list[str], body: range) -> None:
-    """Fold a ``>`` block's adjacent non-blank lines at its base indentation."""
+    """Fold a ``>`` block's adjacent non-blank lines at its base indentation. A ``#`` line
+    there is content, not a YAML comment: ``pytest`` / ``# note`` / ``ruff check .`` folds to
+    ``pytest # note ruff check .``, whose shell runs pytest alone."""
     base = next((_indent(lines[j]) for j in body if lines[j].strip()), -1)
     first = -1
     for j in body:
-        if lines[j].strip() and _indent(lines[j]) == base and not lines[j].strip().startswith("#"):
+        if lines[j].strip() and _indent(lines[j]) == base:
             if first < 0:
                 first = j
             else:
