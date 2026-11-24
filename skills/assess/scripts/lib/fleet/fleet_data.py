@@ -54,6 +54,12 @@ when there is no ``signal`` or the manifest has no entry for it (a caller's own 
 never invented. It is the toolkit's own text, never a repository's, so counts-only keeps
 it (``FLEET_DATA_KEPT``).
 
+An unknown cell whose confirmed criteria reach level 1 or more also carries ``floor``
+(#889): that low bound, as ``lib.levels.floor_of`` reads it from the row evaluation, so a
+badge can show "at least N". The key is absent on a known cell and on an unknown one with
+no confirmed level. Achievements still read known levels only (``known_level``): a floor
+below the level a row last held would otherwise read as a slip it may not be.
+
 **Unit rows** (#866, ``lib/fleet/fleet_data_units.py``): a repository scanned with
 ``--monorepo-units`` carries ``unit_rows``, one per monorepo unit: its kind (``skill``, ``agents``,
 ``commands`` or ``package``, #1098), its Step, the Step above, the
@@ -132,7 +138,7 @@ from lib.fleet.fleet_opportunities import Opportunities, build_opportunities
 from lib.fleet.fleet_stamp import FleetStamp, RepositoryCounts
 from lib.fleet.fleet_units import Tree
 from lib.level_result_types import LevelResult, NextStep, Tally, TagCell
-from lib.levels import Evaluation, MaturityModel, Row, StepDef, evaluate_row
+from lib.levels import Evaluation, MaturityModel, Row, StepDef, evaluate_row, floor_of
 
 # 1 (#703): first version. 2 (#772): the roll-up drops ``mean_share``, ``weakest`` and
 # ``overall`` for ``lowest_level``; repositories drop ``mean_share``. Cells are unchanged.
@@ -202,6 +208,7 @@ class Cell(TypedDict):
     value: Value
     reason: str | None  # unknown cells only
     why: str | None  # the check manifest's why for ``signal`` at its level (#1128); None when none
+    floor: NotRequired[int]  # #889: an unknown cell's confirmed low bound (``lib.levels.floor_of``), at least 1
 
 
 class DataRepo(TypedDict):
@@ -227,9 +234,10 @@ class DataRepo(TypedDict):
 
 # The stamp fields RunDetails leaves out: the stamp's own envelope version, the
 # --fleet-config section counts (the sha256 is the comparability key) and the --discovered
-# coverage counts (#745; run.json and report.md carry them). A test fails when FleetStamp
+# coverage counts (#745; run.json and report.md carry them) and the collector revisions (#952;
+# run.json carries them, the rules hash is copied). A test fails when FleetStamp
 # gains a field that is neither copied below nor listed here.
-RUN_EXCLUDED = frozenset({"fleet_stamp_version", "fleet_config_entries", "coverage"})
+RUN_EXCLUDED = frozenset({"fleet_stamp_version", "fleet_config_entries", "coverage", "collectors"})
 
 
 class RunDetails(TypedDict):
@@ -247,6 +255,7 @@ class RunDetails(TypedDict):
     fleet_config_sha256: str | None  # the --fleet-config comparability key (#706)
     platform: bool  # --platform ran the platform pass (#714); False for a stamp without it
     managed_settings: bool  # --managed-settings read the machine's policy (#1153); False without it
+    rules_sha256: str | None  # the rules scored with (#952, lib/fleet/fleet_method.py); None: none or unrecorded
     repositories: RepositoryCounts
 
 
@@ -332,8 +341,11 @@ def repo_cells(rows: Sequence[Row], repo: FleetRow) -> list[Cell]:
             continue
         ev = evaluate_row(row, repo_signals(repo))
         signal, value, reason, why = _explain(row, ev)
-        cells.append({"row": row["id"], "status": ev["status"], "level": ev["level"], "top_level": top,
-                      "signal": signal, "value": value, "reason": reason, "why": why})
+        cell: Cell = {"row": row["id"], "status": ev["status"], "level": ev["level"], "top_level": top,
+                      "signal": signal, "value": value, "reason": reason, "why": why}
+        if (floor := floor_of(ev)) is not None:
+            cell["floor"] = floor  # the low bound badges read beside an unknown level (#889)
+        cells.append(cell)
     return cells
 
 
@@ -405,6 +417,7 @@ def run_details(stamp: FleetStamp) -> RunDetails:
         "fleet_config_sha256": stamp.get("fleet_config_sha256"),
         "platform": stamp.get("platform", False),
         "managed_settings": stamp.get("managed_settings", False),
+        "rules_sha256": stamp.get("rules_sha256"),
         "repositories": {"selected": counts["selected"], "scanned_ok": counts["scanned_ok"],
                          "failed": counts["failed"], "qualifying": counts["qualifying"]},
     }

@@ -9,7 +9,7 @@ the run history beside the other files.
 | Key | Value |
 |-----|-------|
 | `fleet_data_version` | Document version (4: version 4 added `step`, `next_step`, `tally`, `exclusions` and `gate_blockers` on repositories and `step` on units; version 3 added `opportunities`; the achievements engine reads versions 1 to 4 alike). |
-| `run` | The run stamp's fields from `run.json`, copied one by one: every field but `fleet_stamp_version` and `fleet_config_entries` (`platform` reads `false` for a stamp written before it). A new stamp field fails a test until it is copied or excluded here, with a `fleet_data_version` bump. |
+| `run` | The run stamp's fields from `run.json`, copied one by one: every field but `fleet_stamp_version`, `fleet_config_entries`, `coverage` and `collectors` (`platform` reads `false` for a stamp written before it; `rules_sha256`, #952, reads `null`). A new stamp field fails a test until it is copied or excluded here, with a `fleet_data_version` bump. |
 | `model` | Each maturity model row: `id`, `title`, `scope`, `top_level`. |
 | `views` | One entry per view, `ownership` and `system`, each with its `units`. |
 | `repos` | One entry per repository row, sorted by `key`. |
@@ -81,7 +81,9 @@ names the signal that could not be read and `reason` (`unavailable`, `type_misma
 `not_scanned` for a failed repository). `why` is the check manifest's why for that
 criterion at its level, the same text as the condition's `why` in `level.json`, or `null`
 when there is no `signal` or the maturity model is a caller's own (#1128); it is the
-toolkit's text, so counts-only output keeps it. `step`, `next_step` and `tally` are the
+toolkit's text, so counts-only output keeps it. An unknown cell whose confirmed criteria reach
+level 1 or more also carries `floor`, that low bound (#697, #889), so a badge can show "at least N";
+the key is absent otherwise, and achievements still count known levels only. `step`, `next_step` and `tally` are the
 repository's [`level.json`](level.md) entry for the same commit (`null` when failed or
 without `--levels`), and `exclusions` lists the conditions the owner excluded in its
 `.assess/config.toml` (#910): `id`, `kind`, `source` and `reason`, listed and never

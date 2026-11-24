@@ -23,9 +23,9 @@ _New to these words? The [glossary](https://github.com/bjcoombs/ai-native-toolki
 
 Next: Step 3 · Unattended agent PRs unlocks when CI turns red on a broken check
 
-Catalogue coverage: 0 of 4 [measured](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage), 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade) · 17 not measured (needs a full run: 1, no manifests read: 1, no ownership map: 1, no remote: 2, no skill files: 1, no skill scripts: 1, no source files: 2, no value read: 6, waits on layer-4-architecture.1: 1, unavailable: 1) · model <<normalized>>
+Catalogue coverage: 0 of 4 [measured](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage), 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade) · 18 not measured (needs a full run: 1, no manifests read: 1, no ownership map: 1, no remote: 2, no skill files: 2, no skill scripts: 1, no source files: 2, no value read: 6, waits on layer-4-architecture.1: 1, unavailable: 1) · model <<normalized>>
 
-By tag: behaviour 0 of 2 (NOT MEASURED: 2) · docs 0 of 1 (NOT MEASURED: 2) · structure 0 of 1 (NOT MEASURED: 5) · agent_context 0 of 0 (NOT MEASURED: 5) · agent_runtime 0 of 0 (NOT MEASURED: 1) · governance 0 of 0 (NOT MEASURED: 2) · supply_chain 0 of 0 (NOT MEASURED: 1)
+By tag: behaviour 0 of 2 (NOT MEASURED: 2) · docs 0 of 1 (NOT MEASURED: 2) · structure 0 of 1 (NOT MEASURED: 5) · agent_context 0 of 0 (NOT MEASURED: 5) · agent_runtime 0 of 0 (NOT MEASURED: 1) · governance 0 of 0 (NOT MEASURED: 3) · supply_chain 0 of 0 (NOT MEASURED: 1)
 
 ## Where you are on the Steps
 
@@ -101,9 +101,9 @@ _Deterministic portion of the assessment: headline, metrics, hotspots, and cross
 
 ## How this was measured
 
-In place: over 1 repository, 33 scans were measured everywhere, 18 ran but were not measured everywhere, and 0 were skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
+In place: over 1 repository, 34 scans were measured everywhere, 18 ran but were not measured everywhere, and 0 were skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
 
-### Ran (51)
+### Ran (52)
 
 - `agent_ops`
 - `config_drift`
@@ -126,6 +126,7 @@ In place: over 1 repository, 33 scans were measured everywhere, 18 ran but were 
 - `instruction_placement`
 - `skill_disclosure`
 - `skill_script_tests`
+- `skill_personal_data`
 - `org_security_policy`: not measured in 1 of 1 (no_remote)
 - `agent_consistency`
 - `ai_usage`: not measured in 1 of 1 (unavailable)

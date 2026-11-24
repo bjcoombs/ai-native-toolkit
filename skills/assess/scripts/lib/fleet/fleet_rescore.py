@@ -13,8 +13,8 @@ unit's row roll-ups are recomputed over its members, and so are the Step fields 
 repository and unit (#944, ``fleet_data.step_fields``, with counts-only privacy) and the per-tag tally
 of each repository and unit (#1073, ``fleet_data.tag_fields``): an entry written before that tally
 gains it from its stored scans (a version 1 entry's ``mean_share`` and
-``overall``, which #772 removed, are dropped), using the parents and placements the entry already stores. ``model`` and
-``run.levels_version`` become this run's. ``rescore`` returns None when a stored repository
+``overall``, which #772 removed, are dropped), using the parents and placements the entry already stores. ``model``,
+``run.levels_version`` and ``run.rules_sha256`` (#952) become this run's. ``rescore`` returns None when a stored repository
 key does not join to a scanned row under this run's key function (another salt), or a
 stored row holds no scans while ok: the caller then passes the entry over. A hashed run's
 ``repos.jsonl`` holds ids hashed at the output boundary (#909), which the key keeps as they
@@ -47,7 +47,8 @@ direction           cause                              signal shown
 A row new to the model has no stored cell to compare, so it gets no Recount line; its
 re-scored unknowns still count as rule-caused (``rule_unknowns``). ``from_version`` is the
 entry's stamped maturity-model version, or None when it stamped none (a run without
-``--levels``); a line then has no "(was ...)" clause.
+``--levels``); a line then has no "(was ...)" clause, and neither has one when the version is
+this run's (only the rules hash changed, #952).
 
 Recount lines are display-only: they never feed the replay, so they never move a streak,
 a level reached or a best share. On the next run the newest earlier entry is at the current
@@ -100,6 +101,7 @@ from lib.fleet.fleet_data_tags import tag_roll_up
 from lib.fleet.fleet_tag_profile import tag_profile
 from lib.level_result_types import TagCell
 from lib.fleet.fleet_maturity import SCOPE
+from lib.fleet.fleet_method import rules_sha256
 from lib.fleet.fleet_next_steps import code, text
 from lib.levels import MaturityModel
 from lib.signal_aliases import SIGNAL_ALIASES as SIGNAL_ALIASES
@@ -183,7 +185,8 @@ def rescore(data: FleetData, rows: Sequence[FleetRow], model: MaturityModel,
             units.append(cast(DataUnit, {**{k: v for k, v in unit.items() if k != "overall"}, "levels": levels,
                                          "step": step, "tags": tag_roll_up([tags[k] for k in mine])}))
         views.append({"view": view["view"], "units": units})
-    return {**data, "run": {**data["run"], "levels_version": model["version"]}, "model": model_rows(model),
+    return {**data, "run": {**data["run"], "levels_version": model["version"], "rules_sha256": rules_sha256(model)},
+            "model": model_rows(model),
             "views": views, "repos": repos, "tag_profile": tag_profile(model, [tags[r["key"]] for r in repos])}
 
 
@@ -215,7 +218,7 @@ def recount(stored: FleetData, rescored: FleetData, model: MaturityModel, run: s
     titles = {row["id"]: row["title"] for row in model["rows"]}
     order = {row["id"]: i for i, row in enumerate(model["rows"])}
     before = {repo["key"]: {c["row"]: c for c in repo["rows"]} for repo in stored["repos"]}
-    was = "" if from_version is None else f" (was {from_version})"
+    was = "" if from_version in (None, model["version"]) else f" (was {from_version})"
     lines: list[RecountLine] = []
     for repo in sorted(rescored["repos"], key=lambda r: r["key"]):
         for after in sorted(repo["rows"], key=lambda c: order.get(c["row"], len(order))):

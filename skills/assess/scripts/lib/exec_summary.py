@@ -9,15 +9,23 @@ it cannot import the Step sentences without an import cycle):
 
   1. ``Step N of M: <what an agent can do here>.`` The sentence is
      ``assess_diagrams_ladder.STEP_MEANING`` (the Step's model name for a Step the table
-     does not know); M is the model's top Step.
+     does not know); M is the model's top Step. Below the first Step of a model whose Step 1
+     has a gate (#889): ``Not yet at Step 1 of M.``. A Step the default model defines under the
+     same name reads its ladder sentence; any other Step reads the model's own Step name.
   2. ``Next: <the blocking gates as a task>. Then you reach Step N+1: <what it allows>.``
      Each gate is worded by ``GATE_TASK`` (an imperative), plus ``headline.gate_note`` when
      it was not measured or the owner excluded it, the same note the Next line carries. At
      the top Step: ``Next: every gate holds; keep them in place to stay at Step N.``
   3. ``Since last run: ...`` from the ``since_last_run`` block: the actions closed, the
      gates now in place and those no longer in place (``headline.GATE_CHANGE`` words), each
-     part "not known" when the block says so, ``Since last run: not known.`` when nothing is
+     part "not known" when the block says so, "model changed (default → handover); gates
+     not compared" when the previous run used another model (``lib/model_change.py``), ``Since last run: not known.`` when nothing is
      known or the block is absent or degraded, and ``First run.`` on a first run.
+
+  A run under a profile or a ``--levels`` model (#1150) opens with the lines
+  ``lib.profiles.model_lines`` gives: the model named, then whether every practice holds
+  (``Ready for handover (profile: handover).``) or exactly which do not, then the practices
+  the default model does not define, when there are any. A default run has none of them.
 
 - ``call_to_action``: ``**Start here:** [<task>](<catalog Step gates entry>)`` for the first
   blocking gate, ``""`` at the top Step. No action carries a how-to link of its own, so the
@@ -30,7 +38,11 @@ it cannot import the Step sentences without an import cycle):
 
 The lines name no layer, no condition id and no count of practices: the only "N of M" is the
 Step's place on the ladder. A headline that is unavailable, or a model without Steps, keeps
-the fields empty. Under counts-only the three fields are dropped. Tests:
+the fields empty. Under counts-only the three fields are dropped.
+
+``run_headline`` also suffixes the one-line ``summary`` with the model's label under a profile
+or a ``--levels`` model (``Step 3 · all gates held (profile: citizen)``), because the badge and
+the ``log.md`` readiness line carry only that line; a default run's summary is unchanged. Tests:
 ``tests/test_exec_summary.py``.
 """
 from __future__ import annotations
@@ -39,11 +51,15 @@ from collections.abc import Mapping
 from typing import Any, cast
 
 from lib.assess_diagrams_ladder import meaning
-from lib.headline import GATE_CHANGE, GLOSSARY_URL, gate_note
+from lib.headline import GATE_CHANGE, GLOSSARY_URL, gate_note, headline
 from lib.level_result_types import Blocker, Headline, LevelResult
+from lib.level_tally import default_model
 from lib.levels import MaturityModel
+from lib.model_change import model_changed_line
+from lib.profiles import ModelChoice, chosen_model, model_lines
 
-__all__ = ["GATE_TASK", "STEP_GATES_URL", "call_to_action", "since_line", "summarised", "summary_lines"]
+__all__ = ["GATE_TASK", "STEP_GATES_URL", "call_to_action", "run_headline", "since_line", "summarised",
+           "summary_lines"]
 
 # The catalog's Step gates entry: what each gate covers. measured_appendix.CATALOG_URL names the
 # same page; importing it here would close a cycle through lib.signals.
@@ -69,9 +85,11 @@ def _gates(level: LevelResult) -> list[Blocker]:
 
 
 def _plain(step: int, model: MaturityModel) -> str:
-    """What an agent can do at ``step``: the ladder's sentence, else the Step's model name."""
+    """What an agent can do at ``step``: the ladder's sentence for a Step the default model
+    defines under the same name, else the model's own Step name (#889, #1150), else the sentence."""
     name = next((s["name"] for s in model.get("steps", []) if s["step"] == step), "")
-    return meaning(step) or name
+    standard = next((s["name"] for s in default_model().get("steps", []) if s["step"] == step), None)
+    return (meaning(step) if name == standard else name) or meaning(step) or name
 
 
 def _gate_words(gates: list[str]) -> str:
@@ -86,6 +104,7 @@ def since_line(since: Any) -> str:
         return "First run."
     closed = since.get("closed_count")
     gained, lost = since.get("gates_gained"), since.get("gates_lost")
+    changed = model_changed_line(since)
     parts: list[str] = []
     if isinstance(closed, int):
         parts.append("no actions closed" if closed == 0 else
@@ -96,21 +115,30 @@ def since_line(since: Any) -> str:
         if lost:
             parts.append(f"no longer in place: {_gate_words(lost)}")
         if not gained and not lost:
-            parts.append("nothing gained or lost")
+            parts.append("no gate changes")
+    elif changed is not None:
+        parts.append(changed[:1].lower() + changed[1:].replace(" since last run", ""))
     if not parts:
         return "Since last run: not known."
     if not isinstance(closed, int):
         parts.append("closed actions not known")
-    elif not (isinstance(gained, list) and isinstance(lost, list)):
+    elif not (isinstance(gained, list) and isinstance(lost, list)) and changed is None:
         parts.append("gate changes not known")
     return f"Since last run: {'; '.join(parts)}."
 
 
 def summary_lines(level: LevelResult, since: Any, model: MaturityModel) -> list[str]:
     """The three summary lines; ``[]`` for a model without Steps."""
-    step = level["step"]
+    step, nxt = level["step"], level["next_step"]
     if step is None:
-        return []
+        if nxt is None or not model.get("steps"):
+            return []
+        # below the first Step of a model whose Step 1 has a gate (#889)
+        top = max(s["step"] for s in model.get("steps", []))
+        task = " and ".join(_task(b) for b in _gates(level)) or "make its gates hold"
+        return [f"Not yet at Step {nxt['step']} of {top}.",
+                f"Next: {task}. Then you reach Step {nxt['step']}: {_plain(nxt['step'], model)}.",
+                since_line(since)]
     top = max(s["step"] for s in model.get("steps", []))
     lines = [f"Step {step} of {top}: {_plain(step, model)}."]
     nxt = level["next_step"]
@@ -127,21 +155,38 @@ def summary_lines(level: LevelResult, since: Any, model: MaturityModel) -> list[
 def call_to_action(level: LevelResult) -> str:
     """The one call to action: the first blocking gate as a task, linked; ``""`` when none."""
     gates = _gates(level)
-    if level["step"] is None or not gates:
+    if not gates:  # also below Step 1, where the first gated Step's gate is the action (#889)
         return ""
     gate = gates[0].get("gate", "")
     task = GATE_TASK.get(gate, f"make the {gate} gate hold")
     return f"**Start here:** [{task[:1].upper()}{task[1:]}]({STEP_GATES_URL}){gate_note(gates[0])}."
 
 
-def summarised(block: Headline, level: Any, since: Any, model: MaturityModel) -> Headline:
+def summarised(block: Headline, level: Any, since: Any, model: MaturityModel,
+               choice: ModelChoice | None = None) -> Headline:
     """``block`` with its summary fields filled from ``level`` and ``since``; unchanged when the
-    headline is unavailable or ``level`` is not a level result."""
+    headline is unavailable or ``level`` is not a level result. ``choice`` is the run's model
+    choice: a profile or ``--levels`` model leads the lines with ``profiles.model_lines``."""
     if block.get("available") is not True or not isinstance(level, dict) or "tally" not in level:
         return block
     result = cast(LevelResult, level)  # narrowed by the tally check above
-    lines = summary_lines(result, since, model)
+    named = model_lines(result, choice)
+    lines = [*named, *summary_lines(result, since, model)]
     action = call_to_action(result)
-    first = lines[:1] and [lines[0].replace("Step", f"[Step]({GLOSSARY_URL}#step)", 1)]
-    markdown = "\n\n".join([*first, *lines[1:], *([action] if action else [])])
+    # the Step line links its first "Step" to the glossary; a profile's model lines come before it
+    at = len(named)
+    linked = [line.replace("Step", f"[Step]({GLOSSARY_URL}#step)", 1) if i == at else line
+              for i, line in enumerate(lines)]
+    markdown = "\n\n".join([*linked, *([action] if action else [])])
     return {**block, "summary_lines": lines, "call_to_action": action, "summary_markdown": markdown}
+
+
+def run_headline(level: Any, since: Any, choice: ModelChoice | None) -> Headline:
+    """The run context's ``headline`` block: the headline of ``level`` under the run's model
+    (``choice``, the default when None), summarised with ``since`` and the model lines."""
+    model = chosen_model(choice)
+    block = summarised(headline(level, model), level, since, model, choice)
+    if choice is None or choice.kind == "default":
+        return block
+    # the badge and the log.md line carry only the summary: it names the model it came from
+    return {**block, "summary": f"{block['summary']} ({choice.label})"}

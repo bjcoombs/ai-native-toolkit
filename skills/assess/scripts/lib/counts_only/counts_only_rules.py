@@ -269,7 +269,7 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
 # field in neither this set nor FLEET_DATA_RULES.
 FLEET_DATA_KEPT: Final = frozenset({
     "run.toolkit_commit", "run.plugin_version", "run.scan_date", "run.window",
-    "run.levels_version", "run.scans", "run.fleet_config_sha256",
+    "run.levels_version", "run.scans", "run.fleet_config_sha256", "run.rules_sha256",
     "model.id", "model.title", "model.scope",
     "repos.rows.row", "repos.rows.signal", "views.units.levels.row",
     # #746: maturity-model ids and the run's own wording (counts and model titles only)

@@ -198,3 +198,20 @@
 
 ---
 <!-- chain:0629f7131ea63e54 -->
+<!-- assess:run_id=20261124070603-7fa74e4a artifact_schema_version=1.43.0 -->
+## 2026-11-24 (v3.0.0, run 7fa74e4a)
+
+- Closed since last run: not known (log.md records an earlier run, but its run-context.json is not here)
+- Gates gained: not known (log.md records an earlier run, but its run-context.json is not here)
+- Gates lost: not known (log.md records an earlier run, but its run-context.json is not here)
+- Next blocker: none, every gate is held
+- **Files scored:** 1324
+- **Readiness:** Step 4 · all gates held
+- **Instructions grade:** A
+- **Hotspot transitions:** 5 graduated, 3 regressed, 0 restructured, 5 new, 2 persistent
+- **Top action:** Give the four # noqa: E402 suppressions in skills/assess/scripts/assess_report.py a recorded reason
+
+[Full report](./assess-report.md)
+
+---
+<!-- chain:5d6efc5403769315 -->

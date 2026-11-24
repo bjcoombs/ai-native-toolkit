@@ -109,7 +109,7 @@ def test_since_last_run_not_known_says_not_known(since: Any) -> None:
 
 def test_since_last_run_words_each_part_and_says_which_part_is_not_known() -> None:
     assert since_line({**KNOWN, "closed_count": 0, "gates_gained": [], "gates_lost": []}) == \
-        "Since last run: no actions closed; nothing gained or lost."
+        "Since last run: no actions closed; no gate changes."
     assert since_line({**KNOWN, "closed_count": 1, "gates_gained": [], "gates_lost": ["coverage_gate"]}) == \
         f"Since last run: 1 action closed; no longer in place: {GATE_CHANGE['coverage_gate']}."
     assert since_line({**KNOWN, "closed_count": None}) == \
@@ -191,3 +191,26 @@ def test_the_landing_page_shows_the_summary_the_code_prints() -> None:
     since = {**KNOWN, "closed_count": 1, "gates_gained": [], "gates_lost": []}
     for line in _summary(2, since)["summary_lines"]:
         assert f"<div>{line}</div>" in page, line
+
+
+def test_below_the_first_step_the_summary_names_step_1_by_the_models_name() -> None:
+    """#889: a custom model whose Step 1 has a gate; a repository below it gets a full summary,
+    worded from the model's own Step name, and the call to action, all plain English."""
+    from lib.plain_english import lint
+    model = {**default_model(), "steps": [
+        {"step": 1, "name": "agents open reviewed pull requests", "gates": [{"id": "own_gate", "row": "c", "level": 1}]},
+        {"step": 2, "name": "agents merge on green", "gates": [{"id": "own_gate", "row": "c", "level": 1}]}]}
+    gate = {"kind": "gate", "gate": "own_gate", "condition": "c.1", "state": "unmet"}
+    level: Any = _level(step=None, next_step={"step": 1, "blockers": [gate]})
+    lines = summary_lines(level, {"available": True, "first_run": True}, model)
+    assert lines == ["Not yet at Step 1 of 2.",
+                     "Next: make the own_gate gate hold. Then you reach Step 1: agents open reviewed pull requests.",
+                     "First run."]
+    action = call_to_action(level)
+    assert action == f"**Start here:** [Make the own_gate gate hold]({STEP_GATES_URL})."
+    assert [i for text in (*lines, action) for i in lint(text)] == []
+    block = summarised(headline(level, model), level, None, model)
+    assert block["summary_markdown"].startswith(f"Not yet at [Step]({GLOSSARY_URL}#step) 1 of 2.")
+    # one rule: Step 1 reads the same once the repository reaches it
+    at_one: Any = _level(step=1, next_step={"step": 2, "blockers": [gate]})
+    assert summary_lines(at_one, None, model)[0] == "Step 1 of 2: agents open reviewed pull requests."

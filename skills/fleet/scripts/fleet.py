@@ -99,7 +99,7 @@ Exit codes:
        --discovered listing (the message names the line)
 
 Run:
-    uv run fleet.py ROOT --out DIR [--levels FILE] [--settings PATH] [--units FILE] [--jobs N] [--window 6mo]
+    uv run fleet.py ROOT --out DIR [--levels FILE | --profile NAME] [--settings PATH] [--units FILE] [--jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
         [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
         [--no-history] [--no-diagrams] [--fleet-config FILE] [--name-agent-clusters] [--discovered FILE]
@@ -231,8 +231,10 @@ from lib.fleet.fleet_platform import (  # noqa: E402
 from lib.fleet.fleet_scanner_diff import row_signals, scanner_diff  # noqa: E402
 from lib.fleet.fleet_trends import TrendRun, history_runs, series_runs, trend_run  # noqa: E402
 from lib.fleet.fleet_view import FleetViewError  # noqa: E402
+from lib.fleet.fleet_method import rules_sha256  # noqa: E402
 from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp, build_stamp, write_stamp  # noqa: E402
 from lib.levels import add_renamed_flag, LevelsError, load_levels, MaturityModel  # noqa: E402
+from lib.profiles import ProfileError, add_model_arguments, profile_path  # noqa: E402
 from lib.level_signals import signal_path_validator  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 from lib.tool_lookup import warn_missing_packages  # noqa: E402
@@ -278,6 +280,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Maturity model (TOML, lib/levels.py format). Each group row in groups.jsonl "
              "carries every maturity model row's whole level (or unknown) and the aggregation rule used.",
     )
+    add_model_arguments(parser, levels=False)
     parser.add_argument(
         "--settings", metavar="PATH",
         help="Group settings from ghreport (#565): a JSON fragment file, a JSON array of "
@@ -407,6 +410,14 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         parser.error("--platform-jobs and --platform-timeout must be at least 1")
     if not args.platform and (args.platform_jobs is not None or args.platform_timeout is not None):
         parser.error("--platform-jobs and --platform-timeout apply to --platform")
+    if args.profile is not None:
+        # A profile is a shipped --levels file (lib/profiles.py, #1150): every --levels rule holds.
+        if args.levels is not None:
+            parser.error("--profile and --levels each choose the model: pass one")
+        try:
+            args.levels = str(profile_path(args.profile))
+        except ProfileError as e:
+            parser.error(str(e))
     if args.monorepo_units and args.levels is None:
         parser.error("--monorepo-units needs --levels: a unit's Step comes from the maturity model")
     if args.scans is not None:
@@ -756,6 +767,7 @@ def main(argv: list[str] | None = None) -> int:
     planned: JsonDict = {
         "fleet_stamp_version": FLEET_STAMP_VERSION,
         "levels_version": maturity_model["version"] if maturity_model is not None else None, "window": window,
+        "rules_sha256": rules_sha256(maturity_model),  # a same-day rerun under edited rules is kept apart (#952)
         "counts_only": not args.full, "scans": sorted(scans) if scans is not None else None,
         "paths_hashed": hash_salt is not None,
         "fleet_config_sha256": config_sha256(fleet_config) if fleet_config is not None else None,
@@ -825,7 +837,7 @@ def main(argv: list[str] | None = None) -> int:
         today=today, window=window, levels_version=maturity_model["version"] if maturity_model is not None else None,
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
         fleet_config=fleet_config, platform=platform_ran, coverage=coverage,
-        managed_settings=options.managed_settings,
+        managed_settings=options.managed_settings, model=maturity_model,
     )
     write_stamp(out_dir, stamp)
     demoted = _condition_effect(out_dir, maturity_model, stamp, public, org_dir, entry)

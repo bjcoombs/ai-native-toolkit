@@ -87,7 +87,7 @@ class LevelResult(TypedDict):
     listed: list[str]  # listed (not counted) conditions met
     not_measured: list[NotMeasured]
     conditions: list[ConditionResult]
-    step: int | None  # None: the model defines no Steps
+    step: int | None  # None: the model defines no Steps, or below Step 1 (next_step set, #889)
     next_step: NextStep | None  # None: no Steps, or the top Step is held
     excluded: NotRequired[list[ExcludedCondition]]  # present only when the owner excluded a condition
     tags: NotRequired[list[TagRow]]  # #940: every truth tag, in TRUTH_TAGS order; absent before #940
@@ -145,7 +145,7 @@ class Headline(TypedDict):
     headline_version: int
     available: bool
     levels_version: str | None
-    step: int | None  # None: not measured, or the model defines no Steps
+    step: int | None  # None: not measured, no Steps, or below Step 1 (next_step set, #889)
     next_step: int | None  # None: at the top Step, no Steps, or not measured
     lines: list[str]
     markdown: str  # the lines as Markdown, pasted verbatim into the report

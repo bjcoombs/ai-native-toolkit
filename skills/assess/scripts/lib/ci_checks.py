@@ -181,7 +181,10 @@ kept off by triggers like any step. A step whose literal ``with:`` input makes i
 install only (``ruff-action`` ``args: --version``, ``golangci-lint-action`` v9+
 ``install-only: true``; ``lib.ci_lint_inputs``, #893) is no lint run, and one whose
 deciding input is not a literal it reads (a ``${{ }}`` expression) reads as a step that
-may lint: ``check_target`` (null) unless another line settles it. A lone ``- flake8`` item counts under a
+may lint: ``check_target`` (null) unless another line settles it. A reviewdog step
+without a literal failing ``fail_level`` (``any`` / ``info`` / ``warning`` / ``error``) never
+fails its job (the default is ``fail_level: none``; ``fail_on_error: true`` alone counts
+only for action-tfsec), so it reads ``check_may_pass`` (null). A lone ``- flake8`` item counts under a
 GitLab ``script:`` key and nowhere else. ``pre-commit/action`` runs
 ``pre-commit run --all-files`` and reads as that line does (below). A check
 target or script may run a linter inside it, and the line alone cannot show
@@ -491,7 +494,8 @@ def _trigger_tally(text: str, workflow: Trigger | None,
     for no test but ``_line_may_check``, which counts it when it runs or may run a check (#799).
     An ``unknown`` line (a matrix command not expanded, ``lib.ci_matrix``, #923) counts for
     ``_line_may_check`` whatever it holds, unless masked. A ``lint_inputs`` step
-    (``lib.ci_lint_inputs``, #893) is no lint run; an unsure one counts for ``_line_may_lint``.
+    (``lib.ci_lint_inputs``, #893) is no lint run; an unsure one counts for ``_line_may_lint``,
+    and a may-pass one (a reviewdog step that cannot fail) counts as a lint line that may pass.
     A ``may_pass_lines`` line (a job or step under a ``continue-on-error`` expression,
     ``lib.ci_expressions``, #1165) that the masking left unmasked reads as one whose failure
     may not fail the job.
@@ -514,14 +518,17 @@ def _trigger_tally(text: str, workflow: Trigger | None,
     steps = lint_inputs.install_only | lint_inputs.unsure
     for test in tests:
         skip = steps if _is_lint_test(test) else frozenset()
+        passing = lint_inputs.may_pass if _is_lint_test(test) else frozenset()
         extra = (gated if _is_lint_test(test) else unknown if test is _line_may_check
                  else lint_inputs.unsure if test is _line_may_lint else frozenset())
-        counts = [count_check_lines(_drop(k, skip), context=lines, test=test, extra=extra) for k in kept]
+        counts = [count_check_lines(_drop(k, skip | (passing if n < 2 else frozenset())), context=lines,
+                                    test=test, extra=extra) for n, k in enumerate(kept)]
         if test is _line_may_check and declared:
             counts = [c + count_check_lines(h, context=lines, test=_declared_check, extra=unknown)
                       for c, h in zip(counts, held_kept, strict=True)]
         # extra too: an unknown command under a continue-on-error expression is a may-pass line
         may_pass = sum(count_check_lines(_drop(k, skip), context=lines, test=test, extra=extra) for k in may)
+        may_pass += sum(1 for k in kept[:2] for i in passing if k[i].strip())   # reviewdog (#893)
         total = count_check_lines(_drop(lines, declared | skip), context=lines, test=test, extra=extra)
         masked = max(total - sum(counts) - may_pass, 0)
         out.append((counts[0], counts[1], counts[2], masked, may_pass))

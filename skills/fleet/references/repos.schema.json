@@ -700,7 +700,7 @@
                     "boolean",
                     "null"
                   ],
-                  "description": "Layer 3 level 1 (issue #782): true when a CI line runs a linter that can fail its job on ordinary changes (not --version or --help), or a step uses a known lint action (golangci-lint-action, ruff-action, super-linter, reviewdog) not set to install only (issue #893: ruff-action args --version, golangci-lint-action install-only true), null when none does but included jobs, unsettled triggers, a lint script the tree does not hold or a check target or script that may lint inside it could hold one, or when the only static gate is a compiler run with warnings as errors or a .NET build's analysers (issue #926), else false. A formatter that rewrites files counts only when a later line of its job runs git diff --exit-code."
+                  "description": "Layer 3 level 1 (issue #782): true when a CI line runs a linter that can fail its job on ordinary changes (not --version or --help), or a step uses a known lint action (golangci-lint-action, ruff-action, super-linter, reviewdog) not set to install only (issue #893: ruff-action args --version, golangci-lint-action install-only true), null when none does but included jobs, a reviewdog step with no failing fail_level (it cannot fail its job), unsettled triggers, a lint script the tree does not hold or a check target or script that may lint inside it could hold one, or when the only static gate is a compiler run with warnings as errors or a .NET build's analysers (issue #926), else false. A formatter that rewrites files counts only when a later line of its job runs git diff --exit-code."
                 },
                 "lint_basis": {
                   "enum": [
@@ -1322,6 +1322,30 @@
                   "reason": {
                     "type": "string",
                     "description": "'code: sentence'. The codes name the missing piece: network (no AI review step is committed in CI, and a headless run without --platform makes no GitHub or GitLab read); no_remote (no AI review step is committed in CI and the repository has no GitHub or GitLab remote, so there are no merged changes to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
+            "skill_personal_data": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'. The codes name the missing piece: skill_files_unread (a skill or agent file could not be read, and none of those read holds a detected kind). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
                   }
                 },
                 "required": [

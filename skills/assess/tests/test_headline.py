@@ -97,6 +97,17 @@ def test_a_model_without_steps_says_so_with_no_count():
     assert h["lines"][0].startswith("Catalogue coverage: ")
 
 
+def test_below_the_first_step_the_next_line_names_step_1():
+    """#889: under a custom model whose Step 1 has a gate, a repository below it still reads Next."""
+    model = {**default_model(), "steps": [{"step": 1, "name": "First", "gates": [
+        {"id": "own_gate", "row": "c", "level": 1}]}]}
+    gate = {"kind": "gate", "gate": "own_gate", "condition": "c.1", "state": "unmet"}
+    h = headline(_level(step=None, next_step={"step": 1, "blockers": [gate]}), model)
+    assert h["lines"][0] == "Next: Step 1 · First unlocks when the own_gate gate holds"
+    assert h["lines"][1].startswith("Catalogue coverage: ") and h["markdown"].startswith("**Next: Step 1")
+    assert h["summary"] == "no Step yet · next: own_gate"  # the badge agrees with the headline
+
+
 def test_not_measured_gate_says_so():
     gate = {"kind": "gate", "gate": "ci_runs_tests", "condition": "layer-5-ci.1",
             "state": "not_measured", "reason": "needs_platform"}

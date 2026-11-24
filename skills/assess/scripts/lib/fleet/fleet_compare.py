@@ -10,7 +10,8 @@ major version and the stamp version must match. A comparison is also refused
 in maturity-model version, window, output mode, scan selection, path hashing or
 ``--fleet-config`` (its ``fleet_config_sha256``; a stamp from before #706 reads as
 no fleet config) or ``--platform`` (``platform``; a stamp from before #714 reads
-as ``false``), or when
+as ``false``) or in the rules of the maturity model (``rules_sha256``, #952, when both
+stamps record one; a stamp from before #952 compares with a note), or when
 the earlier run's files are at another envelope version (``RunVersionError``
 from ``load_run`` becomes such a reason in ``not_comparable``).
 
@@ -55,7 +56,9 @@ turn into a not-comparable result). `comparability` reuses
 `diff_reliability._diff_is_reliable` for the plugin major version and stamp version and
 adds maturity-model version, window, output mode, scan selection, path hashing and the
 `--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config) and
-`platform` (a pre-#714 stamp is false); any reason
+`platform` (a pre-#714 stamp is false), and the rules hash (`rules_sha256`, #952,
+`lib/fleet/fleet_method.py`: a reason only when both stamps recorded one; an unrecorded side
+or a collector revision change is a note, printed by `summary_lines` too); any reason
 gives `comparable: false` with no deltas. `compare` reports the measured-set movement
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
 the row's `active`) apart from level movement: each group's maturity model rows then and now with
@@ -89,6 +92,7 @@ from lib.fleet.fleet_data import FLEET_DATA_FILE
 from lib.fleet.fleet_level import LEVEL_FILE
 from lib.fleet.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow, RowLevel
 from lib.fleet.fleet_legacy import stamp_value, upgrade
+from lib.fleet.fleet_method import METHOD_PREFIXES, method_notes, rule_reasons
 from lib.levels import floor_of
 from lib.signal_aliases import renamed
 from lib.fleet.fleet_view import FleetViewError, load_groups, read_repos
@@ -302,8 +306,9 @@ def comparability(earlier: FleetStamp, later: FleetStamp) -> tuple[list[str], li
         then, now = stamp_value(earlier, key), stamp_value(later, key)
         if then != now:
             reasons.append(f"{label} changed {then!r}->{now!r}")
+    reasons += rule_reasons(earlier, later)  # the rules hash (#952): only when both recorded one
     notes = [HASH_NOTE] if earlier.get("paths_hashed") and later.get("paths_hashed") else []
-    return reasons, notes
+    return reasons, notes + method_notes(earlier, later)
 
 
 def _summary(stamp: FleetStamp) -> StampSummary:
@@ -578,7 +583,7 @@ def summary_lines(comparison: Comparison) -> list[str]:
 
 
 def _scanner_notes(comparison: Comparison) -> list[str]:
-    return [note for note in comparison["notes"] if note.startswith(UNAVAILABLE_PREFIX)]
+    return [note for note in comparison["notes"] if note.startswith((UNAVAILABLE_PREFIX, *METHOD_PREFIXES))]
 
 
 def _why(row: RowMove) -> str:
