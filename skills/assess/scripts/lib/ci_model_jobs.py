@@ -4,8 +4,9 @@ A CI job that calls a model API costs money on every run. One that runs on every
 default branch or every pull request update, with nothing to limit it, costs in step with merge
 volume rather than with changes to the prompts it tests. This module finds those jobs in the
 committed CI files and says whether each one is gated. Rules only, no model; one
-``IndentTree`` walk per file (``lib.ci_masking``), no YAML parser. The full reference (the sign
-and gate tables, the trigger rules and the known limits) is ``lib/docs/ci_model_jobs.md``.
+``IndentTree`` walk per file (``lib.ci_masking``), no YAML parser. The sign and gate tables,
+the trigger rules and the known limits are in the long reference.
+Full reference: lib/docs/ci_model_jobs.md.
 
 **A model-backed job** (``signs``): a ``run:`` or ``script:`` line runs an eval harness
 (``eval_harness``: promptfoo eval, deepeval test, oaieval, inspect eval, lm_eval, ragas) or the
