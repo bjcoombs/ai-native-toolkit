@@ -157,6 +157,24 @@ def test_home_and_backslash_paths_are_refused(tmp_path: Path) -> None:
     assert "'/'" in _error(tmp_path, _check('exists = "docs\\\\a.md"'))
 
 
+@pytest.mark.parametrize("path, expect", [
+    ("a\\u0000b", "control character"),
+    ("docs/\\tx.md", "control character"),
+    (".", "'.' segment"),
+    ("./docs/a.md", "'.' segment"),
+    ("docs//a.md", "empty"),
+    ("docs/", "empty"),
+])
+def test_non_canonical_path_is_refused(tmp_path: Path, path: str, expect: str) -> None:
+    message = _error(tmp_path, _check(f'exists = "{path}"'))
+    assert expect in message and "exists" in message
+
+
+def test_key_file_suffix_ignores_case(tmp_path: Path) -> None:
+    pack = load_pack(_write(tmp_path, _check('key_exists = { file = "Service.YAML", key = "a" }')))
+    assert pack["checks"][0]["rule"] == {"kind": "key_exists", "file": "Service.YAML", "key": "a"}
+
+
 def test_dotted_names_are_not_dotdot(tmp_path: Path) -> None:
     pack = load_pack(_write(tmp_path, _check('glob_count = "..github/x..md"')))
     assert pack["checks"][0]["rule"] == {"kind": "glob_count", "glob": "..github/x..md"}

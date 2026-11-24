@@ -44,8 +44,10 @@ Rules:
   ``key_exists`` names a ``.toml``, ``.yaml``, ``.yml`` or ``.json`` file and a
   dotted key with no empty segment.
 - Every path and glob is relative to the assessed repository root, written with
-  ``/``. An absolute path, a ``..`` segment, a ``~`` path or a backslash is a
-  load error.
+  ``/`` in canonical form. An absolute path, a ``..``, ``.`` or empty segment
+  (``./a``, ``a//b``, ``docs/``), a ``~`` path, a backslash or a control
+  character is a load error, so the collector never has to normalise a path.
+  The ``key_exists`` suffix match ignores case.
 - Key sets are closed, as in ``lib/levels.py``: an unknown key anywhere is a load
   error naming its location. A key that would run code (``CODE_KEYS``) gets its
   own error that names the fix: express the check as one of the four rules;
@@ -214,6 +216,7 @@ def _parse_rule(kind: str, value: object, where: str) -> Rule:
                 "text": _text(value.get("text"), f"{where}.text")}
     _check_keys(value, _KEY_EXISTS_KEYS, where)
     file = _relative(value.get("file"), f"{where}.file")
+    # Case-insensitive: ``Service.YAML`` loads, so the collector (#1273) picks its reader the same way.
     if not file.lower().endswith(KEY_FILE_SUFFIXES):
         raise PackError(f"{where}.file: {file!r} must be a {', '.join(KEY_FILE_SUFFIXES)} file")
     key = _text(value.get("key"), f"{where}.key")
@@ -255,6 +258,11 @@ def _relative(value: object, where: str) -> str:
         raise PackError(f"{where}: {text!r} is a home-directory path; use a path relative to the repository root")
     if PurePosixPath(text).is_absolute() or PureWindowsPath(text).drive:
         raise PackError(f"{where}: {text!r} is absolute; use a path relative to the repository root")
-    if ".." in text.split("/"):
+    if any(ord(ch) < 0x20 or ch == "\x7f" for ch in text):
+        raise PackError(f"{where}: {text!r} holds a control character")
+    segments = text.split("/")
+    if ".." in segments:
         raise PackError(f"{where}: {text!r} has a '..' segment; paths stay inside the repository root")
+    if any(seg in ("", ".") for seg in segments):
+        raise PackError(f"{where}: {text!r} has an empty or '.' segment; write the path in canonical form")
     return text
