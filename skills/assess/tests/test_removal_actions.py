@@ -154,10 +154,10 @@ def test_a_degraded_run_keeps_the_baseline_and_the_ledger(tmp_path: Path, monkey
                                                    encoding="utf-8")
     _commit(repo, "2026-11-22T11:00:00Z", "mark the fix done")
 
-    def boom(_ctx: Any) -> Any:
+    def boom(_ctx: Any, _choice: Any) -> Any:
         raise RuntimeError("scan timed out")
     with monkeypatch.context() as m:
-        m.setattr(cs, "run_context_level", boom)
+        m.setattr(cs, "run_level", boom)  # the level scan's engine (lib.profiles.run_level, #1150)
         degraded = _run(repo, "2026-11-22")
     assert (repo / ".assess" / "prior-level.json").read_bytes() == stored  # untouched
     assert f"`{first['run_id']}`" in "\n".join(degraded["since_last_run"]["lines"])

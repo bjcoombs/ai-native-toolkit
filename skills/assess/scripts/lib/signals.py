@@ -341,6 +341,7 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
     (``ai_usage``, #547). ``fleet_config`` is the ``--fleet-config`` file merged
     with the target's ``.assess/config.toml`` sections (``lib/fleet_config.py``, #706).
     ``ghsync_root`` is ``--ghsync-root``, the root GitLab includes resolve against (#766).
+    ``maturity_model`` is None: no headless scan evaluates a maturity model (#1150).
     ``managed_settings`` is ``--managed-settings`` (#1153): ``agent_ops`` reads this machine's
     Claude Code managed settings. Never read from the target's ``.assess/config.toml``.
     Besides the ``build_run_context`` arguments, it supplies the setup values
@@ -353,6 +354,7 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
         "requested_scope": scope,
         "run_date": datetime.now(timezone.utc).date().isoformat(),
         "non_interactive": True,
+        "maturity_model": None,  # the headless runner reports no level (/fleet --levels scores the rows)
         "managed_settings": managed_settings,
         "instruction_files": instruction_files,
         "scope": scope,
