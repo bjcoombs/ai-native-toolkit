@@ -23,6 +23,11 @@ reads the run context; nothing writes a file or recomputes ``since_last_run``:
 - **No baseline.** ``no_baseline`` is True on a first run or when the run context carries no
   committed baseline (``prior_level.baseline`` absent): there is nothing to compare with, so
   the gate passes and the log says so.
+- **Not compared.** ``not_compared`` gives the reason no gate was compared across maturity
+  models (#1150): the ``since_last_run`` model-changed line, or, for a run under a profile or
+  ``--levels`` model, that the committed baseline holds the default model's gates only. The
+  gate prints it as a warn line instead of "clean snapshot", so a check that compared nothing
+  never reads clean.
 
 Tests: ``tests/test_gate_loss.py`` and ``tests/test_assess_gate.py``.
 """
@@ -33,9 +38,23 @@ from typing import Any
 
 from lib.level_tally import default_model, gate_blockers
 from lib.levels import StepDef
+from lib.model_change import model_changed_line, model_name
+from lib.prior_level import default_level
 
-__all__ = ["baseline_step", "held_at_baseline", "lost_gates", "no_baseline", "split_lost",
-           "step_change"]
+__all__ = ["baseline_step", "held_at_baseline", "lost_gates", "no_baseline", "not_compared",
+           "split_lost", "step_change"]
+
+
+def not_compared(ctx: Mapping[str, Any]) -> str | None:
+    """Why this run compared no gate with the committed baseline across maturity models, or None."""
+    changed = model_changed_line(ctx.get("since_last_run"))
+    if changed is not None:
+        return changed
+    level = ctx.get("level")
+    if default_level(level):
+        return None
+    name = model_name(level["levels_version"]) if isinstance(level, Mapping) else "?"
+    return f"this run used {name}, and the committed baseline holds the default model's gates only"
 
 
 def _steps() -> list[StepDef]:

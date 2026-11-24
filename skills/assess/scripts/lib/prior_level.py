@@ -18,7 +18,8 @@ is any shape other than ``PriorLevel`` (a version this reader does not know, a t
 an unreadable earlier run is never drawn, and the strip says it could not be read.
 ``write_prior_level`` writes nothing when the level result has no ``tags`` (a degraded level
 block) and leaves the previous good run's file as it was (#1158), so its baseline and pruning
-ledger survive one failed run; the strip still compares only runs counted under the same model
+ledger survive one failed run; it writes nothing under a profile or ``--levels`` model either
+(``default_level``, #1150), so the file only ever holds the default model's baseline; the strip still compares only runs counted under the same model
 (``same_model``).
 The strip draws the earlier run only when its ``levels_version`` equals this run's
 (``same_model``); otherwise it says why in one line.
@@ -206,17 +207,29 @@ def load_prior_level(assess_dir: Path) -> PriorLevel | PriorLevelUnread | None:
     return prior if prior is not None else {**UNREADABLE}
 
 
+def default_level(level: Any) -> bool:
+    """True when ``level`` was counted under the default model (a ``default-<date>`` version)
+    or names no model (a degraded level, which ``build_prior_level`` already keeps out)."""
+    version = level.get("levels_version") if isinstance(level, Mapping) else None
+    return not isinstance(version, str) or version.startswith("default-")
+
+
 def write_prior_level(assess_dir: Path, level: Any, baseline: Baseline | None = None,
                       pruning: list[PruningEntry] | None = None) -> Path | None:
     """Write this run's ``prior-level.json`` (sorted keys, LF).
 
     A run whose level block has no tags (a degraded level) leaves the existing file untouched
     (#1158): it holds the previous good run's baseline and pruning ledger, which the next good
-    run compares with. A symlink in the file's place is removed, never written through. A file
+    run compares with. A run under a profile or a ``--levels`` model (``default_level`` False,
+    #1150) leaves it untouched too: the committed baseline is the default model's, which the
+    CI gate compares with, so a profile run never disarms ``fail_on_gate_loss``. A symlink in
+    the file's place is removed, never written through. A file
     that cannot be written (``OSError``) is named on stderr and skipped, as
     ``assess_diagrams.write_diagrams`` does: the record never stops a run. Returns the path
     written, or None."""
     path = assess_dir / PRIOR_LEVEL_FILE
+    if not default_level(level):
+        return None
     content = build_prior_level(level, baseline, pruning)
     try:
         if path.is_symlink():

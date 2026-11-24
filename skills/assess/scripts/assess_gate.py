@@ -22,7 +22,8 @@ snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
   could not be read this run (``not_measured``) is a warn line, never a loss.
   A loss counts only against the committed baseline: one ``since_last_run`` read from an
   earlier ``run-context.json`` left on disk is a warn line. Without the opt-in a lost
-  gate is a warn line only.
+  gate is a warn line only. A run whose gates were not compared across maturity models
+  (``gate_loss.not_compared``, #1150) prints a warn line naming why, never "clean snapshot".
 
 A third, explanatory part: when the committed ``.assess/findings.json`` (read
 from disk, or the prior the run recorded before rewriting it) was
@@ -64,7 +65,7 @@ from typing import Any, NotRequired, TypedDict, cast
 # scripts/ is on sys.path (pyproject pythonpath); lib is a package under it.
 from lib.assess_config import GateConfig, load_gate_config, load_gate_config_file
 from lib.findings_snapshot import committed_prior, method_change
-from lib.gate_loss import held_at_baseline, no_baseline, split_lost, step_change
+from lib.gate_loss import held_at_baseline, no_baseline, not_compared, split_lost, step_change
 from lib.reviewed_findings import open_findings
 from lib.run_context_types import DerivedFinding, JsonDict, MethodChange
 
@@ -98,6 +99,8 @@ class GateVerdict(TypedDict):
     gates_lost_warning: NotRequired[list[str]]
     # Gates the baseline held that this run could not read: unknown, never a loss.
     gates_unread_warning: NotRequired[list[str]]
+    # Why no gate was compared across maturity models (#1150): a warn line, never "clean".
+    gates_not_compared: NotRequired[str]
     # fail_on_gate_loss is on but there is no committed baseline to compare with.
     no_baseline: NotRequired[bool]
 
@@ -266,6 +269,9 @@ def evaluate(ctx: JsonDict, gate: GateConfig) -> GateVerdict:
         verdict["gates_unread_warning"] = unread
     if gate.get("fail_on_gate_loss") and no_baseline(ctx):
         verdict["no_baseline"] = True
+    reason = not_compared(ctx)
+    if reason is not None:
+        verdict["gates_not_compared"] = reason
     return verdict
 
 
@@ -313,13 +319,19 @@ def format_verdict(verdict: GateVerdict) -> str:
             f"  warn no longer measured: {', '.join(unread)} held at the committed "
             "baseline and could not be read this run, so it is not counted as lost"
         )
+    skipped = verdict.get("gates_not_compared")
+    if skipped:
+        lines.append(
+            f"  warn gates not compared: {skipped}. fail_on_gate_loss compares runs of one "
+            "maturity model, so commit a default-model run to re-arm it"
+        )
     if verdict.get("no_baseline"):
         lines.append(
             "  no baseline yet: commit .assess/prior-level.json from an /assess run "
             "so the next run can compare gates and Steps"
         )
     if (not verdict["failures"] and not verdict["threshold_breaches"]
-            and not verdict["warnings"] and not lost and not unread):
+            and not verdict["warnings"] and not lost and not unread and not skipped):
         lines.append("  no findings fired - clean snapshot")
     disclosure = _format_exclusion_disclosure(verdict.get("excluded_by_config"))
     if disclosure:

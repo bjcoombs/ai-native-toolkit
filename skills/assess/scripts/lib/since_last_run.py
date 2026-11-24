@@ -8,7 +8,9 @@ this run's publish step overwrites any of them:
   (``prior_level.load_baseline``, #1122: the run id, its measured commit and the gates it
   held, written by ``baseline_record`` at publish), so a fresh clone or a CI checkout has
   one; else ``run-context.json`` in the run's ``.assess/`` directory as the previous run left
-  it (gitignored, so often only on the machine that ran it). None there, and no earlier run in ``log.md``, means this is the
+  it (gitignored, so often only on the machine that ran it). A run under a profile or a
+  ``--levels`` model skips the committed baseline, which holds the default model's gates only
+  (#1150), and reads ``run-context.json``. None there, and no earlier run in ``log.md``, means this is the
   first run, and the section says so; a log with earlier runs but no context (it is often
   gitignored, so a fresh clone or CI has none) is unknown, ``previous_state_missing``.
   A file that cannot be read gives unknowns (``None``, ``previous_unreadable``), never a
@@ -68,7 +70,7 @@ from typing import Any
 from lib.headline import GATE_NOUN
 from lib.level_tally import default_model, gate_blockers
 from lib.levels import StepDef
-from lib.prior_level import Baseline, PruningEntry, build_prior_level, load_baseline, load_pruning
+from lib.prior_level import Baseline, PruningEntry, build_prior_level, default_level, load_baseline, load_pruning
 from lib.pruning_ledger import ledger_lines, removal, update_ledger
 from lib.reviewed_findings import action_entries
 from lib.run_context_types_since import ClosedAction, SinceLastRun
@@ -269,8 +271,8 @@ def _markdown(lines: list[str]) -> str:
     return "\n".join(f"  - {line.strip()}" if line.startswith("  ") else f"- {line}" for line in lines)
 
 
-def _baseline(assess_dir: Path, superseded: Any) -> tuple[bool, str | None, Mapping[str, Any] | None,
-                                                         Mapping[str, Any] | None]:
+def _baseline(assess_dir: Path, superseded: Any, committed: bool = True
+              ) -> tuple[bool, str | None, Mapping[str, Any] | None, Mapping[str, Any] | None]:
     """``(first_run, why the previous state is unknown, previous context, inherited block)``.
 
     Read order: the superseded run's own block (below), then the committed baseline in
@@ -287,15 +289,18 @@ def _baseline(assess_dir: Path, superseded: Any) -> tuple[bool, str | None, Mapp
 
     A run that supersedes a same-day run on the same commit (``superseded``) takes that run's
     own baseline from its ``since_last_run`` block, so the credit it showed is not lost when
-    its log entry is replaced; the commit is the same, so its gate changes still hold."""
+    its log entry is replaced; the commit is the same, so its gate changes still hold.
+
+    ``committed`` False (a run under a profile or a ``--levels`` model, #1150) skips the
+    committed baseline: it holds the default model's gates only."""
     if isinstance(superseded, Mapping):
         inherited = superseded.get("since_last_run")
         if isinstance(inherited, Mapping) and inherited.get("available") is True:
             return bool(inherited.get("first_run")), None, None, inherited
-    committed = load_baseline(assess_dir)  # the committed baseline first (#1122)
-    if committed is not None:
-        return False, None, {"run_id": committed.get("run_id"), "head_sha": committed["head_sha"],
-                             "held_gates": committed["held_gates"]}, None
+    stored = load_baseline(assess_dir) if committed else None  # the committed baseline first (#1122)
+    if stored is not None:
+        return False, None, {"run_id": stored.get("run_id"), "head_sha": stored["head_sha"],
+                             "held_gates": stored["held_gates"]}, None
     path = assess_dir / "run-context.json"
     if not path.is_file():
         return ((False, "previous_state_missing", None, None) if (assess_dir / "log.md").is_file()
@@ -344,7 +349,7 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
                    instruction_placement: Any = None) -> SinceLastRun:
     """The ``since_last_run`` block for this run's ``level`` block (see the module docstring)."""
     steps = default_model().get("steps", [])
-    first, unknown, prev, inherited = _baseline(assess_dir, superseded)
+    first, unknown, prev, inherited = _baseline(assess_dir, superseded, default_level(level))
     held_before: list[str] | None = None  # the gates held at the previous run, for the ledger
     if inherited is not None:
         previous_commit, run_id = inherited.get("previous_commit"), inherited.get("previous_run_id")

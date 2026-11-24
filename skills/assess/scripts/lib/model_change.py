@@ -50,7 +50,7 @@ from typing import Any, cast
 from lib.headline import GATE_NOUN
 from lib.levels import LevelsError, MaturityModel, load_levels
 from lib.level_tally import default_model
-from lib.prior_level import load_prior_level
+from lib.prior_level import default_level, load_prior_level
 from lib.profiles import CUSTOM_MODEL_SUFFIX, ModelChoice, profile_names, profile_path
 from lib.run_context_types_since import SinceLastRun
 from lib.since_last_run import gate_changes
@@ -116,13 +116,14 @@ def _version(level: Any) -> str | None:
     return version if isinstance(version, str) else None
 
 
-def previous_levels_version(assess_dir: Path, superseded: Any) -> str | None:
-    """The previous run's ``levels_version``, read in ``since_last_run``'s baseline order."""
+def previous_levels_version(assess_dir: Path, superseded: Any, level: Any = None) -> str | None:
+    """The previous run's ``levels_version``, read in ``since_last_run``'s baseline order; under a
+    profile or ``--levels`` ``level`` that order skips ``prior-level.json``, as it does."""
     if isinstance(superseded, Mapping):
         inherited = superseded.get("since_last_run")
         if isinstance(inherited, Mapping) and inherited.get("available") is True:
             return _version(superseded.get("level"))
-    prior = load_prior_level(assess_dir)
+    prior = load_prior_level(assess_dir) if default_level(level) else None
     if isinstance(prior, Mapping) and isinstance(prior.get("baseline"), Mapping):
         return _version(prior)
     try:

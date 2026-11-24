@@ -87,10 +87,12 @@ def test_the_previous_version_follows_the_baseline_order(tmp_path: Path) -> None
     assert previous_levels_version(tmp_path, None) is None
     (tmp_path / "run-context.json").write_text(json.dumps({"level": {"levels_version": "ctx-1"}}), encoding="utf-8")
     assert previous_levels_version(tmp_path, None) == "ctx-1"
-    write_prior_level(tmp_path, _level(HANDOVER))  # no baseline: run-context.json still decides
+    write_prior_level(tmp_path, _level(None))  # no baseline: run-context.json still decides
     assert previous_levels_version(tmp_path, None) == "ctx-1"
-    write_prior_level(tmp_path, _level(HANDOVER), {"run_id": "r", "head_sha": "abc", "held_gates": []})
-    assert previous_levels_version(tmp_path, None) == HANDOVER.model["version"]
+    write_prior_level(tmp_path, _level(None), {"run_id": "r", "head_sha": "abc", "held_gates": []})
+    assert previous_levels_version(tmp_path, None) == DEFAULT_VERSION
+    # a profile run reads past the committed default baseline, to the run-context.json
+    assert previous_levels_version(tmp_path, None, _level(HANDOVER)) == "ctx-1"
     superseded = {"since_last_run": {"available": True}, "level": {"levels_version": "sup-1"}}
     assert previous_levels_version(tmp_path, superseded) == "sup-1"
     (tmp_path / "prior-level.json").unlink()
@@ -203,3 +205,33 @@ def test_a_default_run_or_an_inherited_block_is_never_refilled(tmp_path: Path) -
     assert on_own_steps(unknown, _level(CITIZEN), previous_level(tmp_path, superseded)) is unknown
     (tmp_path / "run-context.json").write_text("[]", encoding="utf-8")
     assert previous_level(tmp_path) is None
+
+
+def test_a_profile_run_never_writes_the_committed_baseline(tmp_path: Path) -> None:
+    assert write_prior_level(tmp_path, _level(HANDOVER), {"run_id": "r", "head_sha": "abc", "held_gates": []}) is None
+    assert write_prior_level(tmp_path, _level(CITIZEN)) is None
+    assert not (tmp_path / "prior-level.json").exists()
+
+
+def test_a_profile_run_keeps_the_default_baseline_so_ci_still_catches_a_lost_gate(ci2: Path) -> None:  # noqa: F811
+    """Default baseline, then a --profile run, then a default run that lost a gate: the gate fails."""
+    from assess_core import build_and_publish_run
+    from assess_gate import evaluate, format_verdict
+    from lib.assess_config import load_gate_config
+    from test_headline import _commit
+
+    assess = ci2 / ".assess"
+    build_and_publish_run(repo_root=ci2, run_date="2026-11-22", non_interactive=True)
+    baseline = (assess / "prior-level.json").read_bytes()
+    build_and_publish_run(repo_root=ci2, run_date="2026-11-23", non_interactive=True, model=HANDOVER)
+    assert (assess / "prior-level.json").read_bytes() == baseline
+    (ci2 / ".github" / "workflows" / "ci.yml").unlink()
+    _commit(ci2, "2026-11-05T10:00:00Z", "no CI")
+    (assess / "run-context.json").unlink()  # a CI checkout has the committed baseline only
+    ctx = build_and_publish_run(repo_root=ci2, run_date="2026-11-24", non_interactive=True)
+    assert "ci_runs_tests" in ctx["since_last_run"]["gates_lost"]
+    assert model_changed_line(ctx["since_last_run"]) is None
+    (assess / "config.toml").write_text("[gate]\nfail_on_gate_loss = true\n", encoding="utf-8")
+    verdict = evaluate(ctx, load_gate_config(ci2))
+    assert verdict["failed"] is True
+    assert "FAIL gate lost: ci_runs_tests" in format_verdict(verdict)

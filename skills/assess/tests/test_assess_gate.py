@@ -572,3 +572,27 @@ def test_a_loss_without_a_committed_baseline_only_warns(tmp_path):
     # A committed baseline that did not hold the gate confirms nothing either.
     ctx = _loss_ctx(["ci_runs_tests"], {"ci_runs_tests": "unmet"}, held=["instructions"])
     assert evaluate(ctx, gate)["failed"] is False
+
+
+def test_gates_not_compared_across_models_never_reads_clean(tmp_path):
+    """#1150: a since block that compared no gate because the model changed, or a profile run,
+    prints why instead of "clean snapshot"."""
+    _write_config(tmp_path, "[gate]\nfail_on_gate_loss = true\n")
+    gate = load_gate_config(tmp_path)
+    ctx = _loss_ctx(None)
+    ctx["since_last_run"]["lines"] = [
+        "Model changed since last run (handover → default); gates not compared"]
+    text = format_verdict(evaluate(ctx, gate))
+    assert ("warn gates not compared: Model changed since last run (handover → default); gates not "
+            "compared. fail_on_gate_loss compares runs of one maturity model") in text
+    assert "clean snapshot" not in text
+    profile = _loss_ctx(None)
+    profile["level"]["levels_version"] = "profile-handover-2026.11.23"
+    verdict = evaluate(profile, gate)
+    assert verdict["failed"] is False
+    assert verdict["gates_not_compared"] == (
+        "this run used handover, and the committed baseline holds the default model's gates only")
+    assert "clean snapshot" not in format_verdict(verdict)
+    default = _loss_ctx(None)
+    default["level"]["levels_version"] = "default-2026.11.10"
+    assert "gates_not_compared" not in evaluate(default, gate)
