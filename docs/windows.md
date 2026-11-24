@@ -121,8 +121,10 @@ need it.
 
 ```bash
 uv --directory skills/assess run --locked ruff check .
+uv --directory skills/assess run --locked ruff check ../fleet/scripts ../marathon/scripts
 uv --directory scripts run --locked ruff check .
 uv --directory skills/assess run --locked mypy
+uv --directory skills/assess run --locked mypy ../fleet/scripts ../marathon/scripts
 uv --directory scripts run --locked mypy
 ```
 

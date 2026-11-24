@@ -1,0 +1,12 @@
+# Ruff config for skills/fleet/scripts (#1207, #1208). The rules, the target
+# version and the complexity threshold come from skills/assess, whose `lib/`
+# these scripts import; `make lint` and the `ruff + mypy gates` CI job run
+# `ruff check ../fleet/scripts` from skills/assess with its locked ruff.
+extend = "../assess/pyproject.toml"
+
+[lint.extend-per-file-ignores]
+# Every script here puts skills/assess/scripts on sys.path before importing
+# lib/ (the plugin ships both skills side by side, and no package install
+# joins them), so its lib imports must follow that bootstrap and E402
+# "module level import not at top of file" is the expected shape, not a defect.
+"scripts/*.py" = ["E402"]

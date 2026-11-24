@@ -39,10 +39,10 @@ sys.dont_write_bytecode = True
 ASSESS_SCRIPTS = Path(__file__).resolve().parents[2] / "assess" / "scripts"
 sys.path.insert(0, str(ASSESS_SCRIPTS))
 
-from lib.fleet.fleet_page import PAGE_FILE  # noqa: E402
-from lib.fleet.fleet_page_live import live_page  # noqa: E402
-from lib.fleet.fleet_publish import PublishError  # noqa: E402
-from lib.fleet.fleet_publish_session import (  # noqa: E402
+from lib.fleet.fleet_page import PAGE_FILE
+from lib.fleet.fleet_page_live import live_page
+from lib.fleet.fleet_publish import PublishError
+from lib.fleet.fleet_publish_session import (
     PUBLISH_DIR,
     STORED_COLLECTIONS,
     StoredDoc,

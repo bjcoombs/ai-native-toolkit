@@ -54,7 +54,7 @@ The `plugin contract pytest` job (`tests/test_plugin_contract.py`) runs these ov
 
 ## File-size ratchet
 
-`tests/test_file_size_ratchet.py` (in `plugin contract pytest`) holds every Python file under `skills/assess/` and `scripts/` to the `default_limit` (800 lines) in `.file-size-ratchet.toml`. Files already over it are listed under `[ceilings]` at their line count and may shrink but not grow.
+`tests/test_file_size_ratchet.py` (in `plugin contract pytest`) holds every Python file under `skills/assess/`, `scripts/`, `skills/fleet/` and `skills/marathon/` to the `default_limit` (800 lines) in `.file-size-ratchet.toml`. Files already over it are listed under `[ceilings]` at their line count and may shrink but not grow.
 
 The ceiling follows the file down: a file more than the larger of `shrink_slack_lines` (20) and `shrink_slack_percent` (2) percent of its ceiling below it fails until the ceiling is lowered to the current count, and an entry must be deleted once its file drops to the limit. A file over its limit gets split; raise a ceiling only for justified growth, with a one-line `reason`.
 

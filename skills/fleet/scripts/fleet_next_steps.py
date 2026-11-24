@@ -34,12 +34,12 @@ sys.dont_write_bytecode = True
 ASSESS_SCRIPTS = Path(__file__).resolve().parents[2] / "assess" / "scripts"
 sys.path.insert(0, str(ASSESS_SCRIPTS))
 
-from lib.fleet.fleet_groups import SettingsError, load_settings  # noqa: E402
-from lib.fleet.fleet_view import FleetViewError, load_groups, read_repos  # noqa: E402
-from lib.fleet.fleet_next_steps import NextStepsError, build_pages, write_pages  # noqa: E402
-from lib.levels import add_renamed_flag, LevelsError, load_levels  # noqa: E402
-from lib.level_signals import DEFAULT_LEVELS, signal_path_validator  # noqa: E402
-from lib.run_context_types import JsonDict  # noqa: E402
+from lib.fleet.fleet_groups import SettingsError, load_settings
+from lib.fleet.fleet_view import FleetViewError, load_groups, read_repos
+from lib.fleet.fleet_next_steps import NextStepsError, build_pages, write_pages
+from lib.levels import add_renamed_flag, LevelsError, load_levels
+from lib.level_signals import DEFAULT_LEVELS, signal_path_validator
+from lib.run_context_types import JsonDict
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

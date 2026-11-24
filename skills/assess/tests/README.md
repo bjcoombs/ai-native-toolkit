@@ -191,6 +191,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_signals_counts_only.py` | `scripts/assess_signals.py --counts-only` - the content-free headless document validates against the schema, hashes paths and shared-tooling ids, and keeps a reason on every unavailable block |
 | `test_fleet.py` | `lib/fleet/runner.py` + `lib/fleet/fleet_schema.py` - the fleet runner core: targets, per-repository rows, isolated failures |
 | `test_fleet_cli.py` | `skills/fleet/scripts/fleet.py` (relative to the repo root) - end to end over real `assess_signals` runs |
+| `test_fleet_cli_args.py` | `lib/fleet/fleet_cli_args.py` - the `fleet.py` flags and their usage rules |
 | `test_fleet_groups.py` | `lib/fleet/fleet_groups.py` - the group roll-up with maturity model levels and joined group settings |
 | `test_fleet_labels.py` | `lib/fleet/fleet_labels.py` + `skills/fleet/scripts/fleet_labels.py` - the closed label set, the `labels.jsonl` schema and its join to `repos.jsonl`; labels never touch a maturity model score |
 | `test_fleet_targets_import.py` | `lib/fleet/fleet_targets_import.py` + `skills/fleet/scripts/fleet_targets_import.py` - page-written Step targets read back into the targets file: each untrusted row accepted or refused with a named reason, byte-stable output, and a `target_hit` on the next run |

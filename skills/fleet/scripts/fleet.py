@@ -126,7 +126,7 @@ import os
 import sys
 import tempfile
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -136,11 +136,9 @@ sys.dont_write_bytecode = True
 ASSESS_SCRIPTS = Path(__file__).resolve().parents[2] / "assess" / "scripts"
 sys.path.insert(0, str(ASSESS_SCRIPTS))
 
-from lib.fleet.runner import (  # noqa: E402
-    DEFAULT_TIMEOUT,
+from lib.fleet.runner import (
     FleetRow,
     LOGS_DIR,
-    REPOS_FILE,
     STATUS_FAILED,
     STATUS_OK,
     ScanOptions,
@@ -153,12 +151,12 @@ from lib.fleet.runner import (  # noqa: E402
     targets_from_list,
     write_rows,
 )
-from lib.fleet_activity import window_start  # noqa: E402
-from lib.fleet.fleet_agent_building import clusters, write_clusters  # noqa: E402
-from lib.fleet.fleet_doc_freshness import freshness_rows, summary_line, write_freshness  # noqa: E402
-from lib.fleet.fleet_cleanup import CloneDeleter  # noqa: E402
-from lib.fleet.fleet_coverage import Discovered, DiscoveryError, coverage_line, read_discovery, reconcile  # noqa: E402
-from lib.fleet.fleet_compare import (  # noqa: E402
+from lib.fleet_activity import window_start
+from lib.fleet.fleet_agent_building import AgentClusters, clusters, write_clusters
+from lib.fleet.fleet_doc_freshness import FreshnessResult, freshness_rows, summary_line, write_freshness
+from lib.fleet.fleet_cleanup import CloneDeleter
+from lib.fleet.fleet_coverage import Discovered, DiscoveryError, coverage_line, read_discovery, reconcile
+from lib.fleet.fleet_compare import (
     Comparison,
     FleetRun,
     RunVersionError,
@@ -169,9 +167,9 @@ from lib.fleet.fleet_compare import (  # noqa: E402
     summary_lines,
     write_comparison,
 )
-from lib.fleet.fleet_diagrams import REPORT_FILE, build_diagrams, clear_diagrams, write_diagrams  # noqa: E402
-from lib.fleet.fleet_page import write_page  # noqa: E402
-from lib.fleet.fleet_achievements import (  # noqa: E402
+from lib.fleet.fleet_diagrams import REPORT_FILE, build_diagrams, clear_diagrams, write_diagrams
+from lib.fleet.fleet_page import write_page
+from lib.fleet.fleet_achievements import (
     ACHIEVEMENTS_FILE,
     Achievements,
     HistoryRun,
@@ -179,26 +177,27 @@ from lib.fleet.fleet_achievements import (  # noqa: E402
     clear_achievements,
     write_achievements,
 )
-from lib.fleet.fleet_achievements_runs import earlier_runs  # noqa: E402
-from lib.fleet.fleet_credit import credit_section  # noqa: E402
-from lib.fleet.fleet_opportunities_section import opportunities_section  # noqa: E402
-from lib.fleet.fleet_level import write_fleet_levels  # noqa: E402
-from lib.fleet.condition_effect import (  # noqa: E402
+from lib.fleet.fleet_achievements_runs import earlier_runs
+from lib.fleet.fleet_credit import credit_section
+from lib.fleet.fleet_opportunities_section import opportunities_section
+from lib.fleet.fleet_cli_args import LATEST, parse_args as _parse_args
+from lib.fleet.fleet_level import write_fleet_levels
+from lib.fleet.condition_effect import (
     CONDITION_EFFECT_FILE,
     HistoryRun as EffectRun,
     build_condition_effect,
     history_runs as effect_history,
     write_condition_effect,
 )
-from lib.fleet.condition_demotion import DEMOTIONS_FILE, decide, with_demotions, write_demotions  # noqa: E402
-from lib.measured_appendix import measured_section  # noqa: E402
-from lib.fleet.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data  # noqa: E402
-from lib.fleet.fleet_targets import TargetSpec, TargetsError, check_units, load_targets, resolve  # noqa: E402
-from lib.fleet_config import FleetConfig, FleetConfigError, config_sha256, parse_fleet_config, read_fleet_config  # noqa: E402
-from lib.fleet.fleet_groups import GroupRow, SettingsError, load_settings, roll_up, write_groups  # noqa: E402
-from lib.fleet.fleet_hashed import public_freshness, public_groups, public_ids, public_rows  # noqa: E402
-from lib.fleet.fleet_repo_facts import collect_facts  # noqa: E402
-from lib.fleet.fleet_units import (  # noqa: E402
+from lib.fleet.condition_demotion import DEMOTIONS_FILE, decide, with_demotions, write_demotions
+from lib.measured_appendix import measured_section
+from lib.fleet.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data
+from lib.fleet.fleet_targets import TargetSpec, TargetsError, check_units, load_targets, resolve
+from lib.fleet_config import FleetConfig, FleetConfigError, config_sha256, parse_fleet_config, read_fleet_config
+from lib.fleet.fleet_groups import GroupRow, SettingsError, load_settings, roll_up, write_groups
+from lib.fleet.fleet_hashed import public_freshness, public_groups, public_ids, public_rows
+from lib.fleet.fleet_repo_facts import RepoFacts, collect_facts
+from lib.fleet.fleet_units import (
     Tree,
     UnitsError,
     UnitsMap,
@@ -208,7 +207,7 @@ from lib.fleet.fleet_units import (  # noqa: E402
     repo_owners,
     unmatched_repos,
 )
-from lib.fleet.fleet_history import (  # noqa: E402
+from lib.fleet.fleet_history import (
     HistoryError,
     choose_entry,
     default_org,
@@ -218,209 +217,30 @@ from lib.fleet.fleet_history import (  # noqa: E402
     persist,
     safe_component,
 )
-from lib.fleet.fleet_platform import (  # noqa: E402
+from lib.fleet.fleet_platform import (
     DEFAULT_PLATFORM_JOBS,
     DEFAULT_PLATFORM_TIMEOUT,
     platform_scans,
     run_platform,
 )
-from lib.fleet.fleet_scanner_diff import row_signals, scanner_diff  # noqa: E402
-from lib.fleet.fleet_trends import TrendRun, history_runs, series_runs, trend_run  # noqa: E402
-from lib.fleet.fleet_view import FleetViewError  # noqa: E402
-from lib.fleet.fleet_method import rules_sha256  # noqa: E402
-from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp, build_stamp, write_stamp  # noqa: E402
-from lib.levels import add_renamed_flag, LevelsError, load_levels, MaturityModel  # noqa: E402
-from lib.profiles import ProfileError, add_model_arguments, profile_path  # noqa: E402
-from lib.level_signals import signal_path_validator  # noqa: E402
-from lib.run_context_types import JsonDict  # noqa: E402
-from lib.tool_lookup import warn_missing_packages  # noqa: E402
-from lib.signals import (  # noqa: E402
+from lib.fleet.fleet_scanner_diff import row_signals, scanner_diff
+from lib.fleet.fleet_trends import TrendRun, history_runs, series_runs, trend_run
+from lib.fleet.fleet_view import FleetViewError
+from lib.fleet.fleet_method import rules_sha256
+from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, FleetStamp, build_stamp, write_stamp
+from lib.levels import LevelsError, load_levels, MaturityModel
+from lib.level_signals import signal_path_validator
+from lib.run_context_types import JsonDict
+from lib.tool_lookup import warn_missing_packages
+from lib.signals import (
     DEFAULT_WINDOW,
     TOOLKIT_ROOT,
     UnknownScanError,
     parse_window,
-    platform_only_error,
     read_plugin_version,
     select_scans,
     toolkit_commit,
 )
-
-
-LATEST = "latest"  # bare --compare: the newest matching history entry
-
-
-def _not_a_run(path: Path) -> bool:
-    """A directory that holds neither ``run.json`` nor ``repos.jsonl`` (a ghsync root, say)."""
-    return path.is_dir() and not (path / RUN_FILE).is_file() and not (path / REPOS_FILE).is_file()
-
-
-def _parse_args(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Run headless /assess signals on every repository under a ghsync root "
-                    "(or in a list) and write one JSON line per repository to OUT/repos.jsonl.",
-    )
-    parser.add_argument(
-        "root", nargs="?",
-        help="ghsync root (<root>/<path>/<repo>-main). With --from-list, resolves list entries "
-             "relative to it and names repositories by their path under it.",
-    )
-    parser.add_argument(
-        "--from-list", metavar="FILE",
-        help="Scan the repositories in FILE instead of discovering them: one per line, a "
-             "<repo>-main checkout, its repository directory, a plain git checkout, or a path "
-             "relative to ROOT (ghsync --porcelain output). Blank lines and # comments ignored.",
-    )
-    parser.add_argument("--out", required=True, help="Output directory; repos.jsonl is written here.")
-    parser.add_argument(
-        "--levels", metavar="FILE",
-        help="Maturity model (TOML, lib/levels.py format). Each group row in groups.jsonl "
-             "carries every maturity model row's whole level (or unknown) and the aggregation rule used.",
-    )
-    add_model_arguments(parser, levels=False)
-    parser.add_argument(
-        "--settings", metavar="PATH",
-        help="Group settings from ghreport (#565): a JSON fragment file, a JSON array of "
-             "fragments, or a directory of fragment files (a ghreport --render-dir works: its "
-             "settings/ subdirectory is read). Joined to each group by scope, nearest ancestor first.",
-    )
-    parser.add_argument(
-        "--units", metavar="FILE",
-        help="Org units mapping (TOML, lib/fleet/fleet_units.py format): declared units and repository "
-             "placements for the ownership and system views of OUT/fleet-data.json. It overrides "
-             "the tree inferred from repository paths, GitHub teams and CODEOWNERS.",
-    )
-    parser.add_argument(
-        "--fleet-config", metavar="FILE",
-        help="Fleet settings (TOML): the [ai_usage], [review] and [platform] sections, validated "
-             "before any scan and passed to every repository scan. A repository's own "
-             ".assess/config.toml sections extend it. run.json records its sha256.",
-    )
-    parser.add_argument("--jobs", type=int, default=os.cpu_count() or 1,
-                        help="Repositories scanned in parallel (default: CPU count).")
-    parser.add_argument("--window", default=None,
-                        help="History window passed to assess_signals, e.g. 6mo, 90d (default: its own).")
-    parser.add_argument("--scans", default=None, help="Comma-separated scan names (default: all).")
-    parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT,
-                        help="Seconds one repository may take before it is marked failed (default: %(default)s).")
-    parser.add_argument("--full", action="store_true",
-                        help="Keep full signal blocks (free text included) instead of counts-only.")
-    parser.add_argument("--monorepo-units", action="store_true",
-                        help="Scan each repository by monorepo unit too (assess_signals --units): "
-                             "fleet-data.json gains unit rows. One scoped pass per unit. Needs --levels.")
-    parser.add_argument("--hash-paths", action="store_true",
-                        help="Hash repo-relative paths and repository ids under one salt drawn for this run "
-                             "(hashes join within the run; reruns are not byte-identical).")
-    parser.add_argument("--hash-salt", metavar="VALUE",
-                        help="Hash paths and repository ids under this salt (implies --hash-paths); "
-                             "reruns stay identical.")
-    parser.add_argument(
-        "--delete-after", action="store_true",
-        help="Delete each ghsync clone (<repo>-main) once it is scanned ok, only when it has no "
-             "local change, untracked or ignored file, stash, unpushed commit or linked worktree. "
-             "Anything else is kept and listed on stderr.",
-    )
-    parser.add_argument(
-        "--compare", metavar="RUN_DIR", nargs="?", const=LATEST,
-        help="Compare this run with an earlier one and write OUT/compare.json plus a summary on "
-             "stderr. RUN_DIR is an --out directory or a history entry; without it, the latest "
-             "history entry whose stamp matches this run.",
-    )
-    parser.add_argument(
-        "--history-dir", metavar="DIR",
-        help="Run history root (default: ${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet). "
-             "Each counts-only run is kept in DIR/<org>/<date>/.",
-    )
-    parser.add_argument("--history-org", metavar="NAME",
-                        help="The <org> directory name in the history (default: from the repository ids).")
-    parser.add_argument("--no-history", action="store_true", help="Do not keep this run in the history.")
-    parser.add_argument(
-        "--targets", metavar="FILE",
-        help=f"Step targets (TOML, lib/fleet/fleet_targets.py): each [[target]] names a view, a unit and a "
-             f"Step (step = 2 or higher). OUT/{ACHIEVEMENTS_FILE} credits a target when the unit's lowest "
-             "Step reaches it and the report shows the gates still missing. Needs --levels with [[steps]]; "
-             "not part of the run stamp.",
-    )
-    parser.add_argument(
-        "--first-achievements", action="store_true",
-        help=f"Also credit 'first' achievements in OUT/{ACHIEVEMENTS_FILE}: a unit reaching a level no "
-             "unit of its kind has held on that row in this fleet's history. Off by default, since it "
-             "compares a unit with its peers. Not part of the run stamp.",
-    )
-    parser.add_argument(
-        "--no-diagrams", action="store_true",
-        help=f"Do not draw the diagrams (OUT/{REPORT_FILE} and its SVGs); any a previous run left "
-             "are removed.",
-    )
-    parser.add_argument(
-        "--managed-settings", action="store_true",
-        help="Read the Claude Code managed settings of the machine running the fleet for the agent "
-             "permissions practice (#1153): a central rule credits every repository scanned, so use "
-             "it only when this machine carries the organisation's policy. Stamped in run.json. "
-             "A repository's .assess/config.toml never turns it on.",
-    )
-    parser.add_argument(
-        "--platform", action="store_true",
-        help="After the offline scan, run a separate platform pass (gh or glab) for the scans in "
-             "lib/signals.py PLATFORM_SCANS and join its blocks into each ok row. Needs gh or glab "
-             "logged in; never changes a row's status. Without it no network call is made.",
-    )
-    parser.add_argument(
-        "--platform-jobs", type=int, default=None, metavar="N",
-        help="Repositories read in parallel by the platform pass (default: [platform] jobs in "
-             f"--fleet-config, else {DEFAULT_PLATFORM_JOBS}).",
-    )
-    parser.add_argument(
-        "--platform-timeout", type=int, default=None, metavar="SECONDS",
-        help="Seconds one repository's platform read may take before its platform blocks are "
-             f"unavailable (default: [platform] timeout in --fleet-config, else {DEFAULT_PLATFORM_TIMEOUT}).",
-    )
-    parser.add_argument(
-        "--discovered", metavar="FILE",
-        help="What ghsync discovered: its --porcelain or --porcelain-json output (one path or "
-             "object per line). report.md and run.json then say how many of these repositories "
-             "were assessed and count each gap: archived or empty, not cloned, could not be "
-             "scanned, excluded by filters. Needs ROOT. Without it, coverage reads unknown.",
-    )
-    parser.add_argument(
-        "--name-agent-clusters", action="store_true",
-        help="Name the member repositories and groups of each agent cluster in "
-             "OUT/agent_clusters.json. Off by default: a cluster carries counts and SDK slugs only.",
-    )
-    add_renamed_flag(parser)
-    args = parser.parse_args(argv)
-    if args.compare not in (None, LATEST) and _not_a_run(Path(args.compare)):
-        parser.error(f"--compare took {args.compare!r} as the earlier run, but it holds no {RUN_FILE} "
-                     f"or {REPOS_FILE}: did it swallow ROOT? Put ROOT first "
-                     "(fleet.py ROOT --out DIR --compare [RUN_DIR]) or write --compare=RUN_DIR")
-    if args.root is None and args.from_list is None:
-        parser.error("give a ghsync ROOT or --from-list FILE")
-    if args.discovered is not None and args.root is None:
-        parser.error("--discovered needs ROOT, the ghsync root its paths are under")
-    if args.full and (args.hash_paths or args.hash_salt is not None):
-        parser.error("--hash-paths and --hash-salt apply to counts-only output, not --full")
-    if args.hash_salt == "":
-        parser.error("--hash-salt needs a non-empty value")
-    if args.jobs < 1 or args.timeout < 1:
-        parser.error("--jobs and --timeout must be at least 1")
-    if any(value is not None and value < 1 for value in (args.platform_jobs, args.platform_timeout)):
-        parser.error("--platform-jobs and --platform-timeout must be at least 1")
-    if not args.platform and (args.platform_jobs is not None or args.platform_timeout is not None):
-        parser.error("--platform-jobs and --platform-timeout apply to --platform")
-    if args.profile is not None:
-        # A profile is a shipped --levels file (lib/profiles.py, #1150): every --levels rule holds.
-        if args.levels is not None:
-            parser.error("--profile and --levels each choose the model: pass one")
-        try:
-            args.levels = str(profile_path(args.profile))
-        except ProfileError as e:
-            parser.error(str(e))
-    if args.monorepo_units and args.levels is None:
-        parser.error("--monorepo-units needs --levels: a unit's Step comes from the maturity model")
-    if args.scans is not None:
-        problem = platform_only_error([s.strip() for s in args.scans.split(",")], args.platform)
-        if problem is not None:
-            parser.error(problem)
-    return args
 
 
 def include_root(args: argparse.Namespace) -> Path | None:
@@ -691,71 +511,138 @@ def utc_today() -> date:
     return datetime.now(timezone.utc).date()
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = _parse_args(argv)
+@dataclass
+class _Inputs:
+    """Every input file read and validated before anything is scanned or written."""
+
+    targets: list[Target]
+    step_targets: list[TargetSpec]
     maturity_model: MaturityModel | None = None
     scans: list[str] | None = None
-    settings: dict[str, JsonDict] = {}
-    units: UnitsMap = empty_map()
+    settings: dict[str, JsonDict] = field(default_factory=dict)
+    units: UnitsMap = field(default_factory=empty_map)
     fleet_config: FleetConfig | None = None
     fleet_config_text: str | None = None
     discovered: list[Discovered] | None = None
+
+
+def _usage_error(message: str) -> int:
+    print(f"error: {message}", file=sys.stderr)
+    return 2
+
+
+def _read_inputs(args: argparse.Namespace) -> _Inputs:
+    """The input files; raises the loaders' errors, which ``_load_inputs`` turns into exit 2."""
+    fleet_config_text = read_fleet_config(Path(args.fleet_config)) if args.fleet_config is not None else None
+    fleet_config = parse_fleet_config(fleet_config_text) if fleet_config_text is not None else None
+    model = load_levels(Path(args.levels), signal_path_validator()) if args.levels is not None else None
+    inputs = _Inputs(targets=[], step_targets=[], maturity_model=model,
+                     fleet_config=fleet_config, fleet_config_text=fleet_config_text)
+    if args.settings is not None:
+        inputs.settings = load_settings(Path(args.settings))
+    if args.units is not None:
+        inputs.units = load_units(Path(args.units))
+    if args.scans is not None:
+        inputs.scans = select_scans([s.strip() for s in args.scans.split(",") if s.strip()])
+    if args.window is not None:
+        parse_window(args.window)
+    if args.targets is not None:
+        inputs.step_targets = load_targets(Path(args.targets), model)
+    inputs.targets = _targets(args)
+    if args.discovered is not None:
+        inputs.discovered = read_discovery(Path(args.discovered), Path(args.root).resolve())
+    return inputs
+
+
+def _load_inputs(args: argparse.Namespace) -> _Inputs | int:
+    """The validated inputs, or exit 2 with the message naming the flag at fault."""
     try:
-        if args.fleet_config is not None:
-            fleet_config_text = read_fleet_config(Path(args.fleet_config))
-            fleet_config = parse_fleet_config(fleet_config_text)
-        if args.levels is not None:
-            maturity_model = load_levels(Path(args.levels), signal_path_validator())
-        if args.settings is not None:
-            settings = load_settings(Path(args.settings))
-        if args.units is not None:
-            units = load_units(Path(args.units))
-        if args.scans is not None:
-            scans = select_scans([s.strip() for s in args.scans.split(",") if s.strip()])
-        if args.window is not None:
-            parse_window(args.window)
-        step_targets = load_targets(Path(args.targets), maturity_model) if args.targets is not None else []
-        targets = _targets(args)
-        if args.discovered is not None:
-            discovered = read_discovery(Path(args.discovered), Path(args.root).resolve())
+        inputs = _read_inputs(args)
     except DiscoveryError as e:
-        print(f"error: --discovered {args.discovered}: {e}", file=sys.stderr)
-        return 2
+        return _usage_error(f"--discovered {args.discovered}: {e}")
     except TargetsError as e:
-        print(f"error: --targets {args.targets}: {e}", file=sys.stderr)
-        return 2
+        return _usage_error(f"--targets {args.targets}: {e}")
     except FleetConfigError as e:
-        print(f"error: --fleet-config {args.fleet_config}: {e}", file=sys.stderr)
-        return 2
+        return _usage_error(f"--fleet-config {args.fleet_config}: {e}")
     except (LevelsError, SettingsError, UnitsError, UnknownScanError, ValueError, OSError) as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 2
-    if not targets:
-        print("error: no repositories found (expected <path>/<repo>/<repo>-main)", file=sys.stderr)
-        return 2
-    out_dir = Path(args.out)
+        return _usage_error(str(e))
+    if not inputs.targets:
+        return _usage_error("no repositories found (expected <path>/<repo>/<repo>-main)")
+    return inputs
+
+
+def _units_trees(args: argparse.Namespace, inputs: _Inputs,
+                 out_dir: Path) -> tuple[dict[str, RepoFacts], dict[str, list[str]], list[Tree]] | int:
+    """Each repository's facts, its CODEOWNERS owners and the units trees, or exit 2."""
+    targets = inputs.targets
     inside = out_inside_target(out_dir, targets)
     if inside is not None:
-        print(f"error: --out {args.out} is inside target {inside.repo}; the fleet run never "
-              "writes into a target", file=sys.stderr)
-        return 2
+        return _usage_error(f"--out {args.out} is inside target {inside.repo}; the fleet run never "
+                            "writes into a target")
     # Web URLs and CODEOWNERS are read before any scan, so --delete-after cannot remove a
     # checkout first. The trees are built before anything is written, so a mapping that
     # names a missing unit exits 2 and leaves nothing behind.
     facts = collect_facts(targets, args.jobs)
     codeowners = {repo: list(f.owners) for repo, f in facts.items()}
     try:
-        trees = build_trees((t.repo for t in targets), units, settings, codeowners)
+        trees = build_trees((t.repo for t in targets), inputs.units, inputs.settings, codeowners)
     except UnitsError as e:
-        print(f"error: --units {args.units}: {e}", file=sys.stderr)
-        return 2
+        return _usage_error(f"--units {args.units}: {e}")
     try:
-        check_units(step_targets, trees, frozenset(t.repo for t in targets))
+        check_units(inputs.step_targets, trees, frozenset(t.repo for t in targets))
     except TargetsError as e:
-        print(f"error: --targets {args.targets}: {e}", file=sys.stderr)
-        return 2
-    for repo in unmatched_repos(units, (t.repo for t in targets)):
+        return _usage_error(f"--targets {args.targets}: {e}")
+    for repo in unmatched_repos(inputs.units, (t.repo for t in targets)):
         print(f"fleet: units: {repo} is mapped but not in this run; skipped", file=sys.stderr)
+    return facts, codeowners, trees
+
+
+def _writable_out(args: argparse.Namespace, out_dir: Path) -> int | None:
+    """None when ``out_dir`` exists and takes a file, else exit 2: checked before any scan,
+    so --delete-after never removes a clone whose results cannot land."""
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        return _usage_error(f"cannot create --out {args.out}: {e.strerror}")
+    try:
+        tempfile.TemporaryFile(dir=out_dir).close()
+    except OSError as e:
+        return _usage_error(f"cannot write to --out {args.out}: {e.strerror}")
+    return None
+
+
+def _print_summary(rows: list[FleetRow], path: Path, groups_path: Path, agent_clusters: AgentClusters,
+                   freshness: FreshnessResult, freshness_path: Path | None,
+                   deleter: CloneDeleter | None) -> None:
+    failed = [row for row in rows if row["status"] == STATUS_FAILED]
+    print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
+          file=sys.stderr)
+    print(f"fleet: agent clusters: {len(agent_clusters['clusters'])} over "
+          f"{agent_clusters['clustered_repos']} of {agent_clusters['builds_agent_repos']} builds-agent "
+          "repositories", file=sys.stderr)
+    for row in failed:
+        print(f"  failed: {row['repo']} ({row['reason']})", file=sys.stderr)
+    if freshness_path is not None:
+        print(f"fleet: doc freshness: {summary_line(freshness.rows)} -> {freshness_path.name}",
+              file=sys.stderr)
+    if deleter is not None:
+        _report_deletions(deleter)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+    loaded = _load_inputs(args)
+    if isinstance(loaded, int):
+        return loaded
+    inputs = loaded
+    targets, step_targets, units = inputs.targets, inputs.step_targets, inputs.units
+    maturity_model, scans, settings = inputs.maturity_model, inputs.scans, inputs.settings
+    fleet_config, fleet_config_text, discovered = inputs.fleet_config, inputs.fleet_config_text, inputs.discovered
+    out_dir = Path(args.out)
+    known = _units_trees(args, inputs, out_dir)
+    if isinstance(known, int):
+        return known
+    facts, codeowners, trees = known
     today = utc_today()
     window = args.window or DEFAULT_WINDOW
     hash_salt = None if args.full else run_salt(args.hash_paths, args.hash_salt)
@@ -793,16 +680,9 @@ def main(argv: list[str] | None = None) -> int:
         ghsync_root=include_root(args), units=args.monorepo_units,
         managed_settings=args.managed_settings,
     )
-    try:  # before any scan, so --delete-after never removes a clone whose results cannot land
-        out_dir.mkdir(parents=True, exist_ok=True)
-    except OSError as e:
-        print(f"error: cannot create --out {args.out}: {e.strerror}", file=sys.stderr)
-        return 2
-    try:
-        tempfile.TemporaryFile(dir=out_dir).close()  # writable: the results land after every scan
-    except OSError as e:
-        print(f"error: cannot write to --out {args.out}: {e.strerror}", file=sys.stderr)
-        return 2
+    unwritable = _writable_out(args, out_dir)
+    if unwritable is not None:
+        return unwritable
     try:
         entry = _history_entry(args, targets, org_dir, today.isoformat(), planned, ids)
     except (HistoryError, OSError) as e:
@@ -852,19 +732,7 @@ def main(argv: list[str] | None = None) -> int:
     _diagrams(out_dir, args.no_diagrams, maturity_model, public, window, history=history, comparison=comparison,
               credit=credit, coverage=coverage_line(coverage, len(rows)),
               opportunities=lambda: opportunities_section(data, achieved), data=data, earlier=earlier, achieved=achieved)
-    failed = [row for row in rows if row["status"] == STATUS_FAILED]
-    print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
-          file=sys.stderr)
-    print(f"fleet: agent clusters: {len(agent_clusters['clusters'])} over "
-          f"{agent_clusters['clustered_repos']} of {agent_clusters['builds_agent_repos']} builds-agent "
-          "repositories", file=sys.stderr)
-    for row in failed:
-        print(f"  failed: {row['repo']} ({row['reason']})", file=sys.stderr)
-    if freshness_path is not None:
-        print(f"fleet: doc freshness: {summary_line(freshness.rows)} -> {freshness_path.name}",
-              file=sys.stderr)
-    if deleter is not None:
-        _report_deletions(deleter)
+    _print_summary(rows, path, groups_path, agent_clusters, freshness, freshness_path, deleter)
     return 0
 
 

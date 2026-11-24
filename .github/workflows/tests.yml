@@ -177,6 +177,13 @@ jobs:
         run: uv run --locked ruff check .
         working-directory: skills/assess
 
+      # The fleet and marathon skill scripts (#1208) run on skills/assess's
+      # locked ruff; skills/fleet/ruff.toml and skills/marathon/ruff.toml extend
+      # its rules, so the gate is the same one.
+      - name: Ruff lint + complexity gate (skills/fleet, skills/marathon)
+        run: uv run --locked ruff check ../fleet/scripts ../marathon/scripts
+        working-directory: skills/assess
+
       - name: Ruff lint + complexity gate (scripts)
         run: uv run --locked ruff check .
         working-directory: scripts
@@ -187,6 +194,13 @@ jobs:
       # skills/assess/pyproject.toml selects the files and checks.
       - name: Mypy type gate (skills/assess)
         run: uv run --locked mypy
+        working-directory: skills/assess
+
+      # The fleet and marathon skill scripts (#1208) under the same strict
+      # config: run from skills/assess, its mypy_path resolves the lib/ the
+      # fleet scripts import, so those calls are checked, not Any.
+      - name: Mypy type gate (skills/fleet, skills/marathon)
+        run: uv run --locked mypy ../fleet/scripts ../marathon/scripts
         working-directory: skills/assess
 
       # Same gate, full strict, for the build pipeline and contract tooling;
