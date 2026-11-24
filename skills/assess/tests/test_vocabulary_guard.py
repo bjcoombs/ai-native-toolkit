@@ -119,9 +119,11 @@ _TEMPLATE = Path(__file__).resolve().parents[2] / "assess-findings" / "SKILL.md"
 
 
 _SCORER = Path(__file__).resolve().parents[3] / "agents" / "assess-layer-scorer.md"
+_README = Path(__file__).resolve().parents[3] / "README.md"
 
 
-@pytest.mark.parametrize("source", [_TEMPLATE, _SCORER], ids=["assess-findings", "assess-layer-scorer"])
+@pytest.mark.parametrize("source", [_TEMPLATE, _SCORER, _README],
+                         ids=["assess-findings", "assess-layer-scorer", "readme"])
 def test_the_model_written_template_uses_the_shared_vocabulary(source: Path) -> None:
     """#1254: the report template the model fills, and the scorer whose Evidence cells
     reach the report, fenced blocks included, keep out the words the shared vocabulary

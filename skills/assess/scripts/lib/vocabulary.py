@@ -66,7 +66,7 @@ maturity-model entry: its practice, the Step it gates, or the gate. The phrases 
 
 **The model-written template (#1254).** The guard also reads the prose of
 `skills/assess-findings/SKILL.md`, fenced template included, and of `agents/assess-layer-scorer.md`,
-whose Evidence cells reach the report, and fails on the #1254 words there (`TEMPLATE_WORDS`:
+whose Evidence cells reach the report, and of the repository `README.md`, and fails on the #1254 words there (`TEMPLATE_WORDS`:
 lying, capped, unproven, concerns).
 
 **Wording elsewhere.** The quadrant names its shaded corner "Most room to grow: busy, early
