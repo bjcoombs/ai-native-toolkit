@@ -26,7 +26,8 @@ Every row but ``share`` is a dashed, hollow track with its reason and no dot: a 
 not measured never plots at 0. A real 0 of N measured does.
 
 **Earlier run.** When ``prior_level`` was counted under this run's maturity-model version
-(``prior_level.same_model``), each tag the earlier run measured gets a hollow outline dot at its
+(``prior_level.same_model``) and recorded under its model's own record (``prior_level.record_for``:
+the default model's, or a shipped profile's, #1184), each tag the earlier run measured gets a hollow outline dot at its
 earlier share, so the strip shows what moved; on a row this run did not measure, the outline
 stays and a key line says it is the earlier share. Otherwise no outline dot is drawn and one
 line says why: no earlier run is recorded, its record could not be read, or it used another
@@ -51,7 +52,7 @@ from lib.headline import reason_word
 from lib.level_result_types import TagRow
 from lib.level_tags import conditions_label
 from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
-from lib.prior_level import as_prior_level, same_model
+from lib.prior_level import PriorLevel, as_prior_level, model_key, record_for, same_model
 from lib.run_context_types_diagrams import AssessDiagram
 from lib.vocabulary import IN_PLACE
 
@@ -141,13 +142,23 @@ def tag_whys() -> dict[str, str]:
     return {tag: tag_why(manifest, tag)["why"] or TRUTH_TAG_TITLES[tag] for tag in TRUTH_TAGS}
 
 
+def _record(raw: Any, level: Mapping[str, Any]) -> PriorLevel | None:
+    """The earlier record this run's strip compares with: its model's own (``record_for``), or
+    the top-level record for a custom model, which ``same_model`` then compares by version; None
+    when there is none (a version-3 file holding only profile records)."""
+    if model_key(level) is not None:
+        return record_for(raw, level)
+    prior = as_prior_level(raw)
+    return prior if prior is not None and "levels_version" in prior else None
+
+
 def earlier_shares(raw: Any, level: Mapping[str, Any]) -> dict[str, tuple[int, int]]:
     """``(met, measured)`` per tag the earlier run measured, when it used this run's model.
     ``raw`` is the run context's ``prior_level`` as stored."""
-    prior = as_prior_level(raw)
+    prior = _record(raw, level)
     if prior is None or not same_model(prior, level):
         return {}
-    return {r["tag"]: (r["met"], r["measured"]) for r in prior["tags"] if r["measured"] > 0}
+    return {r["tag"]: (r["met"], r["measured"]) for r in prior.get("tags", []) if r["measured"] > 0}
 
 
 def prior_note(raw: Any, level: Mapping[str, Any]) -> str:
@@ -156,13 +167,15 @@ def prior_note(raw: Any, level: Mapping[str, Any]) -> str:
     (``prior_level.UNREADABLE``, or a hand-edited value) is an earlier record not read."""
     if raw is None:
         return "No earlier run is recorded here, so no earlier dots are drawn."
-    prior = as_prior_level(raw)
-    if prior is None:
+    if as_prior_level(raw) is None:
         return "The earlier run's record could not be read, so no earlier dots are drawn."
+    prior = _record(raw, level)
+    if prior is None:
+        return "No earlier run under this maturity model is recorded here, so no earlier dots are drawn."
     if not same_model(prior, level):
-        return (f"Earlier dots not drawn: the earlier run used maturity model {prior['levels_version']} "
+        return (f"Earlier dots not drawn: the earlier run used maturity model {prior.get('levels_version')} "
                 f"and this run {level.get('levels_version')}, so the two do not compare.")
-    if not earlier_shares(prior, level):
+    if not earlier_shares(raw, level):
         return "No earlier dots: the earlier run, under the same maturity model, measured no tag."
     return f"Hollow dots: the earlier run, under the same maturity model {level.get('levels_version')}."
 

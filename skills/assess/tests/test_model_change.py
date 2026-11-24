@@ -17,7 +17,7 @@ from lib.assess_diagrams import build_diagrams
 from lib.exec_summary import since_line
 from lib.level_tally import LEVEL_READS, default_model
 from lib.model_change import (CUSTOM_NOT_DRAWN, across_models, custom_run, model_changed_line, model_for_level,
-                              model_name, on_own_steps, previous_level, previous_levels_version, units_label)
+                              model_name, previous_levels_version, units_label)
 from lib.prior_level import write_prior_level
 from lib.profiles import ModelChoice, resolve
 from test_headline import ci2  # noqa: F401 - ci2 is a fixture
@@ -181,41 +181,58 @@ def test_two_runs_of_one_profile_compare_their_gates(name: str, ci2: Path) -> No
     assert any(line.startswith("Gates gained: ") and "none" not in line for line in since["lines"])
 
 
-def test_on_own_steps_leaves_a_known_or_cross_model_block_alone() -> None:
-    known = _since()
-    assert on_own_steps(known, _level(CITIZEN), _level(CITIZEN)) is known
-    unknown = _since(gates_gained=None, gates_lost=None)
-    assert on_own_steps(unknown, _level(CITIZEN), _level(None)) is unknown
-    assert on_own_steps(unknown, _level(CITIZEN), None) is unknown
-    assert on_own_steps(unknown, _level(CITIZEN), {"levels_version": CITIZEN.model["version"]}) is unknown
+def test_a_profile_run_writes_only_its_own_record(tmp_path: Path) -> None:
+    import json
+
+    from lib.prior_level import load_baseline
+
+    default = {"run_id": "d", "head_sha": "a" * 40, "held_gates": ["instructions"]}
+    write_prior_level(tmp_path, _level(None), default,
+                      [{"path": "CLAUDE.md", "completed_sha": "b" * 40, "cost_before": 3, "runs_held": 0,
+                        "credited": False, "saved": None, "gates": None, "credited_at": None}])
+    before = json.loads((tmp_path / "prior-level.json").read_text(encoding="utf-8"))
+    citizen = {"run_id": "c", "head_sha": "c" * 40, "held_gates": ["instructions", "ci_runs_tests"]}
+    write_prior_level(tmp_path, _level(CITIZEN), citizen, [])
+    after = json.loads((tmp_path / "prior-level.json").read_text(encoding="utf-8"))
+    assert {k: v for k, v in after.items() if k != "models"} == before  # the default record and ledger kept
+    assert after["models"]["citizen"]["baseline"] == citizen and "pruning" not in after["models"]["citizen"]
+    assert load_baseline(tmp_path, _level(CITIZEN)) == citizen
+    assert load_baseline(tmp_path, _level(None)) == load_baseline(tmp_path) == default
+    assert load_baseline(tmp_path, _level(HANDOVER)) is None  # handover has no record yet
+    write_prior_level(tmp_path, _level(None), default)  # a default run keeps every profile record
+    assert load_baseline(tmp_path, _level(CITIZEN)) == citizen
+    custom = {**_level(None), "levels_version": "team-1"}
+    assert write_prior_level(tmp_path, custom, default) is None  # a custom model keeps no record
+    degraded = {"available": False, "levels_version": CITIZEN.model["version"]}
+    assert write_prior_level(tmp_path, degraded, citizen) is None  # #1158: every record kept
+    assert load_baseline(tmp_path, _level(CITIZEN)) == citizen
 
 
-def test_a_model_change_from_the_baseline_is_never_refilled_from_run_context() -> None:
-    changed = across_models(_since(), _level(CITIZEN), DEFAULT_VERSION)
-    assert on_own_steps(changed, _level(CITIZEN), _level(CITIZEN)) is changed
+def test_a_profile_run_leaves_an_unreadable_file_as_it_is(tmp_path: Path) -> None:
+    """The default record in it is what the CI gate reads; only a default run replaces it."""
+    path = tmp_path / "prior-level.json"
+    path.write_text('{"prior_level_version": 4}', encoding="utf-8")
+    citizen = {"run_id": "c", "head_sha": "c" * 40, "held_gates": []}
+    assert write_prior_level(tmp_path, _level(CITIZEN), citizen) is None
+    assert path.read_text(encoding="utf-8") == '{"prior_level_version": 4}'
+    assert write_prior_level(tmp_path, _level(None), citizen) == path  # a default run rewrites it, as before
 
 
-def test_a_default_run_or_an_inherited_block_is_never_refilled(tmp_path: Path) -> None:
-    unknown = _since(gates_gained=None, gates_lost=None, closed_reason="previous_state_missing")
-    assert on_own_steps(unknown, _level(None), _level(None)) is unknown
-    (tmp_path / "run-context.json").write_text(json.dumps({"level": _level(CITIZEN)}), encoding="utf-8")
-    assert previous_level(tmp_path) == _level(CITIZEN)
-    superseded = {"since_last_run": {"available": True}, "level": _level(CITIZEN)}
-    assert previous_level(tmp_path, superseded) is None
-    assert on_own_steps(unknown, _level(CITIZEN), previous_level(tmp_path, superseded)) is unknown
-    (tmp_path / "run-context.json").write_text("[]", encoding="utf-8")
-    assert previous_level(tmp_path) is None
+def test_a_profile_only_file_reads(tmp_path: Path) -> None:
+    from lib.prior_level import load_baseline, load_prior_level
 
-
-def test_a_profile_run_never_writes_the_committed_baseline(tmp_path: Path) -> None:
-    assert write_prior_level(tmp_path, _level(HANDOVER), {"run_id": "r", "head_sha": "abc", "held_gates": []}) is None
-    assert write_prior_level(tmp_path, _level(CITIZEN)) is None
-    assert not (tmp_path / "prior-level.json").exists()
+    citizen = {"run_id": "c", "head_sha": "c" * 40, "held_gates": ["instructions"]}
+    write_prior_level(tmp_path, _level(CITIZEN), citizen)
+    prior = load_prior_level(tmp_path)
+    assert prior is not None and "levels_version" not in prior and prior["prior_level_version"] == 3
+    assert load_baseline(tmp_path, _level(CITIZEN)) == citizen and load_baseline(tmp_path) is None
 
 
 @pytest.mark.parametrize("removed", ["CLAUDE.md", ".github/workflows/ci.yml"])
 def test_a_profile_run_keeps_the_default_baseline_so_ci_still_catches_a_lost_gate(removed: str, ci2: Path) -> None:  # noqa: F811
     """Default baseline, then a --profile run, then a default run that lost a gate: the gate fails."""
+    import json
+
     from assess_core import build_and_publish_run
     from assess_gate import evaluate, format_verdict
     from lib.assess_config import load_gate_config
@@ -223,9 +240,11 @@ def test_a_profile_run_keeps_the_default_baseline_so_ci_still_catches_a_lost_gat
 
     assess = ci2 / ".assess"
     build_and_publish_run(repo_root=ci2, run_date="2026-11-22", non_interactive=True)
-    baseline = (assess / "prior-level.json").read_bytes()
+    default = {k: v for k, v in json.loads((assess / "prior-level.json").read_text(encoding="utf-8")).items()
+               if k != "models"}
     build_and_publish_run(repo_root=ci2, run_date="2026-11-23", non_interactive=True, model=HANDOVER)
-    assert (assess / "prior-level.json").read_bytes() == baseline
+    after = json.loads((assess / "prior-level.json").read_text(encoding="utf-8"))
+    assert {k: v for k, v in after.items() if k != "models"} == default and "handover" in after["models"]
     (ci2 / removed).unlink()
     _commit(ci2, "2026-11-05T10:00:00Z", f"drop {removed}")
     (assess / "run-context.json").unlink()  # a CI checkout has the committed baseline only
@@ -238,19 +257,50 @@ def test_a_profile_run_keeps_the_default_baseline_so_ci_still_catches_a_lost_gat
     assert f"FAIL gate lost: {lost[0]}" in format_verdict(verdict)
 
 
-def test_a_profile_run_under_the_gate_loss_opt_in_fails_only_when_it_compared_nothing(ci2: Path) -> None:  # noqa: F811
+@pytest.mark.parametrize("name", ["citizen", "handover"])
+def test_two_profile_runs_compare_on_the_committed_record_alone(name: str, ci2: Path) -> None:  # noqa: F811
+    """#1184: with run-context.json deleted between them, as in CI or a fresh clone, the second
+    run reads the first run's committed profile record and reports the gate gained."""
+    from assess_core import build_and_publish_run
+    from test_headline import _commit
+
+    choice = resolve(name, None)
+    workflow = ci2 / ".github" / "workflows" / "ci.yml"
+    text = workflow.read_text(encoding="utf-8")
+    workflow.unlink()
+    _commit(ci2, "2026-11-03T10:00:00Z", "no CI")
+    first = build_and_publish_run(repo_root=ci2, run_date="2026-11-22", non_interactive=True, model=choice)
+    assert first["level"]["step"] == 2
+    workflow.write_text(text, encoding="utf-8")
+    _commit(ci2, "2026-11-04T10:00:00Z", "CI")
+    (ci2 / ".assess" / "run-context.json").unlink()
+    second = build_and_publish_run(repo_root=ci2, run_date="2026-11-23", non_interactive=True, model=choice)
+    since = second["since_last_run"]
+    assert since["gates_gained"] == ["ci_runs_tests"] and since["gates_lost"] == []
+    assert since["previous_run_id"] == first["run_id"] and model_changed_line(since) is None
+
+
+def test_a_profile_run_under_the_gate_loss_opt_in_reads_its_own_record(ci2: Path) -> None:  # noqa: F811
+    """No profile record yet: "no baseline yet", as a default first run. With one committed, the
+    profile run compares on its own gates and fails on a real loss."""
     from assess_core import build_and_publish_run
     from assess_gate import evaluate, format_verdict
     from lib.assess_config import load_gate_config
+    from test_headline import _commit
 
     assess = ci2 / ".assess"
-    build_and_publish_run(repo_root=ci2, run_date="2026-11-22", non_interactive=True)
-    (assess / "run-context.json").unlink()  # a CI checkout: the committed default baseline only
+    build_and_publish_run(repo_root=ci2, run_date="2026-11-21", non_interactive=True)
+    (assess / "run-context.json").unlink()  # a CI checkout: the committed default record only
     (assess / "config.toml").write_text("[gate]\nfail_on_gate_loss = true\n", encoding="utf-8")
-    first = build_and_publish_run(repo_root=ci2, run_date="2026-11-23", non_interactive=True, model=HANDOVER)
+    first = build_and_publish_run(repo_root=ci2, run_date="2026-11-22", non_interactive=True, model=CITIZEN)
     verdict = evaluate(first, load_gate_config(ci2))
+    assert verdict["failed"] is False and verdict["no_baseline"] is True
+    assert "no baseline yet" in format_verdict(verdict)
+    (ci2 / "CLAUDE.md").unlink()
+    _commit(ci2, "2026-11-05T10:00:00Z", "drop CLAUDE.md")
+    (assess / "run-context.json").unlink()
+    second = build_and_publish_run(repo_root=ci2, run_date="2026-11-23", non_interactive=True, model=CITIZEN)
+    assert "instructions" in second["since_last_run"]["gates_lost"]
+    verdict = evaluate(second, load_gate_config(ci2))
     assert verdict["failed"] is True
-    assert "FAIL gates not compared under profile handover: no committed per-profile baseline" in format_verdict(verdict)
-    again = build_and_publish_run(repo_root=ci2, run_date="2026-11-24", non_interactive=True, model=HANDOVER)
-    assert again["since_last_run"]["gates_lost"] == []  # compared with the run-context.json of the same profile
-    assert evaluate(again, load_gate_config(ci2))["failed"] is False
+    assert "FAIL gate lost: instructions" in format_verdict(verdict)
