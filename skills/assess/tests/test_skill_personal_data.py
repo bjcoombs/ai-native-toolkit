@@ -48,6 +48,7 @@ def _state(block: Any) -> tuple[str, str | None]:
     ("Reach the box at 10.20." + "30.40 first.", ["ip_address"]),
     ("Run ssh deploy@" + "build-01 to deploy.", ["ssh_or_host"]),
     ("token = " + "ghp" + "_abc123def456", ["credential"]),
+    ("token: ${{ secrets.X }} and password = " + "hunter" + "2abc", ["credential"]),  # one literal is enough
     ("AKIA" + "ABCDEFGHIJKLMNOP is the key.", ["cloud_key"]),
     ("-----BEGIN RSA PRIVATE KEY-----", ["private_key"]),
     (f"{EMAIL} or {PHONE}", ["email", "phone"]),
@@ -67,6 +68,10 @@ def test_each_kind_is_detected(text: str, kinds: list[str]) -> None:
     "Serve on 127.0.0.1 and 0.0.0.0.",
     "Requires v1.2.3.4 on 127.0.0.1.",
     "password = <your-password> and token=${TOKEN}",
+    "token: ${{ secrets.GITHUB_TOKEN }}",
+    "api_key: process.env.API_KEY",
+    'token = os.environ["T"]',
+    "Released 2024-01-01 +0000 2024-01-02",
 ])
 def test_placeholders_and_lookalikes_are_not_findings(text: str) -> None:
     assert kinds_in(text) == []

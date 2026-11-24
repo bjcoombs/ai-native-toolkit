@@ -16,7 +16,9 @@ example, and the noise would bury real findings.
 
 - From ``agent_instructions_grader.scan_sensitive_content`` (the instruction-file scan):
   ``private_key`` (a PEM private key block), ``cloud_key`` (an AWS-style access key id),
-  ``credential`` (a ``password=``/``token=``/``api_key=`` assignment with a concrete value),
+  ``credential`` (a ``password=``/``token=``/``api_key=`` assignment with a concrete value;
+  checked again here so a value that only refers to a secret held elsewhere, such as
+  ``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X`` or ``os.environ[...]``, is not a finding),
   ``ssh_or_host`` (``root@host`` or ``ssh user@host``), ``ip_address`` (a routable or private
   IPv4 literal, loopback left out, and none that follows a version word such as ``v`` or
   ``version``) and ``home_path`` (a personal ``/Users/<name>/``,
@@ -27,7 +29,8 @@ example, and the noise would bury real findings.
   no-reply address (``noreply@``, ``no-reply@``, or a ``noreply`` label in the domain, as in
   ``users.noreply.github.com``) and whose local
   part is not a placeholder (``user``, ``you``, ``name``, ``someone``, ...); and ``phone``, a
-  number with a ``+`` country code and 8 to 15 digits, or the ``(NNN) NNN-NNNN`` form.
+  number with a ``+`` country code and 8 to 15 digits (not a timezone offset before a date), or
+  the ``(NNN) NNN-NNNN`` form.
 
 A finding names the file and the kind, never the data: no matched text, not even redacted,
 reaches the block. Counts-only output drops the path, or hashes it under ``--hash-paths``, and
@@ -80,6 +83,16 @@ _PLACEHOLDER_HOME = frozenset({"user", "username", "you", "your", "yourname", "n
 # ``version 10.0.19041.1``); the grader's IP check is re-run here without those.
 _IPV4 = re.compile(r"(?<![\w.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?![\w.])")
 _VERSION_BEFORE = re.compile(r"(?:\bv|\bversion|\brelease|\bbuild)\s*[:=]?\s*$", re.IGNORECASE)
+# A credential assignment, as the grader reads it, re-checked here: a value that only refers to a
+# secret held elsewhere (``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X``, ``os.environ[...]``) is
+# not a committed secret, and telling a team to rotate it would be wrong.
+_CREDENTIAL = re.compile(r"\b(?:password|passwd|secret|api[_-]?key|access[_-]?key|auth[_-]?token|token)\b"
+                         r"\s*[:=]\s*(\"[^\"]*\"|'[^']*'|\S+)", re.IGNORECASE)
+_REFERENCE = re.compile(r"^(?:\$\{?\{?|\$\w|%\w+%|\{\{|<|process\.env\b|os\.environ\b|os\.getenv\b|getenv\b|"
+                        r"env\.|env\[|ENV\[|secrets\.|vars\.|System\.getenv\b|Environment\.|import\.meta\.env\b)",
+                        re.IGNORECASE)
+# A date inside an international-number match: a timezone offset then a date, not a phone number.
+_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _PHONE_INTL = re.compile(r"(?<![\w+])\+\d[\d .()-]{6,20}\d(?![\w])")
 _PHONE_NANP = re.compile(r"(?<!\w)\(\d{3}\)\s?\d{3}-\d{4}(?!\w)")
 
@@ -104,7 +117,7 @@ def _has_email(text: str) -> bool:
         local, domain = m.group(1).lower(), m.group(2).lower()
         if _RESERVED_DOMAIN.search(domain) or _NOREPLY_DOMAIN.search(domain) or local in _PLACEHOLDER_LOCAL:
             continue
-        if local.startswith(("noreply", "no-reply")) or local.endswith("[bot]"):
+        if local.startswith(("noreply", "no-reply")):
             continue
         return True
     return False
@@ -113,7 +126,8 @@ def _has_email(text: str) -> bool:
 def _has_phone(text: str) -> bool:
     if _PHONE_NANP.search(text):
         return True
-    return any(8 <= sum(c.isdigit() for c in m.group(0)) <= 15 for m in _PHONE_INTL.finditer(text))
+    return any(8 <= sum(c.isdigit() for c in m.group(0)) <= 15 and not _DATE.search(m.group(0))
+               for m in _PHONE_INTL.finditer(text))
 
 
 def kinds_in(text: str) -> list[str]:
@@ -121,6 +135,8 @@ def kinds_in(text: str) -> list[str]:
     found = {f["category"] for f in scan_sensitive_content(text)}
     if "home_path" in found and not any(m.group(1).lower() not in _PLACEHOLDER_HOME for m in _HOME.finditer(text)):
         found.discard("home_path")
+    if "credential" in found and all(_REFERENCE.match(m.group(1).strip("\"'")) for m in _CREDENTIAL.finditer(text)):
+        found.discard("credential")
     if "ip_address" in found and all(_VERSION_BEFORE.search(text[max(0, m.start() - 12):m.start()])
                                      for m in _IPV4.finditer(text) if all(int(g) <= 255 for g in m.groups())
                                      and m.group(1) != "127" and m.group(0) != "0.0.0.0"):
