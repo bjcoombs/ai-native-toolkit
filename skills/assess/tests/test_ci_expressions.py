@@ -201,3 +201,14 @@ def test_a_declared_input_under_a_continue_on_error_expression_keeps_check_targe
     steps = ("      - uses: someone/runner@v1\n        continue-on-error: ${{ inputs.soft }}\n"
              "        with:\n          run: pytest\n")
     assert _scan(tmp_path, _wf(steps))[:3] == (True, None, "check_target")
+
+
+@pytest.mark.parametrize(("job", "step"), [
+    ("", "        continue-on-error: ${{ inputs.soft }}\n"),
+    ("    continue-on-error: ${{ inputs.soft }}\n", ""),
+])
+def test_an_unknown_command_under_a_continue_on_error_expression_reads_null(
+        tmp_path: Path, job: str, step: str) -> None:
+    reading = _scan(tmp_path, _wf("      - run: $CMD\n" + step, job=job))
+    assert reading[1] is None and reading[3] is None
+    assert reading[2] in ("check_may_pass", "check_target") and reading[4] in ("check_may_pass", "check_target")

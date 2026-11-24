@@ -520,7 +520,8 @@ def _trigger_tally(text: str, workflow: Trigger | None,
         if test is _line_may_check and declared:
             counts = [c + count_check_lines(h, context=lines, test=_declared_check, extra=unknown)
                       for c, h in zip(counts, held_kept, strict=True)]
-        may_pass = sum(count_check_lines(_drop(k, skip), context=lines, test=test) for k in may)
+        # extra too: an unknown command under a continue-on-error expression is a may-pass line
+        may_pass = sum(count_check_lines(_drop(k, skip), context=lines, test=test, extra=extra) for k in may)
         total = count_check_lines(_drop(lines, declared | skip), context=lines, test=test, extra=extra)
         masked = max(total - sum(counts) - may_pass, 0)
         out.append((counts[0], counts[1], counts[2], masked, may_pass))
