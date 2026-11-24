@@ -136,6 +136,10 @@ def test_a_ci_scan_meets_level_2_measured(tmp_path: Path, rel: str, text: str, t
     (".github/workflows/x.yml", "steps:\n  - run: detect-secrets scan --baseline .secrets.baseline\n"),  # exits 0
     (".github/workflows/x.yml", "steps:\n  - run: trufflehog git file://.\n"),  # no --fail: exits 0
     (".github/workflows/x.yml", "steps:\n  - run: gitleaks detect --exit-code 0\n"),  # cannot fail
+    (".github/workflows/x.yml", "steps:\n  - run: gitleaks protect --staged\n"),  # nothing staged in CI
+    (".github/workflows/x.yml", "steps:\n  - run: gitleaks version\n"),
+    (".github/workflows/x.yml", "steps:\n  - run: gitleaks --help\n"),
+    (".github/workflows/x.yml", "steps:\n  - run: echo Secret-Detection.gitlab-ci.yml\n"),  # a GitHub file
     (".gitlab-ci.yml", "build:\n  tags:\n    - gitleaks\n  script:\n    - make\n"),  # a runner tag
     (".github/workflows/x.yml", "on:\n  push:\n    paths:\n      - trufflehog\n"),  # a path filter                    # a hidden job never runs
     (".gitlab-ci.yml", "include:\n  # - template: Security/Secret-Detection.gitlab-ci.yml\n"),  # commented out
@@ -244,6 +248,7 @@ PRE_COMMIT = "repos:\n  - repo: https://github.com/gitleaks/gitleaks\n    hooks:
     ("  - run: pre-commit run gitleaks\n", []),  # staged files only: none in CI
     ("  - run: pre-commit run --all-files ruff\n", []),  # a hook id after the flag
     ("  - run: pre-commit run --all-files gitleaks\n", ["gitleaks"]),
+    ("  - run: pre-commit run -a\n", ["gitleaks"]),
     ("  - name: pre-commit run --all-files\n    run: echo hi\n", []),  # a step label
 ])
 def test_ci_that_runs_the_pre_commit_secrets_hooks_is_a_scan(tmp_path: Path, step: str, tools: list[str]) -> None:
@@ -254,6 +259,21 @@ def test_ci_that_runs_the_pre_commit_secrets_hooks_is_a_scan(tmp_path: Path, ste
 def test_a_pre_commit_comment_naming_a_tool_is_not_a_hook(tmp_path: Path) -> None:
     text = "repos:\n  - repo: https://github.com/astral-sh/ruff-pre-commit\n    hooks:\n      - id: ruff  # gitleaks later\n"
     assert scan_secrets_guard(_repo(tmp_path, {".pre-commit-config.yaml": text}))["pre_commit"]["present"] is False
+
+
+def test_a_hook_id_variant_maps_to_its_tool(tmp_path: Path) -> None:
+    cfg = "repos:\n  - repo: https://github.com/gitleaks/gitleaks\n    hooks:\n      - id: gitleaks-docker\n"
+    root = _repo(tmp_path, {".pre-commit-config.yaml": cfg,
+                            ".github/workflows/x.yml": "steps:\n  - run: pre-commit run gitleaks-docker --all-files\n"})
+    assert scan_secrets_guard(root)["ci"]["tools"] == ["gitleaks"]
+
+
+def test_a_manual_stage_hook_is_not_run_by_ci(tmp_path: Path) -> None:
+    cfg = PRE_COMMIT + "        stages: [manual]\n"
+    root = _repo(tmp_path, {".pre-commit-config.yaml": cfg,
+                            ".github/workflows/x.yml": "steps:\n  - run: pre-commit run --all-files\n"})
+    block = scan_secrets_guard(root)
+    assert block["ci"]["present"] is False and block["configured"] is True  # level 1 still lists it
 
 
 def test_pre_commit_run_without_a_secrets_hook_is_not_a_scan(tmp_path: Path) -> None:

@@ -114,6 +114,7 @@ _COMMAND_NAMES = sorted((*SECRET_TOOLS, "detect-secrets-hook"), key=len, reverse
 # A command that cannot fail the job guards nothing: ``detect-secrets scan`` writes a baseline and
 # exits 0, ``trufflehog`` exits 0 on findings without ``--fail``, ``gitleaks --exit-code 0``.
 _TRUFFLEHOG_FAIL = re.compile(r"(?<![\w-])--fail(?![\w-])")  # not --fail-on-scan-errors
+_STAGED_OR_INFO = re.compile(r"--staged\b|\bgitleaks\s+(?:version|help)\b|(?<!\S)(?:--help|-h|--version)(?!\S)")
 _GITLEAKS_NO_FAIL = re.compile(r"--exit-code[= ]0\b")
 _COMMAND = re.compile(
     r"(?:^\s*|[;&|]\s*|(?<![\w-])(?:run|script):\s*|^\s*-\s+|"
@@ -140,7 +141,7 @@ _STEP_START = re.compile(r"^(\s*)-\s")
 # A bare ``pre-commit run`` checks staged files only, which a CI checkout has none of.
 _PRE_COMMIT_RUN = re.compile(r"(?:^\s*(?:-\s+)?(?:run:\s*)?|[;&|]\s*)pre-commit run\b([^\n]*)")
 _PRE_COMMIT_ACTION = re.compile(r"^\s*-?\s*uses:\s*['\"]?pre-commit/action@")
-_PRE_COMMIT_SCOPE = re.compile(r"(?:^|\s)--(?:all-files|from-ref|files)\b")
+_PRE_COMMIT_SCOPE = re.compile(r"(?:^|\s)(?:-a\b|--(?:all-files|from-ref|files)\b)")
 # A list of names, not commands: jobs (``needs:``), stages, runner tags, branches and paths. A
 # ``needs: [- gitleaks]`` names a job called gitleaks; a ``paths: [- trufflehog]`` a folder.
 _NAME_LIST = re.compile(r"^\s*(?:needs|dependencies|extends|stages|tags|tags-ignore|paths|paths-ignore|"
@@ -332,6 +333,37 @@ _VALUED_FLAGS = frozenset({"--from-ref", "--to-ref", "--source", "--origin", "-s
                            "--color", "--config", "-c", "--remote-name", "--remote-url"})
 
 
+def _hook_tool(hook_id: str) -> str:
+    """The tool a hook id runs: ``gitleaks-docker`` and ``gitleaks-system`` run gitleaks."""
+    return next((t for t in SECRET_TOOLS if hook_id == t or hook_id.startswith(f"{t}-")), hook_id)
+
+
+_STAGES = re.compile(r"^\s*stages\s*:\s*(.*)$")
+_HOOK_ID = re.compile(r"^(\s*)-?\s*id\s*:\s*(\S+)")
+_DEFAULT_STAGES = frozenset({"pre-commit", "commit"})
+
+
+def _hooks_run_in_ci(root: Path, hook: PreCommitGuard) -> frozenset[str]:
+    """The secrets hooks a plain ``pre-commit run`` selects: a hook whose ``stages:`` leaves out the
+    pre-commit stage (``[manual]``, ``[pre-push]``) is skipped, so CI does not run it."""
+    if not hook["file"]:
+        return frozenset()
+    lines = _code_lines(_read(root / hook["file"]) or "")
+    skipped: set[str] = set()
+    for i, line in enumerate(lines):
+        m = _HOOK_ID.match(line)
+        if not m:
+            continue
+        indent = len(m.group(1))
+        for ln in lines[i + 1:]:
+            if ln.strip() and (len(ln) - len(ln.lstrip()) <= indent or _HOOK_ID.match(ln)):
+                break
+            stages = _STAGES.match(ln)
+            if stages and not _DEFAULT_STAGES & set(re.findall(r"[\w-]+", stages.group(1))):
+                skipped.add(_hook_tool(m.group(2).lower()))
+    return frozenset(hook["tools"]) - skipped
+
+
 def _hook_id(tokens: list[str]) -> str | None:
     """The hook ``pre-commit run`` names, wherever it sits among the flags; None for every hook."""
     skip = False
@@ -355,8 +387,8 @@ def _tool_that_can_fail(name: str, line: str) -> str | None:
         return None  # ``detect-secrets scan`` and ``audit`` always exit 0
     if name == "trufflehog" and not _TRUFFLEHOG_FAIL.search(line):
         return None
-    if name == "gitleaks" and _GITLEAKS_NO_FAIL.search(line):
-        return None
+    if name == "gitleaks" and (_GITLEAKS_NO_FAIL.search(line) or _STAGED_OR_INFO.search(line)):
+        return None  # a CI checkout has nothing staged; version and help scan nothing
     return name
 
 
@@ -389,7 +421,7 @@ def _ci_tools(text: str, hooks: frozenset[str] = frozenset(), gitlab: bool = Fal
         if run_hooks:  # the pre-commit secrets hooks, run where they cannot be skipped
             if _PRE_COMMIT_SCOPE.search(run_hooks.group(1)):
                 hook_id = _hook_id(run_hooks.group(1).split())
-                tools.update(hooks if hook_id is None else hooks & {hook_id})
+                tools.update(hooks if hook_id is None else hooks & {_hook_tool(hook_id)})
             continue
         uses = _USES.match(line)
         if uses:
@@ -402,7 +434,7 @@ def _ci_tools(text: str, hooks: frozenset[str] = frozenset(), gitlab: bool = Fal
         names |= {m.group(1).lower() for m in _DOCKER_IMAGE.finditer(line)}
         tools.update(t for t in (_tool_that_can_fail(n, line) for n in names) if t)
     code = "\n".join(lines)
-    if _GITLAB_TEMPLATE.search(code) and not _gitlab_job_disabled(lines) \
+    if gitlab and _GITLAB_TEMPLATE.search(code) and not _gitlab_job_disabled(lines) \
             and not _DETECTION_DISABLED.search(code):
         tools.add("secret_detection")
     return sorted(tools)
@@ -483,7 +515,7 @@ def scan_secrets_guard(repo_root: Path, scope: Path | None = None,
     repository's, so a ``scope`` reads the root's, as ``guardrails`` reads the root pre-commit config."""
     root = repo_root.resolve()
     hook = pre_commit_guard(root)
-    ci = ci_guard(root, ghsync_root, frozenset(hook["tools"]))
+    ci = ci_guard(root, ghsync_root, _hooks_run_in_ci(root, hook))
     sources = [SourceGrade(source=name, grade=_GRADES[name])
                for name, found in (("pre_commit", hook["present"]), ("ci", ci["present"])) if found]
     return {"available": True, "pre_commit": hook, "ci": ci, "configured": bool(sources),
