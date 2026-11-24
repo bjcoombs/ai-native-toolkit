@@ -207,7 +207,7 @@ def test_extends_across_an_include(tmp_path: Path) -> None:
                  "  script:\n    - echo x\n", (False, "no_lint_command"), id="inherit-false"),
     pytest.param("default:\n  before_script:\n    - ruff check .\njob:\n  inherit:\n    default: [image]\n"
                  "  script:\n    - echo x\n", (False, "no_lint_command"), id="inherit-list"),
-    pytest.param("default:\n  before_script:\n    - ruff check .\njob:\n  inherit:\n    default: *x\n"
+    pytest.param("default:\n  before_script:\n    - ruff check .\njob:\n  inherit:\n    default: sometimes\n"
                  "  script:\n    - echo x\n", (None, "unknown_trigger"), id="inherit-unread"),
 ])
 def test_default_script_keys_run_only_in_the_jobs_that_take_them(
@@ -283,3 +283,17 @@ def test_an_unnamed_top_level_entry_opens_the_config(tmp_path: Path) -> None:
 
 def test_no_gitlab_file_has_no_merged_config(tmp_path: Path) -> None:
     assert merged_config(_repo(tmp_path / "repo", {"README.md": "x\n"})) is None
+
+
+@pytest.mark.parametrize("default", [
+    pytest.param("before_script:\n  - pip install ruff\n", id="legacy"),
+    pytest.param("default:\n  before_script:\n    - pip install ruff\n", id="default"),
+])
+def test_a_job_merged_only_by_default_keeps_its_reading_when_anchored(tmp_path: Path, default: str) -> None:
+    text = default + ".common: &common\n  tags: [docker]\nlint:\n  <<: *common\n  script:\n    - ruff check .\n"
+    repo = _repo(tmp_path / "repo", {".gitlab-ci.yml": text})
+    block = scan_ci_checks(repo)
+    assert (block["lint_runs"], block["enforced_check_runs"]) == (True, True)   # as on main
+    config = merged_config(repo)
+    assert config is not None
+    assert merged_view(config).rendered == ""

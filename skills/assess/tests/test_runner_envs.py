@@ -99,3 +99,18 @@ def test_read_envs_lists_what_it_read(tmp_path: Path) -> None:
     envs = read_envs(tmp_path)
     assert envs.tox == {"lint": ("ruff check .",)}
     assert envs.nox == {"lint": ("ruff check .",)}
+
+
+@pytest.mark.parametrize("files", [
+    pytest.param({"tox.ini": "[testenv]\nignore_outcome = true\n[testenv:lint]\ncommands = ruff check .\n"},
+                 id="ini-base-ignore-outcome"),
+    pytest.param({"tox.toml": '[env_run_base]\nignore_outcome = true\n[env.lint]\ncommands = [["ruff", "check"]]\n'},
+                 id="toml-run-base-ignore-outcome"),
+    pytest.param({"tox.ini": "[testenv:lint]\nbase = other\ncommands = ruff check .\n"}, id="ini-base-key"),
+])
+def test_an_inherited_ignore_outcome_is_not_credited(tmp_path: Path, files: dict[str, str]) -> None:
+    assert _lint(tmp_path, "tox -e lint", files) == (None, "check_target")
+    # Mirror: the environment sets it back to false.
+    if "tox.ini" in files and "ignore_outcome" in files["tox.ini"]:
+        mirror = {"tox.ini": files["tox.ini"] + "ignore_outcome = false\n"}
+        assert _lint(tmp_path / "mirror", "tox -e lint", mirror) == (True, "lint_command")

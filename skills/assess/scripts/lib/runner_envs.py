@@ -12,8 +12,9 @@ command or environment that is not read gives nothing, so the line keeps its nul
   root, ``tox.ini`` (``[testenv:<name>]``) or ``tox.toml`` (``[env.<name>]``). Not read: a
   second tox configuration anywhere in the tree (a ``cd`` may pick it), ``setup.cfg`` and
   ``pyproject.toml`` forms, ``-c`` / ``--conf`` / ``--root``, ``-m``, ``ALL``, positional
-  arguments after ``--``, an environment without its own ``commands`` (it inherits), one with
-  ``ignore_outcome = true``, a factor-conditional line (``py311: pytest``) and a substitution
+  arguments after ``--``, an environment without its own ``commands`` (it inherits) or with a
+  ``base``, one whose ``ignore_outcome`` (its own, else ``[testenv]`` / ``env_run_base``'s) is
+  not false, a factor-conditional line (``py311: pytest``) and a substitution
   other than ``{posargs}`` (``{posargs:x}`` reads ``x``). A command prefixed ``-`` or ``!``
   cannot fail the run, so it is not returned.
 - **nox**: ``nox -s a b`` (``--session``, ``--sessions``, ``-e``) with the one
@@ -88,11 +89,15 @@ def _tox_ini(text: str) -> dict[str, tuple[str, ...]]:
     except configparser.Error:
         return {}
     envs: dict[str, tuple[str, ...]] = {}
+    base = parser["testenv"] if parser.has_section("testenv") else None
     for section in parser.sections():
         name = section.removeprefix("testenv:")
-        if name == section or "{" in name or "commands" not in parser[section]:
+        own = parser[section]
+        if name == section or "{" in name or "commands" not in own or "base" in own:
             continue
-        if parser[section].get("ignore_outcome", "").strip().lower() == "true":
+        # [testenv] settings apply to every environment that does not set its own.
+        outcome = own.get("ignore_outcome", base.get("ignore_outcome", "") if base is not None else "")
+        if outcome.strip().lower() not in ("", "false"):
             continue
         envs[name] = _ini_commands(parser[section]["commands"])
     return envs
@@ -105,9 +110,12 @@ def _tox_toml(text: str) -> dict[str, tuple[str, ...]]:
         return {}
     envs: dict[str, tuple[str, ...]] = {}
     table = data.get("env")
+    run_base = data.get("env_run_base")
+    base = run_base if isinstance(run_base, dict) else {}
     for name, env in (table.items() if isinstance(table, dict) else ()):
         commands = env.get("commands") if isinstance(env, dict) else None
-        if not isinstance(commands, list) or env.get("ignore_outcome") is True:
+        if not isinstance(commands, list) or "base" in env or env.get(
+                "ignore_outcome", base.get("ignore_outcome", False)) is not False:
             continue
         envs[name] = tuple(
             text for argv in commands

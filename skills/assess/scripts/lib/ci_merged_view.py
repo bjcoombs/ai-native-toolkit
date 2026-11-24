@@ -20,7 +20,9 @@ job replaces. ``merged_view(config)`` takes ``ci_includes.merged_config`` and re
   could not be merged (a flow map beside a block map). ``ci_checks`` reads their triggers as
   unknown, so they read as not measured, never as met.
 
-A job that is not merged keeps its own lines and its own reading. ``MergedJob.open`` (an include
+A job that is not merged keeps its own lines and its own reading. So does a job merged only
+by a ``default:`` script key whose own definition is ``unreadable`` (an anchor merge): it reads as
+before #1180, and the ``default:`` lines stay in place for it. ``MergedJob.open`` (an include
 this run could not read may also define the job) is not applied here: ``ci_checks`` keeps
 #766's reading of such a job, and its ``included_jobs`` basis covers a missing check. Inward-only
 imports: ``lib.ci_includes``. Tests: ``tests/test_ci_merged_config.py``.
@@ -121,10 +123,19 @@ def _render(config: MergedConfig, keys: dict[str, tuple[KeyDef, ...]],
     return out, settled
 
 
+def _merged(job: MergedJob) -> bool:
+    if job.hidden:
+        return False
+    if len(job.defs) > 1 or job.extended:
+        return True
+    # A job whose only other source is a default: script key keeps its own reading when its own
+    # definition is not read whole (an anchor merge): merging it would make it unknown.
+    return bool(job.inherited & SCRIPT_KEYS) and job.unresolved != "unreadable"
+
+
 def merged_jobs(config: MergedConfig) -> list[MergedJob]:
     """The visible jobs whose keys GitLab merges from more than one place."""
-    return [job for job in config.jobs.values() if not job.hidden and (
-        len(job.defs) > 1 or job.extended or job.inherited & SCRIPT_KEYS)]
+    return [job for job in config.jobs.values() if _merged(job)]
 
 
 def merged_view(config: MergedConfig) -> MergedView:
@@ -143,7 +154,10 @@ def merged_view(config: MergedConfig) -> MergedView:
             if parent.startswith(".") and parent in config.jobs:
                 for d in config.jobs[parent].defs:
                     drop(d.source, d.start, d.end)
-    if config.default is not None:
+    # A job left on its own reading still runs the default: script lines as written there.
+    kept = any(not job.hidden and job.inherited & SCRIPT_KEYS and not _merged(job)
+               for job in config.jobs.values())
+    if config.default is not None and not kept:
         for key in SCRIPT_KEYS:
             for k in config.default.keys.get(key, ()):
                 drop(k.source, k.start, k.end)
