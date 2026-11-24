@@ -78,15 +78,32 @@ def test_numbered_names_outside_the_fragment_shape_are_not_fragments() -> None:
     assert classify_working_notes_trees(signals) == []
 
 
+def _fragment_signals(*names: str) -> dict:
+    signals = {"changes/README.md": {"in_degree": 1, "inbound_sources": ["README.md"]}}
+    for n in names:
+        signals[f"changes/{n}"] = {"in_degree": 0, "inbound_sources": [], "graph_in_degree": 0}
+    return signals
+
+
 def test_working_notes_ignore_keeps_a_fragment_tree_counted() -> None:
-    signals = {
-        "changes/README.md": {"in_degree": 1, "inbound_sources": ["README.md"]},
-        "changes/1.feature.md": {"in_degree": 0, "inbound_sources": []},
-    }
-    assert classify_working_notes_trees(signals) == [
-        {"path": "changes", "file_count": 1, "docs": ["changes/1.feature.md"]},
-    ]
+    signals = _fragment_signals("1.feature.md", "2.bugfix.md")
+    assert classify_working_notes_trees(signals) == [{
+        "path": "changes", "file_count": 2,
+        "docs": ["changes/1.feature.md", "changes/2.bugfix.md"],
+    }]
     assert classify_working_notes_trees(signals, ignore=["changes"]) == []
+
+
+def test_one_numbered_page_beside_a_readme_stays_an_orphan() -> None:
+    assert classify_working_notes_trees(_fragment_signals("01.setup.md")) == []
+
+
+def test_fragment_a_base_hub_selects_stays_counted() -> None:
+    signals = _fragment_signals("1.feature.md", "2.bugfix.md", "3.misc.md")
+    signals["changes/3.misc.md"]["graph_in_degree"] = 1  # a `.base` view selects it
+    assert classify_working_notes_trees(signals)[0]["docs"] == [
+        "changes/1.feature.md", "changes/2.bugfix.md",
+    ]
 
 
 # --- #1228: TOML table headers in prose -------------------------------------
@@ -105,6 +122,12 @@ def test_unresolved_wikilink_without_a_toml_file_is_still_broken(tmp_path: Path)
     _write(tmp_path, "README.md", "See [[units]] for the list.\n")
     d = _graph(tmp_path)
     assert d["broken_links"] == [{"from": "README.md", "target": "units", "kind": "wikilink"}]
+
+
+def test_wikilink_with_anchor_or_alias_on_a_toml_line_is_still_broken(tmp_path: Path) -> None:
+    _write(tmp_path, "README.md", "See [[install#setup|installation]] and pyproject.toml.\n")
+    d = _graph(tmp_path)
+    assert d["broken_links"] == [{"from": "README.md", "target": "install", "kind": "wikilink"}]
 
 
 def test_resolving_wikilink_on_a_toml_line_still_links(tmp_path: Path) -> None:

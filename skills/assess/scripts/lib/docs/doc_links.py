@@ -31,7 +31,8 @@ without linking it; a filename several docs share (`SKILL.md`) counts only when 
 them sits in the naming doc's own directory (#1229). Stdlib only and imports no `lib` module, so
 `doc_graph.py` passes its doc and code extension sets in. `doc_graph.py` also reuses
 `strip_fenced_lines` and `INLINE_CODE_RE` for its reference-edge scan.
-Co-changes with `doc_graph.py` (its only caller) and its test `tests/test_doc_links.py`;
+Co-changes with `doc_graph.py` (its only caller) and its tests `tests/test_doc_links.py`
+and `tests/test_doc_graph_false_positives.py` (the TOML-header and shared-filename rules);
 `skills/assess/tests/test_doc_graph.py` covers the same rules end to end.
 """
 from __future__ import annotations
@@ -276,8 +277,8 @@ def _harvest_wikilinks(
         if amb:
             harvest.ambiguous += 1
         if tgt is None:
-            if not is_toml_table_header(
-                wikilink_target, lines[link_text.count("\n", 0, m.start())],
+            if not is_toml_table_header(  # raw contents: `[[a#b|c]]` is no TOML key
+                m.group(1).strip(), lines[link_text.count("\n", 0, m.start())],
             ):
                 harvest.add_broken(d, wikilink_target, "wikilink")
             continue

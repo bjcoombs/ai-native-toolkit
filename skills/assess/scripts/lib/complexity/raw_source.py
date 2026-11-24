@@ -92,8 +92,9 @@ joins a tree at that path whatever its size or fingerprint, and no doc under a
 `chapter-20` series stays counted); ignore wins where they overlap, and an outer
 tree absorbs any tree inside it. A release-note fragment directory (#1227) is a
 working-notes tree too: towncrier-style `<issue>.<kind>.md` files beside a
-`README.md`, unlinked until the release folds them. Only its fragments with no
-inbound link leave the headline; the README stays counted. Only docs are classified, never
+`README.md`, unlinked until the release folds them. At least two fragments with no
+inbound link (a `.base` hub counts as one) must be present; only they leave the
+headline, and the README stays counted. Only docs are classified, never
 a `.base` hub. It runs on the headline graph (link and reference edges) after
 the raw pass. `doc_graph.py` excludes these trees too and reports
 `excluded_working_notes_trees`, `working_notes_doc_count`,
@@ -235,6 +236,7 @@ _SEQUENCE_RE = re.compile(r"^([a-z]+(?:[-_ ][a-z]+)*)[-_ ]\d+$")
 # `+<slug>.<kind>.md`, an orphan fragment, with an optional `.<n>` counter) in a
 # directory with a README that explains them. Each is written unlinked on purpose
 # and deleted when the release folds it, so an orphan fragment is a working note.
+FRAGMENT_TREE_MIN_FILES = 2  # a series, not one numbered page
 _FRAGMENT_RE = re.compile(
     r"^(?:\d+|\+[\w-]+)\.[a-z][a-z0-9_-]*(?:\.\d+)?\.(?:md|mdx|markdown)$", re.IGNORECASE,
 )
@@ -243,9 +245,11 @@ _FRAGMENT_RE = re.compile(
 def _fragment_trees(doc_signals: dict[str, DocSignal]) -> dict[str, list[str]]:
     """Release-note fragment directories, each mapped to its unlinked fragments.
 
-    A directory qualifies when it holds a ``README.md`` and at least one fragment
-    with in-degree 0. Only those fragments leave the headline: the README, any
-    other doc and a fragment something links to stay counted."""
+    A directory qualifies when it holds a ``README.md`` and at least
+    ``FRAGMENT_TREE_MIN_FILES`` fragments nothing links to, a `.base` hub
+    included. Only those fragments leave the headline: the README, any other doc
+    and a linked fragment stay counted. The floor keeps one unlinked
+    ``01.setup.md`` beside a README counted as the orphan it is."""
     readme_dirs: set[str] = set()
     fragments: dict[str, list[str]] = {}
     for rel in sorted(doc_signals):
@@ -254,9 +258,18 @@ def _fragment_trees(doc_signals: dict[str, DocSignal]) -> dict[str, list[str]]:
             continue  # a root-level doc never anchors a tree
         if name.lower() == "readme.md":
             readme_dirs.add(head)
-        elif _FRAGMENT_RE.match(name) and int(doc_signals[rel].get("in_degree", 0)) == 0:
+        elif _FRAGMENT_RE.match(name) and not _linked(doc_signals[rel]):
             fragments.setdefault(head, []).append(rel)
-    return {d: f for d, f in fragments.items() if d in readme_dirs}
+    return {
+        d: f for d, f in fragments.items()
+        if d in readme_dirs and len(f) >= FRAGMENT_TREE_MIN_FILES
+    }
+
+
+def _linked(signal: DocSignal) -> bool:
+    """True when anything links to the doc: another doc, or a `.base` hub,
+    which ``graph_in_degree`` counts and the doc-only ``in_degree`` does not."""
+    return max(int(signal.get("graph_in_degree", 0)), int(signal.get("in_degree", 0))) > 0
 
 
 def _name_key(rel: str) -> str | None:

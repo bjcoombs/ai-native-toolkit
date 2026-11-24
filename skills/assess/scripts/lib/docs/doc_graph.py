@@ -813,7 +813,8 @@ def _detect_working_notes_trees(
     signals: dict[str, DocSignal] = {}
     for r in sorted(doc_rels):
         sources = [u for u in graph.predecessors(r) if u in doc_rels]
-        signals[r] = {"in_degree": len(sources), "inbound_sources": sources}
+        signals[r] = {"in_degree": len(sources), "inbound_sources": sources,
+                      "graph_in_degree": graph.in_degree(r)}
     trees = classify_working_notes_trees(signals, force=force, ignore=ignore)
     return {r for t in trees for r in t["docs"]}, trees
 
