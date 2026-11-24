@@ -31,6 +31,8 @@ def _reading(text: str) -> str:
     got = read_lint_inputs(text)
     if _USES_LINE in got.install_only:
         return "install_only"
+    if _USES_LINE in got.may_pass:
+        return "may_pass"
     return "unsure" if _USES_LINE in got.unsure else "lint"
 
 
@@ -89,8 +91,22 @@ def _reading(text: str) -> str:
     ("golangci/golangci-lint-action@v8", _with(**{"install-only": "${{ inputs.only }}"}), "lint"),
     ("golangci/golangci-lint-action@v9", "        with: {version: \"v2.1\"}\n", "lint"),
     ("golangci/golangci-lint-action@v9", "        with: {install-only: true}\n", "install_only"),
+    # reviewdog: the default fail_level none (and fail_on_error false) never fails the step.
+    ("reviewdog/action-eslint@v1", "", "may_pass"),
+    ("reviewdog/action-eslint@v1", _with(reporter="github-pr-review"), "may_pass"),
+    ("reviewdog/action-eslint@v1", _with(fail_level="none"), "may_pass"),
+    ("reviewdog/action-eslint@v1", _with(fail_on_error="false"), "may_pass"),
+    ("reviewdog/action-golangci-lint@v2", _with(fail_level="'nonsense'"), "may_pass"),
+    ("reviewdog/action-eslint@v1", _with(fail_level="${{ inputs.level }}"), "may_pass"),
+    ("reviewdog/action-eslint@v1", _with(fail_on_error="${{ inputs.fail }}"), "may_pass"),
+    ("reviewdog/action-eslint@v1", _with(fail_level="error"), "lint"),
+    ("reviewdog/action-shellcheck@v1", _with(fail_level="'any'"), "lint"),
+    ("reviewdog/action-eslint@v1", _with(fail_level="warning"), "lint"),
+    ("reviewdog/action-eslint@v1", _with(fail_level="info"), "lint"),
+    ("reviewdog/action-tfsec@v1", _with(fail_on_error="true"), "lint"),
+    ("reviewdog/action-eslint@v1", _with(fail_level="none", fail_on_error="true"), "lint"),
+    ("reviewdog/action-eslint@v1", "        with:\n          <<: *rd\n", "lint"),
     # Other lint actions are not read here: their #782 credit stands.
-    ("reviewdog/action-eslint@v1", _with(args="--version"), "lint"),
     ("super-linter/super-linter@v7", _with(**{"install-only": "true"}), "lint"),
 ])
 def test_lint_action_inputs(uses: str, with_block: str, expected: str) -> None:
@@ -132,6 +148,10 @@ def _scan(tmp_path: Path, text: str) -> tuple[bool | None, str]:
     ("astral-sh/ruff-action@v3", _with(args="${{ matrix.args }}"), (None, "check_target")),
     ("golangci/golangci-lint-action@v9", _with(**{"install-only": "${{ inputs.only }}"}),
      (None, "check_target")),
+    ("reviewdog/action-eslint@v1", "", (None, "check_may_pass")),
+    ("reviewdog/action-eslint@v1", _with(fail_level="${{ inputs.level }}"), (None, "check_may_pass")),
+    ("reviewdog/action-eslint@v1", _with(fail_level="error"), (True, "lint_command")),
+    ("reviewdog/action-eslint@v1", _with(fail_on_error="true"), (True, "lint_command")),
 ])
 def test_scan_reads_the_inputs(tmp_path: Path, uses: str, with_block: str,
                                expected: tuple[bool | None, str]) -> None:
@@ -249,3 +269,24 @@ def test_a_backslash_matrix_leg_is_text_not_a_template(tmp_path: Path, leg: str,
 ])
 def test_an_alias_input_keeps_todays_answer_in_both_styles(with_block: str) -> None:
     assert _reading(_step("golangci/golangci-lint-action@v9", with_block)) == "lint"
+
+
+@pytest.mark.parametrize(("extra", "on", "expected"), [
+    ("        continue-on-error: true\n", "[pull_request]", (False, "not_enforced")),
+    ("", "[workflow_dispatch]", (False, "not_enforced")),
+])
+def test_a_may_pass_reviewdog_step_masked_or_off_trigger_reads_not_enforced(
+        tmp_path: Path, extra: str, on: str, expected: tuple[bool | None, str]) -> None:
+    text = _step("reviewdog/action-eslint@v1", extra=extra).replace("[pull_request]", on)
+    assert _scan(tmp_path, text) == expected
+
+
+def test_a_may_pass_reviewdog_step_beside_a_lint_run_keeps_the_run(tmp_path: Path) -> None:
+    text = _step("reviewdog/action-eslint@v1", extra="      - run: npx eslint .\n")
+    assert _scan(tmp_path, text) == (True, "lint_command")
+
+
+def test_a_reviewdog_step_with_unsettled_triggers_reads_unknown_trigger(tmp_path: Path) -> None:
+    """An unsettled trigger reads before the may-pass reading, as for any lint line."""
+    text = "jobs:\n  lint:\n    steps:\n      - uses: reviewdog/action-eslint@v1\n"
+    assert _scan(tmp_path, text)[0] is None

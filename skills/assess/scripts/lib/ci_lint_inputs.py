@@ -1,8 +1,9 @@
-"""Does a known lint action's step lint, or only install the linter? (issue #893)
+"""Does a known lint action's step lint, and can it fail its job? (issue #893)
 
 ``lib.ci_lines.lint_action`` credits a ``uses:`` step of a known lint action from the
 ``uses:`` line alone (#782). Two actions document a ``with:`` input that installs the linter
-and runs nothing, so ``read_lint_inputs(text)`` reads each such step's ``with:`` block:
+and runs nothing, and the reviewdog actions never fail by default, so
+``read_lint_inputs(text)`` reads each such step's ``with:`` block:
 
 - ``astral-sh/ruff-action`` and ``chartboost/ruff-action`` run ``ruff <args> <src>``
   (``args`` defaults to ``check``). ``args: --version`` is the install-only form the
@@ -17,11 +18,24 @@ and runs nothing, so ``read_lint_inputs(text)`` reads each such step's ``with:``
   tag reads the input, a ``v8`` or earlier tag ignores it, and a SHA or branch is not read.
   ``install-mode: none`` (use a golangci-lint already on the path) and ``only-new-issues``
   still lint, so they keep the credit.
+- ``reviewdog/action-*`` (apart from action-setup and action-suggester, which
+  ``lint_action`` never credits) passes ``-fail-level`` and ``-fail-on-error`` to reviewdog.
+  Every listed action defaults to ``fail_level: none`` (always exit 0) and the deprecated
+  ``fail_on_error: false``; older releases have only ``fail_on_error``. A literal
+  ``fail_level`` of ``any``, ``info``, ``warning`` or ``error``, or ``fail_on_error: true``,
+  can fail the step and keeps the credit. Anything else (the defaults, ``none``, ``false``,
+  an expression, an unknown value) is a lint run whose failure may not fail the job.
 
-Each step comes back in one of two index sets of its ``uses:`` line:
+Each step comes back in one of three index sets of its ``uses:`` line:
 
 - ``install_only``: a literal input makes the step run no linter. ``lib.ci_checks`` does not
   count the line for ``lint_runs``.
+- ``may_pass``: a reviewdog step that may not fail its job. ``lib.ci_checks`` counts it as
+  a lint line on the ``check_may_pass`` side, like a ``ruff check . || echo failed`` line
+  (``lib.ci_unsure``): ``lint_runs`` reads null with ``lint_basis: check_may_pass`` unless
+  another line settles it. A reviewdog posting a GitHub check run may still block a merge
+  through that check, which this module cannot see, so the reading is null, not false.
+  Masking and triggers apply as to any step.
 - ``unsure``: the deciding input is set, but not to a value this module settles (a
   ``${{ }}`` expression, an empty ``args``, an ``install-only: true`` on a SHA or branch ref,
   an ``install-only`` value that is neither true nor false). ``lib.ci_checks`` counts the
@@ -64,6 +78,8 @@ _GOLANGCI_INSTALL_ONLY_SINCE = 9   # install-only is declared from v9.0.0
 _TRUE = frozenset({"true", "True", "TRUE"})
 _FALSE = frozenset({"false", "False", "FALSE"})
 _RUFF_INFO_COMMANDS = frozenset({"version", "help"})
+_REVIEWDOG = "reviewdog/action-"
+_FAILING_LEVELS = frozenset({"any", "info", "warning", "error"})
 _USES_VALUE = re.compile(r"^([\w.-]+/[\w.-]+)(?:/[^@\s]*)?@(\S+)$")
 _TAG = re.compile(r"^v(\d+)(?:\.\d+){0,2}$")
 _FLOW_ITEM = re.compile(r"^\s*([\w.-]+)\s*:\s*(.*?)\s*$")
@@ -71,10 +87,11 @@ _MATRIX_REF = re.compile(r"\$\{\{\s*matrix\.([\w-]+)\s*\}\}")
 
 
 class LintInputs(NamedTuple):
-    """The ``uses:`` line indexes of install-only lint steps and of unsettled ones."""
+    """The ``uses:`` line indexes of install-only, unsettled and may-pass lint steps."""
 
     install_only: frozenset[int]
     unsure: frozenset[int]
+    may_pass: frozenset[int] = frozenset()
 
 
 NO_INPUTS = LintInputs(frozenset(), frozenset())
@@ -245,12 +262,24 @@ def _matrix_reading(tree: IndentTree, uses: int, value: Value, read: Callable[[V
     return "install_only" if readings == {"install_only"} else "unsure"
 
 
+def _reviewdog_reading(fail_level: Value, fail_on_error: Value) -> str:
+    """``lint`` when a literal input lets reviewdog fail the step, else ``may_pass``."""
+    if isinstance(fail_level, _Unread) or isinstance(fail_on_error, _Unread):
+        return "lint"   # an unread with: keeps today's answer
+    if fail_level is not None and fail_level.lower() in _FAILING_LEVELS:
+        return "lint"
+    if fail_on_error is not None and fail_on_error in _TRUE:
+        return "lint"
+    return "may_pass"
+
+
 def read_lint_inputs(text: str) -> LintInputs:
     """Sort the known lint action steps of one workflow file (module docstring)."""
     raw = text.splitlines()
     tree = IndentTree(parse_lines(raw))
     install_only: set[int] = set()
     unsure: set[int] = set()
+    may_pass: set[int] = set()
     for i, line in enumerate(tree.lines):
         if not (line.structural and line.key == "uses" and lint_action(raw[i])):
             continue
@@ -258,16 +287,14 @@ def read_lint_inputs(text: str) -> LintInputs:
         if match is None:
             continue
         name, ref = match.group(1).lower(), match.group(2)
-        if name not in _RUFF_ACTIONS and name != _GOLANGCI:
+        if name not in _RUFF_ACTIONS and name != _GOLANGCI and not name.startswith(_REVIEWDOG):
             continue
         step = tree.siblings[tree.mapping_of[i]]
         with_line = next((k for k in step if tree.lines[k].key == "with"), None)
         inputs = {} if with_line is None else _with_inputs(tree, raw, with_line)
         reading = (_matrix_reading(tree, i, _input(inputs, "args"), _ruff_reading) if name in _RUFF_ACTIONS
                    else _matrix_reading(tree, i, _input(inputs, "install-only"),
-                                        partial(_golangci_reading, ref)))
-        if reading == "install_only":
-            install_only.add(i)
-        elif reading == "unsure":
-            unsure.add(i)
-    return LintInputs(frozenset(install_only), frozenset(unsure))
+                                        partial(_golangci_reading, ref)) if name == _GOLANGCI
+                   else _reviewdog_reading(_input(inputs, "fail_level"), _input(inputs, "fail_on_error")))
+        {"install_only": install_only, "unsure": unsure, "may_pass": may_pass}.get(reading, set()).add(i)
+    return LintInputs(frozenset(install_only), frozenset(unsure), frozenset(may_pass))
