@@ -244,7 +244,7 @@ def _masked_lines(lines: list[str]) -> set[int]:
             continue
         if _WHEN_MANUAL.match(line):  # a manual job runs only on a click: mask the whole job
             job = next((j for j in range(i, -1, -1) if lines[j].strip() and not lines[j][0].isspace()), None)
-            if job is not None:
+            if job is not None and _unconditional(lines, i, job):
                 masked.update(range(job, _block_end(lines, job, 0)))
             continue
         if not _CONTINUE_ON_ERROR.match(line):
@@ -279,6 +279,18 @@ def _runs_on_change(lines: list[str]) -> bool:
     return False
 
 
+def _unconditional(lines: list[str], i: int, job: int) -> bool:
+    """Whether the ``when:`` on line ``i`` of the job opening at ``job`` holds on every pipeline: set on
+    the job itself, or in a rule with no ``if:``, ``changes:`` or ``exists:``."""
+    indent = len(lines[i]) - len(lines[i].lstrip())
+    if not _STEP_START.match(lines[i]) and indent <= 2:
+        return True
+    start = i if _STEP_START.match(lines[i]) else next(
+        (k for k in range(i, job, -1) if _STEP_START.match(lines[k])), i)
+    item = lines[start:_block_end(lines, start, len(lines[start]) - len(lines[start].lstrip()))]
+    return not any(_RULE_CONDITION.match(ln) for ln in item)
+
+
 def _gitlab_job_disabled(lines: list[str]) -> bool:
     """Whether the visible ``secret_detection`` job never runs: an unconditional ``when: never``, on
     the job or as a rule with no ``if:``, ``changes:`` or ``exists:``. That switches off the job and
@@ -287,19 +299,7 @@ def _gitlab_job_disabled(lines: list[str]) -> bool:
         if not _GITLAB_JOB.match(line):
             continue
         end = _block_end(lines, i, 0)
-        for j in range(i + 1, end):
-            if not _WHEN_NEVER.match(lines[j]):
-                continue
-            indent = len(lines[j]) - len(lines[j].lstrip())
-            if not _STEP_START.match(lines[j]) and indent <= 2:
-                return True  # ``when: never`` on the job itself
-            start = j if _STEP_START.match(lines[j]) else next(
-                (k for k in range(j, i, -1) if _STEP_START.match(lines[k])), j)
-            item_indent = len(lines[start]) - len(lines[start].lstrip())
-            item = lines[start:_block_end(lines, start, item_indent)]
-            if not any(_RULE_CONDITION.match(ln) for ln in item):
-                return True
-        return False
+        return any(_WHEN_NEVER.match(lines[j]) and _unconditional(lines, j, i) for j in range(i + 1, end))
     return False
 
 
