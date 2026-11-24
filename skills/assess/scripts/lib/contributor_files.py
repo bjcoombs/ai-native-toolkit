@@ -158,6 +158,20 @@ def _org_policy(org: Any) -> PolicyReading:
                       + (f" ({why})" if why else "")}
 
 
+def tree_policy(repo_root: Path) -> tuple[str | None, PolicyKind | None]:
+    """The policy the tree holds: a ``SECURITY`` file, else a private-reporting link in the guide or
+    README; ``(None, None)`` when there is neither. ``lib.hosting.org_security_policy`` reads it to
+    skip the network when the tree holds one."""
+    root = repo_root.resolve()
+    path = _find(root, POLICY_NAMES)
+    if path is not None:
+        return path, "file"
+    guide = _find(root, GUIDE_NAMES)
+    readmes = [name for name in _READMES if (root / name).is_file()]
+    link = _links_private_reporting(root, [*([guide] if guide else []), *readmes])
+    return (link, "private_reporting") if link else (None, None)
+
+
 def scan_contributor_files(repo_root: Path, archetype: Mapping[str, Any] | None = None,
                            org_security_policy: Any = None) -> ContributorFilesBlock:
     """Build the ``contributor_files`` block (see the module doc)."""
@@ -167,12 +181,7 @@ def scan_contributor_files(repo_root: Path, archetype: Mapping[str, Any] | None 
                           "contributing guide and a security policy are not measured"}
     root = repo_root.resolve()
     guide = _find(root, GUIDE_NAMES)
-    path = _find(root, POLICY_NAMES)
-    kind: PolicyKind | None = "file" if path else None
-    if path is None:
-        readmes = [name for name in _READMES if (root / name).is_file()]
-        path = _links_private_reporting(root, [*([guide] if guide else []), *readmes])
-        kind = "private_reporting" if path else None
+    path, kind = tree_policy(root)
     policy: PolicyReading = ({"available": True, "present": True, "path": path, "kind": kind, "source": "repo"}
                              if path is not None else _org_policy(org_security_policy))
     ready: bool | None = (False if guide is None else

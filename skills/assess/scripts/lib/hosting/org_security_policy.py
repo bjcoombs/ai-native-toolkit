@@ -17,12 +17,17 @@ Block (``org_security_policy`` in run-context.json)::
 
     {"available": True, "found": bool, "path": str | None}  # path inside the owner's .github repo
 
-``found`` is false when the owner has no public ``.github`` repository (``not_found``) or it holds
-no security file in those places. Counts-only output drops ``path``.
+``found`` is false when the owner has no ``.github`` repository (``not_found``), when it is
+private (GitHub uses the default community health files of a public one only, so a member's
+``gh`` reading a private one must not count it), or when it holds no security file in those
+places. When the tree already holds a policy (``contributor_files.tree_policy``), no call is made:
+the block is unavailable with ``repo_policy``, which ``lib.contributor_files`` never reads.
+Counts-only output drops ``path``.
 
-Organisation security policy (#1045), network. `scan_org_security_policy(repo_root)` resolves the
+Organisation security policy (#1045), network. `scan_org_security_policy(repo_root)` makes no call when
+the tree holds a policy (`repo_policy`); otherwise it resolves the
 github.com remote (`gh_cli.open_github`), lists the owner's `.github` repository at its root,
-`.github/` and `docs/`, and sets `found` for a `SECURITY` file (`.md` or no extension, any case);
+`.github/` and `docs/` when the repository is public, and sets `found` for a `SECURITY` file (`.md` or no extension, any case);
 a missing `.github` repository reads `found: false`; no github.com remote, no `gh`, no sign-in or an
 API error is the `gh_cli.unavailable` block. Tests: `tests/test_contributor_files.py`.
 """
@@ -31,9 +36,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, TypedDict
 
+from lib.contributor_files import tree_policy
 from lib.hosting.gh_cli import GhUnavailable, gh_api, open_github, unavailable
 
 PLACES = ("", ".github", "docs")
+# The repository holds its own policy, so the owner's is not read (no network call).
+REASON_REPO_POLICY = ("repo_policy: the repository holds its own security policy, so the owner's "
+                      "shared one is not read")
 NAMES = frozenset({"security.md", "security"})
 
 
@@ -60,8 +69,19 @@ def _listing(owner: str, place: str) -> list[Any] | None:
 
 def scan_org_security_policy(repo_root: Path) -> OrgSecurityPolicyBlock | dict[str, Any]:
     """Build the ``org_security_policy`` block (see the module doc)."""
+    if tree_policy(repo_root)[0] is not None:
+        return unavailable(REASON_REPO_POLICY)
     try:
         repo = open_github(repo_root)
+        try:
+            meta = gh_api(f"repos/{repo.owner}/.github")
+        except GhUnavailable as e:
+            if e.reason.startswith("not_found"):
+                return {"available": True, "found": False, "path": None}
+            raise
+        if not isinstance(meta, dict) or meta.get("private") is not False:
+            # GitHub uses the default community health files of a public .github only.
+            return {"available": True, "found": False, "path": None}
         for place in PLACES:
             listing = _listing(repo.owner, place)
             if listing is None:

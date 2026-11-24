@@ -130,20 +130,37 @@ def _gh(monkeypatch: pytest.MonkeyPatch, listings: dict[str, Any]) -> None:
     monkeypatch.setattr(osp, "gh_api", api)
 
 
+PUBLIC = {"repos/acme/.github": {"private": False}}
+
+
 @pytest.mark.parametrize(("listings", "expected"), [
-    ({"repos/acme/.github/contents": [{"name": "SECURITY.md", "type": "file"}]},
+    ({**PUBLIC, "repos/acme/.github/contents": [{"name": "SECURITY.md", "type": "file"}]},
      {"available": True, "found": True, "path": "SECURITY.md"}),
-    ({"repos/acme/.github/contents": [{"name": "README.md", "type": "file"}],
+    ({**PUBLIC, "repos/acme/.github/contents": [{"name": "README.md", "type": "file"}],
       "repos/acme/.github/contents/.github": [{"name": "security.md", "type": "file"}]},
      {"available": True, "found": True, "path": ".github/security.md"}),
-    ({"repos/acme/.github/contents": [{"name": "README.md", "type": "file"}]},
+    ({**PUBLIC, "repos/acme/.github/contents": [{"name": "README.md", "type": "file"}]},
      {"available": True, "found": False, "path": None}),
     ({}, {"available": True, "found": False, "path": None}),  # no .github repository
+    # a private .github: GitHub does not use it, so a member's gh reading it must not count it
+    ({"repos/acme/.github": {"private": True},
+      "repos/acme/.github/contents": [{"name": "SECURITY.md", "type": "file"}]},
+     {"available": True, "found": False, "path": None}),
 ])
 def test_the_owners_dot_github_repository_is_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
                                                   listings: dict[str, Any], expected: dict[str, Any]) -> None:
     _gh(monkeypatch, listings)
     assert osp.scan_org_security_policy(tmp_path) == expected
+
+
+def test_a_policy_in_the_tree_makes_no_network_call(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def no_call(*_args: object) -> Any:
+        raise AssertionError("no gh call when the tree holds a policy")
+    monkeypatch.setattr(osp, "open_github", no_call)
+    monkeypatch.setattr(osp, "gh_api", no_call)
+    block = osp.scan_org_security_policy(_repo(tmp_path, {"SECURITY.md": "x", "CONTRIBUTING.md": "x"}))
+    assert block["available"] is False and block["reason"].startswith("repo_policy:")
+    assert scan_contributor_files(tmp_path, None, block)["policy"]["source"] == "repo"
 
 
 def test_no_github_remote_or_sign_in_is_unavailable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

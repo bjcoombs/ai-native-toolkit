@@ -38,6 +38,7 @@ case "$all" in
   "pr list"*) cat "$FAKE_DIR/prs.json"; exit 0 ;;
   "api users/claude%5Bbot%5D"|"api users/coderabbitai%5Bbot%5D") echo '{"type":"Bot"}'; exit 0 ;;
   "api repos/acme/widget") echo '{"default_branch":"main"}'; exit 0 ;;
+  "api repos/acme/.github") echo '{"private":false}'; exit 0 ;;
   "api repos/acme/widget/rules/branches/main") echo '[]'; exit 0 ;;
   "api repos/acme/widget/branches/main/protection") echo 'gh: Branch not protected (HTTP 404)' >&2; exit 1 ;;
 esac
@@ -106,8 +107,8 @@ def _names_target(argv: list[str], slug: str) -> bool:
         return argv[argv.index("--repo") + 1] == slug
     owner = slug.split("/")[0]
     # The owner's shared .github repository (lib/hosting/org_security_policy.py, #1045) is named too.
-    return any(a.startswith((f"repos/{slug}", f"repos/{owner}/.github/")) or a.startswith("users/")
-               for a in argv)
+    return any(a.startswith((f"repos/{slug}", f"repos/{owner}/.github/")) or a == f"repos/{owner}/.github"
+               or a.startswith("users/") for a in argv)
 
 
 def _run(tmp_path: Path, remote: str, gitlab_ci: str | None = None) -> dict[str, object]:
