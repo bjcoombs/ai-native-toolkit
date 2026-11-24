@@ -18,10 +18,12 @@ reader in ``lib/pack_yaml.py`` does not follow). The reason is a code alone, nev
 What it reads. The files under the repository root, walked once per run without following a
 symlinked directory, minus ``.git``, ``.assess``, the dependency and cache folders an install
 or a tool run writes (``SKIPPED_DIRS``: ``node_modules``, ``.venv``, ``__pycache__`` and the
-like, at any depth, so a check reads the same on a fresh clone as on a working checkout) and
-the ``.assess/config.toml`` excludes (``assess_config.is_user_excluded``). It does not ask git
-which files are tracked, since the collector runs no program; any other untracked file is read,
-and a pack author excludes it in ``.assess/config.toml``. A symlinked file counts only when it resolves inside the
+like, at any depth, so a check reads the same before and after an install) and the
+``.assess/config.toml`` excludes (``assess_config.is_user_excluded``). It does not ask git which
+files are tracked, since the collector runs no program, so any other untracked file is read,
+build output included (``dist/``, ``build/``, ``target/``): some repositories track those
+folders, so they are not skipped, and a pack author whose globs reach them excludes them in
+``.assess/config.toml``. A symlinked file counts only when it resolves inside the
 root, so a link pointing outside is never followed or read. ``exists`` is true for a file of
 the walk or a directory holding one; ``glob_count`` counts the walk's files whose path matches
 the glob (``*`` and ``?`` within one segment, ``**`` across any number, ``[...]`` a class);
