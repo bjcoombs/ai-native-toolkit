@@ -65,6 +65,7 @@ from lib.assess_diagrams_ladder import (LADDER_FILE, LADDER_TITLE, gate_conditio
 from lib.headline import reason_word
 from lib.level_result_types import ConditionResult, LevelResult
 from lib.level_tally import default_model
+from lib.model_change import CUSTOM_NOT_DRAWN, custom_run, model_for_level
 from lib.levels import StepDef
 from lib.run_context_types_diagrams import AssessDiagram, WaffleSquare
 from lib.vocabulary import IN_PLACE
@@ -351,16 +352,29 @@ def build_diagrams(ctx: Mapping[str, Any],
     """Every /assess diagram for one run context, in report order; never raises.
 
     ``model_rows`` are the maturity model's rows (for row titles) and ``steps`` its Steps
-    (the ladder and the outlined gate squares); None reads the shipped model, the one the
-    run context's ``level`` block is computed with.
+    (the ladder and the outlined gate squares); None reads the model the run context's
+    ``level`` block was computed with (``model_change.model_for_level``: the default model
+    or a shipped profile, #1150), else the default model. A run under a custom ``--levels``
+    model (``model_change.custom_run``) draws neither picture, each saying why, so the report
+    never shows a Step from another model.
     """
-    if model_rows is None:
-        model_rows = default_model()["rows"]
-    if steps is None:
-        steps = default_model().get("steps", [])
+    if model_rows is None or steps is None:
+        model = model_for_level(ctx.get("level"))
+        if model is None and custom_run(ctx):
+            return [_custom(LADDER_FILE), _custom(WAFFLE_FILE)]
+        model = model or default_model()
+        model_rows = model["rows"] if model_rows is None else model_rows
+        steps = model.get("steps", []) if steps is None else steps
     model_steps = steps
     return [_guarded(lambda: _ladder(ctx, model_steps), LADDER_FILE),
             _guarded(lambda: _waffle(ctx, model_rows, model_steps), WAFFLE_FILE)]
+
+
+def _custom(file: str) -> AssessDiagram:
+    """A diagram not drawn because the run's model is a custom file (#1150)."""
+    entry = _entry(file)
+    entry["skipped"] = CUSTOM_NOT_DRAWN
+    return entry
 
 
 NOT_ON_DISK = ("the file is not in the artifact directory (the write was skipped, or the "

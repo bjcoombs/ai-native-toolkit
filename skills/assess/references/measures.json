@@ -5677,7 +5677,8 @@
         "structure",
         "structure_drift",
         "test_pressure",
-        "owner_exclusions"
+        "owner_exclusions",
+        "maturity_model"
       ],
       "network": false,
       "private": false
@@ -5706,7 +5707,8 @@
       ],
       "reads": [
         "level",
-        "since_last_run"
+        "since_last_run",
+        "maturity_model"
       ],
       "network": false,
       "private": false
@@ -5779,7 +5781,8 @@
       ],
       "reads": [
         "unit_levels",
-        "units"
+        "units",
+        "maturity_model"
       ],
       "network": false,
       "private": false

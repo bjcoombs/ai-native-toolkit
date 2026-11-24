@@ -72,7 +72,7 @@ KINDS: tuple[Kind, ...] = ("collector", "signal", "condition", "finding")
 STAGES = ("setup", "read_side", "post_offers", "final")
 # The names the core passes to ``run_scans`` (``scan_registry.PROVIDED_INPUTS``).
 PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive",
-                             "managed_settings"})
+                             "maturity_model", "managed_settings"})
 # Tokens for ``scan_registry.GATE_REASONS``, the reasons a scan may opt out of degrading.
 GATE_REASONS = ("setup", "bad_scope", "self_degrading", "serialiser")
 PRIVACY_CLASSES = ("path", "token", "reason", "id", "drop", "hashed_path")
