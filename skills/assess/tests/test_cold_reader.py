@@ -13,6 +13,10 @@ The first screen must also hold no jargon a newcomer cannot read: no condition i
 no snake_case gate id and no catalogue count. A term the glossary defines may appear only as
 a link to its glossary entry.
 
+It must also be plain English (#1174), for readers whose first language is not English: no
+sentence over ``plain_english.MAX_WORDS`` words and no idiom or phrasal verb from
+``plain_english.IDIOMS`` (``plain_english.lint``, read on the visible words).
+
 The report is the one ``assess_tour.py report --out`` writes, the same file the CI step
 uploads as ``tour-sample-report``.
 """
@@ -123,6 +127,14 @@ def test_the_first_screen_holds_no_jargon(
         text = unlinked.replace("**", "").lower()
         assert not [term for term in JARGON if re.search(rf"\b{term}s?\b", text)], line
         assert not [p.pattern for p in INTERNAL if p.search(text)], line
+
+
+@pytest.mark.parametrize("label", ["sample", "fixed"])
+def test_the_first_screen_is_plain_english(
+        reports: dict[str, tuple[assess_tour.TourResult, str]], label: str) -> None:
+    """#1174: short sentences, no idioms, as a reader in a second language needs."""
+    from lib.plain_english import lint
+    assert [issue for line in first_screen(reports[label][1]) for issue in lint(visible(line))] == []
 
 
 @pytest.mark.parametrize("label", ["sample", "fixed"])

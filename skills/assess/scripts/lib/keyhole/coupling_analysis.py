@@ -147,8 +147,8 @@ def detect_hidden_coupling(
             if _looks_modular(metrics, high_modularity_q, high_front_door_ratio):
                 finding: str | None = "hidden_coupling"
                 recommendation = (
-                    "investigate the seam - the static boundary looks modular but "
-                    "its commits reach outside it; the boundary reads better than the history"
+                    "check why these files change together: the static boundary looks modular, "
+                    "but its commits reach outside it, so the boundary reads better than the history"
                 )
             else:
                 # Static and history agree this is coupled. Not hidden, and the

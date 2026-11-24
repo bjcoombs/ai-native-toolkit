@@ -330,7 +330,7 @@ def test_missing_untrusted_entry_is_inserted_in_order() -> None:
     lying = next(f for f in ctx["derived_findings"] if f["name"] == "lying_map")
     assert lying["action"] == "act lying_map"
     e1 = next(f for f in ctx["derived_findings"] if f["name"] == "untrusted_hotspot")
-    assert e1["action"].startswith("strengthen tests")
+    assert e1["action"].startswith("make the tests check")
 
 
 def test_config_excluded_hotspot_is_disclosed() -> None:
