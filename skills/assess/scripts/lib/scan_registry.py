@@ -76,7 +76,10 @@ order (#558). Only `anomalies` relies on its stage, staying the last scan key wh
 later entries append to the table. The `unit_readings` entry (#863) runs the collectors
 the manifest marks `unit_scope` again for each monorepo unit; the module binds that pass
 (`unit_readings.bind`) with a lazy table loader and `run_scans`, so the scan module never
-imports the registry.
+imports the registry. A `--profile` or `--levels` run passes `run_scans` a `plan`
+(`lib/scan_plan.py`, #1268): only its scans run, and each skipped entry leaves the plan's
+"not run under <model>" marker where its value would go; the `scan_plan_stamp` entry
+publishes the plan as `scan_plan`, and nothing for a full run.
 """
 from __future__ import annotations
 
@@ -125,6 +128,7 @@ from lib.review_automation import review_evidence, scan_review_automation
 from lib.hosting.review_reality import review_reality_from_sample
 from lib.shared_tooling import scan_shared_tooling
 from lib.manifest.check_manifest import core_manifest
+from lib.scan_plan import ScanPlan
 from lib.unit_levels import READS as UNIT_LEVEL_READS
 from lib.unit_readings import OWN_READS as UNIT_OWN_READS
 from lib.unit_readings import UNIT_EXTERNAL_READS, UnitTable, unit_table
@@ -133,9 +137,10 @@ from lib.unit_readings import bind as bind_unit_pass
 # Names the core passes to ``run_scans``: the arguments of
 # ``build_run_context``. A spec may read these, or the key of any spec declared
 # before it (``instruction_files``, ``scope``, ``excludes``, ``history_window`` and
-# ``fleet_config`` are setup specs).
+# ``fleet_config`` are setup specs). ``plan`` is the run's ``lib.scan_plan.ScanPlan``, or
+# None for a full run (#1268).
 PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive",
-                             "maturity_model", "managed_settings"})
+                             "maturity_model", "managed_settings", "plan"})
 
 STAGE_SETUP = "setup"
 STAGE_READ_SIDE = "read_side"
@@ -292,6 +297,7 @@ def run_scans(
     inputs: MutableMapping[str, Any],
     stage: str | None = None,
     specs: Iterable[ScanSpec] | None = None,
+    plan: ScanPlan | None = None,
 ) -> None:
     """Run every spec of ``stage`` in table order, writing its result.
 
@@ -305,18 +311,27 @@ def run_scans(
     the degrade wrapper: an unresolvable read is a wiring error in the table or
     the core, so it raises ``ScanRegistryError`` and stops the run, while a
     failure inside the scan itself degrades.
+
+    ``plan`` (``lib/scan_plan.py``, #1268; by default the ``plan`` input) runs only ``plan.scans``: a skipped
+    entry's value is ``plan.marker()``, written where its value would have gone
+    (each spread key, the inputs for a private entry), and it is never called.
     """
     table = tuple(SCANS if specs is None else specs)
+    # ``plan`` is optional for callers that predate it (#1268): absent means every scan runs
+    plan = inputs.setdefault("plan", None) if plan is None else plan
     if stage is None:
         for each in STAGES:
-            run_scans(ctx, inputs, each, table)
+            run_scans(ctx, inputs, each, table, plan)
         return
     spread = frozenset(name for each in table for name in each.spread)
     for spec in table:
         if spec.stage != stage:
             continue
-        args = tuple(_resolve(spec, name, inputs, ctx, spread) for name in spec.reads)
-        value, degraded = _call(spec, args)
+        if plan is not None and not plan.runs(spec.key):
+            value, degraded = plan.marker(), True
+        else:
+            args = tuple(_resolve(spec, name, inputs, ctx, spread) for name in spec.reads)
+            value, degraded = _call(spec, args)
         if spec.spread:
             _spread(spec, ctx, value, degraded)
             inputs[spec.key] = value
@@ -434,6 +449,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # The first 25 run-context keys; the four wiki keys are filled after the
     # wiki is written (lib/run_publish.py).
     _spec("run_header", rs.run_header, spread=rs.RUN_HEADER_KEYS),
+    # The scan plan a --profile or --levels run ran under (lib/scan_plan.py, #1268): the
+    # scans it ran and left out. Absent from a full run, whose run context is unchanged.
+    _spec("scan_plan_stamp", rs.scan_plan_stamp, spread=("scan_plan",)),
     _spec("working_notes", cs.working_notes),
     # Layer 0 navigability: the doc graph.
     _spec("doc_graph", cs.doc_graph),

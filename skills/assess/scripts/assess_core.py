@@ -58,6 +58,7 @@ from lib.run_publish import publish_run
 from lib.assess_config import load_managed_settings_opt_in
 from lib.run_wiki import refresh_log_readiness
 from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
+from lib.scan_plan import ScanPlan, run_plan
 from lib.scan_registry import run_scans
 from lib.scan_registry import safe as _safe
 from lib.testing.test_focus import mutation_scope
@@ -67,6 +68,7 @@ from lib.test_pressure import scan_test_pressure
 def build_run_context(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
     scope: Path | None = None, model: ModelChoice | None = None, managed_settings: bool = False,
+    plan: ScanPlan | None = None,
 ) -> dict[str, Any]:
     """Run the deterministic pipeline and return the structured context dict.
 
@@ -95,13 +97,18 @@ def build_run_context(
     ``managed_settings`` (``--managed-settings`` or the ``[agent_ops] managed_settings`` config
     key, #1153) lets ``agent_ops`` read this machine's Claude Code managed settings; off, the
     agent permissions practice reads the repository alone.
+
+    ``plan`` (``lib.scan_plan.run_plan``, #1268) runs only the scans the model needs; each
+    skipped block reads ``not run under <model>`` and the ``scan_plan`` key records the plan.
+    None runs every scan, as the default model and ``--all-scans`` do.
     """
-    return _scan(repo_root, run_date, non_interactive, scope, model, managed_settings)[0]
+    return _scan(repo_root, run_date, non_interactive, scope, model, managed_settings, plan)[0]
 
 
 def build_and_publish_run(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
     scope: Path | None = None, model: ModelChoice | None = None, managed_settings: bool = False,
+    plan: ScanPlan | None = None,
 ) -> dict[str, Any]:
     """``build_run_context``, then the publish step that writes the artifacts.
 
@@ -109,14 +116,14 @@ def build_and_publish_run(
     run-context.json, and fills the context keys only it can know
     (``pruned_hotspots``, ``log_integrity``, ``prior_findings_snapshot``, ...).
     """
-    ctx, scan_inputs = _scan(repo_root, run_date, non_interactive, scope, model, managed_settings)
+    ctx, scan_inputs = _scan(repo_root, run_date, non_interactive, scope, model, managed_settings, plan)
     publish_run(ctx, scan_inputs)
     return ctx
 
 
 def _scan(
     repo_root: Path, run_date: str, non_interactive: bool, scope: Path | None,
-    model: ModelChoice | None = None, managed_settings: bool = False,
+    model: ModelChoice | None = None, managed_settings: bool = False, plan: ScanPlan | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Run the scan table; return the context and the inputs it filled."""
     scan_inputs: dict[str, Any] = {
@@ -124,6 +131,7 @@ def _scan(
         "run_date": run_date, "non_interactive": non_interactive,
         "maturity_model": model,
         "managed_settings": managed_settings,
+        "plan": plan,
     }
     ctx: dict[str, Any] = {}
     run_scans(ctx, scan_inputs)
@@ -303,6 +311,13 @@ def main(argv: list[str] | None = None) -> int:
             "it on with [agent_ops] managed_settings = true in .assess/config.toml."
         ),
     )
+    parser.add_argument(
+        "--all-scans", action="store_true",
+        help=(
+            "Under --profile or --levels, run every scan, not only those the model reads, for "
+            "the whole report. The default model always runs every scan."
+        ),
+    )
     add_counts_only_arguments(parser)
     parsed = parser.parse_args(argv)
     validate_counts_only_args(parser, parsed)
@@ -320,7 +335,7 @@ def main(argv: list[str] | None = None) -> int:
         ctx = build_and_publish_run(
             repo_root=repo_root, run_date=run_date,
             non_interactive=parsed.non_interactive,
-            scope=parsed.scope, model=model,
+            scope=parsed.scope, model=model, plan=run_plan(model, parsed.all_scans),
             managed_settings=parsed.managed_settings or load_managed_settings_opt_in(repo_root),
         )
     except ValueError as e:

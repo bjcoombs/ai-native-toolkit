@@ -97,7 +97,8 @@ two agent systems it is `unknown`.
 | `--platform-timeout S` | Seconds one repository's platform read may take before its platform blocks are unavailable (default: `[platform] timeout`, else 300). Needs `--platform`. |
 | `--jobs N` | Repositories scanned in parallel (default: CPU count). |
 | `--window W` | History window passed to `assess_signals.py` (`6mo`, `90d`, `12w`, `1y`). |
-| `--scans a,b` | Only these scans (default: all), plus what they read. `review_reality` also brings `review_automation` and `review_evidence`, the review-on-merged-pull-requests level 1 signal. |
+| `--all-scans` | Under `--levels` or `--profile`, run every scan for every repository, not only those the model reads. |
+| `--scans a,b` | Only these scans (default: all; under `--levels` or `--profile`, the blocks the model reads and the owner exclusions, the same for every repository, recorded as `scans` in `run.json`), plus what they read. `review_reality` also brings `review_automation` and `review_evidence`, the review-on-merged-pull-requests level 1 signal. |
 | `--timeout S` | Seconds one repository may take before its row is marked failed (default 600). |
 | `--full` | Keep the full signal blocks, free text included. Default is counts-only. |
 | `--monorepo-units` | Scan each repository by monorepo unit too (`assess_signals.py --units`): each repository in `fleet-data.json` gains `unit_rows`, one Step, next blocking gate, per-tag tally and "learn from" siblings (the units of the same repository that already hold that gate, #1155) per unit. Needs `--levels` (exit 2 without it). A unit is named only by its folder's hash under `--hash-paths` or `--hash-salt`; in plain counts-only output a unit row's `key` is `null`, so it cannot be matched to a folder or to the next run (use `--hash-salt` to join runs, or `--full`). One scoped pass per unit, so it adds scan time on a large monorepo. See [Unit rows](references/fleet-data.md#unit-rows). |

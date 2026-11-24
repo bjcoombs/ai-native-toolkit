@@ -107,11 +107,11 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
     (tmp_path / "rub.toml").write_text(LEVELS, encoding="utf-8")
     before = _snapshot(froot)
 
-    assert fleet_cli.main([str(froot), "--levels", "rub.toml", "--out", "out1"]) == 0
-    assert fleet_cli.main([str(froot), "--levels", "rub.toml", "--out", "out2", "--jobs", "1"]) == 0
+    assert fleet_cli.main([str(froot), "--levels", "rub.toml", "--all-scans", "--out", "out1"]) == 0
+    assert fleet_cli.main([str(froot), "--levels", "rub.toml", "--all-scans", "--out", "out2", "--jobs", "1"]) == 0
     listing = tmp_path / "list.txt"
     listing.write_text("".join(f"{c}\n" for c in sorted(froot.glob("*/*/*-main"))), encoding="utf-8")
-    assert fleet_cli.main(["--from-list", str(listing), "--levels", "rub.toml", "--out", "out3"]) == 0
+    assert fleet_cli.main(["--from-list", str(listing), "--levels", "rub.toml", "--all-scans", "--out", "out3"]) == 0
 
     first = (tmp_path / "out1" / "repos.jsonl").read_bytes()
     assert first == (tmp_path / "out2" / "repos.jsonl").read_bytes()
@@ -221,7 +221,7 @@ def test_diagrams_are_drawn_from_a_real_run_and_byte_identical(tmp_path, monkeyp
     monkeypatch.chdir(tmp_path)
     (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
     for out in ("d1", "d2"):
-        assert fleet_cli.main([str(root), "--levels", "levels.toml", "--out", out, "--no-history"]) == 0
+        assert fleet_cli.main([str(root), "--levels", "levels.toml", "--all-scans", "--out", out, "--no-history"]) == 0
     for name in ("quadrant.svg", "shared-tooling.svg", "report.md"):
         assert (tmp_path / "d1" / name).read_bytes() == (tmp_path / "d2" / name).read_bytes()
     rows = {r["repo"]: r for r in _rows(tmp_path / "d1")}

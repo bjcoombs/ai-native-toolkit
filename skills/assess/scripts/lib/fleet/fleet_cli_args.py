@@ -82,7 +82,12 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
                         help="Repositories scanned in parallel (default: CPU count).")
     parser.add_argument("--window", default=None,
                         help="History window passed to assess_signals, e.g. 6mo, 90d (default: its own).")
-    parser.add_argument("--scans", default=None, help="Comma-separated scan names (default: all).")
+    parser.add_argument("--scans", default=None,
+                        help="Comma-separated scan names (default: all; under --levels or --profile, "
+                             "the scans the model reads, lib/scan_plan.py).")
+    parser.add_argument("--all-scans", action="store_true",
+                        help="Under --levels or --profile, run every scan, not only those the model "
+                             "reads. --scans, when given, still chooses the scans.")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT,
                         help="Seconds one repository may take before it is marked failed (default: %(default)s).")
     parser.add_argument("--full", action="store_true",

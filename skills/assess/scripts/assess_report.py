@@ -61,6 +61,7 @@ from lib.assess_diagrams import diagrams_section
 from lib.assess_diagrams_review import build_all
 from lib.headline import GLOSSARY_URL, as_headline
 from lib.measured_appendix import measured_section
+from lib.scan_plan import not_run_text
 
 # Caps on rows rendered so a pathological repo can't bloat the frozen report.
 # The structured arrays in run-context.json keep the full lists.
@@ -202,8 +203,18 @@ def render_hotspots_table(ctx: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _not_run(ctx: dict[str, Any], key: str) -> str | None:
+    """``_Not run under profile citizen._`` when a ``--profile`` / ``--levels`` run left the
+    scan behind ``key`` out (``lib/scan_plan.py``, #1268): never read as none or zero."""
+    text = not_run_text(ctx.get(key))
+    return None if text is None else f"_{text[0].upper()}{text[1:]}._"
+
+
 def render_keyhole_summary(ctx: dict[str, Any]) -> str:
     """Return the pre-built keyhole-readiness summary line (consumed verbatim)."""
+    skipped = _not_run(ctx, "keyhole_summary")
+    if skipped is not None:
+        return skipped
     summary = ctx.get("keyhole_summary") or {}
     text = summary.get("summary_text")
     return text if text else "_Keyhole readiness summary unavailable._"
@@ -333,6 +344,9 @@ def render_findings_section(ctx: dict[str, Any]) -> str:
     into ``findings_markdown``; this renderer copies it so the section appears
     whether or not an LLM is in the loop.
     """
+    skipped = _not_run(ctx, "findings_markdown")
+    if skipped is not None:
+        return skipped
     markdown: str | None = ctx.get("findings_markdown")
     if not markdown or not markdown.strip():
         return "_No cross-practice findings recorded._"
@@ -590,12 +604,27 @@ GLOSSARY_LINE = (
 
 
 def render_summary_section(ctx: dict[str, Any]) -> str:
-    """The top card (``lib/top_card.py``, #1252), then the glossary line (``GLOSSARY_LINE``),
+    """The top card (``lib/top_card.py``, #1252), with a line naming the scans a profile's plan left
+    out (``_narrowed_line``, #1268), then the glossary line (``GLOSSARY_LINE``),
     ending in a blank line, all before the first ``## `` heading. The card is left out when the
     headline has none (unavailable, or a context written before it); the glossary line always
     renders."""
     markdown = as_headline(ctx.get("headline"))["summary_markdown"]
+    narrowed = _narrowed_line(ctx)
+    if markdown and narrowed:
+        markdown = f"{markdown}\n\n{narrowed}"
     return f"{markdown}\n\n{GLOSSARY_LINE}\n\n" if markdown else f"{GLOSSARY_LINE}\n\n"
+
+
+def _narrowed_line(ctx: dict[str, Any]) -> str:
+    """The card's last line on a run a scan plan narrowed (``lib/scan_plan.py``, #1268): the
+    scans the model does not read, the unit roll-up among them, were not run, never zero."""
+    plan = ctx.get("scan_plan")
+    model = plan.get("model") if isinstance(plan, dict) else None
+    if not isinstance(model, str):
+        return ""
+    return (f"_Scans this model does not read were not run under {model}; their sections say so. "
+            "Run with `--all-scans` for every scan._")
 
 
 def _headline_markdown(ctx: dict[str, Any]) -> str:

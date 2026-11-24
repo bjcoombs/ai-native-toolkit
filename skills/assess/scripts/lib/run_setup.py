@@ -13,7 +13,8 @@ written after the scans by ``lib/run_publish.py``.
 Setup-stage adapters for the scan table (#557): `run_scope`, `run_assess_dir`,
 `new_run_id`, `current_stats` / `prior_stats`, `stats_diff` (dropping a graduation the
 generated-file filter caused), `instruction_grading`, `rename_map` and
-`measured_commit`, `config_excludes`,
+`measured_commit`, `config_excludes`, `scan_plan_stamp` (the `scan_plan` key a `--profile` or
+`--levels` run records, #1268),
 `first_flagged`, `superseded_run`, `unfinalized_exclusions`, `read_plugin_version`, and
 `run_header`, which returns the first 28 run-context keys (`RUN_HEADER_KEYS`) with the
 four `WIKI_KEYS`, `prior_findings_snapshot` and `prior_level` (#940) reserved as None for the publish step. Reads only. Tests:
@@ -24,7 +25,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, Protocol
 
 from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION, ASSESS_METHOD_VERSION
 from lib.assess_config import load_excludes
@@ -43,6 +45,13 @@ from lib.wiki_state import (
     rekey_first_flagged,
     same_measurement_prior_run,
 )
+
+
+class _Plan(Protocol):
+    """``lib.scan_plan.ScanPlan``, by shape: importing it would reach the level engine and the
+    platform clients, and the setup adapters stay offline (``tests/test_signals.py``)."""
+
+    def stamp(self) -> Mapping[str, object]: ...
 
 # The run-context keys a wiki write fills. The header reserves them (``None``)
 # so they keep their place in run-context.json; lib/run_publish.py assigns them
@@ -74,6 +83,12 @@ def new_run_id() -> str:
     finalize can prove the finalize-input and run-context came from one run.
     """
     return f"{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
+
+
+def scan_plan_stamp(plan: _Plan | None) -> dict[str, Mapping[str, object]]:
+    """The ``scan_plan`` key of a narrowed run (#1268): the model, the scans it ran and the
+    scans it left out; nothing for a full run, so its run context is unchanged."""
+    return {} if plan is None else {"scan_plan": plan.stamp()}
 
 
 def read_plugin_version(plugin_json: Path = PLUGIN_JSON) -> str:

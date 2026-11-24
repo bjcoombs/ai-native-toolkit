@@ -160,6 +160,14 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `prior_level.models.*.baseline.head_sha` | token |
 | `prior_level.models.*.baseline.held_gates` | token |
 
+## scan_plan_stamp
+
+| Field | Kept as |
+|---|---|
+| `scan_plan.model` | dropped |
+| `scan_plan.ran` | token |
+| `scan_plan.not_run` | token |
+
 ## doc_graph
 
 | Field | Kept as |

@@ -217,7 +217,7 @@ def test_a_version_bump_rescores_a_hashed_entry_only_under_the_same_salt(zroot, 
     bumped.write_text(text.replace(f'version = "{version}"', f'version = "{version}-bumped"', 1), encoding="utf-8")
     _run(zroot, tmp_path / "o1", hist, "--hash-salt", "s909")
     _kept_earlier(hist)
-    assert fleet_cli.main([str(zroot), "--out", str(tmp_path / "o2"), "--levels", str(bumped),
+    assert fleet_cli.main([str(zroot), "--out", str(tmp_path / "o2"), "--levels", str(bumped), "--all-scans",
                            "--history-dir", str(hist), "--hash-salt", salt]) == 0
     doc = json.loads((tmp_path / "o2" / "achievements.json").read_text(encoding="utf-8"))
     assert bool(doc["rescored_runs"]) is rescored
