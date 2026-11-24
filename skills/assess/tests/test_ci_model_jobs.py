@@ -459,3 +459,38 @@ def test_an_unread_workflow_file_blocks_a_met_reading(tmp_path: Path) -> None:
     assert _state(block) == ("not_measured", "ci_jobs_unread")
     del files[".github/workflows/empty.yml"]
     assert _state(scan_ci_model_jobs(_repo(tmp_path / "b", files))) == ("met", None)
+
+
+# --- review round 3: a provider key beside a gated call, an unread-only repository ------
+
+JOB_ENV_KEY = """jobs:
+  evals:
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: key only
+        run: echo ready
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - {cond}run: npx promptfoo@latest eval
+"""
+
+
+def test_a_job_env_key_does_not_undo_a_label_gated_step(tmp_path: Path) -> None:
+    gated = JOB_ENV_KEY.format(cond="if: contains(github.event.pull_request.labels.*.name, 'evals')\n        ")
+    job = _workflow(tmp_path, "  pull_request:", gated)["jobs"][0]
+    assert (job["state"], job["gates"]) == ("gated", ["label"])
+    open_job = _workflow(tmp_path / "b", "  pull_request:", JOB_ENV_KEY.format(cond=""))["jobs"][0]
+    assert open_job["state"] == "ungated"
+
+
+def test_a_remote_reusable_workflow_alone_reads_unread_not_no_model_jobs(tmp_path: Path) -> None:
+    remote = "on: pull_request\njobs:\n  review:\n    uses: org/ci/.github/workflows/claude-review.yml@v1\n"
+    block = scan_ci_model_jobs(_repo(tmp_path, {".github/workflows/r.yml": remote}))
+    assert (block["model_jobs"], block["unread"], block["ungated"]) == (None, 1, None)
+    assert _state(block) == ("not_measured", "ci_jobs_unread")
+    plain = "on: pull_request\njobs:\n  t:\n    steps:\n      - run: pytest\n"
+    assert _state(scan_ci_model_jobs(_repo(tmp_path / "b", {".github/workflows/t.yml": plain}))) == (
+        "not_measured", "no_model_jobs")

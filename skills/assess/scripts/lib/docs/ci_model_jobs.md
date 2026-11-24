@@ -79,7 +79,10 @@ A job is `unknown` (with `reason`) and never ungated or gated when:
 - `rules_unread`: GitLab rules this reader cannot settle.
 
 `unread` counts jobs that call a reusable workflow from another repository, GitLab includes
-that were not read, and tracked CI files that could not be read (empty, over the size limit). Either can hide an ungated job, so with none ungated the signal is null
+that were not read, and tracked CI files that could not be read (empty, over the size limit). With no
+model-backed job found but `unread` above 0, `model_jobs` is null and the reason is `ci_jobs_unread`, not
+`no_model_jobs`. The step gate reads only the lines that show a model call: a provider key in a
+job `env:`, or in a step that only sets it, neither gates nor ungates a job. Either can hide an ungated job, so with none ungated the signal is null
 (`ci_jobs_unread`) rather than 0.
 
 ## Known limits

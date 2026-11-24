@@ -33,7 +33,7 @@ cannot settle is unknown, never ungated or gated. A job whose only sign is a pro
 
 Block (``ci_model_jobs`` in run-context.json)::
 
-    {"available": True, "files_read": int, "model_jobs": int, "gated": int, "unknown": int,
+    {"available": True, "files_read": int, "model_jobs": int | None, "gated": int, "unknown": int,
      "unread": int, "ungated": int | None, "ungated_reason": str (only when ungated is None),
      "jobs": [{"path", "line", "job", "platform" (github | gitlab), "signs": [...],
                "triggers": [...], "gates": [...], "state", "reason" (unknown only),
@@ -42,7 +42,8 @@ Block (``ci_model_jobs`` in run-context.json)::
 ``ungated`` is the count of ungated jobs whenever one is ungated. With none ungated it is null
 when a job is unknown (``trigger_unresolved``) or a job or include could not be read
 (``unread`` above 0: ``ci_jobs_unread``), else 0. With no model-backed job, ``model_jobs`` is 0
-and the condition is not measured (``no_model_jobs``, ``signal_grades.EMPTY_DENOMINATORS``).
+and the condition is not measured (``no_model_jobs``, ``signal_grades.EMPTY_DENOMINATORS``);
+with none found but ``unread`` above 0, ``model_jobs`` is null and the reason is ``ci_jobs_unread``.
 Tests: ``tests/test_ci_model_jobs.py``.
 """
 from __future__ import annotations
@@ -131,7 +132,7 @@ class ModelJob(TypedDict):
 class CiModelJobsBlock(TypedDict):
     available: bool
     files_read: int
-    model_jobs: int
+    model_jobs: int | None  # null when none is found but a job or file was not read
     gated: int
     unknown: int
     unread: int  # job-level remote reusable workflows and unresolved GitLab includes
@@ -466,7 +467,10 @@ def _github(repo: Path, files: list[str], read_local: ReadLocal | None = None) -
             signs = _job_signs(flow.tree, job, read_local, shared)
             if not signs or set(signs) <= set(shared) and _child(flow.tree, job, "uses") is not None:
                 continue  # nothing beyond the workflow env, in a job that only calls a workflow
-            lines = sorted(signs)
+            # The step gate reads the lines that show a model call; a provider key alone (a job
+            # env, a step that only sets it) proves none, so it neither gates nor ungates the job.
+            calls = [i for i, found_signs in signs.items() if found_signs != ["provider_secret"]]
+            lines = sorted(calls or signs)
             base = _base(flow, callers.get(flow.rel.rsplit("/", 1)[-1], [])) if (
                 flow.called or flow.run_by_workflow) else None
             route = flow.job_route(job, lines, base)
@@ -560,7 +564,9 @@ def scan_ci_model_jobs(repo_root: Path, ghsync_root: Path | None = None) -> CiMo
     block = CiModelJobsBlock(available=True, files_read=len(files), model_jobs=len(jobs),
                              gated=count["gated"], unknown=count["unknown"], unread=unread,
                              ungated=count["ungated"], jobs=jobs)
-    if not count["ungated"] and jobs and (count["unknown"] or unread):
+    if not count["ungated"] and (count["unknown"] or unread):
         block["ungated"] = None
         block["ungated_reason"] = REASON_UNRESOLVED if count["unknown"] else REASON_UNREAD
+        if not jobs:  # nothing found, but an unread job or file may call a model: not no_model_jobs
+            block["model_jobs"] = None
     return block
