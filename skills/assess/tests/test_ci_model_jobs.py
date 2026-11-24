@@ -293,3 +293,36 @@ def test_counts_only_keeps_the_ungated_reason(tmp_path: Path) -> None:
     out = counts_only({"ci_model_jobs": scan_ci_model_jobs(root)})["ci_model_jobs"]
     assert (out["ungated"], out["ungated_reason"], out["jobs"][0]["reason"]) == (
         None, "trigger_unresolved", "on_unread")
+
+
+# --- corpus findings: precision --------------------------------------------------------
+
+def test_a_secret_passed_on_by_a_command_is_not_a_sign() -> None:
+    text = ("jobs:\n  deploy:\n    steps:\n      - run: |\n"
+            "          aws secretsmanager put-secret-value --secret-string \"${{ secrets.ANTHROPIC_API_KEY }}\"\n")
+    assert _signs(text) == []
+
+
+def test_a_never_true_step_is_not_read(tmp_path: Path) -> None:
+    jobs = EVAL_STEPS.replace("      - run: npx", "      - if: false\n        run: npx")
+    assert _workflow(tmp_path, "  pull_request:", jobs)["model_jobs"] == 0
+
+
+def test_a_step_if_on_a_step_output_is_not_measured(tmp_path: Path) -> None:
+    jobs = EVAL_STEPS.replace("      - run: npx", "      - if: steps.scope.outputs.scope == 'prompts'\n        run: npx")
+    block = _workflow(tmp_path, "  push:", jobs)
+    assert block["jobs"][0]["reason"] == "condition_unread"
+    assert _state(block) == ("not_measured", "trigger_unresolved")
+
+
+def test_a_job_if_on_a_changes_job_is_not_measured(tmp_path: Path) -> None:
+    jobs = EVAL_STEPS.replace("    runs-on:", "    needs: changes\n    if: needs.changes.outputs.prompts == 'true'\n    runs-on:")
+    assert _workflow(tmp_path, "  pull_request:", jobs)["jobs"][0]["state"] == "unknown"
+
+
+def test_a_job_if_on_an_ordinary_event_narrows_the_trigger(tmp_path: Path) -> None:
+    jobs = EVAL_STEPS.replace("    runs-on:", "    if: github.event_name == 'pull_request'\n    runs-on:")
+    job = _workflow(tmp_path, "  push:\n  pull_request:", jobs)["jobs"][0]
+    assert (job["state"], job["triggers"]) == ("ungated", ["pull_request"])
+    gated = _workflow(tmp_path / "b", "  push:\n  pull_request:\n    paths: [p/**]", jobs)["jobs"][0]
+    assert (gated["state"], gated["gates"]) == ("gated", ["event_if"])

@@ -10,9 +10,10 @@ and gate tables, the trigger rules and the known limits) is ``lib/docs/ci_model_
 **A model-backed job** (``signs``): a ``run:`` or ``script:`` line runs an eval harness
 (``eval_harness``: promptfoo eval, deepeval test, oaieval, inspect eval, lm_eval, ragas) or the
 Claude Code CLI in print mode (``agent_cli``: ``claude -p``); a step uses an agent action
-(``agent_action``, ``AGENT_ACTIONS``); a line of the job names a model-provider secret
-(``provider_secret``, ``PROVIDER_SECRETS``); or a command runs ``pytest -m eval`` or a path
-under ``evals/`` (``eval_tests``). An install line (``pip install ragas``) is not a sign.
+(``agent_action``, ``AGENT_ACTIONS``); an ``env:`` or ``with:`` line of the job names a
+model-provider secret (``provider_secret``, ``PROVIDER_SECRETS``); or a command runs ``pytest -m eval`` or a path
+under ``evals/`` (``eval_tests``). An install line (``pip install ragas``) is not a sign, and a step or job whose ``if:`` is never
+true is not read.
 
 **A gate** (``GATES``): ``paths`` (``paths:`` or ``paths-ignore:`` on every ordinary event that
 fires the job), ``pr_types`` (pull request ``types:`` without ``synchronize``), ``label`` (a
@@ -87,6 +88,11 @@ _SECRET = re.compile(r"\b(?:" + "|".join(PROVIDER_SECRETS) + r")\b")
 _USES = re.compile(r"""^["']?([\w.-]+/[\w.-]+)""")
 _LABEL = re.compile(r"github\.event\.(?:pull_request\.labels|label\b)")
 _EVENT_IF = re.compile(r"github\.event_name\s*==\s*['\"](\w+)['\"]")
+# A condition on a value this reader does not follow: a step output, another job's output (a
+# changed-files job), a variable or an input. It may be a gate, so it reads unknown.
+_OPAQUE = re.compile(r"\b(?:steps|needs|vars|env|inputs)\.")
+# A literal never-true if: (``false``, ``${{ false }}``): the step or job never runs.
+_NEVER = re.compile(r"""^(["']?)(?:false|\$\{\{\s*false\s*\}\})\1$""", re.IGNORECASE)
 _REMOTE_WORKFLOW = re.compile(r"""^["']?[\w.-]+/[\w.-]+/\.github/workflows/""")
 _LOCAL_WORKFLOW = re.compile(r"""^["']?\./\.github/workflows/([\w.-]+\.ya?ml)""")
 
@@ -171,9 +177,10 @@ def signs_in(tree: IndentTree, lines: range) -> list[str]:
             match = _USES.match(raw)
             if match and match.group(1).lower() in AGENT_ACTIONS:
                 found.add("agent_action")
-        if _SECRET.search(raw if line.structural else strip_comment(raw)) or _SECRET.search(line.key):
-            found.add("provider_secret")
         if tree.lines[tree.body(i)].key not in _BODY_KEYS:
+            # an env or with: entry, never a command passing the secret on (a deploy storing it)
+            if _SECRET.search(raw if line.structural else strip_comment(raw)) or _SECRET.search(line.key):
+                found.add("provider_secret")
             continue
         command = raw if not line.structural or line.dash or line.key in _BODY_KEYS else ""
         if not command or command[:1] in ("|", ">") or _INSTALL.search(command):
@@ -244,14 +251,26 @@ def _workflow_route(tree: IndentTree, text: str) -> _Route:
 
 
 def _if_gate(condition: str) -> str | None:
-    """``label``, ``event_if``, ``unknown`` (a gate joined with ``||``, or a repository
-    variable) or None for an ``if:`` that limits nothing this reader counts."""
+    """``label``, ``event_if``, ``unknown`` (a gate joined with ``||``, or a condition on a step
+    or job output, a variable or an input) or None for an ``if:`` that limits nothing counted."""
     events = _EVENT_IF.findall(condition)
     gate = ("label" if _LABEL.search(condition)
             else "event_if" if events and not set(events) & _ORDINARY else None)
-    if "vars." in condition or (gate and "||" in condition):
-        return "unknown"
-    return gate
+    if gate is not None:
+        return "unknown" if "||" in condition else gate
+    return "unknown" if _OPAQUE.search(condition) else None
+
+
+def _narrowed(route: _Route, condition: str) -> _Route:
+    """An ungated route cut to the ordinary events a job ``if:`` requires (``github.event_name ==
+    'pull_request'``); none of its ungated events left means the job runs only when gated."""
+    events = set(_EVENT_IF.findall(condition))
+    if route["state"] != "ungated" or not events or "||" in condition or not events <= _ORDINARY:
+        return route
+    left = [e for e in route["triggers"] if e in events]
+    if not left:
+        return _Route(state="gated", triggers=sorted(events), gates=["event_if"], reason="")
+    return _Route(state="ungated", triggers=left, gates=[], reason="")
 
 
 def _apply_if(route: _Route, gate: str | None) -> _Route:
@@ -298,13 +317,24 @@ class _Workflow:
         return [k for k in self.tree.children(jobs) if self.tree.lines[k].key] if jobs is not None else []
 
     def job_route(self, job: int, sign_lines: Sequence[int]) -> _Route:
-        condition = _child(self.tree, job, "if")
-        route = _apply_if(self.route, _if_gate(_text(self.tree, condition)) if condition is not None else None)
+        key = _child(self.tree, job, "if")
+        condition = _text(self.tree, key) if key is not None else ""
+        route = _apply_if(_narrowed(self.route, condition), _if_gate(condition) if condition else None)
         return _apply_if(route, _step_gate(self.tree, job, sign_lines) if sign_lines else None)
 
 
+def _never(tree: IndentTree, keys: Sequence[int]) -> bool:
+    return any(tree.lines[k].key == "if" and _NEVER.match(tree.lines[k].value) for k in keys)
+
+
 def _sign_lines(tree: IndentTree, job: int) -> list[int]:
-    return [i for i in tree.subtree(job) if signs_in(tree, range(i, i + 1))]
+    """The lines of ``job`` showing a sign, outside a step (or job) whose ``if:`` is never true."""
+    if _never(tree, tree.children(job)):
+        return []
+    steps = _child(tree, job, "steps")
+    dead = {i for item in (tree.items(steps) if steps is not None else []) if _never(tree, item)
+            for i in range(item[0], max(tree.subtree(k).stop for k in item))}
+    return [i for i in tree.subtree(job) if i not in dead and signs_in(tree, range(i, i + 1))]
 
 
 def _worst(routes: Sequence[_Route]) -> _Route:
@@ -346,7 +376,7 @@ def _github(repo: Path, files: list[str]) -> tuple[list[ModelJob], int]:
 def _entry(rel: str, tree: IndentTree, job: int, platform: str, lines: Sequence[int],
            route: _Route, cancels: bool) -> ModelJob:
     entry = ModelJob(path=rel, line=job + 1, job=tree.lines[job].key, platform=platform,
-                     signs=signs_in(tree, range(job, max(lines) + 1)), triggers=route["triggers"],
+                     signs=sorted({s for i in lines for s in signs_in(tree, range(i, i + 1))}), triggers=route["triggers"],
                      gates=route["gates"], state=route["state"], cancel_superseded=cancels)
     if route["state"] == "unknown":
         entry["reason"] = route["reason"]
