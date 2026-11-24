@@ -5,7 +5,7 @@
 id = "core.agent_consistency"
 kind = "collector"
 title = "Cross-agent instruction consistency"
-summary = "Compares the root instruction files of every agent system present (Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue, Zed): check commands one names and another does not, conflicting thresholds, and whether each links to one canonical file, with the pointer line for each unlinked system."
+summary = "Compares the root instruction files of every agent system present: Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue and Zed. It finds check commands one file names and another does not, and thresholds that conflict. It checks whether each file links to one canonical file, and gives the pointer line for each system that does not."
 issues = [768]
 callable = "lib.agent_consistency:scan_agent_consistency"
 publishes = ["agent_consistency"]
@@ -60,7 +60,7 @@ kind = "condition"
 title = "Every agent system names the same checks"
 key = "agent-consistency.1:agent_consistency.conflicts"
 why = "When agent systems are told different check commands or thresholds, one agent's change passes checks another agent was told to run differently."
-fix = "Make the instruction files agree: name the same test and lint commands and the same thresholds in each, or replace each tool's file with the pointer line the report gives."
+fix = "Make the instruction files agree. Name the same test and lint commands and the same thresholds in each. Or replace each tool's file with the pointer line the report gives."
 
 [[entries]]
 id = "core.cond.agent-consistency.2.unlinked"
@@ -68,4 +68,4 @@ kind = "condition"
 title = "Every agent system reads one canonical file"
 key = "agent-consistency.2:agent_consistency.unlinked"
 why = "One source of instructions keeps every agent's picture of the repository the same, and keeps it maintained in one place."
-fix = "Keep AGENTS.md as the one source and make each other tool's file a thin pointer or a symlink to it, using the exact line the report gives for that tool."
+fix = "Keep AGENTS.md as the one source. Make each other tool's file a short pointer or a symlink to it, with the exact line the report gives for that tool."

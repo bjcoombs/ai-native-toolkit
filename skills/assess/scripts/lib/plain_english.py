@@ -18,6 +18,13 @@ words as printed are checked, not only the tables. ``tests/test_plain_english.py
 lint passes on all of them. Machine-read output (run-context keys, reason codes, the badge)
 is not prose and is not linted.
 
+``manifest_lines()`` (#1186) names every prose string of the check manifest the report or the
+catalog prints, keyed ``<entry id>.<field path>``: the ``MANIFEST_PROSE`` fields (titles,
+summaries, condition fixes, finding actions, reason-code meanings and next steps, and what a
+null reading means). The ``why``
+and ``whys`` texts are left out: each was approved by the maintainer under #939, so a shorter
+one is proposed and joins the lint only once approved, by its key in ``APPROVED_WHYS``.
+
 ``untranslated_tokens(english, translation)`` serves the findings template's translation rule
 (the labelled translation under the English summary, #1174): it returns each token of the
 English that must appear unchanged in the translation and does not, in order. Those are the
@@ -31,7 +38,8 @@ from typing import TypedDict, cast
 
 from lib.level_result_types import LevelResult
 
-__all__ = ["IDIOMS", "MAX_WORDS", "PlainIssue", "fixed_lines", "lint", "untranslated_tokens"]
+__all__ = ["APPROVED_WHYS", "IDIOMS", "MAX_WORDS", "MANIFEST_PROSE", "PlainIssue", "fixed_lines", "lint",
+           "manifest_lines", "untranslated_tokens"]
 
 # Long sentences are the first thing a reader in a second language loses track of.
 MAX_WORDS = 25
@@ -134,3 +142,32 @@ def untranslated_tokens(english: str, translation: str) -> list[str]:
     # a whole token: AGENTS.md inside OLD_AGENTS.md is not the same file
     return [t for t in dict.fromkeys(tokens)
             if not re.search(rf"(?<![\w./-]){re.escape(t)}(?![\w/-])", translation)]
+
+
+# The manifest fields the report and the catalog print as prose (#1186).
+MANIFEST_PROSE = frozenset({"title", "summary", "fix", "action", "means", "null_means", "next_step"})
+# ``why`` and ``whys`` keys whose shorter text the maintainer approved (#939, #1186); each joins
+# the lint once approved. Empty until the first approval.
+APPROVED_WHYS: frozenset[str] = frozenset()
+
+
+def manifest_lines() -> dict[str, str]:
+    """Every prose string of the check manifest, keyed ``<entry id>.<field path>`` (see the docstring)."""
+    from lib.manifest.check_manifest import core_manifest
+    out: dict[str, str] = {}
+
+    def walk(value: object, path: tuple[str, ...]) -> None:
+        if isinstance(value, dict):
+            for k, v in value.items():
+                walk(v, (*path, str(k)))
+        elif isinstance(value, list):
+            for i, v in enumerate(value):
+                walk(v, (*path, str(i)))
+        elif isinstance(value, str) and len(path) > 1:
+            key = ".".join(path)
+            why = path[-1] == "why" or path[-2] == "whys"
+            if (not why and path[-1] in MANIFEST_PROSE) or (why and key in APPROVED_WHYS):
+                out[key] = value
+    for entry in core_manifest()["entries"]:
+        walk({k: v for k, v in entry.items() if k != "id"}, (str(entry.get("id")),))
+    return out
