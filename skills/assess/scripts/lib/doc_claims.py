@@ -1,4 +1,4 @@
-"""Moved to ``lib.docs.doc_claims`` (#917). This path is removed in 4.0.0."""
+"""Moved to ``lib.docs.doc_claims`` (#917). This path is removed in 5.0.0."""
 import sys
 
 import lib.docs.doc_claims as _moved

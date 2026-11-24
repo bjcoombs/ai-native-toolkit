@@ -75,7 +75,9 @@ from lib.levels import MaturityModel
 # 3 (#1083): Steps read gates only. `summary` reads "Step N · next: <gate>" or "Step N · all
 #   gates held", with no count; the Next line names gates only; the tally line is relabelled
 #   "Catalogue coverage". No key is added or removed.
-HEADLINE_VERSION = 3
+# 4 (4.0.0 release): the block gains `summary_lines`, `call_to_action` and
+#   `summary_markdown`, the report's three-line summary and its one call to action (#1102).
+HEADLINE_VERSION = 4
 
 __all__ = ["GATE_CHANGE", "GATE_NOUN", "GLOSSARY_URL", "Headline", "as_headline", "gate_change", "gate_note", "headline", "reason_word",
            "run_context_headline", "tag_cells", "verified_count"]

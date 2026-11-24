@@ -6,10 +6,10 @@
   "type": "object",
   "properties": {
     "achievements_version": {
-      "const": 5
+      "const": 6
     },
     "fleet_data_version": {
-      "const": 4
+      "const": 5
     },
     "run": {
       "type": "string"
