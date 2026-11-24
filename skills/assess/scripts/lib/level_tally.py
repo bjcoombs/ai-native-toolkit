@@ -124,7 +124,8 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   yet), `countable` and `set_aside` (by grade, and of those excluded or declined), `met` and `measured` (the headline strip cell's, `tag_cells`, never a second
   tally) `not_measured[]` (`{id, reason}`) and `countable_not_measured[]`, its countable subset. A multi-tagged condition is on each of its rows
   and counted once in `tally`; `measured` 0 means not measured, never a share of 0.
-- `step` (null without `[[steps]]`) and `next_step` (`step`, `blockers[]`; null at the top
+- `step` (null without `[[steps]]`, and null below Step 1 when Step 1 has a gate that does
+  not hold, with `next_step` naming Step 1, #889) and `next_step` (`step`, `blockers[]`; null at the top
   Step): a Step is held when every gate holds (the gate row's conditions up to its level all
   `met`, whatever their grade), every lower Step held too. Gates only (#1083): the tally never
   moves a Step. A blocker is `{kind: "gate", gate, condition, state, reason?}` for the first
