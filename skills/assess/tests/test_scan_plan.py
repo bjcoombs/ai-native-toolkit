@@ -225,3 +225,33 @@ def test_a_hotspot_page_says_the_marker_scan_did_not_run(ci2: Path) -> None:  # 
     assert pages, "the fixture's hotspot gets a page"
     text = pages[0].read_text(encoding="utf-8")
     assert "Stale promissory markers: not run under profile citizen." in text
+
+
+def test_a_method_change_never_lists_findings_a_plan_left_out_as_cleared() -> None:
+    from lib.findings_snapshot import method_change
+
+    prior = {"assess_method_version": 1, "findings": [{"name": "lying_map", "paths": ["a.md"]}]}
+    ctx: dict[str, Any] = {"prior_findings_snapshot": prior, "assess_method_version": 2,
+                           "derived_findings": ScanPlan("profile citizen", frozenset(), ()).marker()}
+    assert method_change(ctx) is None
+    ctx["derived_findings"] = []
+    change = method_change(ctx)
+    assert change is not None and change["cleared"] == [{"finding": "lying_map", "path": "a.md"}]
+
+
+def test_fleet_unit_rows_under_a_plan_match_all_scans(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from test_fleet_cli import fleet_cli
+    from test_unit_readings import MONOREPO, _write
+
+    mono = _write(tmp_path / "root" / "grp" / "mono" / "mono-main", MONOREPO)
+    monkeypatch.chdir(tmp_path)
+    args = [str(mono.parents[2]), "--profile", "handover", "--monorepo-units", "--no-history", "--no-diagrams"]
+    assert fleet_cli.main([*args, "--out", "plan"]) == 0
+    assert fleet_cli.main([*args, "--out", "full", "--all-scans"]) == 0
+
+    def units(out: str) -> Any:
+        (repo,) = json.loads((tmp_path / out / "fleet-data.json").read_text(encoding="utf-8"))["repos"]
+        return repo["unit_rows"]
+
+    assert json.loads((tmp_path / "plan" / "run.json").read_text(encoding="utf-8"))["scans"] is not None
+    assert units("plan") and units("plan") == units("full")
