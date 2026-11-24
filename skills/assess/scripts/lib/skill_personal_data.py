@@ -58,8 +58,9 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
+from lib.assess_config import is_user_excluded
 from lib.agent_instructions_grader import CREDENTIAL_PLACEHOLDERS, scan_sensitive_content
 from lib.instruction_placement import skill_and_agent_files
 
@@ -67,6 +68,7 @@ GRADER_KINDS = ("private_key", "cloud_key", "credential", "ssh_or_host", "ip_add
 KINDS = (*GRADER_KINDS, "email", "phone")
 REFERENCE_SUFFIXES = frozenset({".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".csv", ""})
 _READ_MAX_BYTES = 1_000_000
+REASON_UNREAD = "skill_files_unread"
 
 _EMAIL = re.compile(r"(?<![\w.+-])([A-Za-z0-9._%+-]+)@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})(?![\w-])")
 _RESERVED_DOMAIN = re.compile(r"(?:^|\.)(?:example\.(?:com|org|net)|example|test|invalid|localhost|local)$",
@@ -92,11 +94,13 @@ _PLACEHOLDER_HOME = frozenset({"user", "username", "you", "your", "yourname", "n
 # before it (``foo==1.2.3.4``, ``~=``, ``>=``) is a version. A plain ``=`` or a
 # ``user@`` before an address is not: ``DB_HOST=10.20.30.40`` and ``deploy@10.1.2.3`` are findings.
 _IPV4 = re.compile(r"(?<![\w.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\w|\.\d)")
+# A netmask (``255.255.255.0``) and a CIDR range (``10.0.0.0/8``) name no host, so neither counts.
 # RFC 5737's documentation ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24): example
 # addresses, as ``example.com`` is for email.
 _DOC_RANGE = re.compile(r"^(?:192\.0\.2|198\.51\.100|203\.0\.113)\.")
-# An ``ssh git@host`` test of a Git host's auth is no login detail; any other user is.
-_SSH = re.compile(r"\bssh\s+([A-Za-z0-9._-]+)@[A-Za-z0-9._-]+")
+# An ``ssh git@host`` test of a Git host's auth is no login detail, nor is a login on a reserved
+# domain (``deploy@example.com``, as for email); any other user and host is.
+_SSH = re.compile(r"\bssh\s+([A-Za-z0-9._-]+)@([A-Za-z0-9._-]+)")
 _ROOT_LOGIN = re.compile(r"\broot@[A-Za-z0-9._-]+")
 _VERSION_BEFORE = re.compile(r"(?:(?:\bv|\bversion|\brelease|\bbuild)\s*[:=]?|[=~!<>]=)\s*$", re.IGNORECASE)
 # A credential assignment, as the grader reads it, re-checked here: a value that only refers to a
@@ -107,6 +111,11 @@ _CREDENTIAL = re.compile(r"\b(?:password|passwd|secret|api[_-]?key|access[_-]?ke
 _REFERENCE = re.compile(r"^(?:\$\{?\{?|\$\w|%\w+%|\{\{|<|process\.env\b|os\.environ\b|os\.getenv\b|getenv\b|"
                         r"env\.|env\[|ENV\[|secrets\.|vars\.|System\.getenv\b|Environment\.|import\.meta\.env\b)",
                         re.IGNORECASE)
+# A type annotation or schema field, not a value: ``token: str``, ``api_key: Optional[str] = None``,
+# ``secret: true``, ``password: required``.
+_SCHEMA_VALUE = re.compile(
+    r"^(?:str|string|bytes|int|integer|number|float|bool|boolean|true|false|yes|no|required|optional|"
+    r"Optional\[|Union\[|SecretStr|list|dict|object|any|unknown|\w+\[)", re.IGNORECASE)
 # A date inside an international-number match: a timezone offset then a date, not a phone number.
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 # A file name, not a mail domain: a retina asset (``logo@2x.png``) or any name ending in a file
@@ -127,9 +136,11 @@ class PersonalDataFile(TypedDict):
 class SkillPersonalDataBlock(TypedDict):
     """``run-context.json`` ``skill_personal_data`` (see the module doc)."""
 
-    available: bool
+    available: bool  # false (skill_files_unread): a file could not be read and none read holds a kind
+    reason: NotRequired[str]
     files: list[PersonalDataFile]
     files_considered: int
+    files_unread: int
     files_with_personal_data: int
     kinds_detected: list[str]
 
@@ -157,7 +168,8 @@ def _literal_secret(value: str) -> bool:
     """Whether a credential value is a literal secret: not empty, not a placeholder the grader skips,
     and not a reference to a secret held elsewhere. Decided per value, so a placeholder beside a
     reference reads clean, as each does alone."""
-    return bool(value) and not CREDENTIAL_PLACEHOLDERS.match(value) and not _REFERENCE.match(value)
+    return (bool(value) and not CREDENTIAL_PLACEHOLDERS.match(value) and not _REFERENCE.match(value)
+            and not _SCHEMA_VALUE.match(value))
 
 
 def kinds_in(text: str) -> list[str]:
@@ -171,10 +183,12 @@ def kinds_in(text: str) -> list[str]:
     found.discard("ip_address")
     if any(not _VERSION_BEFORE.search(text[max(0, m.start() - 12):m.start()])
            for m in _IPV4.finditer(text) if all(int(g) <= 255 for g in m.groups())
-           and m.group(1) != "127" and m.group(0) != "0.0.0.0" and not _DOC_RANGE.match(m.group(0))):
+           and m.group(1) != "127" and m.group(0) != "0.0.0.0" and not _DOC_RANGE.match(m.group(0))
+           and m.group(1) != "255" and not text.startswith("/", m.end())):  # a netmask or a CIDR range
         found.add("ip_address")
     if "ssh_or_host" in found and not _ROOT_LOGIN.search(text) \
-            and all(m.group(1).lower() == "git" for m in _SSH.finditer(text)):
+            and all(m.group(1).lower() == "git" or _RESERVED_DOMAIN.search(m.group(2).lower())
+                    for m in _SSH.finditer(text)):
         found.discard("ssh_or_host")
     if _has_email(text):
         found.add("email")
@@ -186,6 +200,7 @@ def kinds_in(text: str) -> list[str]:
 def _files(repo: Path, scope: Path | None, excludes: tuple[set[str], list[str]] | None) -> list[Path]:
     folder = scope.resolve() if scope is not None else repo
     out: set[Path] = set()
+    dirs, pats = excludes or (set(), [])
     for path, kind in skill_and_agent_files(repo, None, excludes):
         path = path.resolve()
         if not path.is_relative_to(folder):
@@ -195,9 +210,11 @@ def _files(repo: Path, scope: Path | None, excludes: tuple[set[str], list[str]] 
         if kind == "skill" and refs.is_dir():
             # A symlinked references/ folder can point outside the repository: keep only what resolves
             # inside it, as for the skill file above.
+            # A target outside the scope (another skill's references/) or a user exclusion is left out.
             out.update(r for r in (p.resolve() for p in refs.rglob("*")
                                    if p.is_file() and not p.is_symlink() and p.suffix.lower() in REFERENCE_SUFFIXES)
-                       if r.is_relative_to(repo))
+                       if r.is_relative_to(repo) and r.is_relative_to(folder)
+                       and not is_user_excluded(r.relative_to(repo), dirs, pats))
     return sorted(out)
 
 
@@ -206,18 +223,24 @@ def scan_skill_personal_data(
 ) -> SkillPersonalDataBlock:
     """Build the ``skill_personal_data`` block (see the module doc)."""
     repo = repo_root.resolve()
-    considered = 0
+    considered = unread = 0
     flagged: list[PersonalDataFile] = []
     for path in _files(repo, scope, excludes):
-        try:
-            if path.stat().st_size > _READ_MAX_BYTES:
-                continue
-            text = path.read_text(encoding="utf-8", errors="replace")
+        try:  # a file over the limit is read up to it, not skipped
+            with path.open("rb") as handle:
+                text = handle.read(_READ_MAX_BYTES).decode("utf-8", errors="replace")
         except OSError:
+            unread += 1
             continue
         considered += 1
         kinds = kinds_in(text)
         if kinds:
             flagged.append(PersonalDataFile(path=path.relative_to(repo).as_posix(), kinds=kinds))
-    return SkillPersonalDataBlock(available=True, files=flagged, files_considered=considered,
-                                  files_with_personal_data=len(flagged), kinds_detected=list(KINDS))
+    block = SkillPersonalDataBlock(available=True, files=flagged, files_considered=considered,
+                                   files_unread=unread, files_with_personal_data=len(flagged),
+                                   kinds_detected=list(KINDS))
+    if unread and not flagged:  # a clean reading would claim files it never read
+        block["available"] = False
+        block["reason"] = (f"{REASON_UNREAD}: {unread} skill or agent file(s) could not be read, and none "
+                           "of those read holds a detected kind")
+    return block

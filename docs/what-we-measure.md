@@ -563,7 +563,8 @@ Each SKILL.md, agent definition and skill references/ file, scanned for emails, 
 - Counts-only: numbers, booleans and nulls kept; strings by field: `skill_personal_data.files.kinds` token, `skill_personal_data.files.path` path, `skill_personal_data.kinds_detected` token.
 - Used by: row `skill-personal-data`.
 - Evidence: `skill_personal_data.files_with_personal_data` head_structure (measured).
-- Not measured when: it cannot read its input; the block says why.
+- Not measured when:
+  - `skill_files_unread`: A skill or agent file could not be read, and none of those read holds a detected kind. Check the file's permissions or encoding, then run /assess again.
 
 ### `org_security_policy`: Owner's shared security policy
 

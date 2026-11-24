@@ -83,6 +83,11 @@ def test_each_kind_is_detected(text: str, kinds: list[str]) -> None:
     "Use logo@2x.png and icon@3x.webp for retina screens.",
     "It saves +1000000000 tokens.",
     "Run ssh git@github.com to test auth.",
+    "Run ssh deploy@example.com to try it.",
+    "def login(token: str) -> None: ...",
+    "api_key: Optional[str] = None",
+    "secret: true\npassword: required\ntoken: string",
+    "Netmask 255.255.255.0 on 10.0.0.0/8",
     "Email: support@" + "anthropic.com for help.",  # a role address
     "pip install foo==1.2.3.4",
     "pin foo>=1.2.3.4 or foo~=1.2.3.4",
@@ -127,6 +132,42 @@ def test_a_references_symlink_out_of_the_repository_is_not_followed(tmp_path: Pa
     (repo / "skills/a/references").symlink_to(outside, target_is_directory=True)
     block = scan_skill_personal_data(repo)
     assert block["files"] == [] and _state(block) == ("met", None)
+
+
+def test_a_large_reference_is_read_up_to_the_limit(tmp_path: Path) -> None:
+    big = "x\n" * 600_000 + f"Escalate to {EMAIL}.\n"  # past the limit: not read
+    repo = _plugin(tmp_path, {"skills/a/SKILL.md": SKILL.format("a", "Clean text."),
+                              "skills/a/references/big.md": f"Escalate to {EMAIL}.\n" + big})
+    block = scan_skill_personal_data(repo)
+    assert [f["path"] for f in block["files"]] == ["skills/a/references/big.md"] and block["files_unread"] == 0
+
+
+def test_an_unreadable_file_leaves_a_clean_reading_not_measured(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _plugin(tmp_path, {"skills/a/SKILL.md": SKILL.format("a", "Clean text."),
+                              "skills/a/references/locked.md": "text\n"})
+    real_open = Path.open
+
+    def fake_open(self: Path, *args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+        if self.name == "locked.md":
+            raise PermissionError(self)
+        return real_open(self, *args, **kwargs)  # type: ignore[call-overload]
+    monkeypatch.setattr(Path, "open", fake_open)
+    block = scan_skill_personal_data(repo)
+    assert block["files_unread"] == 1 and block["available"] is False
+    assert block["reason"].startswith("skill_files_unread:")
+    assert _state(block)[0] == "not_measured"
+
+
+def test_a_reference_outside_the_scope_or_excluded_is_not_read(tmp_path: Path) -> None:
+    repo = _plugin(tmp_path, {"skills/a/SKILL.md": SKILL.format("a", "Clean text."),
+                              "skills/b/SKILL.md": SKILL.format("b", "Clean text."),
+                              "skills/b/references/contacts.md": f"Escalate to {EMAIL}.\n",
+                              "skills/c/SKILL.md": SKILL.format("c", "Clean text."),
+                              "skills/c/references/contacts.md": f"Escalate to {EMAIL}.\n"})
+    (repo / "skills/a/references").symlink_to(repo / "skills/b/references", target_is_directory=True)
+    assert scan_skill_personal_data(repo, scope=repo / "skills/a")["files"] == []
+    excluded = scan_skill_personal_data(repo, excludes=(set(), ["contacts.md"]))  # a basename glob
+    assert excluded["files"] == []
 
 
 def test_clean_skill_text_reads_met_and_no_skill_reads_not_measured(tmp_path: Path) -> None:

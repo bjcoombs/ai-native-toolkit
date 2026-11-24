@@ -2746,7 +2746,13 @@
         ],
         "findings": []
       },
-      "unknown_reasons": [],
+      "unknown_reasons": [
+        {
+          "code": "skill_files_unread",
+          "means": "A skill or agent file could not be read, and none of those read holds a detected kind.",
+          "next_step": "Check the file's permissions or encoding, then run /assess again."
+        }
+      ],
       "evidence": [
         {
           "signal": "skill_personal_data.files_with_personal_data",
