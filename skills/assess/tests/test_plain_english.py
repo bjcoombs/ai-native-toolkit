@@ -51,3 +51,12 @@ def test_a_polish_translation_keeps_ids_paths_and_links_and_the_template_puts_it
     rule = template[template.index("**Translation for a reader in another language"):]
     assert "English stays first and verbatim" in rule and "untranslated_tokens" in rule
     assert all(name in rule for name in ("run-context.json", "badge.json", "log.md"))  # machine-read stays English
+
+
+def test_every_manifest_prose_string_except_the_whys_is_plain_english() -> None:
+    """#1186: titles, summaries, fixes, actions, meanings and next steps pass; whys wait for approval."""
+    from lib.plain_english import APPROVED_WHYS, manifest_lines
+    lines = manifest_lines()
+    assert len(lines) > 300
+    assert not [k for k in lines if (k.endswith(".why") or ".whys." in k) and k not in APPROVED_WHYS]
+    assert {k: [i["reason"] for i in lint(v)] for k, v in lines.items() if lint(v)} == {}
