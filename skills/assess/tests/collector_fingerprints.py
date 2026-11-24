@@ -83,7 +83,9 @@ def current() -> tuple[dict[str, dict[str, str]], dict[str, int]]:
     return hashes, {c["id"]: c["revision"] for c in entries}
 
 
-def read_stored(path: Path = FINGERPRINTS) -> dict[str, dict[str, Any]]:
+def read_stored(path: Path | None = None) -> dict[str, dict[str, Any]]:
+    """The recorded fingerprints; ``path`` defaults to ``FINGERPRINTS``, read at call time."""
+    path = FINGERPRINTS if path is None else path
     if not path.is_file():
         return {}
     data: dict[str, dict[str, Any]] = json.loads(path.read_text(encoding="utf-8"))["collectors"]
@@ -94,20 +96,21 @@ def dumps(prints: Mapping[str, Mapping[str, Any]]) -> str:
     return json.dumps({"collectors": prints}, sort_keys=True, indent=2) + "\n"
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, path: Path | None = None) -> int:
     """Record the fingerprints; refuse when the file is missing (it would record any output as
     unchanged) unless ``--init`` asks to start it."""
     args = sys.argv[1:] if argv is None else argv
-    if not FINGERPRINTS.is_file() and "--init" not in args:
-        print(f"{FINGERPRINTS.name} is missing: restore it from git, or pass --init to start a new one",
+    path = FINGERPRINTS if path is None else path
+    if not path.is_file() and "--init" not in args:
+        print(f"{path.name} is missing: restore it from git, or pass --init to start a new one",
               file=sys.stderr)
         return 1
     hashes, revisions = current()
-    found = violations(read_stored(), hashes, revisions)
+    found = violations(read_stored(path), hashes, revisions)
     if found:
         print("\n".join(found), file=sys.stderr)
         return 1
-    FINGERPRINTS.write_text(dumps(fingerprints(hashes, revisions)), encoding="utf-8", newline="\n")
+    path.write_text(dumps(fingerprints(hashes, revisions)), encoding="utf-8", newline="\n")
     return 0
 
 

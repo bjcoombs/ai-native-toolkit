@@ -296,6 +296,14 @@
       },
       "revision": 1
     },
+    "core.skill_personal_data": {
+      "repos": {
+        "grpa/sub/deep/svc2": "b8a837825b092faed0389b75e775562e9f4d5dc12efe1268fa037a847fcaa271",
+        "grpa/svc1": "b8a837825b092faed0389b75e775562e9f4d5dc12efe1268fa037a847fcaa271",
+        "grpb/lib1": "b8a837825b092faed0389b75e775562e9f4d5dc12efe1268fa037a847fcaa271"
+      },
+      "revision": 1
+    },
     "core.skill_script_tests": {
       "repos": {
         "grpa/sub/deep/svc2": "751f5dcf235403ad9582ae81b0c8a254c24a73e9d8f7285fe8fc69c45a9ccec4",

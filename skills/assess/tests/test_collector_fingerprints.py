@@ -57,12 +57,28 @@ def test_one_mutated_block_in_the_real_golden_is_exactly_one_violation():
     assert cf.violations(stored, hashes, revisions) == []
 
 
-def test_a_missing_fingerprints_file_is_refused_without_init(tmp_path, monkeypatch):
+def test_a_missing_fingerprints_file_is_refused_without_init(tmp_path):
+    path = tmp_path / "collector_fingerprints.json"
+    assert cf.main([], path) == 1
+    assert not path.exists()
+    assert cf.main(["--init"], path) == 0
+    assert cf.read_stored(path) == cf.fingerprints(*cf.current())
+
+
+def test_the_default_path_is_read_at_call_time(tmp_path, monkeypatch):
     monkeypatch.setattr(cf, "FINGERPRINTS", tmp_path / "collector_fingerprints.json")
-    assert cf.main([]) == 1
-    assert not cf.FINGERPRINTS.exists()
-    assert cf.main(["--init"]) == 0
-    assert cf.read_stored() == cf.fingerprints(*cf.current())
+    assert cf.read_stored() == {}
+    assert cf.main([]) == 1 and not cf.FINGERPRINTS.exists()
+
+
+def test_a_collector_new_to_the_manifest_is_recorded_by_regen_alone(tmp_path):
+    path = tmp_path / "collector_fingerprints.json"
+    hashes, revisions = cf.current()
+    dropped = sorted(hashes)[0]
+    path.write_text(cf.dumps({k: v for k, v in cf.fingerprints(hashes, revisions).items() if k != dropped}),
+                    encoding="utf-8")
+    assert cf.main([], path) == 0  # no revision bump needed
+    assert dropped in cf.read_stored(path)
 
 
 def test_the_committed_fingerprints_match_the_fleet_golden_and_the_manifest():
