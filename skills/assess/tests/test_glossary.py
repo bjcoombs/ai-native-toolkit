@@ -120,7 +120,7 @@ def test_report_template_links_each_term_at_the_summary() -> None:
     text = FINDINGS_SKILL.read_text(encoding="utf-8")
     summary = text.index("<paste `headline.summary_markdown`")
     line_start = text.index("_New to these words?", summary)
-    assert line_start < text.index("## Since Last Run", summary), "the glossary line sits under the summary"
+    assert line_start < text.index("## Top 3 Actions", summary), "the glossary line sits under the card"
     line = text[line_start:text.index("\n", line_start)]
     linked = set(_glossary_anchors_in(line))
     assert linked >= set(TEMPLATE_TERMS), f"the template's glossary line leaves out {set(TEMPLATE_TERMS) - linked}"

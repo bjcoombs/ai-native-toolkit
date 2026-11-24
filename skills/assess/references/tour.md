@@ -61,7 +61,7 @@ It commits only the workflow file: their edit if they made one (`"fix": "edited"
 uv run "${CLAUDE_SKILL_DIR}/scripts/assess_tour.py" run "<sample>"
 ```
 
-`step` is now 3 and `next_gates` is `["coverage_gate"]`. Show the new summary lines and the "Since Last Run" section, which lists the gate gained. Say what Step 3 means: an agent's pull request can go through without a person watching, because CI now fails when a test fails.
+`step` is now 3 and `next_gates` is `["coverage_gate"]`. Show the new top card, whose since line names the gate now in place. Say what Step 3 means: an agent's pull request can go through without a person watching, because CI now fails when a test fails.
 
 ## 5. Close
 
