@@ -69,7 +69,8 @@ def _node(lines: list[str], start: int, end: int, col: int) -> _Node:
     if (value and not value.startswith("&")) or not body or body[0][1].strip().startswith("-"):
         return _Node(head, raw, col, None, False)
     child_col = _indent(body[0][1])
-    keys = [j for j, line in body if _indent(line) == child_col]
+    # A sequence at its key's own indent (``paths:`` then ``- x``) belongs to that key.
+    keys = [j for j, line in body if _indent(line) == child_col and not line.strip().startswith("-")]
     children: dict[str, _Node] = {}
     for n, j in enumerate(keys):
         name, colon, _rest = lines[j].strip().partition(":")

@@ -446,14 +446,15 @@ def _job_def(lines: list[str], source: int, start: int, end: int, value: str) ->
         _ALIAS.match(line) or "$[[" in line for line in body)
     keys: list[tuple[str, KeyDef]] = []
     col: int | None = None
+    open_block = False  # the last key has no inline value, so a sequence may follow at its indent
     for j in range(start + 1, end):
         raw = lines[j]
         if not _content(raw):
             continue
         indent = len(raw) - len(raw.lstrip(" "))
         col = indent if col is None else col
-        if indent > col:
-            continue
+        if indent > col or (indent == col and raw.strip()[:2] in ("- ", "-") and open_block):
+            continue   # a key's value; a block sequence may sit at the key's own indent
         match = _SUB.match(raw.strip())
         if indent < col or match is None:
             unreadable = True
@@ -462,6 +463,7 @@ def _job_def(lines: list[str], source: int, start: int, end: int, value: str) ->
             name, last = keys[-1]
             keys[-1] = (name, KeyDef(source, last.start, j, col))
         keys.append((_unquote(match.group("key")), KeyDef(source, j, end, col)))
+        open_block = not _bare(match.group("value")) or _ANCHOR.fullmatch(_bare(match.group("value"))) is not None
     if len({name for name, _ in keys}) < len(keys):
         unreadable = True  # a duplicate key: which one YAML keeps is not read here
     return JobDef(source, start, end, tuple(keys), unreadable)
@@ -543,7 +545,8 @@ def _inherit(lines: list[str], key: KeyDef) -> frozenset[str] | None:
         return None
     rows = [line for line in lines[key.start + 1:key.end] if _content(line)]
     col = len(rows[0]) - len(rows[0].lstrip(" ")) if rows else 0
-    own = [i for i, r in enumerate(rows) if len(r) - len(r.lstrip(" ")) == col]
+    own = [i for i, r in enumerate(rows) if len(r) - len(r.lstrip(" ")) == col
+           and not r.strip().startswith("- ")]
     for n, i in enumerate(own):
         match = _SUB.match(rows[i].strip())
         if match is None or _unquote(match.group("key")) != "default":

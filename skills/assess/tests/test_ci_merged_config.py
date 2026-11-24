@@ -297,3 +297,28 @@ def test_a_job_merged_only_by_default_keeps_its_reading_when_anchored(tmp_path: 
     config = merged_config(repo)
     assert config is not None
     assert merged_view(config).rendered == ""
+
+
+@pytest.mark.parametrize(("text", "reading"), [
+    pytest.param(".base:\n  image: python:3.12\nlint:\n  extends: .base\n  script:\n  - ruff check .\n",
+                 (True, "lint_command"), id="script"),
+    pytest.param(".base:\n  allow_failure: true\nlint:\n  extends:\n  - .base\n  script:\n  - ruff check .\n",
+                 (False, "not_enforced"), id="extends-list"),
+    pytest.param("default:\n  before_script:\n  - ruff check .\njob:\n  inherit:\n    default:\n    - image\n"
+                 "  script:\n  - echo x\n", (False, "no_lint_command"), id="inherit-list"),
+])
+def test_a_sequence_at_its_key_indent_is_read(tmp_path: Path, text: str, reading: tuple[object, object]) -> None:
+    assert _lint(tmp_path, {".gitlab-ci.yml": text}) == reading
+    config = merged_config(tmp_path / "repo")
+    assert config is not None and all(j.unresolved is None for j in config.jobs.values())
+
+
+def test_a_nested_sequence_at_its_key_indent_merges(tmp_path: Path) -> None:
+    files = {".gitlab-ci.yml": "include:\n  - local: ci/lint.yml\nlint:\n  cache:\n    key: k\n",
+             "ci/lint.yml": "lint:\n  cache:\n    paths:\n    - .cache\n  script:\n    - ruff check .\n"}
+    repo = _repo(tmp_path / "repo", files)
+    config = merged_config(repo)
+    assert config is not None
+    view = merged_view(config)
+    assert view.unsettled == frozenset()
+    assert "    - .cache" in view.rendered and "    key: k" in view.rendered
