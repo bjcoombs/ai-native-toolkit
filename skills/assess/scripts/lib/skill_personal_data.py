@@ -59,7 +59,7 @@ import re
 from pathlib import Path
 from typing import TypedDict
 
-from lib.agent_instructions_grader import scan_sensitive_content
+from lib.agent_instructions_grader import _CREDENTIAL_PLACEHOLDERS, scan_sensitive_content
 from lib.instruction_placement import skill_and_agent_files
 
 GRADER_KINDS = ("private_key", "cloud_key", "credential", "ssh_or_host", "ip_address", "home_path")
@@ -132,13 +132,20 @@ def _has_phone(text: str) -> bool:
                for m in _PHONE_INTL.finditer(text))
 
 
+def _literal_secret(value: str) -> bool:
+    """Whether a credential value is a literal secret: not empty, not a placeholder the grader skips,
+    and not a reference to a secret held elsewhere. Decided per value, so a placeholder beside a
+    reference reads clean, as each does alone."""
+    return bool(value) and not _CREDENTIAL_PLACEHOLDERS.match(value) and not _REFERENCE.match(value)
+
+
 def kinds_in(text: str) -> list[str]:
     """The ``KINDS`` found in ``text``, in ``KINDS`` order; the data itself is never returned."""
     found = {f["category"] for f in scan_sensitive_content(text)}
     if "home_path" in found and not any((m.group(1) or m.group(2)).lower() not in _PLACEHOLDER_HOME
                                          for m in _HOME.finditer(text)):
         found.discard("home_path")
-    if "credential" in found and all(_REFERENCE.match(m.group(1).strip("\"'")) for m in _CREDENTIAL.finditer(text)):
+    if "credential" in found and not any(_literal_secret(m.group(1).strip("\"'")) for m in _CREDENTIAL.finditer(text)):
         found.discard("credential")
     if "ip_address" in found and all(_VERSION_BEFORE.search(text[max(0, m.start() - 12):m.start()])
                                      for m in _IPV4.finditer(text) if all(int(g) <= 255 for g in m.groups())

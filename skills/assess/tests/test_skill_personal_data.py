@@ -73,6 +73,8 @@ def test_each_kind_is_detected(text: str, kinds: list[str]) -> None:
     "token: ${{ secrets.GITHUB_TOKEN }}",
     "api_key: process.env.API_KEY",
     'token = os.environ["T"]',
+    "password: changeme\ntoken: ${{ secrets.X }}",  # a placeholder beside a reference
+    'password: ""\ntoken: ${{ secrets.X }}',
     "Released 2024-01-01 +0000 2024-01-02",
 ])
 def test_placeholders_and_lookalikes_are_not_findings(text: str) -> None:
