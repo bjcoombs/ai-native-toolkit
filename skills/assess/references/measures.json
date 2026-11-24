@@ -743,7 +743,9 @@
             "governance"
           ],
           "polarity": "positive",
-          "requires": [],
+          "requires": [
+            "layer-7-review.1"
+          ],
           "guarded_by": null,
           "predicted": null,
           "review": null,
@@ -1664,6 +1666,11 @@
       "kind": "requires",
       "source": "layer-6-coverage.2",
       "target": "layer-5-ci.1"
+    },
+    {
+      "kind": "requires",
+      "source": "layer-7-review.2",
+      "target": "layer-7-review.1"
     },
     {
       "kind": "requires",

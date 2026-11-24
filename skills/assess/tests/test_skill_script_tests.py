@@ -8,6 +8,7 @@ import pytest
 
 import lib.level_tally as lt
 import lib.manifest.check_manifest as cm
+import lib.skill_script_tests as sst
 import lib.unit_readings as ur
 from lib.skill_script_tests import is_test_file, scan_skill_script_tests
 from test_unit_readings import _read, _write
@@ -137,3 +138,46 @@ def test_a_scoped_read_lists_only_that_skill_and_still_searches_the_repository(t
     scoped = scan_skill_script_tests(repo, scope=repo / "skills" / "a")
     assert [s["path"] for s in scoped["skills"]] == ["skills/a"]
     assert scoped["skills"][0]["tested_elsewhere"] == ["tests/test_a.py"]
+
+
+def _marketplace(root: Path, skills: int) -> Path:
+    """``skills`` untested skill units; every other one is tested from a shared tests folder."""
+    files = {".claude-plugin/plugin.json": '{"name": "p"}\n'}
+    for i in range(skills):
+        files[f"skills/s{i}/SKILL.md"] = SKILL.format(f"s{i}")
+        files[f"skills/s{i}/scripts/run{i}.py"] = "print(1)\n"
+        if i % 2:
+            files[f"tests/test_s{i}.py"] = f'"skills/s{i}/scripts/run{i}.py"\n'
+    return _write(root, files)
+
+
+def test_the_cached_index_reads_the_same_as_the_uncached_path(tmp_path: Path,
+                                                               monkeypatch: pytest.MonkeyPatch) -> None:
+    """#1189: sharing the test-file index across units changes no reading."""
+    repo = _marketplace(tmp_path / "m", 6)
+    sst._test_index.cache_clear()
+    cached = _read(repo)
+    monkeypatch.setattr(sst, "_outside_tests", lambda r, d, p: sst._test_index.__wrapped__(
+        r, sst._head(r), frozenset(d), tuple(p)))
+    assert _read(repo) == cached
+    full = scan_skill_script_tests(repo)
+    assert [s["path"] for s in full["skills"] if s["tested_elsewhere"]] == ["skills/s1", "skills/s3", "skills/s5"]
+
+
+def test_fifty_untested_skill_units_read_the_test_files_once(tmp_path: Path,
+                                                              monkeypatch: pytest.MonkeyPatch) -> None:
+    """#1189: the unit pass reads the repository's test files once, not once per untested unit."""
+    repo = _marketplace(tmp_path / "m", 50)
+    reads: list[str] = []
+    real = Path.read_text
+
+    def counting(self: Path, *args: Any, **kwargs: Any) -> str:
+        if self.parent.name == "tests" and self.name.startswith("test_s"):
+            reads.append(self.name)
+        return real(self, *args, **kwargs)
+
+    sst._test_index.cache_clear()
+    monkeypatch.setattr(Path, "read_text", counting)
+    units = [u for u in _read(repo)["units"] if u["path"].startswith("skills/")]
+    assert len(units) == 50 and all(u["blocks"]["skill_script_tests"]["skills_untested"] == 1 for u in units)
+    assert sorted(reads) == sorted(f"test_s{i}.py" for i in range(1, 50, 2))  # each file once

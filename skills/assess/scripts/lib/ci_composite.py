@@ -22,9 +22,12 @@ whose ``action.yml`` runs ``ruff check .`` and ``pytest`` used to read as no com
   caller's literal ``with:`` scalar for that name, else, only when the caller's ``with:``
   omits the name, the action's literal ``inputs.<name>.default``. One left in command position (no value, a block or
   ``${{ }}`` value) makes that line unknown. A whole ``run: ${{ inputs.run }}`` (or
-  ``script`` / ``command``) the caller passes is left as it is: ``lib.ci_action_inputs``
-  already reads the caller's ``with:`` value for it (#799), so it is not counted twice; one
-  the caller omits takes the default like any other input.
+  ``script`` / ``command``) the caller passes is emptied (``run: ''``):
+  ``lib.ci_action_inputs`` already reads the caller's ``with:`` value for it (#799), so it is
+  neither counted twice nor read as an unknown command; one the caller omits takes the
+  default like any other input. The step's other lines (an ``env:`` value such as ``CMD:
+  ${{ inputs.cmd }}``) take the literal values too, never marked unknown, so
+  ``lib.ci_expressions`` can read ``run: $CMD`` (#1164).
 - **Unknown, never 0.** A step of the action that ``uses:`` another local action is not
   followed: it is copied with its ``uses:`` line in ``unknown``. ``inline_composites``
   returns ``(text, unknown)`` (``lib.ci_matrix.Expanded``); ``lib.ci_checks`` reads the
@@ -125,6 +128,11 @@ def _value(line: str) -> str:
     return stripped.split(":", 1)[1].strip() if stripped.startswith("run:") else stripped
 
 
+def _fill(line: str, given: dict[str, str]) -> str:
+    """``line`` with each ``${{ inputs.<name> }}`` that ``given`` holds replaced by its value."""
+    return _INPUT_REF.sub(lambda m: given.get(m.group(1), m.group(0)), line)
+
+
 def _settle(line: str, given: dict[str, str], supplied: frozenset[str]) -> tuple[str, bool]:
     """``(line, unknown)``: ``${{ inputs.<name> }}`` replaced by its literal caller or default
     value; unknown when one left in command position cannot be. A whole ``run:`` of a
@@ -132,8 +140,8 @@ def _settle(line: str, given: dict[str, str], supplied: frozenset[str]) -> tuple
     ``lib.ci_action_inputs``, which reads the caller's ``with:`` line."""
     forward = _FORWARD.match(_value(line))
     if forward and forward.group(1) in INPUT_KEYS and forward.group(1) in supplied:
-        return line, False
-    line = _INPUT_REF.sub(lambda m: given.get(m.group(1), m.group(0)), line)
+        return _INPUT_REF.sub("''", line), False   # read from the caller's with: line instead
+    line = _fill(line, given)
     left = (m.group(1) for m in CMD_EXPR.finditer(_value(line)))
     return line, any(_INPUT_ONLY.match(inner) or "inputs" in inner for inner in left)
 
@@ -173,8 +181,8 @@ def inline_composites(text: str, read_local: ReadLocal) -> Expanded:
                     copied.append((shifted, "uses:" in raw))
                 elif j in step.body:
                     copied.append(_settle(shifted, given, frozenset(passed)))
-                else:
-                    copied.append((shifted, False))
+                else:   # an env: value (CMD: ${{ inputs.cmd }}) takes its literal too (#1164)
+                    copied.append((_fill(shifted, given), False))
             copied += [(" " * (indent + step.gap) + key, False) for key in caller]
         if copied:
             after.setdefault(max(tree.subtree(k).stop for k in item) - 1, []).extend(copied)
