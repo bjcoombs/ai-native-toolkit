@@ -21,7 +21,7 @@ rule in `CLAUDE.md`, this file is usually the one that fails.
 | `contract/` | The acceptance-contract gates in `scripts/contract/` and the canary harness in `scripts/canaries/` |
 | `canaries/` | The fixtures the canary harness runs; [canaries/README.md](canaries/README.md) defines the contract file format |
 | `test_ghsync_*.py`, `test_ghreport*.py` | The `/ghsync` and `/ghreport` bash scripts, run offline against stubbed `gh` and `glab` |
-| `ghsync_gitlab_env.py`, `ghreport_gitlab_env.py`, `gitbash.py` | Shared fixtures and helpers that run the bash scripts the same way on every OS |
+| `ghsync_gitlab_env.py`, `ghreport_gitlab_env.py`, `gitbash.py`, `test_gitbash.py` | Shared fixtures and helpers that run the bash scripts the same way on every OS, and the test for those helpers |
 | `test_file_size_ratchet.py` | Python files under the ratchet roots may shrink but not grow |
 | `test_make_regen.py` | `make regen` rewrites every generated file and nothing else |
 | `test_merge_queue_workflows.py`, `test_windows_workflow.py` | The required checks report on merge-queue groups and on the split Windows run |

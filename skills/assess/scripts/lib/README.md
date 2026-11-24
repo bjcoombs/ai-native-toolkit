@@ -174,55 +174,43 @@ New code imports the new path.
 - **`agents/`**: what a repository builds with agents and how an agent runs in it, the
   Layer 8 inputs. `agent_identity` is shared core, and `agent_consistency`, `agent_systems`
   and `agent_instructions_grader` wait for the `instructions` group, so all four stay at the
-  root. Files: `__init__.py`, `agent_building.py`, `agent_building_vocab.py`,
-  `agent_environment.py`, `agent_harness.py`, `agent_manifests.py`, `agent_ops.py`.
+  root. Files: `__init__.py`, `agent_building.py`, `agent_building_vocab.py`, `agent_environment.py`, `agent_harness.py`, `agent_manifests.py`, `agent_ops.py`, `managed_settings.py`.
 - **`complexity/`**: the complexity treemap renderer, `scc` coverage, the Dart scanner and
   the stats sidecar (its rows, cross-run diff and diff reliability), plus the generated- and
-  raw-source exclusions they apply. Files: `__init__.py`, `dart_complexity.py`,
-  `diff_reliability.py`, `generated_files.py`, `raw_source.py`, `scc_coverage.py`,
-  `stats_diff.py`, `stats_rows.py`, `treemap_render.py`.
+  raw-source exclusions they apply. Files: `__init__.py`, `dart_complexity.py`, `diff_reliability.py`, `generated_files.py`, `raw_source.py`, `scc_coverage.py`, `stats_diff.py`, `stats_rows.py`, `treemap_render.py`.
 - **`counts_only/`**: the content-free copy of a run-context and its allow-list: the engine,
   the field rules and their schema, the reason codes it keeps and the typed block shapes a
   default criterion reads. `lib/counts_only.py` became `counts_only/content_free.py`, because
   the package now holds that name; until 5.0.0 the package `__init__.py` forwards each old
   name (`lib.counts_only.render_doc`) to `lib.counts_only.content_free` on first use, without
-  importing it eagerly. Files: `__init__.py`, `block_shapes.py`, `content_free.py`,
-  `counts_only_rules.py`, `counts_only_schema.py`, `reason_codes.py`.
+  importing it eagerly. Files: `__init__.py`, `block_shapes.py`, `content_free.py`, `counts_only_rules.py`, `counts_only_schema.py`, `reason_codes.py`.
 - **`docs/`** ([README](docs/README.md)): the doc graph and the Layer 0 doc signals: links, claims, ownership,
   provenance, staleness and its generator directives, the doc-to-complexity join and the
   vault queries. `doc_graph` imports `ownership_parser` inside a function, because
   `ownership_parser` imports `doc_graph`. The folder holds two kinds of file: the doc-scan
   modules (`.py`) and every group's long module references (`.md`, one per module, #981).
-  Files: `__init__.py`, `doc_claims.py`, `doc_complexity_join.py`, `doc_directives.py`,
-  `doc_graph.py`, `doc_graph_layout.py`, `doc_links.py`, `doc_ownership.py`,
-  `doc_provenance.py`, `doc_staleness.py`, `ownership_parser.py`, `vault_queries.py`.
+  Files: `__init__.py`, `doc_claims.py`, `doc_complexity_join.py`, `doc_directives.py`, `doc_graph.py`, `doc_graph_layout.py`, `doc_links.py`, `doc_ownership.py`, `doc_provenance.py`, `doc_staleness.py`, `ownership_parser.py`, `parallel_docs.py`, `vault_queries.py`.
 - **`fleet/`** ([README](fleet/README.md)): the `/fleet` runner, roll-ups, run history, published fleet schemas and
   diagrams. `lib/fleet.py` became `fleet/runner.py`, because the package now holds that
   name; until 5.0.0 the package `__init__.py` forwards each runner name (`lib.fleet.FleetRow`)
   to `lib.fleet.runner` on first use, without importing it eagerly. `fleet_config` and
   `fleet_activity` keep their prefix but are not fleet modules: `fleet_config` is shared core,
-  and `fleet_activity` waits for the `history` group. Files: `__init__.py`, `fleet_achievements.py`, `fleet_achievements_runs.py`, `fleet_achievements_schema.py`, `fleet_agent_building.py`, `fleet_cleanup.py`, `fleet_cli_args.py`, `fleet_compare.py`, `fleet_coverage.py`, `fleet_credit.py`, `fleet_data.py`, `fleet_data_schema.py`, `fleet_data_steps.py`, `fleet_data_tags.py`, `fleet_diagrams.py`, `fleet_doc_freshness.py`, `fleet_group_schema.py`, `fleet_groups.py`, `fleet_hashed.py`, `fleet_heatmap.py`, `fleet_history.py`, `fleet_labels.py`, `fleet_legacy.py`, `fleet_level.py`, `fleet_level_schema.py`, `fleet_maturity.py`, `fleet_method.py`, `fleet_next_steps.py`, `fleet_opportunities.py`, `fleet_opportunities_section.py`, `fleet_platform.py`, `fleet_publish.py`, `fleet_quadrant.py`, `fleet_repo_facts.py`, `fleet_rescore.py`, `fleet_scanner_diff.py`, `fleet_schema.py`, `fleet_slope.py`, `fleet_stamp.py`, `fleet_step_targets.py`, `fleet_svg.py`, `fleet_targets.py`, `fleet_tooling_map.py`, `fleet_trends.py`, `fleet_units.py`, `fleet_view.py`, `runner.py`.
+  and `fleet_activity` waits for the `history` group. Files: `__init__.py`, `condition_demotion.py`, `condition_effect.py`, `fleet_achievements.py`, `fleet_achievements_runs.py`, `fleet_achievements_schema.py`, `fleet_agent_building.py`, `fleet_cleanup.py`, `fleet_cli_args.py`, `fleet_compare.py`, `fleet_coverage.py`, `fleet_credit.py`, `fleet_data.py`, `fleet_data_schema.py`, `fleet_data_steps.py`, `fleet_data_tags.py`, `fleet_data_units.py`, `fleet_diagrams.py`, `fleet_doc_freshness.py`, `fleet_group_schema.py`, `fleet_groups.py`, `fleet_hashed.py`, `fleet_heatmap.py`, `fleet_history.py`, `fleet_labels.py`, `fleet_learn_from.py`, `fleet_legacy.py`, `fleet_level.py`, `fleet_level_schema.py`, `fleet_maturity.py`, `fleet_method.py`, `fleet_next_steps.py`, `fleet_opportunities.py`, `fleet_opportunities_section.py`, `fleet_page.py`, `fleet_page_assets.py`, `fleet_page_data.py`, `fleet_page_live.py`, `fleet_platform.py`, `fleet_publish.py`, `fleet_publish_session.py`, `fleet_quadrant.py`, `fleet_repo_facts.py`, `fleet_rescore.py`, `fleet_scanner_diff.py`, `fleet_schema.py`, `fleet_slope.py`, `fleet_stamp.py`, `fleet_step_funnel.py`, `fleet_step_lifts.py`, `fleet_step_movement.py`, `fleet_step_targets.py`, `fleet_svg.py`, `fleet_tag_heatmap.py`, `fleet_tag_profile.py`, `fleet_targets.py`, `fleet_targets_import.py`, `fleet_tooling_map.py`, `fleet_trends.py`, `fleet_units.py`, `fleet_view.py`, `fleet_why.py`, `runner.py`.
 - **`graph/`**: language import graphs and the static dependency structure built from
   them. The builder registry, `import_graph_builders`, stays at the root: `import_graph`
   imports it inside a function, because each builder imports `import_graph`.
-  Files: `__init__.py`, `import_graph.py`, `import_graph_go.py`, `import_graph_python.py`,
-  `import_graph_typescript.py`, `structure_graph.py`.
+  Files: `__init__.py`, `import_graph.py`, `import_graph_go.py`, `import_graph_python.py`, `import_graph_typescript.py`, `structure_graph.py`.
 - **`hosting/`** ([README](hosting/README.md)): the `gh` and `glab` reads and the platform blocks built from them: the
   shared merged sample, delivery, review reality, GitLab notes and CI lint, and config drift.
   Named `hosting`, not `platform`, because a `lib/platform/` package would shadow the standard
   library's `platform` module for any script run by path from `lib/` (decision 9 on #917).
   `external_ci`, `external_ci_rules`, `gitlab_rules` and `unread_ci` (#884, #928) postdate the
-  #917 module map and stay at the root. Files: `__init__.py`, `config_drift.py`, `delivery.py`,
-  `gh_cli.py`, `gitlab_ci_lint.py`, `gitlab_cli.py`, `gitlab_notes.py`, `merged_sample.py`,
-  `platform_cli.py`, `review_reality.py`.
+  #917 module map and stay at the root. Files: `__init__.py`, `config_drift.py`, `delivery.py`, `gh_cli.py`, `github_secret_scanning.py`, `gitlab_ci_lint.py`, `gitlab_cli.py`, `gitlab_notes.py`, `merged_sample.py`, `org_security_policy.py`, `platform_cli.py`, `review_reality.py`.
 - **`keyhole/`** ([README](keyhole/README.md)): the keyhole-readiness signals and findings, and the Layer 1 liveness
   inputs: accretion, promissory markers, structure drift, hidden coupling, understanding,
   archetype and the Dart and JVM capability entries. `promissory_markers` and
   `accretion_ratchet` also run as scripts: run the moved file,
-  `python scripts/lib/keyhole/<stem>.py`. Files: `__init__.py`,
-  `accretion_ratchet.py`, `archetype.py`, `coupling_analysis.py`, `dart_capabilities.py`,
-  `jvm_capabilities.py`, `keyhole_signals.py`, `liveness_scan.py`, `promissory_markers.py`,
-  `python_regions.py`, `structure_drift.py`, `understanding_analysis.py`.
+  `python scripts/lib/keyhole/<stem>.py`. Files: `__init__.py`, `accretion_ratchet.py`, `archetype.py`, `coupling_analysis.py`, `dart_capabilities.py`, `instrumentation_scan.py`, `jvm_capabilities.py`, `keyhole_signals.py`, `liveness_scan.py`, `promissory_markers.py`, `python_regions.py`, `structure_drift.py`, `understanding_analysis.py`.
 - **`manifest/`**: the check manifest loader (`checks/core.toml` and its fragments), its
   structured validation errors, and the `why` rules the loader applies to every entry
   (#939). Files: `__init__.py`, `check_manifest.py`, `check_validation.py`, `manifest_whys.py`.
@@ -231,10 +219,7 @@ New code imports the new path.
 - **`testing/`** ([README](testing/README.md)): the Layer 6 test signals outside `test_pressure/`: the coverage gate and
   the readings it combines (coverage activation, CI coverage runs, the root coverage.py
   config), the coverage report, test focus, sibling tests, import credit, the mutation cap
-  and refresh, and untrusted hotspots. Files: `__init__.py`, `ci_workdir.py`, `coverage_activation.py`,
-  `coverage_ci.py`, `coverage_gate.py`, `coverage_report.py`, `coverage_root_config.py`,
-  `import_credit.py`, `mutation_cap.py`, `mutation_refresh.py`, `sibling_tests.py`,
-  `test_focus.py`, `untrusted_hotspot.py`.
+  and refresh, and untrusted hotspots. Files: `__init__.py`, `ci_workdir.py`, `coverage_activation.py`, `coverage_ci.py`, `coverage_codecov.py`, `coverage_gate.py`, `coverage_report.py`, `coverage_root_config.py`, `import_credit.py`, `mutation_cap.py`, `mutation_refresh.py`, `sibling_tests.py`, `test_focus.py`, `untrusted_hotspot.py`.
 
 ## Module reference
 

@@ -362,6 +362,23 @@ def test_every_lib_docs_reference_is_linked_from_the_lib_readme() -> None:
     assert [d for d in _module_references() if d not in linked] == []
 
 
+def test_lib_readme_subpackage_file_lists_match_disk() -> None:
+    """Each subpackage bullet in ``lib/README.md`` lists exactly the ``.py`` files in
+    that package (issue #1220): 21 modules had gone missing from the lists unnoticed."""
+    readme = (LIB_DIR / "README.md").read_text(encoding="utf-8")
+    bullets = re.findall(r"^- \*\*`(\w+)/`\*\*(.*?)Files: ((?:`[\w.]+`[,.]\s*)+)", readme, re.M | re.S)
+    assert bullets, "expected the subpackage bullets in lib/README.md"
+    drift = {}
+    for pkg, _, files in bullets:
+        listed = sorted(re.findall(r"`([\w.]+)`", files))
+        on_disk = sorted(p.name for p in (LIB_DIR / pkg).glob("*.py"))
+        if listed != on_disk:
+            drift[pkg] = sorted(set(listed) ^ set(on_disk))
+    packages = sorted(p.parent.name for p in LIB_DIR.glob("*/__init__.py"))
+    assert sorted(pkg for pkg, _, _ in bullets) == packages
+    assert drift == {}
+
+
 def test_the_docstring_check_fails_on_a_missing_or_run_on_summary(tmp_path: Path) -> None:
     """The rule bites: no docstring, an empty one, a wrapped summary and two
     sentences on the first line each fail; a package marker passes."""
