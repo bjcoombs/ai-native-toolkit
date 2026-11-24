@@ -88,9 +88,9 @@ _PRE_COMMIT_KEY = re.compile(r"^\s*-?\s*(?:repo|id)\s*:\s*(.+)$")
 # GitLab's template (Auto DevOps includes it) or its CI/CD component (``.../secret-detection@<v>``).
 _GITLAB_TEMPLATE = re.compile(r"(?:Secret-Detection(?:\.latest)?|Auto-DevOps)\.gitlab-ci\.yml"
                               r"|component:\s*['\"]?\S*/secret-detection@\S+", re.IGNORECASE)
-# The include kinds that can add a scan this run cannot see; a template or component is named by
-# its path, which _GITLAB_TEMPLATE reads, so an unread one hides nothing.
-_HIDING_KINDS = frozenset({"local", "project", "remote", "unknown"})
+# The include kinds that can add a scan this run cannot see. A GitLab template is named by its path,
+# which _GITLAB_TEMPLATE reads, so an unread one hides nothing; a component can be anyone's.
+_HIDING_KINDS = frozenset({"local", "project", "remote", "component", "unknown"})
 # A visible job: a hidden one (``.secret_detection:``) is a template GitLab never runs.
 _GITLAB_JOB = re.compile(r"^secret_detection\s*:", re.MULTILINE)
 _MASKED = re.compile(r"\|\|\s*(?:true|:|exit\s+0)\b")
@@ -108,6 +108,7 @@ _USES = re.compile(r"^\s*-?\s*uses:\s*['\"]?([\w.-]+/[\w.-]+)", re.IGNORECASE)
 _COMMAND_NAMES = sorted((*SECRET_TOOLS, "detect-secrets-hook"), key=len, reverse=True)
 # A command that cannot fail the job guards nothing: ``detect-secrets scan`` writes a baseline and
 # exits 0, ``trufflehog`` exits 0 on findings without ``--fail``, ``gitleaks --exit-code 0``.
+_TRUFFLEHOG_FAIL = re.compile(r"(?<![\w-])--fail(?![\w-])")  # not --fail-on-scan-errors
 _GITLEAKS_NO_FAIL = re.compile(r"--exit-code[= ]0\b")
 _COMMAND = re.compile(
     r"(?:^\s*|[;&|]\s*|(?<![\w-])(?:run|script):\s*|^\s*-\s+|"
@@ -205,7 +206,7 @@ def pre_commit_guard(root: Path) -> PreCommitGuard:
         for line in text.splitlines():
             if _COMMENT.match(line):
                 continue
-            m = _PRE_COMMIT_KEY.match(line)
+            m = _PRE_COMMIT_KEY.match(_TRAILING_COMMENT.sub(r"\1", line))
             if m:
                 tools.update(_tools_in(m.group(1)))
         return {"present": bool(tools), "file": name, "tools": sorted(tools)}
@@ -222,6 +223,17 @@ def _ci_files(root: Path) -> list[Path]:
 def _code_lines(text: str) -> list[str]:
     """The lines with comments removed, a whole-line comment as an empty line so line numbers hold."""
     return ["" if _COMMENT.match(line) else _TRAILING_COMMENT.sub(r"\1", line) for line in text.splitlines()]
+
+
+def _list_block_end(lines: list[str], start: int, indent: int) -> int:
+    """As ``_block_end``, but a list item at the key's own indent (``after_script:`` then ``- x`` with
+    no indent, valid YAML) stays in the block."""
+    for i in range(start + 1, len(lines)):
+        line = lines[i]
+        ind = len(line) - len(line.lstrip())
+        if line.strip() and (ind < indent or (ind == indent and not _STEP_START.match(line))):
+            return i
+    return len(lines)
 
 
 def _block_end(lines: list[str], start: int, indent: int) -> int:
@@ -241,7 +253,7 @@ def _masked_lines(lines: list[str], gitlab: bool = False) -> set[int]:
     masked: set[int] = set()
     for i, line in enumerate(lines):
         if gitlab and _AFTER_SCRIPT.match(line):  # GitLab ignores after_script failures for the job status
-            masked.update(range(i, _block_end(lines, i, len(line) - len(line.lstrip()))))
+            masked.update(range(i, _list_block_end(lines, i, len(line) - len(line.lstrip()))))
             continue
         if gitlab and _WHEN_MANUAL.match(line):  # a manual job runs only on a click: mask the whole job
             job = next((j for j in range(i, -1, -1) if lines[j].strip() and not lines[j][0].isspace()), None)
@@ -275,7 +287,12 @@ def _runs_on_change(lines: list[str]) -> bool:
         if m.group(1).strip():
             return bool(CHANGE_EVENTS & set(_WORD.findall(m.group(1))))
         end = _block_end(lines, i, 0)
-        keys = [ln.strip().lstrip("- ").split(":")[0].strip() for ln in lines[i + 1:end] if ln.strip()]
+        body = [ln for ln in lines[i + 1:end] if ln.strip()]
+        if not body:
+            return False
+        level = min(len(ln) - len(ln.lstrip()) for ln in body)  # the event keys, not their inputs
+        keys = [ln.strip().lstrip("- ").split(":")[0].strip() for ln in body
+                if len(ln) - len(ln.lstrip()) == level]
         return bool(CHANGE_EVENTS & set(keys))
     return False
 
@@ -293,15 +310,36 @@ def _unconditional(lines: list[str], i: int, job: int) -> bool:
 
 
 def _gitlab_job_disabled(lines: list[str]) -> bool:
-    """Whether the visible ``secret_detection`` job never runs: an unconditional ``when: never``, on
+    """Whether the visible ``secret_detection`` job never runs on its own: an unconditional ``when: never``
+    or ``when: manual``, on
     the job or as a rule with no ``if:``, ``changes:`` or ``exists:``. That switches off the job and
     the template's job it overrides. A ``when: never`` under a condition skips some pipelines only."""
     for i, line in enumerate(lines):
         if not _GITLAB_JOB.match(line):
             continue
         end = _block_end(lines, i, 0)
-        return any(_WHEN_NEVER.match(lines[j]) and _unconditional(lines, j, i) for j in range(i + 1, end))
+        return any((_WHEN_NEVER.match(lines[j]) or _WHEN_MANUAL.match(lines[j])) and _unconditional(lines, j, i)
+                   for j in range(i + 1, end))
     return False
+
+
+_VALUED_FLAGS = frozenset({"--from-ref", "--to-ref", "--source", "--origin", "-s", "-o", "--hook-stage",
+                           "--color", "--config", "-c", "--remote-name", "--remote-url"})
+
+
+def _hook_id(tokens: list[str]) -> str | None:
+    """The hook ``pre-commit run`` names, wherever it sits among the flags; None for every hook."""
+    skip = False
+    for token in tokens:
+        if skip:
+            skip = False
+        elif token == "--files":
+            return None  # the rest are file names
+        elif token in _VALUED_FLAGS:
+            skip = True
+        elif not token.startswith("-"):
+            return token.lower()
+    return None
 
 
 def _tool_that_can_fail(name: str, line: str) -> str | None:
@@ -310,7 +348,7 @@ def _tool_that_can_fail(name: str, line: str) -> str | None:
         return "detect-secrets"
     if name == "detect-secrets":
         return None  # ``detect-secrets scan`` and ``audit`` always exit 0
-    if name == "trufflehog" and "--fail" not in line:
+    if name == "trufflehog" and not _TRUFFLEHOG_FAIL.search(line):
         return None
     if name == "gitleaks" and _GITLEAKS_NO_FAIL.search(line):
         return None
@@ -343,9 +381,8 @@ def _ci_tools(text: str, hooks: frozenset[str] = frozenset(), gitlab: bool = Fal
             continue
         run_hooks = _PRE_COMMIT_RUN.match(line)
         if run_hooks:  # the pre-commit secrets hooks, run where they cannot be skipped
-            rest = run_hooks.group(1).split()
             if _PRE_COMMIT_SCOPE.search(run_hooks.group(1)):
-                hook_id = rest[0].lower() if rest and not rest[0].startswith("-") else None
+                hook_id = _hook_id(run_hooks.group(1).split())
                 tools.update(hooks if hook_id is None else hooks & {hook_id})
             continue
         uses = _USES.match(line)
@@ -359,7 +396,7 @@ def _ci_tools(text: str, hooks: frozenset[str] = frozenset(), gitlab: bool = Fal
         names |= {m.group(1).lower() for m in _DOCKER_IMAGE.finditer(line)}
         tools.update(t for t in (_tool_that_can_fail(n, line) for n in names) if t)
     code = "\n".join(lines)
-    if (_GITLAB_TEMPLATE.search(code) or _GITLAB_JOB.search(code)) and not _gitlab_job_disabled(lines) \
+    if _GITLAB_TEMPLATE.search(code) and not _gitlab_job_disabled(lines) \
             and not _DETECTION_DISABLED.search(code):
         tools.add("secret_detection")
     return sorted(tools)

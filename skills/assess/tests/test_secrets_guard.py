@@ -24,7 +24,7 @@ def _repo(root: Path, files: dict[str, str], remote: str | None = None) -> Path:
     """Write ``files``; a GitHub workflow with no ``on:`` line gets ``ON_CHANGE``, so a case states
     only the step it tests (the trigger rule has its own tests)."""
     for rel, text in files.items():
-        if "/workflows/" in rel and not any(ln.startswith(("on:", "true:")) for ln in text.splitlines()):
+        if "/workflows/" in rel and not any(ln.startswith(("on:", "true:", "'on':", '"on":')) for ln in text.splitlines()):
             text = ON_CHANGE + text
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -83,7 +83,8 @@ def test_a_gitlab_repository_without_a_ci_scan_reads_level_2_unmet(tmp_path: Pat
     (".github/workflows/scan.yaml", "steps:\n  - uses: trufflesecurity/trufflehog@main\n", ["trufflehog"]),
     (".github/workflows/scan.yml", "steps:\n  - run: ggshield secret scan ci\n", ["ggshield"]),
     (".gitlab-ci.yml", "include:\n  - template: Security/Secret-Detection.gitlab-ci.yml\n", ["secret_detection"]),
-    (".gitlab-ci.yml", "secret_detection:\n  stage: test\n", ["secret_detection"]),
+    (".gitlab-ci.yml", "include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n"
+                       "secret_detection:\n  stage: test\n", ["secret_detection"]),  # an override
     (".github/workflows/scan.yml", "steps:\n  - uses: GitGuardian/ggshield-action@v1\n", ["ggshield"]),
     (".github/workflows/scan.yml", "steps:\n  - run: |\n      docker run zricethezav/gitleaks detect\n", ["gitleaks"]),
     (".github/workflows/scan.yml",
@@ -139,6 +140,13 @@ def test_a_ci_scan_meets_level_2_measured(tmp_path: Path, rel: str, text: str, t
     (".gitlab-ci.yml", "scan:\n  script:\n    - echo hi\n  after_script:\n    - gitleaks detect --source .\n"),
     (".gitlab-ci.yml", "scan:\n  when: manual\n  script:\n    - gitleaks detect\n"),  # a click, not a guard
     (".gitlab-ci.yml", "scan:\n  rules:\n    - when: manual\n  script:\n    - gitleaks detect\n"),
+    (".gitlab-ci.yml", "scan:\n  script:\n    - echo hi\n  after_script:\n  - gitleaks detect\n"),  # indentless list
+    (".gitlab-ci.yml", "secret_detection:\n  script: echo ready\n"),  # a job name, not a scan
+    (".gitlab-ci.yml", "include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n"
+                       "secret_detection:\n  when: manual\n"),  # a click, not a guard
+    (".github/workflows/x.yml", "on:\n  workflow_dispatch:\n    inputs:\n      pull_request:\n        type: string\n"
+                                "jobs:\n  s:\n    steps:\n      - run: gitleaks detect\n"),  # an input name
+    (".github/workflows/x.yml", "steps:\n  - run: trufflehog git file://. --fail-on-scan-errors\n"),
 ])
 def test_a_masked_commented_or_lookalike_line_is_not_a_scan(tmp_path: Path, rel: str, text: str) -> None:
     block = scan_secrets_guard(_repo(tmp_path, {rel: text}))
@@ -230,11 +238,18 @@ PRE_COMMIT = "repos:\n  - repo: https://github.com/gitleaks/gitleaks\n    hooks:
     ("  - run: pre-commit run gitleaks --all-files\n", ["gitleaks"]),
     ("  - run: pre-commit run eslint --all-files\n", []),  # another hook by id
     ("  - run: pre-commit run gitleaks\n", []),  # staged files only: none in CI
+    ("  - run: pre-commit run --all-files ruff\n", []),  # a hook id after the flag
+    ("  - run: pre-commit run --all-files gitleaks\n", ["gitleaks"]),
     ("  - name: pre-commit run --all-files\n    run: echo hi\n", []),  # a step label
 ])
 def test_ci_that_runs_the_pre_commit_secrets_hooks_is_a_scan(tmp_path: Path, step: str, tools: list[str]) -> None:
     root = _repo(tmp_path, {".pre-commit-config.yaml": PRE_COMMIT, ".github/workflows/x.yml": "steps:\n" + step})
     assert scan_secrets_guard(root)["ci"]["tools"] == tools
+
+
+def test_a_pre_commit_comment_naming_a_tool_is_not_a_hook(tmp_path: Path) -> None:
+    text = "repos:\n  - repo: https://github.com/astral-sh/ruff-pre-commit\n    hooks:\n      - id: ruff  # gitleaks later\n"
+    assert scan_secrets_guard(_repo(tmp_path, {".pre-commit-config.yaml": text}))["pre_commit"]["present"] is False
 
 
 def test_pre_commit_run_without_a_secrets_hook_is_not_a_scan(tmp_path: Path) -> None:
