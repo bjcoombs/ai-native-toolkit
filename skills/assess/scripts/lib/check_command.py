@@ -23,6 +23,7 @@ from pathlib import PurePosixPath
 
 from lib.command_flags import SHELLS, make_args, shell_args, shell_string
 from lib.command_resolver import RUNNERS, command_words
+from lib.runner_envs import env_commands
 from lib.runner_args import (
     SCRIPT, gradle_build_verdict, gradle_run, gradle_tasks, is_gradle, runs_no_task, script_run)
 from lib.lint_vocabulary import (
@@ -344,7 +345,8 @@ def is_lint_run(text: str) -> bool:
     """``is_lint_command`` that also runs the lint (#782): not ``--version`` / ``--help`` / ``-V``.
 
     Type checkers count as linters here (``pyright``, ``tsc --noEmit``, ``npx vue-tsc``,
-    ``npm run typecheck``, ``make type-check``). A go-task lint target (``task lint``),
+    ``npm run typecheck``, ``make type-check``). ``tox -e`` / ``nox -s`` whose environment
+    runs a linter counts (``lib.runner_envs``, #1180). A go-task lint target (``task lint``),
     ``hatch fmt --check`` and ``hatch run``
     of a linter program (``hatch run ruff check .``) count too, and a package-manager test
     alias (``npm test``, ``npx jest``) does not. ``is_lint_command`` keeps its
@@ -361,6 +363,9 @@ def is_lint_run(text: str) -> bool:
     if _no_analysis(words):   # swiftlint --fix rewrites, phpstan --generate-baseline (#926)
         return False
     if ecosystem_lint(words):   # phpstan, mix credo, ./gradlew ktlintCheck, pint --test (#926)
+        return True
+    env = env_commands(_program(words))   # tox -e lint, nox -s lint: the commands read (#1180)
+    if env is not None and any(is_lint_run(c) for c in env):
         return True
     program = _exec_program(words)
     if program is not None:   # npx / pnpm exec / yarn dlx <program>: the program names the run

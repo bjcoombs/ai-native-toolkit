@@ -504,7 +504,11 @@ def test_a_lone_linter_runs_only_under_a_script_key(tmp_path: Path, files: dict[
                                                     lint: bool) -> None:
     block = scan_ci_checks(_write(tmp_path, files))
     assert block["lint_runs"] is lint
-    assert block["test_or_lint_configured"] is False   # unchanged: a lone linter never counted there
+    # #1180: under a GitLab script: key it fails the job, so it is a check run in every signal.
+    # A type checker (pyright) is a lint run only: Layer 5's vocabulary leaves it out, lone or not.
+    check = lint and "pyright" not in files[".gitlab-ci.yml"]
+    assert block["test_or_lint_configured"] is check
+    assert block["enforced_check_runs"] is check
 
 
 def test_a_lint_action_with_continue_on_error_is_not_enforced(tmp_path: Path) -> None:
