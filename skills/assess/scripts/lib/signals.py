@@ -151,6 +151,10 @@ from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
 #   `summary.permissions_encoded` may be null under the option.
 # - a new headless block, `secrets_guard` (issue #1173): file paths dropped in counts-only
 #   output or hashed under `--hash-paths`, tool and source tokens kept.
+# 4 (3.1.0 release): one change, without a bump.
+# - a new headless block, `ci_model_jobs` (issue #1242): paths dropped in counts-only output or
+#   hashed under `--hash-paths`, job names dropped, signs, triggers, gates and states kept as
+#   tokens.
 SIGNALS_SCHEMA_VERSION = 4
 
 # Run-context blocks ``assess_core`` assembles through its own table entries in

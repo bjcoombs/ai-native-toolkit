@@ -523,6 +523,12 @@ instead of editing the history comment; the release PR folds the notes in with
 #   map (issue #1184): one record per shipped profile, keyed by its name, each
 #   `{levels_version, tags, baseline}`. The top-level record stays the default model's and may
 #   be absent when only profiles have run. Version-1 and version-2 files still read.
+# 1.44.0 (3.1.0 release): one change, without a bump.
+# - run-context.json gains `ci_model_jobs` (issue #1242): each CI job that calls a model API
+#   (`path`, `line`, `job`, `platform`, `signs`, `triggers`, `gates`, `state` gated | ungated |
+#   unknown, `reason` when unknown, `cancel_superseded`), with `files_read`, `model_jobs`,
+#   `gated`, `unknown`, `unread` and `ungated` (null with `ungated_reason` `trigger_unresolved`
+#   or `ci_jobs_unread` when none is ungated but one could not be settled or read).
 ARTIFACT_SCHEMA_VERSION = "1.44.0"
 
 # The finding method version: which rules decide the findings a run produces.
@@ -1233,4 +1239,25 @@ ARTIFACT_SCHEMA_VERSION = "1.44.0"
 #   meanings and next steps, and scan summaries are split into sentences of 25 words or fewer,
 #   and the plain-English lint now runs over every manifest prose field except the whys. The
 #   whys are unchanged; shorter versions await the maintainer's approval.
+# 39 (3.1.0 release): two rule changes, without a bump.
+# - issue #922, three hollow cases read unmet. A Makefile target with no prerequisite whose
+#   recipe runs only true, :, exit 0, or echo or printf lines with nothing chained after
+#   them (no ;, &&, ||, | or >) resolves unknown ("runs nothing"), so a named make test with
+#   recipe true no longer counts in agent_environment.check.named_total, and the target is
+#   not a check entry point. A settings hook event counts in agent_ops hook_events only when
+#   it holds a prompt, agent, http or mcp_tool hook, or a command other than true, : or exit 0; an empty
+#   event list or a hook with no type counts 0. Architecture-doc references count toward
+#   structure_drift boundary_patterns only when the docs name two or more distinct module
+#   paths, compared normalised (./src/a.py is src/a.py, src/core/ is src/core); CODEOWNERS is unchanged. The trade-off: a doc that names several components, of
+#   which only one is a module path (#874), now counts 0. In the local corpus,
+#   santifer/career-ops moved this way: its docs/ARCHITECTURE.md names dashboard/ beside
+#   root scripts and data directories.
+# - a new counted condition, `model-ci-gated.1` (issue #1242, tag `governance`): no CI job that
+#   calls a model API (an eval harness, an agent action or the Claude Code CLI, a model-provider
+#   secret, `pytest -m eval` or an `evals/` path) runs on every default-branch push or every pull
+#   request update without a gate (a paths filter, a schedule or manual trigger only, a label,
+#   pull request types without synchronize, GitLab `rules:changes:`). `cancel-in-progress` is
+#   recorded, not a gate. Not measured (`no_model_jobs`) with no such job, and
+#   (`trigger_unresolved`, `ci_jobs_unread`) when none is ungated but one could not be settled.
+#   It gates no Step.
 ASSESS_METHOD_VERSION = 39

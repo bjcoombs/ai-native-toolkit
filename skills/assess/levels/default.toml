@@ -363,6 +363,14 @@
 #   gate or criterion changes, so results are the same; only the printed titles move.
 # - a `secrets-guard` row (issue #1173): level 1 reads `secrets_guard.configured`, level 2
 #   `secrets_guard.enforcement.present`, both `eq true`, tagged `governance`.
+#
+# default-2026.11.24 (3.1.0 release): two changes, without a bump.
+# - the Layer 0, Layer 4 and Layer 8 comments name the #922 rules; the criteria text is
+#   unchanged. layer-0-instructions.2 reads unmet on a named Make target that runs
+#   nothing, layer-4-architecture.1 on an architecture doc naming one module path, and
+#   layer-8-agent-ops.2 on settings hooks that run only true, :, exit 0 or nothing.
+# - a `model-ci-gated` row (issue #1242): level 1 reads `ci_model_jobs.ungated eq 0`, tagged
+#   `governance`, unknown (`no_model_jobs`) with no model-backed CI job. It gates no Step.
 
 version = "default-2026.11.24"
 
