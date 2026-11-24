@@ -127,7 +127,7 @@ def test_a_removed_group_and_a_group_unknown_throughout_are_named_never_zero():
         _group("dark", [_move("instructions", None, None)]),
     ])))
     assert "gone (not in this run)" in text
-    assert "dark (no row measured in both runs)" in text
+    assert "dark (no practice measured in both runs)" in text
     assert "gone 0" not in text and "dark 0" not in text
 
 
@@ -157,7 +157,7 @@ def test_slope_skips_say_why():
     assert "no maturity model" in (skipped(None, real) or "")
     nothing = _comparison([_group("g", [_move("instructions", None, 1)])])
     assert skipped(levels, nothing) == (
-        "skipped: no group has a team row with a known level in both runs.")
+        "skipped: no group has a practice with a known level in both runs.")
 
 
 def test_a_raising_slope_renderer_is_a_skip_line(monkeypatch):
@@ -195,4 +195,4 @@ def test_long_slope_labels_stay_inside_the_canvas():
 
 def test_rows_left_out_of_a_mean_are_named_visibly():
     text = fs.render_slope(_fixture_view())
-    assert "Rows left out of a mean, not known in both runs (left out/rows): data\u00a0(1/2)" in text
+    assert "Practices left out of a mean, not known in both runs (left out/practices): data\u00a0(1/2)" in text

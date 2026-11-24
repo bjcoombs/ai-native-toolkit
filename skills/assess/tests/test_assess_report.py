@@ -66,7 +66,7 @@ def _full_ctx() -> dict:
             "concerns": [{"name": "hidden_coupling", "count": 5}],
             "safe_zones": 1,
             "total_concerns": 5,
-            "summary_text": "5 structural concerns (5 hidden coupling), 1 safe zone.",
+            "summary_text": "5 structural notes (5 hidden coupling), 1 safe zone.",
         },
         "findings_markdown": (
             "## Cross-Practice Findings (Keyhole Readiness)\n\n"
@@ -324,7 +324,7 @@ def test_hotspots_table_caps_at_ten_rows() -> None:
 
 def test_keyhole_summary_consumed_verbatim() -> None:
     out = render_keyhole_summary(_full_ctx())
-    assert out == "5 structural concerns (5 hidden coupling), 1 safe zone."
+    assert out == "5 structural notes (5 hidden coupling), 1 safe zone."
 
 
 def test_keyhole_summary_missing_fallback() -> None:
@@ -690,6 +690,23 @@ def test_generated_header_disclosure_folds_rows_past_the_cap() -> None:
     for i in (10, 11, 12):
         assert f"- `gen/f{i}.sql` (generated-header)" in fold
     assert fold.rstrip().endswith("</details>")
+
+
+def test_lying_map_paths_render_before_the_first_fold() -> None:
+    """#1254: a doc that says one thing while the code does another is never folded."""
+    import lib.keyhole.keyhole_signals as ks
+    ctx = _full_ctx()
+    findings = ks.assemble_findings({"lying_map": ["docs/arch.md", "src/core.py"]})
+    ctx["findings_markdown"] = ks.render_findings_markdown(findings, [])
+    ctx["excluded_generated"] = [{"path": f"gen/f{i:02}.sql", "reason": "generated-header"} for i in range(13)]
+    report = render_report(ctx, "demo")
+    fold = report.index("<details>")
+    assert report.index("### lying_map") < fold
+    for path in ("docs/arch.md", "src/core.py"):
+        assert report.index(path) < fold
+    # The disclosure is its own subsection, not part of the last finding or the attention list.
+    heading = report.index("### Excluded as generated")
+    assert report.index("src/core.py") < heading < report.index("13 files excluded from scoring") < fold
 
 
 def test_pruned_finding_paths_disclosure_names_incomplete_rename_map() -> None:

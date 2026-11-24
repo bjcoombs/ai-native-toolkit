@@ -34,7 +34,7 @@ def _seed_run_context(
             "max_layer6_band": "Present" if mutation_run else "Partial",
             "annotation": (
                 None if mutation_run
-                else "truth-pressure unproven (mutation not run)"
+                else "truth pressure not yet measured (mutation not run)"
             ),
         },
     }
@@ -652,7 +652,7 @@ def test_finalize_layer6_present_without_mutation_refuses(tmp_assess_dir: Path) 
 
     with pytest.raises(
         FinalizeValidationError,
-        match="truth-pressure unproven",
+        match="truth pressure not yet measured",
     ):
         finalize_run(assess_dir=tmp_assess_dir)
 

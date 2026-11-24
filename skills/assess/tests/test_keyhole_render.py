@@ -176,7 +176,7 @@ def test_build_keyhole_summary_counts_concerns_and_safe_zones() -> None:
     assert by_name == {"hidden_coupling": 2, "lying_map": 1}
     # The summary text is a pure count, parallel to the 0-8 score - never a score.
     assert summary["summary_text"] == (
-        "3 structural concerns (2 hidden coupling, 1 stale doc over complex code), 3 safe zones."
+        "3 structural notes (2 hidden coupling, 1 stale doc over complex code), 3 safe zones."
     )
 
 
@@ -185,7 +185,7 @@ def test_build_keyhole_summary_empty_findings_neutral_message() -> None:
     assert summary["concerns"] == []
     assert summary["total_concerns"] == 0
     assert summary["safe_zones"] == 0
-    assert summary["summary_text"] == "No structural concerns, 0 safe zones."
+    assert summary["summary_text"] == "No structural notes, 0 safe zones."
 
 
 def test_build_keyhole_summary_singular_plural() -> None:
@@ -195,14 +195,14 @@ def test_build_keyhole_summary_singular_plural() -> None:
     })
     summary = ks.build_keyhole_summary(findings)
     assert summary["summary_text"] == (
-        "1 structural concern (1 hidden coupling), 1 safe zone."
+        "1 structural note (1 hidden coupling), 1 safe zone."
     )
 
 
 def test_build_keyhole_summary_no_concerns_with_safe_zones() -> None:
     findings = ks.assemble_findings({"refactor_boundary": ["s1", "s2"]})
     summary = ks.build_keyhole_summary(findings)
-    assert summary["summary_text"] == "No structural concerns, 2 safe zones."
+    assert summary["summary_text"] == "No structural notes, 2 safe zones."
 
 
 def test_build_keyhole_summary_hyphenates_self_referential_tests() -> None:
@@ -211,7 +211,7 @@ def test_build_keyhole_summary_hyphenates_self_referential_tests() -> None:
     findings = ks.assemble_findings({"self_referential_tests": ["a", "b"]})
     summary = ks.build_keyhole_summary(findings)
     assert summary["summary_text"] == (
-        "2 structural concerns (2 self-referential tests), 0 safe zones."
+        "2 structural notes (2 self-referential tests), 0 safe zones."
     )
 
 
