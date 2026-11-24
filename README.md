@@ -142,6 +142,8 @@ The goal is a codebase that stays legible to whoever — or whatever — works o
 
 The report's scorecard has one row per practice, in reading order. It is detail, not a score: the Step reads its gates, and the per-tag strip groups conditions by truth tag. Older versions numbered these practices as layers 0-8; the numbers survive only inside the maturity model's row ids (`layer-0-instructions` and so on) and the alias that lets older configs and fleet history resolve. Read in order, the practices run from **read-side** (can the agent form a true picture?) through **write-side** (can it be trusted to produce good output?) to **meta** (does the system keep itself honest?). The full list of conditions, their grades and their tags is in [What /assess measures](docs/what-we-measure.md); the decisions behind the model are in the [scoring model](skills/assess/references/scoring-model.md).
 
+**Make it yours.** To score a practice your team holds, such as a coverage gate of at least 80, follow [Build your own practice](docs/build-your-own-practice.md). It copies a model, adds the practice and runs it with `--levels`.
+
 | Practice | Band | What it enforces |
 |----------|------|------------------|
 | Agent instructions | read | Compact rules in `CLAUDE.md` / `AGENTS.md` / `copilot-instructions`, plus a navigable doc graph (can an agent traverse links to the right place, and is what it finds still true?) |

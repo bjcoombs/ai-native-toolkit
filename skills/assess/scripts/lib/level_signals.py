@@ -146,6 +146,10 @@ names the values that mean "could not be measured" with the tally's reason code
 (`test_pressure.mutation_run` false: `needs_full_run`; `promissory_markers.aging_reliable`
 false: `degenerate_history`). A new criterion signal needs its own signal entry with an `evidence` class in `checks/core/`, which generates `SIGNAL_INPUTS` (#953), and a removed one loses it (the table holds exactly the default signals).
 Tests: `tests/test_signal_inputs.py`, one case per default criterion signal.
+
+`published_paths(scope)` (#1151) lists the paths a criterion can name: `ORG_PATHS` for `org`; for `team`,
+every scalar field of a typed block plus each block's `available`. A load error's "did you mean"
+hint reads it (`lib/levels_hints.py`). Tests: `tests/test_levels_hints.py`.
 """
 from __future__ import annotations
 
@@ -236,6 +240,37 @@ def team_path_ok(path: str) -> bool:
         if shapes:
             return any(_fits(shape, parts[cut:]) for shape in shapes)
     return True
+
+
+def _leaves(tp: Any, prefix: str, depth: int = 0) -> set[str]:
+    """Every path below ``prefix`` that ``_fits`` accepts and that ends on a scalar or an open value."""
+    origin = get_origin(tp)
+    if origin in _UNIONS or origin is typing.NotRequired or origin is typing.Required:
+        return set().union(*(_leaves(arm, prefix, depth) for arm in get_args(tp)))
+    if tp is Any or tp is object or tp in _SCALARS or origin is Literal:
+        return {prefix}
+    if typing.is_typeddict(tp) and depth < 8:  # the bound stops a self-referencing shape
+        hints = get_type_hints(tp)
+        return set().union(*(_leaves(hints[key], f"{prefix}.{key}", depth + 1) for key in hints))
+    return set()  # a list or an open mapping: no path a criterion can name ends here
+
+
+@lru_cache(maxsize=2)
+def published_paths(scope: Scope) -> tuple[str, ...]:
+    """The signal paths a criterion can name in ``scope``, sorted: the ``ORG_PATHS`` for ``org``;
+    for ``team``, every scalar field of a typed block plus each block's ``available``.
+
+    An untyped block accepts any sub-path, so it adds only its ``available`` flag here. The
+    list feeds the "did you mean" hint of a load error (``lib.levels_hints``, #1151)."""
+    if scope == "org":
+        return tuple(sorted(ORG_PATHS))
+    names = scan_names()
+    paths = {f"{name}.available" for name in names}
+    for root, shapes in _ROOTS.items():
+        if root.split(".")[0] in names:
+            for shape in shapes:
+                paths |= _leaves(shape, root)
+    return tuple(sorted(p for p in paths if team_path_ok(p)))
 
 
 def signal_path_validator() -> PathValidator:
