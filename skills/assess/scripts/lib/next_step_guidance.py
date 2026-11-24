@@ -439,12 +439,11 @@ _WORDING: dict[str, Wording] = {
         "A workflow in `.github/workflows/` or `.gitlab-ci.yml` runs a secrets scan, unmasked."),
     "skill_personal_data.files_with_personal_data": _none_left(
         "In each skill or agent file the report names, remove the kind of data it lists (an email, "
-        "phone number, home path, IP address, SSH login, credential or key), or replace it with a "
-        "placeholder such as `user@example.com` or `/home/user/`; rotate any key or credential "
-        "that was committed.",
+        "phone number, home path, IP address, SSH login or key), or replace it with a placeholder "
+        "such as `user@example.com` or `/home/user/`; rotate any key that was committed.",
         "No `SKILL.md`, agent definition or skill `references/` file holds an email, phone number, "
-        "personal home path, IP address, SSH login, credential or key (personal names are not "
-        "checked)."),
+        "personal home path, IP address, SSH login or key (personal names are not checked; "
+        "credential-shaped assignments are counted for information only)."),
     "skill_script_tests.skills_untested": _none_left(
         "Add tests for each named skill's scripts in that skill's own folder (`tests/` or "
         "`test_*.py` beside them). Where the report finds them elsewhere, move or copy them in: "

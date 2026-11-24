@@ -519,6 +519,8 @@ def _on_github(root: Path) -> bool:
         names = remote("remote").split()
         url = remote("remote", "get-url", names[0]) if len(names) == 1 else ""
     return bool(_GITHUB_REMOTE.match(url))
+
+
 _GRADES = {"pre_commit": "config_only", "ci": "measured"}
 
 

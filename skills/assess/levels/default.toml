@@ -251,8 +251,9 @@
 #   file that could hold the scan and was not read (ci_includes_unresolved). It gates no Step.
 # - Personal data in skill text reads skill_personal_data.files_with_personal_data
 #   (lib/skill_personal_data.py, #1045): no SKILL.md, agent definition or skill references/
-#   file holds a detected kind: email, phone, home path, IP address, SSH login, credential or
-#   key. Precision first, so met means none of these kinds was found, not that the text holds
+#   file holds a detected kind: email, phone, home path, IP address, SSH login or key. A
+#   credential-shaped assignment is counted (credential_candidates) and never makes it unmet,
+#   until a precision check passes (#1196). Precision first, so met means none of these kinds was found, not that the text holds
 #   no personal data of any kind; personal names are not detected. A finding names the file
 #   and the kind, never the data. With no skill or agent file the row is unknown
 #   (no_skill_files), never met. Read per skill unit only; it gates no Step. Graded measured.
