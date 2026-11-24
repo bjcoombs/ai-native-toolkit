@@ -37,6 +37,11 @@ the sha256 of the rules of the maturity model the run scored with (None without
 lacks both and reads as unrecorded (None), never as the same rules, so the stamp version
 stays 1. A rules difference is a rule reason, re-scored like a ``levels_version`` one.
 
+``packs`` (#1273, ``lib/fleet/fleet_method.py``) names each practice pack the run evaluated,
+``{name, version, sha256}`` in pass order. It is written only when a pack was passed, so a
+run without one writes the stamp it wrote before; a stamp without it reads as no pack, and a
+packs difference is a rule reason. The stamp version stays 1.
+
 The stamp holds no absolute path, salt, timing or input mode, so a root run,
 a list run and any ``--jobs`` value over unchanged checkouts on the same day
 write a byte-identical ``run.json`` (with ``--discovered``, a list run that leaves
@@ -71,6 +76,7 @@ from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_coverage import Coverage
 from lib.fleet.fleet_method import CollectorRevision, method_keys
 from lib.levels import MaturityModel
+from lib.packs import PackIdentity
 from lib.fleet_config import FleetConfig, FleetConfigEntries, config_sha256, section_entries
 
 # Bumped when the stamp's keys change, except for the 2.0.0 maturity-model key renames
@@ -95,6 +101,7 @@ class _LaterStampKeys(TypedDict, total=False):
     managed_settings: bool  # --managed-settings read this machine's managed settings; absent before #1153
     rules_sha256: str | None  # the rules scored with (lib/fleet/fleet_method.py); None without --levels or before #952
     collectors: list[CollectorRevision] | None  # every core collector's revision; None before #952
+    packs: list[PackIdentity]  # each --pack's name, version and sha256 (#1273); absent: no pack
 
 
 class FleetStamp(_LaterStampKeys):
@@ -128,10 +135,12 @@ def build_stamp(
     today: date, window: str, levels_version: str | None, counts_only: bool, paths_hashed: bool,
     scans: list[str] | None, fleet_config: FleetConfig | None = None, platform: bool = False,
     coverage: Coverage | None = None, managed_settings: bool = False, model: MaturityModel | None = None,
+    packs: list[PackIdentity] | None = None,
 ) -> FleetStamp:
-    """The run stamp; ``model`` is the maturity model the run scored with (before any demotion)."""
+    """The run stamp; ``model`` is the maturity model the run scored with (before any demotion),
+    ``packs`` the identities of the run's practice packs (none: the key is not written)."""
     method = method_keys(model)
-    return {
+    stamp: FleetStamp = {
         "fleet_stamp_version": FLEET_STAMP_VERSION,
         "toolkit_commit": toolkit_commit,
         "plugin_version": plugin_version,
@@ -150,6 +159,9 @@ def build_stamp(
         "rules_sha256": method["rules_sha256"],
         "collectors": method["collectors"],
     }
+    if packs:  # absent without a pack, so such a run writes the stamp it wrote before #1273
+        stamp["packs"] = list(packs)
+    return stamp
 
 
 def dumps_stamp(stamp: FleetStamp) -> str:

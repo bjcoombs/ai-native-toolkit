@@ -103,6 +103,12 @@ Maintainer rulings (#783 and #789 triage decisions, 2026-11-21):
 Tests: ``tests/test_signal_inputs.py`` (one case per default criterion signal,
 so an unclassified one names itself).
 
+Pack paths (#1273). ``signal_path_validator(packs)`` accepts a team path
+``pack.<pack>.<check>`` only for a check of one of ``packs``, the run's ``--pack`` files
+(``lib/packs.py``), and refuses every other ``pack.`` path, so the load error names
+``--pack``. A pack signal has no entry in ``SIGNAL_INPUTS``, so its condition carries no grade
+and is listed, never counted.
+
 The real `PathValidator` for `levels.py`, and the default maturity model. A `team` path's first
 segment must be a block name the published headless schema lists
 (`references/signals.schema.json`, `scans.propertyNames`, generated from
@@ -156,12 +162,14 @@ from __future__ import annotations
 import json
 import types
 import typing
+from collections.abc import Sequence
 from functools import lru_cache
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 from lib.counts_only.counts_only_schema import ROOTS
 from lib.levels import Criterion, PathValidator, MaturityModel, Scope, load_levels
 from lib.levels_hints import register_names
+from lib.packs import SIGNAL_PREFIX, Pack
 from lib.signals_schema import SCHEMA_PATH
 from lib.signal_grades import DEFAULT_LEVELS as DEFAULT_LEVELS
 from lib.signal_grades import EMPTY_DENOMINATORS as EMPTY_DENOMINATORS
@@ -277,10 +285,19 @@ def published_paths(scope: str) -> tuple[str, ...]:
 register_names(published_paths)  # the "did you mean" names of a load error
 
 
-def signal_path_validator() -> PathValidator:
-    """The ``PathValidator`` for ``lib.levels.load_levels``."""
+PACK_PREFIX = f"{SIGNAL_PREFIX}."
+
+
+def signal_path_validator(packs: Sequence[Pack] = ()) -> PathValidator:
+    """The ``PathValidator`` for ``lib.levels.load_levels``. A team path
+    ``pack.<pack>.<check>`` is accepted only for a check of one of ``packs`` (the run's
+    ``--pack`` files, #1273); any other ``pack.`` path is refused, and the load error names
+    ``--pack`` (``lib.levels_hints``)."""
+    pack_paths = frozenset(check["signal"] for pack in packs for check in pack["checks"])
 
     def validate(scope: Scope, path: str) -> bool:
+        if scope == "team" and path.startswith(PACK_PREFIX):
+            return path in pack_paths
         return path in ORG_PATHS if scope == "org" else team_path_ok(path)
 
     return validate
