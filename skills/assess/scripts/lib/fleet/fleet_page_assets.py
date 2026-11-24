@@ -166,7 +166,7 @@ SCRIPT = r"""
       lines.push("State: level " + cell.level + " of " + row.top_level);
     }
     if (cell.signal) {
-      lines.push("Condition: " + row.title + ", level " + (cell.status === "level" ? cell.level + 1 : "next")
+      lines.push("Condition: " + row.title + ", level " + (cell.next_level === null || cell.next_level === undefined ? "next" : cell.next_level)
         + ", reads " + cell.signal + (cell.value !== null && cell.value !== undefined ? " (measured " + cell.value + ")" : ""));
     }
     if (cell.why) { lines.push("Why: " + cell.why); }

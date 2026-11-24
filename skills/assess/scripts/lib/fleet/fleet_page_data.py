@@ -18,6 +18,14 @@ model) never reach the page: a row is its index into ``rows`` and is shown by it
 condition is shown as its row title and level. Gate ids are copied: they are the model's Step
 gate names.
 
+**Only this run's keys.** An achievement, a Recount line or a target whose unit or repository
+is not in this run's ``fleet-data.json`` (a repository dropped since the earlier run, a target
+for a unit this run did not build) is left out: it could only be shown by its raw key, which
+would name it in counts-only output. No label ever falls back to a raw key.
+
+**Gate ids** are copied as the model names them. The shipped model's gate ids carry no layer
+number (``tests/test_fleet_page.py`` checks it); a caller's own model is shown as written.
+
 **Achievements** are re-worded from their structured evidence with the same templates as
 ``fleet_achievements`` credit lines, so the unit and repository labels follow the mode above.
 
@@ -125,7 +133,10 @@ def _repo(repo: Mapping[str, Any], label: Mapping[str, str], rows: Mapping[str, 
              "condition": _condition_text(str(b.get("condition") or ""), titles)} for b in nxt["blockers"]]},
         "exclusions": [{"condition": _condition_text(e["id"], titles), "kind": e.get("kind"),
                         "reason": e.get("reason") if mode == FULL else None} for e in repo.get("exclusions") or []],
-        "cells": [{"row": rows[c["row"]], "status": c["status"], "level": c["level"], "signal": c.get("signal"),
+        "cells": [{"row": rows[c["row"]], "status": c["status"], "level": c["level"],
+                   # the level the cell's signal stands before: fleet-data names the next level's criterion
+                   "next_level": c["level"] + 1 if c["status"] == "level" and c.get("signal") else None,
+                   "signal": c.get("signal"),
                    "value": c.get("value"), "reason": c.get("reason"), "why": c.get("why")}
                   for c in repo.get("rows") or [] if c["row"] in rows],
         "units": {u["view"]: label[u["unit"]] for u in repo.get("units") or [] if u["unit"] in label},
@@ -137,7 +148,7 @@ def _achievement(a: Mapping[str, Any], label: Mapping[str, str], titles: Mapping
                  tops: Mapping[str, int]) -> dict[str, Any]:
     """One achievement, worded as ``fleet_achievements._credit`` words it, with the page's labels."""
     ev = a.get("evidence") or {}
-    who = label.get(a["unit"], a["unit"])
+    who = label[a["unit"]]
     title = titles.get(ev.get("row") or "", "")
     kind = a["kind"]
     if kind == "level_up":
@@ -175,18 +186,19 @@ def page_bundle(data: Mapping[str, Any], achievements: Mapping[str, Any] | None,
         "views": [{"view": v["view"], "units": [_unit(u, label) for u in v["units"]]} for v in data.get("views") or []],
         "repos": [_repo(r, label, rows, titles, mode) for r in data.get("repos") or []],
         "achievements": [_achievement(a, label, titles, tops) for a in ach.get("achievements") or []
-                         if a.get("run") == ach.get("run")],
+                         if a.get("run") == ach.get("run") and a["unit"] in label],
         "runs": list(ach.get("runs") or []), "note": ach.get("note"),
         "recount": None if not recount else {
             "from_version": recount.get("from_version"), "to_version": recount.get("to_version"),
-            "lines": [{"repo": label.get(line["repo"], line["repo"]), "row": titles.get(line["row"], ""),
+            "lines": [{"repo": label[line["repo"]], "row": titles.get(line["row"], ""),
                        "cause": line["cause"], "from_level": line.get("from_level"), "to_level": line.get("to_level")}
-                      for line in recount.get("lines") or []]},
-        "targets": [{"view": t["view"], "unit": label.get(t["unit"], t["unit"]), "step": t["step"],
+                      for line in recount.get("lines") or [] if line["repo"] in label]},
+        "targets": [{"view": t["view"], "unit": label[t["unit"]], "step": t["step"],
                      "lowest_step": t.get("lowest_step"), "measured": t.get("measured"), "repos": t.get("repos"),
                      "distance": t.get("distance"), "held": t.get("held"),
                      "missing": [{k: g[k] for k in ("gate", "held", "not_measured", "excluded")}
-                                 for g in t.get("missing_gates") or []]} for t in ach.get("targets") or []],
+                                 for g in t.get("missing_gates") or []]} for t in ach.get("targets") or []
+                    if t["unit"] in label],
         "pictures": list(pictures),
     }
 

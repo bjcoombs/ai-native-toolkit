@@ -244,3 +244,47 @@ def test_every_achievement_kind_and_the_recount_take_the_page_labels() -> None:
         "repository 1 held every level for 3 runs in a row."]
     assert bundle["recount"] is not None and bundle["recount"]["lines"][0]["repo"] == "repository 1"
     assert key not in embed(bundle)
+
+
+@pytest.mark.parametrize("name", ["counts-only", "hashed"])
+def test_keys_not_in_this_run_never_reach_the_page_by_their_raw_name(name: str) -> None:
+    """A dropped repository's Recount line, a target for a unit this run did not build and an
+    achievement for a unit not in the run are left out, never shown by the raw key."""
+    privacy = fx.VARIANTS[name]
+    data = dict(fx.run(fx.DATES[-1], privacy))
+    gone_repo, gone_unit = privacy.key("grp/gone/oldrepo"), privacy.key("ownership/grp/oldteam")
+    ev = {"row": "docs", "from_level": 0, "to_level": 1, "level": 1, "from_step": 1, "to_step": 2,
+          "target_step": 2, "runs": 3, "moves": []}
+    ach = {"run": "r2", "runs": ["r1", "r2"], "note": None,
+           "achievements": [{"kind": "level_up", "view": "ownership", "unit": gone_unit, "unit_kind": "team",
+                             "run": "r2", "evidence": ev}],
+           "targets": [{"view": "ownership", "unit": gone_unit, "step": 3, "lowest_step": None, "measured": 0,
+                        "repos": 0, "distance": None, "held": 0, "missing_gates": []}],
+           "recount": {"from_version": "a", "to_version": "b", "run": "r1",
+                       "lines": [{"repo": gone_repo, "row": "docs", "cause": "Now checked", "from_level": 1,
+                                  "to_level": 0}]}}
+    from lib.fleet.fleet_page_data import page_bundle
+    bundle = page_bundle(data, ach, fdf.model())
+    html = build_page(bundle)
+    assert bundle["achievements"] == [] and bundle["targets"] == []
+    assert bundle["recount"] is not None and bundle["recount"]["lines"] == []
+    for leak in ("gone", "oldrepo", "oldteam", *fx.NAMES):
+        assert leak not in html, leak
+    if name == "hashed":
+        assert gone_repo not in html and gone_unit not in html
+
+
+def test_the_shipped_model_s_gate_ids_carry_no_layer_number() -> None:
+    """Gate ids reach the page as written, so the shipped ones must be layer-free."""
+    from lib.level_signals import DEFAULT_LEVELS
+    from lib.levels import load_levels
+    gates = {g["id"] for s in load_levels(DEFAULT_LEVELS).get("steps", []) for g in s["gates"]}
+    assert gates and not [g for g in gates if re.search(r"layer", g, re.I)]
+
+
+def test_the_next_level_comes_from_the_bundle() -> None:
+    _, bundle = _parts(fx.goldens()["expected-full.html"])
+    cells = [c for r in bundle["repos"] for c in r["cells"]]
+    assert all(c["next_level"] == (c["level"] + 1 if c["status"] == "level" and c["signal"] else None) for c in cells)
+    script, _ = _parts(fx.goldens()["expected-full.html"])
+    assert "cell.level + 1" not in script
