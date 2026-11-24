@@ -264,6 +264,16 @@ def test_unresolved_named_check_keeps_the_cap(tmp_path: Path) -> None:
     assert "(1 named, none resolved)" in block["layer5_cap"]["reason"]
 
 
+def test_a_named_target_that_runs_nothing_is_no_check(tmp_path: Path) -> None:
+    """``make test`` whose recipe is ``true`` is neither named nor an entry point (#922)."""
+    root = _repo(tmp_path, {"CLAUDE.md": "Run `make test` before pushing.\n",
+                            "Makefile": "test:\n\ttrue\ncheck:\n\truff check .\n"})
+    check = _scan(root, ("CLAUDE.md",))["check"]
+    assert check["named_total"] == 0
+    assert check["unresolved"][0]["reason"] == "target `test` in a Makefile runs nothing"
+    assert check["entry_points"] == [{"command": "make check", "source": "Makefile"}]
+
+
 def test_entry_points_per_family(tmp_path: Path) -> None:
     root = _repo(tmp_path, {
         "package.json": json.dumps({"scripts": {"test:unit": "x", "lint": "y", "build": "z"}}),

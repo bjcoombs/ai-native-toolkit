@@ -175,3 +175,51 @@ def test_non_utf8_tracked_filename_does_not_abort(git_repo) -> None:  # type: ig
     assert "Makefile" in files
     assert len(files) == 2
     assert build_index(repo).make_targets is not None
+
+
+def test_noop_make_targets(tmp_path: Path) -> None:
+    """A target with no prerequisite and only no-op recipe lines runs nothing (#922)."""
+    root = _write(tmp_path, {"Makefile": (
+        ".PHONY: test lint fmt check all build empty\n"
+        "test:\n\ttrue\n"
+        "lint:\n\t@echo \"lint is not set up\"\n\t# todo\n\n\t@:\n"
+        "fmt: ; @exit 0\n"
+        "empty:\n"
+        "check: test lint\n"
+        "all:\n\t@echo building\n\tpytest\n"
+        "build:\n\techo $(shell pytest)\n"
+        "help-noop: ## Run tests\n\t@echo \"no tests yet\"\n"
+        "help-real: ## Run tests\n\tpytest\n"
+        "real:\n\ttrue\n"
+        "real:\n\tpytest\n"
+        "TOOLS = x\n"
+        "\tnot-a-recipe-line\n"
+    ), "mk/extra.mk": "lint:\n\t@printf 'x'\n"})
+    targets = build_index(root).make_targets
+    assert targets is not None
+    assert targets.noop == frozenset({"test", "lint", "fmt", "empty", "help-noop"})
+    assert targets.runs_nothing("test") and not targets.runs_nothing("check")
+    assert targets.has("test")  # it exists: the resolver reads it unknown, never missing
+
+
+def test_noop_target_busy_in_another_makefile(tmp_path: Path) -> None:
+    root = _write(tmp_path, {"Makefile": "test:\n\ttrue\n", "mk/test.mk": "test:\n\tgo test ./...\n"})
+    targets = build_index(root).make_targets
+    assert targets is not None and targets.noop == frozenset()
+
+
+def test_noop_recipe_line() -> None:
+    assert all(map(command_index.noop_recipe_line, ["", "\t", "\ttrue", "\t@:", "\t-exit 0",
+                                                    "\t@echo hi", "\tprintf x", "\t# note"]))
+    assert not any(map(command_index.noop_recipe_line, ["\tpytest", "\techo `pytest`",
+                                                        "\techo ${X}", "\texit 1", "\ttrue; pytest",
+                                                        "\t@echo a && pytest", "\techo a; pytest",
+                                                        "\techo pytest | sh",
+                                                        "\techo x > out.txt"]))
+
+
+def test_noop_targets_union_across_makefiles(tmp_path: Path) -> None:
+    """The lenient union: a root no-op ``test`` beside a real one elsewhere is not a no-op."""
+    root = _write(tmp_path, {"Makefile": "test:\n\t@true\n", "sub/Makefile": "test:\n\tpytest\n"})
+    targets = build_index(root).make_targets
+    assert targets is not None and not targets.runs_nothing("test")
