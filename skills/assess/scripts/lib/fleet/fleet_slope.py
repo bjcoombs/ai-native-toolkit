@@ -36,7 +36,7 @@ and the maturity model alone. `slope_view(levels, comparison)` gives each group 
 share (`fleet_maturity.mean_share`, team rows only, #684) then and now, taken only over the team
 rows with a known level in both runs (org rows are out of the mean, the counts and the mover), so a row going unknown to known never moves a line, and its biggest mover
 (largest share change, ties to the lower row id) with the comparison's `cause`. A group added,
-removed or with no row known in both runs is named on a hatched strip, never at zero.
+removed or with no practice known in both runs is named on a hatched strip, never at zero.
 `end_labels` spreads the end labels `LABEL_GAP` apart (`fleet_svg.spread_vertical`), read by
 both `render_slope` and its gap test. A mover whose `cause` is anything but `level` (`set`, `set_and_level`, or the #774
 `scanner_changed` / `toolkit_changed_unknown_scope`) carries a `*` explained under the chart.
@@ -185,7 +185,7 @@ def _why(group: GroupSlope) -> str:
     mover = group["mover"]
     name = svg.truncate(group["group"], 16)
     if mover is None:
-        return f"{name}: no row moved"
+        return f"{name}: no practice moved"
     mark = " *" if mover["cause"] not in (None, CAUSE_LEVEL) else ""
     tail = f" {mover['then']}→{mover['now']}{mark}"
     room = max(MAX_WHY - len(name) - 2 - len(tail), 6)
@@ -207,7 +207,7 @@ def _unknown_text(group: GroupSlope) -> str:
         return f"{group['group']} (new since the earlier run)"
     if group["absent"] == "removed":
         return f"{group['group']} (not in this run)"
-    return f"{group['group']} (no row measured in both runs)"
+    return f"{group['group']} (no practice measured in both runs)"
 
 
 def render_slope(view: SlopeView) -> str:
@@ -219,10 +219,10 @@ def render_slope(view: SlopeView) -> str:
     bottom = PLOT_T + PLOT_H
     body = [svg.text(PAD, PAD + 18, TITLE, size=18, weight="bold", cls="fg"),
             svg.text(PAD, PAD + 40, f"{len(view['groups'])} groups · mean maturity in "
-                     f"{view['earlier']} and {view['later']}, labelled with the row that moved most",
+                     f"{view['earlier']} and {view['later']}, labelled with the practice that moved most",
                      cls="muted"),
-            svg.text(PAD, PAD + 58, "Maturity: each team row's level as a share of its top level, "
-                     "averaged over the team rows with a known level in both runs", size=11.5,
+            svg.text(PAD, PAD + 58, "Maturity: each practice's level as a share of its top level, "
+                     "averaged over the practices with a known level in both runs", size=11.5,
                      cls="muted")]
     for tick in Y.ticks(4):
         ty = Y(tick)
@@ -239,7 +239,7 @@ def render_slope(view: SlopeView) -> str:
         y0, y1, colour = Y(then), Y(now), tone(group)
         change = delta(group)
         tip = (f"{group['group']}: {then:.2f} → {now:.2f} ({change:+.2f}; "
-               f"{group['paired_rows']} of {group['rows']} rows known in both runs"
+               f"{group['paired_rows']} of {group['rows']} practices known in both runs"
                + _floor_tip(group) + ")")
         body.append(f'<line x1="{LX:.1f}" y1="{y0:.1f}" x2="{RX:.1f}" y2="{y1:.1f}" '
                     f'class="s-{colour}" stroke-width="2.4"><title>{svg.esc(tip)}</title></line>')
@@ -262,7 +262,7 @@ def render_slope(view: SlopeView) -> str:
         cursor += LINE_H + 4
     floored = [f"{g['group']}\u00a0{_floor_span(g)}" for g in view["groups"] if _floor_span(g)]
     if floored:
-        for line in textwrap.wrap("With floors, a lower bound (unknown rows counted at their confirmed "
+        for line in textwrap.wrap("With floors, a lower bound (unknown practices counted at their confirmed "
                                   "floor), at least: " + ", ".join(floored), WRAP):
             body.append(svg.text(PAD, cursor, line, size=11.5, cls="muted"))
             cursor += LINE_H
@@ -271,7 +271,7 @@ def render_slope(view: SlopeView) -> str:
     partial = [f"{g['group']}\u00a0({g['rows'] - g['paired_rows']}/{g['rows']})" for g in groups
                if g["paired_rows"] < g["rows"]]
     if partial:
-        for line in textwrap.wrap("Rows left out of a mean, not known in both runs (left out/rows): "
+        for line in textwrap.wrap("Practices left out of a mean, not known in both runs (left out/practices): "
                                   + ", ".join(partial), WRAP):
             body.append(svg.text(PAD, cursor, line, size=11.5, cls="muted"))
             cursor += LINE_H
@@ -283,6 +283,6 @@ def render_slope(view: SlopeView) -> str:
         body += parts
         cursor += height
     desc = ("Slope chart: one line per group from its mean maturity in the earlier run to this "
-            "one, up in the accent colour, down in the alarm colour; groups with no row known in "
+            "one, up in the accent colour, down in the alarm colour; groups with no practice known in "
             "both runs are listed on a hatched strip, not drawn at zero.")
     return svg.document(WIDTH, float(int(cursor + PAD)), TITLE, desc, body, defs=THEMED_HATCH)

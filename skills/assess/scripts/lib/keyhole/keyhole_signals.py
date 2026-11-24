@@ -1001,12 +1001,12 @@ def _format_summary(concerns: list[KeyholeConcern], safe_zones: int) -> str:
 
     zones = plural(safe_zones, "safe zone")
     if not concerns:
-        return f"No structural concerns, {zones}."
+        return f"No structural notes, {zones}."
     total = sum(c["count"] for c in concerns)
     detail = ", ".join(
         f"{c['count']} {finding_display_name(c['name'])}" for c in concerns
     )
-    headline = plural(total, "structural concern")
+    headline = plural(total, "structural note")  # #1254: notes, not concerns
     return f"{headline} ({detail}), {zones}."
 
 

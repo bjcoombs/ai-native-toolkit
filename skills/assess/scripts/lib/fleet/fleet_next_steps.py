@@ -316,7 +316,7 @@ def _unknown_section(row: Row, result: RowResult, settings_scope: str | None,
     gap = "This is a measurement gap: the run could not measure every signal the level depends on."
     floor = floor_of(result)
     if result["scope"] == "org":
-        head = (f"{IN_PLACE} nothing confirmed on this row yet; the level is not measured" if floor is None
+        head = (f"{IN_PLACE} nothing confirmed for this practice yet; the level is not measured" if floor is None
                 else f"{IN_PLACE} at least level {floor}, confirmed; higher levels are not measured yet")
         if settings_scope is None:
             return [f"{head}. {gap}", "",
@@ -328,7 +328,7 @@ def _unknown_section(row: Row, result: RowResult, settings_scope: str | None,
     evaluations = result.get("repos", {})
     low, high = _rolled(result, top, 0), _rolled(result, top, 1)
     span = f" (between {low} and {high} of {top} once measured)" if evaluations else ""
-    head = (f"{IN_PLACE} nothing confirmed on this row yet; the level is not measured{span}" if floor is None
+    head = (f"{IN_PLACE} nothing confirmed for this practice yet; the level is not measured{span}" if floor is None
             else f"{IN_PLACE} at least level {floor} of {top}, confirmed; higher levels are not measured "
                  f"yet (up to {high})")
     lines = [f"{head}. {gap}", ""]
@@ -356,7 +356,7 @@ def _unknown_section(row: Row, result: RowResult, settings_scope: str | None,
 def _held(level: int, top: int) -> str:
     """The opening line of a known row below its top: level 0 confirms nothing, so it says so."""
     if level == 0:
-        return f"{IN_PLACE} nothing confirmed on this row yet (level 0 of {top})"
+        return f"{IN_PLACE} nothing confirmed for this practice yet (level 0 of {top})"
     return f"{IN_PLACE} level {level} of {top}"
 
 
@@ -397,16 +397,16 @@ def group_page(maturity_model: MaturityModel, group: GroupRow, rows: Sequence[Fl
     started = sum(1 for level, _ in known if level >= 1)
     rows_n = len(maturity_model["rows"])
     lines = [f"# Next steps: {code(group['group'])}", "",
-             f"{IN_PLACE} {at_top} of {rows_n} rows at the top level and {started} at level 1 or above, "
+             f"{IN_PLACE} {at_top} of {rows_n} practices at the top level and {started} at level 1 or above, "
              f"across {_repos(group['repos'])}.", "",
              f"Maturity model {code(maturity_model['version'])}. {_repos(group['repos'])}: "
              f"{group['scanned']} scanned, {group['failed']} could not be scanned.", "",
              "Each numbered step is one change: take or leave it on its own. \"Done when\" is "
              "checkable in the repository or its platform settings; the re-run check is optional.",
              "", "## Levels", "",
-             f"{IN_PLACE} {len(known)} of {rows_n} rows measured for this group, each with the roll-up "
+             f"{IN_PLACE} {len(known)} of {rows_n} practices measured for this group, each with the roll-up "
              "rule it uses.", "",
-             "| Row | Level | Roll-up |", "|-----|-------|---------|"]
+             "| Practice | Level | Roll-up |", "|----------|-------|---------|"]
     for row, result in zip(maturity_model["rows"], results):
         lines.append(f"| {text(row['title'])} | {_level_cell(result, len(row['levels']))} | "
                      f"{_rule_cell(result, group['settings_scope'])} |")
@@ -432,10 +432,10 @@ def index_page(maturity_model: MaturityModel, groups: Sequence[GroupRow]) -> str
                   if r["status"] == "level" and r["level"] is not None and r["level"] == tops.get(r["id"]))
     lines = ["# Team next steps", "",
              f"{IN_PLACE} {len(groups)} {'group' if len(groups) == 1 else 'groups'} with a page, holding "
-             f"{reached} {'row' if reached == 1 else 'rows'} at the top level between them.", "",
-             f"Maturity model {code(maturity_model['version'])}: {len(maturity_model['rows'])} rows. One page per group.", "",
-             "| Group | Repositories | Rows at top level | Rows with next steps | Rows unknown |",
-             "|-------|--------------|-------------------|----------------------|--------------|"]
+             f"{reached} {'practice' if reached == 1 else 'practices'} at the top level between them.", "",
+             f"Maturity model {code(maturity_model['version'])}: {len(maturity_model['rows'])} practices. One page per group.", "",
+             "| Group | Repositories | Practices at top level | Practices with next steps | Practices unknown |",
+             "|-------|--------------|------------------------|---------------------------|-------------------|"]
     for group in groups:
         known = [r for r in group["levels"] if r["status"] == "level" and r["level"] is not None]
         top = sum(1 for r in known if r["level"] == tops.get(r["id"]))

@@ -91,7 +91,7 @@ def test_mutation_not_run_cap_applies_on_default_scan(tmp_path: Path) -> None:
     assert cap["applies"] is True
     assert cap["mutation_run"] is False
     assert cap["max_layer6_band"] == "Partial"
-    assert cap["annotation"] == "truth-pressure unproven (mutation not run)"
+    assert cap["annotation"] == "truth pressure not yet measured (mutation not run)"
 
 
 def test_mutation_run_requires_parsed_mutants_for_cap_lift() -> None:
@@ -104,7 +104,7 @@ def test_mutation_run_requires_parsed_mutants_for_cap_lift() -> None:
     assert empty["applies"] is True
     assert empty["mutation_run"] is False
     assert empty["max_layer6_band"] == "Partial"
-    assert empty["annotation"] == "truth-pressure unproven (mutation not run)"
+    assert empty["annotation"] == "truth pressure not yet measured (mutation not run)"
 
     missing = mutation_not_run_cap({"mutation_run": True})
     assert missing["applies"] is True

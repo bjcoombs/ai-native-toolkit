@@ -356,7 +356,7 @@ def _bound_lines(run: TrendRun, groups: Sequence[str]) -> list[str]:
     floored = [f"{g}\u00a0{bounds[g]:.2f}" for g in groups if bounds.get(g) is not None]
     if not floored:
         return []
-    return textwrap.wrap(f"With floors, a lower bound (unknown rows counted at their confirmed floor), "
+    return textwrap.wrap(f"With floors, a lower bound (unknown practices counted at their confirmed floor), "
                          f"at least, on {run['label']}: " + ", ".join(floored), WRAP)
 
 
@@ -375,7 +375,7 @@ def render_trend(runs: Sequence[TrendRun]) -> str:
     bottom = PLOT_T + PLOT_H
     body = [svg.text(PAD, PAD + 18, TITLE, size=18, weight="bold", cls="fg"),
             svg.text(PAD, PAD + 40, f"{len(runs)} dated runs, {runs[0]['label']} to {runs[-1]['label']} "
-                     "· mean share of top level per group (team rows with a level)", cls="muted"),
+                     "· mean share of top level per group (practices with a level)", cls="muted"),
             svg.text(PAD, PAD + 58, svg.truncate(_versions_line(runs), WRAP), size=11.5, cls="muted")]
     for tick in Y_TICKS:
         ty = plan.y(tick)

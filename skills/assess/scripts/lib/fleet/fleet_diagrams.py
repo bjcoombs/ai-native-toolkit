@@ -88,7 +88,7 @@ HEADINGS: dict[str, tuple[str, str]] = {
     fleet_tooling_map.FILE: ("Shared tooling",
                              "What does a shared template change reach, and which pins differ from the fleet's?"),
     fleet_trends.FILE: ("Group trends", "Is each team improving?"),
-    fleet_slope.FILE: ("Before and after", "What moved since the earlier run, and which row moved it?"),
+    fleet_slope.FILE: ("Before and after", "What moved since the earlier run, and which practice moved it?"),
     fleet_step_movement.FILE: (fleet_step_movement.TITLE, fleet_step_movement.QUESTION),
 }
 
@@ -110,7 +110,7 @@ class Diagram(TypedDict):
 
 NO_LEVELS = "skipped: the run had no maturity model (--levels), so no levels."
 NO_HISTORY = "skipped: the run is not kept in the run history (--no-history or --full), so no earlier runs."
-NO_TEAM_ROWS = "skipped: the maturity model has no team rows to measure maturity by."
+NO_TEAM_ROWS = "skipped: the maturity model has no team practices to measure maturity by."
 NO_REPOS = "skipped: no repositories in the run."
 NO_STEPS = "skipped: the maturity model defines no Steps."
 NO_DATA = "skipped: the run wrote no fleet-data.json to read the Steps from."
@@ -254,7 +254,7 @@ def _slope(levels: MaturityModel | None, comparison: Comparison | None, repos: i
         entry["in_place"] = (f"{IN_PLACE} {paired} {'group' if paired == 1 else 'groups'} with a known "
                              "level in both runs.")
         if not paired:
-            entry["skipped"] = "skipped: no group has a team row with a known level in both runs."
+            entry["skipped"] = "skipped: no group has a practice with a known level in both runs."
         else:
             entry["svg"] = fleet_slope.render_slope(view)
     return entry

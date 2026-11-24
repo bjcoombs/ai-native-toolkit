@@ -62,8 +62,8 @@ LINE_H = 16.0
 
 
 _BOTTOM = PLOT_T + PLOT_H
-FLOOR_NOTE = ("\"At least\" (in a tooltip or below) is a lower bound: unknown team rows counted at "
-              "their confirmed floor beside the known rows; the dot sits on the known-only mean.")
+FLOOR_NOTE = ("\"At least\" (in a tooltip or below) is a lower bound: unknown practices counted at "
+              "their confirmed floor beside the known ones; the dot sits on the known-only mean.")
 # Quadrant captions: (x, y, text, anchor, theme role, weight); labels are placed around them.
 CAPTIONS: tuple[tuple[float, float, str, str, str, str | None], ...] = (
     (PLOT_R - 8, _BOTTOM - 10, "Most room to grow: busy, early levels", "end", "warn", "600"),
@@ -173,8 +173,8 @@ def render_quadrant(points: Sequence[RepoPoint], window: str) -> str:
     body = [svg.text(PAD, PAD + 18, TITLE, size=18, weight="bold", cls="fg"),
             svg.text(PAD, PAD + 40, f"{len(points)} repositories · commits in the {window} window "
                      "(non-merge) against mean maturity", cls="muted"),
-            svg.text(PAD, PAD + 58, "Maturity: each team row's level as a share of its top level, "
-                     "averaged over the rows that could be measured", size=11.5, cls="muted")]
+            svg.text(PAD, PAD + 58, "Maturity: each practice's level as a share of its top level, "
+                     "averaged over the practices that could be measured", size=11.5, cls="muted")]
     sx, sy = x(split), y(Y_SPLIT)
     body.append(f'<rect x="{sx:.1f}" y="{PLOT_T:.1f}" width="{PLOT_R - sx:.1f}" '
                 f'height="{sy - PLOT_T:.1f}" class="f-accent" opacity="0.06"/>')
@@ -209,7 +209,7 @@ def render_quadrant(points: Sequence[RepoPoint], window: str) -> str:
         cx, cy = x(point["commits"] or 0), y(point["maturity"] or 0.0)
         tone = "warn" if at_risk(point, split) else "accent"
         tip = (f"{point['repo']}: {point['commits']} commits, maturity {point['maturity']:.2f} "
-               f"({point['measured_rows']} of {point['team_rows']} team rows measured"
+               f"({point['measured_rows']} of {point['team_rows']} practices measured"
                + (f"; {floor_text(point)})" if floor_text(point) else ")"))
         body.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="6.5" class="f-{tone} s-bg" '
                     f'stroke-width="1.5"><title>{svg.esc(tip)}</title></circle>')

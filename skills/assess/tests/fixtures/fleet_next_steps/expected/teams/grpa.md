@@ -1,6 +1,6 @@
 # Next steps: `grpa`
 
-In place: 0 of 7 rows at the top level and 2 at level 1 or above, across 3 repositories.
+In place: 0 of 7 practices at the top level and 2 at level 1 or above, across 3 repositories.
 
 Maturity model `next-steps-fixture-1`. 3 repositories: 2 scanned, 1 could not be scanned.
 
@@ -8,10 +8,10 @@ Each numbered step is one change: take or leave it on its own. "Done when" is ch
 
 ## Levels
 
-In place: 3 of 7 rows measured for this group, each with the roll-up rule it uses.
+In place: 3 of 7 practices measured for this group, each with the roll-up rule it uses.
 
-| Row | Level | Roll-up |
-|-----|-------|---------|
+| Practice | Level | Roll-up |
+|----------|-------|---------|
 | Group settings | 1 of 2 | group settings `grpa` |
 | Agent instructions | unknown | every repository (min) |
 | Coverage \| mutation | 1 of 2 | 50% of repositories (share) |
@@ -34,7 +34,7 @@ To reach level 2:
 
 ## Agent instructions
 
-In place: nothing confirmed on this row yet; the level is not measured (between 0 and 1 of 2 once measured). This is a measurement gap: the run could not measure every signal the level depends on.
+In place: nothing confirmed for this practice yet; the level is not measured (between 0 and 1 of 2 once measured). This is a measurement gap: the run could not measure every signal the level depends on.
 
 - `agent_environment.check.named_total`: not measured in 1 of 3 repositories. The repository scan did not complete in each of them; the reason token is listed below.
 - `nested_instructions.budget.claude_code.bytes`: not measured in 1 of 3 repositories. The repository scan did not complete in each of them; the reason token is listed below.
@@ -67,28 +67,28 @@ Below level 2 with no unmet criterion found, because a signal was not measured (
 
 ## Runtime legibility
 
-In place: nothing confirmed on this row yet; the level is not measured (between 0 and 1 of 1 once measured). This is a measurement gap: the run could not measure every signal the level depends on.
+In place: nothing confirmed for this practice yet; the level is not measured (between 0 and 1 of 1 once measured). This is a measurement gap: the run could not measure every signal the level depends on.
 
 - `observability.rung`: not measured in 3 of 3 repositories. Read from committed files by a full `/assess` run and a headless scan alike; unavailable when the scan raised (`scan_failed`) or the scan came from an older toolkit, which measured it in a full run only.
 - Repositories whose own level is undetermined (3): `grpa/svc1`, `grpa/svc2`, `grpa/svc3` (scan did not complete: `scan_timeout`).
 
 ## Agent permissions
 
-In place: nothing confirmed on this row yet; the level is not measured (between 0 and 1 of 1 once measured). This is a measurement gap: the run could not measure every signal the level depends on.
+In place: nothing confirmed for this practice yet; the level is not measured (between 0 and 1 of 1 once measured). This is a measurement gap: the run could not measure every signal the level depends on.
 
 - `agent_ops.summary.permissions_encoded`: not measured in 1 of 3 repositories. The repository scan did not complete in each of them; the reason token is listed below.
 - Repositories whose own level is undetermined (1): `grpa/svc3` (scan did not complete: `scan_timeout`).
 
 ## Shared tooling
 
-In place: nothing confirmed on this row yet; the level is not measured (between 0 and 1 of 1 once measured). This is a measurement gap: the run could not measure every signal the level depends on.
+In place: nothing confirmed for this practice yet; the level is not measured (between 0 and 1 of 1 once measured). This is a measurement gap: the run could not measure every signal the level depends on.
 
 - `shared_tooling.available`: not measured in 1 of 3 repositories. The repository scan did not complete in each of them; the reason token is listed below.
 - Repositories whose own level is undetermined (1): `grpa/svc3` (scan did not complete: `scan_timeout`).
 
 ## Agent environment
 
-In place: nothing confirmed on this row yet (level 0 of 1); 1 of 3 repositories already at level 1.
+In place: nothing confirmed for this practice yet (level 0 of 1); 1 of 3 repositories already at level 1.
 
 To reach level 1: the rule needs 3.
 
