@@ -29,7 +29,8 @@ example, and the noise would bury real findings.
   no-reply address (``noreply@``, ``no-reply@``, or a ``noreply`` label in the domain, as in
   ``users.noreply.github.com``) and whose local
   part is not a placeholder (``user``, ``you``, ``name``, ``someone``, ...); and ``phone``, a
-  number with a ``+`` country code and 8 to 15 digits (not a timezone offset before a date), or
+  number with a ``+`` country code, 8 to 15 digits and a space, dash or bracket between them (not
+  a timezone offset before a date, a decimal or a bare count such as ``+1000000000``), or
   the ``(NNN) NNN-NNNN`` form.
 
 A finding names the file and the kind, never the data: no matched text, not even redacted,
@@ -95,6 +96,12 @@ _REFERENCE = re.compile(r"^(?:\$\{?\{?|\$\w|%\w+%|\{\{|<|process\.env\b|os\.envi
                         re.IGNORECASE)
 # A date inside an international-number match: a timezone offset then a date, not a phone number.
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+# A file name, not a mail domain: a retina asset (``logo@2x.png``) or any name ending in a file
+# extension (``icon@3x.webp``).
+_ASSET_DOMAIN = re.compile(r"^\d+x\b|\.(?:png|jpe?g|gif|svg|webp|avif|ico|pdf)$", re.IGNORECASE)
+# A number, not a phone: a decimal (``+0.5``) or a run of digits with no separator (``+1000000000``).
+_DECIMAL = re.compile(r"\.\d")
+_SEPARATOR = re.compile(r"[ (-]")
 _PHONE_INTL = re.compile(r"(?<![\w+])\+\d[\d .()-]{6,20}\d(?![\w])")
 _PHONE_NANP = re.compile(r"(?<!\w)\(\d{3}\)\s?\d{3}-\d{4}(?!\w)")
 
@@ -119,7 +126,7 @@ def _has_email(text: str) -> bool:
         local, domain = m.group(1).lower(), m.group(2).lower()
         if _RESERVED_DOMAIN.search(domain) or _NOREPLY_DOMAIN.search(domain) or local in _PLACEHOLDER_LOCAL:
             continue
-        if local.startswith(("noreply", "no-reply")):
+        if local.startswith(("noreply", "no-reply")) or _ASSET_DOMAIN.search(domain):
             continue
         return True
     return False
@@ -129,6 +136,7 @@ def _has_phone(text: str) -> bool:
     if _PHONE_NANP.search(text):
         return True
     return any(8 <= sum(c.isdigit() for c in m.group(0)) <= 15 and not _DATE.search(m.group(0))
+               and not _DECIMAL.search(m.group(0)) and _SEPARATOR.search(m.group(0)[1:])
                for m in _PHONE_INTL.finditer(text))
 
 

@@ -76,6 +76,9 @@ def test_each_kind_is_detected(text: str, kinds: list[str]) -> None:
     "password: changeme\ntoken: ${{ secrets.X }}",  # a placeholder beside a reference
     'password: ""\ntoken: ${{ secrets.X }}',
     "Released 2024-01-01 +0000 2024-01-02",
+    "Use logo@2x.png and icon@3x.webp for retina screens.",
+    "It saves +1000000000 tokens.",
+    "Weights: +0.5 - 0.25 - 0.125",
 ])
 def test_placeholders_and_lookalikes_are_not_findings(text: str) -> None:
     assert kinds_in(text) == []
