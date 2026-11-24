@@ -135,6 +135,10 @@ jobs:
             Write-Host "::error::expected ripgrep $env:RG_VERSION, got: $version"
             exit 1
           }
+          # A failed choco attempt leaves $LASTEXITCODE non-zero, and the
+          # runner's pwsh wrapper exits with it. Reaching here means rg is
+          # RG_VERSION from one of the two paths, so the step passes.
+          exit 0
 
       # `shell: bash` on windows-latest is Git Bash. Git Bash does not ship jq;
       # the runner image usually does. The smoke fixtures and the eval
