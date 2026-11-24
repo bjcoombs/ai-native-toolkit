@@ -39,11 +39,12 @@ from typing import Any
 
 from lib.level_tally import default_model, gate_blockers
 from lib.levels import StepDef
-from lib.model_change import model_changed_line, model_name
+from lib.model_change import changed_models, model_name
+from lib.profiles import profile_names
 from lib.prior_level import default_level
 
-__all__ = ["baseline_step", "held_at_baseline", "lost_gates", "no_baseline", "non_default_label",
-           "not_compared", "split_lost", "step_change", "uncompared_profile_run"]
+__all__ = ["baseline_step", "held_at_baseline", "lost_gates", "model_change_reason", "no_baseline",
+           "non_default_label", "not_compared", "split_lost", "step_change", "uncompared_profile_run"]
 
 
 def non_default_label(level: Any) -> str | None:
@@ -62,13 +63,33 @@ def uncompared_profile_run(ctx: Mapping[str, Any]) -> str | None:
     return None if label is None or compared else label
 
 
+def _model_label(name: str) -> str:
+    """``the default model``, ``profile handover`` or ``model <version>``."""
+    if name == "default":
+        return "the default model"
+    return f"profile {name}" if name in profile_names() else f"model {name}"
+
+
+def model_change_reason(ctx: Mapping[str, Any]) -> str | None:
+    """``model changed (A -> B)`` when this run compared no gate because the previous run used
+    another model, with the two models named as ``ModelChoice.label`` does; None otherwise."""
+    models = changed_models(ctx.get("since_last_run"))
+    return None if models is None else f"model changed ({' -> '.join(_model_label(m) for m in models)})"
+
+
 def not_compared(ctx: Mapping[str, Any]) -> str | None:
-    """Why this run compared no gate across maturity models, or None."""
-    changed = model_changed_line(ctx.get("since_last_run"))
-    if changed is not None:
-        return changed
-    label = uncompared_profile_run(ctx)
-    return None if label is None else f"no committed per-profile baseline yet for {label} (#1184)"
+    """Why this run compared no gate across maturity models, with what to do, or None. A profile
+    run leaves the committed baseline alone, so its advice is to gate a default run; a default run
+    after a model change (a ``run-context.json`` fallback or an older ``prior-level.json``) is
+    re-armed by committing a run of one model."""
+    changed = model_change_reason(ctx)
+    label = uncompared_profile_run(ctx) if changed is None else non_default_label(ctx.get("level"))
+    if changed is None and label is None:
+        return None
+    why = changed or f"no committed per-profile baseline yet for {label} (#1184)"
+    if label is not None:
+        return f"{why}; the gate compares default-model runs only, so run it on a default /assess"
+    return f"{why}; commit a run of one maturity model to re-arm fail_on_gate_loss"
 
 
 def _steps() -> list[StepDef]:

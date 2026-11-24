@@ -71,9 +71,8 @@ from typing import Any, NotRequired, TypedDict, cast
 # scripts/ is on sys.path (pyproject pythonpath); lib is a package under it.
 from lib.assess_config import GateConfig, load_gate_config, load_gate_config_file
 from lib.findings_snapshot import committed_prior, method_change
-from lib.gate_loss import (held_at_baseline, no_baseline, not_compared, split_lost, step_change,
-                           uncompared_profile_run)
-from lib.model_change import model_changed_line
+from lib.gate_loss import (held_at_baseline, model_change_reason, no_baseline, not_compared, split_lost,
+                           step_change, uncompared_profile_run)
 from lib.reviewed_findings import open_findings
 from lib.run_context_types import DerivedFinding, JsonDict, MethodChange
 
@@ -230,10 +229,11 @@ def check_gate_loss(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
         return []
     # A run that compared no gate because the previous run used another model cannot show a
     # loss, so the opt-in fails with that reason rather than reading "could not check" as clean.
-    uncompared = model_changed_line(ctx.get("since_last_run"))
-    if uncompared is not None:
-        models = uncompared[uncompared.find("("):uncompared.find(")") + 1]
-        return [{"metric": "gates_not_compared", "count": 0, "paths": [], "models": models}]
+    # With no committed baseline a model change came from a run-context.json left on disk, which
+    # can only warn, as a lost gate read from it does.
+    changed = model_change_reason(ctx)
+    if changed is not None and not no_baseline(ctx):
+        return [{"metric": "gates_not_compared", "count": 0, "paths": [], "reason": changed}]
     label = uncompared_profile_run(ctx)
     if label is not None:
         return [{"metric": "gates_not_compared", "count": 0, "paths": [], "model": label}]
@@ -303,13 +303,14 @@ def _breach_line(breach: JsonDict) -> str:
     elif breach["metric"] == "gates_not_compared" and "model" in breach:
         return (
             f"  FAIL gates not compared under {breach['model']}: no committed per-profile "
-            "baseline yet (#1184). Run without --fail-on-gate-loss, or use the default model in CI"
+            "baseline yet (#1184). Turn off fail_on_gate_loss (the --fail-on-gate-loss flag or the "
+            "config key), or use the default model in CI"
         )
     elif breach["metric"] == "gates_not_compared":
         return (
-            f"  FAIL gates not compared: model changed {breach['models']}; cannot confirm no gate "
-            "was lost. fail_on_gate_loss compares runs of one maturity model, so run and commit "
-            "the model the baseline used"
+            f"  FAIL gates not compared: {breach['reason']}; cannot confirm no gate was lost. "
+            "fail_on_gate_loss compares runs of one maturity model, so run and commit the model "
+            "the baseline used"
         )
     elif breach["metric"] == "gates_lost":
         step = (f" (Step {breach['step_from']} -> Step {breach['step_to']})"
@@ -354,10 +355,7 @@ def format_verdict(verdict: GateVerdict) -> str:
     skipped = verdict.get("gates_not_compared")
     failing_skip = any(b["metric"] == "gates_not_compared" for b in verdict["threshold_breaches"])
     if skipped and not failing_skip:
-        lines.append(
-            f"  warn gates not compared: {skipped}. fail_on_gate_loss compares runs of one "
-            "maturity model, so commit a default-model run to re-arm it"
-        )
+        lines.append(f"  warn gates not compared: {skipped}")
     if verdict.get("no_baseline"):
         lines.append(
             "  no baseline yet: commit .assess/prior-level.json from an /assess run "
@@ -537,9 +535,10 @@ def main(argv: list[str] | None = None) -> int:
     # after the last pipeline run (#661).
     ctx["prior_findings_snapshot"] = committed_prior(ctx, repo_root)
     verdict = evaluate(ctx, gate)
+    # the summary's model-changed line carries U+2192, which a cp1252 console cannot encode
     if summary and format_summary(ctx):
-        print(format_summary(ctx) + "\n")
-    print(format_verdict(verdict))
+        print(format_summary(ctx).replace("\u2192", "->") + "\n")
+    print(format_verdict(verdict).replace("\u2192", "->"))
     return 1 if verdict["failed"] else 0
 
 

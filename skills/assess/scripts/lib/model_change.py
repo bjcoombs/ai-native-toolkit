@@ -56,7 +56,7 @@ from lib.run_context_types_since import SinceLastRun
 from lib.since_last_run import gate_changes
 from lib.unit_rollup import UnitRollUpBlock
 
-__all__ = ["CUSTOM_NOT_DRAWN", "MODEL_CHANGED", "across_models", "custom_run", "model_changed_line",
+__all__ = ["CUSTOM_NOT_DRAWN", "MODEL_CHANGED", "across_models", "changed_models", "custom_run", "model_changed_line",
            "model_for_level", "on_own_steps", "previous_level",
            "model_name", "previous_levels_version", "units_label"]
 
@@ -184,6 +184,16 @@ def on_own_steps(block: SinceLastRun, level: Any, previous: Any) -> SinceLastRun
                    for k, v in gates.items() if e.startswith(k)), e) for e in block["lines"]]
     return cast(SinceLastRun, {**block, "gates_gained": gained, "gates_lost": lost,
                                "lines": lines, "markdown": _markdown(lines)})
+
+
+def changed_models(since: Any) -> tuple[str, str] | None:
+    """The (previous, current) model names of a ``since_last_run`` model-changed line, or None."""
+    line = model_changed_line(since)
+    head, _, tail = MODEL_CHANGED.partition("{} → {}")
+    if line is None or not line.endswith(tail):
+        return None
+    before, arrow, after = line[len(head):len(line) - len(tail)].partition(" → ")
+    return (before, after) if arrow else None
 
 
 def model_changed_line(since: Any) -> str | None:

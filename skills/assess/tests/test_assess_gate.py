@@ -574,42 +574,48 @@ def test_a_loss_without_a_committed_baseline_only_warns(tmp_path):
     assert evaluate(ctx, gate)["failed"] is False
 
 
+def _changed(old: str, new: str) -> list[str]:
+    return [f"Model changed since last run ({old} \u2192 {new}); gates not compared"]
+
+
 def test_gates_not_compared_across_models_never_reads_clean(tmp_path):
-    """#1150: a since block that compared no gate because the model changed, or a profile run,
-    prints why instead of "clean snapshot"."""
+    """#1150: with fail_on_gate_loss on, a run that compared no gate because the model changed,
+    or a profile run with nothing to compare, fails with why; off, it is a warn line, never clean."""
     _write_config(tmp_path, "[gate]\nfail_on_gate_loss = true\n")
-    gate = load_gate_config(tmp_path)
+    gate, off = load_gate_config(tmp_path), load_gate_config(Path("/nonexistent"))
     ctx = _loss_ctx(None)
-    ctx["since_last_run"]["lines"] = [
-        "Model changed since last run (handover → default); gates not compared"]
+    ctx["since_last_run"]["lines"] = _changed("handover", "default")
     verdict = evaluate(ctx, gate)
-    assert verdict["failed"] is True  # opted in: a default run that compared nothing fails
+    assert verdict["failed"] is True
     text = format_verdict(verdict)
-    assert ("FAIL gates not compared: model changed (handover → default); cannot confirm no gate "
-            "was lost") in text
+    assert ("FAIL gates not compared: model changed (profile handover -> the default model); cannot "
+            "confirm no gate was lost") in text
     assert "warn gates not compared" not in text and "clean snapshot" not in text
-    off = evaluate(ctx, load_gate_config(Path("/nonexistent")))
-    assert off["failed"] is False
-    assert "warn gates not compared: Model changed since last run (handover → default)" in format_verdict(off)
-    assert "clean snapshot" not in format_verdict(off)
+    text = format_verdict(evaluate(ctx, off))
+    assert ("warn gates not compared: model changed (profile handover -> the default model); commit a "
+            "run of one maturity model to re-arm fail_on_gate_loss") in text
+    assert "clean snapshot" not in text and "RESULT: PASS" in text
+
     to_profile = _loss_ctx(None)
     to_profile["level"]["levels_version"] = "profile-handover-2026.11.23"
-    to_profile["since_last_run"]["lines"] = [
-        "Model changed since last run (default → handover); gates not compared"]
-    verdict = evaluate(to_profile, gate)
-    assert verdict["failed"] is True
-    assert ("FAIL gates not compared: model changed (default → handover); cannot confirm no gate "
-            "was lost") in format_verdict(verdict)
+    to_profile["since_last_run"]["lines"] = _changed("default", "handover")
+    assert ("FAIL gates not compared: model changed (the default model -> profile handover)"
+            in format_verdict(evaluate(to_profile, gate)))
+    assert ("the gate compares default-model runs only, so run it on a default /assess"
+            in format_verdict(evaluate(to_profile, off)))
+
     profile = _loss_ctx(None)  # a profile run that compared nothing, e.g. on a CI checkout
     profile["level"]["levels_version"] = "profile-handover-2026.11.23"
     verdict = evaluate(profile, gate)
     assert verdict["failed"] is True
     assert ("FAIL gates not compared under profile handover: no committed per-profile baseline yet "
-            "(#1184). Run without --fail-on-gate-loss, or use the default model in CI") in format_verdict(verdict)
-    off = evaluate(profile, load_gate_config(Path("/nonexistent")))
-    assert off["failed"] is False
-    assert off["gates_not_compared"] == "no committed per-profile baseline yet for profile handover (#1184)"
-    assert "clean snapshot" not in format_verdict(off)
+            "(#1184). Turn off fail_on_gate_loss (the --fail-on-gate-loss flag or the config key), or "
+            "use the default model in CI") in format_verdict(verdict)
+    verdict = evaluate(profile, off)
+    assert verdict["failed"] is False
+    assert verdict["gates_not_compared"] == (
+        "no committed per-profile baseline yet for profile handover (#1184); the gate compares "
+        "default-model runs only, so run it on a default /assess")
     custom = _loss_ctx(None)
     custom["level"]["levels_version"] = "team-1"
     assert "under model team-1:" in format_verdict(evaluate(custom, gate))
@@ -620,3 +626,37 @@ def test_gates_not_compared_across_models_never_reads_clean(tmp_path):
     default = _loss_ctx(None)
     default["level"]["levels_version"] = "default-2026.11.10"
     assert "gates_not_compared" not in evaluate(default, gate)
+
+
+def test_a_model_change_with_no_committed_baseline_only_warns(tmp_path):
+    """The model-changed line then came from a run-context.json left on disk, which can only warn,
+    as a lost gate read from it does."""
+    _write_config(tmp_path, "[gate]\nfail_on_gate_loss = true\n")
+    ctx = _loss_ctx(None)
+    del ctx["prior_level"]
+    ctx["since_last_run"]["lines"] = _changed("handover", "default")
+    verdict = evaluate(ctx, load_gate_config(tmp_path))
+    assert verdict["failed"] is False and verdict["no_baseline"] is True
+    text = format_verdict(verdict)
+    assert "warn gates not compared: model changed" in text and "no baseline yet" in text
+
+
+def test_a_custom_model_name_with_brackets_is_named_whole(tmp_path):
+    _write_config(tmp_path, "[gate]\nfail_on_gate_loss = true\n")
+    ctx = _loss_ctx(None)
+    ctx["since_last_run"]["lines"] = _changed("team(v2)", "default")
+    assert ("model changed (model team(v2) -> the default model);"
+            in format_verdict(evaluate(ctx, load_gate_config(tmp_path))))
+
+
+def test_main_prints_the_gate_in_cp1252(tmp_path, capsys):
+    """A Windows console with redirected stdout is cp1252, which has no U+2192."""
+    ctx = _loss_ctx(None)
+    ctx["since_last_run"]["lines"] = _changed("handover", "default")
+    ctx["headline"] = {"summary_lines": ["Since last run: model changed (default \u2192 handover)."]}
+    (tmp_path / ".assess").mkdir()
+    (tmp_path / ".assess" / "run-context.json").write_text(json.dumps(ctx), encoding="utf-8")
+    assert main([str(tmp_path), "--fail-on-gate-loss", "--summary"]) == 1
+    out = capsys.readouterr().out
+    out.encode("cp1252")
+    assert "(default -> handover)" in out
