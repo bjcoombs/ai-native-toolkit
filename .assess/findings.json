@@ -1,28 +1,34 @@
 {
-  "assess_method_version": 30,
+  "assess_method_version": 38,
   "findings": [
     {
       "name": "hidden_coupling",
       "paths": [
         "scripts",
-        "scripts/contract",
         "scripts/tests",
         "skills/assess",
         "skills/assess/scripts",
         "skills/assess/scripts/lib",
+        "skills/assess/scripts/lib/counts_only",
+        "skills/assess/scripts/lib/docs",
+        "skills/assess/scripts/lib/fleet",
         "skills/assess/scripts/lib/test_pressure",
         "skills/assess/tests",
         "skills/assess/tests/fixtures",
         "skills/fleet",
         "skills/fleet/scripts",
+        "skills/marathon",
         "skills/skill-forge",
-        "tests",
-        "tests/contract"
+        "tests"
       ]
     },
     {
       "name": "lying_map",
-      "paths": []
+      "paths": [
+        "skills/assess/scripts/lib/README.md",
+        "skills/assess/scripts/lib/docs/wiki_writer.md",
+        "skills/assess/tests/README.md"
+      ]
     },
     {
       "name": "unexplained_complexity",
@@ -34,19 +40,44 @@
     },
     {
       "name": "self_referential_tests",
-      "paths": [
-        "scripts/floor_anchor.py",
-        "scripts/floor_check.py"
-      ]
+      "paths": []
     },
     {
       "name": "unactioned_intent",
       "paths": [
+        "skills/assess/scripts/assess_report.py",
         "skills/assess/scripts/assess_signals.py",
-        "skills/assess/scripts/lib/fleet_schema.py",
+        "skills/assess/scripts/lib/headline.py",
         "skills/assess/scripts/lib/signals_schema.py",
+        "skills/assess/tests/conftest.py",
+        "skills/assess/tests/fleet_data_fixture.py",
+        "skills/assess/tests/fleet_diagrams_fixture.py",
+        "skills/assess/tests/test_agent_environment.py",
+        "skills/assess/tests/test_check_manifest.py",
+        "skills/assess/tests/test_ci_checks.py",
+        "skills/assess/tests/test_delivery.py",
+        "skills/assess/tests/test_fleet.py",
+        "skills/assess/tests/test_fleet_achievements.py",
+        "skills/assess/tests/test_fleet_cli.py",
+        "skills/assess/tests/test_fleet_config.py",
+        "skills/assess/tests/test_fleet_data.py",
+        "skills/assess/tests/test_fleet_doc_freshness.py",
         "skills/assess/tests/test_fleet_groups.py",
+        "skills/assess/tests/test_fleet_heatmap.py",
         "skills/assess/tests/test_fleet_history.py",
+        "skills/assess/tests/test_fleet_next_steps.py",
+        "skills/assess/tests/test_fleet_rescore.py",
+        "skills/assess/tests/test_fleet_run_stamp.py",
+        "skills/assess/tests/test_gitlab_protected_branches.py",
+        "skills/assess/tests/test_headline.py",
+        "skills/assess/tests/test_hollow_conditions.py",
+        "skills/assess/tests/test_platform_argv_contract.py",
+        "skills/assess/tests/test_review_reality.py",
+        "skills/assess/tests/test_review_reality_gitlab.py",
+        "skills/assess/tests/test_reviewed_findings.py",
+        "skills/assess/tests/test_scan_block_schemas.py",
+        "skills/assess/tests/test_tool_lookup.py",
+        "skills/assess/tests/test_vocabulary_guard.py",
         "skills/fleet/scripts/fleet.py",
         "tests/test_ghreport.py",
         "tests/test_ghreport_gitlab.py",
@@ -56,16 +87,18 @@
     {
       "name": "accretion_ratchet",
       "paths": [
-        "scripts/floor_check.py",
         "scripts/tests/test_floor_check.py",
-        "skills/assess/scripts/lib/fleet_compare.py",
-        "skills/assess/scripts/lib/shared_tooling.py",
-        "skills/assess/scripts/lib/test_pressure/mutmut3.py",
-        "skills/assess/scripts/lib/wiki_writer.py",
-        "skills/assess/tests/test_assess_finalize.py",
-        "skills/assess/tests/test_complexity_treemap.py",
-        "skills/fleet/scripts/fleet.py",
-        "tests/test_ghsync_gitlab.py"
+        "skills/assess/references/signals.schema.json",
+        "skills/assess/scripts/assess_report.py",
+        "skills/assess/scripts/lib/ci_triggers.py",
+        "skills/assess/scripts/lib/command_resolver.py",
+        "skills/assess/scripts/lib/keyhole/keyhole_signals.py",
+        "skills/assess/scripts/lib/levels.py",
+        "skills/assess/scripts/lib/manifest/check_manifest.py",
+        "skills/assess/scripts/lib/unit_discovery.py",
+        "skills/assess/tests/fixtures/golden/run-context-baseline.json",
+        "skills/fleet/references/repos.schema.json",
+        "skills/ghreport/scripts/ghreport.sh"
       ]
     },
     {

@@ -1258,8 +1258,8 @@
               "value": 0,
               "eq_signal": null,
               "text": "Skill and agent files holding a detected kind of personal data: is 0",
-              "title": "No skill file holds a detected kind of personal data (email, phone, home path, IP, SSH login, credential, key)",
-              "fix": "In each file the report names, remove the kind of data it lists, or replace it with a placeholder (user@example.com, /home/user/); a key or credential that was committed should also be rotated.",
+              "title": "No skill file holds a detected kind of personal data (email, phone, home path, IP, SSH login, key)",
+              "fix": "In each file the report names, remove the kind of data it lists, or replace it with a placeholder (user@example.com, /home/user/); a key that was committed should also be rotated.",
               "why": "Skill text is loaded into every session that triggers it and copied wherever it is published, so personal data in it leaks to every user.",
               "why_source": "",
               "input_class": "head_structure",
@@ -2726,7 +2726,7 @@
     {
       "name": "skill_personal_data",
       "title": "Personal data in skill text",
-      "summary": "Each SKILL.md, agent definition and skill references/ file, scanned for emails, phone numbers, home paths, IP addresses, SSH logins, credentials and keys. A finding names the file and the kind, never the data. Personal names are not detected.",
+      "summary": "Each SKILL.md, agent definition and skill references/ file, scanned for emails, phone numbers, home paths, IP addresses, SSH logins and keys. A finding names the file and the kind, never the data. Credential-shaped assignments are counted for information only. Personal names are not detected.",
       "collector": "core.skill_personal_data",
       "reads": [
         "repo_root",

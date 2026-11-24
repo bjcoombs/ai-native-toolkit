@@ -1,16 +1,16 @@
-<!-- assess:run_id=20261120202111-d1e8fc2e artifact_schema_version=1.18.0 -->
+<!-- assess:run_id=20261124070603-7fa74e4a artifact_schema_version=1.43.0 -->
 # Hotspot: `skills/assess/tests/test_assess_core.py`
 
-_First flagged: 2026-05-31. Last seen: 2026-11-20. Status: regressed._
+_First flagged: 2026-05-31. Last seen: 2026-11-24. Status: persistent._
 
 ## Current metrics
 
 | Metric | Value |
 |--------|-------|
-| LOC | 542 |
+| LOC | 544 |
 | Cyclomatic complexity (file aggregate) | 69 |
 | Worst function | `_gap_repo` (6) |
-| Commits in churn window | 63 |
+| Commits in churn window | 91 |
 | Has test file | yes |
 
 ## History across runs
@@ -28,12 +28,13 @@ _First flagged: 2026-05-31. Last seen: 2026-11-20. Status: regressed._
 | 2026-10-11 | 0d249381 | 518 | 62 | 46 | persistent |
 | 2026-11-20 | 2e2af36e | 518 | 62 | 58 | persistent |
 | 2026-11-20 | d1e8fc2e | 542 | 69 | 63 | regressed |
+| 2026-11-24 | 7fa74e4a | 544 | 69 | 91 | persistent |
 
 ## Briefing for editing this file
 
 Use this briefing when about to modify `skills/assess/tests/test_assess_core.py`:
 
-Hotspot (regressed). 542 LOC, aggregate cyclomatic complexity 69 (worst function `_gap_repo` 6), 63 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
+Hotspot (persistent). 544 LOC, aggregate cyclomatic complexity 69 (worst function `_gap_repo` 6), 91 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
 
 ## Suggested actions
 
