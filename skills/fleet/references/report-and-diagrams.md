@@ -87,8 +87,9 @@ sections, in order:
    hatched with its reason, never 0.
 5. **Fleet pictures**: the drawn tag and Step SVGs.
 
-Names follow the run's output mode. `--full` names repositories and units and shows an
-exclusion's reason. A hashed run shows hashed ids. Plain counts-only shows `repository N` and
-`team N`. No page shows a person, an owner or a path. The page's data layer has one interface
+Names follow the run's output mode. `--full` names repositories and units by their keys and
+paths and shows an exclusion's reason. A hashed run shows hashed ids. Plain counts-only shows
+`repository N` and `<kind> N` (such as `group N` or `team N`). No page shows a person or an
+owner, and only a `--full` page shows a path. The page's data layer has one interface
 (`load`, `subscribeTargets`, and `setTarget` only on a live source), so a published page can
 read a database instead of the embedded data.

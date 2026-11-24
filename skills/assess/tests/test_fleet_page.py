@@ -53,8 +53,8 @@ process.stdout.write(JSON.stringify(out));
 
 
 def _parts(html: str) -> tuple[str, dict[str, Any]]:
-    script = re.findall(r"<script>(.*?)</script>", html, re.S)[0]
-    raw = re.search(r'<script type="application/json" id="fleet-bundle">(.*?)</script>', html, re.S)
+    script = re.findall(r"<script>(.*?)</script\s*>", html, re.S | re.I)[0]
+    raw = re.search(r'<script type="application/json" id="fleet-bundle">(.*?)</script\s*>', html, re.S | re.I)
     assert raw is not None
     return script, json.loads(raw.group(1))
 
@@ -206,7 +206,7 @@ def test_embedded_json_cannot_close_its_script_block() -> None:
 
 
 @pytest.mark.parametrize("mode", [[], ["--full"], ["--hash-salt", "s3cret"]], ids=["counts-only", "full", "hashed"])
-def test_fleet_writes_the_page_and_names_no_repository_outside_full(froot: Path, tmp_path: Path,  # noqa: F811
+def test_fleet_writes_the_page_and_names_no_repository_outside_full(froot: Path, tmp_path: Path,  # noqa: F811 - froot is a pytest fixture
                                                                     mode: list[str]) -> None:
     from lib.level_signals import DEFAULT_LEVELS
     out = tmp_path / "out"
