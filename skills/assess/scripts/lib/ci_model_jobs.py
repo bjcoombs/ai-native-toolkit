@@ -175,6 +175,8 @@ def _list(tree: IndentTree, i: int) -> list[str] | None:
     if value.startswith("{"):
         return None
     if value.startswith("["):
+        if not value.endswith("]"):  # a flow list continued on the next line: not read whole
+            return None
         return [w.strip(" '\"") for w in value.strip("[]").split(",") if w.strip(" '\"")]
     if value:
         return [value.strip("'\"")]
@@ -491,9 +493,10 @@ def _entry(rel: str, tree: IndentTree, job: int, platform: str, signs: list[str]
 
 
 def without_changes(text: str) -> str:
-    """``text`` with every ``rules:`` item holding ``changes:`` made unable to run the job: one
-    that runs becomes ``- if: $CI_COMMIT_TAG`` (unset in a branch or merge request pipeline),
-    one with ``when: never`` becomes ``- when: never``. Line numbers are kept."""
+    """``text`` with every ``rules:`` item holding ``changes:`` made one that never matches,
+    ``- if: $CI_COMMIT_TAG`` (unset in a branch or merge request pipeline): the pipeline of a change
+    outside those paths. A ``when: never`` exclusion (skip docs-only changes) then lets the later
+    rules decide, as GitLab does for a source change. Line numbers are kept."""
     lines = text.splitlines()
     tree = _tree(text)
     for i, line in enumerate(tree.lines):
@@ -503,10 +506,9 @@ def without_changes(text: str) -> str:
             keys = {tree.lines[k].key: k for k in item}
             if "changes" not in keys or not tree.lines[item[0]].dash:
                 continue
-            never = "when" in keys and tree.lines[keys["when"]].value.strip("'\"") == "never"
             end = max(tree.subtree(k).stop for k in item)
             lead = " " * tree.lines[item[0]].indent
-            lines[item[0]] = lead + ("- when: never" if never else "- if: $CI_COMMIT_TAG")
+            lines[item[0]] = lead + "- if: $CI_COMMIT_TAG"
             for j in range(item[0] + 1, end):
                 lines[j] = ""
     return "\n".join(lines)

@@ -259,7 +259,7 @@ def test_without_changes_keeps_line_numbers() -> None:
     text = "j:\n  rules:\n    - changes:\n        - a/**\n      when: never\n    - when: on_success\n"
     out = without_changes(text)
     assert len(out.splitlines()) == len(text.splitlines())
-    assert out.splitlines()[2] == "    - when: never"
+    assert out.splitlines()[2] == "    - if: $CI_COMMIT_TAG"
 
 
 # --- no model job ----------------------------------------------------------------------
@@ -494,3 +494,20 @@ def test_a_remote_reusable_workflow_alone_reads_unread_not_no_model_jobs(tmp_pat
     plain = "on: pull_request\njobs:\n  t:\n    steps:\n      - run: pytest\n"
     assert _state(scan_ci_model_jobs(_repo(tmp_path / "b", {".github/workflows/t.yml": plain}))) == (
         "not_measured", "no_model_jobs")
+
+
+# --- review round 4: a continued flow list, a GitLab docs-skip rule ----------------------------
+
+@pytest.mark.parametrize(("types", "state"), [
+    ("[opened,\n      synchronize]", "unknown"),
+    ("[opened, reopened]", "gated"),
+])
+def test_a_flow_list_continued_on_the_next_line_is_not_read(tmp_path: Path, types: str, state: str) -> None:
+    assert _workflow(tmp_path, f"  pull_request:\n    types: {types}")["jobs"][0]["state"] == state
+
+
+def test_a_gitlab_docs_skip_rule_is_not_a_gate(tmp_path: Path) -> None:
+    rules = "  rules:\n    - changes: [docs/**]\n      when: never\n    - when: always\n"
+    assert _gitlab(tmp_path, rules)["jobs"][0]["state"] == "ungated"
+    only = "  rules:\n    - changes: [prompts/**]\n      when: always\n"
+    assert _gitlab(tmp_path / "b", only)["jobs"][0]["gates"] == ["changes"]

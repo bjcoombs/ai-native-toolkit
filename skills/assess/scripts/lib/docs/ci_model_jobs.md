@@ -54,9 +54,11 @@ Not gates: a `branches:` filter alone (the default branch is still pushed), an a
 superseded run, but the last push of every update still runs the job.
 
 GitLab `changes` is read by rewriting the file (`without_changes`): each `rules:` item holding
-`changes:` becomes one that cannot run the job (or `when: never` when it was one), line numbers
-kept, and `lib.ci_triggers.gitlab_line_triggers` reads the job again. A job that ran before and
+`changes:` becomes one that never matches (the pipeline of a change outside its paths), line
+numbers kept, and `lib.ci_triggers.gitlab_line_triggers` reads the job again. A job that ran before and
 no longer runs in an ordinary pipeline is gated by `changes`; one that still does is ungated.
+So a docs-skip rule (`changes: [docs/**]` with `when: never`, then `when: always`) is not a
+gate: a source change reaches the later rule. This differs from GitHub `paths-ignore`, which counts.
 `extends:` and `workflow: rules:` are read as `ci_triggers` reads them.
 
 ## Unknown, never a guess
