@@ -226,3 +226,26 @@ def test_a_block_matrix_and_include_exclude(matrix: str, expected: str) -> None:
 def test_scan_reads_a_matrix_input(tmp_path: Path, matrix: str, expected: tuple[bool | None, str]) -> None:
     text = _matrix_step(matrix, "astral-sh/ruff-action@v3", _with(args="${{ matrix.a }}"))
     assert _scan(tmp_path, text) == expected
+
+
+@pytest.mark.parametrize(("leg", "expected"), [
+    (r"check --select E\d", (True, "lint_command")),
+    (r"check src\pkg", (True, "lint_command")),
+    (r"\1", (True, "lint_command")),
+    (r"\g<0>", (True, "lint_command")),
+    (r"--version \1", (False, "no_lint_command")),
+])
+def test_a_backslash_matrix_leg_is_text_not_a_template(tmp_path: Path, leg: str,
+                                                       expected: tuple[bool | None, str]) -> None:
+    """A matrix leg is repo text: re.sub must never read it as a replacement template."""
+    matrix = f"        a: ['{leg}']\n"
+    text = _matrix_step(matrix, "astral-sh/ruff-action@v3", _with(args="${{ matrix.a }}"))
+    assert _scan(tmp_path, text) == expected
+
+
+@pytest.mark.parametrize("with_block", [
+    "        with: {install-only: *only}\n",
+    "        with:\n          install-only: *only\n",
+])
+def test_an_alias_input_keeps_todays_answer_in_both_styles(with_block: str) -> None:
+    assert _reading(_step("golangci/golangci-lint-action@v9", with_block)) == "lint"

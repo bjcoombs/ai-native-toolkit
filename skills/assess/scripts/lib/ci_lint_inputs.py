@@ -108,7 +108,8 @@ def _flow_inputs(value: str) -> dict[str, Value] | None:
         match = _FLOW_ITEM.match(item)
         if match is None or item.count('"') % 2 or item.count("'") % 2:
             return None   # a quoted key, or a comma inside a quoted value
-        out[match.group(1)] = _unquote(match.group(2))
+        flow_value = match.group(2).strip()
+        out[match.group(1)] = _UNREAD if flow_value.startswith("*") else _unquote(flow_value)
     return out
 
 
@@ -221,6 +222,12 @@ def _axis_values(tree: IndentTree, uses: int, name: str) -> list[str] | None:
     return None if values is None else values + included
 
 
+def _put(value: str, leg: str) -> str:
+    """``value`` with its matrix reference replaced by ``leg``, which is repo text: a
+    function replacement, so a backslash in it (``E\\d``, ``\\1``) is never a regex template."""
+    return _MATRIX_REF.sub(lambda _match: leg, value)
+
+
 def _matrix_reading(tree: IndentTree, uses: int, value: Value, read: Callable[[Value], str]) -> str:
     """``read`` once per matrix value when ``value`` is one ``${{ matrix.<key> }}`` expression."""
     reading = read(value)
@@ -232,7 +239,7 @@ def _matrix_reading(tree: IndentTree, uses: int, value: Value, read: Callable[[V
     legs = _axis_values(tree, uses, keys.pop())
     if not legs:
         return reading
-    readings = {read(_MATRIX_REF.sub(leg, value)) for leg in legs}
+    readings = {read(_put(value, leg)) for leg in legs}
     if "lint" in readings:
         return "lint"
     return "install_only" if readings == {"install_only"} else "unsure"
