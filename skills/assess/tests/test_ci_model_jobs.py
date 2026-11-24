@@ -411,3 +411,51 @@ def test_a_negated_label_or_event_test_reads_unknown(tmp_path: Path, condition: 
 def test_an_evals_path_needs_a_runner() -> None:
     assert _signs("jobs:\n  j:\n    steps:\n      - run: ruff check src/ evals/\n") == []
     assert _signs("jobs:\n  j:\n    steps:\n      - run: uv run python evals/run.py\n") == ["eval_tests"]
+
+
+# --- review round 2: called workflows, negative labels, unread files ----------------------
+
+LABEL_IF = "    if: contains(github.event.pull_request.labels.*.name, 'run-evals')\n    runs-on:"
+CALLER = "on:\n  pull_request:\njobs:\n  run:\n    uses: ./.github/workflows/evals.yml\n"
+
+
+def test_a_called_job_keeps_its_own_label_gate(tmp_path: Path) -> None:
+    callee = "on:\n  workflow_call:\n" + EVAL_STEPS.replace("    runs-on:", LABEL_IF)
+    block = scan_ci_model_jobs(_repo(tmp_path, {".github/workflows/evals.yml": callee,
+                                                ".github/workflows/ci.yml": CALLER}))
+    assert [(j["path"], j["state"], j["gates"]) for j in block["jobs"]] == [
+        (".github/workflows/evals.yml", "gated", ["label"])]
+    ungated = scan_ci_model_jobs(_repo(tmp_path / "b", {".github/workflows/evals.yml": "on:\n  workflow_call:\n" + EVAL_STEPS,
+                                                        ".github/workflows/ci.yml": CALLER}))
+    assert [(j["path"], j["state"]) for j in ungated["jobs"]] == [(".github/workflows/evals.yml", "ungated")]
+
+
+def test_a_callee_with_direct_triggers_takes_the_worst_route(tmp_path: Path) -> None:
+    callee = "on:\n  workflow_call:\n  push:\n    paths: ['prompts/**']\n" + EVAL_STEPS
+    block = scan_ci_model_jobs(_repo(tmp_path, {".github/workflows/evals.yml": callee,
+                                                ".github/workflows/ci.yml": CALLER}))
+    assert block["jobs"][0]["state"] == "ungated"  # the caller's pull_request is ungated
+    gated_caller = CALLER.replace("  pull_request:\n", "  pull_request:\n    paths: ['prompts/**']\n")
+    block = scan_ci_model_jobs(_repo(tmp_path / "b", {".github/workflows/evals.yml": callee,
+                                                      ".github/workflows/ci.yml": gated_caller}))
+    assert (block["jobs"][0]["state"], block["jobs"][0]["gates"]) == ("gated", ["paths"])
+
+
+@pytest.mark.parametrize(("condition", "state"), [
+    ("contains(github.event.pull_request.labels.*.name, 'skip-ai') == false", "unknown"),
+    ("contains(github.event.pull_request.labels.*.name, 'run') != true", "unknown"),
+    ("contains(github.event.pull_request.labels.*.name, 'run') == true", "gated"),
+])
+def test_a_negative_label_comparison_is_not_a_gate(tmp_path: Path, condition: str, state: str) -> None:
+    jobs = EVAL_STEPS.replace("    runs-on:", f"    if: {condition}\n    runs-on:")
+    assert _workflow(tmp_path, "  pull_request:", jobs)["jobs"][0]["state"] == state
+
+
+def test_an_unread_workflow_file_blocks_a_met_reading(tmp_path: Path) -> None:
+    files = {".github/workflows/e.yml": "on:\n  schedule:\n    - cron: '0 0 * * *'\n" + EVAL_STEPS,
+             ".github/workflows/empty.yml": ""}
+    block = scan_ci_model_jobs(_repo(tmp_path, files))
+    assert (block["unread"], block["ungated"]) == (1, None)
+    assert _state(block) == ("not_measured", "ci_jobs_unread")
+    del files[".github/workflows/empty.yml"]
+    assert _state(scan_ci_model_jobs(_repo(tmp_path / "b", files))) == ("met", None)

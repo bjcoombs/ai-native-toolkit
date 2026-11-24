@@ -109,6 +109,7 @@ _EVENT_IF = re.compile(r"github\.event_name\s*==\s*['\"](\w+)['\"]")
 # changed-files job), a variable or an input. It may be a gate, so it reads unknown.
 _OPAQUE = re.compile(r"\b(?:steps|needs|vars|env|inputs)\.")
 # A literal never-true if: (``false``, ``${{ false }}``): the step or job never runs.
+_FALSE = re.compile(r"==\s*['\"]?false\b", re.IGNORECASE)
 _NEVER = re.compile(r"""^(["']?)(?:false|\$\{\{\s*false\s*\}\})\1$""", re.IGNORECASE)
 _REMOTE_WORKFLOW = re.compile(r"""^["']?[\w.-]+/[\w.-]+/\.github/workflows/""")
 _LOCAL_WORKFLOW = re.compile(r"""^["']?\./\.github/workflows/([\w.-]+\.ya?ml)""")
@@ -243,12 +244,17 @@ def _event_gates(tree: IndentTree, event: int) -> list[str] | None:
     return gates
 
 
-def _workflow_route(tree: IndentTree, text: str) -> _Route:
-    """How a GitHub workflow's ``on`` fires its jobs, before any job ``if:``."""
+def _workflow_route(tree: IndentTree, text: str, direct: bool = False) -> _Route | None:
+    """How a GitHub workflow's ``on`` fires its jobs, before any job ``if:``. With ``direct``, the
+    events other than ``workflow_call`` / ``workflow_run`` only, None when there are none."""
     route = _Route(state="unknown", triggers=[], gates=[], reason="on_unread")
     events = workflow_events(text)
     if events is None:
-        return route
+        return None if direct else route
+    if direct:
+        events = [e for e in events if e not in _CALLED]
+        if not events:
+            return None
     ordinary = sorted(set(events) & _ORDINARY)
     route["triggers"] = ordinary or sorted(set(events))
     if not set(events) <= _ORDINARY | _CALLED | GATING_EVENTS:
@@ -285,8 +291,8 @@ def _if_gate(condition: str) -> str | None:
     events = _EVENT_IF.findall(condition)
     gate = ("label" if _LABEL.search(condition)
             else "event_if" if events and not set(events) & _ORDINARY else None)
-    if gate is not None:  # a gate joined with || or under a negation may not limit the job
-        return "unknown" if "||" in condition or "!" in condition else gate
+    if gate is not None:  # a gate joined with ||, negated or compared with false may not limit the job
+        return "unknown" if "||" in condition or "!" in condition or _FALSE.search(condition) else gate
     return "unknown" if _OPAQUE.search(condition) else None
 
 
@@ -338,17 +344,25 @@ class _Workflow:
     def __init__(self, rel: str, text: str) -> None:
         self.rel, self.text, self.tree = rel, text, _tree(text)
         self.top = _top(self.tree)
-        self.route = _workflow_route(self.tree, text)
+        route = _workflow_route(self.tree, text)
+        assert route is not None
+        self.route = route
+        self.direct = _workflow_route(self.tree, text, direct=True)
+        events = set(workflow_events(text) or [])
+        self.called = "workflow_call" in events
+        self.run_by_workflow = "workflow_run" in events
         self.cancels = _cancels(self.tree, self.top.get("concurrency"))
 
     def jobs(self) -> list[int]:
         jobs = self.top.get("jobs")
         return [k for k in self.tree.children(jobs) if self.tree.lines[k].key] if jobs is not None else []
 
-    def job_route(self, job: int, sign_lines: Sequence[int]) -> _Route:
+    def job_route(self, job: int, sign_lines: Sequence[int], base: _Route | None = None) -> _Route:
+        """The job's route: ``base`` (else the workflow's), then its own ``if:`` and step gates."""
         key = _child(self.tree, job, "if")
         condition = _text(self.tree, key) if key is not None else ""
-        route = _apply_if(_narrowed(self.route, condition), _if_gate(condition) if condition else None)
+        start = base if base is not None else self.route
+        route = _apply_if(_narrowed(start, condition), _if_gate(condition) if condition else None)
         return _apply_if(route, _step_gate(self.tree, job, sign_lines) if sign_lines else None)
 
 
@@ -359,7 +373,8 @@ def _never(tree: IndentTree, keys: Sequence[int]) -> bool:
 def _composite_signs(uses: str, read_local: ReadLocal | None) -> list[str]:
     """The signs in a repo-local action a step uses (``uses: ./.github/actions/x``), one level,
     read through ``read_local`` as ``lib.ci_composite`` reads one (tracked files only)."""
-    if read_local is None or not uses.startswith("./"):
+    if read_local is None or not uses.startswith("./") or _LOCAL_WORKFLOW.match(uses):
+        # a reusable workflow (``./.github/workflows/x.yml``) is scanned as a workflow of its own
         return []
     for rel in local_action_paths(uses):
         text = read_local(rel)
@@ -417,10 +432,24 @@ def _workflow_env(flow: "_Workflow") -> dict[int, list[str]]:
     return {i: ["provider_secret"] for i in lines if "provider_secret" in signs_in(flow.tree, range(i, i + 1))}
 
 
+def _base(flow: _Workflow, callers: Sequence[_Route]) -> _Route:
+    """A called workflow's route before its jobs' conditions: the worst of its own direct
+    events and its local callers' routes; unknown with no route this repository settles."""
+    routes = list(callers)
+    if flow.direct is not None:
+        routes.append(flow.direct)
+    if flow.run_by_workflow:
+        routes.append(_Route(state="unknown", triggers=["workflow_run"], gates=[], reason="called_workflow"))
+    if not callers and flow.direct is None:
+        return flow.route
+    return _worst(routes)
+
+
 def _github(repo: Path, files: list[str], read_local: ReadLocal | None = None) -> tuple[list[ModelJob], int]:
-    flows = {rel: _Workflow(rel, read_config(repo, rel)) for rel in files if rel.startswith(".github/")}
+    texts = {rel: read_config(repo, rel) for rel in files if rel.startswith(".github/")}
+    unread = sum(not text.strip() for text in texts.values())  # a workflow not read may hold an ungated job
+    flows = {rel: _Workflow(rel, text) for rel, text in texts.items() if text.strip()}
     callers: dict[str, list[_Route]] = {}
-    unread = 0
     for flow in flows.values():
         for job in flow.jobs():
             uses = _child(flow.tree, job, "uses")
@@ -438,10 +467,9 @@ def _github(repo: Path, files: list[str], read_local: ReadLocal | None = None) -
             if not signs or set(signs) <= set(shared) and _child(flow.tree, job, "uses") is not None:
                 continue  # nothing beyond the workflow env, in a job that only calls a workflow
             lines = sorted(signs)
-            route = flow.job_route(job, lines)
-            if route["reason"] == "called_workflow" and flow.rel.rsplit("/", 1)[-1] in callers:
-                caller = _worst(callers[flow.rel.rsplit("/", 1)[-1]])
-                route = caller if caller["reason"] != "called_workflow" else route
+            base = _base(flow, callers.get(flow.rel.rsplit("/", 1)[-1], [])) if (
+                flow.called or flow.run_by_workflow) else None
+            route = flow.job_route(job, lines, base)
             cancels = flow.cancels or _cancels(flow.tree, _child(flow.tree, job, "concurrency"))
             names = sorted({s for found_signs in signs.values() for s in found_signs})
             found.append(_entry(flow.rel, flow.tree, job, "github", names, _secret_only(route, names), cancels))
@@ -519,7 +547,9 @@ def scan_ci_model_jobs(repo_root: Path, ghsync_root: Path | None = None) -> CiMo
 
     jobs, unread = _github(repo, files, read_local)
     if GITLAB_CI in files:
-        jobs += _gitlab(GITLAB_CI, read_config(repo, GITLAB_CI))
+        text = read_config(repo, GITLAB_CI)
+        unread += not text.strip()
+        jobs += _gitlab(GITLAB_CI, text)
         resolution = resolve_includes(repo, ghsync_root)
         unread += resolution.unresolved
         for included in resolution.files:

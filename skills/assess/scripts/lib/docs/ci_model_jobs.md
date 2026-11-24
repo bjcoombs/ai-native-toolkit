@@ -67,18 +67,28 @@ A job is `unknown` (with `reason`) and never ungated or gated when:
   know (an expression such as `${{ fromJSON(x) }}`, a typo);
 - `filters_unread`: an event's filters are a flow mapping or a `types:` that is not a list;
 - `called_workflow`: only `workflow_call` / `workflow_run` fire it and no workflow of the
-  repository calls it (a called workflow takes its local callers' route, the worst one first);
+  repository calls it. A called workflow's route is the worst of its local callers' routes and
+  its own other events (ungated, then unknown, then gated); its jobs' own `if:` and step
+  conditions then apply. A `workflow_run` trigger adds an unknown route. A job-level
+  `uses: ./.github/workflows/x.yml` is never read as a composite: the callee is scanned itself;
 - `secret_only`: see above;
-- `condition_unread`: a label or event `if:` joined with `||` or holding a negation (`!`), or a job or step `if:` on a value
+- `condition_unread`: a label or event `if:` joined with `||`, holding a negation (`!`, `!=`) or
+  compared with `false`, or a job or step `if:` on a value
   this reader does not follow (`steps.`, `needs.`, `vars.`, `env.`, `inputs.`), such as a
   changed-files job's output, which may be a paths gate;
 - `rules_unread`: GitLab rules this reader cannot settle.
 
-`unread` counts jobs that call a reusable workflow from another repository and GitLab includes
-that were not read. Either can hide an ungated job, so with none ungated the signal is null
+`unread` counts jobs that call a reusable workflow from another repository, GitLab includes
+that were not read, and tracked CI files that could not be read (empty, over the size limit). Either can hide an ungated job, so with none ungated the signal is null
 (`ci_jobs_unread`) rather than 0.
 
 ## Known limits
+
+- GitLab `extends:` is read for rules, not for commands: a model command inherited from a
+  template is not found.
+- `paths: ['**', '!docs/**']` reads as no gate, though it acts like `paths-ignore: ['docs/**']`.
+- An install word inside a command's arguments (`claude -p 'add tests'`) hides the command.
+- Two sign steps with different recognised gates (one `label`, one `event_if`) read ungated.
 
 - Only workflow files directly under `.github/workflows/` and `.gitlab-ci.yml` (with its
   includes, reported at the include line of the repository's own file) are read.
