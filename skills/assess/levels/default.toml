@@ -247,7 +247,8 @@
 #   secrets_guard.enforcement.present: a secrets scan in CI, where an agent cannot skip it.
 #   Graded measured and counted. With no CI scan on a GitHub repository, GitHub's own secret
 #   scanning could still guard it and is not read, so level 2 is unknown
-#   (secret_scanning_not_read), never unmet. It gates no Step.
+#   (secret_scanning_not_read), never unmet, and so is a GitLab repository whose CI includes a
+#   file that could hold the scan and was not read (ci_includes_unresolved). It gates no Step.
 # - Contributor files reads contributor_files.guide.present and policy.present
 #   (lib/contributor_files.py, #1045): a CONTRIBUTING guide and a SECURITY policy (or a link
 #   to GitHub private vulnerability reporting) at the root, in .github/ or in docs/, or the

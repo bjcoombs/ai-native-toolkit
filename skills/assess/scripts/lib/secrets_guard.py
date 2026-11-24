@@ -98,7 +98,7 @@ _USES = re.compile(r"^\s*-?\s*uses:\s*['\"]?([\w.-]+/[\w.-]+)", re.IGNORECASE)
 # at the start of a shell line (indented, as inside a ``run: |`` or ``script:`` block), after ``run:``/``script:``/``- ``, after a pipe or ``&&``, or after
 # ``docker run <image>`` (so a path such as ``.gitleaks.toml`` or a ``gitleaks:allow`` note is not).
 _COMMAND = re.compile(
-    r"(?:^\s*|[;&|]\s*|(?:run|script):\s*|-\s+|docker run\s+(?:--?\S+\s+)*\S*/)(?:[\w./-]*/)?("
+    r"(?:^\s*|[;&|]\s*|(?:run|script):\s*|^\s*-\s+|docker run\s+(?:--?\S+\s+)*\S*/)(?:[\w./-]*/)?("
     + "|".join(re.escape(t) for t in SECRET_TOOLS) + r")(?=\s|$|@)", re.IGNORECASE)
 # A step or job that cannot fail the run (GitHub ``continue-on-error: true``, GitLab
 # ``allow_failure: true``) or never runs (``if: false``).

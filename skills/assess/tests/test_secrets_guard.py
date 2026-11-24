@@ -117,7 +117,8 @@ def test_a_ci_scan_meets_level_2_measured(tmp_path: Path, rel: str, text: str, t
     (".gitlab-ci.yml", ".secret_detection:\n  script: echo hi\n"),
     (".gitlab-ci.yml", "scan:\n  allow_failure: true\n  script:\n    - gitleaks detect\n"),  # masked job
     (".github/workflows/x.yml", "steps:\n  - continue-on-error: true\n    run: gitleaks detect\n"),  # step-first mask
-    (".gitlab-ci.yml", "deploy:\n  needs:\n    - gitleaks\n  script:\n    - make deploy\n"),  # a job name                    # a hidden job never runs
+    (".gitlab-ci.yml", "deploy:\n  needs:\n    - gitleaks\n  script:\n    - make deploy\n"),  # a job name
+    (".github/workflows/x.yml", "steps:\n  - name: Secrets - gitleaks\n    run: echo skipped\n"),  # a step label                    # a hidden job never runs
     (".gitlab-ci.yml", "include:\n  # - template: Security/Secret-Detection.gitlab-ci.yml\n"),  # commented out
 ])
 def test_a_masked_commented_or_lookalike_line_is_not_a_scan(tmp_path: Path, rel: str, text: str) -> None:
