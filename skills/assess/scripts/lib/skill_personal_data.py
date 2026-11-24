@@ -88,13 +88,14 @@ _PLACEHOLDER_HOME = frozenset({"user", "username", "you", "your", "yourname", "n
                                "public", "default", "runner", "someone", "example", "jdoe", "alice", "bob"})
 # An IPv4-shaped number that follows a version word is a version, not an address (``v1.2.3.4``,
 # ``version 10.0.19041.1``); the grader's IP check is decided again here without those, and with
-# a lookahead that also takes an address ending a sentence (``at 10.20.30.40.``), and a lookbehind
-# that skips a pinned version (``foo==1.2.3.4``, ``pkg@1.2.3.4``).
-_IPV4 = re.compile(r"(?<![\w.=@])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\w|\.\d)")
+# a lookahead that also takes an address ending a sentence (``at 10.20.30.40.``). A version pin
+# before it (``foo==1.2.3.4``, ``~=``, ``>=``) is a version. A plain ``=`` or a
+# ``user@`` before an address is not: ``DB_HOST=10.20.30.40`` and ``deploy@10.1.2.3`` are findings.
+_IPV4 = re.compile(r"(?<![\w.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\w|\.\d)")
 # An ``ssh git@host`` test of a Git host's auth is no login detail; any other user is.
 _SSH = re.compile(r"\bssh\s+([A-Za-z0-9._-]+)@[A-Za-z0-9._-]+")
 _ROOT_LOGIN = re.compile(r"\broot@[A-Za-z0-9._-]+")
-_VERSION_BEFORE = re.compile(r"(?:\bv|\bversion|\brelease|\bbuild)\s*[:=]?\s*$", re.IGNORECASE)
+_VERSION_BEFORE = re.compile(r"(?:(?:\bv|\bversion|\brelease|\bbuild)\s*[:=]?|[=~!<>]=)\s*$", re.IGNORECASE)
 # A credential assignment, as the grader reads it, re-checked here: a value that only refers to a
 # secret held elsewhere (``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X``, ``os.environ[...]``) is
 # not a committed secret, and telling a team to rotate it would be wrong.

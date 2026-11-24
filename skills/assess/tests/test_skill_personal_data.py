@@ -49,6 +49,9 @@ def _state(block: Any) -> tuple[str, str | None]:
     ("C:\\Users\\" + "Jos\u00e9\\x", ["home_path"]),             # an accented letter
     ("Reach the box at 10.20." + "30.40 first.", ["ip_address"]),
     ("The box is at 10.20." + "30.40.", ["ip_address"]),  # an address ending a sentence
+    ("DB_HOST=10.20." + "30.40", ["ip_address"]),
+    ("Pass --host=10.20." + "30.40 here.", ["ip_address"]),
+    ("postgres://app@10.20." + "30.40:5432/db", ["ip_address"]),
     ("Run ssh deploy@" + "build-01 to deploy.", ["ssh_or_host"]),
     ("token = " + "ghp" + "_abc123def456", ["credential"]),
     ("token: ${{ secrets.X }} and password = " + "hunter" + "2abc", ["credential"]),  # one literal is enough
@@ -82,6 +85,7 @@ def test_each_kind_is_detected(text: str, kinds: list[str]) -> None:
     "Run ssh git@github.com to test auth.",
     "Email: support@" + "anthropic.com for help.",  # a role address
     "pip install foo==1.2.3.4",
+    "pin foo>=1.2.3.4 or foo~=1.2.3.4",
     "Weights: +0.5 - 0.25 - 0.125",
 ])
 def test_placeholders_and_lookalikes_are_not_findings(text: str) -> None:
