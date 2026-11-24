@@ -71,7 +71,9 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   alerts after the secret has landed, so it meets level 1, not level 2. Graded ``measured`` and
   counted. With no CI scan on a github.com remote and the settings not read (no ``--platform``,
   no admin, owner or security manager rights), push protection could still guard the repository, so the reading is not
-  measured (``secret_scanning_not_read``), never unmet; read and off, it is unmet; likewise
+  measured (``secret_scanning_not_read``), never unmet; read and off, it is unmet. On a public
+  repository GitHub also turns on push protection for each user by default; that does not show in
+  the repository's settings and a pusher can opt out of it, so it does not meet level 2; likewise
   (``ci_includes_unresolved``) when a GitLab include that could hold a scan was not read, since
   ``.gitlab-ci.yml``'s includes are read through ``lib.ci_includes``;
   a GitHub Enterprise Server or ``*.ghe.com`` remote is not recognised as GitHub yet, so it reads

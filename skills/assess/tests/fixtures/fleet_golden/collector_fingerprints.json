@@ -294,7 +294,7 @@
         "grpa/svc1": "5d414f0fbba509293ca58f0c4a35e645f0b3c31e66454eacc01fa7d6ce1f1f3d",
         "grpb/lib1": "5d414f0fbba509293ca58f0c4a35e645f0b3c31e66454eacc01fa7d6ce1f1f3d"
       },
-      "revision": 2
+      "revision": 3
     },
     "core.shared_tooling": {
       "repos": {

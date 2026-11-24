@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -582,9 +583,10 @@ def test_both_settings_off_read_unmet_on_github(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("platform", [None, {"available": False, "reason": "settings_not_readable: ..."},
                                       {"available": False, "reason": "network: ..."}])
-def test_an_unread_setting_leaves_level_2_not_measured_on_github(tmp_path: Path, platform: object) -> None:
+def test_an_unread_setting_leaves_level_2_not_measured_on_github(
+        tmp_path: Path, platform: Mapping[str, object] | None) -> None:
     block = scan_secrets_guard(_repo(tmp_path, {"README.md": "x\n"}, remote=GITHUB),
-                               github_secret_scanning=platform)  # type: ignore[arg-type]
+                               github_secret_scanning=platform)
     assert block["enforcement"]["available"] is False
     assert block["enforcement"]["reason"].startswith("secret_scanning_not_read:")
 
