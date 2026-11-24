@@ -121,6 +121,9 @@ _CONTINUE_ON_ERROR = re.compile(r"^\s*(?:-\s+)?(?:(?:continue-on-error|allow_fai
 CHANGE_EVENTS = frozenset({"push", "pull_request", "pull_request_target", "merge_group"})
 _ON = re.compile(r"""^(?:on|"on"|'on'|true)\s*:\s*(.*)$""")
 _WORD = re.compile(r"[\w-]+")
+# GitLab's documented switch for the template (a pipeline or job variable): the scan never runs.
+_DETECTION_DISABLED = re.compile(r"^\s*SECRET_DETECTION_DISABLED\s*:\s*['\"]?(?:true|1|yes)\b",
+                                 re.IGNORECASE | re.MULTILINE)
 _RULE_CONDITION = re.compile(r"^\s*-?\s*(?:if|changes|exists)\s*:")
 _WHEN_NEVER = re.compile(r"^\s*-?\s*when:\s*['\"]?never\b", re.IGNORECASE)
 _STEP_START = re.compile(r"^(\s*)-\s")
@@ -344,7 +347,8 @@ def _ci_tools(text: str, hooks: frozenset[str] = frozenset()) -> list[str]:
         names |= {m.group(1).lower() for m in _DOCKER_IMAGE.finditer(line)}
         tools.update(t for t in (_tool_that_can_fail(n, line) for n in names) if t)
     code = "\n".join(lines)
-    if (_GITLAB_TEMPLATE.search(code) or _GITLAB_JOB.search(code)) and not _gitlab_job_disabled(lines):
+    if (_GITLAB_TEMPLATE.search(code) or _GITLAB_JOB.search(code)) and not _gitlab_job_disabled(lines) \
+            and not _DETECTION_DISABLED.search(code):
         tools.add("secret_detection")
     return sorted(tools)
 
