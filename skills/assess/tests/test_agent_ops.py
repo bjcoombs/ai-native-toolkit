@@ -117,3 +117,83 @@ def test_routine_dirs(git_repo) -> None:
     )
     assert workflows["tracked_count"] == 1
     assert block["summary"]["routines_present"] is True
+
+
+# ── auto mode and managed settings (#1153) ─────────────────────────────────
+
+def test_deny_rule_with_auto_mode_meets_the_practice(git_repo) -> None:
+    """defaultMode is information only: a deny rule under auto mode still meets it."""
+    repo, commit = git_repo
+    _write_settings(repo, ".claude/settings.json", {"permissions": {
+        "defaultMode": "auto", "deny": ["Bash(git push origin main)"]}})
+    commit("add settings")
+    block = scan_agent_ops(repo)
+    assert block["settings"][0]["default_mode"] == "auto"
+    assert block["summary"]["permissions_encoded"] is True
+    assert block["summary"]["permissions_source"] == "repository"
+
+
+def test_default_mode_alone_never_meets_or_fails(git_repo) -> None:
+    repo, commit = git_repo
+    _write_settings(repo, ".claude/settings.json", {"permissions": {"defaultMode": "yolo"}})
+    commit("add settings")
+    block = scan_agent_ops(repo)
+    assert block["settings"][0]["default_mode"] == "other"  # never the file's own text
+    assert block["summary"]["permissions_encoded"] is False
+
+
+def _managed(monkeypatch, tmp_path: Path, data: object) -> None:
+    directory = tmp_path / "managed"
+    _write_settings(directory, "managed-settings.json", data)
+    monkeypatch.setenv("ASSESS_MANAGED_SETTINGS_DIR", str(directory))
+
+
+def test_managed_deny_rule_meets_a_repo_without_settings(git_repo, tmp_path, monkeypatch) -> None:
+    repo, commit = git_repo
+    (repo / "README.md").write_text("hi", encoding="utf-8")
+    commit("init")
+    _managed(monkeypatch, tmp_path, {"permissions": {"deny": ["Bash(git push origin main)"]}})
+    block = scan_agent_ops(repo, managed_settings=True)
+    assert block["managed"]["state"] == "found"
+    assert block["summary"]["permissions_encoded"] is True
+    assert block["summary"]["permissions_source"] == "managed"
+
+
+def test_unreadable_managed_settings_read_not_measured(git_repo, tmp_path, monkeypatch) -> None:
+    repo, commit = git_repo
+    (repo / "README.md").write_text("hi", encoding="utf-8")
+    commit("init")
+    _managed(monkeypatch, tmp_path, "{not json")
+    block = scan_agent_ops(repo, managed_settings=True)
+    assert block["managed"]["state"] == "unreadable"
+    assert block["summary"]["permissions_encoded"] is None
+    assert block["summary"]["permissions_encoded_reason"] == "managed_settings_unreadable"
+
+
+def test_repo_rule_meets_whatever_the_managed_state(git_repo, tmp_path, monkeypatch) -> None:
+    repo, commit = git_repo
+    _write_settings(repo, ".claude/settings.json", {"permissions": {"deny": ["WebFetch"]}})
+    commit("add settings")
+    _managed(monkeypatch, tmp_path, "{not json")
+    summary = scan_agent_ops(repo, managed_settings=True)["summary"]
+    assert summary["permissions_encoded"] is True
+    assert "permissions_encoded_reason" not in summary
+
+
+def test_managed_without_rules_leaves_the_repo_reading(git_repo, tmp_path, monkeypatch) -> None:
+    repo, commit = git_repo
+    (repo / "README.md").write_text("hi", encoding="utf-8")
+    commit("init")
+    _managed(monkeypatch, tmp_path, {"model": "opus"})
+    assert scan_agent_ops(repo, managed_settings=True)["summary"]["permissions_encoded"] is False
+
+
+def test_managed_settings_are_not_read_without_the_option(git_repo, tmp_path, monkeypatch) -> None:
+    """#1153 decision: the machine read is opt-in, so by default a central rule is not seen."""
+    repo, commit = git_repo
+    (repo / "README.md").write_text("hi", encoding="utf-8")
+    commit("init")
+    _managed(monkeypatch, tmp_path, {"permissions": {"deny": ["Bash(git push origin main)"]}})
+    block = scan_agent_ops(repo)
+    assert block["managed"] == {"state": "not_read", "sources": []}
+    assert block["summary"]["permissions_encoded"] is False

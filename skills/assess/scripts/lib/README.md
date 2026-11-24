@@ -2,14 +2,17 @@
 
 Deterministic library modules for the `/assess` engine. No LLM calls anywhere in this
 package - every function is a pure transform of filesystem, git, or pre-computed signal
-data, with two bounded exceptions. Live platform reads are confined to `gh_cli.py`
+data, with three bounded exceptions. Live platform reads are confined to `gh_cli.py`
 (GitHub) and `gitlab_cli.py` (GitLab), which run their CLI through `platform_cli.py`;
 the headless runner makes them only under `--platform`. They are optional (they need a github.com or
 GitLab remote and an authenticated `gh` or `glab`) and degrade to `available: False`
 with a reason, never to a clean result. The opt-in mutation pass's uv
 runner (`test_pressure/mutmut3.py`) may fetch mutmut, pytest and the assessed package's
 dependencies from the package index on first use, into a scratch environment; it runs
-only on explicit consent and degrades to a named `reason`. The LLM reads
+only on explicit consent and degrades to a named `reason`. The `/assess --fix` delivery
+(`starter_delivery.py`, #1154) is the one network write: only with the opt-in `--pr`, a clean
+tree, an authenticated `gh` or `glab` and a run from the default branch's tip, it pushes a branch and opens a pull (merge) request;
+any failed precondition leaves the commit on the local branch, with a named `reason`. The LLM reads
 `run-context.json` after the core finishes; it does not call into these modules.
 
 ## The assess_core.py -> lib seam
@@ -221,7 +224,7 @@ New code imports the new path.
 - **`testing/`**: the Layer 6 test signals outside `test_pressure/`: the coverage gate and
   the readings it combines (coverage activation, CI coverage runs, the root coverage.py
   config), the coverage report, test focus, sibling tests, import credit, the mutation cap
-  and refresh, and untrusted hotspots. Files: `__init__.py`, `coverage_activation.py`,
+  and refresh, and untrusted hotspots. Files: `__init__.py`, `ci_workdir.py`, `coverage_activation.py`,
   `coverage_ci.py`, `coverage_gate.py`, `coverage_report.py`, `coverage_root_config.py`,
   `import_credit.py`, `mutation_cap.py`, `mutation_refresh.py`, `sibling_tests.py`,
   `test_focus.py`, `untrusted_hotspot.py`.

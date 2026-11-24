@@ -126,7 +126,7 @@ def test_row_order_is_fixed_and_labels_carry_conditions_and_repositories_measure
         label = (f">{TRUTH_TAG_TITLES[row['tag']]} · {conditions_label(row['conditions'])} · "
                  f"{row['measured']} of {row['repos']} ")
         assert label in _row(svg, row["tag"])
-    assert ">Behaviour · 3 conditions · 3 of 4 repositories<" in svg
+    assert ">Behaviour · 4 conditions · 3 of 4 repositories<" in svg
     assert ">Supply chain · 1 condition · 0 of 4 repositories<" in svg
 
 

@@ -16,8 +16,10 @@ is any shape other than ``PriorLevel`` (a version this reader does not know, a t
 ``TRUTH_TAGS``, a count that is not a non-negative integer, or counts that do not nest as
 ``met <= measured <= countable <= conditions`` with ``measured + set_aside <= countable``):
 an unreadable earlier run is never drawn, and the strip says it could not be read.
-``write_prior_level`` writes nothing, and removes a stale file, when the level result has no
-``tags`` (a degraded level block), so an old run is never compared under a new label.
+``write_prior_level`` writes nothing when the level result has no ``tags`` (a degraded level
+block) and leaves the previous good run's file as it was (#1158), so its baseline and pruning
+ledger survive one failed run; the strip still compares only runs counted under the same model
+(``same_model``).
 The strip draws the earlier run only when its ``levels_version`` equals this run's
 (``same_model``); otherwise it says why in one line.
 
@@ -74,6 +76,7 @@ class PruningEntry(TypedDict):
     saved: int | None  # the measured drop in always-on lines, set when credited
     gates: list[str] | None  # the Step gates the removal must keep, set when first seen
     credited_at: str | None  # the commit the credit was given at
+    merged: NotRequired[list[str]]  # earlier removals of the same file folded into this one (#1168)
 
 
 class PriorLevel(TypedDict):
@@ -128,6 +131,7 @@ def _valid_pruning(value: Any) -> bool:
         and isinstance(e.get("credited"), bool) and (e.get("saved") is None or type(e.get("saved")) is int)
         and (e.get("gates") is None or (isinstance(e.get("gates"), list) and all(isinstance(g, str) for g in e["gates"])))
         and (e.get("credited_at") is None or isinstance(e.get("credited_at"), str))
+        and (isinstance(e.get("merged", []), list) and all(isinstance(m, str) for m in e.get("merged", [])))
         for e in value)
 
 
@@ -204,15 +208,18 @@ def load_prior_level(assess_dir: Path) -> PriorLevel | PriorLevelUnread | None:
 
 def write_prior_level(assess_dir: Path, level: Any, baseline: Baseline | None = None,
                       pruning: list[PruningEntry] | None = None) -> Path | None:
-    """Write this run's ``prior-level.json`` (sorted keys, LF); remove a stale one when the
-    level block has no tags. A symlink in the file's place is removed, never written through,
-    and a file that cannot be written (``OSError``) is named on stderr and skipped, as
+    """Write this run's ``prior-level.json`` (sorted keys, LF).
+
+    A run whose level block has no tags (a degraded level) leaves the existing file untouched
+    (#1158): it holds the previous good run's baseline and pruning ledger, which the next good
+    run compares with. A symlink in the file's place is removed, never written through. A file
+    that cannot be written (``OSError``) is named on stderr and skipped, as
     ``assess_diagrams.write_diagrams`` does: the record never stops a run. Returns the path
     written, or None."""
     path = assess_dir / PRIOR_LEVEL_FILE
     content = build_prior_level(level, baseline, pruning)
     try:
-        if path.is_symlink() or content is None:
+        if path.is_symlink():
             path.unlink(missing_ok=True)
         if content is None:
             return None

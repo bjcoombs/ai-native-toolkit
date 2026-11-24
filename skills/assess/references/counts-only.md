@@ -147,6 +147,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `prior_level.pruning.completed_sha` | token |
 | `prior_level.pruning.gates` | token |
 | `prior_level.pruning.credited_at` | token |
+| `prior_level.pruning.merged` | token |
 
 ## doc_graph
 
@@ -324,6 +325,17 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `promissory_markers.top_offenders.text` | dropped |
 | `promissory_markers.top_offenders.commit` | dropped |
 | `promissory_markers.stale_by_file.{}.families` | dropped |
+
+## agent_ops
+
+| Field | Kept as |
+|---|---|
+| `agent_ops.settings.default_mode` | token |
+| `agent_ops.managed.state` | token |
+| `agent_ops.managed.reason` | token |
+| `agent_ops.managed.sources.kind` | token |
+| `agent_ops.summary.permissions_source` | token |
+| `agent_ops.summary.permissions_encoded_reason` | token |
 
 ## config_drift
 
@@ -715,6 +727,40 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `instruction_placement.loaded_in_full.relocatable.home.kind` | token |
 | `instruction_placement.loaded_in_full.relocatable.home.target` | path (hashed when hashing is on) |
 
+## skill_disclosure
+
+| Field | Kept as |
+|---|---|
+| `skill_disclosure.files.path` | path (hashed when hashing is on) |
+| `skill_disclosure.files.kind` | token |
+| `skill_disclosure.files.breaks` | token |
+| `skill_disclosure.files.references.target` | path (hashed when hashing is on) |
+
+## skill_script_tests
+
+| Field | Kept as |
+|---|---|
+| `skill_script_tests.skills.path` | path (hashed when hashing is on) |
+| `skill_script_tests.skills.tested_elsewhere` | path (hashed when hashing is on) |
+
+## org_security_policy
+
+| Field | Kept as |
+|---|---|
+| `org_security_policy.reason` | reason code |
+| `org_security_policy.path` | dropped |
+
+## contributor_files
+
+| Field | Kept as |
+|---|---|
+| `contributor_files.reason` | reason code |
+| `contributor_files.guide.path` | path (hashed when hashing is on) |
+| `contributor_files.policy.path` | path (hashed when hashing is on) |
+| `contributor_files.policy.kind` | token |
+| `contributor_files.policy.source` | token |
+| `contributor_files.policy.reason` | reason code |
+
 ## gap_actions
 
 | Field | Kept as |
@@ -850,10 +896,12 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `since_last_run.pruned.completed_sha` | token |
 | `since_last_run.pruned.gates` | token |
 | `since_last_run.pruned.credited_at` | token |
+| `since_last_run.pruned.merged` | token |
 | `since_last_run.pruning.path` | path (hashed when hashing is on) |
 | `since_last_run.pruning.completed_sha` | token |
 | `since_last_run.pruning.gates` | token |
 | `since_last_run.pruning.credited_at` | token |
+| `since_last_run.pruning.merged` | token |
 
 ## headline
 

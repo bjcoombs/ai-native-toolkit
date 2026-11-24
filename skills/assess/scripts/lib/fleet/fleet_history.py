@@ -83,7 +83,7 @@ HISTORY_FILES = (REPOS_FILE, GROUPS_FILE, RUN_FILE)  # written in this order: ru
 OPTIONAL_HISTORY_FILES = (FRESHNESS_FILE, FLEET_DATA_FILE, "demotions.json")
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$")
 _MATCH_KEYS = ("levels_version", "window", "counts_only", "scans", "paths_hashed", "fleet_config_sha256",
-               "platform")
+               "platform", "managed_settings")
 _ENTRY = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\.([1-9][0-9]*))?$")
 MAX_SAME_DAY = 99
 

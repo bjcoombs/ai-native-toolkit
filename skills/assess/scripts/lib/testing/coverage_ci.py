@@ -138,10 +138,14 @@ reads the nearest config only); `pytest -p no:cov --cov` (pytest exits 4 on the 
 flag) still credits. On a scoped run,
 any enforced run of the tool anywhere in the repository credits the scope's config gate
 (`cd other && pytest --cov` credits `pkg/pyproject.toml`): the working directory a CI line
-runs in is not resolved. Imports `lib.ci_checks`, `lib.ci_masking`, `lib.ci_triggers`,
-`lib.command_index`, `lib.command_resolver`, `lib.check_command`, `lib.testing.coverage_activation`,
+runs in is not resolved, except for a Gradle run (`Run.cwd`, `lib.testing.ci_workdir`): `-p app`
+or `cd app` runs an unqualified task in `app` and its subprojects only, so a gate in `lib`
+reads null (#1162), and the Gradle root is the nearest settings file at or above that
+directory (#1163, `lib.runner_args.gradle_runs_in`). Imports `lib.ci_checks`, `lib.ci_masking`, `lib.ci_triggers`,
+`lib.command_index`, `lib.command_resolver`, `lib.check_command`, `lib.testing.ci_workdir`, `lib.testing.coverage_activation`,
 `lib.testing.coverage_codecov` (a Codecov patch or ``auto`` status is skipped, #882) and `lib.shared_tooling`; never `lib.testing.coverage_gate` (which calls it) or an orchestrator.
-Tests: `tests/test_coverage_ci.py`, `tests/test_coverage_ci_edges.py` (#954).
+Tests: `tests/test_coverage_ci.py`, `tests/test_coverage_ci_edges.py` (#954),
+`tests/test_gradle_workdir.py` (#1162).
 """
 from __future__ import annotations
 
@@ -160,6 +164,7 @@ from lib.named_check import may_lint_named
 from lib.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, workflow_trigger
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.unread_ci import unread_ci_paths
+from lib.testing.ci_workdir import exact_cwd
 from lib.command_resolver import command_words, extract_commands
 from lib.runner_args import (
     GRADLE, SCRIPT, gradle_dry_run, gradle_roots, gradle_roots_set, gradle_runs_in,
@@ -205,6 +210,7 @@ class Run:
     text: str
     trigger: Trigger
     may_pass: bool = False   # a #1008 form: its failure may not fail the job
+    cwd: str | None = None   # a Gradle run's working directory, "" the root (#1162)
 
 
 @dataclass(frozen=True)
@@ -323,12 +329,24 @@ def read_ci_runs(repo_root: Path) -> CiRuns:
                 continue
             for words, command in _word_lists(line_text):
                 if words:
-                    runs.append(Run(rel, span, words, command, triggers[span[0]]))
+                    runs.append(Run(rel, span, words, command, triggers[span[0]],
+                                    cwd=_gradle_cwd(span, words, lines, gitlab)))
         for span, line_text in _command_groups(lines, unmasked, unsure, 1):
-            runs.extend(Run(rel, span, words, command, triggers[span[0]], True)
+            runs.extend(Run(rel, span, words, command, triggers[span[0]], True,
+                            _gradle_cwd(span, words, lines, gitlab))
                         for words, command in _word_lists(line_text) if words)
     return CiRuns(tuple(runs), frozenset(files), elsewhere, unread, pdm_scripts(root),
                   gradle_roots(root))
+
+
+def _gradle_cwd(span: range, words: tuple[str, ...], lines: list[str], gitlab: bool
+                ) -> str | None:
+    """A Gradle run's working directory (``lib.testing.ci_workdir``, #1162), read for
+    Gradle only; None: unresolved, or another program."""
+    if program(words)[0] not in GRADLE:
+        return None
+    cwd = exact_cwd(span, words, lines, gitlab)
+    return None if cwd is None else "" if not cwd.parts else cwd.as_posix()
 
 
 def _size(path: Path) -> int:
@@ -494,13 +512,15 @@ def pytest_on(args: Sequence[str], on: bool, off: bool,
 def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
               jest_collects: bool = False, gradle_check: bool = False,
               pytest_off: bool = False, activation: Activation = Activation(),
-              pytest_maybe: bool = False, gate_file: str | None = None) -> bool | None:
+              pytest_maybe: bool = False, gate_file: str | None = None,
+              cwd: str | None = None) -> bool | None:
     """Does this command run ``family``'s coverage check? The tool must be the program
     the command runs (``program``), never an argument. None: it runs the tool, but
     whether coverage is on is set elsewhere (a Jest or Vitest config), or a Gradle task
     may run the verification (``build`` / ``check`` are met when the build file wires
     ``check`` to ``jacocoTestCoverageVerification``, ``gradle_check``). A Gradle task
-    named by project path (``:app:check``) credits only ``gate_file``'s project (#1126)."""
+    named by project path (``:app:check``) credits only ``gate_file``'s project (#1126); an
+    unqualified one, with ``-p`` or a known ``cwd``, only a project at or under it (#1162)."""
     if is_info_invocation(" ".join(words)):   # pytest --version runs no gate (#919)
         return False
     name, args = program(words)
@@ -532,9 +552,9 @@ def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
         _, excluded = gradle_tasks(args)
         # A project-path exclusion may or may not be the gate's project: unsure, never false.
         partly = any(partly_excluded(excluded, t) for t in (_VERIFY, "test", "check"))
-        if gradle_runs_in(args, frozenset({_VERIFY}), gate_file):
+        if gradle_runs_in(args, frozenset({_VERIFY}), gate_file, cwd):
             return None if partly else True
-        if (gradle_check and gradle_runs_in(args, frozenset({"build", "check"}), gate_file)
+        if (gradle_check and gradle_runs_in(args, frozenset({"build", "check"}), gate_file, cwd)
                 and "check" not in excluded):
             return None if partly else True
         return None
@@ -659,7 +679,7 @@ def _tool_state(run: Run, family: str, pytest_cov: bool, jest_collects: bool,
                 gate_file: str | None = None) -> bool | None | str:
     state = runs_tool(run.words, family, pytest_cov=pytest_cov, jest_collects=jest_collects,
                       gradle_check=gradle_check, pytest_off=pytest_off, activation=activation,
-                      pytest_maybe=maybe, gate_file=gate_file)
+                      pytest_maybe=maybe, gate_file=gate_file, cwd=run.cwd)
     if state is False or run.trigger == "not_ordinary":
         return False
     if run.trigger == "unknown":

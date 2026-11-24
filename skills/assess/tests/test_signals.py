@@ -452,7 +452,8 @@ def test_schema_rejects_an_unavailable_block_without_a_reason():
     doc = {
         "signals_schema_version": 1,
         "stamp": {"toolkit_commit": None, "plugin_version": "x", "scan_date": "2026-01-01",
-                  "window": "6mo", "target_head": None, "target_dirty": None, "scope": None},
+                  "window": "6mo", "target_head": None, "target_dirty": None, "scope": None,
+                  "managed_settings": False},
         "scans": {"agent_ops": {"available": False}},
     }
     with pytest.raises(jsonschema.ValidationError):
@@ -467,7 +468,8 @@ def test_schema_names_every_known_scan_and_rejects_others():
     doc = {
         "signals_schema_version": 1,
         "stamp": {"toolkit_commit": None, "plugin_version": "x", "scan_date": "2026-01-01",
-                  "window": "6mo", "target_head": None, "target_dirty": None, "scope": None},
+                  "window": "6mo", "target_head": None, "target_dirty": None, "scope": None,
+                  "managed_settings": False},
         "scans": {"no_such_scan": {}},
     }
     with pytest.raises(jsonschema.ValidationError, match="no_such_scan"):

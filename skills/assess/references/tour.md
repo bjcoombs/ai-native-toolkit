@@ -20,6 +20,18 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/assess_tour.py" run "<sample>"
 
 `run` prints one JSON line: `step` (2), `next_gates` (`["ci_runs_tests"]`) and `report`, the path of the report (`<sample>/.assess/deterministic-report.md`). The Step ladder and the evidence waffle are beside it, in `<sample>/.assess/`. If `build` says the sample is missing, the skill's install is incomplete: say so and stop.
 
+<!-- chat-skip:start -->
+**On Windows (PowerShell).** There is no `mktemp`, so build into a new folder under the temp directory, then use the printed `repo` path as above. Every step of the tour takes the same three commands, and git must be on `PATH`:
+
+```powershell
+uv run "${CLAUDE_SKILL_DIR}/scripts/assess_tour.py" build (Join-Path ([IO.Path]::GetTempPath()) "tally-$([guid]::NewGuid().ToString('N').Substring(0, 8))")
+uv run "${CLAUDE_SKILL_DIR}/scripts/assess_tour.py" run "<sample>"
+uv run "${CLAUDE_SKILL_DIR}/scripts/assess_tour.py" fix "<sample>"
+```
+
+Without uv, run each as `python "${CLAUDE_SKILL_DIR}/scripts/assess_tour.py" ...` with the same arguments, after the one-time install in the skill's Windows section (`networkx` and `grimp` are the tour's only packages).
+<!-- chat-skip:end -->
+
 Tell the newcomer in two sentences what is about to happen: a sample repository has been assessed, and you will go through its report a section at a time before they fix one thing in it.
 
 ## 2. Walk the report, one section per message
@@ -67,4 +79,6 @@ cd skills/assess && uv run --locked python scripts/assess_tour.py report --out /
 ```
 
 Tests: `tests/test_assess_tour.py` pins the Step, the next gate, the move by exactly one Step and byte-identical reports from two builds.
+
+The `skills/assess pytest` job in `.github/workflows/tests.yml` writes the sample report on every run and uploads it as the `tour-sample-report` artifact. `tests/test_cold_reader.py` is the cold-reader test: it reads only the report's first screen (between the "Generated" line and the first section) and checks that it says where the repository is (the Step and what it means), the one next action and its Start here link, with no jargon outside a glossary link.
 <!-- chat-skip:end -->

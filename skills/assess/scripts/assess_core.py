@@ -52,6 +52,7 @@ from lib.level_tally import default_model, run_context_level
 from lib.testing.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.testing.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.run_publish import publish_run
+from lib.assess_config import load_managed_settings_opt_in
 from lib.run_wiki import refresh_log_readiness
 from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
 from lib.scan_registry import run_scans
@@ -62,7 +63,7 @@ from lib.test_pressure import scan_test_pressure
 
 def build_run_context(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
-    scope: Path | None = None,
+    scope: Path | None = None, managed_settings: bool = False,
 ) -> dict[str, Any]:
     """Run the deterministic pipeline and return the structured context dict.
 
@@ -84,13 +85,17 @@ def build_run_context(
     (index.md, log.md, hotspots/*.md, badge.json, findings.json and
     run-context.json, through ``lib.run_publish.publish_run``) is
     ``build_and_publish_run``'s, which ``main`` calls.
+
+    ``managed_settings`` (``--managed-settings`` or the ``[agent_ops] managed_settings`` config
+    key, #1153) lets ``agent_ops`` read this machine's Claude Code managed settings; off, the
+    agent permissions practice reads the repository alone.
     """
-    return _scan(repo_root, run_date, non_interactive, scope)[0]
+    return _scan(repo_root, run_date, non_interactive, scope, managed_settings)[0]
 
 
 def build_and_publish_run(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
-    scope: Path | None = None,
+    scope: Path | None = None, managed_settings: bool = False,
 ) -> dict[str, Any]:
     """``build_run_context``, then the publish step that writes the artifacts.
 
@@ -98,18 +103,20 @@ def build_and_publish_run(
     run-context.json, and fills the context keys only it can know
     (``pruned_hotspots``, ``log_integrity``, ``prior_findings_snapshot``, ...).
     """
-    ctx, scan_inputs = _scan(repo_root, run_date, non_interactive, scope)
+    ctx, scan_inputs = _scan(repo_root, run_date, non_interactive, scope, managed_settings)
     publish_run(ctx, scan_inputs)
     return ctx
 
 
 def _scan(
     repo_root: Path, run_date: str, non_interactive: bool, scope: Path | None,
+    managed_settings: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Run the scan table; return the context and the inputs it filled."""
     scan_inputs: dict[str, Any] = {
         "repo_root": repo_root, "requested_scope": scope,
         "run_date": run_date, "non_interactive": non_interactive,
+        "managed_settings": managed_settings,
     }
     ctx: dict[str, Any] = {}
     run_scans(ctx, scan_inputs)
@@ -248,6 +255,15 @@ def main(argv: list[str] | None = None) -> int:
             "run (unchanged). Pass the same `--scope` to `--opt-in-mutation`."
         ),
     )
+    parser.add_argument(
+        "--managed-settings", action="store_true",
+        help=(
+            "Read this machine's Claude Code managed settings for the agent permissions "
+            "practice: a permission rule set centrally counts, graded listed. Off by default, "
+            "since it measures the machine, not the repository; a single repository can turn "
+            "it on with [agent_ops] managed_settings = true in .assess/config.toml."
+        ),
+    )
     add_counts_only_arguments(parser)
     parsed = parser.parse_args(argv)
     validate_counts_only_args(parser, parsed)
@@ -260,6 +276,7 @@ def main(argv: list[str] | None = None) -> int:
             repo_root=repo_root, run_date=run_date,
             non_interactive=parsed.non_interactive,
             scope=parsed.scope,
+            managed_settings=parsed.managed_settings or load_managed_settings_opt_in(repo_root),
         )
     except ValueError as e:
         # Invalid --scope (missing path or outside the repo). Report cleanly

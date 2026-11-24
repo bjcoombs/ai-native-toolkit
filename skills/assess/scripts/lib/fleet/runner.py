@@ -235,6 +235,7 @@ class ScanOptions:
     cache_dir: Path | None = None  # set: the scan's gh/glab response cache (lib/hosting/platform_cli.py)
     ghsync_root: Path | None = None  # set: assess_signals --ghsync-root (GitLab includes, #766)
     units: bool = False  # set: assess_signals --units on the offline scan (monorepo unit rows, #866)
+    managed_settings: bool = False  # set: assess_signals --managed-settings (this machine's policy, #1153)
 
 
 ScanFn = Callable[[Target, Path, ScanOptions], FleetRow]
@@ -547,6 +548,8 @@ def signals_command(checkout: Path, out: Path, options: ScanOptions) -> list[str
         command += ["--fleet-config", str(options.fleet_config)]
     if options.ghsync_root is not None:
         command += ["--ghsync-root", str(options.ghsync_root)]
+    if options.managed_settings:
+        command.append("--managed-settings")
     if options.platform:
         command.append("--platform")
     elif options.units:  # the platform pass reads no unit; the offline scan does

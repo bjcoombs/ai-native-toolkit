@@ -71,6 +71,23 @@ jobs:
           path: skills/assess/coverage.xml
           if-no-files-found: warn
 
+      # The guided tour's sample report (#1102), the input of tests/test_cold_reader.py, which
+      # the pytest step above already checks. Written here too so a reader can open the exact
+      # first screen a newcomer sees on this commit.
+      - name: Write the tour's sample report
+        run: uv run --locked python scripts/assess_tour.py report --out "$RUNNER_TEMP/tour-sample-report.md"
+        working-directory: skills/assess
+
+      # continue-on-error: an artifact outage, or a 409 on a re-run, is not a test result
+      # and must not turn this required job red. A missing report still errors in the log.
+      - name: Upload the tour's sample report
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: tour-sample-report
+          path: ${{ runner.temp }}/tour-sample-report.md
+          if-no-files-found: error
+
   pipeline-tests:
     name: scripts/ pytest
     runs-on: ubuntu-latest
