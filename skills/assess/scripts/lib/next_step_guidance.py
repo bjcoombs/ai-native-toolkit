@@ -437,6 +437,14 @@ _WORDING: dict[str, Wording] = {
         "`trufflesecurity/trufflehog`, or GitLab's `Secret-Detection` template); a pre-commit hook "
         "alone can be skipped with `--no-verify`.",
         "A workflow in `.github/workflows/` or `.gitlab-ci.yml` runs a secrets scan, unmasked."),
+    "skill_personal_data.files_with_personal_data": _none_left(
+        "In each skill or agent file the report names, remove the kind of data it lists (an email, "
+        "phone number, home path, IP address, SSH login, credential or key), or replace it with a "
+        "placeholder such as `user@example.com` or `/home/user/`; rotate any key or credential "
+        "that was committed.",
+        "No `SKILL.md`, agent definition or skill `references/` file holds an email, phone number, "
+        "personal home path, IP address, SSH login, credential or key (personal names are not "
+        "checked)."),
     "skill_script_tests.skills_untested": _none_left(
         "Add tests for each named skill's scripts in that skill's own folder (`tests/` or "
         "`test_*.py` beside them). Where the report finds them elsewhere, move or copy them in: "
@@ -560,6 +568,8 @@ _MEASURE_HINTS = {
                      "no secrets scan in CI: GitHub's own secret scanning could guard it, and those "
                      "repository settings are not read yet. A CI scan settles it. It is also not measured "
                      "(`ci_includes_unresolved`) when a GitLab include that could hold the scan was not read.",
+    "skill_personal_data": "Not measured (`no_skill_files`) when the repository, or the skill unit, "
+                           "holds no `SKILL.md` or agent definition: there is nothing to scan.",
     "skill_script_tests": "Not measured (`no_skill_scripts`) when no skill in the repository, or in "
                           "the skill unit, holds a script: there is nothing to test.",
     "skill_disclosure": "Not measured (`no_skill_files`) when the repository, or the skill unit, "

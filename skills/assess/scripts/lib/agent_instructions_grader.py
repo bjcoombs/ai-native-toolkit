@@ -229,6 +229,8 @@ _CREDENTIAL_PLACEHOLDERS = re.compile(
     r"\$\{?\w+\}?|<[^>]+>|\{\{[^}]+\}\})$",
     re.IGNORECASE,
 )
+# Public for lib.skill_personal_data, which applies the same placeholder rule per value (#1045).
+CREDENTIAL_PLACEHOLDERS = _CREDENTIAL_PLACEHOLDERS
 
 
 def _redact(token: str, *, keep: int = 0) -> str:

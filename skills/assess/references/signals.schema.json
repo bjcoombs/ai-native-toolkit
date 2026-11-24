@@ -131,6 +131,7 @@
           "secrets_guard",
           "shared_tooling",
           "skill_disclosure",
+          "skill_personal_data",
           "skill_script_tests",
           "stats_summary",
           "structure",
@@ -1404,6 +1405,30 @@
               "reason": {
                 "type": "string",
                 "description": "'code: sentence'. The codes name the missing piece: secret_scanning_not_read (no secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read); ci_includes_unresolved (no secrets scan was found in the CI read. A GitLab include that could hold one, a local, project or remote file, was not read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "skill_personal_data": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: skill_files_unread (a skill or agent file could not be read, and none of those read holds a detected kind). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [

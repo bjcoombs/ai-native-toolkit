@@ -1353,6 +1353,30 @@
                 ]
               }
             },
+            "skill_personal_data": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'. The codes name the missing piece: skill_files_unread (a skill or agent file could not be read, and none of those read holds a detected kind). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
             "structure": {
               "type": "object",
               "if": {

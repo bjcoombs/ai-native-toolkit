@@ -250,7 +250,7 @@ def test_default_levels_loads_against_the_schema() -> None:
     maturity_model = load_default_levels()
     assert maturity_model["version"].startswith("default-")
     assert all(row["scope"] == "team" for row in maturity_model["rows"])
-    one = {"skill-disclosure", "skill-script-tests", "contributor-files"}  # one condition each (#1045); else 2
+    one = {"skill-disclosure", "skill-script-tests", "skill-personal-data", "contributor-files"}  # #1045; else 2
     assert all(len(row["levels"]) == (1 if row["id"] in one else 2) for row in maturity_model["rows"])
     assert "disagree" in DEFAULT_LEVELS.read_text(encoding="utf-8").lower()
 
@@ -309,7 +309,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "doc-freshness": 2,          # docs and code committed together: none stale
             "guardrails-stated": None,   # no configured gate: nothing to state
             "agent-consistency": None,   # no instruction file: nothing to agree with
-            "skill-disclosure": None,    # no SKILL.md or agent definition: no_skill_files
+            "skill-disclosure": None, "skill-personal-data": None,  # no SKILL.md or agent file: no_skill_files
             "skill-script-tests": None,  # no skill holds a script: no_skill_scripts
             "contributor-files": 0,      # no CONTRIBUTING or SECURITY file
             "secrets-guard": 0,          # no secrets hook or CI scan, and no remote
@@ -347,7 +347,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "agent-consistency": None,  # the capture predates agent_consistency
         "skill-disclosure": None,  # the capture predates skill_disclosure
         "skill-script-tests": None,  # the capture predates skill_script_tests
-        "contributor-files": None,  # the capture predates contributor_files
+        "skill-personal-data": None, "contributor-files": None,  # the capture predates both blocks
         "secrets-guard": None,  # the capture predates secrets_guard
     }
     assert "layer_grades.instruction_file_present" in _row(
