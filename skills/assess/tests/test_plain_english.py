@@ -24,6 +24,7 @@ def test_an_idiom_or_a_phrasal_verb_fails_as_a_whole_word() -> None:
     assert [i["reason"] for i in lint("This is low-hanging fruit.")] == ["idiom:low-hanging fruit"]
     assert lint("The setup is done.") == []  # "setup" is not "set up"
     assert lint("Run `make set up` once.") == []  # code is not prose
+    assert lint("Run `cd x; set up` now.") == []  # a ; inside code ends no sentence
     assert "set up" in IDIOMS
 
 

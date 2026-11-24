@@ -48,6 +48,9 @@ IDIOMS = (
 )
 
 _SENTENCE = re.compile(r"(?<=[.!?;])\s+")
+# Sentence marks inside a code span are hidden while splitting, so code never ends a sentence.
+_HIDE = str.maketrans({".": "\0", "!": "\1", "?": "\2", ";": "\3"})
+_SHOW = str.maketrans({"\0": ".", "\1": "!", "\2": "?", "\3": ";"})
 _CODE = re.compile(r"`[^`]*`")
 
 
@@ -65,10 +68,10 @@ def _words(sentence: str) -> int:
 def lint(text: str) -> list[PlainIssue]:
     """Each sentence of ``text`` that is too long or holds an idiom, in order."""
     issues: list[PlainIssue] = []
-    for sentence in (s.strip() for s in _SENTENCE.split(_CODE.sub(lambda m: m.group(0).replace(".", "\0"), text))):
+    for sentence in (s.strip() for s in _SENTENCE.split(_CODE.sub(lambda m: m.group(0).translate(_HIDE), text))):
         if not sentence:
             continue
-        shown = sentence.replace("\0", ".")
+        shown = sentence.translate(_SHOW)
         if _words(shown) > MAX_WORDS:
             issues.append({"sentence": shown, "reason": "too_long"})
         prose = _CODE.sub(" ", shown).lower()
