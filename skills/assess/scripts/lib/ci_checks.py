@@ -488,8 +488,8 @@ def _trigger_tally(text: str, workflow: Trigger | None,
     lines = text.splitlines()
     gated = rewrite_gated(text) if any(_is_lint_test(t) for t in tests) else frozenset()
     unmasked, unsure = mask_lines(text)
-    for i in may_pass_lines:
-        if unmasked[i].strip():
+    for i in may_pass_lines:   # a declared line keeps its own check_target reading
+        if i not in declared and unmasked[i].strip():
             unsure[i], unmasked[i] = unmasked[i], ""
     held = [line if i in declared else "" for i, line in enumerate(unmasked)]
     unmasked, unsure = _drop(unmasked, declared), _drop(unsure, declared)

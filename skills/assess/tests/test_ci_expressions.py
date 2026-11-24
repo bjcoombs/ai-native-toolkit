@@ -195,3 +195,9 @@ def test_a_shell_operator_in_a_variable_value_is_unknown(
         tmp_path: Path, run: str, value: str, reading: tuple[object, ...]) -> None:
     steps = f"      - run: {run}\n        env:\n          CMD: {value}\n"
     assert _scan(tmp_path, _wf(steps))[:3] == reading
+
+
+def test_a_declared_input_under_a_continue_on_error_expression_keeps_check_target(tmp_path: Path) -> None:
+    steps = ("      - uses: someone/runner@v1\n        continue-on-error: ${{ inputs.soft }}\n"
+             "        with:\n          run: pytest\n")
+    assert _scan(tmp_path, _wf(steps))[:3] == (True, None, "check_target")
