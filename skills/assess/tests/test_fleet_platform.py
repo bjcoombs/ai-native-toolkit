@@ -52,7 +52,7 @@ BLOCK: JsonDict = {"available": True, "merged_count": 3}
 
 def test_platform_scans_is_the_explicit_list_narrowed_by_scans():
     assert PLATFORM_SCANS == ("review_reality", "delivery", "review_evidence", "review_automation",
-                              "ci_checks", "org_security_policy", "github_secret_scanning")
+                              "ci_checks", "org_security_policy", "github_secret_scanning", "secrets_guard")
     assert platform_scans(None) == list(PLATFORM_SCANS)
     # review_reality brings its companions review_automation and review_evidence (#696),
     # rebuilt by the pass; ci_checks and review_automation read the merged CI config (#796).
@@ -155,6 +155,8 @@ GH_STUB = """#!/bin/sh
 echo "$*" >> "$GH_STUB_DIR/log"
 case "$1" in
   auth) exit 0 ;;
+  api) [ "$2" = "repos/grp/svc" ] && {
+         echo '{"security_and_analysis":{"secret_scanning_push_protection":{"status":"enabled"}}}'; exit 0; } ;;
   pr) [ -f "$GH_STUB_DIR/hang" ] && sleep 20
       [ -f "$GH_STUB_DIR/refuse" ] && { echo "gh: HTTP 403" >&2; exit 1; }
       echo '[]'; exit 0 ;;
@@ -385,3 +387,16 @@ def test_no_github_review_or_comment_body_is_written_to_disk(tmp_path, monkeypat
     assert _calls(data, "leak.log") == []
     for root in (scratch, out):
         assert not [p for p in root.rglob("*") if p.is_file() and b"SECRET-BODY" in p.read_bytes()]
+
+
+def test_platform_rebuilds_secrets_guard_from_the_read_setting(world, tmp_path):
+    """``secrets_guard`` reads ``github_secret_scanning``, so the pass rebuilds it (#1173)."""
+    assert fleet_cli.main([str(tmp_path / "root"), "--out", str(tmp_path / "off"), "--no-history",
+                           "--no-diagrams", "--scans", "secrets_guard"]) == 0
+    off = json.loads((tmp_path / "off" / "repos.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert off["scans"]["secrets_guard"]["enforcement"]["available"] is False  # not read offline
+    assert fleet_cli.main([str(tmp_path / "root"), "--out", str(tmp_path / "on"), "--no-history",
+                           "--no-diagrams", "--scans", "secrets_guard", "--platform"]) == 0
+    on = json.loads((tmp_path / "on" / "repos.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert on["scans"]["secrets_guard"]["enforcement"] == {"available": True, "present": True, "source": "platform"}
+    jsonschema.validate(on, build_schema())

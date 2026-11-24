@@ -2952,7 +2952,7 @@
         "github_secret_scanning"
       ],
       "network": false,
-      "platform": false,
+      "platform": true,
       "headless": "registered",
       "privacy": {
         "written": true,
