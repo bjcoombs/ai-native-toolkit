@@ -175,6 +175,12 @@ def test_a_github_workflow_counts_only_when_it_runs_on_a_change(tmp_path: Path, 
     assert block["ci"]["present"] is counts
 
 
+def test_a_job_level_manual_in_a_four_space_file_masks_the_job(tmp_path: Path) -> None:
+    text = ("scan:\n    rules:\n        - if: $CI_COMMIT_TAG\n    when: manual\n"
+            "    script:\n        - gitleaks detect\n")
+    assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["present"] is False
+
+
 def test_a_github_input_named_when_masks_nothing(tmp_path: Path) -> None:
     text = ("jobs:\n  a:\n    steps:\n      - uses: some/action@v1\n        with:\n          when: manual\n"
             "  b:\n    steps:\n      - run: gitleaks detect\n")

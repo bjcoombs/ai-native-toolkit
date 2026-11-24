@@ -32,6 +32,19 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   require them, so ``allow_failure`` masks nothing it reports. A GitHub workflow counts only when its ``on:`` names a change event
   (``CHANGE_EVENTS``: push, pull_request, pull_request_target, merge_group): a schedule-only
   workflow scans nothing before it lands.
+- A command counts only when it can fail the job: ``detect-secrets scan`` always exits 0, so
+  only ``detect-secrets-hook`` counts; ``trufflehog`` needs ``--fail``; ``gitleaks`` with
+  ``--exit-code 0``, ``--staged`` (a CI checkout has nothing staged), ``version`` or ``--help``
+  does not count. A ``||`` whose right side is not a non-zero exit or ``false``, and a pipe, mask
+  the command; a command continued with a trailing backslash is judged whole.
+- CI that runs the pre-commit hooks counts for the secrets hooks it selects: ``uses:
+  pre-commit/action``, or ``pre-commit run`` with ``--all-files``/``-a``, ``--from-ref`` or
+  ``--files`` (a bare ``pre-commit run`` checks staged files only). A named hook id counts for its
+  tool (``gitleaks-docker`` runs gitleaks), and a hook whose ``stages:`` leaves out the
+  pre-commit stage is not selected.
+- GitLab's ``SECRET_DETECTION_DISABLED: "true"`` switches the template off, as an unconditional
+  ``when: never`` or ``when: manual`` does; an ``after_script:`` scan and a manual job do not
+  count, since neither can fail the pipeline.
 
 **The two levels** (maintainer decision on #1173):
 
@@ -316,7 +329,8 @@ def _unconditional(lines: list[str], i: int, job: int) -> bool:
     """Whether the ``when:`` on line ``i`` of the job opening at ``job`` holds on every pipeline: set on
     the job itself, or in a rule with no ``if:``, ``changes:`` or ``exists:``."""
     indent = len(lines[i]) - len(lines[i].lstrip())
-    if not _STEP_START.match(lines[i]) and indent <= 2:
+    first_key = next((len(ln) - len(ln.lstrip()) for ln in lines[job + 1:] if ln.strip()), indent)
+    if not _STEP_START.match(lines[i]) and indent <= first_key:  # a key of the job, any indent width
         return True
     start = i if _STEP_START.match(lines[i]) else next(
         (k for k in range(i, job, -1) if _STEP_START.match(lines[k])), i)
@@ -365,8 +379,7 @@ def _hooks_run_in_ci(root: Path, hook: PreCommitGuard) -> frozenset[str]:
         end = _block_end(lines, i, dash)
         keys = [(i, line[dash + 1:].strip())] + [(k, lines[k].strip()) for k in range(i + 1, end)
                                                   if len(lines[k]) - len(lines[k].lstrip()) == dash + 2]
-        hook_id = next((re.match(r"id\s*:\s*(\S+)", v).group(1) for _, v in keys  # type: ignore[union-attr]
-                        if re.match(r"id\s*:\s*\S", v)), None)
+        hook_id = next((m.group(1) for _, v in keys if (m := re.match(r"id\s*:\s*(\S+)", v))), None)
         stages_at = next((k for k, v in keys if re.match(r"stages\s*:", v)), None)
         if hook_id is None or stages_at is None:
             continue
