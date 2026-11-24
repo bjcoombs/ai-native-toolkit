@@ -100,9 +100,9 @@ def test_merged_levels_keep_every_user_and_group_grant(world: World) -> None:
     user = {"access_level": 40, "user_id": 7, "group_id": None, "deploy_key_id": None}
     group = {"access_level": 30, "user_id": None, "group_id": 9, "deploy_key_id": None}
     a, b = _rule("release/*", push=0), _rule("*-stable", push=0)
-    a["push_access_levels"] = _levels(0) + [user]  # type: ignore[operator]
+    a["push_access_levels"] = _levels(0) + [user]  # type: ignore[operator]  # user and group grants are untyped dicts
     dup = {**user, "id": 5}  # the same grant on the other rule carries its own id
-    b["push_access_levels"] = _levels(0) + [group, dup]  # type: ignore[operator]
+    b["push_access_levels"] = _levels(0) + [group, dup]  # type: ignore[operator]  # user and group grants are untyped dicts
     b["code_owner_approval_required"] = True
     world.serve(LIST, [a, b])
     got = branch_protection(P, "release/1-stable")
