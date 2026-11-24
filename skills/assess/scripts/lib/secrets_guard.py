@@ -35,7 +35,10 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
 **The two levels** (maintainer decision on #1173):
 
 - ``configured`` (level 1): a guard is configured from any source. A pre-commit hook is enough,
-  so the condition is graded ``config_only``: listed, not counted.
+  so the condition is graded ``config_only``: listed, not counted. It reads the files this run
+  read: an unread GitLab include leaves level 2 not measured (``ci_includes_unresolved``) but
+  level 1 unmet. The asymmetry is deliberate: level 1 is listed and moves no count, so an unmet
+  there costs nothing, while level 2 is counted and must not read unmet on evidence it lacks.
 - ``enforcement`` (level 2): a guard runs where an agent cannot skip it, a CI scan (and, once
   read, GitHub's secret scanning or push protection). Graded ``measured`` and counted. With no CI
   scan on a github.com remote, GitHub's own settings could still guard the repository, so the
@@ -110,8 +113,15 @@ _ON = re.compile(r"""^(?:on|"on"|'on'|true)\s*:\s*(.*)$""")
 _WORD = re.compile(r"[\w-]+")
 _WHEN_NEVER = re.compile(r"^\s*-?\s*when:\s*['\"]?never\b", re.IGNORECASE)
 _STEP_START = re.compile(r"^(\s*)-\s")
-# A list of job or stage names, not commands: ``needs: [- gitleaks]`` names a job called gitleaks.
-_NAME_LIST = re.compile(r"^\s*(?:needs|dependencies|extends|stages)\s*:\s*$")
+# A list of names, not commands: jobs (``needs:``), stages, runner tags, branches and paths. A
+# ``needs: [- gitleaks]`` names a job called gitleaks; a ``paths: [- trufflehog]`` a folder.
+_NAME_LIST = re.compile(r"^\s*(?:needs|dependencies|extends|stages|tags|tags-ignore|paths|paths-ignore|"
+                        r"branches|branches-ignore|only|except)\s*:\s*$")
+# A tool's container image, tag allowed: ``docker run -v $PWD:/p zricethezav/gitleaks:latest detect``,
+# ``ghcr.io/gitleaks/gitleaks:v8.18.0`` or a ``uses: docker://...`` step. The image has an owner.
+_DOCKER_IMAGE = re.compile(
+    r"(?:\bdocker run\b.*?\s|docker://)(?:[\w.-]+/)+("
+    + "|".join(re.escape(t) for t in SECRET_TOOLS) + r")(?::[\w.@-]+)?(?=\s|$|['\"])", re.IGNORECASE)
 
 
 class PreCommitGuard(TypedDict):
@@ -276,6 +286,7 @@ def _ci_tools(text: str) -> list[str]:
         if _STEP_START.match(line) and _in_name_list(lines, i):
             continue
         tools.update(m.group(1).lower() for m in _COMMAND.finditer(line))
+        tools.update(m.group(1).lower() for m in _DOCKER_IMAGE.finditer(line))
     code = "\n".join(lines)
     if (_GITLAB_TEMPLATE.search(code) or _GITLAB_JOB.search(code)) and not _gitlab_job_disabled(lines):
         tools.add("secret_detection")

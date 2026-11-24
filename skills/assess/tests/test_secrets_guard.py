@@ -91,6 +91,11 @@ def test_a_gitlab_repository_without_a_ci_scan_reads_level_2_unmet(tmp_path: Pat
     (".github/workflows/scan.yml", "steps:\n  - name: scan\n    run: |\n      gitleaks detect --source .\n",
      ["gitleaks"]),
     (".github/workflows/scan.yml", "steps:\n  - run: >\n      trufflehog git file://. --fail\n", ["trufflehog"]),
+    (".github/workflows/scan.yml", "steps:\n  - run: docker run -v $PWD:/path zricethezav/gitleaks:latest detect\n",
+     ["gitleaks"]),
+    (".github/workflows/scan.yml", "steps:\n  - run: docker run --rm ghcr.io/gitleaks/gitleaks:v8.18.0 detect\n",
+     ["gitleaks"]),
+    (".github/workflows/scan.yml", "steps:\n  - uses: docker://zricethezav/gitleaks:latest\n", ["gitleaks"]),
     (".gitlab-ci.yml", "scan:\n  script:\n    - echo start\n    - gitleaks detect --source .\n", ["gitleaks"]),
     (".gitlab-ci.yml", "include:\n  - template: Security/Secret-Detection.gitlab-ci.yml\n"
                        "secret_detection:\n  allow_failure: true\n", ["secret_detection"]),  # reports by artifact
@@ -118,7 +123,9 @@ def test_a_ci_scan_meets_level_2_measured(tmp_path: Path, rel: str, text: str, t
     (".gitlab-ci.yml", "scan:\n  allow_failure: true\n  script:\n    - gitleaks detect\n"),  # masked job
     (".github/workflows/x.yml", "steps:\n  - continue-on-error: true\n    run: gitleaks detect\n"),  # step-first mask
     (".gitlab-ci.yml", "deploy:\n  needs:\n    - gitleaks\n  script:\n    - make deploy\n"),  # a job name
-    (".github/workflows/x.yml", "steps:\n  - name: Secrets - gitleaks\n    run: echo skipped\n"),  # a step label                    # a hidden job never runs
+    (".github/workflows/x.yml", "steps:\n  - name: Secrets - gitleaks\n    run: echo skipped\n"),  # a step label
+    (".gitlab-ci.yml", "build:\n  tags:\n    - gitleaks\n  script:\n    - make\n"),  # a runner tag
+    (".github/workflows/x.yml", "on:\n  push:\n    paths:\n      - trufflehog\n"),  # a path filter                    # a hidden job never runs
     (".gitlab-ci.yml", "include:\n  # - template: Security/Secret-Detection.gitlab-ci.yml\n"),  # commented out
 ])
 def test_a_masked_commented_or_lookalike_line_is_not_a_scan(tmp_path: Path, rel: str, text: str) -> None:
