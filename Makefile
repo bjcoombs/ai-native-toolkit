@@ -25,7 +25,7 @@ help:
 	@echo "make test-scripts   scripts/ pytest, with its coverage floor"
 	@echo "make test-contract  plugin contract pytest (tests/)"
 	@echo "make lint           ruff and mypy gates for both packages"
-	@echo "make catalog        regenerate docs/what-we-measure.md and references/measures.json"
+	@echo "make catalog        regenerate docs/what-we-measure.md, docs/checks.html and references/measures.json"
 	@echo "make regen          regenerate every generated file and golden (run after a conflict in one)"
 	@echo "make fold RELEASE=x release PR only: fold skills/assess/changes/ into the counter histories, then regen"
 
@@ -52,7 +52,7 @@ test-scripts:
 test-contract:
 	uv run --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4" pytest -v $(XDIST) tests/
 
-# The measures catalog, generated from skills/assess/checks/core.toml (and its fragments), the default
+# The measures catalog (docs/what-we-measure.md, docs/checks.html, measures.json), generated from skills/assess/checks/core.toml (and its fragments), the default
 # maturity model, lib/level_signals.py, lib/signals.py (the headless scan list) and
 # lib/scan_registry.py (the registry). test-assess fails (tests/test_catalog.py)
 # when a committed copy is stale, so run this after changing any of them.
