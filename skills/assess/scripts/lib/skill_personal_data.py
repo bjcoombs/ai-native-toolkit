@@ -16,7 +16,9 @@ example, and the noise would bury real findings.
 
 - From ``agent_instructions_grader.scan_sensitive_content`` (the instruction-file scan):
   ``private_key`` (a PEM private key block), ``cloud_key`` (an AWS-style access key id),
-  ``credential`` (a ``password=``/``token=``/``api_key=`` assignment with a concrete value;
+  ``credential`` (information only, counted in ``credential_candidates`` and never a finding
+  until a precision check passes, #1196: a ``password=``/``token=``/``api_key=`` assignment with
+  a concrete value, not a placeholder such as ``xxx``, ``<...>``, ``your_...`` or a short ``sk-`` stub;
   checked again here so a value that only refers to a secret held elsewhere, such as
   ``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X`` or ``os.environ[...]``, is not a finding),
   ``ssh_or_host`` (``root@host`` or ``ssh user@host``), ``ip_address`` (a routable or private
@@ -43,7 +45,8 @@ Block (``skill_personal_data`` in run-context.json)::
      "reason": str,                                    # only when available is false
      "files": [{"path": str, "kinds": [kind, ...]}],  # only the files with a finding
      "files_considered": int, "files_unread": int, "files_with_personal_data": int,
-     "kinds_detected": [kind, ...]}                    # KINDS, so a reader sees what "met" covers
+     "credential_candidates": int,                     # information only (#1196)
+     "kinds_detected": [kind, ...]}                    # FINDING_KINDS, so a reader sees what "met" covers
 
 With ``scope`` (a skill unit's folder in the unit pass) only the files under it are read. With no
 skill or agent file, ``files_considered`` is 0 and the condition reads not measured
@@ -70,6 +73,11 @@ from lib.instruction_placement import skill_and_agent_files
 
 GRADER_KINDS = ("private_key", "cloud_key", "credential", "ssh_or_host", "ip_address", "home_path")
 KINDS = (*GRADER_KINDS, "email", "phone")
+# ``credential`` is information only until a precision check passes (#1196): it matches example
+# values in skill docs, and a false "your skill leaks a credential" costs more trust than a miss.
+# It is counted in ``credential_candidates`` and never makes the condition unmet.
+CANDIDATE_KINDS = ("credential",)
+FINDING_KINDS = tuple(k for k in KINDS if k not in CANDIDATE_KINDS)
 REFERENCE_SUFFIXES = frozenset({".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".csv", ""})
 _READ_MAX_BYTES = 1_000_000
 REASON_UNREAD = "skill_files_unread"
@@ -149,6 +157,7 @@ class SkillPersonalDataBlock(TypedDict):
     files_considered: int
     files_unread: int
     files_with_personal_data: int
+    credential_candidates: int  # files with a credential-shaped assignment: information only (#1196)
     kinds_detected: list[str]
 
 
@@ -172,12 +181,19 @@ def _has_phone(text: str) -> bool:
                for m in _PHONE_INTL.finditer(text))
 
 
+# A placeholder value: an ``xxx`` or ``***`` run, ``<...>``, ``${...}``, a value that opens with
+# ``your_``/``your-``, ``example``, ``dummy`` or ``placeholder``, or an ``sk-`` stub under 20 characters.
+_PLACEHOLDER_SECRET = re.compile(
+    r"^(?:x{3,}\w*|\*{3,}\S*|<[^>]*>\S*|\$\{[^}]*\}\S*|(?:your[_-]|example|dummy|placeholder)\S*|sk-\S{0,16})$",
+    re.IGNORECASE)
+
+
 def _literal_secret(value: str) -> bool:
     """Whether a credential value is a literal secret: not empty, not a placeholder the grader skips,
     and not a reference to a secret held elsewhere. Decided per value, so a placeholder beside a
     reference reads clean, as each does alone."""
     return (bool(value) and not CREDENTIAL_PLACEHOLDERS.match(value) and not _REFERENCE.match(value)
-            and not _SCHEMA_VALUE.match(value))
+            and not _SCHEMA_VALUE.match(value) and not _PLACEHOLDER_SECRET.match(value))
 
 
 # An unquoted value followed by another word is prose after a label; a real secret is one token
@@ -253,7 +269,7 @@ def scan_skill_personal_data(
 ) -> SkillPersonalDataBlock:
     """Build the ``skill_personal_data`` block (see the module doc)."""
     repo = repo_root.resolve()
-    considered = unread = 0
+    considered = unread = candidates = 0
     flagged: list[PersonalDataFile] = []
     for path in _files(repo, scope, excludes):
         try:  # a file over the limit is read up to it, not skipped
@@ -263,12 +279,14 @@ def scan_skill_personal_data(
             unread += 1
             continue
         considered += 1
-        kinds = kinds_in(text)
+        found = kinds_in(text)
+        candidates += any(k in CANDIDATE_KINDS for k in found)
+        kinds = [k for k in found if k in FINDING_KINDS]
         if kinds:
             flagged.append(PersonalDataFile(path=path.relative_to(repo).as_posix(), kinds=kinds))
     block = SkillPersonalDataBlock(available=True, files=flagged, files_considered=considered,
                                    files_unread=unread, files_with_personal_data=len(flagged),
-                                   kinds_detected=list(KINDS))
+                                   credential_candidates=candidates, kinds_detected=list(FINDING_KINDS))
     if unread and not flagged:  # a clean reading would claim files it never read
         block["available"] = False
         block["reason"] = (f"{REASON_UNREAD}: {unread} skill or agent file(s) could not be read, and none "
