@@ -77,10 +77,10 @@ def normalize_test_pressure(test_pressure: Any) -> TestPressure:
 # The annotation the LLM must attach to Layer 6 when mutation testing never
 # ran. Layer 6 (truth pressure) asks whether the suite *proves* behaviour, not
 # merely visits it - a claim only a mutation run can substantiate. Absent that
-# run, the strongest honest verdict is Partial; a Present claim would be an
-# unproven self-description, exactly the guardrail-erosion failure /assess
+# run, the strongest honest verdict is Partial; a Present claim would be a
+# self-description not yet measured, exactly the guardrail-erosion failure /assess
 # exists to catch. assess_finalize enforces the cap deterministically.
-MUTATION_NOT_RUN_ANNOTATION = "truth-pressure unproven (mutation not run)"
+MUTATION_NOT_RUN_ANNOTATION = "truth pressure not yet measured (mutation not run)"  # #1254 wording
 
 
 # The annotation the LLM must attach to Layer 6 when mutation ran but every group

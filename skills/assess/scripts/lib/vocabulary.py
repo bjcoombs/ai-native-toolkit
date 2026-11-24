@@ -65,8 +65,9 @@ maturity-model entry: its practice, the Step it gates, or the gate. The phrases 
 (`row_hits`). A table row in the ordinary sense is not checked.
 
 **The model-written template (#1254).** The guard also reads the prose of
-`skills/assess-findings/SKILL.md`, fenced template included, and fails on the #1254 words
-there (`TEMPLATE_WORDS`: lying, capped, unproven, concerns).
+`skills/assess-findings/SKILL.md`, fenced template included, and of `agents/assess-layer-scorer.md`,
+whose Evidence cells reach the report, and fails on the #1254 words there (`TEMPLATE_WORDS`:
+lying, capped, unproven, concerns).
 
 **Wording elsewhere.** The quadrant names its shaded corner "Most room to grow: busy, early
 levels" in the amber `warn` role, not the red `bad` one; the keyhole summary shows `lying_map` as

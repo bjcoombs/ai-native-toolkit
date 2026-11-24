@@ -118,13 +118,25 @@ def test_fleet_pages_name_steps_and_gates_not_rows(outputs: dict[str, str], flee
 _TEMPLATE = Path(__file__).resolve().parents[2] / "assess-findings" / "SKILL.md"
 
 
-def test_the_model_written_template_uses_the_shared_vocabulary() -> None:
-    """#1254: the report template the model fills, fenced blocks included, keeps out the
-    words the shared vocabulary replaced."""
-    text = template_prose(_TEMPLATE.read_text(encoding="utf-8"))
+_SCORER = Path(__file__).resolve().parents[3] / "agents" / "assess-layer-scorer.md"
+
+
+@pytest.mark.parametrize("source", [_TEMPLATE, _SCORER], ids=["assess-findings", "assess-layer-scorer"])
+def test_the_model_written_template_uses_the_shared_vocabulary(source: Path) -> None:
+    """#1254: the report template the model fills, and the scorer whose Evidence cells
+    reach the report, fenced blocks included, keep out the words the shared vocabulary
+    replaced."""
+    text = template_prose(source.read_text(encoding="utf-8"))
     hits = [f"{term!r}, line {line}: {body}" for term, line, body in banned_hits(text)
             if term in TEMPLATE_WORDS]
-    assert not hits, f"banned vocabulary in {_TEMPLATE.name}:\n" + "\n".join(hits)
+    assert not hits, f"banned vocabulary in {source.name}:\n" + "\n".join(hits)
+
+
+def test_the_mutation_annotation_uses_the_shared_vocabulary() -> None:
+    """The annotation the scorer copies into every Evidence cell when mutation did not run."""
+    from lib.testing.mutation_cap import MUTATION_NOT_RUN_ANNOTATION, MUTATION_PARTIAL_ANNOTATION
+    for text in (MUTATION_NOT_RUN_ANNOTATION, MUTATION_PARTIAL_ANNOTATION):
+        assert not banned_hits(text), text
 
 
 def test_every_fleet_report_and_next_steps_section_opens_with_what_is_in_place(
