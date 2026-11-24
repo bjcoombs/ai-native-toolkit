@@ -290,7 +290,7 @@ jobs:
     assert scan_agent_ops(repo)["agent_workflows"][0]["signs"] == ["agent_cli"]
 
 
-def test_a_remote_reusable_workflow_reads_not_measured(git_repo) -> None:
+def test_a_remote_reusable_workflow_naming_an_agent_reads_not_measured(git_repo) -> None:
     caller = CALLER.replace("./.github/workflows/agent.yml", "acme/shared/.github/workflows/agent.yml@v1")
     repo = _repo(git_repo, {".github/workflows/triage.yml": caller})
     block = scan_agent_ops(repo)
@@ -298,6 +298,42 @@ def test_a_remote_reusable_workflow_reads_not_measured(git_repo) -> None:
     assert block["summary"]["agent_work_present"] is None
     assert block["summary"]["agent_work_present_reason"] == "agent_workflows_unread"
     assert block["summary"]["routines_present"] is False
+
+
+def test_ordinary_shared_ci_from_another_repository_reads_unmet(git_repo) -> None:
+    caller = CALLER.replace("./.github/workflows/agent.yml", "acme/shared/.github/workflows/ci.yml@main")
+    block = scan_agent_ops(repo := _repo(git_repo, {".github/workflows/ci.yml": caller}))
+    assert (block["agent_workflows_unread"], block["summary"]["agent_work_present"]) == (0, False)
+    assert repo.is_dir()
+
+
+def test_a_prompt_that_says_add_or_install_still_counts(git_repo) -> None:
+    text = """on:
+  issues:
+    types: [opened]
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - run: codex exec "add a label to this issue"
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - run: claude -p 'install the deps and add tests'
+"""
+    repo = _repo(git_repo, {".github/workflows/triage.yml": text})
+    assert scan_agent_ops(repo)["agent_workflows"][0]["signs"] == ["agent_cli"]
+
+
+def test_a_workflow_read_inside_a_chain_is_read_whole_at_the_top(git_repo) -> None:
+    a = "on:\n  workflow_call:\n" + AGENT_STEPS + "  go:\n    uses: ./.github/workflows/b.yml\n"
+    b = "on:\n  issues:\n  workflow_call:\njobs:\n  go:\n    uses: ./.github/workflows/a.yml\n"
+    caller = CALLER.replace("agent.yml", "a.yml")
+    repo = _repo(git_repo, {".github/workflows/a.yml": a, ".github/workflows/b.yml": b,
+                            ".github/workflows/triage.yml": caller})
+    flows = {w["path"]: w["via"] for w in scan_agent_ops(repo)["agent_workflows"]}
+    assert flows == {".github/workflows/b.yml": [".github/workflows/a.yml"],
+                     ".github/workflows/triage.yml": [".github/workflows/a.yml"]}
 
 
 def test_a_remote_call_does_not_hide_a_found_agent(git_repo) -> None:

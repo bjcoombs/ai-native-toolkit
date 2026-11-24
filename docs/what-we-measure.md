@@ -234,7 +234,7 @@ Committed permission allowlists, hooks, sandbox rules and routines. A routine is
 - Used by: row `layer-8-agent-ops`.
 - Evidence: `agent_ops.summary.permissions_encoded` config_text (config_only), `agent_ops.summary.hooks_present` config_text (config_only), `agent_ops.summary.agent_work_present` head_text (declared).
 - Not measured when:
-  - `agent_workflows_unread`: No committed routine or agent workflow was found, but a scheduled or event-triggered workflow calls a reusable workflow from another repository. An agent may run there. Nothing to change: this reads as not measured until that workflow can be read.
+  - `agent_workflows_unread`: No committed routine or agent workflow was found. But a scheduled or event-triggered workflow calls a reusable workflow from another repository, and its path names an agent. Nothing to change: this reads as not measured until that workflow can be read.
 
 Why the signals named here matter:
 

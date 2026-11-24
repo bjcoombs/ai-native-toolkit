@@ -22,8 +22,11 @@ This module scans the repo-observable subset of those guardrails:
   ``summary.agent_work_present``, the maturity model's routines condition, is true on either or
   on an event-triggered agent workflow, so the two kinds are one condition, never two. It is
   null (``agent_workflows_unread``) when it would read false but a scheduled or event-triggered
-  workflow calls a reusable workflow in another repository (``agent_workflows_unread`` counts
-  those), since the agent may run there.
+  workflow calls a reusable workflow in another repository whose path names an agent
+  (``claude``, ``codex``, ``agent``, ``ai`` ...; ``agent_workflows_unread`` counts those), since
+  the agent may run there. Ordinary shared CI from another repository leaves it false. A
+  prompt in quotes is set aside before the install-line check, so ``codex exec "add a label"``
+  still counts.
 
 Only **git-tracked** artifacts count toward the summary booleans, mirroring the
 Layer 0 rule: a settings file present on disk but uncommitted reaches no clone,
@@ -204,14 +207,22 @@ EVENT_TRIGGERS = frozenset({
 _GH_AW_EVENTS = frozenset({"command", "slash_command"})
 _GH_AW_SCHEDULE = re.compile(r"^(?:hourly|daily|weekly|monthly|every\b)", re.IGNORECASE)
 _CMD = r"(?:^|[\s;&|(/=\"'])"
-# A headless agent CLI beyond ``claude -p`` (which ``ci_model_jobs.signs_in`` reads).
+# A headless agent CLI. ``claude -p`` is read here too, after quoted prompt text is set aside,
+# so a prompt that says "add" or "install" does not hide it.
 _AGENT_CLI = re.compile(_CMD + r"""(?:(?:codex|@openai/codex)(?:@\S+)?\s+(?:exec|e)\b
+    |(?:claude|@anthropic-ai/claude-code)(?:@\S+)?\s+(?:[^;&|]*\s)?(?:-p|--print)(?:\s|$)
     |(?:gemini|copilot|cursor-agent|@google/gemini-cli|@github/copilot)(?:@\S+)?\s+(?:[^;&|]*\s)?(?:-p|--prompt|--print)(?:[\s=]|$)
     |opencode(?:@\S+)?\s+run\b)""", re.X)
 # A model named in a command, an env or a with: value (``OZ_MODEL=claude-4-8-opus-high``).
 _MODEL = re.compile(r"(?<![\w.-])(?:claude-(?:\d|opus|sonnet|haiku|instant)|gpt-(?:\d|o\b|oss\b)"
                     r"|gemini-(?:\d|pro\b|flash\b|ultra\b))", re.IGNORECASE)
 _INSTALL = re.compile(r"\b(?:install|add)\b")
+# A quoted string (a prompt): an install verb inside one is prompt text, not an install.
+_QUOTED = re.compile(r"\"[^\"]*\"|'[^']*'")
+# A reusable workflow in another repository whose path names an agent: only such a call may hide
+# one. Ordinary shared CI (``org/shared/.github/workflows/ci.yml``) does not leave the reading open.
+_AGENT_NAME = re.compile(r"claude|codex|gemini|copilot|opencode|agent|llm|gpt|(?<![a-z])ai(?![a-z])",
+                         re.IGNORECASE)
 _SKIP_KEYS = frozenset({"if", "name", "description"})
 _LOCAL_WORKFLOW = re.compile(r"""^["']?\./(\.github/workflows/[\w.-]+\.ya?ml)""")
 _REMOTE_WORKFLOW = re.compile(r"""^["']?[\w.-]+/[\w.-]+/\.github/workflows/""")
@@ -256,7 +267,7 @@ class _Signs:
             if owner.key in _SKIP_KEYS or line.key in _SKIP_KEYS:
                 continue
             value = line.value if line.structural else strip_comment(line.value)
-            if not value or _INSTALL.search(value):
+            if not value or _INSTALL.search(_QUOTED.sub(" ", value)):
                 continue
             if _AGENT_CLI.search(value):
                 found.add("agent_cli")
@@ -266,8 +277,9 @@ class _Signs:
 
     def workflow(self, rel: str, text: str, seen: frozenset[str] = frozenset()) -> tuple[
             frozenset[str], tuple[str, ...], bool]:
-        """(signs, local workflows the signs came through, calls a remote reusable workflow)."""
-        if rel in self.cache:
+        """(signs, local workflows the signs came through, calls a remote reusable workflow whose
+        path names an agent)."""
+        if not seen and rel in self.cache:
             return self.cache[rel]
         signs = self.lines(text)
         via: list[str] = []
@@ -278,7 +290,9 @@ class _Signs:
                 continue
             uses = stripped[len("uses:"):].strip()
             local = _LOCAL_WORKFLOW.match(uses)
-            if local and local.group(1) not in seen and local.group(1) != rel:
+            if local:  # a reusable workflow, never read as a composite action
+                if local.group(1) in seen or local.group(1) == rel:
+                    continue
                 called = self.read(local.group(1))
                 if called is not None:
                     more, deeper, far = self.workflow(local.group(1), called, seen | {rel})
@@ -286,7 +300,7 @@ class _Signs:
                     if more:
                         signs |= more
                         via += [local.group(1), *deeper]
-            elif _REMOTE_WORKFLOW.match(uses):
+            elif _REMOTE_WORKFLOW.match(uses) and _AGENT_NAME.search(uses.split("@", 1)[0]):
                 remote = True
             elif uses.strip("'\"").startswith("./"):
                 for action in local_action_paths(uses.strip("'\"")):
@@ -295,13 +309,15 @@ class _Signs:
                         signs |= self.lines(action_text)
                         break
         result = (frozenset(signs), tuple(sorted(set(via))), remote)
-        self.cache[rel] = result
+        if not seen:  # a result read inside a call chain leaves out the chain's own files
+            self.cache[rel] = result
         return result
 
 
 def scan_agent_workflows(repo_root: Path) -> tuple[list[AgentWorkflow], int]:
     """Committed scheduled and event-triggered agent workflows, and the count of such workflows
-    whose agent may sit in another repository's reusable workflow (not read, never counted).
+    that call another repository's reusable workflow whose path names an agent (not read, never
+    counted).
 
     A GitHub Actions workflow counts when its ``on`` names ``schedule`` (#815) or an event in
     ``EVENT_TRIGGERS`` (#847) and it runs an agent: an agent action, a headless agent CLI or a

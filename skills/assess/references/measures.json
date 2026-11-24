@@ -1818,7 +1818,7 @@
       "unknown_reasons": [
         {
           "code": "agent_workflows_unread",
-          "means": "No committed routine or agent workflow was found, but a scheduled or event-triggered workflow calls a reusable workflow from another repository. An agent may run there.",
+          "means": "No committed routine or agent workflow was found. But a scheduled or event-triggered workflow calls a reusable workflow from another repository, and its path names an agent.",
           "next_step": "Nothing to change: this reads as not measured until that workflow can be read."
         }
       ],
@@ -6370,7 +6370,7 @@
       "collector": "core.agent_ops",
       "input_class": "head_text",
       "grade": "declared",
-      "null_means": "no routine or agent workflow was found, but a scheduled or event-triggered workflow calls a reusable workflow in another repository (agent_workflows_unread)"
+      "null_means": "no routine or agent workflow was found. But a workflow calls an agent-named reusable workflow in another repository (agent_workflows_unread)"
     },
     {
       "path": "doc_staleness.summary.stale_pct",

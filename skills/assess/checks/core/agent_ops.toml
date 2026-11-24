@@ -18,7 +18,7 @@ shapes = [
 ]
 revision = 3
 unknown_reasons = [
-  { code = "agent_workflows_unread", block = "agent_ops", means = "No committed routine or agent workflow was found, but a scheduled or event-triggered workflow calls a reusable workflow from another repository. An agent may run there.", next_step = "Nothing to change: this reads as not measured until that workflow can be read." },
+  { code = "agent_workflows_unread", block = "agent_ops", means = "No committed routine or agent workflow was found. But a scheduled or event-triggered workflow calls a reusable workflow from another repository, and its path names an agent.", next_step = "Nothing to change: this reads as not measured until that workflow can be read." },
 ]
   [entries.privacy]
   "agent_ops.settings.default_mode" = "token"
@@ -60,7 +60,7 @@ collector = "core.agent_ops"
 path = "agent_ops.summary.agent_work_present"
 type = "bool"
 evidence = "head_text"
-null_means = "no routine or agent workflow was found, but a scheduled or event-triggered workflow calls a reusable workflow in another repository (agent_workflows_unread)"
+null_means = "no routine or agent workflow was found. But a workflow calls an agent-named reusable workflow in another repository (agent_workflows_unread)"
 
 [[entries]]
 id = "core.cond.layer-8-agent-ops.1.permissions_encoded"
