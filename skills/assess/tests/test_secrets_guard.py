@@ -348,3 +348,11 @@ def test_stages_before_the_id_is_read(tmp_path: Path) -> None:
     root = _repo(tmp_path, {".pre-commit-config.yaml": cfg,
                             ".github/workflows/x.yml": "steps:\n  - run: pre-commit run --all-files\n"})
     assert scan_secrets_guard(root)["ci"]["present"] is False
+
+
+@pytest.mark.parametrize(("default", "runs"), [("default_stages: [pre-push]\n", False),
+                                                ("default_stages: [pre-commit, pre-push]\n", True)])
+def test_default_stages_apply_to_a_hook_with_none(tmp_path: Path, default: str, runs: bool) -> None:
+    root = _repo(tmp_path, {".pre-commit-config.yaml": default + PRE_COMMIT,
+                            ".github/workflows/x.yml": "steps:\n  - run: pre-commit run --all-files\n"})
+    assert scan_secrets_guard(root)["ci"]["present"] is runs

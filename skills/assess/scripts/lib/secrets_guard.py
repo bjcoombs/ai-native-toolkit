@@ -3,8 +3,8 @@
 A token committed once lives in the history of every clone. A guard catches it before it lands:
 a secrets hook in the pre-commit config, which a contributor can skip with ``--no-verify``, or a
 secrets scan in CI, which runs on every change whoever sends it. This module reads both from the
-commit; GitHub's own secret scanning and push protection are repository settings, read by a
-platform collector. No model is involved and no scanner runs.
+commit; GitHub's own secret scanning and push protection are repository settings, which a
+platform collector will read (part B of #1173). No model is involved and no scanner runs.
 
 The tendency it compensates for is guardrail erosion: a token pasted into a config or a skill
 "just for now" is never removed, and nothing at the door stops the next one.
@@ -364,12 +364,27 @@ def _hook_tool(hook_id: str) -> str:
 _DEFAULT_STAGES = frozenset({"pre-commit", "commit"})
 
 
+def _stage_values(lines: list[str], at: int) -> set[str]:
+    """The stage names a ``stages:`` or ``default_stages:`` key on line ``at`` lists, inline or as a
+    block list below it."""
+    values = lines[at].split(":", 1)[1].strip()
+    if not values:  # a block list: the key, then ``- pre-commit`` lines below it
+        key_indent = len(lines[at]) - len(lines[at].lstrip())
+        values = " ".join(x.strip().lstrip("- ") for x in lines[at + 1:_list_block_end(lines, at, key_indent)])
+    return set(re.findall(r"[\w-]+", values))
+
+
 def _hooks_run_in_ci(root: Path, hook: PreCommitGuard) -> frozenset[str]:
-    """The secrets hooks a plain ``pre-commit run`` selects: a hook whose ``stages:`` leaves out the
-    pre-commit stage (``[manual]``, ``[pre-push]``) is skipped, so CI does not run it."""
+    """The secrets hooks a plain ``pre-commit run`` selects: a hook whose ``stages:`` (or, with none,
+    the top-level ``default_stages:``) leaves out the pre-commit stage (``[manual]``,
+    ``[pre-push]``) is skipped, so CI does not run it."""
     if not hook["file"]:
         return frozenset()
     lines = _code_lines(_read(root / hook["file"]) or "")
+    # A top-level ``default_stages:`` applies to every hook that sets no ``stages:`` of its own.
+    top = next((k for k, ln in enumerate(lines) if ln.startswith("default_stages")
+                and re.match(r"default_stages\s*:", ln)), None)
+    default = _stage_values(lines, top) if top is not None else None
     skipped: set[str] = set()
     for i, line in enumerate(lines):  # each list item; a hook item has its own ``id:`` key
         item = _STEP_START.match(line)
@@ -381,14 +396,10 @@ def _hooks_run_in_ci(root: Path, hook: PreCommitGuard) -> frozenset[str]:
                                                   if len(lines[k]) - len(lines[k].lstrip()) == dash + 2]
         hook_id = next((m.group(1) for _, v in keys if (m := re.match(r"id\s*:\s*(\S+)", v))), None)
         stages_at = next((k for k, v in keys if re.match(r"stages\s*:", v)), None)
-        if hook_id is None or stages_at is None:
+        if hook_id is None:
             continue
-        values = lines[stages_at].split(":", 1)[1].strip()
-        if not values:  # a block list: ``stages:`` then ``- pre-commit`` lines below it
-            key_indent = len(lines[stages_at]) - len(lines[stages_at].lstrip())
-            values = " ".join(x.strip().lstrip("- ")
-                              for x in lines[stages_at + 1:_list_block_end(lines, stages_at, key_indent)])
-        if not _DEFAULT_STAGES & set(re.findall(r"[\w-]+", values)):
+        stages = _stage_values(lines, stages_at) if stages_at is not None else default
+        if stages is not None and not _DEFAULT_STAGES & stages:
             skipped.add(_hook_tool(hook_id.lower()))
     return frozenset(hook["tools"]) - skipped
 
