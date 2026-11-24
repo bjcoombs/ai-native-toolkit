@@ -136,6 +136,15 @@ def test_older_sidecar_without_code_band_reads_the_full_lists(git_repo):
     assert _self_referential_test_paths(repo, stats, parse_commit_file_sets(repo)) == ["src/target.py"]
 
 
+def test_empty_code_band_does_not_fall_back_to_the_full_lists(git_repo):
+    """A band ranked over no code files (a Shell-only repo) is a measured empty
+    set: the finding reads none of scc's files rather than the full lists."""
+    repo, _target, _scripts = _scored_repo(git_repo)
+    stats = {"code_band": {"population": 0, "paths": []}, "top_large": [{"path": "src/target.py"}]}
+    assert code_band_paths(stats) == []
+    assert _self_referential_test_paths(repo, stats, parse_commit_file_sets(repo)) == []
+
+
 @pytest.mark.parametrize("stats", [{}, {"code_band": None}, {"code_band": {"paths": "x"}}])
 def test_code_band_paths_none_when_absent_or_malformed(stats):
     assert code_band_paths(stats) is None
@@ -144,6 +153,7 @@ def test_code_band_paths_none_when_absent_or_malformed(stats):
 def test_code_band_ranks_only_code_rows():
     rows = [{"path": f"doc{i}.md", "loc": 900, "ccn": 0.0, "_score": 50.0} for i in range(12)]
     rows.append({"path": "a.py", "loc": 5, "ccn": 1.0, "_score": 1.0})
+    # Partial rows stand in for ScoredHotspotRow: code_band reads only path, loc, ccn, _score.
     band = code_band(rows, {"a.py"})  # type: ignore[arg-type]
     assert band == {"population": 1, "paths": ["a.py"]}
     assert code_band_paths({"code_band": band}) == ["a.py"]

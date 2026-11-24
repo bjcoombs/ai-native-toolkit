@@ -1152,8 +1152,7 @@ def _structure_drift_tier1(
 def _paths_from_stats(complexity_stats: JsonDict, cap: int = MAX_AUTHORSHIP_PATHS) -> list[str]:
     """The ranked-list paths to run authorship analysis over (capped).
 
-    Union of the three top-N lists: the high-complexity / high-churn units the
-    understanding findings care about. Capped to bound the per-path git calls.
+    Union of the three top-N lists, the units the understanding findings read; capped.
     """
     seen: list[str] = []
     s: set[str] = set()
@@ -1272,10 +1271,11 @@ def _self_referential_test_paths(
     """E2 trust axis: tests co-located AND co-committed with the code they cover.
 
     Reads the code band (``code_band``, #1234), so scc's extra files cannot move a code
-    file out of it; an older sidecar falls back to the full top lists. Degrades to [].
+    file out of it; only a sidecar with no band reads the full top lists. Degrades to [].
     """
     try:
-        source_paths = code_band_paths(complexity_stats) or _paths_from_stats(complexity_stats)
+        band = code_band_paths(complexity_stats)
+        source_paths = band if band is not None else _paths_from_stats(complexity_stats)
         test_to_code = build_test_to_code_map(repo_root, source_paths)
         self_ref = find_self_referential_tests(repo_root, test_to_code, commit_sets)
         return sorted({sr["source_file"] for sr in self_ref})
