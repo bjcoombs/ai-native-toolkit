@@ -32,8 +32,8 @@ backticked spans (ids, paths, commands, code), the link targets, and the bare fi
 paths (a word with a ``/`` or a file extension).
 
 ``CRITICAL_WORDS`` (#744, #889) are the words of blame or loss the report and the fleet pages
-never use about a team's progress; ``critical_words(text)`` returns those ``text`` starts a
-word with, except the check-describing forms in ``CHECK_FORMS``. The fleet credit tests and the engine-text test (the headline, the Next line, the
+never use about a team's progress; ``critical_words(text)`` returns those ``text`` holds as a
+substring, after removing the exact text of each ``CRITICAL_WORD_EXEMPT`` entry. The fleet credit tests and the engine-text test (the headline, the Next line, the
 gate notes and reason words) read the one tuple. Tests: ``tests/test_plain_english.py``.
 """
 from __future__ import annotations
@@ -43,7 +43,7 @@ from typing import TypedDict, cast
 
 from lib.level_result_types import LevelResult
 
-__all__ = ["APPROVED_WHYS", "CHECK_FORMS", "CRITICAL_WORDS", "IDIOMS", "MAX_WORDS", "MANIFEST_PROSE", "PlainIssue", "fixed_lines", "lint",
+__all__ = ["APPROVED_WHYS", "CRITICAL_WORDS", "CRITICAL_WORD_EXEMPT", "IDIOMS", "MAX_WORDS", "MANIFEST_PROSE", "PlainIssue", "fixed_lines", "lint",
            "critical_words", "manifest_lines", "untranslated_tokens"]
 
 # Long sentences are the first thing a reader in a second language loses track of.
@@ -184,16 +184,26 @@ def manifest_lines() -> dict[str, str]:
 CRITICAL_WORDS = ("regress", "lost", "broke", "behind", "worst", "fail", "bad", "rank")
 
 
-# Forms of a critical stem that describe a check, not a team's progress: the ``ci_runs_tests``
-# gate reads "CI turns red on a broken check", and a check "fails".
-CHECK_FORMS = frozenset({"broken", "fails"})
+# Engine text that holds a critical word yet describes what a check does, not how a team is doing.
+# Keyed by its ``fixed_lines()`` location, with its exact text: a change to the text fails the
+# engine-text test until this entry is looked at again (#889).
+class Exemption(TypedDict):
+    text: str
+    reason: str
+
+
+CRITICAL_WORD_EXEMPT: dict[str, Exemption] = {
+    "GATE_CHANGE.ci_runs_tests": {"text": "CI turns red on a broken check",
+                                  "reason": "describes what a check does, not how the team is doing"},
+}
 
 
 def critical_words(text: str, words: tuple[str, ...] = CRITICAL_WORDS) -> list[str]:
-    """Each of ``words`` that ``text`` uses as the start of a word, case-insensitively, in order.
+    """Each of ``words`` that ``text`` holds, as a substring, case-insensitively, in order.
 
-    A stem catches its inflections ("failed", "regressed", "ranked"); a word in ``CHECK_FORMS``
-    is let through. The fleet credit tests use the stricter substring form on their own sections."""
+    A substring catches every inflection ("failed", "regressed", "falling behind"). The exact
+    text of each ``CRITICAL_WORD_EXEMPT`` entry is removed first, wherever it is quoted."""
     lower = text.lower()
-    return [w for w in words
-            if any(m.group(0) not in CHECK_FORMS for m in re.finditer(rf"(?<![\w-]){re.escape(w)}[\w-]*", lower))]
+    for exempt in CRITICAL_WORD_EXEMPT.values():
+        lower = lower.replace(exempt["text"].lower(), " ")
+    return [w for w in words if w in lower]

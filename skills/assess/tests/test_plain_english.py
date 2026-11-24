@@ -62,11 +62,20 @@ def test_every_manifest_prose_string_except_the_whys_is_plain_english() -> None:
     assert {k: [i["reason"] for i in lint(v)] for k, v in lines.items() if lint(v)} == {}
 
 
-def test_critical_words_catch_inflections_but_not_check_forms() -> None:
+def test_critical_words_catch_every_inflection_and_only_the_named_exemption() -> None:
     from lib.plain_english import critical_words
     assert critical_words("We lost ground and fell behind.") == ["lost", "behind"]
     assert critical_words("the gate failed; coverage regressed; the team is ranked") == ["regress", "fail", "rank"]
-    assert critical_words("CI turns red on a broken check; CI fails when a check fails.") == []
+    assert critical_words("Next: CI turns red on a broken check.") == []  # the exempt text, quoted
+    assert critical_words("CI turns red on a broken test.") == ["broke"]  # not the exempt text
+
+
+def test_each_exemption_still_matches_its_text() -> None:
+    """#889: changing an exempt line (the maintainer's gate wording) fails here until the
+    exemption is looked at again."""
+    from lib.plain_english import CRITICAL_WORD_EXEMPT
+    lines = fixed_lines()
+    assert {k: lines.get(k) for k in CRITICAL_WORD_EXEMPT} == {k: e["text"] for k, e in CRITICAL_WORD_EXEMPT.items()}
 
 
 def test_the_engine_text_holds_no_critical_word() -> None:

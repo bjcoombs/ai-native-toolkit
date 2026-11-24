@@ -9,7 +9,9 @@ it cannot import the Step sentences without an import cycle):
 
   1. ``Step N of M: <what an agent can do here>.`` The sentence is
      ``assess_diagrams_ladder.STEP_MEANING`` (the Step's model name for a Step the table
-     does not know); M is the model's top Step.
+     does not know); M is the model's top Step. Below the first Step of a model whose Step 1
+     has a gate (#889): ``Not yet at Step 1 of M.``, and the Next line names Step 1 by the
+     model's own Step name.
   2. ``Next: <the blocking gates as a task>. Then you reach Step N+1: <what it allows>.``
      Each gate is worded by ``GATE_TASK`` (an imperative), plus ``headline.gate_note`` when
      it was not measured or the owner excluded it, the same note the Next line carries. At
@@ -106,11 +108,24 @@ def since_line(since: Any) -> str:
     return f"Since last run: {'; '.join(parts)}."
 
 
+def _named(step: int, model: MaturityModel) -> str:
+    """What ``step`` allows under the model's own Step names, else the ladder's sentence."""
+    return next((s["name"] for s in model.get("steps", []) if s["step"] == step and s["name"]), "") \
+        or _plain(step, model)
+
+
 def summary_lines(level: LevelResult, since: Any, model: MaturityModel) -> list[str]:
     """The three summary lines; ``[]`` for a model without Steps."""
-    step = level["step"]
+    step, nxt = level["step"], level["next_step"]
     if step is None:
-        return []
+        if nxt is None or not model.get("steps"):
+            return []
+        # below the first Step of a model whose Step 1 has a gate (#889)
+        top = max(s["step"] for s in model.get("steps", []))
+        task = " and ".join(_task(b) for b in _gates(level)) or "make its gates hold"
+        return [f"Not yet at Step {nxt['step']} of {top}.",
+                f"Next: {task}. Then you reach Step {nxt['step']}: {_named(nxt['step'], model)}.",
+                since_line(since)]
     top = max(s["step"] for s in model.get("steps", []))
     lines = [f"Step {step} of {top}: {_plain(step, model)}."]
     nxt = level["next_step"]
@@ -127,7 +142,7 @@ def summary_lines(level: LevelResult, since: Any, model: MaturityModel) -> list[
 def call_to_action(level: LevelResult) -> str:
     """The one call to action: the first blocking gate as a task, linked; ``""`` when none."""
     gates = _gates(level)
-    if level["step"] is None or not gates:
+    if not gates:  # also below Step 1, where the first gated Step's gate is the action (#889)
         return ""
     gate = gates[0].get("gate", "")
     task = GATE_TASK.get(gate, f"make the {gate} gate hold")
