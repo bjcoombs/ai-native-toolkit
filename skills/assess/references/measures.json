@@ -2948,7 +2948,8 @@
       "reads": [
         "repo_root",
         "scope",
-        "ghsync_root"
+        "ghsync_root",
+        "github_secret_scanning"
       ],
       "network": false,
       "platform": false,
@@ -2981,7 +2982,7 @@
         {
           "code": "secret_scanning_not_read",
           "means": "No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read.",
-          "next_step": "Add a secrets scan step to CI (gitleaks or trufflehog); GitHub's own settings are not read yet."
+          "next_step": "Run with --platform as a repository admin to read GitHub push protection, or add a secrets scan step to CI (gitleaks or trufflehog)."
         },
         {
           "code": "gitlab_rules_unevaluated",
@@ -5775,7 +5776,8 @@
       "reads": [
         "repo_root",
         "scope",
-        "ghsync_root"
+        "ghsync_root",
+        "github_secret_scanning"
       ],
       "network": false,
       "private": false

@@ -29,6 +29,7 @@ HANDOVER_MET: dict[str, Any] = {
     "coverage_gate": {"enforced_meets_minimum": True},
     "review_evidence": {"present": True},
     "doc_staleness": {"summary": {"stale_pct": 10}},
+    "secrets_guard": {"configured": True, "enforcement": {"available": True, "present": True, "source": "ci"}},
 }
 
 CUSTOM = """version = "my-1"
@@ -137,6 +138,10 @@ def test_citizen_has_its_own_words() -> None:
     assert _summary(_blocks(), choice)[1] == "Meets the citizen bar (profile: citizen)."
     lines = _summary(_blocks(layer_grades={"instruction_file_present": False}), choice)
     assert lines[1] == "Below the citizen bar (profile: citizen). Missing: Agent instructions (not met)."
+    hook_only = _blocks(secrets_guard={"configured": True,
+                                       "enforcement": {"available": True, "present": False, "source": None}})
+    assert _summary(hook_only, choice)[1] == ("Below the citizen bar (profile: citizen). "
+                                              "Missing: Secrets guard, level 2 (not met).")
 
 
 def test_a_custom_model_marks_the_practices_the_default_does_not_define(tmp_path: Path) -> None:

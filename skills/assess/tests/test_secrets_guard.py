@@ -550,3 +550,46 @@ def test_sample_config_style_stages_are_read(tmp_path: Path) -> None:
     root = _repo(tmp_path, {".pre-commit-config.yaml": cfg,
                             ".github/workflows/x.yml": "steps:\n  - run: pre-commit run --all-files\n"})
     assert scan_secrets_guard(root)["ci"]["present"] is False
+
+
+def _platform(scanning: bool, push: bool) -> dict[str, object]:
+    return {"available": True, "secret_scanning": scanning, "push_protection": push}
+
+
+GITHUB = "https://github.com/acme/widget.git"
+
+
+def test_push_protection_meets_level_2_from_the_platform(tmp_path: Path) -> None:
+    block = scan_secrets_guard(_repo(tmp_path, {"README.md": "x\n"}, remote=GITHUB),
+                               github_secret_scanning=_platform(False, True))
+    assert block["enforcement"] == {"available": True, "present": True, "source": "platform"}
+    assert block["configured"] is True and {"source": "platform", "grade": "measured"} in block["sources"]
+
+
+def test_secret_scanning_alone_is_configured_but_not_level_2(tmp_path: Path) -> None:
+    block = scan_secrets_guard(_repo(tmp_path, {"README.md": "x\n"}, remote=GITHUB),
+                               github_secret_scanning=_platform(True, False))
+    assert block["configured"] is True
+    assert block["enforcement"] == {"available": True, "present": False, "source": None}
+
+
+def test_both_settings_off_read_unmet_on_github(tmp_path: Path) -> None:
+    block = scan_secrets_guard(_repo(tmp_path, {"README.md": "x\n"}, remote=GITHUB),
+                               github_secret_scanning=_platform(False, False))
+    assert block["configured"] is False
+    assert block["enforcement"] == {"available": True, "present": False, "source": None}
+
+
+@pytest.mark.parametrize("platform", [None, {"available": False, "reason": "settings_not_readable: ..."},
+                                      {"available": False, "reason": "network: ..."}])
+def test_an_unread_setting_leaves_level_2_not_measured_on_github(tmp_path: Path, platform: object) -> None:
+    block = scan_secrets_guard(_repo(tmp_path, {"README.md": "x\n"}, remote=GITHUB),
+                               github_secret_scanning=platform)  # type: ignore[arg-type]
+    assert block["enforcement"]["available"] is False
+    assert block["enforcement"]["reason"].startswith("secret_scanning_not_read:")
+
+
+def test_a_ci_scan_wins_over_the_platform_source(tmp_path: Path) -> None:
+    block = scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": ACTION}, remote=GITHUB),
+                               github_secret_scanning=_platform(False, True))
+    assert block["enforcement"]["source"] == "ci"

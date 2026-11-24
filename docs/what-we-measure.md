@@ -608,14 +608,14 @@ A token committed once stays in the history of every clone; a guard that scans e
 
 A secrets hook in the pre-commit config and a secrets scan in CI, such as gitleaks, trufflehog or GitLab Secret-Detection. Each is recorded with its own evidence grade.
 
-- Collector: `core.secrets_guard`, reading `repo_root`, `scope`, `ghsync_root`.
+- Collector: `core.secrets_guard`, reading `repo_root`, `scope`, `ghsync_root`, `github_secret_scanning`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `secrets_guard.ci.files` path, `secrets_guard.ci.rules_unevaluated` token, `secrets_guard.ci.tools` token, `secrets_guard.enforcement.reason` reason, `secrets_guard.enforcement.source` token, `secrets_guard.pre_commit.file` path, `secrets_guard.pre_commit.tools` token, `secrets_guard.sources.grade` token, `secrets_guard.sources.source` token.
 - Used by: row `secrets-guard`.
 - Evidence: `secrets_guard.configured` config_text (config_only), `secrets_guard.enforcement.present` head_structure (measured).
 - Not measured when:
-  - `secret_scanning_not_read`: No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read. Add a secrets scan step to CI (gitleaks or trufflehog); GitHub's own settings are not read yet.
+  - `secret_scanning_not_read`: No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read. Run with --platform as a repository admin to read GitHub push protection, or add a secrets scan step to CI (gitleaks or trufflehog).
   - `gitlab_rules_unevaluated`: A GitLab job holds a secrets scan but runs under rules, only/except or a when that is not evaluated. So it is not known whether the scan runs on each change. Nothing to change for the reading: a plain job with no rules, or a GitHub workflow, is read in full.
   - `ci_includes_unresolved`: No secrets scan was found in the CI read. A GitLab include that could hold one, a local, project or remote file, was not read. Clone the included project beside this one (/ghsync), or add the secrets scan to the repository's own .gitlab-ci.yml.
 
@@ -1198,7 +1198,7 @@ The scan registry in run order, including the private inputs other scans read.
 | `org_security_policy` | Owner's shared security policy | `repo_root` | `org_security_policy` | yes |
 | `github_secret_scanning` | GitHub secret scanning | `repo_root` | `github_secret_scanning` | yes |
 | `contributor_files` | Contributor files | `repo_root`, `archetype`, `org_security_policy` | `contributor_files` | no |
-| `secrets_guard` | Secrets guard | `repo_root`, `scope`, `ghsync_root` | `secrets_guard` | no |
+| `secrets_guard` | Secrets guard | `repo_root`, `scope`, `ghsync_root`, `github_secret_scanning` | `secrets_guard` | no |
 | `gap_actions` | Gap actions | `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`, `instruction_placement` | `gap_actions` | no |
 | `agent_consistency` | Cross-agent instruction consistency | `repo_root`, `excludes` | `agent_consistency` | no |
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |

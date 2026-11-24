@@ -16,13 +16,14 @@
 #   the agent building the app how to build and test it.
 # - layer-5-ci.1: CI running the tests is the one check that catches a broken
 #   change before anyone else depends on it.
-#
-# Not in the bar: a secrets guard. No practice in the default model measures
-# one, and a profile never adds a signal of its own.
+# - secrets-guard.1: a citizen developer pastes keys while wiring up services;
+#   any configured secrets guard is the first line against committing one.
+# - secrets-guard.2: a token committed once stays in every clone, so the guard
+#   must run where the builder cannot skip it (CI or GitHub push protection).
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "profile-citizen-2026.11.23"
+version = "profile-citizen-2026.11.24"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -47,6 +48,22 @@ aggregation = "min"
   level = 1
   truth = ["behaviour"]
   criteria = [{ signal = "ci_checks.enforced_check_runs", op = "eq", value = true }]
+
+[[rows]]
+id = "secrets-guard"
+title = "Secrets guard"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["governance"]
+  criteria = [{ signal = "secrets_guard.configured", op = "eq", value = true }]
+
+  [[rows.levels]]
+  level = 2
+  truth = ["governance"]
+  criteria = [{ signal = "secrets_guard.enforcement.present", op = "eq", value = true }]
 
 [[steps]]
 step = 1

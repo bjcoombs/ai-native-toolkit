@@ -565,8 +565,8 @@ _MEASURE_HINTS = {
                          "repository holds none and the owner's shared `.github` repository was not "
                          "read: run with `--platform`, or `/assess` with `gh` signed in.",
     "secrets_guard": "Level 2 is not measured (`secret_scanning_not_read`) on a GitHub repository with "
-                     "no secrets scan in CI: GitHub's own secret scanning could guard it, and those "
-                     "repository settings are not read yet. A CI scan settles it. It is also not measured "
+                     "no secrets scan in CI when its push protection setting was not read: run with "
+                     "`--platform` as a repository admin, or add a CI scan, to settle it. It is also not measured "
                      "(`ci_includes_unresolved`) when a GitLab include that could hold the scan was not read, or "
                      "(`gitlab_rules_unevaluated`) when a GitLab scan job runs under rules, only/except or a "
                      "when that is not evaluated.",
