@@ -2835,7 +2835,7 @@
         {
           "code": "secret_scanning_not_read",
           "means": "No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read.",
-          "next_step": "Add a secrets scan step to CI (gitleaks or trufflehog), or run with --platform so GitHub's settings are read."
+          "next_step": "Add a secrets scan step to CI (gitleaks or trufflehog); GitHub's own settings are not read yet."
         }
       ],
       "evidence": [

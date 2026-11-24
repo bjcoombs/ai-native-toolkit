@@ -15,8 +15,15 @@ HOOK = "repos:\n  - repo: https://github.com/gitleaks/gitleaks\n    rev: v8.18.0
 ACTION = "jobs:\n  scan:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: gitleaks/gitleaks-action@v2\n"
 
 
+ON_CHANGE = "on: [push, pull_request]\n"
+
+
 def _repo(root: Path, files: dict[str, str], remote: str | None = None) -> Path:
+    """Write ``files``; a GitHub workflow with no ``on:`` line gets ``ON_CHANGE``, so a case states
+    only the step it tests (the trigger rule has its own tests)."""
     for rel, text in files.items():
+        if "/workflows/" in rel and not any(ln.startswith(("on:", "true:")) for ln in text.splitlines()):
+            text = ON_CHANGE + text
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
@@ -105,6 +112,28 @@ def test_a_ci_scan_meets_level_2_measured(tmp_path: Path, rel: str, text: str, t
 def test_a_masked_commented_or_lookalike_line_is_not_a_scan(tmp_path: Path, rel: str, text: str) -> None:
     block = scan_secrets_guard(_repo(tmp_path, {rel: text}))
     assert block["ci"]["present"] is False
+
+
+@pytest.mark.parametrize(("trigger", "counts"), [
+    ("on: schedule\n", False),
+    ("on:\n  schedule:\n    - cron: '0 0 * * *'\n  workflow_dispatch:\n", False),
+    ("on: pull_request\n", True),
+    ("on:\n  merge_group:\n  schedule:\n    - cron: '0 0 * * *'\n", True),
+    ("'on':\n  push:\n    branches: [main]\n", True),
+])
+def test_a_github_workflow_counts_only_when_it_runs_on_a_change(tmp_path: Path, trigger: str, counts: bool) -> None:
+    block = scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": trigger + ACTION}))
+    assert block["ci"]["present"] is counts
+
+
+@pytest.mark.parametrize(("rel", "text"), [
+    (".github/workflows/x.yml", "jobs:\n  s:\n    if: false\n    steps:\n      - run: gitleaks detect\n"),
+    (".github/workflows/x.yml", "jobs:\n  s:\n    if: ${{ false }}\n    steps:\n      - run: gitleaks detect\n"),
+    (".gitlab-ci.yml", "include:\n  - template: Security/Secret-Detection.gitlab-ci.yml\n"
+                       "secret_detection:\n  rules:\n    - when: never\n"),
+])
+def test_a_job_that_never_runs_is_not_a_scan(tmp_path: Path, rel: str, text: str) -> None:
+    assert scan_secrets_guard(_repo(tmp_path, {rel: text}))["ci"]["present"] is False
 
 
 def test_an_unmasked_step_beside_a_masked_one_still_counts(tmp_path: Path) -> None:

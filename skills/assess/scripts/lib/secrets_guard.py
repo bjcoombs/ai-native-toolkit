@@ -23,7 +23,10 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   hidden ``.secret_detection`` job is a template GitLab never runs). Comments, whole-line or
   trailing, never count, so neither does a ``gitleaks:allow`` note or a ``.gitleaks.toml`` path.
   A masked scan does not count, since it guards nothing: a line ending ``|| true``, or a GitHub
-  step or job with ``continue-on-error: true``.
+  step or job with ``continue-on-error: true`` or ``if: false``, or a GitLab ``secret_detection``
+  job with ``when: never``. A GitHub workflow counts only when its ``on:`` names a change event
+  (``CHANGE_EVENTS``: push, pull_request, pull_request_target, merge_group): a schedule-only
+  workflow scans nothing before it lands.
 
 **The two levels** (maintainer decision on #1173):
 
@@ -84,7 +87,14 @@ _USES = re.compile(r"^\s*-?\s*uses:\s*['\"]?([\w.-]+/[\w.-]+)", re.IGNORECASE)
 _COMMAND = re.compile(
     r"(?:^|[;&|]\s*|(?:run|script):\s*|-\s+|docker run\s+(?:--?\S+\s+)*\S*/)(?:[\w./-]*/)?("
     + "|".join(re.escape(t) for t in SECRET_TOOLS) + r")(?=\s|$|@)", re.IGNORECASE)
-_CONTINUE_ON_ERROR = re.compile(r"^\s*continue-on-error:\s*['\"]?true\b", re.IGNORECASE)
+# A step or job that cannot fail the run (``continue-on-error: true``) or never runs (``if: false``).
+_CONTINUE_ON_ERROR = re.compile(r"^\s*(?:continue-on-error:\s*['\"]?true\b|if:\s*(?:\$\{\{\s*)?false\s*(?:\}\})?\s*$)",
+                                re.IGNORECASE)
+# The events that run a GitHub workflow on each change, before or as it lands.
+CHANGE_EVENTS = frozenset({"push", "pull_request", "pull_request_target", "merge_group"})
+_ON = re.compile(r"""^(?:on|"on"|'on'|true)\s*:\s*(.*)$""")
+_WORD = re.compile(r"[\w-]+")
+_WHEN_NEVER = re.compile(r"^\s*-?\s*when:\s*['\"]?never\b", re.IGNORECASE)
 _STEP_START = re.compile(r"^(\s*)-\s")
 
 
@@ -193,6 +203,30 @@ def _masked_lines(lines: list[str]) -> set[int]:
     return masked
 
 
+def _runs_on_change(lines: list[str]) -> bool:
+    """Whether a GitHub workflow's ``on:`` names a change event (``CHANGE_EVENTS``): a schedule-only or
+    manual workflow scans nothing before it lands. A workflow with no readable ``on:`` does not count."""
+    for i, line in enumerate(lines):
+        m = _ON.match(line)
+        if not m:
+            continue
+        if m.group(1).strip():
+            return bool(CHANGE_EVENTS & set(_WORD.findall(m.group(1))))
+        end = _block_end(lines, i, 0)
+        keys = [ln.strip().lstrip("- ").split(":")[0].strip() for ln in lines[i + 1:end] if ln.strip()]
+        return bool(CHANGE_EVENTS & set(keys))
+    return False
+
+
+def _gitlab_job_disabled(lines: list[str]) -> bool:
+    """Whether the visible ``secret_detection`` job sets ``when: never``, which switches off the job
+    and the template's job it overrides."""
+    for i, line in enumerate(lines):
+        if _GITLAB_JOB.match(line):
+            return any(_WHEN_NEVER.match(ln) for ln in lines[i + 1:_block_end(lines, i, 0)])
+    return False
+
+
 def _ci_tools(text: str) -> list[str]:
     """The secrets tools a CI file uses or runs, unmasked; ``secret_detection`` for GitLab's template
     or visible job. Comments never count, and neither does a masked step or job."""
@@ -209,7 +243,7 @@ def _ci_tools(text: str) -> list[str]:
             continue
         tools.update(m.group(1).lower() for m in _COMMAND.finditer(line))
     code = "\n".join(lines)
-    if _GITLAB_TEMPLATE.search(code) or _GITLAB_JOB.search(code):
+    if (_GITLAB_TEMPLATE.search(code) or _GITLAB_JOB.search(code)) and not _gitlab_job_disabled(lines):
         tools.add("secret_detection")
     return sorted(tools)
 
@@ -221,6 +255,9 @@ def ci_guard(root: Path) -> CiGuard:
     for path in _ci_files(root):
         text = _read(path)
         found = _ci_tools(text) if text is not None else []
+        if found and path.suffix in (".yml", ".yaml") and path.parent.name == "workflows" \
+                and not _runs_on_change(_code_lines(text or "")):
+            found = []
         if found:
             files.append(path.relative_to(root).as_posix())
             tools.update(found)

@@ -581,7 +581,7 @@ A secrets hook in the pre-commit config and a secrets scan in CI (gitleaks, dete
 - Used by: row `secrets-guard`.
 - Evidence: `secrets_guard.configured` config_text (config_only), `secrets_guard.enforcement.present` head_structure (measured).
 - Not measured when:
-  - `secret_scanning_not_read`: No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read. Add a secrets scan step to CI (gitleaks or trufflehog), or run with --platform so GitHub's settings are read.
+  - `secret_scanning_not_read`: No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read. Add a secrets scan step to CI (gitleaks or trufflehog); GitHub's own settings are not read yet.
 
 ### `agent_consistency`: Cross-agent instruction consistency
 
