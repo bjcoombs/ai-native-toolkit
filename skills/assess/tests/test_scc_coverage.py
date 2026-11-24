@@ -103,7 +103,7 @@ def test_languages_are_judged_against_their_own_median():
     assert rows == []
 
 
-def test_backend_by_language_null_for_partial_coverage():
+def test_backend_by_language_null_without_a_backend():
     a, b = ROOT / "a.py", ROOT / "b.sh"
     files = [(a, 10, 2.0, "lizard"), (b, 10, 2.0, "scc")]
     assert backend_by_language(files, {a: "Python", b: "Shell"}, {a: "lizard"}) == {

@@ -83,6 +83,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 - `prior_tool_versions`
 - `promissory_markers.families`
 - `stats_summary.fn_ccn.backend_by_language`
+- `stats_summary.fn_ccn.file_level_by_language`
 - `tool_versions`
 - `unit_readings.units.blocks`
 - `unit_readings.units.blocks.promissory_markers.families`

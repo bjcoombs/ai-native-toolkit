@@ -115,6 +115,7 @@ IDENTIFIER_KEYED_MAPS: Final = frozenset({
     "instruction_files.{}.subscores",
     "nested_instructions.files.subscores",
     "stats_summary.fn_ccn.backend_by_language",
+    "stats_summary.fn_ccn.file_level_by_language",
 })
 
 # Record field names of blocks with no TypedDict (built as dict literals). The

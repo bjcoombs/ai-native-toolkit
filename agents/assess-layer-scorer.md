@@ -356,8 +356,10 @@ if [ -f "$STATS" ]; then
     # THIS against cyclop:15 etc., never the file-aggregate `.ccn` block.
     fn_ccn_p95: .fn_ccn.p95, fn_ccn_max: .fn_ccn.max,
     fn_count: .fn_ccn.function_count,
-    # Per-function backend per scc language; null = scored at file level only.
+    # Per-function backend per scc language; null = no backend scored a file of it.
+    # file_level_by_language counts the files scc alone scored, per language.
     fn_backends: .fn_ccn.backend_by_language,
+    fn_file_level: .fn_ccn.file_level_by_language,
     # File-aggregate ccn (sum per file): drives the treemap hue / hotspot rank.
     # NOT a per-function violation - label it as an aggregate in the report.
     file_aggregate_ccn_p95: .ccn.p95, file_aggregate_ccn_max: .ccn.max,
@@ -379,7 +381,7 @@ If the sidecar is missing, skip the combined-scoring matrix below and fall back 
 - **`fn_ccn` / a row's `max_fn_ccn`** - *per-function* cyclomatic complexity. A linter rule (`cyclop: 15`, `gocognit`, `complexity`) gates this. Compare it against the thresholds below.
 - **`ccn` / a row's `ccn`** - the *file-level aggregate* (sum of every function's complexity). It drives the treemap hue and the hotspot rank, but it is **not** a per-function value and a per-function threshold does not apply to it. A file of a dozen simple functions can sum past 100 with no single function violating anything.
 
-When you name a complexity hotspot, lead with the per-function fact against the threshold and label the aggregate as an aggregate. E.g. _"`service_modules.go` - file-aggregate ccn 136 across 13 functions; worst single function ccn 13, under the cyclop:15 threshold (no per-function violation)."_ Never report the aggregate as if it were one function's complexity. When `max_fn_ccn` is `null` (no per-function backend scored the file), say so - don't invent a per-function number. Read `fn_ccn.backend_by_language`: for every language it maps to `null`, state the gap once in the Layer 3 evidence as "no per-function data for <Language>" (a per-function threshold cannot be checked there, so a clean `fn_ccn` does not clear those files). A language mapped to a backend `fn_ccn.source` marks `approximate: true` (`dart-scanner` for Dart) has per-function figures, but label them approximate when you cite them against a threshold.
+When you name a complexity hotspot, lead with the per-function fact against the threshold and label the aggregate as an aggregate. E.g. _"`service_modules.go` - file-aggregate ccn 136 across 13 functions; worst single function ccn 13, under the cyclop:15 threshold (no per-function violation)."_ Never report the aggregate as if it were one function's complexity. When `max_fn_ccn` is `null` (no per-function backend scored the file), say so - don't invent a per-function number. Read `fn_ccn.backend_by_language`: for every language it maps to `null`, state the gap once in the Layer 3 evidence as "no per-function data for <Language>" (a per-function threshold cannot be checked there, so a clean `fn_ccn` does not clear those files). A language mapped to a backend is covered, even when `fn_ccn.file_level_by_language` counts some of its files as scored at file level only: state that count as partial coverage ("1 Python file scored at file level only"), not as a gap for the language. A language mapped to a backend `fn_ccn.source` marks `approximate: true` (`dart-scanner` for Dart) has per-function figures, but label them approximate when you cite them against a threshold.
 
 **Verify any structural mechanism against the source before narrating it.** Do not write "a large switch dispatching by module name" (or any other concrete structure) inferred from a metric - the number tells you nothing about whether the code is a switch, a dispatch table, or a recursive walk. If you describe a mechanism, you must have read the file and confirmed it; otherwise describe only what the metric shows ("high aggregate complexity concentrated in N functions") and leave the mechanism to whoever opens the file.
 
