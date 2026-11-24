@@ -19,7 +19,8 @@ runs nobody priced.
 | `provider_secret` | an `env:` or `with:` line of the job names one of `PROVIDER_SECRETS` (as the key or in `secrets.<NAME>`) |
 | `eval_tests` | a command running `pytest -m eval` / `-m evals`, or a runner (`pytest`, `python`, `node`, `npx` ...) given a path under `evals/` |
 
-A command line that installs (`pip install ragas`) is never a sign. A secret named inside a command is
+A command line that installs (`pip install ragas`) is never a sign. Nor is an `evals/` path a runner is told to leave out
+(`--ignore`, `--ignore-glob`, `--deselect`, `--exclude`): keeping evals out of a job is the remedy. A secret named inside a command is
 not a sign either. A workflow-level `env:` secret reaches every job, so it is a sign of each. A step
 that `uses:` a repo-local action (`./.github/actions/x`) carries the signs of that action's
 `action.yml`, one level, read from tracked files as `lib.ci_composite` reads one. A step or job

@@ -101,6 +101,9 @@ _EVAL = re.compile(_CMD + r"""(?:promptfoo(?:@\S+)?\s+(?:eval|redteam)\b|deepeva
 _CLI = re.compile(_CMD + r"(?:claude|@anthropic-ai/claude-code)\s+(?:[^;&|]*\s)?(?:-p|--print)(?:\s|$)")
 _EVAL_TESTS = re.compile(r"\bpytest\b[^;&|]*\s-m\s+[\"']?evals?\b|\b(?:pytest|python3?|node|bun|deno|npx|tsx)\b"
                          r"[^;&|]*?(?:^|[\s=])(?:\./)?(?:[\w.-]+/)*evals/")
+# A path a runner is told to leave out (``pytest --ignore=evals/``): keeping evals out of a job is the
+# remedy, never a sign.
+_EXCLUDED = re.compile(r"--(?:ignore|ignore-glob|deselect|exclude)(?:=|\s+)\S+")
 _INSTALL = re.compile(r"\b(?:install|add)\b")
 _SECRET = re.compile(r"\b(?:" + "|".join(PROVIDER_SECRETS) + r")\b")
 _USES = re.compile(r"""^["']?([\w.-]+/[\w.-]+)""")
@@ -210,7 +213,7 @@ def signs_in(tree: IndentTree, lines: range) -> list[str]:
             found.add("eval_harness")
         if _CLI.search(command):
             found.add("agent_cli")
-        if _EVAL_TESTS.search(command):
+        if _EVAL_TESTS.search(_EXCLUDED.sub(" ", command)):
             found.add("eval_tests")
     return sorted(found)
 

@@ -511,3 +511,15 @@ def test_a_gitlab_docs_skip_rule_is_not_a_gate(tmp_path: Path) -> None:
     assert _gitlab(tmp_path, rules)["jobs"][0]["state"] == "ungated"
     only = "  rules:\n    - changes: [prompts/**]\n      when: always\n"
     assert _gitlab(tmp_path / "b", only)["jobs"][0]["gates"] == ["changes"]
+
+
+@pytest.mark.parametrize(("command", "signs"), [
+    ("pytest --ignore=evals/ tests", []),
+    ("pytest --ignore evals/ tests", []),
+    ("pytest --ignore-glob=evals/* tests", []),
+    ("pytest --deselect evals/test_llm.py tests", []),
+    ("pytest evals/", ["eval_tests"]),
+    ("pytest --ignore=tests/slow evals/", ["eval_tests"]),
+])
+def test_an_excluded_evals_path_is_not_a_sign(command: str, signs: list[str]) -> None:
+    assert _signs(f"jobs:\n  j:\n    steps:\n      - run: {command}\n") == signs
