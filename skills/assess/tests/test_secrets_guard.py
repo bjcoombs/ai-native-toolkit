@@ -75,6 +75,10 @@ def test_a_gitlab_repository_without_a_ci_scan_reads_level_2_unmet(tmp_path: Pat
     (".github/workflows/scan.yml", "steps:\n  - run: ggshield secret scan ci\n", ["ggshield"]),
     (".gitlab-ci.yml", "include:\n  - template: Security/Secret-Detection.gitlab-ci.yml\n", ["secret_detection"]),
     (".gitlab-ci.yml", "secret_detection:\n  stage: test\n", ["secret_detection"]),
+    (".github/workflows/scan.yml", "steps:\n  - uses: GitGuardian/ggshield-action@v1\n", ["ggshield"]),
+    (".github/workflows/scan.yml", "steps:\n  - run: |\n      docker run zricethezav/gitleaks detect\n", ["gitleaks"]),
+    (".github/workflows/scan.yml", "steps:\n  - run: detect-secrets scan --baseline .secrets.baseline\n",
+     ["detect-secrets"]),
 ])
 def test_a_ci_scan_meets_level_2_measured(tmp_path: Path, rel: str, text: str, tools: list[str]) -> None:
     block = scan_secrets_guard(_repo(tmp_path, {rel: text}, "https://github.com/acme/widget.git"))
@@ -84,14 +88,29 @@ def test_a_ci_scan_meets_level_2_measured(tmp_path: Path, rel: str, text: str, t
     assert _states(block) == (("met", None), ("met", None))
 
 
-@pytest.mark.parametrize("text", [
-    "steps:\n  - run: gitleaks detect || true\n",       # masked: guards nothing
-    "steps:\n  # - uses: gitleaks/gitleaks-action@v2\n",  # commented out
-    "steps:\n  - run: echo gitleaks-report.json\n",       # a file name, not the tool
+@pytest.mark.parametrize(("rel", "text"), [
+    (".github/workflows/x.yml", "steps:\n  - run: gitleaks detect || true\n"),       # masked: guards nothing
+    (".github/workflows/x.yml", "steps:\n  # - uses: gitleaks/gitleaks-action@v2\n"),  # commented out
+    (".github/workflows/x.yml", "steps:\n  - run: echo gitleaks-report.json\n"),       # a file name, not the tool
+    (".github/workflows/x.yml", "env:\n  TOKEN: abc # gitleaks:allow\n"),              # an allowlist note
+    (".github/workflows/x.yml", "on:\n  push:\n    paths-ignore:\n      - '.gitleaks.toml'\n"),  # a path
+    (".github/workflows/x.yml",                                                        # a masked step
+     "jobs:\n  s:\n    steps:\n      - uses: gitleaks/gitleaks-action@v2\n        continue-on-error: true\n"),
+    (".github/workflows/x.yml",                                                        # a masked job
+     "jobs:\n  s:\n    continue-on-error: true\n    steps:\n      - run: gitleaks detect\n"),
+    (".github/workflows/x.yml", "steps:\n  - uses: someone/gitleaks-wrapper@v1\n"),   # not a known action
+    (".gitlab-ci.yml", ".secret_detection:\n  script: echo hi\n"),                    # a hidden job never runs
+    (".gitlab-ci.yml", "include:\n  # - template: Security/Secret-Detection.gitlab-ci.yml\n"),  # commented out
 ])
-def test_a_masked_commented_or_lookalike_line_is_not_a_scan(tmp_path: Path, text: str) -> None:
-    block = scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": text}))
+def test_a_masked_commented_or_lookalike_line_is_not_a_scan(tmp_path: Path, rel: str, text: str) -> None:
+    block = scan_secrets_guard(_repo(tmp_path, {rel: text}))
     assert block["ci"]["present"] is False
+
+
+def test_an_unmasked_step_beside_a_masked_one_still_counts(tmp_path: Path) -> None:
+    text = ("jobs:\n  s:\n    steps:\n      - uses: gitleaks/gitleaks-action@v2\n        continue-on-error: true\n"
+            "      - uses: trufflesecurity/trufflehog@main\n")
+    assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": text}))["ci"]["tools"] == ["trufflehog"]
 
 
 def test_a_workflow_in_a_subfolder_is_not_read(tmp_path: Path) -> None:

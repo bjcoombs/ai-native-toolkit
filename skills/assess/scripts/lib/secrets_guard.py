@@ -16,10 +16,14 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   git-secrets, ripsecrets).
 - ``ci``: a GitHub Actions workflow directly under ``.github/workflows/`` (the files GitHub runs)
   or the root ``.gitlab-ci.yml`` with a step that uses a secrets action
-  (``gitleaks/gitleaks-action``, ``trufflesecurity/trufflehog``, ``GitGuardian/ggshield-action``)
-  or runs a secrets tool, or that includes GitLab's ``Secret-Detection.gitlab-ci.yml`` template
-  or defines a ``secret_detection`` job. A line whose failure is masked (``|| true``) does not
-  count, since it guards nothing.
+  (``ACTION_SLUGS``: ``gitleaks/gitleaks-action``, ``trufflesecurity/trufflehog``,
+  ``GitGuardian/ggshield-action``, ...) or runs a secrets tool as a command (its name, then a
+  subcommand, a flag or the end of the line), or that includes GitLab's
+  ``Secret-Detection.gitlab-ci.yml`` template or defines a visible ``secret_detection`` job (a
+  hidden ``.secret_detection`` job is a template GitLab never runs). Comments, whole-line or
+  trailing, never count, so neither does a ``gitleaks:allow`` note or a ``.gitleaks.toml`` path.
+  A masked scan does not count, since it guards nothing: a line ending ``|| true``, or a GitHub
+  step or job with ``continue-on-error: true``.
 
 **The two levels** (maintainer decision on #1173):
 
@@ -65,9 +69,23 @@ PRE_COMMIT_FILES = (".pre-commit-config.yaml", ".pre-commit-config.yml")
 _TOOL = re.compile(r"(?<![\w-])(" + "|".join(re.escape(t) for t in SECRET_TOOLS) + r")(?![\w-])", re.IGNORECASE)
 _PRE_COMMIT_KEY = re.compile(r"^\s*-?\s*(?:repo|id)\s*:\s*(.+)$")
 _GITLAB_TEMPLATE = re.compile(r"Secret-Detection(?:\.latest)?\.gitlab-ci\.yml", re.IGNORECASE)
-_GITLAB_JOB = re.compile(r"^(?:\.)?secret_detection\s*:", re.MULTILINE)
+# A visible job: a hidden one (``.secret_detection:``) is a template GitLab never runs.
+_GITLAB_JOB = re.compile(r"^secret_detection\s*:", re.MULTILINE)
 _MASKED = re.compile(r"\|\|\s*(?:true|:|exit\s+0)\b")
 _COMMENT = re.compile(r"^\s*#")
+_TRAILING_COMMENT = re.compile(r"\s+#.*$")
+# The secrets actions a ``uses:`` step names (owner/name, any ref).
+ACTION_SLUGS = ("gitleaks/gitleaks-action", "trufflesecurity/trufflehog", "gitguardian/ggshield-action",
+                "secretlint/secretlint-action", "zricethezav/gitleaks-action")
+_USES = re.compile(r"^\s*-?\s*uses:\s*['\"]?([\w.-]+/[\w.-]+)", re.IGNORECASE)
+# A tool run as a command: its name as a word, then a subcommand or flag or the end of the line,
+# at the start of a shell line, after ``run:``/``script:``/``- ``, after a pipe or ``&&``, or after
+# ``docker run <image>`` (so a path such as ``.gitleaks.toml`` or a ``gitleaks:allow`` note is not).
+_COMMAND = re.compile(
+    r"(?:^|[;&|]\s*|(?:run|script):\s*|-\s+|docker run\s+(?:--?\S+\s+)*\S*/)(?:[\w./-]*/)?("
+    + "|".join(re.escape(t) for t in SECRET_TOOLS) + r")(?=\s|$|@)", re.IGNORECASE)
+_CONTINUE_ON_ERROR = re.compile(r"^\s*continue-on-error:\s*['\"]?true\b", re.IGNORECASE)
+_STEP_START = re.compile(r"^(\s*)-\s")
 
 
 class PreCommitGuard(TypedDict):
@@ -142,14 +160,56 @@ def _ci_files(root: Path) -> list[Path]:
     return [*found, *([gitlab] if gitlab.is_file() else [])]
 
 
-def _ci_tools(text: str) -> list[str]:
-    """The secrets tools a CI file runs or uses, unmasked; ``secret_detection`` for GitLab's template or job."""
-    tools: set[str] = set()
-    for line in text.splitlines():
-        if _COMMENT.match(line) or _MASKED.search(line):
+def _code_lines(text: str) -> list[str]:
+    """The lines with comments removed, a whole-line comment as an empty line so line numbers hold."""
+    return ["" if _COMMENT.match(line) else _TRAILING_COMMENT.sub("", line) for line in text.splitlines()]
+
+
+def _block_end(lines: list[str], start: int, indent: int) -> int:
+    """The index after the YAML block that opens at ``start`` with ``indent`` (its list item or key)."""
+    for i in range(start + 1, len(lines)):
+        line = lines[i]
+        if line.strip() and len(line) - len(line.lstrip()) <= indent:
+            return i
+    return len(lines)
+
+
+def _masked_lines(lines: list[str]) -> set[int]:
+    """The lines inside a GitHub step or job that sets ``continue-on-error: true``: that step's or job's
+    failure never stops the run, so a scan in it guards nothing."""
+    masked: set[int] = set()
+    for i, line in enumerate(lines):
+        if not _CONTINUE_ON_ERROR.match(line):
             continue
-        tools.update(_tools_in(line))
-    if _GITLAB_TEMPLATE.search(text) or _GITLAB_JOB.search(text):
+        indent = len(line) - len(line.lstrip())
+        for j in range(i, -1, -1):  # the enclosing step (a list item) or job (a key one level up)
+            opener = lines[j]
+            if not opener.strip():
+                continue
+            ind = len(opener) - len(opener.lstrip())
+            if ind < indent or (ind == indent - 2 and _STEP_START.match(opener)):
+                masked.update(range(j, _block_end(lines, j, ind)))
+                break
+    return masked
+
+
+def _ci_tools(text: str) -> list[str]:
+    """The secrets tools a CI file uses or runs, unmasked; ``secret_detection`` for GitLab's template
+    or visible job. Comments never count, and neither does a masked step or job."""
+    lines = _code_lines(text)
+    masked = _masked_lines(lines)
+    tools: set[str] = set()
+    for i, line in enumerate(lines):
+        if i in masked or not line.strip() or _MASKED.search(line):
+            continue
+        uses = _USES.match(line)
+        if uses:
+            slug = uses.group(1).lower()
+            tools.update(t for t in SECRET_TOOLS if slug in ACTION_SLUGS and t in slug)
+            continue
+        tools.update(m.group(1).lower() for m in _COMMAND.finditer(line))
+    code = "\n".join(lines)
+    if _GITLAB_TEMPLATE.search(code) or _GITLAB_JOB.search(code):
         tools.add("secret_detection")
     return sorted(tools)
 
