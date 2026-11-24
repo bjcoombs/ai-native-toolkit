@@ -39,14 +39,18 @@ keeps the kinds as tokens.
 
 Block (``skill_personal_data`` in run-context.json)::
 
-    {"available": True,
+    {"available": bool,                                # false: skill_files_unread (below)
+     "reason": str,                                    # only when available is false
      "files": [{"path": str, "kinds": [kind, ...]}],  # only the files with a finding
-     "files_considered": int, "files_with_personal_data": int,
+     "files_considered": int, "files_unread": int, "files_with_personal_data": int,
      "kinds_detected": [kind, ...]}                    # KINDS, so a reader sees what "met" covers
 
 With ``scope`` (a skill unit's folder in the unit pass) only the files under it are read. With no
 skill or agent file, ``files_considered`` is 0 and the condition reads not measured
-(``no_skill_files``), never met.
+(``no_skill_files``), never met. A file that cannot be read counts in ``files_unread``; when none
+of the files read holds a kind, the block reads ``available: false`` with ``reason``
+``skill_files_unread: ...``, so a partial scan is never a clean pass. A file over 1 MB is read up to
+that limit.
 
 Skill personal data (#1045), no model. `scan_skill_personal_data(repo_root, scope, excludes)` reads
 each skill and agent file and its skill's `references/` files and records per file the `KINDS`
@@ -122,6 +126,8 @@ _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 # A file name, not a mail domain: a retina asset (``logo@2x.png``) or any name ending in a file
 # extension (``icon@3x.webp``).
 _ASSET_DOMAIN = re.compile(r"^\d+x\b|\.(?:png|jpe?g|gif|svg|webp|avif|ico|pdf)$", re.IGNORECASE)
+# A diff stat, not a phone: ``+1234 -5678`` (lines added and removed).
+_DIFF_STAT = re.compile(r"^\+\d+\s+-\d")
 # A number, not a phone: a decimal (``+0.5``) or a run of digits with no separator (``+1000000000``).
 _DECIMAL = re.compile(r"\.\d")
 _SEPARATOR = re.compile(r"[ (-]")
@@ -162,6 +168,7 @@ def _has_phone(text: str) -> bool:
         return True
     return any(8 <= sum(c.isdigit() for c in m.group(0)) <= 15 and not _DATE.search(m.group(0))
                and not _DECIMAL.search(m.group(0)) and _SEPARATOR.search(m.group(0)[1:])
+               and not _DIFF_STAT.match(m.group(0))
                for m in _PHONE_INTL.finditer(text))
 
 
