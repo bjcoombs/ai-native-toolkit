@@ -398,3 +398,8 @@ def test_never_rules_all_the_way_down_switch_the_job_off(tmp_path: Path) -> None
 def test_a_bare_gitleaks_call_prints_usage(tmp_path: Path) -> None:
     text = "steps:\n  - run: |\n      gitleaks\n"
     assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": text}))["ci"]["present"] is False
+
+
+def test_an_untagged_docker_uses_step_still_counts(tmp_path: Path) -> None:
+    text = "steps:\n  - uses: docker://zricethezav/gitleaks\n    with:\n      args: detect --source .\n"
+    assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": text}))["ci"]["tools"] == ["gitleaks"]

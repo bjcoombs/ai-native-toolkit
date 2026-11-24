@@ -127,8 +127,10 @@ _COMMAND_NAMES = sorted((*SECRET_TOOLS, "detect-secrets-hook"), key=len, reverse
 # A command that cannot fail the job guards nothing: ``detect-secrets scan`` writes a baseline and
 # exits 0, ``trufflehog`` exits 0 on findings without ``--fail``, ``gitleaks --exit-code 0``.
 _TRUFFLEHOG_FAIL = re.compile(r"(?<![\w-])--fail(?![\w-])")  # not --fail-on-scan-errors
-_STAGED_OR_INFO = re.compile(r"--staged\b|\bgitleaks\s+(?:version|help)\b|(?<!\S)(?:--help|-h|--version)(?!\S)"
-                             r"|\bgitleaks\s*['\"]?\s*$")  # a bare call prints usage
+_STAGED_OR_INFO = re.compile(r"--staged\b|\bgitleaks\s+(?:version|help)\b|(?<!\S)(?:--help|-h|--version)(?!\S)")
+# A bare ``gitleaks`` shell call prints usage. Only for a command: a ``uses: docker://...gitleaks``
+# step ends its line too, with its arguments under ``with:`` below.
+_BARE_CALL = re.compile(r"\bgitleaks\s*['\"]?\s*$")
 _GITLEAKS_NO_FAIL = re.compile(r"--exit-code[= ]0\b")
 _COMMAND = re.compile(
     r"(?:^\s*|[;&|]\s*|(?<![\w-])(?:run|script):\s*|^\s*-\s+|"
@@ -439,7 +441,7 @@ def _hook_id(tokens: list[str]) -> str | None:
     return None
 
 
-def _tool_that_can_fail(name: str, line: str) -> str | None:
+def _tool_that_can_fail(name: str, line: str, command: bool = True) -> str | None:
     """The tool a command on ``line`` runs, if the command can fail the job; else None."""
     if name == "detect-secrets-hook":
         return "detect-secrets"
@@ -447,7 +449,8 @@ def _tool_that_can_fail(name: str, line: str) -> str | None:
         return None  # ``detect-secrets scan`` and ``audit`` always exit 0
     if name == "trufflehog" and not _TRUFFLEHOG_FAIL.search(line):
         return None
-    if name == "gitleaks" and (_GITLEAKS_NO_FAIL.search(line) or _STAGED_OR_INFO.search(line)):
+    if name == "gitleaks" and (_GITLEAKS_NO_FAIL.search(line) or _STAGED_OR_INFO.search(line)
+                               or (command and _BARE_CALL.search(line))):
         return None  # a CI checkout has nothing staged; version and help scan nothing
     return name
 
@@ -490,9 +493,10 @@ def _ci_tools(text: str, hooks: frozenset[str] = frozenset(), gitlab: bool = Fal
             continue
         if _STEP_START.match(line) and _in_name_list(lines, i):
             continue
-        names = {m.group(1).lower() for m in _COMMAND.finditer(line)}
-        names |= {m.group(1).lower() for m in _DOCKER_IMAGE.finditer(line)}
-        tools.update(t for t in (_tool_that_can_fail(n, line) for n in names) if t)
+        commands = {m.group(1).lower() for m in _COMMAND.finditer(line)}
+        images = {m.group(1).lower() for m in _DOCKER_IMAGE.finditer(line)} - commands
+        tools.update(t for t in (_tool_that_can_fail(n, line) for n in commands) if t)
+        tools.update(t for t in (_tool_that_can_fail(n, line, command=False) for n in images) if t)
     code = "\n".join(lines)
     if gitlab and _GITLAB_TEMPLATE.search(code) and not _gitlab_job_disabled(lines) \
             and not _DETECTION_DISABLED.search(code):
