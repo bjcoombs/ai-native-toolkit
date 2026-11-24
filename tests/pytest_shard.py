@@ -32,8 +32,8 @@ Without `--shard` the plugin does nothing.
 teardown summed, in the xdist controller too) as the JSON `--shard-weights`
 reads. The committed `skills/assess/tests/shard-weights.json` holds Windows
 seconds: rebuild it from a green Windows run by merging its
-`shard-seconds-assess-<K>` artifacts with `jq -S -s add`, not from a Linux or
-local run, whose per-file times differ. A stale weights file still yields a
+`shard-seconds-assess-<K>` artifacts with `jq -S -s add` (averaging a few runs
+smooths their noise), not from a Linux or local run, whose per-file times differ. A stale weights file still yields a
 valid partition; only the balance drifts.
 """
 from __future__ import annotations
