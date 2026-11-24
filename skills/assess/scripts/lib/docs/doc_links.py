@@ -8,8 +8,8 @@ edges, broken links ("ghosts"), doc->code links, wikilink ambiguity, and the
 per-doc machine-link fingerprint the raw-source detector reads.
 
 ``lib.docs.doc_graph`` owns discovery, the reference-edge pass, and the signals; it
-calls :func:`harvest_links` once per build and reuses :func:`strip_fenced_lines`
-and :data:`INLINE_CODE_RE` for its backticked-reference and missing-xref scans.
+calls :func:`harvest_links` and :func:`missing_xrefs` once per build and reuses
+:func:`strip_fenced_lines` and :data:`INLINE_CODE_RE` for its backticked-reference scan.
 Inward-only and leaf-level: stdlib only, no runtime ``lib`` import, so the doc
 and code extension sets are passed in rather than imported from
 ``lib.docs.doc_graph``. The row shapes come from ``lib.run_context_types`` under
@@ -24,10 +24,15 @@ relative to the doc or from the repo root. `harvest_links` adds the `link` edges
 graph and returns a `LinkHarvest` of broken links ("ghosts"; a link to an existing
 directory is not one), doc->code links, the ambiguous-wikilink count, and the per-doc
 count of URI-scheme links (`mailto:`, `tel:`, `http:`) that `raw_source.py` reads as the
-machine-extraction fingerprint. Stdlib only and imports no `lib` module, so
+machine-extraction fingerprint. An unresolved `[[key]]` on a line that names a `.toml` file
+is a TOML array-of-tables header in prose (`the [[units]] of .assess/config.toml`), not a
+broken wikilink (#1228). `missing_xrefs` finds docs that name another doc's filename
+without linking it; a filename several docs share (`SKILL.md`) counts only when one of
+them sits in the naming doc's own directory (#1229). Stdlib only and imports no `lib` module, so
 `doc_graph.py` passes its doc and code extension sets in. `doc_graph.py` also reuses
-`strip_fenced_lines` and `INLINE_CODE_RE` for its reference-edge and missing-xref scans.
-Co-changes with `doc_graph.py` (its only caller) and its test `tests/test_doc_links.py`;
+`strip_fenced_lines` and `INLINE_CODE_RE` for its reference-edge scan.
+Co-changes with `doc_graph.py` (its only caller) and its tests `tests/test_doc_links.py`
+and `tests/test_doc_graph_false_positives.py` (the TOML-header and shared-filename rules);
 `skills/assess/tests/test_doc_graph.py` covers the same rules end to end.
 """
 from __future__ import annotations
@@ -41,7 +46,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # annotation only; the caller owns the networkx import
     import networkx as nx
 
-    from lib.run_context_types import BrokenLink, DocToCodeEdge
+    from lib.run_context_types import BrokenLink, DocToCodeEdge, MissingXref
 
 # by-relpath, by-basename and by-stem indexes from ``_build_name_index``.
 NameIndex = tuple[dict[str, Path], dict[str, list[Path]], dict[str, list[Path]]]
@@ -65,19 +70,19 @@ _EXTERNAL_RE = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
 # a real navigation edge - the writer formatted it as code on purpose. Caps
 # match-length to avoid spanning paragraphs when stray backticks appear.
 INLINE_CODE_RE = re.compile(r"`[^`\n]{1,200}`")
+# A TOML array-of-tables header in prose (`the [[units]] of .assess/config.toml`)
+# shares the wikilink syntax (#1228). A bare or dotted TOML key ...
+_TOML_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$")
+# ... on a line that names a `.toml` file.
+_TOML_FILE_RE = re.compile(r"[\w-]\.toml\b", re.IGNORECASE)
 
 
-def _strip_code_spans(text: str) -> str:
-    """Remove fenced code blocks and inline-code spans before link extraction.
-
-    Without this, a markdown doc that *teaches* link syntax (a FORMAT spec, an
-    Obsidian-skill how-to) contributes phantom edges to the navigation graph
-    and inflates `dangling_links`. The writer formatted those targets as code
-    precisely because they are samples, not navigation.
-    """
-    # Strip fenced blocks first so an inline-code regex can't snag content
-    # inside a fence that legitimately contains backticks of its own.
-    return INLINE_CODE_RE.sub("", strip_fenced_lines(text))
+def is_toml_table_header(target: str, line: str) -> bool:
+    """True when an unresolved ``[[target]]`` reads as a TOML table header: the
+    target is a TOML key and its line names a ``.toml`` file. Called only for a
+    target that resolves to no doc, so a real ``[[note]]`` on such a line still
+    links."""
+    return bool(_TOML_KEY_RE.match(target)) and bool(_TOML_FILE_RE.search(line))
 
 
 def _strip_anchor_and_alias(target: str) -> str:
@@ -251,10 +256,12 @@ class LinkHarvest:
 
 
 def _harvest_wikilinks(
-    d: Path, link_text: str, repo_root: Path, name_index: NameIndex, doc_set: set[Path],
-    graph: nx.DiGraph, harvest: LinkHarvest,
+    d: Path, link_text: str, lines: list[str], repo_root: Path, name_index: NameIndex,
+    doc_set: set[Path], graph: nx.DiGraph, harvest: LinkHarvest,
 ) -> None:
-    """Wikilinks resolve by note name across the vault."""
+    """Wikilinks resolve by note name across the vault. ``lines`` are the doc's
+    lines with fences dropped but code spans kept, one per ``link_text`` line,
+    so the TOML-header test still sees a backticked `config.toml`."""
     rel = harvest.rel
     for m in _WIKILINK_RE.finditer(link_text):
         # Strip alias/anchor first so the scheme check sees the bare target
@@ -270,7 +277,10 @@ def _harvest_wikilinks(
         if amb:
             harvest.ambiguous += 1
         if tgt is None:
-            harvest.add_broken(d, wikilink_target, "wikilink")
+            if not is_toml_table_header(  # raw contents: `[[a#b|c]]` is no TOML key
+                m.group(1).strip(), lines[link_text.count("\n", 0, m.start())],
+            ):
+                harvest.add_broken(d, wikilink_target, "wikilink")
             continue
         if tgt in doc_set and tgt != d:
             graph.add_edge(rel(d), rel(tgt), kind="link")
@@ -330,10 +340,70 @@ def harvest_links(
         # Strip code spans before harvesting links: a link target inside a
         # fence or backtick span is a documentation sample (FORMAT specs,
         # wikilink-syntax demos), not a navigation edge.
-        link_text = _strip_code_spans(text)
-        _harvest_wikilinks(d, link_text, repo_root, name_index, doc_set, graph, harvest)
+        fenced = strip_fenced_lines(text)
+        link_text = INLINE_CODE_RE.sub("", fenced)
+        _harvest_wikilinks(
+            d, link_text, fenced.split("\n"), repo_root, name_index, doc_set, graph, harvest,
+        )
         _harvest_mdlinks(
             d, link_text, repo_root, doc_set, graph, harvest,
             doc_exts=doc_exts, code_exts=code_exts,
         )
     return harvest
+
+
+# Conventional filenames that get mentioned all the time and don't need a
+# cross-reference every time they're named - excluded from the missing-xref scan.
+XREF_SKIP_NAMES = {
+    "readme.md", "index.md", "_index.md", "license.md", "changelog.md",
+    "contributing.md", "code_of_conduct.md", "security.md", "agents.md",
+    "claude.md", "gemini.md", "home.md", "notes.md",
+}
+
+
+def _xref_target(candidates: list[Path], source: Path) -> Path | None:
+    """The one doc a bare filename names from ``source``, or None.
+
+    A filename shared by several docs (every skill's ``SKILL.md``) names the one
+    in the source's own directory, or no doc at all (#1229): picking one of the
+    others would cite a doc the writer never meant."""
+    if len(candidates) == 1:
+        return candidates[0]
+    same_dir = [c for c in candidates if c.parent == source.parent]
+    return same_dir[0] if len(same_dir) == 1 else None
+
+
+def missing_xrefs(
+    docs: list[Path], texts: dict[Path, str], graph: nx.DiGraph, rel: Callable[[Path], str],
+) -> list[MissingXref]:
+    """Docs that name another doc's filename in prose but never link to it
+    (Karpathy Lint: "missing cross-references").
+
+    High-precision: matches the exact filename (e.g. `payments.md`) outside
+    fenced code, only for non-conventional target docs, only when the name
+    picks out one doc (``_xref_target``), and only when no link or reference
+    edge to that target already exists.
+    """
+    by_name: dict[str, list[Path]] = {}
+    for d in docs:
+        if d.name.lower() not in XREF_SKIP_NAMES:
+            by_name.setdefault(d.name.lower(), []).append(d)
+    if not by_name:
+        return []
+    alt = "|".join(re.escape(n) for n in sorted(by_name, key=len, reverse=True))
+    pattern = re.compile(r"(?<![\w./-])(" + alt + r")\b", re.IGNORECASE)
+    edges = set(graph.edges())
+    out: list[MissingXref] = []
+    for d in docs:
+        text = texts.get(d)
+        if not text:
+            continue
+        seen: set[Path] = set()
+        for m in pattern.finditer(strip_fenced_lines(text)):
+            t = _xref_target(by_name.get(m.group(1).lower(), []), d)
+            if t is None or t == d or t in seen:
+                continue
+            seen.add(t)
+            if (rel(d), rel(t)) not in edges:  # already linked -> not missing
+                out.append({"from": rel(d), "to": rel(t)})
+    return out
