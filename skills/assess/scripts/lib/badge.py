@@ -27,7 +27,8 @@ blue, blue, green, brightgreen for Steps 1-4, never red; grey with the message
 it through `write_headline_badge` on every run, stamping a `link` to
 `assess-report.md` and the `run_id`, and rewrites it after the opt-in mutation
 recount; `assess_finalize` never touches it. The layered "X / 8" score badge and
-its band ladder are retired. Tests: `tests/test_badge.py`, `tests/test_headline.py`.
+its band ladder are retired. A measured repository below the first Step of a model whose Step 1
+has a gate gets ``BELOW_FIRST_STEP_COLOR`` (Step 1's blue), not the not-measured grey. Tests: `tests/test_badge.py`, `tests/test_headline.py`.
 """
 from __future__ import annotations
 
@@ -43,6 +44,9 @@ LABEL = "AI-readiness"
 # Step -> shields colour: cool to warm achievement colours, no red (#740).
 STEP_COLORS = {1: "blue", 2: "blue", 3: "green", 4: "brightgreen"}
 NOT_MEASURED_COLOR = "lightgrey"
+# Measured, but below the first Step of a model whose Step 1 has a gate (#889): Step 1's colour,
+# never the not-measured grey.
+BELOW_FIRST_STEP_COLOR = STEP_COLORS[1]
 
 
 def step_color(step: int | None) -> str:
@@ -76,7 +80,8 @@ def headline_badge(
         "schemaVersion": 1,
         "label": _scoped_label(scope),
         "message": headline["summary"],
-        "color": step_color(step),
+        "color": BELOW_FIRST_STEP_COLOR if headline["available"] and step is None and headline["next_step"] is not None
+        else step_color(step),
     }
     if run_id is not None:
         badge["run_id"] = run_id

@@ -29,7 +29,12 @@ one is proposed and joins the lint only once approved, by its key in ``APPROVED_
 (the labelled translation under the English summary, #1174): it returns each token of the
 English that must appear unchanged in the translation and does not, in order. Those are the
 backticked spans (ids, paths, commands, code), the link targets, and the bare file names and
-paths (a word with a ``/`` or a file extension). Tests: ``tests/test_plain_english.py``.
+paths (a word with a ``/`` or a file extension).
+
+``CRITICAL_WORDS`` (#744, #889) are the words of blame or loss the report and the fleet pages
+never use about a team's progress; ``critical_words(text)`` returns those ``text`` holds as a
+substring, after removing the exact text of each ``CRITICAL_WORD_EXEMPT`` entry. The fleet credit tests and the engine-text test (the headline, the Next line, the
+gate notes and reason words) read the one tuple. Tests: ``tests/test_plain_english.py``.
 """
 from __future__ import annotations
 
@@ -38,8 +43,8 @@ from typing import TypedDict, cast
 
 from lib.level_result_types import LevelResult
 
-__all__ = ["APPROVED_WHYS", "IDIOMS", "MAX_WORDS", "MANIFEST_PROSE", "PlainIssue", "fixed_lines", "lint",
-           "manifest_lines", "untranslated_tokens"]
+__all__ = ["APPROVED_WHYS", "CRITICAL_WORDS", "CRITICAL_WORD_EXEMPT", "IDIOMS", "MAX_WORDS", "MANIFEST_PROSE", "PlainIssue", "fixed_lines", "lint",
+           "critical_words", "manifest_lines", "untranslated_tokens"]
 
 # Long sentences are the first thing a reader in a second language loses track of.
 MAX_WORDS = 25
@@ -171,3 +176,36 @@ def manifest_lines() -> dict[str, str]:
     for entry in core_manifest()["entries"]:
         walk({k: v for k, v in entry.items() if k != "id"}, (str(entry.get("id")),))
     return out
+
+
+# Words that read as blame or loss, kept out of what the report and the fleet pages say about a
+# team's progress (#744, #889): the fleet credit section and the engine's own text (the headline,
+# the Next line, gate notes and reason words) are tested against them.
+CRITICAL_WORDS = ("regress", "lost", "broke", "behind", "worst", "fail", "bad", "rank")
+
+
+# Engine text that holds a critical word yet describes what a check does, not how a team is doing.
+# Keyed by its ``fixed_lines()`` location, with its exact text: a change to the text fails the
+# engine-text test until this entry is looked at again (#889).
+class Exemption(TypedDict):
+    text: str
+    reason: str
+
+
+CRITICAL_WORD_EXEMPT: dict[str, Exemption] = {
+    "GATE_CHANGE.ci_runs_tests": {"text": "CI turns red on a broken check",
+                                  "reason": "describes what a check does, not how the team is doing"},
+}
+
+
+def critical_words(text: str, words: tuple[str, ...] = CRITICAL_WORDS) -> list[str]:
+    """Each of ``words`` that ``text`` holds, as a substring, case-insensitively, in order.
+
+    A substring catches every inflection ("failed", "regressed", "falling behind"). The exact
+    text of each ``CRITICAL_WORD_EXEMPT`` entry is removed first, wherever it is quoted. A word
+    that only contains a stem ("badge" holds "bad") is a false match: give it an exemption,
+    never shorten the tuple."""
+    lower = text.lower()
+    for exempt in CRITICAL_WORD_EXEMPT.values():
+        lower = lower.replace(exempt["text"].lower(), " ")
+    return [w for w in words if w in lower]

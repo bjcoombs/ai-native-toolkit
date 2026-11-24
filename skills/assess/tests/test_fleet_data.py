@@ -214,6 +214,24 @@ def test_a_type_mismatch_reads_as_unknown_with_its_reason() -> None:
     assert model()["version"] == "fleet-data-1"
 
 
+def test_an_unknown_cell_with_a_confirmed_level_carries_its_floor() -> None:
+    """#889: level 1 holds and level 2 cannot be read, so the cell is unknown with floor 1."""
+    levels = parse_levels({"version": "t", "rows": [{
+        "id": "r", "title": "R", "scope": "team", "aggregation": "min",
+        "levels": [{"level": 1, "criteria": [{"signal": "b.n", "op": "gt", "value": 0}]},
+                   {"level": 2, "criteria": [{"signal": "b.m", "op": "gt", "value": 0}]}]}]})
+    row = dict(ROWS[0])
+    row["scans"] = {"b": {"available": True, "n": 3}}
+    (cell,) = fd.repo_cells(levels["rows"], row)  # type: ignore[arg-type]
+    assert (cell["status"], cell.get("floor")) == ("unknown", 1)
+    row["scans"] = {"b": {"available": True, "n": 3, "m": 1}}
+    (known,) = fd.repo_cells(levels["rows"], row)  # type: ignore[arg-type]
+    assert (known["status"], known["level"], "floor" in known) == ("level", 2, False)
+    row["scans"] = {"b": {"available": True, "n": "many"}}
+    (none,) = fd.repo_cells(levels["rows"], row)  # type: ignore[arg-type]
+    assert (none["status"], "floor" in none) == ("unknown", False)
+
+
 def test_write_fleet_data_replaces_the_file(tmp_path: Path) -> None:
     data = build(fd.Privacy())
     path = fd.write_fleet_data(tmp_path / "out", data)
