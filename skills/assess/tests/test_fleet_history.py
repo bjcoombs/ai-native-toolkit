@@ -234,7 +234,7 @@ def test_a_failed_same_day_replace_never_leaves_a_mixed_entry_that_is_selected(t
     def flaky(src: object, dst: object) -> None:
         if Path(str(dst)) == entry / fail_at:
             raise OSError("disk full")
-        real_replace(src, dst)  # type: ignore[arg-type]  # the os.replace stub types its paths as object
+        real_replace(src, dst)  # type: ignore[arg-type]  # the flaky wrapper types its paths as object
     monkeypatch.setattr(fh.os, "replace", flaky)
     with pytest.raises(OSError):
         persist(out, entry, STAMP, REPOS)  # type: ignore[arg-type]  # STAMP is a plain dict standing in for FleetStamp
