@@ -5,7 +5,7 @@ description: Renders the /assess report from the deterministic run-context.json 
 
 # Assess Findings Writer
 
-The report-writing half of `/assess`. The deterministic core has written `.assess/run-context.json` (the data bus) and the `assess-layer-scorer` agent has returned the per-practice scorecard. Your job is to assemble `.assess/assess-report.md`: the deterministic headline, the scorecard, the snapshots, the **verbatim** cross-practice findings, the findings where the repository says one thing and does another, and the Top 3 Actions.
+The report-writing half of `/assess`. The deterministic core has written `.assess/run-context.json` (the data bus) and the `assess-layer-scorer` agent has returned the per-practice scorecard. Your job is to assemble `.assess/assess-report.md`: the deterministic top card, the scorecard, the snapshots, the **verbatim** cross-practice findings, the findings where the repository says one thing and does another, and the Top 3 Actions.
 
 **Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
 
@@ -46,16 +46,16 @@ jq '.derived_findings, .attention, .attention_low_signal, .keyhole_summary, .pre
 
 **Copy `findings_markdown` verbatim.** `run-context.json` carries a pre-rendered `findings_markdown` string - the deterministic findings section (the ten findings with their paths and actions, then the attention list). Paste it into the report **verbatim, inside the `🔎 Cross-practice findings` fold below** - do not paraphrase, summarise, reorder, or drop findings. You write framing prose (the "why these matter here") *inside* the block, directly under its `## Cross-Practice Findings (Keyhole Readiness)` heading - the block already opens with that heading, so **never add your own heading above or around it**; the heading must appear exactly once in the report. The section itself is the deterministic core's product, not yours. This is what makes the findings impossible to omit regardless of which LLM drives the run.
 
-`keyhole_summary` rolls the same findings into a one-line readiness summary (`summary_text`), reported beside the deterministic headline - see the **headline** in the report template below. `prescribed_actions` lists the actions the report MUST include, one per top `attention` row (up to three; one when `attention_low_signal` is true), and `gap_actions` lists `{signal, action, paths}` candidates for the slots left free: instruction files that are all nested (`signal` `layer_grades`, advising a root `AGENTS.md` or `CLAUDE.md` that names the check command, naming the nested files), a missing coverage report (`signal` `coverage_report`, naming the top hotspots to measure), doc reachability below the 0.50 floor (`signal` `doc_graph`, naming the unreachable docs), and a removal (`signal` `instruction_placement`, `mode` `remove`, #1084): an instruction file whose always-on text the scan flags, with its measured `cost` (`{metric, path, value}`, always-on lines). A removal earns credit by taking something away; when it fills a Top 3 slot, copy its `finding` and `cost` into the action in `finalize-input.json` verbatim, and its `paths` into the action's `files`, so finalize writes the `remove` mode and the measured cost into `actions.json` and keeps the action's lifecycle across runs (identity is `finding` plus `files`; the directive's line count changes as the file shrinks). `[]` when none fires, or `{available: false, reason}` when the gap scan failed (then fill free slots by judgement) - see the **Mandatory attention rule** in the Top 3 Actions section below.
+`keyhole_summary` rolls the same findings into a one-line readiness summary (`summary_text`), pasted in the catalogue coverage fold of the report template below. `prescribed_actions` lists the actions the report MUST include, one per top `attention` row (up to three; one when `attention_low_signal` is true), and `gap_actions` lists `{signal, action, paths}` candidates for the slots left free: instruction files that are all nested (`signal` `layer_grades`, advising a root `AGENTS.md` or `CLAUDE.md` that names the check command, naming the nested files), a missing coverage report (`signal` `coverage_report`, naming the top hotspots to measure), doc reachability below the 0.50 floor (`signal` `doc_graph`, naming the unreachable docs), and a removal (`signal` `instruction_placement`, `mode` `remove`, #1084): an instruction file whose always-on text the scan flags, with its measured `cost` (`{metric, path, value}`, always-on lines). A removal earns credit by taking something away; when it fills a Top 3 slot, copy its `finding` and `cost` into the action in `finalize-input.json` verbatim, and its `paths` into the action's `files`, so finalize writes the `remove` mode and the measured cost into `actions.json` and keeps the action's lifecycle across runs (identity is `finding` plus `files`; the directive's line count changes as the file shrinks). `[]` when none fires, or `{available: false, reason}` when the gap scan failed (then fill free slots by judgement) - see the **Mandatory attention rule** in the Top 3 Actions section below.
 
 
 ## Write the Report
 
-Write the report to `$REPO_ROOT/.assess/assess-report.md`. **The headline is not yours to compute.** It is the run context's `headline` block (`lib/headline.py`), a pure function of the commit and the maturity-model version, except its top card fields, which read the previous run and `actions.json`: "Catalogue coverage" with the not-measured count and the model version, then the per-tag strip. Paste `headline.markdown` verbatim. The report opens with `headline.summary_markdown`, the top card (`lib/top_card.py`): the Step, the gates held, the gate that blocks the next Step, what moved since the last run, and one "Start here" and "Done when", pasted verbatim at the very top. Then comes the `since_last_run` block (`lib/since_last_run.py`): the actions closed since the previous run with their commits and the gates gained or lost, or a line saying this run is the baseline. Paste its `markdown` verbatim above the headline; it is the credit for work done, and it never names a count of practices. Never write a layered score, a fraction such as "X / 8" or a band name; the per-practice verdicts sit underneath as detail, and they never set the Step.
+Write the report to `$REPO_ROOT/.assess/assess-report.md`. **The top card is not yours to compute.** `headline.summary_markdown` (`lib/top_card.py`) states each fact about where the repository stands once: the Step, the gates held, the gate that blocks the next Step, what moved since the last run, and one "Start here" and one "Done when". It is the only paste above the fold. `assess_finalize.py` later rewrites its Start here and Done when from rank 1 of the Top 3 you write, so paste it exactly as it stands and never edit those two lines yourself. Never write a layered score, a fraction such as "X / 8" or a band name; the per-practice verdicts sit underneath as detail, and they never set the Step.
 
-**Translation for a reader in another language (#1174).** When the user works in a language other than English, add a translation directly under the pasted summary and call to action: a line `Translation (<language>):` (the language named in English, for example `Translation (Polish):`), then the same lines in that language. The English stays first and verbatim: it is the source of truth, and the deterministic lines are never rewritten. Translate the words only: condition ids, file paths, commands, code, gate ids and link targets stay exactly as written, so every backticked span and every link URL of the English appears unchanged in the translation (the helper `lib/plain_english.untranslated_tokens(english, translation)` lists any that went missing; `tests/test_plain_english.py` applies it to a sample Polish translation). Nothing machine-read is translated: `run-context.json`, `badge.json`, `log.md`, `actions.json` and fleet output stay English. With an English-speaking user, add nothing.
+**Translation for a reader in another language (#1174).** When the user works in a language other than English, add a translation directly under the pasted card: a line `Translation (<language>):` (the language named in English, for example `Translation (Polish):`), then the same lines in that language, with Start here and Done when translated from your Top 3 rank 1 (its first step and done-when), since finalize rewrites the English pair from it. The English stays first and verbatim: it is the source of truth, and the deterministic lines are never rewritten. Translate the words only: condition ids, file paths, commands, code, gate ids and link targets stay exactly as written, so every backticked span and every link URL of the English appears unchanged in the translation (the helper `lib/plain_english.untranslated_tokens(english, translation)` lists any that went missing; `tests/test_plain_english.py` applies it to a sample Polish translation). Nothing machine-read is translated: `run-context.json`, `badge.json`, `log.md`, `actions.json` and fleet output stay English. With an English-speaking user, add nothing.
 
-**Two audiences, one file.** The report serves a human (wants a short, picture-led skim) and an AI agent (wants the full structured detail). The structure below satisfies both: the **default-visible surface is short** - the headline, the Top 3 Actions, the "Says one thing, does another" section, and the two SVG images, plus one caveat line - and **everything verbose is relocated into collapsible `<details>` folds**. A collapsed `<details>` keeps its content fully present in the raw markdown, so an agent reading the file sees everything inside the folds; the fold only hides it from a human's *rendered* view. **Folding is presentation, not removal - never delete content to shorten, relocate it into a fold.** Three things never fold: the **headline**, the **Top 3 Actions** and the **"Says one thing, does another"** section. A section-ablation A/B showed that removing the Top 3 made a fresh agent confidently act on the *wrong* (lower-priority) item, so they stay visible and complete. A doc or gate that says one thing while the repository does another is the finding a reader most needs, so it stays visible too (#1254).
+**Two audiences, one file.** The report serves a human (wants a short, picture-led skim) and an AI agent (wants the full structured detail). The structure below satisfies both: the **default-visible surface is short** - the top card, the Top 3 Actions, the "Says one thing, does another" section, and the two SVG images with a one-line takeaway each, plus one caveat line - and **everything verbose, your own prose included, is relocated into collapsible `<details>` folds**. A collapsed `<details>` keeps its content fully present in the raw markdown, so an agent reading the file sees everything inside the folds; the fold only hides it from a human's *rendered* view. **Folding is presentation, not removal - never delete content to shorten, relocate it into a fold.** Three things never fold: the **top card**, the **Top 3 Actions** and the **"Says one thing, does another"** section. A section-ablation A/B showed that removing the Top 3 made a fresh agent confidently act on the *wrong* (lower-priority) item, so they stay visible and complete. A doc or gate that says one thing while the repository does another is the finding a reader most needs, so it stays visible too (#1254).
 
 Use the CodeRabbit fold style: `<details>`, then `<summary>emoji label</summary>`, a blank line, the content, a blank line, then `</details>`. The blank lines are required for tables and lists to render inside the fold. Nesting is allowed.
 
@@ -66,39 +66,16 @@ Use the CodeRabbit fold style: `<details>`, then `<summary>emoji label</summary>
 
 _Generated <YYYY-MM-DD>. Generated by `/assess` v<version>._
 
-<paste `headline.summary_markdown` from run-context.json verbatim; leave this block out when it is empty>
-<!-- The top card comes from the deterministic core (lib/top_card.py): the Step, the gates held, the gate that blocks the next Step, what moved since the last run, then one "Start here" and one "Done when". It is the first thing a newcomer reads, so it sits above everything else. Paste it unchanged; every other action stays below as detail. -->
-<only when the user works in a language other than English: `Translation (<language>):` on its own line, then the summary and the call to action above in that language; see "Translation for a reader in another language" above>
+<paste `headline.summary_markdown` from run-context.json verbatim; leave it out when it is empty>
+<only when the user works in a language other than English: `Translation (<language>):` on its own line, then the card in that language; see "Translation for a reader in another language" above>
 
 _New to these words? The [glossary](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md) explains [Step](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#step), [gate](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#gate), [practice](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#practice), [level](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#level), [evidence grade](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade) and [truth tag](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#truth-tag) in a sentence or two each._
-<!-- The glossary line is a FIXED string: paste it verbatim directly under the executive summary, even when the summary block is left out. The summary is where a newcomer first meets these words, so each one links to its plain-English entry here, before the report uses them again. -->
 
-## Since Last Run
-
-<paste `since_last_run.markdown` from run-context.json verbatim; leave this block out when the run context has no `since_last_run` block>
-
-<paste `headline.markdown` from run-context.json verbatim>
-
-<paste `unit_rollup.markdown` from run-context.json verbatim, only when it is non-empty (a monorepo run with two or more units)>
-
-_A readiness snapshot, not a verdict._ · Keyhole: <paste `keyhole_summary.summary_text` from run-context.json verbatim>
-<!-- The headline lines come from the deterministic core: "Catalogue coverage" with its not-measured count and model version, then the per-tag strip; the Step and its gates are on the top card. Paste them unchanged; never add a score, a fraction or a band name. The unit roll-up lines (lowest unit's Step, measured units at the next Step, the change that lifts the most units, then the "Learn from:" lines) follow the same rule: paste, never compute, never name a unit beside them. The "Learn from:" lines (#1155) name the sibling units that already hold a unit's next gate: paste them as written, never add, drop or reorder a name. -->
-<!-- The "A readiness snapshot, not a verdict." line is a FIXED string: paste it verbatim under the headline. It is the SHORT not-a-verdict frame that sits with the headline so the reader never mistakes a Step for a pass/fail gate. Do NOT expand it into the full "This is an improvement roadmap, not a verdict" sentence here - that longer framing stays in the "How to read" fold, and duplicating it on the surface regresses the bespoke-opening contract. -->
-
-<Bespoke summary - the report's emotional headline and the first thing a human reads. Write 2-3 sentences specific to **this** repo and **this** run; it must be **unrepeatable** - a sentence that would print identically under a different headline is the boilerplate tell to avoid. Hit recognition before remediation:
-> 1. **Lead with the genuine standout strengths**, named from the actual findings (the enforced gates, the complexity ratchet, a navigability jump, the closing feedback loop) - so the maintainer feels *seen* and a skeptic sees the tool read *this* code, not a template.
-> 2. **Then** name the single most important next step in one clause, and - when prior-run data exists - a one-beat trajectory note (what moved since last run: the Step, the verified tally, a layer that flipped, reachability).
->
-> Keep the non-verdict reassurance alive in the *tone* (a Missing or Partial locates where someone is partly blind, it is not a mark against the code) but do not lead with it or restate it as a standalone caveat - the full framing lives in the "How to read" fold. Celebrate what is working before pointing at what to improve.>
-
-<MUTATION_CAVEAT - render this line VERBATIM and above the fold only when mutation testing did not run; omit it entirely when mutation ran. Read `mutation_not_run_cap.applies` from run-context.json (equivalently `mutation_run` is false; task 8 lands this data - read it, do not recompute). When it applies, paste exactly:>
+<MUTATION_CAVEAT - only when `mutation_not_run_cap.applies` is true (mutation did not run), paste exactly:>
 _Note: Mutation testing was not run. The "Coverage gates and truth pressure" practice is held at Partly in place, and truth pressure is not yet measured._
 
-<MUTATION_PARTIAL_CAVEAT - render this line VERBATIM and above the fold only when `mutation_not_run_cap.partial` is true (mutation ran, but every group with records stopped at the time budget); omit it otherwise. It never appears together with MUTATION_CAVEAT. When it applies, paste exactly:>
+<MUTATION_PARTIAL_CAVEAT - only when `mutation_not_run_cap.partial` is true (every mutation group stopped at its time budget); never with MUTATION_CAVEAT. Paste exactly:>
 _Note: Mutation testing stopped at its time budget in every package it ran in. The "Coverage gates and truth pressure" practice is held at Partly in place: the figures cover only the fastest mutants, a biased sample._
-
-> **Agents start here.** The prioritized Top 3 actions below are also machine-readable in `.assess/actions.json` (schema v2: every entry carries `rank`, `action`, `done_when`, and `scope_fence`, plus the lifecycle fields `status` / `claimed_by` / `completed_sha` and a derived execution `mode`). Read that file to pick up the work - even with a smaller model - without parsing this report's prose.
-<!-- Paste this "Agents start here" pointer VERBATIM (it is a deterministic fixed string keyed to the actions.json v2 schema, not prose to rewrite or embellish). It must sit above the first fold, pointing the reader at the durable machine-readable Top-3 contract before the human-readable table below. -->
 
 ## Top 3 Actions
 
@@ -114,7 +91,7 @@ _Note: Mutation testing stopped at its time budget in every package it ran in. T
 
 **One concern per action.** Each row carries one change a maintainer could accept or decline on its own. When a gap needs several independent changes (an instruction-file stub, a lockfile, a CI step), the row takes the highest-leverage one, and each other change goes directly under the table as a lettered sub-item (`3a. <change> - Done when: <criterion>`), so a maintainer can take each on its own. Sub-items are not extra rows: the table and `actions.json` keep one entry per rank, and the issue-tracking step files one item per `actions.json` entry (#1251), so a sub-item reaches the tracker only when the filer splits that entry.
 
-**Name the condition an action moves.** When an action changes one maturity-model condition, put that condition's id in the action's `condition` field in `finalize-input.json` (an id `level.conditions` lists, e.g. `layer-5-ci.1`); `assess_finalize.py` refuses an id the run's level result does not list. When the headline's Next line names an unmet gate and no prescribed action holds the slot, the change that holds that gate is the strongest candidate for a free slot.
+**Name the condition an action moves.** When an action changes one maturity-model condition, put that condition's id in the action's `condition` field in `finalize-input.json` (an id `level.conditions` lists, e.g. `layer-5-ci.1`); `assess_finalize.py` refuses an id the run's level result does not list. When the top card's Blocks line names an unmet gate and no prescribed action holds the slot, the change that holds that gate is the strongest candidate for a free slot.
 
 **Scope fence** names what the action must NOT touch: the files, behaviours, or conventions out of bounds ("only `.golangci.yml`; no source edits", "extract the one function; no drive-by reformatting of the rest of the file"). Smaller models over-extend without an explicit fence.
 
@@ -124,7 +101,7 @@ _Note: Mutation testing stopped at its time budget in every package it ran in. T
 
 ### Why these three?
 
-<For each action that names a maturity-model condition or a scan, first quote that entry's `why` verbatim, in quotation marks: a condition's from its `level.conditions[]` entry in run-context.json (`.why`), a gap action's from its `gap_actions[]` entry (`.why`), and a scan's from `.scans[] | select(.name == "<scan>") | .why` in the assess skill's `references/measures.json`. Never quote a why that is `exempt: plumbing`. Then add the repository-specific framing after the quote: connect it to the specific gaps from the scorecard and to hotspot files where relevant, and be concrete about what the action prevents here. The why states the reason; do not invent another reason, and when an action names no condition or scan, give its leverage in 2-3 sentences of framing alone.>
+<For each action that names a maturity-model condition or a scan, first quote that entry's `why` verbatim, in quotation marks: a condition's from its `level.conditions[]` entry in run-context.json (`.why`), a gap action's from its `gap_actions[]` entry (`.why`), and a scan's from `.scans[] | select(.name == "<scan>") | .why` in the assess skill's `references/measures.json`. Never quote a why that is `exempt: plumbing`. Then add one or two sentences of repository-specific framing after the quote: what the action prevents here, naming the scorecard gap or hotspot file. The why states the reason; do not invent another reason, and when an action names no condition or scan, give its leverage in one or two sentences of framing alone.>
 
 ## Says one thing, does another
 
@@ -166,6 +143,20 @@ These artefacts look true but aren't: the repository says one thing and does ano
 
 <one-line takeaway: reachability plus whether it is a wayfinding or a truth gap - e.g. "~10% link-reachable: a curation/wayfinding gap, not hidden content; no doc says one thing while its code does another.">
 
+<details>
+<summary>📋 Catalogue coverage, units and keyhole summary</summary>
+
+<paste `headline.markdown` from run-context.json verbatim: "Catalogue coverage" with the not-measured count and the model version, then the per-tag strip>
+
+<paste `unit_rollup.markdown` from run-context.json verbatim, only when it is non-empty (a monorepo run with two or more units); never add, drop or reorder a unit name in its "Learn from:" lines>
+
+Keyhole: <paste `keyhole_summary.summary_text` from run-context.json verbatim>
+
+</details>
+
+<details>
+<summary>🗺️ More snapshots (Steps, evidence, truth tags, packages, doc drift, review)</summary>
+
 ### Where you are on the Steps
 
 [![Where you are on the Steps](./step-ladder.svg)](./step-ladder.svg)
@@ -201,6 +192,8 @@ These artefacts look true but aren't: the repository says one thing and does ano
 [![Review on recent merges](./review-strip.svg)](./review-strip.svg)
 
 <the strip's caption and its "In place:" line, copied verbatim from the `## Review on recent merges` section that `assess_report.py <repo> --stdout` prints; when that section says "Not drawn:", write its reason here instead of the image>
+
+</details>
 
 <details>
 <summary>📈 Snapshot detail (commit, hotspots, navigability, stale docs)</summary>
@@ -323,13 +316,12 @@ The **What it asks** column is the question that row answers for an agent workin
 
 ### The headline (deterministic)
 
-**State the headline only.** The headline is the `headline` block the core computed from the `level` block; paste it and never narrate a correction, a draft, or a reconciliation with the scorer's verdicts. If a layer verdict seems to disagree with the headline, the verdict is detail and the headline stands: the Step reads only the maturity model's conditions. The evidence markers above (`(unverified)`, `N of M claim(s) rejected`) are findings about the repository and stay.
+**State the headline only.** The top card and the catalogue coverage lines are the `headline` block the core computed from the `level` block; paste them and never narrate a correction, a draft, or a reconciliation with the scorer's verdicts. If a layer verdict seems to disagree with the card, the verdict is detail and the card stands: the Step reads only the maturity model's conditions. The evidence markers above (`(unverified)`, `N of M claim(s) rejected`) are findings about the repository and stay.
 
-- **The Step and its gates are on the top card** (`headline.summary_markdown`, `lib/top_card.py`): the Step, the gates held, the gate that blocks the next Step, what moved since the last run, one Start here and one Done when. A Step reads its gates only, so no line names a count of practices. A gate the run could not see says "not measured here" with its reason.
-- **Line 1, catalogue coverage.** The card's Holding line gives "N of M measured catalogue conditions met, V verified" and this line the not-measured count; together they say how much of the catalogue this run could read and are never a progress figure: N is `tally.met` (measured and verified conditions met), M is `tally.measured` (measured conditions only), V is the share of N graded verified (CI-executed or platform-measured), then the not-measured count with each reason and the maturity-model version. A condition that was not measured is never in M, so a blind run neither lowers nor raises the tally. Config-only and declared conditions are listed (`level.listed`), never counted.
-- **Line 2, the per-tag strip.** "By tag: behaviour 2 of 3 · docs 0 of 0 (NOT MEASURED: 1) · ...": one cell per truth tag, counted like the tally over the conditions with that tag. A condition with several tags is in each of their cells and counted once in N. NOT MEASURED, HAZARD and DECLINED are badges with their counts, shown only when non-zero. A run with no tagged condition has no strip.
+- **The card's Holding line** reads "N of M measured catalogue conditions met, V verified", and the catalogue coverage line adds the not-measured count with each reason and the model version: how much of the catalogue this run could read, never a progress figure. N is `tally.met`, M is `tally.measured`, V the share of N graded verified. A condition that was not measured is never in M, so a blind run neither lowers nor raises the tally; config-only and declared conditions are listed (`level.listed`), never counted.
+- **The per-tag strip** ("By tag: behaviour 2 of 3 · docs 0 of 0 (NOT MEASURED: 1) · ...") counts like the tally over each truth tag's conditions; NOT MEASURED, HAZARD and DECLINED show only when non-zero.
 
-There is no layered score, no fraction and no band name anywhere in the report. For a knowledge base (`.archetype.archetype` is not `"software"`), the scorecard marks the write-side layers N/A as above; the headline is unchanged, because it reads conditions, not layers.
+There is no layered score, no fraction and no band name anywhere in the report. For a knowledge base (`.archetype.archetype` is not `"software"`), the scorecard marks the write-side layers N/A as above; the card is unchanged, because it reads conditions, not layers.
 
 ### What the Step unlocks
 
@@ -342,7 +334,7 @@ Each Step names the agent **autonomy** this repo's contracts support, in the voc
 | 3 | Unattended agent PRs | `ci_runs_tests`: CI runs the tests, unmasked |
 | 4 | Autonomous loops | `coverage_gate`: an enforced coverage gate |
 
-**This is a bound, not a claim about how the team actually works** - a Step 3 repo whose team reviews every diff by hand is operating below its bound; a Step 1 repo running unattended agents is operating beyond it (the risk the headline names). A Step is a capability unlocked, never a grade of the team.
+**This is a bound, not a claim about how the team actually works** - a Step 3 repo whose team reviews every diff by hand is operating below its bound; a Step 1 repo running unattended agents is operating beyond it (the risk the top card names). A Step is a capability unlocked, never a grade of the team.
 
 </details>
 
@@ -407,7 +399,7 @@ This is an improvement roadmap, not a verdict. It measures one thing: **is the c
 
 - **Where the codebase is today** - the complexity heatmap shows current complexity and churn. Vivid red = complex AND actively changing = the files most likely to bite an agent (or a human) next week.
 - **Whether an agent can navigate it** - the doc graph shows the docs' link structure: how much is reachable from the entry point, and which docs are stale maps of churning code.
-- **What keeps it from getting worse** - the headline: the autonomy Step the contracts support and the practices in place behind it, with the per-practice scorecard underneath across three bands: read-side foundation (can the agent form a true picture?), write-side enforcement (can it be trusted to produce good output?), and meta (does the system keep itself honest over time?).
+- **What keeps it from getting worse** - the top card: the autonomy Step the contracts support and the practices in place behind it, with the per-practice scorecard underneath across three bands: read-side foundation (can the agent form a true picture?), write-side enforcement (can it be trusted to produce good output?), and meta (does the system keep itself honest over time?).
 
 A codebase can hold Step 4 and still be on fire (strong contracts, legacy debt) - or Step 1 with a calm treemap (small codebase, no enforcement needed yet). The views matter together.
 
@@ -432,6 +424,7 @@ When you write the findings and Top 3 Actions, name these anchors where they app
 If you are an agent working in this repo, the `.assess/` directory is actionable feedback written for you - the first place to look when deciding where to point effort. It is a compounding, AI-readable record that an agent can ingest directly, without re-parsing this prose, and it grows with every run:
 
 - `.assess/assess-report.md` - this report: the scorecard, the findings where the repository says one thing and does another, and the Top 3 Actions with exact commands and file paths.
+- `.assess/actions.json` - the Top 3 Actions as data (schema 2): each entry's `rank`, `action`, `done_when`, `scope_fence`, lifecycle `status` and execution `mode`. Pick up the work from here without parsing this report.
 - `.assess/run-context.json` - the full data bus (findings, attention, keyhole summary, prescribed actions, stats, diff).
 - `.assess/complexity-stats.json` - complexity / estimated-token / LOC percentiles, the keyhole-budget rollup (`est_tokens.budget`), plus the ranked file lists (`top_hotspots`, `top_complex`, `top_large`) and `files`, every scored file's `{path, ccn}`.
 - `.assess/hotspots/<file>.md` - per-file briefings, each with a **Suggested actions** section. Read a file's briefing before you change it.

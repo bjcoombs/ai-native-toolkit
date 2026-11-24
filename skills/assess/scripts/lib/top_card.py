@@ -10,7 +10,8 @@ one fact function in ``lib/card_facts.py``; this module only words them.
    - at the top Step: ``Holding Step 4 of 4 · 2 advisories, none blocks the Step.``, where
      the count is ``card_facts.advisories`` (unmet conditions no Step gate waits on). One
      reads ``1 advisory, and it blocks no Step.``; none reads ``Holding Step 4 of 4.``;
-   - below it: ``Step 3 of 4: unattended agent PRs.``, the Step's name in the model;
+   - below it: ``Step 3 of 4: unattended agent PRs.``, the Step's name in the model, its first
+     letter lowered unless the name opens with an acronym (``CI-gated merges`` stays);
    - below the first Step of a model whose Step 1 has a gate (#889): ``Not yet at Step 1 of 3.``;
    - a model without Steps: ``This maturity model defines no Steps.``;
 
@@ -35,9 +36,12 @@ one fact function in ``lib/card_facts.py``; this module only words them.
    below the top Step, the first blocking gate as a task (``GATE_TASK``), linked to its
    catalog entry; at the top Step, the next run of ``/assess``. The core reads ``actions.json``
    as it stands when the run starts, the file the previous run's finalize step wrote (or the
-   committed one), because this run's finalize writes its own Top 3 later: the card's Start here
-   is the open action carried into this run, and it can differ from rank 1 of the Top 3 table the
-   same run writes until a run refreshes the card after finalize (#1252, subtask 2c).
+   committed one), because this run's finalize writes its own Top 3 later. ``assess_finalize.py``
+   then re-renders these two lines from the Top 3 it has just written (``lib/card_refresh.py``,
+   which calls ``start_lines``), so the finished card names this run's first open action.
+   The file read is ``<assess_dir>/actions.json`` only: a scoped run reads
+   ``.assess/<slug>/actions.json`` and never the whole-repo ``.assess/actions.json``, whose
+   actions belong to another scope; without its own file it falls back as above.
 
 A profile or ``--levels`` run leads the card with ``profiles.model_lines`` (``lib/exec_summary.py``
 adds them). ``card_markdown(lines)`` joins the lines into paragraphs with the lead line bold and
@@ -62,7 +66,7 @@ from lib.model_change import model_changed_line
 from lib.since_last_run import FIRST_RUN, UNKNOWN_CLOSED
 
 __all__ = ["GATE_GAP", "GATE_TASK", "STEP_GATES_URL", "CardAction", "card_lines",
-           "card_markdown", "first_action", "since_line", "read_first_action"]
+           "card_markdown", "first_action", "since_line", "read_first_action", "start_lines"]
 
 # The catalog's Step gates entry: what each gate covers. measured_appendix.CATALOG_URL names the
 # same page; importing it here would close a cycle through lib.signals.
@@ -94,6 +98,11 @@ class CardAction(TypedDict):
 
     start: str
     done_when: str
+
+
+def _lower_first(text: str) -> str:
+    """``text`` with its first letter lowered, unless it opens an acronym (``CI-gated merges``)."""
+    return text if text[1:2].isupper() else text[:1].lower() + text[1:]
 
 
 def _sentence(text: str) -> str:
@@ -151,7 +160,7 @@ def _lead(level: Mapping[str, Any], model: MaturityModel) -> str:
                 else f" · {k} advisories, none blocks the Step")
         return f"Holding Step {step} of {top}{tail}."
     name = step_name(model, step)
-    return f"Step {step} of {top}: {name[:1].lower()}{name[1:]}." if name else f"Step {step} of {top}."
+    return f"Step {step} of {top}: {_lower_first(name)}." if name else f"Step {step} of {top}."
 
 
 def _holding(level: Mapping[str, Any], model: MaturityModel, head_sha: str | None) -> str:
@@ -215,7 +224,7 @@ def since_line(since: Any) -> str | None:
             parts.append(f"pruned always-on text in `{entry['path']}`, saved {entry.get('saved')} always-on lines")
     changed = model_changed_line(since)
     if changed is not None and not isinstance(gained, list):
-        parts.append(changed[:1].lower() + changed[1:].replace(" since last run", ""))
+        parts.append(_lower_first(changed).replace(" since last run", ""))
     elif not isinstance(gained, list) or not isinstance(lost, list):
         parts.append("gate changes not known")
     if not isinstance(closed, int):
@@ -225,7 +234,9 @@ def since_line(since: Any) -> str | None:
     return f"Since last run: {'; '.join(parts)}." if parts else None
 
 
-def _start(level: Mapping[str, Any], action: CardAction | None) -> tuple[str, str]:
+def start_lines(level: Mapping[str, Any], action: CardAction | None) -> tuple[str, str]:
+    """The card's ``Start here:`` and ``Done when:`` lines: ``action``'s, else the first blocking
+    gate as a task, else the next run of ``/assess``."""
     if action is not None:
         return f"Start here: {action['start']}", f"Done when: {_sentence(action['done_when'])}"
     gates = blocking_gates(level)
@@ -252,7 +263,7 @@ def card_lines(level: Any, model: MaturityModel, since: Any, rollup: Any = None,
     moved = since_line(since)
     if moved:
         lines.append(moved)
-    lines.extend(_start(level, action))
+    lines.extend(start_lines(level, action))
     return lines
 
 
