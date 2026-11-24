@@ -78,6 +78,13 @@ def test_deny_rule_is_the_one_the_guidance_words() -> None:
     assert deny_rules(_facts(default_branch="develop"))[0] == "Bash(git push origin develop)"
 
 
+def test_no_guardrail_paragraph_when_the_settings_file_exists(tmp_path: Path) -> None:
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text("{}\n", encoding="utf-8")
+    planned = plan_files(tmp_path, ["instructions"], _facts(), guardrail=True)
+    assert "Guardrails" not in planned[0]["content"]
+
+
 def test_no_check_command_names_the_manual_step(tmp_path: Path) -> None:
     planned = plan_files(tmp_path, ["instructions", "ci_runs_tests"], _facts(check_command=None, language=None),
                          guardrail=False)

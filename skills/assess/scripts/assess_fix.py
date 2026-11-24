@@ -214,6 +214,8 @@ def render(report: FixReport) -> str:
     elif d["mode"] == "working_tree" and d["branch"]:  # the commit failed after the branch was cut
         out.append(f"The files are staged, not committed, on branch {d['branch']}, the current checkout "
                    f"({d['reason'].replace('_', ' ')}).")
+    elif d["mode"] == "none" and d["reason"] == "nothing_staged":
+        out.append("The files are written but `git add` refused them: nothing is staged or committed.")
     elif d["mode"] == "working_tree":
         why = _DELIVERY_WORDS.get(d["reason"], d["reason"].replace("_", " "))
         out.append(f"The files are staged in the working tree for review ({why}).")

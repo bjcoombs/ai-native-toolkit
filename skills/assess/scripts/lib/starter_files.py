@@ -154,7 +154,8 @@ def plan_files(root: Path, gates: Iterable[str], facts: RepoFacts, guardrail: bo
     for gate in wanted:
         if gate == "instructions":
             planned.append({"path": INSTRUCTION_PATH, "gate": gate, "manual": None,
-                            "content": instruction_file(root.resolve().name, facts, guardrail)})
+                            "content": instruction_file(root.resolve().name, facts,
+                                                        guardrail and not (root / SETTINGS_PATH).exists())})
             if command is None:
                 planned[-1]["manual"] = f"name the command that runs the tests in `{INSTRUCTION_PATH}`"
         elif gate in ("ci_runs_tests", "coverage_gate") and command is None:

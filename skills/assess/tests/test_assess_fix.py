@@ -194,8 +194,11 @@ def test_pr_on_the_default_branch_pushes_and_opens_the_pull_request() -> None:
 def test_pr_on_a_feature_branch_is_refused_and_nothing_is_pushed(tmp_path: Path) -> None:
     runner = _Recorder(branch="feature/x")
     delivery = _deliver(runner, open_pr=True)
-    assert (delivery["mode"], delivery["reason"]) == ("local_branch", "not_on_default_branch")
+    assert (delivery["mode"], delivery["reason"], delivery["next_command"]) == (
+        "local_branch", "not_on_default_branch", None)
     assert runner.network() == []
+    without_pr = _deliver(_Recorder(branch="feature/x"), open_pr=False)
+    assert (without_pr["reason"], without_pr["next_command"]) == ("not_on_default_branch", None)
     report = cli.fix(_repo(tmp_path, PYTHON), starter=False)
     report["delivery"] = delivery
     assert "run from main to open a fix PR" in cli.render(report)
@@ -225,6 +228,12 @@ def test_pr_behind_origin_is_refused() -> None:
 def test_pr_preconditions_fail_to_a_named_reason(clean: bool, fail: tuple[str, ...], mode: str, reason: str) -> None:
     delivery = _deliver(_Recorder(fail), open_pr=True, clean=clean)
     assert (delivery["mode"], delivery["reason"]) == (mode, reason)
+
+
+def test_render_names_files_git_add_refused(tmp_path: Path) -> None:
+    report = cli.fix(_repo(tmp_path, PYTHON), starter=False)
+    report["delivery"] = {"mode": "none", "branch": None, "url": None, "reason": "nothing_staged", "next_command": None}
+    assert "nothing is staged or committed" in cli.render(report)
 
 
 def test_a_dirty_tree_commits_nothing() -> None:

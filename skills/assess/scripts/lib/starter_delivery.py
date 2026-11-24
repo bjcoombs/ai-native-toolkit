@@ -11,7 +11,9 @@ leaves out by naming only the written files). It never pushes unless asked: with
 ``open_pr`` (``assess_fix.py --pr``) it also pushes and opens a pull request (GitHub, through
 ``gh``) or merge request (GitLab, through ``glab``), only when the ``origin`` host has a CLI, that
 CLI is authenticated, and the run started on the default branch's tip, so no other branch's
-commits ride into the request (``not_on_default_branch`` otherwise). A dirty tree commits
+commits ride into the request. Off that tip, with or without ``open_pr``, the result is
+``not_on_default_branch`` with no ``next_command``, since any push from there would carry the
+other branch's commits. A dirty tree commits
 nothing: the files stay staged. A failed step stops there with its reason; nothing is retried.
 Commands run through an injectable ``Runner`` so tests make no network call.
 """
@@ -122,12 +124,13 @@ def deliver(root: Path, branch: str, title: str, body: str, paths: Sequence[str]
         return {"mode": "local_branch", "branch": branch, "url": None, "reason": reason,
                 "next_command": push_command(cli, branch)}
 
+    if not tip:  # a branch cut here carries the other branch's commits: offer no push at all
+        return {"mode": "local_branch", "branch": branch, "url": None, "reason": "not_on_default_branch",
+                "next_command": None}
     if not open_pr:
         return local("committed_locally")
     if cli is None:
         return local("no_supported_remote")
-    if not tip:
-        return local("not_on_default_branch")
     if runner([cli, "auth", "status"], root)[0] != 0:
         return local(f"{cli}_not_authenticated")
     if runner(["git", "push", "-q", "-u", "origin", branch], root)[0] != 0:
