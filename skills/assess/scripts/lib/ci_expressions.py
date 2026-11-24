@@ -10,7 +10,11 @@ one under ``continue-on-error: ${{ ... }}`` as an enforced check. Neither is kno
   ``else``) that is a ``${{ ... }}`` expression, ``$NAME`` or ``${NAME}`` (quoted or not):
   ``${{ env.NAME }}``, ``$NAME`` and ``${NAME}`` are replaced by a literal ``env:`` value
   of the step, else the job, else the workflow (a quoted ``"$NAME"`` only when the value is
-  one word, as the shell runs it). Anything else (``${{ inputs.cmd }}``, ``${{
+  one word, as the shell runs it). A shell ``$NAME`` is word-split, not reparsed, so a
+  value holding ``;&|()<>`` is not read for it (``${{ env.NAME }}`` is text, and is); nor is
+  a name the run value assigns itself (``NAME=``, ``export NAME=``, on that line or an
+  earlier one), nor, in either form, one an earlier step of the job writes to
+  ``$GITHUB_ENV``. Anything else (``${{ inputs.cmd }}``, ``${{
   steps.x.outputs.cmd }}``, a variable no literal ``env:`` sets, one set in the script
   itself) puts the line in ``unknown``: ``lib.ci_checks`` reads it as ``check_target``
   (null) when no other line settles the signals, false when masked, as for an unexpanded
@@ -53,6 +57,12 @@ _LITERAL = re.compile(r"""^(\s*(?:-\s+)?continue-on-error:\s*)["']?\$\{\{\s*(tru
                       re.IGNORECASE)
 
 Env = dict[str, str | None]
+# A shell assignment in a run value (``CMD=x``, ``export CMD=x``): that variable is not the env's.
+_ASSIGN = re.compile(r"(?:^\s*|[;&|({]\s*|\b(?:export|then|do|else)\s+)([A-Za-z_]\w*)=")
+# A write to $GITHUB_ENV (``echo "CMD=x" >> $GITHUB_ENV``, ``CMD<<EOF``): later steps may see it.
+_ENV_WRITE = re.compile(r"""["']?([A-Za-z_]\w*)(?:=|<<).*>>\s*["']?\$\{?GITHUB_ENV\b""")
+# Shell operators a word-split ``$NAME`` cannot run: such a value is not one command.
+_OPERATORS = frozenset(";&|()<>")
 
 
 class Settled(NamedTuple):
@@ -69,27 +79,33 @@ def _env(tree: IndentTree, keys: list[int]) -> Env:
     return {tree.lines[c].key: scalar(tree.lines[c].value) for c in tree.children(block)} if block is not None else {}
 
 
-def _resolve(match: re.Match[str], env: Env) -> str | None:
-    """The literal a command-position word stands for, or None."""
+def _resolve(match: re.Match[str], env: Env, assigned: set[str]) -> str | None:
+    """The literal a command-position word stands for, or None. A shell ``$NAME`` is word-split,
+    never reparsed, so a value with a shell operator, or a name the script ``assigned``, is
+    unknown; ``${{ env.NAME }}`` is substituted as text before the shell runs."""
     expr = match.group("expr")
     if expr is not None:
         named = _ENV_EXPR.match(expr)
         name = named.group(1) if named else None
     else:
         name = match.group("var") or match.group("bvar")
+        if name in assigned:
+            return None
     value = env.get(name) if name else None
     if value is None or (match.group("q") and len(value.split()) != 1):
+        return None
+    if expr is None and _OPERATORS & set(value):
         return None
     return value
 
 
-def _settle_line(line: str, env: Env) -> tuple[str, bool]:
+def _settle_line(line: str, env: Env, assigned: set[str]) -> tuple[str, bool]:
     """``(line, unknown)`` for one run-value line."""
     unknown = False
 
     def swap(match: re.Match[str]) -> str:
         nonlocal unknown
-        value = _resolve(match, env)
+        value = _resolve(match, env, assigned)
         if value is None:
             unknown = True
             return match.group(0)
@@ -112,12 +128,17 @@ def settle_expressions(text: str) -> Settled:
         job_env = workflow_env | _env(tree, job_keys)
         steps = next((k for k in job_keys if tree.lines[k].key == "steps"), None)
         mappings = [(job_keys, tree.subtree(job))]
+        written: set[str] = set()   # names an earlier step of the job wrote to $GITHUB_ENV
         for item in tree.items(steps) if steps is not None else []:
-            env = job_env | _env(tree, item)
-            for j in body_lines(tree, item):
-                out[j], unsure = _settle_line(lines[j], env)
+            env = job_env | _env(tree, item) | dict.fromkeys(written)
+            assigned: set[str] = set()
+            run_lines = body_lines(tree, item)
+            for j in run_lines:
+                assigned.update(_ASSIGN.findall(lines[j].split(":", 1)[-1] if tree.lines[j].structural else lines[j]))
+                out[j], unsure = _settle_line(lines[j], env, assigned)
                 if unsure:
                     unknown.add(j)
+            written.update(n for j in run_lines for n in _ENV_WRITE.findall(lines[j]))
             mappings.append((item, range(item[0], max(tree.subtree(k).stop for k in item))))
         for keys, span in mappings:
             for k in keys:

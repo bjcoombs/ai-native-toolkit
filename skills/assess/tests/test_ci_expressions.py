@@ -152,3 +152,46 @@ def test_a_literal_continue_on_error_keeps_its_reading(
 def test_an_expression_on_one_step_leaves_the_others_enforced(tmp_path: Path) -> None:
     steps = "      - run: ruff check .\n        continue-on-error: ${{ inputs.soft }}\n      - run: pytest\n"
     assert _scan(tmp_path, _wf(steps)) == (True, True, "enforced_check", None, "check_may_pass")
+
+
+# --- pre-review round 1: the shell's own reading of a variable -----------------------------------
+
+@pytest.mark.parametrize(("run", "reading"), [
+    ("|\n          CMD=echo\n          $CMD", _NULL),
+    ("|\n          export CMD=echo\n          ${CMD}", _NULL),
+    ("CMD=echo; $CMD", _NULL),
+    ("|\n          OTHER=x\n          $CMD", _CREDIT),         # another name: the env literal stands
+])
+def test_a_variable_the_script_sets_itself_is_unknown(
+        tmp_path: Path, run: str, reading: tuple[object, ...]) -> None:
+    steps = f"      - run: {run}\n        env:\n          CMD: ruff check .\n"
+    assert _scan(tmp_path, _wf(steps)) == reading
+
+
+@pytest.mark.parametrize(("write", "reading"), [
+    ('echo "CMD=echo hi" >> $GITHUB_ENV', _NULL),
+    ("echo CMD=echo >> \"$GITHUB_ENV\"", _NULL),
+    ('echo "OTHER=x" >> $GITHUB_ENV', _CREDIT),
+])
+def test_a_github_env_write_makes_later_steps_unknown(
+        tmp_path: Path, write: str, reading: tuple[object, ...]) -> None:
+    steps = f"      - run: {write}\n      - run: ${{{{ env.CMD }}}}\n"
+    assert _scan(tmp_path, _wf(steps, job="    env:\n      CMD: ruff check .\n")) == reading
+
+
+def test_a_github_env_write_does_not_reach_back() -> None:
+    text = ("jobs:\n  t:\n    env:\n      CMD: pytest\n    steps:\n      - run: $CMD\n"
+            "      - run: echo CMD=x >> $GITHUB_ENV\n")
+    assert settle_expressions(text).unknown == frozenset()
+
+
+@pytest.mark.parametrize(("run", "value", "reading"), [
+    ("$CMD", "'cd app && pytest'", _NULL[:3]),          # word-split: && is an argument, never run
+    ("${CMD}", "'pytest | tee log'", _NULL[:3]),
+    ("${{ env.CMD }}", "'cd app && pytest'", _TESTS),    # text substitution: the shell parses it
+    ("$CMD", "pytest -q", _TESTS),
+])
+def test_a_shell_operator_in_a_variable_value_is_unknown(
+        tmp_path: Path, run: str, value: str, reading: tuple[object, ...]) -> None:
+    steps = f"      - run: {run}\n        env:\n          CMD: {value}\n"
+    assert _scan(tmp_path, _wf(steps))[:3] == reading
