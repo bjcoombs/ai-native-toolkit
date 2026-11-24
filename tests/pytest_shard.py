@@ -17,20 +17,24 @@ keeps that file on one worker (#831). Each file goes to exactly one shard:
 2. Heaviest file first, ties broken by node path, each file joins the shard
    with the least weight so far (ties go to the lowest shard number).
 
-The assignment depends only on the set of collected files and their weights,
-so N legs started with the same arguments and different K hold disjoint
-shards whose union is the whole collection. Every leg checks that property
-over all N shards of its own collection before it deselects anything, and
-stops with a usage error if any collected test falls in no shard or in two.
+The plan places every collected file exactly once by construction, and it
+depends only on the set of collected files and their weights. So N legs that
+collect the same files with the same arguments, differing only in K, hold
+disjoint shards whose union is the whole collection. No single leg can see
+the other legs, so that precondition is what the guards check:
+tests/test_windows_workflow.py pins one suite step per sharded suite whose
+only per-leg argument is `--shard`, with every K in 1..N exactly once, and
+tests/test_pytest_shard.py runs the plugin over real collections and checks
+that the shards' union is the full collection with no overlap.
 Without `--shard` the plugin does nothing.
 
 `--shard-record PATH` writes the run's seconds per test file (setup, call and
 teardown summed, in the xdist controller too) as the JSON `--shard-weights`
-reads. Regenerate a committed weights file with a full, unsharded run:
-
-    pytest -p pytest_shard -n auto --dist loadfile --shard-record <weights>.json
-
-A stale weights file still yields a valid partition; only the balance drifts.
+reads. The committed `skills/assess/tests/shard-weights.json` holds Windows
+seconds: rebuild it from a green Windows run by merging its
+`shard-seconds-assess-<K>` artifacts with `jq -S -s add`, not from a Linux or
+local run, whose per-file times differ. A stale weights file still yields a
+valid partition; only the balance drifts.
 """
 from __future__ import annotations
 
@@ -77,20 +81,6 @@ def file_weights(files: dict[str, Path], measured: dict[str, float] | None) -> d
     return {key: float(measured.get(key, fallback)) for key in files}
 
 
-def check_partition(files: list[str], shards: list[list[str]]) -> None:
-    """Fail unless the shards are disjoint and their union is exactly `files`."""
-    seen: dict[str, int] = {}
-    for i, shard in enumerate(shards):
-        for path in shard:
-            if path in seen:
-                raise pytest.UsageError(f"shard plan puts {path} in shards {seen[path] + 1} and {i + 1}")
-            seen[path] = i
-    missing = sorted(set(files) - set(seen))
-    extra = sorted(set(seen) - set(files))
-    if missing or extra:
-        raise pytest.UsageError(f"shard plan does not cover the collection: missing {missing}, extra {extra}")
-
-
 def pytest_addoption(parser: pytest.Parser) -> None:
     group = parser.getgroup("shard", "deterministic split by test file")
     group.addoption("--shard", default=None, metavar="K/N", help="run only shard K of N (1-based)")
@@ -126,12 +116,9 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     if weights_path:
         measured = {str(key): float(val) for key, val in json.loads(Path(weights_path).read_text(encoding="utf-8")).items()}
     shards = plan_shards(file_weights(files, measured), n)
-    check_partition(list(files), shards)
     keep = set(shards[k - 1])
     selected = [item for item in items if _node_path(item) in keep]
     deselected = [item for item in items if _node_path(item) not in keep]
-    if len(selected) + len(deselected) != len(items):
-        raise pytest.UsageError("shard selection lost a test")
     if deselected:
         config.hook.pytest_deselected(items=deselected)
     items[:] = selected

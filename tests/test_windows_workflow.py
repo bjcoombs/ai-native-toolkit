@@ -175,6 +175,8 @@ def test_sharded_suite_steps_pass_the_leg_shard() -> None:
     for name in ("skills/assess pytest", GHSYNC_SUITE):
         run = " ".join(steps[name]["run"].split())
         assert SHARD_ARG in run, name
+        # The legs of a suite share this step; the shard is its only per-leg input.
+        assert set(re.findall(r"matrix\.(\w+)", run)) == {"shard", "shards"}, name
         assert "--dist loadfile" in run, name
         assert steps[name]["env"]["PYTHONPATH"] == "${{ github.workspace }}/tests", name
         assert '--shard-record "${{ runner.temp }}/shard-seconds.json"' in run, name

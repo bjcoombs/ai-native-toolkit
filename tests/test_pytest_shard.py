@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import pytest_shard  # noqa: E402
+import pytest_shard  # noqa: E402 (importable only after the sys.path insert above)
 
 REPO = Path(__file__).resolve().parent.parent
 TESTS = REPO / "tests"
@@ -56,13 +56,6 @@ def test_plan_balances_by_weight() -> None:
     # Heaviest first, each to the lightest shard: the big file sits alone.
     files = {"b": 3.0, "a": 10.0, "d": 3.0, "c": 3.0}
     assert pytest_shard.plan_shards(files, 2) == [["a"], ["b", "c", "d"]]
-
-
-def test_check_partition_rejects_overlap_and_gaps() -> None:
-    with pytest.raises(pytest.UsageError, match="shards 1 and 2"):
-        pytest_shard.check_partition(["a", "b"], [["a"], ["a", "b"]])
-    with pytest.raises(pytest.UsageError, match="missing"):
-        pytest_shard.check_partition(["a", "b"], [["a"], []])
 
 
 def test_measured_weights_fall_back_to_the_median(tmp_path: Path) -> None:
