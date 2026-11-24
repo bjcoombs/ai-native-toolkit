@@ -106,7 +106,9 @@ FACT_IDS = ("lead", "holding", "blocks", "since", "start_here", "done_when")
 
 # "Step" or "Steps" as a word (the no-Steps lead links "Steps")
 _STEP_WORD = re.compile(r"\bSteps?\b")
-_PROFILE = re.compile(r"\bprofile(:?) ([A-Za-z0-9_.-]+)")
+# The two places a profile's name stands: the model line's opening and the "(profile: x)" label.
+# A row title that holds the word "profile" is never linked.
+_PROFILE = re.compile(r"^(Maturity model: )profile ([A-Za-z0-9_.-]+)|(\()profile: ([A-Za-z0-9_.-]+)(\))")
 _CUSTOM = re.compile(r"^(Maturity model: )(.+?)(, a custom file)|(\(model: )([^)]+)(\))")
 
 
@@ -287,7 +289,8 @@ def card_lines(level: Any, model: MaturityModel, since: Any, rollup: Any = None,
 def _model_markdown(line: str) -> str:
     """A profile line before the lead: the profile linked to its file, a custom model's file
     name in backticks, and "default model" linked to the default model's file."""
-    line = _PROFILE.sub(lambda m: f"[profile{m.group(1)} {m.group(2)}]({PROFILES_URL}/{m.group(2)}.toml)",
+    line = _PROFILE.sub(lambda m: f"{m.group(1)}[profile {m.group(2)}]({PROFILES_URL}/{m.group(2)}.toml)"
+                        if m.group(1) else f"([profile: {m.group(4)}]({PROFILES_URL}/{m.group(4)}.toml))",
                         line, count=1)
     line = _CUSTOM.sub(lambda m: f"{m.group(1)}`{m.group(2)}`{m.group(3)}" if m.group(1)
                        else f"{m.group(4)}`{m.group(5)}`{m.group(6)}", line, count=1)

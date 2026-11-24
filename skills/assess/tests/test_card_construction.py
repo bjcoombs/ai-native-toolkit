@@ -40,7 +40,7 @@ from lib.exec_summary import summarised, summary_facts
 from lib.headline import headline
 from lib.keyhole.keyhole_signals import render_findings_markdown
 from lib.level_tally import default_model
-from lib.top_card import FACT_IDS
+from lib.top_card import FACT_IDS, PROFILES_URL
 from test_headline import ci2  # noqa: F401 - ci2 is a fixture
 from test_top_card import FIRST, KNOWN, ROLLUP, SHA, _below, _top
 
@@ -190,6 +190,14 @@ def test_the_no_steps_and_profile_lines_carry_a_link() -> None:
                             "Not in the default model: Tests.", "Step 1 of 1."], lead_at=3)
     assert lint_errors([flat, *custom.split("\n\n")]) == []
     assert "`my.toml`" in custom
+    # a row title holding "profile" is never taken for a profile name (#1296 review)
+    titles = card_markdown(["Maturity model: my.toml, a custom file, not the default.",
+                            "Not ready (model: my.toml). Missing: Complexity profile tracked (not met).",
+                            "Not in the default model: Test profile coverage, level 2.", "Step 1 of 1."], lead_at=3)
+    assert "/profiles/" not in titles
+    handover = card_markdown(["Maturity model: profile handover, not the default.",
+                              "Ready for handover (profile: handover).", "Step 4 of 4."], lead_at=2)
+    assert handover.split("\n\n")[1] == f"Ready for handover ([profile: handover]({PROFILES_URL}/handover.toml))."
 
 
 def test_the_report_names_the_findings_heading_the_core_writes() -> None:
