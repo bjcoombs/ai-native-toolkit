@@ -9,7 +9,11 @@ repository, without running anything:
   package's script resolves);
 - Makefile targets (``Makefile``, ``makefile``, ``GNUmakefile``, ``*.mk``) and
   justfile recipes, with a lenient flag when a target name is computed
-  (``$(VAR)``) or a pattern rule (``%``) could match anything;
+  (``$(VAR)``) or a pattern rule (``%``) could match anything. A Makefile
+  target whose every rule has no prerequisite and only no-op recipe lines
+  (blank, a comment, ``true``, ``:``, ``exit 0``, ``echo``, ``printf``; none
+  holding ``$(``, ``${`` or a backtick) is in ``TargetSet.noop``: it exists but
+  runs nothing, so the resolver reads it ``unknown``, never a check (#922);
 - ``pyproject.toml``: declared dependencies, ``[project.scripts]`` and the
   ``[tool.*]`` tables (``[tool.ruff]`` means ``ruff`` is the repo's tool);
   whether pytest is configured; tox environments and nox sessions;
@@ -28,7 +32,8 @@ HEAD (`git ls-files`, tracked symlinks as themselves; a walk outside git): packa
 scripts and dependencies, Makefile targets, justfile recipes, pyproject names (dependencies,
 `[project.scripts]`, `[tool.*]` tables), pytest presence, tox environments, nox sessions
 and CI configuration lines. Config files are unioned across the repo and a computed target
-makes its family lenient, so a false `missing` stays rare. Tests:
+makes its family lenient, so a false `missing` stays rare. A Makefile target that only
+runs no-op lines (`true`, `:`, `exit 0`, `echo`) is listed in `TargetSet.noop` (#922). Tests:
 `tests/test_command_index.py`.
 """
 from __future__ import annotations
@@ -66,6 +71,9 @@ _NOX_SESSION = re.compile(
 )
 _NOX_NAME = re.compile(r"name\s*=\s*[\"']([^\"']+)[\"']")
 _REQUIREMENT_NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
+# Recipe lines that run nothing (#922): a target made only of these is not a check.
+NOOP_COMMANDS = frozenset({"true", ":", "exit 0", "exit"})
+_ECHO_WORDS = frozenset({"echo", "printf"})
 
 
 @dataclass(frozen=True)
@@ -74,9 +82,14 @@ class TargetSet:
 
     names: frozenset[str]
     lenient: bool = False
+    noop: frozenset[str] = frozenset()
 
     def has(self, name: str) -> bool:
         return self.lenient or name in self.names
+
+    def runs_nothing(self, name: str) -> bool:
+        """True when every rule for ``name`` has no prerequisite and a no-op recipe."""
+        return name in self.noop
 
 
 @dataclass(frozen=True)
@@ -219,21 +232,46 @@ def _npm(root: Path, files: frozenset[str]) -> tuple[TargetSet | None, frozenset
     return TargetSet(frozenset(scripts)), frozenset(packages)
 
 
-def _make_targets(text: str) -> tuple[set[str], bool]:
+def noop_recipe_line(line: str) -> bool:
+    """A recipe line that runs nothing: blank, a comment, ``true``, ``:``, ``exit 0`` or an echo."""
+    text = line.strip().lstrip("@-+").strip()
+    if "$(" in text or "${" in text or "`" in text:
+        return False
+    word = text.split(maxsplit=1)[0] if text else ""
+    return (not text or text.startswith("#") or text in NOOP_COMMANDS
+            or word in _ECHO_WORDS)
+
+
+def _make_targets(text: str) -> tuple[set[str], bool, set[str]]:
+    """``(names, lenient, noop)``: the targets, whether a name is computed, and the
+    targets whose every rule has no prerequisite and only no-op recipe lines."""
     names: set[str] = set()
     lenient = False
+    rules: list[tuple[list[str], bool]] = []  # (targets, runs nothing so far)
     for line in text.splitlines():
         if line.startswith(("\t", " ")):
+            if rules and rules[-1][1] and not noop_recipe_line(line):
+                rules[-1] = (rules[-1][0], False)
+            continue
+        if not line.strip():
             continue
         match = _MAKE_RULE.match(line)
         if not match:
+            if rules:
+                rules.append(([], False))  # a variable or directive ends the recipe
             continue
+        prereqs, _, inline = line[match.end():].partition(";")
+        quiet = not prereqs.strip() and (not inline or noop_recipe_line(inline))
+        rule_names: list[str] = []
         for name in match.group(1).split():
             if "$" in name or "%" in name:
                 lenient = True
             elif not name.startswith("."):
                 names.add(name)
-    return names, lenient
+                rule_names.append(name)
+        rules.append((rule_names, quiet))
+    busy = {n for targets, quiet in rules if not quiet for n in targets}
+    return names, lenient, {n for targets, _ in rules for n in targets} - busy
 
 
 def _make(root: Path, files: frozenset[str]) -> TargetSet | None:
@@ -241,12 +279,16 @@ def _make(root: Path, files: frozenset[str]) -> TargetSet | None:
     if not makefiles:
         return None
     names: set[str] = set()
+    noop: set[str] = set()
+    busy: set[str] = set()
     lenient = False
     for rel in makefiles:
-        found, loose = _make_targets(_read(root, rel))
+        found, loose, quiet = _make_targets(_read(root, rel))
         names |= found
+        noop |= quiet
+        busy |= found - quiet
         lenient = lenient or loose
-    return TargetSet(frozenset(names), lenient)
+    return TargetSet(frozenset(names), lenient, frozenset(noop - busy))
 
 
 def _just(root: Path, files: frozenset[str]) -> TargetSet | None:

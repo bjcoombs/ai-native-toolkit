@@ -40,7 +40,9 @@ left behind - and `parse_ownership` runs both with the module-shape degradation 
 reference declares a module boundary: a literal path segment and at least one matched
 file with a `CODE_EXTENSIONS` suffix under a non-dot directory, so `*`, `*.py`,
 `/.github/`, root files and docs-only paths do not (#785, #874; tests in
-`tests/test_structure_drift_boundaries.py`). It mirrors
+`tests/test_structure_drift_boundaries.py`). `architecture_boundaries(refs)` counts the
+architecture-doc boundary references only when the docs name two or more distinct ones
+(`MIN_ARCHITECTURE_BOUNDARIES`): one backticked path is a pointer, not a map (#922). It mirrors
 `doc_graph.py` deliberately: the same `EXCLUDE_DIRS` / `is_excluded_path` resolution and
 `tracked_files` filtering, the same honest-degrade-over-crash shape, every collection
 sorted at the boundary for byte-identical output. The one inversion is that it *reads*
@@ -205,6 +207,21 @@ def is_boundary_pattern(pattern: str, files: set[Path]) -> bool:
     """A CODEOWNERS line or architecture-doc reference that names a module path owning
     tracked source (#785, #874)."""
     return _names_a_path(pattern) and any(_is_module_source(f) for f in files)
+
+
+MIN_ARCHITECTURE_BOUNDARIES = 2
+
+
+def architecture_boundaries(refs: list[str]) -> int:
+    """How many architecture-doc boundary references count toward ``boundary_patterns``.
+
+    ``refs`` holds one entry per (section, reference), as the drift walk counts them.
+    A boundary has two sides, so the docs must name ``MIN_ARCHITECTURE_BOUNDARIES``
+    distinct module paths: one backticked path is a pointer, not a map (#922). Fewer
+    count 0; otherwise every entry counts, as before. A CODEOWNERS line is not held to
+    this: it assigns an owner on its own.
+    """
+    return len(refs) if len(set(refs)) >= MIN_ARCHITECTURE_BOUNDARIES else 0
 
 
 def parse_codeowners(repo_root: Path) -> dict[str, set[Path]]:

@@ -282,9 +282,10 @@ def _boundary_map(op: str, value: Operand) -> Guidance | None:
     if not (op == "gt" and value == 0 or op == "gte" and value == 1):
         return None
     return {"change": "Declare module boundaries: a `CODEOWNERS` line per module path, or an "
-                      "`ARCHITECTURE.md` that names module paths.",
-            "done_when": "A committed `CODEOWNERS` line or `ARCHITECTURE.md` reference names "
-                         "a module path that matches a tracked, non-excluded source file (not "
+                      "`ARCHITECTURE.md` that names two or more module paths.",
+            "done_when": "A committed `CODEOWNERS` line, or two or more `ARCHITECTURE.md` "
+                         "references, name a module path that matches a tracked, non-excluded "
+                         "source file (not "
                          "a catch-all such as `*` or `/**`, an extension glob such as `*.py`, "
                          "`.github/`, or a docs-only path)."}
 

@@ -26,7 +26,8 @@ without running anything. Public API:
   repo's config once; pass the index to ``resolve`` when resolving many.
 
 Runner coverage: npm / pnpm / yarn / bun (``run X``, shorthand ``pnpm X``,
-``npm test``/``start``, built-ins), npx / bunx (declared packages), make,
+``npm test``/``start``, built-ins), npx / bunx (declared packages), make (a
+target that runs nothing, ``TargetSet.runs_nothing``, is ``unknown``, #922),
 just, uv / poetry (``run X``: a ``--with`` package, a declared dependency,
 script or ``[tool.*]`` table, a file), uvx, tox (``-e`` environments), nox
 (``-s`` sessions), pytest and ``python -m pytest`` (pytest configured, path
@@ -478,6 +479,8 @@ def _make(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
         outcome = _target(index.make_targets, name, "target", "a Makefile")
         if outcome[0] != "resolved":
             return outcome
+    if pos and all(index.make_targets.runs_nothing(n) for n in pos):
+        return "unknown", f"target `{pos[0]}` in a Makefile runs nothing"  # #922
     if pos:
         return "resolved", f"target `{pos[0]}` in a Makefile"
     if index.make_targets.names or index.make_targets.lenient:
