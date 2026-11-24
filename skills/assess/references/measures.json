@@ -5045,6 +5045,18 @@
       "private": false
     },
     {
+      "name": "scan_plan_stamp",
+      "title": "Scan plan",
+      "publishes": [
+        "scan_plan"
+      ],
+      "reads": [
+        "plan"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "working_notes",
       "title": "Working notes",
       "publishes": [],

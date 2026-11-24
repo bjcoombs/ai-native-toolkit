@@ -231,11 +231,13 @@ from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, FleetStamp, build_stamp, 
 from lib.levels import LevelsError, load_levels, MaturityModel
 from lib.level_signals import signal_path_validator
 from lib.run_context_types import JsonDict
+from lib.scan_plan import fleet_scans
 from lib.tool_lookup import warn_missing_packages
 from lib.signals import (
     DEFAULT_WINDOW,
     TOOLKIT_ROOT,
     UnknownScanError,
+    known_scans,
     parse_window,
     read_plugin_version,
     select_scans,
@@ -544,6 +546,9 @@ def _read_inputs(args: argparse.Namespace) -> _Inputs:
         inputs.units = load_units(Path(args.units))
     if args.scans is not None:
         inputs.scans = select_scans([s.strip() for s in args.scans.split(",") if s.strip()])
+    elif (planned := fleet_scans(model, known_scans(), args.all_scans)) is not None:
+        # --levels / --profile: only the scans the model reads, the same plan for every repository (#1268)
+        inputs.scans = select_scans(planned)
     if args.window is not None:
         parse_window(args.window)
     if args.targets is not None:
@@ -675,7 +680,8 @@ def main(argv: list[str] | None = None) -> int:
     options = ScanOptions(
         counts_only=not args.full,
         hash_salt=hash_salt,
-        window=args.window, scans=args.scans, timeout=args.timeout,
+        window=args.window, timeout=args.timeout,
+        scans=args.scans if args.scans is not None or scans is None else ",".join(scans),
         log_dir=out_dir / LOGS_DIR, active_since=window_start(window, today),
         ghsync_root=include_root(args), units=args.monorepo_units,
         managed_settings=args.managed_settings,

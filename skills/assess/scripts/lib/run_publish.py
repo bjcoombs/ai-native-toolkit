@@ -18,7 +18,7 @@ block's bullets, #1083), writes `badge.json` from the `headline` block
 `prior-level.json` into `prior_level` (`lib/prior_level.py`, #940) before drawing the diagrams and then
 rewrites it from the `level` block, reads the previous
 `findings.json` into `prior_findings_snapshot` and rewrites it
-(`findings_snapshot`), and then writes `run-context.json`. Tests: `tests/test_run_setup.py`.
+(`findings_snapshot`; kept as it is when a `--profile` scan plan left the findings out, #1268), and then writes `run-context.json`. Tests: `tests/test_run_setup.py`.
 """
 from __future__ import annotations
 
@@ -35,6 +35,7 @@ from lib.prior_level import load_prior_level, write_prior_level
 from lib.since_last_run import baseline_record, pruning_record
 from lib.run_setup import read_plugin_version
 from lib.run_wiki import write_run_wiki
+from lib.scan_plan import not_run_text
 
 
 def _since_markdown(ctx: Mapping[str, Any]) -> str:
@@ -89,5 +90,8 @@ def publish_run(ctx: dict[str, Any], state: Mapping[str, Any]) -> None:
     # overwriting it, so the gate can explain a method-version change by the
     # findings that appeared and cleared since.
     ctx["prior_findings_snapshot"] = load_snapshot(assess_dir)
-    write_snapshot(assess_dir, build_snapshot(ctx["derived_findings"], ASSESS_METHOD_VERSION))
+    # A --profile run whose plan left the findings out keeps the committed snapshot (#1268):
+    # an empty one would read as every finding cleared.
+    if not_run_text(ctx["derived_findings"]) is None:
+        write_snapshot(assess_dir, build_snapshot(ctx["derived_findings"], ASSESS_METHOD_VERSION))
     (assess_dir / "run-context.json").write_text(json.dumps(ctx, indent=2), encoding="utf-8")
