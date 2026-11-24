@@ -403,3 +403,23 @@ def test_a_bare_gitleaks_call_prints_usage(tmp_path: Path) -> None:
 def test_an_untagged_docker_uses_step_still_counts(tmp_path: Path) -> None:
     text = "steps:\n  - uses: docker://zricethezav/gitleaks\n    with:\n      args: detect --source .\n"
     assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": text}))["ci"]["tools"] == ["gitleaks"]
+
+
+@pytest.mark.parametrize(("root_ci", "included"), [
+    ("include:\n  - local: ci/sec.yml\nvariables:\n  SECRET_DETECTION_DISABLED: \"true\"\n",
+     "include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n"),
+    ("include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n  - local: ci/sec.yml\n",
+     "secret_detection:\n  rules:\n    - when: never\n"),
+])
+def test_a_switch_off_in_one_file_cancels_the_template_in_another(tmp_path: Path, root_ci: str, included: str) -> None:
+    root = _repo(tmp_path, {".gitlab-ci.yml": root_ci, "ci/sec.yml": included}, remote="https://gitlab.com/g/p.git")
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
+    assert scan_secrets_guard(root)["ci"]["present"] is False
+
+
+def test_a_template_in_an_include_still_counts(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {".gitlab-ci.yml": "include:\n  - local: ci/sec.yml\n",
+                            "ci/sec.yml": "include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n"},
+                 remote="https://gitlab.com/g/p.git")
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
+    assert scan_secrets_guard(root)["ci"]["tools"] == ["secret_detection"]

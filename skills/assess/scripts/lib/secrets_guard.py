@@ -497,11 +497,18 @@ def _ci_tools(text: str, hooks: frozenset[str] = frozenset(), gitlab: bool = Fal
         images = {m.group(1).lower() for m in _DOCKER_IMAGE.finditer(line)} - commands
         tools.update(t for t in (_tool_that_can_fail(n, line) for n in commands) if t)
         tools.update(t for t in (_tool_that_can_fail(n, line, command=False) for n in images) if t)
-    code = "\n".join(lines)
-    if gitlab and _GITLAB_TEMPLATE.search(code) and not _gitlab_job_disabled(lines) \
-            and not _DETECTION_DISABLED.search(code):
-        tools.add("secret_detection")
     return sorted(tools)
+
+
+def _gitlab_template_runs(texts: list[str]) -> bool:
+    """Whether GitLab's Secret-Detection template (or component) runs in the merged pipeline: the root
+    ``.gitlab-ci.yml`` and every file it includes are one pipeline, so the template in one file and
+    a switch-off (``SECRET_DETECTION_DISABLED``, an unconditional ``when: never``/``manual`` on the
+    ``secret_detection`` job) in another are judged together."""
+    lines = [ln for text in texts for ln in _code_lines(text)]
+    code = "\n".join(lines)
+    return bool(_GITLAB_TEMPLATE.search(code)) and not _gitlab_job_disabled(lines) \
+        and not _DETECTION_DISABLED.search(code)
 
 
 def ci_guard(root: Path, ghsync_root: Path | None = None, hooks: frozenset[str] = frozenset()) -> CiGuard:
@@ -528,6 +535,10 @@ def ci_guard(root: Path, ghsync_root: Path | None = None, hooks: frozenset[str] 
                 tools.update(found)
         unresolved = sum(r["status"] not in SETTLED and r["kind"] in _HIDING_KINDS
                          for r in resolution.includes)
+        if _gitlab_template_runs([_read(root / ".gitlab-ci.yml") or "", *(f.text for f in resolution.files)]):
+            tools.add("secret_detection")
+            if ".gitlab-ci.yml" not in files:
+                files.append(".gitlab-ci.yml")
     return {"present": bool(files), "files": files, "tools": sorted(tools), "includes_unresolved": unresolved}
 
 
