@@ -86,7 +86,7 @@
         "grpa/svc1": "6f138903823445143ad86ed6d58bdc09a0f9c3c29f35ba3d867865a91d01f577",
         "grpb/lib1": "c52536f0c0954fa12d353751fe88c57c0c20c399b942c95be5ca709d434913e7"
       },
-      "revision": 6
+      "revision": 7
     },
     "core.ci_model_jobs": {
       "repos": {

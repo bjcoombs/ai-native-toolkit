@@ -55,7 +55,8 @@ def _line_runs_check(line: str, *, script_item: bool = True, present: Present | 
             ((is_check_command(c.text) and not setup_ci_target(c.text) and not _skips_tests(c.text)
               or script_runs(c.text, present, is_check_command))   # a read body (#1033)
              and not (bare_item and not script_item and _lone_check(c.text)))
-            or (is_lint_command(c.text) and not (bare_item and _lone_linter(c.text))))
+            # a lone - mypy runs under a GitLab script: key, as for lint_runs (#1180)
+            or (is_lint_command(c.text) and not (bare_item and not script_item and _lone_linter(c.text))))
         for c in commands
     )
 
@@ -166,8 +167,8 @@ def _indent(line: str) -> int:
 def _script_items(lines: Sequence[str]) -> list[bool]:
     """Per line: false for a bare list item whose parent key is not a GitLab script key.
 
-    Read for a lone always-check item (``- pytest``) and a lone linter (``- mypy``,
-    which only ``lint_runs`` reads by key: ``test_or_lint_configured`` never counts one).
+    Read for a lone always-check item (``- pytest``) and a lone linter (``- mypy``): both
+    count only under a script key, in every signal (#1180).
 
     The parent is the nearest line above at the item's indent or less that is not a
     sibling item, skipping blank and comment lines and lines nested deeper (a sibling's

@@ -43,7 +43,8 @@ evidence is static, read from the files at HEAD:
   ``go vet``, ``cargo clippy``, ``./scripts/lint.sh``). An install that names a
   linter (``npm install eslint``, ``uv sync --extra lint``) never counts, nor
   does a bare list item that only names a linter (``- mypy`` under
-  ``matrix:``, ``needs:`` or ``stages:``); ``- ruff check .`` does.
+  ``matrix:``, ``needs:`` or ``stages:``); ``- ruff check .`` does, and so does a
+  lone ``- mypy`` under a GitLab ``script:`` key (#1180), which fails the job.
 - A bare list item that only names an always-check program (``- pytest``,
   ``- tox``, ``- py.test``, ``- nox``) counts only when its parent key is a
   GitLab ``script:``, ``before_script:`` or ``after_script:``; under
@@ -95,6 +96,16 @@ ROOT). Each resolved file's lines are classified the same way and counted in
 ``resolved_includes`` / ``unresolved_includes`` counts. The toolkit's own regression gate
 template (status ``toolkit_gate``, ``ci_includes.SETTLED``, #1152) counts as resolved: its
 one job runs no project tests.
+
+GitLab's merge (#1180, ``lib.ci_merged_view`` over ``ci_includes.merged_config``): a job whose
+keys come from more than one place (defined in the root file and an include, ``extends:``, or a
+``before_script:`` taken from ``default:``) is read once, merged, for the enforced and lint
+signals: a root ``lint: when: manual`` over an included ``lint:`` job is off-trigger, a root
+``script:`` replaces the included one, a template's ``allow_failure: true`` masks. A merge the
+resolver cannot settle (an include under ``rules:``, an anchor merge, an ``extends:`` parent not
+read) reads with an unknown trigger. ``test_or_lint_configured`` and the line counts read the
+files as written. ``tox -e`` / ``nox -s`` read through to the environment's commands
+(``lib.runner_envs``).
 
 Under ``--platform`` (and in a full ``/assess`` run) a repository whose
 includes did not all resolve offline also gets GitLab's merged configuration
@@ -369,7 +380,8 @@ from typing import Literal, NotRequired, TypedDict
 from lib.ci_action_inputs import Inputs, ReadLocal, read_inputs
 from lib.ci_expressions import follow_workflow
 from lib.ci_continuations import join_continued
-from lib.ci_includes import SETTLED, IncludeRecord, Resolution, resolve_includes
+from lib.ci_includes import SETTLED, IncludeRecord, Resolution, merged_config, resolve_includes
+from lib.ci_merged_view import merged_view
 from lib.ci_lint_gates import line_compiler_gate, line_dotnet_build, lint_gate, rewrite_gated
 from lib.ci_lint_inputs import NO_INPUTS, LintInputs, read_lint_inputs
 from lib.ci_lines import (
@@ -386,6 +398,7 @@ from lib.ci_scripts import ScriptTree, runs_missing
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, read_config, repo_files
 from lib.dot_source import dot_as_source
 from lib.runner_args import reads_pdm_scripts
+from lib.runner_envs import reads_runner_envs
 from lib.external_ci_rules import as_external
 from lib.merged_ci import MergedStatus, as_merged
 from lib.shared_tooling import include_lines, pulls_jobs_from_elsewhere
@@ -485,7 +498,8 @@ def _trigger_tally(text: str, workflow: Trigger | None,
                    declared: frozenset[int] = frozenset(),
                    unknown: frozenset[int] = frozenset(),
                    lint_inputs: LintInputs = NO_INPUTS,
-                   may_pass_lines: frozenset[int] = frozenset()) -> list[Tally]:
+                   may_pass_lines: frozenset[int] = frozenset(),
+                   unsettled: frozenset[int] = frozenset()) -> list[Tally]:
     """Per line test: ``(ordinary, unknown trigger, off trigger, masked, may pass)`` lines of one CI file.
 
     ``workflow`` is a GitHub workflow's settled trigger; None reads GitLab job triggers.
@@ -498,7 +512,8 @@ def _trigger_tally(text: str, workflow: Trigger | None,
     and a may-pass one (a reviewdog step that cannot fail) counts as a lint line that may pass.
     A ``may_pass_lines`` line (a job or step under a ``continue-on-error`` expression,
     ``lib.ci_expressions``, #1165) that the masking left unmasked reads as one whose failure
-    may not fail the job.
+    may not fail the job. An ``unsettled`` line (a GitLab job whose merge is not resolved,
+    ``lib.ci_merged_view``, #1180) reads with an unknown trigger.
     """
     text = join_continued(text)
     lines = text.splitlines()
@@ -511,6 +526,7 @@ def _trigger_tally(text: str, workflow: Trigger | None,
     unmasked, unsure = _drop(unmasked, declared), _drop(unsure, declared)
     triggers: list[Trigger] = (gitlab_line_triggers(text) if workflow is None
                                else [workflow] * len(lines))
+    triggers = ["unknown" if i in unsettled else t for i, t in enumerate(triggers)]
     kept = [keep(unmasked, triggers, t) for t in ("ordinary", "unknown", "not_ordinary")]
     may = [keep(unsure, triggers, t) for t in ("ordinary", "unknown")]
     held_kept = [keep(held, triggers, t) for t in ("ordinary", "unknown", "not_ordinary")]
@@ -572,6 +588,7 @@ def _local_reader(root: Path, tracked: frozenset[str]) -> ReadLocal:
 
 @dot_as_source()   # . ./test.sh reads as source ./test.sh on a CI line (#1033)
 @reads_pdm_scripts   # a [tool.pdm.scripts] name is a script, not a program (#1046)
+@reads_runner_envs   # tox -e lint / nox -s lint read through to their commands (#1180)
 def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
                    merged_ci: object = None, external_ci: object = None) -> CiChecksBlock:
     """Build the ``ci_checks`` block for the repository at ``repo_root``. ``merged_ci`` is the
@@ -625,12 +642,18 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
                                               instruction_words(runs_missing(_line_runs_check)),
                                               runs_missing(_line_runs_lint))
     ) + (_line_may_lint, _line_may_check, line_compiler_gate, line_dotnet_build)
-    tallies = [_trigger_tally(texts[rel], workflows.get(rel), tests, inputs[rel].declared,
+    # GitLab's merge (#1180): jobs whose keys come from several places read as merged.
+    config = merged_config(root, ghsync_root) if resolution is not None else None
+    view = merged_view(config) if config is not None and config.sources[0] == texts.get(".gitlab-ci.yml") else None
+    tallies = [_trigger_tally(view.texts[0] if view and rel in CI_CONFIG_FILES else texts[rel],
+                              workflows.get(rel), tests, inputs[rel].declared,
                               unexpanded.get(rel, frozenset()),
                               NO_INPUTS if rel in CI_CONFIG_FILES else read_lint_inputs(texts[rel]),
                               followed[rel].may_pass if rel in followed else frozenset())
                for rel in files]
-    tallies += [_trigger_tally(f.text, None, tests) for f in resolution.files] if resolution else []
+    tallies += [_trigger_tally(t, None, tests) for t in
+                (view.texts[1:] if view else (f.text for f in resolution.files) if resolution else ())]
+    tallies += [_trigger_tally(view.rendered, None, tests, unsettled=view.unsettled)] if view else []
     check_t, lint_t, miss_t, lint_miss_t, may_t, may_check_t, gate_t, dotnet_t = (
         _sum(t[i] for t in tallies) for i in range(len(tests)))
     ordinary, unknown, off, masked, may_pass = check_t
