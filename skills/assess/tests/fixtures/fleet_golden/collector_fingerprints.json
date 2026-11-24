@@ -280,6 +280,14 @@
       },
       "revision": 1
     },
+    "core.secrets_guard": {
+      "repos": {
+        "grpa/sub/deep/svc2": "6991bb861a2a5c97c6606dd1b9d21a4a6db6b3d70bd14f02f26d6da99d6a7625",
+        "grpa/svc1": "6991bb861a2a5c97c6606dd1b9d21a4a6db6b3d70bd14f02f26d6da99d6a7625",
+        "grpb/lib1": "6991bb861a2a5c97c6606dd1b9d21a4a6db6b3d70bd14f02f26d6da99d6a7625"
+      },
+      "revision": 1
+    },
     "core.shared_tooling": {
       "repos": {
         "grpa/sub/deep/svc2": "f420ed94ff2a1090127e50efb0bb7b76ab8c1acfcda09fe59146b594e9d66d14",
