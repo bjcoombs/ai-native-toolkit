@@ -50,6 +50,7 @@ Tests: ``tests/test_top_card.py``.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, TypedDict
@@ -82,6 +83,10 @@ GATE_GAP = {
     "ci_runs_tests": "CI does not turn red when a check breaks",
     "coverage_gate": "no coverage gate is enforced",
 }
+
+
+# "Step" as a word, never inside "Steps" (the no-Steps lead)
+_STEP_WORD = re.compile(r"\bStep\b")
 
 
 class CardAction(TypedDict):
@@ -258,7 +263,8 @@ def card_markdown(lines: Sequence[str], lead_at: int = 0) -> str:
     out: list[str] = []
     for i, line in enumerate(lines):
         if i == lead_at:
-            line = f"**{line.replace('Step', f'[Step]({GLOSSARY_URL}#step)', 1)}**"
+            linked = _STEP_WORD.sub(f"[Step]({GLOSSARY_URL}#step)", line, count=1)
+            line = f"**{linked}**"
         elif line.startswith("Holding: "):
             line = line.replace(" measured catalogue conditions met,",
                                 f" [measured catalogue conditions]({GLOSSARY_URL}#catalogue-coverage) met,", 1)

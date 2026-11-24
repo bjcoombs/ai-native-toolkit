@@ -189,6 +189,8 @@ def test_the_markdown_bolds_the_lead_and_links_the_glossary_terms_once() -> None
     assert f"[measured catalogue conditions]({GLOSSARY_URL}#catalogue-coverage) met" in md
     assert f"[verified]({GLOSSARY_URL}#evidence-grade)" in md
     assert all("](" not in line for line in lines)
+    # "Steps" is not "Step": the no-Steps lead links nothing
+    assert card_markdown(["This maturity model defines no Steps."]) == "**This maturity model defines no Steps.**"
 
 
 def test_the_card_lines_are_plain_english() -> None:
