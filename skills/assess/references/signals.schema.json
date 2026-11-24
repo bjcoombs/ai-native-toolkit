@@ -1318,6 +1318,30 @@
             }
           }
         },
+        "agent_ops": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: agent_workflows_unread (no committed routine or agent workflow was found. But a scheduled or event-triggered workflow calls a reusable workflow from another repository, and its path names an agent). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
         "ci_model_jobs": {
           "type": "object",
           "if": {

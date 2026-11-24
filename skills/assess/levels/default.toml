@@ -292,7 +292,11 @@
 #   counts toward hooks_present only when it holds a hook that does
 #   something: a prompt, agent, http or mcp_tool hook, or a command other
 #   than true, : or exit 0. An empty event list or a hook with no type does
-#   not count (#922).
+#   not count (#922). Level 2's second criterion, agent_work_present, is met by a
+#   routine file, a scheduled agent workflow (#815) or an issue or pull request
+#   workflow that runs an agent (#847): one condition, never two. Not measured
+#   (agent_workflows_unread) when only another repository's reusable workflow may
+#   hold the agent.
 #
 # Conditions, the verified tally and Steps (lib/level_tally.py, #744): each
 # row level is also one condition, <row id>.<level>. Only conditions whose
@@ -489,7 +493,7 @@ aggregation = "min"
   truth = ["agent_runtime"]
   criteria = [
     { signal = "agent_ops.summary.hooks_present", op = "eq", value = true },
-    { signal = "agent_ops.summary.routines_present", op = "eq", value = true },
+    { signal = "agent_ops.summary.agent_work_present", op = "eq", value = true },
   ]
 
 [[rows]]
