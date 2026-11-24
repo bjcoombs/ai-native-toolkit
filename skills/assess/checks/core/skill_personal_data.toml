@@ -1,0 +1,43 @@
+# Check manifest fragment: the skill_personal_data collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.skill_personal_data"
+kind = "collector"
+title = "Personal data in skill text"
+summary = "Each SKILL.md, agent definition and skill references/ file, scanned for emails, phone numbers, home paths, IP addresses, SSH logins, credentials and keys. A finding names the file and the kind, never the data. Personal names are not detected."
+issues = [1045]
+callable = "lib.skill_personal_data:scan_skill_personal_data"
+publishes = ["skill_personal_data"]
+reads = ["repo_root", "scope", "excludes"]
+stage = "post_offers"
+unit_scope = "scoped"
+unit_kinds = ["skill"]
+headless = { skill_personal_data = "registered" }
+whys.skill_personal_data = "Skill text is loaded into every session that triggers it and copied wherever it is published, so personal data in it leaks to every user."
+shapes = [
+  { path = "skill_personal_data", type = "lib.skill_personal_data:SkillPersonalDataBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "skill_personal_data.files.path" = "path"
+  "skill_personal_data.files.kinds" = "token"
+  "skill_personal_data.kinds_detected" = "token"
+
+[[entries]]
+id = "core:skill_personal_data.files_with_personal_data"
+kind = "signal"
+title = "Skill and agent files holding a detected kind of personal data"
+collector = "core.skill_personal_data"
+path = "skill_personal_data.files_with_personal_data"
+type = "number"
+evidence = "head_structure"
+null_means = "no_skill_files: the repository, or the skill unit, holds no SKILL.md or agent definition (files_considered 0), so there is nothing to scan"
+
+[[entries]]
+id = "core.cond.skill-personal-data.1.files_with_personal_data"
+kind = "condition"
+title = "No skill file holds a detected kind of personal data (email, phone, home path, IP, SSH login, credential, key)"
+key = "skill-personal-data.1:skill_personal_data.files_with_personal_data"
+why = "Skill text is loaded into every session that triggers it and copied wherever it is published, so personal data in it leaks to every user."
+fix = "In each file the report names, remove the kind of data it lists, or replace it with a placeholder (user@example.com, /home/user/); a key or credential that was committed should also be rotated."
