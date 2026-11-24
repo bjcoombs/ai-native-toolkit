@@ -53,7 +53,7 @@ def refreshed(block: Any, level: Any, action: Any) -> Headline | None:
     if new_lines == lines:
         return None
     new_markdown = "\n\n".join(_swap(markdown.split("\n\n"), start, done))
-    return {**block, "summary_lines": new_lines, "call_to_action": start,  # type: ignore[typeddict-item]
+    return {**block, "summary_lines": new_lines, "call_to_action": start,  # type: ignore[return-value]
             "summary_markdown": new_markdown}
 
 
