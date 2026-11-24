@@ -194,6 +194,16 @@ def test_malformed_pack_is_named(tmp_path: Path, text: str, expect: str) -> None
     assert expect in _error(tmp_path, text)
 
 
+@pytest.mark.parametrize("text, expect", [
+    ('[pack]\nname = "p\\n"\nversion = "1"\n\n[[checks]]\nid = "c"\ntitle = "T"\nwhy = "W"\nexists = "a"\n',
+     "pack.name"),
+    (HEADER + '[[checks]]\nid = "c\\n"\ntitle = "T"\nwhy = "W"\nexists = "a"\n', "checks[0].id"),
+    (_check('key_exists = { file = "a.json", key = "a.b\\n" }'), "key_exists.key"),
+])
+def test_trailing_newline_never_reaches_a_name_or_key(tmp_path: Path, text: str, expect: str) -> None:
+    assert expect in _error(tmp_path, text)
+
+
 def test_file_must_be_named_pack_toml(tmp_path: Path) -> None:
     with pytest.raises(PackError, match=r"\.pack\.toml"):
         load_pack(_write(tmp_path, VALID, name="team.toml"))

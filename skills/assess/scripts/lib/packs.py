@@ -217,7 +217,7 @@ def _parse_rule(kind: str, value: object, where: str) -> Rule:
     if not file.lower().endswith(KEY_FILE_SUFFIXES):
         raise PackError(f"{where}.file: {file!r} must be a {', '.join(KEY_FILE_SUFFIXES)} file")
     key = _text(value.get("key"), f"{where}.key")
-    if not _KEY_PATTERN.match(key):
+    if not _KEY_PATTERN.fullmatch(key):
         raise PackError(f"{where}.key: {key!r} must be a dotted key with no empty segment")
     return {"kind": "key_exists", "file": file, "key": key}
 
@@ -241,7 +241,7 @@ def _text(value: object, where: str) -> str:
 
 def _name(value: object, where: str) -> str:
     text = _text(value, where)
-    if not NAME_PATTERN.match(text):
+    if not NAME_PATTERN.fullmatch(text):
         raise PackError(f"{where}: {text!r} must match {NAME_PATTERN.pattern}")
     return text
 
