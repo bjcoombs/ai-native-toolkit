@@ -115,7 +115,7 @@ _REFERENCE = re.compile(r"^(?:\$\{?\{?|\$\w|%\w+%|\{\{|<|process\.env\b|os\.envi
 # ``secret: true``, ``password: required``.
 _SCHEMA_VALUE = re.compile(
     r"^(?:(?:str|string|bytes|int|integer|number|float|bool|boolean|true|false|yes|no|required|optional|"
-    r"SecretStr|list|dict|object|any|unknown)(?![\w-])|"
+    r"SecretStr|list|dict|object|any|unknown)(?=\s*(?:$|[,;)\]}=|#]))|"
     r"(?:Optional|Union|List|Dict|Annotated|Literal)\[)", re.IGNORECASE)
 # A date inside an international-number match: a timezone offset then a date, not a phone number.
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
