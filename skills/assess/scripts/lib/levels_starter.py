@@ -12,7 +12,7 @@ changes:
   a custom file, so a copy that kept them would not load with ``--levels``.
 
 The copy must load with ``--levels`` before the command reports success: ``write_starter``
-writes a temporary file beside ``OUT``, loads it through ``lib.profiles.single_repo_choice``
+writes ``.<OUT stem>.levels-new.toml`` beside ``OUT`` (with the usual file mode), loads it through ``lib.profiles.single_repo_choice``
 and moves it onto ``OUT`` only when it loads. On any error the temporary file is removed and
 ``OUT`` is left as it was. It never replaces an existing file unless ``force`` is set. A file
 system error (a folder that does not exist, no permission) is a ``StarterError`` too. The guide that uses it is
@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import os
 import re
-import tempfile
 from pathlib import Path
 
 from lib.level_signals import signal_path_validator
@@ -104,18 +103,14 @@ def write_starter(out: Path, profile: str | None = None, version: str | None = N
     if version is not None and (not version.strip() or '"' in version or "\\" in version):
         raise StarterError(f"version {version!r} must be a non-empty string without quotes or backslashes")
     text = starter_text(source_path(profile), out.name, version or default_version(out))
+    # write_text, not mkstemp: the copy keeps the usual umask mode, never owner-only 0600
+    temporary = out.with_name(f".{out.stem}.levels-new.toml")
     try:
-        handle, name = tempfile.mkstemp(prefix=f".{out.stem}-", suffix=".toml", dir=out.parent)
-    except OSError as exc:
-        raise StarterError(f"cannot write {out}: {exc}") from exc
-    temporary = Path(name)
-    try:
-        with os.fdopen(handle, "w", encoding="utf-8") as stream:
-            stream.write(text)
+        temporary.write_text(text, encoding="utf-8")
         single_repo_choice(None, temporary, signal_path_validator())
         os.replace(temporary, out)
-    except ProfileError as exc:
-        raise StarterError(f"the copy does not load: {exc}") from exc
+    except ProfileError as exc:  # name the user's file, never the temporary one
+        raise StarterError(f"the copy does not load: {str(exc).replace(temporary.name, out.name)}") from exc
     except OSError as exc:
         raise StarterError(f"cannot write {out}: {exc}") from exc
     finally:

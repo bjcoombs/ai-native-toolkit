@@ -1,6 +1,7 @@
 """lib/levels_starter.py and scripts/levels_new.py: a starter model that loads with --levels (#1151)."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -104,3 +105,20 @@ def test_a_folder_that_does_not_exist_is_a_starter_error_and_exit_2(tmp_path: Pa
         write_starter(out)
     assert levels_new.main([str(out)]) == 2
     assert "cannot write" in capsys.readouterr().err
+
+
+def test_a_refused_copy_names_the_users_file_not_the_temporary_one(tmp_path: Path) -> None:
+    with pytest.raises(StarterError) as caught:
+        write_starter(tmp_path / "x.toml", version="profile-x")
+    assert "x.toml has version 'profile-x'" in str(caught.value)
+    assert "levels-new" not in str(caught.value)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="file modes are POSIX")
+def test_the_copy_keeps_the_usual_file_mode(tmp_path: Path) -> None:
+    mask = os.umask(0o022)
+    try:
+        out = write_starter(tmp_path / "x.toml")
+    finally:
+        os.umask(mask)
+    assert out.stat().st_mode & 0o777 == 0o644
