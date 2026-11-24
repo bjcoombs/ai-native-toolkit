@@ -127,7 +127,8 @@ _COMMAND_NAMES = sorted((*SECRET_TOOLS, "detect-secrets-hook"), key=len, reverse
 # A command that cannot fail the job guards nothing: ``detect-secrets scan`` writes a baseline and
 # exits 0, ``trufflehog`` exits 0 on findings without ``--fail``, ``gitleaks --exit-code 0``.
 _TRUFFLEHOG_FAIL = re.compile(r"(?<![\w-])--fail(?![\w-])")  # not --fail-on-scan-errors
-_STAGED_OR_INFO = re.compile(r"--staged\b|\bgitleaks\s+(?:version|help)\b|(?<!\S)(?:--help|-h|--version)(?!\S)")
+_STAGED_OR_INFO = re.compile(r"--staged\b|\bgitleaks\s+(?:version|help)\b|(?<!\S)(?:--help|-h|--version)(?!\S)"
+                             r"|\bgitleaks\s*['\"]?\s*$")  # a bare call prints usage
 _GITLEAKS_NO_FAIL = re.compile(r"--exit-code[= ]0\b")
 _COMMAND = re.compile(
     r"(?:^\s*|[;&|]\s*|(?<![\w-])(?:run|script):\s*|^\s*-\s+|"
@@ -340,13 +341,16 @@ def _unconditional(lines: list[str], i: int, job: int) -> bool:
     item_indent = len(lines[start]) - len(lines[start].lstrip())
     item = lines[start:_block_end(lines, start, item_indent)]
     # GitLab rules are first-match: a rule after another one is a fallback, so the job still runs
-    # wherever an earlier rule matches. Only a first rule with no condition holds on every pipeline.
+    # wherever an earlier rule matches, unless that earlier rule also switches it off. A rule with
+    # no condition holds on every pipeline once every rule before it is ``never``/``manual`` too.
     for k in range(start - 1, job, -1):
         ind = len(lines[k]) - len(lines[k].lstrip())
         if lines[k].strip() and ind < item_indent:
             break  # the ``rules:`` key: no earlier rule
         if ind == item_indent and _STEP_START.match(lines[k]):
-            return False
+            earlier = lines[k:_block_end(lines, k, ind)]
+            if not any(_WHEN_NEVER.match(ln) or _WHEN_MANUAL.match(ln) for ln in earlier):
+                return False  # an earlier rule can run the job
     return not any(_RULE_CONDITION.match(ln) for ln in item)
 
 

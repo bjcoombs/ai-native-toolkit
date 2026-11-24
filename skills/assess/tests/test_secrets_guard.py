@@ -387,3 +387,14 @@ def test_a_block_list_condition_keeps_when_never_conditional(tmp_path: Path, key
     text = ("include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n"
             f"secret_detection:\n  rules:\n    - {key}:\n        - docs/**\n      when: never\n")
     assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["tools"] == ["secret_detection"]
+
+
+def test_never_rules_all_the_way_down_switch_the_job_off(tmp_path: Path) -> None:
+    text = ("include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n"
+            "secret_detection:\n  rules:\n    - if: $CI_COMMIT_TAG\n      when: never\n    - when: never\n")
+    assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["present"] is False
+
+
+def test_a_bare_gitleaks_call_prints_usage(tmp_path: Path) -> None:
+    text = "steps:\n  - run: |\n      gitleaks\n"
+    assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": text}))["ci"]["present"] is False
