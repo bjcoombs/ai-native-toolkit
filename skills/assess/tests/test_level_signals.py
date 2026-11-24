@@ -251,7 +251,7 @@ def test_default_levels_loads_against_the_schema() -> None:
     assert maturity_model["version"].startswith("default-")
     assert all(row["scope"] == "team" for row in maturity_model["rows"])
     # Partial, Present; skill-disclosure and contributor-files are one condition each (#1045)
-    one = {"skill-disclosure", "contributor-files"}
+    one = {"skill-disclosure", "skill-script-tests", "contributor-files"}
     assert all(len(row["levels"]) == (1 if row["id"] in one else 2) for row in maturity_model["rows"])
     assert "disagree" in DEFAULT_LEVELS.read_text(encoding="utf-8").lower()
 
@@ -311,6 +311,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "guardrails-stated": None,   # no configured gate: nothing to state
             "agent-consistency": None,   # no instruction file: nothing to agree with
             "skill-disclosure": None,    # no SKILL.md or agent definition: no_skill_files
+            "skill-script-tests": None,  # no skill holds a script: no_skill_scripts
             "contributor-files": 0,      # no CONTRIBUTING or SECURITY file
         }
     for scans in golden_repos.values():   # measured headless, each unknown for a named reason
@@ -345,6 +346,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "guardrails-stated": None,  # the capture predates the guardrails block
         "agent-consistency": None,  # the capture predates agent_consistency
         "skill-disclosure": None,  # the capture predates skill_disclosure
+        "skill-script-tests": None,  # the capture predates skill_script_tests
         "contributor-files": None,  # the capture predates contributor_files
     }
     assert "layer_grades.instruction_file_present" in _row(

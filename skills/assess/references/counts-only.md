@@ -736,6 +736,13 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `skill_disclosure.files.breaks` | token |
 | `skill_disclosure.files.references.target` | path (hashed when hashing is on) |
 
+## skill_script_tests
+
+| Field | Kept as |
+|---|---|
+| `skill_script_tests.skills.path` | path (hashed when hashing is on) |
+| `skill_script_tests.skills.tested_elsewhere` | path (hashed when hashing is on) |
+
 ## org_security_policy
 
 | Field | Kept as |

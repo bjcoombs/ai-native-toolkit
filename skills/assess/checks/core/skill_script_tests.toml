@@ -1,0 +1,42 @@
+# Check manifest fragment: the skill_script_tests collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.skill_script_tests"
+kind = "collector"
+title = "Skill script tests"
+summary = "Whether each skill's scripts have tests beside them in the skill's own folder: presence, not coverage, since no suite runs. Tests found only outside the folder are named, as information."
+issues = [1045]
+callable = "lib.skill_script_tests:scan_skill_script_tests"
+publishes = ["skill_script_tests"]
+reads = ["repo_root", "scope", "excludes"]
+stage = "post_offers"
+unit_scope = "scoped"
+unit_kinds = ["skill"]
+headless = { skill_script_tests = "registered" }
+whys.skill_script_tests = "A skill's scripts run with an agent's permissions every time it triggers; tests beside them are the only check that a change still does what the SKILL.md promises."
+shapes = [
+  { path = "skill_script_tests", type = "lib.skill_script_tests:SkillScriptTestsBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "skill_script_tests.skills.path" = "path"
+  "skill_script_tests.skills.tested_elsewhere" = "path"
+
+[[entries]]
+id = "core:skill_script_tests.skills_untested"
+kind = "signal"
+title = "Skills whose scripts have no tests beside them"
+collector = "core.skill_script_tests"
+path = "skill_script_tests.skills_untested"
+type = "number"
+evidence = "head_structure"
+null_means = "no_skill_scripts: no skill in the repository, or in the skill unit, holds a script (skills_with_scripts 0), so there is nothing to test"
+
+[[entries]]
+id = "core.cond.skill-script-tests.1.skills_untested"
+kind = "condition"
+title = "Each skill's scripts have tests beside them (presence, not coverage)"
+key = "skill-script-tests.1:skill_script_tests.skills_untested"
+why = "A skill's scripts run with an agent's permissions every time it triggers; tests beside them are the only check that a change still does what the SKILL.md promises."
+fix = "Add tests for each named skill's scripts in that skill's own folder (tests/ or test_*.py beside them); where the report finds them elsewhere, move or copy them in, since tests outside the folder do not ship with the skill."
