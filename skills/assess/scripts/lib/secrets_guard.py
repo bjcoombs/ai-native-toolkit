@@ -465,9 +465,11 @@ def _job_shape(lines: list[str], job: int) -> str:
         return "plain"
     child = min(len(ln) - len(ln.lstrip()) for ln in body)
     keys = [ln.strip() for ln in body if len(ln) - len(ln.lstrip()) == child]
-    if any(k.split(":", 1)[0].strip() in _JOB_CONDITION_KEYS for k in keys):
+    names = [k.split(":", 1)[0].strip().strip("'\"") for k in keys]  # as _gitlab_jobs reads job names
+    if any(n in _JOB_CONDITION_KEYS for n in names):
         return "unevaluated"
-    when = next((m.group(1).lower() for k in keys if (m := _JOB_WHEN.match(k))), None)
+    unquoted = [f"{n}:{k.split(':', 1)[1]}" if ":" in k else k for n, k in zip(names, keys)]
+    when = next((m.group(1).lower() for k in unquoted if (m := _JOB_WHEN.match(k))), None)
     if when is None or when in _RUNS:
         return "plain"
     return "off" if when in _OFF else "unevaluated"

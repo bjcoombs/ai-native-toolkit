@@ -488,3 +488,15 @@ def test_a_job_that_inherits_its_rules_is_not_measured(tmp_path: Path, text: str
 def test_a_template_override_that_extends_is_not_measured(tmp_path: Path) -> None:
     text = TEMPLATE + ".mr-only:\n  rules:\n    - if: $CI_MERGE_REQUEST_IID\nsecret_detection:\n  extends: .mr-only\n"
     assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["rules_unevaluated"] == ["secret_detection"]
+
+
+@pytest.mark.parametrize("key", ['"extends": .mr', "'rules':\n    - if: $CI_COMMIT_TAG"])
+def test_a_quoted_condition_key_is_not_measured(tmp_path: Path, key: str) -> None:
+    text = f".mr:\n  script: [echo]\nsecrets:\n  {key}\n  script:\n    - gitleaks detect\n"
+    assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["rules_unevaluated"] == ["gitleaks"]
+
+
+def test_a_quoted_job_level_when_never_is_off(tmp_path: Path) -> None:
+    text = "secrets:\n  \"when\": never\n  script:\n    - gitleaks detect\n"
+    block = scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))
+    assert block["ci"]["present"] is False and block["ci"]["rules_unevaluated"] == []
