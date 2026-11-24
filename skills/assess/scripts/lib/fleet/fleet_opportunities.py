@@ -18,6 +18,9 @@ person (the inputs are scan blocks and repository ids only).
   that at least ``MIN_INCLUDERS`` repositories include, the repositories it would lift if
   it ran tests or a check: those whose only unmet next-level criterion reads a
   ``ci_checks.`` signal, grouped by row and level. Sorted by source, then row order.
+- ``step_lifts`` (#941, ``lib/fleet/fleet_step_lifts.py``): the single conditions that would
+  take the most repositories to their next Step, from the rows' level results; counts only,
+  no repository named. Empty when no ``results`` are passed.
 
 Recent progress (units that reached a new level since the previous run) is display only:
 the report section reads it from this run's ``level_up`` achievements
@@ -50,12 +53,14 @@ rank or position field. Tests: `tests/test_fleet_opportunities.py`.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_groups import repo_signals
 from lib.fleet.fleet_maturity import SCOPE
+from lib.fleet.fleet_step_lifts import StepLift, step_lifts
 from lib.fleet.fleet_why import criterion_why
+from lib.level_result_types import LevelResult
 from lib.levels import Criterion, MaturityModel, Row, evaluate_row
 from lib.next_step_guidance import guidance
 
@@ -102,6 +107,9 @@ class Opportunities(TypedDict):
     in_place: list[InPlace]
     biggest_lift: Lift | None
     shared_templates: list[TemplateLift]
+    # #941: the single conditions that take the most repositories to their next Step
+    # (lib/fleet/fleet_step_lifts.py); NotRequired: an entry stored before it has none
+    step_lifts: NotRequired[list[StepLift]]
 
 
 Key = Callable[[str], str]
@@ -221,8 +229,10 @@ def _templates(team_rows: Sequence[Row], ok: Sequence[FleetRow], next_of: Mappin
     return sorted(out, key=lambda t: (t["source"], order[t["row"]], t["level"], t["signal"]))
 
 
-def build_opportunities(model: MaturityModel | None, rows: Sequence[FleetRow], key: Key) -> Opportunities | None:
-    """The run's opportunities; None without a maturity model (nothing to lift to)."""
+def build_opportunities(model: MaturityModel | None, rows: Sequence[FleetRow], key: Key,
+                        results: Mapping[str, LevelResult | None] | None = None) -> Opportunities | None:
+    """The run's opportunities; None without a maturity model (nothing to lift to). ``results``
+    are the rows' level results by id (``fleet_data.level_results``), for ``step_lifts``."""
     if model is None:
         return None
     team_rows = [row for row in model["rows"] if row["scope"] == SCOPE]
@@ -238,4 +248,5 @@ def build_opportunities(model: MaturityModel | None, rows: Sequence[FleetRow], k
             lifts.setdefault(cand, []).append(repo["repo"])
     return {"measured": len(ok), "in_place": _in_place(team_rows, ok),
             "biggest_lift": _biggest_lift(model, team_rows, lifts, key),
-            "shared_templates": _templates(team_rows, ok, next_of, key)}
+            "shared_templates": _templates(team_rows, ok, next_of, key),
+            "step_lifts": step_lifts(model, (results or {}).values())}
