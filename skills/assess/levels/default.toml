@@ -248,7 +248,9 @@
 #   Graded measured and counted. With no CI scan on a GitHub repository, GitHub's own secret
 #   scanning could still guard it and is not read, so level 2 is unknown
 #   (secret_scanning_not_read), never unmet, and so is a GitLab repository whose CI includes a
-#   file that could hold the scan and was not read (ci_includes_unresolved). It gates no Step.
+#   file that could hold the scan and was not read (ci_includes_unresolved), and so is a GitLab
+#   scan job under rules, only/except or an uncertain when (gitlab_rules_unevaluated): GitLab rules
+#   are not evaluated, so such a job is never read met. It gates no Step.
 # - Personal data in skill text reads skill_personal_data.files_with_personal_data
 #   (lib/skill_personal_data.py, #1045): no SKILL.md, agent definition or skill references/
 #   file holds a detected kind: email, phone, home path, IP address, SSH login or key. A

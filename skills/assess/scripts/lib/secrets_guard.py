@@ -20,13 +20,11 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   ``GitGuardian/ggshield-action``, ...) or runs a secrets tool as a command (its name, then a
   subcommand, a flag or the end of the line), or that includes GitLab's
   ``Secret-Detection.gitlab-ci.yml`` template (or its component). A visible ``secret_detection``
-  job counts only as an override of that template, never alone; one that never runs on its own
-  (``when: never`` or ``when: manual`` on every pipeline) switches the template's job off. Comments, whole-line or
+  job counts only as an override of that template, never alone. Comments, whole-line or
   trailing, never count, so neither does a ``gitleaks:allow`` note or a ``.gitleaks.toml`` path.
   A masked scan does not count, since it guards nothing: a line ending ``|| true``, or a GitHub
   step or job with ``continue-on-error: true`` or ``if: false``, a GitLab job with
-  ``allow_failure: true`` that runs a tool command, or a GitLab ``secret_detection`` job with
-  ``when: never``. GitLab's Secret-Detection template and its ``secret_detection`` job count even
+  ``allow_failure: true`` that runs a tool command. GitLab's Secret-Detection template and its ``secret_detection`` job count even
   though the template sets ``allow_failure: true``: that job never reports by failing; its
   findings reach the merge request through its report artifact, where an approval policy can
   require them, so ``allow_failure`` masks nothing it reports. A GitHub workflow counts only when its ``on:`` names a change event
@@ -42,9 +40,17 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
   ``--files`` (a bare ``pre-commit run`` checks staged files only). A named hook id counts for its
   tool (``gitleaks-docker`` runs gitleaks), and a hook whose ``stages:`` leaves out the
   pre-commit stage is not selected.
-- GitLab's ``SECRET_DETECTION_DISABLED: "true"`` switches the template off, as an unconditional
-  ``when: never`` or ``when: manual`` does; an ``after_script:`` scan and a manual job do not
-  count, since neither can fail the pipeline.
+- A GitLab job is judged from its direct keys only, and GitLab ``rules:`` are not evaluated. A job
+  with no ``rules:``, ``only:`` or ``except:``, and a job-level ``when:`` of ``always``,
+  ``on_success`` or none, runs: its scan counts. A job-level ``when: never`` or ``manual`` is off:
+  its scan does not count, and level 2 can read unmet. Any other job (``rules:``,
+  ``only:``/``except:``, ``when: delayed``) is unevaluated: its scan is held in
+  ``ci.rules_unevaluated`` and level 2 reads not measured (``gitlab_rules_unevaluated``), never
+  met. Under-counting a guarded repository is acceptable; reading met for one that is not is not.
+  The template follows the same rule over every ``secret_detection`` definition in the merged
+  pipeline (root and includes); definitions that disagree leave it unevaluated, and
+  ``SECRET_DETECTION_DISABLED: "true"`` switches it off. An ``after_script:`` scan and a hidden
+  job do not count, since neither fails the pipeline.
 
 **The two levels** (maintainer decision on #1173):
 
@@ -147,12 +153,18 @@ _WORD = re.compile(r"[\w-]+")
 # GitLab's documented switch for the template (a pipeline or job variable): the scan never runs.
 _DETECTION_DISABLED = re.compile(r"^\s*SECRET_DETECTION_DISABLED\s*:\s*['\"]?(?:true|1|yes)\b",
                                  re.IGNORECASE | re.MULTILINE)
-_JOB_RUN_KEY = re.compile(r"^\s+(?:rules|when)\s*:")
-_RULE_CONDITION = re.compile(r"^\s*-?\s*(?:if|changes|exists)\s*:")
-_WHEN_NEVER = re.compile(r"^\s*-?\s*when:\s*['\"]?never\b", re.IGNORECASE)
+# A GitLab job's run condition, read from its direct keys only. ``rules:``, ``only:`` and ``except:``
+# are not evaluated: a job with any of them is unevaluated (``gitlab_rules_unevaluated``), never
+# met. A job-level ``when:`` is certain: ``always``/``on_success`` run, ``never``/``manual`` do not.
+_JOB_CONDITION_KEYS = frozenset({"rules", "only", "except"})
+_JOB_WHEN = re.compile(r"^when\s*:\s*['\"]?([\w-]+)")
+_RUNS = frozenset({"always", "on_success"})
+_OFF = frozenset({"never", "manual"})
+# Top-level GitLab keys that are not jobs.
+_GITLAB_GLOBAL_KEYS = frozenset({"include", "variables", "stages", "default", "workflow", "image",
+                                 "services", "before_script", "after_script", "cache", "spec"})
 _HIDDEN_JOB = re.compile(r"^\.[\w.-]+\s*:")
 _AFTER_SCRIPT = re.compile(r"^\s*after_script\s*:")
-_WHEN_MANUAL = re.compile(r"^\s*-?\s*when:\s*['\"]?manual\b", re.IGNORECASE)
 _STEP_START = re.compile(r"^(\s*)-\s")
 # CI that runs the repository's own pre-commit hooks over the checkout, in a command position:
 # ``pre-commit run [<hook>] --all-files`` (or ``--from-ref``/``--files``), or ``uses: pre-commit/action``.
@@ -182,6 +194,7 @@ class CiGuard(TypedDict):
     files: list[str]
     tools: list[str]
     includes_unresolved: int  # GitLab includes that could hold a scan and were not read
+    rules_unevaluated: list[str]  # GitLab scans under rules/only/except: not measured, never met
 
 
 class Enforcement(TypedDict, total=False):
@@ -280,9 +293,9 @@ def _block_end(lines: list[str], start: int, indent: int) -> int:
 
 def _masked_lines(lines: list[str], gitlab: bool = False) -> set[int]:
     """The lines whose scan guards nothing: inside a GitHub step or job that sets
-    ``continue-on-error: true`` (its failure never stops the run), a GitLab ``after_script:`` (its
-    failure never sets the job status) or a GitLab job that runs ``when: manual``. The two GitLab
-    masks run only on GitLab files (``gitlab``): in a GitHub workflow ``when:`` is an action input."""
+    ``continue-on-error: true`` (its failure never stops the run), a GitLab hidden job, or a GitLab
+    ``after_script:`` (its failure never sets the job status). The GitLab masks run only on GitLab
+    files (``gitlab``); a GitLab job's own run condition is ``_job_shape``'s."""
     masked: set[int] = set()
     for i, line in enumerate(lines):
         if gitlab and _HIDDEN_JOB.match(line):  # a hidden job runs only through a visible job's ``extends:``
@@ -290,11 +303,6 @@ def _masked_lines(lines: list[str], gitlab: bool = False) -> set[int]:
             continue
         if gitlab and _AFTER_SCRIPT.match(line):  # GitLab ignores after_script failures for the job status
             masked.update(range(i, _list_block_end(lines, i, len(line) - len(line.lstrip()))))
-            continue
-        if gitlab and _WHEN_MANUAL.match(line):  # a manual job runs only on a click: mask the whole job
-            job = next((j for j in range(i, -1, -1) if lines[j].strip() and not lines[j][0].isspace()), None)
-            if job is not None and _unconditional(lines, i, job):
-                masked.update(range(job, _block_end(lines, job, 0)))
             continue
         if not _CONTINUE_ON_ERROR.match(line):
             continue
@@ -330,54 +338,6 @@ def _runs_on_change(lines: list[str]) -> bool:
         keys = [ln.strip().lstrip("- ").split(":")[0].strip() for ln in body
                 if len(ln) - len(ln.lstrip()) == level]
         return bool(CHANGE_EVENTS & set(keys))
-    return False
-
-
-def _unconditional(lines: list[str], i: int, job: int) -> bool:
-    """Whether the ``when:`` on line ``i`` of the job opening at ``job`` holds on every pipeline: set on
-    the job itself, or in the first rule, with no ``if:``, ``changes:`` or ``exists:``."""
-    indent = len(lines[i]) - len(lines[i].lstrip())
-    first_key = next((len(ln) - len(ln.lstrip()) for ln in lines[job + 1:] if ln.strip()), indent)
-    if not _STEP_START.match(lines[i]) and indent <= first_key:  # a key of the job, any indent width
-        return True
-    # The rule this ``when:`` belongs to: the nearest list item less indented than it, so a path in a
-    # block-list ``changes:`` or ``exists:`` above it is not taken for the rule's start.
-    start = i if _STEP_START.match(lines[i]) else next(
-        (k for k in range(i - 1, job, -1)
-         if _STEP_START.match(lines[k]) and len(lines[k]) - len(lines[k].lstrip()) < indent), i)
-    item_indent = len(lines[start]) - len(lines[start].lstrip())
-    item = lines[start:_block_end(lines, start, item_indent)]
-    # GitLab rules are first-match: a rule after another one is a fallback, so the job still runs
-    # wherever an earlier rule matches, unless that earlier rule also switches it off. A rule with
-    # no condition holds on every pipeline once every rule before it is ``never``/``manual`` too.
-    for k in range(start - 1, job, -1):
-        ind = len(lines[k]) - len(lines[k].lstrip())
-        if lines[k].strip() and ind < item_indent:
-            break  # the ``rules:`` key: no earlier rule
-        if ind == item_indent and _STEP_START.match(lines[k]):
-            earlier = lines[k:_block_end(lines, k, ind)]
-            if not any(_WHEN_NEVER.match(ln) or _WHEN_MANUAL.match(ln) for ln in earlier):
-                return False  # an earlier rule can run the job
-    return not any(_RULE_CONDITION.match(ln) for ln in item)
-
-
-def _gitlab_job_disabled(lines: list[str]) -> bool:
-    """Whether the visible ``secret_detection`` job never runs on its own: an unconditional ``when: never``
-    or ``when: manual``, on the job or as a rule with no ``if:``, ``changes:`` or ``exists:``. That
-    switches off the job and the template's job it overrides. A ``when: never`` under a condition
-    skips some pipelines only. GitLab deep-merges every definition of the job, root over includes,
-    so the first block (``lines`` puts the root first) with its own ``rules:`` or ``when:`` decides;
-    a block that only sets ``variables:`` leaves the decision to the next one."""
-    for i, line in enumerate(lines):
-        if not _GITLAB_JOB.match(line):
-            continue
-        end = _block_end(lines, i, 0)
-        child = next((len(ln) - len(ln.lstrip()) for ln in lines[i + 1:end] if ln.strip()), None)
-        if child is None or not any(_JOB_RUN_KEY.match(lines[j]) and len(lines[j]) - len(lines[j].lstrip()) == child
-                                    for j in range(i + 1, end)):
-            continue  # this definition leaves rules and when to another (``artifacts: when:`` is not the job's)
-        return any((_WHEN_NEVER.match(lines[j]) or _WHEN_MANUAL.match(lines[j])) and _unconditional(lines, j, i)
-                   for j in range(i + 1, end))
     return False
 
 
@@ -489,16 +449,61 @@ def _in_name_list(lines: list[str], i: int) -> bool:
     return False
 
 
+def _job_shape(lines: list[str], job: int) -> str:
+    """``plain``, ``off`` or ``unevaluated`` for the GitLab job whose key is on line ``job``, from its
+    direct keys only (see ``_JOB_CONDITION_KEYS``)."""
+    end = _block_end(lines, job, 0)
+    body = [ln for ln in lines[job + 1:end] if ln.strip()]
+    if not body:
+        return "plain"
+    child = min(len(ln) - len(ln.lstrip()) for ln in body)
+    keys = [ln.strip() for ln in body if len(ln) - len(ln.lstrip()) == child]
+    if any(k.split(":", 1)[0].strip() in _JOB_CONDITION_KEYS for k in keys):
+        return "unevaluated"
+    when = next((m.group(1).lower() for k in keys if (m := _JOB_WHEN.match(k))), None)
+    if when is None or when in _RUNS:
+        return "plain"
+    return "off" if when in _OFF else "unevaluated"
+
+
+def _gitlab_jobs(lines: list[str]) -> list[tuple[str, int, int]]:
+    """Each visible GitLab job as (name, start line, end line)."""
+    jobs: list[tuple[str, int, int]] = []
+    for i, line in enumerate(lines):
+        if not line.strip() or line[0].isspace() or line.startswith((".", "-")) or ":" not in line:
+            continue
+        name = line.split(":", 1)[0].strip().strip("'\"")
+        if name not in _GITLAB_GLOBAL_KEYS:
+            jobs.append((name, i, _block_end(lines, i, 0)))
+    return jobs
+
+
 def _ci_tools(text: str, hooks: frozenset[str] = frozenset(), gitlab: bool = False) -> list[str]:
-    """The secrets tools a CI file uses or runs, unmasked; ``secret_detection`` for GitLab's template
-    or component (a ``secret_detection`` job only overrides it). Comments never count, and neither
-    does a masked step or job."""
+    """The secrets tools a CI file runs where a failure fails the run; see ``_ci_scan``."""
+    return _ci_scan(text, hooks, gitlab)[0]
+
+
+def _ci_scan(text: str, hooks: frozenset[str] = frozenset(),
+             gitlab: bool = False) -> tuple[list[str], list[str]]:
+    """The secrets tools a CI file uses or runs, unmasked, and those held back as unevaluated: in a
+    GitLab job with ``rules:``/``only:``/``except:`` or an uncertain ``when:``. Comments never count,
+    and neither does a masked step or job, or a GitLab job that is ``off``. GitLab's template is
+    ``_gitlab_template_state``'s."""
     lines = _code_lines(text)
     masked = _masked_lines(lines, gitlab)
-    tools: set[str] = set()
+    held: set[int] = set()
+    if gitlab:
+        for _, start, end in _gitlab_jobs(lines):
+            shape = _job_shape(lines, start)
+            if shape == "off":
+                masked.update(range(start, end))
+            elif shape == "unevaluated":
+                held.update(range(start, end))
+    found: dict[int, set[str]] = {}
     for i, line in enumerate(lines):
         if i in masked or not line.strip() or _MASKED.search(line):
             continue
+        tools = found.setdefault(i, set())
         if _PRE_COMMIT_ACTION.match(line):  # every hook over every file, or the hook ``extra_args`` names
             extra = _step_value(lines, i, "extra_args")
             named = _hook_id(extra.split()) if extra else None
@@ -521,18 +526,31 @@ def _ci_tools(text: str, hooks: frozenset[str] = frozenset(), gitlab: bool = Fal
         images = {m.group(1).lower() for m in _DOCKER_IMAGE.finditer(line)} - commands
         tools.update(t for t in (_tool_that_can_fail(n, line) for n in commands) if t)
         tools.update(t for t in (_tool_that_can_fail(n, line, command=False) for n in images) if t)
-    return sorted(tools)
+    counted = {t for i, ts in found.items() if i not in held for t in ts}
+    unevaluated = {t for i, ts in found.items() if i in held for t in ts} - counted
+    return sorted(counted), sorted(unevaluated)
 
 
-def _gitlab_template_runs(texts: list[str]) -> bool:
-    """Whether GitLab's Secret-Detection template (or component) runs in the merged pipeline: the root
-    ``.gitlab-ci.yml`` and every file it includes are one pipeline, so the template in one file and
-    a switch-off (``SECRET_DETECTION_DISABLED``, an unconditional ``when: never``/``manual`` on the
-    ``secret_detection`` job) in another are judged together."""
+def _gitlab_template_state(texts: list[str]) -> str:
+    """``absent``, ``runs``, ``off`` or ``unevaluated`` for GitLab's Secret-Detection template (or
+    component) over the merged pipeline: the root ``.gitlab-ci.yml`` and every file it includes are
+    one pipeline. ``SECRET_DETECTION_DISABLED`` switches it off; so does a ``secret_detection`` job
+    that is ``off`` (job-level ``when: never``/``manual``). Any ``secret_detection`` definition with
+    ``rules:``/``only:``/``except:`` or an uncertain ``when:``, or definitions that disagree, leave it
+    unevaluated."""
     lines = [ln for text in texts for ln in _code_lines(text)]
     code = "\n".join(lines)
-    return bool(_GITLAB_TEMPLATE.search(code)) and not _gitlab_job_disabled(lines) \
-        and not _DETECTION_DISABLED.search(code)
+    if not _GITLAB_TEMPLATE.search(code):
+        return "absent"
+    if _DETECTION_DISABLED.search(code):
+        return "off"
+    shapes = [_job_shape(lines, start) for name, start, _ in _gitlab_jobs(lines) if name == "secret_detection"]
+    explicit_runs = any(_job_shape(lines, start) == "plain" and any(
+        _JOB_WHEN.match(ln.strip()) for ln in lines[start + 1:end])
+        for name, start, end in _gitlab_jobs(lines) if name == "secret_detection")
+    if "unevaluated" in shapes or ("off" in shapes and explicit_runs):
+        return "unevaluated"
+    return "off" if "off" in shapes else "runs"
 
 
 def ci_guard(root: Path, ghsync_root: Path | None = None, hooks: frozenset[str] = frozenset()) -> CiGuard:
@@ -540,9 +558,11 @@ def ci_guard(root: Path, ghsync_root: Path | None = None, hooks: frozenset[str] 
     secrets hooks, which a CI ``pre-commit run`` runs."""
     files: list[str] = []
     tools: set[str] = set()
+    held: set[str] = set()
     for path in _ci_files(root):
         text = _read(path)
-        found = _ci_tools(text, hooks, gitlab=path.name == ".gitlab-ci.yml") if text is not None else []
+        found, unevaluated = _ci_scan(text, hooks, gitlab=path.name == ".gitlab-ci.yml") if text is not None else ([], [])
+        held.update(unevaluated)
         if found and path.relative_to(root).parts[:2] == (".github", "workflows") \
                 and not _runs_on_change(_code_lines(text or "")):
             found = []
@@ -553,21 +573,27 @@ def ci_guard(root: Path, ghsync_root: Path | None = None, hooks: frozenset[str] 
     if (root / ".gitlab-ci.yml").is_file():  # the files .gitlab-ci.yml includes (lib.ci_includes)
         resolution = resolve_includes(root, ghsync_root)  # a project include resolves from a ghsync clone
         for included in resolution.files:
-            found = _ci_tools(included.text, hooks, gitlab=True)
+            found, unevaluated = _ci_scan(included.text, hooks, gitlab=True)
+            held.update(unevaluated)
             if found:
                 files.append(f".gitlab-ci.yml include (line {included.line})")
                 tools.update(found)
         unresolved = sum(r["status"] not in SETTLED and r["kind"] in _HIDING_KINDS
                          for r in resolution.includes)
-        if _gitlab_template_runs([_read(root / ".gitlab-ci.yml") or "", *(f.text for f in resolution.files)]):
+        template = _gitlab_template_state([_read(root / ".gitlab-ci.yml") or "", *(f.text for f in resolution.files)])
+        if template == "runs":
             tools.add("secret_detection")
             if ".gitlab-ci.yml" not in files:
                 files.append(".gitlab-ci.yml")
-    return {"present": bool(files), "files": files, "tools": sorted(tools), "includes_unresolved": unresolved}
+        elif template == "unevaluated":
+            held.add("secret_detection")
+    return {"present": bool(files), "files": files, "tools": sorted(tools), "includes_unresolved": unresolved,
+            "rules_unevaluated": sorted(held - tools)}
 
 
 REASON_NOT_READ = "secret_scanning_not_read"
 REASON_INCLUDES = "ci_includes_unresolved"
+REASON_RULES = "gitlab_rules_unevaluated"
 # A github.com remote, HTTPS or SSH: the same prefixes as ``lib.hosting.gh_cli._REMOTE_RE`` (any
 # SSH user, an ``ssh://`` port), pinned by a parity test. Read here with plain git rather than
 # imported, so this offline scan never imports a platform client and is not flagged as network.
@@ -600,6 +626,10 @@ def _enforcement(root: Path, ci: CiGuard) -> Enforcement:
     could still guard the repository and is not read here, so the reading is not measured."""
     if ci["present"]:
         return {"available": True, "present": True, "source": "ci"}
+    if ci["rules_unevaluated"]:
+        return {"available": False,
+                "reason": f"{REASON_RULES}: a GitLab scan ({', '.join(ci['rules_unevaluated'])}) runs under "
+                          "rules, only/except or a when that this reader does not evaluate"}
     if ci["includes_unresolved"]:
         return {"available": False,
                 "reason": f"{REASON_INCLUDES}: no secrets scan in the CI read, and "

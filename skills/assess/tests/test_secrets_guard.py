@@ -187,19 +187,6 @@ def test_a_github_input_named_when_masks_nothing(tmp_path: Path) -> None:
     assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": text}))["ci"]["tools"] == ["gitleaks"]
 
 
-def test_a_conditional_when_manual_rule_still_runs_the_scan(tmp_path: Path) -> None:
-    text = ("secrets:\n  script:\n    - gitleaks detect\n  rules:\n    - if: $CI_COMMIT_TAG\n"
-            "      when: manual\n    - when: on_success\n")
-    assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["tools"] == ["gitleaks"]
-
-
-def test_a_conditional_when_never_rule_still_runs_the_scan(tmp_path: Path) -> None:
-    text = ("include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n"
-            "secret_detection:\n  rules:\n    - if: $CI_COMMIT_BRANCH == \"dev\"\n      when: never\n"
-            "    - when: on_success\n")
-    assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["tools"] == ["secret_detection"]
-
-
 @pytest.mark.parametrize(("rel", "text"), [
     (".github/workflows/x.yml", "jobs:\n  s:\n    if: false\n    steps:\n      - run: gitleaks detect\n"),
     (".github/workflows/x.yml", "jobs:\n  s:\n    if: ${{ false }}\n    steps:\n      - run: gitleaks detect\n"),
@@ -374,21 +361,6 @@ def test_a_manual_variant_does_not_drop_a_selected_hook(tmp_path: Path) -> None:
     assert scan_secrets_guard(root)["ci"]["tools"] == ["gitleaks"]
 
 
-@pytest.mark.parametrize("fallback", ["never", "manual"])
-def test_a_trailing_when_rule_is_a_fallback(tmp_path: Path, fallback: str) -> None:
-    text = ("include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n"
-            "secret_detection:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"merge_request_event\"\n"
-            f"    - when: {fallback}\n")
-    assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["tools"] == ["secret_detection"]
-
-
-@pytest.mark.parametrize("key", ["changes", "exists"])
-def test_a_block_list_condition_keeps_when_never_conditional(tmp_path: Path, key: str) -> None:
-    text = ("include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n"
-            f"secret_detection:\n  rules:\n    - {key}:\n        - docs/**\n      when: never\n")
-    assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["tools"] == ["secret_detection"]
-
-
 def test_never_rules_all_the_way_down_switch_the_job_off(tmp_path: Path) -> None:
     text = ("include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n"
             "secret_detection:\n  rules:\n    - if: $CI_COMMIT_TAG\n      when: never\n    - when: never\n")
@@ -460,3 +432,40 @@ def test_a_named_hook_must_match_a_configured_id(tmp_path: Path) -> None:
 def test_a_hidden_gitlab_job_is_not_a_scan(tmp_path: Path) -> None:
     text = ".secret_scan:\n  script:\n    - gitleaks detect\nbuild:\n  script:\n    - make\n"
     assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["present"] is False
+
+
+TEMPLATE = "include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n"
+
+
+@pytest.mark.parametrize("job", [
+    "secret_detection:\n  rules:\n    - if: $CI_COMMIT_TAG\n      when: never\n    - when: on_success\n",
+    "secret_detection:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"merge_request_event\"\n    - when: never\n",
+    "secret_detection:\n  rules:\n    - changes:\n        - docs/**\n      when: never\n",
+    "secret_detection:\n  only:\n    - main\n",
+    "secret_detection:\n  when: delayed\n  start_in: 5 minutes\n",
+])
+def test_a_template_job_with_rules_is_not_measured(tmp_path: Path, job: str) -> None:
+    block = scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": TEMPLATE + job}))
+    assert block["ci"]["present"] is False and block["ci"]["rules_unevaluated"] == ["secret_detection"]
+    assert block["enforcement"]["available"] is False
+    assert block["enforcement"]["reason"].startswith("gitlab_rules_unevaluated:")
+
+
+def test_a_scan_job_with_rules_is_not_measured(tmp_path: Path) -> None:
+    text = "secrets:\n  rules:\n    - if: $CI_COMMIT_TAG\n      when: manual\n    - when: on_success\n  script:\n    - gitleaks detect\n"
+    block = scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))
+    assert block["ci"]["rules_unevaluated"] == ["gitleaks"]
+    assert block["enforcement"]["reason"].startswith("gitlab_rules_unevaluated:")
+
+
+@pytest.mark.parametrize("job", ["secret_detection:\n  when: never\n", "secret_detection:\n  when: manual\n"])
+def test_a_job_level_never_or_manual_is_certainly_off(tmp_path: Path, job: str) -> None:
+    block = scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": TEMPLATE + job}))
+    assert block["ci"]["present"] is False and block["ci"]["rules_unevaluated"] == []
+    assert block["enforcement"] == {"available": True, "present": False, "source": None}
+
+
+@pytest.mark.parametrize("job", ["", "secret_detection:\n  variables:\n    FOO: bar\n",
+                                 "secret_detection:\n  when: always\n"])
+def test_a_plain_template_job_counts(tmp_path: Path, job: str) -> None:
+    assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": TEMPLATE + job}))["ci"]["tools"] == ["secret_detection"]

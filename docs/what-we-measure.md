@@ -595,11 +595,12 @@ A secrets hook in the pre-commit config and a secrets scan in CI, such as gitlea
 - Collector: `core.secrets_guard`, reading `repo_root`, `scope`, `ghsync_root`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `secrets_guard.ci.files` path, `secrets_guard.ci.tools` token, `secrets_guard.enforcement.reason` reason, `secrets_guard.enforcement.source` token, `secrets_guard.pre_commit.file` path, `secrets_guard.pre_commit.tools` token, `secrets_guard.sources.grade` token, `secrets_guard.sources.source` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `secrets_guard.ci.files` path, `secrets_guard.ci.rules_unevaluated` token, `secrets_guard.ci.tools` token, `secrets_guard.enforcement.reason` reason, `secrets_guard.enforcement.source` token, `secrets_guard.pre_commit.file` path, `secrets_guard.pre_commit.tools` token, `secrets_guard.sources.grade` token, `secrets_guard.sources.source` token.
 - Used by: row `secrets-guard`.
 - Evidence: `secrets_guard.configured` config_text (config_only), `secrets_guard.enforcement.present` head_structure (measured).
 - Not measured when:
   - `secret_scanning_not_read`: No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read. Add a secrets scan step to CI (gitleaks or trufflehog); GitHub's own settings are not read yet.
+  - `gitlab_rules_unevaluated`: A GitLab job holds a secrets scan but runs under rules, only/except or a when that is not evaluated. So it is not known whether the scan runs on each change. Nothing to change for the reading: a plain job with no rules, or a GitHub workflow, is read in full.
   - `ci_includes_unresolved`: No secrets scan was found in the CI read. A GitLab include that could hold one, a local, project or remote file, was not read. Clone the included project beside this one (/ghsync), or add the secrets scan to the repository's own .gitlab-ci.yml.
 
 ### `agent_consistency`: Cross-agent instruction consistency
