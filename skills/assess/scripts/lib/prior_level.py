@@ -214,7 +214,8 @@ def as_prior_level(value: Any) -> PriorLevel | None:
     if not isinstance(value, Mapping) or value.get("prior_level_version") not in READABLE_VERSIONS:
         return None
     out = dict(value)
-    models = _models(out.pop("models", None)) if value.get("prior_level_version") == 3 else {}
+    raw_models = out.pop("models", None)  # only version 3 defines it: an older file's is dropped
+    models = _models(raw_models) if value.get("prior_level_version") == 3 else {}
     has_default = "levels_version" in out or "tags" in out
     if has_default and not _valid_record(out):
         return None

@@ -268,6 +268,12 @@ def test_a_version_three_file_keeps_readable_profile_records_and_drops_the_rest(
     assert record_for(raw, {"levels_version": "default-2026.11.10"}) is None  # no default record
     assert as_prior_level({"prior_level_version": 3}) is None  # neither record
     assert as_prior_level({"prior_level_version": 2, "models": {"citizen": good}}) is None  # v2 has no models
+    v2 = {"prior_level_version": 2, "levels_version": "default-2026.11.23", "tags": tags,
+          "models": {"citizen": good, "junk": "junk"}}
+    read = as_prior_level(v2)
+    assert read is not None and "models" not in read  # a v2 file's models is dropped, never read
+    assert record_for(v2, citizen) is None
+    assert record_for({**v2, "models": {"citizen": "junk"}}, citizen) is None
 
 
 def test_an_older_file_still_reads_as_the_default_record(tmp_path: Path) -> None:
