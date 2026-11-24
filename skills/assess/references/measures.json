@@ -3390,7 +3390,8 @@
       "summary": "",
       "collector": "core.keyhole_blocks",
       "reads": [
-        "keyhole"
+        "keyhole",
+        "run_scope"
       ],
       "network": false,
       "platform": false,
@@ -4120,7 +4121,8 @@
       "summary": "",
       "collector": "core.keyhole_blocks",
       "reads": [
-        "keyhole"
+        "keyhole",
+        "run_scope"
       ],
       "network": false,
       "platform": false,
@@ -4201,7 +4203,8 @@
       "summary": "",
       "collector": "core.keyhole_blocks",
       "reads": [
-        "keyhole"
+        "keyhole",
+        "run_scope"
       ],
       "network": false,
       "platform": false,
@@ -4284,7 +4287,8 @@
       "summary": "",
       "collector": "core.keyhole_blocks",
       "reads": [
-        "keyhole"
+        "keyhole",
+        "run_scope"
       ],
       "network": false,
       "platform": false,
@@ -4362,7 +4366,8 @@
       "summary": "",
       "collector": "core.keyhole_blocks",
       "reads": [
-        "keyhole"
+        "keyhole",
+        "run_scope"
       ],
       "network": false,
       "platform": false,
@@ -4441,7 +4446,8 @@
       "summary": "",
       "collector": "core.keyhole_blocks",
       "reads": [
-        "keyhole"
+        "keyhole",
+        "run_scope"
       ],
       "network": false,
       "platform": false,
@@ -5482,7 +5488,8 @@
         "prescribed_actions"
       ],
       "reads": [
-        "keyhole"
+        "keyhole",
+        "run_scope"
       ],
       "network": false,
       "private": false

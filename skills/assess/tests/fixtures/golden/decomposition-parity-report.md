@@ -6,7 +6,7 @@ _Generated <<normalized>>._
 
 Next: make CI turn red when a check breaks. Then you reach Step 3: agents open pull requests nobody has to watch.
 
-First run.
+Since last run: not known.
 
 **Start here:** [Make CI turn red when a check breaks](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates).
 
@@ -14,7 +14,9 @@ _New to these words? The [glossary](https://github.com/bjcoombs/ai-native-toolki
 
 ## Since Last Run
 
-- This run is your baseline.
+- Closed since last run: not known (no baseline is committed yet, and this run's result cannot be recorded as one)
+- Gates gained: not known (no baseline is committed yet, and this run's result cannot be recorded as one)
+- Gates lost: not known (no baseline is committed yet, and this run's result cannot be recorded as one)
 - Next blocker: CI runs tests
 
 ## Headline

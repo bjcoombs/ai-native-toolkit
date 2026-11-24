@@ -11,7 +11,10 @@ this run's publish step overwrites any of them:
   A fresh clone or a CI checkout has it, so the block reads the same there as on the
   machine that ran the last run. No baseline there makes this run the baseline (#1256):
   ``first_run`` is true and the section reads ``FIRST_RUN`` once, whatever ``log.md`` and
-  the local, gitignored ``run-context.json`` hold. A ``prior-level.json`` that cannot be
+  the local, gitignored ``run-context.json`` hold. That holds only when this run can record
+  a baseline (a HEAD commit, a level result with every gate's condition, and the tags
+  ``build_prior_level`` needs); otherwise no baseline is written and the claim would repeat
+  on every run, so the previous state is unknown (``baseline_not_recorded``). A ``prior-level.json`` that cannot be
   read gives unknowns (``None``, ``baseline_unreadable``), never a first run. A custom
   ``--levels`` run keeps no committed record, so it keeps the older order:
   ``run-context.json`` in the run's ``.assess/`` directory as the previous run left it,
@@ -93,6 +96,7 @@ UNKNOWN_CLOSED = {
     "actions_unreadable": "the committed actions.json could not be read",
     "actions_not_committed": "no .assess/actions.json is committed; commit it for closed actions to count",
     "baseline_unreadable": "the committed .assess/prior-level.json could not be read",
+    "baseline_not_recorded": "no baseline is committed yet, and this run's result cannot be recorded as one",
     "previous_unreadable": "the previous run's local record could not be read; re-run /assess to rebuild it",
     "previous_state_missing": ("log.md records an earlier run, but a custom --levels run keeps no committed "
                                "baseline and this machine holds no record of it"),
@@ -233,8 +237,8 @@ def _noun(gate: str) -> str:
 
 def _gates_line(word: str, gates: list[str] | None, reason: str | None) -> str:
     if gates is None:
-        why = (UNKNOWN_CLOSED[reason] if reason in ("baseline_unreadable", "previous_unreadable",
-                                                    "previous_state_missing")
+        why = (UNKNOWN_CLOSED[reason] if reason in ("baseline_unreadable", "baseline_not_recorded",
+                                                    "previous_unreadable", "previous_state_missing")
                else "the previous run has no level result this model can compare")
         return f"Gates {word}: not known ({why})"
     return f"Gates {word}: " + (", ".join(_noun(g) for g in gates) if gates else "none")
@@ -370,6 +374,11 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
     """The ``since_last_run`` block for this run's ``level`` block (see the module docstring)."""
     steps = _steps(level)
     first, unknown, prev, inherited = _baseline(assess_dir, superseded, level)
+    head = _git(repo_root, "rev-parse", "HEAD")
+    head_sha = head.stdout.strip() if head is not None and head.returncode == 0 else None
+    if first and inherited is None and model_key(level) is not None and (
+            head_sha is None or _held(steps, level) is None or build_prior_level(level) is None):
+        first, unknown = False, "baseline_not_recorded"  # "your baseline" only when one is written
     held_before: list[str] | None = None  # the gates held at the previous run, for the ledger
     if inherited is not None:
         previous_commit, run_id = inherited.get("previous_commit"), inherited.get("previous_run_id")
@@ -408,8 +417,6 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
     else:
         closed, unresolved = found
     current = level if isinstance(level, Mapping) else {}
-    head = _git(repo_root, "rev-parse", "HEAD")
-    head_sha = head.stdout.strip() if head is not None and head.returncode == 0 else None
     # a hold counts once per measured commit: compare with the commit that wrote the stored
     # ledger (the committed baseline), not the "since" baseline a superseding run inherits
     stored = load_baseline(assess_dir, level)

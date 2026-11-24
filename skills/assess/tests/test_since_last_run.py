@@ -21,6 +21,7 @@ from test_headline import _commit, _run, ci2  # noqa: F401  (ci2 is a fixture)
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 STEPS = default_model()["steps"]
+STEPS_VERSION = default_model()["version"]
 
 
 def _cond(cid: str, state: str) -> dict[str, Any]:
@@ -34,7 +35,9 @@ def _level(instr: str, ci: str, cov: str = "unmet") -> dict[str, Any]:
     blockers = [{"kind": "gate", "gate": g, "condition": c["id"], "state": c["state"]}
                 for g, c in zip(("instructions", "ci_runs_tests", "coverage_gate"), conditions)
                 if c["state"] != "met"]
-    return {"conditions": conditions, "next_step": {"step": 2, "blockers": blockers} if blockers else None}
+    # a level the run can record as its baseline: the default model's version and tags (#1256)
+    return {"levels_version": STEPS_VERSION, "tags": [], "conditions": conditions,
+            "next_step": {"step": 2, "blockers": blockers} if blockers else None}
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -297,6 +300,22 @@ def test_a_log_without_a_committed_baseline_makes_this_run_the_baseline(repo: Pa
         assert not any("not known" in line for line in block["lines"])
 
 
+def test_a_run_that_cannot_record_a_baseline_never_claims_to_be_one(repo: Path, tmp_path: Path) -> None:
+    """Review of #1256: with no level tags, no gate conditions or no HEAD commit, publish writes
+    no baseline, so "This run is your baseline." would repeat on every run: unknown instead."""
+    untagged = {k: v for k, v in _level("met", "met").items() if k != "tags"}
+    no_conditions = {**_level("met", "met"), "conditions": []}
+    empty = tmp_path / "empty"
+    subprocess.run(["git", "init", "-q", str(empty)], check=True, capture_output=True)
+    (empty / ".assess").mkdir()
+    for level, root in ((untagged, repo), (no_conditions, repo), (_level("met", "met"), empty)):
+        block = since_last_run(level, root / ".assess", root)
+        assert (block["first_run"], block["closed_reason"]) == (False, "baseline_not_recorded")
+        assert FIRST_RUN not in block["lines"]
+        assert ("Gates gained: not known (no baseline is committed yet, and this run's result cannot be "
+                "recorded as one)") in block["lines"]
+
+
 def test_a_local_run_context_is_never_the_default_models_baseline(repo: Path) -> None:
     """#1256: the default model reads the committed prior-level.json only, so a run-context.json
     left on one machine cannot make its report differ from a fresh clone's."""
@@ -423,8 +442,8 @@ def test_the_kept_line_follows_the_write_side_rule(repo: Path) -> None:
         "prior_level_version": 2, "levels_version": "x", "tags": [],
         "baseline": {"run_id": "stored-run", "head_sha": _git(repo, "rev-parse", "HEAD"), "held_gates": []}}),
         encoding="utf-8")
-    untagged = _level("met", "unmet")  # conditions but no tags: the writer keeps the file
-    recorded = {**untagged, "levels_version": "x", "tags": []}  # the writer rebuilds the file
+    recorded = _level("met", "unmet")  # the writer rebuilds the file
+    untagged = {k: v for k, v in recorded.items() if k != "tags"}  # conditions but no tags: the writer keeps the file
     assert any(line.startswith("Baseline kept") for line in since_last_run(untagged, repo / ".assess", repo)["lines"])
     assert not any(line.startswith("Baseline kept")
                    for line in since_last_run(recorded, repo / ".assess", repo)["lines"])
