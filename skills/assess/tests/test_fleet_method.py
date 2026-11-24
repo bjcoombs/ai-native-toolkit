@@ -163,3 +163,77 @@ def test_the_stamp_schema_accepts_old_and_new_stamps() -> None:
                              .read_text(encoding="utf-8"))
     jsonschema.validate(_method(V1), schema)
     jsonschema.validate(_legacy(_method(V1)), schema)
+
+
+# --- same-day history and the trend chart ---------------------------------------------
+
+
+def _kept(tmp_path: Path, stamp: FleetStamp) -> Path:
+    from lib.fleet.fleet_stamp import RUN_FILE
+
+    entry = tmp_path / "org" / "2026-11-22"
+    entry.mkdir(parents=True)
+    (entry / RUN_FILE).write_text(json.dumps(stamp), encoding="utf-8")
+    return entry
+
+
+def test_a_same_day_rerun_under_edited_rules_keeps_the_earlier_entry(tmp_path: Path) -> None:
+    from lib.fleet.fleet_history import entry_conflict
+
+    entry = _kept(tmp_path, _method(V1))
+    assert entry_conflict(entry, _method(V1)) is None
+    conflict = entry_conflict(entry, _method(SAME_VERSION_NEW_RULES))
+    assert conflict is not None and "rules_sha256" in conflict
+
+
+def test_a_same_day_entry_without_the_rules_hash_is_kept_apart_but_is_a_compare_baseline(tmp_path: Path) -> None:
+    from lib.fleet.fleet_history import entry_conflict, latest_matching
+
+    entry = _kept(tmp_path, _legacy(_method(V1)))
+    assert entry_conflict(entry, _method(V1)) is not None
+    assert latest_matching(tmp_path / "org", _method(V1)) == entry
+    assert latest_matching(tmp_path / "org", _method(SAME_VERSION_NEW_RULES)) == entry
+
+
+def test_a_recorded_rules_hash_must_match_for_a_compare_baseline(tmp_path: Path) -> None:
+    from lib.fleet.fleet_history import latest_matching
+
+    _kept(tmp_path, _method(V1))
+    assert latest_matching(tmp_path / "org", _method(SAME_VERSION_NEW_RULES)) is None
+
+
+def test_the_trend_breaks_at_a_rules_change_both_runs_recorded() -> None:
+    import lib.fleet.fleet_trends as ft
+
+    def run(label: str, rules: str | None) -> ft.TrendRun:
+        point: ft.TrendRun = {"label": label, "levels_version": "v1", "means": {"g": 1.0}, "scaled": True}
+        if rules is not None:
+            point["rules_sha256"] = rules
+        return point
+
+    drawn = [run("a", None), run("b", "r1"), run("c", "r1"), run("d", "r2")]
+    assert ft._segments(drawn, "g") == [[0, 1, 2], [3]]  # unrecorded -> r1 is no break
+    assert ft.layout(drawn).breaks == [3]
+
+
+def test_an_unrecorded_rules_hash_is_not_native_credit_across_two_rescored_entries(
+        tmp_path: Path, monkeypatch: Any) -> None:
+    from test_fleet_rescore import V2
+
+    org = tmp_path / "org"
+    _entry(org, DATES[0], BASE, V1)  # before #952: no hash
+    _entry(org, DATES[1], BASE, V1, rules_sha256=fm.rules_sha256(V1))
+    _entry(org, DATES[2], BASE, V1, rules_sha256=fm.rules_sha256(V1))
+    runs = earlier_runs(org, _with_rules(V2, NOW), frozenset(BASE), model=V2, key=KEY)
+    assert [r.rescored_rules for r in runs] == [None, fm.rules_sha256(V1), fm.rules_sha256(V1)]
+    seen: list[object] = []
+    step = fa._Replay.step
+
+    def spy(self: Any, run_id: str, prev_id: str, *args: Any) -> None:
+        seen.append((run_id, args[-1] is not None))
+        step(self, run_id, prev_id, *args)
+
+    monkeypatch.setattr(fa._Replay, "step", spy)
+    fa.build_achievements(fa.HistoryRun(NOW, _data(NOW, BASE, V2)), runs, V2)
+    # rescored cells are passed (not native) only on the step whose two entries' rules differ
+    assert seen[:2] == [(DATES[1], True), (DATES[2], False)]

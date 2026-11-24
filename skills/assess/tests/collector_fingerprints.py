@@ -2,15 +2,19 @@
 
 ``tests/fixtures/fleet_golden/collector_fingerprints.json`` holds, per core collector whose
 blocks appear in the fleet golden (``tests/fixtures/fleet_golden/repos.jsonl``), its
-``revision`` from ``skills/assess/checks/core.toml`` and the sha256 of its blocks across the
-golden's repositories. When a collector's golden output changes, its revision must be bumped
-too: ``violations`` names each collector whose hash moved under an unchanged revision, and
-this script refuses to record it. A bumped revision (or a collector new to the golden) is
-recorded with its new hash.
+``revision`` from ``skills/assess/checks/core.toml`` and, per golden repository, the sha256 of
+its blocks in that repository's row. When a collector's golden output changes, its revision
+must be bumped too: ``violations`` names each collector whose hash moved, in a repository
+present on both sides, under an unchanged revision, and this script refuses to record it. A
+bumped revision, a collector new to the golden, and a repository added to or dropped from the
+golden (a fixture change, not a collector change) are recorded as they are.
 
 Regenerate after the fleet golden (``make regen`` runs both):
 
     cd skills/assess && uv run --locked python tests/collector_fingerprints.py
+
+A missing fingerprints file is refused, so deleting it cannot clear the guard; ``--init``
+starts a new one.
 """
 from __future__ import annotations
 
@@ -35,33 +39,44 @@ def golden_rows(path: Path = GOLDEN) -> list[dict[str, Any]]:
                   key=lambda row: row["repo"])
 
 
-def output_hashes(rows: list[dict[str, Any]], publishes: Mapping[str, list[str]]) -> dict[str, str]:
-    """Collector id -> sha256 of its blocks in every row, for the collectors with a block in any row."""
-    out: dict[str, str] = {}
+def output_hashes(rows: list[dict[str, Any]], publishes: Mapping[str, list[str]]) -> dict[str, dict[str, str]]:
+    """Collector id -> {repo: sha256 of its blocks in that repo's row}, for the repos holding one of its blocks."""
+    out: dict[str, dict[str, str]] = {}
     for cid, blocks in publishes.items():
-        found = [[row["repo"], {b: row["scans"][b] for b in blocks if b in (row.get("scans") or {})}]
-                 for row in rows]
-        if not any(blocks_of for _repo, blocks_of in found):
-            continue
-        text = json.dumps(found, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-        out[cid] = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        per_repo: dict[str, str] = {}
+        for row in rows:
+            scans = row.get("scans") or {}
+            found = {b: scans[b] for b in blocks if b in scans}
+            if found:
+                text = json.dumps(found, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+                per_repo[row["repo"]] = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        if per_repo:
+            out[cid] = per_repo
     return out
 
 
-def violations(stored: Mapping[str, Mapping[str, Any]], hashes: Mapping[str, str],
+def violations(stored: Mapping[str, Mapping[str, Any]], hashes: Mapping[str, Mapping[str, str]],
                revisions: Mapping[str, int]) -> list[str]:
-    """Each collector whose output hash changed while its revision did not."""
-    return [f"{cid}: its output in the fleet golden changed but its revision is still {revisions[cid]}; "
-            f"bump `revision` in its skills/assess/checks/core/ fragment"
-            for cid, sha in sorted(hashes.items())
-            if cid in stored and stored[cid]["revision"] == revisions[cid] and stored[cid]["sha256"] != sha]
+    """Each collector whose output changed, in a golden repository present on both sides, while its
+    revision did not. A repository added to or dropped from the golden is no violation."""
+    out: list[str] = []
+    for cid, now in sorted(hashes.items()):
+        then = stored.get(cid)
+        if then is None or then["revision"] != revisions[cid]:
+            continue
+        moved = sorted(repo for repo in now.keys() & then.get("repos", {}).keys() if now[repo] != then["repos"][repo])
+        if moved:
+            out.append(f"{cid}: its output in the fleet golden changed ({', '.join(moved)}) but its revision "
+                       f"is still {revisions[cid]}; bump `revision` in its skills/assess/checks/core/ fragment")
+    return out
 
 
-def fingerprints(hashes: Mapping[str, str], revisions: Mapping[str, int]) -> dict[str, dict[str, Any]]:
-    return {cid: {"revision": revisions[cid], "sha256": sha} for cid, sha in sorted(hashes.items())}
+def fingerprints(hashes: Mapping[str, Mapping[str, str]], revisions: Mapping[str, int]) -> dict[str, dict[str, Any]]:
+    return {cid: {"revision": revisions[cid], "repos": dict(sorted(per_repo.items()))}
+            for cid, per_repo in sorted(hashes.items())}
 
 
-def current() -> tuple[dict[str, str], dict[str, int]]:
+def current() -> tuple[dict[str, dict[str, str]], dict[str, int]]:
     """The golden's output hashes and the manifest's revisions."""
     entries = collectors(core_manifest())
     hashes = output_hashes(golden_rows(), {c["id"]: c["publishes"] for c in entries})
@@ -79,7 +94,14 @@ def dumps(prints: Mapping[str, Mapping[str, Any]]) -> str:
     return json.dumps({"collectors": prints}, sort_keys=True, indent=2) + "\n"
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    """Record the fingerprints; refuse when the file is missing (it would record any output as
+    unchanged) unless ``--init`` asks to start it."""
+    args = sys.argv[1:] if argv is None else argv
+    if not FINGERPRINTS.is_file() and "--init" not in args:
+        print(f"{FINGERPRINTS.name} is missing: restore it from git, or pass --init to start a new one",
+              file=sys.stderr)
+        return 1
     hashes, revisions = current()
     found = violations(read_stored(), hashes, revisions)
     if found:

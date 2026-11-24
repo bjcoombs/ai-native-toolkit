@@ -10,10 +10,12 @@ tell a rule change and a scanner change from a change in the repositories.
 spaces) of the maturity model as ``fleet.py`` loaded it, the resolved model every result
 is scored with, so anything that changes the loaded model changes the hash, a named
 profile included. Keys that only name things are left out (``UNHASHED_KEYS``): ``version``
-(stamped on its own as ``levels_version``), a row's ``title`` and a Step's ``name``. So is
-``demoted``: the exit rule (#1086) decides it per run from the run history after the stamp
-is written, and ``demotions.json`` records it. Every other key is hashed, a new one too.
-None without ``--levels``.
+(stamped on its own as ``levels_version``), a row's ``title`` and a Step's ``name``.
+``demoted`` is left out too, though it changes scoring: the exit rule (#1086) decides it per
+run from the run history after the stamp is written, and ``demotions.json`` records it. Every
+other key is hashed, a new one too. The hash is conservative: reordering rows or gates, or
+renaming a row or gate id, moves it on purpose; the cost is a re-score of the earlier run,
+nothing worse. None without ``--levels``.
 
 **Collector identity.** ``collectors`` is ``[{id, revision}]`` for every collector in the
 core check manifest, sorted by id. A ``revision`` is bumped when a collector's output
@@ -32,6 +34,11 @@ collector changes and its revision does not.
   revision change is a note naming each collector, never a refusal: the #774 scanner diff
   attributes the moves.
 
+**Elsewhere.** A same-day rerun under other rules is kept beside the earlier entry, not over
+it (``fleet_history._MATCH_KEYS``; ``fleet.py`` plans the hash before any scan), while a bare
+``--compare`` still takes an entry that recorded no hash as its baseline. The trend chart breaks
+its lines at a rules change both runs recorded (``fleet_trends``).
+
 Tests: ``tests/test_fleet_method.py``.
 """
 from __future__ import annotations
@@ -46,7 +53,8 @@ from lib.manifest.check_manifest import CheckManifest, collectors, core_manifest
 
 # The stamp keys that name the rules a run scored with: a difference in any is re-scorable.
 RULE_KEYS = ("levels_version", "rules_sha256")
-# Model keys left out of rules_sha256, by level of the model: they name, they do not score.
+# Model keys left out of rules_sha256, by level of the model: names, plus ``demoted``, which the
+# exit rule decides per run after the stamp and demotions.json records.
 UNHASHED_KEYS: Mapping[str, frozenset[str]] = {
     "model": frozenset({"version", "demoted"}), "row": frozenset({"title"}), "step": frozenset({"name"}),
 }

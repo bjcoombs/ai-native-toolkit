@@ -635,7 +635,9 @@ def build_achievements(current: HistoryRun, earlier: Sequence[HistoryRun], model
     replay.see(states[0][0], states[0][1], states[0][2])
     for i, ((prev_id, prev, prev_cells), (run_id, now, now_cells)) in enumerate(zip(states, states[1:])):
         then_caused = caused[i]
-        # both runs re-scored from one earlier version: the step keeps its native-model credit
+        # both runs re-scored from one earlier version and one rules hash: the step keeps its
+        # native-model credit. A hash one entry did not record (#952) is not read as the same
+        # rules, so that one step loses native credit on purpose (tests/test_fleet_method.py).
         native = (runs[i].stored is not None and runs[i + 1].stored is not None
                   and runs[i].rescored_from == runs[i + 1].rescored_from
                   and runs[i].rescored_rules == runs[i + 1].rescored_rules)

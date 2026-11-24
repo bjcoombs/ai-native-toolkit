@@ -31,6 +31,40 @@ def test_a_collector_new_to_the_golden_is_not_a_violation():
     assert cf.violations({}, cf.output_hashes(ROWS, PUBLISHES), {"core.blk": 1, "core.other": 1}) == []
 
 
+REVISIONS = {"core.blk": 1, "core.other": 1}
+NEW_REPO = {"repo": "a/z", "scans": {"blk": {"available": True, "n": 3}, "other": {"n": 4}}}
+
+
+def test_a_repository_added_to_the_golden_is_not_a_violation():
+    before = cf.fingerprints(cf.output_hashes(ROWS, PUBLISHES), REVISIONS)
+    assert cf.violations(before, cf.output_hashes([*ROWS, NEW_REPO], PUBLISHES), REVISIONS) == []
+
+
+def test_a_repository_dropped_from_the_golden_is_not_a_violation():
+    before = cf.fingerprints(cf.output_hashes([*ROWS, NEW_REPO], PUBLISHES), REVISIONS)
+    assert cf.violations(before, cf.output_hashes(ROWS, PUBLISHES), REVISIONS) == []
+
+
+def test_one_mutated_block_in_the_real_golden_is_exactly_one_violation():
+    hashes, revisions = cf.current()
+    stored = cf.read_stored()
+    rows = cf.golden_rows()
+    rows[0] = {**rows[0], "scans": {**rows[0]["scans"], "stats_summary": {"available": True, "mutated": 1}}}
+    from lib.manifest.check_manifest import collectors, core_manifest
+    publishes = {c["id"]: c["publishes"] for c in collectors(core_manifest())}
+    found = cf.violations(stored, cf.output_hashes(rows, publishes), revisions)
+    assert len(found) == 1 and found[0].startswith("core.run_header:") and rows[0]["repo"] in found[0]
+    assert cf.violations(stored, hashes, revisions) == []
+
+
+def test_a_missing_fingerprints_file_is_refused_without_init(tmp_path, monkeypatch):
+    monkeypatch.setattr(cf, "FINGERPRINTS", tmp_path / "collector_fingerprints.json")
+    assert cf.main([]) == 1
+    assert not cf.FINGERPRINTS.exists()
+    assert cf.main(["--init"]) == 0
+    assert cf.read_stored() == cf.fingerprints(*cf.current())
+
+
 def test_the_committed_fingerprints_match_the_fleet_golden_and_the_manifest():
     hashes, revisions = cf.current()
     stored = cf.read_stored()

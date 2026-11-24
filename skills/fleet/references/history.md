@@ -19,7 +19,8 @@ only when the history is used: a kept run or a bare `--compare`. With
 `--no-history` or `--full` (and an explicit `--compare RUN_DIR`) `<org>` is never
 resolved, so an id whose first segment is not a safe directory name (`My
 Projects/svc`) still runs; otherwise pass `--history-org`. A same-day rerun replaces the day's entry only when that entry is a
-fleet run with the same maturity-model version, window, output mode, scans and path
+fleet run with the same maturity-model version and rules (`rules_sha256`; an entry from
+before it is kept apart from a run that records one), window, output mode, scans and path
 hashing over the same repository set (a partial `--from-list` rerun never
 replaces the full-fleet entry). Otherwise the entry is kept and the run goes to a suffixed sibling,
 `<date>.2`, `<date>.3` and so on (the first that is free or holds a matching
