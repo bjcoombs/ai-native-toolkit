@@ -61,7 +61,7 @@ practice yet", never implied credit. The guard checks it on every rendered page.
 
 **Step and gate on fleet pages (#1254).** The fleet pages use the /assess words for a
 maturity-model entry: its practice, the Step it gates, or the gate. The phrases in
-`ROW_PHRASES` ("which row", "team row", "this row") are checked in every rendered fleet page
+`ROW_PHRASES` ("which row", "team row", "this row", "row's", "rows'") are checked in every rendered fleet page
 (`row_hits`). A table row in the ordinary sense is not checked.
 
 **The model-written template (#1254).** The guard also reads the prose of
@@ -108,7 +108,7 @@ BANNED_WORDS: dict[str, str] = {
 #: Fleet pages name a maturity-model entry by its Step, gate or practice, as /assess does,
 #: never as a "row" (#1254). A table row in the ordinary sense is unaffected, so only these
 #: phrases are checked, on the fleet outputs.
-ROW_PHRASES: tuple[str, ...] = ("which row", "team row", "this row")
+ROW_PHRASES: tuple[str, ...] = ("which row", "team row", "this row", "row's", "rows'")
 
 #: The old maturity band labels (#740, #747): the Step names replace them.
 RETIRED_LABELS: tuple[str, ...] = ("Not Ready", "Basic", "Solid", "AI-Native")
@@ -142,7 +142,7 @@ def _pattern(term: str) -> re.Pattern[str]:
 
 
 _TERMS = tuple((term, _pattern(term)) for term in (*BANNED_WORDS, *RETIRED_LABELS))
-_ROWS = tuple((phrase, re.compile(r"\b" + re.escape(phrase) + r"s?\b", re.I)) for phrase in ROW_PHRASES)
+_ROWS = tuple((phrase, re.compile(r"\b" + re.escape(phrase) + r"(?:s\b|(?!\w))", re.I)) for phrase in ROW_PHRASES)
 
 #: The #1254 words the guard checks in the model-written report template.
 TEMPLATE_WORDS: tuple[str, ...] = ("lying", "capped", "unproven", "concerns")

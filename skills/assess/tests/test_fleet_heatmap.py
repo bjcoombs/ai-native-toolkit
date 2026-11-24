@@ -163,7 +163,7 @@ def test_without_a_levels_file_levels_index_the_ramp(tmp_path):
     out = tmp_path / "plain.svg"
     assert cli.main([str(FIXTURES / "groups.jsonl"), "--output", str(out)]) == 0
     svg = out.read_text(encoding="utf-8")
-    assert "not scaled to each row" in svg
+    assert "not scaled to each practice" in svg
     assert _cells(svg)["grpa · teamdocs"] == fh.LEVEL_RAMP[2]
 
 

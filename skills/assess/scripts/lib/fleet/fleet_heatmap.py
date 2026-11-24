@@ -315,7 +315,7 @@ def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
         y += 10
 
     scale = ("level as a share of the practice's top level" if all(c["top"] is not None for c in columns)
-             else "whole level (no maturity model file: not scaled to each row's top level)")
+             else "whole level (no maturity model file: not scaled to each practice's top level)")
     body.append(_text(PAD, y, f"Legend: {scale}", weight="bold"))
     y += 10
     floors = any(floor_of(cell(g, c["id"])) is not None for g in groups for c in columns)

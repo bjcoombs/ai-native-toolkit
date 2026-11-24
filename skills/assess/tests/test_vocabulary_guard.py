@@ -223,7 +223,10 @@ def test_banned_hits_reads_prose_only(text: str, found: list[str]) -> None:
     ("What moved, and which row moved it?", ["which row"]),
     ("no team rows to measure", ["team row"]),
     ("nothing confirmed on this row yet", ["this row"]),
+    ("not scaled to each row's top level", ["row's"]),
+    ("the rows' levels", ["rows'"]),
     ("one table row per repository", []),
+    ("rowing club", []),
     ("`team_rows` stays", []),
 ])
 def test_row_hits(text: str, found: list[str]) -> None:
