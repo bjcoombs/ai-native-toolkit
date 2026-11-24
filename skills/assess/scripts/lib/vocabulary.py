@@ -108,7 +108,7 @@ BANNED_WORDS: dict[str, str] = {
 #: Fleet pages name a maturity-model entry by its Step, gate or practice, as /assess does,
 #: never as a "row" (#1254). A table row in the ordinary sense is unaffected, so only these
 #: phrases are checked, on the fleet outputs.
-ROW_PHRASES: tuple[str, ...] = ("which row", "team row", "this row", "row's", "rows'")
+ROW_PHRASES: tuple[str, ...] = ("which row", "team row", "this row", "row's", "rows'", "no row", "unknown rows")
 
 #: The old maturity band labels (#740, #747): the Step names replace them.
 RETIRED_LABELS: tuple[str, ...] = ("Not Ready", "Basic", "Solid", "AI-Native")

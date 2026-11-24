@@ -127,7 +127,7 @@ def test_a_removed_group_and_a_group_unknown_throughout_are_named_never_zero():
         _group("dark", [_move("instructions", None, None)]),
     ])))
     assert "gone (not in this run)" in text
-    assert "dark (no row measured in both runs)" in text
+    assert "dark (no practice measured in both runs)" in text
     assert "gone 0" not in text and "dark 0" not in text
 
 

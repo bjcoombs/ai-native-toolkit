@@ -36,7 +36,7 @@ and the maturity model alone. `slope_view(levels, comparison)` gives each group 
 share (`fleet_maturity.mean_share`, team rows only, #684) then and now, taken only over the team
 rows with a known level in both runs (org rows are out of the mean, the counts and the mover), so a row going unknown to known never moves a line, and its biggest mover
 (largest share change, ties to the lower row id) with the comparison's `cause`. A group added,
-removed or with no row known in both runs is named on a hatched strip, never at zero.
+removed or with no practice known in both runs is named on a hatched strip, never at zero.
 `end_labels` spreads the end labels `LABEL_GAP` apart (`fleet_svg.spread_vertical`), read by
 both `render_slope` and its gap test. A mover whose `cause` is anything but `level` (`set`, `set_and_level`, or the #774
 `scanner_changed` / `toolkit_changed_unknown_scope`) carries a `*` explained under the chart.
@@ -207,7 +207,7 @@ def _unknown_text(group: GroupSlope) -> str:
         return f"{group['group']} (new since the earlier run)"
     if group["absent"] == "removed":
         return f"{group['group']} (not in this run)"
-    return f"{group['group']} (no row measured in both runs)"
+    return f"{group['group']} (no practice measured in both runs)"
 
 
 def render_slope(view: SlopeView) -> str:
@@ -262,7 +262,7 @@ def render_slope(view: SlopeView) -> str:
         cursor += LINE_H + 4
     floored = [f"{g['group']}\u00a0{_floor_span(g)}" for g in view["groups"] if _floor_span(g)]
     if floored:
-        for line in textwrap.wrap("With floors, a lower bound (unknown rows counted at their confirmed "
+        for line in textwrap.wrap("With floors, a lower bound (unknown practices counted at their confirmed "
                                   "floor), at least: " + ", ".join(floored), WRAP):
             body.append(svg.text(PAD, cursor, line, size=11.5, cls="muted"))
             cursor += LINE_H
@@ -283,6 +283,6 @@ def render_slope(view: SlopeView) -> str:
         body += parts
         cursor += height
     desc = ("Slope chart: one line per group from its mean maturity in the earlier run to this "
-            "one, up in the accent colour, down in the alarm colour; groups with no row known in "
+            "one, up in the accent colour, down in the alarm colour; groups with no practice known in "
             "both runs are listed on a hatched strip, not drawn at zero.")
     return svg.document(WIDTH, float(int(cursor + PAD)), TITLE, desc, body, defs=THEMED_HATCH)

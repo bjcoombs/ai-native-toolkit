@@ -356,7 +356,7 @@ def _bound_lines(run: TrendRun, groups: Sequence[str]) -> list[str]:
     floored = [f"{g}\u00a0{bounds[g]:.2f}" for g in groups if bounds.get(g) is not None]
     if not floored:
         return []
-    return textwrap.wrap(f"With floors, a lower bound (unknown rows counted at their confirmed floor), "
+    return textwrap.wrap(f"With floors, a lower bound (unknown practices counted at their confirmed floor), "
                          f"at least, on {run['label']}: " + ", ".join(floored), WRAP)
 
 
