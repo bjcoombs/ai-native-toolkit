@@ -136,6 +136,9 @@ def test_a_ci_scan_meets_level_2_measured(tmp_path: Path, rel: str, text: str, t
     (".gitlab-ci.yml", "include:\n  # - template: Security/Secret-Detection.gitlab-ci.yml\n"),  # commented out
     (".gitlab-ci.yml", "include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n"
                        "variables:\n  SECRET_DETECTION_DISABLED: \"true\"\n"),  # switched off
+    (".gitlab-ci.yml", "scan:\n  script:\n    - echo hi\n  after_script:\n    - gitleaks detect --source .\n"),
+    (".gitlab-ci.yml", "scan:\n  when: manual\n  script:\n    - gitleaks detect\n"),  # a click, not a guard
+    (".gitlab-ci.yml", "scan:\n  rules:\n    - when: manual\n  script:\n    - gitleaks detect\n"),
 ])
 def test_a_masked_commented_or_lookalike_line_is_not_a_scan(tmp_path: Path, rel: str, text: str) -> None:
     block = scan_secrets_guard(_repo(tmp_path, {rel: text}))

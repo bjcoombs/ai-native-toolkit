@@ -55,7 +55,7 @@ Block (``secrets_guard`` in run-context.json)::
 
     {"available": True,
      "pre_commit": {"present": bool, "file": str | None, "tools": [str, ...]},
-     "ci": {"present": bool, "files": [str, ...], "tools": [str, ...]},
+     "ci": {"present": bool, "files": [str, ...], "tools": [str, ...], "includes_unresolved": int},
      "configured": bool,
      "enforcement": {"available": True, "present": bool, "source": "ci" | None}
                     | {"available": False, "reason": "secret_scanning_not_read: ..."},
@@ -110,7 +110,7 @@ _COMMAND_NAMES = sorted((*SECRET_TOOLS, "detect-secrets-hook"), key=len, reverse
 # exits 0, ``trufflehog`` exits 0 on findings without ``--fail``, ``gitleaks --exit-code 0``.
 _GITLEAKS_NO_FAIL = re.compile(r"--exit-code[= ]0\b")
 _COMMAND = re.compile(
-    r"(?:^\s*|[;&|]\s*|(?:run|script):\s*|^\s*-\s+|"
+    r"(?:^\s*|[;&|]\s*|(?<![\w-])(?:run|script):\s*|^\s*-\s+|"
     r"(?:npx|bunx|uvx|pipx run|pnpm (?:exec|dlx)|yarn dlx)\s+(?:--?\S+\s+)*|docker run\s+(?:--?\S+\s+)*\S*/)(?:[\w./-]*/)?("
     + "|".join(re.escape(t) for t in _COMMAND_NAMES) + r")(?=\s|$|@)", re.IGNORECASE)
 # A step or job that cannot fail the run (GitHub ``continue-on-error: true``, GitLab
@@ -126,6 +126,8 @@ _DETECTION_DISABLED = re.compile(r"^\s*SECRET_DETECTION_DISABLED\s*:\s*['\"]?(?:
                                  re.IGNORECASE | re.MULTILINE)
 _RULE_CONDITION = re.compile(r"^\s*-?\s*(?:if|changes|exists)\s*:")
 _WHEN_NEVER = re.compile(r"^\s*-?\s*when:\s*['\"]?never\b", re.IGNORECASE)
+_AFTER_SCRIPT = re.compile(r"^\s*after_script\s*:")
+_WHEN_MANUAL = re.compile(r"^\s*-?\s*when:\s*['\"]?manual\b", re.IGNORECASE)
 _STEP_START = re.compile(r"^(\s*)-\s")
 # CI that runs the repository's own pre-commit hooks over the checkout, in a command position:
 # ``pre-commit run [<hook>] --all-files`` (or ``--from-ref``/``--files``), or ``uses: pre-commit/action``.
@@ -232,10 +234,19 @@ def _block_end(lines: list[str], start: int, indent: int) -> int:
 
 
 def _masked_lines(lines: list[str]) -> set[int]:
-    """The lines inside a GitHub step or job that sets ``continue-on-error: true``: that step's or job's
-    failure never stops the run, so a scan in it guards nothing."""
+    """The lines whose scan guards nothing: inside a GitHub step or job that sets
+    ``continue-on-error: true`` (its failure never stops the run), a GitLab ``after_script:`` (its
+    failure never sets the job status) or a GitLab job that runs ``when: manual``."""
     masked: set[int] = set()
     for i, line in enumerate(lines):
+        if _AFTER_SCRIPT.match(line):  # GitLab ignores after_script failures for the job status
+            masked.update(range(i, _block_end(lines, i, len(line) - len(line.lstrip()))))
+            continue
+        if _WHEN_MANUAL.match(line):  # a manual job runs only on a click: mask the whole job
+            job = next((j for j in range(i, -1, -1) if lines[j].strip() and not lines[j][0].isspace()), None)
+            if job is not None:
+                masked.update(range(job, _block_end(lines, job, 0)))
+            continue
         if not _CONTINUE_ON_ERROR.match(line):
             continue
         indent = len(line) - len(line.lstrip())
