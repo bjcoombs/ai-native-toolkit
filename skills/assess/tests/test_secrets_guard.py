@@ -157,6 +157,12 @@ def test_a_github_workflow_counts_only_when_it_runs_on_a_change(tmp_path: Path, 
     assert block["ci"]["present"] is counts
 
 
+def test_a_github_input_named_when_masks_nothing(tmp_path: Path) -> None:
+    text = ("jobs:\n  a:\n    steps:\n      - uses: some/action@v1\n        with:\n          when: manual\n"
+            "  b:\n    steps:\n      - run: gitleaks detect\n")
+    assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": text}))["ci"]["tools"] == ["gitleaks"]
+
+
 def test_a_conditional_when_manual_rule_still_runs_the_scan(tmp_path: Path) -> None:
     text = ("secrets:\n  script:\n    - gitleaks detect\n  rules:\n    - if: $CI_COMMIT_TAG\n"
             "      when: manual\n    - when: on_success\n")

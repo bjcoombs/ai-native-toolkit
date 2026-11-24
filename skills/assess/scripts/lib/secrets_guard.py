@@ -233,16 +233,17 @@ def _block_end(lines: list[str], start: int, indent: int) -> int:
     return len(lines)
 
 
-def _masked_lines(lines: list[str]) -> set[int]:
+def _masked_lines(lines: list[str], gitlab: bool = False) -> set[int]:
     """The lines whose scan guards nothing: inside a GitHub step or job that sets
     ``continue-on-error: true`` (its failure never stops the run), a GitLab ``after_script:`` (its
-    failure never sets the job status) or a GitLab job that runs ``when: manual``."""
+    failure never sets the job status) or a GitLab job that runs ``when: manual``. The two GitLab
+    masks run only on GitLab files (``gitlab``): in a GitHub workflow ``when:`` is an action input."""
     masked: set[int] = set()
     for i, line in enumerate(lines):
-        if _AFTER_SCRIPT.match(line):  # GitLab ignores after_script failures for the job status
+        if gitlab and _AFTER_SCRIPT.match(line):  # GitLab ignores after_script failures for the job status
             masked.update(range(i, _block_end(lines, i, len(line) - len(line.lstrip()))))
             continue
-        if _WHEN_MANUAL.match(line):  # a manual job runs only on a click: mask the whole job
+        if gitlab and _WHEN_MANUAL.match(line):  # a manual job runs only on a click: mask the whole job
             job = next((j for j in range(i, -1, -1) if lines[j].strip() and not lines[j][0].isspace()), None)
             if job is not None and _unconditional(lines, i, job):
                 masked.update(range(job, _block_end(lines, job, 0)))
@@ -328,11 +329,11 @@ def _in_name_list(lines: list[str], i: int) -> bool:
     return False
 
 
-def _ci_tools(text: str, hooks: frozenset[str] = frozenset()) -> list[str]:
+def _ci_tools(text: str, hooks: frozenset[str] = frozenset(), gitlab: bool = False) -> list[str]:
     """The secrets tools a CI file uses or runs, unmasked; ``secret_detection`` for GitLab's template
     or visible job. Comments never count, and neither does a masked step or job."""
     lines = _code_lines(text)
-    masked = _masked_lines(lines)
+    masked = _masked_lines(lines, gitlab)
     tools: set[str] = set()
     for i, line in enumerate(lines):
         if i in masked or not line.strip() or _MASKED.search(line):
@@ -371,7 +372,7 @@ def ci_guard(root: Path, ghsync_root: Path | None = None, hooks: frozenset[str] 
     tools: set[str] = set()
     for path in _ci_files(root):
         text = _read(path)
-        found = _ci_tools(text, hooks) if text is not None else []
+        found = _ci_tools(text, hooks, gitlab=path.name == ".gitlab-ci.yml") if text is not None else []
         if found and path.relative_to(root).parts[:2] == (".github", "workflows") \
                 and not _runs_on_change(_code_lines(text or "")):
             found = []
@@ -382,7 +383,7 @@ def ci_guard(root: Path, ghsync_root: Path | None = None, hooks: frozenset[str] 
     if (root / ".gitlab-ci.yml").is_file():  # the files .gitlab-ci.yml includes (lib.ci_includes)
         resolution = resolve_includes(root, ghsync_root)  # a project include resolves from a ghsync clone
         for included in resolution.files:
-            found = _ci_tools(included.text, hooks)
+            found = _ci_tools(included.text, hooks, gitlab=True)
             if found:
                 files.append(f".gitlab-ci.yml include (line {included.line})")
                 tools.update(found)
