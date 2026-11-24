@@ -368,8 +368,10 @@ def _gitlab_job_disabled(lines: list[str]) -> bool:
         if not _GITLAB_JOB.match(line):
             continue
         end = _block_end(lines, i, 0)
-        if not any(_JOB_RUN_KEY.match(lines[j]) for j in range(i + 1, end)):
-            continue  # this definition leaves rules and when to another one
+        child = next((len(ln) - len(ln.lstrip()) for ln in lines[i + 1:end] if ln.strip()), None)
+        if child is None or not any(_JOB_RUN_KEY.match(lines[j]) and len(lines[j]) - len(lines[j].lstrip()) == child
+                                    for j in range(i + 1, end)):
+            continue  # this definition leaves rules and when to another (``artifacts: when:`` is not the job's)
         return any((_WHEN_NEVER.match(lines[j]) or _WHEN_MANUAL.match(lines[j])) and _unconditional(lines, j, i)
                    for j in range(i + 1, end))
     return False

@@ -432,3 +432,12 @@ def test_a_partial_root_override_keeps_an_included_when_never(tmp_path: Path) ->
                  remote="https://gitlab.com/g/p.git")
     subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
     assert scan_secrets_guard(root)["ci"]["present"] is False
+
+
+def test_a_nested_when_does_not_decide_for_the_job(tmp_path: Path) -> None:
+    root_ci = ("include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n  - local: ci/sec.yml\n"
+               "secret_detection:\n  artifacts:\n    when: always\n")
+    root = _repo(tmp_path, {".gitlab-ci.yml": root_ci, "ci/sec.yml": "secret_detection:\n  rules:\n    - when: never\n"},
+                 remote="https://gitlab.com/g/p.git")
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
+    assert scan_secrets_guard(root)["ci"]["present"] is False
