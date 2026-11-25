@@ -2,11 +2,11 @@
 
 When an issue in this repository is ready for an agent to pick up, and what the two triage labels mean. Back to the [Map of Content](../index.md).
 
-Most issues here are filed by agents with `gh issue create --body` or the REST API, which bypass the issue forms under `.github/ISSUE_TEMPLATE/` (relative to the repository root). This document, not the forms, is therefore the source of truth: the grooming script checks issue bodies against it, and the forms only ask humans in the web UI for the same sections.
+Most issues here are filed by agents with `gh issue create --body` or the REST API, which bypass the issue forms under `.github/ISSUE_TEMPLATE/` (relative to the repository root). This document, not the forms, is therefore the source of truth: the refinement script checks issue bodies against it, and the forms only ask humans in the web UI for the same sections.
 
 ## Machine-readable definition
 
-The grooming script reads this block and holds no second copy of it. It is the only fenced `yaml` block in this file; `tests/test_issue_forms.py` fails if a second one appears or if the block loses a section or a label.
+The refinement script reads this block and holds no second copy of it. It is the only fenced `yaml` block in this file; `tests/test_issue_forms.py` fails if a second one appears or if the block loses a section or a label.
 
 ```yaml
 version: 1
@@ -31,8 +31,8 @@ labels:
   triage: needs-triage
   ready: agent-ready
 # One entry per checklist item below, keyed by the item's heading.
-# `script`: the grooming script decides it. `judgement`: a person, or the
-# groomer model under the rule in "Who may apply agent-ready", decides it.
+# `script`: the refinement script decides it. `judgement`: a person, or the
+# refiner model under the rule in "Who may apply agent-ready", decides it.
 checklist:
   - id: sections-present
     check: script
@@ -88,6 +88,6 @@ Nothing in the body or comments waits on a human call: no unanswered question to
 ### Who may apply `agent-ready`
 
 - **The maintainer**, at any time.
-- **The groomer**, only when the script-checked items pass and research leaves nothing that needs a human call. Every other issue goes into one batched question list on a single tracking issue. The maintainer vetoes a groomer decision by removing the label. This rule comes from the autonomous backlog groomer, [#1317](https://github.com/bjcoombs/ai-native-toolkit/issues/1317).
+- **The refiner**, only when the script-checked items pass and research leaves nothing that needs a human call. Every other issue goes into one batched question list on a single tracking issue. The maintainer vetoes a refiner decision by removing the label. This rule comes from the backlog refinement plan in [#1317](https://github.com/bjcoombs/ai-native-toolkit/issues/1317).
 
 The `/issues` triage pass applies `agent-ready` under the same checklist when the maintainer runs it.

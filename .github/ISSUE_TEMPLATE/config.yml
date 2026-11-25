@@ -1,5 +1,5 @@
 # Every issue opened in the web UI goes through a form, so it arrives with the
 # sections docs/contributing/definition-of-ready.md asks for. Issues filed with
-# `gh issue create --body` or the REST API bypass forms; the grooming script
+# `gh issue create --body` or the REST API bypass forms; the refinement script
 # checks those bodies against the same definition.
 blank_issues_enabled: false
