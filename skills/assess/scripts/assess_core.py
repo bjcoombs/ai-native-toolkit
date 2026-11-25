@@ -169,6 +169,14 @@ def _model_differs(level_block: Any, model: ModelChoice | None) -> bool:
     return isinstance(recorded, str) and model_name(recorded) != model_name(version)
 
 
+def _recorded_packs(level_block: Any) -> list[str]:
+    """The packs whose rows the run's ``level`` block holds (#1274), in order: every condition
+    ``source`` after the first, which is the base model's; ``[]`` for a block without one."""
+    conditions = level_block.get("conditions") if isinstance(level_block, dict) else None
+    sources = [c["source"] for c in conditions or [] if isinstance(c, dict) and isinstance(c.get("source"), str)]
+    return list(dict.fromkeys(sources))[1:]
+
+
 def _model_hint(level_block: dict[str, Any]) -> str:
     """The flag that reruns under the model ``level_block`` names: ``the run used profile
     handover: pass --profile handover``, the default model, or a custom file's version."""
@@ -206,7 +214,9 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
     model), which the recount uses; a model other than the one the ``level`` block names
     returns 2 before any mutation runs, naming the flag that model needs (``_model_hint``),
     so a refresh never recounts a profile run under
-    another model (#1150).
+    another model (#1150). Likewise the packs whose rows the ``level`` block holds (each
+    condition's ``source``, #1274) must be the ones layered onto ``model``, in order, or it
+    returns 2 naming them, so a refresh never drops a pack's practices.
 
     The treemap overlay (regenerated separately by the orchestrator) then reads
     the refreshed ``test_pressure.per_file`` so covered-but-unpinned files get
@@ -232,6 +242,12 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
     if _model_differs(ctx.get("level"), model):
         print(f"--opt-in-mutation needs the --profile or --levels the run used; {_model_hint(ctx['level'])}",
               file=sys.stderr)
+        return 2
+    recorded = _recorded_packs(ctx.get("level"))
+    if recorded != pack_sources(chosen_model(model)):
+        named = ", ".join(recorded) or "none with rows"
+        print(f"--opt-in-mutation needs every --pack whose rows the run layered, in the same order; "
+              f"the run's packs: {named}", file=sys.stderr)
         return 2
 
     # Only focus entries with test evidence: mutating a file with no test yields

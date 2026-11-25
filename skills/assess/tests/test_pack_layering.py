@@ -203,3 +203,27 @@ def test_counts_only_keeps_each_condition_source(tmp_path: Path, packs: tuple[Pa
     ctx["level"] = run_level(ctx, _choice(packs))
     kept = {c["id"]: c.get("source") for c in counts_only(ctx)["level"]["conditions"]}
     assert kept["company-glossary.1"] == "company" and kept["team-owner.1"] == "team"
+
+
+def test_a_mutation_refresh_without_the_runs_packs_is_refused(
+        tmp_path: Path, packs: tuple[Pack, ...], capsys: pytest.CaptureFixture[str]) -> None:
+    """--opt-in-mutation recounts the level: without the run's --pack it would drop the pack
+    practices, so it returns 2 naming them before any mutation runs."""
+    import assess_core
+    repo = tmp_path / "target"
+    (repo / ".assess").mkdir(parents=True)
+    ctx = _ctx(tmp_path, packs)
+    ctx["level"] = run_level(ctx, _choice(packs))
+    (repo / ".assess" / "run-context.json").write_text(json.dumps(ctx), encoding="utf-8")
+    assert assess_core.run_opt_in_mutation(repo) == 2
+    assert "company, team" in capsys.readouterr().err
+    assert assess_core.run_opt_in_mutation(repo, model=_choice(packs[:1])) == 2
+    same_order = layer_packs(default_model(), "default", [packs[0], packs[1]])
+    assert assess_core._recorded_packs(ctx["level"]) == pack_sources(same_order)
+
+
+def test_a_mutation_refresh_of_a_run_without_pack_rows_reads_no_packs() -> None:
+    import assess_core
+    golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
+    assert assess_core._recorded_packs(run_level(golden, None)) == []
+    assert assess_core._recorded_packs(None) == []

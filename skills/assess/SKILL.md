@@ -375,7 +375,7 @@ REOFFER_MUT=$(jq -r '.reoffer_mutation // false' "$REPO_ROOT/.assess/run-context
 ```bash
 # 1. Re-run the test-pressure scan with the bounded mutation pass enabled
 <!-- chat-replace:uv-core-mutation -->
-uv run "${CLAUDE_SKILL_DIR}/scripts/assess_core.py" "$REPO_ROOT" --opt-in-mutation  # plus the run's --profile NAME or --levels FILE, if it had one
+uv run "${CLAUDE_SKILL_DIR}/scripts/assess_core.py" "$REPO_ROOT" --opt-in-mutation  # plus the run's --profile NAME or --levels FILE and every --pack FILE, if it had them
 
 # 2. Regenerate the heatmap with the survivor overlay so covered-but-unpinned
 #    files get hatched and stop reading as safe green

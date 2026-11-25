@@ -63,7 +63,8 @@ pointing it at the scope directory as its root
 it for a code-only service.
 
 The opt-in mutation re-run must be given the same scope so it finds the scoped
-run-context: `assess_core.py "$REPO_ROOT" --opt-in-mutation --scope "$SCOPE"`.
+run-context: `assess_core.py "$REPO_ROOT" --opt-in-mutation --scope "$SCOPE"`, plus the
+run's `--profile` or `--levels` and every `--pack`.
 
 ## What "scoped" means per signal
 
