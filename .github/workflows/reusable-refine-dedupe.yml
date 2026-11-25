@@ -1,0 +1,180 @@
+name: Refine dedupe (reusable)
+
+# Duplicate detection for one issue (issues #1321, #1327). Adopt it with one
+# `uses:` line from a workflow triggered on `issues: opened` and
+# `workflow_dispatch`; refine-dedupe.yml is the reference caller.
+#
+#   1. skills/refine/scripts/refine.py writes the deterministic verdict.
+#   2. An exact pair with both issues open is closed with no model, under the
+#      weekly close cap, with a comment that names the `/reopen` route.
+#   3. Otherwise the /dedupe command looks for issues that cover the same
+#      work and returns at most three candidates. They are named in one
+#      comment and never closed.
+#
+# Permissions, credentials and allowed_non_write_users: as in
+# reusable-refine-triage.yml.
+on:
+  workflow_call:
+    inputs:
+      enabled:
+        description: Kill switch. Pass `vars.REFINE_ENABLED == 'true'`; false skips every job.
+        type: boolean
+        default: false
+      mode:
+        description: "`live` writes; any other value, including empty, is a dry-run."
+        type: string
+        default: dry-run
+      issue_number:
+        type: number
+        required: true
+      toolkit_repository:
+        type: string
+        default: bjcoombs/ai-native-toolkit
+      toolkit_ref:
+        type: string
+        default: main
+      model:
+        description: A Sonnet-class model.
+        type: string
+        default: sonnet
+      close_cap:
+        description: The most duplicate closes the bot may make in any 7 days.
+        type: number
+        default: 10
+      anthropic_federation_rule_id:
+        type: string
+        default: ''
+      anthropic_organization_id:
+        type: string
+        default: ''
+      anthropic_service_account_id:
+        type: string
+        default: ''
+      anthropic_workspace_id:
+        type: string
+        default: ''
+    secrets:
+      anthropic_api_key:
+        required: false
+
+jobs:
+  dedupe:
+    if: inputs.enabled
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: refine-dedupe-${{ github.repository }}-${{ inputs.issue_number }}
+      cancel-in-progress: true
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      ISSUE: ${{ inputs.issue_number }}
+      REFINE_MODE: ${{ inputs.mode }}
+      REFINE_CLOSE_CAP: ${{ inputs.close_cap }}
+      CLAUDE_CODE_SCRIPT_CAPS: '{"close-duplicate.sh":1,"comment-on-duplicates.sh":1}'
+      APPLY: .refine-toolkit/skills/refine/scripts/refine_apply.py
+    steps:
+      - name: Check out the repository (default branch)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out the refinement scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ inputs.toolkit_repository }}
+          ref: ${{ inputs.toolkit_ref }}
+          path: .refine-toolkit
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Write the deterministic verdict
+        timeout-minutes: 5
+        run: |
+          mkdir -p .refine
+          python3 .refine-toolkit/skills/refine/scripts/refine.py --repo "$GH_REPO" --issue "$ISSUE" \
+            --out .refine/verdict.json
+
+      - name: Close an exact duplicate (no model)
+        id: exact
+        run: python3 "$APPLY" dedupe-exact --verdict .refine/verdict.json --issue "$ISSUE" >> "$GITHUB_OUTPUT"
+
+      - name: Check the credential and the author
+        id: gate
+        if: steps.exact.outputs.model == 'true'
+        env:
+          HAS_KEY: ${{ secrets.anthropic_api_key != '' }}
+          HAS_WIF: ${{ inputs.anthropic_federation_rule_id != '' && inputs.anthropic_organization_id != '' }}
+          TRUSTED: ${{ github.event_name == 'workflow_dispatch' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association) }}
+        run: |
+          if [ "$HAS_KEY" != "true" ] && [ "$HAS_WIF" != "true" ]; then
+            echo "::notice::No refiner credential is set; the model step is skipped."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          elif [ "$TRUSTED" != "true" ]; then
+            echo "::notice::The author has no write access; only the exact-duplicate check ran."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "schema=$(jq -c . .refine-toolkit/skills/refine/scripts/dedupe-plan.schema.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Install the refiner commands
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          mkdir -p .claude/commands
+          for f in .refine-toolkit/skills/refine/commands/*.md; do
+            [ -e ".claude/commands/$(basename "$f")" ] || cp "$f" .claude/commands/
+          done
+
+      - name: Look for duplicates (model, read-only)
+        id: model
+        if: steps.gate.outputs.run == 'true'
+        timeout-minutes: 10
+        continue-on-error: true
+        uses: anthropics/claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c  # v1.0.290
+        with:
+          github_token: ${{ github.token }}
+          anthropic_api_key: ${{ secrets.anthropic_api_key }}
+          anthropic_federation_rule_id: ${{ inputs.anthropic_federation_rule_id }}
+          anthropic_organization_id: ${{ inputs.anthropic_organization_id }}
+          anthropic_service_account_id: ${{ inputs.anthropic_service_account_id }}
+          anthropic_workspace_id: ${{ inputs.anthropic_workspace_id }}
+          prompt: "/dedupe REPO: ${{ github.repository }} ISSUE: ${{ inputs.issue_number }} VERDICT: .refine/verdict.json"
+          claude_args: |
+            --model ${{ inputs.model }}
+            --max-turns 20
+            --permission-mode auto
+            --disallowedTools "WebFetch,WebSearch,Write,Edit,MultiEdit,NotebookEdit"
+            --json-schema '${{ steps.gate.outputs.schema }}'
+
+      - name: Name the candidates (no model)
+        if: steps.model.outcome == 'success' && steps.model.outputs.structured_output != ''
+        env:
+          PLAN: ${{ steps.model.outputs.structured_output }}
+        run: |
+          printf '%s' "$PLAN" > .refine/plan.json
+          python3 "$APPLY" dedupe --verdict .refine/verdict.json --issue "$ISSUE" --plan .refine/plan.json
+
+      - name: Report final status
+        if: always() && steps.gate.outputs.run == 'true'
+        env:
+          OUTCOME: ${{ steps.model.outcome }}
+          CONCLUSION: ${{ steps.model.outputs.conclusion }}
+          EXEC_FILE: ${{ steps.model.outputs.execution_file }}
+        run: bash .refine-toolkit/skills/refine/scripts/check-model-run.sh
+
+      - name: Write the job summary
+        if: always()
+        run: python3 "$APPLY" summary >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload the verdict, plan and actions
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: refine-dedupe-${{ inputs.issue_number }}-${{ github.run_attempt }}
+          path: |
+            .refine/
+            ${{ runner.temp }}/refine/actions.jsonl
+          if-no-files-found: ignore

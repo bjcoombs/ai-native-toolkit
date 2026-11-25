@@ -1,0 +1,22 @@
+[
+  {
+    "id": 503,
+    "user": {
+      "login": "bjcoombs",
+      "id": 6078679,
+      "type": "User"
+    },
+    "body": "Questions go here.",
+    "created_at": "2026-11-01T10:00:00Z"
+  },
+  {
+    "id": 504,
+    "user": {
+      "login": "github-actions[bot]",
+      "id": 7067056,
+      "type": "Bot"
+    },
+    "body": "<!-- refine:ready-buffer -->\n### Ready buffer",
+    "created_at": "2026-11-24T06:17:00Z"
+  }
+]

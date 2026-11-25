@@ -1,0 +1,23 @@
+name: Refine sweep
+
+# This repository's caller for reusable-refine-sweep.yml (issue #1321): twice
+# a day, no model. Settings as in refine-triage.yml.
+on:
+  schedule:
+    - cron: '17 6,18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sweep:
+    if: vars.REFINE_ENABLED == 'true'
+    uses: ./.github/workflows/reusable-refine-sweep.yml
+    with:
+      enabled: ${{ vars.REFINE_ENABLED == 'true' }}
+      mode: ${{ vars.REFINE_MODE || 'dry-run' }}
+      toolkit_repository: ${{ github.repository }}
+      toolkit_ref: ${{ github.sha }}
+      questions_issue: ${{ vars.REFINE_QUESTIONS_ISSUE }}

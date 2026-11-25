@@ -1,0 +1,12 @@
+[
+  {
+    "id": 502,
+    "user": {
+      "login": "github-actions[bot]",
+      "id": 7067056,
+      "type": "Bot"
+    },
+    "body": "<!-- refine:duplicates -->\nThe refiner found ...",
+    "created_at": "2026-11-21T10:00:00Z"
+  }
+]

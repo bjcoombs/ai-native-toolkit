@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "triage-plan.schema.json",
+  "title": "Refiner triage plan",
+  "description": "What the /triage-issue command returns for one issue (issue #1321). The model writes nothing; refine_apply.py applies this plan through the guarded write scripts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["issue", "ready", "labels_add", "labels_remove", "size", "size_reason", "blocked_by", "questions", "summary"],
+  "properties": {
+    "issue": {"type": "integer", "minimum": 1},
+    "ready": {"type": "boolean", "description": "True only when every judgement item passes after research and no question needs a person."},
+    "labels_add": {"type": "array", "maxItems": 5, "items": {"type": "string", "maxLength": 50}},
+    "labels_remove": {"type": "array", "maxItems": 5, "items": {"type": "string", "maxLength": 50}},
+    "size": {"type": ["integer", "null"], "minimum": 1, "description": "Fibonacci story points, or null to leave the size alone."},
+    "size_reason": {"type": "string", "maxLength": 300},
+    "blocked_by": {"type": "array", "maxItems": 5, "items": {"type": "integer", "minimum": 1}},
+    "questions": {"type": "array", "maxItems": 5, "items": {"type": "string", "maxLength": 500}},
+    "summary": {"type": "string", "maxLength": 1000}
+  }
+}
