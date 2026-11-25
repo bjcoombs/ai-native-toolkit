@@ -2443,7 +2443,8 @@
         "repo_root",
         "ghsync_root",
         "gitlab_merged_ci",
-        "external_ci"
+        "external_ci",
+        "gitlab_include_renames"
       ],
       "network": false,
       "platform": true,
@@ -2456,6 +2457,7 @@
           "ci_checks.includes.id": "id",
           "ci_checks.includes.kind": "token",
           "ci_checks.includes.ref_basis": "token",
+          "ci_checks.includes.rename": "token",
           "ci_checks.includes.status": "token",
           "ci_checks.lint_basis": "token",
           "ci_checks.merged_config": "token",
@@ -5069,7 +5071,8 @@
         "repo_root",
         "ghsync_root",
         "gitlab_merged_ci",
-        "external_ci"
+        "external_ci",
+        "gitlab_include_renames"
       ],
       "network": false,
       "private": false
@@ -5402,6 +5405,17 @@
       ],
       "network": true,
       "private": false
+    },
+    {
+      "name": "gitlab_include_renames",
+      "title": "GitLab CI include projects looked up across a rename",
+      "publishes": [],
+      "reads": [
+        "repo_root",
+        "ghsync_root"
+      ],
+      "network": true,
+      "private": true
     },
     {
       "name": "gitlab_merged_ci",

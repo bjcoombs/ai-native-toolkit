@@ -678,6 +678,15 @@
                   "depth": {
                     "type": "integer",
                     "description": "Include level: 1 for the repository's own include."
+                  },
+                  "rename": {
+                    "enum": [
+                      "followed",
+                      "checked",
+                      "not_checked",
+                      null
+                    ],
+                    "description": "A project or component with no clone at its written path (#1357): followed (read from the clone at the path GitLab's API answered under), checked (looked up, no clone at a new path) or not_checked (offline, or not answered); null for every other include."
                   }
                 }
               },

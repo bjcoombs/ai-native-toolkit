@@ -128,6 +128,7 @@ from lib.hosting.github_secret_scanning import scan_github_secret_scanning
 from lib.scoring.layer_grades import scan_layer_grades
 from lib.hosting.merged_sample import merged_sample, offline_merged_sample
 from lib.hosting.gitlab_ci_lint import no_merged_ci, read_merged_ci
+from lib.hosting.gitlab_include_renames import no_include_renames, read_include_renames
 from lib.instructions.guardrails import scan_guardrails
 from lib.ci.review_automation import review_evidence, scan_review_automation
 from lib.hosting.review_reality import review_reality_from_sample
@@ -633,6 +634,10 @@ SCANS: tuple[ScanSpec, ...] = (
     # the check runs and statuses of the sampled merged pull requests, at most two GETs each.
     # Private, two counts in memory; offline it reads nothing.
     _spec("external_ci", read_external_ci, offline_fn=no_external_ci),
+    # Include projects moved since the include was written (#1357, lib/hosting/gitlab_include_renames.py):
+    # each one with no clone looked up through the API, so ci_checks reads the clone at its new
+    # path. Private; offline it reads nothing.
+    _spec("gitlab_include_renames", read_include_renames, offline_fn=no_include_renames),
     _spec("ci_checks", scan_ci_checks),
     # Agent building (issue #689): what the repository builds with agents, an
     # inventory and not scored - agent SDKs and frameworks in manifests, agent
