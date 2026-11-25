@@ -1,0 +1,24 @@
+[
+  {
+    "number": 90,
+    "title": "widgets: reopened report",
+    "body": "Size: 1 point\n\n## Problem Statement\n\nThe problem statement of case 90: t90w0pro t90w1pro t90w2pro t90w3pro t90w4pro t90w5pro.\n\n## Technical Context\n\nThe technical context of case 90: t90w0tec t90w1tec t90w2tec t90w3tec t90w4tec t90w5tec.\n\n## Impact\n\nThe impact of case 90: t90w0imp t90w1imp t90w2imp t90w3imp t90w4imp t90w5imp.\n\n## Root Cause\n\nThe root cause of case 90: t90w0roo t90w1roo t90w2roo t90w3roo t90w4roo t90w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 90: t90w0sol t90w1sol t90w2sol t90w3sol t90w4sol t90w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n\nFiled once, closed as completed, filed again.\n",
+    "state": "CLOSED",
+    "stateReason": "COMPLETED",
+    "labels": [],
+    "createdAt": "2026-10-01T09:00:00Z",
+    "closedAt": "2026-10-05T09:00:00Z",
+    "url": "https://github.com/acme/widgets/issues/90"
+  },
+  {
+    "number": 91,
+    "title": "widgets: refiled after rejection",
+    "body": "Size: 1 point\n\n## Problem Statement\n\nThe problem statement of case 91: t91w0pro t91w1pro t91w2pro t91w3pro t91w4pro t91w5pro.\n\n## Technical Context\n\nThe technical context of case 91: t91w0tec t91w1tec t91w2tec t91w3tec t91w4tec t91w5tec.\n\n## Impact\n\nThe impact of case 91: t91w0imp t91w1imp t91w2imp t91w3imp t91w4imp t91w5imp.\n\n## Root Cause\n\nThe root cause of case 91: t91w0roo t91w1roo t91w2roo t91w3roo t91w4roo t91w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 91: t91w0sol t91w1sol t91w2sol t91w3sol t91w4sol t91w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n\nClosed as not planned, then filed again.\n",
+    "state": "CLOSED",
+    "stateReason": "NOT_PLANNED",
+    "labels": [],
+    "createdAt": "2026-10-01T09:00:00Z",
+    "closedAt": "2026-10-02T09:00:00Z",
+    "url": "https://github.com/acme/widgets/issues/91"
+  }
+]

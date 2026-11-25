@@ -80,6 +80,14 @@
       },
       "revision": 1
     },
+    "core.backlog_ready": {
+      "repos": {
+        "grpa/sub/deep/svc2": "cf8a96ae6fad3af77ba2255b44768fbe8e1c38f408b1c32bca21a75f2b3f93d0",
+        "grpa/svc1": "eef20519753695e1ab09ef0a5d9832e10c87fd312591ee1c31624f8143b1dbbc",
+        "grpb/lib1": "cf8a96ae6fad3af77ba2255b44768fbe8e1c38f408b1c32bca21a75f2b3f93d0"
+      },
+      "revision": 1
+    },
     "core.ci_checks": {
       "repos": {
         "grpa/sub/deep/svc2": "c52536f0c0954fa12d353751fe88c57c0c20c399b942c95be5ca709d434913e7",

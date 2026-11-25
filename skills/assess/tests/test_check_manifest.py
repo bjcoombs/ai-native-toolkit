@@ -37,7 +37,7 @@ from lib.counts_only.counts_only_schema import ROOTS
 from lib.graph.import_graph import STRUCTURE_REASON_CODES
 from lib.keyhole.keyhole_signals import (FINDING_ACTIONS, FINDING_MODE_VALUES, FINDING_MODES,
                                  FINDING_ORDER, GIT_HISTORY_FINDINGS, _CHURN_DERIVED_FINDINGS)
-from lib.level_signals import InputClass, load_default_levels
+from lib.level_signals import STAGED_BLOCKS, InputClass, load_default_levels
 
 SCHEMA = Path(__file__).resolve().parents[1] / "references" / "check-manifest.schema.json"
 SIGNALS_SCHEMA = SCHEMA.with_name("signals.schema.json")
@@ -251,7 +251,11 @@ def test_signals_match_default_model(manifest: cm.CheckManifest) -> None:
     entries = {s["path"]: s for s in cm.signals(manifest)}
     read = {sig: value for _, _, sig, value in _criteria()}
     problems = [f"{sig}: read by default.toml, no signal entry" for sig in read if sig not in entries]
-    problems += [f"{sig}: signal entry read by no default criterion" for sig in entries if sig not in read]
+    problems += [f"{sig}: signal entry read by no default criterion" for sig in entries
+                 if sig not in read and sig.split(".")[0] not in STAGED_BLOCKS]
+    # A staged block (#1322) is allowed only while no default criterion reads it.
+    problems += [f"{sig}: read by default.toml, drop {sig.split('.')[0]} from STAGED_BLOCKS"
+                 for sig in read if sig.split(".")[0] in STAGED_BLOCKS]
     for sig in read.keys() & entries.keys():
         kind = "bool" if isinstance(read[sig], bool) else "number"
         if entries[sig]["type"] != kind:

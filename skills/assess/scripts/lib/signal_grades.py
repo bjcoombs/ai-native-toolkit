@@ -7,7 +7,8 @@ reaching the scanners. ``SIGNAL_INPUTS`` is generated at import from each signal
 ``lib.level_signals`` re-exports every name and documents the classes and rulings.
 
 The classification data `level_signals.py` documents and re-exports: `InputClass`, `Grade`,
-`INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES`, `EMPTY_DENOMINATORS` (signal
+`INPUT_GRADES`, `LISTED_GRADES`, `STAGED_BLOCKS` (blocks whose signals a test model reads before
+their row enters a shipped model, #1322), `SIGNAL_INPUTS`, `UNMEASURED_VALUES`, `EMPTY_DENOMINATORS` (signal
 to its set's count and the code when that count is 0, read by `levels.py`: `no_source_files`,
 `no_manifests`) and the `DEFAULT_LEVELS` path, importing only `lib.manifest.check_manifest` (which imports only
 `lib.manifest.check_validation` and `lib.manifest.manifest_whys`, neither a scanner), so `level_tally.py` and the run context's `level` entry read them
@@ -37,6 +38,12 @@ INPUT_GRADES: dict[InputClass, Grade] = {
     "platform": "verified",
 }
 LISTED_GRADES: frozenset[str] = frozenset({"config_only", "declared"})
+
+# Block -> the issue that places its row in a shipped model. A staged block's signals carry their
+# evidence class so a test model grades them, while no default criterion reads them yet; the
+# check-manifest and signal-input tests allow them only while the default model leaves the block
+# unread, so the entry goes when the row lands. backlog_ready: #1322, placed by #1324.
+STAGED_BLOCKS: dict[str, int] = {"backlog_ready": 1324}
 
 # Signal path -> its producer input class: each signal entry's `evidence` in
 # checks/core/ (#953), validated against `InputClass` by the loader.

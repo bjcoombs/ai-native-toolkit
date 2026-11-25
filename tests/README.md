@@ -30,6 +30,7 @@ rule in `CLAUDE.md`, this file is usually the one that fails.
 | `test_issue_forms.py` | The issue forms, the machine-readable block in `docs/contributing/definition-of-ready.md` and the `needs-triage` workflow's trigger and permissions |
 | `test_landing_page.py` | The skill index on the GitHub Pages landing page |
 | `test_marathon_flow_metrics.py` | The marathon flow metrics script |
+| `test_refine.py`, `test_refine_platform.py`, `refine_env.py` | The backlog refinement script in `skills/refine/scripts/`, replaying recorded `gh` output from `fixtures/refine/` |
 | `test_refine_workflows.py`, `test_refine_write.py`, `test_refine_apply.py`, `refine_write_env.py` | The refiner workflows' triggers, permissions, tool limits, call caps and `workflow_call` inputs, and the write scripts' guardrails in `skills/refine/scripts/`, replaying recorded `gh` output from `fixtures/refine_write/` |
 | `test_skill_forge_instruction_files.py` | `/skill-forge` on instruction files such as `CLAUDE.md` and `AGENTS.md` |
-| `fixtures/` | Inputs for the Windows smoke checks |
+| `fixtures/` | Inputs for the Windows smoke checks and the recorded `gh` output for the refinement script |

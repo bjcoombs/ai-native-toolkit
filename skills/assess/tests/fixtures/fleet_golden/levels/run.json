@@ -57,6 +57,10 @@
       "revision": 1
     },
     {
+      "id": "core.backlog_ready",
+      "revision": 1
+    },
+    {
       "id": "core.broken_instruction_refs",
       "revision": 1
     },

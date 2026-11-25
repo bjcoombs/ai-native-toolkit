@@ -50,7 +50,7 @@ test-scripts:
 	cd scripts && uv run --locked pytest -v $(XDIST) --cov=. --cov-report=term --cov-report=xml:coverage.xml
 
 test-contract:
-	uv run --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4" pytest -v $(XDIST) tests/
+	uv run --with pytest --with pyyaml --with jsonschema --with "pytest-xdist>=3.6,<4" pytest -v $(XDIST) tests/
 
 # The measures catalog (docs/what-we-measure.md, docs/checks.html, measures.json), generated from skills/assess/checks/core.toml (and its fragments), the default
 # maturity model, lib/level_signals.py, lib/signals.py (the headless scan list) and
@@ -102,10 +102,10 @@ regen:
 
 lint:
 	cd skills/assess && uv run --locked ruff check .
-	cd skills/assess && uv run --locked ruff check ../fleet/scripts ../marathon/scripts
+	cd skills/assess && uv run --locked ruff check ../fleet/scripts ../marathon/scripts ../refine/scripts
 	cd scripts && uv run --locked ruff check .
 	cd skills/assess && uv run --locked mypy
-	cd skills/assess && uv run --locked mypy ../fleet/scripts ../marathon/scripts
+	cd skills/assess && uv run --locked mypy ../fleet/scripts ../marathon/scripts ../refine/scripts
 	cd scripts && uv run --locked mypy
 
 # Release PR only (#1011): write the version notes in skills/assess/changes/ into

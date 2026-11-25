@@ -117,6 +117,7 @@ from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.skill_disclosure import scan_skill_disclosure
 from lib.secrets_guard import scan_secrets_guard
+from lib.backlog_ready import scan_backlog_ready
 from lib.skill_script_tests import scan_skill_script_tests
 from lib.skill_personal_data import scan_skill_personal_data
 from lib.ci_model_jobs import scan_ci_model_jobs
@@ -665,6 +666,10 @@ SCANS: tuple[ScanSpec, ...] = (
     # Secrets guard (issue #1173): a secrets hook in the pre-commit config and a secrets scan in CI,
     # each with its own grade; level 1 any guard (listed), level 2 one an agent cannot skip (counted).
     _spec("secrets_guard", scan_secrets_guard),
+    # Backlog kept agent-ready, level 1 (issue #1322): an issue form with a required field, a
+    # workflow that labels new issues untriaged, a documented ready label, and no stale job that
+    # closes ready issues. Committed files only; the row waits in a test model for #1324.
+    _spec("backlog_ready", scan_backlog_ready),
     # Top 3 candidates read from measured gaps. Post-offers since #821: the
     # root-instructions gap reads layer_grades; the removal proposal (#1084)
     # reads instruction_placement, so it runs after it.
