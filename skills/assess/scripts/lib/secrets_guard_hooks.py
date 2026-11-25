@@ -87,7 +87,8 @@ def _hooks(lines: list[str]) -> Iterator[tuple[str | None, str | None, frozenset
     for keys in _items(lines):
         repo = _value(lines, keys["repo"]) if "repo" in keys else None
         hook = _value(lines, keys["id"]) if "id" in keys else None
-        stages = _stage_values(lines, keys["stages"]) if "stages" in keys else default
+        # An empty ``stages: []`` is unset: pre-commit falls back to ``default_stages``.
+        stages = (_stage_values(lines, keys["stages"]) if "stages" in keys else None) or default
         if repo is not None or hook is not None:
             yield repo, hook, stages
 

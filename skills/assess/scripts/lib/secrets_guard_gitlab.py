@@ -22,7 +22,7 @@ This module builds on the shared resolver, ``lib.ci_includes.merged_config`` wit
   never``/``manual`` turns it off, ``always``/``on_success`` or none runs. An unresolved job is
   unevaluated. ``SECRET_DETECTION_DISABLED`` (GitLab's switch) is read only where GitLab applies
   it to the job: the pipeline's top-level ``variables:`` in any file, and the job's own merged
-  ``variables:`` (which win). A value under another job, or under ``rules:`` variables, no
+  ``variables:`` (which win), and the root file's top-level value over an included file's. A value under another job, or under ``rules:`` variables, no
   longer turns the scan off; one inside ``workflow:`` may or may not apply, so it reads
   unevaluated. A truthy value (``true``, ``1``, ``yes``) turns it off.
 
@@ -86,12 +86,12 @@ def _switch(config: MergedConfig) -> str | None:
         own += _disabled_values(sources[k.source], k.start, k.end)
     if own:
         return "off" if own[-1] else None   # the job's own variables win over the pipeline's
-    pipeline: list[bool] = []
+    pipeline: list[list[bool]] = []
     for lines in sources:
         block = _top_block(lines, "variables")
-        if block is not None:
-            pipeline += _disabled_values(lines, *block)
-    if any(pipeline):
+        pipeline.append(_disabled_values(lines, *block) if block is not None else [])
+    # The root file merges last, so its value wins; else any included file's.
+    if pipeline[0][-1:] == [True] or (not pipeline[0] and any(any(v) for v in pipeline[1:])):
         return "off"
     for lines in sources:
         flow = _top_block(lines, "workflow")

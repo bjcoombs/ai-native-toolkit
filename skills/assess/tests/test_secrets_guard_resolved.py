@@ -125,6 +125,19 @@ def test_the_job_variable_wins_over_the_pipeline_variable(tmp_path: Path) -> Non
     assert _gitlab(tmp_path, {".gitlab-ci.yml": text})["ci"]["tools"] == ["secret_detection"]
 
 
+def test_the_root_pipeline_variable_wins_over_an_included_one(tmp_path: Path) -> None:
+    block = _gitlab(tmp_path, {".gitlab-ci.yml": TEMPLATE + "  - local: ci/vars.yml\nvariables:\n"
+                                                            "  SECRET_DETECTION_DISABLED: \"false\"\n",
+                               "ci/vars.yml": "variables:\n  SECRET_DETECTION_DISABLED: \"true\"\n"})
+    assert block["ci"]["tools"] == ["secret_detection"]
+
+
+def test_an_empty_stages_list_is_unset(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {".pre-commit-config.yaml": PRE_COMMIT + "        stages: []\n", ".github/workflows/x.yml": RUN_ALL})
+    block = scan_secrets_guard(root)
+    assert block["pre_commit"]["present"] is True and block["ci"]["tools"] == ["gitleaks"]
+
+
 def test_the_switch_under_workflow_rules_is_not_measured(tmp_path: Path) -> None:
     text = TEMPLATE + ("workflow:\n  rules:\n    - if: $CI_COMMIT_TAG\n      variables:\n"
                        "        SECRET_DETECTION_DISABLED: \"true\"\n    - when: always\n")
