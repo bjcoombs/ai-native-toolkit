@@ -1,7 +1,6 @@
 <!--
 Title: a conventional commit (`feat: ...`, `fix: ...`); the `Validate PR title` check enforces it.
 Link the issue: `Closes #<n>` for each issue this resolves, `Part of #<n>` for a decomposed parent.
-No emojis and no AI attribution in the title, body or commits.
 -->
 
 ## Summary
