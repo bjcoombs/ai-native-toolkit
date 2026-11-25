@@ -332,3 +332,50 @@ def test_a_masked_composite_call_stays_masked(tmp_path: Path) -> None:
 def test_an_env_command_is_read_through(tmp_path: Path) -> None:
     wf = "jobs:\n  s:\n    env:\n      SCANNER: gitleaks\n    steps:\n      - run: $SCANNER detect --source .\n"
     assert scan_secrets_guard(_repo(tmp_path, {".github/workflows/x.yml": wf}, GITHUB))["ci"]["tools"] == ["gitleaks"]
+
+
+# --- 7. only a template: or component: include item is the template; a background & never fails ---
+
+
+@pytest.mark.parametrize("files", [
+    {".gitlab-ci.yml": "include:\n  - local: ci/Secret-Detection.gitlab-ci.yml\n",
+     "ci/Secret-Detection.gitlab-ci.yml": "lint:\n  script:\n    - echo hi\n"},
+    {".gitlab-ci.yml": "include:\n  - local: ci/Secret-Detection.gitlab-ci.yml\n    rules:\n      - if: $NEVER\n",
+     "ci/Secret-Detection.gitlab-ci.yml": "lint:\n  script:\n    - echo hi\n"},
+    {".gitlab-ci.yml": "lint:\n  script:\n    - cp a Secret-Detection.gitlab-ci.yml\n"},
+])
+def test_a_local_file_named_like_the_template_is_not_the_template(tmp_path: Path, files: dict[str, str]) -> None:
+    block = _gitlab(tmp_path, files)
+    assert block["ci"]["present"] is False and block["ci"]["tools"] == []
+    assert block["ci"]["rules_unevaluated"] == []
+
+
+def test_the_template_beside_a_local_file_named_like_it_still_counts(tmp_path: Path) -> None:
+    block = _gitlab(tmp_path, {".gitlab-ci.yml": TEMPLATE + "  - local: ci/Secret-Detection.gitlab-ci.yml\n",
+                               "ci/Secret-Detection.gitlab-ci.yml": "lint:\n  script:\n    - echo hi\n"})
+    assert block["ci"]["tools"] == ["secret_detection"] and _states(block)[1] == ("met", None)
+
+
+@pytest.mark.parametrize("run", [
+    "pre-commit run --all-files &",
+    "pre-commit run gitleaks --all-files & wait",
+    "gitleaks detect &",
+    "gitleaks detect & sleep 1",
+])
+def test_a_scan_sent_to_the_background_is_not_enforcement(tmp_path: Path, run: str) -> None:
+    wf = f"steps:\n  - run: {run}\n"
+    root = _repo(tmp_path, {".pre-commit-config.yaml": PRE_COMMIT, ".github/workflows/x.yml": wf})
+    assert scan_secrets_guard(root)["ci"]["present"] is False
+
+
+@pytest.mark.parametrize("run", [
+    "pre-commit run --all-files && echo ok",
+    "gitleaks detect && echo ok",
+    "gitleaks detect &> out.log",
+    "gitleaks detect 2>&1",
+    "sleep 1 & gitleaks detect",
+])
+def test_a_scan_in_the_foreground_beside_an_ampersand_still_counts(tmp_path: Path, run: str) -> None:
+    wf = f"steps:\n  - run: {run}\n"
+    root = _repo(tmp_path, {".pre-commit-config.yaml": PRE_COMMIT, ".github/workflows/x.yml": wf})
+    assert scan_secrets_guard(root)["ci"]["tools"] == ["gitleaks"]

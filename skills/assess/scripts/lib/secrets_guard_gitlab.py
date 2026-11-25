@@ -34,20 +34,32 @@ from __future__ import annotations
 
 import re
 
+from lib.ci_include_items import include_items
 from lib.ci_includes import MergedConfig, Resolution
 from lib.ci_merged_view import merged_jobs, merged_view
 from lib.secrets_guard_lines import block_end, code_lines
 
 GITLAB_CI = ".gitlab-ci.yml"
 # GitLab's template (Auto DevOps includes it) or its CI/CD component (``.../secret-detection@<v>``).
-GITLAB_TEMPLATE = re.compile(r"(?:Secret-Detection(?:\.latest)?|Auto-DevOps)\.gitlab-ci\.yml"
-                             r"|component:\s*['\"]?\S*/secret-detection@\S+", re.IGNORECASE)
+# Matched only against an include item (``names_template``), never a file's text or a ``local:`` path.
+GITLAB_TEMPLATE = re.compile(r"(?:^|/)(?:Secret-Detection(?:\.latest)?|Auto-DevOps)\.gitlab-ci\.yml$", re.IGNORECASE)
+GITLAB_COMPONENT = re.compile(r"/secret-detection@\S+$", re.IGNORECASE)
 _DISABLED_KEY = re.compile(r"""^\s*['"]?SECRET_DETECTION_DISABLED['"]?\s*:\s*(.*)$""")
 _VALUE_KEY = re.compile(r"^\s*value\s*:\s*(.*)$")
 _TRUTHY = frozenset({"true", "1", "yes"})
 _CONDITION_KEYS = frozenset({"rules", "only", "except"})
 _RUNS = frozenset({"always", "on_success"})
 _OFF = frozenset({"never", "manual"})
+
+
+def names_template(kind: str, source: str) -> bool:
+    """Whether an include item is GitLab's template: a ``template:`` item named by
+    ``GITLAB_TEMPLATE``, or a ``component:`` item named by ``GITLAB_COMPONENT``. A ``local:``,
+    ``project:`` or ``remote:`` file named like the template is read like any other file (#1204)."""
+    source = source.strip().strip("'\"")
+    if kind == "template":
+        return GITLAB_TEMPLATE.search(source) is not None
+    return kind == "component" and GITLAB_COMPONENT.search(source) is not None
 
 
 def _scalar(value: str) -> str:
@@ -103,11 +115,11 @@ def _switch(config: MergedConfig) -> str | None:
 
 def _conditional(resolution: Resolution, named: list[int]) -> bool:
     """Whether the template may sit in an include under ``rules:``: an unread one that is the
-    template's own entry (never read; matched by ``GITLAB_TEMPLATE``, so an unrelated template
+    template's own entry (never read; matched by ``names_template``, so an unrelated template
     such as SAST under ``rules:`` does not count, #1204), or every read file that names it. An
     unread slot with no item text could be the template and counts."""
     unread = any(slot.file is None and slot.conditional and slot.jobs is None
-                 and (slot.include is None or GITLAB_TEMPLATE.search(slot.include))
+                 and (slot.include is None or names_template(*slot.include.split(": ", 1)))
                  for slot in resolution.slots)
     read = {slot.file + 1 for slot in resolution.slots if slot.file is not None and slot.conditional}
     return unread or set(named) <= read
@@ -115,7 +127,8 @@ def _conditional(resolution: Resolution, named: list[int]) -> bool:
 
 def template_state(config: MergedConfig, resolution: Resolution) -> str:
     """GitLab's Secret-Detection template over the merged pipeline (module docstring)."""
-    named = [s for s, text in enumerate(config.sources) if GITLAB_TEMPLATE.search("\n".join(code_lines(text)))]
+    named = [s for s, text in enumerate(config.sources)
+             if any(names_template(item.kind, item.source) for item in include_items(text)[0])]
     if not named:
         return "absent"
     switch = _switch(config)

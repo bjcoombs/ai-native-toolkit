@@ -44,7 +44,9 @@ tracked file is read as it stands.
   does not count: help and version, a staged-only or pre-commit scan (``--staged``, ``gitleaks
   protect``, ``--pre-commit``, ``ggshield secret scan pre-commit``) and git-secrets setup
   (``--install``, ``--register-aws``). A ``||`` whose right side is not a non-zero exit or
-  ``false`` masks the command, and so does a pipe after it; a scan last in a pipe sets its status
+  ``false`` masks the command, and so does a pipe after it; a command sent to the background
+  (``gitleaks detect &``) never fails the job and does not count (``&&``, ``&>`` and ``2>&1``
+  are no background); a scan last in a pipe sets its status
   and counts. The shell's quoting is read (``lib.secrets_guard_lines``, #1204): a whole
   YAML-quoted value is unwrapped, an operator inside quotes (``--log-opts="a|b"``) is an
   argument, and so is a tool name inside quotes (``echo 'a; gitleaks detect'``). A command
@@ -158,6 +160,16 @@ _HIDING_KINDS = frozenset({"local", "project", "remote", "component", "unknown"}
 _OR_MASK = re.compile(r"\|\|(?!\s*(?:exit\s+[1-9]|false\b))")
 _SHELL_OPERATOR = re.compile(r"&&|\|\||;|\||&")
 _PIPE = re.compile(r"(?<!\|)\|(?!\|)")
+# A command ends at one of these; a lone ``&`` before it sends the command to the background, where
+# its failure never reaches the job (``&&``, ``&>`` and ``2>&1`` are not one).
+_SEPARATOR = re.compile(r"&&|\|\||;|\|")
+_BACKGROUND = re.compile(r"(?<![&<>])&(?![&>])")
+
+
+def _backgrounded(bare: str, start: int) -> bool:
+    """Whether the command at ``bare[start:]`` (quoted spans blanked) ends in a background ``&``."""
+    end = m.start() if (m := _SEPARATOR.search(bare, start)) else len(bare)
+    return _BACKGROUND.search(bare, start, end) is not None
 # The secrets actions a ``uses:`` step names (owner/name, any ref).
 # GitGuardian's maintained action is a path in its repository (``GitGuardian/ggshield/actions/secret``).
 ACTION_SLUGS = ("gitleaks/gitleaks-action", "trufflesecurity/trufflehog", "gitguardian/ggshield-action",
@@ -456,7 +468,7 @@ def _ci_scan(text: str, hooks: HookStages, gitlab: bool = False,
         run_hooks = _PRE_COMMIT_RUN.match(line)
         if run_hooks:  # the pre-commit secrets hooks, run where they cannot be skipped
             args = _SHELL_OPERATOR.split(run_hooks.group(1), maxsplit=1)[0]  # this command's own arguments
-            if pipe < 0 and _PRE_COMMIT_SCOPE.search(args):
+            if pipe < 0 and not _backgrounded(bare, run_hooks.start(1)) and _PRE_COMMIT_SCOPE.search(args):
                 tools.update(_hook_tools(hooks, args))
             continue
         uses = _USES.match(line)
@@ -471,7 +483,8 @@ def _ci_scan(text: str, hooks: HookStages, gitlab: bool = False,
         # A command inside quotes is an argument (``echo 'a; gitleaks detect'``); one before a pipe
         # is masked by it.
         commands = {m.group(1).lower() for m in _COMMAND.finditer(line)
-                    if not in_spans(m.start(1), spans) and m.start(1) > pipe}
+                    if not in_spans(m.start(1), spans) and m.start(1) > pipe
+                    and not _backgrounded(bare, m.start(1))}
         tools.update(t for t in (_tool_that_can_fail(n, line) for n in commands) if t)
         if pipe < 0:
             tools.update(_image_tools(lines, i, commands))
