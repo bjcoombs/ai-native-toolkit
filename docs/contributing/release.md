@@ -25,6 +25,10 @@ ${BODY}"
 
 When several PRs share one marathon, the standalone build fires on the **first** version-changing merge. The final merged tree must therefore carry the highest version (have the last-merging PR bump one step higher; see [the version hot file](./marathon.md#the-version-hot-file)), otherwise the published `standalone-skills-v<version>` bundle is missing the later PRs and no further build re-fires for that version.
 
+## Changelog
+
+The release PR adds the new release's sections to the top of `CHANGELOG.md` (relative to the repository root), one section per GitHub release the release will create, newest first: `## v<version> - <date>` with a link to the release notes, then `## standalone-skills-v<version> - <date>` with a link to the ZIP bundle. Copy the shape of the sections below them. A section links its release; it does not copy the notes, which GitHub generates from the merged PRs.
+
 ## Cold-reader check for a card change
 
 A release that changes the report's top card (the lines above the first section heading, built in `skills/assess/scripts/lib/top_card.py` and pinned by the goldens `skills/assess/tests/fixtures/golden/card-*.md`) gets one cold-reader check before it ships. The construction tests (`skills/assess/tests/test_card_construction.py`) hold each fact to one line, the word budget and a number, link or command on every line; they cannot tell whether a stranger understands the card.
