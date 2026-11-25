@@ -206,6 +206,7 @@ def _stub(monkeypatch: pytest.MonkeyPatch, answers: dict[str, Any]) -> list[str]
         return got
 
     monkeypatch.setattr(fil, "glab_api", fake)
+    monkeypatch.setattr(fil, "glab_auth", lambda host: None)  # the host stays logged in
     return calls
 
 
@@ -272,9 +273,66 @@ def test_a_project_not_fully_read_is_reported() -> None:
 
 
 def test_glab_host_failure_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    _stub(monkeypatch, {"projects/g%2Fa": GhUnavailable("not_authenticated: glab is not logged in")})
-    with pytest.raises(fil.IncludeListError, match="not_authenticated"):
+    _stub(monkeypatch, {"projects/g%2Fa": GhUnavailable("glab_not_installed: the glab CLI is not on PATH")})
+    with pytest.raises(fil.IncludeListError, match="glab_not_installed"):
         fil.GlabIncludeApi("h").access("g/a")
+
+
+@pytest.mark.parametrize("answer", [
+    GhUnavailable("no_access: refused (401 Unauthorized)"),
+    GhUnavailable("not_found: `glab api` (404 Not Found)"),
+    GhUnavailable("glab_error: failed (dial tcp: connection refused)"),
+])
+def test_a_login_lost_mid_walk_exits_3(answer: GhUnavailable, monkeypatch: pytest.MonkeyPatch,
+                                       tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # glab api never says "not logged in"; the per-project refusal re-checks the host.
+    nested = _b64(_include("g/b"))
+    _stub(monkeypatch, {
+        "projects/g%2Fa": {"path_with_namespace": "g/a", "default_branch": "main"},
+        "projects/g%2Fa/repository/tree?recursive=true&per_page=100&page=1&ref=main":
+            [{"type": "blob", "path": "ci.yml"}],
+        "projects/g%2Fa/repository/files/ci.yml?ref=main": {"content": nested, "encoding": "base64"},
+        "projects/g%2Fb": answer,
+    })
+    probes: list[str] = []
+
+    def logged_out_after_open(host: str) -> None:
+        probes.append(host)
+        if len(probes) > 1:
+            raise GhUnavailable(f"not_authenticated: glab is not logged in to {host}")
+
+    monkeypatch.setattr(fil, "glab_auth", logged_out_after_open)
+    (tmp_path / "run.json").write_text(json.dumps({"not_cloned_includes": [{"project": "g/a"}]}),
+                                       encoding="utf-8")
+    assert cli.main([str(tmp_path), "--host", "h"]) == 3
+    assert "not_authenticated" in capsys.readouterr().err
+    assert not (tmp_path / "include-projects.txt").exists()
+    assert probes == ["h", "h"]  # once to open, once when g/b was refused
+
+
+def test_a_project_refused_while_the_host_is_up_stays_per_project(monkeypatch: pytest.MonkeyPatch) -> None:
+    _stub(monkeypatch, {"projects/g%2Fa": GhUnavailable("no_access: refused (403 Forbidden)")})
+    probes: list[str] = []
+    monkeypatch.setattr(fil, "glab_auth", probes.append)
+    assert fil.GlabIncludeApi("h").access("g/a").status == "no_access"
+    assert probes == ["h"]
+
+
+def test_a_nested_variable_include_is_reported_and_marks_its_includer_partial() -> None:
+    api = FakeApi({"grp/a": {"ci.yml": _include("grp/b")},
+                   "grp/b": {"ci.yml": _include("$CI_PROJECT_NAMESPACE/shared", "grp/c")
+                             + "  - component: $CI_SERVER_FQDN/$NS/comp/x@1\n"},
+                   "grp/c": {"ci.yml": ""}})
+    checked = fil.walk(["grp/a"], api)
+    assert [(c.project, c.partial, c.unusable) for c in checked] == [
+        ("grp/a", False, ()),
+        ("grp/b", True, ("$CI_PROJECT_NAMESPACE/shared", "$CI_SERVER_FQDN/$NS/comp/x@1")),
+        ("grp/c", False, ())]
+    shown = fil.report(checked, "l.txt", "h", ["$TOP/ci"])
+    assert ("3 not looked up, because the path is no project path (a CI variable, or a single "
+            "segment): `$TOP/ci`, `$CI_PROJECT_NAMESPACE/shared` (named by `grp/b`), "
+            "`$CI_SERVER_FQDN/$NS/comp/x@1` (named by `grp/b`)") in shown
+    assert "1 reachable but not fully read" in shown and "`grp/b`" in shown
 
 
 def test_glab_ci_files_pages_the_tree_and_keeps_yaml(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -12,7 +12,8 @@ Exit codes:
     0  list written (it may hold no project)
     2  unreadable inputs: no ``run.json``, or a run that does not name its include projects
        (run fleet with ``--full``)
-    3  the GitLab host could not be read: ``glab`` missing, not logged in, or the host unreachable
+    3  the GitLab host could not be read: ``glab`` missing, not logged in, or the host unreachable,
+       before the walk or partway through it (a project that is not reachable re-checks the host)
 
 Run:
     uv run fleet_include_list.py OUT --host gitlab.example.com [--output FILE]

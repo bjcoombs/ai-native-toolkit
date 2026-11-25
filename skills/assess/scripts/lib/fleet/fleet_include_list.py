@@ -14,9 +14,13 @@ fetches every include project the user can read. ghsync itself is unchanged.
 - **Access** (``IncludeApi.access``): ``projects/<id>`` answered is ``reachable``; HTTP 404 is
   ``not_found`` and HTTP 401 or 403 ``no_access``; any other refusal of one project is
   ``error``. ``GlabIncludeApi.open`` runs ``glab auth status`` for the host first, because
-  ``glab api`` alone reports a missing login as 401/404 per project; a host-wide failure
-  (``glab`` not installed, not logged in, host unreachable) raises ``IncludeListError``, and
-  nothing is written.
+  ``glab api`` alone reports a missing login as 401/404 per project and a dead host as
+  ``glab_error``. The same check runs again whenever a project is not ``reachable``, so a login
+  lost or a host gone partway through the walk is told apart from one refused project. A
+  host-wide failure (``glab`` not installed, not logged in, host unreachable), before or during
+  the walk, raises ``IncludeListError`` and nothing is written (the command exits 3). A failure
+  on a tree or file read is not re-checked: it marks that project ``partial``, and the next
+  project that is not reachable re-checks the host.
 - **Recursion** (``walk``): ``run.json`` keeps the include project, not the files it names, so
   a reachable project's nested includes are read from every YAML file in its default branch
   (the first ``MAX_FILES`` of them, by path): a superset of the files a pipeline reads. A
@@ -24,11 +28,13 @@ fetches every include project the user can read. ghsync itself is unchanged.
   depth 1, and a project at ``lib.ci.ci_includes.MAX_DEPTH`` (fleet's nested-include depth) is
   checked but not read, so the walk stops where fleet's offline walk stops. An extra reachable
   project costs one clone; the next fleet run then resolves the includes exactly. A project
-  whose tree or a file could not be read, or with more YAML files than the cap, is
-  ``partial`` and the report names it.
+  whose tree or a file could not be read, with more YAML files than the cap, or whose files
+  name a project include that maps to None, is ``partial`` and the report names it.
 - **Unusable entries**: fleet records an include path built from a CI variable as
   ``not_cloned`` too; ``seeds`` sets such an entry aside and ``report`` names it, so the other
-  projects are still checked.
+  projects are still checked. A nested ``project``/``component`` include that maps to None is
+  kept on its includer's ``Checked.unusable`` and named in the same report line, with the
+  project that named it.
 - **Output**: ``list_file`` is the ``--porcelain`` format ghsync reads, a ``#`` header then one
   path per line, sorted; a reachable project is written as the API spells its path when that
   differs from the include only in case. ``report`` is the Markdown summary: the counts, then
@@ -62,9 +68,11 @@ TREE_MAX_PAGES = 10  # a template project with more entries is read in part
 HEADER = "# CI include projects for ghsync --from-list, from a fleet run (fleet_include_list.py)\n"
 # A path segment GitLab allows; a CI variable ($VAR) or a template expression is not one.
 _SEGMENT = re.compile(r"^(?!\.+$)[a-z0-9_.][a-z0-9_.-]*$")
-# Reasons that mean the host, not one project, could not be read. A timeout is not one: after
-# ``open`` passes, one slow read is that project's ``error`` or ``partial``, not the whole run's.
-_HOST_FAILURES = ("glab_not_installed", "not_authenticated", "unreachable")
+# The one reason ``glab api`` raises that means the host, not one project, could not be read.
+# A lost login or a dead host reads as a project's 401/404 or ``glab_error``; ``access`` tells
+# those apart with ``glab auth status``. A timeout is not one: after ``open`` passes, one slow
+# read is that project's ``error`` or ``partial``, not the whole run's.
+_HOST_FAILURES = ("glab_not_installed",)
 
 
 class IncludeListError(Exception):
@@ -86,6 +94,7 @@ class Checked:
     via: str | None  # the project whose CI files named it; None at depth 1
     path: str | None = None  # the path to clone: the API's spelling, else the include's
     partial: bool = False  # reachable, but its CI files were not all read (see ``report``)
+    unusable: tuple[str, ...] = ()  # project includes its CI files name that map to None
 
 
 class IncludeApi(Protocol):
@@ -148,6 +157,7 @@ def walk(start: Sequence[str], api: IncludeApi, max_depth: int = MAX_DEPTH) -> l
         access = api.access(project)
         path = access.path if access.path and access.path.lower() == project else project
         partial = False
+        unusable: list[str] = []
         if access.status == "reachable" and access.ref is not None and depth < max_depth:
             files, complete = api.ci_files(project, access.ref)
             partial = not complete or len(files) > MAX_FILES
@@ -156,11 +166,16 @@ def walk(start: Sequence[str], api: IncludeApi, max_depth: int = MAX_DEPTH) -> l
                 partial = partial or text is None
                 for item in include_items(text)[0] if text is not None else []:
                     named = include_project(item)
-                    if named is not None and named not in seen:
+                    if named is None and item.kind in ("project", "component"):
+                        partial = True
+                        if item.source not in unusable:
+                            unusable.append(item.source)
+                    elif named is not None and named not in seen:
                         seen.add(named)
                         queue.append((named, depth + 1, project))
         checked.append(Checked(project, access.status, depth, via,
-                               path if access.status == "reachable" else None, partial))
+                               path if access.status == "reachable" else None, partial,
+                               tuple(unusable)))
     return checked
 
 
@@ -183,14 +198,16 @@ def report(checked: Sequence[Checked], list_path: str, host: str,
                   "| Project | Status | Named by |", "|---|---|---|"]
         lines += [f"| `{c.project}` | {c.status} | {f'`{c.via}`' if c.via else 'the fleet run'} |"
                   for c in missing]
-    if unusable:
-        lines += ["", f"{len(unusable)} not looked up, because the path is no project path "
-                  "(a CI variable, or a single segment): " + ", ".join(f"`{u}`" for u in unusable)]
+    skipped = [f"`{u}`" for u in unusable]
+    skipped += [f"`{u}` (named by `{c.project}`)" for c in checked for u in c.unusable]
+    if skipped:
+        lines += ["", f"{len(skipped)} not looked up, because the path is no project path "
+                  "(a CI variable, or a single segment): " + ", ".join(skipped)]
     partial = [c.project for c in checked if c.partial]
     if partial:
         lines += ["", f"{len(partial)} reachable but not fully read, so an include they hold may be "
-                  "missing from the list (a refused or oversized file, or more than "
-                  f"{MAX_FILES} YAML files): " + ", ".join(f"`{p}`" for p in partial)]
+                  "missing from the list (a refused or oversized file, an include not looked "
+                  f"up, or more than {MAX_FILES} YAML files): " + ", ".join(f"`{p}`" for p in partial)]
     return "\n".join(lines) + "\n"
 
 
@@ -205,11 +222,16 @@ class GlabIncludeApi:
         """The API on ``host`` once ``glab auth status`` passes for it. ``glab api`` alone
         reports a missing login as 401/404 and a dead host as ``glab_error``, which would read
         as unreachable projects; this check raises IncludeListError instead."""
+        api = cls(host)
+        api.check_host()
+        return api
+
+    def check_host(self) -> None:
+        """Raise IncludeListError unless ``glab auth status`` passes for the host."""
         try:
-            glab_auth(host)
+            glab_auth(self.host)
         except GhUnavailable as e:
             raise IncludeListError(e.reason) from None
-        return cls(host)
 
     def _get(self, project: str, rest: str = "") -> Any:
         target = GitlabProject(self.host, project)
@@ -221,13 +243,17 @@ class GlabIncludeApi:
             raise
 
     def access(self, project: str) -> ProjectAccess:
+        """The project's status; one that is not reachable re-checks the host first, so a
+        login lost or a host gone mid-walk raises IncludeListError, not a per-project status."""
         try:
             got = self._get(project)
         except GhUnavailable as e:
+            self.check_host()
             if e.reason.startswith("not_found"):
                 return ProjectAccess("not_found")
             return ProjectAccess("no_access" if e.reason.startswith("no_access") else "error")
         if not isinstance(got, dict):
+            self.check_host()
             return ProjectAccess("error")
         path, ref = got.get("path_with_namespace"), got.get("default_branch")
         return ProjectAccess("reachable", path if isinstance(path, str) else None,
