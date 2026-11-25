@@ -611,6 +611,7 @@ def test_main_writes_report_file(tmp_path: Path, capsys: pytest.CaptureFixture) 
     ("https://gitlab.example.com/group/sub/real-repo.git", "real-repo"),
     ("C:\\repos\\real-repo.git", "real-repo"),
     ("C:/repos/real-repo.git", "real-repo"),
+    ("C:\\repos\\real-repo\\", "real-repo"),
     (None, "assess-snapshot-2026-11-24"),
     ("file:///somewhere/real-repo.git", "assess-snapshot-2026-11-24"),
 ])

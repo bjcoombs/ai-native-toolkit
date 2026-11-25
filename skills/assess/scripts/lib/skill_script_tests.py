@@ -219,7 +219,8 @@ def script_tested_elsewhere(repo_root: Path, rel_path: str) -> bool:
     """True when ``rel_path`` is one of a skill folder's scripts and a test file outside that folder
     names it, by the matcher behind ``tested_elsewhere`` (#1233). ``test_focus`` and the hotspot
     pages read it through ``sibling_tests.has_sibling_test``, so a script tested from the top-level
-    ``tests/`` reads as having a test file there too. Never raises."""
+    ``tests/`` reads as having a test file there too. A script whose file name another script in the
+    same skill folder shares gets no credit, since the matcher keys on the name. Never raises."""
     try:
         repo = repo_root.resolve()
         folder = _skill_folder_of(repo, rel_path)
@@ -229,6 +230,9 @@ def script_tested_elsewhere(repo_root: Path, rel_path: str) -> bool:
         if (rel.suffix not in SCRIPT_EXTENSIONS or is_test_file(rel)
                 or any(p in SKIP_DIRS for p in rel.parts[:-1])):
             return False
+        scripts, _tests = _count(folder, repo, set(), [])
+        if scripts.count(rel.name) > 1:
+            return False  # the matcher keys on the name: it cannot say which same-named script a test names
         return bool(_elsewhere(repo, folder, [rel.name], _outside_tests(repo, set(), [])))
     except (OSError, ValueError):
         return False

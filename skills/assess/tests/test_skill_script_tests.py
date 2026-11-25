@@ -205,3 +205,16 @@ def test_a_skill_md_above_the_repository_is_never_its_skill_folder(tmp_path: Pat
     repo = _plugin(tmp_path / "repo", {"tests/test_x.py": 'X = "repo/../outside.sh"\n'})
     assert sst.script_tested_elsewhere(repo, "../outside.sh") is False
     assert sst.script_tested_elsewhere(repo, str(tmp_path / "outside.sh")) is False
+
+
+def test_same_named_scripts_in_one_skill_get_no_credit(tmp_path: Path) -> None:
+    """The matcher keys on the file name, so it cannot tell which of two same-named scripts in
+    one skill a test names: neither is credited, and a uniquely named one still is."""
+    repo = _plugin(tmp_path, {
+        "skills/a/SKILL.md": SKILL.format("a"), "skills/a/scripts/run.sh": "echo\n",
+        "skills/a/scripts/nested/run.sh": "echo\n", "skills/a/scripts/solo.sh": "echo\n",
+        "tests/test_a.py": 'X = "skills/a/scripts/nested/run.sh"\nY = "skills/a/scripts/solo.sh"\n',
+    })
+    assert sst.script_tested_elsewhere(repo, "skills/a/scripts/run.sh") is False
+    assert sst.script_tested_elsewhere(repo, "skills/a/scripts/nested/run.sh") is False
+    assert sst.script_tested_elsewhere(repo, "skills/a/scripts/solo.sh") is True
