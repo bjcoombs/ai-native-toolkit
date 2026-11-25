@@ -225,3 +225,18 @@ def test_every_write_script_runs_one_refine_write_subcommand() -> None:
     for name in WRITE_SCRIPTS:
         text = (SCRIPTS / name).read_text(encoding="utf-8")
         assert re.search(r'exec python3 "\$\(dirname "\$0"\)/refine_write\.py" [a-z-]+ "\$@"', text), name
+
+
+@pytest.mark.parametrize("name", sorted(CALLERS.values()))
+def test_toolkit_scripts_come_from_the_default_branch_in_this_repository(name: str) -> None:
+    for job in _load(name)["jobs"].values():
+        steps = job["steps"]
+        assert steps[0]["with"]["ref"] == "${{ github.event.repository.default_branch }}"
+        link = next(s for s in steps if s.get("run") == "ln -s . .refine-toolkit")
+        assert link["if"] == "inputs.toolkit_repository == github.repository"
+        external = next(s for s in steps if s.get("with", {}).get("path") == ".refine-toolkit")
+        assert external["if"] == "inputs.toolkit_repository != github.repository"
+    for caller, reusable in CALLERS.items():
+        if reusable == name:
+            job = next(iter(_load(caller)["jobs"].values()))
+            assert "toolkit_repository" not in job["with"], "the default names this repository"

@@ -18,6 +18,4 @@ jobs:
     with:
       enabled: ${{ vars.REFINE_ENABLED == 'true' }}
       mode: ${{ vars.REFINE_MODE || 'dry-run' }}
-      toolkit_repository: ${{ github.repository }}
-      toolkit_ref: ${{ github.sha }}
       questions_issue: ${{ vars.REFINE_QUESTIONS_ISSUE }}

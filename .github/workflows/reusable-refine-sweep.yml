@@ -78,7 +78,15 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      # In the toolkit's own repository the scripts come from the
+      # default-branch checkout above; elsewhere from the toolkit at the
+      # ref the caller pinned.
+      - name: Use this repository's refinement scripts
+        if: inputs.toolkit_repository == github.repository
+        run: ln -s . .refine-toolkit
+
       - name: Check out the refinement scripts
+        if: inputs.toolkit_repository != github.repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ${{ inputs.toolkit_repository }}
