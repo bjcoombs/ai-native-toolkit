@@ -478,3 +478,11 @@ def test_gate_fails_fast_with_no_credential(tmp_path: Path, name: str) -> None:
     code, outputs, stdout = _run_gate(tmp_path, name, False, False, False)
     assert code == 1 and "run" not in outputs
     assert "::error::No refiner credential is set" in stdout and "claude_code_oauth_token" in stdout
+
+
+@needs_bash
+@pytest.mark.skipif(shutil.which("jq") is None, reason="the gate step reads the plan schema with jq")
+@pytest.mark.parametrize("name", MODEL_WORKFLOWS)
+def test_gate_skips_an_untrusted_author_without_needing_a_credential(tmp_path: Path, name: str) -> None:
+    code, outputs, _ = _run_gate(tmp_path, name, False, False, False, trusted=False)
+    assert code == 0 and outputs["run"] == "false" and "auth" not in outputs
