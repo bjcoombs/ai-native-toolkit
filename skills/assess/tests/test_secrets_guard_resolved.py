@@ -153,6 +153,31 @@ def test_a_template_under_include_rules_is_not_measured(tmp_path: Path, ci: str)
     assert block["ci"]["present"] is False and block["ci"]["rules_unevaluated"] == ["secret_detection"]
 
 
+@pytest.mark.parametrize("other", [
+    "  - template: Security/SAST.gitlab-ci.yml\n    rules:\n      - if: $CI_COMMIT_TAG\n",
+    "  - template: Jobs/Dependency-Scanning.gitlab-ci.yml\n    rules:\n      - if: $NEVER\n",
+])
+def test_an_unrelated_template_under_include_rules_leaves_the_scan_met(tmp_path: Path, other: str) -> None:
+    # Only the Secret-Detection include's own slot can make the template conditional (#1204).
+    block = _gitlab(tmp_path, {".gitlab-ci.yml": TEMPLATE + other})
+    assert block["ci"]["present"] is True and block["ci"]["tools"] == ["secret_detection"]
+    assert block["ci"]["rules_unevaluated"] == []
+    assert _states(block)[1] == ("met", None)
+
+
+@pytest.mark.parametrize("ci", [
+    "include:\n  - template: Auto-DevOps.gitlab-ci.yml\n    rules:\n      - if: $CI_COMMIT_TAG\n",
+    "include:\n  - component: $CI_SERVER_FQDN/components/secret-detection/secret-detection@1.1\n"
+    "    rules:\n      - if: $CI_COMMIT_TAG\n",
+    TEMPLATE + "  - template: Security/SAST.gitlab-ci.yml\n    rules:\n      - if: $NEVER\n"
+    "  - template: Security/Secret-Detection.gitlab-ci.yml\n    rules:\n      - if: $NEVER\n",
+])
+def test_an_unread_secret_detection_include_under_rules_is_not_measured(tmp_path: Path, ci: str) -> None:
+    block = _gitlab(tmp_path, {".gitlab-ci.yml": ci})
+    assert block["ci"]["present"] is False and block["ci"]["rules_unevaluated"] == ["secret_detection"]
+    assert _states(block)[1] == ("not_measured", "gitlab_rules_unevaluated")
+
+
 def test_pre_commit_run_arguments_stop_at_a_shell_operator(tmp_path: Path) -> None:
     wf = "steps:\n  - run: pre-commit run --all-files && git diff --exit-code\n"
     root = _repo(tmp_path, {".pre-commit-config.yaml": PRE_COMMIT, ".github/workflows/x.yml": wf})

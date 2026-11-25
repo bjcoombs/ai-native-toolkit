@@ -7,7 +7,9 @@ Reference for `lib/ci_includes.py` (with `lib/ci_include_items.py`, the `include
 
 `merged_config(repo_root, ghsync_root)` returns a `MergedConfig`, or None without a readable
 `.gitlab-ci.yml`. It is built from `resolve_includes`, whose `Resolution.slots` list GitLab's
-merge order and whose `Resolution.root` holds the repository's own file.
+merge order and whose `Resolution.root` holds the repository's own file. An unread include's
+slot carries the item as written (`Slot.include`, `<kind>: <source>`), so a reader can tell which
+include it is: the secrets guard counts only the Secret-Detection include's own slot (#1204).
 
 ### Precedence
 

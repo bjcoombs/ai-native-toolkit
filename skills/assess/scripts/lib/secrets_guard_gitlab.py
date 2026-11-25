@@ -17,7 +17,8 @@ This module builds on the shared resolver, ``lib.ci_includes.merged_config`` wit
   the line reader holds any job that has them.
 - ``template_state(config)`` reads GitLab's Secret-Detection template (or component, or Auto
   DevOps) over the merged ``secret_detection`` job: ``absent``, ``runs``, ``off`` or
-  ``unevaluated``. A template under an include with ``rules:`` is unevaluated. Its keys follow GitLab's precedence (a root key over an included one, maps
+  ``unevaluated``. A template under an include with ``rules:`` is unevaluated; another include
+  under ``rules:`` (SAST, say) is not the template and leaves it as it is. Its keys follow GitLab's precedence (a root key over an included one, maps
   deep-merged): ``rules:``, ``only:`` or ``except:`` leave it unevaluated, a job-level ``when:
   never``/``manual`` turns it off, ``always``/``on_success`` or none runs. An unresolved job is
   unevaluated. ``SECRET_DETECTION_DISABLED`` (GitLab's switch) is read only where GitLab applies
@@ -101,9 +102,13 @@ def _switch(config: MergedConfig) -> str | None:
 
 
 def _conditional(resolution: Resolution, named: list[int]) -> bool:
-    """Whether the template may sit in an include under ``rules:``: an unread one (the template's
-    own entry is never read), or every read file that names it."""
-    unread = any(slot.file is None and slot.conditional and slot.jobs is None for slot in resolution.slots)
+    """Whether the template may sit in an include under ``rules:``: an unread one that is the
+    template's own entry (never read; matched by ``GITLAB_TEMPLATE``, so an unrelated template
+    such as SAST under ``rules:`` does not count, #1204), or every read file that names it. An
+    unread slot with no item text could be the template and counts."""
+    unread = any(slot.file is None and slot.conditional and slot.jobs is None
+                 and (slot.include is None or GITLAB_TEMPLATE.search(slot.include))
+                 for slot in resolution.slots)
     read = {slot.file + 1 for slot in resolution.slots if slot.file is not None and slot.conditional}
     return unread or set(named) <= read
 
