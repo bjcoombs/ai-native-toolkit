@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict
 
 import pytest
-from refine_write_env import actions, verdict, writer
+from refine_write_env import FIXTURES, actions, verdict, writer
 
 import refine_write
 from refine_write import Refused
@@ -180,20 +180,20 @@ def test_candidates_not_listed_twice(tmp_path: Path) -> None:
 
 def test_size_marker_is_the_first_line(tmp_path: Path) -> None:
     w, gh = writer(tmp_path, {"issues/101/comments": "comments_none.json"})
-    assert w.write_size_marker(101, 5, "two modules\nand docs")
+    assert w.write_size_marker(101, 5, "two modules\nand docs", verdict())
     assert gh.writes[0][-1] == "<!-- refine:size 5 -->\ntwo modules and docs"
 
 
 def test_size_marker_skipped_when_unchanged(tmp_path: Path) -> None:
     w, gh = writer(tmp_path, {"issues/101/comments": "comments_size_3.json"})
-    assert not w.write_size_marker(101, 3, "same")
+    assert not w.write_size_marker(101, 3, "same", verdict())
     assert gh.writes == []
 
 
 def test_size_marker_refuses_a_non_fibonacci_size(tmp_path: Path) -> None:
     w, gh = writer(tmp_path, {})
     with pytest.raises(Refused, match="Fibonacci"):
-        w.write_size_marker(101, 4, "x")
+        w.write_size_marker(101, 4, "x", verdict())
 
 
 def test_blocked_by_edge_posts_the_numeric_id(tmp_path: Path) -> None:
@@ -277,26 +277,26 @@ def test_reopen_refused(tmp_path: Path, number: int, commenter: str, routes: Dic
 
 def test_call_cap_refuses_the_next_run(tmp_path: Path) -> None:
     w, gh = writer(tmp_path, {"issues/101/comments": "comments_none.json"}, caps={"write-size-marker.sh": 1})
-    w.write_size_marker(101, 2, "small")
+    w.write_size_marker(101, 2, "small", verdict())
     with pytest.raises(Refused, match="call cap reached \\(1 of 1\\)"):
-        w.write_size_marker(101, 3, "bigger")
+        w.write_size_marker(101, 3, "bigger", verdict())
     assert len(gh.writes) == 1
 
 
 def test_call_cap_persists_across_processes(tmp_path: Path) -> None:
     routes = {"issues/101/comments": "comments_none.json"}
     first, _ = writer(tmp_path, routes, caps={"write-size-marker.sh": 1})
-    first.write_size_marker(101, 2, "small")
+    first.write_size_marker(101, 2, "small", verdict())
     second, gh = writer(tmp_path, routes, caps={"write-size-marker.sh": 1})
     with pytest.raises(Refused, match="call cap"):
-        second.write_size_marker(101, 3, "bigger")
+        second.write_size_marker(101, 3, "bigger", verdict())
     assert gh.writes == []
 
 
 def test_script_missing_from_the_caps_is_refused(tmp_path: Path) -> None:
     w, gh = writer(tmp_path, {}, caps={"edit-issue-labels.sh": 1})
     with pytest.raises(Refused, match="not named in CLAUDE_CODE_SCRIPT_CAPS"):
-        w.write_size_marker(101, 2, "small")
+        w.write_size_marker(101, 2, "small", verdict())
 
 
 def test_dry_run_makes_no_write_and_logs_every_action(tmp_path: Path) -> None:
@@ -305,7 +305,7 @@ def test_dry_run_makes_no_write_and_logs_every_action(tmp_path: Path) -> None:
                    live=False, REFINE_QUESTIONS_ISSUE="50")
     w.edit_labels(103, ["agent-ready"], [], verdict())
     w.close_duplicate(101, 100, verdict())
-    w.write_size_marker(101, 2, "small")
+    w.write_size_marker(101, 2, "small", verdict())
     w.post_questions([{"issue": 101, "question": "Split it?"}])
     assert gh.writes == []
     logged = [a["action"] for a in actions(tmp_path)]
@@ -323,7 +323,8 @@ def test_only_live_is_live(tmp_path: Path, mode: str) -> None:
 def test_cli_exit_code_four_on_refusal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GH_REPO", "acme/widgets")
     monkeypatch.setenv("REFINE_STATE_DIR", str(tmp_path))
-    code = refine_write.main(["size-marker", "--issue", "101", "--points", "4", "--reason", "x"],
+    code = refine_write.main(["size-marker", "--issue", "101", "--points", "4", "--reason", "x",
+                              "--verdict", str(FIXTURES / "verdict.json")],
                              runner=lambda args: "[]")
     assert code == 4
 
@@ -361,4 +362,13 @@ def test_blocker_that_is_a_pull_request_refused_before_other_reads(tmp_path: Pat
                               "issues/90": '{"id": 1, "number": 90, "state": "open", "pull_request": {}}'})
     with pytest.raises(Refused, match="pull request"):
         w.add_blocked_by(101, 90)
+    assert gh.writes == []
+
+
+def test_size_marker_refused_when_the_issue_already_has_a_size(tmp_path: Path) -> None:
+    w, gh = writer(tmp_path, {"issues/103/comments": "comments_none.json"})
+    with pytest.raises(Refused, match="already has a size"):
+        w.write_size_marker(103, 2, "smaller than the author said", verdict())
+    with pytest.raises(Refused, match="already has a size"):
+        w.write_size_marker(101, 2, "no verdict", None)
     assert gh.writes == []

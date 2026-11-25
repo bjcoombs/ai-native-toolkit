@@ -141,7 +141,7 @@ def _attempt(w: Writer, fn: Any, *args: Any) -> None:
 
 def apply_triage(w: Writer, verdict: Json, issue: int, plan: Json) -> None:
     if plan["size"] is not None:
-        _attempt(w, w.write_size_marker, issue, plan["size"], plan["size_reason"] or "sized by the refiner")
+        _attempt(w, w.write_size_marker, issue, plan["size"], plan["size_reason"] or "sized by the refiner", verdict)
     for blocker in plan["blocked_by"]:
         _attempt(w, w.add_blocked_by, issue, blocker)
     add = [a for a in plan["labels_add"] if a != w.s.ready_label]

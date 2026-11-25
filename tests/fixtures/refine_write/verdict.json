@@ -18,7 +18,7 @@
       "not_ready": 3
     },
     "settled": 4,
-    "unsized": 0,
+    "unsized": 1,
     "untriaged": 4,
     "duplicate_pairs": {
       "exact": 1,
@@ -63,7 +63,7 @@
       ],
       "size_points": null,
       "size_source": null,
-      "unsized": false,
+      "unsized": true,
       "sub_issues": 0,
       "blocked_by": [],
       "overlaps": [],
@@ -105,8 +105,8 @@
           "hints": []
         }
       ],
-      "size_points": null,
-      "size_source": null,
+      "size_points": 2,
+      "size_source": "body",
       "unsized": false,
       "sub_issues": 0,
       "blocked_by": [],

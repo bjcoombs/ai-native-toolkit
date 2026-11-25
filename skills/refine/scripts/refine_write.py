@@ -21,6 +21,8 @@ rules below are enforced here, in code, whatever the plan says:
   reopened by a person, and fewer than `REFINE_CLOSE_CAP` duplicate closes
   by `REFINE_BOT_LOGIN` in the last 7 days. The close comment links the surviving issue and names the
   `/reopen` route.
+- **Sizes.** A size marker goes only on an issue the refinement script
+  reported `unsized`, so a size a person wrote is never overridden.
 - **Questions** for the maintainer go into one comment per run on the issue
   named by `REFINE_QUESTIONS_ISSUE`, skipped when the refiner already posted
   the same comment there.
@@ -403,14 +405,22 @@ class Writer:
 
     # ── write-size-marker.sh ─────────────────────────────────────────────
 
-    def write_size_marker(self, number: int, points: int, reason: str) -> bool:
-        """Post a sizing comment; skip when the newest marker already says `points`."""
+    def write_size_marker(self, number: int, points: int, reason: str, verdict: Optional[Json]) -> bool:
+        """Post a sizing comment for an unsized issue; skip when the newest marker already says `points`.
+
+        Only an issue the refinement script reported `unsized` may be sized,
+        so the refiner never overrides a size a person wrote in the body or in
+        an earlier marker.
+        """
         script = "write-size-marker.sh"
         self.take_cap(script)
         if points not in FIBONACCI:
             raise self.refuse(script, number, f"{points} is not a Fibonacci size {FIBONACCI}")
         if not reason.strip():
             raise self.refuse(script, number, "a sizing comment needs a one-line reason")
+        entry = verdict_entry(verdict, number)
+        if entry is None or entry.get("unsized") is not True:
+            raise self.refuse(script, number, "the issue already has a size, or no verdict says it is unsized")
         latest: Optional[int] = None
         for c in self.comments(number):
             first = str(c.get("body", "")).split("\n", 1)[0].strip()
@@ -596,6 +606,7 @@ def _parser() -> argparse.ArgumentParser:
     s.add_argument("--issue", type=int, required=True)
     s.add_argument("--points", type=int, required=True)
     s.add_argument("--reason", required=True)
+    s.add_argument("--verdict", required=True)
     s = sub.add_parser("blocked-by")
     s.add_argument("--issue", type=int, required=True)
     s.add_argument("--blocker", type=int, required=True)
@@ -621,7 +632,7 @@ def dispatch(args: argparse.Namespace, w: Writer) -> None:
     elif cmd == "close-duplicate":
         w.close_duplicate(args.issue, args.of, _load_json(args.verdict))
     elif cmd == "size-marker":
-        w.write_size_marker(args.issue, args.points, args.reason)
+        w.write_size_marker(args.issue, args.points, args.reason, _load_json(args.verdict))
     elif cmd == "blocked-by":
         w.add_blocked_by(args.issue, args.blocker)
     elif cmd == "questions":

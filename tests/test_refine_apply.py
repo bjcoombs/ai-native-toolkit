@@ -189,7 +189,7 @@ def test_report_body_carries_depth_and_critical_path() -> None:
 
 def test_summary_table_lists_dry_run_actions(tmp_path: Path) -> None:
     w, _ = writer(tmp_path, {"issues/101/comments": "comments_none.json"}, live=False)
-    w.write_size_marker(101, 2, "small")
+    w.write_size_marker(101, 2, "small", verdict())
     text = refine_apply.summary(w.s)
     assert "dry-run (nothing was written)" in text and "| write-size-marker.sh | size-marker | #101 |" in text
 
