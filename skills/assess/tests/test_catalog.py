@@ -20,7 +20,7 @@ import pytest
 
 import lib.manifest.check_manifest as cm
 from lib.catalog import (CATALOG_VERSION, GRADE_ORDER, UNCLASSIFIED, build_catalog, counts, criterion_text,
-                         grade_of, render_json)
+                         grade_of, render_json, stable_model)
 from lib.catalog_md import CONDITION_COLUMNS, render_markdown
 from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
 from lib.keyhole.keyhole_signals import FINDING_ORDER
@@ -47,8 +47,8 @@ def test_committed_catalog_is_current(path: Path) -> None:
         "repository root (or `uv run --locked python scripts/gen_catalog.py` from skills/assess)")
 
 
-def test_signal_order_follows_the_model_not_the_manifest() -> None:
-    """Fragments group signals by collector (#982); the catalog lists them in model order."""
+def test_catalog_order_is_independent_of_the_manifest_order() -> None:
+    """Fragments group signals by collector (#982); the catalog sorts every list by a stable key (#1239)."""
     data = _manifest_data()
     shuffled = copy.deepcopy(data)
     shuffled["entries"].reverse()
@@ -56,6 +56,13 @@ def test_signal_order_follows_the_model_not_the_manifest() -> None:
     shuffled["entries"] = collectors[::-1] + [e for e in shuffled["entries"] if e["kind"] != "collector"]
     assert render_json(build_catalog(cm.parse_manifest(data))) \
         == render_json(build_catalog(cm.parse_manifest(shuffled)))
+    catalog = build_catalog()
+    for key, names in (("signals", [s["path"] for s in catalog["signals"]]),
+                       ("scans", [s["name"] for s in catalog["scans"]]),
+                       ("collectors", [c["name"] for c in catalog["collectors"]]),
+                       ("findings", [f["name"] for f in catalog["findings"]]),
+                       ("rows", [r["id"] for r in catalog["rows"]])):
+        assert names == sorted(names), key
 
 
 def test_a_manifest_title_change_changes_both_outputs() -> None:
@@ -79,7 +86,7 @@ def test_generation_is_deterministic() -> None:
 
 def test_every_known_scan_has_a_complete_entry() -> None:
     catalog = build_catalog()
-    assert [s["name"] for s in catalog["scans"]] == known_scans()
+    assert [s["name"] for s in catalog["scans"]] == sorted(known_scans())
     for scan in catalog["scans"]:
         assert set(scan) == SCAN_FIELDS, scan["name"]
         assert scan["grades"], scan["name"]
@@ -88,15 +95,15 @@ def test_every_known_scan_has_a_complete_entry() -> None:
 
 def test_every_registry_scan_row_criterion_and_finding_is_listed() -> None:
     catalog = build_catalog()
-    assert [c["name"] for c in catalog["collectors"]] == [spec.key for spec in SCANS]
-    model = load_default_levels()
+    assert [c["name"] for c in catalog["collectors"]] == sorted(spec.key for spec in SCANS)
+    model = stable_model(load_default_levels())
     assert [(r["id"], [lv["level"] for lv in r["levels"]]) for r in catalog["rows"]] == \
         [(r["id"], [lv["level"] for lv in r["levels"]]) for r in model["rows"]]
     listed = [(c["signal"], c["op"], c["value"]) for r in catalog["rows"]
               for lv in r["levels"] for c in lv["criteria"]]
     assert listed == [(c["signal"], c["op"], c["value"]) for r in model["rows"]
                       for lv in r["levels"] for c in lv["criteria"]]
-    assert [f["name"] for f in catalog["findings"]] == list(FINDING_ORDER)
+    assert [f["name"] for f in catalog["findings"]] == sorted(FINDING_ORDER)
 
 
 def test_grades_and_counting() -> None:
@@ -150,7 +157,8 @@ def test_criterion_text_words() -> None:
 def test_a_criterion_without_manifest_entries_still_renders() -> None:
     model = load_default_levels()
     model["rows"][0]["levels"][0]["criteria"] = [{"signal": "ci_checks.ci_files", "op": "gt", "value": 0}]
-    row = build_catalog(model=model)["rows"][0]
+    first = model["rows"][0]["id"]
+    row = next(r for r in build_catalog(model=model)["rows"] if r["id"] == first)
     crit = row["levels"][0]["criteria"][0]
     assert (crit["grade"], crit["counts"], crit["fix"]) == (UNCLASSIFIED, False, "")
     assert crit["title"] == "ci_checks.ci_files"
@@ -227,8 +235,8 @@ def _section(text: str, heading: str) -> str:
 
 def test_every_condition_carries_its_frame_fields() -> None:
     catalog = build_catalog()
-    model = load_default_levels()
-    for row, mrow in zip(catalog["rows"], model["rows"]):
+    model = stable_model(load_default_levels())
+    for row, mrow in zip(catalog["rows"], model["rows"], strict=True):
         for level, mlevel in zip(row["levels"], mrow["levels"]):
             assert level["id"] == f"{row['id']}.{level['level']}"
             assert level["truth"] == mlevel["truth"]

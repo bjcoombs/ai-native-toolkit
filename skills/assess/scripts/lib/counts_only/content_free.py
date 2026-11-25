@@ -26,6 +26,10 @@ Pure: the input is never mutated, and nothing here reads the filesystem. The
 CLI helpers at the bottom give ``assess_core`` (and the headless entry point
 of #545) one set of flags.
 
+``render_doc`` writes ``references/counts-only.md`` with one section per block, sorted by
+block name, so a new collector's section lands at a fixed place and two PRs that add
+different collectors merge cleanly (#1239).
+
 The content-free run-context mode for scans of repositories you do not own (#546).
 `counts_only(ctx, hash_paths=, salt=)` returns a copy that keeps every number, boolean
 and null and only the strings whose field `counts_only_rules` classifies as a path or a
@@ -318,7 +322,7 @@ def render_doc() -> str:
         "Generated from each collector's `privacy` table in `checks/core.toml` and",
         "the global rules in `scripts/lib/counts_only/counts_only_rules.py` (in the assess skill)",
         "by `lib.counts_only.content_free.render_doc`; `test_counts_only.py` fails when this file",
-        "and the table disagree. Each section below is one collector. Regenerate with:",
+        "and the table disagree. Each section below is one collector, sorted by block name. Regenerate with:",
         "",
         "```bash",
         "# from the assess skill directory",
@@ -383,7 +387,7 @@ def render_doc() -> str:
         "",
     ]
     lines += [f"- `{m}`" for m in sorted(IDENTIFIER_KEYED_MAPS)]
-    for block, rules in RULES.items():
+    for block, rules in sorted(RULES.items()):  # by block name: a new block lands at a fixed place (#1239)
         lines += ["", f"## {block}", "", "| Field | Kept as |", "|---|---|"]
         lines += [f"| `{p}` | {_CLASS_LABEL[c]} |" for p, c in rules.items()]
     lines += [

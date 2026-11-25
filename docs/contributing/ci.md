@@ -24,7 +24,9 @@ The CI reference for `ai-native-toolkit`, moved out of the root `CLAUDE.md` so i
 
 The schemas, the measures catalog, `references/counts-only.md` and the fixture goldens under `skills/assess/tests/fixtures/` are committed generator output. A test byte-compares each against a fresh build, so a stale copy fails CI. `.gitattributes` lists every one as `linguist-generated`, which also folds them out of GitHub diffs. When a PR changes a generator, a renderer or a report, expand the folded files in review: a golden such as the parity report or a team page is where the behaviour change shows.
 
-They conflict on most parallel merges. The recipe for a conflict in any of them, whichever files it touches:
+The four catalog files (`docs/checks.html`, `docs/what-we-measure.md`, `skills/assess/references/measures.json` and `skills/assess/references/counts-only.md`) give each check its own lines, sorted by id or name, and hold no count or total. Two PRs that add different checks therefore change different lines and merge without a conflict; `skills/assess/tests/test_catalog_merge.py` merges two such branches and checks the result equals a fresh build. Two checks whose names sort next to each other can still meet at one spot, as can two additions to a one-element list in `measures.json` (a pair of truth tags that share one condition): take either side and run `make regen`.
+
+The schemas and goldens still conflict on most parallel merges. The recipe for a conflict in any generated file, whichever files it touches:
 
 ```bash
 git checkout --theirs -- <conflicted generated files>   # or --ours: either side works

@@ -19,6 +19,11 @@ what it requires and its tags, then per criterion the rule, why, fix, signal and
 card carries ``data-text``, the lower-cased words the client-side filter matches; without
 JavaScript every card shows.
 
+**Stable layout (#1239).** Each card, table row and index link sits on its own line, in the
+catalog's sorted order, and no line holds a count, so two PRs that add different checks change
+different lines of the page and merge cleanly. The whitespace between those elements does not
+render: the sections, the index and the tables lay out by grid or table rules.
+
 ``inline(text)`` renders the configure prose's two marks, `` `code` `` and ``[text](url)``,
 after escaping. ``scripts/gen_catalog.py`` writes the page beside the other catalog files,
 so ``tests/test_catalog.py::test_committed_catalog_is_current`` is its drift test; the page's
@@ -72,7 +77,6 @@ nav { position: sticky; top: 16px; align-self: start; max-height: calc(100vh - 3
 nav a { color: var(--fg); text-decoration: none; padding: 4px 8px; border-radius: 6px;
   display: flex; justify-content: space-between; gap: 8px; }
 nav a:hover, nav a:focus-visible { background: var(--teal-soft); outline: none; }
-nav .n { color: var(--muted); font-family: var(--mono); font-size: 12px; }
 nav h2 { margin: 14px 8px 4px; font-family: var(--mono); font-size: 11px; letter-spacing: .08em;
   text-transform: uppercase; color: var(--muted); }
 main { display: grid; gap: 36px; min-width: 0; }
@@ -84,6 +88,7 @@ p { margin: 0; max-width: 72ch; }
 a { color: var(--teal); }
 .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--teal); }
 .lede, .tagwhy, .note { color: var(--muted); }
+ul.note { margin: 0; padding-left: 20px; }
 .tagwhy { font-style: italic; }
 header, section, .tagsec, .option { display: grid; gap: 12px; }
 input[type=search] { width: 100%; max-width: 420px; box-sizing: border-box; padding: 9px 12px; border: 1px solid var(--line);
@@ -198,25 +203,26 @@ def card(row: CatalogRow, level: CatalogLevel, scans: dict[str, CatalogScan]) ->
 
 
 def _tag_section(tag: CatalogTag, cards: list[str], shared_elsewhere: list[str]) -> str:
-    body = "".join(cards) if cards else ""
+    body = list(cards)
     if shared_elsewhere:
-        links = ", ".join(f'<a href="#{_e(c)}"><code>{_e(c)}</code></a>' for c in shared_elsewhere)
-        body += f'<p class="note">Also carries this tag, shown under its first tag: {links}.</p>'
+        body += ['<p class="note">Also carries this tag, shown under its first tag:</p>', '<ul class="note">',
+                 *(f'<li><a href="#{_e(c)}"><code>{_e(c)}</code></a></li>' for c in shared_elsewhere), "</ul>"]
     if not cards and not shared_elsewhere:
-        body = '<p class="empty">No condition carries this tag yet.</p>'
-    return (f'<section class="tagsec" id="tag-{_e(tag["id"])}"><div><h2>{_e(tag["title"])} '
-            f'<span class="cid">#{_e(tag["id"])}</span></h2><p class="tagwhy">{_e(tag["why"])}</p></div>'
-            f"{body}</section>")
+        body = ['<p class="empty">No condition carries this tag yet.</p>']
+    return "\n".join([f'<section class="tagsec" id="tag-{_e(tag["id"])}"><div><h2>{_e(tag["title"])} '
+                      f'<span class="cid">#{_e(tag["id"])}</span></h2><p class="tagwhy">{_e(tag["why"])}</p></div>',
+                      *body, "</section>"])
 
 
 def _table(head: list[str], rows: list[list[str]]) -> str:
     th = "".join(f"<th>{h}</th>" for h in head)
-    trs = "".join("<tr>" + "".join(f"<td>{cell}</td>" for cell in r) + "</tr>" for r in rows)
-    return f'<div class="tbl"><table><thead><tr>{th}</tr></thead><tbody>{trs}</tbody></table></div>'
+    trs = ["<tr>" + "".join(f"<td>{cell}</td>" for cell in r) + "</tr>" for r in rows]
+    return "\n".join([f'<div class="tbl"><table><thead><tr>{th}</tr></thead><tbody>', *trs,
+                      "</tbody></table></div>"])
 
 
 def _reference(key: str, title: str, table: str) -> str:
-    return f'<section id="{key}"><h2>{title}</h2><p class="lede">{inline(SECTION_LEDES[key])}</p>{table}</section>'
+    return f'<section id="{key}"><h2>{title}</h2><p class="lede">{inline(SECTION_LEDES[key])}</p>\n{table}\n</section>'
 
 
 def _steps(catalog: Catalog) -> str:
@@ -275,19 +281,17 @@ def render_html(catalog: Catalog, version: str, profiles_shipped: bool = False) 
         listed = [card(*levels[c], scans) for c in tag["listed"] if c in levels]
         elsewhere = [c for c in tag["conditions"] if c not in tag["listed"]]
         sections.append(_tag_section(tag, listed, elsewhere))
-        nav.append(f'<a href="#tag-{_e(tag["id"])}">{_e(tag["title"])}<span class="n">{len(tag["conditions"])}</span></a>')
+        nav.append(f'<a href="#tag-{_e(tag["id"])}">{_e(tag["title"])}</a>')
     untagged = [card(row, lv, scans) for row, lv in levels.values() if not lv["truth"]]
     if untagged:
         sections.append(_tag_section({"id": "untagged", "title": "Untagged", "conditions": [], "listed": [],
                                       "shared": [], "why": UNTAGGED, "why_source": ""}, untagged, []))
-        nav.append(f'<a href="#tag-untagged">Untagged<span class="n">{len(untagged)}</span></a>')
+        nav.append('<a href="#tag-untagged">Untagged</a>')
     nav += ['<h2>Reference</h2>', '<a href="#steps">Steps and gates</a>', '<a href="#grades">Evidence grades</a>',
-            f'<a href="#findings">Findings<span class="n">{len(catalog["findings"])}</span></a>',
-            f'<a href="#scans">Scans<span class="n">{len(catalog["scans"])}</span></a>',
+            '<a href="#findings">Findings</a>', '<a href="#scans">Scans</a>',
             '<a href="#configure">Configure the checks</a>']
     source = (f'Generated from the measures catalog, the same data as <code>skills/assess/references/measures.json</code> (catalog version '
-              f'{catalog["catalog_version"]}, toolkit {_e(version)}) by <code>make regen</code>. '
-              f'{len(levels)} conditions.')
+              f'{catalog["catalog_version"]}, toolkit {_e(version)}) by <code>make regen</code>.')
     header = (f'<header><span class="eyebrow">AI Native Toolkit · /assess</span><h1>{TITLE}</h1>'
               f'<p class="lede">{inline(LEDE)}</p><p class="note">{source} '
               f'<a href="#configure">Configure the checks</a>.</p>'
@@ -305,7 +309,7 @@ def render_html(catalog: Catalog, version: str, profiles_shipped: bool = False) 
         '<meta name="color-scheme" content="light dark">',
         "<!-- Generated by skills/assess/scripts/gen_catalog.py (make regen); do not edit by hand. -->",
         f"<style>\n{CSS}</style>", "</head>", "<body>", '<div class="wrap">',
-        f'<nav aria-label="Index">{"".join(nav)}</nav>', "<main>", header, *sections,
+        "\n".join(['<nav aria-label="Index">', *nav, "</nav>"]), "<main>", header, *sections,
         _steps(catalog), _grades(catalog), _findings(catalog), _scans(catalog), _configure(version, profiles_shipped), footer,
         "</main>", "</div>", f"<script>\n{SCRIPT}</script>", "</body>", "</html>",
     ]

@@ -51,7 +51,8 @@ def test_every_condition_has_exactly_one_card() -> None:
     cards = _parse(_page(catalog)).cards
     assert sorted(cards) == sorted(conditions) and len(cards) == len(set(cards))
     assert len(cards) > 20
-    assert f"{len(conditions)} conditions." in _page(catalog)
+    assert f"{len(conditions)} conditions" not in _page(catalog)  # no count line (#1239)
+    assert 'class="n"' not in _page(catalog)
 
 
 def test_ids_are_unique_and_every_anchor_resolves() -> None:

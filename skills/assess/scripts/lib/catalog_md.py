@@ -22,10 +22,14 @@ section that names a signal path in backticks also holds the why of each conditi
 feeds: ``_with_signal_whys`` adds a "Why the signals named here matter" list to any section that
 lacks one of them. A version 1 manifest has no whys, and none of this is written.
 
-"How the tags relate" holds the shared-condition matrix (``tag_pairs``; the diagonal is each
-tag's own count), the Step gates table (the gates new at each Step, the conditions they
+"How the tags relate" holds the shared conditions of each pair of tags (``tag_pairs``), the Step gates table (the gates new at each Step, the conditions they
 cover and their tags) and the requires, guard and equality links. A tag with no condition,
 a model with no Steps, and no guard or equality link are each said in words.
+
+**Stable layout (#1239).** Each check has its own lines: a table row per criterion, a section
+per scan, a row per finding and per collector, a line per shared condition, each sorted by id or name (``lib.catalog``). No
+line holds a count or total that every new check would rewrite, so two PRs that add different
+checks change different lines and merge cleanly; ``tests/test_catalog_merge.py`` merges two.
 
 **Generator and staleness test.** `scripts/gen_catalog.py` (`make catalog` from the repository
 root) writes both files; `--check` writes nothing and exits 1 naming a stale one.
@@ -178,17 +182,9 @@ def _lines(catalog: Catalog) -> dict[str, list[Line]]:
 def _tag_opening(tag: CatalogTag) -> list[str]:
     """The lines that open a tag section, before its table."""
     why = [tag["why"], ""] if tag["why"] else []
-    total, shared = len(tag["conditions"]), len(tag["shared"])
-    if not total:
+    if not tag["conditions"]:
         return [*why, f"Tag `{tag['id']}`. No condition carries this tag yet.", ""]
-    noun = "condition" if total == 1 else "conditions"
-    if not shared:
-        share = "none shared with another tag"
-    elif shared == total:
-        share = "all shared with another tag" if total > 1 else "shared with another tag"
-    else:
-        share = f"{shared} shared with another tag"
-    return [*why, f"Tag `{tag['id']}`: {total} {noun}, {share}.", ""]
+    return why
 
 
 def _tag_section(tag: CatalogTag, lines: dict[str, list[Line]], first: dict[str, str]) -> list[str]:
@@ -198,23 +194,19 @@ def _tag_section(tag: CatalogTag, lines: dict[str, list[Line]], first: dict[str,
         out += [*_table(rows), ""]
     elsewhere = [cid for cid in tag["conditions"] if cid not in tag["listed"]]
     if elsewhere:
-        out += ["Also carries this tag, listed under its first tag: "
-                + ", ".join(f"`{cid}` ({tag_title(first[cid])})" for cid in elsewhere) + ".", ""]
+        out += ["Also carries this tag, listed under its first tag:", "",
+                *(f"- `{cid}` ({tag_title(first[cid])})" for cid in elsewhere), ""]
     return out
 
 
 def _by_tag(catalog: Catalog) -> list[str]:
     conditions = [lv for r in catalog["rows"] for lv in r["levels"]]
-    multi = sum(len(lv["truth"]) > 1 for lv in conditions)
     out = ["## Conditions by truth tag", "",
            "Each condition carries one or more truth tags: the truth it keeps honest. A condition "
            "holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. "
            "A condition with several tags is listed under its first tag and named under the others "
-           f"as shared; it counts once. There are {len(conditions)} conditions, {multi} of them "
-           "with more than one tag.", "",
-           "| Tag | Conditions | Listed here | Shared |", "|---|---|---|---|"]
-    out += [f"| {t['title']} (`{t['id']}`) | {len(t['conditions'])} | {len(t['listed'])} | "
-            f"{len(t['shared'])} |" for t in catalog["tags"]]
+           "as shared; a level result counts it once. Conditions are sorted by id.", ""]
+    out += [f"- {t['title']} (`{t['id']}`)" for t in catalog["tags"]]
     out.append("")
     lines = _lines(catalog)
     first = {lv["id"]: lv["truth"][0] for lv in conditions if lv["truth"]}
@@ -224,19 +216,10 @@ def _by_tag(catalog: Catalog) -> list[str]:
 
 
 def _relations(catalog: Catalog) -> list[str]:
-    ids = [t["id"] for t in catalog["tags"]]
-    shared = {tuple(p["tags"]): len(p["conditions"]) for p in catalog["tag_pairs"]}
-    own = {t["id"]: len(t["conditions"]) for t in catalog["tags"]}
     out = ["## How the tags relate", "", "### Shared conditions", "",
-           "How many conditions each pair of tags shares. The diagonal is the tag's own count.", "",
-           "| Tag | " + " | ".join(f"`{i}`" for i in ids) + " |", "|---|" + "---|" * len(ids)]
-    for a in ids:
-        cells = [str(own[a]) if a == b else str(shared.get((a, b), shared.get((b, a), 0))) for b in ids]
-        out.append(f"| `{a}` | " + " | ".join(cells) + " |")
-    out.append("")
-    for pair in catalog["tag_pairs"]:
-        out.append(f"- `{pair['tags'][0]}` and `{pair['tags'][1]}`: "
-                   + ", ".join(f"`{c}`" for c in pair["conditions"]) + ".")
+           "Each pair of tags that share a condition, one line per condition both carry.", ""]
+    out += [f"- `{pair['tags'][0]}` and `{pair['tags'][1]}`: `{c}`"
+            for pair in catalog["tag_pairs"] for c in pair["conditions"]]
     if not catalog["tag_pairs"]:
         out.append("No two tags share a condition yet.")
     out += ["", "### Step gates", "",
@@ -317,7 +300,7 @@ def _scan(scan: CatalogScan) -> list[str]:
 
 
 def _findings(catalog: Catalog) -> list[str]:
-    lines = ["## Derived findings", "", "In report order.", "",
+    lines = ["## Derived findings", "", "Sorted by name.", "",
              "| Finding | Reads | Why it matters | Next step | Mode | Rules |", "|---|---|---|---|---|---|"]
     for f in catalog["findings"]:
         rules = []
@@ -336,7 +319,7 @@ def _findings(catalog: Catalog) -> list[str]:
 
 def _collectors(catalog: Catalog) -> list[str]:
     lines = ["## Every registered scan", "",
-             "The scan registry in run order, including the private inputs other scans read.", "",
+             "The scan registry sorted by name, including the private inputs other scans read.", "",
              "| Scan | What it is | Reads | Writes | Network |", "|---|---|---|---|---|"]
     for c in catalog["collectors"]:
         writes = "private input" if c["private"] else ", ".join(_code(p) for p in c["publishes"])
@@ -394,7 +377,7 @@ def _with_signal_whys(lines: list[str], feeds: dict[str, list[tuple[str, str]]])
 def render_markdown(catalog: Catalog) -> str:
     """The catalog page, ending in one newline."""
     lines = [HEADER, *_grades(catalog), *_by_tag(catalog), *_relations(catalog), *_rows(catalog),
-             "## Scans", "", "Every scan name `assess_signals.py --scans` accepts, in run order.", ""]
+             "## Scans", "", "Every scan name `assess_signals.py --scans` accepts, sorted by name.", ""]
     for scan in catalog["scans"]:
         lines += _scan(scan)
     lines += [*_findings(catalog), *_collectors(catalog)]

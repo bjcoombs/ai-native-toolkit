@@ -28,24 +28,20 @@ A scan that feeds no maturity-model criterion is `unclassified` until its eviden
 
 ## Conditions by truth tag
 
-Each condition carries one or more truth tags: the truth it keeps honest. A condition holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. A condition with several tags is listed under its first tag and named under the others as shared; it counts once. There are 31 conditions, 2 of them with more than one tag.
+Each condition carries one or more truth tags: the truth it keeps honest. A condition holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. A condition with several tags is listed under its first tag and named under the others as shared; a level result counts it once. Conditions are sorted by id.
 
-| Tag | Conditions | Listed here | Shared |
-|---|---|---|---|
-| Behaviour (`behaviour`) | 4 | 4 | 0 |
-| Contracts (`contracts`) | 0 | 0 | 0 |
-| Docs (`docs`) | 4 | 3 | 1 |
-| Structure (`structure`) | 6 | 6 | 0 |
-| Agent context (`agent_context`) | 7 | 7 | 1 |
-| Agent runtime (`agent_runtime`) | 4 | 4 | 1 |
-| Governance (`governance`) | 7 | 7 | 0 |
-| Supply chain (`supply_chain`) | 1 | 0 | 1 |
+- Behaviour (`behaviour`)
+- Contracts (`contracts`)
+- Docs (`docs`)
+- Structure (`structure`)
+- Agent context (`agent_context`)
+- Agent runtime (`agent_runtime`)
+- Governance (`governance`)
+- Supply chain (`supply_chain`)
 
 ### Behaviour
 
 That the code's behaviour is checked by something that runs on every change, not taken on trust.
-
-Tag `behaviour`: 4 conditions, none shared with another tag.
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -64,22 +60,20 @@ Tag `contracts`. No condition carries this tag yet.
 
 That what an agent reads about the code is still true of the code.
 
-Tag `docs`: 4 conditions, 1 shared with another tag.
-
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `doc-freshness.1` Most mapped docs keep pace with their code | `doc_staleness` | Share of mapped docs outrun by their code: is at most 50 (`doc_staleness.summary.stale_pct lte 50`) | `measured` | yes | - | positive | - | - | An agent reads the docs as true. A doc whose code has moved on misleads it about that code. | Refresh the docs the report lists under doc freshness. |
-| `doc-freshness.2` Four in five mapped docs keep pace | `doc_staleness` | Share of mapped docs outrun by their code: is at most 20 (`doc_staleness.summary.stale_pct lte 20`) | `measured` | yes | - | positive | - | - | With four in five mapped docs keeping pace with their code, an agent can take most of what it reads at its word. | Refresh the docs the report lists under doc freshness, oldest first. |
 | `contributor-files.1` A newcomer can learn how to send a change | `contributor_files` | A contributing guide is committed: is true (`contributor_files.guide.present eq true`) | `measured` | yes | - | positive | - | - | A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue. | Commit a CONTRIBUTING.md that says how to build, test and shape a change, at the root, in .github/ or in docs/. |
 | `contributor-files.1` A newcomer can report a vulnerability privately | `contributor_files` | A security policy is committed or shared by the owner: is true (`contributor_files.policy.present eq true`) | `measured` | yes | - | positive | - | - | A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue. | Commit a SECURITY.md that says how to report a vulnerability privately, at the root, in .github/ or in docs/, or link GitHub private vulnerability reporting. |
+| `doc-freshness.1` Most mapped docs keep pace with their code | `doc_staleness` | Share of mapped docs outrun by their code: is at most 50 (`doc_staleness.summary.stale_pct lte 50`) | `measured` | yes | - | positive | - | - | An agent reads the docs as true. A doc whose code has moved on misleads it about that code. | Refresh the docs the report lists under doc freshness. |
+| `doc-freshness.2` Four in five mapped docs keep pace | `doc_staleness` | Share of mapped docs outrun by their code: is at most 20 (`doc_staleness.summary.stale_pct lte 20`) | `measured` | yes | - | positive | - | - | With four in five mapped docs keeping pace with their code, an agent can take most of what it reads at its word. | Refresh the docs the report lists under doc freshness, oldest first. |
 
-Also carries this tag, listed under its first tag: `layer-0-instructions.2` (Agent context).
+Also carries this tag, listed under its first tag:
+
+- `layer-0-instructions.2` (Agent context)
 
 ### Structure
 
 That the code is shaped so an agent can work on one part without holding the whole repository in mind.
-
-Tag `structure`: 6 conditions, none shared with another tag.
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -96,25 +90,21 @@ Tag `structure`: 6 conditions, none shared with another tag.
 
 That an agent starts each task knowing how this repository works and how to check its own change.
 
-Tag `agent_context`: 7 conditions, 1 shared with another tag.
-
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
+| `agent-consistency.1` Every agent system names the same checks | `agent_consistency` | Commands and thresholds the agent systems disagree on: is 0 (`agent_consistency.conflicts eq 0`) | `measured` | yes | - | positive | - | - | When agent systems are told different check commands or thresholds, one agent's change passes checks another agent was told to run differently. | Make the instruction files agree. Name the same test and lint commands and the same thresholds in each. Or replace each tool's file with the pointer line the report gives. |
+| `agent-consistency.2` Every agent system reads one canonical file | `agent_consistency` | Agent systems not linked to the canonical instruction file: is 0 (`agent_consistency.unlinked eq 0`) | `measured` | yes | - | positive | requires `agent-consistency.1` | - | One source of instructions keeps every agent's picture of the repository the same, and keeps it maintained in one place. | Keep AGENTS.md as the one source. Make each other tool's file a short pointer or a symlink to it, with the exact line the report gives for that tool. |
+| `guardrails-stated.1` Half the configured gates are stated | `guardrails` | Share of configured gates an instruction file states: is at least 50 (`guardrails.stated_pct gte 50`) | `measured` | yes | - | positive | - | - | A gate an agent does not know about turns its job red after the work is done. Stated with its threshold, the gate is a constraint it can plan for. | Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md. Then the next session knows the rule before it meets the gate. |
+| `guardrails-stated.2` Every configured gate is stated | `guardrails` | Share of configured gates an instruction file states: is at least 100 (`guardrails.stated_pct gte 100`) | `measured` | yes | - | positive | requires `guardrails-stated.1` | - | With every configured gate written down, rule and threshold, an agent can check each one before it pushes. | Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing. |
 | `layer-0-instructions.1` An instruction file is committed | `layer_grades` | A committed instruction file exists: is true (`layer_grades.instruction_file_present eq true`) | `declared` | no, listed | `instructions` | positive | - | - | Without one, an agent starts every task by guessing how the repository builds, tests and is laid out, and those guesses drive its first changes. | Commit a CLAUDE.md or AGENTS.md that tells an agent how this repository works. |
 | `layer-0-instructions.2` An instruction file names a check command (shared with Docs) | `agent_environment` | Instruction files name a check command: is above 0 (`agent_environment.check.named_total gt 0`) | `declared` | no, listed | - | positive | - | - | An agent can confirm its change only if it knows which command checks it. A named command that resolves saves it guessing, and running the wrong check or none. | Name the command that checks a change (for example make check) in your instruction file. |
 | `layer-0-instructions.2` Every checkable instruction claim holds (shared with Docs) | `instruction_claims` | Instruction claims that do not hold: is 0 (`instruction_claims.failed eq 0`) | `declared` | no, listed | - | positive | - | - | An agent takes its instructions literally. A line saying a script runs in CI, or a version is pinned, that is no longer true sends it the wrong way with full confidence. | Update the instruction lines whose claims no longer match the repository. |
 | `layer-0-instructions.2` Always-loaded instructions fit in 200 lines (shared with Docs) | `nested_instructions` | Always-loaded Claude Code instruction lines: is at most 200 (`nested_instructions.budget.claude_code.lines lte 200`) | `declared` | no, listed | - | positive | - | - | Always-loaded text is read on every task and competes with the task for the agent's attention. Long files bury the rules that matter. | Move detail that is needed only sometimes into files the instructions point to. |
-| `guardrails-stated.1` Half the configured gates are stated | `guardrails` | Share of configured gates an instruction file states: is at least 50 (`guardrails.stated_pct gte 50`) | `measured` | yes | - | positive | - | - | A gate an agent does not know about turns its job red after the work is done. Stated with its threshold, the gate is a constraint it can plan for. | Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md. Then the next session knows the rule before it meets the gate. |
-| `guardrails-stated.2` Every configured gate is stated | `guardrails` | Share of configured gates an instruction file states: is at least 100 (`guardrails.stated_pct gte 100`) | `measured` | yes | - | positive | requires `guardrails-stated.1` | - | With every configured gate written down, rule and threshold, an agent can check each one before it pushes. | Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing. |
-| `agent-consistency.1` Every agent system names the same checks | `agent_consistency` | Commands and thresholds the agent systems disagree on: is 0 (`agent_consistency.conflicts eq 0`) | `measured` | yes | - | positive | - | - | When agent systems are told different check commands or thresholds, one agent's change passes checks another agent was told to run differently. | Make the instruction files agree. Name the same test and lint commands and the same thresholds in each. Or replace each tool's file with the pointer line the report gives. |
-| `agent-consistency.2` Every agent system reads one canonical file | `agent_consistency` | Agent systems not linked to the canonical instruction file: is 0 (`agent_consistency.unlinked eq 0`) | `measured` | yes | - | positive | requires `agent-consistency.1` | - | One source of instructions keeps every agent's picture of the repository the same, and keeps it maintained in one place. | Keep AGENTS.md as the one source. Make each other tool's file a short pointer or a symlink to it, with the exact line the report gives for that tool. |
 | `skill-disclosure.1` Skills load only what the task needs | `skill_disclosure` | Skill and agent files that break a disclosure rule: is 0 (`skill_disclosure.files_breaking eq 0`) | `measured` | yes | - | positive | - | - | A skill loads its whole SKILL.md every time it triggers, so detail that only one branch needs spends an agent's context before work starts; keeping the body small, the description within its limit and references one level deep keeps that cost to what the task uses. | For each file the report names, fix the rule it breaks. Give each SKILL.md and agent definition a name, and a description of at most 1024 characters. Move detail that only some tasks need into references/, linked from SKILL.md. Link each reference to a file that exists. |
 
 ### Agent runtime
 
 That an agent can see the system it changes run, and confirm a change there, not only in the code.
-
-Tag `agent_runtime`: 4 conditions, 1 shared with another tag.
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -128,46 +118,33 @@ Tag `agent_runtime`: 4 conditions, 1 shared with another tag.
 
 That people stay in the loop on what agents change, and that what agents may do is agreed and visible.
 
-Tag `governance`: 7 conditions, none shared with another tag.
-
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `layer-7-review.1` Changes get reviewed | `review_evidence` | Review evidence exists: is true (`review_evidence.present eq true`) | `declared` | no, listed | - | positive | - | - | A second reader, a person or a review agent, catches what an agent misunderstood about intent, which tests and linters do not look for. | Commit an AI review step in CI, or review merged changes before they land. |
 | `layer-7-review.2` Most merged changes are reviewed | `review_reality` | Share of merged changes reviewed: is at least 0.8 (`review_reality.reviewed_share gte 0.8`) | `verified` | yes | - | positive | requires `layer-7-review.1` | - | Review protects only the changes it reaches. At four in five merged changes, most of what lands, an agent's work included, has had a second reader. | Aim for a review on at least four in five merged changes. |
 | `layer-7-review.2` Half of merged changes are approved | `review_reality` | Share of merged changes approved: is at least 0.5 (`review_reality.approved_share gte 0.5`) | `verified` | yes | - | positive | requires `layer-7-review.1` | - | An explicit approval records that someone accepted the change, not just that it was looked at. | Approve changes explicitly when you review them. |
 | `layer-8-agent-ops.1` Agent permissions are committed | `agent_ops` | Agent permissions are committed: is true (`agent_ops.summary.permissions_encoded eq true`) | `config_only` | no, listed | - | positive | - | - | Deny rules and hooks keep an agent inside its limits in every permission mode, auto mode included. Committed to the repository or set in managed settings, they apply the same way to everyone and are reviewed like code. | Commit a deny rule for an action no agent should take, such as `"deny": ["Bash(git push origin main)"]` under `permissions` in `.claude/settings.json`. It holds under auto mode too. If your organisation sets this centrally, run with --managed-settings. |
+| `model-ci-gated.1` Model-backed CI jobs are gated | `ci_model_jobs` | Model-backed CI jobs that run on every change without a gate: is 0 (`ci_model_jobs.ungated eq 0`) | `measured` | yes | - | positive | - | - | A CI job that calls a model costs money on every run. If it runs on every merge and every pull request update, the cost grows with the number of changes agents make, not with changes to the prompts it tests. | Run each named job only when prompts, skills or instruction files change, or nightly, or on a label. Cancel superseded runs, sample the eval cases, and use the cheapest model that still tells good from bad. Move rule-checkable assertions into ordinary tests. |
 | `secrets-guard.1` A secrets guard is configured (a pre-commit hook counts; listed, not counted) | `secrets_guard` | A secrets guard is configured (pre-commit hook or CI scan): is true (`secrets_guard.configured eq true`) | `config_only` | no, listed | - | positive | - | - | A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one. | Add a secrets hook to .pre-commit-config.yaml (gitleaks or detect-secrets), or a secrets scan step to CI. |
 | `secrets-guard.2` A secrets scan runs where an agent cannot skip it | `secrets_guard` | A secrets scan runs where an agent cannot skip it (CI): is true (`secrets_guard.enforcement.present eq true`) | `measured` | yes | - | positive | - | - | A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one. | Add a secrets scan step to CI that runs on each push or pull request (gitleaks/gitleaks-action, trufflehog, or GitLab's Secret-Detection template); a pre-commit hook alone can be skipped with --no-verify. |
 | `skill-personal-data.1` No skill file holds a detected kind of personal data (email, phone, home path, IP, SSH login, key) | `skill_personal_data` | Skill and agent files holding a detected kind of personal data: is 0 (`skill_personal_data.files_with_personal_data eq 0`) | `measured` | yes | - | positive | - | - | Skill text is loaded into every session that triggers it and copied wherever it is published, so personal data in it leaks to every user. | In each file the report names, remove the kind of data it lists, or replace it with a placeholder (user@example.com, /home/user/); a key that was committed should also be rotated. |
-| `model-ci-gated.1` Model-backed CI jobs are gated | `ci_model_jobs` | Model-backed CI jobs that run on every change without a gate: is 0 (`ci_model_jobs.ungated eq 0`) | `measured` | yes | - | positive | - | - | A CI job that calls a model costs money on every run. If it runs on every merge and every pull request update, the cost grows with the number of changes agents make, not with changes to the prompts it tests. | Run each named job only when prompts, skills or instruction files change, or nightly, or on a label. Cancel superseded runs, sample the eval cases, and use the cheapest model that still tells good from bad. Move rule-checkable assertions into ordinary tests. |
 
 ### Supply chain
 
 That an agent builds and tests against the same dependency versions as CI and everyone else.
 
-Tag `supply_chain`: 1 condition, shared with another tag.
+Also carries this tag, listed under its first tag:
 
-Also carries this tag, listed under its first tag: `layer-5-ci.2` (Agent runtime).
+- `layer-5-ci.2` (Agent runtime)
 
 ## How the tags relate
 
 ### Shared conditions
 
-How many conditions each pair of tags shares. The diagonal is the tag's own count.
+Each pair of tags that share a condition, one line per condition both carry.
 
-| Tag | `behaviour` | `contracts` | `docs` | `structure` | `agent_context` | `agent_runtime` | `governance` | `supply_chain` |
-|---|---|---|---|---|---|---|---|---|
-| `behaviour` | 4 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `contracts` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `docs` | 0 | 0 | 4 | 0 | 1 | 0 | 0 | 0 |
-| `structure` | 0 | 0 | 0 | 6 | 0 | 0 | 0 | 0 |
-| `agent_context` | 0 | 0 | 1 | 0 | 7 | 0 | 0 | 0 |
-| `agent_runtime` | 0 | 0 | 0 | 0 | 0 | 4 | 0 | 1 |
-| `governance` | 0 | 0 | 0 | 0 | 0 | 0 | 7 | 0 |
-| `supply_chain` | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 |
-
-- `docs` and `agent_context`: `layer-0-instructions.2`.
-- `agent_runtime` and `supply_chain`: `layer-5-ci.2`.
+- `docs` and `agent_context`: `layer-0-instructions.2`
+- `agent_runtime` and `supply_chain`: `layer-5-ci.2`
 
 ### Step gates
 
@@ -182,13 +159,13 @@ The autonomy Steps in order. A Step needs every gate, whatever the gate's grade,
 
 ### Requires, guard and equality links
 
+- `agent-consistency.2` requires `agent-consistency.1`.
+- `guardrails-stated.2` requires `guardrails-stated.1`.
 - `layer-2-design.2` requires `layer-2-design.1`.
 - `layer-3-linters.2` requires `layer-3-linters.1`.
 - `layer-4-architecture.2` requires `layer-4-architecture.1`.
 - `layer-6-coverage.2` requires `layer-5-ci.1`.
 - `layer-7-review.2` requires `layer-7-review.1`.
-- `guardrails-stated.2` requires `guardrails-stated.1`.
-- `agent-consistency.2` requires `agent-consistency.1`.
 
 No condition is guarded yet. No criterion compares two signals yet.
 
@@ -198,6 +175,10 @@ The rows the conditions come from. A row's level is the highest level whose cond
 
 | Row | Title | Scope | Aggregated by | Levels |
 |---|---|---|---|---|
+| `agent-consistency` | Cross-agent instruction consistency | team | `min` | `agent-consistency.1`, `agent-consistency.2` |
+| `contributor-files` | Contributor files | team | `min` | `contributor-files.1` |
+| `doc-freshness` | Documentation freshness | team | `min` | `doc-freshness.1`, `doc-freshness.2` |
+| `guardrails-stated` | Guardrails stated | team | `min` | `guardrails-stated.1`, `guardrails-stated.2` |
 | `layer-0-instructions` | Agent instructions | team | `min` | `layer-0-instructions.1`, `layer-0-instructions.2` |
 | `layer-1-liveness` | Runtime legibility | team | `min` | `layer-1-liveness.1`, `layer-1-liveness.2` |
 | `layer-2-design` | Code design (module structure) | team | `min` | `layer-2-design.1`, `layer-2-design.2` |
@@ -207,19 +188,90 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | `layer-6-coverage` | Coverage gates and truth pressure | team | `min` | `layer-6-coverage.1`, `layer-6-coverage.2` |
 | `layer-7-review` | Review on merged pull requests | team | `min` | `layer-7-review.1`, `layer-7-review.2` |
 | `layer-8-agent-ops` | AI project management | team | `min` | `layer-8-agent-ops.1`, `layer-8-agent-ops.2` |
-| `doc-freshness` | Documentation freshness | team | `min` | `doc-freshness.1`, `doc-freshness.2` |
-| `guardrails-stated` | Guardrails stated | team | `min` | `guardrails-stated.1`, `guardrails-stated.2` |
-| `agent-consistency` | Cross-agent instruction consistency | team | `min` | `agent-consistency.1`, `agent-consistency.2` |
-| `skill-disclosure` | Skill disclosure | team | `min` | `skill-disclosure.1` |
-| `skill-script-tests` | Skill script tests | team | `min` | `skill-script-tests.1` |
-| `secrets-guard` | Secrets guard | team | `min` | `secrets-guard.1`, `secrets-guard.2` |
-| `skill-personal-data` | Personal data in skill text | team | `min` | `skill-personal-data.1` |
 | `model-ci-gated` | Model-backed CI jobs are gated | team | `min` | `model-ci-gated.1` |
-| `contributor-files` | Contributor files | team | `min` | `contributor-files.1` |
+| `secrets-guard` | Secrets guard | team | `min` | `secrets-guard.1`, `secrets-guard.2` |
+| `skill-disclosure` | Skill disclosure | team | `min` | `skill-disclosure.1` |
+| `skill-personal-data` | Personal data in skill text | team | `min` | `skill-personal-data.1` |
+| `skill-script-tests` | Skill script tests | team | `min` | `skill-script-tests.1` |
 
 ## Scans
 
-Every scan name `assess_signals.py --scans` accepts, in run order.
+Every scan name `assess_signals.py --scans` accepts, sorted by name.
+
+### `accretion_ratchet`: Accretion ratchet
+
+Files that only ever grow get harder to read whole with every addition; this names them before an agent adds the next feature to one.
+
+- Collector: `core.accretion_ratchet`, reading `accretion_scan`, `current`.
+- Network: no.
+- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `accretion_ratchet.reason` drop.
+- Used by: finding `accretion_ratchet`.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+
+### `agent_building`: Agent building
+
+Run plumbing: no row or finding reads this scan.
+
+- Collector: `core.agent_building`, reading `repo_root`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_building.agent_class` token, `agent_building.ci_agents` token, `agent_building.config` token, `agent_building.git_hosts` token, `agent_building.issue_trackers` token, `agent_building.reason` drop, `agent_building.sdks` token.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
+
+### `agent_consistency`: Cross-agent instruction consistency
+
+It compares the instruction files of every agent system present, so each agent is told the same checks and thresholds, from one source.
+
+Compares the root instruction files of every agent system present: Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue and Zed. It finds check commands one file names and another does not, and thresholds that conflict. It checks whether each file links to one canonical file, and gives the pointer line for each system that does not.
+
+- Collector: `core.agent_consistency`, reading `repo_root`, `excludes`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_consistency.canonical` path, `agent_consistency.divergences.kind` token, `agent_consistency.divergences.missing_from` token, `agent_consistency.divergences.named_in` token, `agent_consistency.divergences.stated.system` token, `agent_consistency.divergences.value` drop, `agent_consistency.files.link` token, `agent_consistency.files.path` path, `agent_consistency.files.system` token, `agent_consistency.next_steps.path` path, `agent_consistency.next_steps.pointer` drop, `agent_consistency.next_steps.symlink` drop, `agent_consistency.next_steps.system` token, `agent_consistency.not_read` drop, `agent_consistency.systems` token.
+- Used by: row `agent-consistency`.
+- Evidence: `agent_consistency.conflicts` head_structure (measured), `agent_consistency.unlinked` head_structure (measured).
+- Not measured when: it cannot read its input; the block says why.
+
+Why the signals named here matter:
+
+- `agent_consistency.conflicts` feeds `agent-consistency.1:agent_consistency.conflicts`: When agent systems are told different check commands or thresholds, one agent's change passes checks another agent was told to run differently.
+- `agent_consistency.unlinked` feeds `agent-consistency.2:agent_consistency.unlinked`: One source of instructions keeps every agent's picture of the repository the same, and keeps it maintained in one place.
+
+### `agent_environment`: Agent working environment
+
+It reads what an agent needs to work like CI does: the check command its instructions name, the committed setup and a lockfile for each dependency manifest.
+
+Committed agent setup, the check command an instruction file names, lockfiles per manifest, and the CI cap. The CI-duration probe is off in headless runs. A manifest row's note is skipped_library or direct_pins_only. skipped_library is a library whose ecosystem commits no lock: it is listed, and not counted in manifests_total or unlocked_total. direct_pins_only is a Gradle version catalog or NuGet central package management with no lock: it counts as unlocked.
+
+- Collector: `core.agent_environment`, reading `repo_root`, `instruction_files`, `agent_harness`, `excludes`.
+- Network: yes, GitHub or GitLab.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_environment.check.entry_points.command` drop, `agent_environment.check.entry_points.source` drop, `agent_environment.check.named.command` drop, `agent_environment.check.named.reason` drop, `agent_environment.check.named.verdict` token, `agent_environment.check.unresolved.command` drop, `agent_environment.check.unresolved.reason` drop, `agent_environment.check.unresolved.verdict` token, `agent_environment.ci_duration.branch` drop, `agent_environment.ci_duration.reason` drop, `agent_environment.ci_duration.workflows.workflow` drop, `agent_environment.findings.detail` drop, `agent_environment.findings.fix` drop, `agent_environment.findings.kind` token, `agent_environment.layer5_cap.ceiling` token, `agent_environment.layer5_cap.reason` drop, `agent_environment.layer5_cap.unmet` token, `agent_environment.pinning.manifests.ecosystem` token, `agent_environment.pinning.manifests.lockfile` path, `agent_environment.pinning.manifests.manifest` path, `agent_environment.pinning.manifests.note` token, `agent_environment.reason` drop, `agent_environment.setup.sources.detail` drop, `agent_environment.setup.sources.kind` token.
+- Used by: row `layer-0-instructions`, row `layer-5-ci`.
+- Evidence: `agent_environment.check.named_total` head_text (declared), `agent_environment.pinning.unlocked_total` head_text (declared).
+- Not measured when: it cannot read its input; the block says why.
+
+Why the signals named here matter:
+
+- `agent_environment.check.named_total` feeds `layer-0-instructions.2:agent_environment.check.named_total`: An agent can confirm its change only if it knows which command checks it. A named command that resolves saves it guessing, and running the wrong check or none.
+- `agent_environment.pinning.unlocked_total` feeds `layer-5-ci.2:agent_environment.pinning.unlocked_total`: A committed lockfile means an agent installs the dependency versions CI tested, so a local test result matches CI's.
+
+### `agent_harness`: Committed agent harness
+
+Committed hooks, env blocks and MCP servers run in every agent session, headless ones included; this lists what they run and flags any that expose a secret or widen an agent's reach.
+
+- Collector: `core.agent_harness`, reading `repo_root`, `scope`, `excludes`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_harness.executes.detail` drop, `agent_harness.executes.kind` token, `agent_harness.executes.name` drop, `agent_harness.findings.detail` drop, `agent_harness.findings.fix` drop, `agent_harness.findings.kind` token, `agent_harness.reason` drop.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
 
 ### `agent_ops`: Agent-operations guardrails
 
@@ -232,7 +284,7 @@ Committed permission allowlists, hooks, sandbox rules and routines. A routine is
 - Headless: reported by headless and fleet runs.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `agent_ops.agent_workflows.path` path, `agent_ops.agent_workflows.signs` token, `agent_ops.agent_workflows.triggers` token, `agent_ops.agent_workflows.via` path, `agent_ops.managed.reason` token, `agent_ops.managed.sources.kind` token, `agent_ops.managed.state` token, `agent_ops.settings.default_mode` token, `agent_ops.summary.agent_work_present_reason` token, `agent_ops.summary.permissions_encoded_reason` token, `agent_ops.summary.permissions_source` token.
 - Used by: row `layer-8-agent-ops`.
-- Evidence: `agent_ops.summary.permissions_encoded` config_text (config_only), `agent_ops.summary.hooks_present` config_text (config_only), `agent_ops.summary.agent_work_present` head_text (declared).
+- Evidence: `agent_ops.summary.agent_work_present` head_text (declared), `agent_ops.summary.hooks_present` config_text (config_only), `agent_ops.summary.permissions_encoded` config_text (config_only).
 - Not measured when:
   - `agent_workflows_unread`: No committed routine or agent workflow was found. But a scheduled or event-triggered workflow calls a reusable workflow from another repository, and its path names an agent. Nothing to change: this reads as not measured until that workflow can be read.
 
@@ -241,6 +293,140 @@ Why the signals named here matter:
 - `agent_ops.summary.permissions_encoded` feeds `layer-8-agent-ops.1:agent_ops.summary.permissions_encoded`: Deny rules and hooks keep an agent inside its limits in every permission mode, auto mode included. Committed to the repository or set in managed settings, they apply the same way to everyone and are reviewed like code.
 - `agent_ops.summary.hooks_present` feeds `layer-8-agent-ops.2:agent_ops.summary.hooks_present`: Committed hooks run around an agent's actions on every clone, so a check written once applies without the agent having to remember it.
 - `agent_ops.summary.agent_work_present` feeds `layer-8-agent-ops.2:agent_ops.summary.agent_work_present`: Committed routines define the agent work the repository runs on a schedule or trigger, so it runs the same way each time and is reviewed like code.
+
+### `agent_outcome`: Agent commit outcomes
+
+No other scan says whether agent work holds once it lands; this records the share of agent commits later reverted or rewritten within two weeks, as a history to set beside the gates. Nothing scores it.
+
+- Collector: `core.agent_outcome`, reading `repo_root`, `scope`, `history_window`, `fleet_config`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_outcome.agent_rule` token, `agent_outcome.limits` drop, `agent_outcome.reason` reason, `agent_outcome.revert_null_reason` token, `agent_outcome.rework_null_reason` token, `agent_outcome.since` drop, `agent_outcome.window` token.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `shallow_clone`: The checkout is a shallow clone, so a reverting or rewriting commit may be cut from the history read. Nothing to change in the repository; a full clone (git fetch --unshallow) lets the scan read it.
+  - `shallow_unknown`: Git could not confirm the checkout is a full clone. Nothing to change in the repository; run the scan on a full clone.
+  - `not_a_repo`: The path is not a git repository, or one with no commits. Nothing to change: there is no history to read.
+  - `no_git`: git is not installed where the scan ran. Install git where the scan runs.
+  - `git_failed`: A git read past the windowed log (a patch-id, numstat or blame read) failed on a repository the log could read. Nothing to change in the repository; re-run the scan, and report the failure if it repeats.
+  - `git_timeout`: A git read took longer than the scan allows. Nothing to change in the repository; a shorter --window reads less history.
+
+### `ai_usage`: AI-assisted change share
+
+Run plumbing: no row or finding reads this scan.
+
+- Collector: `core.ai_usage`, reading `repo_root`, `scope`, `history_window`, `fleet_config`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `ai_usage.covered_agents` drop, `ai_usage.covered_author_agents` drop, `ai_usage.limits` drop, `ai_usage.merge_rule` token, `ai_usage.reason` drop, `ai_usage.since` drop, `ai_usage.window` token.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
+
+### `ancestor_instruction_files`: Ancestor instruction files
+
+Instruction files above the repository root load in a local session but never reach a fresh clone, so an agent elsewhere works without those rules.
+
+- Collector: `core.ancestor_instruction_files`, reading `repo_root`.
+- Network: no.
+- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `ancestor_instruction_files` drop.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+
+### `archetype`: Repository archetype
+
+It tells a documentation repository from a software one, so the report does not ask a repository with no code for tests and CI on code it does not hold.
+
+- Collector: `core.archetype`, reading `repo_root`.
+- Network: no.
+- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `archetype.archetype` token, `archetype.detected_via` token, `archetype.kb_maintenance.gist` drop, `archetype.reason` drop.
+- Used by: finding `override_contradicts_signals`.
+- Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
+
+### `behaviour`: Keyhole blocks: behaviour
+
+It reads which files change together in history, so coupling the import graph does not show, and modules safe to change in isolation, are both found.
+
+- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
+- Network: no.
+- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `behaviour.hidden_coupling_findings.finding` token, `behaviour.hidden_coupling_findings.recommendation` drop, `behaviour.reason` drop, `behaviour.refactor_boundaries.finding` token, `behaviour.refactor_boundaries.recommendation` drop, `behaviour.static_history_disagreement.finding` token, `behaviour.static_history_disagreement.recommendation` drop, `behaviour.static_modularity_projection` drop.
+- Used by: finding `hidden_coupling`, finding `refactor_boundary`.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+  - `no_grimp`: grimp, the Python import-graph builder, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
+  - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
+  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
+  - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
+
+### `ci_checks`: CI runs a test or lint command
+
+It reads whether CI runs tests or linters on ordinary changes in a way that can stop the job, so "it passed" means a check ran and could have said no.
+
+Whether a GitHub Actions or GitLab CI line runs a test or lint command. Whether such a line can fail its job on ordinary changes: not masked, and not outside the ordinary triggers. Whether such a line runs a linter. The value is null when no check is found but a CI file pulls its jobs from elsewhere. It is also null when no check is found and the tree tracks a CI file the scan does not parse. It is null under --platform when most sampled merged pull requests carry an external CI check. It is null when a root Prow OWNERS_ALIASES is the only CI evidence.
+
+- Collector: `core.ci_checks`, reading `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `ci_checks.basis` token, `ci_checks.enforced_basis` token, `ci_checks.includes.id` id, `ci_checks.includes.kind` token, `ci_checks.includes.ref_basis` token, `ci_checks.includes.status` token, `ci_checks.lint_basis` token, `ci_checks.merged_config` token, `ci_checks.merged_config_reason` token, `ci_checks.reason` drop.
+- Used by: row `layer-3-linters`, row `layer-5-ci`.
+- Evidence: `ci_checks.enforced_check_runs` ci_executed (verified), `ci_checks.lint_runs` ci_executed (verified).
+- Not measured when:
+  - `included_jobs`: A CI file pulls its jobs from a file this checkout does not hold, so the check may live there. Nothing to change: this reads as not measured until the included file can be read. On GitLab, fleet --platform reads the merged configuration through the CI lint API.
+  - `merged_config_partial`: GitLab's merged CI configuration was read and runs no check, but jobs may be missing from it. The lint API does not expand an include under rules: or a trigger: child pipeline. Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false.
+  - `unknown_trigger`: In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle. Examples are a missing on: key, or a rules: if: on a custom variable. Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it.
+  - `check_may_pass`: In enforced_basis and lint_basis: the check's exit status may not reach its job. Causes are a || fallback that can pass (pytest || echo failed), an if or while condition, or an until loop that breaks. Or a check sits before && with more of the step after it, or in a { } group or function. Let the check's exit status reach the step. Run the check on its own line, or end the fallback with exit 1 (pytest || { echo failed; exit 1; }).
+  - `script_not_found`: In enforced_basis and lint_basis: the only CI line that would settle the signal runs a committed script (./ci.sh, bash scripts/test.sh, ./scripts/lint.sh). No tracked file matches that script, so it is not credited. An earlier step may still create it. Commit the script the CI step runs. Or call the test or lint command in its own CI step (pytest, ruff check .), so the scan can read it.
+  - `check_target`: No CI line runs the linter (lint_basis) or the check (enforced_basis). But one runs a target whose recipe is not read, and that target may run it. Examples: make check or npm test for a linter; make foo, npm run foo or ./scripts/foo.sh for a check. Nothing to change if the target runs the check; calling the test or lint command in its own CI step (make test, pytest, ruff check .) lets the scan read it.
+  - `unread_ci_system`: No readable GitHub Actions or GitLab CI line settles the signal. The tree tracks a CI file of a system this scan does not parse, such as Jenkins, CircleCI, Azure Pipelines, Buildkite, LUCI, Prow or Zuul. The lib/unread_ci.py docstring lists the paths, and unread_ci_files counts them. Nothing to change: the scanner cannot read those systems' configuration, so their checks read as not measured rather than absent.
+  - `external_ci`: Under --platform only: no readable CI line settles the signal. Over half of sampled merged pull requests carry a check run or status from a known external CI system (Buildkite, LUCI, Prow tide, Azure Pipelines). A check ran; that earns no credit. Nothing to change: the checks run on a CI system configured outside the repository, so they read as not measured rather than absent.
+  - `external_ci_marker`: The tree tracks no CI file of any kind, and the root holds a Prow OWNERS_ALIASES file. So presubmits likely run on Prow, configured in another repository. An OWNERS file alone is not a marker. Nothing to change: run with --platform to read the checks on merged pull requests instead.
+  - `analysers_in_build`: In lint_basis: no CI line runs a linter, but a CI dotnet build runs the analysers a committed Directory.Build.props or .csproj turns on (EnforceCodeStyleInBuild, AnalysisLevel). Their severities live in .editorconfig, which the scan does not evaluate. Nothing to change if the analysers fail the build on a finding; a CI step running dotnet format --verify-no-changes lets the scan read a lint run.
+  - `compiler_gate_only`: In lint_basis: no CI line runs a linter, and the only static gate is a compiler run with warnings as errors. Examples are mix compile --warnings-as-errors, -Werror, dotnet build -warnaserror and TreatWarningsAsErrors in Directory.Build.props. It is not counted as a lint run. Running a linter or analyser in its own CI step (mix credo, clang-tidy, dotnet format --verify-no-changes) lets the scan read a lint run.
+
+Why the signals named here matter:
+
+- `ci_checks.lint_runs` feeds `layer-3-linters.1:ci_checks.lint_runs`: A linter or type checker in CI catches mechanical mistakes in every change, an agent's included, before a reviewer spends time on them.
+- `ci_checks.enforced_check_runs` feeds `layer-5-ci.1:ci_checks.enforced_check_runs`: This turns "the agent says it works" into "CI says it works": a check that can stop its job runs on ordinary changes, so a broken change turns the job red where everyone can see it.
+
+### `ci_model_jobs`: Model-backed CI jobs
+
+A CI job that calls a model costs money on every run. If it runs on every merge and every pull request update, the cost grows with the number of changes agents make, not with changes to the prompts it tests.
+
+Each GitHub Actions or GitLab CI job that calls a model API. Signs are an eval harness, an agent action, the Claude Code CLI, a model-provider secret, pytest -m eval or an evals/ path. For each job, whether a gate stops it running on every push or pull request update. Gates are a paths filter, a schedule or manual trigger only, a label, or GitLab rules:changes.
+
+- Collector: `core.ci_model_jobs`, reading `repo_root`, `ghsync_root`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `ci_model_jobs.jobs.gates` token, `ci_model_jobs.jobs.job` drop, `ci_model_jobs.jobs.path` path, `ci_model_jobs.jobs.platform` token, `ci_model_jobs.jobs.reason` token, `ci_model_jobs.jobs.signs` token, `ci_model_jobs.jobs.state` token, `ci_model_jobs.jobs.triggers` token, `ci_model_jobs.ungated_reason` token.
+- Used by: row `model-ci-gated`.
+- Evidence: `ci_model_jobs.ungated` head_structure (measured).
+- Not measured when:
+  - `no_model_jobs`: With model_jobs at 0, no model-calling CI job was detected, so there is nothing to gate. A model call inside a script file a job runs is not read. Nothing to change.
+  - `trigger_unresolved`: The ungated count is null and ungated_reason holds this code. No model-backed job is ungated, but one could not be settled. Examples are an unreadable on: key, a label if: joined with ||, or a job that only names a provider secret. A GitLab merge that is not settled reads the same way. Nothing to change if the job is gated; a plain paths:, schedule: or label condition lets the scan read it.
+  - `ci_jobs_unread`: The ungated count is null and ungated_reason holds this code. Every model-backed job found is gated. But a job calls a reusable workflow from another repository on a route that is not gated, or a GitLab include was not read. An ungated job may sit there. Nothing to change: this reads as not measured until those files can be read.
+
+### `claude_config`: Claude Code configuration
+
+Claude Code drops a frontmatter field it does not recognise without an error, so a skill, command or agent can look configured while doing nothing; this names each dropped field.
+
+- Collector: `core.claude_config`, reading `repo_root`, `scope`, `excludes`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `claude_config.findings.fix` drop, `claude_config.findings.key` drop, `claude_config.findings.kind` token, `claude_config.findings.value` drop, `claude_config.manifest_error` drop, `claude_config.reason` drop, `claude_config.snapshot_date` token, `claude_config.source_urls` drop.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
 
 ### `config_drift`: Configuration drift
 
@@ -255,52 +441,21 @@ An agent that reads a committed ruleset or branch-protection export as the curre
 - Not measured when:
   - `network`: It reads GitHub or GitLab, which only a full /assess run does. Run /assess on the repository with gh or glab signed in.
 
-### `review_reality`: Review on merged changes
+### `contributor_files`: Contributor files
 
-It shows how many recently merged changes had a review and an approval, which is how far a second reader reaches into what agents and people merge.
+A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue.
 
-Review and approval shares over the sampled merged changes, read through gh or glab.
+A contributing guide and a security policy at the root, in .github/ or in docs/. The policy is a SECURITY file or a link to GitHub private vulnerability reporting. Issue and pull or merge request templates count as evidence.
 
-- Collector: `core.review_reality`, reading `merged_sample`, `gitlab_note_facts`.
-- Network: yes, GitHub or GitLab (with --platform).
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `review_reality.bot_sequence` token, `review_reality.reason` drop, `review_reality.sequence` token.
-- Used by: row `layer-7-review`.
-- Evidence: `review_reality.reviewed_share` platform (verified), `review_reality.approved_share` platform (verified).
+- Collector: `core.contributor_files`, reading `repo_root`, `archetype`, `org_security_policy`.
+- Network: no.
+- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `contributor_files.guide.path` path, `contributor_files.policy.kind` token, `contributor_files.policy.path` path, `contributor_files.policy.reason` reason, `contributor_files.policy.source` token, `contributor_files.reason` reason.
+- Used by: row `contributor-files`.
+- Evidence: `contributor_files.guide.present` head_structure (measured), `contributor_files.policy.present` head_structure (measured).
 - Not measured when:
-  - `network`: A headless run without --platform makes no GitHub or GitLab read. Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in.
-  - `no_remote`: The repository has no GitHub or GitLab remote, so there are no merged changes to read. Nothing to change if the repository is local only; with a GitHub or GitLab remote, /assess and fleet --platform read its merged changes.
-
-Why the signals named here matter:
-
-- `review_reality.reviewed_share` feeds `layer-7-review.2:review_reality.reviewed_share`: Review protects only the changes it reaches. At four in five merged changes, most of what lands, an agent's work included, has had a second reader.
-- `review_reality.approved_share` feeds `layer-7-review.2:review_reality.approved_share`: An explicit approval records that someone accepted the change, not just that it was looked at.
-
-### `delivery`: Delivery figures
-
-Run plumbing: no row or finding reads this scan.
-
-- Collector: `core.delivery`, reading `merged_sample`, `review_reality`, `fleet_config`, `gitlab_note_facts`.
-- Network: yes, GitHub or GitLab (with --platform).
-- Headless: only with --platform; left out otherwise.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `delivery.reason` drop.
-- Used by: no row or finding yet.
-- Evidence: `unclassified`.
-- Not measured when:
-  - `platform_only`: The block exists only on the platform: without --platform it is left out. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
-
-### `gate_cost_estimate`: Gate cost estimate
-
-Run plumbing: no row or finding reads this scan.
-
-- Collector: `core.gate_cost_estimate`, reading `repo_root`.
-- Network: yes, GitHub or GitLab.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `gate_cost_estimate.assumption` drop, `gate_cost_estimate.reason` drop.
-- Used by: no row or finding yet.
-- Evidence: `unclassified`.
-- Not measured when:
-  - `network`: It reads GitHub or GitLab, which only a full /assess run does. Run /assess on the repository with gh or glab signed in.
+  - `knowledge_base`: The repository is a knowledge base (archetype knowledge-base), which takes no code patches. Nothing to change: a contributing guide and a security policy are not measured for a knowledge base.
+  - `org_policy_not_read`: The repository holds no security policy. The owner's shared .github repository, whose policy GitHub shows on this one, was not read. The cause is offline use, no --platform, a remote not on github.com, or gh not signed in. Commit a SECURITY.md, or run /assess with gh signed in (or fleet with --platform) so the owner's shared policy is read.
 
 ### `coverage_gate`: Coverage gate
 
@@ -325,19 +480,201 @@ Why the signals named here matter:
 
 - `coverage_gate.enforced_meets_minimum` feeds `layer-6-coverage.1:coverage_gate.enforced_meets_minimum`: An enforced floor turns the job red when a change takes coverage below it, so tests an agent removes or skips show in CI instead of passing quietly.
 
-### `units`: Monorepo units
+### `coverage_report`: Coverage report
 
-One score for a monorepo describes none of its services. Naming each unit lets every one be scored on its own, so one service's gaps are not hidden behind another's practices.
+It reads a coverage report the project already produced, so test depth on the riskiest files is known instead of assumed.
 
-The repository's units. First each skill folder (a SKILL.md), and a plugin's agents/ and commands/. Then the shallowest build-manifest folders, with each workspace root's declared members in its place, or the [[units]] of .assess/config.toml. Folders with only a manifest are skipped.
-
-- Collector: `core.units`, reading `repo_root`, `excludes`.
+- Collector: `core.coverage_report`, reading `repo_root`, `coverage_data`.
 - Network: no.
-- Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `units.aggregators.ecosystem` token, `units.aggregators.path` drop, `units.skipped.path` drop, `units.skipped.problem` token, `units.source` token, `units.unit_count_reason` token, `units.units.ecosystem` token, `units.units.kind` token, `units.units.name` drop, `units.units.origin` token, `units.units.path` hashed_path, `units.units.workspace` drop, `units.unreadable_manifests` drop.
+- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `coverage_report.format` token, `coverage_report.source` path.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+
+### `dead_code`: Liveness blocks: dead_code
+
+Code nothing in the repository calls still costs an agent reading time and can be kept alive by mistake; candidates are listed for a person to check, since callers outside the repository are not visible.
+
+- Collector: `core.liveness_blocks`, reading `liveness`.
+- Network: no.
+- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `dead_code.candidates.kind` token, `dead_code.candidates.symbol` drop, `dead_code.caveat` drop, `dead_code.tools.consent` drop, `dead_code.tools.language` token, `dead_code.tools.reason` drop, `dead_code.tools.status` token, `dead_code.tools.tool` token.
+- Used by: finding `candidate_dead_weight`.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+
+### `delivery`: Delivery figures
+
+Run plumbing: no row or finding reads this scan.
+
+- Collector: `core.delivery`, reading `merged_sample`, `review_reality`, `fleet_config`, `gitlab_note_facts`.
+- Network: yes, GitHub or GitLab (with --platform).
+- Headless: only with --platform; left out otherwise.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `delivery.reason` drop.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `platform_only`: The block exists only on the platform: without --platform it is left out. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
+
+### `derived_findings`: Keyhole blocks: derived_findings
+
+Run plumbing: no row or finding reads this scan.
+
+- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
+- Network: no.
+- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `derived_findings.action` drop, `derived_findings.name` token, `derived_findings.paths` path, `derived_findings.reviewed.completed_sha` drop, `derived_findings.reviewed.note` drop, `derived_findings.reviewed.path` path.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+  - `no_grimp`: grimp, the Python import-graph builder, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
+  - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
+  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
+  - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
+
+### `diff`: Run header: diff
+
+Run plumbing: no row or finding reads this scan.
+
+- Collector: `core.run_header`, reading `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized`.
+- Network: no.
+- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
+- Counts-only: numbers, booleans and nulls kept; no string field kept.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+
+### `doc_claims`: Doc claims
+
+An agent reads guides as literally as instruction files. This checks the same pin and count claims across the doc set and names two docs that state different values.
+
+- Collector: `core.doc_claims`, reading `repo_root`, `instruction_files`, `scope`, `excludes`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `doc_claims.contradictions.conflict_pair.value` drop, `doc_claims.contradictions.kind` token, `doc_claims.contradictions.sites.value` drop, `doc_claims.excluded_trees` path, `doc_claims.failures.kind` token, `doc_claims.failures.reason` drop, `doc_claims.failures.version` drop.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
+
+### `doc_graph`: Doc graph
+
+An agent finds docs by following links from README, AGENTS.md or an index; a doc no link reaches is one it will not read.
+
+- Collector: `core.doc_graph`, reading `repo_root`, `excludes`, `scope`, `working_notes`.
+- Network: no.
+- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `doc_graph.broken_links.from` path, `doc_graph.broken_links.kind` token, `doc_graph.broken_links.target` path, `doc_graph.doc_to_code_edges.code` path, `doc_graph.doc_to_code_edges.doc` path, `doc_graph.entry_points` path, `doc_graph.link_parents.link_entry` path, `doc_graph.link_parents.link_parent` path, `doc_graph.missing_xrefs.from` path, `doc_graph.missing_xrefs.to` path, `doc_graph.moc_named_but_not_wired` path, `doc_graph.orphans` path, `doc_graph.reason` drop, `doc_graph.unreachable` path.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
+
+### `doc_staleness`: Doc staleness
+
+It compares each doc's last change with the churn in the code it describes, so a doc whose code moved on is found before an agent relies on it.
+
+Each doc's last content change against its code subject's churn, following renames.
+
+- Collector: `core.doc_staleness`, reading `repo_root`, `doc_graph`, `excludes`, `scope`.
+- Network: no.
+- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `doc_staleness.bulk_commits_skipped.date` token, `doc_staleness.bulk_commits_skipped.sha` drop, `doc_staleness.churn_window` drop, `doc_staleness.declared_cross_repo.path` path, `doc_staleness.declared_cross_repo.reason` token, `doc_staleness.declared_cross_repo.repo` id, `doc_staleness.declared_cross_repo.scope` path, `doc_staleness.declared_cross_repo.status` token, `doc_staleness.docs.base_doc_dir` path, `doc_staleness.docs.confidence` token, `doc_staleness.docs.last_change_basis` token, `doc_staleness.docs.last_commit_days_bound` token, `doc_staleness.docs.provenance.generated_by` drop, `doc_staleness.docs.provenance.method` token, `doc_staleness.docs.provenance.sources` path, `doc_staleness.docs.subject_match` token, `doc_staleness.docs.subject_method` token, `doc_staleness.docs.subject_paths` path, `doc_staleness.docs.subject_roots` path, `doc_staleness.history_boundary_date` token.
+- Used by: row `doc-freshness`.
+- Evidence: `doc_staleness.summary.stale_pct` git_history (measured).
+- Not measured when: it cannot read its input; the block says why.
+
+Why the signals named here matter:
+
+- `doc_staleness.summary.stale_pct` feeds `doc-freshness.1:doc_staleness.summary.stale_pct`: An agent reads the docs as true. A doc whose code has moved on misleads it about that code.
+- `doc_staleness.summary.stale_pct` feeds `doc-freshness.2:doc_staleness.summary.stale_pct`: With four in five mapped docs keeping pace with their code, an agent can take most of what it reads at its word.
+
+### `documentation`: Keyhole blocks: documentation
+
+It joins doc freshness with code complexity, so the places where an agent most needs a true doc, and has none or a stale one, are named.
+
+- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
+- Network: no.
+- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `documentation.good_contracts.confidence` token, `documentation.good_contracts.finding` token, `documentation.good_contracts.recommendation` drop, `documentation.reason` drop, `documentation.stale_doc_on_complexity.confidence` token, `documentation.stale_doc_on_complexity.finding` token, `documentation.stale_doc_on_complexity.recommendation` drop, `documentation.unexplained_complexity.confidence` token, `documentation.unexplained_complexity.finding` token, `documentation.unexplained_complexity.recommendation` drop.
+- Used by: finding `lying_map`, finding `unexplained_complexity`.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+  - `no_grimp`: grimp, the Python import-graph builder, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
+  - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
+  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
+  - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
+
+### `gap_actions`: Gap actions
+
+Run plumbing: no row or finding reads this scan.
+
+- Collector: `core.gap_actions`, reading `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`, `instruction_placement`.
+- Network: no.
+- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `gap_actions.action` drop, `gap_actions.cost.metric` token, `gap_actions.cost.path` path, `gap_actions.finding` token, `gap_actions.mode` token, `gap_actions.paths` path, `gap_actions.signal` token, `gap_actions.why` drop.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+
+### `gate_cost_estimate`: Gate cost estimate
+
+Run plumbing: no row or finding reads this scan.
+
+- Collector: `core.gate_cost_estimate`, reading `repo_root`.
+- Network: yes, GitHub or GitLab.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `gate_cost_estimate.assumption` drop, `gate_cost_estimate.reason` drop.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `network`: It reads GitHub or GitLab, which only a full /assess run does. Run /assess on the repository with gh or glab signed in.
+
+### `github_secret_scanning`: GitHub secret scanning
+
+A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.
+
+GitHub's own secret scanning and push protection settings, read through gh. They are returned only to a repository admin, organization owner or security manager.
+
+- Collector: `core.github_secret_scanning`, reading `repo_root`.
+- Network: yes, GitHub or GitLab (with --platform).
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `github_secret_scanning.reason` reason.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
+  - `settings_not_readable`: Only a repository admin, organization owner or security manager can read GitHub's secret scanning and push protection settings. Run /assess with gh signed in as a repository admin, organization owner or security manager, or add a secrets scan to CI.
+
+### `guardrails`: Guardrails stated
+
+It lists the gates the repository configures and whether an instruction file states each rule and threshold, so an agent learns a gate before CI turns red on it.
+
+Lists the gates the repository configures: a ruff or flake8 complexity limit, the coverage floor, pre-commit hooks and mypy strict. It checks whether a graded instruction file states each gate's rule and threshold. An unstated gate carries a ready one-line snippet.
+
+- Collector: `core.guardrails`, reading `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `guardrails.gates.kind` token, `guardrails.gates.rule` token, `guardrails.gates.snippet` drop, `guardrails.gates.stated_in` path, `guardrails.gates.tool` token, `guardrails.not_read` drop.
+- Used by: row `guardrails-stated`.
+- Evidence: `guardrails.stated_pct` head_structure (measured).
+- Not measured when: it cannot read its input; the block says why.
+
+Why the signals named here matter:
+
+- `guardrails.stated_pct` feeds `guardrails-stated.1:guardrails.stated_pct`: A gate an agent does not know about turns its job red after the work is done. Stated with its threshold, the gate is a constraint it can plan for.
+- `guardrails.stated_pct` feeds `guardrails-stated.2:guardrails.stated_pct`: With every configured gate written down, rule and threshold, an agent can check each one before it pushes.
 
 ### `instruction_claims`: Instruction claims
 
@@ -355,17 +692,35 @@ Why the signals named here matter:
 
 - `instruction_claims.failed` feeds `layer-0-instructions.2:instruction_claims.failed`: An agent takes its instructions literally. A line saying a script runs in CI, or a version is pinned, that is no longer true sends it the wrong way with full confidence.
 
-### `claude_config`: Claude Code configuration
+### `instruction_placement`: Instruction placement
 
-Claude Code drops a frontmatter field it does not recognise without an error, so a skill, command or agent can look configured while doing nothing; this names each dropped field.
+It names the always-loaded sections that are reference for one tool or subtree, so they can move to files an agent reads when needed and leave the always-loaded text for rules.
 
-- Collector: `core.claude_config`, reading `repo_root`, `scope`, `excludes`.
+- Collector: `core.instruction_placement`, reading `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `claude_config.findings.fix` drop, `claude_config.findings.key` drop, `claude_config.findings.kind` token, `claude_config.findings.value` drop, `claude_config.manifest_error` drop, `claude_config.reason` drop, `claude_config.snapshot_date` token, `claude_config.source_urls` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `instruction_placement.files.kind` token, `instruction_placement.files.relocatable.heading` drop, `instruction_placement.files.relocatable.home.kind` token, `instruction_placement.files.relocatable.home.target` path, `instruction_placement.files.relocatable.signals` token, `instruction_placement.flagged` path, `instruction_placement.loaded_in_full.kind` token, `instruction_placement.loaded_in_full.relocatable.heading` drop, `instruction_placement.loaded_in_full.relocatable.home.kind` token, `instruction_placement.loaded_in_full.relocatable.home.target` path, `instruction_placement.loaded_in_full.relocatable.signals` token.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
+
+### `layer_grades`: Deterministic layer grades
+
+It republishes whether a committed instruction file exists, the evidence the `instructions` gate reads.
+
+The instruction-file grade and where the instruction files are (root, nested only or none), republished as a block, so a maturity model can read them.
+
+- Collector: `core.layer_grades`, reading `instruction_grading`, `nested_instructions`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `layer_grades.instruction_presence` token, `layer_grades.instructions_grade` token, `layer_grades.reason` drop.
+- Used by: row `layer-0-instructions`.
+- Evidence: `layer_grades.instruction_file_present` head_text (declared).
+- Not measured when: it cannot read its input; the block says why.
+
+Why the signals named here matter:
+
+- `layer_grades.instruction_file_present` feeds `layer-0-instructions.1:layer_grades.instruction_file_present`: Without one, an agent starts every task by guessing how the repository builds, tests and is laid out, and those guesses drive its first changes.
 
 ### `nested_instructions`: Nested instruction files
 
@@ -383,48 +738,69 @@ Why the signals named here matter:
 
 - `nested_instructions.budget.claude_code.lines` feeds `layer-0-instructions.2:nested_instructions.budget.claude_code.lines`: Always-loaded text is read on every task and competes with the task for the agent's attention. Long files bury the rules that matter.
 
-### `agent_harness`: Committed agent harness
+### `observability`: Liveness blocks: observability
 
-Committed hooks, env blocks and MCP servers run in every agent session, headless ones included; this lists what they run and flags any that expose a secret or widen an agent's reach.
+It reads how far the repository gives an agent a view of the running system: telemetry emitted, a runbook that says where it lives, and a path the agent can query.
 
-- Collector: `core.agent_harness`, reading `repo_root`, `scope`, `excludes`.
+- Collector: `core.liveness_blocks`, reading `liveness`.
 - Network: no.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_harness.executes.detail` drop, `agent_harness.executes.kind` token, `agent_harness.executes.name` drop, `agent_harness.findings.detail` drop, `agent_harness.findings.fix` drop, `agent_harness.findings.kind` token, `agent_harness.reason` drop.
-- Used by: no row or finding yet.
-- Evidence: `unclassified`.
-- Not measured when: it cannot read its input; the block says why.
-
-### `agent_environment`: Agent working environment
-
-It reads what an agent needs to work like CI does: the check command its instructions name, the committed setup and a lockfile for each dependency manifest.
-
-Committed agent setup, the check command an instruction file names, lockfiles per manifest, and the CI cap. The CI-duration probe is off in headless runs. A manifest row's note is skipped_library or direct_pins_only. skipped_library is a library whose ecosystem commits no lock: it is listed, and not counted in manifests_total or unlocked_total. direct_pins_only is a Gradle version catalog or NuGet central package management with no lock: it counts as unlocked.
-
-- Collector: `core.agent_environment`, reading `repo_root`, `instruction_files`, `agent_harness`, `excludes`.
-- Network: yes, GitHub or GitLab.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_environment.check.entry_points.command` drop, `agent_environment.check.entry_points.source` drop, `agent_environment.check.named.command` drop, `agent_environment.check.named.reason` drop, `agent_environment.check.named.verdict` token, `agent_environment.check.unresolved.command` drop, `agent_environment.check.unresolved.reason` drop, `agent_environment.check.unresolved.verdict` token, `agent_environment.ci_duration.branch` drop, `agent_environment.ci_duration.reason` drop, `agent_environment.ci_duration.workflows.workflow` drop, `agent_environment.findings.detail` drop, `agent_environment.findings.fix` drop, `agent_environment.findings.kind` token, `agent_environment.layer5_cap.ceiling` token, `agent_environment.layer5_cap.reason` drop, `agent_environment.layer5_cap.unmet` token, `agent_environment.pinning.manifests.ecosystem` token, `agent_environment.pinning.manifests.lockfile` path, `agent_environment.pinning.manifests.manifest` path, `agent_environment.pinning.manifests.note` token, `agent_environment.reason` drop, `agent_environment.setup.sources.detail` drop, `agent_environment.setup.sources.kind` token.
-- Used by: row `layer-0-instructions`, row `layer-5-ci`.
-- Evidence: `agent_environment.check.named_total` head_text (declared), `agent_environment.pinning.unlocked_total` head_text (declared).
+- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `observability.boundary` drop, `observability.discoverable.signals` drop, `observability.instrumented.kinds` token, `observability.instrumented.signals` drop, `observability.reachable.signals` drop.
+- Used by: row `layer-1-liveness`.
+- Evidence: `observability.rung` head_text (declared).
 - Not measured when: it cannot read its input; the block says why.
 
 Why the signals named here matter:
 
-- `agent_environment.check.named_total` feeds `layer-0-instructions.2:agent_environment.check.named_total`: An agent can confirm its change only if it knows which command checks it. A named command that resolves saves it guessing, and running the wrong check or none.
-- `agent_environment.pinning.unlocked_total` feeds `layer-5-ci.2:agent_environment.pinning.unlocked_total`: A committed lockfile means an agent installs the dependency versions CI tested, so a local test result matches CI's.
+- `observability.rung` feeds `layer-1-liveness.1:observability.rung`: Telemetry in the code is what any view of the running system is built on. Without it, there is nothing for an agent or a person to read when checking how a change behaves in use.
+- `observability.rung` feeds `layer-1-liveness.2:observability.rung`: When an agent can query logs or metrics itself, it can check a change against the running system instead of handing that back to a person.
 
-### `shared_tooling`: Shared tooling
+### `org_security_policy`: Owner's shared security policy
 
-Run plumbing: no row or finding reads this scan.
+A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue.
 
-- Collector: `core.shared_tooling`, reading `repo_root`.
-- Network: no.
+The SECURITY file in the owner's public .github repository, which GitHub shows on every repository of the owner that has none, read through gh.
+
+- Collector: `core.org_security_policy`, reading `repo_root`.
+- Network: yes, GitHub or GitLab (with --platform).
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `shared_tooling.ci_includes.id` id, `shared_tooling.ci_includes.kind` token, `shared_tooling.ci_includes.ref` token, `shared_tooling.ci_includes.source` drop, `shared_tooling.ci_source_ids` id, `shared_tooling.marketplace_ids` id, `shared_tooling.marketplaces.id` id, `shared_tooling.marketplaces.kind` token, `shared_tooling.marketplaces.name` drop, `shared_tooling.marketplaces.source` drop, `shared_tooling.reason` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `org_security_policy.path` drop, `org_security_policy.reason` reason.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
+  - `no_remote`: The repository has no github.com remote, so there is no owner .github repository to read. Nothing to change: the shared-policy fallback is GitHub's; commit a SECURITY.md in the repository.
+
+### `owner_exclusions`: Owner exclusions
+
+It reads the checks a repository's owners have committed as not applying to them, so the Step holds a team only to practices it has not deliberately set aside, and each exclusion stays visible and reviewable in the repository.
+
+The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why.
+
+- Collector: `core.owner_exclusions`, reading `repo_root`.
+- Network: no.
+- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `owner_exclusions.disclosures` drop, `owner_exclusions.exclusions.excluded_at` token, `owner_exclusions.exclusions.excluded_by` drop, `owner_exclusions.exclusions.id` token, `owner_exclusions.exclusions.kind` token, `owner_exclusions.exclusions.reason` drop, `owner_exclusions.exclusions.source` token, `owner_exclusions.exclusions.version` token, `owner_exclusions.skipped.id` drop, `owner_exclusions.skipped.problem` token.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
+
+### `promissory_markers`: Promissory markers
+
+TODOs, suppressions and disabled tests that survive many edits are promises nobody kept; an agent cannot tell from the code whether one is still meant.
+
+- Collector: `core.promissory_markers`, reading `promissory`.
+- Network: no.
+- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `promissory_markers.reason` drop, `promissory_markers.stale_by_file.{}.families` drop, `promissory_markers.top_offenders.commit` drop, `promissory_markers.top_offenders.family` token, `promissory_markers.top_offenders.text` drop.
+- Used by: row `layer-3-linters`.
+- Evidence: `promissory_markers.aging_reliable` git_history (measured), `promissory_markers.families.suppression.stale` git_history (measured).
+- Not measured when: it cannot read its input; the block says why.
+
+Why the signals named here matter:
+
+- `promissory_markers.families.suppression.stale` feeds `layer-3-linters.2:promissory_markers.families.suppression.stale`: A suppression that survives many edits switches a check off in code that keeps changing, and an agent editing nearby gets no sign the warning still matters.
+- `promissory_markers.aging_reliable` feeds `layer-3-linters.2:promissory_markers.aging_reliable`: A guard for the suppression count: on a shallow or squashed history every suppression looks new, so a count of 0 would say nothing.
 
 ### `review_automation`: AI review committed in CI
 
@@ -458,544 +834,26 @@ Why the signals named here matter:
 
 - `review_evidence.present` feeds `layer-7-review.1:review_evidence.present`: A second reader, a person or a review agent, catches what an agent misunderstood about intent, which tests and linters do not look for.
 
-### `ci_checks`: CI runs a test or lint command
+### `review_reality`: Review on merged changes
 
-It reads whether CI runs tests or linters on ordinary changes in a way that can stop the job, so "it passed" means a check ran and could have said no.
+It shows how many recently merged changes had a review and an approval, which is how far a second reader reaches into what agents and people merge.
 
-Whether a GitHub Actions or GitLab CI line runs a test or lint command. Whether such a line can fail its job on ordinary changes: not masked, and not outside the ordinary triggers. Whether such a line runs a linter. The value is null when no check is found but a CI file pulls its jobs from elsewhere. It is also null when no check is found and the tree tracks a CI file the scan does not parse. It is null under --platform when most sampled merged pull requests carry an external CI check. It is null when a root Prow OWNERS_ALIASES is the only CI evidence.
+Review and approval shares over the sampled merged changes, read through gh or glab.
 
-- Collector: `core.ci_checks`, reading `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci`.
-- Network: no.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `ci_checks.basis` token, `ci_checks.enforced_basis` token, `ci_checks.includes.id` id, `ci_checks.includes.kind` token, `ci_checks.includes.ref_basis` token, `ci_checks.includes.status` token, `ci_checks.lint_basis` token, `ci_checks.merged_config` token, `ci_checks.merged_config_reason` token, `ci_checks.reason` drop.
-- Used by: row `layer-3-linters`, row `layer-5-ci`.
-- Evidence: `ci_checks.lint_runs` ci_executed (verified), `ci_checks.enforced_check_runs` ci_executed (verified).
-- Not measured when:
-  - `included_jobs`: A CI file pulls its jobs from a file this checkout does not hold, so the check may live there. Nothing to change: this reads as not measured until the included file can be read. On GitLab, fleet --platform reads the merged configuration through the CI lint API.
-  - `merged_config_partial`: GitLab's merged CI configuration was read and runs no check, but jobs may be missing from it. The lint API does not expand an include under rules: or a trigger: child pipeline. Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false.
-  - `unknown_trigger`: In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle. Examples are a missing on: key, or a rules: if: on a custom variable. Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it.
-  - `check_may_pass`: In enforced_basis and lint_basis: the check's exit status may not reach its job. Causes are a || fallback that can pass (pytest || echo failed), an if or while condition, or an until loop that breaks. Or a check sits before && with more of the step after it, or in a { } group or function. Let the check's exit status reach the step. Run the check on its own line, or end the fallback with exit 1 (pytest || { echo failed; exit 1; }).
-  - `script_not_found`: In enforced_basis and lint_basis: the only CI line that would settle the signal runs a committed script (./ci.sh, bash scripts/test.sh, ./scripts/lint.sh). No tracked file matches that script, so it is not credited. An earlier step may still create it. Commit the script the CI step runs. Or call the test or lint command in its own CI step (pytest, ruff check .), so the scan can read it.
-  - `check_target`: No CI line runs the linter (lint_basis) or the check (enforced_basis). But one runs a target whose recipe is not read, and that target may run it. Examples: make check or npm test for a linter; make foo, npm run foo or ./scripts/foo.sh for a check. Nothing to change if the target runs the check; calling the test or lint command in its own CI step (make test, pytest, ruff check .) lets the scan read it.
-  - `unread_ci_system`: No readable GitHub Actions or GitLab CI line settles the signal. The tree tracks a CI file of a system this scan does not parse, such as Jenkins, CircleCI, Azure Pipelines, Buildkite, LUCI, Prow or Zuul. The lib/unread_ci.py docstring lists the paths, and unread_ci_files counts them. Nothing to change: the scanner cannot read those systems' configuration, so their checks read as not measured rather than absent.
-  - `external_ci`: Under --platform only: no readable CI line settles the signal. Over half of sampled merged pull requests carry a check run or status from a known external CI system (Buildkite, LUCI, Prow tide, Azure Pipelines). A check ran; that earns no credit. Nothing to change: the checks run on a CI system configured outside the repository, so they read as not measured rather than absent.
-  - `external_ci_marker`: The tree tracks no CI file of any kind, and the root holds a Prow OWNERS_ALIASES file. So presubmits likely run on Prow, configured in another repository. An OWNERS file alone is not a marker. Nothing to change: run with --platform to read the checks on merged pull requests instead.
-  - `analysers_in_build`: In lint_basis: no CI line runs a linter, but a CI dotnet build runs the analysers a committed Directory.Build.props or .csproj turns on (EnforceCodeStyleInBuild, AnalysisLevel). Their severities live in .editorconfig, which the scan does not evaluate. Nothing to change if the analysers fail the build on a finding; a CI step running dotnet format --verify-no-changes lets the scan read a lint run.
-  - `compiler_gate_only`: In lint_basis: no CI line runs a linter, and the only static gate is a compiler run with warnings as errors. Examples are mix compile --warnings-as-errors, -Werror, dotnet build -warnaserror and TreatWarningsAsErrors in Directory.Build.props. It is not counted as a lint run. Running a linter or analyser in its own CI step (mix credo, clang-tidy, dotnet format --verify-no-changes) lets the scan read a lint run.
-
-Why the signals named here matter:
-
-- `ci_checks.lint_runs` feeds `layer-3-linters.1:ci_checks.lint_runs`: A linter or type checker in CI catches mechanical mistakes in every change, an agent's included, before a reviewer spends time on them.
-- `ci_checks.enforced_check_runs` feeds `layer-5-ci.1:ci_checks.enforced_check_runs`: This turns "the agent says it works" into "CI says it works": a check that can stop its job runs on ordinary changes, so a broken change turns the job red where everyone can see it.
-
-### `agent_building`: Agent building
-
-Run plumbing: no row or finding reads this scan.
-
-- Collector: `core.agent_building`, reading `repo_root`.
-- Network: no.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_building.agent_class` token, `agent_building.ci_agents` token, `agent_building.config` token, `agent_building.git_hosts` token, `agent_building.issue_trackers` token, `agent_building.reason` drop, `agent_building.sdks` token.
-- Used by: no row or finding yet.
-- Evidence: `unclassified`.
-- Not measured when: it cannot read its input; the block says why.
-
-### `layer_grades`: Deterministic layer grades
-
-It republishes whether a committed instruction file exists, the evidence the `instructions` gate reads.
-
-The instruction-file grade and where the instruction files are (root, nested only or none), republished as a block, so a maturity model can read them.
-
-- Collector: `core.layer_grades`, reading `instruction_grading`, `nested_instructions`.
-- Network: no.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `layer_grades.instruction_presence` token, `layer_grades.instructions_grade` token, `layer_grades.reason` drop.
-- Used by: row `layer-0-instructions`.
-- Evidence: `layer_grades.instruction_file_present` head_text (declared).
-- Not measured when: it cannot read its input; the block says why.
-
-Why the signals named here matter:
-
-- `layer_grades.instruction_file_present` feeds `layer-0-instructions.1:layer_grades.instruction_file_present`: Without one, an agent starts every task by guessing how the repository builds, tests and is laid out, and those guesses drive its first changes.
-
-### `instruction_placement`: Instruction placement
-
-It names the always-loaded sections that are reference for one tool or subtree, so they can move to files an agent reads when needed and leave the always-loaded text for rules.
-
-- Collector: `core.instruction_placement`, reading `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes`.
-- Network: no.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `instruction_placement.files.kind` token, `instruction_placement.files.relocatable.heading` drop, `instruction_placement.files.relocatable.home.kind` token, `instruction_placement.files.relocatable.home.target` path, `instruction_placement.files.relocatable.signals` token, `instruction_placement.flagged` path, `instruction_placement.loaded_in_full.kind` token, `instruction_placement.loaded_in_full.relocatable.heading` drop, `instruction_placement.loaded_in_full.relocatable.home.kind` token, `instruction_placement.loaded_in_full.relocatable.home.target` path, `instruction_placement.loaded_in_full.relocatable.signals` token.
-- Used by: no row or finding yet.
-- Evidence: `unclassified`.
-- Not measured when: it cannot read its input; the block says why.
-
-### `skill_disclosure`: Skill disclosure
-
-A skill loads its whole SKILL.md every time it triggers, so detail that only one branch needs spends an agent's context before work starts; keeping the body small, the description within its limit and references one level deep keeps that cost to what the task uses.
-
-Each SKILL.md and agent definition against Anthropic's skill authoring guidance: body lines, size in tokens, name and description, and references that resolve one level deep.
-
-- Collector: `core.skill_disclosure`, reading `repo_root`, `scope`, `excludes`.
-- Network: no.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `skill_disclosure.files.breaks` token, `skill_disclosure.files.kind` token, `skill_disclosure.files.path` path, `skill_disclosure.files.references.target` path.
-- Used by: row `skill-disclosure`.
-- Evidence: `skill_disclosure.files_breaking` head_structure (measured).
-- Not measured when: it cannot read its input; the block says why.
-
-### `skill_script_tests`: Skill script tests
-
-A skill's scripts run with an agent's permissions every time it triggers; tests beside them are the only check that a change still does what the SKILL.md promises.
-
-Whether each skill's scripts have tests beside them in the skill's own folder: presence, not coverage, since no suite runs. Tests found only outside the folder are named, as information.
-
-- Collector: `core.skill_script_tests`, reading `repo_root`, `scope`, `excludes`.
-- Network: no.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `skill_script_tests.skills.path` path, `skill_script_tests.skills.tested_elsewhere` path.
-- Used by: row `skill-script-tests`.
-- Evidence: `skill_script_tests.skills_untested` head_structure (measured).
-- Not measured when: it cannot read its input; the block says why.
-
-### `skill_personal_data`: Personal data in skill text
-
-Skill text is loaded into every session that triggers it and copied wherever it is published, so personal data in it leaks to every user.
-
-Each SKILL.md, agent definition and skill references/ file, scanned for emails, phone numbers, home paths, IP addresses, SSH logins and keys. A finding names the file and the kind, never the data. Credential-shaped assignments are counted for information only. Personal names are not detected.
-
-- Collector: `core.skill_personal_data`, reading `repo_root`, `scope`, `excludes`.
-- Network: no.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `skill_personal_data.files.kinds` token, `skill_personal_data.files.path` path, `skill_personal_data.kinds_detected` token.
-- Used by: row `skill-personal-data`.
-- Evidence: `skill_personal_data.files_with_personal_data` head_structure (measured).
-- Not measured when:
-  - `skill_files_unread`: A skill or agent file could not be read, and none of those read holds a detected kind. Check the file's permissions or encoding, then run /assess again.
-
-### `ci_model_jobs`: Model-backed CI jobs
-
-A CI job that calls a model costs money on every run. If it runs on every merge and every pull request update, the cost grows with the number of changes agents make, not with changes to the prompts it tests.
-
-Each GitHub Actions or GitLab CI job that calls a model API. Signs are an eval harness, an agent action, the Claude Code CLI, a model-provider secret, pytest -m eval or an evals/ path. For each job, whether a gate stops it running on every push or pull request update. Gates are a paths filter, a schedule or manual trigger only, a label, or GitLab rules:changes.
-
-- Collector: `core.ci_model_jobs`, reading `repo_root`, `ghsync_root`.
-- Network: no.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `ci_model_jobs.jobs.gates` token, `ci_model_jobs.jobs.job` drop, `ci_model_jobs.jobs.path` path, `ci_model_jobs.jobs.platform` token, `ci_model_jobs.jobs.reason` token, `ci_model_jobs.jobs.signs` token, `ci_model_jobs.jobs.state` token, `ci_model_jobs.jobs.triggers` token, `ci_model_jobs.ungated_reason` token.
-- Used by: row `model-ci-gated`.
-- Evidence: `ci_model_jobs.ungated` head_structure (measured).
-- Not measured when:
-  - `no_model_jobs`: With model_jobs at 0, no model-calling CI job was detected, so there is nothing to gate. A model call inside a script file a job runs is not read. Nothing to change.
-  - `trigger_unresolved`: The ungated count is null and ungated_reason holds this code. No model-backed job is ungated, but one could not be settled. Examples are an unreadable on: key, a label if: joined with ||, or a job that only names a provider secret. A GitLab merge that is not settled reads the same way. Nothing to change if the job is gated; a plain paths:, schedule: or label condition lets the scan read it.
-  - `ci_jobs_unread`: The ungated count is null and ungated_reason holds this code. Every model-backed job found is gated. But a job calls a reusable workflow from another repository on a route that is not gated, or a GitLab include was not read. An ungated job may sit there. Nothing to change: this reads as not measured until those files can be read.
-
-### `org_security_policy`: Owner's shared security policy
-
-A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue.
-
-The SECURITY file in the owner's public .github repository, which GitHub shows on every repository of the owner that has none, read through gh.
-
-- Collector: `core.org_security_policy`, reading `repo_root`.
+- Collector: `core.review_reality`, reading `merged_sample`, `gitlab_note_facts`.
 - Network: yes, GitHub or GitLab (with --platform).
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `org_security_policy.path` drop, `org_security_policy.reason` reason.
-- Used by: no row or finding yet.
-- Evidence: `unclassified`.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `review_reality.bot_sequence` token, `review_reality.reason` drop, `review_reality.sequence` token.
+- Used by: row `layer-7-review`.
+- Evidence: `review_reality.approved_share` platform (verified), `review_reality.reviewed_share` platform (verified).
 - Not measured when:
-  - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
-  - `no_remote`: The repository has no github.com remote, so there is no owner .github repository to read. Nothing to change: the shared-policy fallback is GitHub's; commit a SECURITY.md in the repository.
-
-### `github_secret_scanning`: GitHub secret scanning
-
-A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.
-
-GitHub's own secret scanning and push protection settings, read through gh. They are returned only to a repository admin, organization owner or security manager.
-
-- Collector: `core.github_secret_scanning`, reading `repo_root`.
-- Network: yes, GitHub or GitLab (with --platform).
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `github_secret_scanning.reason` reason.
-- Used by: no row or finding yet.
-- Evidence: `unclassified`.
-- Not measured when:
-  - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
-  - `settings_not_readable`: Only a repository admin, organization owner or security manager can read GitHub's secret scanning and push protection settings. Run /assess with gh signed in as a repository admin, organization owner or security manager, or add a secrets scan to CI.
-
-### `secrets_guard`: Secrets guard
-
-A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.
-
-A secrets hook in the pre-commit config and a secrets scan in CI, such as gitleaks, trufflehog or GitLab Secret-Detection. Each is recorded with its own evidence grade.
-
-- Collector: `core.secrets_guard`, reading `repo_root`, `scope`, `ghsync_root`, `github_secret_scanning`.
-- Network: no.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `secrets_guard.ci.files` path, `secrets_guard.ci.rules_unevaluated` token, `secrets_guard.ci.tools` token, `secrets_guard.enforcement.reason` reason, `secrets_guard.enforcement.source` token, `secrets_guard.pre_commit.file` path, `secrets_guard.pre_commit.tools` token, `secrets_guard.sources.grade` token, `secrets_guard.sources.source` token.
-- Used by: row `secrets-guard`.
-- Evidence: `secrets_guard.configured` config_text (config_only), `secrets_guard.enforcement.present` head_structure (measured).
-- Not measured when:
-  - `secret_scanning_not_read`: No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read. Run /assess with gh signed in as a repository admin, organization owner or security manager, or a headless run with --platform. Or add a secrets scan step to CI (gitleaks or trufflehog).
-  - `gitlab_rules_unevaluated`: A GitLab job holds a secrets scan but runs under rules, only/except or a when that is not evaluated. Or its merged definitions could not be settled. So it is not known whether the scan runs on each change. Nothing to change for the reading: a plain job with no rules, or a GitHub workflow, is read in full.
-  - `ci_includes_unresolved`: No secrets scan was found in the CI read. A GitLab include that could hold one, a local, project or remote file, was not read. Clone the included project beside this one (/ghsync), or add the secrets scan to the repository's own .gitlab-ci.yml.
-
-### `agent_consistency`: Cross-agent instruction consistency
-
-It compares the instruction files of every agent system present, so each agent is told the same checks and thresholds, from one source.
-
-Compares the root instruction files of every agent system present: Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue and Zed. It finds check commands one file names and another does not, and thresholds that conflict. It checks whether each file links to one canonical file, and gives the pointer line for each system that does not.
-
-- Collector: `core.agent_consistency`, reading `repo_root`, `excludes`.
-- Network: no.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_consistency.canonical` path, `agent_consistency.divergences.kind` token, `agent_consistency.divergences.missing_from` token, `agent_consistency.divergences.named_in` token, `agent_consistency.divergences.stated.system` token, `agent_consistency.divergences.value` drop, `agent_consistency.files.link` token, `agent_consistency.files.path` path, `agent_consistency.files.system` token, `agent_consistency.next_steps.path` path, `agent_consistency.next_steps.pointer` drop, `agent_consistency.next_steps.symlink` drop, `agent_consistency.next_steps.system` token, `agent_consistency.not_read` drop, `agent_consistency.systems` token.
-- Used by: row `agent-consistency`.
-- Evidence: `agent_consistency.conflicts` head_structure (measured), `agent_consistency.unlinked` head_structure (measured).
-- Not measured when: it cannot read its input; the block says why.
+  - `network`: A headless run without --platform makes no GitHub or GitLab read. Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in.
+  - `no_remote`: The repository has no GitHub or GitLab remote, so there are no merged changes to read. Nothing to change if the repository is local only; with a GitHub or GitLab remote, /assess and fleet --platform read its merged changes.
 
 Why the signals named here matter:
 
-- `agent_consistency.conflicts` feeds `agent-consistency.1:agent_consistency.conflicts`: When agent systems are told different check commands or thresholds, one agent's change passes checks another agent was told to run differently.
-- `agent_consistency.unlinked` feeds `agent-consistency.2:agent_consistency.unlinked`: One source of instructions keeps every agent's picture of the repository the same, and keeps it maintained in one place.
-
-### `ai_usage`: AI-assisted change share
-
-Run plumbing: no row or finding reads this scan.
-
-- Collector: `core.ai_usage`, reading `repo_root`, `scope`, `history_window`, `fleet_config`.
-- Network: no.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `ai_usage.covered_agents` drop, `ai_usage.covered_author_agents` drop, `ai_usage.limits` drop, `ai_usage.merge_rule` token, `ai_usage.reason` drop, `ai_usage.since` drop, `ai_usage.window` token.
-- Used by: no row or finding yet.
-- Evidence: `unclassified`.
-- Not measured when: it cannot read its input; the block says why.
-
-### `agent_outcome`: Agent commit outcomes
-
-No other scan says whether agent work holds once it lands; this records the share of agent commits later reverted or rewritten within two weeks, as a history to set beside the gates. Nothing scores it.
-
-- Collector: `core.agent_outcome`, reading `repo_root`, `scope`, `history_window`, `fleet_config`.
-- Network: no.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_outcome.agent_rule` token, `agent_outcome.limits` drop, `agent_outcome.reason` reason, `agent_outcome.revert_null_reason` token, `agent_outcome.rework_null_reason` token, `agent_outcome.since` drop, `agent_outcome.window` token.
-- Used by: no row or finding yet.
-- Evidence: `unclassified`.
-- Not measured when:
-  - `shallow_clone`: The checkout is a shallow clone, so a reverting or rewriting commit may be cut from the history read. Nothing to change in the repository; a full clone (git fetch --unshallow) lets the scan read it.
-  - `shallow_unknown`: Git could not confirm the checkout is a full clone. Nothing to change in the repository; run the scan on a full clone.
-  - `not_a_repo`: The path is not a git repository, or one with no commits. Nothing to change: there is no history to read.
-  - `no_git`: git is not installed where the scan ran. Install git where the scan runs.
-  - `git_failed`: A git read past the windowed log (a patch-id, numstat or blame read) failed on a repository the log could read. Nothing to change in the repository; re-run the scan, and report the failure if it repeats.
-  - `git_timeout`: A git read took longer than the scan allows. Nothing to change in the repository; a shorter --window reads less history.
-
-### `doc_claims`: Doc claims
-
-An agent reads guides as literally as instruction files. This checks the same pin and count claims across the doc set and names two docs that state different values.
-
-- Collector: `core.doc_claims`, reading `repo_root`, `instruction_files`, `scope`, `excludes`.
-- Network: no.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `doc_claims.contradictions.conflict_pair.value` drop, `doc_claims.contradictions.kind` token, `doc_claims.contradictions.sites.value` drop, `doc_claims.excluded_trees` path, `doc_claims.failures.kind` token, `doc_claims.failures.reason` drop, `doc_claims.failures.version` drop.
-- Used by: no row or finding yet.
-- Evidence: `unclassified`.
-- Not measured when: it cannot read its input; the block says why.
-
-### `guardrails`: Guardrails stated
-
-It lists the gates the repository configures and whether an instruction file states each rule and threshold, so an agent learns a gate before CI turns red on it.
-
-Lists the gates the repository configures: a ruff or flake8 complexity limit, the coverage floor, pre-commit hooks and mypy strict. It checks whether a graded instruction file states each gate's rule and threshold. An unstated gate carries a ready one-line snippet.
-
-- Collector: `core.guardrails`, reading `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope`.
-- Network: no.
-- Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `guardrails.gates.kind` token, `guardrails.gates.rule` token, `guardrails.gates.snippet` drop, `guardrails.gates.stated_in` path, `guardrails.gates.tool` token, `guardrails.not_read` drop.
-- Used by: row `guardrails-stated`.
-- Evidence: `guardrails.stated_pct` head_structure (measured).
-- Not measured when: it cannot read its input; the block says why.
-
-Why the signals named here matter:
-
-- `guardrails.stated_pct` feeds `guardrails-stated.1:guardrails.stated_pct`: A gate an agent does not know about turns its job red after the work is done. Stated with its threshold, the gate is a constraint it can plan for.
-- `guardrails.stated_pct` feeds `guardrails-stated.2:guardrails.stated_pct`: With every configured gate written down, rule and threshold, an agent can check each one before it pushes.
-
-### `structure`: Keyhole blocks: structure
-
-It measures module structure and how packages import one another, which decides how much code an agent must read to change one part.
-
-- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
-- Network: no.
-- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `structure.breakup_candidates.clusters` path, `structure.breakup_candidates.package` path, `structure.footprints.module` path, `structure.internal_burrow_edges.imported` path, `structure.internal_burrow_edges.importer` path, `structure.language` token, `structure.modularity_reason` token, `structure.name_collisions.name` path, `structure.name_collisions.paths` path, `structure.package_edges.from` path, `structure.package_edges.to` path, `structure.packages.id` path, `structure.reason` reason, `structure.sccs` path.
-- Used by: row `layer-2-design`.
-- Evidence: `structure.modularity_q` head_structure (measured), `structure.cross_package_edges` head_structure (measured), `structure.front_door_ratio` head_structure (measured).
-- Not measured when:
-  - `no_grimp`: grimp, the Python import-graph builder, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
-  - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
-  - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
-  - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
-  - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
-  - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
-
-Why the signals named here matter:
-
-- `structure.modularity_q` feeds `layer-2-design.1:structure.modularity_q`: Clear modules let an agent load the part of the code a task touches, instead of tracing the whole repository to change one thing.
-- `structure.cross_package_edges` feeds `layer-2-design.2:structure.cross_package_edges`: A guard for the next condition: with no import between packages, the front-door share reads null by default and says nothing about how packages are entered.
-- `structure.front_door_ratio` feeds `layer-2-design.2:structure.front_door_ratio`: When packages are entered through one public surface, an agent can change a package's insides without breaking callers it never read.
-
-### `stats_summary`: Run header: stats_summary
-
-It summarises file size and complexity across the repository; the 95th-percentile file size is what decides whether an agent can read a file whole.
-
-- Collector: `core.run_header`, reading `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized`.
-- Network: no.
-- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `stats_summary.ccn.basis` token, `stats_summary.complexity_unreliable.language` token, `stats_summary.complexity_unreliable.path` path, `stats_summary.est_tokens.budget.budget_basis` drop, `stats_summary.fn_ccn.backend_by_language.*` token, `stats_summary.fn_ccn.basis` token, `stats_summary.fn_ccn.source.name` token, `stats_summary.top_complex.ccn_basis` token, `stats_summary.top_complex.max_fn_name` drop, `stats_summary.top_complex.source` token, `stats_summary.top_hotspots.ccn_basis` token, `stats_summary.top_hotspots.max_fn_name` drop, `stats_summary.top_hotspots.source` token, `stats_summary.top_large.ccn_basis` token, `stats_summary.top_large.max_fn_name` drop, `stats_summary.top_large.source` token.
-- Used by: row `layer-4-architecture`.
-- Evidence: `stats_summary.loc_by_class.source.p95` head_structure (measured).
-- Not measured when: it cannot read its input; the block says why.
-
-Why the signals named here matter:
-
-- `stats_summary.loc_by_class.source.p95` feeds `layer-4-architecture.2:stats_summary.loc_by_class.source.p95`: With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file.
-
-### `promissory_markers`: Promissory markers
-
-TODOs, suppressions and disabled tests that survive many edits are promises nobody kept; an agent cannot tell from the code whether one is still meant.
-
-- Collector: `core.promissory_markers`, reading `promissory`.
-- Network: no.
-- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `promissory_markers.reason` drop, `promissory_markers.stale_by_file.{}.families` drop, `promissory_markers.top_offenders.commit` drop, `promissory_markers.top_offenders.family` token, `promissory_markers.top_offenders.text` drop.
-- Used by: row `layer-3-linters`.
-- Evidence: `promissory_markers.families.suppression.stale` git_history (measured), `promissory_markers.aging_reliable` git_history (measured).
-- Not measured when: it cannot read its input; the block says why.
-
-Why the signals named here matter:
-
-- `promissory_markers.families.suppression.stale` feeds `layer-3-linters.2:promissory_markers.families.suppression.stale`: A suppression that survives many edits switches a check off in code that keeps changing, and an agent editing nearby gets no sign the warning still matters.
-- `promissory_markers.aging_reliable` feeds `layer-3-linters.2:promissory_markers.aging_reliable`: A guard for the suppression count: on a shallow or squashed history every suppression looks new, so a count of 0 would say nothing.
-
-### `structure_drift`: Structure drift: structure_drift
-
-Ownership and boundary maps are read as authoritative, and nothing forces them to follow the code; this checks each map's patterns against where the code now lives.
-
-- Collector: `core.structure_drift_block`, reading `repo_root`, `keyhole`.
-- Network: no.
-- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `structure_drift.reason` reason, `structure_drift.tier_0.empty_ownership_patterns.declared_in` drop, `structure_drift.tier_0.empty_ownership_patterns.owners` drop, `structure_drift.tier_0.empty_ownership_patterns.pattern` drop, `structure_drift.tier_1.static_lens_reason` token.
-- Used by: row `layer-4-architecture`, finding `hidden_coupling`.
-- Evidence: `structure_drift.tier_0.boundary_patterns` config_text (config_only).
-- Not measured when:
-  - `no_ownership_map`: The repository commits no ownership or boundary map (CODEOWNERS, an ARCHITECTURE module list) for the drift check to read. Nothing to change if no one owns paths; a committed CODEOWNERS or boundary map lets the scan read it.
-
-Why the signals named here matter:
-
-- `structure_drift.tier_0.boundary_patterns` feeds `layer-4-architecture.1:structure_drift.tier_0.boundary_patterns`: A map that names module paths tells an agent which code belongs together, and with CODEOWNERS, whose review a change there needs.
-
-### `observability`: Liveness blocks: observability
-
-It reads how far the repository gives an agent a view of the running system: telemetry emitted, a runbook that says where it lives, and a path the agent can query.
-
-- Collector: `core.liveness_blocks`, reading `liveness`.
-- Network: no.
-- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `observability.boundary` drop, `observability.discoverable.signals` drop, `observability.instrumented.kinds` token, `observability.instrumented.signals` drop, `observability.reachable.signals` drop.
-- Used by: row `layer-1-liveness`.
-- Evidence: `observability.rung` head_text (declared).
-- Not measured when: it cannot read its input; the block says why.
-
-Why the signals named here matter:
-
-- `observability.rung` feeds `layer-1-liveness.1:observability.rung`: Telemetry in the code is what any view of the running system is built on. Without it, there is nothing for an agent or a person to read when checking how a change behaves in use.
-- `observability.rung` feeds `layer-1-liveness.2:observability.rung`: When an agent can query logs or metrics itself, it can check a change against the running system instead of handing that back to a person.
-
-### `doc_graph`: Doc graph
-
-An agent finds docs by following links from README, AGENTS.md or an index; a doc no link reaches is one it will not read.
-
-- Collector: `core.doc_graph`, reading `repo_root`, `excludes`, `scope`, `working_notes`.
-- Network: no.
-- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `doc_graph.broken_links.from` path, `doc_graph.broken_links.kind` token, `doc_graph.broken_links.target` path, `doc_graph.doc_to_code_edges.code` path, `doc_graph.doc_to_code_edges.doc` path, `doc_graph.entry_points` path, `doc_graph.link_parents.link_entry` path, `doc_graph.link_parents.link_parent` path, `doc_graph.missing_xrefs.from` path, `doc_graph.missing_xrefs.to` path, `doc_graph.moc_named_but_not_wired` path, `doc_graph.orphans` path, `doc_graph.reason` drop, `doc_graph.unreachable` path.
-- Used by: no row or finding yet.
-- Evidence: `unclassified`.
-- Not measured when: it cannot read its input; the block says why.
-
-### `doc_staleness`: Doc staleness
-
-It compares each doc's last change with the churn in the code it describes, so a doc whose code moved on is found before an agent relies on it.
-
-Each doc's last content change against its code subject's churn, following renames.
-
-- Collector: `core.doc_staleness`, reading `repo_root`, `doc_graph`, `excludes`, `scope`.
-- Network: no.
-- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `doc_staleness.bulk_commits_skipped.date` token, `doc_staleness.bulk_commits_skipped.sha` drop, `doc_staleness.churn_window` drop, `doc_staleness.declared_cross_repo.path` path, `doc_staleness.declared_cross_repo.reason` token, `doc_staleness.declared_cross_repo.repo` id, `doc_staleness.declared_cross_repo.scope` path, `doc_staleness.declared_cross_repo.status` token, `doc_staleness.docs.base_doc_dir` path, `doc_staleness.docs.confidence` token, `doc_staleness.docs.last_change_basis` token, `doc_staleness.docs.last_commit_days_bound` token, `doc_staleness.docs.provenance.generated_by` drop, `doc_staleness.docs.provenance.method` token, `doc_staleness.docs.provenance.sources` path, `doc_staleness.docs.subject_match` token, `doc_staleness.docs.subject_method` token, `doc_staleness.docs.subject_paths` path, `doc_staleness.docs.subject_roots` path, `doc_staleness.history_boundary_date` token.
-- Used by: row `doc-freshness`.
-- Evidence: `doc_staleness.summary.stale_pct` git_history (measured).
-- Not measured when: it cannot read its input; the block says why.
-
-Why the signals named here matter:
-
-- `doc_staleness.summary.stale_pct` feeds `doc-freshness.1:doc_staleness.summary.stale_pct`: An agent reads the docs as true. A doc whose code has moved on misleads it about that code.
-- `doc_staleness.summary.stale_pct` feeds `doc-freshness.2:doc_staleness.summary.stale_pct`: With four in five mapped docs keeping pace with their code, an agent can take most of what it reads at its word.
-
-### `archetype`: Repository archetype
-
-It tells a documentation repository from a software one, so the report does not ask a repository with no code for tests and CI on code it does not hold.
-
-- Collector: `core.archetype`, reading `repo_root`.
-- Network: no.
-- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `archetype.archetype` token, `archetype.detected_via` token, `archetype.kb_maintenance.gist` drop, `archetype.reason` drop.
-- Used by: finding `override_contradicts_signals`.
-- Evidence: `unclassified`.
-- Not measured when: it cannot read its input; the block says why.
-
-### `owner_exclusions`: Owner exclusions
-
-It reads the checks a repository's owners have committed as not applying to them, so the Step holds a team only to practices it has not deliberately set aside, and each exclusion stays visible and reviewable in the repository.
-
-The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why.
-
-- Collector: `core.owner_exclusions`, reading `repo_root`.
-- Network: no.
-- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `owner_exclusions.disclosures` drop, `owner_exclusions.exclusions.excluded_at` token, `owner_exclusions.exclusions.excluded_by` drop, `owner_exclusions.exclusions.id` token, `owner_exclusions.exclusions.kind` token, `owner_exclusions.exclusions.reason` drop, `owner_exclusions.exclusions.source` token, `owner_exclusions.exclusions.version` token, `owner_exclusions.skipped.id` drop, `owner_exclusions.skipped.problem` token.
-- Used by: no row or finding yet.
-- Evidence: `unclassified`.
-- Not measured when: it cannot read its input; the block says why.
-
-### `contributor_files`: Contributor files
-
-A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue.
-
-A contributing guide and a security policy at the root, in .github/ or in docs/. The policy is a SECURITY file or a link to GitHub private vulnerability reporting. Issue and pull or merge request templates count as evidence.
-
-- Collector: `core.contributor_files`, reading `repo_root`, `archetype`, `org_security_policy`.
-- Network: no.
-- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `contributor_files.guide.path` path, `contributor_files.policy.kind` token, `contributor_files.policy.path` path, `contributor_files.policy.reason` reason, `contributor_files.policy.source` token, `contributor_files.reason` reason.
-- Used by: row `contributor-files`.
-- Evidence: `contributor_files.guide.present` head_structure (measured), `contributor_files.policy.present` head_structure (measured).
-- Not measured when:
-  - `knowledge_base`: The repository is a knowledge base (archetype knowledge-base), which takes no code patches. Nothing to change: a contributing guide and a security policy are not measured for a knowledge base.
-  - `org_policy_not_read`: The repository holds no security policy. The owner's shared .github repository, whose policy GitHub shows on this one, was not read. The cause is offline use, no --platform, a remote not on github.com, or gh not signed in. Commit a SECURITY.md, or run /assess with gh signed in (or fleet with --platform) so the owner's shared policy is read.
-
-### `unit_readings`: Monorepo unit readings
-
-A unit inherits root CI and review but not the root's suppressions, stale docs or structure. Reading those per unit, with each condition labelled, shows which change lifts which unit.
-
-Each unit's own readings of the scope-sensitive scans: suppressions, doc staleness, structure, size, and its own coverage gate or instruction file. Every condition is tagged unit or inherited.
-
-- Collector: `core.unit_readings`, reading `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes`.
-- Network: no.
-- Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `unit_readings.unit_blocks` token, `unit_readings.unit_count_reason` token, `unit_readings.units.conditions.id` token, `unit_readings.units.conditions.origin` token, `unit_readings.units.kind` token, `unit_readings.units.path` hashed_path.
-- Used by: no row or finding yet.
-- Evidence: `unclassified`.
-- Not measured when: it cannot read its input; the block says why.
-
-### `diff`: Run header: diff
-
-Run plumbing: no row or finding reads this scan.
-
-- Collector: `core.run_header`, reading `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized`.
-- Network: no.
-- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
-- Counts-only: numbers, booleans and nulls kept; no string field kept.
-- Used by: no row or finding yet.
-- Evidence: `unclassified`.
-- Not measured when:
-  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
-
-### `dead_code`: Liveness blocks: dead_code
-
-Code nothing in the repository calls still costs an agent reading time and can be kept alive by mistake; candidates are listed for a person to check, since callers outside the repository are not visible.
-
-- Collector: `core.liveness_blocks`, reading `liveness`.
-- Network: no.
-- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `dead_code.candidates.kind` token, `dead_code.candidates.symbol` drop, `dead_code.caveat` drop, `dead_code.tools.consent` drop, `dead_code.tools.language` token, `dead_code.tools.reason` drop, `dead_code.tools.status` token, `dead_code.tools.tool` token.
-- Used by: finding `candidate_dead_weight`.
-- Evidence: `unclassified`.
-- Not measured when:
-  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
-
-### `ancestor_instruction_files`: Ancestor instruction files
-
-Instruction files above the repository root load in a local session but never reach a fresh clone, so an agent elsewhere works without those rules.
-
-- Collector: `core.ancestor_instruction_files`, reading `repo_root`.
-- Network: no.
-- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `ancestor_instruction_files` drop.
-- Used by: no row or finding yet.
-- Evidence: `unclassified`.
-- Not measured when:
-  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
-
-### `behaviour`: Keyhole blocks: behaviour
-
-It reads which files change together in history, so coupling the import graph does not show, and modules safe to change in isolation, are both found.
-
-- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
-- Network: no.
-- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `behaviour.hidden_coupling_findings.finding` token, `behaviour.hidden_coupling_findings.recommendation` drop, `behaviour.reason` drop, `behaviour.refactor_boundaries.finding` token, `behaviour.refactor_boundaries.recommendation` drop, `behaviour.static_history_disagreement.finding` token, `behaviour.static_history_disagreement.recommendation` drop, `behaviour.static_modularity_projection` drop.
-- Used by: finding `hidden_coupling`, finding `refactor_boundary`.
-- Evidence: `unclassified`.
-- Not measured when:
-  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
-  - `no_grimp`: grimp, the Python import-graph builder, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
-  - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
-  - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
-  - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
-  - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
-  - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
-
-### `documentation`: Keyhole blocks: documentation
-
-It joins doc freshness with code complexity, so the places where an agent most needs a true doc, and has none or a stale one, are named.
-
-- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
-- Network: no.
-- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `documentation.good_contracts.confidence` token, `documentation.good_contracts.finding` token, `documentation.good_contracts.recommendation` drop, `documentation.reason` drop, `documentation.stale_doc_on_complexity.confidence` token, `documentation.stale_doc_on_complexity.finding` token, `documentation.stale_doc_on_complexity.recommendation` drop, `documentation.unexplained_complexity.confidence` token, `documentation.unexplained_complexity.finding` token, `documentation.unexplained_complexity.recommendation` drop.
-- Used by: finding `lying_map`, finding `unexplained_complexity`.
-- Evidence: `unclassified`.
-- Not measured when:
-  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
-  - `no_grimp`: grimp, the Python import-graph builder, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
-  - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
-  - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
-  - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
-  - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
-  - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
-
-### `understanding`: Keyhole blocks: understanding
-
-For each complex module it reads whether a person authored it and whether a doc states its intent, so an agent knows whether there is anyone or anything to check its reading against.
-
-- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
-- Network: no.
-- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `understanding.authorship_class_by_path.{}` token, `understanding.modules.authorship_class` token, `understanding.modules.finding` token, `understanding.modules.recommendation` drop, `understanding.orphaned_understanding` path, `understanding.reason` drop.
-- Used by: finding `orphaned_understanding`.
-- Evidence: `unclassified`.
-- Not measured when:
-  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
-  - `no_grimp`: grimp, the Python import-graph builder, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
-  - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
-  - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
-  - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
-  - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
-  - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
+- `review_reality.reviewed_share` feeds `layer-7-review.2:review_reality.reviewed_share`: Review protects only the changes it reaches. At four in five merged changes, most of what lands, an agent's work included, has had a second reader.
+- `review_reality.approved_share` feeds `layer-7-review.2:review_reality.approved_share`: An explicit approval records that someone accepted the change, not just that it was looked at.
 
 ### `runtime`: Keyhole blocks: runtime
 
@@ -1017,18 +875,105 @@ Run plumbing: no row or finding reads this scan.
   - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
-### `derived_findings`: Keyhole blocks: derived_findings
+### `secrets_guard`: Secrets guard
+
+A token committed once stays in the history of every clone; a guard that scans each change before it lands is the check that stops an agent or a newcomer from leaking one.
+
+A secrets hook in the pre-commit config and a secrets scan in CI, such as gitleaks, trufflehog or GitLab Secret-Detection. Each is recorded with its own evidence grade.
+
+- Collector: `core.secrets_guard`, reading `repo_root`, `scope`, `ghsync_root`, `github_secret_scanning`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `secrets_guard.ci.files` path, `secrets_guard.ci.rules_unevaluated` token, `secrets_guard.ci.tools` token, `secrets_guard.enforcement.reason` reason, `secrets_guard.enforcement.source` token, `secrets_guard.pre_commit.file` path, `secrets_guard.pre_commit.tools` token, `secrets_guard.sources.grade` token, `secrets_guard.sources.source` token.
+- Used by: row `secrets-guard`.
+- Evidence: `secrets_guard.configured` config_text (config_only), `secrets_guard.enforcement.present` head_structure (measured).
+- Not measured when:
+  - `secret_scanning_not_read`: No secrets scan runs in CI, and the repository is on GitHub, whose own secret scanning and push protection were not read. Run /assess with gh signed in as a repository admin, organization owner or security manager, or a headless run with --platform. Or add a secrets scan step to CI (gitleaks or trufflehog).
+  - `gitlab_rules_unevaluated`: A GitLab job holds a secrets scan but runs under rules, only/except or a when that is not evaluated. Or its merged definitions could not be settled. So it is not known whether the scan runs on each change. Nothing to change for the reading: a plain job with no rules, or a GitHub workflow, is read in full.
+  - `ci_includes_unresolved`: No secrets scan was found in the CI read. A GitLab include that could hold one, a local, project or remote file, was not read. Clone the included project beside this one (/ghsync), or add the secrets scan to the repository's own .gitlab-ci.yml.
+
+### `shared_tooling`: Shared tooling
 
 Run plumbing: no row or finding reads this scan.
 
-- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
+- Collector: `core.shared_tooling`, reading `repo_root`.
 - Network: no.
-- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `derived_findings.action` drop, `derived_findings.name` token, `derived_findings.paths` path, `derived_findings.reviewed.completed_sha` drop, `derived_findings.reviewed.note` drop, `derived_findings.reviewed.path` path.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `shared_tooling.ci_includes.id` id, `shared_tooling.ci_includes.kind` token, `shared_tooling.ci_includes.ref` token, `shared_tooling.ci_includes.source` drop, `shared_tooling.ci_source_ids` id, `shared_tooling.marketplace_ids` id, `shared_tooling.marketplaces.id` id, `shared_tooling.marketplaces.kind` token, `shared_tooling.marketplaces.name` drop, `shared_tooling.marketplaces.source` drop, `shared_tooling.reason` drop.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
+
+### `skill_disclosure`: Skill disclosure
+
+A skill loads its whole SKILL.md every time it triggers, so detail that only one branch needs spends an agent's context before work starts; keeping the body small, the description within its limit and references one level deep keeps that cost to what the task uses.
+
+Each SKILL.md and agent definition against Anthropic's skill authoring guidance: body lines, size in tokens, name and description, and references that resolve one level deep.
+
+- Collector: `core.skill_disclosure`, reading `repo_root`, `scope`, `excludes`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `skill_disclosure.files.breaks` token, `skill_disclosure.files.kind` token, `skill_disclosure.files.path` path, `skill_disclosure.files.references.target` path.
+- Used by: row `skill-disclosure`.
+- Evidence: `skill_disclosure.files_breaking` head_structure (measured).
+- Not measured when: it cannot read its input; the block says why.
+
+### `skill_personal_data`: Personal data in skill text
+
+Skill text is loaded into every session that triggers it and copied wherever it is published, so personal data in it leaks to every user.
+
+Each SKILL.md, agent definition and skill references/ file, scanned for emails, phone numbers, home paths, IP addresses, SSH logins and keys. A finding names the file and the kind, never the data. Credential-shaped assignments are counted for information only. Personal names are not detected.
+
+- Collector: `core.skill_personal_data`, reading `repo_root`, `scope`, `excludes`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `skill_personal_data.files.kinds` token, `skill_personal_data.files.path` path, `skill_personal_data.kinds_detected` token.
+- Used by: row `skill-personal-data`.
+- Evidence: `skill_personal_data.files_with_personal_data` head_structure (measured).
 - Not measured when:
-  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+  - `skill_files_unread`: A skill or agent file could not be read, and none of those read holds a detected kind. Check the file's permissions or encoding, then run /assess again.
+
+### `skill_script_tests`: Skill script tests
+
+A skill's scripts run with an agent's permissions every time it triggers; tests beside them are the only check that a change still does what the SKILL.md promises.
+
+Whether each skill's scripts have tests beside them in the skill's own folder: presence, not coverage, since no suite runs. Tests found only outside the folder are named, as information.
+
+- Collector: `core.skill_script_tests`, reading `repo_root`, `scope`, `excludes`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `skill_script_tests.skills.path` path, `skill_script_tests.skills.tested_elsewhere` path.
+- Used by: row `skill-script-tests`.
+- Evidence: `skill_script_tests.skills_untested` head_structure (measured).
+- Not measured when: it cannot read its input; the block says why.
+
+### `stats_summary`: Run header: stats_summary
+
+It summarises file size and complexity across the repository; the 95th-percentile file size is what decides whether an agent can read a file whole.
+
+- Collector: `core.run_header`, reading `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized`.
+- Network: no.
+- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `stats_summary.ccn.basis` token, `stats_summary.complexity_unreliable.language` token, `stats_summary.complexity_unreliable.path` path, `stats_summary.est_tokens.budget.budget_basis` drop, `stats_summary.fn_ccn.backend_by_language.*` token, `stats_summary.fn_ccn.basis` token, `stats_summary.fn_ccn.source.name` token, `stats_summary.top_complex.ccn_basis` token, `stats_summary.top_complex.max_fn_name` drop, `stats_summary.top_complex.source` token, `stats_summary.top_hotspots.ccn_basis` token, `stats_summary.top_hotspots.max_fn_name` drop, `stats_summary.top_hotspots.source` token, `stats_summary.top_large.ccn_basis` token, `stats_summary.top_large.max_fn_name` drop, `stats_summary.top_large.source` token.
+- Used by: row `layer-4-architecture`.
+- Evidence: `stats_summary.loc_by_class.source.p95` head_structure (measured).
+- Not measured when: it cannot read its input; the block says why.
+
+Why the signals named here matter:
+
+- `stats_summary.loc_by_class.source.p95` feeds `layer-4-architecture.2:stats_summary.loc_by_class.source.p95`: With nearly all source files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice. Tests and fixtures are counted apart, so many small ones cannot hide a large source file.
+
+### `structure`: Keyhole blocks: structure
+
+It measures module structure and how packages import one another, which decides how much code an agent must read to change one part.
+
+- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
+- Network: no.
+- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `structure.breakup_candidates.clusters` path, `structure.breakup_candidates.package` path, `structure.footprints.module` path, `structure.internal_burrow_edges.imported` path, `structure.internal_burrow_edges.importer` path, `structure.language` token, `structure.modularity_reason` token, `structure.name_collisions.name` path, `structure.name_collisions.paths` path, `structure.package_edges.from` path, `structure.package_edges.to` path, `structure.packages.id` path, `structure.reason` reason, `structure.sccs` path.
+- Used by: row `layer-2-design`.
+- Evidence: `structure.cross_package_edges` head_structure (measured), `structure.front_door_ratio` head_structure (measured), `structure.modularity_q` head_structure (measured).
+- Not measured when:
   - `no_grimp`: grimp, the Python import-graph builder, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
   - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
   - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
@@ -1037,14 +982,37 @@ Run plumbing: no row or finding reads this scan.
   - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
-### `coverage_report`: Coverage report
+Why the signals named here matter:
 
-It reads a coverage report the project already produced, so test depth on the riskiest files is known instead of assumed.
+- `structure.modularity_q` feeds `layer-2-design.1:structure.modularity_q`: Clear modules let an agent load the part of the code a task touches, instead of tracing the whole repository to change one thing.
+- `structure.cross_package_edges` feeds `layer-2-design.2:structure.cross_package_edges`: A guard for the next condition: with no import between packages, the front-door share reads null by default and says nothing about how packages are entered.
+- `structure.front_door_ratio` feeds `layer-2-design.2:structure.front_door_ratio`: When packages are entered through one public surface, an agent can change a package's insides without breaking callers it never read.
 
-- Collector: `core.coverage_report`, reading `repo_root`, `coverage_data`.
+### `structure_drift`: Structure drift: structure_drift
+
+Ownership and boundary maps are read as authoritative, and nothing forces them to follow the code; this checks each map's patterns against where the code now lives.
+
+- Collector: `core.structure_drift_block`, reading `repo_root`, `keyhole`.
+- Network: no.
+- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `structure_drift.reason` reason, `structure_drift.tier_0.empty_ownership_patterns.declared_in` drop, `structure_drift.tier_0.empty_ownership_patterns.owners` drop, `structure_drift.tier_0.empty_ownership_patterns.pattern` drop, `structure_drift.tier_1.static_lens_reason` token.
+- Used by: row `layer-4-architecture`, finding `hidden_coupling`.
+- Evidence: `structure_drift.tier_0.boundary_patterns` config_text (config_only).
+- Not measured when:
+  - `no_ownership_map`: The repository commits no ownership or boundary map (CODEOWNERS, an ARCHITECTURE module list) for the drift check to read. Nothing to change if no one owns paths; a committed CODEOWNERS or boundary map lets the scan read it.
+
+Why the signals named here matter:
+
+- `structure_drift.tier_0.boundary_patterns` feeds `layer-4-architecture.1:structure_drift.tier_0.boundary_patterns`: A map that names module paths tells an agent which code belongs together, and with CODEOWNERS, whose review a change there needs.
+
+### `test_focus`: Test focus
+
+It ranks risky files by the test work each needs, so the files where an agent's change is least held by tests come first.
+
+- Collector: `core.test_focus`, reading `repo_root`, `current`, `coverage_data`, `test_pressure`, `hot_test_index`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `coverage_report.format` token, `coverage_report.source` path.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `test_focus.entries.hollow_heuristic_kinds` token, `test_focus.entries.risk_band` token, `test_focus.entries.suggested_action` token, `test_focus.entries.test_signal` token.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when:
@@ -1067,170 +1035,179 @@ Why the signals named here matter:
 
 - `test_pressure.mutation_run` feeds `layer-6-coverage.2:test_pressure.mutation_run`: Coverage shows tests run the code; a mutation run shows whether they notice it changing. A completed run names the surviving mutants, which are the tests an agent cannot yet rely on.
 
-### `test_focus`: Test focus
+### `understanding`: Keyhole blocks: understanding
 
-It ranks risky files by the test work each needs, so the files where an agent's change is least held by tests come first.
+For each complex module it reads whether a person authored it and whether a doc states its intent, so an agent knows whether there is anyone or anything to check its reading against.
 
-- Collector: `core.test_focus`, reading `repo_root`, `current`, `coverage_data`, `test_pressure`, `hot_test_index`.
+- Collector: `core.keyhole_blocks`, reading `keyhole`, `run_scope`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `test_focus.entries.hollow_heuristic_kinds` token, `test_focus.entries.risk_band` token, `test_focus.entries.suggested_action` token, `test_focus.entries.test_signal` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `understanding.authorship_class_by_path.{}` token, `understanding.modules.authorship_class` token, `understanding.modules.finding` token, `understanding.modules.recommendation` drop, `understanding.orphaned_understanding` path, `understanding.reason` drop.
+- Used by: finding `orphaned_understanding`.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+  - `no_grimp`: grimp, the Python import-graph builder, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
+  - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
+  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
+  - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
+
+### `unit_readings`: Monorepo unit readings
+
+A unit inherits root CI and review but not the root's suppressions, stale docs or structure. Reading those per unit, with each condition labelled, shows which change lifts which unit.
+
+Each unit's own readings of the scope-sensitive scans: suppressions, doc staleness, structure, size, and its own coverage gate or instruction file. Every condition is tagged unit or inherited.
+
+- Collector: `core.unit_readings`, reading `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes`.
+- Network: no.
+- Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `unit_readings.unit_blocks` token, `unit_readings.unit_count_reason` token, `unit_readings.units.conditions.id` token, `unit_readings.units.conditions.origin` token, `unit_readings.units.kind` token, `unit_readings.units.path` hashed_path.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
-- Not measured when:
-  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+- Not measured when: it cannot read its input; the block says why.
 
-### `accretion_ratchet`: Accretion ratchet
+### `units`: Monorepo units
 
-Files that only ever grow get harder to read whole with every addition; this names them before an agent adds the next feature to one.
+One score for a monorepo describes none of its services. Naming each unit lets every one be scored on its own, so one service's gaps are not hidden behind another's practices.
 
-- Collector: `core.accretion_ratchet`, reading `accretion_scan`, `current`.
+The repository's units. First each skill folder (a SKILL.md), and a plugin's agents/ and commands/. Then the shallowest build-manifest folders, with each workspace root's declared members in its place, or the [[units]] of .assess/config.toml. Folders with only a manifest are skipped.
+
+- Collector: `core.units`, reading `repo_root`, `excludes`.
 - Network: no.
-- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `accretion_ratchet.reason` drop.
-- Used by: finding `accretion_ratchet`.
-- Evidence: `unclassified`.
-- Not measured when:
-  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
-
-### `gap_actions`: Gap actions
-
-Run plumbing: no row or finding reads this scan.
-
-- Collector: `core.gap_actions`, reading `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`, `instruction_placement`.
-- Network: no.
-- Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `gap_actions.action` drop, `gap_actions.cost.metric` token, `gap_actions.cost.path` path, `gap_actions.finding` token, `gap_actions.mode` token, `gap_actions.paths` path, `gap_actions.signal` token, `gap_actions.why` drop.
+- Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `units.aggregators.ecosystem` token, `units.aggregators.path` drop, `units.skipped.path` drop, `units.skipped.problem` token, `units.source` token, `units.unit_count_reason` token, `units.units.ecosystem` token, `units.units.kind` token, `units.units.name` drop, `units.units.origin` token, `units.units.path` hashed_path, `units.units.workspace` drop, `units.unreadable_manifests` drop.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
-- Not measured when:
-  - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+- Not measured when: it cannot read its input; the block says why.
 
 ## Derived findings
 
-In report order.
+Sorted by name.
 
 | Finding | Reads | Why it matters | Next step | Mode | Rules |
 |---|---|---|---|---|---|
+| `accretion_ratchet` Accretion ratchet | `accretion_ratchet` | A file that has only ever grown gets harder to read whole with each change, and each agent addition makes the next one harder. | make the file smaller: move code out, delete dead code, or split the file | `refactor_safe` | - |
+| `candidate_dead_weight` Candidate dead weight | `dead_code` | Code nothing in the repository calls costs an agent reading time and can be maintained by mistake; it needs a person to confirm no outside caller uses it. | check that the code is used, and delete it if it is not | `verify_then_retire` | - |
 | `hidden_coupling` Hidden coupling | `behaviour.hidden_coupling_findings`, `structure_drift.tier_1` | These files change together in history with no import between them, so an agent changing one has nothing in the code telling it to change the other. | check why these files change together | `characterize_first` | emptied when `doc_staleness.churn_degenerate == true`; deleted paths pruned |
 | `lying_map` Stale doc over complex code | `documentation.stale_doc_on_complexity` | The doc has fallen behind complex code it describes, which is where an agent leans on a doc most. | fix or delete the doc | `verify_then_retire` | emptied when `doc_staleness.churn_degenerate == true` |
-| `unexplained_complexity` Unexplained complexity | `documentation.unexplained_complexity` | Complex code with no doc of what it should do leaves an agent only the code to infer intent from, so it cannot tell a bug from a requirement. | write the contract the code needs (write it by hand; do not generate it) | `characterize_first` | - |
-| `untrusted_hotspot` Untrusted hotspot | `current`, `test_pressure` | Complex, often-changed code whose tests let many mutants survive: an agent's change here is not held by the tests that look like they cover it. | make the tests check what the code does, as a caller sees it (not its internal state) | `characterize_first` | - |
-| `self_referential_tests` Self-referential tests | `current` | Tests kept and committed beside the code they cover can check internal consistency rather than truth, so an agent changing both together can make them agree on a wrong answer. | ask a person to review: the tests check that the code agrees with itself, not that it is right | `verify_then_retire` | - |
-| `unactioned_intent` Unactioned intent | `promissory` | A TODO or skip that survives many edits reads to an agent as a live plan or a settled exception, and it cannot tell which. | keep the promise: fix it, open a ticket for it, or delete the marker or skip | `verify_then_retire` | - |
-| `accretion_ratchet` Accretion ratchet | `accretion_ratchet` | A file that has only ever grown gets harder to read whole with each change, and each agent addition makes the next one harder. | make the file smaller: move code out, delete dead code, or split the file | `refactor_safe` | - |
 | `orphaned_understanding` Orphaned understanding | `understanding.orphaned_understanding` | Complex code with no human author and no doc of its intent has nobody to ask and nothing to check an agent's reading against. | name a person who owns this code before it changes again | `characterize_first` | - |
-| `candidate_dead_weight` Candidate dead weight | `dead_code` | Code nothing in the repository calls costs an agent reading time and can be maintained by mistake; it needs a person to confirm no outside caller uses it. | check that the code is used, and delete it if it is not | `verify_then_retire` | - |
 | `override_contradicts_signals` Archetype override contradicts the signals | `archetype` | The declared repository kind decides which checks apply; when the signals disagree, checks marked not applicable may hide gaps an agent would meet. | Review the archetype marker: the measured signals suggest a different kind of repository | `characterize_first` | - |
 | `refactor_boundary` Refactor boundary | `behaviour.refactor_boundaries` | A strength: edits here stay inside the directory, so an agent can change it without reading the rest of the repository. | safe to hand an agent in isolation | `refactor_safe` | deleted paths pruned; a strength, not a concern |
+| `self_referential_tests` Self-referential tests | `current` | Tests kept and committed beside the code they cover can check internal consistency rather than truth, so an agent changing both together can make them agree on a wrong answer. | ask a person to review: the tests check that the code agrees with itself, not that it is right | `verify_then_retire` | - |
+| `unactioned_intent` Unactioned intent | `promissory` | A TODO or skip that survives many edits reads to an agent as a live plan or a settled exception, and it cannot tell which. | keep the promise: fix it, open a ticket for it, or delete the marker or skip | `verify_then_retire` | - |
+| `unexplained_complexity` Unexplained complexity | `documentation.unexplained_complexity` | Complex code with no doc of what it should do leaves an agent only the code to infer intent from, so it cannot tell a bug from a requirement. | write the contract the code needs (write it by hand; do not generate it) | `characterize_first` | - |
+| `untrusted_hotspot` Untrusted hotspot | `current`, `test_pressure` | Complex, often-changed code whose tests let many mutants survive: an agent's change here is not held by the tests that look like they cover it. | make the tests check what the code does, as a caller sees it (not its internal state) | `characterize_first` | - |
 
 ## Every registered scan
 
-The scan registry in run order, including the private inputs other scans read.
+The scan registry sorted by name, including the private inputs other scans read.
 
 | Scan | What it is | Reads | Writes | Network |
 |---|---|---|---|---|
-| `run_scope` | Run scope | `repo_root`, `requested_scope` | private input | no |
-| `scope` | Scope root | `run_scope` | private input | no |
-| `assess_dir` | Artifact directory | `repo_root`, `run_scope` | private input | no |
-| `run_id` | Run id | - | private input | no |
-| `current` | Complexity stats (this run) | `assess_dir` | private input | no |
-| `prior` | Complexity stats (prior run) | `assess_dir` | private input | no |
-| `excluded_as_generated` | Generated-file paths | `current` | private input | no |
-| `diff` | Stats diff against the prior run | `prior`, `current`, `excluded_as_generated` | private input | no |
-| `instruction_grading` | Instruction-file grading | `repo_root` | private input | no |
-| `instruction_files` | Graded instruction files | `instruction_grading` | private input | no |
-| `rename_map` | Git rename map | `repo_root` | private input | no |
-| `first_flagged` | First-flagged hotspot dates | `assess_dir`, `rename_map` | private input | no |
-| `excludes` | Config excludes | `repo_root` | private input | no |
-| `history_window` | Git history window | `current` | private input | no |
-| `fleet_config` | Fleet settings sections | `repo_root` | private input | no |
-| `ghsync_root` | ghsync root for GitLab includes | `repo_root` | private input | no |
-| `measured_commit` | Measured commit | `repo_root` | private input | no |
-| `superseded` | Superseded run | `assess_dir`, `run_date`, `measured_commit` | private input | no |
-| `unfinalized` | Unfinalized exclusions | `assess_dir`, `superseded`, `first_flagged`, `current`, `diff`, `excludes` | private input | no |
-| `promissory` | Promissory marker scan | `repo_root`, `excludes`, `scope` | private input | no |
-| `accretion_scan` | Accretion scan | `repo_root` | private input | no |
 | `accretion_by_file` | Accretion by file | `accretion_scan` | private input | no |
-| `hot_test_index` | Repository test index | `repo_root`, `current` | private input | no |
-| `run_header` | Run header | `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized` | `run_id`, `artifact_schema_version`, `assess_method_version`, `run_date`, `scope`, `scope_slug`, `measured_commit`, `prior_stats_exists`, `stats_summary`, `instruction_files`, `instructions_grade`, `diff`, `diff_reliable`, `diff_version_note`, `diff_trend_reset`, `prior_plugin_version`, `schema_version`, `prior_schema_version`, `tool_versions`, `prior_tool_versions`, `diff_detail`, `pruned_hotspots`, `retired_excluded_hotspots`, `dropped_first_flagged`, `provisional_first_flagged`, `log_integrity`, `prior_findings_snapshot`, `prior_level` | no |
-| `scan_plan_stamp` | Scan plan | `plan` | `scan_plan` | no |
-| `working_notes` | Working notes | `repo_root` | private input | no |
-| `doc_graph` | Doc graph | `repo_root`, `excludes`, `scope`, `working_notes` | `doc_graph` | no |
-| `doc_staleness` | Doc staleness | `repo_root`, `doc_graph`, `excludes`, `scope` | `doc_staleness` | no |
-| `stale_hubs` | Stale doc hubs | `doc_graph`, `doc_staleness` | `stale_hubs` | no |
-| `churn_degenerate` | Degenerate churn history | `doc_staleness` | `churn_degenerate` | no |
-| `doc_join` | Doc and complexity join | `current`, `doc_staleness`, `repo_root` | private input | no |
-| `untracked_instruction_files` | Untracked instruction files | `instruction_grading` | `untracked_instruction_files` | no |
-| `broken_instruction_refs` | Broken instruction references | `doc_graph`, `instruction_grading` | `broken_instruction_refs` | no |
-| `sensitive_instruction_content` | Sensitive instruction content | `instruction_grading` | `sensitive_instruction_content` | no |
-| `archetype` | Repository archetype | `repo_root` | `archetype` | no |
-| `ancestor_instruction_files` | Ancestor instruction files | `repo_root` | `ancestor_instruction_files` | no |
-| `skills` | Skills factoring | `instruction_grading` | `skills_present`, `skills_count`, `skill_files` | no |
-| `instruction_file_size` | Instruction file size | `instruction_files` | `instruction_file_size` | no |
-| `liveness` | Liveness scan | `repo_root`, `excludes`, `scope` | private input | no |
-| `liveness_blocks` | Liveness blocks | `liveness` | `dead_code`, `observability`, `capability_offers`, `language_capabilities` | no |
-| `structure_scan` | Import graph scan | `repo_root`, `excludes`, `scope` | private input | no |
-| `coverage_data` | Coverage report data | `repo_root` | private input | no |
-| `coverage_report` | Coverage report | `repo_root`, `coverage_data` | `coverage_report` | no |
-| `test_pressure_scan` | Test pressure scan | `repo_root`, `current`, `coverage_data` | private input | no |
-| `test_pressure` | Test pressure | `test_pressure_scan` | `test_pressure` | no |
-| `mutation_not_run_cap` | Mutation-not-run cap | `test_pressure` | `mutation_not_run_cap` | no |
-| `test_focus` | Test focus | `repo_root`, `current`, `coverage_data`, `test_pressure`, `hot_test_index` | `test_focus` | no |
-| `promissory_markers` | Promissory markers | `promissory` | `promissory_markers` | no |
-| `agent_ops` | Agent-operations guardrails | `repo_root`, `managed_settings` | `agent_ops` | no |
-| `config_drift` | Configuration drift | `repo_root` | `config_drift` | yes |
-| `merged_sample` | Merged-change sample | `repo_root`, `history_window`, `run_date` | private input | yes |
-| `gitlab_note_facts` | GitLab merge request notes | `merged_sample`, `fleet_config` | private input | yes |
-| `review_reality` | Review on merged changes | `merged_sample`, `gitlab_note_facts` | `review_reality` | yes |
-| `delivery` | Delivery figures | `merged_sample`, `review_reality`, `fleet_config`, `gitlab_note_facts` | `delivery` | yes |
-| `gate_cost_estimate` | Gate cost estimate | `repo_root` | `gate_cost_estimate` | yes |
-| `coverage_gate` | Coverage gate | `repo_root`, `scope`, `excludes` | `coverage_gate` | no |
 | `accretion_ratchet` | Accretion ratchet | `accretion_scan`, `current` | `accretion_ratchet` | no |
+| `accretion_scan` | Accretion scan | `repo_root` | private input | no |
+| `agent_building` | Agent building | `repo_root` | `agent_building` | no |
+| `agent_consistency` | Cross-agent instruction consistency | `repo_root`, `excludes` | `agent_consistency` | no |
+| `agent_environment` | Agent working environment | `repo_root`, `instruction_files`, `agent_harness`, `excludes` | `agent_environment` | yes |
+| `agent_harness` | Committed agent harness | `repo_root`, `scope`, `excludes` | `agent_harness` | no |
+| `agent_ops` | Agent-operations guardrails | `repo_root`, `managed_settings` | `agent_ops` | no |
+| `agent_outcome` | Agent commit outcomes | `repo_root`, `scope`, `history_window`, `fleet_config` | `agent_outcome` | no |
+| `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |
+| `ancestor_instruction_files` | Ancestor instruction files | `repo_root` | `ancestor_instruction_files` | no |
+| `anomalies` | Anomalies | `run_header` | `anomalies` | no |
+| `archetype` | Repository archetype | `repo_root` | `archetype` | no |
+| `assess_dir` | Artifact directory | `repo_root`, `run_scope` | private input | no |
+| `broken_instruction_refs` | Broken instruction references | `doc_graph`, `instruction_grading` | `broken_instruction_refs` | no |
+| `churn_degenerate` | Degenerate churn history | `doc_staleness` | `churn_degenerate` | no |
+| `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci` | `ci_checks` | no |
+| `ci_model_jobs` | Model-backed CI jobs | `repo_root`, `ghsync_root` | `ci_model_jobs` | no |
+| `claude_config` | Claude Code configuration | `repo_root`, `scope`, `excludes` | `claude_config` | no |
+| `config_drift` | Configuration drift | `repo_root` | `config_drift` | yes |
+| `contributor_files` | Contributor files | `repo_root`, `archetype`, `org_security_policy` | `contributor_files` | no |
+| `coverage_data` | Coverage report data | `repo_root` | private input | no |
+| `coverage_gate` | Coverage gate | `repo_root`, `scope`, `excludes` | `coverage_gate` | no |
+| `coverage_report` | Coverage report | `repo_root`, `coverage_data` | `coverage_report` | no |
+| `current` | Complexity stats (this run) | `assess_dir` | private input | no |
+| `decline` | Declined optional tools | `assess_dir`, `plugin_version` | `decline_markers`, `reoffer_mutation`, `decline_disclosures` | no |
+| `delivery` | Delivery figures | `merged_sample`, `review_reality`, `fleet_config`, `gitlab_note_facts` | `delivery` | yes |
+| `diff` | Stats diff against the prior run | `prior`, `current`, `excluded_as_generated` | private input | no |
+| `doc_claims` | Doc claims | `repo_root`, `instruction_files`, `scope`, `excludes` | `doc_claims` | no |
+| `doc_graph` | Doc graph | `repo_root`, `excludes`, `scope`, `working_notes` | `doc_graph` | no |
+| `doc_join` | Doc and complexity join | `current`, `doc_staleness`, `repo_root` | private input | no |
+| `doc_staleness` | Doc staleness | `repo_root`, `doc_graph`, `excludes`, `scope` | `doc_staleness` | no |
+| `excluded_as_generated` | Generated-file paths | `current` | private input | no |
+| `excluded_generated` | Excluded generated files | `current` | `excluded_generated` | no |
+| `excludes` | Config excludes | `repo_root` | private input | no |
+| `exclusion_disclosures` | Exclusion disclosures | `keyhole`, `excludes` | `excluded_by_config`, `excluded_as_archive`, `pruned_finding_paths` | no |
+| `external_ci` | External CI on merged pull requests | `merged_sample` | private input | yes |
+| `first_flagged` | First-flagged hotspot dates | `assess_dir`, `rename_map` | private input | no |
+| `fleet_config` | Fleet settings sections | `repo_root` | private input | no |
+| `gap_actions` | Gap actions | `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`, `instruction_placement` | `gap_actions` | no |
+| `gate_cost_estimate` | Gate cost estimate | `repo_root` | `gate_cost_estimate` | yes |
+| `ghsync_root` | ghsync root for GitLab includes | `repo_root` | private input | no |
+| `github_secret_scanning` | GitHub secret scanning | `repo_root` | `github_secret_scanning` | yes |
+| `gitlab_merged_ci` | GitLab merged CI configuration | `repo_root`, `ghsync_root` | private input | yes |
+| `gitlab_note_facts` | GitLab merge request notes | `merged_sample`, `fleet_config` | private input | yes |
+| `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope` | `guardrails` | no |
+| `headline` | Deterministic headline | `level`, `since_last_run`, `maturity_model`, `unit_rollup`, `measured_commit`, `assess_dir` | `headline` | no |
+| `history_window` | Git history window | `current` | private input | no |
+| `hot_test_index` | Repository test index | `repo_root`, `current` | private input | no |
+| `instruction_claims` | Instruction claims | `repo_root`, `instruction_files` | `instruction_claims` | no |
+| `instruction_file_size` | Instruction file size | `instruction_files` | `instruction_file_size` | no |
+| `instruction_files` | Graded instruction files | `instruction_grading` | private input | no |
+| `instruction_grading` | Instruction-file grading | `repo_root` | private input | no |
+| `instruction_placement` | Instruction placement | `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes` | `instruction_placement` | no |
 | `keyhole` | Keyhole integration | `repo_root`, `current`, `doc_staleness`, `liveness_blocks`, `structure_scan`, `test_pressure`, `promissory`, `accretion_ratchet`, `archetype`, `excludes`, `scope`, `rename_map`, `doc_join` | private input | no |
 | `keyhole_blocks` | Keyhole blocks | `keyhole`, `run_scope` | `structure`, `behaviour`, `documentation`, `understanding`, `runtime`, `derived_findings`, `attention`, `attention_low_signal`, `findings_markdown`, `keyhole_summary`, `prescribed_actions` | no |
-| `exclusion_disclosures` | Exclusion disclosures | `keyhole`, `excludes` | `excluded_by_config`, `excluded_as_archive`, `pruned_finding_paths` | no |
-| `excluded_generated` | Excluded generated files | `current` | `excluded_generated` | no |
-| `structure_drift_block` | Structure drift | `repo_root`, `keyhole` | `structure_drift` | no |
-| `plugin_version` | Plugin version | - | `plugin_version` | no |
-| `decline` | Declined optional tools | `assess_dir`, `plugin_version` | `decline_markers`, `reoffer_mutation`, `decline_disclosures` | no |
-| `owner_exclusions` | Owner exclusions | `repo_root` | `owner_exclusions` | no |
-| `units` | Monorepo units | `repo_root`, `excludes` | `units` | no |
-| `offers_block` | End-of-run offers | `non_interactive` | `interactive`, `offers` | no |
-| `uninstall_instructions_path` | Uninstall instructions path | - | `uninstall_instructions_path` | no |
-| `anomalies` | Anomalies | `run_header` | `anomalies` | no |
-| `instruction_claims` | Instruction claims | `repo_root`, `instruction_files` | `instruction_claims` | no |
-| `claude_config` | Claude Code configuration | `repo_root`, `scope`, `excludes` | `claude_config` | no |
+| `layer_grades` | Deterministic layer grades | `instruction_grading`, `nested_instructions` | `layer_grades` | no |
+| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions`, `maturity_model`, `pack` | `level` | no |
+| `liveness` | Liveness scan | `repo_root`, `excludes`, `scope` | private input | no |
+| `liveness_blocks` | Liveness blocks | `liveness` | `dead_code`, `observability`, `capability_offers`, `language_capabilities` | no |
+| `measured_commit` | Measured commit | `repo_root` | private input | no |
+| `merged_sample` | Merged-change sample | `repo_root`, `history_window`, `run_date` | private input | yes |
+| `mutation_not_run_cap` | Mutation-not-run cap | `test_pressure` | `mutation_not_run_cap` | no |
 | `nested_instructions` | Nested instruction files | `repo_root`, `excludes` | `nested_instructions` | no |
-| `agent_harness` | Committed agent harness | `repo_root`, `scope`, `excludes` | `agent_harness` | no |
-| `agent_environment` | Agent working environment | `repo_root`, `instruction_files`, `agent_harness`, `excludes` | `agent_environment` | yes |
-| `shared_tooling` | Shared tooling | `repo_root` | `shared_tooling` | no |
-| `gitlab_merged_ci` | GitLab merged CI configuration | `repo_root`, `ghsync_root` | private input | yes |
+| `offers_block` | End-of-run offers | `non_interactive` | `interactive`, `offers` | no |
+| `org_security_policy` | Owner's shared security policy | `repo_root` | `org_security_policy` | yes |
+| `owner_exclusions` | Owner exclusions | `repo_root` | `owner_exclusions` | no |
+| `pack_checks` | Practice pack checks | `repo_root`, `excludes`, `packs` | `pack`, `packs` | no |
+| `plugin_version` | Plugin version | - | `plugin_version` | no |
+| `prior` | Complexity stats (prior run) | `assess_dir` | private input | no |
+| `promissory` | Promissory marker scan | `repo_root`, `excludes`, `scope` | private input | no |
+| `promissory_markers` | Promissory markers | `promissory` | `promissory_markers` | no |
+| `rename_map` | Git rename map | `repo_root` | private input | no |
 | `review_automation` | AI review committed in CI | `repo_root`, `fleet_config`, `ghsync_root`, `gitlab_merged_ci` | `review_automation` | no |
 | `review_evidence` | Review evidence | `review_automation`, `review_reality` | `review_evidence` | no |
-| `external_ci` | External CI on merged pull requests | `merged_sample` | private input | yes |
-| `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci` | `ci_checks` | no |
-| `agent_building` | Agent building | `repo_root` | `agent_building` | no |
-| `layer_grades` | Deterministic layer grades | `instruction_grading`, `nested_instructions` | `layer_grades` | no |
-| `instruction_placement` | Instruction placement | `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes` | `instruction_placement` | no |
-| `skill_disclosure` | Skill disclosure | `repo_root`, `scope`, `excludes` | `skill_disclosure` | no |
-| `skill_script_tests` | Skill script tests | `repo_root`, `scope`, `excludes` | `skill_script_tests` | no |
-| `skill_personal_data` | Personal data in skill text | `repo_root`, `scope`, `excludes` | `skill_personal_data` | no |
-| `ci_model_jobs` | Model-backed CI jobs | `repo_root`, `ghsync_root` | `ci_model_jobs` | no |
-| `org_security_policy` | Owner's shared security policy | `repo_root` | `org_security_policy` | yes |
-| `github_secret_scanning` | GitHub secret scanning | `repo_root` | `github_secret_scanning` | yes |
-| `contributor_files` | Contributor files | `repo_root`, `archetype`, `org_security_policy` | `contributor_files` | no |
+| `review_reality` | Review on merged changes | `merged_sample`, `gitlab_note_facts` | `review_reality` | yes |
+| `run_header` | Run header | `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized` | `run_id`, `artifact_schema_version`, `assess_method_version`, `run_date`, `scope`, `scope_slug`, `measured_commit`, `prior_stats_exists`, `stats_summary`, `instruction_files`, `instructions_grade`, `diff`, `diff_reliable`, `diff_version_note`, `diff_trend_reset`, `prior_plugin_version`, `schema_version`, `prior_schema_version`, `tool_versions`, `prior_tool_versions`, `diff_detail`, `pruned_hotspots`, `retired_excluded_hotspots`, `dropped_first_flagged`, `provisional_first_flagged`, `log_integrity`, `prior_findings_snapshot`, `prior_level` | no |
+| `run_id` | Run id | - | private input | no |
+| `run_scope` | Run scope | `repo_root`, `requested_scope` | private input | no |
+| `scan_plan_stamp` | Scan plan | `plan` | `scan_plan` | no |
+| `scope` | Scope root | `run_scope` | private input | no |
 | `secrets_guard` | Secrets guard | `repo_root`, `scope`, `ghsync_root`, `github_secret_scanning` | `secrets_guard` | no |
-| `gap_actions` | Gap actions | `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`, `instruction_placement` | `gap_actions` | no |
-| `agent_consistency` | Cross-agent instruction consistency | `repo_root`, `excludes` | `agent_consistency` | no |
-| `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |
-| `agent_outcome` | Agent commit outcomes | `repo_root`, `scope`, `history_window`, `fleet_config` | `agent_outcome` | no |
-| `doc_claims` | Doc claims | `repo_root`, `instruction_files`, `scope`, `excludes` | `doc_claims` | no |
-| `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope` | `guardrails` | no |
-| `pack_checks` | Practice pack checks | `repo_root`, `excludes`, `packs` | `pack`, `packs` | no |
-| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions`, `maturity_model`, `pack` | `level` | no |
+| `sensitive_instruction_content` | Sensitive instruction content | `instruction_grading` | `sensitive_instruction_content` | no |
+| `shared_tooling` | Shared tooling | `repo_root` | `shared_tooling` | no |
 | `since_last_run` | Since last run | `level`, `assess_dir`, `repo_root`, `superseded`, `instruction_placement` | `since_last_run` | no |
-| `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
+| `skill_disclosure` | Skill disclosure | `repo_root`, `scope`, `excludes` | `skill_disclosure` | no |
+| `skill_personal_data` | Personal data in skill text | `repo_root`, `scope`, `excludes` | `skill_personal_data` | no |
+| `skill_script_tests` | Skill script tests | `repo_root`, `scope`, `excludes` | `skill_script_tests` | no |
+| `skills` | Skills factoring | `instruction_grading` | `skills_present`, `skills_count`, `skill_files` | no |
+| `stale_hubs` | Stale doc hubs | `doc_graph`, `doc_staleness` | `stale_hubs` | no |
+| `structure_drift_block` | Structure drift | `repo_root`, `keyhole` | `structure_drift` | no |
+| `structure_scan` | Import graph scan | `repo_root`, `excludes`, `scope` | private input | no |
+| `superseded` | Superseded run | `assess_dir`, `run_date`, `measured_commit` | private input | no |
+| `test_focus` | Test focus | `repo_root`, `current`, `coverage_data`, `test_pressure`, `hot_test_index` | `test_focus` | no |
+| `test_pressure` | Test pressure | `test_pressure_scan` | `test_pressure` | no |
+| `test_pressure_scan` | Test pressure scan | `repo_root`, `current`, `coverage_data` | private input | no |
+| `unfinalized` | Unfinalized exclusions | `assess_dir`, `superseded`, `first_flagged`, `current`, `diff`, `excludes` | private input | no |
+| `uninstall_instructions_path` | Uninstall instructions path | - | `uninstall_instructions_path` | no |
 | `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `ci_model_jobs`, `contributor_files`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `secrets_guard`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
+| `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `skill_disclosure`, `skill_personal_data`, `skill_script_tests`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
 | `unit_rollup` | Monorepo unit roll-up | `unit_levels`, `units`, `maturity_model` | `unit_rollup` | no |
-| `headline` | Deterministic headline | `level`, `since_last_run`, `maturity_model`, `unit_rollup`, `measured_commit`, `assess_dir` | `headline` | no |
+| `units` | Monorepo units | `repo_root`, `excludes` | `units` | no |
+| `untracked_instruction_files` | Untracked instruction files | `instruction_grading` | `untracked_instruction_files` | no |
+| `working_notes` | Working notes | `repo_root` | private input | no |
