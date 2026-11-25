@@ -33,6 +33,13 @@ number (``tests/test_fleet_page.py`` checks it); a caller's own model is shown a
 is copied as ``packs``, each pack's name and version and each practice's title, level and
 counts; no condition id. Absent without a pack.
 
+**Practice shape** (#1368, part 3 of #1314): each unit's ``levels`` roll-up is copied as
+``practice``, one ``{row, met, measured}`` per team row (``row`` an index into ``rows``): the
+repositories at the row's top level out of those with a known level, never a mean. ``radar``
+names the rows the page draws a spoke for: those measured (a known level) in at least
+``min_share`` percent (``RADAR_MIN_SHARE``, 20) of the fleet's repositories, the axis rule of
+``radar.svg`` (#1367). ``radar_axes`` picks them, the one count the bundle works out itself.
+
 **Front screen** (#1255, ``lib/fleet/fleet_front.py``): copied as computed, counts and gate ids
 only; its team links are replaced by the ownership view's team units under the labels above, so
 a counts-only page shows ``team N``.
@@ -51,6 +58,7 @@ from lib.scoring.levels import MaturityModel
 from lib.scoring.levels_fields import TRUTH_TAG_TITLES
 
 PAGE_VERSION = 1
+RADAR_MIN_SHARE = 20  # percent of the fleet's repositories a row needs measured to be a spoke (#1314)
 FULL, HASHED, COUNTS_ONLY = "full", "hashed", "counts_only"
 
 
@@ -59,6 +67,11 @@ class Picture(TypedDict):
     title: str
     question: str
     src: str  # a data: URI
+
+
+class Radar(TypedDict):
+    min_share: int  # percent of the fleet's repositories measured for a row to be a spoke
+    axes: list[int]  # indexes into ``rows``, in model order
 
 
 class _PackKeys(TypedDict, total=False):
@@ -82,6 +95,19 @@ class PageBundle(_PackKeys):
     targets: list[dict[str, Any]]
     pictures: list[Picture]
     front: dict[str, Any] | None  # the front screen (fleet_front.FrontScreen), team links by label
+    radar: Radar  # the Practice shape spokes (#1368)
+
+
+def radar_axes(data: Mapping[str, Any], rows: Mapping[str, int], min_share: int = RADAR_MIN_SHARE) -> list[int]:
+    """The team rows measured (a known level) in at least ``min_share`` percent of the fleet's
+    repositories, as indexes into the page's ``rows``. A fleet with no repository has none."""
+    repos = data.get("repos") or []
+    known = {i: 0 for i in rows.values()}
+    for repo in repos:
+        for cell in repo.get("rows") or []:
+            if cell["row"] in rows and cell["status"] == "level":
+                known[rows[cell["row"]]] += 1
+    return [i for i in sorted(known) if repos and known[i] * 100 >= min_share * len(repos)]
 
 
 def _front(front: Mapping[str, Any] | None, data: Mapping[str, Any], label: Mapping[str, str]) -> dict[str, Any] | None:
@@ -126,7 +152,7 @@ def _condition_text(cid: str, titles: Mapping[str, str]) -> str:
     return f"{titles.get(row, 'a condition')}, level {level}" if level.isdigit() else titles.get(cid, "a condition")
 
 
-def _unit(unit: Mapping[str, Any], label: Mapping[str, str]) -> dict[str, Any]:
+def _unit(unit: Mapping[str, Any], label: Mapping[str, str], rows: Mapping[str, int]) -> dict[str, Any]:
     step = unit.get("step") or {}
     nxt = step.get("next_step")
     tags = unit.get("tags") or {}
@@ -140,6 +166,8 @@ def _unit(unit: Mapping[str, Any], label: Mapping[str, str]) -> dict[str, Any]:
             "gates": [{k: g[k] for k in ("gate", "held", "not_measured", "excluded")} for g in nxt["gates"]]},
         "tags": [{k: c[k] for k in ("tag", "met", "measured", "not_measured")} for c in tags.get("cells") or []],
         "tags_measured": tags.get("measured"),
+        "practice": [{"row": rows[lv["row"]], "met": lv["met"], "measured": lv["measured"]}
+                     for lv in unit.get("levels") or [] if lv["row"] in rows],
     }
 
 
@@ -206,7 +234,7 @@ def page_bundle(data: Mapping[str, Any], achievements: Mapping[str, Any] | None,
         "steps": [{"step": s["step"], "name": s["name"], "gates": [g["id"] for g in s["gates"]]}
                   for s in sorted(model.get("steps", []), key=lambda s: s["step"])],
         "tags": [{"tag": tag, "title": title} for tag, title in TRUTH_TAG_TITLES.items()],
-        "views": [{"view": v["view"], "units": [_unit(u, label) for u in v["units"]]} for v in data.get("views") or []],
+        "views": [{"view": v["view"], "units": [_unit(u, label, rows) for u in v["units"]]} for v in data.get("views") or []],
         "repos": [_repo(r, label, rows, titles, mode) for r in data.get("repos") or []],
         "achievements": [_achievement(a, label, titles, tops) for a in ach.get("achievements") or []
                          if a.get("run") == ach.get("run") and a["unit"] in label],
@@ -224,6 +252,7 @@ def page_bundle(data: Mapping[str, Any], achievements: Mapping[str, Any] | None,
                     if t["unit"] in label],
         "pictures": list(pictures),
         "front": _front(front, data, label),
+        "radar": {"min_share": RADAR_MIN_SHARE, "axes": radar_axes(data, rows)},
     }
     if data.get("packs"):  # each pack's practices fleet-wide: names, titles and counts only
         bundle["packs"] = [{"name": p["name"], "version": p["version"], "repos": p["repos"],

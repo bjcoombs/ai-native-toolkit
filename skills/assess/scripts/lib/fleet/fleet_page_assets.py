@@ -20,8 +20,10 @@ words what it finds. Its parts:
   front screen, #1255, from the bundle's ``front``: Step counts, moves, one change away, gates
   ranked by the repositories each would move, team units by name, each a button that opens it in
   the ownership view), then Practice packs (a ``--pack`` run's per-pack counts, #1276), then
-  Since last run, Where this unit stands, Your target, Drill-down,
-  Fleet pictures (the #705 design order).
+  Since last run, Where this unit stands, Your target, Drill-down, Practice shape (#1368: one
+  radar per unit in the shown unit's subtree, by label and never overlaid, each spoke a practice
+  in ``radar.axes`` at met/measured, an unmeasured spoke a break in the outline with no point,
+  then the same counts as a table), Fleet pictures (the #705 design order).
 - **Pinned unit.** A per-viewer ``localStorage`` key, read and written inside try/catch; the
   page opens on the ownership root without it.
 - **Order.** Units and repositories are listed by label, never by rank.
@@ -51,6 +53,11 @@ th,td{border:1px solid var(--rule);padding:4px 6px;text-align:center}th.repo{tex
 td.l0{background:var(--l0);color:var(--lt)}td.l1{background:var(--l1);color:var(--lt)}
 td.l2{background:var(--l2);color:var(--lt)}td.l3{background:var(--l3);color:var(--ltd)}
 td.unknown{background:repeating-linear-gradient(45deg,var(--bg) 0 4px,var(--unk) 4px 6px);color:var(--fg);font-style:italic}
+.radars{display:flex;flex-wrap:wrap;gap:12px}.radars figure{margin:8px 0;flex:0 1 300px;max-width:100%}
+svg.radar{width:100%;height:auto;display:block;font-size:10px;fill:var(--fg)}
+svg.radar .ring{fill:none;stroke:var(--rule)}svg.radar .spoke{stroke:var(--rule)}svg.radar .gap{stroke-dasharray:3 3;fill:var(--muted)}
+svg.radar .outline{fill:none;stroke:var(--accent);stroke-width:2}svg.radar .point{fill:var(--accent)}
+table.radar-table caption{text-align:left;color:var(--muted);padding:4px 0}
 .pictures figure{margin:12px 0}.pictures img{max-width:100%;height:auto;display:block}
 @media (max-width:600px){main{padding:12px}h1{font-size:19px}}
 """
@@ -260,6 +267,77 @@ SCRIPT = r"""
     var picked = bundle.repos.filter(function (r) { return r.key === state.repo; })[0];
     return out + (picked ? repoDetail(bundle, picked) : "");
   }
+  function pt(cx, cy, r, i, n) {
+    var a = -Math.PI / 2 + 2 * Math.PI * i / n;
+    return [(cx + r * Math.cos(a)).toFixed(1), (cy + r * Math.sin(a)).toFixed(1)];
+  }
+  function share(p) { return p && p.measured ? p.met / p.measured : null; }
+  function radarSvg(bundle, u) {
+    // One unit's own chart, never overlaid with another's: a spoke per practice in bundle.radar.axes,
+    // its point at met/measured; a spoke with nothing measured has no point and breaks the outline.
+    var axes = bundle.radar.axes, n = axes.length, c = 150, R = 80, by = {};
+    (u.practice || []).forEach(function (p) { by[p.row] = p; });
+    var out = "<svg class=\"radar\" viewBox=\"0 0 300 240\" role=\"img\" aria-label=\""
+      + esc(u.key + ": practices met of measured") + "\" data-unit=\"" + esc(u.key) + "\">";
+    [25, 50, 75, 100].forEach(function (q) {
+      out += "<circle class=\"ring\" cx=\"" + c + "\" cy=\"120\" r=\"" + (R * q / 100) + "\"><title>" + q + "%</title></circle>";
+    });
+    var pts = axes.map(function (row, i) {
+      var p = by[row], end = pt(c, 120, R, i, n), lab = pt(c, 120, R + 14, i, n), f = share(p);
+      var anchor = Math.abs(Number(lab[0]) - c) < 1 ? "middle" : Number(lab[0]) > c ? "start" : "end";
+      out += "<line class=\"spoke" + (f === null ? " gap" : "") + "\" x1=\"" + c + "\" y1=\"120\" x2=\"" + end[0]
+        + "\" y2=\"" + end[1] + "\"></line><text x=\"" + lab[0] + "\" y=\"" + lab[1] + "\" text-anchor=\"" + anchor
+        + "\"" + (f === null ? " class=\"gap\"" : "") + ">" + esc(bundle.rows[row].title) + (f === null ? " (not measured)" : "")
+        + "</text>";
+      return f === null ? null : {xy: pt(c, 120, R * f, i, n), p: p, row: row};
+    });
+    var runs = [], cur = [], start = pts.indexOf(null);
+    if (start < 0) {
+      out += "<polygon class=\"outline\" points=\"" + pts.map(function (q) { return q.xy.join(","); }).join(" ") + "\"></polygon>";
+    } else {
+      for (var k = 1; k <= n; k += 1) {
+        var q = pts[(start + k) % n];
+        if (q) { cur.push(q); } else { runs.push(cur); cur = []; }
+      }
+      runs.forEach(function (r) {
+        if (r.length > 1) {
+          out += "<polyline class=\"outline\" points=\"" + r.map(function (q) { return q.xy.join(","); }).join(" ") + "\"></polyline>";
+        }
+      });
+    }
+    pts.forEach(function (q) {
+      if (!q) { return; }
+      out += "<circle class=\"point\" cx=\"" + q.xy[0] + "\" cy=\"" + q.xy[1] + "\" r=\"3.5\"><title>"
+        + esc(u.key + ", " + bundle.rows[q.row].title + ": " + q.p.met + "/" + q.p.measured
+          + " measured repositories at the top level") + "</title></circle>";
+    });
+    return out + "</svg>";
+  }
+  function shape(bundle, state) {
+    if (!bundle.radar) { return ""; }
+    var mine = subtree(bundle, state.view, state.unit).map(function (k) { return unitOf(bundle, state.view, k); }).sort(byKey);
+    var axes = bundle.radar.axes;
+    var out = "<h2>Practice shape</h2><p class=\"muted\">One chart for each unit, by name. A spoke is a practice "
+      + "measured in at least " + esc(bundle.radar.min_share) + "% of the fleet's repositories; its point is the unit's "
+      + "repositories at the top level out of those measured, with rings at 25, 50, 75 and 100%. A practice with "
+      + "nothing measured in the unit breaks the outline and has no point, never 0.</p>";
+    if (!axes.length) {
+      return out + "<p>No practice is measured in enough of the fleet's repositories to draw.</p>";
+    }
+    out += "<div class=\"radars\">" + mine.map(function (u) {
+      return "<figure><figcaption><strong>" + esc(u.key) + "</strong> <span class=\"muted\">" + esc(u.kind) + "</span>"
+        + "</figcaption>" + radarSvg(bundle, u) + "</figure>";
+    }).join("") + "</div>";
+    return out + "<div class=\"grid\"><table class=\"radar-table\"><caption>The same counts as a table: met/measured"
+      + "</caption><thead><tr><th class=\"repo\">Practice</th>" + mine.map(function (u) {
+        return "<th>" + esc(u.key) + "</th>";
+      }).join("") + "</tr></thead><tbody>" + axes.map(function (row) {
+        return "<tr><th class=\"repo\">" + esc(bundle.rows[row].title) + "</th>" + mine.map(function (u) {
+          var p = (u.practice || []).filter(function (x) { return x.row === row; })[0];
+          return share(p) === null ? "<td class=\"unknown\">not measured</td>" : "<td>" + esc(p.met + "/" + p.measured) + "</td>";
+        }).join("") + "</tr>";
+      }).join("") + "</tbody></table></div>";
+  }
   function pictures(bundle) {
     if (!bundle.pictures.length) { return ""; }
     return "<h2>Fleet pictures</h2><div class=\"pictures\">" + bundle.pictures.map(function (p) {
@@ -326,6 +404,7 @@ SCRIPT = r"""
     function (b, s, t, c, x) { return stands(b, s, x); },
     function (b, s, t, c) { return target(b, s, t, c); },
     function (b, s) { return drill(b, s); },
+    function (b, s) { return shape(b, s); },
     function (b) { return pictures(b); }
   ];
   function renderPage(bundle, state, targets, canSet, extra) {

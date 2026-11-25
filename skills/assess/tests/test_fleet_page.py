@@ -161,11 +161,11 @@ def test_sections_come_in_the_design_order_and_target_entry_is_static_hidden() -
     page = out["pages"][0]
     heads = re.findall(r"<h2>(.*?)</h2>", page)
     assert heads == ["Fleet at a glance", "Since last run", "Where this unit stands", "Your target", "Drill-down",
-                     "Fleet pictures"]
+                     "Practice shape", "Fleet pictures"]
     assert out["staticHasSet"] == "undefined" and "set-target" not in page
     assert "set-target" in out["withSet"]  # a live source with setTarget draws the entry for a unit with a target id
     assert "set-target" not in out["withSetNoId"]  # and none for a unit without one (#949)
-    assert out["sections"] == 7  # Practice packs (#1276) draws nothing without a pack
+    assert out["sections"] == 8  # Practice packs (#1276) draws nothing without a pack
 
 
 def test_the_root_page_shows_the_target_gates_the_credit_and_the_exclusion() -> None:
@@ -422,3 +422,103 @@ def test_a_pack_run_s_page_names_each_pack_with_its_counts() -> None:
     text = _text(page)
     assert "Pack team (version 1)" in text and "Decision records: 1 of 2 measured repositories meet it" in text
     assert "1 repository not measured" in text and "team-adrs" not in page
+
+
+# --- practice shape (#1368, part 3 of #1314) ---------------------------------------------
+
+
+def _shape(page: str) -> str:
+    start = page.index("<h2>Practice shape</h2>")
+    end = page.find("<h2>Fleet pictures</h2>")
+    return page[start:] if end < 0 else page[start:end]
+
+
+def _root_page(bundle: dict[str, Any]) -> str:
+    """The page on the ownership root of ``bundle``, drawn by the shipped script under Node."""
+    if NODE is None:
+        pytest.skip("node is not on PATH")
+    script, _ = _parts(fx.goldens()["expected-full.html"])
+    runner = (RUNNER.split("const out")[0] + "const r = b.views[0].units.filter(function (u) { return !u.parent; })[0];"
+              "process.stdout.write(api.renderPage(b, {view: \"ownership\", unit: r.key, repo: null}, b.targets, false));")
+    return subprocess.run([NODE, "-e", runner], input=json.dumps({"script": script, "bundle": bundle}),
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout
+
+
+@pytest.mark.parametrize("name", sorted(fx.VARIANTS))
+def test_the_practice_shape_panel_draws_one_radar_per_unit_and_the_table_fallback(name: str) -> None:
+    """The root page draws one chart per ownership unit, each its own ``<svg>`` holding one unit's
+    outline (never overlaid), units by label, then a table of met/measured, practice by unit."""
+    _, bundle = _parts(fx.goldens()[f"expected-{name}.html"])
+    shape = _shape(_root_page(bundle))
+    keys = sorted(u["key"] for u in bundle["views"][0]["units"])
+    charts = re.findall(r'<svg class="radar"[^>]*data-unit="([^"]+)">(.*?)</svg>', shape, re.S)
+    assert [k for k, _ in charts] == keys
+    for key, svg in charts:
+        assert len(re.findall(r"<polygon|<polyline", svg)) <= 1  # one unit's outline, never another's
+        assert set(re.findall(r"<title>([^,<]+), ", svg)) == {key}
+        assert [t for t in re.findall(r"<title>(\d+)%</title>", svg)] == ["25", "50", "75", "100"]
+    table = re.search(r'<table class="radar-table">(.*?)</table>', shape, re.S)
+    assert table is not None
+    assert re.findall(r"<th>([^<]+)</th>", table.group(1)) == keys
+    titles = [bundle["rows"][i]["title"] for i in bundle["radar"]["axes"]]
+    body = table.group(1).split("<tbody>")[1]
+    assert re.findall(r'<tr><th class="repo">([^<]+)</th>', body) == titles
+    root = next(u for u in bundle["views"][0]["units"] if u["parent"] is None)
+    assert f"<td>{root['practice'][0]['met']}/{root['practice'][0]['measured']}</td>" in table.group(1)
+    if name != "full":
+        for leak in fx.NAMES:
+            assert leak not in shape, leak
+
+
+def test_an_unmeasured_practice_breaks_the_outline_with_no_point_at_zero() -> None:
+    """``grp/other`` has no measured Instruction docs repository: its spoke is dashed and labelled
+    not measured, it has no point, no closed outline, and the table cell reads not measured."""
+    _, bundle = _parts(fx.goldens()["expected-full.html"])
+    shape = _shape(_root_page(bundle))
+    svg = re.search(r'data-unit="grp/other">(.*?)</svg>', shape, re.S)
+    assert svg is not None
+    assert "Instruction docs (not measured)" in svg.group(1) and 'class="spoke gap"' in svg.group(1)
+    assert "<polygon" not in svg.group(1)
+    assert re.findall(r"<title>(grp/other, [^<]+)</title>", svg.group(1)) == [
+        "grp/other, CI gate: 1/1 measured repositories at the top level"]
+    assert 'cx="150.0" cy="120.0"' not in shape  # no point is ever drawn at the centre
+    assert '<td class="unknown">not measured</td>' in shape
+    closed = re.search(r'data-unit="grp/sub">(.*?)</svg>', shape, re.S)
+    assert closed is not None and closed.group(1).count("<polygon") == 1
+
+
+def test_each_point_s_title_names_unit_practice_and_met_of_measured() -> None:
+    _, bundle = _parts(fx.goldens()["expected-full.html"])
+    shape = _shape(_root_page(bundle))
+    assert "<title>grp, Instruction docs: 1/2 measured repositories at the top level</title>" in shape
+    assert "<title>grp, CI gate: 2/3 measured repositories at the top level</title>" in shape
+
+
+def test_a_practice_measured_in_under_a_fifth_of_the_fleet_is_not_a_spoke() -> None:
+    from lib.fleet.fleet_page_data import RADAR_MIN_SHARE, page_bundle, radar_axes
+    data: dict[str, Any] = dict(fx.run(fx.DATES[-1], fx.VARIANTS["counts-only"]))
+    rows = {"docs": 0, "ci": 1}
+    assert RADAR_MIN_SHARE == 20
+    assert radar_axes(data, rows) == [0, 1]  # docs 2 of 4 measured, ci 3 of 4
+    assert radar_axes(data, rows, 60) == [1] and radar_axes(data, rows, 80) == []
+    assert radar_axes({"repos": []}, rows) == []
+    for repo in data["repos"]:  # leave docs measured in 1 of 4 repositories, then 0 of 4
+        for cell in repo["rows"]:
+            if cell["row"] == "docs" and repo["key"] != "grp/sub/proj1":
+                cell["status"], cell["level"] = "unknown", None
+    assert radar_axes(data, rows) == [0, 1]  # 25% still reaches the 20% floor
+    for cell in data["repos"][2]["rows"]:
+        cell["status"] = "unknown"
+    assert radar_axes(data, rows) == [1]
+    bundle = dict(page_bundle(data, None, fdf.model()))
+    assert bundle["radar"] == {"min_share": 20, "axes": [1]}
+    shape = _shape(_root_page(bundle))
+    assert "Instruction docs" not in shape and "CI gate" in shape
+
+
+def test_no_spoke_draws_no_chart_and_says_why() -> None:
+    _, bundle = _parts(fx.goldens()["expected-counts-only.html"])
+    bundle["radar"]["axes"] = []
+    shape = _shape(_root_page(bundle))
+    assert '<svg class="radar"' not in shape and "radar-table" not in shape
+    assert "No practice is measured in enough of the fleet's repositories to draw." in shape
