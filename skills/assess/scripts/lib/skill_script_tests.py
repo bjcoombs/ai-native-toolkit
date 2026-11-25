@@ -35,7 +35,9 @@ reads untested, and the report says where its tests are and to move or copy them
 ``script_tested_elsewhere(repo_root, rel_path)`` asks the same question of one script, with the same
 matcher, for the "does this file have a test file?" probe in ``lib.testing.sibling_tests`` (#1233):
 a script tested only from the top-level ``tests/`` then reads as having a test file in
-``test_focus`` and on the hotspot pages, as it does here.
+``test_focus`` and on the hotspot pages, as it does here. The probe applies no user excludes, like
+the rest of ``sibling_tests``, so the two agree when ``.assess`` sets none; with excludes set, a
+test under an excluded folder credits the script there but is not listed here.
 
 Block (``skill_script_tests`` in run-context.json)::
 

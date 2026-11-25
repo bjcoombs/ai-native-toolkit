@@ -409,7 +409,10 @@ def sibling_test_match(
     ``MATCH_IMPORT``: a test file in the index imports the source
     (:mod:`lib.testing.import_credit`). ``MATCH_FLAT``: only a bounded flat tree holds
     a builder name - weaker
-    evidence the caller disambiguates with :func:`shared_name_keys`. A source
+    evidence the caller disambiguates with :func:`shared_name_keys`.
+    ``MATCH_ELSEWHERE``: a skill's script that a test outside its skill folder
+    names (:func:`lib.skill_script_tests.script_tested_elsewhere`, #1233),
+    tried before the flat result is returned. A source
     not on disk (a stale stats entry for a deleted file) is never credited.
     Never raises."""
     try:
@@ -445,9 +448,10 @@ def has_sibling_test(
     index: TestIndex | None = None,
 ) -> bool | None:
     """Does this file have a test file? ``None`` when the file is not on disk
-    (honestly unknown), ``True`` for a direct, basename or import match or a
-    flat match on a name no other considered file shares, otherwise ``False``. Callers
-    probing several files pass one ``index`` from :func:`build_test_index`."""
+    (honestly unknown), ``True`` for a direct, basename, import or skill-elsewhere
+    match or a flat match on a name no other considered file shares, otherwise
+    ``False``. Callers probing several files pass one ``index`` from
+    :func:`build_test_index`."""
     try:
         if not (repo_root / rel_path).is_file():
             return None
