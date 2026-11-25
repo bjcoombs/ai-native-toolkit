@@ -1,7 +1,7 @@
 """One maturity-model criterion's check manifest ``why`` for the fleet outputs (#1128).
 
 ``criterion_why(row, level, signal)`` finds the criterion on ``signal`` in the row's
-``level`` and returns ``lib.level_tally.condition_why`` over that criterion alone: the
+``level`` and returns ``lib.scoring.level_tally.condition_why`` over that criterion alone: the
 same manifest text the level result's conditions carry, read from the same core manifest
 map (``manifest_whys.condition_whys``, built once per process here). ``None`` when the row
 has no such level or criterion, or the manifest has no entry for it (a caller's own model):
@@ -13,8 +13,8 @@ from __future__ import annotations
 import functools
 from collections.abc import Mapping
 
-from lib.level_tally import condition_why
-from lib.levels import Row
+from lib.scoring.level_tally import condition_why
+from lib.scoring.levels import Row
 
 
 @functools.cache

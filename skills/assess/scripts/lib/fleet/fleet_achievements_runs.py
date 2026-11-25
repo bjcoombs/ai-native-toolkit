@@ -65,7 +65,7 @@ from lib.fleet.fleet_method import RULE_KEYS
 from lib.fleet.fleet_rescore import rescore
 from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 from lib.fleet.fleet_view import FleetViewError, read_repos
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 
 _TOP_KEYS = ("run", "model", "views", "repos")
 # The fleet-data.json versions whose cells and units the engine reads alike: 1 (#703) carried

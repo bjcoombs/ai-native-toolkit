@@ -18,9 +18,9 @@ from assess_core import build_and_publish_run
 from assess_diagrams_fixture import FIXTURES, LEVEL, MODEL_ROWS, goldens
 from assess_report import render_report
 from lib import assess_diagrams as ad
-from lib.level_result_types import LevelResult
+from lib.scoring.level_result_types import LevelResult
 from lib.run_context_types_diagrams import AssessDiagram
-from lib.level_tally import run_context_level
+from lib.scoring.level_tally import run_context_level
 from lib.vocabulary import IN_PLACE, banned_hits
 from svg_cascade import overridden_text_attributes
 from test_decomposition_parity import _build_parity_fixture
@@ -288,7 +288,7 @@ def test_the_step_gate_squares_are_outlined_with_a_key_entry() -> None:
 
 def test_the_shipped_model_gates_are_outlined_in_the_report_waffle() -> None:
     from lib.assess_diagrams_ladder import gate_conditions
-    from lib.level_tally import default_model
+    from lib.scoring.level_tally import default_model
     steps = default_model()["steps"]
     assert gate_conditions(steps) == ["layer-0-instructions.1", "layer-5-ci.1", "layer-6-coverage.1"]
     waffle = _by_file(ad.build_diagrams({"level": LEVEL}, MODEL_ROWS))[ad.WAFFLE_FILE]["svg"] or ""

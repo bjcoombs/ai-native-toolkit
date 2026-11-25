@@ -1,4 +1,4 @@
-"""lib/level_signals.py: schema-backed signal paths and the shipped default maturity model."""
+"""lib/scoring/level_signals.py: schema-backed signal paths and the shipped default maturity model."""
 from __future__ import annotations
 
 import copy
@@ -17,8 +17,8 @@ from lib.ci.ci_checks import scan_ci_checks
 from lib.counts_only.content_free import counts_only_scans
 from lib.keyhole.promissory_markers import scan_promissory_markers
 from lib.graph.structure_graph import analyze_structure
-from lib.levels import Group, LevelsError, LevelsResult, dumps_result, evaluate, load_levels, resolve_signal
-from lib.level_signals import (
+from lib.scoring.levels import Group, LevelsError, LevelsResult, dumps_result, evaluate, load_levels, resolve_signal
+from lib.scoring.level_signals import (
     DEFAULT_LEVELS,
     ORG_PATHS,
     load_default_levels,
@@ -147,7 +147,7 @@ def test_scan_names_come_from_the_published_schema() -> None:
 
 def test_the_pack_block_is_published_but_never_a_scan_a_criterion_names() -> None:
     """#1276: the schema allows the --pack block, but only a run's own packs make a pack path valid."""
-    from lib.level_signals import SCHEMA_PATH, signal_path_validator
+    from lib.scoring.level_signals import SCHEMA_PATH, signal_path_validator
     enum = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))["properties"]["scans"]["propertyNames"]["enum"]
     assert "pack" in enum and "pack" not in scan_names()
     assert not signal_path_validator()("team", "pack.available")

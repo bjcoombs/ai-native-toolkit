@@ -84,7 +84,7 @@ from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_coverage import Coverage
 from lib.fleet.fleet_includes import NotClonedInclude, not_cloned_includes
 from lib.fleet.fleet_method import CollectorRevision, method_keys
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 from lib.packs import PackIdentity
 from lib.fleet_config import FleetConfig, FleetConfigEntries, config_sha256, section_entries
 

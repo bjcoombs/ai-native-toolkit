@@ -12,7 +12,7 @@ publishes = ["headline"]
 reads = ["level", "since_last_run", "maturity_model", "unit_rollup", "measured_commit", "assess_dir"]
 stage = "post_offers"
 shapes = [
-  { path = "headline", type = "lib.level_result_types:Headline" },
+  { path = "headline", type = "lib.scoring.level_result_types:Headline" },
 ]
 revision = 4
   [entries.privacy]

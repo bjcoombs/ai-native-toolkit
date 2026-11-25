@@ -15,8 +15,8 @@ from lib import scan_registry as reg
 from lib import signals
 from lib.counts_only.content_free import counts_only_scans, reason_code
 from lib.docs.doc_staleness import DocStalenessRow, _safe_rel, staleness_summary
-from lib.level_signals import load_default_levels
-from lib.levels import evaluate
+from lib.scoring.level_signals import load_default_levels
+from lib.scoring.levels import evaluate
 from lib.signals_schema import SCHEMA_PATH
 
 BLOCKS = ("observability", "doc_graph", "doc_staleness", "archetype")

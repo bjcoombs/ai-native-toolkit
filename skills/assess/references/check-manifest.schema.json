@@ -34,7 +34,7 @@
     },
     "tags": {
       "type": "object",
-      "description": "Truth tag (lib/levels_fields.py TRUTH_TAGS) -> its why, at manifest_version 2 (#939). In the root manifest, not a fragment.",
+      "description": "Truth tag (lib/scoring/levels_fields.py TRUTH_TAGS) -> its why, at manifest_version 2 (#939). In the root manifest, not a fragment.",
       "additionalProperties": {
         "type": "object",
         "required": [

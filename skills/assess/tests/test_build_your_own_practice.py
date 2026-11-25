@@ -29,8 +29,8 @@ import assess_core
 import levels_new
 from lib import core_scans
 from lib.packs import PackError, load_pack
-from lib.level_signals import signal_path_validator
-from lib.level_tally import LEVEL_READS
+from lib.scoring.level_signals import signal_path_validator
+from lib.scoring.level_tally import LEVEL_READS
 from lib.plain_english import lint
 from lib.profiles import ProfileError, single_repo_choice
 from lib.vocabulary import banned_hits

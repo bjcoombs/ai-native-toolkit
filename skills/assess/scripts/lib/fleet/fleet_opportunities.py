@@ -60,9 +60,9 @@ from lib.fleet.fleet_groups import repo_signals
 from lib.fleet.fleet_maturity import SCOPE
 from lib.fleet.fleet_step_lifts import StepLift, step_lifts
 from lib.fleet.fleet_why import criterion_why
-from lib.level_result_types import LevelResult
-from lib.levels import Criterion, MaturityModel, Row, evaluate_row
-from lib.next_step_guidance import guidance
+from lib.scoring.level_result_types import LevelResult
+from lib.scoring.levels import Criterion, MaturityModel, Row, evaluate_row
+from lib.scoring.next_step_guidance import guidance
 
 TITLE = "Opportunities"
 CI_PREFIX = "ci_checks."
@@ -171,7 +171,7 @@ def _biggest_lift(model: MaturityModel, team_rows: Sequence[Row], lifts: Mapping
     row_id, level, signal, index = best
     row = team_rows[order[row_id]]
     criterion = _criteria(row, level)[index]
-    # an eq_signal criterion's value is a second path, not an operand to set (lib/levels_fields.py)
+    # an eq_signal criterion's value is a second path, not an operand to set (lib/scoring/levels_fields.py)
     words = None if "eq_signal" in criterion else guidance(signal, criterion["op"], criterion["value"])
     gate, step = _gate(model, row_id, level)
     repos = lifts[best]

@@ -15,7 +15,7 @@ from lib.fleet.fleet_credit import credit_section
 from lib.fleet.fleet_data import Privacy
 from lib.fleet.fleet_targets import TargetSpec, TargetsError, check_units, parse_targets, resolve
 from lib.fleet.fleet_units import build_trees, empty_map
-from lib.levels import MaturityModel, parse_levels
+from lib.scoring.levels import MaturityModel, parse_levels
 from test_fleet_achievements import Spec, _data
 
 MODEL: MaturityModel = parse_levels(tomllib.loads(LEVELS))  # Step 2: docs gate; Step 3: docs and ci gates

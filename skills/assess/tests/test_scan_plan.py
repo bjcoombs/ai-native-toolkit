@@ -15,9 +15,9 @@ from typing import Any
 import pytest
 
 import lib.scan_registry as sr
-from lib.level_signals import signal_path_validator
-from lib.level_tally import default_model, model_blocks
-from lib.levels import load_levels
+from lib.scoring.level_signals import signal_path_validator
+from lib.scoring.level_tally import default_model, model_blocks
+from lib.scoring.levels import load_levels
 from lib.profiles import ModelChoice, profile_path, resolve, single_repo_choice
 from lib.scan_plan import (NOT_RUN_CODE, ScanPlan, ScanPlanError, fleet_scans, frame_keys, model_plan,
                            not_run_text, plan_scans, run_plan)

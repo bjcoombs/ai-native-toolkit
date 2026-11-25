@@ -51,7 +51,7 @@ What each line does:
 - `scope = "team"` reads each repository. An `"org"` row reads GitHub or GitLab group settings, and only `/fleet` has those.
 - `aggregation = "min"` tells `/fleet` how to join many repositories: the level that every repository reaches.
 - `level = 1` is the first level of the practice. A row can have levels 1, 2, 3 with no gap. A repository reaches a level when every criterion of that level, and of each level below it, holds.
-- `truth` names what the practice keeps true. Coverage keeps the tests honest, so the tag is `behaviour`. The tags are listed in `skills/assess/scripts/lib/levels_fields.py`.
+- `truth` names what the practice keeps true. Coverage keeps the tests honest, so the tag is `behaviour`. The tags are listed in `skills/assess/scripts/lib/scoring/levels_fields.py`.
 - `criteria` is a list of tests, and all of them must hold. Each test is `{ signal, op, value }`.
 
 This practice has two tests. The first test asks that CI enforces a coverage gate of at least 50 percent. The second asks that the highest threshold in the repository is at least 80. Read together, CI enforces a gate, and some gate is set at 80 or more.

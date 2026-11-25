@@ -359,7 +359,7 @@ def test_a_spread_key_is_readable_from_its_stage_on():
 
 
 def test_the_level_entry_reads_the_default_models_blocks():
-    from lib.level_tally import DEFAULT_BLOCKS, EXCLUSIONS_BLOCK, default_model, model_blocks
+    from lib.scoring.level_tally import DEFAULT_BLOCKS, EXCLUSIONS_BLOCK, default_model, model_blocks
 
     spec = next(s for s in reg.SCANS if s.key == "level")
     assert spec.reads == (*DEFAULT_BLOCKS, EXCLUSIONS_BLOCK, "maturity_model", "pack")

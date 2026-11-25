@@ -4,7 +4,7 @@
 ``scripts/gen_catalog.py`` from the check manifest, the default maturity model and the
 signal input classes. ``test_committed_catalog_is_current`` is the staleness test: it
 fails when either committed copy differs from what the generator writes, so a change to
-``checks/core.toml``, ``levels/default.toml`` or ``lib/level_signals.py`` without
+``checks/core.toml``, ``levels/default.toml`` or ``lib/scoring/level_signals.py`` without
 ``make catalog`` fails here.
 """
 from __future__ import annotations
@@ -22,9 +22,9 @@ import lib.manifest.check_manifest as cm
 from lib.catalog import (CATALOG_VERSION, GRADE_ORDER, UNCLASSIFIED, build_catalog, counts, criterion_text,
                          grade_of, render_json, stable_model)
 from lib.catalog_md import CONDITION_COLUMNS, render_markdown
-from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
+from lib.scoring.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
 from lib.keyhole.keyhole_signals import FINDING_ORDER
-from lib.level_signals import SIGNAL_INPUTS, counts_toward_level, load_default_levels
+from lib.scoring.level_signals import SIGNAL_INPUTS, counts_toward_level, load_default_levels
 from lib.scan_registry import SCANS
 from lib.signals import known_scans
 

@@ -37,7 +37,7 @@ come from the fixed truth-tag list and the rest are counts. The document carries
 per-repository tallies, with the repositories measured; null stats when none is measured.
 
 **Per-repository cell** (one per ``team`` row): ``status`` and ``level`` as
-``lib.levels.evaluate_row`` gives them, plus the criterion that explains it:
+``lib.scoring.levels.evaluate_row`` gives them, plus the criterion that explains it:
 
 - below the top level: the first unmet criterion of the next level (``signal``,
   its measured ``value``), the thing standing between the repository and a
@@ -55,7 +55,7 @@ never invented. It is the toolkit's own text, never a repository's, so counts-on
 it (``FLEET_DATA_KEPT``).
 
 An unknown cell whose confirmed criteria reach level 1 or more also carries ``floor``
-(#889): that low bound, as ``lib.levels.floor_of`` reads it from the row evaluation, so a
+(#889): that low bound, as ``lib.scoring.levels.floor_of`` reads it from the row evaluation, so a
 badge can show "at least N". The key is absent on a known cell and on an unknown one with
 no confirmed level. Achievements still read known levels only (``known_level``): a floor
 below the level a row last held would otherwise read as a slip it may not be.
@@ -142,8 +142,8 @@ from lib.fleet.fleet_maturity import SCOPE
 from lib.fleet.fleet_opportunities import Opportunities, build_opportunities
 from lib.fleet.fleet_stamp import FleetStamp, RepositoryCounts
 from lib.fleet.fleet_units import Tree
-from lib.level_result_types import LevelResult, NextStep, Tally, TagCell
-from lib.levels import Evaluation, MaturityModel, Row, StepDef, evaluate_row, floor_of
+from lib.scoring.level_result_types import LevelResult, NextStep, Tally, TagCell
+from lib.scoring.levels import Evaluation, MaturityModel, Row, StepDef, evaluate_row, floor_of
 
 # Bump on any change to the shapes below; #704 and #705 read it.
 # History: skills/assess/changes/history/fleet_data.md, newest entry first.
@@ -204,7 +204,7 @@ class Cell(TypedDict):
     value: Value
     reason: str | None  # unknown cells only
     why: str | None  # the check manifest's why for ``signal`` at its level (#1128); None when none
-    floor: NotRequired[int]  # #889: an unknown cell's confirmed low bound (``lib.levels.floor_of``), at least 1
+    floor: NotRequired[int]  # #889: an unknown cell's confirmed low bound (``lib.scoring.levels.floor_of``), at least 1
 
 
 class DataRepo(TypedDict):

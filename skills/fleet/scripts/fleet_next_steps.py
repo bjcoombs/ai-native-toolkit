@@ -37,8 +37,8 @@ sys.path.insert(0, str(ASSESS_SCRIPTS))
 from lib.fleet.fleet_groups import SettingsError, load_settings
 from lib.fleet.fleet_view import FleetViewError, load_groups, read_repos
 from lib.fleet.fleet_next_steps import NextStepsError, build_pages, write_pages
-from lib.levels import add_renamed_flag, LevelsError, load_levels
-from lib.level_signals import DEFAULT_LEVELS, signal_path_validator
+from lib.scoring.levels import add_renamed_flag, LevelsError, load_levels
+from lib.scoring.level_signals import DEFAULT_LEVELS, signal_path_validator
 from lib.run_context_types import JsonDict
 
 

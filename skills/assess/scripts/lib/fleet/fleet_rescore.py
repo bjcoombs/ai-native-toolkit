@@ -99,11 +99,11 @@ from lib.fleet.fleet_data import (
 from lib.fleet.fleet_data_steps import RepoSteps, step_roll_up
 from lib.fleet.fleet_data_tags import tag_roll_up
 from lib.fleet.fleet_tag_profile import tag_profile
-from lib.level_result_types import TagCell
+from lib.scoring.level_result_types import TagCell
 from lib.fleet.fleet_maturity import SCOPE
 from lib.fleet.fleet_method import rules_sha256
 from lib.fleet.fleet_next_steps import code, text
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 from lib.signal_aliases import SIGNAL_ALIASES as SIGNAL_ALIASES
 from lib.signal_aliases import aliased as aliased
 

@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-import lib.level_tally as lt
+import lib.scoring.level_tally as lt
 import lib.manifest.check_manifest as cm
 import lib.skill_script_tests as sst
 import lib.unit_readings as ur

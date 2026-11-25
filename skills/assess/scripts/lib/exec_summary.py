@@ -1,7 +1,7 @@
 """The headline block with the report's top card filled in (#1102, #1252).
 
 ``run_headline(level, since, choice, rollup, measured, assess_dir)`` is the run context's
-``headline`` block: ``lib/headline.py`` words the level under the run's model, and
+``headline`` block: ``lib/scoring/headline.py`` words the level under the run's model, and
 ``summarised`` fills the three fields that block leaves empty with the top card
 (``lib/top_card.py``), which states each fact about where the repository stands once:
 
@@ -33,9 +33,9 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
-from lib.headline import headline
-from lib.level_result_types import Headline, LevelResult
-from lib.levels import MaturityModel
+from lib.scoring.headline import headline
+from lib.scoring.level_result_types import Headline, LevelResult
+from lib.scoring.levels import MaturityModel
 from lib.card_facts import CardFact
 from lib.profiles import ModelChoice, chosen_model, model_facts
 from lib.top_card import GATE_TASK, STEP_GATES_URL, CardAction, card_facts, card_markdown, read_first_action

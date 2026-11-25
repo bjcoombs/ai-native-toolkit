@@ -20,7 +20,7 @@ from lib.fleet.fleet_diagrams import report_markdown
 from lib.fleet.fleet_stamp import FleetStamp, RUN_FILE
 from lib.fleet.fleet_targets import TargetSpec, resolve
 from lib.fleet.fleet_units import build_trees, empty_map
-from lib.levels import MaturityModel, parse_levels
+from lib.scoring.levels import MaturityModel, parse_levels
 from lib.plain_english import CRITICAL_WORDS
 
 MODEL: MaturityModel = parse_levels(tomllib.loads(LEVELS))

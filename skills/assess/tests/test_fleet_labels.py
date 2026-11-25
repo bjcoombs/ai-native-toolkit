@@ -19,7 +19,7 @@ import pytest
 
 import lib.fleet.fleet_labels as fl
 from lib.fleet.runner import REPOS_FILE, FleetRow, dumps_rows
-from lib.levels import Group, dumps_result, evaluate, load_levels
+from lib.scoring.levels import Group, dumps_result, evaluate, load_levels
 
 LIB = Path(__file__).resolve().parents[1] / "scripts" / "lib"
 SKILLS = Path(__file__).resolve().parents[2]

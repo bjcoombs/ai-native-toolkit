@@ -1,4 +1,4 @@
-"""lib/levels_fields.py: required truth tags, the legacy layer alias and the additive fields (#843)."""
+"""lib/scoring/levels_fields.py: required truth tags, the legacy layer alias and the additive fields (#843)."""
 from __future__ import annotations
 
 import copy
@@ -8,10 +8,10 @@ from typing import Any
 
 import pytest
 
-import lib.level_tally as lt
-from lib.level_signals import DEFAULT_LEVELS, signal_path_validator
-from lib.levels import LevelsError, MixedTruthError, evaluate_row, known_paths, load_levels, parse_levels
-from lib.levels_fields import LEGACY_LAYER_TRUTH, LEGACY_ROW_TRUTH, TRUTH_TAGS, legacy_truth
+import lib.scoring.level_tally as lt
+from lib.scoring.level_signals import DEFAULT_LEVELS, signal_path_validator
+from lib.scoring.levels import LevelsError, MixedTruthError, evaluate_row, known_paths, load_levels, parse_levels
+from lib.scoring.levels_fields import LEGACY_LAYER_TRUTH, LEGACY_ROW_TRUTH, TRUTH_TAGS, legacy_truth
 from test_fleet_cli import fleet_cli
 
 LEGACY = Path(__file__).parent / "fixtures" / "levels" / "levels.toml"

@@ -1,6 +1,6 @@
-# `lib/levels.py`
+# `lib/scoring/levels.py`
 
-The full reference for `skills/assess/scripts/lib/levels.py`, whose module docstring holds the summary.
+The full reference for `skills/assess/scripts/lib/scoring/levels.py`, whose module docstring holds the summary.
 
 Loads a caller-supplied maturity model (TOML via stdlib `tomllib`) and evaluates it
 from signals with no model in the path. A criterion over a signal in
@@ -44,4 +44,4 @@ naming its removal. A model without them loads exactly as before.
 Each level also carries `truth` (#843), and three additive fields ride along, all defined in
 `levels_fields.py`. `load_levels` passes the file path to `parse_levels` (`source=`) so a
 `MixedTruthError` names the model file. `LevelsError` and `MixedTruthError` are defined in
-`levels_fields.py` and re-exported here, so callers keep importing them from `lib.levels`.
+`levels_fields.py` and re-exported here, so callers keep importing them from `lib.scoring.levels`.

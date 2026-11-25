@@ -20,8 +20,8 @@ from lib.counts_only.content_free import HASH_PREFIX, hash_value
 from lib.fleet.fleet_data_units import next_blocker, unit_rows
 from lib.fleet.fleet_publish import check_strings
 from lib.fleet.runner import ScanOptions, signals_command
-from lib.headline import tag_cells
-from lib.level_tally import default_model, level_result
+from lib.scoring.headline import tag_cells
+from lib.scoring.level_tally import default_model, level_result
 from test_fleet_cli import fleet_cli
 from test_unit_readings import MONOREPO, _write
 

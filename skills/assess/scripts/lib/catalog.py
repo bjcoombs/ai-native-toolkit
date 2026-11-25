@@ -3,7 +3,7 @@
 ``build_catalog`` joins the check manifest (``checks/core.toml`` and its fragments under
 ``checks/core/``, ``lib.manifest.check_manifest``),
 the default maturity model (``levels/default.toml``) and the signal input classes
-(``lib.level_signals``, #783) into one ``Catalog`` document. ``lib.catalog_md`` renders it
+(``lib.scoring.level_signals``, #783) into one ``Catalog`` document. ``lib.catalog_md`` renders it
 as ``docs/what-we-measure.md``; ``render_json`` writes it as
 ``skills/assess/references/measures.json``. ``gen_catalog.py`` writes both, and
 ``tests/test_catalog.py`` fails when either committed copy is stale. Pure and
@@ -20,7 +20,7 @@ named key, so a later field (the #939 ``why``) is an added key, never a restruct
   (``<row id>.<level>``), ``truth`` tags, ``polarity``, ``requires``, ``guarded_by``, the exit
   rule's ``predicted`` direction and ``review`` date (null when unset, #1086), the
   ``step_gates`` that cover it, its ``grade`` (the weakest of every signal its criteria read,
-  ``eq_signal`` included, as ``lib.level_tally`` grades it) and whether it ``counts``. Each
+  ``eq_signal`` included, as ``lib.scoring.level_tally`` grades it) and whether it ``counts``. Each
   criterion has the signal, its ``producer`` (scan block and collector), the operator and
   value or ``eq_signal``, the plain-words criterion, the condition's title and next step from
   the manifest, its grade and whether it counts.
@@ -80,9 +80,9 @@ from typing import Literal, NotRequired, TypedDict
 from lib import catalog_tags as ct
 import lib.manifest.check_manifest as cm
 import lib.manifest.manifest_whys as mw
-from lib.level_signals import INPUT_GRADES, counts_toward_level, load_default_levels
-from lib.levels import Criterion, MaturityModel, Scalar, condition_id
-from lib.levels_fields import DEFAULT_POLARITY, TRUTH_TAGS
+from lib.scoring.level_signals import INPUT_GRADES, counts_toward_level, load_default_levels
+from lib.scoring.levels import Criterion, MaturityModel, Scalar, condition_id
+from lib.scoring.levels_fields import DEFAULT_POLARITY, TRUTH_TAGS
 from lib.signals import NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS, UNIT_SCANS, known_scans
 
 CATALOG_VERSION = 1
@@ -92,7 +92,7 @@ UNCLASSIFIED = "unclassified"
 # (the check manifest's fragments, #994).
 SOURCES = ("skills/assess/checks/core.toml", "skills/assess/checks/core/*.toml",
            "skills/assess/levels/default.toml",
-           "skills/assess/scripts/lib/level_signals.py", "skills/assess/scripts/lib/signals.py",
+           "skills/assess/scripts/lib/scoring/level_signals.py", "skills/assess/scripts/lib/signals.py",
            "skills/assess/scripts/lib/scan_registry.py")
 
 Headless = Literal["registered", "headless_variant", "unregistered", "platform_only", "units_only"]
@@ -173,11 +173,11 @@ class CatalogCriterion(TypedDict):
 class CatalogLevel(TypedDict):
     level: int
     id: str  # the condition id, <row id>.<level>
-    truth: list[str]  # the condition's truth tags (lib/levels_fields.py, #843)
+    truth: list[str]  # the condition's truth tags (lib/scoring/levels_fields.py, #843)
     polarity: str  # positive or hazard
     requires: list[str]
     guarded_by: str | None
-    predicted: str | None  # the exit rule's predicted direction (lib/levels_fields.py, #1086)
+    predicted: str | None  # the exit rule's predicted direction (lib/scoring/levels_fields.py, #1086)
     review: str | None  # its review date, ISO; None when the condition has none
     step_gates: list[str]  # the gate ids that cover this condition, in Step order
     grade: str
@@ -284,7 +284,7 @@ def _value_words(value: Scalar | list[Scalar]) -> str:
 
 def criterion_text(criterion: Criterion, title: str) -> str:
     """The criterion in plain words: the signal's title, the operator, the value."""
-    if "eq_signal" in criterion:  # two measured signals compared (lib/levels_fields.py)
+    if "eq_signal" in criterion:  # two measured signals compared (lib/scoring/levels_fields.py)
         return f"{title}: {OP_WORDS.get(criterion['op'], criterion['op'])} signal {criterion['eq_signal']}"
     return f"{title}: {OP_WORDS.get(criterion['op'], criterion['op'])} {_value_words(criterion['value'])}"
 

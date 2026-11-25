@@ -7,7 +7,7 @@ kind = "collector"
 title = "Deterministic layer grades"
 summary = "The instruction-file grade and where the instruction files are (root, nested only or none), republished as a block, so a maturity model can read them."
 issues = [620, 821]
-callable = "lib.layer_grades:scan_layer_grades"
+callable = "lib.scoring.layer_grades:scan_layer_grades"
 publishes = ["layer_grades"]
 reads = ["instruction_grading", "nested_instructions"]
 stage = "post_offers"
@@ -15,7 +15,7 @@ unit_scope = "override"
 headless = { layer_grades = "registered" }
 whys.layer_grades = "It republishes whether a committed instruction file exists, the evidence the `instructions` gate reads."
 shapes = [
-  { path = "layer_grades", type = "lib.layer_grades:LayerGradesBlock" },
+  { path = "layer_grades", type = "lib.scoring.layer_grades:LayerGradesBlock" },
 ]
 revision = 2
   [entries.privacy]

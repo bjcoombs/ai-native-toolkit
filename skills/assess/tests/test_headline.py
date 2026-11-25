@@ -1,4 +1,4 @@
-"""The deterministic /assess headline (lib/headline.py, #747) and the X / 8 retirement (#741).
+"""The deterministic /assess headline (lib/scoring/headline.py, #747) and the X / 8 retirement (#741).
 
 Pure cases pin the wording of each line over hand-built level results; the end to
 end cases run the core on the contract's ci2 shape (FL5 + CI workflow + CLAUDE.md),
@@ -18,8 +18,8 @@ from typing import Any
 
 import pytest
 
-from lib.headline import GATE_CHANGE, GATE_NOUN, as_headline, gate_change, headline, run_context_headline
-from lib.level_tally import default_model
+from lib.scoring.headline import GATE_CHANGE, GATE_NOUN, as_headline, gate_change, headline, run_context_headline
+from lib.scoring.level_tally import default_model
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 ROOT = Path(__file__).resolve().parents[3]
@@ -304,9 +304,9 @@ def test_counts_only_keeps_the_headline_numbers_and_drops_its_text():
 
 def test_next_why_holds_the_whys_of_the_unmet_gate_conditions_only() -> None:
     """#939: the Next line's why is each blocking gate's unmet conditions' whys, nothing else."""
-    from lib.level_tally import level_result
-    from lib.levels import load_levels
-    from lib.signal_grades import DEFAULT_LEVELS
+    from lib.scoring.level_tally import level_result
+    from lib.scoring.levels import load_levels
+    from lib.scoring.signal_grades import DEFAULT_LEVELS
 
     model = load_levels(DEFAULT_LEVELS)
     level = level_result(model, {})

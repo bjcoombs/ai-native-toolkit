@@ -7,14 +7,14 @@ from typing import Any
 
 import pytest
 
-import lib.level_tally as lt
+import lib.scoring.level_tally as lt
 import lib.manifest.check_manifest as cm
 from lib.assess_config import load_backlog_ready_labels
 from lib.backlog_ready import (READY_LABELS, UNTRIAGED_LABELS, documents_ready_label, form_state,
                                scan_backlog_ready, stale_state)
 from lib.counts_only.content_free import counts_only
-from lib.level_signals import STAGED_BLOCKS, criterion_grade, signal_path_validator
-from lib.levels import MaturityModel, load_levels
+from lib.scoring.level_signals import STAGED_BLOCKS, criterion_grade, signal_path_validator
+from lib.scoring.levels import MaturityModel, load_levels
 
 FIXTURES = Path(__file__).parent / "fixtures" / "backlog_ready"
 MODEL = FIXTURES / "levels.toml"

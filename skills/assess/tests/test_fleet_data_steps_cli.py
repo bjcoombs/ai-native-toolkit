@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from lib.level_signals import DEFAULT_LEVELS
+from lib.scoring.level_signals import DEFAULT_LEVELS
 from test_fleet_cli import fleet_cli
 from test_level_tally import CIWF, CLMD, FL5, _commit
 

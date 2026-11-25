@@ -37,7 +37,7 @@ from lib.counts_only.counts_only_schema import ROOTS
 from lib.graph.import_graph import STRUCTURE_REASON_CODES
 from lib.keyhole.keyhole_signals import (FINDING_ACTIONS, FINDING_MODE_VALUES, FINDING_MODES,
                                  FINDING_ORDER, GIT_HISTORY_FINDINGS, _CHURN_DERIVED_FINDINGS)
-from lib.level_signals import STAGED_BLOCKS, InputClass, load_default_levels
+from lib.scoring.level_signals import STAGED_BLOCKS, InputClass, load_default_levels
 
 SCHEMA = Path(__file__).resolve().parents[1] / "references" / "check-manifest.schema.json"
 SIGNALS_SCHEMA = SCHEMA.with_name("signals.schema.json")

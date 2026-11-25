@@ -1,4 +1,4 @@
-"""lib/levels.py: TOML maturity model loading and deterministic whole-level evaluation."""
+"""lib/scoring/levels.py: TOML maturity model loading and deterministic whole-level evaluation."""
 from __future__ import annotations
 
 import copy
@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from lib.levels import (
+from lib.scoring.levels import (
     Group,
     LevelsError,
     dumps_result,
@@ -431,7 +431,7 @@ def test_levels_may_be_listed_out_of_order() -> None:
 def test_share_level_is_the_public_roll_up_rule() -> None:
     from fractions import Fraction
 
-    from lib.levels import share_level
+    from lib.scoring.levels import share_level
     assert share_level([2, 1, 2], Fraction(1), 2) == 1  # min
     assert share_level([2, 1, 2], Fraction(2, 3), 2) == 2
     assert share_level([], Fraction(1), 2) == 2  # vacuous: callers pass measured levels only

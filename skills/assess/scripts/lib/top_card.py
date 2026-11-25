@@ -67,8 +67,8 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from lib.card_facts import CardFact, advisories, blocking_gates, step_gate_ids, step_name, top_step
-from lib.headline import GATE_CHANGE, GLOSSARY_URL, gate_note, verified_count
-from lib.levels import MaturityModel
+from lib.scoring.headline import GATE_CHANGE, GLOSSARY_URL, gate_note, verified_count
+from lib.scoring.levels import MaturityModel
 from lib.model_change import model_changed_line
 from lib.since_last_run import FIRST_RUN, UNKNOWN_CLOSED
 

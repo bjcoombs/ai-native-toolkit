@@ -70,16 +70,16 @@ from pathlib import Path
 from typing import Any, Literal
 
 from lib.card_facts import CardFact
-from lib.headline import reason_word
-from lib.level_result_types import ConditionResult, LevelResult
-from lib.level_tally import DEFAULT_BLOCKS, default_model, level_result, model_blocks, run_context_level
-from lib.level_tally import run_exclusions
-from lib.levels import LevelsError, MaturityModel, PathValidator, load_levels
+from lib.scoring.headline import reason_word
+from lib.scoring.level_result_types import ConditionResult, LevelResult
+from lib.scoring.level_tally import DEFAULT_BLOCKS, default_model, level_result, model_blocks, run_context_level
+from lib.scoring.level_tally import run_exclusions
+from lib.scoring.levels import LevelsError, MaturityModel, PathValidator, load_levels
 from lib.pack_layering import layer_packs, pack_sources, row_source
 from lib.packs import SIGNAL_PREFIX as PACK_BLOCK
 from lib.packs import Pack, PackError
 from lib.prior_level import base_model_key
-from lib.signal_grades import DEFAULT_LEVELS
+from lib.scoring.signal_grades import DEFAULT_LEVELS
 
 __all__ = ["CUSTOM_MODEL_SUFFIX", "PROFILES_DIR", "RESERVED_PREFIXES", "READY_WORDS", "ModelChoice", "ProfileError", "add_model_arguments",
            "chosen_model", "model_for_level", "model_facts", "model_lines", "non_default_ids", "profile_names", "profile_path", "resolve",
@@ -170,13 +170,13 @@ def add_model_arguments(parser: argparse.ArgumentParser, *, levels: bool = True)
     if levels:
         group.add_argument(
             "--levels", metavar="FILE",
-            help="Evaluate a custom maturity model (TOML, lib/levels.py format) instead of the default.")
+            help="Evaluate a custom maturity model (TOML, lib/scoring/levels.py format) instead of the default.")
 
 
 def resolve(profile: str | None, levels: str | Path | None,
             validator: PathValidator | None = None) -> ModelChoice:
     """The model ``--profile`` or ``--levels`` names, else the default; ``ProfileError`` on a
-    bad name, both flags at once, or a model ``lib.levels`` refuses."""
+    bad name, both flags at once, or a model ``lib.scoring.levels`` refuses."""
     if profile is not None and levels is not None:
         raise ProfileError("--profile and --levels each choose the model: pass one")
     try:
@@ -200,7 +200,7 @@ def single_repo_choice(profile: str | None, levels: str | Path | None,
                        validator: PathValidator | None = None, packs: Sequence[Pack] = ()) -> ModelChoice:
     """``resolve``, refusing a model that reads a block the single-repository level does not.
     With ``packs`` (``--pack``, #1273) the level also reads the ``pack`` block, so a model may
-    read ``pack.<pack>.<check>``; ``lib.level_signals.signal_path_validator(packs)`` refuses a
+    read ``pack.<pack>.<check>``; ``lib.scoring.level_signals.signal_path_validator(packs)`` refuses a
     path of a pack that was not passed, naming ``--pack``. Each pack's rows are layered onto
     the model (``lib.pack_layering.layer_packs``, #1274); a layering error is a ``ProfileError``."""
     choice = resolve(profile, levels, validator)

@@ -10,7 +10,7 @@ reports a gap for tests on code the repo doesn't contain.
 
 This module turns "what kind of repo is this?" into a deterministic signal so
 the scorer can mark the inapplicable layers **N/A** rather than **Missing** (a
-real gap). The headline (``lib/headline.py``) reads maturity-model conditions,
+real gap). The headline (``lib/scoring/headline.py``) reads maturity-model conditions,
 not layers, so it is unchanged by the archetype.
 
 Detection is **dispatch-friendly**: ``classify_archetype`` evaluates one

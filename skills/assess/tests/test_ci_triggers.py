@@ -7,8 +7,8 @@ import pytest
 
 from lib.ci.ci_checks import scan_ci_checks
 from lib.ci.ci_triggers import gitlab_line_triggers, workflow_events, workflow_trigger
-from lib.level_signals import load_default_levels
-from lib.levels import Group, evaluate
+from lib.scoring.level_signals import load_default_levels
+from lib.scoring.levels import Group, evaluate
 
 _JOB = "jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest\n"
 

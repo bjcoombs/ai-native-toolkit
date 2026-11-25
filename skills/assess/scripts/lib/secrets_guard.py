@@ -258,7 +258,7 @@ class Enforcement(TypedDict, total=False):
 
 class SourceGrade(TypedDict):
     source: str  # pre_commit | ci | platform
-    grade: str  # the source's own evidence grade (lib.signal_grades): config_only | measured
+    grade: str  # the source's own evidence grade (lib.scoring.signal_grades): config_only | measured
 
 
 class SecretsGuardBlock(TypedDict):

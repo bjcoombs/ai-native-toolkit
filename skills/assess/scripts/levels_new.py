@@ -7,7 +7,7 @@ The copy opens with a comment on each field of the format, and its ``version`` i
 ``<file stem>-1`` unless ``--version`` names another. It refuses to replace an existing file
 without ``--force``, and a copy that does not load leaves an existing file as it was. On success it prints one line naming the file and the command that runs
 it; on any error it prints the reason to stderr and exits 2. The logic is
-``lib/levels_starter.py``; the guide is ``docs/build-your-own-practice.md`` at the repository
+``lib/scoring/levels_starter.py``; the guide is ``docs/build-your-own-practice.md`` at the repository
 root.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ from pathlib import Path
 # Make the sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.levels_starter import StarterError, write_starter
+from lib.scoring.levels_starter import StarterError, write_starter
 from lib.profiles import profile_names
 
 

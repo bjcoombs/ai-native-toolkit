@@ -1,4 +1,4 @@
-"""Owner exclusions of conditions (lib/owner_exclusions.py, lib/level_tally.py, #910).
+"""Owner exclusions of conditions (lib/owner_exclusions.py, lib/scoring/level_tally.py, #910).
 
 An excluded condition reads not_applicable with disposition excluded_by_owner,
 leaves the denominator, never earns, and never holds a Step gate. An entry with
@@ -14,8 +14,9 @@ from typing import Any
 
 import pytest
 
-import lib.level_tally as lt
-from lib import core_scans, headline as hl
+import lib.scoring.level_tally as lt
+from lib import core_scans
+from lib.scoring import headline as hl
 from lib.counts_only.content_free import counts_only
 from lib.owner_exclusions import KINDS, PROBLEMS, owner_exclusions_block, parse_exclusions
 from lib.scan_registry import SCANS

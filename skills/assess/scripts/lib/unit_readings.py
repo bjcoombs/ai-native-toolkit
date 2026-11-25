@@ -69,7 +69,7 @@ so a failing scan degrades to its unavailable marker for that unit alone.
 ``unit_count_reason`` copied from ``units`` (a null count stays null, #1030), ``unit_blocks``
 (the model blocks a unit can read as its own), and per unit its ``path``, ``blocks`` (each
 own reading, projected to the model's signal paths plus the ``available`` and ``reason``
-along them and the ``EMPTY_DENOMINATORS`` counts, so ``lib.levels.resolve_signal`` and the
+along them and the ``EMPTY_DENOMINATORS`` counts, so ``lib.scoring.levels.resolve_signal`` and the
 tally's reason codes read it as they read the full block), its ``kind`` from the
 ``units`` entry (``package``, ``skill``, ``agents``, ``commands``, #1098) and ``conditions``: every model
 condition id with its ``origin``, ``unit`` when a criterion reads a block in the unit's
@@ -90,10 +90,10 @@ from typing import Any, Literal, Protocol, TypedDict
 
 import lib.manifest.check_manifest as cm
 from lib.testing.coverage_gate import GO_RUST_UNMEASURED, go_rust_manifests
-from lib.level_tally import DEFAULT_BLOCKS, default_model
-from lib.levels import MaturityModel, condition_id
+from lib.scoring.level_tally import DEFAULT_BLOCKS, default_model
+from lib.scoring.levels import MaturityModel, condition_id
 from lib.run_context_types import JsonDict
-from lib.signal_grades import EMPTY_DENOMINATORS
+from lib.scoring.signal_grades import EMPTY_DENOMINATORS
 from lib.unit_components import KINDS, Kind
 
 

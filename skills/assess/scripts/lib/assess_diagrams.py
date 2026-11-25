@@ -24,7 +24,7 @@ Diagrams, in report order:
   between each pair, "You are here" on the run's Step and the next gate highlighted;
   drawn by ``lib/assess_diagrams_ladder.py``, which documents it.
 - **Evidence waffle** (``evidence-waffle.svg``): one square per condition of the run's
-  ``level`` block (``lib/level_tally.py``), grouped by maturity-model row in model
+  ``level`` block (``lib/scoring/level_tally.py``), grouped by maturity-model row in model
   order, coloured by state and grade (``CATEGORIES``). Met conditions read verified,
   measured or listed (counted or not, as the tally reads them); unmet, declined, not
   applicable (an empty outline) and not measured (hatched, its reason in the key)
@@ -62,11 +62,11 @@ from typing import Any, cast
 import lib.fleet.fleet_svg as svg
 from lib.assess_diagrams_ladder import (LADDER_FILE, LADDER_TITLE, gate_conditions, ladder_caption,
                                         ladder_in_place, render_ladder)
-from lib.headline import reason_word
-from lib.level_result_types import ConditionResult, LevelResult
-from lib.level_tally import default_model
+from lib.scoring.headline import reason_word
+from lib.scoring.level_result_types import ConditionResult, LevelResult
+from lib.scoring.level_tally import default_model
 from lib.model_change import CUSTOM_NOT_DRAWN, custom_run, model_for_level
-from lib.levels import StepDef
+from lib.scoring.levels import StepDef
 from lib.run_context_types_diagrams import AssessDiagram, WaffleSquare
 from lib.vocabulary import IN_PLACE
 

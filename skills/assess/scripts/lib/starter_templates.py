@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import re
 
-from lib.next_step_guidance import DENY_RULE_EXAMPLE
+from lib.scoring.next_step_guidance import DENY_RULE_EXAMPLE
 from lib.run_context_types_fix import RepoFacts
 
 # The lowest threshold coverage_gate.enforced_meets_minimum credits: a start the team raises.

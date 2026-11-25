@@ -13,7 +13,7 @@ from lib.fleet.fleet_history import entry_conflict, entry_repos, latest_matching
 from lib.fleet.fleet_legacy import RENAMED_KEYS, upgrade
 from lib.fleet.fleet_stamp import FleetStamp
 from lib.fleet.fleet_view import load_groups
-from lib.levels import load_levels
+from lib.scoring.levels import load_levels
 from test_fleet import make_repo
 from test_fleet_cli import fleet_cli
 from test_fleet_heatmap import cli as heatmap_cli

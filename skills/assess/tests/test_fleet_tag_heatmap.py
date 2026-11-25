@@ -18,7 +18,7 @@ from fleet_data_fixture import ROWS, SALT, build, model
 from fleet_tag_heatmap_fixture import COUNTS_ONLY, FIXTURES, FULL, HASHED, NAMES, goldens
 from lib.fleet.fleet_diagrams import build_diagrams
 from lib.fleet.fleet_tag_profile import FILE as PROFILE_FILE
-from lib.levels_fields import TRUTH_TAGS
+from lib.scoring.levels_fields import TRUTH_TAGS
 from lib.vocabulary import banned_hits
 from svg_cascade import overridden_text_attributes
 

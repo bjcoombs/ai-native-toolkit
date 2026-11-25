@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import lib.fleet.fleet_groups as fg
 from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
-from lib.levels import load_levels
+from lib.scoring.levels import load_levels
 from lib.run_context_types import JsonDict
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_heatmap"

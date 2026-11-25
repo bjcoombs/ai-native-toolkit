@@ -21,7 +21,7 @@ from lib.counts_only.content_free import counts_only_scans
 from lib.testing.coverage_gate import CoverageGateBlock
 from lib.hosting.delivery import DeliveryBlock
 from lib.instructions.guardrails import GuardrailsBlock
-from lib.layer_grades import LayerGradesBlock
+from lib.scoring.layer_grades import LayerGradesBlock
 from lib.fleet.fleet_schema import build_schema as build_row_schema
 from lib.scan_block_schemas import BLOCK_SCHEMAS
 from lib.signals import collect

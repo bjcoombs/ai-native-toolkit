@@ -22,7 +22,7 @@ from lib.fleet.fleet_tag_profile import tag_profile
 from lib.fleet.fleet_groups import roll_up
 from lib.fleet.fleet_stamp import build_stamp
 from lib.fleet.fleet_view import read_repos
-from lib.levels import MaturityModel, load_levels
+from lib.scoring.levels import MaturityModel, load_levels
 from lib.run_context_types import JsonDict
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_diagrams"

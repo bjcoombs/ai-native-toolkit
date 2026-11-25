@@ -59,7 +59,7 @@ import json
 from collections.abc import Mapping
 from typing import Any, TypedDict
 
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 from lib.manifest.check_manifest import CheckManifest, collectors, core_manifest
 
 # The stamp keys that name the rules a run scored with: a difference in any is re-scorable.

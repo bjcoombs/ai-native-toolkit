@@ -195,7 +195,7 @@ aggregation = "min"
 
 
 def test_rows_load_through_the_levels_parser(tmp_path: Path) -> None:
-    """#1274 lifts the #1272 refusal: rows parse with the lib/levels.py grammar."""
+    """#1274 lifts the #1272 refusal: rows parse with the lib/scoring/levels.py grammar."""
     pack = load_pack(_write(tmp_path, _check('exists = "a"') + ROW))
     assert [r["id"] for r in pack["rows"]] == ["p-glossary"]
     assert pack["rows"][0]["levels"][0]["truth"] == ["docs"]

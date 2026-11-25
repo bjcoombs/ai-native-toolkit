@@ -1,4 +1,4 @@
-"""lib/levels_fields.py: a condition's predicted outcome direction and review date (#1086)."""
+"""lib/scoring/levels_fields.py: a condition's predicted outcome direction and review date (#1086)."""
 from __future__ import annotations
 
 import datetime as dt
@@ -7,11 +7,11 @@ from typing import Any
 
 import pytest
 
-import lib.level_tally as lt
+import lib.scoring.level_tally as lt
 from lib import catalog, catalog_md
-from lib.level_signals import DEFAULT_LEVELS
-from lib.levels import LevelsError, parse_levels
-from lib.levels_fields import PREDICTIONS
+from lib.scoring.level_signals import DEFAULT_LEVELS
+from lib.scoring.levels import LevelsError, parse_levels
+from lib.scoring.levels_fields import PREDICTIONS
 
 REVIEW = dt.date(2027, 5, 23)
 

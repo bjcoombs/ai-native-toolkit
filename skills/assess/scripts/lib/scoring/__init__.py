@@ -1,0 +1,1 @@
+"""Maturity models and their scoring: the model loader and its condition fields, hints and starter copy, the signal values a condition reads, the tally and its tag rows, the level result types, the layer and signal grades, the headline, the action conditions and the next-step guidance (#917)."""

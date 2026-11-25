@@ -56,7 +56,7 @@ from lib.assess_diagrams_tags import TAG_FILES, tag_diagrams
 from lib.assess_diagrams_packages import PACKAGE_COUNTS_ONLY_FILE, PACKAGE_FILE, package_diagrams
 from lib.docs.doc_complexity_join import STALENESS_RATIO_THRESHOLD, is_stale
 from lib.docs.doc_ownership import REPO_BASELINE
-from lib.headline import reason_word
+from lib.scoring.headline import reason_word
 from lib.counts_only.reason_codes import reason_code
 from lib.hosting.review_reality import APPROVED, BOT, NO_BOT, REVIEWED, SEQUENCE_STATES, UNKNOWN, UNREVIEWED
 from lib.run_context_types_diagrams import AssessDiagram

@@ -39,7 +39,7 @@ from lib.fleet.fleet_page_data import COUNTS_ONLY
 from lib.fleet.fleet_step_funnel import funnel_view
 from lib.fleet.fleet_step_lifts import lifts_of
 from lib.fleet.fleet_step_movement import StepMoves
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 from lib.top_card import GATE_TASK
 from lib.vocabulary import IN_PLACE
 

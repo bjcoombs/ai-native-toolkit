@@ -17,7 +17,7 @@ import pytest
 from lib.fleet import fleet_packs as fp
 from lib.fleet.fleet_level import fleet_levels
 from lib.fleet.runner import ScanOptions, signals_command
-from lib.levels import parse_levels
+from lib.scoring.levels import parse_levels
 from lib.pack_layering import layer_packs
 from lib.packs import PackError, parse_pack
 from test_fleet import make_repo
@@ -265,7 +265,7 @@ def test_an_owner_excluded_condition_is_in_neither_column() -> None:
 
 def test_a_levels_file_holding_the_default_model_names_its_rows_default(tmp_path: Path) -> None:
     """The base source does not depend on the file name, so a copy keeps the rules hash."""
-    from lib.signal_grades import DEFAULT_LEVELS
+    from lib.scoring.signal_grades import DEFAULT_LEVELS
     copy = tmp_path / "renamed.toml"
     copy.write_text(DEFAULT_LEVELS.read_text(encoding="utf-8"), encoding="utf-8")
     team = parse_pack(_toml(TEAM))

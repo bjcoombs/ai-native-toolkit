@@ -58,7 +58,7 @@ This page lists every check `/assess` and `/fleet` run, what each one reads, and
 feeds the maturity model. It is generated from the check manifest
 (`skills/assess/checks/core.toml`), the default maturity model
 (`skills/assess/levels/default.toml`) and the signal input classes
-(`skills/assess/scripts/lib/level_signals.py`), so it changes only when they do. The same
+(`skills/assess/scripts/lib/scoring/level_signals.py`), so it changes only when they do. The same
 data for machines is [measures.json](../skills/assess/references/measures.json).
 
 Nothing here is a judgement of a team. A gap is the next thing to try, and a check that
@@ -133,7 +133,7 @@ def _links_cell(line: Line) -> str:
     return "; ".join(parts) or "-"
 
 
-# The plain words of each predicted direction (lib/levels_fields.py PREDICTIONS, #1086).
+# The plain words of each predicted direction (lib/scoring/levels_fields.py PREDICTIONS, #1086).
 PREDICTION_WORDS = {"lower_revert": "lower revert share", "lower_rework": "lower rework share",
                     "none": "no effect predicted"}
 
@@ -151,7 +151,7 @@ CONDITION_COLUMNS: tuple[tuple[str, Callable[[Line], str]], ...] = (
     ("Condition", _condition_cell),
     ("Producer", lambda line: f"`{line.criterion['producer']['scan']}`"),
     ("Criterion", _criterion_cell),
-    # Grade and Counts are the whole condition's, as lib.level_tally scores it: its weakest signal.
+    # Grade and Counts are the whole condition's, as lib.scoring.level_tally scores it: its weakest signal.
     ("Grade", lambda line: f"`{line.level['grade']}`"),
     ("Counts", lambda line: "yes" if line.level["counts"] else "no, listed"),
     ("Step gate", lambda line: _codes(line.level["step_gates"])),

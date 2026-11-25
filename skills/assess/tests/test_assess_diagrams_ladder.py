@@ -13,10 +13,10 @@ import pytest
 
 from assess_diagrams_fixture import LEVEL
 from lib import assess_diagrams_ladder as ladder
-from lib.headline import GATE_CHANGE
-from lib.level_result_types import ConditionResult, LevelResult
-from lib.level_tally import default_model
-from lib.levels import StepDef
+from lib.scoring.headline import GATE_CHANGE
+from lib.scoring.level_result_types import ConditionResult, LevelResult
+from lib.scoring.level_tally import default_model
+from lib.scoring.levels import StepDef
 from lib.vocabulary import IN_PLACE, banned_hits
 from svg_cascade import overridden_text_attributes
 

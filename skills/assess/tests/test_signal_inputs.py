@@ -1,4 +1,4 @@
-"""lib/level_signals.py: every maturity-model signal's producer input class and the declared predicate (#783)."""
+"""lib/scoring/level_signals.py: every maturity-model signal's producer input class and the declared predicate (#783)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,8 +6,8 @@ from typing import get_args
 
 import pytest
 
-from lib.levels import Criterion, load_levels
-from lib.level_signals import (
+from lib.scoring.levels import Criterion, load_levels
+from lib.scoring.level_signals import (
     INPUT_GRADES,
     SIGNAL_INPUTS,
     STAGED_BLOCKS,

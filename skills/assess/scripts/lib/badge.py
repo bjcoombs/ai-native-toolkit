@@ -6,7 +6,7 @@ AI-readiness badge with zero infrastructure::
 
     ![AI-readiness](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/<owner>/<repo>/<branch>/.assess/badge.json)
 
-The message is the run's deterministic headline summary (``lib/headline.py``,
+The message is the run's deterministic headline summary (``lib/scoring/headline.py``,
 #747): the autonomy Step and the verified tally, e.g. ``Step 3 · 4 of 4
 measured``. It is a pure function of the commit and the maturity-model version,
 never an LLM-authored score, so two runs on one commit write the same message.
@@ -36,7 +36,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from lib.headline import Headline
+from lib.scoring.headline import Headline
 
 BADGE_FILENAME = "badge.json"
 LABEL = "AI-readiness"

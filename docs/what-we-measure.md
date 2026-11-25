@@ -6,7 +6,7 @@ This page lists every check `/assess` and `/fleet` run, what each one reads, and
 feeds the maturity model. It is generated from the check manifest
 (`skills/assess/checks/core.toml`), the default maturity model
 (`skills/assess/levels/default.toml`) and the signal input classes
-(`skills/assess/scripts/lib/level_signals.py`), so it changes only when they do. The same
+(`skills/assess/scripts/lib/scoring/level_signals.py`), so it changes only when they do. The same
 data for machines is [measures.json](../skills/assess/references/measures.json).
 
 Nothing here is a judgement of a team. A gap is the next thing to try, and a check that

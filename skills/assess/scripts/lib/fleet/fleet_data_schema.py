@@ -25,7 +25,7 @@ if __package__ in (None, ""):  # run as a script: make ``lib`` importable
 from lib.fleet.fleet_data import FLEET_DATA_VERSION, FleetData
 from lib.fleet.fleet_group_schema import type_schema
 from lib.fleet.fleet_units import KINDS, VIEWS
-from lib.level_tally import EXCLUDED_BY_OWNER, STATES
+from lib.scoring.level_tally import EXCLUDED_BY_OWNER, STATES
 from lib.owner_exclusions import KINDS as EXCLUSION_KINDS, SOURCE_REPO
 from lib.run_context_types import JsonDict
 

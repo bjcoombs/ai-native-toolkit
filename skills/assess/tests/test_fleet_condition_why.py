@@ -3,7 +3,7 @@
 A fleet run under the default maturity model carries the check manifest's why for each
 next-step criterion: in ``fleet-data.json`` (``repos.rows.why``, ``opportunities.biggest_lift.why``),
 on the team next-steps pages ("- Why:" above "Done when") and in ``level.json`` (each
-condition's ``why``, already set by ``lib.level_tally``; ``lib.fleet.fleet_why`` reads
+condition's ``why``, already set by ``lib.scoring.level_tally``; ``lib.fleet.fleet_why`` reads
 ``level_tally.condition_why`` for one criterion). A criterion with no manifest entry
 gets null and no Why line. The why is the toolkit's own text, so counts-only and hashed
 bundles keep it word for word (``FLEET_DATA_KEPT``).
@@ -20,7 +20,7 @@ import lib.fleet.fleet_next_steps as ns
 from lib.counts_only.counts_only_rules import FLEET_DATA_KEPT
 from lib.fleet.fleet_publish import check_strings
 from lib.fleet.fleet_why import criterion_why
-from lib.level_signals import DEFAULT_LEVELS, load_default_levels
+from lib.scoring.level_signals import DEFAULT_LEVELS, load_default_levels
 from lib.manifest.check_manifest import condition_key, core_manifest
 from lib.manifest.manifest_whys import condition_whys
 from test_fleet_cli import fleet_cli, froot  # noqa: F401 - froot is a fixture

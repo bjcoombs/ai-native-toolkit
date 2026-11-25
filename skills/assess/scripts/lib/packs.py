@@ -59,12 +59,12 @@ Rules:
   (``./a``, ``a//b``, ``docs/``), a ``~`` path, a backslash or a control
   character is a load error, so the collector never has to normalise a path.
   The ``key_exists`` suffix match ignores case.
-- Key sets are closed, as in ``lib/levels.py``: an unknown key anywhere is a load
+- Key sets are closed, as in ``lib/scoring/levels.py``: an unknown key anywhere is a load
   error naming its location. A key that would run code (``CODE_KEYS``) gets its
   own error that names the fix: express the check as one of the four rules;
   #1266 says why installed-package collectors are out of scope.
 - A pack holds one or more ``[[checks]]`` or ``[[rows]]``. ``[[rows]]`` use the
-  ``lib/levels.py`` row grammar and are validated by its parser at load, with two
+  ``lib/scoring/levels.py`` row grammar and are validated by its parser at load, with two
   additions: every level declares ``truth`` (no legacy alias in a pack), and a
   ``requires`` naming a condition outside the pack is left to layering
   (``lib/pack_layering.py``, #1274), which checks it against the base model and the
@@ -100,7 +100,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from collections.abc import Sequence
 from typing import Any, Literal, Mapping, TypedDict
 
-from lib.levels import LevelsError, Row, parse_levels
+from lib.scoring.levels import LevelsError, Row, parse_levels
 
 PACK_SUFFIX = ".pack.toml"
 SIGNAL_PREFIX = "pack"
@@ -160,7 +160,7 @@ class Pack(TypedDict):
     name: str
     version: str
     checks: list[PackCheck]
-    rows: list[Row]  # practices in the lib/levels.py grammar, layered onto the model (#1274)
+    rows: list[Row]  # practices in the lib/scoring/levels.py grammar, layered onto the model (#1274)
     sha256: str
 
 
@@ -256,7 +256,7 @@ def pack_sha256(name: str, version: str, checks: list[PackCheck], rows: list[Row
 
 
 def _parse_rows(raw: object, pack: str) -> list[Row]:
-    """``[[rows]]`` through ``lib.levels.parse_levels``; a ``requires`` outside the pack is
+    """``[[rows]]`` through ``lib.scoring.levels.parse_levels``; a ``requires`` outside the pack is
     left to layering (``lib/pack_layering.py``), which knows the base model and earlier packs."""
     if not isinstance(raw, list) or not raw or not all(isinstance(r, Mapping) for r in raw):
         raise PackError("rows: must be one or more [[rows]] tables")

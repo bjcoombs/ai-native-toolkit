@@ -5,7 +5,7 @@
 never raises. ``assess_diagrams_review.build_all`` places it after the evidence waffle, and
 ``write_all`` owns its file (``ALL_FILES``).
 
-The strip draws from data only: the run context's ``level.tags`` (``lib/level_tags.py``
+The strip draws from data only: the run context's ``level.tags`` (``lib/scoring/level_tags.py``
 ``tag_rows``, whose ``met`` and ``measured`` are the headline strip's cells, never a second
 tally) and ``prior_level`` (``lib/prior_level.py``, read before this run wrote its own). One
 row per truth tag, every tag of ``TRUTH_TAGS`` in that fixed order, so two profiles always
@@ -48,10 +48,10 @@ from typing import Any, cast
 
 import lib.fleet.fleet_svg as svg
 from lib.assess_diagrams import wrap
-from lib.headline import reason_word
-from lib.level_result_types import TagRow
-from lib.level_tags import conditions_label
-from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
+from lib.scoring.headline import reason_word
+from lib.scoring.level_result_types import TagRow
+from lib.scoring.level_tags import conditions_label
+from lib.scoring.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
 from lib.prior_level import PriorLevel, as_prior_level, model_key, record_for, same_model
 from lib.run_context_types_diagrams import AssessDiagram
 from lib.vocabulary import IN_PLACE

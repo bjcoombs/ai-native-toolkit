@@ -65,9 +65,9 @@ from lib.instructions.instruction_files import (
 from lib.interactivity import build_offers_block
 from lib.keyhole.keyhole_signals import integrate
 from lib.exec_summary import run_headline
-from lib.headline import Headline
-from lib.level_result_types import LevelResult, OwnerExclusionsBlock
-from lib.level_tally import LEVEL_READS
+from lib.scoring.headline import Headline
+from lib.scoring.level_result_types import LevelResult, OwnerExclusionsBlock
+from lib.scoring.level_tally import LEVEL_READS
 from lib.keyhole.liveness_scan import scan_liveness
 from lib.owner_exclusions import owner_exclusions_block
 from lib.model_change import across_models, previous_levels_version, units_label

@@ -11,12 +11,12 @@ import pytest
 
 import lib.fleet.condition_demotion as cd
 import lib.fleet.condition_effect as ce
-import lib.level_tally as lt
+import lib.scoring.level_tally as lt
 from lib.fleet.fleet_history import OPTIONAL_HISTORY_FILES
 from lib.fleet.fleet_level import fleet_levels
 from lib.fleet.runner import FLEET_ROW_VERSION
-from lib.levels import parse_levels
-from lib.levels_fields import PREDICTIONS
+from lib.scoring.levels import parse_levels
+from lib.scoring.levels_fields import PREDICTIONS
 from fleet_trends_fixture import stamp
 
 SIGNAL = "doc_staleness.summary.stale_pct"
@@ -76,7 +76,7 @@ def test_with_demotions_copies_and_leaves_the_model_unchanged() -> None:
 
 def test_repository_unit_and_tag_results_read_the_same_demotions() -> None:
     from lib.fleet.fleet_data_units import unit_rows
-    from lib.level_tags import tag_rows
+    from lib.scoring.level_tags import tag_rows
 
     row = {"fleet_row_version": FLEET_ROW_VERSION, "repo": "a", "group": "g", "status": "ok", "scans": DATA}
     model = _demoted("p.1")
@@ -107,7 +107,7 @@ def test_only_fleet_py_applies_demotions() -> None:
 
 
 def test_a_model_file_cannot_carry_demotions() -> None:
-    from lib.levels import LevelsError
+    from lib.scoring.levels import LevelsError
 
     raw = {"version": "v1", "demoted": ["p.1"], "rows": [
         {"id": "p", "title": "p", "scope": "team", "aggregation": "min", "levels": [_level()]}]}

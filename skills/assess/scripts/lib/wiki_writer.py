@@ -85,7 +85,7 @@ class HotspotEntry:
 class LogEntry:
     run_date: str
     files_scored: int
-    # The headline summary (lib/headline.py, #747, #1083), written by the core, never the LLM.
+    # The headline summary (lib/scoring/headline.py, #747, #1083), written by the core, never the LLM.
     readiness: str
     # Optional[str]: None means no instruction file was found at any known
     # location (the schema convention in CLAUDE.md). The log template renders it

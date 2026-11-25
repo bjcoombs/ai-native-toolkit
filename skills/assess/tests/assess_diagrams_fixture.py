@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from lib.assess_diagrams import LADDER_FILE, WAFFLE_FILE, build_diagrams, diagrams_section
-from lib.level_result_types import ConditionResult, LevelResult
+from lib.scoring.level_result_types import ConditionResult, LevelResult
 from lib.run_context_types import JsonDict
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "assess_diagrams"

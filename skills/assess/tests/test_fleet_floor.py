@@ -1,6 +1,6 @@
 """A level's floor when only a higher level's signal is unmeasured (issue #697).
 
-``lib.levels`` gives an unknown row ``floor`` when its confirmed criteria reach
+``lib.scoring.levels`` gives an unknown row ``floor`` when its confirmed criteria reach
 at least level 1; ``lib.fleet.fleet_groups`` carries it, and ``full_run_only`` names
 the missing signals only a full ``/assess`` measures; the views print "at least".
 """
@@ -21,8 +21,8 @@ from lib import signals
 from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
 from lib.fleet.fleet_groups import FLEET_GROUP_VERSION, full_run_only_signals, group_row
 from lib.fleet.fleet_view import FleetViewError, _check_row
-from lib.level_signals import load_default_levels
-from lib.levels import MaturityModel, evaluate, evaluate_row, floor_of, parse_levels
+from lib.scoring.level_signals import load_default_levels
+from lib.scoring.levels import MaturityModel, evaluate, evaluate_row, floor_of, parse_levels
 
 GATE = {"signal": "gate.enforced", "op": "eq", "value": True}
 MUTATION = {"signal": "pressure.mutation_run", "op": "eq", "value": True}
@@ -61,7 +61,7 @@ def _cov(row: dict[str, Any]) -> dict[str, Any]:
     return entry
 
 
-# --- lib.levels ----------------------------------------------------------------
+# --- lib.scoring.levels ----------------------------------------------------------------
 
 
 def test_a_met_level_with_only_a_higher_signal_missing_has_a_floor():

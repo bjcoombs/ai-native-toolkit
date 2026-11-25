@@ -16,7 +16,7 @@ import pytest
 import lib.fleet.fleet_diagrams as fd
 import lib.fleet.fleet_trends as ft
 from lib.fleet.fleet_groups import GroupRow
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 from fleet_trends_fixture import (CURRENT_STAMP, ENTRIES, FIXTURES, LEVELS, LONG, REPOS, TOP, build, goldens,
                                   group, runs, stamp)
 from svg_cascade import overridden_text_attributes

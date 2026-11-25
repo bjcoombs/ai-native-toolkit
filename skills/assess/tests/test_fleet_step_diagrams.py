@@ -23,9 +23,9 @@ from lib.fleet.fleet_diagrams import DIAGRAM_FILES, build_diagrams
 from lib.fleet.fleet_history import OPTIONAL_HISTORY_FILES
 from lib.fleet.fleet_level import LEVEL_FILE
 from lib.fleet.fleet_opportunities import build_opportunities
-from lib.level_result_types import LevelResult
-from lib.level_signals import DEFAULT_LEVELS
-from lib.levels import MaturityModel, condition_id
+from lib.scoring.level_result_types import LevelResult
+from lib.scoring.level_signals import DEFAULT_LEVELS
+from lib.scoring.levels import MaturityModel, condition_id
 from lib.vocabulary import banned_hits
 from svg_cascade import overridden_text_attributes
 from test_fleet_cli import fleet_cli, froot  # noqa: F401 - froot is a fixture

@@ -15,7 +15,7 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from lib.next_step_guidance import DENY_RULE_EXAMPLE, guidance  # noqa: E402 - a path constant precedes the sys.path bootstrap
+from lib.scoring.next_step_guidance import DENY_RULE_EXAMPLE, guidance  # noqa: E402 - a path constant precedes the sys.path bootstrap
 from lib.run_context_types_fix import RepoFacts  # noqa: E402 - a path constant precedes the sys.path bootstrap
 from lib.starter_files import (  # noqa: E402 - a path constant precedes the sys.path bootstrap
     GUARDRAIL,

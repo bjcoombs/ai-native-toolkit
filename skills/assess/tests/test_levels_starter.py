@@ -1,4 +1,4 @@
-"""lib/levels_starter.py and scripts/levels_new.py: a starter model that loads with --levels (#1151)."""
+"""lib/scoring/levels_starter.py and scripts/levels_new.py: a starter model that loads with --levels (#1151)."""
 from __future__ import annotations
 
 import os
@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 
 import levels_new
-from lib.level_signals import signal_path_validator
-from lib.levels_starter import FIELD_GUIDE, StarterError, source_path, starter_text, write_starter
+from lib.scoring.level_signals import signal_path_validator
+from lib.scoring.levels_starter import FIELD_GUIDE, StarterError, source_path, starter_text, write_starter
 from lib.profiles import profile_names, single_repo_choice
-from lib.signal_grades import DEFAULT_LEVELS
+from lib.scoring.signal_grades import DEFAULT_LEVELS
 
 
 @pytest.mark.parametrize("profile", [None, *profile_names()])

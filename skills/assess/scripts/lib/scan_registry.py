@@ -125,7 +125,7 @@ from lib.pack_checks import IDENTITY_BLOCK, PACK_BLOCK
 from lib.pack_checks import collect as collect_packs
 from lib.hosting.org_security_policy import scan_org_security_policy
 from lib.hosting.github_secret_scanning import scan_github_secret_scanning
-from lib.layer_grades import scan_layer_grades
+from lib.scoring.layer_grades import scan_layer_grades
 from lib.hosting.merged_sample import merged_sample, offline_merged_sample
 from lib.hosting.gitlab_ci_lint import no_merged_ci, read_merged_ci
 from lib.instructions.guardrails import scan_guardrails
@@ -710,7 +710,7 @@ SCANS: tuple[ScanSpec, ...] = (
 )
 
 
-# The verified tally and the autonomy Step (lib/level_tally.py, #744): the run's
+# The verified tally and the autonomy Step (lib/scoring/level_tally.py, #744): the run's
 # maturity model (the default, or the --profile / --levels choice, #1150) over the
 # finished run context. Core-only: the
 # headless runner never reports it; /fleet computes the same from each row.
@@ -734,7 +734,7 @@ SCANS = (*SCANS, pinned_reads(_spec("unit_levels", cs.unit_levels), UNIT_LEVEL_R
 # #865): the lowest unit's Step plus "N of M measured", and the changes ranked by the
 # units they lift. Core-only.
 SCANS = (*SCANS, _spec("unit_rollup", cs.unit_rollup))
-# The deterministic headline (lib/headline.py, #747, #844, #1083): catalogue coverage and the per-tag
+# The deterministic headline (lib/scoring/headline.py, #747, #844, #1083): catalogue coverage and the per-tag
 # strip, worded from the level block, and the badge and log entry summary. It carries the report's top
 # card (lib/top_card.py, #1252), which reads since_last_run, unit_rollup and measured_commit, so it
 # runs after the unit roll-up.

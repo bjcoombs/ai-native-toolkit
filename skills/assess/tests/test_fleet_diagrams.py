@@ -19,7 +19,7 @@ import lib.fleet.fleet_svg as svg
 import lib.fleet.fleet_tooling_map as ftm
 from lib.fleet.runner import FleetRow
 from lib.fleet.fleet_view import read_repos
-from lib.levels import MaturityModel, load_levels
+from lib.scoring.levels import MaturityModel, load_levels
 from fleet_diagrams_fixture import FIXTURES, ROWS, WINDOW, build, comparison, goldens
 from svg_cascade import overridden_text_attributes
 

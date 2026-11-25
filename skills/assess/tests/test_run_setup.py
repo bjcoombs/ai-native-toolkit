@@ -65,7 +65,7 @@ def _header_for(current: dict) -> dict:
 def test_a_missing_stats_sidecar_reads_unavailable_not_zero(tmp_path: Path) -> None:
     """#959: no complexity-stats.json is not a measured zero, so the empty-set rule
     (no_scored_files) never fires on it and the tally names the missing sidecar."""
-    from lib import level_tally
+    from lib.scoring import level_tally
     from lib.run_scope import NO_STATS_REASON, load_current_stats
 
     stats = _header_for(load_current_stats(tmp_path))["stats_summary"]
@@ -83,7 +83,7 @@ def test_a_missing_stats_sidecar_reads_unavailable_not_zero(tmp_path: Path) -> N
 def test_a_sidecar_before_the_class_split_reads_no_class_split() -> None:
     """#820: a stored sidecar without loc_by_class is not a measured 0, so L4.2 reads
     not measured with its code; a missing sidecar carries no class-split marker."""
-    from lib import level_tally
+    from lib.scoring import level_tally
     from lib.class_sizes import loc_by_class
     from lib.run_scope import load_current_stats
 

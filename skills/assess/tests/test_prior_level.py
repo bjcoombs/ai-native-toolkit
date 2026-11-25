@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from lib.level_tally import default_model, level_result
+from lib.scoring.level_tally import default_model, level_result
 from lib.since_last_run import baseline_record
 from lib.prior_level import (
     PRIOR_LEVEL_FILE,

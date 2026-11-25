@@ -33,7 +33,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, NamedTuple
 
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 
 MAX_NAMES = 3
 LABEL = "Learn from"

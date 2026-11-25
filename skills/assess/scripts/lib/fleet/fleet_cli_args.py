@@ -24,7 +24,7 @@ from lib.fleet.fleet_diagrams import REPORT_FILE
 from lib.fleet.fleet_platform import DEFAULT_PLATFORM_JOBS, DEFAULT_PLATFORM_TIMEOUT
 from lib.fleet.fleet_stamp import RUN_FILE
 from lib.fleet.runner import DEFAULT_TIMEOUT, REPOS_FILE
-from lib.levels import add_renamed_flag
+from lib.scoring.levels import add_renamed_flag
 from lib.profiles import ProfileError, add_model_arguments, profile_path
 from lib.signals import platform_only_error
 
@@ -73,7 +73,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--out", required=True, help="Output directory; repos.jsonl is written here.")
     parser.add_argument(
         "--levels", metavar="FILE",
-        help="Maturity model (TOML, lib/levels.py format). Each group row in groups.jsonl "
+        help="Maturity model (TOML, lib/scoring/levels.py format). Each group row in groups.jsonl "
              "carries every maturity model row's whole level (or unknown) and the aggregation rule used.",
     )
     add_model_arguments(parser, levels=False)

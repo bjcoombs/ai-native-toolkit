@@ -10,7 +10,7 @@ During a version freeze, a PR that would bump a version counter adds one file he
 |---------|----------|-------------|---------|
 | `artifact_schema` | `ARTIFACT_SCHEMA_VERSION` | `skills/assess/scripts/lib/artifact_schema.py` | [`history/artifact_schema.md`](history/artifact_schema.md) |
 | `assess_method` | `ASSESS_METHOD_VERSION` | `skills/assess/scripts/lib/assess_method.py` | [`history/assess_method.md`](history/assess_method.md) |
-| `level_result` | `LEVEL_RESULT_VERSION` | `skills/assess/scripts/lib/level_tally.py` | [`history/level_result.md`](history/level_result.md) |
+| `level_result` | `LEVEL_RESULT_VERSION` | `skills/assess/scripts/lib/scoring/level_tally.py` | [`history/level_result.md`](history/level_result.md) |
 | `signals_schema` | `SIGNALS_SCHEMA_VERSION` | `skills/assess/scripts/lib/signals.py` | [`history/signals_schema.md`](history/signals_schema.md) |
 | `levels_default` | `version` | `skills/assess/levels/default.toml` | [`history/levels_default.md`](history/levels_default.md) |
 | `fleet_data` | `FLEET_DATA_VERSION` | `skills/assess/scripts/lib/fleet/fleet_data.py` | [`history/fleet_data.md`](history/fleet_data.md) |

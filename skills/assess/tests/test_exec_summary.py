@@ -15,8 +15,8 @@ from pathlib import Path
 from typing import Any
 
 from lib.exec_summary import GATE_TASK, STEP_GATES_URL, summarised
-from lib.headline import as_headline, headline
-from lib.level_tally import default_model
+from lib.scoring.headline import as_headline, headline
+from lib.scoring.level_tally import default_model
 from lib.top_card import card_lines
 from test_headline import SCRIPTS, _level, _run, ci2  # noqa: F401 - ci2 is a fixture
 from test_top_card import _cond

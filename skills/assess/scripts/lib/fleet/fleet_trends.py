@@ -79,7 +79,7 @@ from lib.fleet.fleet_maturity import SCOPE, floor_mean, has_floor, mean_share
 from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 from lib.fleet.fleet_svg import THEMED_HATCH, LinearScale
 from lib.fleet.fleet_view import load_groups
-from lib.levels import MaturityModel, floor_of
+from lib.scoring.levels import MaturityModel, floor_of
 
 TITLE = "Group maturity over time"
 FILE = "trend.svg"

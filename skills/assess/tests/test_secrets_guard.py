@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-import lib.level_tally as lt
+import lib.scoring.level_tally as lt
 import lib.manifest.check_manifest as cm
 from test_ci_includes import INCLUDE_TEST, _root_with_template
 

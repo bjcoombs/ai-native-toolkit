@@ -23,7 +23,7 @@ import lib.fleet.fleet_view as fv
 from lib.fleet.runner import FLEET_ROW_VERSION
 from lib.fleet.fleet_group_schema import build_schema
 from lib.fleet.fleet_groups import GroupRow
-from lib.levels import load_levels
+from lib.scoring.levels import load_levels
 from fleet_heatmap_fixture import build
 from svg_cascade import overridden_text_attributes
 

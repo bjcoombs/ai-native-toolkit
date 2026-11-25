@@ -1,7 +1,7 @@
 """The estate-wide fleet tag heatmap: repositories by truth tag, under the median strip (#940).
 
 ``heatmap_rows(data)`` reads ``fleet-data.json`` alone: each repository's per-tag tally
-(``repos[].tags``, #1073, the headline strip's cells from ``lib.level_tags.tag_cells``) and
+(``repos[].tags``, #1073, the headline strip's cells from ``lib.scoring.level_tags.tag_cells``) and
 its Step (``repos[].step``), never a second tally. One row per repository, every repository of
 the run, sorted by Step (highest first, a repository with no Step last) and then by its key;
 never grouped by unit, and no unit or group name is drawn. One column per truth tag, every tag of
@@ -29,7 +29,7 @@ from typing import Any, TypedDict
 
 import lib.fleet.fleet_svg as svg
 from lib.assess_diagrams import wrap
-from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
+from lib.scoring.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
 from lib.vocabulary import IN_PLACE
 
 FILE = "tag-heatmap.svg"

@@ -39,9 +39,9 @@ from lib.fleet_config import (
     merge_repo_sections,
     parse_fleet_config,
 )
-from lib.level_signals import signal_path_validator
+from lib.scoring.level_signals import signal_path_validator
 from lib.signals import collect
-from lib.levels import load_levels
+from lib.scoring.levels import load_levels
 
 RECENT = (datetime.now(timezone.utc) - timedelta(days=30)).replace(microsecond=0).isoformat()
 

@@ -81,9 +81,9 @@ def test_each_exemption_still_matches_its_text() -> None:
 def test_the_engine_text_holds_no_critical_word() -> None:
     """#889, #1252: the headline, the top card, gate notes, reason words and the since line, over every
     Step of the default model and every blocker state, use no word of blame or loss."""
-    from lib.headline import REASON_WORDS, headline
+    from lib.scoring.headline import REASON_WORDS, headline
     from lib.top_card import card_lines, since_line
-    from lib.level_tally import default_model
+    from lib.scoring.level_tally import default_model
     from lib.plain_english import critical_words
     model = default_model()
     texts = list(fixed_lines().values())

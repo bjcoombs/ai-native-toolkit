@@ -18,8 +18,8 @@ import pytest
 
 import assess_core
 import lib.scan_registry as reg
-from lib.level_signals import signal_path_validator
-from lib.level_tally import LEVEL_READS
+from lib.scoring.level_signals import signal_path_validator
+from lib.scoring.level_tally import LEVEL_READS
 from lib.pack_checks import collect, glob_regex
 from lib.pack_yaml import LEAF, OPAQUE, UNPARSABLE, UNSUPPORTED, YamlError, lookup, parse
 from lib.packs import load_pack

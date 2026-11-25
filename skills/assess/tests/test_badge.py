@@ -17,8 +17,8 @@ from lib.badge import (
     write_badge,
     write_headline_badge,
 )
-from lib.headline import as_headline
-from lib.level_result_types import Headline
+from lib.scoring.headline import as_headline
+from lib.scoring.level_result_types import Headline
 
 
 def _headline(step: int | None = 3, summary: str = "Step 3 · next: coverage gate") -> Headline:

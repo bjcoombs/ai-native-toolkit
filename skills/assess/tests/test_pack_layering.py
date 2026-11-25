@@ -8,8 +8,8 @@ from typing import Any
 import pytest
 
 import lib.fleet.fleet_method as fm
-from lib.level_signals import signal_path_validator
-from lib.level_tally import default_model
+from lib.scoring.level_signals import signal_path_validator
+from lib.scoring.level_tally import default_model
 from lib.pack_checks import collect
 from lib.pack_layering import layer_packs, pack_sources, row_source
 from lib.packs import Pack, PackError, load_pack

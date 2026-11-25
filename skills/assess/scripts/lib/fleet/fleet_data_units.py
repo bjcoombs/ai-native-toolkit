@@ -20,7 +20,7 @@ fields are computed from the row (``lib.fleet.fleet_level.repo_level``):
 - ``next_blocker``: the first gate of that Step that does not hold, as tokens (``gate``,
   ``state``, ``disposition``, as ``gate_blockers`` writes them, #945), null when no gate
   blocks it;
-- ``tags``: the unit's per-tag tally, the headline strip (``lib.headline.tag_cells``) over the
+- ``tags``: the unit's per-tag tally, the headline strip (``lib.scoring.headline.tag_cells``) over the
   unit's level result, the shape of the repository's ``tags`` (#1073);
 - ``learn_from``: up to three sibling units of the same repository that already hold the
   unit's next blocking gate (#1155, ``lib.fleet.fleet_learn_from``), the same ecosystem and
@@ -46,9 +46,9 @@ from typing import Any, TypedDict
 
 from lib.fleet.fleet_data_steps import GateBlocker
 from lib.fleet.fleet_learn_from import Sibling, condition_states, ecosystems, learn_from, next_gate
-from lib.headline import tag_cells
-from lib.level_result_types import LevelResult, TagCell
-from lib.levels import MaturityModel
+from lib.scoring.headline import tag_cells
+from lib.scoring.level_result_types import LevelResult, TagCell
+from lib.scoring.levels import MaturityModel
 from lib.unit_components import KINDS, Kind
 from lib.unit_levels import unit_result
 

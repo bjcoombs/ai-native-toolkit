@@ -12,7 +12,7 @@ import lib.fleet.fleet_svg as svg
 from lib.fleet.runner import FleetRow
 from lib.fleet.fleet_compare import Comparison, GroupChange, LevelState, RowMove, not_comparable
 from lib.fleet.fleet_view import read_repos
-from lib.levels import MaturityModel, load_levels
+from lib.scoring.levels import MaturityModel, load_levels
 from fleet_diagrams_fixture import FIXTURES, WINDOW, comparison
 
 

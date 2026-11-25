@@ -15,7 +15,7 @@ same way, here:
 
 - **Lower bound (#697).** ``floor_mean`` is the floor-inclusive figure shown beside
   the known-only mean, never in its place: an unknown row with a confirmed floor
-  (``lib.levels.floor_of``) joins at that floor's share. It is a lower bound over a
+  (``lib.scoring.levels.floor_of``) joins at that floor's share. It is a lower bound over a
   larger row set, so it can sit below the known-only mean (a 1-of-4 floor row
   joining rows at their top). Plotted positions stay on ``mean_share``: an entry
   written before #697 has no floors, and a line drawn on this figure would move

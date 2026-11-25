@@ -25,9 +25,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import lib.fleet.fleet_svg as svg
-from lib.headline import GATE_CHANGE, gate_change
-from lib.level_result_types import LevelResult
-from lib.levels import StepDef, StepGate
+from lib.scoring.headline import GATE_CHANGE, gate_change
+from lib.scoring.level_result_types import LevelResult
+from lib.scoring.levels import StepDef, StepGate
 from lib.vocabulary import IN_PLACE
 
 LADDER_FILE = "step-ladder.svg"

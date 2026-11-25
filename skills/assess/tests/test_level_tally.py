@@ -1,4 +1,4 @@
-"""The verified tally and the autonomy Step (lib/level_tally.py, #744).
+"""The verified tally and the autonomy Step (lib/scoring/level_tally.py, #744).
 
 Unit cases run the engine over hand-built signals and small models; the
 end-to-end cases build the #744 contract fixtures (FL5 plus CI and an
@@ -17,15 +17,15 @@ from typing import Any
 import jsonschema
 import pytest
 
-import lib.level_tally as lt
-from lib import level_signals
+import lib.scoring.level_tally as lt
+from lib.scoring import level_signals
 from lib.counts_only.content_free import counts_only
 from lib.fleet.runner import STATUS_FAILED, STATUS_OK
 from lib.hosting.merged_sample import UNSUPPORTED_HOST_REASON
 from lib.fleet.fleet_level import LEVEL_FILE, fleet_levels, write_fleet_levels
 from lib.fleet.fleet_level_schema import SCHEMA_PATH, build_schema, render
-from lib.level_signals import DEFAULT_LEVELS, load_default_levels
-from lib.levels import LevelsError, MaturityModel, Row, evaluate_row, parse_levels
+from lib.scoring.level_signals import DEFAULT_LEVELS, load_default_levels
+from lib.scoring.levels import LevelsError, MaturityModel, Row, evaluate_row, parse_levels
 from test_fleet_cli import fleet_cli
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"

@@ -1,6 +1,6 @@
 # `LEVEL_RESULT_VERSION` history
 
-The version history of `LEVEL_RESULT_VERSION` in `skills/assess/scripts/lib/level_tally.py`, newest entry first.
+The version history of `LEVEL_RESULT_VERSION` in `skills/assess/scripts/lib/scoring/level_tally.py`, newest entry first.
 The release PR's `make fold` writes each new entry at the top from the notes in
 [`skills/assess/changes/`](../README.md).
 

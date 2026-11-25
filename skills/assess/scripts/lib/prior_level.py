@@ -2,7 +2,7 @@
 
 Each run writes ``prior-level.json`` into its artifact directory (``.assess/`` or
 ``.assess/<scope-slug>/``) with the maturity-model version (``levels_version``) and the
-``level`` block's ``tags`` rows (``lib/level_tags.py``). ``run_publish.publish_run`` reads the
+``level`` block's ``tags`` rows (``lib/scoring/level_tags.py``). ``run_publish.publish_run`` reads the
 previous file into the run context's ``prior_level`` key **before** it draws the diagrams and
 rewrites the file, as ``prior_findings_snapshot`` is read before ``findings.json`` is
 rewritten, so the strip (``lib/assess_diagrams_tags.py``) draws the earlier run from the
@@ -63,8 +63,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
-from lib.level_result_types import TagRow
-from lib.levels_fields import TRUTH_TAGS
+from lib.scoring.level_result_types import TagRow
+from lib.scoring.levels_fields import TRUTH_TAGS
 
 PRIOR_LEVEL_FILE = "prior-level.json"
 # Joins a base model and its practice packs in a record key (#1276): a pack name is

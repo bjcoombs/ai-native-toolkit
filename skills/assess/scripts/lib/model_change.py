@@ -38,7 +38,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
-from lib.level_tally import default_model
+from lib.scoring.level_tally import default_model
 from lib.prior_level import load_prior_level, record_for
 from lib.profiles import CUSTOM_MODEL_SUFFIX, ModelChoice, model_for_level
 from lib.run_context_types_since import SinceLastRun

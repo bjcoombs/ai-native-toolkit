@@ -1,7 +1,7 @@
 """``OUT/level.json``: each repository's verified tally and Step in a fleet run (#744).
 
 ``fleet --levels FILE`` evaluates the model over every scanned repository's
-``scans`` with ``lib.level_tally.level_result``, the same function ``/assess``
+``scans`` with ``lib.scoring.level_tally.level_result``, the same function ``/assess``
 runs over its run context, so one commit gives one result in both. Keyed by the
 repository id of ``repos.jsonl``; a failed scan has no signals and no entry.
 The envelope carries the method identity (the model version, the toolkit commit
@@ -37,9 +37,9 @@ from typing import Any, NotRequired, TypedDict
 
 from lib.fleet.fleet_packs import PackRollUp, pack_roll_up
 from lib.fleet.runner import STATUS_OK, FleetRow, RepoCommit
-from lib.levels import MaturityModel
-from lib.level_result_types import LevelResult
-from lib.level_tally import LEVEL_RESULT_VERSION, dumps_level, level_result, run_exclusions
+from lib.scoring.levels import MaturityModel
+from lib.scoring.level_result_types import LevelResult
+from lib.scoring.level_tally import LEVEL_RESULT_VERSION, dumps_level, level_result, run_exclusions
 
 LEVEL_FILE = "level.json"
 

@@ -1,13 +1,13 @@
-"""lib/levels_hints.py: an unknown signal path names its line and the closest real signals (#1151)."""
+"""lib/scoring/levels_hints.py: an unknown signal path names its line and the closest real signals (#1151)."""
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from lib.level_signals import ORG_PATHS, published_paths, signal_path_validator
-from lib.levels import LevelsError, known_paths, load_levels, parse_levels
-from lib.levels_hints import CATALOG, UnknownSignalError, closest
+from lib.scoring.level_signals import ORG_PATHS, published_paths, signal_path_validator
+from lib.scoring.levels import LevelsError, known_paths, load_levels, parse_levels
+from lib.scoring.levels_hints import CATALOG, UnknownSignalError, closest
 
 MODEL = """version = "t-1"
 
@@ -92,16 +92,16 @@ def test_a_path_not_in_the_text_keeps_no_line() -> None:
 
 
 def test_with_no_names_registered_the_error_points_at_the_catalog(monkeypatch: pytest.MonkeyPatch) -> None:
-    import lib.levels_hints as hints
+    import lib.scoring.levels_hints as hints
     monkeypatch.setattr(hints, "_names", [])
     assert closest("team", "coverage_gate.threshold") == []
     assert str(UnknownSignalError([("team", "coverage_gate.threshold", "r")])).endswith(f"{CATALOG} lists them all")
 
 
 def test_levels_hints_never_imports_level_signals() -> None:
-    """lib.level_signals reaches the platform clients; importing it here would mark every
-    importer of lib.levels as a network scan (tests/test_signals.py)."""
-    import lib.levels_hints as hints
+    """lib.scoring.level_signals reaches the platform clients; importing it here would mark every
+    importer of lib.scoring.levels as a network scan (tests/test_signals.py)."""
+    import lib.scoring.levels_hints as hints
     assert "level_signals" not in Path(hints.__file__).read_text(encoding="utf-8").split('"""', 2)[2]
 
 

@@ -24,7 +24,7 @@ import fleet_diagrams_fixture
 import fleet_trends_fixture
 from assess_report import render_report
 import lib.keyhole.keyhole_signals as ks
-from lib.level_signals import DEFAULT_LEVELS
+from lib.scoring.level_signals import DEFAULT_LEVELS
 from lib.run_context_types import KeyholeConcern
 from lib.vocabulary import (BANNED_WORDS, IN_PLACE, RETIRED_LABELS, ROW_PHRASES, TEMPLATE_WORDS, banned_hits,
                             opening_lines, prose, row_hits, template_prose)
@@ -172,9 +172,9 @@ def test_the_readme_documents_exactly_the_banned_list() -> None:
 def test_every_next_step_and_hint_the_shipped_model_can_render_is_supportive() -> None:
     """Every criterion's guidance and every signal's hint, not only the levels a fixture reaches."""
     from lib.fleet.fleet_next_steps import FULL_RUN_HINT, PLATFORM_HINT
-    from lib.headline import reason_word
-    from lib.level_signals import load_default_levels
-    from lib.next_step_guidance import _LAYER5_PARTS, guidance, measure_hint
+    from lib.scoring.headline import reason_word
+    from lib.scoring.level_signals import load_default_levels
+    from lib.scoring.next_step_guidance import _LAYER5_PARTS, guidance, measure_hint
     texts = {"FULL_RUN_HINT": FULL_RUN_HINT, "PLATFORM_HINT": PLATFORM_HINT}
     for row in load_default_levels()["rows"]:
         texts[f"{row['id']} title"] = row["title"]

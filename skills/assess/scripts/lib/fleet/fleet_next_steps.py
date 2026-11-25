@@ -8,7 +8,7 @@ one page per group, with no rescan:
 - for each row below its top level, the unmet criteria of the next level, one
   numbered step per criterion, so a team can take or leave each on its own.
   Each step leads with the change and a "done when" in the repository's own
-  terms (``lib/next_step_guidance.py``); the signal expression follows as the
+  terms (``lib/scoring/next_step_guidance.py``); the signal expression follows as the
   optional re-run check. Between the two, a "Why:" line gives the check manifest's why
   for that criterion at its level (``lib.fleet.fleet_why.criterion_why``, #1128); a criterion
   with no manifest entry (a caller's own model) gets no Why line, never an empty one. A team row names the repositories holding the group
@@ -23,7 +23,7 @@ one page per group, with no rescan:
   ``PLATFORM_ONLY_SCANS`` block, absent without ``--platform``) says ``fleet
   --platform`` measures it (``PLATFORM_HINT``).
 
-Levels come from re-running ``lib.levels.evaluate`` on the same inputs the
+Levels come from re-running ``lib.scoring.levels.evaluate`` on the same inputs the
 roll-up (``lib/fleet/fleet_groups.py``) evaluated: each repository's ``scans`` and
 the group's joined settings fragment. ``build_pages`` checks every row's
 status and level against ``groups.jsonl`` and raises ``NextStepsError`` on any
@@ -84,9 +84,9 @@ from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_groups import (GroupRow, full_run_only_signals, platform_signals, repo_signals, settings_for,
                               settings_signals)
 from lib.fleet.fleet_why import criterion_why
-from lib.next_step_guidance import guidance, measure_hint
-from lib.next_step_guidance import parts as unmet_parts_of
-from lib.levels import Criterion, CriterionOutcome, Evaluation, Row, RowResult, MaturityModel, evaluate, floor_of
+from lib.scoring.next_step_guidance import guidance, measure_hint
+from lib.scoring.next_step_guidance import parts as unmet_parts_of
+from lib.scoring.levels import Criterion, CriterionOutcome, Evaluation, Row, RowResult, MaturityModel, evaluate, floor_of
 from lib.run_context_types import JsonDict
 from lib.vocabulary import IN_PLACE
 
@@ -227,7 +227,7 @@ def _outcomes(evaluation: Evaluation | RowResult, target: int) -> dict[tuple[str
 
 def _step(number: int, criterion: Criterion, where: Sequence[str],
           unmet_parts: Sequence[str] = (), why: str | None = None) -> list[str]:
-    # an eq_signal criterion's value is a second path, not an operand to set (lib/levels_fields.py)
+    # an eq_signal criterion's value is a second path, not an operand to set (lib/scoring/levels_fields.py)
     words = None if "eq_signal" in criterion else guidance(
         criterion["signal"], criterion["op"], criterion["value"], unmet_parts)
     because = [f"   - Why: {text(why)}"] if why else []  # no manifest why: no line (#1128)
@@ -301,7 +301,7 @@ def _repos(count: int) -> str:
 
 
 def _rolled(result: RowResult, top: int, bound: int) -> int:
-    """The team roll-up of the repositories' low (0) or high (1) bounds, as lib.levels rolls it."""
+    """The team roll-up of the repositories' low (0) or high (1) bounds, as lib.scoring.levels rolls it."""
     evaluations = result.get("repos", {})
     levels = [ev["bounds"][bound] for ev in evaluations.values()]
     best = 0

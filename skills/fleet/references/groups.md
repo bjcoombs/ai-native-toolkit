@@ -17,8 +17,8 @@ Logic: `skills/assess/scripts/lib/fleet/fleet_groups.py`.
 | `levels_version` | The maturity model's `version`; `null` without `--levels`. |
 | `levels` | One entry per maturity model row: `id`, `scope`, `status` (`level` or `unknown`), `level` (a whole number, `null` when unknown), `top_level` (the row's number of levels, so a level reads as a share of it without the maturity model file; absent in rows written before it was added, which readers handle), `aggregation` (the team rule, `{rule, share}`; `null` for org rows), `missing_signals`, `unknown_repos`; on an `unknown` row only, optional `floor` (the level its confirmed criteria reach, when at least 1: "at least N", never the exact level) and `full_run_only` (the missing signals only a full `/assess` measures, their block unavailable as `not_registered` or `network` in every repository missing them; a `--platform` scan's block such as `review_reality` is left out, since `fleet --platform` measures it, and the next-steps page says so). Both are absent otherwise and in rows written before #697, which readers handle. |
 
-Maturity model signal paths are checked at load against `lib/level_signals.py` (an
-unknown path exits 2 before any scan) and evaluated by `lib/levels.py`, with no
+Maturity model signal paths are checked at load against `lib/scoring/level_signals.py` (an
+unknown path exits 2 before any scan) and evaluated by `lib/scoring/levels.py`, with no
 second threshold config. The shipped `skills/assess/levels/default.toml` uses
 the same namespace.
 

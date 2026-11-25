@@ -30,7 +30,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
-from lib.level_result_types import Headline
+from lib.scoring.level_result_types import Headline
 from lib.top_card import CardAction, read_first_action, start_lines
 
 __all__ = ["refresh_card", "refreshed", "refreshed_report"]

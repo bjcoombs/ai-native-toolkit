@@ -12,9 +12,9 @@ from lib.fleet.fleet_data_tags import member_tags, repo_tags, tag_roll_up
 from lib.fleet.fleet_level import fleet_levels
 from lib.fleet.fleet_rescore import rescore
 from lib.fleet.fleet_units import build_trees, empty_map
-from lib.headline import headline
-from lib.level_result_types import TagCell
-from lib.levels_fields import TRUTH_TAGS
+from lib.scoring.headline import headline
+from lib.scoring.level_result_types import TagCell
+from lib.scoring.levels_fields import TRUTH_TAGS
 
 
 def _cell(tag: str, met: int = 0, measured: int = 0, verified: int = 0, not_measured: int = 0,

@@ -19,7 +19,7 @@ headless_variants = [
   { block = "owner_exclusions", callable = "lib.headless_static:owner_exclusions", reads = ["repo_root"], stage = "read_side" },
 ]
 shapes = [
-  { path = "owner_exclusions", type = "lib.level_result_types:OwnerExclusionsBlock" },
+  { path = "owner_exclusions", type = "lib.scoring.level_result_types:OwnerExclusionsBlock" },
 ]
 revision = 1
   [entries.privacy]

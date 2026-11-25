@@ -37,8 +37,8 @@ from dataclasses import dataclass
 from typing import Any, NamedTuple, TypedDict, cast
 
 from lib.fleet.fleet_data_steps import GateBlocker, GateHold, RepoSteps, step_hold
-from lib.level_result_types import Tally
-from lib.levels import MaturityModel, StepDef
+from lib.scoring.level_result_types import Tally
+from lib.scoring.levels import MaturityModel, StepDef
 
 
 class Target(NamedTuple):

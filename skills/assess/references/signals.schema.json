@@ -1293,7 +1293,7 @@
               "reason"
             ]
           },
-          "description": "Deterministic layer grades (lib/layer_grades.py): the best instruction-file grade and where the agent instruction files are. Tokens and a boolean, kept whole by counts-only output; no path is carried.",
+          "description": "Deterministic layer grades (lib/scoring/layer_grades.py): the best instruction-file grade and where the agent instruction files are. Tokens and a boolean, kept whole by counts-only output; no path is carried.",
           "properties": {
             "instruction_presence": {
               "enum": [

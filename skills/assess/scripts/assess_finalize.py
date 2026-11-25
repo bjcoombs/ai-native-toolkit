@@ -60,10 +60,10 @@ from pathlib import Path
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.action_conditions import condition_errors
+from lib.scoring.action_conditions import condition_errors
 from lib.card_lint import done_when_warnings
 from lib.card_refresh import refresh_card
-from lib.headline import as_headline
+from lib.scoring.headline import as_headline
 from lib.evidence_check import check_evidence, describe
 from lib.gap_actions import action_mode
 from lib.testing.mutation_cap import layer6_cap_violation

@@ -96,7 +96,7 @@ def lint(text: str) -> list[PlainIssue]:
 
 def _rendered() -> dict[str, str]:
     """The top card's lines as printed, for each Step of the default model (#1252)."""
-    from lib.level_tally import default_model
+    from lib.scoring.level_tally import default_model
     from lib.top_card import card_lines
     model = default_model()
     steps = model.get("steps", [])
@@ -123,7 +123,7 @@ def _rendered() -> dict[str, str]:
 def fixed_lines() -> dict[str, str]:
     """Every fixed user-facing line, keyed ``<source>.<key>``."""
     from lib.assess_diagrams_ladder import STEP_MEANING
-    from lib.headline import GATE_CHANGE, GATE_NOUN
+    from lib.scoring.headline import GATE_CHANGE, GATE_NOUN
     from lib.keyhole.keyhole_signals import FINDING_ACTIONS
     from lib.top_card import GATE_GAP, GATE_TASK
     out: dict[str, str] = {}

@@ -15,7 +15,7 @@ import pytest
 from lib import core_scans
 from lib.assess_diagrams import build_diagrams
 from lib.top_card import since_line
-from lib.level_tally import LEVEL_READS, default_model
+from lib.scoring.level_tally import LEVEL_READS, default_model
 from lib.model_change import (CUSTOM_NOT_DRAWN, across_models, custom_run, model_changed_line, model_for_level,
                               model_name, previous_levels_version, units_label)
 from lib.prior_level import write_prior_level

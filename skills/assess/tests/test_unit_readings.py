@@ -18,8 +18,8 @@ from lib import run_setup as rs
 from lib import unit_readings as ur
 from lib.counts_only.content_free import counts_only
 from lib.instructions.instruction_files import nested_instruction_surface
-from lib.layer_grades import scan_layer_grades
-from lib.levels import resolve_signal
+from lib.scoring.layer_grades import scan_layer_grades
+from lib.scoring.levels import resolve_signal
 from lib.scan_registry import SCANS, STAGE_READ_SIDE, ScanSpec
 from lib.signals import HEADLESS_SCANS
 from lib.unit_discovery import scan_units
@@ -322,7 +322,7 @@ def test_a_sibling_nested_file_through_the_unit_pass(tmp_path: Path) -> None:
 def test_no_model_condition_mixes_unit_and_repo_wide_blocks() -> None:
     # An origin is "unit" when any criterion reads an own block (#864 relies on a level
     # reading one kind only); a level mixing both would need a finer rule.
-    from lib.level_tally import default_model
+    from lib.scoring.level_tally import default_model
     own = set(ur.unit_blocks(cm.core_manifest()))
     for row in default_model()["rows"]:
         for level in row["levels"]:
@@ -398,7 +398,7 @@ def test_repo_wide_conditions_are_inherited_and_scoped_ones_are_the_units(
 
 
 def test_every_model_condition_is_tagged(monorepo: ur.UnitReadingsBlock) -> None:
-    from lib.level_tally import condition_ids, default_model
+    from lib.scoring.level_tally import condition_ids, default_model
     for unit in monorepo["units"]:
         assert {c["id"] for c in unit["conditions"]} == set(condition_ids(default_model()))
         assert {c["origin"] for c in unit["conditions"]} <= {"unit", "inherited"}

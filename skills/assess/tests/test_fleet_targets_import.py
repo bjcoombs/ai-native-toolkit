@@ -14,7 +14,7 @@ import lib.fleet.fleet_targets_import as ti
 from lib.fleet.fleet_data import FleetData
 from lib.fleet.fleet_publish import PublishError
 from lib.fleet.fleet_targets import TargetSpec, parse_targets
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 from test_fleet_achievements_cli import STEP_LEVELS, _root, _seed_lower
 from test_fleet_cli import fleet_cli
 
