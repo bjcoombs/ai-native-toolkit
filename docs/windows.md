@@ -90,7 +90,12 @@ scripts by hand:
 - `/fleet`: the [Windows section of the fleet skill](../skills/fleet/SKILL.md#windows)
   has the PowerShell forms for a ghsync root and for `--from-list`.
 - `/ghsync` and `/ghreport`: run the scripts from Git Bash, with `jq` and `gh`
-  (or `glab`) installed as above.
+  (or `glab`) installed as above. `/ghsync` clones with
+  `-c core.longpaths=true` and sets the same value on every sync, because a
+  GitLab layout nests the full project path and can pass Windows' 260-character
+  path limit. A clone that still fails with "Filename too long" is listed under
+  Failed as "failed: path too long, see core.longpaths"; a shorter `--root`
+  is the usual fix.
 
 ## The test suites without make
 

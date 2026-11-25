@@ -24,6 +24,10 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from ghsync_gitlab_env import HOST as GITLAB_HOST
+from ghsync_gitlab_env import SYNCED as GITLAB_SYNCED
+from ghsync_gitlab_env import Env as GitLabEnv
+from ghsync_gitlab_env import _config as gitlab_config
 from gitbash import BASH, base_env, rmtree
 
 REPO = Path(__file__).resolve().parent.parent
@@ -64,6 +68,13 @@ JSON
         # Forward what follows -- to git clone, as gh does.
         repo=$3; dest=$4; shift 4
         [ "${1:-}" = "--" ] && shift
+        # GH_CLONE_TOO_LONG names one repo whose checkout fails as Git for
+        # Windows reports a path past MAX_PATH.
+        if [ "$repo" = "${GH_CLONE_TOO_LONG:-}" ]; then
+          echo "error: unable to create file a/very/deep/path: Filename too long"
+          echo "fatal: unable to checkout working tree"
+          exit 128
+        fi
         exec git clone -q "$@" "https://github.com/$repo.git" "$dest" ;;
       view) echo "main" ;;
     esac ;;
@@ -287,9 +298,50 @@ def test_quiet_clone_passes_q_to_git(env: Env) -> None:
     assert res.returncode == 0, res.stdout + res.stderr
     clones = [ln for ln in env.gh_log.read_text().splitlines()
               if ln.startswith("gh repo clone")]
-    assert clones and all(ln.endswith(" -- -q") for ln in clones), clones
+    assert clones and all(ln.endswith(" -- -c core.longpaths=true -q") for ln in clones), clones
     assert "*** Cloning" not in res.stdout
     assert "*** Cloned" not in res.stdout
+
+
+# ---- Windows long paths (core.longpaths) -----------------------------------
+
+
+def test_github_clone_carries_core_longpaths(env: Env) -> None:
+    """Every clone passes -c core.longpaths=true to git clone, so the first
+    checkout already has it; the clone keeps it in its config."""
+    res = env.run()
+    assert res.returncode == 0, res.stdout + res.stderr
+    for path in SYNCED:
+        assert " -- -c core.longpaths=true " in _clone_line(env, path) + " "
+        assert _config(env, env.checkout(path), "core.longpaths") == "true"
+
+
+def test_gitlab_clone_carries_core_longpaths(tmp_path: Path) -> None:
+    gl = GitLabEnv(tmp_path)
+    trace = tmp_path / "git-trace.log"
+    res = gl.run("--host", GITLAB_HOST, "--quiet", root=gl.root,
+                 env={"GIT_TRACE": str(trace)})
+    assert res.returncode == 0, res.stdout + res.stderr
+    clones = [ln for ln in trace.read_text().splitlines()
+              if "built-in: git clone " in ln]
+    assert len(clones) == len(GITLAB_SYNCED), clones
+    assert all(" clone -q -c core.longpaths=true " in ln for ln in clones), clones
+    for path in GITLAB_SYNCED:
+        assert gitlab_config(gl, gl.checkout(path), "core.longpaths") == "true"
+
+
+def test_filename_too_long_is_named_in_failed_summary(env: Env) -> None:
+    res = subprocess.run(
+        [BASH, str(GHSYNC), "--org", ORG, "--root", str(env.root), "--quiet"],
+        capture_output=True, text=True, timeout=120,
+        env={**env.env, "GH_CLONE_TOO_LONG": f"{ORG}/ns/nested"},
+    )
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert _section(res.stdout, "Failed") == [
+        "ns/nested (failed: path too long, see core.longpaths)"
+    ]
+    assert "Filename too long" in res.stdout
+    assert not (env.root / "ns" / "nested").exists()
 
 
 # ---- analysis-only mirrors: --partial / --filter, --shallow-since ----------
@@ -319,7 +371,7 @@ def test_partial_clone_keeps_history_without_historic_blobs(env: Env) -> None:
     res = env.run("--partial")
     assert res.returncode == 0, res.stdout + res.stderr
     assert "filtering not recognized" not in res.stdout + res.stderr
-    assert _clone_line(env, "alpha").endswith(" -- --filter=blob:none -q")
+    assert _clone_line(env, "alpha").endswith(" -- -c core.longpaths=true --filter=blob:none -q")
     checkout = env.checkout("alpha")
     assert _config(env, checkout, "remote.origin.partialclonefilter") == "blob:none"
     # The first CHANGES blob is history-only, so the partial clone lacks it.
@@ -332,14 +384,14 @@ def test_partial_clone_keeps_history_without_historic_blobs(env: Env) -> None:
 def test_filter_spec_is_passed_through(env: Env) -> None:
     res = env.run("--filter=tree:0", "--limit", "1")
     assert res.returncode == 0, res.stdout + res.stderr
-    assert _clone_line(env, "alpha").endswith(" -- --filter=tree:0 -q")
+    assert _clone_line(env, "alpha").endswith(" -- -c core.longpaths=true --filter=tree:0 -q")
 
 
 def test_shallow_since_truncates_history(env: Env) -> None:
     new = env.advance("alpha", date="2099-01-01T00:00:00")
     res = env.run("--shallow-since", "2098-01-01")
     assert res.returncode == 0, res.stdout + res.stderr
-    assert _clone_line(env, "alpha").endswith(" -- --shallow-since=2098-01-01 -q")
+    assert _clone_line(env, "alpha").endswith(" -- -c core.longpaths=true --shallow-since=2098-01-01 -q")
     checkout = env.checkout("alpha")
     assert env.git("rev-parse", "--is-shallow-repository", cwd=checkout) == "true"
     assert env.git("rev-list", "HEAD", cwd=checkout).split() == [new]
@@ -377,6 +429,6 @@ def test_partial_without_quiet_omits_q(env: Env) -> None:
         capture_output=True, text=True, env=env.env, timeout=120,
     )
     assert res.returncode == 0, res.stdout + res.stderr
-    assert _clone_line(env, "alpha").endswith(" -- --filter=blob:none")
+    assert _clone_line(env, "alpha").endswith(" -- -c core.longpaths=true --filter=blob:none")
     checkout = env.checkout("alpha")
     assert _config(env, checkout, "remote.origin.partialclonefilter") == "blob:none"
