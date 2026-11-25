@@ -1,0 +1,31 @@
+name: Issue needs-triage
+
+# Mark every new issue as untriaged, so the untriaged backlog is countable
+# (docs/contributing/definition-of-ready.md, "Labels"). The grooming workflow
+# or the maintainer removes the label once the issue is settled.
+#
+# An issue that opens already carrying `agent-ready` was triaged by whoever
+# filed it (the maintainer, or /issues creating an approved decomposition), so
+# it is left alone rather than given both labels.
+#
+# No checkout and no action: one `gh` call with the workflow token, which is
+# granted `issues: write` and nothing else.
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  label:
+    name: apply needs-triage
+    if: ${{ !contains(github.event.issue.labels.*.name, 'agent-ready') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Add the needs-triage label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --add-label needs-triage

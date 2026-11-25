@@ -99,6 +99,7 @@ The Six Thinking Hats team, orchestrated by [`/huddle`](../skills/huddle/SKILL.m
 - [Contributing: goal](./contributing/goal.md) - the goal every skill and report serves, the three contributor tendencies the guardrails trace to, and the feature test for any change.
 - [Contributing: CI and merge gates](./contributing/ci.md) - workflows, branch protection, the type gate, the file-size ratchet, the floor, mutation testing, CodeQL and the coverage floor.
 - [Contributing: marathon notes](./contributing/marathon.md) - the reasoning behind the `## Marathon Configuration` values in `CLAUDE.md`: bot reviewers, the claude-review four-state rule, non-blocking checks, the version hot file.
+- [Contributing: definition of ready](./contributing/definition-of-ready.md) - when an issue is ready for an agent: the six required sections, the checklist the grooming script parses, and the `needs-triage` and `agent-ready` labels.
 - [Contributing: releasing](./contributing/release.md) - cutting the per-marathon release and refreshing the Marketplace listing.
 - [Contributing: standalone skill pipeline](./contributing/standalone-skills.md) - how the standalone ZIPs are built, vendored and marker-transformed.
 - [Contributing: /assess architecture](./contributing/assess-architecture.md) - the deterministic core, the inward-only layering, the `.assess/` wiki and the LLM write-back.
