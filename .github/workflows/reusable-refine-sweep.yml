@@ -59,9 +59,11 @@ jobs:
     if: inputs.enabled
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # refine.py reads open pull requests for its overlap check.
     permissions:
       contents: read
       issues: write
+      pull-requests: read
     concurrency:
       group: refine-sweep-${{ github.repository }}
       cancel-in-progress: false

@@ -61,9 +61,9 @@ def test_caller_triggers() -> None:
 
 
 @pytest.mark.parametrize("caller", sorted(CALLERS))
-def test_caller_permissions_are_exactly_contents_read_issues_write(caller: str) -> None:
+def test_caller_permissions_are_issues_write_and_reads_only(caller: str) -> None:
     doc = _load(caller)
-    assert doc["permissions"] == {"contents": "read", "issues": "write"}
+    assert doc["permissions"] == {"contents": "read", "issues": "write", "pull-requests": "read"}
     for job in doc["jobs"].values():
         assert "permissions" not in job
 
@@ -118,6 +118,8 @@ def test_reusable_is_workflow_call_only_and_safe_by_default(name: str) -> None:
             # Takes the caller's grant, so a caller using Workload Identity
             # Federation can add id-token: write; a called job cannot widen it.
             assert "permissions" not in job
+        elif job_id == "sweep":
+            assert job["permissions"] == {"contents": "read", "issues": "write", "pull-requests": "read"}
         else:
             assert job["permissions"] == {"contents": "read", "issues": "write"}
         assert str(job["if"]).lstrip().startswith("inputs.enabled")

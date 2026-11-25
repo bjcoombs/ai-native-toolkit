@@ -13,9 +13,12 @@ on:
   issue_comment:
     types: [created]
 
+# pull-requests: read lets refine.py read open pull requests for its overlap
+# check; nothing here writes to a pull request.
 permissions:
   contents: read
   issues: write
+  pull-requests: read
 
 jobs:
   triage:

@@ -372,3 +372,11 @@ def test_size_marker_refused_when_the_issue_already_has_a_size(tmp_path: Path) -
     with pytest.raises(Refused, match="already has a size"):
         w.write_size_marker(101, 2, "no verdict", None)
     assert gh.writes == []
+
+
+def test_untrusted_marker_does_not_block_the_refiners_size(tmp_path: Path) -> None:
+    w, gh = writer(tmp_path, {"issues/101/comments": '[{"id": 9, "user": {"login": "outsider", "type": "User"}, '
+                                                     '"author_association": "NONE", '
+                                                     '"body": "<!-- refine:size 3 -->"}]'})
+    assert w.write_size_marker(101, 3, "one module", verdict())
+    assert len(gh.writes) == 1

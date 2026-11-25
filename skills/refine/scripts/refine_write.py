@@ -65,6 +65,7 @@ FIBONACCI = (1, 2, 3, 5, 8, 13, 21)
 MAX_CANDIDATES = 3
 MAX_TEXT = 500
 WRITE_ROLES = ("admin", "maintain", "write")
+TRUSTED_ASSOCIATIONS = ("OWNER", "MEMBER", "COLLABORATOR")
 
 SIZE_MARKER = "<!-- refine:size {points} -->"
 DUPLICATES_MARKER = "<!-- refine:duplicates -->"
@@ -423,6 +424,8 @@ class Writer:
             raise self.refuse(script, number, "the issue already has a size, or no verdict says it is unsized")
         latest: Optional[int] = None
         for c in self.comments(number):
+            if not (self._is_bot(c.get("user")) or c.get("author_association") in TRUSTED_ASSOCIATIONS):
+                continue
             first = str(c.get("body", "")).split("\n", 1)[0].strip()
             for p in FIBONACCI:
                 if first == SIZE_MARKER.format(points=p):

@@ -23,6 +23,7 @@ detail saying so, so a new checklist row degrades to a reader, not to a pass.
 
 Text sources: the issue body plus every comment whose first line is
 `<!-- triage:clarified-scope -->`, which the definition lets supply a section.
+Only a trusted author's comment (`Comment.trusted`) counts.
 The size comes from two producers, whichever is newer: a comment whose first
 line matches `size_marker` (`<!-- refine:size N -->`, written by `/issues`
 triage and the refiner with a one-line reason) or a `size_pattern` line in the
@@ -62,8 +63,9 @@ _PATH_SPAN = re.compile(r"`([\w.\-/]+)`")
 
 
 def text_sources(issue: Issue) -> List[str]:
-    """The body, then each clarified-scope comment, in order."""
-    clarified = [c["body"] for c in issue["comments"] if c["body"].lstrip().startswith(CLARIFIED_MARKER)]
+    """The body, then each clarified-scope comment from a trusted author, in order."""
+    clarified = [c["body"] for c in issue["comments"]
+                 if c["trusted"] and c["body"].lstrip().startswith(CLARIFIED_MARKER)]
     return [issue["body"]] + clarified
 
 
