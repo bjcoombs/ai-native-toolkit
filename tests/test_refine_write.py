@@ -487,3 +487,11 @@ def test_existing_marker_and_edge_cost_no_call_from_the_cap(tmp_path: Path) -> N
     with pytest.raises(Refused, match="call cap reached"):
         unsized.write_size_marker(101, 5, "a real write", verdict())
     assert gh.writes == []
+
+
+def test_size_marker_from_another_bot_is_not_a_size(tmp_path: Path) -> None:
+    other = json.dumps([{"id": 9, "user": {"login": "renovate[bot]", "type": "Bot"}, "author_association": "NONE",
+                         "body": "<!-- refine:size 8 -->"}])
+    w, gh = writer(tmp_path, {"issues/101": "issue_101_open.json", "issues/101/comments": other})
+    assert w.current_size(101, verdict()) is None
+    assert w.write_size_marker(101, 2, "one module", verdict())

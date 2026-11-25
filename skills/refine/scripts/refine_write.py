@@ -86,6 +86,7 @@ MAX_CANDIDATES = 3
 MAX_TEXT = 500
 WRITE_ROLES = ("admin", "maintain", "write")
 TRUSTED_ASSOCIATIONS = ("OWNER", "MEMBER", "COLLABORATOR")
+TRUSTED_BOTS = ("github-actions", "github-actions[bot]")
 
 SIZE_MARKER = "<!-- refine:size {points} -->"
 DUPLICATES_MARKER = "<!-- refine:duplicates -->"
@@ -253,6 +254,11 @@ class Writer:
             return False
         return actor.get("login") == self.s.bot_login or actor.get("type") == "Bot"
 
+    def _trusted_sizer(self, comment: Json) -> bool:
+        """A size marker counts from a writer or the refiner's bot, as in `refine_platform._trusted`."""
+        login = str((comment.get("user") or {}).get("login") or "")
+        return comment.get("author_association") in TRUSTED_ASSOCIATIONS or login in (self.s.bot_login, *TRUSTED_BOTS)
+
     def removed_by_person(self, number: int) -> Set[str]:
         """Labels a person (not a bot) has removed from the issue."""
         out: Set[str] = set()
@@ -268,7 +274,7 @@ class Writer:
         pattern, marker = size_rules(verdict)
         latest: Optional[int] = None
         for c in self.comments(number):
-            if not (self._is_bot(c.get("user")) or c.get("author_association") in TRUSTED_ASSOCIATIONS):
+            if not self._trusted_sizer(c):
                 continue
             match = marker.fullmatch(str(c.get("body", "")).split("\n", 1)[0].strip())
             if match:
