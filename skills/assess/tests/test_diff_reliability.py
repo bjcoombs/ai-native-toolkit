@@ -185,3 +185,24 @@ def test_stats_tool_versions_reads_every_backend_by_language_tool() -> None:
         "tool_versions": {"x": "y"}, "scc_version_extra": "no",
     })
     assert got == {"lizard": "1.23.0", "scc": "3.7.0", "dart-scanner": "1"}
+
+
+def test_run_contexts_that_differ_only_in_timings_produce_no_diff(tmp_path: Path) -> None:
+    """#1380: the timings block differs on every run, so it must not move the cross-run
+    diff. Two runs over the same stats, the first run's timings rewritten to differ,
+    give the same diff with the toolchain still comparable, and no sidecar holds timings."""
+    stamp = {"plugin_version": "1.54.1", "schema_version": 1, "lizard_version": "1.23.0"}
+    repo = _seed_prior_current(tmp_path, stamp, stamp)
+    first = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
+    ctx_path = repo / ".assess" / "run-context.json"
+    on_disk = json.loads(ctx_path.read_text(encoding="utf-8"))
+    on_disk["timings"] = {"total_seconds": 999.0, "stages": {"setup": 999.0}, "scans": {"run_header": 999.0}}
+    ctx_path.write_text(json.dumps(on_disk), encoding="utf-8")
+
+    second = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
+    assert first["timings"] != on_disk["timings"] != second["timings"]
+    for key in ("diff", "diff_detail", "diff_reliable", "diff_version_note", "diff_trend_reset"):
+        assert second[key] == first[key], key
+    assert second["diff_reliable"] is True
+    for sidecar in (repo / ".assess").glob("complexity-stats*.json"):
+        assert "timings" not in json.loads(sidecar.read_text(encoding="utf-8"))

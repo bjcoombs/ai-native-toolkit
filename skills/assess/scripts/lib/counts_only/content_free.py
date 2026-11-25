@@ -35,7 +35,8 @@ The content-free run-context mode for scans of repositories you do not own (#546
 and null and only the strings whose field `counts_only_rules` classifies as a path or a
 short token (kind, grade, band, date, version); free text, commands, commit subjects,
 program names and identities are dropped, and a dropped list of strings becomes its
-length. A string field with no rule is dropped too (allow-list, not deny-list). Path
+length. A string field with no rule is dropped too (allow-list, not deny-list). The
+`timings` diagnostic block (#1380) is left out whole: it differs on every run. Path
 hashing is opt-in: HMAC-SHA256 under a random per-call salt, or a fixed `--hash-salt`
 so hashes join across runs. `unclassified_strings` lists the string fields a
 run-context holds with no rule. A block that degraded to the scan table's unavailable marker is read as a record even where its key is path-keyed or dropped, so it survives as `{"available": false}` (#623). `add_cli_arguments` / `validate_cli_args` /
@@ -65,6 +66,7 @@ from collections.abc import Mapping
 from functools import cache
 from typing import Any
 
+from lib.scan_timings import DIAGNOSTIC_KEYS
 from lib.counts_only.counts_only_rules import (
     DROP,
     EXTRA_FIELD_NAMES,
@@ -246,9 +248,11 @@ def counts_only(
 
     ``hash_paths`` replaces every kept path (and every path-keyed map key) with
     a salted hash; ``salt`` fixes the hash key so hashes join across runs, and
-    None draws a random one for this call.
+    None draws a random one for this call. A diagnostic block (``scan_timings.DIAGNOSTIC_KEYS``:
+    the run's ``timings``, #1380) is left out whole.
     """
-    return _Filter(hash_paths, salt).mapping("", ctx)
+    measured = {key: value for key, value in ctx.items() if key not in DIAGNOSTIC_KEYS}
+    return _Filter(hash_paths, salt).mapping("", measured)
 
 
 def hash_path(value: str, salt: str) -> str | None:

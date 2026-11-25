@@ -8,6 +8,8 @@ import pytest
 
 from lib import scan_registry as reg
 from lib.scan_registry import ScanRegistryError, ScanSpec
+from lib.scan_plan import ScanPlan
+from lib.scan_timings import TIMINGS_KEY
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 
@@ -287,7 +289,8 @@ def test_the_run_context_carries_only_declared_keys_in_table_order(tmp_path):
         for spec in reg.SCANS:
             if spec.stage == stage and not spec.private:
                 declared.extend(spec.spread or (spec.key,))
-    assert list(ctx) == [key for key in declared if key in ctx]
+    # the timings diagnostic (#1380) follows every declared key
+    assert list(ctx) == [key for key in declared if key in ctx] + [TIMINGS_KEY]
     spread_keys = {key for spec in reg.SCANS for key in spec.spread}
     unpublished = {spec.key for spec in reg.SCANS if spec.private or spec.spread} - spread_keys
     assert not unpublished & set(ctx)
@@ -373,3 +376,47 @@ def test_a_spread_key_its_entry_leaves_out_reads_none():
     ctx: dict = {}
     reg.run_scans(ctx, {}, specs=(spread, reader))
     assert ctx == {"a": 1, "pair": [1, None]}
+
+
+def test_timings_go_to_the_inputs_never_to_the_context():
+    """#1380: each stage and each called scan is timed, a raising one too; a scan the plan
+    skips has no entry; the context run_scans fills carries none of it."""
+    def boom(_root):
+        raise RuntimeError("kaput")
+
+    specs = (_spec("first", lambda root: 1), _spec("second", boom),
+             _spec("skipped", lambda root: 3), _spec("late", lambda root: 4, stage=reg.STAGE_FINAL))
+    plan = ScanPlan("profile test", frozenset({"first", "second", "late"}), ("skipped",))
+    ctx: dict = {}
+    inputs: dict = {"repo_root": "r"}
+    reg.run_scans(ctx, inputs, specs=specs, plan=plan)
+
+    assert TIMINGS_KEY not in ctx
+    block = inputs[TIMINGS_KEY]
+    assert list(block["stages"]) == list(reg.STAGES)
+    assert list(block["scans"]) == ["first", "second", "late"]
+    assert all(isinstance(v, float) and v >= 0 for v in [*block["stages"].values(), *block["scans"].values()])
+    assert block["total_seconds"] == round(sum(block["stages"].values()), 3)
+
+
+def test_timings_block_is_written_and_left_out_of_counts_only(tmp_path):
+    """#1380: run-context.json carries per-stage and per-scan wall time; the counts-only
+    copy carries none, and stdout stays the diff while stderr gets the one-line summary."""
+    import json
+
+    from assess_core import main
+    from assess_core_helpers import _minimal_repo
+    from lib.counts_only.content_free import COUNTS_ONLY_FILE
+
+    repo = _minimal_repo(tmp_path)
+    assert main([str(repo), "--non-interactive", "--counts-only"]) == 0
+    ctx = json.loads((repo / ".assess" / "run-context.json").read_text(encoding="utf-8"))
+    block = ctx[TIMINGS_KEY]
+    assert set(block) == {"total_seconds", "stages", "scans"}
+    assert list(block["stages"]) == list(reg.STAGES)
+    assert {"run_header", "level", "anomalies"} <= set(block["scans"])
+    assert block["total_seconds"] >= max(block["scans"].values()) >= 0
+
+    content_free = json.loads((repo / ".assess" / COUNTS_ONLY_FILE).read_text(encoding="utf-8"))
+    assert TIMINGS_KEY not in content_free
+    assert "seconds" not in json.dumps(content_free)
