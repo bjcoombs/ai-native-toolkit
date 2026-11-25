@@ -27,7 +27,7 @@ When several PRs share one marathon, the standalone build fires on the **first**
 
 ## Changelog
 
-The release PR adds the new release's sections to the top of `CHANGELOG.md` (relative to the repository root), one section per GitHub release the release will create, newest first: `## v<version> - <date>` with a link to the release notes, then `## standalone-skills-v<version> - <date>` with a link to the ZIP bundle. Copy the shape of the sections below them. A section links its release; it does not copy the notes, which GitHub generates from the merged PRs.
+The release PR brings `CHANGELOG.md` (relative to the repository root) up to date: one section per GitHub release, newest first. The standalone build publishes a `standalone-skills-v<version>` release on every version-bump push to `main`, not only at a release, so first add a section for each release published since the newest section in the file: `gh release list --repo bjcoombs/ai-native-toolkit --limit 50` lists them. Then add the sections the release itself will create: `## v<version> - <date>` with a link to the release notes, and `## standalone-skills-v<version> - <date>` with a link to the ZIP bundle. Copy the shape of the sections below them. A section links its release; it does not copy the notes, which GitHub generates from the merged PRs. After the release, `rg -c '^## ' CHANGELOG.md` is at least `gh release list --repo bjcoombs/ai-native-toolkit --limit 500 | wc -l`.
 
 ## Cold-reader check for a card change
 
