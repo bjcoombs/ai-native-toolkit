@@ -285,6 +285,7 @@ def unclassified_strings(ctx: Mapping[str, Any]) -> list[str]:
     default rather than by decision, and the tests fail until it is classified.
     A record key that is not a known field name (and is not a key of a
     declared path- or identifier-keyed map) is reported as ``<pattern>.<key>?``.
+    A diagnostic block (``DIAGNOSTIC_KEYS``) is skipped: ``counts_only`` leaves it out whole.
     """
     found: set[str] = set()
 
@@ -308,7 +309,7 @@ def unclassified_strings(ctx: Mapping[str, Any]) -> list[str]:
             for item in value:
                 walk(pattern, item)
 
-    walk("", ctx)
+    walk("", {key: value for key, value in ctx.items() if key not in DIAGNOSTIC_KEYS})
     return sorted(found)
 
 

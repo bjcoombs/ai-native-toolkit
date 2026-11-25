@@ -34,3 +34,12 @@ def test_summary_without_a_block_or_scans_says_so():
     assert summary_line(None) == "timings: not recorded"
     empty = {"total_seconds": 0.0, "stages": {}, "scans": {}}
     assert summary_line(empty) == "timings: total 0.0s; slowest scans: none"
+
+
+def test_counts_only_checks_leave_the_timings_block_out():
+    from lib.counts_only.content_free import counts_only, unclassified_strings
+
+    ctx = {"run_date": "2026-11-25", TIMINGS_KEY: {"total_seconds": 1.0, "stages": {"setup": 1.0},
+                                                   "scans": {"run_header": 1.0}}}
+    assert TIMINGS_KEY not in counts_only(ctx)
+    assert unclassified_strings(ctx) == []
