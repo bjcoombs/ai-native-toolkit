@@ -10,6 +10,7 @@ from lib.levels import Criterion, load_levels
 from lib.level_signals import (
     INPUT_GRADES,
     SIGNAL_INPUTS,
+    STAGED_BLOCKS,
     Grade,
     InputClass,
     UnclassifiedSignal,
@@ -99,4 +100,7 @@ def test_every_classified_signal_is_a_valid_team_path() -> None:
 
 def test_the_table_holds_exactly_the_default_signals() -> None:
     # The table shrinks with its readers: a signal no default criterion reads is a stale line.
-    assert set(SIGNAL_INPUTS) == set(_default_signals())
+    # A STAGED_BLOCKS block's signals (#1322) wait for their row; the default model reads none of them.
+    staged = {s for s in SIGNAL_INPUTS if s.split(".")[0] in STAGED_BLOCKS}
+    assert set(SIGNAL_INPUTS) - staged == set(_default_signals())
+    assert not staged & set(_default_signals())

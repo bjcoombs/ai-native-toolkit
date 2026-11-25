@@ -2274,6 +2274,85 @@
       "why_source": ""
     },
     {
+      "name": "backlog_ready",
+      "title": "Backlog kept agent-ready (intake configuration)",
+      "summary": "How new issues are taken in, read from committed files. An issue form has a required field. A workflow on issues opened adds an untriaged label. A ready label is documented with its criteria. No stale job can close a ready issue.",
+      "collector": "core.backlog_ready",
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "backlog_ready.required_form_field_reason": "token",
+          "backlog_ready.stale_job_safe_reason": "token",
+          "backlog_ready.untriaged_on_open_reason": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "form_unreadable",
+          "means": "No issue form read has a required field, and a form could not be read. Causes are a tab indent, an unclosed flow collection, or no top-level body list.",
+          "next_step": "Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue."
+        },
+        {
+          "code": "gitlab_templates",
+          "means": "The repository is on GitLab and holds no GitHub issue form. GitLab issue templates are not read yet, so the form signal is not measured.",
+          "next_step": "Nothing to change: GitLab issue templates will be read in a later release."
+        },
+        {
+          "code": "gitlab_ci_not_read",
+          "means": "The repository is on GitLab and holds no GitHub workflow. GitLab has no CI trigger for a new issue, and a scheduled refinement job is not read yet.",
+          "next_step": "Nothing to change: GitLab refinement jobs will be read in a later release."
+        },
+        {
+          "code": "workflow_unreadable",
+          "means": "No workflow read adds an untriaged label when an issue opens, and a workflow's on: key could not be read.",
+          "next_step": "Nothing to change if that workflow labels new issues; a plain on: issues: types: [opened] lets the scan read it."
+        },
+        {
+          "code": "stale_input_unresolved",
+          "means": "No stale job is sure to close a ready issue. But one sets its close days or exempt labels to an expression, which this reader does not follow.",
+          "next_step": "Nothing to change if the job exempts the ready label; a literal exempt-issue-labels or days-before-issue-close: -1 lets the scan read it."
+        }
+      ],
+      "evidence": [
+        {
+          "signal": "backlog_ready.ready_label_documented",
+          "input_class": "config_text",
+          "grade": "config_only"
+        },
+        {
+          "signal": "backlog_ready.required_form_field",
+          "input_class": "config_text",
+          "grade": "config_only"
+        },
+        {
+          "signal": "backlog_ready.stale_job_safe",
+          "input_class": "config_text",
+          "grade": "config_only"
+        },
+        {
+          "signal": "backlog_ready.untriaged_on_open",
+          "input_class": "config_text",
+          "grade": "config_only"
+        }
+      ],
+      "grades": [
+        "config_only"
+      ],
+      "why": "An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up.",
+      "why_source": ""
+    },
+    {
       "name": "behaviour",
       "title": "Keyhole blocks: behaviour",
       "summary": "",
@@ -4944,6 +5023,18 @@
       "private": true
     },
     {
+      "name": "backlog_ready",
+      "title": "Backlog kept agent-ready (intake configuration)",
+      "publishes": [
+        "backlog_ready"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "broken_instruction_refs",
       "title": "Broken instruction references",
       "publishes": [
@@ -6255,6 +6346,42 @@
       "input_class": "config_text",
       "grade": "config_only",
       "null_means": "the repository lists no permission entry and a managed settings source on the machine running the check could not be read (managed_settings_unreadable)"
+    },
+    {
+      "path": "backlog_ready.ready_label_documented",
+      "title": "A ready label is documented with its criteria",
+      "type": "bool",
+      "collector": "core.backlog_ready",
+      "input_class": "config_text",
+      "grade": "config_only",
+      "null_means": ""
+    },
+    {
+      "path": "backlog_ready.required_form_field",
+      "title": "An issue form has a required field",
+      "type": "bool",
+      "collector": "core.backlog_ready",
+      "input_class": "config_text",
+      "grade": "config_only",
+      "null_means": "form_unreadable: a form could not be read and none read has a required field; gitlab_templates: a GitLab repository, whose issue templates are not read yet"
+    },
+    {
+      "path": "backlog_ready.stale_job_safe",
+      "title": "No stale job can close a ready issue",
+      "type": "bool",
+      "collector": "core.backlog_ready",
+      "input_class": "config_text",
+      "grade": "config_only",
+      "null_means": "stale_input_unresolved: no stale job closes ready issues for certain, but one sets an input to an expression"
+    },
+    {
+      "path": "backlog_ready.untriaged_on_open",
+      "title": "A workflow labels each new issue untriaged",
+      "type": "bool",
+      "collector": "core.backlog_ready",
+      "input_class": "config_text",
+      "grade": "config_only",
+      "null_means": "workflow_unreadable: no workflow read adds an untriaged label on issues opened, and a workflow's on: key could not be read; gitlab_ci_not_read: a GitLab repository, whose scheduled refinement jobs are not read yet"
     },
     {
       "path": "ci_checks.enforced_check_runs",

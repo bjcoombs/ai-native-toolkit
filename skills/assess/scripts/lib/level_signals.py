@@ -150,7 +150,7 @@ reads are their own class; instruction files stay declared but still gate Steps)
 `lib/catalog.py` reads it). `UNMEASURED_VALUES`
 names the values that mean "could not be measured" with the tally's reason code
 (`test_pressure.mutation_run` false: `needs_full_run`; `promissory_markers.aging_reliable`
-false: `degenerate_history`). A new criterion signal needs its own signal entry with an `evidence` class in `checks/core/`, which generates `SIGNAL_INPUTS` (#953), and a removed one loses it (the table holds exactly the default signals).
+false: `degenerate_history`). A new criterion signal needs its own signal entry with an `evidence` class in `checks/core/`, which generates `SIGNAL_INPUTS` (#953), and a removed one loses it (the table holds exactly the default signals, plus those of a `STAGED_BLOCKS` block, #1322).
 Tests: `tests/test_signal_inputs.py`, one case per default criterion signal.
 
 `published_paths(scope)` (#1151) lists the paths a criterion can name: `ORG_PATHS` for `org`; for `team`,
@@ -176,6 +176,7 @@ from lib.signal_grades import EMPTY_DENOMINATORS as EMPTY_DENOMINATORS
 from lib.signal_grades import INPUT_GRADES as INPUT_GRADES
 from lib.signal_grades import LISTED_GRADES as LISTED_GRADES
 from lib.signal_grades import SIGNAL_INPUTS as SIGNAL_INPUTS
+from lib.signal_grades import STAGED_BLOCKS as STAGED_BLOCKS
 from lib.signal_grades import UNMEASURED_VALUES as UNMEASURED_VALUES
 from lib.signal_grades import Grade as Grade
 from lib.signal_grades import InputClass as InputClass
