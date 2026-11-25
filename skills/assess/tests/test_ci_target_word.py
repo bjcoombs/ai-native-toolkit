@@ -17,9 +17,9 @@ import pytest
 
 from lib.agent_consistency import check_commands
 from lib.agents.agent_environment import scan_agent_environment
-from lib.check_command import check_verdict, is_check_name
+from lib.ci.check_command import check_verdict, is_check_name
 from lib.ci.ci_checks import scan_ci_checks
-from lib.ci_scripts import Present, runs_missing
+from lib.ci.ci_scripts import Present, runs_missing
 from lib.testing.coverage_gate import detect_coverage_gate
 from lib.named_check import is_named_check, is_named_check_name, unread_ci_target
 
@@ -97,7 +97,7 @@ def test_a_ci_target_keeps_the_coverage_gate_not_measured(tmp_path: Path, run: s
 
 
 def test_a_committed_ci_sh_is_read_by_its_name_no_more(tmp_path: Path) -> None:
-    """``lib.ci_scripts`` checks the file is there and never reads it: ``echo deploy`` is no check."""
+    """``lib.ci.ci_scripts`` checks the file is there and never reads it: ``echo deploy`` is no check."""
     (tmp_path / "ci.sh").write_text("echo deploy\n", encoding="utf-8")
     assert _scan(tmp_path, "./ci.sh") == (None, "check_target", None, "check_target")
 

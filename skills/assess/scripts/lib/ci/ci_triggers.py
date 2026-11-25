@@ -70,7 +70,7 @@ inherited through ``default:`` or a YAML anchor are not read; ``workflow: rules:
 in the file that holds it, not across ``include:``; hidden
 jobs (``.name:``) are read like any job; GitHub branch and path filters and
 ``if:`` conditions are not read here (a literal ``if: false`` is a mask in
-``lib.ci_masking``, #919). Only a workflow file directly under
+``lib.ci.ci_masking``, #919). Only a workflow file directly under
 ``.github/workflows/`` is read: GitHub does not run one in a subfolder
 (``command_index.ci_config_files``).
 
@@ -99,7 +99,7 @@ import re
 from collections.abc import Iterable
 from typing import Literal
 
-from lib.ci_masking import IndentTree, parse_lines, strip_comment
+from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.gitlab_rules import CONTEXTS, Context, Outcome, Rule, outcome
 
 Trigger = Literal["ordinary", "not_ordinary", "unknown"]

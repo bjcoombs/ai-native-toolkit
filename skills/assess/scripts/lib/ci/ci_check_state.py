@@ -24,7 +24,7 @@ LintBasis = Literal["lint_command", "included_jobs", "merged_config_partial", "u
 External = Literal["external_ci", "external_ci_marker"] | None
 
 # ``(ordinary, unknown trigger, off trigger, masked, may pass)`` check lines: may pass
-# counts the #1008 forms (``lib.ci_unsure``) on ordinary or unsettled triggers.
+# counts the #1008 forms (``lib.ci.ci_unsure``) on ordinary or unsettled triggers.
 Tally = tuple[int, int, int, int, int]
 NO_LINES: Tally = (0, 0, 0, 0, 0)
 

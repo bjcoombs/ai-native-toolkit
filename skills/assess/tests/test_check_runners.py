@@ -1,4 +1,4 @@
-"""Tests for issue #920: common test runners and wrappers in CI (``lib.check_command``).
+"""Tests for issue #920: common test runners and wrappers in CI (``lib.ci.check_command``).
 
 Each listed runner reads true at Layer 5 level 1; an unrecognised target of a runner whose
 recipe is not read (``make foo``, ``task foo``) reads null (``check_target``), never false.
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.check_command import check_verdict, is_check_command, is_lint_command, is_lint_run, may_lint
+from lib.ci.check_command import check_verdict, is_check_command, is_lint_command, is_lint_run, may_lint
 from lib.agents.agent_environment import scan_agent_environment
 from lib.ci.ci_checks import scan_ci_checks
 

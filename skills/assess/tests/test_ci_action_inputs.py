@@ -1,7 +1,7 @@
-"""Tests for lib/ci_action_inputs.py: which ``with:`` inputs are shell commands (#799)."""
+"""Tests for lib/ci/ci_action_inputs.py: which ``with:`` inputs are shell commands (#799)."""
 from __future__ import annotations
 
-from lib.ci_action_inputs import ReadLocal, forwarded_inputs, read_inputs
+from lib.ci.ci_action_inputs import ReadLocal, forwarded_inputs, read_inputs
 
 _ACTION = ("runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: ${{ inputs.run }}\n"
            "    - shell: bash\n      run: |\n        ${{ inputs.after }}\n"

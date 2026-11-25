@@ -271,7 +271,7 @@ def test_label_and_call_must_share_a_step(tmp_path: Path) -> None:
 @pytest.mark.parametrize("indicator", [">-", "|"])
 def test_a_block_scalar_exempt_list_is_read(indicator: str) -> None:
     from lib.backlog_ready import _with_inputs
-    from lib.ci_masking import IndentTree, parse_lines
+    from lib.ci.ci_masking import IndentTree, parse_lines
     text = (f"jobs:\n  s:\n    steps:\n      - uses: actions/stale@v9\n        with:\n"
             f"          exempt-issue-labels: {indicator}\n            pinned,\n            agent-ready\n")
     tree = IndentTree(parse_lines(text.splitlines()))

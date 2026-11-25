@@ -19,9 +19,9 @@ from pathlib import Path
 import pytest
 
 from lib.ci.ci_checks import scan_ci_checks
-from lib.ci_compound import compound_core, segment_core
-from lib.ci_exempt import piped_groups, piped_members
-from lib.ci_masking import split_statements
+from lib.ci.ci_compound import compound_core, segment_core
+from lib.ci.ci_exempt import piped_groups, piped_members
+from lib.ci.ci_masking import split_statements
 
 SHELLS = {"default": "", "bash": "        shell: bash\n", "sh": "        shell: sh\n"}
 CREDIT = (True, "enforced_check")
@@ -393,7 +393,7 @@ def test_a_piped_function_call_over_several_lines(tmp_path: Path, shell: str) ->
 
 
 def test_a_stray_expansion_brace_closes_no_group() -> None:
-    from lib.ci_unsure import _groups
+    from lib.ci.ci_unsure import _groups
     statements = [s for line in ["f() {", "pytest", "}", "f", "echo ${A}"] for s in split_statements(line)]
     assert _groups(statements) == [(0, 2, "f")]
 

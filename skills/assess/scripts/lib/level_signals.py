@@ -48,7 +48,7 @@ new signal has to be classified on purpose; ``input_class`` raises
 - ``ci_executed``: a CI line that CI runs on every change; the pipeline
   enforces its result. Grade ``verified``. ``ci_checks.enforced_check_runs``
   (#775) has it: a check line counts only when its exit code can fail the job
-  (``lib/ci_masking.py``) and its workflow or job runs on ordinary changes
+  (``lib/ci/ci_masking.py``) and its workflow or job runs on ordinary changes
   (``lib/ci/ci_triggers.py``: a GitHub ``push`` / ``pull_request`` /
   ``merge_group`` event, a GitLab job no ``when: manual``, ``only:`` or
   ``rules:`` keeps off ordinary pipelines); triggers it cannot settle read

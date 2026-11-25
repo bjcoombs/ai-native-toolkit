@@ -4,7 +4,7 @@
 (``mvn ${MVN_ARGS} -T8 \\`` / ``-DskipTests \\`` / ``verify``) used to be read from its first
 line only, and the goal on the last line was never seen. ``join_continued(text)`` returns the
 text with each such command on its first physical line and the lines it continued onto left
-blank, so every line keeps its index: the masking (``lib.ci_masking``), trigger
+blank, so every line keeps its index: the masking (``lib.ci.ci_masking``), trigger
 (``lib.ci.ci_triggers``) and count readers still line up. The join is idempotent.
 
 A line continues when it ends in an odd run of backslashes (``\\\\`` is a literal backslash)
@@ -19,7 +19,7 @@ YAML folds two scalar forms into one line, and a command split over them is one 
 on its first physical line and blanks the rest:
 
 - a folded block scalar (``run: >``, ``- >-``): adjacent non-blank lines at the block's own
-  indentation, as ``lib.ci_masking`` folds them; a blank or more-indented line keeps its
+  indentation, as ``lib.ci.ci_masking`` folds them; a blank or more-indented line keeps its
   break. A literal block (``run: |``) keeps every line: each is its own shell line.
 - a plain multi-line scalar (``- ruff`` then ``--version`` deeper, ``run: ruff`` then a line
   deeper than ``run``): continuation lines sit deeper than the item's dash or the key, and

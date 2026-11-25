@@ -1,4 +1,4 @@
-"""How a shell and make read their own options, for ``lib.check_command`` (issue #955).
+"""How a shell and make read their own options, for ``lib.ci.check_command`` (issue #955).
 
 ``shell_args(words)`` is the script path and arguments a shell runs after its own flags:
 ``bash -e scripts/test.sh`` runs ``scripts/test.sh`` (``-e`` takes no value), ``bash -o

@@ -1,6 +1,6 @@
-# `lib/check_command.py`
+# `lib/ci/check_command.py`
 
-The full reference for `skills/assess/scripts/lib/check_command.py`, whose module docstring holds the summary.
+The full reference for `skills/assess/scripts/lib/ci/check_command.py`, whose module docstring holds the summary.
 
 Pure classifier, split from `agent_environment.py` (issue #698) so an offline scan
 can use it without reaching `gh_cli`. `is_check_command(text)` is true for a test
@@ -97,7 +97,7 @@ run their script; `-o` / `+o` / `-O`, a cluster ending in `o` (`-eo pipefail`),
 `bash --norc ./ci.sh` runs `ci.sh`. `bash -c "<cmd>"` is read by `_outer_wrapper` as the
 command its string runs when that is one plain command (`bash -c "make test"` is `make
 test`); a list, pipeline, redirection or substitution in the string, or a string that cannot
-be split, reads null (`check_target`), because the masking of `lib.ci_masking` cannot see
+be split, reads null (`check_target`), because the masking of `lib.ci.ci_masking` cannot see
 inside the quotes. make's option values are dropped before its targets are read
 (`make -j 4 build` is `build`, false). `hatch run <name>` has the name trust of `make
 <name>`: `hatch run lint` is a lint command and a lint run, as `make lint` is.

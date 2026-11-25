@@ -70,8 +70,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from lib.ci_action_inputs import local_action_paths
-from lib.ci_masking import IndentTree, parse_lines, strip_comment
+from lib.ci.ci_action_inputs import local_action_paths
+from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci.ci_model_jobs import signs_in
 from lib.ci.ci_triggers import workflow_events
 from lib.command_index import NOOP_COMMANDS, ci_config_files, read_config, repo_files

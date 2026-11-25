@@ -36,7 +36,7 @@ Each step comes back in one of three index sets of its ``uses:`` line:
   count the line for ``lint_runs``.
 - ``may_pass``: a reviewdog step that may not fail its job. ``lib.ci.ci_checks`` counts it as
   a lint line on the ``check_may_pass`` side, like a ``ruff check . || echo failed`` line
-  (``lib.ci_unsure``): ``lint_runs`` reads null with ``lint_basis: check_may_pass`` unless
+  (``lib.ci.ci_unsure``): ``lint_runs`` reads null with ``lint_basis: check_may_pass`` unless
   another line settles it. A reviewdog posting a GitHub check run may still block a merge
   through that check, which this module cannot see, so the reading is null, not false.
   Masking and triggers apply as to any step.
@@ -59,9 +59,9 @@ A step with no deciding input keeps the #782 credit. A ``with:`` this module can
 keeps it too, as the issue asks: a merge key (``<<: *defaults``) or quoted key that may set
 the input, an alias value, or a flow mapping that is not plain ``key: value`` items
 (``with: {args: --version}`` and ``{src: "./src"}`` are read).
-The structure comes from ``lib.ci_masking``'s indentation model, run on the final workflow
-text ``lib.ci.ci_checks`` tallies, so indexes match. Inward-only imports: ``lib.check_command``,
-``lib.ci.ci_lines``, ``lib.ci_masking`` and ``lib.ci.ci_matrix`` (``scalar``). Tests: ``tests/test_ci_lint_inputs.py``.
+The structure comes from ``lib.ci.ci_masking``'s indentation model, run on the final workflow
+text ``lib.ci.ci_checks`` tallies, so indexes match. Inward-only imports: ``lib.ci.check_command``,
+``lib.ci.ci_lines``, ``lib.ci.ci_masking`` and ``lib.ci.ci_matrix`` (``scalar``). Tests: ``tests/test_ci_lint_inputs.py``.
 """
 from __future__ import annotations
 
@@ -71,9 +71,9 @@ from collections.abc import Callable
 from functools import partial
 from typing import NamedTuple
 
-from lib.check_command import is_info_invocation
+from lib.ci.check_command import is_info_invocation
 from lib.ci.ci_lines import lint_action
-from lib.ci_masking import IndentTree, parse_lines
+from lib.ci.ci_masking import IndentTree, parse_lines
 from lib.ci.ci_matrix import scalar
 
 _RUFF_ACTIONS = frozenset({"astral-sh/ruff-action", "chartboost/ruff-action"})

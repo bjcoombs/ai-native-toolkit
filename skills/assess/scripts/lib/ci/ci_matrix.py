@@ -36,9 +36,9 @@ masking (``continue-on-error``, ``|| true``, the step's ``shell:``), as each mat
   lines blanked, so ``- ruff check .`` under ``matrix:`` is not counted again outside the
   step, where the step's masking cannot reach it.
 
-The structure comes from ``lib.ci_masking``'s indentation model; there is no YAML parser.
+The structure comes from ``lib.ci.ci_masking``'s indentation model; there is no YAML parser.
 Only GitHub workflow text is read (GitLab's ``parallel: matrix:`` sets variables, not
-expressions). Inward-only imports: ``lib.ci_action_inputs``, ``lib.ci_masking``.
+expressions). Inward-only imports: ``lib.ci.ci_action_inputs``, ``lib.ci.ci_masking``.
 Tests: ``tests/test_ci_matrix.py``, ``tests/test_ci_composite_matrix.py``.
 """
 from __future__ import annotations
@@ -49,8 +49,8 @@ from typing import NamedTuple
 
 import math
 
-from lib.ci_action_inputs import INPUT_KEYS
-from lib.ci_masking import IndentTree, parse_lines
+from lib.ci.ci_action_inputs import INPUT_KEYS
+from lib.ci.ci_masking import IndentTree, parse_lines
 
 # A ``${{ ... }}`` expression where a command starts: the inner text is group 1.
 CMD_EXPR = re.compile(r"""(?:^|[;&|({]\s*|\b(?:then|do|else)\s+)["']?\$\{\{([^}]*)\}\}""")
@@ -253,7 +253,7 @@ def jobs(tree: IndentTree) -> list[int]:
 
 def expand_matrix(text: str, unknown_in: frozenset[int] = frozenset()) -> Expanded:
     """Copy each matrix-command step once per value (module docstring). ``unknown_in`` are
-    line indexes of ``text`` already unknown (``lib.ci_composite``); they come back moved."""
+    line indexes of ``text`` already unknown (``lib.ci.ci_composite``); they come back moved."""
     lines = text.splitlines()
     tree = IndentTree(parse_lines(lines))
     replace: dict[int, tuple[int, list[list[str]]]] = {}   # step start -> (end, copies)

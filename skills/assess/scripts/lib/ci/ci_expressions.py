@@ -26,14 +26,14 @@ one under ``continue-on-error: ${{ ... }}`` as an enforced check. Neither is kno
   ``may_pass``: ``lib.ci.ci_checks`` reads its checks as ``check_may_pass`` (null), never
   enforced. A literal ``continue-on-error: false`` keeps the credit.
 
-The structure comes from ``lib.ci_masking``'s indentation model; there is no YAML parser.
+The structure comes from ``lib.ci.ci_masking``'s indentation model; there is no YAML parser.
 ``follow_workflow(text, read_local)`` is the whole GitHub reading ``lib.ci.ci_checks`` runs
-before ``lib.ci_action_inputs``: ``\\`` continuations joined, local composite actions
-inlined (``lib.ci_composite``), matrix commands copied out (``lib.ci.ci_matrix``), then this
+before ``lib.ci.ci_action_inputs``: ``\\`` continuations joined, local composite actions
+inlined (``lib.ci.ci_composite``), matrix commands copied out (``lib.ci.ci_matrix``), then this
 module, with the unknown lines of all three merged.
 
-Only GitHub workflow text is read. Inward-only imports: ``lib.ci_action_inputs``,
-``lib.ci_composite``, ``lib.ci.ci_continuations``, ``lib.ci_masking``, ``lib.ci.ci_matrix``.
+Only GitHub workflow text is read. Inward-only imports: ``lib.ci.ci_action_inputs``,
+``lib.ci.ci_composite``, ``lib.ci.ci_continuations``, ``lib.ci.ci_masking``, ``lib.ci.ci_matrix``.
 Tests: ``tests/test_ci_expressions.py``.
 """
 from __future__ import annotations
@@ -41,10 +41,10 @@ from __future__ import annotations
 import re
 from typing import NamedTuple
 
-from lib.ci_action_inputs import ReadLocal
-from lib.ci_composite import inline_composites
+from lib.ci.ci_action_inputs import ReadLocal
+from lib.ci.ci_composite import inline_composites
 from lib.ci.ci_continuations import join_continued
-from lib.ci_masking import IndentTree, parse_lines
+from lib.ci.ci_masking import IndentTree, parse_lines
 from lib.ci.ci_matrix import body_lines, expand_matrix, jobs, scalar
 
 # A whole expression or variable word where a command starts.

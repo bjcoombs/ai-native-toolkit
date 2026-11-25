@@ -39,7 +39,7 @@ it reads null, never false). `job_ids(lines)`
 numbers the jobs: each top-level key (a GitLab job) and each key at the first indent
 under a top-level `jobs:` (GitHub). `line_commands(line)` is the per-line command reader
 `ci_checks` and `ci_lines` share; it reads each segment past its compound-command lead
-(`lib.ci_compound`, #1061). `line_compiler_gate` and `line_dotnet_build` are per-line tests over
+(`lib.ci.ci_compound`, #1061). `line_compiler_gate` and `line_dotnet_build` are per-line tests over
 `lint_vocabulary.compiler_gate` and `dotnet_build`. `dotnet_props(root, tracked)` reads
 the committed `Directory.Build.props` files, then the `*.csproj` files, by path through
 `command_index.read_config`, and returns two booleans: `TreatWarningsAsErrors` true, and
@@ -57,12 +57,12 @@ from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 from typing import Literal
 
-from lib.check_command import is_format_rewrite
-from lib.ci_compound import compound_core
-from lib.ci_masking import unmasked_lines
+from lib.ci.check_command import is_format_rewrite
+from lib.ci.ci_compound import compound_core
+from lib.ci.ci_masking import unmasked_lines
 from lib.command_index import ci_line_text, read_config
 from lib.command_resolver import Command, command_words, extract_commands
-from lib.lint_vocabulary import compiler_gate, dotnet_build
+from lib.ci.lint_vocabulary import compiler_gate, dotnet_build
 
 GateBasis = Literal["analysers_in_build", "compiler_gate_only"]
 

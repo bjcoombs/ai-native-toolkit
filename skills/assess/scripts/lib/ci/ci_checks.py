@@ -23,7 +23,7 @@ evidence is static, read from the files at HEAD:
   (``command_index.ci_line_text``), split into shell segments and tokenised the
   way instruction-file commands are (``command_resolver.extract_commands``), each
   segment read from the command a compound-command lead runs (``if ! pytest``, ``{
-  pytest``, ``f() { pytest``, ``(pytest)``; ``lib.ci_compound``, #1061), and classified with ``check_command.is_check_command``: any test or
+  pytest``, ``f() { pytest``, ``(pytest)``; ``lib.ci.ci_compound``, #1061), and classified with ``check_command.is_check_command``: any test or
   check target of a modelled runner counts (``pytest``, ``make check``,
   ``npm test``, ``uv run ruff check``, ``./scripts/test.sh``), and so do the
   common test runners (``dotnet test``, ``swift test``, ``mix test``,
@@ -65,11 +65,11 @@ evidence is static, read from the files at HEAD:
   for Layer 5 and Layer 3 alike, and ``pdm run`` / ``poe`` are read through to the program
   or script they run (``lib.runner_args``).
 - A ``run`` / ``script`` / ``command`` input under a ``uses:`` step's ``with:`` (#799,
-  ``lib.ci_action_inputs``) reads as shell only for an action that runs it: a local action
+  ``lib.ci.ci_action_inputs``) reads as shell only for an action that runs it: a local action
   whose committed ``action.yml`` runs ``${{ inputs.<name> }}``, or a listed runner.
   ``actions/github-script`` is not read; any other action's input counts in
   ``test_or_lint_configured`` and reads ``check_target`` (null) for the enforced signals.
-- A step ``uses:`` of a local composite action (#923, ``lib.ci_composite``) has the
+- A step ``uses:`` of a local composite action (#923, ``lib.ci.ci_composite``) has the
   action's ``run:`` and known lint action steps copied in after it (#1194: a nested local
   action followed with cycle protection), repo-local only, with the
   caller's ``continue-on-error`` and ``if:`` on each copy and its literal ``with:`` values
@@ -142,7 +142,7 @@ out: a check that runs but cannot fail its job (``pytest || true``,
 ``continue-on-error: true``, ``allow_failure: true``, ``set +e``, an exit-zero
 flag such as ``--exit-zero``, a later ``exit 0`` in a shell without errexit, a literal
 ``if: false``; the rules and
-their known limits are in ``lib.ci_masking``), and with checks that do not
+their known limits are in ``lib.ci.ci_masking``), and with checks that do not
 run on ordinary changes left out too (a ``workflow_dispatch``- or
 ``schedule``-only workflow, a GitLab ``when: manual`` job; ``lib.ci.ci_triggers``).
 ``enforced_basis`` says which case applied:
@@ -155,11 +155,11 @@ run on ordinary changes left out too (a ``workflow_dispatch``- or
 - ``unknown_trigger`` (null): none does, but an unmasked check sits in a
   workflow or job whose triggers this reader cannot settle.
 - ``check_may_pass`` (null, #1008): none does, but a line on ordinary changes runs a
-  check whose failure the step may hide (``lib.ci_unsure``: ``pytest || echo failed``,
+  check whose failure the step may hide (``lib.ci.ci_unsure``: ``pytest || echo failed``,
   ``if pytest; then ...; fi``, ``until pytest; do break; done``, ``pytest && echo ok``
   with more of the step after it); ``lint_basis`` alike.
 - ``script_not_found`` (null, #937): none does, but one runs a check through a
-  committed script the tree does not hold (``lib.ci_scripts``: ``./ci.sh`` with no
+  committed script the tree does not hold (``lib.ci.ci_scripts``: ``./ci.sh`` with no
   ``ci.sh``); ``lint_basis`` alike. ``test_or_lint_configured`` still counts it. A committed
   script whose body provably fails on a failing check is one (#1033, ``ci_scripts.ScriptTree``).
 - ``check_target`` (null): none does, but an unmasked line on ordinary changes
@@ -207,7 +207,7 @@ lint line such a check reads null. A direct test-program call (``pytest``,
 ``go test``, ``cargo test``, ``npx jest``) runs no linter, and a target whose recipe
 is not read (``check_command.may_check``: ``make foo``, ``npm run foo``,
 ``./scripts/foo.sh``) reads null here as it does at Layer 5 (#926). The lint and
-analyser commands of other ecosystems come from ``lib.lint_vocabulary`` (#926):
+analyser commands of other ecosystems come from ``lib.ci.lint_vocabulary`` (#926):
 ``phpstan``, ``mix credo``, ``./gradlew ktlintCheck``, ``dart analyze``,
 ``swiftlint``, ``clang-tidy``, and a formatter in its check mode. A formatter that
 rewrites files (``clang-format -i``, ``mix format``) counts only when a later
@@ -379,7 +379,7 @@ from functools import partial
 from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
-from lib.ci_action_inputs import Inputs, ReadLocal, read_inputs
+from lib.ci.ci_action_inputs import Inputs, ReadLocal, read_inputs
 from lib.ci.ci_expressions import follow_workflow
 from lib.ci.ci_continuations import join_continued
 from lib.ci.ci_includes import SETTLED, IncludeRecord, Resolution, merged_config, resolve_includes
@@ -393,10 +393,10 @@ from lib.ci.ci_lines import (
 from lib.ci.ci_check_state import (
     EnforcedBasis as EnforcedBasis, External as External, LintBasis as LintBasis, Tally,
     _enforced_state, _lint_state, _max, _sum)
-from lib.ci_masking import mask_lines, unmasked_lines
+from lib.ci.ci_masking import mask_lines, unmasked_lines
 from lib.named_check import instruction_words, named_count
 from lib.ci.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
-from lib.ci_scripts import ScriptTree, runs_missing
+from lib.ci.ci_scripts import ScriptTree, runs_missing
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, read_config, repo_files
 from lib.dot_source import dot_as_source
 from lib.runner_args import reads_pdm_scripts
@@ -506,7 +506,7 @@ def _trigger_tally(text: str, workflow: Trigger | None,
 
     ``workflow`` is a GitHub workflow's settled trigger; None reads GitLab job triggers.
     The lint test also counts the rewrite lines a ``git diff`` gate makes lint runs (#926).
-    A ``declared`` line (an unread action's ``with:`` input, ``lib.ci_action_inputs``) counts
+    A ``declared`` line (an unread action's ``with:`` input, ``lib.ci.ci_action_inputs``) counts
     for no test but ``_line_may_check``, which counts it when it runs or may run a check (#799).
     An ``unknown`` line (a matrix command not expanded, ``lib.ci.ci_matrix``, #923) counts for
     ``_line_may_check`` whatever it holds, unless masked. A ``lint_inputs`` step
