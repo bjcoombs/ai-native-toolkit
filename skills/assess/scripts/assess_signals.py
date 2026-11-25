@@ -18,13 +18,13 @@ Exit codes:
     0  document written
     2  usage error: unknown scan name, bad --window, --out inside the target,
        a target or --ghsync-root that is not a directory, a --scope that is missing or
-       outside the target, --scope with --units or a --scans unit scan, or an unreadable or invalid
-       --fleet-config (the message names the key)
+       outside the target, --scope with --units or a --scans unit scan, an unreadable or invalid
+       --fleet-config (the message names the key), or a --pack that does not load
 
 Run:
     uv run assess_signals.py <repo> --out FILE.json [--scans a,b,c] [--window 6mo]
         [--counts-only [--hash-paths | --hash-salt VALUE]] [--fleet-config FILE] [--platform]
-        [--ghsync-root DIR] [--scope PATH | --units]
+        [--ghsync-root DIR] [--scope PATH | --units] [--pack FILE ...]
 
 ``--ghsync-root DIR`` names the ghsync root holding the target: GitLab
 ``include: project:`` and ``component:`` files are then read from the clones
@@ -42,6 +42,11 @@ under ``--hash-paths``, so ``null`` still means the whole checkout.
 every condition tagged ``unit`` or ``inherited``. ``fleet.py --monorepo-units`` passes it, and the
 fleet computes each unit's Step from them. Counts-only output drops each unit's folder, or
 hashes it under ``--hash-paths``.
+
+``--pack FILE`` (#1276), repeatable, evaluates a practice pack's checks (``lib/packs.py``,
+``lib/pack_checks.py``) whatever ``--scans`` selects, into the ``pack`` block,
+``{<pack>: {<check>: value}}``: booleans, counts and unavailable markers, no path or file
+text. ``fleet.py --pack`` passes every repository the same packs in the same order.
 """
 # /// script
 # requires-python = ">=3.11"
@@ -79,6 +84,7 @@ from lib.counts_only.content_free import (
     validate_cli_args,
 )
 from lib.fleet_config import FleetConfig, FleetConfigError, load_fleet_config
+from lib.packs import PackError, load_packs
 from lib.run_context_types import SignalsDocument
 from lib.run_scope import resolve_scope
 from lib.signals import (
@@ -135,6 +141,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
              "project: and component: files are read from the clones under it (lib/ci_includes.py). "
              "Without it only local: includes resolve.",
     )
+    parser.add_argument(
+        "--pack", action="append", default=[], metavar="FILE",
+        help="A practice pack (<name>.pack.toml, lib/packs.py) whose checks are evaluated offline "
+             "into the pack block, under pack.<name>.<check>; repeat for several.",
+    )
     unit = parser.add_mutually_exclusive_group()
     unit.add_argument(
         "--scope", metavar="PATH",
@@ -174,6 +185,11 @@ def main(argv: list[str] | None = None) -> int:
         except FleetConfigError as e:
             print(f"error: --fleet-config {args.fleet_config}: {e}", file=sys.stderr)
             return 2
+    try:
+        packs = load_packs(args.pack)
+    except PackError as e:
+        print(f"error: --pack: {e}", file=sys.stderr)
+        return 2
     ghsync_root: Path | None = None
     if args.ghsync_root is not None:
         ghsync_root = Path(args.ghsync_root).resolve()
@@ -204,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
     document = build_document(repo_root, requested, args.window, fleet_config=fleet_config,
                               platform=args.platform, ghsync_root=ghsync_root,
                               scope=scope, units=args.units,
-                              managed_settings=args.managed_settings)
+                              managed_settings=args.managed_settings, packs=packs)
     if args.counts_only:
         _counts_only(document, args)
     _write_atomically(out, json.dumps(document, indent=2, default=str) + "\n")

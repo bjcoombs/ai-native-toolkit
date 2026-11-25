@@ -280,8 +280,23 @@ td.unknown{background:repeating-linear-gradient(45deg,var(--bg) 0 4px,var(--unk)
     }
     return out;
   }
+  function packs(bundle) {
+    if (!bundle.packs || !bundle.packs.length) { return ""; }
+    return "<h2>Practice packs</h2><p class=\"muted\">Each pack applied to every repository. A repository where a "
+      + "pack check could not be read counts as not measured, never as not met.</p>" + bundle.packs.map(function (p) {
+        var head = "<h3>Pack " + esc(p.name) + " (version " + esc(p.version) + ")</h3>";
+        if (!p.practices.length) { return head + "<p>This pack adds checks only, no practice to score.</p>"; }
+        return head + "<ul>" + p.practices.map(function (q) {
+          var title = q.level === 1 ? q.title : q.title + ", level " + q.level;
+          return "<li>" + esc(title) + ": " + esc(q.met + " of " + q.measured + " measured "
+            + (q.measured === 1 ? "repository" : "repositories") + " meet it") + (q.not_measured
+            ? " <span class=\"muted\">(" + esc(repos(q.not_measured)) + " not measured)</span>" : "") + "</li>";
+        }).join("") + "</ul>";
+      }).join("");
+  }
   var SECTIONS = [
     function (b) { return glance(b); },
+    function (b) { return packs(b); },
     function (b, s) { return since(b, s); },
     function (b, s, t, c, x) { return stands(b, s, x); },
     function (b, s, t, c) { return target(b, s, t, c); },

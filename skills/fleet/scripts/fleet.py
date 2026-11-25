@@ -63,6 +63,12 @@ records ``platform`` (true only when a platform read ran: ``--scans`` selecting 
 platform scan stamps false), and runs with and without it do not compare. With
 ``--delete-after`` a clone is deleted only after its platform read.
 
+``--pack FILE`` (#1276, repeatable; needs a model) applies the same practice packs to every
+repository: each is read once before any scan (a load error exits 2), every scan reads a
+private copy in pass order, the packs' rows are layered onto the model, ``run.json`` names each
+pack, and ``level.json``, ``fleet-data.json``, ``report.md`` and the page break results down per
+pack (``lib/fleet/fleet_packs.py``).
+
 ``--monorepo-units`` (#866) scans each repository by monorepo unit: every child gets
 ``assess_signals.py --units``, and ``fleet-data.json`` gives each repository its
 ``unit_rows`` (``lib/fleet/fleet_data_units.py``), one Step, next blocking gate and per-tag
@@ -93,7 +99,7 @@ Exit codes:
        exist, no repositories found, --out inside a target, an unreadable
        --levels, --settings or --units (a settings directory with no fragment files included,
        or a units file naming a missing unit),
-       a list entry whose ~user cannot be expanded, bad scan arguments, an --out that
+       a list entry whose ~user cannot be expanded, a --pack that does not load or layer, bad scan arguments, an --out that
        cannot be created or written (checked before any scan), an unusable history
        location, an unreadable --compare run, or an unreadable or invalid
        --fleet-config (the message names the key), or an unreadable or malformed
@@ -104,7 +110,7 @@ Run:
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
         [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
         [--no-history] [--no-diagrams] [--fleet-config FILE] [--name-agent-clusters] [--discovered FILE]
-        [--platform [--platform-jobs N] [--platform-timeout SECONDS]] [--managed-settings]
+        [--platform [--platform-jobs N] [--platform-timeout SECONDS]] [--managed-settings] [--pack FILE ...]
     uv run fleet.py --from-list FILE [ROOT] --out DIR [...]
 """
 # /// script
@@ -186,6 +192,7 @@ from lib.fleet.fleet_credit import credit_section
 from lib.fleet.fleet_opportunities_section import opportunities_section
 from lib.fleet.fleet_cli_args import LATEST, parse_args as _parse_args
 from lib.fleet.fleet_level import write_fleet_levels
+from lib.fleet.fleet_packs import FleetPacks, fleet_model, load_fleet_packs, pack_copies, packs_section
 from lib.fleet.condition_effect import (
     CONDITION_EFFECT_FILE,
     HistoryRun as EffectRun,
@@ -232,8 +239,8 @@ from lib.fleet.fleet_trends import TrendRun, history_runs, series_runs, trend_ru
 from lib.fleet.fleet_view import FleetViewError
 from lib.fleet.fleet_method import rules_sha256
 from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, FleetStamp, build_stamp, write_stamp
-from lib.levels import LevelsError, load_levels, MaturityModel
-from lib.level_signals import signal_path_validator
+from lib.levels import LevelsError, MaturityModel
+from lib.packs import PackError
 from lib.run_context_types import JsonDict
 from lib.scan_plan import fleet_scans
 from lib.tool_lookup import warn_missing_packages
@@ -427,7 +434,8 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
                                   data=data, earlier=earlier, moves=moves)
         ok = [row["scans"] for row in rows if row["status"] == "ok" and row["scans"] is not None]
         write_diagrams(out_dir, diagrams, credit, coverage, opportunities() if opportunities else None,
-                       measured_section(ok), front_section(front, len(rows)))
+                       measured_section(ok), front_section(front, len(rows)),
+                       packs_section(data.get("packs") if data is not None else None))
         write_page(out_dir, data, achieved, maturity_model, diagrams, front)
     except Exception as e:  # noqa: BLE001 - a diagram never fails a completed run
         print(f"fleet: diagrams: not written ({type(e).__name__}: {e})", file=sys.stderr)
@@ -483,17 +491,21 @@ PlatformPass = Callable[[list[FleetRow], ScanOptions], list[FleetRow]]
 
 
 def _scan_all(targets: list[Target], options: ScanOptions, jobs: int, deleter: CloneDeleter | None,
-              fleet_config_text: str | None, platform: PlatformPass | None = None) -> list[FleetRow]:
-    """Every scan, then the ``--platform`` pass when given. With ``--fleet-config``, each reads
-    one private copy of the text validated before any scan, by absolute path, so an edit
-    mid-run cannot reach some scans only. With a platform pass, ``--delete-after`` waits for it."""
+              fleet_config_text: str | None, platform: PlatformPass | None = None,
+              packs: FleetPacks = FleetPacks()) -> list[FleetRow]:
+    """Every scan, then the ``--platform`` pass when given. With ``--fleet-config`` or ``--pack``,
+    each reads one private copy of each text validated before any scan, by absolute path, so an
+    edit mid-run cannot reach some scans only. With a platform pass, ``--delete-after`` waits for it."""
     def scan(scan_options: ScanOptions) -> list[FleetRow]:
         rows = run_fleet(targets, scan_options, jobs, after=None if platform is not None else deleter)
         return platform(rows, scan_options) if platform is not None else rows
 
-    if fleet_config_text is None:
+    if fleet_config_text is None and not packs.packs:
         return scan(options)
     with tempfile.TemporaryDirectory(prefix="fleet-config-") as tmp:
+        options = replace(options, packs=pack_copies(Path(tmp).resolve(), packs))
+        if fleet_config_text is None:
+            return scan(options)
         copy = Path(tmp).resolve() / "fleet-config.toml"
         copy.write_text(fleet_config_text, encoding="utf-8", newline="\n")
         return scan(replace(options, fleet_config=copy))
@@ -538,6 +550,7 @@ class _Inputs:
     fleet_config: FleetConfig | None = None
     fleet_config_text: str | None = None
     discovered: list[Discovered] | None = None
+    packs: FleetPacks = field(default_factory=FleetPacks)
 
 
 def _usage_error(message: str) -> int:
@@ -549,9 +562,11 @@ def _read_inputs(args: argparse.Namespace) -> _Inputs:
     """The input files; raises the loaders' errors, which ``_load_inputs`` turns into exit 2."""
     fleet_config_text = read_fleet_config(Path(args.fleet_config)) if args.fleet_config is not None else None
     fleet_config = parse_fleet_config(fleet_config_text) if fleet_config_text is not None else None
-    model = load_levels(Path(args.levels), signal_path_validator()) if args.levels is not None else None
+    packs = load_fleet_packs(args.pack)  # --pack: read once, layered onto the model (#1276)
+    model = (fleet_model(Path(args.levels), args.profile or Path(args.levels).name, packs.packs)
+             if args.levels is not None else None)
     inputs = _Inputs(targets=[], step_targets=[], maturity_model=model,
-                     fleet_config=fleet_config, fleet_config_text=fleet_config_text)
+                     fleet_config=fleet_config, fleet_config_text=fleet_config_text, packs=packs)
     if args.settings is not None:
         inputs.settings = load_settings(Path(args.settings))
     if args.units is not None:
@@ -581,6 +596,8 @@ def _load_inputs(args: argparse.Namespace) -> _Inputs | int:
         return _usage_error(f"--targets {args.targets}: {e}")
     except FleetConfigError as e:
         return _usage_error(f"--fleet-config {args.fleet_config}: {e}")
+    except PackError as e:
+        return _usage_error(f"--pack: {e}")
     except (LevelsError, SettingsError, UnitsError, UnknownScanError, ValueError, OSError) as e:
         return _usage_error(str(e))
     if not inputs.targets:
@@ -673,6 +690,7 @@ def main(argv: list[str] | None = None) -> int:
         "paths_hashed": hash_salt is not None,
         "fleet_config_sha256": config_sha256(fleet_config) if fleet_config is not None else None,
         "platform": platform_ran,
+        **({"packs": inputs.packs.identities()} if inputs.packs.packs else {}),  # #1276
     }
     keeps_history = not args.no_history and not args.full
     ids = public_ids((t.repo for t in targets), hash_salt)  # the ids every output file names (#909)
@@ -718,7 +736,7 @@ def main(argv: list[str] | None = None) -> int:
     # Each scan runs with this interpreter: one hint here, not one per repository.
     warn_missing_packages()
     platform = _platform_pass(args, targets, fleet_config, scans, deleter)
-    rows = _scan_all(targets, options, args.jobs, deleter, fleet_config_text, platform)
+    rows = _scan_all(targets, options, args.jobs, deleter, fleet_config_text, platform, inputs.packs)
     public = public_rows(rows, hash_salt)  # fleet-data.json and the coverage read the real ids
     path = write_rows(out_dir, public)
     groups = public_groups(roll_up(rows, maturity_model, settings, counts_only=not args.full), hash_salt)
@@ -732,14 +750,14 @@ def main(argv: list[str] | None = None) -> int:
         today=today, window=window, levels_version=maturity_model["version"] if maturity_model is not None else None,
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
         fleet_config=fleet_config, platform=platform_ran, coverage=coverage,
-        managed_settings=options.managed_settings, model=maturity_model,
+        managed_settings=options.managed_settings, model=maturity_model, packs=inputs.packs.identities(),
     )
     write_stamp(out_dir, stamp)
     demoted = _condition_effect(out_dir, maturity_model, stamp, public, org_dir, entry)
     if maturity_model is not None and demoted:  # every result below reads the same demotions (#1086)
         maturity_model = with_demotions(maturity_model, demoted)
     write_fleet_levels(out_dir, public, maturity_model, toolkit_commit=stamp["toolkit_commit"],
-                       plugin_version=stamp["plugin_version"])
+                       plugin_version=stamp["plugin_version"], packs=stamp.get("packs", []))
     data = _write_fleet_data(out_dir, stamp, rows, maturity_model, trees, args.full, hash_salt, units, codeowners,
                              {repo: f.web_url for repo, f in facts.items()})
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, public, groups, row_signals(data)), earlier)

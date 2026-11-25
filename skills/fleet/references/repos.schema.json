@@ -1496,6 +1496,38 @@
                   "reason"
                 ]
               }
+            },
+            "pack": {
+              "type": "object",
+              "description": "Present only with --pack (lib/pack_checks.py): {<pack>: {<check>: value}}, read at pack.<pack>.<check>. A value is a boolean (exists, key_exists), a file count (glob_count, contains) or {available: false} when the check could not be answered; never a path or file text.",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "available": {
+                          "const": false
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "available"
+                      ]
+                    }
+                  ]
+                }
+              }
             }
           }
         },

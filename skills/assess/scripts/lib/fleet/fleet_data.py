@@ -91,6 +91,10 @@ names and owners and writes a non-token value as `set`; with a salt every unit a
 repository key is `counts_only.hash_value`d and no name, owner or web URL is written;
 `Privacy.key` keeps an id that is already hashed (`counts_only.is_hashed`), so the re-score
 joins a stored `repos.jsonl` row hashed at the output boundary (#909).
+With `--pack` (#1276) the document gains `packs`, each pack's name, version, sha256 and
+practices with the repositories that meet each, out of those measured
+(`fleet_packs.pack_roll_up`); absent without a pack. Every string is the pack author's, so
+counts-only keeps it (`FLEET_DATA_KEPT`).
 `write_fleet_data` writes sorted, compact JSON through a temp file and `os.replace`.
 Version 3 (#746) adds `opportunities` (`fleet_opportunities.build_opportunities`, null
 without a model). `step_fields` gives each repository its Step fields (`fleet_data_steps`)
@@ -130,6 +134,7 @@ from lib.fleet.fleet_data_tags import TagRollUp, repo_tags, tag_roll_up
 from lib.fleet.fleet_data_units import UnitRow, unit_rows
 from lib.fleet.fleet_learn_from import repo_learn_from
 from lib.fleet.fleet_tag_profile import FleetTagRow, tag_profile
+from lib.fleet.fleet_packs import PackRollUp, pack_roll_up
 from lib.fleet.fleet_groups import repo_signals
 from lib.fleet.fleet_level import repo_level
 from lib.fleet.fleet_why import criterion_why
@@ -226,8 +231,8 @@ class DataRepo(TypedDict):
 # The stamp fields RunDetails leaves out: the stamp's own envelope version, the
 # --fleet-config section counts (the sha256 is the comparability key) and the --discovered
 # coverage counts (#745; run.json and report.md carry them) and the collector revisions (#952;
-# run.json carries them, the rules hash is copied) and the practice packs (#1273; run.json
-# carries them until /fleet reports per pack, #1276). A test fails when FleetStamp
+# run.json carries them, the rules hash is copied) and the practice packs (#1273; the
+# document's own ``packs`` roll-up names each, #1276). A test fails when FleetStamp
 # gains a field that is neither copied below nor listed here.
 RUN_EXCLUDED = frozenset({"fleet_stamp_version", "fleet_config_entries", "coverage", "collectors", "packs"})
 
@@ -261,6 +266,8 @@ class FleetData(TypedDict):
     # #940: the fleet's per-tag roll-up (lib/fleet/fleet_tag_profile.py); None without a model.
     # NotRequired: a stored entry written before it reads as not measured, never as zeros.
     tag_profile: NotRequired[list[FleetTagRow] | None]
+    # #1276: each pack's practices over the scanned repositories (lib/fleet/fleet_packs.py); only with --pack
+    packs: NotRequired[list[PackRollUp]]
 
 
 class Privacy(NamedTuple):
@@ -527,7 +534,7 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
                                           if repo["status"] == STATUS_OK else None, privacy),
             "learn_from": public_names(learn.get(name), "repos.learn_from", privacy),
         })
-    return {
+    data: FleetData = {
         "fleet_data_version": FLEET_DATA_VERSION,
         "run": run_details(stamp),
         "model": model_rows(maturity_model),
@@ -536,6 +543,10 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
         "opportunities": build_opportunities(maturity_model, rows, privacy.key, results),
         "tag_profile": tag_profile(maturity_model, repo_tag.values()),
     }
+    roll_up = pack_roll_up(maturity_model, stamp.get("packs", []), results.values())
+    if roll_up:
+        data["packs"] = roll_up
+    return data
 
 
 def dumps_fleet_data(data: FleetData) -> str:

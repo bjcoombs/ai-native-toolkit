@@ -295,6 +295,9 @@ FLEET_DATA_KEPT: Final = frozenset({
     # #941: one change away, model ids and titles only (lib/fleet/fleet_step_lifts.py)
     "opportunities.step_lifts.condition", "opportunities.step_lifts.row", "opportunities.step_lifts.title",
     "opportunities.step_lifts.gate",
+    # #1276: the practice packs' roll-up, the pack author's own names, versions, ids and titles
+    "packs.name", "packs.version", "packs.sha256", "packs.practices.condition", "packs.practices.row",
+    "packs.practices.title",
 })
 
 

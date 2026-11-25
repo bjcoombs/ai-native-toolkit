@@ -37,7 +37,12 @@ hold count survives a fresh clone too; a malformed ledger is dropped the same wa
 Version 3 (#1184) keeps one record per model. The top-level ``levels_version``, ``tags``,
 ``baseline`` and ``pruning`` are the default model's record, as before; ``models`` maps a
 shipped profile's name to its own ``ModelRecord`` (``levels_version``, ``tags``, ``baseline``),
-and the top-level record may be absent when only profiles have run. ``model_key(level)`` names
+and the top-level record may be absent when only profiles have run. A run whose model holds
+practice-pack rows (#1274) keeps its own record under ``models``, keyed by the base model and
+each pack in model order (``default--company--team``, ``PACK_KEY_JOIN``, #1276): runs with and
+without packs, or with other packs, never share a record, so "since last run" never reads a
+pack coming or going as gates gained or lost. ``base_model_key`` is the base alone, which
+``profiles.model_for_level`` reads. ``model_key(level)`` names
 the record a run reads and writes (``default``, a profile name, or None for a custom
 ``--levels`` model, which keeps none), and ``record_for(prior, level)`` returns that record as
 a ``PriorLevel`` view, so ``load_baseline(assess_dir, level)``, the gate and the tag strip each
@@ -62,6 +67,9 @@ from lib.level_result_types import TagRow
 from lib.levels_fields import TRUTH_TAGS
 
 PRIOR_LEVEL_FILE = "prior-level.json"
+# Joins a base model and its practice packs in a record key (#1276): a pack name is
+# ``[a-z][a-z0-9_]*`` (lib/packs.py), so the key stays an identifier counts-only output keeps.
+PACK_KEY_JOIN = "--"
 # 1 (#940): the first version.
 # 2 (#1122): adds the optional ``baseline``. Version-1 files are still read, without one.
 # 3 (#1184): adds the optional ``models``, one record per shipped profile keyed by its name, and
@@ -231,15 +239,33 @@ def as_prior_level(value: Any) -> PriorLevel | None:
     return cast(PriorLevel, out)
 
 
-def model_key(level: Any) -> str | None:
-    """The record a ``level`` block reads and writes: ``default`` for a default-model version (or a
-    level that names none), a profile's name for ``profile-<name>-<date>``, None for a custom
-    ``--levels`` model, which keeps no committed record."""
+def base_model_key(level: Any) -> str | None:
+    """The base model a ``level`` block was counted under: ``default`` for a default-model
+    version (or a level that names none), a profile's name for ``profile-<name>-<date>``, None
+    for a custom ``--levels`` model. Practice packs layered onto it are not part of it."""
     version = level.get("levels_version") if isinstance(level, Mapping) else None
     if not isinstance(version, str) or version.startswith("default-"):
         return "default"
     name = version[len("profile-"):].rpartition("-")[0] if version.startswith("profile-") else ""
     return name or None
+
+
+def level_packs(level: Any) -> list[str]:
+    """The practice packs whose rows a ``level`` block holds, in model order: every condition
+    ``source`` after the first, which is the base model's (#1274); ``[]`` without one."""
+    conditions = level.get("conditions") if isinstance(level, Mapping) else None
+    sources = [c["source"] for c in conditions or [] if isinstance(c, Mapping) and isinstance(c.get("source"), str)]
+    return list(dict.fromkeys(sources))[1:]
+
+
+def model_key(level: Any) -> str | None:
+    """The record a ``level`` block reads and writes: the ``base_model_key``, joined with each
+    layered pack's name by ``PACK_KEY_JOIN`` when packs added rows (#1276), so a run with packs
+    and a run without them never share a record; None for a custom ``--levels`` model, which
+    keeps no committed record."""
+    base = base_model_key(level)
+    packs = level_packs(level)
+    return base if base is None or not packs else PACK_KEY_JOIN.join([base, *packs])
 
 
 def record_for(prior: Any, level: Any) -> PriorLevel | None:

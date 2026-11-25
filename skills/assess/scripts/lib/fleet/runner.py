@@ -227,6 +227,7 @@ class ScanOptions:
     ghsync_root: Path | None = None  # set: assess_signals --ghsync-root (GitLab includes, #766)
     units: bool = False  # set: assess_signals --units on the offline scan (monorepo unit rows, #866)
     managed_settings: bool = False  # set: assess_signals --managed-settings (this machine's policy, #1153)
+    packs: tuple[Path, ...] = ()  # absolute: assess_signals --pack each, in order, on the offline scan (#1276)
 
 
 ScanFn = Callable[[Target, Path, ScanOptions], FleetRow]
@@ -545,6 +546,9 @@ def signals_command(checkout: Path, out: Path, options: ScanOptions) -> list[str
         command.append("--platform")
     elif options.units:  # the platform pass reads no unit; the offline scan does
         command.append("--units")
+    if not options.platform:  # the offline scan evaluates the packs; the platform pass reads none
+        for pack in options.packs:
+            command += ["--pack", str(pack)]
     return command
 
 

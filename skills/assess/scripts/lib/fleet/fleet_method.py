@@ -45,7 +45,8 @@ passed; a stamp without it (no pack, or written before #1273) reads as no pack.
   attributes the moves.
 
 **Elsewhere.** A same-day rerun under other rules is kept beside the earlier entry, not over
-it (``fleet_history._MATCH_KEYS``; ``fleet.py`` plans the hash before any scan), while a bare
+it (``fleet_history._MATCH_KEYS``, which holds ``packs`` too, #1276; ``fleet.py`` plans the hash
+and the packs before any scan), while a bare
 ``--compare`` still takes an entry that recorded no hash as its baseline. The trend chart breaks
 its lines at a rules change both runs recorded (``fleet_trends``).
 

@@ -10,6 +10,11 @@ Linux job proves the committed ``repos.jsonl`` is Linux-true; the Windows job
 (.github/workflows/windows.yml) compares its own run against the same file, so
 a separator, encoding or line-ending difference fails there.
 
+A second run scores the same estate with ``fixtures/fleet_golden/levels/levels.toml`` and no
+``--pack`` (#1276): its ``repos.jsonl``, ``run.json`` and ``level.json`` must match the
+committed copies beside that model byte for byte, with the toolkit commit, plugin version and
+run date pinned.
+
 Regenerate after a scan changes its output, on Linux with ripgrep installed:
 
     cd skills/assess && FLEET_GOLDEN_REGEN=1 uv run --locked pytest tests/test_fleet_golden.py
@@ -20,6 +25,7 @@ import json
 import os
 import shutil
 import subprocess
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -118,3 +124,31 @@ def test_fixture_fleet_run_matches_the_committed_linux_repos_jsonl(tmp_path, mon
         "purpose, regenerate it (see this module's docstring)")
     assert b"\r\n" not in produced, "repos.jsonl must be written with LF line endings"
     assert produced == golden
+
+
+LEVELS_GOLDEN = GOLDEN.parent / "levels"
+LEVELS_OUTPUTS = ("repos.jsonl", "run.json", "level.json")
+
+
+@pytest.mark.skipif(shutil.which("rg") is None, reason="needs ripgrep")
+def test_a_levels_run_without_pack_writes_the_committed_outputs(tmp_path, monkeypatch):
+    """#1276: a fleet --levels run without --pack writes repos.jsonl, run.json and level.json
+    byte for byte as committed, so adding --pack changed nothing for a run without one. The
+    toolkit commit, plugin version and run date are pinned; the rest is the run's own."""
+    root = tmp_path / "froot"
+    _build_estate(root)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(fleet_cli, "toolkit_commit", lambda: "0" * 40)
+    monkeypatch.setattr(fleet_cli, "read_plugin_version", lambda: "0.0.0")
+    monkeypatch.setattr(fleet_cli, "utc_today", lambda: date(2020, 1, 2))
+
+    assert fleet_cli.main([str(root), "--out", "out", "--jobs", "1", "--no-history", "--no-diagrams",
+                           "--levels", str(LEVELS_GOLDEN / "levels.toml")]) == 0
+
+    for name in LEVELS_OUTPUTS:
+        produced = (tmp_path / "out" / name).read_bytes()
+        if os.environ.get("FLEET_GOLDEN_REGEN") == "1":
+            (LEVELS_GOLDEN / name).write_bytes(produced)
+        assert produced == (LEVELS_GOLDEN / name).read_bytes(), (
+            f"{name} differs from the committed golden; if a scan or the stamp changed on purpose, "
+            "regenerate it (see this module's docstring)")

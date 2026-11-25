@@ -53,6 +53,73 @@
         "additionalProperties": false
       },
       "description": "the commit each repos entry measured, under the same ids"
+    },
+    "packs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "repos": {
+            "type": "integer"
+          },
+          "practices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "condition": {
+                  "type": "string"
+                },
+                "row": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "level": {
+                  "type": "integer"
+                },
+                "met": {
+                  "type": "integer"
+                },
+                "measured": {
+                  "type": "integer"
+                },
+                "not_measured": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "condition",
+                "level",
+                "measured",
+                "met",
+                "not_measured",
+                "row",
+                "title"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "name",
+          "practices",
+          "repos",
+          "sha256",
+          "version"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "required": [

@@ -29,6 +29,10 @@ number (``tests/test_fleet_page.py`` checks it); a caller's own model is shown a
 **Achievements** are re-worded from their structured evidence with the same templates as
 ``fleet_achievements`` credit lines, so the unit and repository labels follow the mode above.
 
+**Practice packs** (#1276, ``lib/fleet/fleet_packs.py``): a ``--pack`` run's ``packs`` roll-up
+is copied as ``packs``, each pack's name and version and each practice's title, level and
+counts; no condition id. Absent without a pack.
+
 **Front screen** (#1255, ``lib/fleet/fleet_front.py``): copied as computed, counts and gate ids
 only; its team links are replaced by the ownership view's team units under the labels above, so
 a counts-only page shows ``team N``.
@@ -57,7 +61,11 @@ class Picture(TypedDict):
     src: str  # a data: URI
 
 
-class PageBundle(TypedDict):
+class _PackKeys(TypedDict, total=False):
+    packs: list[dict[str, Any]]  # a --pack run's roll-up (#1276), copied from fleet-data.json; absent without
+
+
+class PageBundle(_PackKeys):
     page_version: int
     mode: str
     scan_date: str | None
@@ -190,7 +198,7 @@ def page_bundle(data: Mapping[str, Any], achievements: Mapping[str, Any] | None,
     tops = {r["id"]: len(r["levels"]) for r in model["rows"]}
     ach = achievements or {}
     recount = ach.get("recount")
-    return {
+    bundle: PageBundle = {
         "page_version": PAGE_VERSION, "mode": mode,
         "scan_date": (data.get("run") or {}).get("scan_date"),
         "levels_version": (data.get("run") or {}).get("levels_version"),
@@ -217,6 +225,11 @@ def page_bundle(data: Mapping[str, Any], achievements: Mapping[str, Any] | None,
         "pictures": list(pictures),
         "front": _front(front, data, label),
     }
+    if data.get("packs"):  # each pack's practices fleet-wide: names, titles and counts only
+        bundle["packs"] = [{"name": p["name"], "version": p["version"], "repos": p["repos"],
+                            "practices": [{k: q[k] for k in ("title", "level", "met", "measured", "not_measured")}
+                                          for q in p["practices"]]} for p in data["packs"]]
+    return bundle
 
 
 def picture(file: str, title: str, question: str, svg: str) -> Picture:

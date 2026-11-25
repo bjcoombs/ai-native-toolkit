@@ -1,0 +1,25 @@
+# The maturity model of the fleet golden's --levels run (tests/test_fleet_golden.py, #1276):
+# a run without --pack writes these outputs byte for byte.
+version = "fleet-golden-1"
+
+[[rows]]
+id = "instructions"
+title = "Instruction file"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["docs"]
+  criteria = [{ signal = "layer_grades.instruction_file_present", op = "eq", value = true }]
+
+[[rows]]
+id = "observability"
+title = "Observability"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["behaviour"]
+  criteria = [{ signal = "observability.rung", op = "gte", value = 1 }]

@@ -19,7 +19,8 @@ words what it finds. Its parts:
 - **Sections.** ``SECTIONS`` lists the section renderers in page order: Fleet at a glance (the
   front screen, #1255, from the bundle's ``front``: Step counts, moves, one change away, gates
   ranked by the repositories each would move, team units by name, each a button that opens it in
-  the ownership view), then Since last run, Where this unit stands, Your target, Drill-down,
+  the ownership view), then Practice packs (a ``--pack`` run's per-pack counts, #1276), then
+  Since last run, Where this unit stands, Your target, Drill-down,
   Fleet pictures (the #705 design order).
 - **Pinned unit.** A per-viewer ``localStorage`` key, read and written inside try/catch; the
   page opens on the ownership root without it.
@@ -304,8 +305,23 @@ SCRIPT = r"""
     }
     return out;
   }
+  function packs(bundle) {
+    if (!bundle.packs || !bundle.packs.length) { return ""; }
+    return "<h2>Practice packs</h2><p class=\"muted\">Each pack applied to every repository. A repository where a "
+      + "pack check could not be read counts as not measured, never as not met.</p>" + bundle.packs.map(function (p) {
+        var head = "<h3>Pack " + esc(p.name) + " (version " + esc(p.version) + ")</h3>";
+        if (!p.practices.length) { return head + "<p>This pack adds checks only, no practice to score.</p>"; }
+        return head + "<ul>" + p.practices.map(function (q) {
+          var title = q.level === 1 ? q.title : q.title + ", level " + q.level;
+          return "<li>" + esc(title) + ": " + esc(q.met + " of " + q.measured + " measured "
+            + (q.measured === 1 ? "repository" : "repositories") + " meet it") + (q.not_measured
+            ? " <span class=\"muted\">(" + esc(repos(q.not_measured)) + " not measured)</span>" : "") + "</li>";
+        }).join("") + "</ul>";
+      }).join("");
+  }
   var SECTIONS = [
     function (b) { return glance(b); },
+    function (b) { return packs(b); },
     function (b, s) { return since(b, s); },
     function (b, s, t, c, x) { return stands(b, s, x); },
     function (b, s, t, c) { return target(b, s, t, c); },

@@ -75,6 +75,9 @@ Rules:
   a load error naming the check, never a collector failure.
 - Each check publishes its result under ``pack.<pack>.<check>`` (``signal``), a
   namespace no core signal uses.
+- ``read_packs(paths)`` loads the ``--pack`` files in pass order, each with the text it was
+  parsed from (``/fleet`` hands every repository a private copy of that text, #1276), and
+  refuses two packs of one name; ``load_packs`` keeps the packs alone.
 - ``pack_identity`` gives ``{name, version, sha256}``, the ``PackIdentity`` the run
   context's ``packs`` block and the fleet stamp's ``packs`` key record (#1273).
 - ``Pack.sha256`` is the sha256 of the canonical JSON (sorted keys, no spaces,
@@ -94,6 +97,7 @@ import json
 import re
 import tomllib
 from pathlib import Path, PurePosixPath, PureWindowsPath
+from collections.abc import Sequence
 from typing import Any, Literal, Mapping, TypedDict
 
 from lib.levels import LevelsError, Row, parse_levels
@@ -178,15 +182,41 @@ def signal_path(pack: str, check: str) -> str:
     return f"{SIGNAL_PREFIX}.{pack}.{check}"
 
 
-def load_pack(path: Path) -> Pack:
-    """Read and validate one ``*.pack.toml`` file; raise ``PackError`` on any fault."""
+def read_pack(path: Path) -> tuple[Pack, str]:
+    """Read and validate one ``*.pack.toml`` file: the pack and the text it was parsed from,
+    read once; raise ``PackError`` on any fault."""
     if not path.name.endswith(PACK_SUFFIX) or path.name == PACK_SUFFIX:
         raise PackError(f"{path.name}: a pack file is named '<name>{PACK_SUFFIX}'")
     try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        data = tomllib.loads(text)
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         raise PackError(f"cannot read pack {path.name}: {exc}") from exc
-    return parse_pack(data)
+    return parse_pack(data), text
+
+
+def load_pack(path: Path) -> Pack:
+    """Read and validate one ``*.pack.toml`` file; raise ``PackError`` on any fault."""
+    return read_pack(path)[0]
+
+
+def read_packs(paths: Sequence[str | Path]) -> list[tuple[Pack, str]]:
+    """Each ``--pack`` file through ``read_pack``, in pass order; ``PackError`` on a load error
+    or on two packs of one name, whose signals would share ``pack.<name>``."""
+    loaded: list[tuple[Pack, str]] = []
+    for path in map(Path, paths):
+        pack, text = read_pack(path)
+        if any(p["name"] == pack["name"] for p, _ in loaded):
+            raise PackError(f"{path.name}: a pack named {pack['name']!r} was already passed; "
+                            "each --pack needs its own [pack] name")
+        loaded.append((pack, text))
+    return loaded
+
+
+def load_packs(paths: Sequence[str | Path]) -> tuple[Pack, ...]:
+    """The packs of ``read_packs``, in pass order (``assess_core.py`` and ``assess_signals.py``
+    ``--pack``)."""
+    return tuple(pack for pack, _ in read_packs(paths))
 
 
 def parse_pack(data: Mapping[str, Any]) -> Pack:

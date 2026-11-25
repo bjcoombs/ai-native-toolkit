@@ -55,7 +55,7 @@ from lib.history_window import WINDOW_PATTERN
 from lib.review_automation import KINDS
 from lib.run_context_types import JsonDict
 from lib.signals import known_scans
-from lib.signals_schema import described_blocks, type_schema
+from lib.signals_schema import described_blocks, pack_blocks, type_schema
 
 # skills/assess/scripts/lib/fleet -> skills/
 SCHEMA_PATH = Path(__file__).resolve().parents[4] / "fleet" / "references" / "repos.schema.json"
@@ -84,7 +84,7 @@ def build_schema() -> JsonDict:
                         "runs an AI review; kinds names which (ci_action, ci_component, config_file)."),
         "properties": {"present": {"type": "boolean"},
                        "kinds": {"type": "array", "items": {"enum": list(KINDS)}}},
-    }, **described_blocks(known_scans())}
+    }, **described_blocks(known_scans()), **pack_blocks()}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": SCHEMA_ID,
