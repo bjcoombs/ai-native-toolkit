@@ -7,12 +7,12 @@ lines against ``result-60`` and ``result-85``. It also swaps in the ``typo`` lin
 the ``typo-error`` message. A change to the guide or the code that makes them disagree
 turns this test red. The guide's prose is held to the plain-English lint and the banned words.
 
-Section 7, a pack check end to end (#1275): the ``pack`` file and the ``pack-row`` table are
-written into a fixture repository with and without ``docs/glossary.md``, and the ``pack-run``
-command is run through ``assess_core.main``; the practice reads met, then unmet. The summary
-lines are checked against ``pack-result-met`` and ``pack-result-unmet`` with the pack block the
-real collector writes, and the ``pack-command`` line, swapped in for the rule, gives the
-loader message of ``pack-command-error``.
+Section 7, a pack check end to end (#1275): the ``pack`` file, which holds the check and the
+practice row (#1274), is written into a fixture repository with and without
+``docs/glossary.md``, and the ``pack-run`` command is run through ``assess_core.main``. The
+practice reads met, then unmet, and the summary holds the ``pack-result-met`` or
+``pack-result-unmet`` line. The ``pack-command`` line, swapped in for the rule, gives the loader
+message of ``pack-command-error``.
 """
 from __future__ import annotations
 
@@ -28,7 +28,6 @@ import pytest
 import assess_core
 import levels_new
 from lib import core_scans
-from lib.pack_checks import collect
 from lib.packs import PackError, load_pack
 from lib.level_signals import signal_path_validator
 from lib.level_tally import LEVEL_READS
@@ -51,7 +50,7 @@ HANDOVER_MET: dict[str, Any] = {
 def examples() -> dict[str, str]:
     found = {name: body for name, body in _EXAMPLE.findall(GUIDE.read_text(encoding="utf-8"))}
     assert set(found) == {"copy", "practice", "typo", "typo-error", "result-60", "result-85",
-                          "pack", "pack-row", "pack-run", "pack-result-met", "pack-result-unmet",
+                          "pack", "pack-run", "pack-result-met", "pack-result-unmet",
                           "pack-command", "pack-command-error"}
     return found
 
@@ -69,11 +68,10 @@ def model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return path
 
 
-def _summary(path: Path, threshold: float, packs: tuple[Any, ...] = (),
-             pack: dict[str, Any] | None = None) -> list[str]:
-    choice = single_repo_choice(None, path, signal_path_validator(packs), packs)
+def _summary(path: Path, threshold: float) -> list[str]:
+    choice = single_repo_choice(None, path, signal_path_validator())
     ctx = {**HANDOVER_MET, "coverage_gate": {"enforced_meets_minimum": True, "max_threshold_percent": threshold}}
-    level = core_scans.level(*(ctx.get(k) for k in LEVEL_READS), choice, pack)
+    level = core_scans.level(*(ctx.get(k) for k in LEVEL_READS), choice)
     return list(core_scans.headline(level, None, choice)["summary_lines"])
 
 
@@ -98,61 +96,62 @@ def test_the_typo_stops_with_the_error_the_guide_shows(model: Path) -> None:
 
 
 def _pack_run() -> list[str]:
-    """The ``pack-run`` command's arguments after ``/assess``, checked against the file names."""
+    """The ``pack-run`` command's arguments after ``/assess``, checked against the file name."""
     argv = shlex.split(examples()["pack-run"].strip())
     assert argv[0] == "/assess"
-    assert argv[argv.index("--levels") + 1] == "my-team.toml"
     assert argv[argv.index("--pack") + 1] == "team.pack.toml"
     return argv[1:]
 
 
 @pytest.fixture
-def team_repo(model: Path, tmp_path: Path) -> Path:
-    """The reader's repository: ``my-team.toml`` with the ``pack-row`` table added, the
-    ``team.pack.toml`` of the guide and a ``docs/glossary.md``."""
+def team_repo(tmp_path: Path) -> Path:
+    """The reader's repository: the guide's ``team.pack.toml`` (its check and its row) and a
+    ``docs/glossary.md``."""
     root = tmp_path / "your-repo"
     (root / "docs").mkdir(parents=True)
     (root / "docs" / "glossary.md").write_text("# Glossary\n", encoding="utf-8")
-    (root / "my-team.toml").write_text(
-        model.read_text(encoding="utf-8") + "\n" + examples()["pack-row"], encoding="utf-8")
     (root / "team.pack.toml").write_text(examples()["pack"], encoding="utf-8")
     subprocess.run(["git", "init", "-q", str(root)], check=True, capture_output=True,
                    encoding="utf-8", errors="replace")
     return root
 
 
+def _run(repo: Path, args: list[str], monkeypatch: pytest.MonkeyPatch,
+         capsys: pytest.CaptureFixture[str]) -> dict[str, Any]:
+    monkeypatch.chdir(repo)
+    assert assess_core.main([str(repo), *args]) == 0
+    capsys.readouterr()
+    ctx: dict[str, Any] = json.loads((repo / ".assess" / "run-context.json").read_text(encoding="utf-8"))
+    return ctx
+
+
 @pytest.mark.parametrize("glossary", [True, False])
-def test_the_pack_run_scores_the_glossary_practice(team_repo: Path, glossary: bool,
-                                                   monkeypatch: pytest.MonkeyPatch,
-                                                   capsys: pytest.CaptureFixture[str]) -> None:
+def test_the_pack_run_reads_as_the_guide_says(team_repo: Path, glossary: bool,
+                                              monkeypatch: pytest.MonkeyPatch,
+                                              capsys: pytest.CaptureFixture[str]) -> None:
     if not glossary:
         (team_repo / "docs" / "glossary.md").unlink()
-    monkeypatch.chdir(team_repo)
-    assert assess_core.main([str(team_repo), *_pack_run()]) == 0
-    capsys.readouterr()
-    ctx = json.loads((team_repo / ".assess" / "run-context.json").read_text(encoding="utf-8"))
+    ctx = _run(team_repo, _pack_run(), monkeypatch, capsys)
     assert ctx["pack"] == {"team": {"glossary": glossary}}
     assert [p["name"] for p in ctx["packs"]] == ["team"]
     condition = next(c for c in ctx["level"]["conditions"] if c["id"] == "glossary.1")
     assert condition["state"] == ("met" if glossary else "unmet")
+    assert condition["source"] == "team"
+    expected = examples()["pack-result-met" if glossary else "pack-result-unmet"].strip()
+    assert expected in ctx["headline"]["summary_lines"]
+
+
+def test_the_pack_adds_its_practice_to_a_levels_copy(model: Path, team_repo: Path,
+                                                     monkeypatch: pytest.MonkeyPatch,
+                                                     capsys: pytest.CaptureFixture[str]) -> None:
+    """The guide's "pass ``--levels my-team.toml`` as well": the section 2 copy plus the pack."""
+    (team_repo / "my-team.toml").write_text(model.read_text(encoding="utf-8"), encoding="utf-8")
+    ctx = _run(team_repo, ["--levels", "my-team.toml", *_pack_run()], monkeypatch, capsys)
+    ids = [c["id"] for c in ctx["level"]["conditions"]]
+    assert "coverage-80.1" in ids and ids[-1] == "glossary.1"
     summary = ctx["headline"]["summary_lines"]
-    assert "Not in the default model: Coverage gate of at least 80; Domain glossary." in summary
-    assert ("Domain glossary (not met)" in summary[1]) is not glossary
-
-
-@pytest.mark.parametrize("glossary", [True, False])
-def test_the_pack_result_reads_as_the_guide_says(team_repo: Path, glossary: bool) -> None:
-    if not glossary:
-        (team_repo / "docs" / "glossary.md").unlink()
-    packs = assess_core.load_packs([str(team_repo / "team.pack.toml")])
-    pack = collect(team_repo, (set(), []), packs)["pack"]
-    expected = examples()["pack-result-met" if glossary else "pack-result-unmet"].strip().splitlines()
-    assert _summary(team_repo / "my-team.toml", 85, packs, pack)[:len(expected)] == expected
-
-
-def test_a_pack_row_without_the_pack_stops_naming_pack(team_repo: Path) -> None:
-    with pytest.raises(ProfileError, match="--pack"):
-        single_repo_choice(None, team_repo / "my-team.toml", signal_path_validator())
+    assert examples()["pack-result-met"].strip() in summary
+    assert "Not in the default model: Coverage gate of at least 80; Domain glossary [pack team]." in summary
 
 
 def test_a_pack_that_runs_a_command_stops_with_the_error_the_guide_shows(team_repo: Path) -> None:

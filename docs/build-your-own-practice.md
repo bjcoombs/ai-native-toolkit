@@ -132,7 +132,7 @@ A pack check reads only the files of the repository. It never runs a program, so
 - `contains` counts the files that match a pattern and hold a given text.
 - `key_exists` is true when a TOML, YAML or JSON file holds a key, such as `metadata.owner` in `service.yaml`.
 
-Save this pack as `team.pack.toml` in your repository:
+Save this pack as `team.pack.toml` in your repository. It holds one check and one practice that reads it:
 
 <!-- guide-example: pack -->
 ```toml
@@ -145,20 +145,7 @@ id = "glossary"
 title = "Domain glossary"
 why = "Agents need the words of the domain before they change the code."
 exists = "docs/glossary.md"
-```
 
-What each line does:
-
-- `name` names the pack, in small letters, digits and `_`, and starts with a letter. Two packs in one run need two names.
-- `version` names this edition of the pack. Change it after each edit. The report also keeps a hash of the pack, so two editions never look the same.
-- `id` is a short name for the check, unique in the pack.
-- `title` and `why` say what the check looks for and why it matters to the team.
-- `exists` is the rule. The path starts at the root of the repository and uses `/`. A path that leaves the repository, such as `../notes.md`, stops the pack from loading.
-
-The check gives the signal `pack.team.glossary`: the word `pack`, the pack name, then the check id. Its value is true or false. A practice reads it like any other signal. Add this row to the end of `my-team.toml`, after the row of section 2:
-
-<!-- guide-example: pack-row -->
-```toml
 [[rows]]
 id = "glossary"
 title = "Domain glossary"
@@ -173,36 +160,40 @@ aggregation = "min"
   ]
 ```
 
-A pack cannot hold a `[[rows]]` table yet, so the row lives in your copy of the model.
+What each line of `[pack]` and `[[checks]]` does:
 
-Pass both files to `/assess`:
+- `name` names the pack, in small letters, digits and `_`, and starts with a letter. Two packs in one run need two names.
+- `version` names this edition of the pack. Change it after each edit. The report also keeps a hash of the pack, so two editions never look the same.
+- `id` is a short name for the check, unique in the pack.
+- `title` and `why` say what the check looks for and why it matters to the team.
+- `exists` is the rule. The path starts at the root of the repository and uses `/`. A path that leaves the repository, such as `../notes.md`, stops the pack from loading.
+
+The check gives the signal `pack.team.glossary`: the word `pack`, the pack name, then the check id. Its value is true or false. The `[[rows]]` table is a practice, written as in section 2, and it reads that signal like any other. A row id must not be used by the model or by another pack.
+
+Pass the pack to `/assess`:
 
 <!-- guide-example: pack-run -->
 ```sh
-/assess --levels my-team.toml --pack team.pack.toml
+/assess --pack team.pack.toml
 ```
 
-A model that reads `pack.team.glossary` stops with an error when the run has no `--pack team.pack.toml`. The error names `--pack`.
+The run scores the default model and adds the practices of the pack after it. To add them to your own copy instead, pass `--levels my-team.toml` as well.
 
-Take the repository of section 5, with the gate at 85 percent. When `docs/glossary.md` is present, the summary reads:
+When `docs/glossary.md` is present, the summary at the top of the report has this line. `[pack team]` names the pack the practice comes from:
 
 <!-- guide-example: pack-result-met -->
 ```text
-Maturity model: my-team.toml, a custom file, not the default.
-Every practice met (model: my-team.toml).
-Not in the default model: Coverage gate of at least 80; Domain glossary.
+Practice packs team: Domain glossary [pack team] (in place).
 ```
 
-Delete `docs/glossary.md` and run it again. The second line names the practice that is not met:
+Delete `docs/glossary.md` and run it again. The line now reads:
 
 <!-- guide-example: pack-result-unmet -->
 ```text
-Maturity model: my-team.toml, a custom file, not the default.
-Not every practice met (model: my-team.toml). Missing: Domain glossary (not met) [not in the default model].
-Not in the default model: Coverage gate of at least 80; Domain glossary.
+Practice packs team: Domain glossary [pack team] (not met).
 ```
 
-The value of each check is in the `pack` block of `.assess/run-context.json`, and the practice is the condition `glossary.1` of the `level` block. The `packs` block holds the name, version and hash of each pack. No path and no text from your files goes into either block.
+With `--levels my-team.toml`, the other summary lines also name the practice with `[pack team]`. The value of each check is in the `pack` block of `.assess/run-context.json`. The practice is the condition `glossary.1` of the `level` block, with `source` set to `team`. The `packs` block holds the name, version and hash of each pack. No path and no text from your files goes into either block.
 
 A pack holds rules only. A key that would run a program, such as `command`, `run` or `script`, stops the pack from loading. Here the check asks for a shell command in place of its rule:
 
