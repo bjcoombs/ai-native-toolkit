@@ -27,6 +27,12 @@ the maturity model as one condition, `<row id>.<level>`, and reports:
   never does. A gate reads the state of its row's conditions, not their grade, and each
   blocker is a gate (`kind: "gate"`).
 
+With `--pack` (#1276), each pack's `[[rows]]` are layered onto the model and every condition
+names its `source` (the base model or the pack). The envelope then gains `packs`: for each
+pack, in pass order, its `name`, `version`, `sha256`, `repos` and `practices[]` with `met`,
+`measured` and `not_measured`, the same roll-up `fleet-data.json` carries. Without `--pack`
+the file is unchanged.
+
 Each result applies the owner exclusions of the repository's own `.assess/config.toml`
 (#910), read from its `owner_exclusions` scan: an excluded condition reads `not_applicable`,
 is never counted, and never holds a gate, and the result lists it under `excluded`. A

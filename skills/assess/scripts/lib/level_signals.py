@@ -196,9 +196,11 @@ _SCALARS = (str, int, float, bool, type(None))
 
 @lru_cache(maxsize=1)
 def scan_names() -> frozenset[str]:
-    """The block names the published headless schema allows under ``scans``."""
+    """The block names the published headless schema allows under ``scans``, less the ``--pack``
+    block (#1276): a ``pack.<pack>.<check>`` path is valid only for a run's own packs, which
+    ``signal_path_validator`` checks, so the bare block is never a scan a criterion can name."""
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
-    return frozenset(schema["properties"]["scans"]["propertyNames"]["enum"])
+    return frozenset(schema["properties"]["scans"]["propertyNames"]["enum"]) - {SIGNAL_PREFIX}
 
 
 def _typed_roots() -> dict[str, list[Any]]:
