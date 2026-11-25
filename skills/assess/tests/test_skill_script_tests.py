@@ -197,4 +197,11 @@ def test_one_script_tested_elsewhere_uses_the_same_matcher(tmp_path: Path) -> No
     assert sst.script_tested_elsewhere(repo, "skills/ghsync/tests/helper.sh") is False  # under tests/
     assert sst.script_tested_elsewhere(repo, "skills/ghsync/SKILL.md") is False  # not a script
     assert sst.script_tested_elsewhere(repo, "tools/loose.sh") is False  # in no skill folder
+
+
+def test_a_skill_md_above_the_repository_is_never_its_skill_folder(tmp_path: Path) -> None:
+    (tmp_path / "SKILL.md").write_text(SKILL.format("parent"), encoding="utf-8")
+    (tmp_path / "outside.sh").write_text("echo\n", encoding="utf-8")
+    repo = _plugin(tmp_path / "repo", {"tests/test_x.py": 'X = "repo/../outside.sh"\n'})
     assert sst.script_tested_elsewhere(repo, "../outside.sh") is False
+    assert sst.script_tested_elsewhere(repo, str(tmp_path / "outside.sh")) is False

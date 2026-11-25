@@ -203,7 +203,10 @@ def _elsewhere(repo: Path, folder: Path, scripts: list[str],
 
 def _skill_folder_of(repo: Path, rel_path: str) -> Path | None:
     """The nearest folder above ``rel_path`` that holds a ``SKILL.md``, inside ``repo``, or None."""
-    for parent in PurePosixPath(rel_path).parents:
+    rel = PurePosixPath(rel_path)
+    if rel.is_absolute() or ".." in rel.parts:
+        return None  # never a folder outside the repository
+    for parent in rel.parents:
         if parent == PurePosixPath("."):
             return None
         folder = repo.joinpath(*parent.parts)
