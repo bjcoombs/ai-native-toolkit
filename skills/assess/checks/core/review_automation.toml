@@ -16,7 +16,7 @@ whys.review_automation = "A review step committed in CI reviews every change it 
 shapes = [
   { path = "review_automation", type = "lib.review_automation:ReviewAutomationBlock" },
 ]
-revision = 2
+revision = 3
   [entries.privacy]
   "review_automation.reason" = "drop"
   "review_automation.kinds" = "token"

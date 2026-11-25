@@ -97,6 +97,14 @@ agent) trusts the boundary deliberately rather than being surprised by the seam:
   `revision`: `tests/test_collector_fingerprints.py` compares the golden against
   `tests/fixtures/fleet_golden/collector_fingerprints.json`, and `make regen` refuses to record
   a changed output under an unchanged revision (#952).
+- **`templates/assess-gate.yml` <-> four collectors' `revision`.** `ci_includes.is_toolkit_gate_text`
+  compares a GitLab `component:` file with the template's lines below its `---` (#1179), so a
+  change to the job body changes what `ci_checks`, `secrets_guard`, `review_automation` and
+  `ci_model_jobs` report for a mirror of the gate. The fleet golden has no such mirror, so
+  `tests/test_collector_fingerprints.py` does not catch it; instead
+  `tests/test_ci_gate_include.py` pins a digest of the body and fails on an edit until the
+  four revisions are bumped and the digest re-recorded. Edits to the `spec:` header and its
+  input defaults do not trip it.
 - **`fleet/fleet_rescore.py` <-> `fleet/fleet_data.py`.** `rescore` rebuilds a stored run's cells and
   roll-ups with `fleet_data`'s own `repo_cells`, `row_roll_up` and `step_fields` (with
   `fleet_data_steps.step_roll_up`), so a

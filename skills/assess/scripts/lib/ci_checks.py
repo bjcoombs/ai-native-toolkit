@@ -96,7 +96,8 @@ ROOT). Each resolved file's lines are classified the same way and counted in
 (kind, id, status, ref_basis, depth; never a file name or text), with the
 ``resolved_includes`` / ``unresolved_includes`` counts. The toolkit's own regression gate
 template (status ``toolkit_gate``, ``ci_includes.SETTLED``, #1152) counts as resolved: its
-one job runs no project tests.
+one job runs no project tests. A component counts only when its cloned file is that template;
+a name alone stays unread (#1179).
 
 GitLab's merge (#1180, ``lib.ci_merged_view`` over ``ci_includes.merged_config``): a job whose
 keys come from more than one place (defined in the root file and an include, ``extends:``, or a
