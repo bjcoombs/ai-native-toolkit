@@ -27,7 +27,7 @@
 {
   "rank": 1,
   "action": "Investigate the src/foo.go <-> src/bar.go seam",
-  "done_when": "The coupling is documented in a contract, or the shared state is extracted",
+  "done_when": "`docs/contracts/foo-bar.md` documents the src/foo.go <-> src/bar.go coupling, or the shared state is extracted",
   "scope_fence": "Only src/foo.go and src/bar.go; do not touch callers",
   "status": "pending",
   "claimed_by": null,
@@ -43,7 +43,7 @@
 |-------|------|---------|
 | `rank` | int | Priority order (1 = do first). |
 | `action` | string | The directive. Also the **fallback identity** used to carry status across re-runs, for an action with no `finding` or no path. |
-| `done_when` | string | The exit criterion. Without it a weak executor doesn't know when to stop. |
+| `done_when` | string | The exit criterion. Without it a weak executor doesn't know when to stop. It holds a backticked command or path, a number or a Markdown link (the top card's line rule, `lib/card_lint.py`); `assess_finalize.py` warns, naming the action, when it holds none. |
 | `scope_fence` | string | What NOT to touch. Without it a weak executor over-extends. |
 | `status` | enum | Lifecycle: `pending` \| `claimed` \| `done` \| `reopened`. See below. |
 | `claimed_by` | string \| null | Identifier of the executor that claimed the action; `null` while unclaimed. |

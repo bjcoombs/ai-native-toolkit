@@ -14,7 +14,8 @@ fold, whichever comes first) and fail when:
   ``fixtures/golden/card-<state>.md`` pin the first screen of each state; regenerate them with
   ``CARD_GOLDEN_REGEN=1`` (``make regen`` does);
 - **a line carries no evidence.** Every paragraph holds a digit, a Markdown link or a
-  backticked command or path.
+  backticked command or path (``lib/card_lint.lint_errors``, the rule ``assess_finalize.py``
+  applies to each Top 3 ``done_when``, #1300).
 
 A narrowed run (``--profile citizen``, #1268) keeps every section heading a full run under the
 same profile shows, with the not-run line under it, and no two non-blank lines in a row are the
@@ -26,7 +27,6 @@ The cold-reader release step for a card change is in ``docs/contributing/release
 from __future__ import annotations
 
 import os
-import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -36,6 +36,7 @@ import pytest
 import lib.exec_summary as es
 from assess_report import FINDINGS_HEADING, render_report, report_facts
 from lib.card_facts import CardFact
+from lib.card_lint import LINK, lint_errors
 from lib.exec_summary import summarised, summary_facts
 from lib.headline import headline
 from lib.keyhole.keyhole_signals import render_findings_markdown
@@ -47,9 +48,6 @@ from test_top_card import FIRST, KNOWN, ROLLUP, SHA, _below, _top
 MODEL = default_model()
 GOLDEN = Path(__file__).parent / "fixtures" / "golden"
 TOP_BUDGET, BUDGET = 120, 180
-LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
-CODE = re.compile(r"`[^`]+`")
-DIGIT = re.compile(r"\d")
 # The rank-1 action's Start here and Done when are the model's words from actions.json; the
 # fixture writes its check as a command in backticks, as a Done when should.
 ACTION = {"start": '`rg -n "noqa: E402" skills/assess/scripts/assess_report.py`',
@@ -113,11 +111,6 @@ def budget_errors(paragraphs: Sequence[str], top: bool) -> list[str]:
     budget = TOP_BUDGET if top else BUDGET
     words = visible_words(paragraphs)
     return [f"{words} words, over the budget of {budget}"] if words > budget else []
-
-
-def lint_errors(paragraphs: Sequence[str]) -> list[str]:
-    """Paragraphs with no digit, no Markdown link and no backticked command or path."""
-    return [p for p in paragraphs if not (DIGIT.search(p) or LINK.search(p) or CODE.search(p))]
 
 
 ALL = {**STATES, **EXTRA}
