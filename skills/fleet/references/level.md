@@ -30,7 +30,9 @@ the maturity model as one condition, `<row id>.<level>`, and reports:
 With `--pack` (#1276), each pack's `[[rows]]` are layered onto the model and every condition
 names its `source` (the base model or the pack). The envelope then gains `packs`: for each
 pack, in pass order, its `name`, `version`, `sha256`, `repos` and `practices[]` with `met`,
-`measured` and `not_measured`, the same roll-up `fleet-data.json` carries. Without `--pack`
+`measured` and `not_measured`, the same roll-up `fleet-data.json` carries. A repository
+whose `.assess/config.toml` excludes a pack condition is in neither column, so
+`measured + not_measured` can be less than `repos`. Without `--pack`
 the file is unchanged.
 
 Each result applies the owner exclusions of the repository's own `.assess/config.toml`

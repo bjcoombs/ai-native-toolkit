@@ -242,6 +242,26 @@ def test_a_hazard_practice_holds_when_unmet_and_a_checks_only_pack_lists_none() 
     assert "This pack adds checks only" in section
 
 
+
+def test_a_pack_with_rows_lists_its_practices_when_no_repository_scanned() -> None:
+    """The practices come from the model, so a run where every scan failed still names them."""
+    model = layer_packs(parse_levels(_toml(LEVELS)), "levels.toml", [parse_pack(_toml(TEAM))])
+    roll = fp.pack_roll_up(model, [{"name": "team", "version": "1", "sha256": "s"}], [None])
+    assert roll[0]["repos"] == 0
+    assert [(p["condition"], p["met"], p["measured"], p["not_measured"]) for p in roll[0]["practices"]] == [
+        ("team-adrs.1", 0, 0, 0)]
+    section = fp.packs_section(roll)  # type: ignore[arg-type]
+    assert section is not None and "adds checks only" not in section
+
+
+def test_an_owner_excluded_condition_is_in_neither_column() -> None:
+    model = layer_packs(parse_levels(_toml(LEVELS)), "levels.toml", [parse_pack(_toml(TEAM))])
+    result = {"conditions": [{"id": "team-adrs.1", "row": "team-adrs", "level": 1, "state": "not_applicable",
+                              "source": "team"}]}
+    roll = fp.pack_roll_up(model, [{"name": "team", "version": "1", "sha256": "s"}], [result])  # type: ignore[list-item]
+    assert roll[0]["repos"] == 1
+    assert (roll[0]["practices"][0]["measured"], roll[0]["practices"][0]["not_measured"]) == (0, 0)
+
 def _toml(text: str) -> dict[str, object]:
     import tomllib
     return tomllib.loads(text)

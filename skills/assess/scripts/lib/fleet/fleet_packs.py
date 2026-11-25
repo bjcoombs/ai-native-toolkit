@@ -21,7 +21,10 @@ text; ``signals.PACK_BLOCKS``). The pack identities are the run stamp's ``packs`
 model order, with ``met`` (the repositories where it holds: met, or unmet for a hazard),
 ``measured`` (met or unmet) and ``not_measured`` (a check unavailable, a signal absent, or a
 ``requires`` not measured), each over ``repos``, the scanned repositories. A repository where
-a pack check could not be answered is not measured, never unmet. A pack with checks but no
+a pack check could not be answered is not measured, never unmet; one whose own
+``.assess/config.toml`` excludes the condition (``not_applicable``, #910) is in neither column,
+so ``measured + not_measured`` can fall short of ``repos``. The practices come from the model,
+so a pack's rows are listed at zero counts when no repository scanned. A pack with checks but no
 rows lists no practice. ``level.json`` (``fleet_level``) and ``fleet-data.json``
 (``fleet_data``) carry it as ``packs``, written only when a pack was passed, so a run without
 ``--pack`` writes the files it wrote before; ``report.md`` gets ``packs_section``, and
@@ -40,7 +43,7 @@ from typing import Any, NamedTuple, TypedDict
 
 from lib.level_result_types import LevelResult
 from lib.level_signals import signal_path_validator
-from lib.levels import MaturityModel, load_levels
+from lib.levels import MaturityModel, condition_id, load_levels
 from lib.pack_layering import layer_packs
 from lib.packs import Pack, PackIdentity, pack_identity, read_packs
 
@@ -112,17 +115,20 @@ def pack_roll_up(model: MaturityModel | None, identities: Sequence[Mapping[str, 
     if model is None or not identities:
         return []
     scanned = [r for r in results if r is not None]
-    titles = {row["id"]: row["title"] for row in model["rows"]}
     out: list[PackRollUp] = []
     for ident in identities:
         name = str(ident.get("name"))
-        practices: dict[str, PackPractice] = {}
+        # Seeded from the model, so a pack's practices are listed even when no repository scanned.
+        practices: dict[str, PackPractice] = {
+            condition_id(row["id"], lvl["level"]): {
+                "condition": condition_id(row["id"], lvl["level"]), "row": row["id"], "title": row["title"],
+                "level": lvl["level"], "met": 0, "measured": 0, "not_measured": 0}
+            for row in model["rows"] if row.get("source") == name for lvl in row["levels"]}
         for result in scanned:
             for c in result["conditions"]:
-                if c.get("source") != name:
+                p = practices.get(c["id"]) if c.get("source") == name else None
+                if p is None:
                     continue
-                p = practices.setdefault(c["id"], {"condition": c["id"], "row": c["row"], "title": titles.get(c["row"], c["row"]),
-                                                   "level": c["level"], "met": 0, "measured": 0, "not_measured": 0})
                 p["met"] += _holds(c)
                 p["measured"] += c["state"] in ("met", "unmet")
                 p["not_measured"] += c["state"] == "not_measured"
