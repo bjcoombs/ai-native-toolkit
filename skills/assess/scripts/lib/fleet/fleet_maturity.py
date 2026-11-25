@@ -1,7 +1,7 @@
 """One maturity number for a repository or a group, shared by the fleet diagrams (issue #684).
 
-The quadrant (``lib/fleet/fleet_quadrant.py``), the slope chart (``lib/fleet/fleet_slope.py``) and
-the trend lines (``lib/fleet/fleet_trends.py``) all plot a mean maturity. They take it the
+The slope chart (``lib/fleet/fleet_slope.py``) and the trend lines (``lib/fleet/fleet_trends.py``)
+plot a mean maturity (the quadrant that also did was dropped in #1255). They take it the
 same way, here:
 
 - **Unit.** Each row's level as a share of the row's top level (the number of levels
@@ -9,7 +9,7 @@ same way, here:
 - **Known rows only.** A row with no level (unknown) or no top level is left out of
   the mean, never counted as 0; with no such row the mean is unknown (None).
 - **Row set.** ``team`` rows only (``SCOPE``). A team row is evaluated on a
-  repository's own scans, so it is the one set the per-repository quadrant can
+  repository's own scans, so it is the one set a single repository can
   measure; an ``org`` row reads the group's settings, which no single repository
   has. The group charts use the same set so the three read on one scale.
 
@@ -23,7 +23,7 @@ same way, here:
 
 Pure arithmetic: no I/O, no ordering dependence.
 
-The one maturity mean the quadrant, the slope chart and the trend lines share (#684).
+The one maturity mean the slope chart and the trend lines share (#684).
 `mean_share(cells)` averages each known `(level, top)` pair's share of top level, leaving out
 an unknown level or a missing top level (`None` when nothing is left, never 0);
 `known_shares` lists them. `SCOPE` is the row set, `team` rows: the only rows a single

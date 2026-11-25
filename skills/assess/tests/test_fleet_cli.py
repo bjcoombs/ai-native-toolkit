@@ -222,15 +222,14 @@ def test_diagrams_are_drawn_from_a_real_run_and_byte_identical(tmp_path, monkeyp
     (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
     for out in ("d1", "d2"):
         assert fleet_cli.main([str(root), "--levels", "levels.toml", "--all-scans", "--out", out, "--no-history"]) == 0
-    for name in ("quadrant.svg", "shared-tooling.svg", "report.md"):
+    for name in ("shared-tooling.svg", "report.md"):
         assert (tmp_path / "d1" / name).read_bytes() == (tmp_path / "d2" / name).read_bytes()
     rows = {r["repo"]: r for r in _rows(tmp_path / "d1")}
     scans = rows["grpb/lib1"]["scans"]
     assert isinstance(scans, dict)
     assert isinstance(scans["ai_usage"]["total_commits"], int)
     assert [e["ref"] for e in scans["shared_tooling"]["ci_includes"]] == ["v5"]
-    quadrant = (tmp_path / "d1" / "quadrant.svg").read_text(encoding="utf-8")
-    assert "grpa/svc1: " in quadrant  # plotted, with its tooltip
+    assert not (tmp_path / "d1" / "quadrant.svg").exists()  # dropped in #1255
     tooling = (tmp_path / "d1" / "shared-tooling.svg").read_text(encoding="utf-8")
     assert "1 pinned off the fleet's most common ref (dashed)" in tooling
     assert 'stroke-dasharray="5 4"><title>grpb/lib1 → gitlab_project:grp/ci-templates @ v5' in tooling

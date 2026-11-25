@@ -36,14 +36,16 @@ team rows, no repositories; for the trend no run history or fewer than 3 compara
 the slope chart no `--compare`, runs not comparable, or no row known in both runs). `history`
 is the trend's runs (`fleet_trends`), `None` when the run is not kept in the history;
 `comparison` is the result `_keep_and_compare` wrote. `report_markdown` opens with the
-`fleet_coverage.coverage_line` paragraph when given, then the
+front screen when given (`lib/fleet/fleet_front.py`, #1255: Step counts, moves, one change away,
+gates ranked, team links), then the `fleet_coverage.coverage_line` paragraph when given, then the
 `fleet_credit` section when given, then the `fleet_opportunities_section` section when
 given, then embeds each with a relative clickable image link or says
 why it is not drawn, then the `measured_appendix` section when given (`fleet.py` passes it,
 built from the ok rows' `scans`). `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
 stale picture. `RETIRED_FILES` names a diagram the fleet no longer draws (`layer-bars.svg`,
-retired with the layer framing in #1073: the fleet rolls up by truth tag), which `clear_diagrams`
+retired with the layer framing in #1073: the fleet rolls up by truth tag; `quadrant.svg`, dropped in #1255
+because it placed repositories against each other, #806), which `clear_diagrams`
 also removes, so a picture from before never sits beside new data. A new diagram (#676) adds its module, its `FILE` with its
 report heading and question to `HEADINGS` (one source for a drawn, skipped or failed diagram,
 #684; `DIAGRAM_FILES` follows it) and an entry to `build_diagrams`. Golden renders: `tests/fixtures/fleet_diagrams/` (regenerate with
@@ -58,7 +60,6 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 import lib.fleet.fleet_maturity as fleet_maturity
-import lib.fleet.fleet_quadrant as fleet_quadrant
 import lib.fleet.fleet_slope as fleet_slope
 import lib.fleet.fleet_step_funnel as fleet_step_funnel
 import lib.fleet.fleet_step_lifts as fleet_step_lifts
@@ -84,7 +85,6 @@ HEADINGS: dict[str, tuple[str, str]] = {
     fleet_tag_heatmap.FILE: (fleet_tag_heatmap.TITLE, fleet_tag_heatmap.QUESTION),
     fleet_step_funnel.FILE: (fleet_step_funnel.TITLE, fleet_step_funnel.QUESTION),
     fleet_step_lifts.FILE: (fleet_step_lifts.TITLE, fleet_step_lifts.QUESTION),
-    fleet_quadrant.FILE: ("Activity and maturity", "Which busy repositories have the most room to grow?"),
     fleet_tooling_map.FILE: ("Shared tooling",
                              "What does a shared template change reach, and which pins differ from the fleet's?"),
     fleet_trends.FILE: ("Group trends", "Is each team improving?"),
@@ -95,8 +95,9 @@ HEADINGS: dict[str, tuple[str, str]] = {
 
 DIAGRAM_FILES = tuple(HEADINGS)
 # Diagrams no longer drawn, removed with the others so an earlier run's picture never stays:
-# the per-layer bars, retired when the fleet moved from layers to truth tags (#1073).
-RETIRED_FILES = ("layer-bars.svg",)
+# the per-layer bars, retired when the fleet moved from layers to truth tags (#1073), and the
+# activity and maturity quadrant, dropped because it placed repositories against each other (#806, #1255).
+RETIRED_FILES = ("layer-bars.svg", "quadrant.svg")
 
 
 class Diagram(TypedDict):
@@ -144,17 +145,24 @@ def _step_lifts(levels: MaturityModel | None, data: Mapping[str, Any] | None, re
 
 
 def _step_movement(levels: MaturityModel | None, data: Mapping[str, Any] | None,
-                   earlier: FleetRun | str | None, comparison: Comparison | None, repos: int) -> Diagram:
+                   earlier: FleetRun | str | None, comparison: Comparison | None, repos: int,
+                   moves: fleet_step_movement.StepMoves | None = None) -> Diagram:
     entry = _entry(fleet_step_movement.FILE, repos)
     if earlier is None:
         entry["in_place"] = f"{IN_PLACE} this run, the baseline a later comparison starts from."
         entry["skipped"] = "skipped: no earlier run compared (no --compare, or no history entry matched this run)."
     elif _step_ready(entry, levels, data) and levels is not None and data is not None:
-        moves = fleet_step_movement.step_moves(levels, earlier, data,
-                                               comparison["reasons"] if comparison else ())
+        if moves is None:
+            moves = step_moves_for(levels, data, earlier, comparison)
         entry["in_place"] = fleet_step_movement.in_place(moves)
         entry["svg"] = fleet_step_movement.render(moves)
     return entry
+
+
+def step_moves_for(levels: MaturityModel, data: Mapping[str, Any], earlier: FleetRun | str,
+                   comparison: Comparison | None) -> fleet_step_movement.StepMoves:
+    """The Step movement counts, computed once for the grid and the front screen (#1255)."""
+    return fleet_step_movement.step_moves(levels, earlier, data, comparison["reasons"] if comparison else ())
 
 
 def _repos(count: int) -> str:
@@ -171,24 +179,6 @@ def _entry(file: str, repos: int = 0) -> Diagram:
 
 def _has_team_rows(levels: MaturityModel) -> bool:
     return any(row["scope"] == fleet_maturity.SCOPE for row in levels["rows"])
-
-
-def _quadrant(levels: MaturityModel | None, repos: Sequence[FleetRow], window: str) -> Diagram:
-    entry = _entry(fleet_quadrant.FILE, len(repos))
-    if levels is None:
-        entry["skipped"] = NO_LEVELS
-    elif not _has_team_rows(levels):
-        entry["skipped"] = NO_TEAM_ROWS
-    elif not repos:
-        entry["skipped"] = NO_REPOS
-    else:
-        points = fleet_quadrant.repo_points(levels, repos)
-        measured = [p for p in points if p["maturity"] is not None]
-        half = sum(1 for p in measured if (p["maturity"] or 0.0) >= 0.5)
-        entry["in_place"] = (f"{IN_PLACE} {_repos(len(measured))} with a measured level, {half} of them "
-                             "at or above half the top level.")
-        entry["svg"] = fleet_quadrant.render_quadrant(points, window)
-    return entry
 
 
 def _tag_profile(levels: MaturityModel | None, profile: Sequence[FleetTagRow] | None, repos: int) -> Diagram:
@@ -300,7 +290,8 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
                    comparison: Comparison | None = None,
                    tag_profile: Sequence[FleetTagRow] | None = None,
                    data: Mapping[str, Any] | None = None,
-                   earlier: FleetRun | str | None = None) -> list[Diagram]:
+                   earlier: FleetRun | str | None = None,
+                   moves: fleet_step_movement.StepMoves | None = None) -> list[Diagram]:
     """Every diagram for one run, in report order; never raises for a diagram's sake.
 
     ``data`` is this run's ``fleet-data.json`` (#940): its ``tag_profile`` (the per-tag roll-up,
@@ -312,7 +303,8 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
     (``fleet_trends.history_runs`` and ``series_runs``); None when no history was read.
     ``comparison`` is this run's ``--compare`` result, None without ``--compare``; ``earlier``
     is the run it compared against (or the reason it could not be read), for the Step
-    movement grid (#941).
+    movement grid (#941); ``moves`` is that grid's counts when the caller already has them
+    (``step_moves_for``, shared with the front screen).
     """
     count = len(repos)
     profile = tag_profile if tag_profile is not None else (data or {}).get("tag_profile")
@@ -321,24 +313,25 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
         _guarded(lambda: _tag_heatmap(levels, data, count), fleet_tag_heatmap.FILE, count),
         _guarded(lambda: _step_funnel(levels, data, count), fleet_step_funnel.FILE, count),
         _guarded(lambda: _step_lifts(levels, data, count), fleet_step_lifts.FILE, count),
-        _guarded(lambda: _quadrant(levels, repos, window), fleet_quadrant.FILE, count),
         _guarded(lambda: _tooling(repos), fleet_tooling_map.FILE, count),
         _guarded(lambda: _trend(levels, history, count), fleet_trends.FILE, count),
         _guarded(lambda: _slope(levels, comparison, count), fleet_slope.FILE, count),
-        _guarded(lambda: _step_movement(levels, data, earlier, comparison, count), fleet_step_movement.FILE,
+        _guarded(lambda: _step_movement(levels, data, earlier, comparison, count, moves), fleet_step_movement.FILE,
                  count),
     ]
 
 
 def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None,
                     coverage: str | None = None, opportunities: str | None = None,
-                    measured: str | None = None) -> str:
-    """``report.md``: the coverage line when given (``lib/fleet/fleet_coverage.py``), the credit
+                    measured: str | None = None, front: str | None = None) -> str:
+    """``report.md``: the front screen when given (``lib/fleet/fleet_front.py``, #1255), the coverage line when given (``lib/fleet/fleet_coverage.py``), the credit
     section when given (``lib/fleet/fleet_credit.py``), the opportunities section when given
     (``lib/fleet/fleet_opportunities_section.py``), then each diagram embedded with a relative
     link, or why it was skipped, then the "How this was measured" section when given
     (``lib/measured_appendix.py``)."""
     lines = ["# Fleet diagrams", ""]
+    if front is not None:
+        lines += [front.rstrip("\n"), ""]
     if coverage is not None:
         lines += [coverage, ""]
     lines += ["Drawn from this run's output with no model call; unknown is hatched and named, "
@@ -383,11 +376,11 @@ def _write(path: Path, content: str) -> Path:
 
 def write_diagrams(out_dir: Path, diagrams: Sequence[Diagram], credit: str | None = None,
                    coverage: str | None = None, opportunities: str | None = None,
-                   measured: str | None = None) -> list[Path]:
-    """Write the drawn SVGs and ``report.md`` (with ``coverage``, ``credit`` and
+                   measured: str | None = None, front: str | None = None) -> list[Path]:
+    """Write the drawn SVGs and ``report.md`` (with ``front``, ``coverage``, ``credit`` and
     ``opportunities`` first and ``measured`` last) under ``out_dir``; returns the paths written."""
     clear_diagrams(out_dir)
     written = [_write(out_dir / d["file"], d["svg"]) for d in diagrams if d["svg"] is not None]
     written.append(_write(out_dir / REPORT_FILE,
-                          report_markdown(diagrams, credit, coverage, opportunities, measured)))
+                          report_markdown(diagrams, credit, coverage, opportunities, measured, front)))
     return written

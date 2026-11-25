@@ -51,6 +51,7 @@ b.views[0].units[0].target_id = "ownership~x";
 out.withSet = api.renderPage(b, {view: "ownership", unit: b.views[0].units[0].key, repo: null}, b.targets, true);
 out.staticHasSet = typeof api.staticSource(b).setTarget;
 out.sections = api.SECTIONS.length;
+out.first = api.SECTIONS[0](b, {view: b.views[0].view, unit: b.views[0].units[0].key, repo: null}, b.targets, false, {});
 process.stdout.write(JSON.stringify(out));
 """
 
@@ -159,11 +160,12 @@ def test_sections_come_in_the_design_order_and_target_entry_is_static_hidden() -
     out = _drawn("counts-only")
     page = out["pages"][0]
     heads = re.findall(r"<h2>(.*?)</h2>", page)
-    assert heads == ["Since last run", "Where this unit stands", "Your target", "Drill-down", "Fleet pictures"]
+    assert heads == ["Fleet at a glance", "Since last run", "Where this unit stands", "Your target", "Drill-down",
+                     "Fleet pictures"]
     assert out["staticHasSet"] == "undefined" and "set-target" not in page
     assert "set-target" in out["withSet"]  # a live source with setTarget draws the entry for a unit with a target id
     assert "set-target" not in out["withSetNoId"]  # and none for a unit without one (#949)
-    assert out["sections"] == 5
+    assert out["sections"] == 6
 
 
 def test_the_root_page_shows_the_target_gates_the_credit_and_the_exclusion() -> None:
@@ -324,3 +326,74 @@ process.stdout.write(JSON.stringify(["ownership", "system"].map(function (v) {
     ownership, system = json.loads(done.stdout)
     assert "OWNERSHIP CREDIT" in ownership and "SYSTEM CREDIT" not in ownership and "REPO CREDIT" in ownership
     assert "SYSTEM CREDIT" in system and "OWNERSHIP CREDIT" not in system and "REPO CREDIT" in system
+
+
+# --- the front screen (#1255) ------------------------------------------------------------
+
+
+def _render(bundle: dict[str, Any]) -> str:
+    """The first section of ``bundle``'s page, drawn by the shipped script under Node."""
+    if NODE is None:
+        pytest.skip("node is not on PATH")
+    script, _ = _parts(fx.goldens()["expected-full.html"])
+    runner = """
+const vm = require("node:vm"); const fs = require("node:fs");
+const input = JSON.parse(fs.readFileSync(0, "utf8")); const ctx = {}; vm.createContext(ctx);
+vm.runInContext(input.script, ctx); const b = input.bundle;
+process.stdout.write(JSON.stringify(ctx.FleetView.SECTIONS[0](b, {view: "ownership", unit: b.views[0].units[0].key,
+  repo: null}, b.targets, false, {})));
+"""
+    done = subprocess.run([NODE, "-e", runner], input=json.dumps({"script": script, "bundle": bundle}),
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
+    first: str = json.loads(done.stdout)
+    return first
+
+
+@pytest.mark.parametrize("name", sorted(fx.VARIANTS))
+def test_the_first_section_renders_the_front_screen(name: str) -> None:
+    out = _drawn(name)
+    first = _text(out["first"])
+    assert re.findall(r"<h2>(.*?)</h2>", out["first"]) == ["Fleet at a glance"]
+    assert "Step 1 · Assisted: 1 repository" in first and "Step 2 · Docs: 2 repositories" in first
+    assert "1 repository moved up a Step and 1 repository moved down; 1 stayed at the same Step." in first
+    assert "1 move came from rule changes alone." in first
+    assert "1 repository is one change from the next Step." in first
+    assert "ci : make the ci gate hold. Moves 1 repository to the next Step." in first
+    assert out["pages"][0].startswith(out["pages"][0].split("<h2>")[0] + out["first"])  # first on every page
+
+
+def test_the_front_screen_s_gates_are_sorted_by_repositories_unblocked_descending() -> None:
+    from lib.fleet.fleet_front import front_screen
+    from lib.fleet.fleet_page_data import page_bundle
+    data: dict[str, Any] = dict(fx.run(fx.DATES[-1], fx.VARIANTS["counts-only"]))
+    lifts = [("docs.1", "docs", 2, 1), ("ci.1", "ci", 3, 3), ("cov.1", "coverage_gate", 3, 2),
+             ("docs.2", "docs", 3, 4)]
+    data["opportunities"] = {**data["opportunities"], "step_lifts": [
+        {"condition": c, "row": c.split(".")[0], "title": c, "gate": g, "step": st, "repo_count": n}
+        for c, g, st, n in lifts]}
+    bundle = page_bundle(data, None, fdf.model(), (), dict(front_screen(fdf.model(), data)))
+    first = _render(dict(bundle))
+    gates = re.findall(r"<li><code>([^<]+)</code>: [^<]*Moves (\d+) repositor", first)
+    assert gates == [("docs", "5"), ("ci", "3"), ("coverage_gate", "2")]
+    assert [int(n) for _, n in gates] == sorted((int(n) for _, n in gates), reverse=True)
+    assert "enforce a coverage gate in CI" in first  # the gate's wording is the top card's (#1252)
+
+
+def test_the_front_screen_s_team_links_are_alphabetical() -> None:
+    from lib.fleet.fleet_front import front_screen
+    from lib.fleet.fleet_page_data import page_bundle
+    data: dict[str, Any] = dict(fx.run(fx.DATES[-1], fx.VARIANTS["full"]))
+    view = data["views"][0]
+    extra = [{**u, "key": f"ownership/{name}", "parent": None} for name in ("zeta", "alpha", "mid")
+             for u in view["units"] if u.get("kind") == "team"][::2]
+    data["views"] = [{**view, "units": [*reversed(view["units"]), *extra]}, *data["views"][1:]]
+    bundle = page_bundle(data, None, fdf.model(), (), dict(front_screen(fdf.model(), data)))
+    teams = re.findall(r'data-view="ownership" data-unit="([^"]+)"', _render(dict(bundle)))
+    assert teams == sorted(teams) and len(teams) >= 3 and "grp/sub" in teams
+
+
+@pytest.mark.parametrize("name", ["counts-only", "hashed"])
+def test_the_front_screen_names_no_repository_or_group_outside_full(name: str) -> None:
+    first = _drawn(name)["first"]
+    for leak in fx.NAMES:
+        assert leak not in first, leak

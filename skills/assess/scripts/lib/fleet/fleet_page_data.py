@@ -29,6 +29,10 @@ number (``tests/test_fleet_page.py`` checks it); a caller's own model is shown a
 **Achievements** are re-worded from their structured evidence with the same templates as
 ``fleet_achievements`` credit lines, so the unit and repository labels follow the mode above.
 
+**Front screen** (#1255, ``lib/fleet/fleet_front.py``): copied as computed, counts and gate ids
+only; its team links are replaced by the ownership view's team units under the labels above, so
+a counts-only page shows ``team N``.
+
 Deterministic: lists in input order (the inputs are sorted), labels by sorted key, the SVGs
 as base64 ``data:`` URIs. `page_bundle(data, achievements, model, pictures)` -> `PageBundle`.
 Tests: `tests/test_fleet_page.py`.
@@ -69,6 +73,17 @@ class PageBundle(TypedDict):
     recount: dict[str, Any] | None
     targets: list[dict[str, Any]]
     pictures: list[Picture]
+    front: dict[str, Any] | None  # the front screen (fleet_front.FrontScreen), team links by label
+
+
+def _front(front: Mapping[str, Any] | None, data: Mapping[str, Any], label: Mapping[str, str]) -> dict[str, Any] | None:
+    """The front screen with the page's team links: the ownership view's team units, by key
+    (alphabetical in ``--full``, label order otherwise), each a unit button, never a file link."""
+    if front is None:
+        return None
+    teams = sorted(u["key"] for v in data.get("views") or [] if v.get("view") == "ownership"
+                   for u in v.get("units") or [] if u.get("kind") == "team")
+    return {**front, "teams": [{"label": label[k], "href": None} for k in teams], "teams_index": None}
 
 
 def mode_of(data: Mapping[str, Any]) -> str:
@@ -165,7 +180,7 @@ def _achievement(a: Mapping[str, Any], label: Mapping[str, str], titles: Mapping
 
 
 def page_bundle(data: Mapping[str, Any], achievements: Mapping[str, Any] | None, model: MaturityModel,
-                pictures: Sequence[Picture] = ()) -> PageBundle:
+                pictures: Sequence[Picture] = (), front: Mapping[str, Any] | None = None) -> PageBundle:
     """The page's bundle (see the module docstring)."""
     mode = mode_of(data)
     label = labels(data, mode)
@@ -200,6 +215,7 @@ def page_bundle(data: Mapping[str, Any], achievements: Mapping[str, Any] | None,
                                  for g in t.get("missing_gates") or []]} for t in ach.get("targets") or []
                     if t["unit"] in label],
         "pictures": list(pictures),
+        "front": _front(front, data, label),
     }
 
 

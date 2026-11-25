@@ -37,7 +37,8 @@ lost (``lib/fleet/fleet_cleanup.py``). Every run also writes the run stamp
 (``lib/fleet/fleet_doc_freshness.py``); without any, no such file is written.
 
 It also draws the fleet diagrams (``lib/fleet/fleet_diagrams.py``): ``<out>/report.md``
-embedding ``quadrant.svg``, ``shared-tooling.svg``, ``trend.svg`` (group trend lines
+opening with the front screen (``lib/fleet/fleet_front.py``, #1255) and
+embedding ``shared-tooling.svg``, ``trend.svg`` (group trend lines
 over the run history, ``lib/fleet/fleet_trends.py``), and ``slope.svg`` (from the ``--compare``
 result; and the Step diagrams of #941), or the reason each was skipped, and ``fleet-view.html`` (#946);
 ``--no-diagrams`` turns them off. ``report.md`` opens with the coverage line: with
@@ -125,7 +126,7 @@ import argparse
 import os
 import sys
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -167,7 +168,10 @@ from lib.fleet.fleet_compare import (
     comparison_lines,
     write_comparison,
 )
-from lib.fleet.fleet_diagrams import REPORT_FILE, build_diagrams, clear_diagrams, write_diagrams
+from lib.fleet.fleet_diagrams import REPORT_FILE, build_diagrams, clear_diagrams, step_moves_for, write_diagrams
+from lib.fleet.fleet_front import front_section, guarded_front
+from lib.fleet.fleet_step_movement import StepMoves
+from lib.fleet.fleet_page_data import mode_of
 from lib.fleet.fleet_page import write_page
 from lib.fleet.fleet_achievements import (
     ACHIEVEMENTS_FILE,
@@ -405,18 +409,26 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
               window: str, *, history: list[TrendRun] | None = None,
               comparison: Comparison | None = None, credit: str | None = None,
               coverage: str | None = None, opportunities: Callable[[], str | None] | None = None,
-              data: FleetData | None = None, earlier: FleetRun | str | None = None, achieved: Achievements | None = None) -> None:
+              data: FleetData | None = None, earlier: FleetRun | str | None = None, achieved: Achievements | None = None,
+              groups: Sequence[str] = ()) -> None:
     """Draw the diagrams, their report and fleet-view.html (#946), or clear them; a failure never changes the exit code."""
     try:
         if no_diagrams:
             clear_diagrams(out_dir)
             return
+        def moves_of() -> StepMoves | None:  # one computation: the grid and the front screen
+            if maturity_model is None or not maturity_model.get("steps") or data is None or earlier is None:
+                return None
+            return step_moves_for(maturity_model, data, earlier, comparison)
+        # guarded: a raise becomes a skip line, so the report is still written and stale files cleared
+        front, moves = guarded_front(maturity_model, data, moves_of, groups,
+                                     mode_of(data) if data is not None else None)
         diagrams = build_diagrams(maturity_model, rows, window, history=history, comparison=comparison,
-                                  data=data, earlier=earlier)
+                                  data=data, earlier=earlier, moves=moves)
         ok = [row["scans"] for row in rows if row["status"] == "ok" and row["scans"] is not None]
         write_diagrams(out_dir, diagrams, credit, coverage, opportunities() if opportunities else None,
-                       measured_section(ok))
-        write_page(out_dir, data, achieved, maturity_model, diagrams)
+                       measured_section(ok), front_section(front, len(rows)))
+        write_page(out_dir, data, achieved, maturity_model, diagrams, front)
     except Exception as e:  # noqa: BLE001 - a diagram never fails a completed run
         print(f"fleet: diagrams: not written ({type(e).__name__}: {e})", file=sys.stderr)
         return
@@ -737,7 +749,8 @@ def main(argv: list[str] | None = None) -> int:
     history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, public, maturity_model)
     _diagrams(out_dir, args.no_diagrams, maturity_model, public, window, history=history, comparison=comparison,
               credit=credit, coverage=coverage_line(coverage, len(rows)),
-              opportunities=lambda: opportunities_section(data, achieved), data=data, earlier=earlier, achieved=achieved)
+              opportunities=lambda: opportunities_section(data, achieved), data=data, earlier=earlier, achieved=achieved,
+              groups=[g["group"] for g in groups])
     _print_summary(rows, path, groups_path, agent_clusters, freshness, freshness_path, deleter)
     return 0
 
