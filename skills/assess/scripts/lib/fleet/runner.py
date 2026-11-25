@@ -331,7 +331,9 @@ def repository_name(checkout: Path) -> str:
     directory's name when there is no ``origin`` remote (#1230). The name only, never the
     owner or host, so it adds nothing the directory name could not already carry."""
     path = remote_path(checkout)
-    return path.rsplit("/", 1)[-1] if path else checkout.resolve().name
+    # Split on both slashes: a Windows ``origin`` (``C:\repos\x.git``) must not put a local
+    # path into the title.
+    return re.split(r"[/\\]", path)[-1] if path else checkout.resolve().name
 
 
 def _under(path: Path, root: Path) -> bool:
