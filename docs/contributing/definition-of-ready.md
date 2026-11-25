@@ -93,4 +93,4 @@ Nothing in the body or comments waits on a human call: no unanswered question to
 - **The maintainer**, at any time.
 - **The refiner**, only when the script-checked items pass and research leaves nothing that needs a human call. Every other issue goes into one batched question list on a single tracking issue. The maintainer vetoes a refiner decision by removing the label. This rule comes from the backlog refinement plan in [#1317](https://github.com/bjcoombs/ai-native-toolkit/issues/1317).
 
-The `/issues` triage pass applies `agent-ready` under the same checklist when the maintainer runs it.
+The `/issues` triage pass applies `agent-ready` by its own sizing judgement today. Making it apply this same checklist is part of [#1317](https://github.com/bjcoombs/ai-native-toolkit/issues/1317).
