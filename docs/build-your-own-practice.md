@@ -127,7 +127,7 @@ Your team may hold a practice that no scan measures, such as "a domain glossary 
 
 A pack check reads only the files of the repository. It never runs a program, so a pack from another team is safe to run. Each check has one rule:
 
-- `exists` is true when a file or folder is present.
+- `exists` is true when a file, or a folder that holds a file, is present.
 - `glob_count` counts the files that match a pattern, such as `docs/adr/*.md`.
 - `contains` counts the files that match a pattern and hold a given text.
 - `key_exists` is true when a TOML, YAML or JSON file holds a key, such as `metadata.owner` in `service.yaml`.
