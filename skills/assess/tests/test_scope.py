@@ -268,3 +268,62 @@ def test_cli_invalid_scope_exits_nonzero(git_repo, capsys) -> None:
     rc = assess_core.main([str(repo), "--scope", "no-such-dir"])
     assert rc == 2
     assert "error" in capsys.readouterr().err.lower()
+
+
+# --------------------------------------------------------------------------
+# assess_finalize on a scoped run (#1291)
+# --------------------------------------------------------------------------
+def _tree(root: Path, skip: Path) -> dict[str, bytes]:
+    """Every file under ``root`` by relative path, leaving out the ``skip`` subtree."""
+    return {p.relative_to(root).as_posix(): p.read_bytes()
+            for p in sorted(root.rglob("*")) if p.is_file() and not p.is_relative_to(skip)}
+
+
+def test_scoped_finalize_refreshes_the_scoped_card_and_leaves_the_whole_repo_files(git_repo) -> None:
+    import assess_finalize
+
+    repo, _ = _two_service_repo(git_repo)
+    whole = repo / ".assess"
+    whole.mkdir()
+    (whole / "complexity-stats.json").write_text(json.dumps(_STATS_SHAPE), encoding="utf-8")
+    build_and_publish_run(repo_root=repo, run_date="2026-07-07", non_interactive=True)
+    whole_actions = {"schema": 2, "actions": [
+        {"rank": 1, "status": "pending", "first_step": "whole-repo step", "done_when": "whole done",
+         "action": "w", "scope_fence": "f"}]}
+    (whole / "actions.json").write_text(json.dumps(whole_actions), encoding="utf-8")
+    (whole / "assess-report.md").write_text("# Whole repo\n", encoding="utf-8")
+
+    _seed_scoped_stats(repo, "service-a", "service-a/app.py")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07",
+                                non_interactive=True, scope=Path("service-a"))
+    scoped = whole / "service-a"
+    before = _tree(whole, scoped)
+    (scoped / "assess-report.md").write_text(
+        f"# Codebase Assessment: service-a\n\n{ctx['headline']['summary_markdown']}\n\n## Top 3 Actions\n",
+        encoding="utf-8")
+    (scoped / ".cache").mkdir(exist_ok=True)
+    (scoped / ".cache" / "finalize-input.json").write_text(json.dumps({
+        "run_id": ctx["run_id"], "top_action": "Split alpha",
+        "actions": [{"rank": 1, "action": "Split alpha", "first_step": "split alpha into two",
+                     "done_when": "alpha has ccn under 10", "scope_fence": "service-a only"}],
+    }), encoding="utf-8")
+
+    assert assess_finalize.main([str(repo), "--scope", "service-a"]) == 0
+
+    rank_one = json.loads((scoped / "actions.json").read_text(encoding="utf-8"))["actions"][0]
+    report = (scoped / "assess-report.md").read_text(encoding="utf-8")
+    assert f"Start here: `{rank_one['first_step']}`" in report
+    assert "whole-repo step" not in report
+    scoped_ctx = json.loads((scoped / "run-context.json").read_text(encoding="utf-8"))
+    assert scoped_ctx["headline"]["call_to_action"] == f"Start here: `{rank_one['first_step']}`"
+    assert "Split alpha" in (scoped / "log.md").read_text(encoding="utf-8")
+    assert not (scoped / ".cache" / "finalize-input.json").exists()
+    assert _tree(whole, scoped) == before
+
+
+def test_finalize_cli_rejects_a_scope_outside_the_repo(git_repo, capsys) -> None:
+    import assess_finalize
+
+    repo, _ = _two_service_repo(git_repo)
+    assert assess_finalize.main([str(repo), "--scope", "no-such-dir"]) == 2
+    assert "scope path does not exist" in capsys.readouterr().err
