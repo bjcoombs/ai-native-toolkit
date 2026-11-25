@@ -98,6 +98,7 @@ regen:
 	cd skills/assess && uv run --locked python tests/collector_fingerprints.py
 	cd skills/assess && FLEET_NEXT_STEPS_REGEN=1 uv run --locked pytest -q -p no:cacheprovider tests/test_fleet_next_steps.py
 	cd skills/assess && PARITY_GOLDEN_REGEN=1 uv run --locked pytest -q -p no:cacheprovider tests/test_decomposition_parity.py
+	cd skills/assess && CARD_GOLDEN_REGEN=1 uv run --locked pytest -q -p no:cacheprovider tests/test_card_construction.py -k golden
 
 lint:
 	cd skills/assess && uv run --locked ruff check .
