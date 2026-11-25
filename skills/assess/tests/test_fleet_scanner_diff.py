@@ -133,7 +133,7 @@ def test_git_changed_files_lists_lib_files_between_two_commits(tmp_path):
 def test_producers_map_each_block_to_its_defining_module_and_what_it_reads():
     producer_map = sd.producers()
     assert f"{sd.LIB_PATH}/ci/ci_checks.py" in producer_map["ci_checks"]
-    assert f"{sd.LIB_PATH}/check_command.py" in producer_map["ci_checks"]
+    assert f"{sd.LIB_PATH}/ci/check_command.py" in producer_map["ci_checks"]
     assert f"{sd.LIB_PATH}/graph/import_graph.py" in producer_map["structure"]  # via the core's structure_scan
     assert all(f"{sd.LIB_PATH}/run_context_types.py" not in paths for paths in producer_map.values())
     assert "structure_scan" not in producer_map  # a private spec publishes no block

@@ -9,12 +9,12 @@ key). The line tests are ``_line_runs_check`` (``check_command.is_check_command`
 ``is_lint_command``), ``_line_runs_lint`` (``is_lint_run`` or a ``uses:`` step of a known
 lint action, ``lint_action`` over ``LINT_ACTIONS``), ``_line_may_lint`` (``may_lint`` or a
 ``MAY_LINT_ACTIONS`` step; ``lint_step_action`` names either action kind for
-``lib.ci_composite``, #1194) and ``_line_may_check`` (``may_check``: a target whose recipe is
+``lib.ci.ci_composite``, #1194) and ``_line_may_check`` (``may_check``: a target whose recipe is
 not read); ``_skipped_check`` flags a Maven or Gradle run with its tests skipped (#799, #1046).
 
-Inward-only imports: ``lib.check_command``, ``lib.ci.ci_lint_gates``, ``lib.ci_scripts``,
+Inward-only imports: ``lib.ci.check_command``, ``lib.ci.ci_lint_gates``, ``lib.ci.ci_scripts``,
 ``lib.command_flags``, ``lib.command_index``, ``lib.command_resolver``,
-``lib.lint_vocabulary``, ``lib.named_check`` and ``lib.runner_args``; never ``lib.ci.ci_checks`` or an orchestrator.
+``lib.ci.lint_vocabulary``, ``lib.named_check`` and ``lib.runner_args``; never ``lib.ci.ci_checks`` or an orchestrator.
 Tests: ``tests/test_ci_checks.py``, ``tests/test_ci_false_credit.py``.
 """
 from __future__ import annotations
@@ -22,16 +22,16 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Sequence
 
-from lib.check_command import (
+from lib.ci.check_command import (
     BARE_RUN_PROGRAMS, LINT_PROGRAMS, TYPE_PROGRAMS, is_check_command, is_info_invocation,
     is_lint_command, is_lint_run, may_check, may_lint)
-from lib.ci_compound import compound_core
+from lib.ci.ci_compound import compound_core
 from lib.ci.ci_lint_gates import line_commands
-from lib.ci_scripts import Present, committed, script_runs
+from lib.ci.ci_scripts import Present, committed, script_runs
 from lib.command_flags import maven_skips_tests
 from lib.command_index import ci_line_text
 from lib.command_resolver import command_words
-from lib.lint_vocabulary import dotnet_build
+from lib.ci.lint_vocabulary import dotnet_build
 from lib.named_check import setup_ci_target, sourced_env, unread_ci_target
 from lib.runner_args import gradle_skips_tests
 
@@ -93,7 +93,7 @@ def lint_action(line: str) -> bool:
 
 def lint_step_action(line: str) -> bool:
     """A ``uses:`` line of an action the line tests read as a lint step: a known lint action
-    or a ``MAY_LINT_ACTIONS`` one (``lib.ci_composite`` copies these out of a composite, #1194)."""
+    or a ``MAY_LINT_ACTIONS`` one (``lib.ci.ci_composite`` copies these out of a composite, #1194)."""
     return lint_action(line) or _action(line) in MAY_LINT_ACTIONS
 
 

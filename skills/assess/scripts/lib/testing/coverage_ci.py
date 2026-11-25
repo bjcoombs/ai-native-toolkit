@@ -5,7 +5,7 @@ gates nothing unless something runs the coverage tool that reads it, so the
 Layer 6 level 1 signal (and the Step 4 ``coverage_gate`` gate) reads
 ``coverage_gate.enforced_meets_minimum``: a threshold of at least 50 percent
 *and* an enforced CI line that runs it. Enforced is #775's rule, reused
-unchanged: the line survives ``lib.ci_masking.unmasked_lines`` (no ``|| true``,
+unchanged: the line survives ``lib.ci.ci_masking.unmasked_lines`` (no ``|| true``,
 ``continue-on-error``, ``allow_failure`` or ``set +e``) and its workflow or job
 runs on ordinary changes (``lib.ci.ci_triggers``). GitHub Actions workflows and
 ``.gitlab-ci.yml`` are read, as ``ci_checks`` reads them.
@@ -141,8 +141,8 @@ any enforced run of the tool anywhere in the repository credits the scope's conf
 runs in is not resolved, except for a Gradle run (`Run.cwd`, `lib.testing.ci_workdir`): `-p app`
 or `cd app` runs an unqualified task in `app` and its subprojects only, so a gate in `lib`
 reads null (#1162), and the Gradle root is the nearest settings file at or above that
-directory (#1163, `lib.runner_args.gradle_runs_in`). Imports `lib.ci.ci_checks`, `lib.ci_masking`, `lib.ci.ci_triggers`,
-`lib.command_index`, `lib.command_resolver`, `lib.check_command`, `lib.testing.ci_workdir`, `lib.testing.coverage_activation`,
+directory (#1163, `lib.runner_args.gradle_runs_in`). Imports `lib.ci.ci_checks`, `lib.ci.ci_masking`, `lib.ci.ci_triggers`,
+`lib.command_index`, `lib.command_resolver`, `lib.ci.check_command`, `lib.testing.ci_workdir`, `lib.testing.coverage_activation`,
 `lib.testing.coverage_codecov` (a Codecov patch or ``auto`` status is skipped, #882) and `lib.ci.shared_tooling`; never `lib.testing.coverage_gate` (which calls it) or an orchestrator.
 Tests: `tests/test_coverage_ci.py`, `tests/test_coverage_ci_edges.py` (#954),
 `tests/test_gradle_workdir.py` (#1162).
@@ -155,9 +155,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypeVar
 
-from lib.check_command import (
+from lib.ci.check_command import (
     _DIRECT_TESTS, LINT_PROGRAMS, _exec_program, _info_program, _program, is_info_invocation)
-from lib.ci_masking import mask_lines
+from lib.ci.ci_masking import mask_lines
 from lib.testing.coverage_activation import Activation, below, covers
 from lib.testing.coverage_codecov import is_patch
 from lib.named_check import may_lint_named

@@ -1,5 +1,5 @@
 """Tests for issue #799: backslash continuations, ``with:`` run inputs and script indirection in
-``lib.ci.ci_checks`` (``lib.ci.ci_continuations``, ``lib.ci_action_inputs``, ``lib.ci_scripts``)."""
+``lib.ci.ci_checks`` (``lib.ci.ci_continuations``, ``lib.ci.ci_action_inputs``, ``lib.ci.ci_scripts``)."""
 from __future__ import annotations
 
 import subprocess
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.check_command import is_check_command
+from lib.ci.check_command import is_check_command
 from lib.ci.ci_checks import check_commands, enforced_check_commands, scan_ci_checks
 from lib.ci.ci_continuations import join_continued, join_folded
 from lib.command_flags import maven_skips_tests

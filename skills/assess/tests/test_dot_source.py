@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from lib.check_command import check_verdict
+from lib.ci.check_command import check_verdict
 from lib.ci.ci_checks import scan_ci_checks
-from lib.ci_scripts import script_path
+from lib.ci.ci_scripts import script_path
 from lib.dot_source import dot_as_source
 from lib.named_check import setup_ci_target
 

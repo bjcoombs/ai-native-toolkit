@@ -614,7 +614,7 @@ SCANS: tuple[ScanSpec, ...] = (
     # include:, a remote reusable workflow; GitLab includes resolve offline against
     # `ghsync_root`, #766; under --platform, GitLab's merged configuration where one did
     # not, #796). enforced_check_runs (#775) leaves out masked
-    # checks and checks off the ordinary triggers (lib/ci_masking.py,
+    # checks and checks off the ordinary triggers (lib/ci/ci_masking.py,
     # lib/ci/ci_triggers.py); Layer 5 level 1 of the default maturity model reads it.
     # lint_runs (#782) is the same test for lint lines; Layer 3 level 1 reads it.
     # Offline itself; under --platform it also reads external_ci (#928, lib/external_ci.py):

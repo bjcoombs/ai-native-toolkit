@@ -136,7 +136,7 @@ from pathlib import Path
 from collections.abc import Mapping
 from typing import TypedDict
 
-from lib.ci_action_inputs import ReadLocal
+from lib.ci.ci_action_inputs import ReadLocal
 from lib.ci.ci_expressions import follow_workflow
 from lib.ci.ci_includes import SETTLED, merged_config, resolve_includes
 from lib.command_index import ci_config_files, repo_files

@@ -14,7 +14,7 @@ runs nobody priced.
 | Sign | Read from |
 |---|---|
 | `eval_harness` | a `run:` or `script:` command: `promptfoo eval` / `redteam`, `deepeval test`, `oaieval`, `inspect eval`, `lm_eval` / `lm-eval`, `ragas` |
-| `agent_cli` | a command running `claude -p` or `claude --print`, or `claude plugin eval` (also through `npx @anthropic-ai/claude-code`). `plugin eval` is read with options before or after `plugin` and `eval`, as a quoted command (`run: "claude plugin eval ."`, `sh -c '...'`) and across the lines of a block `run:` or `script:` (a `\` continuation, a folded `>`, a GitLab `- >` item), and inside a `$(...)` or backtick span in double quotes (`OUT="$(claude plugin eval .)"`, read by `lib.ci_shell_text`); a quoted argument (`git commit -m "..."`), an `echo` or `printf` and a `#` comment naming it are not read; an apostrophe with no later `'` anywhere in the text (`don't` in a heredoc body) ends at its line, so the commands after it are still read; a later `'`, even inside double quotes, still pairs with it |
+| `agent_cli` | a command running `claude -p` or `claude --print`, or `claude plugin eval` (also through `npx @anthropic-ai/claude-code`). `plugin eval` is read with options before or after `plugin` and `eval`, as a quoted command (`run: "claude plugin eval ."`, `sh -c '...'`) and across the lines of a block `run:` or `script:` (a `\` continuation, a folded `>`, a GitLab `- >` item), and inside a `$(...)` or backtick span in double quotes (`OUT="$(claude plugin eval .)"`, read by `lib.ci.ci_shell_text`); a quoted argument (`git commit -m "..."`), an `echo` or `printf` and a `#` comment naming it are not read; an apostrophe with no later `'` anywhere in the text (`don't` in a heredoc body) ends at its line, so the commands after it are still read; a later `'`, even inside double quotes, still pairs with it |
 | `agent_action` | a step `uses:` one of `AGENT_ACTIONS`: `anthropics/claude-code-action`, `anthropics/claude-code-base-action`, `openai/codex-action`, `google-github-actions/run-gemini-cli` |
 | `provider_secret` | an `env:`, `with:`, `secrets:` or GitLab `variables:` entry of the job names one of `PROVIDER_SECRETS` (as the key or in `secrets.<NAME>`); a step `name:` naming one is not a sign |
 | `eval_tests` | a command running `pytest -m eval` / `-m evals`, or a runner (`pytest`, `python`, `node`, `npx` ...) given a path under `evals/` |
@@ -28,7 +28,7 @@ and a `claude -p` line is an `agent_cli` sign even when it also installs (`npm i
 (`--ignore`, `--ignore-glob`, `--deselect`, `--exclude`): keeping evals out of a job is the remedy. A secret named inside a command is
 not a sign either. A workflow-level `env:` secret reaches every job, so it is a sign of each. A step
 that `uses:` a repo-local action (`./.github/actions/x`) carries the signs of that action's
-`action.yml`, one level, read from tracked files as `lib.ci_composite` reads one. A step or job
+`action.yml`, one level, read from tracked files as `lib.ci.ci_composite` reads one. A step or job
 whose `if:` is never true (`if: false`) is not read.
 
 **A secret alone is not enough to read ungated.** A deploy or secret-store step names the key

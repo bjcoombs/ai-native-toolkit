@@ -1,1 +1,1 @@
-"""CI workflow parsing: the committed CI files and lines, their includes, matrices, expressions and triggers, and the CI checks, lint gates, model jobs, review automation and shared tooling read from them (#917)."""
+"""CI configuration read offline: the committed CI files and lines, their includes, matrices, expressions and triggers, the steps they run (action inputs, composite actions, shell statements, masking, scripts and the command classifier), and the CI checks, lint gates, model jobs, review automation and shared tooling read from them (#917)."""

@@ -13,9 +13,9 @@ from typing import Any
 import pytest
 
 import lib.level_tally as lt
-from lib.ci_masking import IndentTree, parse_lines
+from lib.ci.ci_masking import IndentTree, parse_lines
 from lib.ci.ci_model_jobs import scan_ci_model_jobs, signs_in
-from lib.ci_shell_text import command_text
+from lib.ci.ci_shell_text import command_text
 
 CID = "model-ci-gated.1"
 

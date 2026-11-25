@@ -1,7 +1,7 @@
 """How Gradle and the Python script runners read their own arguments (issue #1046).
 
-One parser, shared by the CI-line reader (``lib.check_command``, ``lib.ci.ci_lines``,
-``lib.lint_vocabulary``) and the coverage gate (``lib.testing.coverage_ci``, #954). Every
+One parser, shared by the CI-line reader (``lib.ci.check_command``, ``lib.ci.ci_lines``,
+``lib.ci.lint_vocabulary``) and the coverage gate (``lib.testing.coverage_ci``, #954). Every
 rule was checked against Gradle 9.4, pdm 2.29.7 and poethepoet 0.49.0.
 
 Gradle:
@@ -56,7 +56,7 @@ a scan whose first argument is the repository root: ``ci_checks.scan_ci_checks``
 ``pdm_scripts_set`` (``coverage_ci`` and ``coverage_root_config`` set ``CiRuns.pdm_scripts``
 where they classify the coverage gate's runs). Outside one (an instruction file) they are not read,
 and ``pdm X`` is read as a script by name. Inward-only imports: stdlib,
-``lib.command_flags`` and ``lib.command_index``; never ``lib.check_command`` or an orchestrator.
+``lib.command_flags`` and ``lib.command_index``; never ``lib.ci.check_command`` or an orchestrator.
 Tests: ``tests/test_runner_args.py``, ``tests/test_gradle_tasks.py``,
 ``tests/test_gradle_workdir.py``.
 """

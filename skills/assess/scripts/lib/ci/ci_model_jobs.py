@@ -4,7 +4,7 @@ A CI job that calls a model API costs money on every run. One that runs on every
 default branch or every pull request update, with nothing to limit it, costs in step with merge
 volume rather than with changes to the prompts it tests. This module finds those jobs in the
 committed CI files and says whether each one is gated. Rules only, no model; one
-``IndentTree`` walk per file (``lib.ci_masking``), no YAML parser. The sign and gate tables,
+``IndentTree`` walk per file (``lib.ci.ci_masking``), no YAML parser. The sign and gate tables,
 the trigger rules and the known limits are in the long reference.
 Full reference: lib/docs/ci_model_jobs.md.
 
@@ -67,11 +67,11 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
-from lib.ci_action_inputs import ReadLocal, local_action_paths
+from lib.ci.ci_action_inputs import ReadLocal, local_action_paths
 from lib.ci.ci_includes import GITLAB_CI, merged_config, resolve_includes
-from lib.ci_masking import IndentTree, parse_lines, strip_comment
+from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci.ci_merged_view import merged_jobs, merged_view
-from lib.ci_shell_text import command_text
+from lib.ci.ci_shell_text import command_text
 from lib.ci.ci_triggers import gitlab_line_triggers, workflow_events
 from lib.command_index import ci_config_files, read_config, repo_files
 
@@ -488,7 +488,7 @@ def _never(tree: IndentTree, keys: Sequence[int]) -> bool:
 
 def _composite_signs(uses: str, read_local: ReadLocal | None) -> list[str]:
     """The signs in a repo-local action a step uses (``uses: ./.github/actions/x``), one level,
-    read through ``read_local`` as ``lib.ci_composite`` reads one (tracked files only)."""
+    read through ``read_local`` as ``lib.ci.ci_composite`` reads one (tracked files only)."""
     if read_local is None or not uses.startswith("./") or _LOCAL_WORKFLOW.match(uses):
         # a reusable workflow (``./.github/workflows/x.yml``) is scanned as a workflow of its own
         return []

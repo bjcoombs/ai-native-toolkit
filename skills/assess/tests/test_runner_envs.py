@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.check_command import is_lint_run
+from lib.ci.check_command import is_lint_run
 from lib.ci.ci_checks import scan_ci_checks
 from lib.runner_envs import env_commands, read_envs, reads_runner_envs
 

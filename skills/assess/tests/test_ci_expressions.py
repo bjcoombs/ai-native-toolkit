@@ -1,6 +1,6 @@
 """Issues #1164 and #1165: a command or ``continue-on-error`` given as an expression or a
 shell variable reads unknown with a reason, never a false 0 and never enforced
-(``lib.ci.ci_expressions``, ``lib.ci.ci_matrix``, ``lib.ci_composite``)."""
+(``lib.ci.ci_expressions``, ``lib.ci.ci_matrix``, ``lib.ci.ci_composite``)."""
 from __future__ import annotations
 
 import subprocess

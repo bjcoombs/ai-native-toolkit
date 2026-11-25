@@ -183,12 +183,15 @@ New code imports the new path.
   Layer 8 inputs. `agent_identity` is shared core, and `agent_consistency`, `agent_systems`
   and `agent_instructions_grader` wait for the `instructions` group, so all four stay at the
   root. Files: `__init__.py`, `agent_building.py`, `agent_building_vocab.py`, `agent_environment.py`, `agent_harness.py`, `agent_manifests.py`, `agent_ops.py`, `managed_settings.py`.
-- **`ci/`**: CI workflow parsing, the first half of the `ci` group (#1392): the committed CI
+- **`ci/`**: CI configuration read offline, the `ci` group (#1392, #1393): the committed CI
   files read line by line (continuations, matrices, expressions, triggers), GitLab `include:`
   items resolved offline and the merged line view, and the blocks built from them: CI checks
   and their state, lint gates and lint inputs, model-backed jobs, review automation and
-  shared tooling. The step-following modules (`ci_masking`, `ci_statements`, `ci_scripts` and
-  the rest of the `ci_*` files) stay at the root until the second half moves. Files: `__init__.py`, `ci_check_state.py`, `ci_checks.py`, `ci_continuations.py`, `ci_expressions.py`, `ci_include_items.py`, `ci_includes.py`, `ci_lines.py`, `ci_lint_gates.py`, `ci_lint_inputs.py`, `ci_matrix.py`, `ci_merged_view.py`, `ci_model_jobs.py`, `ci_triggers.py`, `merged_ci.py`, `review_automation.py`, `shared_tooling.py`.
+  shared tooling. The step-following modules read what one step runs: action inputs,
+  composite actions, compound and shell statements, masking and its exemptions, scripts a
+  step calls, unsure lines, and the check, lint and type-check command classifier with its
+  lint vocabulary. `ci_workflow` emits the gate workflow and moves with the `report` group.
+  Files: `__init__.py`, `check_command.py`, `ci_action_inputs.py`, `ci_check_state.py`, `ci_checks.py`, `ci_composite.py`, `ci_compound.py`, `ci_continuations.py`, `ci_exempt.py`, `ci_expressions.py`, `ci_include_items.py`, `ci_includes.py`, `ci_lines.py`, `ci_lint_gates.py`, `ci_lint_inputs.py`, `ci_masking.py`, `ci_matrix.py`, `ci_merged_view.py`, `ci_model_jobs.py`, `ci_scripts.py`, `ci_shell_text.py`, `ci_statements.py`, `ci_triggers.py`, `ci_unsure.py`, `lint_vocabulary.py`, `merged_ci.py`, `review_automation.py`, `shared_tooling.py`.
 - **`complexity/`**: the complexity treemap renderer, `scc` coverage, the Dart scanner and
   the stats sidecar (its rows, cross-run diff and diff reliability), plus the generated- and
   raw-source exclusions they apply. Files: `__init__.py`, `dart_complexity.py`, `diff_reliability.py`, `generated_files.py`, `raw_source.py`, `scc_coverage.py`, `stats_diff.py`, `stats_rows.py`, `treemap_render.py`.
@@ -248,7 +251,7 @@ on one that is not linked.
 
 | Module | Reference | What it covers |
 |---|---|---|
-| `lib.check_command` | [check_command.md](docs/check_command.md) | Whether a command line runs tests, lint or a type check |
+| `lib.ci.check_command` | [check_command.md](docs/check_command.md) | Whether a command line runs tests, lint or a type check |
 | `lib.ci.ci_includes` | [ci_includes.md](docs/ci_includes.md) | GitLab CI `include:` items, `extends:` parents and the merged configuration view |
 | `lib.ci.ci_model_jobs` | [ci_model_jobs.md](docs/ci_model_jobs.md) | CI jobs that call a model, and the block they produce |
 | `lib.docs.doc_graph` | [doc_graph.md](docs/doc_graph.md) | The doc link graph: orphans, reachability, entry points and link parents |

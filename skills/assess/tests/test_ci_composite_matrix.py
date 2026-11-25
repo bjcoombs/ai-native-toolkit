@@ -1,5 +1,5 @@
 """Issue #923: ``lib.ci.ci_checks`` follows a local composite action (nested ones too, #1194) and reads a
-literal matrix command (``lib.ci_composite``, ``lib.ci.ci_matrix``), in both directions."""
+literal matrix command (``lib.ci.ci_composite``, ``lib.ci.ci_matrix``), in both directions."""
 from __future__ import annotations
 
 import subprocess
@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from lib.ci.ci_checks import scan_ci_checks
-from lib.ci_composite import inline_composites
+from lib.ci.ci_composite import inline_composites
 from lib.ci.ci_matrix import expand_matrix
 
 

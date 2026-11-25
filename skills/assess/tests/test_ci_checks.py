@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from lib.ci.ci_checks import check_commands, count_check_lines, enforced_check_commands, scan_ci_checks
-from lib.ci_masking import split_statements, unmasked_lines
+from lib.ci.ci_masking import split_statements, unmasked_lines
 from lib.ci.shared_tooling import pulls_jobs_from_elsewhere
 
 REPO_ROOT = Path(__file__).resolve().parents[3]

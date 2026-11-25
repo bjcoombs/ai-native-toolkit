@@ -147,7 +147,7 @@ CI_CHECKS: JsonDict = {
         "GitLab's merged configuration from the CI lint API (lib/hosting/gitlab_ci_lint.py), counted "
         "apart in merged_check_commands; a template resolved offline wins. enforced_check_runs (issue #775) is the same test with "
         "masked checks left out (|| true, continue-on-error: true, allow_failure: true, set +e "
-        "without a re-raise; lib/ci_masking.py) and checks off the ordinary triggers left out "
+        "without a re-raise; lib/ci/ci_masking.py) and checks off the ordinary triggers left out "
         "(lib/ci/ci_triggers.py); masked_check_commands and off_trigger_check_commands count the "
         "lines left out. lint_runs (issue #782) is the enforced test for lint lines only (Layer 3 "
         "level 1); a check target or script that may run a linter inside it reads null. "
@@ -355,7 +355,7 @@ COVERAGE_GATE: JsonDict = {
             {"type": ["boolean", "null"]},
             "The Layer 6 level 1 signal (issue #921): threshold_meets_minimum with a CI run "
             "required. True when it is true and an enforced CI line (unmasked, on ordinary "
-            "triggers; lib/ci_masking.py, lib/ci/ci_triggers.py) passes a counted threshold of at "
+            "triggers; lib/ci/ci_masking.py, lib/ci/ci_triggers.py) passes a counted threshold of at "
             "least 50 itself or runs the tool that reads it; null when threshold_meets_minimum "
             "is null or the run cannot be told (see enforced_basis); false otherwise."),
         "enforced_basis": _field(

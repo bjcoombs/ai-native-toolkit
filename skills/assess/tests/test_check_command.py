@@ -1,11 +1,11 @@
-"""Tests for lib/check_command.py: the check and lint command classifiers (issues #514, #698)."""
+"""Tests for lib/ci/check_command.py: the check and lint command classifiers (issues #514, #698)."""
 from __future__ import annotations
 
 import pytest
 
-from lib.check_command import (
+from lib.ci.check_command import (
     check_verdict, is_check_command, is_check_name, is_lint_command, is_lint_run, may_lint)
-from lib.ci_scripts import script_path
+from lib.ci.ci_scripts import script_path
 from lib.command_flags import make_args, shell_args, shell_string
 from lib.command_resolver import command_words
 

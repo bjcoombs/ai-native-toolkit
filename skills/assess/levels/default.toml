@@ -60,7 +60,7 @@
 #   known lint action (golangci-lint-action, ruff-action, super-linter,
 #   reviewdog/action-*, lint-action, markdownlint-cli2-action; an unknown
 #   third-party action is not read), under the same masking and
-#   trigger rules as Layer 5 (lib/ci_masking.py, lib/ci/ci_triggers.py): a
+#   trigger rules as Layer 5 (lib/ci/ci_masking.py, lib/ci/ci_triggers.py): a
 #   masked lint step (ruff check . || true) or one off the ordinary triggers
 #   does not count. A linter asked only for --version, --help or -V does not
 #   run. A check target or script that may run a linter inside it (make
@@ -159,7 +159,7 @@
 #   whose exit code can fail the job. A masked check runs but does not count:
 #   pytest || true (or || exit 0, || :), a step or job with
 #   continue-on-error: true, a GitLab job with allow_failure: true, or a
-#   set +e script body that never re-raises the status (lib/ci_masking.py).
+#   set +e script body that never re-raises the status (lib/ci/ci_masking.py).
 #   || echo, a pipe without pipefail and allow_failure inherited through
 #   default:/extends: are known limits and still count. The check must also
 #   run on ordinary changes (lib/ci/ci_triggers.py): a workflow only on

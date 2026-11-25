@@ -1,5 +1,5 @@
 """Issue #1194: a known lint action inside a local composite action is read as it is at the
-top level, and nested local composites are followed with cycle protection (``lib.ci_composite``)."""
+top level, and nested local composites are followed with cycle protection (``lib.ci.ci_composite``)."""
 from __future__ import annotations
 
 import subprocess
@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from lib.ci.ci_checks import scan_ci_checks
-from lib.ci_composite import inline_composites
+from lib.ci.ci_composite import inline_composites
 
 
 def _git(root: Path, *args: str) -> None:

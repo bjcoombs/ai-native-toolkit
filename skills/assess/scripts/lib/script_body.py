@@ -26,7 +26,7 @@ pytest``) is credited as a CI line with the same guard is: it fails the script w
 Known limit: a nested source is refused whatever the file holds, so a body that sources a
 harmless ``. ./lib.sh`` (``X=1``) and then fails on its check reads null, not true. That null
 is safe (never credit), only less precise. False means "not shown", never "no check": callers only upgrade a
-reading with it (``lib.ci_scripts.ScriptTree``), so a name rule's True or null stands.
+reading with it (``lib.ci.ci_scripts.ScriptTree``), so a name rule's True or null stands.
 
 ``start_state(form, body)`` gives the errexit and pipefail a script starts with:
 ``executed`` (``./x``, ``bin/x``) follows the shebang's flags (``#!/bin/bash -e``,
@@ -46,8 +46,8 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 
-from lib.ci_exempt import exempt_segments, pipefail_after
-from lib.ci_masking import split_statements
+from lib.ci.ci_exempt import exempt_segments, pipefail_after
+from lib.ci.ci_masking import split_statements
 from lib.named_check import sourced_env
 
 _UNMODELLED = frozenset({

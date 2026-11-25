@@ -5,7 +5,7 @@ starts from a guess. Level 1 of the "backlog kept agent-ready" practice (#1318) 
 committed files only, whether new issues are asked for structure, marked untriaged when they
 arrive, and judged against a documented ready label, and whether a stale job can close an issue
 that is ready. Rules only, no model, no network; the workflows and issue forms are read with
-``lib.ci_masking``'s indentation model and ``lib.ci.ci_triggers``, never a YAML parser. Every signal
+``lib.ci.ci_masking``'s indentation model and ``lib.ci.ci_triggers``, never a YAML parser. Every signal
 is ``config_text``, so the level is listed, not counted.
 
 The tendency it compensates for is unactioned intent at the tracker: the bar an issue must clear
@@ -66,7 +66,7 @@ from pathlib import Path, PurePosixPath
 from typing import Literal, NotRequired, TypedDict
 
 from lib.assess_config import load_backlog_ready_labels
-from lib.ci_masking import IndentTree, parse_lines, strip_comment
+from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci.ci_triggers import workflow_events
 from lib.command_index import ci_config_files, read_config, repo_files
 from lib.docs.doc_graph import is_excluded_path

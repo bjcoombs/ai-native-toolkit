@@ -1,12 +1,12 @@
-"""Tests for lib/lint_vocabulary.py and its use in lib/check_command.py (issue #926): the lint
+"""Tests for lib/ci/lint_vocabulary.py and its use in lib/ci/check_command.py (issue #926): the lint
 and formatter-check commands of .NET, Gradle, PHP, Elixir, Ruby, Dart, Swift and C++."""
 from __future__ import annotations
 
 import pytest
 
-from lib.check_command import (
+from lib.ci.check_command import (
     check_verdict, is_format_rewrite, is_info_invocation, is_lint_command, is_lint_run)
-from lib.lint_vocabulary import compiler_gate, dotnet_build, formatter_mode, program_name
+from lib.ci.lint_vocabulary import compiler_gate, dotnet_build, formatter_mode, program_name
 
 # Acceptance criterion 1: each reads true from is_lint_command and is_lint_run.
 LINT_RUNS = [

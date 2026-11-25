@@ -23,7 +23,7 @@ three above). ``lib.ci.ci_checks`` wraps its missing-check test (``ci_scripts.ru
 ``./ci.sh`` still reads ``script_not_found`` (#937), and ``named_count(count, texts)`` is
 true when ``count`` finds a check line under it, so a masked ``./ci.sh || true`` reads
 ``not_enforced``. Both are false readings or null ones, never credit: a committed ``./ci.sh``
-reads null ``check_target``, because ``lib.ci_scripts`` checks that the file is there and
+reads null ``check_target``, because ``lib.ci.ci_scripts`` checks that the file is there and
 never reads its body (``echo deploy`` was credited before #951).
 ``setup_ci_target(text)`` (#1033) is a ``ci`` name that also names setup or a build
 (``make deploy-ci``, ``npm run build:ci``, ``./scripts/deploy-ci.sh``, ``make ci-deploy``):
@@ -32,7 +32,7 @@ an ``unread_ci_target`` and ``lib.ci.ci_lines._line_may_check`` reads it false, 
 ``make deploy``; the instruction side (``is_named_check``, ``may_lint_named``) is unchanged.
 ``sourced_env(text)`` is a sourced environment file (``. venv/bin/activate``, ``source .env``,
 ``. ./env.sh``): ``_line_may_check`` reads it false too, since it runs no check.
-Pure, like ``lib.check_command``. Tests: ``tests/test_ci_target_word.py``,
+Pure, like ``lib.ci.check_command``. Tests: ``tests/test_ci_target_word.py``,
 ``tests/test_dot_source.py``.
 """
 from __future__ import annotations
@@ -44,7 +44,7 @@ from typing import ParamSpec, TypeVar
 import re
 from pathlib import PurePosixPath
 
-from lib.check_command import (
+from lib.ci.check_command import (
     CHECK_NAMES, CHECK_WORDS, SETUP_TARGETS, check_verdict, is_check_command, is_check_name,
     may_lint)
 from lib.command_resolver import command_words

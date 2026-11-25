@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from lib.ci.ci_checks import scan_ci_checks
-from lib.ci_masking import mask_lines
+from lib.ci.ci_masking import mask_lines
 from lib.testing.coverage_gate import detect_coverage_gate
 
 SHELLS = {"default": "", "bash": "        shell: bash\n", "sh": "        shell: sh\n"}
@@ -234,7 +234,7 @@ def _block_step(body: str) -> str:
 
 
 # End to end. A line that opens with ``if``, ``while``, ``until``, ``{`` or ``f()`` is read
-# from the command it runs (``lib.ci_compound``, #1061), so the masking rules above decide
+# from the command it runs (``lib.ci.ci_compound``, #1061), so the masking rules above decide
 # it: a form that can pass reads check_may_pass and one that re-raises stays credited. A
 # multi-line ``{ }`` group or function body puts the check on its own line and reads the same.
 _MAY = (None, "check_may_pass")

@@ -80,7 +80,7 @@ templates and paths, never file text; written into the file, each passes the lin
 on the command line, user-level rules, scoped and nested files). Counts-only keeps the
 systems, links, kinds and counts, paths as paths, and drops `value`, `pointer`,
 `symlink` and `not_read`. Known limit: for a system that follows text, any line naming the canonical file's name counts
-as a pointer. Stdlib plus `lib.check_command`, `lib.command_resolver`,
+as a pointer. Stdlib plus `lib.ci.check_command`, `lib.command_resolver`,
 `lib.instruction_budget` and `lib.instruction_discovery`. Tests:
 `tests/test_agent_consistency.py`.
 """
@@ -93,7 +93,7 @@ from pathlib import Path, PurePosixPath
 from typing import Literal, TypedDict
 
 from lib.agent_systems import AIDER_CONFIG, SYSTEM_BY_ID, SYSTEM_ORDER
-from lib.check_command import ALWAYS_CHECK, LINT_PROGRAMS, is_lint_command
+from lib.ci.check_command import ALWAYS_CHECK, LINT_PROGRAMS, is_lint_command
 from lib.named_check import is_named_check
 from lib.command_resolver import command_words, extract_commands
 from lib.docs.doc_graph import is_repo_file
