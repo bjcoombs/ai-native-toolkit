@@ -201,8 +201,10 @@ def test_exact_duplicate_pair_names_the_survivor(plan):
     assert by_number(plan)[103]["verdict"] == "not_ready"
 
 
-def test_open_issue_duplicating_a_completed_closed_issue_is_closable(plan):
-    assert pair(plan, 90, 112)["closable"] is True
+def test_open_issue_repeating_a_completed_closed_issue_is_not_closable(plan):
+    # It may be a regression of a fixed issue; a reader decides.
+    found = pair(plan, 90, 112)
+    assert (found["kind"], found["closable"]) == ("exact", False)
 
 
 def test_issue_closed_as_not_planned_does_not_survive(plan):

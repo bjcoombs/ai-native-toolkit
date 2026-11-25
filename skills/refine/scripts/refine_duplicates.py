@@ -12,8 +12,10 @@ with each closed issue inside the window the caller fetched (90 days).
 
 The **survivor** is the issue created first, unless that issue was closed as
 `not_planned` or `duplicate`, in which case the other one survives. An exact
-pair is **closable** when its non-survivor is open: the refiner may close
-only exact duplicates, linking the survivor (#1317).
+pair is **closable** when both issues are open: the refiner may close only
+exact duplicates, linking the survivor (#1317). An open issue that repeats a
+closed one is reported but not closable: it may be a regression of a fixed
+issue, which a reader should decide.
 
 Python 3.8 compatible and stdlib only.
 """
@@ -99,7 +101,7 @@ def find_duplicates(open_issues: List[Issue], closed: List[Issue]) -> List[Dupli
             kept, dup = survivor(a.issue, b.issue)
             pairs.append(DuplicatePair(
                 kept=kept["number"], duplicate=dup["number"], kind=kind, basis=basis,
-                similarity=similarity, closable=kind == "exact" and dup["state"] == "open",
+                similarity=similarity, closable=kind == "exact" and dup["state"] == "open" and kept["state"] == "open",
             ))
     return sorted(pairs, key=lambda p: (p["duplicate"], p["kept"]))
 

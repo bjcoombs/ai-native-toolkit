@@ -396,7 +396,7 @@
             "type": "boolean"
           }
         },
-        "description": "A duplicate pair. Only an exact pair whose duplicate is open is closable; near pairs are for review."
+        "description": "A duplicate pair. Only an exact pair with both issues open is closable; near pairs are for review."
       }
     },
     "untriaged": {

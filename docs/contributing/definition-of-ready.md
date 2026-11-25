@@ -84,7 +84,7 @@ The size comes from one of two producers, and the newer one wins:
 
 Every issue or pull request this one depends on is recorded as a blocked-by edge (`gh api repos/<owner>/<repo>/issues/<n>/dependencies/blocked_by`), not only named in prose. An issue may be ready while its blockers are still open; the edge is what lets the marathon order the work.
 
-**Check: judgement.** The script lists the edges and fails an issue whose text says "blocked by" or "depends on" an issue that has no edge, but whether a dependency exists that nothing records needs a reader.
+**Check: judgement.** The script lists the edges and fails an issue whose text says "blocked by" or "depends on" (not negated) an open issue that has no edge; a closed one is only a hint, but whether a dependency exists that nothing records needs a reader.
 
 ### `no-open-question`
 

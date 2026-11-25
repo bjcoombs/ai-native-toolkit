@@ -15,7 +15,12 @@ could change state before it starts a process:
 - every other subcommand is refused with `ReadOnlyViolation`.
 
 The runner is injectable (`Runner`), so the tests replay recorded `gh` output
-with no network.
+with no network. A missing `gh` and malformed output both raise `GhError`, so
+the script's host-failure exit code covers them.
+
+Limit: `gh issue list --json comments` returns one page of comments per issue
+(the first 100) and does not paginate, so on a longer thread a newer
+`refine:size` marker past that page is not seen.
 
 Python 3.8 compatible and stdlib only.
 """
@@ -81,9 +86,12 @@ def check_read_only(args: Sequence[str]) -> None:
 def run_gh_readonly(args: Sequence[str]) -> str:
     """Run `gh <args>` after `check_read_only` and return its stdout."""
     check_read_only(args)
-    proc = subprocess.run(
-        ["gh", *args], capture_output=True, encoding="utf-8", errors="replace", check=False,
-    )
+    try:
+        proc = subprocess.run(
+            ["gh", *args], capture_output=True, encoding="utf-8", errors="replace", check=False,
+        )
+    except OSError as exc:  # gh missing from PATH, or not executable
+        raise GhError(f"cannot run gh: {exc}") from exc
     if proc.returncode != 0:
         raise GhError(f"gh {' '.join(args)} exited {proc.returncode}: {proc.stderr.strip()}")
     return proc.stdout
@@ -160,7 +168,10 @@ class GitHubBacklog:
         self.closed_truncated = False
 
     def _list(self, args: List[str]) -> List[Json]:
-        rows = json.loads(self._run(args) or "[]")
+        try:
+            rows = json.loads(self._run(args) or "[]")
+        except json.JSONDecodeError as exc:
+            raise GhError(f"gh {' '.join(args)} returned malformed JSON: {exc}") from exc
         if not isinstance(rows, list):
             raise GhError(f"gh {' '.join(args)} did not return a JSON array")
         return rows

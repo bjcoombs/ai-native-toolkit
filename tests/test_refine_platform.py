@@ -63,6 +63,21 @@ def test_runner_returns_stdout_and_raises_on_failure(monkeypatch):
         refine_platform.run_gh_readonly(["issue", "view", "1"])
 
 
+def test_missing_gh_is_a_host_error(monkeypatch):
+    def missing(*a, **k):
+        raise FileNotFoundError("gh")
+
+    monkeypatch.setattr(subprocess, "run", missing)
+    with pytest.raises(refine_platform.GhError, match="cannot run gh"):
+        refine_platform.run_gh_readonly(["issue", "list"])
+
+
+def test_malformed_output_is_a_host_error():
+    backlog = refine_platform.GitHubBacklog(FIXTURE_REPO, runner=lambda args: "not json")
+    with pytest.raises(refine_platform.GhError, match="malformed JSON"):
+        backlog.open_issues()
+
+
 def test_github_issue_maps_the_graphql_shapes():
     issue = refine_platform.github_issue({
         "number": 7, "title": "t", "body": None, "state": "OPEN", "stateReason": "NOT_PLANNED",
