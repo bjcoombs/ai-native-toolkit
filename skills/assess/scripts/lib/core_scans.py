@@ -31,7 +31,7 @@ from typing import Any
 
 from lib.contributor_files import scan_contributor_files
 from lib.keyhole.accretion_ratchet import AccretionScan, scan_accretion_ratchet
-from lib.anomaly_detector import detect_anomalies
+from lib.report.anomaly_detector import detect_anomalies
 from lib.keyhole.archetype import analyze_archetype
 from lib.since_last_run import SinceLastRun
 from lib.since_last_run import since_last_run as since_last_run_block
@@ -56,7 +56,7 @@ from lib.decline_markers import build_decline_block
 from lib.docs.doc_complexity_join import analyze_doc_complexity_join
 from lib.docs.doc_graph import build_doc_graph
 from lib.docs.doc_staleness import analyze_doc_staleness
-from lib.gap_actions import build_gap_actions
+from lib.report.gap_actions import build_gap_actions
 from lib.instructions.instruction_files import (
     broken_instruction_refs,
     detect_ancestor_instructions,

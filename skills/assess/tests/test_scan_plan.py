@@ -235,7 +235,7 @@ def test_a_hotspot_page_says_the_marker_scan_did_not_run(ci2: Path) -> None:  # 
 
 
 def test_a_method_change_never_lists_findings_a_plan_left_out_as_cleared() -> None:
-    from lib.findings_snapshot import method_change
+    from lib.report.findings_snapshot import method_change
 
     prior = {"assess_method_version": 1, "findings": [{"name": "lying_map", "paths": ["a.md"]}]}
     ctx: dict[str, Any] = {"prior_findings_snapshot": prior, "assess_method_version": 2,

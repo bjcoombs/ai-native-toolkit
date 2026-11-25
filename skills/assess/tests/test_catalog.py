@@ -19,9 +19,9 @@ import gen_catalog
 import pytest
 
 import lib.manifest.check_manifest as cm
-from lib.catalog import (CATALOG_VERSION, GRADE_ORDER, UNCLASSIFIED, build_catalog, counts, criterion_text,
+from lib.report.catalog import (CATALOG_VERSION, GRADE_ORDER, UNCLASSIFIED, build_catalog, counts, criterion_text,
                          grade_of, render_json, stable_model)
-from lib.catalog_md import CONDITION_COLUMNS, render_markdown
+from lib.report.catalog_md import CONDITION_COLUMNS, render_markdown
 from lib.scoring.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
 from lib.keyhole.keyhole_signals import FINDING_ORDER
 from lib.scoring.level_signals import SIGNAL_INPUTS, counts_toward_level, load_default_levels

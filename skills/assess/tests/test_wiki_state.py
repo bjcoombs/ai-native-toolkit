@@ -1,4 +1,4 @@
-"""Tests for lib/wiki_state.py: first-flagged dates, including rekeying through
+"""Tests for lib/report/wiki_state.py: first-flagged dates, including rekeying through
 the rename map.
 
 Moved out of test_assess_core.py when assess_core's helpers split into
@@ -11,9 +11,7 @@ from pathlib import Path
 
 from assess_core import build_and_publish_run
 from assess_core_helpers import _renamed_and_deleted_history
-from lib import wiki_state
-
-
+from lib.report import wiki_state
 def test_first_flagged_unknown_when_prior_seeded_without_history(tmp_path: Path) -> None:
     """When prior stats are seeded but first-flagged.json isn't, a hotspot that
     predates this run must read 'unknown', not today's date

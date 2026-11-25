@@ -64,13 +64,13 @@ from lib.scoring.action_conditions import condition_errors
 from lib.card_lint import done_when_warnings
 from lib.card_refresh import refresh_card
 from lib.scoring.headline import as_headline
-from lib.evidence_check import check_evidence, describe
-from lib.gap_actions import action_mode
+from lib.report.evidence_check import check_evidence, describe
+from lib.report.gap_actions import action_mode
 from lib.testing.mutation_cap import layer6_cap_violation
-from lib.reviewed_findings import action_entries, carried_completed, reopened_status
+from lib.report.reviewed_findings import action_entries, carried_completed, reopened_status
 from lib.run_scope import assess_dir_for, resolve_scope
 from lib.run_context_types import ActionLifecycle, FinalizeInput, JsonDict
-from lib.wiki_writer import (
+from lib.report.wiki_writer import (
     find_log_entry,
     log_entry_date,
     log_entry_is_unfinalized,
@@ -587,7 +587,7 @@ def _validate_evidence(data: FinalizeInput, repo_root: Path) -> list[JsonDict]:
 
     The scorer is a model, and the facts it cites ("docs/guide.md is absent",
     "no workflow calls scripts/check-x.sh") are checked again here with the
-    deterministic ``lib.evidence_check``, each ``path`` resolved against
+    deterministic ``lib.report.evidence_check``, each ``path`` resolved against
     ``repo_root`` (the parent of ``.assess/``). Grouped by ``layer``:
 
     - every entry of a layer rejected: the verdict rests on nothing true, so

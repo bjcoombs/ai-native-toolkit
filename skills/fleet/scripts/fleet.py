@@ -202,7 +202,7 @@ from lib.fleet.condition_effect import (
     write_condition_effect,
 )
 from lib.fleet.condition_demotion import DEMOTIONS_FILE, decide, with_demotions, write_demotions
-from lib.measured_appendix import measured_section
+from lib.report.measured_appendix import measured_section
 from lib.fleet.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data
 from lib.fleet.fleet_targets import TargetSpec, TargetsError, check_units, load_targets, resolve
 from lib.fleet_config import FleetConfig, FleetConfigError, config_sha256, parse_fleet_config, read_fleet_config

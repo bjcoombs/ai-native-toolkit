@@ -15,7 +15,7 @@ import pytest
 from test_complexity_treemap import stubbed_treemap
 
 from assess_report import render_hotspots_table
-from lib.anomaly_detector import detect_anomalies
+from lib.report.anomaly_detector import detect_anomalies
 from lib.complexity.scc_coverage import (
     MIN_UNRELIABLE_NLOC,
     backend_by_language,

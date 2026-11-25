@@ -10,8 +10,8 @@ Key modules:
 
 - `lib/instructions/agent_instructions_grader.py` - heuristic scoring of CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .github/copilot-instructions.md (regex + arithmetic, no AI).
 - `lib/complexity/stats_diff.py` - cross-run comparison (graduated/regressed/new/persistent hotspots).
-- `lib/wiki_writer.py` - renders `index.md`, `log.md`, `hotspots/*.md` from templates.
-- `lib/anomaly_detector.py` - flags suspicious run results for self-feedback.
+- `lib/report/wiki_writer.py` - renders `index.md`, `log.md`, `hotspots/*.md` from templates.
+- `lib/report/anomaly_detector.py` - flags suspicious run results for self-feedback.
 - `scripts/assess_core.py` - orchestrator; writes `run-context.json` for the LLM to read.
 - `scripts/assess_signals.py` - headless, signals-only entry point for fleet scans (issue #545): `assess_signals.py <repo> --out FILE.json [--scans a,b,c] [--window 6mo]` runs the offline registered scans (`lib/signals.py`) and writes one JSON document outside the target. No `.assess/` writes, no network, no SVG, no consent prompts; network and still-unregistered scans report `{"available": false, "reason": ...}`. The output shape is published as `skills/assess/references/signals.schema.json`, generated from `lib/run_context_types.py` by `lib/signals_schema.py`. `--counts-only` (optionally `--hash-paths` or `--hash-salt VALUE`) makes the document content-free through `lib/counts_only/content_free.py`; the fields kept per block are listed in `skills/assess/references/counts-only.md`.
 - `scripts/assess_finalize.py` - LLM write-back; reads `.assess/finalize-input.json` and replaces deterministic-core placeholders in `log.md` and `hotspots/*.md` with the LLM-derived score and per-file actions.

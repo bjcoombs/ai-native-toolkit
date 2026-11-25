@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 import lib.scoring.level_tally as lt
-from lib import catalog, catalog_md
+from lib.report import catalog, catalog_md
 from lib.scoring.level_signals import DEFAULT_LEVELS
 from lib.scoring.levels import LevelsError, parse_levels
 from lib.scoring.levels_fields import PREDICTIONS

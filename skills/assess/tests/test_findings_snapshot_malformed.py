@@ -13,7 +13,7 @@ import pytest
 
 from assess_gate import main
 from lib.artifact_schema import ASSESS_METHOD_VERSION
-from lib.findings_snapshot import (
+from lib.report.findings_snapshot import (
     FINDINGS_SNAPSHOT_FILE,
     build_snapshot,
     committed_prior,

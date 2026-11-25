@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from lib.gap_actions import REMOVAL_FINDING
+from lib.report.gap_actions import REMOVAL_FINDING
 from lib.prior_level import PruningEntry
 from lib.pruning_ledger import HOLD_RUNS, ledger_lines, removal, update_ledger
 from lib.since_last_run import pruning_record

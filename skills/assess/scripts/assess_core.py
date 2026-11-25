@@ -41,7 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.prior_level import write_prior_level
 from lib.since_last_run import baseline_record, pruning_record
 from lib.assess_diagrams_review import COUNTS_ONLY_FILES, build_all, counts_only_diagrams, write_all
-from lib.badge import write_headline_badge
+from lib.report.badge import write_headline_badge
 from lib.exec_summary import run_headline
 from lib.scoring.headline import as_headline
 from lib.counts_only.content_free import COUNTS_ONLY_FILE
@@ -58,7 +58,7 @@ from lib.testing.mutation_cap import mutation_not_run_cap, normalize_test_pressu
 from lib.testing.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.run_publish import publish_run
 from lib.assess_config import load_managed_settings_opt_in
-from lib.run_wiki import refresh_log_readiness
+from lib.report.run_wiki import refresh_log_readiness
 from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
 from lib.scan_plan import ScanPlan, run_plan
 from lib.scan_registry import run_scans

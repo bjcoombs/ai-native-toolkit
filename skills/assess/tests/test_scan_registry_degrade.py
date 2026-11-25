@@ -92,7 +92,7 @@ def test_a_failed_churn_check_does_not_read_as_degenerate_history():
 
 
 def test_a_failed_coverage_read_proposes_no_coverage_action():
-    from lib.gap_actions import build_gap_actions
+    from lib.report.gap_actions import build_gap_actions
 
     hot = [{"path": "src/a.py"}]
     software = {"archetype": "software"}

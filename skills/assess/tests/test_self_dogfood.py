@@ -30,9 +30,9 @@ import pytest
 from assess_core import build_and_publish_run
 from assess_finalize import _write_actions_contract
 from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION
-from lib.gap_actions import ACTION_MODE_VALUES
+from lib.report.gap_actions import ACTION_MODE_VALUES
 from lib.keyhole.keyhole_signals import mode_for_finding
-from lib.wiki_writer import (
+from lib.report.wiki_writer import (
     hotspot_page_source_path,
     hotspot_page_status,
     is_retired_status,

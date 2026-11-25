@@ -1,4 +1,4 @@
-"""Tests for the frozen-harness workflow emitter (lib/ci_workflow.py).
+"""Tests for the frozen-harness workflow emitter (lib/report/ci_workflow.py).
 
 The emitter bakes the discovered toolchain into a GitHub Action. These tests pin
 the substitution (version, branch, tool steps), the literal-dollar escaping for
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.ci_workflow import emit_ci_workflow, find_path_filtered_workflow, render_ci_workflow
+from lib.report.ci_workflow import emit_ci_workflow, find_path_filtered_workflow, render_ci_workflow
 
 # Every external tool the emitter knows how to install - renders the maximal
 # workflow so the supply-chain assertions cover all recipes.

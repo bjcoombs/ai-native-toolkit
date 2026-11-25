@@ -15,7 +15,7 @@ from typing import Any
 from assess_core import build_and_publish_run
 from assess_finalize import _write_actions_contract
 from assess_gate import check_finding_regressions
-from lib import reviewed_findings as rf
+from lib.report import reviewed_findings as rf
 from lib.counts_only.content_free import counts_only
 from lib.keyhole.keyhole_signals import finding_display_name, finding_products
 from lib.testing.mutation_refresh import _rebuilt_findings

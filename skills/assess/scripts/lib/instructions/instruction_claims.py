@@ -18,7 +18,7 @@ Claim kinds:
   Jenkins, CircleCI, Azure, Buildkite, Bitbucket, Travis, Drone) or in a task
   runner CI commonly calls through (``Makefile``, ``package.json``,
   ``.pre-commit-config.yaml``, ``justfile``, ``Taskfile.yml``, ``tox.ini``,
-  ``noxfile.py``), using the reference search of ``lib.evidence_check``. A repo
+  ``noxfile.py``), using the reference search of ``lib.report.evidence_check``. A repo
   with no CI configuration at all yields no enforcement claim: there is
   nothing to check against, so the claim is unverifiable, not false.
 - ``pin``: a sentence holding "pinned in" followed by a backticked file, plus
@@ -117,7 +117,7 @@ from pathlib import Path, PureWindowsPath
 from typing import Any, NamedTuple
 
 from lib.docs.doc_graph import is_excluded_path
-from lib.evidence_check import is_referenced_in
+from lib.report.evidence_check import is_referenced_in
 
 # Where CI is configured. The enforcement check needs at least one to exist.
 CI_CONFIG_PATHS = (

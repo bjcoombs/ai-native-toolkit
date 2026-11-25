@@ -262,7 +262,7 @@ def test_mutation_recount_rewrites_headline_and_badge(ci2: Path, monkeypatch: py
     stale = copy.deepcopy(ctx)
     stale["headline"]["summary"] = "stale"
     ctx_path.write_text(json.dumps(stale), encoding="utf-8")
-    from lib.run_wiki import refresh_log_readiness
+    from lib.report.run_wiki import refresh_log_readiness
 
     assert refresh_log_readiness(ci2 / ".assess", ctx["run_id"], "stale")
     monkeypatch.setattr(assess_core, "mutation_scope", lambda focus: ["src/a.py"])
@@ -277,8 +277,8 @@ def test_mutation_recount_rewrites_headline_and_badge(ci2: Path, monkeypatch: py
 
 
 def test_log_readiness_line_is_rewritten_and_rechained(ci2: Path):
-    from lib.run_wiki import refresh_log_readiness
-    from lib.wiki_writer import verify_log_chain
+    from lib.report.run_wiki import refresh_log_readiness
+    from lib.report.wiki_writer import verify_log_chain
 
     ctx = _run(ci2, "2026-11-22")
     assess = ci2 / ".assess"

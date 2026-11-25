@@ -25,7 +25,7 @@ import pytest
 
 from assess_core import build_and_publish_run
 from assess_finalize import finalize_run
-from lib.wiki_writer import (
+from lib.report.wiki_writer import (
     RETIRED_EXCLUDED_STATUS,
     RETIRED_STATUS,
     slug_for_path,

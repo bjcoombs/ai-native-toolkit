@@ -17,7 +17,7 @@ import pytest
 
 from assess_core import build_and_publish_run
 from assess_finalize import FinalizeValidationError, finalize_run
-from lib.wiki_writer import (
+from lib.report.wiki_writer import (
     LOG_PLACEHOLDER,
     read_log_entries,
     rewrite_log_entry,
@@ -281,7 +281,7 @@ def test_earlier_same_date_placeholder_without_run_id_does_not_block_finalize(re
     """An unstamped earlier entry cannot be dropped by id; refusing on it would
     leave finalize with no way out, so it stays as history and finalize fills
     this run's entry."""
-    from lib.wiki_writer import LogEntry, append_log_entry
+    from lib.report.wiki_writer import LogEntry, append_log_entry
 
     assess_dir = repo / ".assess"
     append_log_entry(assess_dir, LogEntry(

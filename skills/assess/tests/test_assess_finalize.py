@@ -93,7 +93,7 @@ def test_finalize_updates_log_last_entry(tmp_assess_dir: Path) -> None:
 def test_finalize_updates_hotspot_actions(tmp_assess_dir: Path) -> None:
     """Hotspot pages get their 'Suggested actions' section rewritten with LLM input."""
     # The slug for "src/foo.go" includes a sha256[:8] hash - use the same function the script uses
-    from lib.wiki_writer import slug_for_path
+    from lib.report.wiki_writer import slug_for_path
     slug = slug_for_path("src/foo.go")
     _seed_hotspot_page(tmp_assess_dir, slug=slug)
     finalize_input = {
@@ -168,7 +168,7 @@ def test_finalize_log_handles_backslash_in_top_action(tmp_assess_dir: Path) -> N
 
 def test_finalize_hotspot_action_handles_backslash(tmp_assess_dir: Path) -> None:
     """Hotspot action text containing \\1 must be inserted literally."""
-    from lib.wiki_writer import slug_for_path
+    from lib.report.wiki_writer import slug_for_path
     slug = slug_for_path("src/foo.go")
     _seed_hotspot_page(tmp_assess_dir, slug=slug)
     _seed_log_md(tmp_assess_dir)

@@ -16,7 +16,7 @@ import pytest
 
 import lib.testing.import_credit as ic
 import lib.keyhole.keyhole_signals as ks
-from lib import run_wiki
+from lib.report import run_wiki
 import lib.testing.sibling_tests as tc
 from lib.testing.test_focus import compute_test_focus
 

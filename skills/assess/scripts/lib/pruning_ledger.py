@@ -43,7 +43,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
 
-from lib.gap_actions import REMOVAL_FINDING
+from lib.report.gap_actions import REMOVAL_FINDING
 from lib.prior_level import PruningEntry
 
 # Two runs on new commits, each with the file unflagged and no gate lost: one run shows

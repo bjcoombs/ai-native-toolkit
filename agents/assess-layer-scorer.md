@@ -33,7 +33,7 @@ Return this as a compact structured summary (not the full report prose). The `as
 
 ### Evidence schema
 
-Prose evidence is a claim; an `evidence` entry is a claim a script can re-check. Before the report is written the orchestrator runs every entry through `lib/evidence_check.py` (`exists()` plus a literal substring search, no model): entries that hold stay in `evidence`, the rest move to `evidence_rejected` and never reach the report. So cite a fact only as it literally stands on disk, and give each scored layer's verdict at least one entry.
+Prose evidence is a claim; an `evidence` entry is a claim a script can re-check. Before the report is written the orchestrator runs every entry through `lib/report/evidence_check.py` (`exists()` plus a literal substring search, no model): entries that hold stay in `evidence`, the rest move to `evidence_rejected` and never reach the report. So cite a fact only as it literally stands on disk, and give each scored layer's verdict at least one entry.
 
 The list is one flat JSON array. Each entry has `layer` (0-8, the layer whose verdict cites it), `kind`, and the kind's arguments. Every `path` is relative to the repository root. `needle` is a literal string, not a regex or glob.
 

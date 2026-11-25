@@ -189,7 +189,7 @@ New code imports the new path.
   shared tooling. The step-following modules read what one step runs: action inputs,
   composite actions, compound and shell statements, masking and its exemptions, scripts a
   step calls, unsure lines, and the check, lint and type-check command classifier with its
-  lint vocabulary. `ci_workflow` emits the gate workflow and moves with the `report` group.
+  lint vocabulary. `ci_workflow` emits the gate workflow and moved with the `report` group.
   Files: `__init__.py`, `check_command.py`, `ci_action_inputs.py`, `ci_check_state.py`, `ci_checks.py`, `ci_composite.py`, `ci_compound.py`, `ci_continuations.py`, `ci_exempt.py`, `ci_expressions.py`, `ci_include_items.py`, `ci_includes.py`, `ci_lines.py`, `ci_lint_gates.py`, `ci_lint_inputs.py`, `ci_masking.py`, `ci_matrix.py`, `ci_merged_view.py`, `ci_model_jobs.py`, `ci_scripts.py`, `ci_shell_text.py`, `ci_statements.py`, `ci_triggers.py`, `ci_unsure.py`, `lint_vocabulary.py`, `merged_ci.py`, `review_automation.py`, `shared_tooling.py`.
 - **`complexity/`**: the complexity treemap renderer, `scc` coverage, the Dart scanner and
   the stats sidecar (its rows, cross-run diff and diff reliability), plus the generated- and
@@ -237,6 +237,14 @@ New code imports the new path.
 - **`manifest/`**: the check manifest loader (`checks/core.toml` and its fragments), its
   structured validation errors, and the `why` rules the loader applies to every entry
   (#939). Files: `__init__.py`, `check_manifest.py`, `check_validation.py`, `manifest_whys.py`.
+- **`report/`**: the artefacts a run writes, the `report` group (#1396): the `.assess/` wiki
+  pages, their first-flagged state and the per-run wiki update, the badge, the committed
+  findings snapshot and the reviews that clear a finding, the evidence check, the gap
+  actions, the anomaly flags, the "How this was measured" appendix, the gate workflow and its
+  Actions cost estimate, and the measures catalog with its Markdown, HTML, configure and
+  truth-tag views. `wiki_writer` and `ci_workflow` locate `templates/` from their own path
+  (`parents[3]`). `evidence_check` also runs as a script: run the moved file,
+  `python scripts/lib/report/evidence_check.py`. Files: `__init__.py`, `anomaly_detector.py`, `badge.py`, `catalog.py`, `catalog_configure.py`, `catalog_html.py`, `catalog_md.py`, `catalog_tags.py`, `ci_workflow.py`, `evidence_check.py`, `findings_snapshot.py`, `gap_actions.py`, `gate_cost.py`, `measured_appendix.py`, `reviewed_findings.py`, `run_wiki.py`, `wiki_state.py`, `wiki_writer.py`.
 - **`scoring/`**: maturity models and how a run is scored against them, the `scoring` group
   (#1395): the model loader with its condition fields, unknown-path hints and starter copy,
   the input class and grade of each signal a condition reads, the verified tally with its
@@ -273,7 +281,7 @@ on one that is not linked.
 | `lib.scoring.levels` | [levels.md](docs/levels.md) | Loading a maturity model and evaluating it from signals |
 | `lib.manifest.check_manifest` | [check_manifest.md](docs/check_manifest.md) | The check manifest loader and its schema |
 | `lib.testing.coverage_gate` | [coverage_gate.md](docs/coverage_gate.md) | Whether a line-coverage threshold is configured |
-| `lib.wiki_writer` | [wiki_writer.md](docs/wiki_writer.md) | Writing the `.assess/` wiki pages |
+| `lib.report.wiki_writer` | [wiki_writer.md](docs/wiki_writer.md) | Writing the `.assess/` wiki pages |
 
 Windows portability (#712, #752): every text-mode `subprocess.run` names
 `encoding="utf-8"` (with `errors="replace"`, or `surrogateescape` on every `git ls-files -z` listing, whose paths must

@@ -14,7 +14,7 @@ The deterministic parts are not yours to invent - you paste them. You write the 
 ## Inputs
 
 - `$REPO_ROOT/.assess/run-context.json` - the data bus (the `headline` and `level` blocks, findings, attention, keyhole summary, prescribed actions, stats, diff).
-- The scorecard returned by the `assess-layer-scorer` agent (the per-practice verdicts and their evidence), with its `evidence` list already re-checked by `lib/evidence_check.py`: only entries that held on disk remain there; the rejected ones arrive separately under `evidence_rejected`, each with the `reason` the check gave.
+- The scorecard returned by the `assess-layer-scorer` agent (the per-practice verdicts and their evidence), with its `evidence` list already re-checked by `lib/report/evidence_check.py`: only entries that held on disk remain there; the rejected ones arrive separately under `evidence_rejected`, each with the `reason` the check gave.
 
 **Existence and wiring claims cite only verified evidence.** A report sentence saying a file or directory exists or is missing, or that something is or is not wired in (a workflow runs the linter, no CI job calls the script), must rest on an entry in the scorecard's `evidence` list and name the path that entry cites. When no verified entry backs such a claim, leave it out rather than restating it from the scorer's prose. The scorecard's per-layer Evidence cell is exempt only in its two empty states (no entries offered, every entry rejected), set beside the scorecard table below; a cell whose layer kept some verified entries cites only those, as the partial state there says. The deterministic findings you paste verbatim are already grounded and need no entry.
 

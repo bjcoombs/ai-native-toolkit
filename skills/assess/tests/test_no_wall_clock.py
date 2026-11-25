@@ -38,14 +38,14 @@ ALLOWED: dict[tuple[str, str], str] = {
     ("assess_core.py", "main"): "run_date is run identity: wiki dates and supersede detection",
     ("lib/run_setup.py", "new_run_id"): "run id minting",
     ("complexity-treemap.py", "_new_run_id"): "run id minting",
-    ("lib/wiki_writer.py", "_build_log_heading"): "wiki log heading time",
+    ("lib/report/wiki_writer.py", "_build_log_heading"): "wiki log heading time",
     ("lib/hosting/review_reality.py", "summarize"):
         "network scan: forge state is not a function of the commit (unavailable headless)",
     ("lib/hosting/review_reality.py", "scan_gitlab_review_reality"):
         "network scan: forge state is not a function of the commit (unavailable headless)",
     ("lib/hosting/review_reality.py", "scan_review_reality"):
         "network scan: forge state is not a function of the commit (unavailable headless)",
-    ("lib/gate_cost.py", "estimate_gate_cost"):
+    ("lib/report/gate_cost.py", "estimate_gate_cost"):
         "network scan: a monthly Actions-cost estimate, not a level signal",
 }
 
