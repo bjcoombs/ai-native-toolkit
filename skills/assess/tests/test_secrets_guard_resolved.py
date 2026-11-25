@@ -361,6 +361,8 @@ def test_the_template_beside_a_local_file_named_like_it_still_counts(tmp_path: P
     "pre-commit run gitleaks --all-files & wait",
     "gitleaks detect &",
     "gitleaks detect & sleep 1",
+    "gitleaks detect --source . && echo ok &",
+    "pre-commit run --all-files && echo ok &",
 ])
 def test_a_scan_sent_to_the_background_is_not_enforcement(tmp_path: Path, run: str) -> None:
     wf = f"steps:\n  - run: {run}\n"
@@ -374,6 +376,7 @@ def test_a_scan_sent_to_the_background_is_not_enforcement(tmp_path: Path, run: s
     "gitleaks detect &> out.log",
     "gitleaks detect 2>&1",
     "sleep 1 & gitleaks detect",
+    "gitleaks detect; sleep 1 &",
 ])
 def test_a_scan_in_the_foreground_beside_an_ampersand_still_counts(tmp_path: Path, run: str) -> None:
     wf = f"steps:\n  - run: {run}\n"

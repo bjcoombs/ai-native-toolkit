@@ -160,15 +160,16 @@ _HIDING_KINDS = frozenset({"local", "project", "remote", "component", "unknown"}
 _OR_MASK = re.compile(r"\|\|(?!\s*(?:exit\s+[1-9]|false\b))")
 _SHELL_OPERATOR = re.compile(r"&&|\|\||;|\||&")
 _PIPE = re.compile(r"(?<!\|)\|(?!\|)")
-# A command ends at one of these; a lone ``&`` before it sends the command to the background, where
-# its failure never reaches the job (``&&``, ``&>`` and ``2>&1`` are not one).
-_SEPARATOR = re.compile(r"&&|\|\||;|\|")
+# A lone ``&`` ends a list (``a && b &``) and sends all of it to the background, where its failure
+# never reaches the job; a ``;`` ends a list in the foreground. ``&&``, ``&>`` and ``2>&1`` are no ``&``.
+_LIST_END = re.compile(r";")
 _BACKGROUND = re.compile(r"(?<![&<>])&(?![&>])")
 
 
 def _backgrounded(bare: str, start: int) -> bool:
-    """Whether the command at ``bare[start:]`` (quoted spans blanked) ends in a background ``&``."""
-    end = m.start() if (m := _SEPARATOR.search(bare, start)) else len(bare)
+    """Whether the list holding the command at ``bare[start:]`` (quoted spans blanked) runs in the
+    background: a lone ``&`` before the next ``;`` or the end of the line."""
+    end = m.start() if (m := _LIST_END.search(bare, start)) else len(bare)
     return _BACKGROUND.search(bare, start, end) is not None
 # The secrets actions a ``uses:`` step names (owner/name, any ref).
 # GitGuardian's maintained action is a path in its repository (``GitGuardian/ggshield/actions/secret``).

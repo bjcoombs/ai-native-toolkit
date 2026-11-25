@@ -15,7 +15,7 @@ This module builds on the shared resolver, ``lib.ci_includes.merged_config`` wit
   A job defined in one file only is held the same way: one from an include under ``rules:``
   (``conditional_include``), and any job while ``hides`` (an unread include could override it). GitLab ``rules:`` are still not evaluated:
   the line reader holds any job that has them.
-- ``template_state(config)`` reads GitLab's Secret-Detection template (or component, or Auto
+- ``template_state(config, resolution)`` reads GitLab's Secret-Detection template (or component, or Auto
   DevOps) over the merged ``secret_detection`` job: ``absent``, ``runs``, ``off`` or
   ``unevaluated``. A template under an include with ``rules:`` is unevaluated; another include
   under ``rules:`` (SAST, say) is not the template and leaves it as it is. Its keys follow GitLab's precedence (a root key over an included one, maps
