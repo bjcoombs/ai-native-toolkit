@@ -91,6 +91,8 @@ def test_each_signal_failing_alone(tmp_path: Path, files: dict[str, str | None],
     {"days-before-issue-stale": "-1"},
     {"exempt-issue-labels": "agent-ready"},
     {"exempt-issue-labels": "pinned, Agent-Ready", "days-before-close": "3"},
+    {"only-labels": "needs-info", "days-before-close": "7"},  # scoped away from ready issues
+    {"any-of-issue-labels": "question,needs-info"},
 ])
 def test_a_stale_job_that_never_closes_or_exempts_ready_issues_is_safe(inputs: dict[str, str]) -> None:
     assert stale_state(inputs, READY_LABELS) == "safe"
@@ -100,9 +102,14 @@ def test_a_stale_job_that_never_closes_or_exempts_ready_issues_is_safe(inputs: d
     {},  # the action's default closes after 7 days
     {"days-before-close": "14", "exempt-issue-labels": "pinned"},
     {"days-before-issue-close": "5", "days-before-close": "-1"},  # the issue setting wins
+    {"any-of-labels": "needs-info,agent-ready"},  # the scope takes in ready issues
 ])
 def test_a_stale_job_that_closes_ready_issues_is_unsafe(inputs: dict[str, str]) -> None:
     assert stale_state(inputs, READY_LABELS) == "unsafe"
+
+
+def test_an_expression_scope_is_unresolved() -> None:
+    assert stale_state({"only-labels": "${{ vars.STALE }}"}, READY_LABELS) == "unresolved"
 
 
 def test_never_closing_and_exempting_stale_jobs_read_safe_in_a_repo(tmp_path: Path) -> None:
@@ -241,6 +248,7 @@ def test_the_issues_opened_trigger(tmp_path: Path, on: str, met: bool) -> None:
     "      - uses: actions/github-script@v7\n        with:\n          script: |\n"
     "            github.rest.issues.addLabels({owner, repo, issue_number, labels: ['status: needs triage']})\n",
     "      - run: gh issue edit 1 --add-label \"needs triage\"\n",
+    "      - uses: andymckay/labeler@1.0.4\n        with:\n          add-labels: \"needs-triage\"\n",
 ])
 def test_label_adding_steps(tmp_path: Path, step: str) -> None:
     wf = "on:\n  issues:\n    types: [opened]\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n" + step
@@ -270,6 +278,9 @@ def test_a_block_scalar_exempt_list_is_read(indicator: str) -> None:
     "      - if: contains(github.event.issue.labels.*.name, 'needs-triage')\n        run: gh issue edit --add-label bug\n",
     "      - run: echo needs-triage\n",  # names the label but adds none
     "      - run: gh issue edit --add-label needs-triage-later\n",  # another label
+    "      - uses: actions-ecosystem/action-remove-labels@v1\n        with:\n          labels: needs-triage\n",
+    "      - run: gh issue list --label needs-triage\n",  # lists, adds nothing
+    "      - uses: andymckay/labeler@1.0.4\n        with:\n          remove-labels: needs-triage\n",
 ])
 def test_lookalikes_are_not_an_untriaged_label(tmp_path: Path, step: str) -> None:
     wf = "on:\n  issues:\n    types: [opened]\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n" + step

@@ -21,8 +21,10 @@ lives in the maintainers' heads, so each issue an agent picks up restates it in 
   folder): GitLab issue templates are not read yet.
 - ``untriaged_on_open``: a workflow (directly under ``.github/workflows/``) triggered by
   ``issues`` with type ``opened`` (no ``types`` means every type) has a step that names an
-  untriaged label beside a label-adding call (``--add-label``, ``--label``, ``addLabels``,
-  ``add-labels`` or a ``labels:`` input); ``name:``, ``if:`` and comment lines do not count. Null
+  untriaged label beside a label-adding call (``--add-label``, ``addLabels``, an ``add-labels``
+  input, ``gh issue create --label``, or a ``labels:`` input of an action named for adding labels
+  or ``labeler``); removing or listing by label is no sign, and ``name:``, ``if:`` and comment
+  lines do not count. Null
   ``workflow_unreadable`` when none does and a workflow's ``on`` could not be read. Null
   ``gitlab_ci_not_read`` on a GitLab repository with no GitHub workflow: GitLab has no CI trigger
   for a new issue, and its counterpart, a scheduled refinement job, is not read yet.
@@ -35,7 +37,8 @@ lives in the maintainers' heads, so each issue an agent picks up restates it in 
 - ``stale_job_safe``: true when no step uses ``actions/stale``, or every such step leaves ready
   issues open: ``days-before-issue-stale`` / ``days-before-stale`` or ``days-before-issue-close``
   / ``days-before-close`` negative (never), or ``exempt-issue-labels`` naming a ready label (a
-  block scalar's lines are joined). The action's default closes after 7 days, so a step with none of these is unsafe (false). Null
+  block scalar's lines are joined), or a scope input (``only-labels``, ``only-issue-labels``,
+  ``any-of-labels``, ``any-of-issue-labels``) that names no ready label. The action's default closes after 7 days, so a step with none of these is unsafe (false). Null
   ``stale_input_unresolved`` when no step is unsafe but one sets an input to an expression.
 
 **Labels.** Matching ignores case, except a one-word label in documentation (above). ``UNTRIAGED_LABELS`` and ``READY_LABELS`` are the defaults; a
@@ -81,7 +84,14 @@ FORM_DIR = ".github/ISSUE_TEMPLATE/"
 _WORKFLOWS = ".github/workflows/"
 _STALE = re.compile(r"""^["']?actions/stale(?:@|["']?$)""")
 _ON = re.compile(r"""^(?:on|"on"|'on'|true)\s*:""")
-_ADDS_LABEL = re.compile(r"--add-label\b|--label\b|addLabels\b|add[-_]labels?\b|^\s*(?:-\s+)?labels\s*:", re.I)
+# A call that adds a label: ``gh issue edit --add-label``, ``addLabels`` (github-script), an
+# ``add-labels`` input, or ``gh issue create --label``. A ``labels:`` input counts only on a step
+# whose action adds labels (``_ADDING_ACTION``); removing or listing by label is no sign.
+_ADDS_LABEL = re.compile(r"--add-label\b|addLabels\b|\badd[-_]labels\b\s*:|\bgh\s+issue\s+create\b.*--label\b", re.I)
+_ADDING_ACTION = re.compile(r"^\s*(?:-\s+)?uses\s*:\s*[\"']?[\w.-]+/[\w.-]*(?:add[-_]labels?|labeler)[\w.-]*", re.I)
+_LABELS_INPUT = re.compile(r"^\s*(?:-\s+)?labels\s*:", re.I)
+# The stale action's scope inputs: with one set, only issues carrying those labels go stale.
+_STALE_SCOPE = ("only-labels", "only-issue-labels", "any-of-labels", "any-of-issue-labels")
 _SKIP_KEYS = frozenset({"name", "if"})
 _HEADING = re.compile(r"^\s{0,3}(#{1,6})\s")
 _LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+\S")
@@ -232,7 +242,9 @@ def _applies_label(text: str, labels: tuple[str, ...]) -> bool:
     for span in _step_spans(tree, jobs):
         kept = [strip_comment(raw[i]) for i in span if i < len(raw) and not raw[i].lstrip().startswith("#")
                 and tree.lines[i].key not in _SKIP_KEYS]
-        if any(_ADDS_LABEL.search(ln) for ln in kept) and any(
+        adds = any(_ADDS_LABEL.search(ln) for ln in kept) or (
+            any(_ADDING_ACTION.match(ln) for ln in kept) and any(_LABELS_INPUT.match(ln) for ln in kept))
+        if adds and any(
                 _token(label).search("\n".join(kept)) for label in labels):
             return True
     return False
@@ -286,6 +298,12 @@ def _negative(value: str | None) -> bool | None:
 
 def stale_state(inputs: dict[str, str], ready: tuple[str, ...]) -> StaleState:
     """Whether one ``actions/stale`` step leaves ready issues open (see the module doc)."""
+    wanted = {r.lower() for r in ready}
+    scopes = [inputs[k] for k in _STALE_SCOPE if inputs.get(k)]
+    if any("${{" in v for v in scopes):
+        return "unresolved"
+    if scopes and not any({n.strip().lower() for n in v.split(",")} & wanted for v in scopes):
+        return "safe"  # scoped to labels that are not ready ones: a ready issue never goes stale
     exempt = inputs.get("exempt-issue-labels")
     if exempt is not None and "${{" not in exempt:
         names = {n.strip().lower() for n in exempt.split(",")}
