@@ -12,6 +12,8 @@ import pytest
 
 import lib.fleet.fleet_include_list as fil
 from lib.ci.ci_include_items import IncludeItem
+from lib.ci.ci_includes import MAX_DEPTH, MAX_FILES
+from lib.command_index import MAX_CONFIG_BYTES
 from lib.hosting.gh_cli import GhUnavailable
 
 SCRIPT = Path(__file__).resolve().parents[2] / "fleet" / "scripts" / "fleet_include_list.py"
@@ -32,7 +34,7 @@ class FakeApi:
     """A GitLab API: ``projects`` maps a path to its CI files (path -> text); a path absent
     from it answers ``missing`` (default 404)."""
 
-    def __init__(self, projects: dict[str, dict[str, str]],
+    def __init__(self, projects: dict[str, dict[str, str | None]],
                  missing: dict[str, fil.Access] | None = None) -> None:
         self.projects = projects
         self.missing = missing or {}
@@ -43,9 +45,9 @@ class FakeApi:
             return fil.ProjectAccess("reachable", project, "main")
         return fil.ProjectAccess(self.missing.get(project, "not_found"))
 
-    def ci_files(self, project: str, ref: str) -> list[str]:
+    def ci_files(self, project: str, ref: str) -> tuple[list[str], bool]:
         self.read_from.append(project)
-        return list(self.projects[project])
+        return list(self.projects[project]), True
 
     def read(self, project: str, file: str, ref: str) -> str | None:
         return self.projects[project].get(file)
@@ -115,7 +117,7 @@ def test_a_nested_include_is_followed_to_the_depth_limit_and_no_further() -> Non
 def test_the_default_depth_is_fleets_nested_include_depth() -> None:
     chain = [f"grp/level{n}" for n in range(1, 12)]
     api = FakeApi({p: {"ci.yml": _include(nxt)} for p, nxt in zip(chain, chain[1:], strict=False)})
-    assert max(c.depth for c in fil.walk([chain[0]], api)) == fil.MAX_DEPTH
+    assert max(c.depth for c in fil.walk([chain[0]], api)) == MAX_DEPTH
 
 
 def test_a_nested_project_is_checked_once_and_a_nested_404_names_its_includer() -> None:
@@ -213,6 +215,49 @@ def test_glab_access_maps_each_answer(monkeypatch: pytest.MonkeyPatch) -> None:
     assert api.access("g/list").status == "error"
 
 
+def test_open_checks_the_login_first(monkeypatch: pytest.MonkeyPatch) -> None:
+    hosts: list[str] = []
+    monkeypatch.setattr(fil, "glab_auth", hosts.append)
+    assert fil.GlabIncludeApi.open("gitlab.example.com").host == "gitlab.example.com"
+
+    def refused(host: str) -> None:
+        raise GhUnavailable("not_authenticated: glab is not logged in to h")
+
+    monkeypatch.setattr(fil, "glab_auth", refused)
+    with pytest.raises(fil.IncludeListError, match="not_authenticated"):
+        fil.GlabIncludeApi.open("h")
+    assert hosts == ["gitlab.example.com"]
+
+
+def test_the_cli_exits_3_when_glab_is_not_logged_in(monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+                                                     capsys: pytest.CaptureFixture[str]) -> None:
+    def refused(host: str) -> None:
+        raise GhUnavailable("not_authenticated: glab is not logged in to h")
+
+    monkeypatch.setattr(fil, "glab_auth", refused)
+    (tmp_path / "run.json").write_text(json.dumps({"not_cloned_includes": [{"project": "g/a"}]}),
+                                       encoding="utf-8")
+    assert cli.main([str(tmp_path), "--host", "h"]) == 3
+    assert "not_authenticated" in capsys.readouterr().err
+    assert not (tmp_path / "include-projects.txt").exists()
+
+
+def test_a_project_not_fully_read_is_reported() -> None:
+    class Gaps(FakeApi):
+        def ci_files(self, project: str, ref: str) -> tuple[list[str], bool]:
+            files, _ = super().ci_files(project, ref)
+            return files, project != "grp/trunc"
+
+    api = Gaps({"grp/a": {"ci.yml": _include("grp/b", "grp/trunc"), "gone.yml": None},
+                "grp/b": {f"f{n}.yml": "" for n in range(MAX_FILES + 1)}, "grp/trunc": {}})
+    checked = fil.walk(["grp/a"], api)
+    assert [(c.project, c.partial) for c in checked] == [("grp/a", True), ("grp/b", True), ("grp/trunc", True)]
+    shown = fil.report(checked, "l.txt", "h")
+    assert "3 reachable but not fully read" in shown and "`grp/trunc`" in shown
+    whole = fil.walk(["grp/x"], FakeApi({"grp/x": {"ci.yml": ""}}))
+    assert not whole[0].partial and "not fully read" not in fil.report(whole, "l.txt", "h")
+
+
 def test_glab_host_failure_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     _stub(monkeypatch, {"projects/g%2Fa": GhUnavailable("not_authenticated: glab is not logged in")})
     with pytest.raises(fil.IncludeListError, match="not_authenticated"):
@@ -225,15 +270,23 @@ def test_glab_ci_files_pages_the_tree_and_keeps_yaml(monkeypatch: pytest.MonkeyP
     _stub(monkeypatch, {f"{base}&page=1&ref=main": first,
                         f"{base}&page=2&ref=main": [{"type": "blob", "path": "b.yaml"},
                                                     {"type": "blob", "path": "README.md"}, "junk"]})
-    files = fil.GlabIncludeApi("h").ci_files("g/a", "main")
-    assert len(files) == 100 and files[-1] == "b.yaml" and "README.md" not in files
+    files, complete = fil.GlabIncludeApi("h").ci_files("g/a", "main")
+    assert complete and len(files) == 100 and files[-1] == "b.yaml" and "README.md" not in files
+
+
+def test_glab_ci_files_still_full_after_the_page_cap_is_incomplete(monkeypatch: pytest.MonkeyPatch) -> None:
+    base = "projects/g%2Fa/repository/tree?recursive=true&per_page=100"
+    full = [{"type": "blob", "path": "x.yml"}] * 100
+    _stub(monkeypatch, {f"{base}&page={n}&ref=main": full for n in range(1, fil.TREE_MAX_PAGES + 1)})
+    files, complete = fil.GlabIncludeApi("h").ci_files("g/a", "main")
+    assert not complete and len(files) == 100 * fil.TREE_MAX_PAGES
 
 
 def test_glab_ci_files_stops_on_a_refusal_or_a_bad_page(monkeypatch: pytest.MonkeyPatch) -> None:
-    _stub(monkeypatch, {})  # every page refused: an empty project
-    assert fil.GlabIncludeApi("h").ci_files("g/a", "main") == []
+    _stub(monkeypatch, {})  # every page refused
+    assert fil.GlabIncludeApi("h").ci_files("g/a", "main") == ([], False)
     _stub(monkeypatch, {"projects/g%2Fa/repository/tree?recursive=true&per_page=100&page=1&ref=main": {}})
-    assert fil.GlabIncludeApi("h").ci_files("g/a", "main") == []
+    assert fil.GlabIncludeApi("h").ci_files("g/a", "main") == ([], False)
 
 
 def test_glab_read_decodes_base64_and_refuses_the_rest(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -242,7 +295,7 @@ def test_glab_read_decodes_base64_and_refuses_the_rest(monkeypatch: pytest.Monke
         f"{files}templates%2Flint.yml?ref=v1%2Fx": {"content": _b64("include: []\n"), "encoding": "base64"},
         f"{files}plain.yml?ref=main": {"content": "x", "encoding": "text"},
         f"{files}bad.yml?ref=main": {"content": "!!!", "encoding": "base64"},
-        f"{files}big.yml?ref=main": {"content": _b64("x" * (fil.MAX_CONFIG_BYTES + 1)), "encoding": "base64"},
+        f"{files}big.yml?ref=main": {"content": _b64("x" * (MAX_CONFIG_BYTES + 1)), "encoding": "base64"},
     })
     api = fil.GlabIncludeApi("h")
     assert api.read("g/a", "templates/lint.yml", "v1/x") == "include: []\n"

@@ -62,7 +62,7 @@ def main(argv: list[str] | None = None, api: IncludeApi | None = None) -> int:
         return 2
     host = normalize_host(args.host)
     try:
-        checked = walk(start, api if api is not None else GlabIncludeApi(host))
+        checked = walk(start, api if api is not None else GlabIncludeApi.open(host))
     except IncludeListError as e:
         print(f"fleet_include_list: GitLab host {host} could not be read: {e}", file=sys.stderr)
         return 3

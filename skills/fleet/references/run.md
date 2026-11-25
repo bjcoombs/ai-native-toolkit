@@ -43,13 +43,14 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_include_list.py" fleet-out --host gitl
 Then clone them into the same root with `/ghsync --provider gitlab --host gitlab.example.com
 --from-list fleet-out/include-projects.txt`, and run fleet again.
 
-It checks each project through the API. A reachable one goes into the list
+It runs `glab auth status` for the host first, then checks each project through the API. A reachable one goes into the list
 (`--output`, default `OUT/include-projects.txt`); one that answers 404 (`not_found`), 401 or
 403 (`no_access`) or another refusal (`error`) is named on stdout with its status and the
 project that included it. The run records the project, not the files it includes, so a
 reachable project's nested includes are read from every YAML file on its default branch (up
 to 50), and each new project named there is checked one level deeper, to fleet's
 nested-include depth (5). An extra project costs one clone; the next fleet run reads the
-includes exactly. Exit codes: `0` list written, `2` no `run.json` or a run that does not name
+includes exactly. A reachable project whose tree or a file could not be read, or that holds more
+than 50 YAML files, is named as not fully read, since an include it holds may be missing. Exit codes: `0` list written, `2` no `run.json` or a run that does not name
 the projects, `3` the host could not be read (no `glab`, not logged in, unreachable), and
 nothing is written. Logic: `lib/fleet/fleet_include_list.py`.

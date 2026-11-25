@@ -13,15 +13,19 @@ fetches every include project the user can read. ghsync itself is unchanged.
   Paths are lower-cased, as ``lib/ci/ci_includes.py`` writes its include ids.
 - **Access** (``IncludeApi.access``): ``projects/<id>`` answered is ``reachable``; HTTP 404 is
   ``not_found`` and HTTP 401 or 403 ``no_access``; any other refusal of one project is
-  ``error``. A host-wide failure (``glab`` not installed, not logged in, host unreachable)
-  raises ``IncludeListError``: no project was checked, so nothing is written.
+  ``error``. ``GlabIncludeApi.open`` runs ``glab auth status`` for the host first, because
+  ``glab api`` alone reports a missing login as 401/404 per project; a host-wide failure
+  (``glab`` not installed, not logged in, host unreachable) raises ``IncludeListError``, and
+  nothing is written.
 - **Recursion** (``walk``): ``run.json`` keeps the include project, not the files it names, so
   a reachable project's nested includes are read from every YAML file in its default branch
   (the first ``MAX_FILES`` of them, by path): a superset of the files a pipeline reads. A
   project named there and not seen before is checked one level deeper. The run's projects are
   depth 1, and a project at ``lib.ci.ci_includes.MAX_DEPTH`` (fleet's nested-include depth) is
   checked but not read, so the walk stops where fleet's offline walk stops. An extra reachable
-  project costs one clone; the next fleet run then resolves the includes exactly.
+  project costs one clone; the next fleet run then resolves the includes exactly. A project
+  whose tree or a file could not be read, or with more YAML files than the cap, is
+  ``partial`` and the report names it.
 - **Output**: ``list_file`` is the ``--porcelain`` format ghsync reads, a ``#`` header then one
   path per line, sorted; a reachable project is written as the API spells its path when that
   differs from the include only in case. ``report`` is the Markdown summary: the counts, then
@@ -47,7 +51,7 @@ from lib.ci.ci_includes import MAX_DEPTH, MAX_FILES
 from lib.ci.shared_tooling import component_source
 from lib.command_index import MAX_CONFIG_BYTES
 from lib.hosting.gh_cli import GhUnavailable
-from lib.hosting.gitlab_cli import GitlabProject, glab_api
+from lib.hosting.gitlab_cli import GitlabProject, glab_api, glab_auth
 
 Access = Literal["reachable", "not_found", "no_access", "error"]
 TREE_PAGE = 100  # GitLab's REST page maximum
@@ -77,12 +81,13 @@ class Checked:
     depth: int  # 1: named by the fleet run
     via: str | None  # the project whose CI files named it; None at depth 1
     path: str | None = None  # the path to clone: the API's spelling, else the include's
+    partial: bool = False  # reachable, but its CI files were not all read (see ``report``)
 
 
 class IncludeApi(Protocol):
     def access(self, project: str) -> ProjectAccess: ...
 
-    def ci_files(self, project: str, ref: str) -> list[str]: ...
+    def ci_files(self, project: str, ref: str) -> tuple[list[str], bool]: ...
 
     def read(self, project: str, file: str, ref: str) -> str | None: ...
 
@@ -134,17 +139,20 @@ def walk(start: Sequence[str], api: IncludeApi, max_depth: int = MAX_DEPTH) -> l
         project, depth, via = queue.pop(0)
         access = api.access(project)
         path = access.path if access.path and access.path.lower() == project else project
+        partial = False
+        if access.status == "reachable" and access.ref is not None and depth < max_depth:
+            files, complete = api.ci_files(project, access.ref)
+            partial = not complete or len(files) > MAX_FILES
+            for file in sorted(files)[:MAX_FILES]:
+                text = api.read(project, file, access.ref)
+                partial = partial or text is None
+                for item in include_items(text)[0] if text is not None else []:
+                    named = include_project(item)
+                    if named is not None and named not in seen:
+                        seen.add(named)
+                        queue.append((named, depth + 1, project))
         checked.append(Checked(project, access.status, depth, via,
-                               path if access.status == "reachable" else None))
-        if access.status != "reachable" or access.ref is None or depth >= max_depth:
-            continue
-        for file in sorted(api.ci_files(project, access.ref))[:MAX_FILES]:
-            text = api.read(project, file, access.ref)
-            for item in include_items(text)[0] if text is not None else []:
-                named = include_project(item)
-                if named is not None and named not in seen:
-                    seen.add(named)
-                    queue.append((named, depth + 1, project))
+                               path if access.status == "reachable" else None, partial))
     return checked
 
 
@@ -166,6 +174,11 @@ def report(checked: Sequence[Checked], list_path: str, host: str) -> str:
                   "| Project | Status | Named by |", "|---|---|---|"]
         lines += [f"| `{c.project}` | {c.status} | {f'`{c.via}`' if c.via else 'the fleet run'} |"
                   for c in missing]
+    partial = [c.project for c in checked if c.partial]
+    if partial:
+        lines += ["", f"{len(partial)} reachable but not fully read, so an include they hold may be "
+                  "missing from the list (a refused or oversized file, or more than "
+                  f"{MAX_FILES} YAML files): " + ", ".join(f"`{p}`" for p in partial)]
     return "\n".join(lines) + "\n"
 
 
@@ -174,6 +187,17 @@ class GlabIncludeApi:
 
     def __init__(self, host: str) -> None:
         self.host = host
+
+    @classmethod
+    def open(cls, host: str) -> GlabIncludeApi:
+        """The API on ``host`` once ``glab auth status`` passes for it. ``glab api`` alone
+        reports a missing login as 401/404 and a dead host as ``glab_error``, which would read
+        as unreachable projects; this check raises IncludeListError instead."""
+        try:
+            glab_auth(host)
+        except GhUnavailable as e:
+            raise IncludeListError(e.reason) from None
+        return cls(host)
 
     def _get(self, project: str, rest: str = "") -> Any:
         target = GitlabProject(self.host, project)
@@ -197,21 +221,22 @@ class GlabIncludeApi:
         return ProjectAccess("reachable", path if isinstance(path, str) else None,
                              ref if isinstance(ref, str) and ref else None)
 
-    def ci_files(self, project: str, ref: str) -> list[str]:
+    def ci_files(self, project: str, ref: str) -> tuple[list[str], bool]:
+        """The YAML files on ``ref``, and whether the listing is complete."""
         files: list[str] = []
         for page in range(1, TREE_MAX_PAGES + 1):
             try:
                 got = self._get(project, f"/repository/tree?recursive=true&per_page={TREE_PAGE}"
                                          f"&page={page}&ref={quote(ref, safe='')}")
             except GhUnavailable:
-                return files
+                return files, False
             if not isinstance(got, list):
-                return files
+                return files, False
             files += [e["path"] for e in got if isinstance(e, dict) and e.get("type") == "blob"
                       and isinstance(e.get("path"), str) and e["path"].endswith((".yml", ".yaml"))]
             if len(got) < TREE_PAGE:
-                break
-        return files
+                return files, True
+        return files, False
 
     def read(self, project: str, file: str, ref: str) -> str | None:
         try:
