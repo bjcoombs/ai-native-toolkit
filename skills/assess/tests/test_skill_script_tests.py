@@ -181,3 +181,40 @@ def test_fifty_untested_skill_units_read_the_test_files_once(tmp_path: Path,
     units = [u for u in _read(repo)["units"] if u["path"].startswith("skills/")]
     assert len(units) == 50 and all(u["blocks"]["skill_script_tests"]["skills_untested"] == 1 for u in units)
     assert sorted(reads) == sorted(f"test_s{i}.py" for i in range(1, 50, 2))  # each file once
+
+
+def test_one_script_tested_elsewhere_uses_the_same_matcher(tmp_path: Path) -> None:
+    """#1233: the per-script question the sibling-test probe asks, answered by the
+    ``tested_elsewhere`` matcher, script by script."""
+    repo = _plugin(tmp_path, {
+        "skills/ghsync/SKILL.md": SKILL.format("ghsync"), "skills/ghsync/scripts/ghsync.sh": "echo\n",
+        "skills/ghsync/scripts/other.sh": "echo\n", "skills/ghsync/tests/helper.sh": "echo\n",
+        "tools/loose.sh": "echo\n",
+        "tests/test_ghsync.py": 'SCRIPT = ROOT / "skills/ghsync/scripts/ghsync.sh"\nX = "loose.sh"\n',
+    })
+    assert sst.script_tested_elsewhere(repo, "skills/ghsync/scripts/ghsync.sh") is True
+    assert sst.script_tested_elsewhere(repo, "skills/ghsync/scripts/other.sh") is False  # not named
+    assert sst.script_tested_elsewhere(repo, "skills/ghsync/tests/helper.sh") is False  # under tests/
+    assert sst.script_tested_elsewhere(repo, "skills/ghsync/SKILL.md") is False  # not a script
+    assert sst.script_tested_elsewhere(repo, "tools/loose.sh") is False  # in no skill folder
+
+
+def test_a_skill_md_above_the_repository_is_never_its_skill_folder(tmp_path: Path) -> None:
+    (tmp_path / "SKILL.md").write_text(SKILL.format("parent"), encoding="utf-8")
+    (tmp_path / "outside.sh").write_text("echo\n", encoding="utf-8")
+    repo = _plugin(tmp_path / "repo", {"tests/test_x.py": 'X = "repo/../outside.sh"\n'})
+    assert sst.script_tested_elsewhere(repo, "../outside.sh") is False
+    assert sst.script_tested_elsewhere(repo, str(tmp_path / "outside.sh")) is False
+
+
+def test_same_named_scripts_in_one_skill_get_no_credit(tmp_path: Path) -> None:
+    """The matcher keys on the file name, so it cannot tell which of two same-named scripts in
+    one skill a test names: neither is credited, and a uniquely named one still is."""
+    repo = _plugin(tmp_path, {
+        "skills/a/SKILL.md": SKILL.format("a"), "skills/a/scripts/run.sh": "echo\n",
+        "skills/a/scripts/nested/run.sh": "echo\n", "skills/a/scripts/solo.sh": "echo\n",
+        "tests/test_a.py": 'X = "skills/a/scripts/nested/run.sh"\nY = "skills/a/scripts/solo.sh"\n',
+    })
+    assert sst.script_tested_elsewhere(repo, "skills/a/scripts/run.sh") is False
+    assert sst.script_tested_elsewhere(repo, "skills/a/scripts/nested/run.sh") is False
+    assert sst.script_tested_elsewhere(repo, "skills/a/scripts/solo.sh") is True

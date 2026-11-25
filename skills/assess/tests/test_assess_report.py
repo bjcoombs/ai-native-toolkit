@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -603,6 +604,33 @@ def test_main_writes_report_file(tmp_path: Path, capsys: pytest.CaptureFixture) 
     report = out_path.read_text(encoding="utf-8")
     assert "# Deterministic Assessment Snapshot:" in report
     assert str(out_path) in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(("remote", "title"), [
+    ("git@github.com:owner/real-repo.git", "real-repo"),
+    ("https://gitlab.example.com/group/sub/real-repo.git", "real-repo"),
+    ("C:\\repos\\real-repo.git", "real-repo"),
+    ("C:/repos/real-repo.git", "real-repo"),
+    ("C:\\repos\\real-repo\\", "real-repo"),
+    (None, "assess-snapshot-2026-11-24"),
+    ("file:///somewhere/real-repo.git", "assess-snapshot-2026-11-24"),
+])
+def test_main_titles_the_report_with_the_repository_name(
+        tmp_path: Path, capsys: pytest.CaptureFixture, remote: str | None, title: str) -> None:
+    """#1230: a checkout whose directory differs from the repository is titled with the
+    name from its origin remote, the name only; with no remote, the directory name."""
+    checkout = tmp_path / "assess-snapshot-2026-11-24"
+    checkout.mkdir()
+    subprocess.run(["git", "init", "-q", str(checkout)], check=True)
+    if remote is not None:
+        subprocess.run(["git", "-C", str(checkout), "remote", "add", "origin", remote], check=True)
+    _seed_run_context(checkout, _full_ctx())
+    assert main([str(checkout), "--stdout"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith(f"# Deterministic Assessment Snapshot: {title}\n")
+    first = out.splitlines()[0]
+    assert "owner" not in first and "group" not in first and "repos" not in first
+    assert "\\" not in first
 
 
 def test_main_stdout_does_not_write_file(tmp_path: Path,

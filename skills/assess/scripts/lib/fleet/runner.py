@@ -77,6 +77,8 @@ child only (the platform pass reads no unit), so the row's scans carry `units` a
 `run_fleet` first removes the `*.stderr` files there (`clear_stderr_logs`, nothing else), and a path resolving outside it is not written.
 `remote_path` drops `.`, `..` and empty segments, so a remote-derived id cannot climb out,
 and treats a host-less URL (`file:///...`) as no remote, so no local path becomes an id.
+`repository_name` is its last segment, else the checkout directory's name: the deterministic
+report's title (#1230), so a `<repo>-main` or worktree checkout is titled with the repository.
 A list entry repeating an earlier id is skipped with a note on stderr. `run_fleet` maps targets over a thread pool of those processes, isolates
 a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
 `repos.jsonl` atomically with sorted keys. Rows keep only the signals `scans` map and
@@ -323,6 +325,16 @@ def remote_path(checkout: Path) -> str | None:
         return None
     segments = [s for s in match.group("path").split("/") if s not in ("", ".", "..")]
     return "/".join(segments) or None
+
+
+def repository_name(checkout: Path) -> str:
+    """The repository's name: the last segment of :func:`remote_path`, else the checkout
+    directory's name when there is no ``origin`` remote (#1230). The name only, never the
+    owner or host, so it adds nothing the directory name could not already carry."""
+    # Split on both slashes: a Windows ``origin`` (``C:\repos\x.git``) must not put a local
+    # path into the title, and a trailing separator must not leave it empty.
+    segments = [s for s in re.split(r"[/\\]", remote_path(checkout) or "") if s]
+    return segments[-1] if segments else checkout.resolve().name
 
 
 def _under(path: Path, root: Path) -> bool:

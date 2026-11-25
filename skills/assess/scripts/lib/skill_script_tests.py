@@ -32,6 +32,12 @@ path segment and, after it on the same line, one of the skill's script file name
 ``tested_elsewhere``, up to
 ``ELSEWHERE_MAX``. It changes nothing: those tests do not ship with the skill, so the skill still
 reads untested, and the report says where its tests are and to move or copy them into the folder.
+``script_tested_elsewhere(repo_root, rel_path)`` asks the same question of one script, with the same
+matcher, for the "does this file have a test file?" probe in ``lib.testing.sibling_tests`` (#1233):
+a script tested only from the top-level ``tests/`` then reads as having a test file in
+``test_focus`` and on the hotspot pages, as it does here. The probe applies no user excludes, like
+the rest of ``sibling_tests``, so the two agree when ``.assess`` sets none; with excludes set, a
+test under an excluded folder credits the script there but is not listed here.
 
 Block (``skill_script_tests`` in run-context.json)::
 
@@ -193,6 +199,43 @@ def _elsewhere(repo: Path, folder: Path, scripts: list[str],
             if len(found) == ELSEWHERE_MAX:
                 break
     return found
+
+
+def _skill_folder_of(repo: Path, rel_path: str) -> Path | None:
+    """The nearest folder above ``rel_path`` that holds a ``SKILL.md``, inside ``repo``, or None."""
+    rel = PurePosixPath(rel_path)
+    if rel.is_absolute() or ".." in rel.parts:
+        return None  # never a folder outside the repository
+    for parent in rel.parents:
+        if parent == PurePosixPath("."):
+            return None
+        folder = repo.joinpath(*parent.parts)
+        if (folder / "SKILL.md").is_file():
+            return folder
+    return None
+
+
+def script_tested_elsewhere(repo_root: Path, rel_path: str) -> bool:
+    """True when ``rel_path`` is one of a skill folder's scripts and a test file outside that folder
+    names it, by the matcher behind ``tested_elsewhere`` (#1233). ``test_focus`` and the hotspot
+    pages read it through ``sibling_tests.has_sibling_test``, so a script tested from the top-level
+    ``tests/`` reads as having a test file there too. A script whose file name another script in the
+    same skill folder shares gets no credit, since the matcher keys on the name. Never raises."""
+    try:
+        repo = repo_root.resolve()
+        folder = _skill_folder_of(repo, rel_path)
+        if folder is None:
+            return False
+        rel = PurePosixPath(Path(rel_path).relative_to(folder.relative_to(repo)).as_posix())
+        if (rel.suffix not in SCRIPT_EXTENSIONS or is_test_file(rel)
+                or any(p in SKIP_DIRS for p in rel.parts[:-1])):
+            return False
+        scripts, _tests = _count(folder, repo, set(), [])
+        if scripts.count(rel.name) > 1:
+            return False  # the matcher keys on the name: it cannot say which same-named script a test names
+        return bool(_elsewhere(repo, folder, [rel.name], _outside_tests(repo, set(), [])))
+    except (OSError, ValueError):
+        return False
 
 
 def _skill_folders(repo: Path, scope: Path | None, excludes: tuple[set[str], list[str]] | None) -> list[Path]:
