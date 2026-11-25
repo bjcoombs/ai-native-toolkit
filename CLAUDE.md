@@ -151,6 +151,7 @@ The final step, once every PR is merged and the retro is done: one GitHub releas
 - Goal in full: `docs/contributing/goal.md`
 - CI, gates, coverage, mutation, CodeQL: `docs/contributing/ci.md`
 - Marathon settings explained: `docs/contributing/marathon.md`
+- Issue readiness, the triage labels and the issue forms: `docs/contributing/definition-of-ready.md`
 - Releasing: `docs/contributing/release.md`
 - Standalone skill pipeline (markers, vendoring, build): `docs/contributing/standalone-skills.md`
 - Scoring model, current decisions only (read before changing levels, Steps or the headline): `skills/assess/references/scoring-model.md`
