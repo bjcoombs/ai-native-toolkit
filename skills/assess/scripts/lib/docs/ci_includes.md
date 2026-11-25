@@ -53,7 +53,10 @@ merge order and whose `Resolution.root` holds the repository's own file.
   applied there: #766 already reads a missing check as `included_jobs`.
 - A reader that must never credit an unread override (the secrets guard, #1204; model-backed
   jobs, #1249) checks `unresolved is None and not open` before reading a job's keys, and reads
-  a key's value from `keys[key][-1]` (or the deep merge of the chain for a map).
+  a key's value from `keys[key][-1]` (or the deep merge of the chain for a map). The secrets
+  guard (`lib.secrets_guard_gitlab`) reads `merged_view` and holds a merged job that fails the
+  check; it applies `open` only while an include that could hold a job was not read, since an
+  unread GitLab `template:` defines only the template's own jobs.
 - What counts as the toolkit's gate (#1179): `is_toolkit_gate` matches only the exact `remote:`
   URL; a `component:` settles only through `is_toolkit_gate_text`, below. Its slot defines
   `TOOLKIT_GATE_JOBS`, so a same-named job stays `include_order`.
