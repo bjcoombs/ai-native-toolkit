@@ -500,8 +500,8 @@ class Writer:
         info = self.issue(number)
         if info.get("state") != "closed" or info.get("state_reason") != "duplicate":
             raise self.refuse(script, number, "the issue is not closed as a duplicate")
-        if not self._is_bot(info.get("closed_by")):
-            raise self.refuse(script, number, "a person closed it, so a person reopens it")
+        if (info.get("closed_by") or {}).get("login") != self.s.bot_login:
+            raise self.refuse(script, number, "the refiner did not close it, so a person reopens it")
         author = str((info.get("user") or {}).get("login", ""))
         if commenter != author:
             perm = self._read(["api", f"repos/{self.s.repo}/collaborators/{commenter}/permission"])

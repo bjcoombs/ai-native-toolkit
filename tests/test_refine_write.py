@@ -260,11 +260,13 @@ def test_reopen_by_author_or_writer(tmp_path: Path, commenter: str, routes: Dict
 
 @pytest.mark.parametrize("number, commenter, routes, reason", [
     (102, "mallory", {"collaborators/mallory/permission": "permission_read.json"}, "neither the author"),
-    (107, "alice", {}, "a person closed it"),
+    (107, "alice", {}, "the refiner did not close it"),
+    (109, "alice", {}, "the refiner did not close it"),
     (101, "alice", {}, "not closed as a duplicate"),
 ])
 def test_reopen_refused(tmp_path: Path, number: int, commenter: str, routes: Dict[str, str], reason: str) -> None:
-    files = {102: "issue_102_closed_duplicate.json", 107: "issue_107_closed_by_person.json", 101: "issue_101_open.json"}
+    files = {102: "issue_102_closed_duplicate.json", 107: "issue_107_closed_by_person.json",
+             109: "issue_109_closed_by_other_bot.json", 101: "issue_101_open.json"}
     w, gh = writer(tmp_path, {f"issues/{number}": files[number], **routes})
     with pytest.raises(Refused, match=reason):
         w.reopen(number, commenter)
