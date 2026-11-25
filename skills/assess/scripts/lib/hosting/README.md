@@ -10,7 +10,7 @@ hide Python's own `platform` module from any script run from `lib/`.
 ## Where to start
 
 - `platform_cli.py` runs `gh` and `glab` for every other module: no prompts, backoff on a
-  rate limit, and one response cache per run. Start here to see how a read can fail.
+  rate limit, and an optional per-run response cache (`CACHE_ENV`, which `/fleet` sets for each scan). Start here to see how a read can fail.
 - `gh_cli.py` and `gitlab_cli.py` are the reads themselves, one per host. Each returns
   `available: False` with a reason when the CLI is missing, signed out or refused. A failed
   read never looks like a clean result.
