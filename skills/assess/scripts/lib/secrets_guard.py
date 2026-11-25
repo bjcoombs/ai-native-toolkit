@@ -10,8 +10,10 @@ No model is involved and no scanner runs.
 The tendency it compensates for is guardrail erosion: a token pasted into a config or a skill
 "just for now" is never removed, and nothing at the door stops the next one.
 
-**What counts** (the tool names in ``SECRET_TOOLS``). Every file is read at the assessed commit:
-only files git tracks, as the other CI readers read (``lib.command_index.repo_files``, #1204).
+**What counts** (the tool names in ``SECRET_TOOLS``). Only files git tracks are read
+(``lib.command_index.repo_files``, #1204), from the work tree, as ``ci_checks`` and
+``lib.ci_includes`` read them: an untracked file is never read, and an uncommitted edit to a
+tracked file is read as it stands.
 
 - ``pre_commit``: a root ``.pre-commit-config.yaml`` (or ``.yml``) whose ``repo:`` or ``id:``
   names a secrets tool (gitleaks, detect-secrets, trufflehog, ggshield, talisman, secretlint,
@@ -58,7 +60,7 @@ only files git tracks, as the other CI readers read (``lib.command_index.repo_fi
   ``script:`` over an included scan job removes it and a visible job running a hidden template's
   scan counts. A merged job the resolver does not settle (``unresolved``, or ``open`` while an
   include that could hold a job was not read) is held as unevaluated, as is a job from an include
-  under ``rules:``. GitLab ``rules:`` are not evaluated. A job
+  under ``rules:``, and any job while such an include is unread. GitLab ``rules:`` are not evaluated. A job
   with no ``rules:``, ``only:`` or ``except:``, and a job-level ``when:`` of ``always``,
   ``on_success`` or none, and no YAML merge key ``<<:`` (which can bring rules in), runs: its scan counts. A job-level ``when: never`` or ``manual`` is off:
   its scan does not count, and level 2 can read unmet. Any other job (``rules:``,
@@ -154,6 +156,7 @@ _HIDING_KINDS = frozenset({"local", "project", "remote", "component", "unknown"}
 # gitleaks stdin``) sets the pipe's status, so it counts. A pipe under ``set -o pipefail`` still
 # masks a scan before it: a follow-up.
 _OR_MASK = re.compile(r"\|\|(?!\s*(?:exit\s+[1-9]|false\b))")
+_SHELL_OPERATOR = re.compile(r"&&|\|\||;|\||&")
 _PIPE = re.compile(r"(?<!\|)\|(?!\|)")
 # The secrets actions a ``uses:`` step names (owner/name, any ref).
 # GitGuardian's maintained action is a path in its repository (``GitGuardian/ggshield/actions/secret``).
@@ -452,8 +455,9 @@ def _ci_scan(text: str, hooks: HookStages, gitlab: bool = False,
             continue
         run_hooks = _PRE_COMMIT_RUN.match(line)
         if run_hooks:  # the pre-commit secrets hooks, run where they cannot be skipped
-            if pipe < 0 and _PRE_COMMIT_SCOPE.search(run_hooks.group(1)):
-                tools.update(_hook_tools(hooks, run_hooks.group(1)))
+            args = _SHELL_OPERATOR.split(run_hooks.group(1), maxsplit=1)[0]  # this command's own arguments
+            if pipe < 0 and _PRE_COMMIT_SCOPE.search(args):
+                tools.update(_hook_tools(hooks, args))
             continue
         uses = _USES.match(line)
         if uses:
@@ -517,7 +521,7 @@ def ci_guard(root: Path, ghsync_root: Path | None = None, hooks: HookStages | No
             if found:
                 files.append(label)
                 tools.update(found)
-        template = template_state(config)
+        template = template_state(config, resolution)
         if template == "runs" and not unresolved:
             tools.add("secret_detection")
             if GITLAB_CI not in files:
@@ -577,14 +581,14 @@ def _enforcement(root: Path, ci: CiGuard, platform: tuple[bool, bool] | None) ->
         return {"available": True, "present": True, "source": "ci"}
     if platform is not None and platform[1]:
         return {"available": True, "present": True, "source": "platform"}
+    if ci["includes_unresolved"]:
+        return {"available": False,
+                "reason": f"{REASON_INCLUDES}: no secrets scan settled in the CI read, and "
+                          f"{ci['includes_unresolved']} GitLab include(s) that could hold or override one were not read"}
     if ci["rules_unevaluated"]:
         return {"available": False,
                 "reason": f"{REASON_RULES}: a GitLab scan ({', '.join(ci['rules_unevaluated'])}) runs under "
                           "rules, only/except or a when that this reader does not evaluate"}
-    if ci["includes_unresolved"]:
-        return {"available": False,
-                "reason": f"{REASON_INCLUDES}: no secrets scan in the CI read, and "
-                          f"{ci['includes_unresolved']} GitLab include(s) that could hold one were not read"}
     if _on_github(root) and platform is None:
         return {"available": False,
                 "reason": f"{REASON_NOT_READ}: no secrets scan in CI, and GitHub's own secret scanning "

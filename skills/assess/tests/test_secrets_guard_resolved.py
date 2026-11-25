@@ -138,6 +138,30 @@ def test_an_empty_stages_list_is_unset(tmp_path: Path) -> None:
     assert block["pre_commit"]["present"] is True and block["ci"]["tools"] == ["gitleaks"]
 
 
+def test_a_root_scan_job_beside_an_unread_include_is_not_measured(tmp_path: Path) -> None:
+    block = _gitlab(tmp_path, {".gitlab-ci.yml": "include:\n  - project: group/ci\n    file: x.yml\n" + SCAN_JOB})
+    assert block["ci"]["present"] is False and block["configured"] is True
+    assert _states(block)[1] == ("not_measured", "ci_includes_unresolved")
+
+
+@pytest.mark.parametrize("ci", [
+    "include:\n  - template: Jobs/Secret-Detection.gitlab-ci.yml\n    rules:\n      - if: $NEVER\n",
+    "include:\n  - local: ci/sec.yml\n    rules:\n      - if: $CI_COMMIT_TAG\n",
+])
+def test_a_template_under_include_rules_is_not_measured(tmp_path: Path, ci: str) -> None:
+    block = _gitlab(tmp_path, {".gitlab-ci.yml": ci, "ci/sec.yml": TEMPLATE})
+    assert block["ci"]["present"] is False and block["ci"]["rules_unevaluated"] == ["secret_detection"]
+
+
+def test_pre_commit_run_arguments_stop_at_a_shell_operator(tmp_path: Path) -> None:
+    wf = "steps:\n  - run: pre-commit run --all-files && git diff --exit-code\n"
+    root = _repo(tmp_path, {".pre-commit-config.yaml": PRE_COMMIT, ".github/workflows/x.yml": wf})
+    assert scan_secrets_guard(root)["ci"]["tools"] == ["gitleaks"]
+    wf = "steps:\n  - run: pre-commit run gitleaks; ls -a\n"   # the -a is ls's, not pre-commit's
+    assert scan_secrets_guard(_repo(tmp_path / "b", {".pre-commit-config.yaml": PRE_COMMIT,
+                                                     ".github/workflows/x.yml": wf}))["ci"]["present"] is False
+
+
 def test_the_switch_under_workflow_rules_is_not_measured(tmp_path: Path) -> None:
     text = TEMPLATE + ("workflow:\n  rules:\n    - if: $CI_COMMIT_TAG\n      variables:\n"
                        "        SECRET_DETECTION_DISABLED: \"true\"\n    - when: always\n")

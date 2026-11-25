@@ -12,12 +12,12 @@ This module builds on the shared resolver, ``lib.ci_includes.merged_config`` wit
   merged jobs (renamed ``job<n>``, effective keys only). A merged job's scan counts only when
   the resolver settled it: ``unresolved is None`` and, while an include that could hold a job
   was not read (``hides``), ``not open``. Otherwise its lines are held: not measured, never met.
-  A job that is not merged keeps its own reading; one defined only in an include under
-  ``rules:`` (``conditional_include``) is held too. GitLab ``rules:`` are still not evaluated:
+  A job defined in one file only is held the same way: one from an include under ``rules:``
+  (``conditional_include``), and any job while ``hides`` (an unread include could override it). GitLab ``rules:`` are still not evaluated:
   the line reader holds any job that has them.
 - ``template_state(config)`` reads GitLab's Secret-Detection template (or component, or Auto
   DevOps) over the merged ``secret_detection`` job: ``absent``, ``runs``, ``off`` or
-  ``unevaluated``. Its keys follow GitLab's precedence (a root key over an included one, maps
+  ``unevaluated``. A template under an include with ``rules:`` is unevaluated. Its keys follow GitLab's precedence (a root key over an included one, maps
   deep-merged): ``rules:``, ``only:`` or ``except:`` leave it unevaluated, a job-level ``when:
   never``/``manual`` turns it off, ``always``/``on_success`` or none runs. An unresolved job is
   unevaluated. ``SECRET_DETECTION_DISABLED`` (GitLab's switch) is read only where GitLab applies
@@ -100,9 +100,18 @@ def _switch(config: MergedConfig) -> str | None:
     return None
 
 
-def template_state(config: MergedConfig) -> str:
+def _conditional(resolution: Resolution, named: list[int]) -> bool:
+    """Whether the template may sit in an include under ``rules:``: an unread one (the template's
+    own entry is never read), or every read file that names it."""
+    unread = any(slot.file is None and slot.conditional and slot.jobs is None for slot in resolution.slots)
+    read = {slot.file + 1 for slot in resolution.slots if slot.file is not None and slot.conditional}
+    return unread or set(named) <= read
+
+
+def template_state(config: MergedConfig, resolution: Resolution) -> str:
     """GitLab's Secret-Detection template over the merged pipeline (module docstring)."""
-    if not any(GITLAB_TEMPLATE.search("\n".join(code_lines(text))) for text in config.sources):
+    named = [s for s, text in enumerate(config.sources) if GITLAB_TEMPLATE.search("\n".join(code_lines(text)))]
+    if not named:
         return "absent"
     switch = _switch(config)
     if switch == "off":
@@ -116,7 +125,8 @@ def template_state(config: MergedConfig) -> str:
             last = job.keys["when"][-1]
             when = _scalar(config.sources[last.source].splitlines()[last.start].split(":", 1)[1])
             shape = "runs" if when in _RUNS else "off" if when in _OFF else "unevaluated"
-    return "unevaluated" if switch == "unevaluated" and shape == "runs" else shape
+    unsure = switch == "unevaluated" or _conditional(resolution, named)
+    return "unevaluated" if unsure and shape == "runs" else shape
 
 
 def scan_texts(config: MergedConfig, resolution: Resolution,
@@ -127,7 +137,7 @@ def scan_texts(config: MergedConfig, resolution: Resolution,
     merged = {job.name for job in jobs}
     held: dict[int, set[int]] = {}
     for job in config.jobs.values():
-        if job.unresolved is not None and job.name not in merged:
+        if (job.unresolved is not None or (job.open and hides)) and job.name not in merged:
             for d in job.defs:
                 held.setdefault(d.source, set()).update(range(d.start, d.end))
     out: list[tuple[str, str, frozenset[int]]] = []
