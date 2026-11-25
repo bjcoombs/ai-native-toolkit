@@ -322,7 +322,7 @@
     },
     {
       "id": "core.secrets_guard",
-      "revision": 4
+      "revision": 5
     },
     {
       "id": "core.sensitive_instruction_content",
