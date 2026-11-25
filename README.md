@@ -257,7 +257,7 @@ jobs:
       mode: ${{ vars.REFINE_MODE || 'dry-run' }}
 ```
 
-- **Secrets.** `REFINE_ANTHROPIC_API_KEY` for triage and dedupe, from a Console workspace with a monthly spend limit; `REFINE_PROJECT_TOKEN` only for the project sync.
+- **Credential for triage and dedupe.** The simplest is `CLAUDE_CODE_OAUTH_TOKEN`, a Claude subscription's OAuth token: it bills the subscription's usage limits, has no spend cap of its own, and competes with the subscriber's own sessions for those limits. For a team, `REFINE_ANTHROPIC_API_KEY` from a Console workspace with a monthly spend limit stays the recommended setup, and wins when both are set. Workload Identity Federation also works. `REFINE_PROJECT_TOKEN` is needed only for the project sync.
 - **Kill switch.** Nothing runs until the variable `REFINE_ENABLED` is `true`.
 - **Dry-run first.** Writes are logged, not sent, until `REFINE_MODE` is `live`. Stay in dry-run until [#1341](https://github.com/bjcoombs/ai-native-toolkit/issues/1341) is closed.
 

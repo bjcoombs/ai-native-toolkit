@@ -118,3 +118,18 @@ def test_settings_table_names_real_inputs() -> None:
     assert names, "the Settings table lists inputs"
     declared = set().union(*(set(_workflow_call(n).get("inputs") or {}) for n in REFINE_CALLERS))
     assert names <= declared, names - declared
+
+
+def test_model_examples_pass_the_claude_code_oauth_token() -> None:
+    for _, job in _uses(DOCS[1]):
+        reusable = job["uses"][len(WORKFLOW_PREFIX):].partition("@")[0]
+        if "claude_code_oauth_token" in (_workflow_call(reusable).get("secrets") or {}):
+            assert job["secrets"]["claude_code_oauth_token"] == "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}", reusable
+
+
+@pytest.mark.parametrize("doc", DOCS, ids=lambda p: p.name)
+def test_docs_state_what_the_oauth_token_costs(doc: Path) -> None:
+    text = " ".join(doc.read_text(encoding="utf-8").split())
+    for claim in ("`CLAUDE_CODE_OAUTH_TOKEN`", "simplest", "usage limits", "no spend cap",
+                  "own sessions", "recommended", "`REFINE_ANTHROPIC_API_KEY`", "spend limit"):
+        assert claim in text, (doc.name, claim)

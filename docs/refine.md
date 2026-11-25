@@ -20,7 +20,12 @@ The model never holds a token that can write: it runs in a job with `issues: rea
 
 ## Set it up
 
-1. **Credential and spend limit.** Create an API key in the Claude Console, in a workspace of its own with a monthly spend limit, and store it as the repository secret `REFINE_ANTHROPIC_API_KEY`. The workspace limit is what caps the cost: every opened issue and every comment can start a model run. To use Workload Identity Federation instead, set the variables `REFINE_ANTHROPIC_FEDERATION_RULE_ID`, `REFINE_ANTHROPIC_ORGANIZATION_ID`, `REFINE_ANTHROPIC_SERVICE_ACCOUNT_ID` and `REFINE_ANTHROPIC_WORKSPACE_ID`; the callers below already grant `id-token: write`. The sweep needs no credential.
+1. **Credential.** Triage and dedupe take the first of three credentials that is set; with none, an issue that needs the model fails the plan job with an error naming all three. The sweep needs no credential.
+   - **Claude Code OAuth token (simplest).** Run `claude setup-token` and store the token as the repository secret `CLAUDE_CODE_OAUTH_TOKEN`, the same secret the `claude-code-action` review workflow uses. It bills the subscription's usage limits, it has no spend cap of its own, and every refiner run competes with the subscriber's own sessions in Claude Code and claude.ai for those limits. It suits a solo maintainer; the workflows use it only when neither option below is set.
+   - **API key with a spend limit (recommended for teams).** Create an API key in the Claude Console, in a workspace of its own with a monthly spend limit, and store it as the repository secret `REFINE_ANTHROPIC_API_KEY`. The workspace limit is what caps the cost: every opened issue and every comment can start a model run. When set, it wins over the other two.
+   - **Workload Identity Federation.** Set the variables `REFINE_ANTHROPIC_FEDERATION_RULE_ID`, `REFINE_ANTHROPIC_ORGANIZATION_ID`, `REFINE_ANTHROPIC_SERVICE_ACCOUNT_ID` and `REFINE_ANTHROPIC_WORKSPACE_ID`, and pass them as the `anthropic_*` inputs; the callers below already grant `id-token: write`. It is used when no API key is set.
+
+   Whichever credential is chosen reaches only the model step of the read-only plan job, never a job that can write.
 2. **Questions issue.** Open an issue for the refiner's questions and ready-buffer report, and set its number as the variable `REFINE_QUESTIONS_ISSUE`.
 3. **Callers.** Add the three workflows below.
 4. **Kill switch.** Set the variable `REFINE_ENABLED` to `true`. Any other value, or none, skips every job. Set it back to `false` to stop the refiner at once.
@@ -55,6 +60,7 @@ jobs:
       questions_issue: ${{ vars.REFINE_QUESTIONS_ISSUE }}
     secrets:
       anthropic_api_key: ${{ secrets.REFINE_ANTHROPIC_API_KEY }}
+      claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
 
 ### `.github/workflows/refine-dedupe.yml`
@@ -79,6 +85,7 @@ jobs:
       issue_number: ${{ github.event.issue.number }}
     secrets:
       anthropic_api_key: ${{ secrets.REFINE_ANTHROPIC_API_KEY }}
+      claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
 
 ### `.github/workflows/refine-sweep.yml`
