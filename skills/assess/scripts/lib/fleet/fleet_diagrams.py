@@ -22,7 +22,10 @@ per-tag tallies in the same document (``data=``). The Step funnel and one change
 ``lib/fleet/fleet_step_funnel.py``, ``lib/fleet/fleet_step_lifts.py``) follow, from the same
 document's Step fields and ``opportunities.step_lifts``; the Step movement grid
 (``lib/fleet/fleet_step_movement.py``) comes last, from the ``--compare`` run (``earlier=``).
-All three are skipped without a model with Steps or without ``fleet-data.json``. The slope chart (#675) follows the trend; it reads
+All three are skipped without a model with Steps or without ``fleet-data.json``. The practice
+radar (#1367, ``lib/fleet/fleet_radar.py``) follows one change away: one radar per unit from
+``views[].units[].levels[]`` (met/measured), with its Markdown table (``Diagram.table``) printed
+under the picture. The slope chart (#675) follows the trend; it reads
 the ``--compare`` result (``comparison``) and is skipped without one; the trend
 (#676, ``lib/fleet/fleet_trends.py``) reads the run history. A new diagram adds its file,
 report heading and question to ``HEADINGS`` (the one source a drawn, skipped or failed diagram
@@ -58,9 +61,10 @@ import os
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 import lib.fleet.fleet_maturity as fleet_maturity
+import lib.fleet.fleet_radar as fleet_radar
 import lib.fleet.fleet_slope as fleet_slope
 import lib.fleet.fleet_step_funnel as fleet_step_funnel
 import lib.fleet.fleet_step_lifts as fleet_step_lifts
@@ -86,6 +90,7 @@ HEADINGS: dict[str, tuple[str, str]] = {
     fleet_tag_heatmap.FILE: (fleet_tag_heatmap.TITLE, fleet_tag_heatmap.QUESTION),
     fleet_step_funnel.FILE: (fleet_step_funnel.TITLE, fleet_step_funnel.QUESTION),
     fleet_step_lifts.FILE: (fleet_step_lifts.TITLE, fleet_step_lifts.QUESTION),
+    fleet_radar.FILE: (fleet_radar.TITLE, fleet_radar.QUESTION),
     fleet_tooling_map.FILE: ("Shared tooling",
                              "What does a shared template change reach, and which pins differ from the fleet's?"),
     fleet_trends.FILE: ("Group trends", "Is each team improving?"),
@@ -108,6 +113,7 @@ class Diagram(TypedDict):
     svg: str | None  # None when skipped
     skipped: str | None  # the one-line reason, when skipped
     in_place: str  # the section's opening line: what this run already has (#743)
+    table: NotRequired[str]  # a Markdown table under the picture (the radar's numbers, #1367)
 
 
 NO_LEVELS = "skipped: the run had no maturity model (--levels), so no levels."
@@ -164,6 +170,29 @@ def step_moves_for(levels: MaturityModel, data: Mapping[str, Any], earlier: Flee
                    comparison: Comparison | None) -> fleet_step_movement.StepMoves:
     """The Step movement counts, computed once for the grid and the front screen (#1255)."""
     return fleet_step_movement.step_moves(levels, earlier, data, comparison["reasons"] if comparison else ())
+
+
+def _radar(levels: MaturityModel | None, data: Mapping[str, Any] | None, repos: int,
+           min_measured: float) -> Diagram:
+    entry = _entry(fleet_radar.FILE, repos)
+    if levels is None:
+        entry["skipped"] = NO_LEVELS
+    elif not _has_team_rows(levels):
+        entry["skipped"] = NO_TEAM_ROWS
+    elif data is None:
+        entry["skipped"] = "skipped: the run wrote no fleet-data.json to read the unit counts from."
+    else:
+        view = fleet_radar.radar_view(data, min_measured)
+        if not view["units"]:
+            entry["skipped"] = "skipped: no ownership or system unit holds a repository in this run."
+        elif not view["axes"]:
+            entry["skipped"] = (f"skipped: no practice was measured in at least {round(min_measured * 100)}% "
+                                "of the run's repositories (--radar-min-measured).")
+        else:
+            entry["in_place"] = fleet_radar.in_place(view)
+            entry["svg"] = fleet_radar.render(view)
+            entry["table"] = fleet_radar.table(view)
+    return entry
 
 
 def _repos(count: int) -> str:
@@ -292,7 +321,8 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
                    tag_profile: Sequence[FleetTagRow] | None = None,
                    data: Mapping[str, Any] | None = None,
                    earlier: FleetRun | str | None = None,
-                   moves: fleet_step_movement.StepMoves | None = None) -> list[Diagram]:
+                   moves: fleet_step_movement.StepMoves | None = None,
+                   radar_min_measured: float = fleet_radar.DEFAULT_MIN_MEASURED) -> list[Diagram]:
     """Every diagram for one run, in report order; never raises for a diagram's sake.
 
     ``data`` is this run's ``fleet-data.json`` (#940): its ``tag_profile`` (the per-tag roll-up,
@@ -305,7 +335,9 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
     ``comparison`` is this run's ``--compare`` result, None without ``--compare``; ``earlier``
     is the run it compared against (or the reason it could not be read), for the Step
     movement grid (#941); ``moves`` is that grid's counts when the caller already has them
-    (``step_moves_for``, shared with the front screen).
+    (``step_moves_for``, shared with the front screen). ``radar_min_measured`` is the share of
+    the run's repositories a practice needs measured to get a radar axis (``fleet.py
+    --radar-min-measured``, #1367).
     """
     count = len(repos)
     profile = tag_profile if tag_profile is not None else (data or {}).get("tag_profile")
@@ -314,6 +346,7 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
         _guarded(lambda: _tag_heatmap(levels, data, count), fleet_tag_heatmap.FILE, count),
         _guarded(lambda: _step_funnel(levels, data, count), fleet_step_funnel.FILE, count),
         _guarded(lambda: _step_lifts(levels, data, count), fleet_step_lifts.FILE, count),
+        _guarded(lambda: _radar(levels, data, count, radar_min_measured), fleet_radar.FILE, count),
         _guarded(lambda: _tooling(repos), fleet_tooling_map.FILE, count),
         _guarded(lambda: _trend(levels, history, count), fleet_trends.FILE, count),
         _guarded(lambda: _slope(levels, comparison, count), fleet_slope.FILE, count),
@@ -349,6 +382,8 @@ def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None,
         lines += [f"## {diagram['title']}", "", diagram["in_place"], "", diagram["question"], ""]
         if diagram["svg"] is not None:
             lines.append(f"[![{diagram['title']}](./{diagram['file']})](./{diagram['file']})")
+            if "table" in diagram:
+                lines += ["", diagram["table"]]
         else:
             lines.append(f"Not drawn: {diagram['skipped']}")
         lines.append("")

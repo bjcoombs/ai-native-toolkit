@@ -42,6 +42,14 @@ Which single change would take the most repositories to their next Step?
 
 Not drawn: skipped: the maturity model defines no Steps.
 
+## Practice shape by unit
+
+In place: 15 repositories in this run, scanned with no model call.
+
+Where is each unit strong across the practices, and where is it not yet measured?
+
+Not drawn: skipped: no ownership or system unit holds a repository in this run.
+
 ## Shared tooling
 
 In place: 12 repositories share 6 CI sources and marketplaces.

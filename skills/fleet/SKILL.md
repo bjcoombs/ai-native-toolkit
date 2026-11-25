@@ -115,6 +115,7 @@ two agent systems it is `unknown`.
 | `--targets FILE` | Targets (TOML) for [`achievements.json`](references/achievements.md#output-achievementsjson): each `[[target]]` names a `view`, a `unit` and a `step` above Step 1 (see the [targets file format](references/achievements.md#output-achievementsjson)). Needs `--levels` with `[[steps]]`. An invalid file, an old `row`/`level`/`share` file, or a unit not in the run exits 2 before any scan. Not part of the run stamp, so changing a target never stops runs comparing. |
 | `--first-achievements` | Also credit `first` achievements in [`achievements.json`](references/achievements.md#output-achievementsjson) (a unit reaching a level no unit of its view and kind has held on that row in this fleet's history). Off by default (#772), since it compares a unit with its peers. Not part of the run stamp. |
 | `--no-diagrams` | Do not draw the [diagrams](references/report-and-diagrams.md#output-reportmd-and-diagrams) (`DIR/report.md`, its SVGs and `DIR/fleet-view.html`); any a previous run left in `DIR` are removed. |
+| `--radar-min-measured PERCENT` | The practice radar (`radar.svg`) draws an axis for a practice measured in at least this percent of the run's repositories (default 20; `0` keeps every practice). Not part of the run stamp. See [diagrams](references/report-and-diagrams.md#output-reportmd-and-diagrams). |
 
 **Exit codes.** `0`: the run completed and `repos.jsonl` and `run.json` were written, including
 when some repositories failed (each is a `failed` row; stderr prints the count
