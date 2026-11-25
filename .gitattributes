@@ -29,6 +29,9 @@ skills/assess/tests/fixtures/fleet_heatmap/groups.jsonl linguist-generated
 skills/assess/tests/fixtures/fleet_heatmap/earlier/groups.jsonl linguist-generated
 skills/assess/tests/fixtures/fleet_heatmap/expected*.svg linguist-generated
 skills/assess/tests/fixtures/fleet_golden/repos.jsonl linguist-generated
+skills/assess/tests/fixtures/fleet_golden/levels/repos.jsonl linguist-generated
+skills/assess/tests/fixtures/fleet_golden/levels/run.json linguist-generated
+skills/assess/tests/fixtures/fleet_golden/levels/level.json linguist-generated
 skills/assess/tests/fixtures/fleet_next_steps/expected/** linguist-generated
 skills/assess/tests/fixtures/golden/decomposition-parity-report.md linguist-generated
 skills/assess/tests/fixtures/golden/card-*.md linguist-generated

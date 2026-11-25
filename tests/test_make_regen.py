@@ -20,6 +20,9 @@ REPO = Path(__file__).resolve().parent.parent
 # Built at test time from a real fleet run; its test skips without ripgrep, so
 # without rg the file is left as committed and only checked for a clean diff.
 FLEET_GOLDEN = "skills/assess/tests/fixtures/fleet_golden/repos.jsonl"
+# Rendered by the same ripgrep-dependent test as FLEET_GOLDEN (#1276): the --levels run's outputs.
+FLEET_GOLDENS = (FLEET_GOLDEN, *(f"skills/assess/tests/fixtures/fleet_golden/levels/{name}"
+                                 for name in ("repos.jsonl", "run.json", "level.json")))
 CONFLICT = "<<<<<<< ours\nleft\n=======\nright\n>>>>>>> theirs\n"
 
 pytestmark = pytest.mark.skipif(
@@ -72,7 +75,7 @@ def test_make_regen_restores_every_generated_file_and_leaves_no_diff(tmp_path: P
     _git(copy, "commit", "-q", "--no-verify", "-m", "tree")
 
     targets = [rel for rel in generated_files()
-               if rel != FLEET_GOLDEN or shutil.which("rg")]
+               if rel not in FLEET_GOLDENS or shutil.which("rg")]
     for rel in targets:
         (copy / rel).write_text(CONFLICT, encoding="utf-8")
 
