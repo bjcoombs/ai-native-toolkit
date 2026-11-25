@@ -1,0 +1,26 @@
+[
+  {
+    "id": 9001,
+    "iid": 1,
+    "project_id": 42,
+    "state": "opened",
+    "link_type": "is_blocked_by",
+    "issue_link_id": 1
+  },
+  {
+    "id": 9900,
+    "iid": 9,
+    "project_id": 77,
+    "state": "opened",
+    "link_type": "is_blocked_by",
+    "issue_link_id": 2
+  },
+  {
+    "id": 9003,
+    "iid": 3,
+    "project_id": 42,
+    "state": "closed",
+    "link_type": "relates_to",
+    "issue_link_id": 3
+  }
+]

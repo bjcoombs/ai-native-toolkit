@@ -1,0 +1,30 @@
+[
+  {
+    "id": 1,
+    "action": "add",
+    "label": {
+      "id": 1,
+      "name": "bug"
+    },
+    "user": {
+      "id": 711,
+      "username": "project_42_bot_abc",
+      "name": "Project_42_Bot_Abc"
+    },
+    "created_at": "2026-11-21T00:00:00.000Z"
+  },
+  {
+    "id": 2,
+    "action": "remove",
+    "label": {
+      "id": 1,
+      "name": "bug"
+    },
+    "user": {
+      "id": 623,
+      "username": "maintainer",
+      "name": "Maintainer"
+    },
+    "created_at": "2026-11-22T00:00:00.000Z"
+  }
+]

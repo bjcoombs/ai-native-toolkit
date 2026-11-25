@@ -7,8 +7,8 @@ a script can settle, and writes one JSON plan. It never writes to the issue
 host and makes no model call; the refiner workflow acts on the plan and sends
 only unsettled issues to a model (#1327).
 
-    python3 refine.py --repo <owner/name> [--dry-run] [--issue <n>] [--out <path>]
-        [--definition <path>] [--builder-slots <n>] [--now <iso8601>]
+    python3 refine.py --repo <owner/name> [--platform github|gitlab] [--dry-run] [--issue <n>]
+        [--out <path>] [--definition <path>] [--builder-slots <n>] [--now <iso8601>]
 
 - Without `--issue`, every open issue is checked: the scheduled
   `refine-sweep` path. With it, only that issue is reported (the
@@ -20,21 +20,26 @@ only unsettled issues to a model (#1327).
   the current directory, then under this toolkit checkout.
 - `--builder-slots` sets the ready-buffer target to twice the slots.
 - `--now` fixes the clock, for replaying recorded input.
+- `--platform` picks the host adapter: `github` (`gh`, the default) or
+  `gitlab` (`glab`, `refine_platform_gitlab.py`, where `--repo` is the
+  project path). It defaults to `REFINE_PLATFORM`, then `github`.
 
 The plan's shape is `refine-output.schema.json`, next to this file. The checks
 live in `refine_checks.py`, duplicates in `refine_duplicates.py`, the buffer
 and critical path in `refine_graph.py`, and host access in
-`refine_platform.py` (`gh`, behind a read-only wrapper).
+`refine_platform.py` (`gh`) and `refine_platform_gitlab.py` (`glab`), each
+behind a read-only wrapper.
 
 Exit codes: 0 plan written; 2 usage or definition error; 3 the host call
 failed or was refused.
 
-Python 3.8 compatible and stdlib only, plus `gh` on PATH.
+Python 3.8 compatible and stdlib only, plus `gh` or `glab` on PATH.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -171,7 +176,9 @@ def _parse_now(value: Optional[str]) -> datetime:
 
 def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
-    parser.add_argument("--repo", required=True, help="owner/name")
+    parser.add_argument("--repo", required=True, help="owner/name, or a GitLab project path")
+    parser.add_argument("--platform", choices=("github", "gitlab"),
+                        default=os.environ.get("REFINE_PLATFORM") or "github")
     parser.add_argument("--dry-run", action="store_true", help='mark the plan "dry_run": true')
     parser.add_argument("--issue", type=int, help="report only this open issue")
     parser.add_argument("--out", help="write the plan here instead of stdout")
@@ -179,9 +186,18 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     parser.add_argument("--builder-slots", type=int, default=DEFAULT_BUILDER_SLOTS)
     parser.add_argument("--now", help="ISO 8601 time to use as now")
     args = parser.parse_args(argv)
+    if args.platform not in ("github", "gitlab"):  # a default from REFINE_PLATFORM skips `choices`
+        parser.error(f"--platform must be github or gitlab, not {args.platform!r}")
     if args.builder_slots < 1:
         parser.error("--builder-slots must be at least 1")
     return args
+
+
+def _backlog(platform: str, repo: str) -> Backlog:
+    if platform == "gitlab":
+        from refine_platform_gitlab import GitLabBacklog
+        return GitLabBacklog(repo)
+    return GitHubBacklog(repo)
 
 
 def main(argv: Optional[Sequence[str]] = None, backlog: Optional[Backlog] = None) -> int:
@@ -193,7 +209,7 @@ def main(argv: Optional[Sequence[str]] = None, backlog: Optional[Backlog] = None
     except (DefinitionError, ValueError) as exc:
         print(f"refine: {exc}", file=sys.stderr)
         return 2
-    source = backlog if backlog is not None else GitHubBacklog(args.repo)
+    source = backlog if backlog is not None else _backlog(args.platform, args.repo)
     try:
         plan = build_plan(source, definition, path.as_posix(), now, args.dry_run, args.issue, args.builder_slots)
     except (GhError, ReadOnlyViolation) as exc:

@@ -261,7 +261,7 @@ jobs:
 - **Kill switch.** Nothing runs until the variable `REFINE_ENABLED` is `true`.
 - **Dry-run first.** Writes are logged, not sent, until `REFINE_MODE` is `live`. Stay in dry-run until [#1341](https://github.com/bjcoombs/ai-native-toolkit/issues/1341) is closed.
 
-The workflows first ship in the release after 4.0.0. All three callers, the settings and the project fields: [Backlog refinement](docs/refine.md). For a one-off pass from the terminal, use `/refine`.
+The workflows first ship in the release after 4.0.0. All three callers, the settings and the project fields: [Backlog refinement](docs/refine.md). On GitLab, one `include:` of `templates/refine.yml` runs the same refiner from a pipeline schedule: [GitLab](docs/refine.md#gitlab). For a one-off pass from the terminal, use `/refine`.
 
 > **Portability split.** The framework pieces (`/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`, `/ghsync`, `/ghreport`, `/fleet`, `/doc-contradictions`, `/6hats`, `/understand` and their agents) are portable and work in any Claude Code session (`/fleet`'s `ROOT` mode reads the `<repo>-main` + `worktree/` layout that `/ghsync` creates). The workflow commands (`/tm`, `/issues`, `/fix-pr`, `/fix-develop`) bake in one author's daily setup: a `<repo>-main/` + `worktree/` layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. See [Adapting](#adapting-for-your-workflow) before relying on them in a different setup.
 

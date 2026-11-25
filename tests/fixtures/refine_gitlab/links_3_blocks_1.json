@@ -1,0 +1,9 @@
+[
+  {
+    "id": 9001,
+    "iid": 1,
+    "project_id": 42,
+    "state": "opened",
+    "link_type": "is_blocked_by"
+  }
+]

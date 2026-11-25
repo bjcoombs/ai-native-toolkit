@@ -1,0 +1,18 @@
+{
+  "id": 9003,
+  "iid": 3,
+  "project_id": 42,
+  "title": "Crash on save",
+  "description": "## Problem Statement\nSaving crashes.\n\n## Technical Context\n`src/save.py` writes the file.\n\n## Impact\nData loss.\n\n## Root Cause\nUnknown.\n\n## Solution Requirements\nFix the write.\n\n## Success Criteria\n- `pytest tests/test_save.py` passes\n",
+  "state": "opened",
+  "labels": [],
+  "author": {
+    "id": 790,
+    "username": "alice",
+    "name": "Alice"
+  },
+  "created_at": "2026-11-23T09:00:00.000Z",
+  "closed_at": null,
+  "closed_by": null,
+  "web_url": "https://gitlab.example.com/acme/widgets/-/issues/1"
+}

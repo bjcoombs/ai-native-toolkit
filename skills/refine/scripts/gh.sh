@@ -13,6 +13,11 @@
 #
 # --web is refused, and so is any --repo other than the job's GH_REPO, and
 # any URL argument to `issue view` outside https://github.com/<GH_REPO>/.
+#
+# On GitLab (REFINE_PLATFORM=gitlab, set by templates/refine.yml) the same
+# checks run, then refine_gitlab_read.py answers the four reads through
+# `glab api` GETs in place of gh, so the model's allow-list and prompts are the
+# same on both hosts (issue #1327). GH_REPO is then the project path.
 set -euo pipefail
 
 refuse() { echo "gh.sh: refused: $*" >&2; exit 4; }
@@ -47,4 +52,7 @@ for arg in "$@"; do
   prev="$arg"
 done
 
+if [ "${REFINE_PLATFORM:-github}" = "gitlab" ]; then
+  exec python3 "$(dirname "$0")/refine_gitlab_read.py" "$@"
+fi
 exec gh "$@"
