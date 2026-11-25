@@ -464,7 +464,7 @@ def test_schema_rejects_an_unavailable_block_without_a_reason():
 
 def test_schema_names_every_known_scan_and_rejects_others():
     names = build_schema()["properties"]["scans"]["propertyNames"]["enum"]
-    assert names == sorted(signals.known_scans())
+    assert names == sorted({*signals.known_scans(), *signals.PACK_BLOCKS})  # --pack's block too (#1276)
     doc = {
         "signals_schema_version": 1,
         "stamp": {"toolkit_commit": None, "plugin_version": "x", "scan_date": "2026-01-01",

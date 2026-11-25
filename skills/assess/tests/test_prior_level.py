@@ -286,3 +286,45 @@ def test_an_older_file_still_reads_as_the_default_record(tmp_path: Path) -> None
     assert load_baseline(tmp_path) == baseline
     assert load_baseline(tmp_path, {"levels_version": "profile-citizen-2026.11.23"}) is None
     assert record_for(old, {"levels_version": "team-1"}) is None
+
+
+# --- one record per base model and pack set (#1276, carried from #1301) --------------------
+
+def _packed(*packs: str) -> dict[str, Any]:
+    """A default-model level with pack rows: each condition names its source, the base first."""
+    level = _level()
+    conditions = [{**c, "source": "default"} for c in level["conditions"]]
+    conditions += [{"id": f"{p}-row.1", "row": f"{p}-row", "level": 1, "grade": None, "counted": False,
+                    "state": "met", "source": p} for p in packs]
+    return {**level, "conditions": conditions}
+
+
+def test_a_run_with_packs_keys_its_own_record() -> None:
+    from lib.prior_level import base_model_key, level_packs, model_key
+
+    assert level_packs(_packed("company", "team")) == ["company", "team"]
+    assert level_packs(_level()) == []
+    assert model_key(_packed("company", "team")) == "default--company--team"
+    assert model_key(_packed()) == "default"  # every row the base's: no pack row, the base record
+    assert base_model_key(_packed("team")) == "default"
+    citizen = {**_packed("team"), "levels_version": "profile-citizen-2026.11.23"}
+    assert model_key(citizen) == "citizen--team"
+    assert model_key({**_packed("team"), "levels_version": "team-1"}) is None  # a custom model keeps none
+
+
+def test_runs_with_and_without_packs_never_share_a_record(tmp_path: Path) -> None:
+    """A run with packs neither reads nor replaces the record of a run without them, so "since
+    last run" never reads a pack coming or going as gates gained or lost."""
+    from lib.prior_level import record_for
+
+    write_prior_level(tmp_path, _level())
+    plain = json.loads((tmp_path / PRIOR_LEVEL_FILE).read_text(encoding="utf-8"))
+    assert record_for(plain, _packed("team")) is None  # the first run with the pack: no earlier record
+    write_prior_level(tmp_path, _packed("team"))
+    both = json.loads((tmp_path / PRIOR_LEVEL_FILE).read_text(encoding="utf-8"))
+    assert {k: v for k, v in both.items() if k != "models"} == plain  # the default record kept as it was
+    assert set(both["models"]) == {"default--team"}
+    default_view = record_for(both, _level())
+    assert default_view is not None and default_view["tags"] == plain["tags"]
+    assert record_for(both, _packed("team")) is not None
+    assert record_for(both, _packed("company")) is None  # other packs, another record

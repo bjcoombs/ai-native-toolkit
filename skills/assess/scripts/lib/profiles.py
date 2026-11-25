@@ -78,7 +78,7 @@ from lib.levels import LevelsError, MaturityModel, PathValidator, load_levels
 from lib.pack_layering import layer_packs, pack_sources, row_source
 from lib.packs import SIGNAL_PREFIX as PACK_BLOCK
 from lib.packs import Pack, PackError
-from lib.prior_level import model_key
+from lib.prior_level import base_model_key
 from lib.signal_grades import DEFAULT_LEVELS
 
 __all__ = ["CUSTOM_MODEL_SUFFIX", "PROFILES_DIR", "RESERVED_PREFIXES", "READY_WORDS", "ModelChoice", "ProfileError", "add_model_arguments",
@@ -135,9 +135,9 @@ def run_level(ctx: Mapping[str, Any], choice: ModelChoice | None) -> LevelResult
 
 def model_for_level(level: Any) -> MaturityModel | None:
     """The model a ``level`` block was computed with, when it is the default or a shipped profile
-    (``prior_level.model_key``); None for a custom ``--levels`` model or a profile not shipped."""
+    (``prior_level.base_model_key``: any practice pack layered onto it aside); None for a custom ``--levels`` model or a profile not shipped."""
     version = level.get("levels_version") if isinstance(level, Mapping) else None
-    key = model_key(level) if isinstance(version, str) else None
+    key = base_model_key(level) if isinstance(version, str) else None
     if key == "default":
         return default_model()
     if key is None or key not in profile_names():

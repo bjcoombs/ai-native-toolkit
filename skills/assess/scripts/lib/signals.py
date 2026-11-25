@@ -102,6 +102,8 @@ from lib.history_window import split_window
 from lib.headless_layers import HEADLESS_SCANS as LAYER_SCANS
 from lib.headless_static import HEADLESS_SCANS as STATIC_SCANS
 from lib.instruction_files import grade_instruction_files
+from lib.pack_checks import PACK_BLOCK
+from lib.packs import Pack
 from lib.plugin_version import read_version
 from lib.run_context_types import JsonDict, SignalsDocument, SignalsStamp
 from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
@@ -154,6 +156,14 @@ CORE_MODULES = frozenset({"lib.core_scans", "lib.run_setup"})
 # scoped run per unit. Each unit's Step is not reported, as the repository's is not: a fleet
 # run computes both from the row with its own model (``lib.fleet.fleet_data_units``).
 UNIT_SCANS: tuple[str, ...] = ("units", "unit_readings")
+
+# Practice packs (#1276): with ``--pack`` the ``pack_checks`` entry (lib/pack_checks.py) runs
+# whatever ``--scans`` selects, and its ``pack`` block, ``{<pack>: {<check>: value}}``, joins
+# the document, so a ``/fleet`` row's level reads ``pack.<pack>.<check>`` as ``/assess`` does.
+# Not a selectable scan name; absent without ``--pack``, so such a document is unchanged.
+# The packs' identities are the fleet stamp's, never repeated per row.
+PACK_ENTRY = "pack_checks"
+PACK_BLOCKS: tuple[str, ...] = (PACK_BLOCK,)
 
 
 def _published(spec: ScanSpec) -> set[str]:
@@ -328,7 +338,7 @@ def parse_window(window: str) -> str:
 def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
                  fleet_config: FleetConfig | None = None,
                  ghsync_root: Path | None = None, scope: Path | None = None,
-                 managed_settings: bool = False) -> dict[str, Any]:
+                 managed_settings: bool = False, packs: Sequence[Pack] = ()) -> dict[str, Any]:
     """The registry's ``PROVIDED_INPUTS``, built the way ``assess_core`` builds them.
 
     ``scope`` is ``--scope`` resolved to an absolute folder under ``repo_root``
@@ -342,7 +352,7 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
     ``maturity_model`` is None: no headless scan evaluates a maturity model (#1150).
     ``managed_settings`` is ``--managed-settings`` (#1153): ``agent_ops`` reads this machine's
     Claude Code managed settings. Never read from the target's ``.assess/config.toml``.
-    ``packs`` is empty: the headless runner evaluates no practice pack (#1273).
+    ``packs`` are ``--pack``'s practice packs (#1276), in pass order; empty without it.
     Besides the ``build_run_context`` arguments, it supplies the setup values
     ``instruction_files``, ``scope``, ``excludes``, ``history_window``,
     ``fleet_config`` and ``ghsync_root`` itself; the table never recomputes a name the runner provides.
@@ -356,7 +366,7 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
         "maturity_model": None,  # the headless runner reports no level (/fleet --levels scores the rows)
         "managed_settings": managed_settings,
         "plan": None,  # the headless runner selects scans by name (--scans), never by plan
-        "packs": (),  # no --pack on the headless runner yet: /fleet per pack is #1276
+        "packs": tuple(packs),  # --pack: the pack_checks entry evaluates them (#1276)
         "instruction_files": instruction_files,
         "scope": scope,
         "excludes": load_excludes(repo_root),
@@ -394,15 +404,17 @@ def collect(
     repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     window: str = DEFAULT_WINDOW, fleet_config: FleetConfig | None = None, platform: bool = False,
     ghsync_root: Path | None = None, scope: Path | None = None, managed_settings: bool = False,
+    packs: Sequence[Pack] = (),
 ) -> dict[str, JsonDict]:
     """Run the selected scans (and what they read); one block per name.
 
     Offline unless ``platform``: then a network scan in ``PLATFORM_SCANS``, or one
     a listed scan reads, runs its network ``fn``. Offline, a ``PLATFORM_ONLY_SCANS``
-    name gets no block at all.
+    name gets no block at all. With ``packs`` the ``pack_checks`` entry runs whatever the
+    selection and its ``pack`` block is added (``PACK_BLOCKS``, #1276).
     """
-    inputs = build_inputs(repo_root, window, fleet_config, ghsync_root, scope, managed_settings)
-    needed = _with_dependencies(selected, specs, inputs)
+    inputs = build_inputs(repo_root, window, fleet_config, ghsync_root, scope, managed_settings, packs)
+    needed = _with_dependencies(selected, specs, inputs) | ({PACK_ENTRY} if packs else set())
     online = _with_dependencies(PLATFORM_SCANS, specs, inputs) if platform else set()
     ctx: dict[str, Any] = {}
     runnable: list[ScanSpec] = []
@@ -418,8 +430,11 @@ def collect(
     if runnable:
         for stage in STAGES:
             run_scans(ctx, inputs, stage, runnable)
-    return {name: ctx.get(name, _unavailable(UNREGISTERED_REASON)) for name in selected
-            if platform or name not in PLATFORM_ONLY_SCANS}
+    blocks = {name: ctx.get(name, _unavailable(UNREGISTERED_REASON)) for name in selected
+              if platform or name not in PLATFORM_ONLY_SCANS}
+    if packs:
+        blocks.update({name: ctx[name] for name in PACK_BLOCKS if name in ctx})
+    return blocks
 
 
 def read_plugin_version(toolkit_root: Path = TOOLKIT_ROOT) -> str:
@@ -502,7 +517,7 @@ def build_document(
     toolkit_root: Path = TOOLKIT_ROOT, specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     fleet_config: FleetConfig | None = None, platform: bool = False,
     ghsync_root: Path | None = None, scope: Path | None = None, units: bool = False,
-    managed_settings: bool = False,
+    managed_settings: bool = False, packs: Sequence[Pack] = (),
 ) -> SignalsDocument:
     """The whole signals document. Raises ``UnknownScanError`` or ``ValueError`` on bad arguments.
 
@@ -518,5 +533,5 @@ def build_document(
             "signals_schema_version": SIGNALS_SCHEMA_VERSION,
             "stamp": build_stamp(repo_root, window, toolkit_root, scope, managed_settings),
             "scans": collect(repo_root, selected, specs, window, fleet_config, platform,
-                             ghsync_root, scope, managed_settings),
+                             ghsync_root, scope, managed_settings, packs),
         }

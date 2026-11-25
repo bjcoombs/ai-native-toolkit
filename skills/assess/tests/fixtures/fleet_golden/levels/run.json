@@ -1,0 +1,441 @@
+{
+  "collectors": [
+    {
+      "id": "core.accretion_by_file",
+      "revision": 1
+    },
+    {
+      "id": "core.accretion_ratchet",
+      "revision": 1
+    },
+    {
+      "id": "core.accretion_scan",
+      "revision": 1
+    },
+    {
+      "id": "core.agent_building",
+      "revision": 2
+    },
+    {
+      "id": "core.agent_consistency",
+      "revision": 1
+    },
+    {
+      "id": "core.agent_environment",
+      "revision": 2
+    },
+    {
+      "id": "core.agent_harness",
+      "revision": 1
+    },
+    {
+      "id": "core.agent_ops",
+      "revision": 3
+    },
+    {
+      "id": "core.agent_outcome",
+      "revision": 1
+    },
+    {
+      "id": "core.ai_usage",
+      "revision": 2
+    },
+    {
+      "id": "core.ancestor_instruction_files",
+      "revision": 1
+    },
+    {
+      "id": "core.anomalies",
+      "revision": 1
+    },
+    {
+      "id": "core.archetype",
+      "revision": 1
+    },
+    {
+      "id": "core.assess_dir",
+      "revision": 1
+    },
+    {
+      "id": "core.broken_instruction_refs",
+      "revision": 1
+    },
+    {
+      "id": "core.churn_degenerate",
+      "revision": 1
+    },
+    {
+      "id": "core.ci_checks",
+      "revision": 8
+    },
+    {
+      "id": "core.ci_model_jobs",
+      "revision": 4
+    },
+    {
+      "id": "core.claude_config",
+      "revision": 1
+    },
+    {
+      "id": "core.config_drift",
+      "revision": 1
+    },
+    {
+      "id": "core.contributor_files",
+      "revision": 1
+    },
+    {
+      "id": "core.coverage_data",
+      "revision": 1
+    },
+    {
+      "id": "core.coverage_gate",
+      "revision": 6
+    },
+    {
+      "id": "core.coverage_report",
+      "revision": 1
+    },
+    {
+      "id": "core.current",
+      "revision": 2
+    },
+    {
+      "id": "core.decline",
+      "revision": 1
+    },
+    {
+      "id": "core.delivery",
+      "revision": 1
+    },
+    {
+      "id": "core.diff",
+      "revision": 1
+    },
+    {
+      "id": "core.doc_claims",
+      "revision": 1
+    },
+    {
+      "id": "core.doc_graph",
+      "revision": 1
+    },
+    {
+      "id": "core.doc_join",
+      "revision": 1
+    },
+    {
+      "id": "core.doc_staleness",
+      "revision": 1
+    },
+    {
+      "id": "core.excluded_as_generated",
+      "revision": 1
+    },
+    {
+      "id": "core.excluded_generated",
+      "revision": 1
+    },
+    {
+      "id": "core.excludes",
+      "revision": 1
+    },
+    {
+      "id": "core.exclusion_disclosures",
+      "revision": 1
+    },
+    {
+      "id": "core.external_ci",
+      "revision": 1
+    },
+    {
+      "id": "core.first_flagged",
+      "revision": 1
+    },
+    {
+      "id": "core.fleet_config",
+      "revision": 1
+    },
+    {
+      "id": "core.gap_actions",
+      "revision": 3
+    },
+    {
+      "id": "core.gate_cost_estimate",
+      "revision": 1
+    },
+    {
+      "id": "core.ghsync_root",
+      "revision": 1
+    },
+    {
+      "id": "core.github_secret_scanning",
+      "revision": 1
+    },
+    {
+      "id": "core.gitlab_merged_ci",
+      "revision": 1
+    },
+    {
+      "id": "core.gitlab_note_facts",
+      "revision": 1
+    },
+    {
+      "id": "core.guardrails",
+      "revision": 2
+    },
+    {
+      "id": "core.headline",
+      "revision": 4
+    },
+    {
+      "id": "core.history_window",
+      "revision": 1
+    },
+    {
+      "id": "core.hot_test_index",
+      "revision": 1
+    },
+    {
+      "id": "core.instruction_claims",
+      "revision": 1
+    },
+    {
+      "id": "core.instruction_file_size",
+      "revision": 1
+    },
+    {
+      "id": "core.instruction_files",
+      "revision": 1
+    },
+    {
+      "id": "core.instruction_grading",
+      "revision": 1
+    },
+    {
+      "id": "core.instruction_placement",
+      "revision": 1
+    },
+    {
+      "id": "core.keyhole",
+      "revision": 1
+    },
+    {
+      "id": "core.keyhole_blocks",
+      "revision": 2
+    },
+    {
+      "id": "core.layer_grades",
+      "revision": 2
+    },
+    {
+      "id": "core.level",
+      "revision": 1
+    },
+    {
+      "id": "core.liveness",
+      "revision": 1
+    },
+    {
+      "id": "core.liveness_blocks",
+      "revision": 2
+    },
+    {
+      "id": "core.measured_commit",
+      "revision": 1
+    },
+    {
+      "id": "core.merged_sample",
+      "revision": 1
+    },
+    {
+      "id": "core.mutation_not_run_cap",
+      "revision": 1
+    },
+    {
+      "id": "core.nested_instructions",
+      "revision": 1
+    },
+    {
+      "id": "core.offers_block",
+      "revision": 1
+    },
+    {
+      "id": "core.org_security_policy",
+      "revision": 1
+    },
+    {
+      "id": "core.owner_exclusions",
+      "revision": 1
+    },
+    {
+      "id": "core.plugin_version",
+      "revision": 1
+    },
+    {
+      "id": "core.prior",
+      "revision": 1
+    },
+    {
+      "id": "core.promissory",
+      "revision": 1
+    },
+    {
+      "id": "core.promissory_markers",
+      "revision": 1
+    },
+    {
+      "id": "core.rename_map",
+      "revision": 1
+    },
+    {
+      "id": "core.review_automation",
+      "revision": 3
+    },
+    {
+      "id": "core.review_evidence",
+      "revision": 2
+    },
+    {
+      "id": "core.review_reality",
+      "revision": 2
+    },
+    {
+      "id": "core.run_header",
+      "revision": 1
+    },
+    {
+      "id": "core.run_id",
+      "revision": 1
+    },
+    {
+      "id": "core.run_scope",
+      "revision": 1
+    },
+    {
+      "id": "core.scan_plan_stamp",
+      "revision": 1
+    },
+    {
+      "id": "core.scope",
+      "revision": 1
+    },
+    {
+      "id": "core.secrets_guard",
+      "revision": 5
+    },
+    {
+      "id": "core.sensitive_instruction_content",
+      "revision": 1
+    },
+    {
+      "id": "core.shared_tooling",
+      "revision": 1
+    },
+    {
+      "id": "core.since_last_run",
+      "revision": 1
+    },
+    {
+      "id": "core.skill_disclosure",
+      "revision": 1
+    },
+    {
+      "id": "core.skill_personal_data",
+      "revision": 2
+    },
+    {
+      "id": "core.skill_script_tests",
+      "revision": 1
+    },
+    {
+      "id": "core.skills",
+      "revision": 1
+    },
+    {
+      "id": "core.stale_hubs",
+      "revision": 1
+    },
+    {
+      "id": "core.structure_drift_block",
+      "revision": 2
+    },
+    {
+      "id": "core.structure_scan",
+      "revision": 1
+    },
+    {
+      "id": "core.superseded",
+      "revision": 1
+    },
+    {
+      "id": "core.test_focus",
+      "revision": 1
+    },
+    {
+      "id": "core.test_pressure",
+      "revision": 1
+    },
+    {
+      "id": "core.test_pressure_scan",
+      "revision": 1
+    },
+    {
+      "id": "core.unfinalized",
+      "revision": 1
+    },
+    {
+      "id": "core.uninstall_instructions_path",
+      "revision": 1
+    },
+    {
+      "id": "core.unit_levels",
+      "revision": 1
+    },
+    {
+      "id": "core.unit_readings",
+      "revision": 1
+    },
+    {
+      "id": "core.unit_rollup",
+      "revision": 2
+    },
+    {
+      "id": "core.units",
+      "revision": 2
+    },
+    {
+      "id": "core.untracked_instruction_files",
+      "revision": 1
+    },
+    {
+      "id": "core.working_notes",
+      "revision": 1
+    }
+  ],
+  "counts_only": true,
+  "coverage": null,
+  "fleet_config_entries": null,
+  "fleet_config_sha256": null,
+  "fleet_stamp_version": 1,
+  "levels_version": "fleet-golden-1",
+  "managed_settings": false,
+  "paths_hashed": false,
+  "platform": false,
+  "plugin_version": "0.0.0",
+  "repositories": {
+    "failed": 0,
+    "qualifying": 3,
+    "scanned_ok": 3,
+    "selected": 3
+  },
+  "rules_sha256": "3d5872d3a5c8a4a5fa0d8cdf4c9d19a77e14efbb51b0ff9d51a696daf2919fac",
+  "scan_date": "2020-01-02",
+  "scans": [
+    "layer_grades",
+    "observability",
+    "owner_exclusions"
+  ],
+  "toolkit_commit": "0000000000000000000000000000000000000000",
+  "window": "6mo"
+}

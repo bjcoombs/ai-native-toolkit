@@ -323,12 +323,13 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
 
 def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None,
                     coverage: str | None = None, opportunities: str | None = None,
-                    measured: str | None = None, front: str | None = None) -> str:
+                    measured: str | None = None, front: str | None = None, packs: str | None = None) -> str:
     """``report.md``: the front screen when given (``lib/fleet/fleet_front.py``, #1255), the coverage line when given (``lib/fleet/fleet_coverage.py``), the credit
     section when given (``lib/fleet/fleet_credit.py``), the opportunities section when given
     (``lib/fleet/fleet_opportunities_section.py``), then each diagram embedded with a relative
     link, or why it was skipped, then the "How this was measured" section when given
-    (``lib/measured_appendix.py``)."""
+    (``lib/measured_appendix.py``). ``packs``, the "Practice packs" section of a ``--pack`` run
+    (``lib/fleet/fleet_packs.py``, #1276), follows the opportunities."""
     lines = ["# Fleet diagrams", ""]
     if front is not None:
         lines += [front.rstrip("\n"), ""]
@@ -336,7 +337,7 @@ def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None,
         lines += [coverage, ""]
     lines += ["Drawn from this run's output with no model call; unknown is hatched and named, "
               "never drawn as zero.", ""]
-    for section in (credit, opportunities):
+    for section in (credit, opportunities, packs):
         if section is not None:
             lines += [section.rstrip("\n"), ""]
     for diagram in diagrams:
@@ -376,11 +377,11 @@ def _write(path: Path, content: str) -> Path:
 
 def write_diagrams(out_dir: Path, diagrams: Sequence[Diagram], credit: str | None = None,
                    coverage: str | None = None, opportunities: str | None = None,
-                   measured: str | None = None, front: str | None = None) -> list[Path]:
+                   measured: str | None = None, front: str | None = None, packs: str | None = None) -> list[Path]:
     """Write the drawn SVGs and ``report.md`` (with ``front``, ``coverage``, ``credit`` and
     ``opportunities`` first and ``measured`` last) under ``out_dir``; returns the paths written."""
     clear_diagrams(out_dir)
     written = [_write(out_dir / d["file"], d["svg"]) for d in diagrams if d["svg"] is not None]
     written.append(_write(out_dir / REPORT_FILE,
-                          report_markdown(diagrams, credit, coverage, opportunities, measured, front)))
+                          report_markdown(diagrams, credit, coverage, opportunities, measured, front, packs)))
     return written

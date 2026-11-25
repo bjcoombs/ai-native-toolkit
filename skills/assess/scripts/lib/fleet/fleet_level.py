@@ -24,14 +24,18 @@ row's `scans` (a failed row has no entry), keyed by repository id, in an
 envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`,
 plus `commits` (`RepoCommit`, the row's `head_sha` and `dirty`, #907) under the same ids;
 nothing in it changes between reruns of the same commits. `write_fleet_levels` removes a
-stale file when the run has no model. Tests: `tests/test_level_tally.py`.
+stale file when the run has no model. With `--pack` (#1276) it adds `packs`, the per-pack
+roll-up (`lib/fleet/fleet_packs.py` `pack_roll_up`): each pack's practices with the
+repositories that meet each, out of those measured; absent without a pack, so the file is
+unchanged. Tests: `tests/test_level_tally.py`.
 """
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, NotRequired, TypedDict
 
+from lib.fleet.fleet_packs import PackRollUp, pack_roll_up
 from lib.fleet.runner import STATUS_OK, FleetRow, RepoCommit
 from lib.levels import MaturityModel
 from lib.level_result_types import LevelResult
@@ -47,6 +51,7 @@ class FleetLevels(TypedDict):
     plugin_version: str
     repos: dict[str, LevelResult]
     commits: dict[str, RepoCommit]  # the same ids: the commit each result measured (#907)
+    packs: NotRequired[list[PackRollUp]]  # #1276: per pack, its practices' counts; only with --pack
 
 
 def repo_level(model: MaturityModel, row: FleetRow) -> LevelResult:
@@ -56,10 +61,10 @@ def repo_level(model: MaturityModel, row: FleetRow) -> LevelResult:
 
 
 def fleet_levels(rows: Iterable[FleetRow], model: MaturityModel, *, toolkit_commit: str | None,
-                 plugin_version: str) -> FleetLevels:
-    """One result per scanned repository, sorted by id."""
+                 plugin_version: str, packs: Sequence[Mapping[str, Any]] = ()) -> FleetLevels:
+    """One result per scanned repository, sorted by id, and the per-pack roll-up with ``packs``."""
     scanned = sorted((row for row in rows if row["status"] == STATUS_OK), key=lambda row: row["repo"])
-    return {
+    levels: FleetLevels = {
         "level_result_version": LEVEL_RESULT_VERSION,
         "levels_version": model["version"],
         "toolkit_commit": toolkit_commit,
@@ -68,15 +73,20 @@ def fleet_levels(rows: Iterable[FleetRow], model: MaturityModel, *, toolkit_comm
         "commits": {row["repo"]: {"head_sha": row.get("head_sha"), "dirty": row.get("dirty")}
                     for row in scanned},
     }
+    roll_up = pack_roll_up(model, packs, levels["repos"].values())
+    if roll_up:
+        levels["packs"] = roll_up
+    return levels
 
 
 def write_fleet_levels(out_dir: Path, rows: Iterable[FleetRow], model: MaturityModel | None, *,
-                       toolkit_commit: str | None, plugin_version: str) -> Path | None:
+                       toolkit_commit: str | None, plugin_version: str,
+                       packs: Sequence[Mapping[str, Any]] = ()) -> Path | None:
     """Write ``level.json``, or remove a stale one when the run has no model."""
     path = out_dir / LEVEL_FILE
     if model is None:
         path.unlink(missing_ok=True)
         return None
-    levels = fleet_levels(rows, model, toolkit_commit=toolkit_commit, plugin_version=plugin_version)
+    levels = fleet_levels(rows, model, toolkit_commit=toolkit_commit, plugin_version=plugin_version, packs=packs)
     path.write_text(dumps_level(levels), encoding="utf-8", newline="\n")
     return path

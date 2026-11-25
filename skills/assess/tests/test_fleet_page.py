@@ -165,7 +165,7 @@ def test_sections_come_in_the_design_order_and_target_entry_is_static_hidden() -
     assert out["staticHasSet"] == "undefined" and "set-target" not in page
     assert "set-target" in out["withSet"]  # a live source with setTarget draws the entry for a unit with a target id
     assert "set-target" not in out["withSetNoId"]  # and none for a unit without one (#949)
-    assert out["sections"] == 6
+    assert out["sections"] == 7  # Practice packs (#1276) draws nothing without a pack
 
 
 def test_the_root_page_shows_the_target_gates_the_credit_and_the_exclusion() -> None:
@@ -397,3 +397,28 @@ def test_the_front_screen_names_no_repository_or_group_outside_full(name: str) -
     first = _drawn(name)["first"]
     for leak in fx.NAMES:
         assert leak not in first, leak
+
+
+def test_a_pack_run_s_page_names_each_pack_with_its_counts() -> None:
+    """#1276: the Practice packs section, copied from fleet-data.json's packs roll-up; no
+    condition id reaches the page."""
+    from lib.fleet.fleet_page_data import page_bundle
+    if NODE is None:
+        pytest.skip("node is not on PATH")
+    script, bundle = _parts((fx.FIXTURES / "expected-counts-only.html").read_text(encoding="utf-8"))
+    roll = [{"name": "team", "version": "1", "sha256": "a" * 64, "repos": 3, "practices": [
+        {"condition": "team-adrs.1", "row": "team-adrs", "title": "Decision records", "level": 1,
+         "met": 1, "measured": 2, "not_measured": 1}]}]
+    copied = page_bundle({"run": {}, "views": [], "repos": [], "packs": roll}, None, {"version": "x", "rows": []})
+    assert copied["packs"] == [{"name": "team", "version": "1", "repos": 3, "practices": [
+        {"title": "Decision records", "level": 1, "met": 1, "measured": 2, "not_measured": 1}]}]
+    bundle["packs"] = copied["packs"]
+    runner = (RUNNER.split("const out")[0] + "process.stdout.write(api.renderPage(b, {view: b.views[0].view, "
+              "unit: b.views[0].units[0].key, repo: null}, b.targets, false));")
+    page = subprocess.run([NODE, "-e", runner], input=json.dumps({"script": script, "bundle": bundle}),
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout
+    heads = re.findall(r"<h2>(.*?)</h2>", page)
+    assert heads[:2] == ["Fleet at a glance", "Practice packs"]
+    text = _text(page)
+    assert "Pack team (version 1)" in text and "Decision records: 1 of 2 measured repositories meet it" in text
+    assert "1 repository not measured" in text and "team-adrs" not in page

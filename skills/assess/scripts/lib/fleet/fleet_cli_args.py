@@ -4,7 +4,7 @@
 no file read: ROOT or ``--from-list``, ``--discovered`` needs ROOT, the hashing flags
 apply to counts-only output, positive ``--jobs``/``--timeout`` and platform limits,
 ``--profile`` resolved to its shipped ``--levels`` file (``lib/profiles.py``, #1150),
-``--monorepo-units`` needs a model, and a ``--compare`` value that is not a run
+``--monorepo-units`` and ``--pack`` need a model, and a ``--compare`` value that is not a run
 directory (it most likely swallowed ROOT). A broken rule exits 2 through
 ``parser.error``. ``LATEST`` is the value a bare ``--compare`` takes: the newest
 matching history entry.
@@ -37,6 +37,23 @@ def _not_a_run(path: Path) -> bool:
     return path.is_dir() and not (path / RUN_FILE).is_file() and not (path / REPOS_FILE).is_file()
 
 
+def _model_rules(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """``--profile`` resolved to its ``--levels`` file, and the flags that need a model."""
+    if args.profile is not None:
+        # A profile is a shipped --levels file (lib/profiles.py, #1150): every --levels rule holds.
+        if args.levels is not None:
+            parser.error("--profile and --levels each choose the model: pass one")
+        try:
+            args.levels = str(profile_path(args.profile))
+        except ProfileError as e:
+            parser.error(str(e))
+    if args.pack and args.levels is None:
+        parser.error("--pack needs --levels or --profile: a pack's practices are scored with a maturity "
+                     "model (the default one is skills/assess/levels/default.toml)")
+    if args.monorepo_units and args.levels is None:
+        parser.error("--monorepo-units needs --levels: a unit's Step comes from the maturity model")
+
+
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run headless /assess signals on every repository under a ghsync root "
@@ -60,6 +77,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
              "carries every maturity model row's whole level (or unknown) and the aggregation rule used.",
     )
     add_model_arguments(parser, levels=False)
+    parser.add_argument(
+        "--pack", action="append", default=[], metavar="FILE",
+        help="A practice pack (<name>.pack.toml, lib/packs.py) applied to every repository, in pass "
+             "order: its checks are read from each repository's files and its [[rows]] are layered onto "
+             "the model; the report, level.json, fleet-data.json and the page break results down per "
+             "pack (lib/fleet/fleet_packs.py). Repeat for several. Needs --levels or --profile.",
+    )
     parser.add_argument(
         "--settings", metavar="PATH",
         help="Group settings from ghreport (#565): a JSON fragment file, a JSON array of "
@@ -194,16 +218,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         parser.error("--platform-jobs and --platform-timeout must be at least 1")
     if not args.platform and (args.platform_jobs is not None or args.platform_timeout is not None):
         parser.error("--platform-jobs and --platform-timeout apply to --platform")
-    if args.profile is not None:
-        # A profile is a shipped --levels file (lib/profiles.py, #1150): every --levels rule holds.
-        if args.levels is not None:
-            parser.error("--profile and --levels each choose the model: pass one")
-        try:
-            args.levels = str(profile_path(args.profile))
-        except ProfileError as e:
-            parser.error(str(e))
-    if args.monorepo_units and args.levels is None:
-        parser.error("--monorepo-units needs --levels: a unit's Step comes from the maturity model")
+    _model_rules(parser, args)
     if args.scans is not None:
         problem = platform_only_error([s.strip() for s in args.scans.split(",")], args.platform)
         if problem is not None:

@@ -14,6 +14,7 @@ the run history beside the other files.
 | `views` | One entry per view, `ownership` and `system`, each with its `units`. |
 | `repos` | One entry per repository row, sorted by `key`. |
 | `opportunities` | The [opportunities](#opportunities) this run's data shows: what is in place, the biggest lift and the shared-template leverage. `null` without `--levels`. |
+| `packs` | With `--pack` only (#1276): one entry per practice pack, in pass order, with `name`, `version`, `sha256`, `repos` (the scanned repositories) and `practices[]`, each condition the pack adds with `met`, `measured` and `not_measured` over `repos`. A repository where a pack check could not be read is not measured, never unmet; one whose `.assess/config.toml` excludes the condition is in neither column, so `measured + not_measured` can be less than `repos`. A hazard level carries `polarity: "hazard"`: its `met` counts the repositories free of the harm, and the report and page list it as "Repositories free of it". Absent without `--pack`. Logic: `lib/fleet/fleet_packs.py`. |
 
 **Units.** A unit is an org, division, department, team or system. Each has a `key`
 (`<view>/<id>`), `view`, `parent` (the parent's key, `null` at a root), `kind`, `source`

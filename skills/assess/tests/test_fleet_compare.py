@@ -309,3 +309,12 @@ def test_a_stamp_without_packs_reads_as_no_pack():
     assert fc.comparability(_stamp(EARLIER), _stamp(LATER, packs=[])) == ([], [])
     reasons, _ = fc.comparability(_stamp(EARLIER), _stamp(LATER, packs=[TEAM]))
     assert reasons == ["practice packs changed none->team@aaaaaaaaaaaa"]
+
+
+def test_two_runs_differing_only_in_packs_are_refused_by_compare():
+    """#1276: --compare of two runs whose packs differ is not comparable, so no movement is
+    read from a pack coming or going."""
+    comparison = compare(_run(EARLIER), _run(LATER, packs=[TEAM]))
+    assert not comparison["comparable"]
+    assert comparison["reasons"] == ["practice packs changed none->team@aaaaaaaaaaaa"]
+    assert compare(_run(EARLIER, packs=[TEAM]), _run(LATER, packs=[TEAM]))["comparable"]

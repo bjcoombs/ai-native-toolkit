@@ -21,7 +21,7 @@ are described under ``structure`` only.
 
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and
 `SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, a `scans` map
-whose names are limited to `signals.known_scans` (sorted; `build_schema(specs)` for a
+whose names are limited to `signals.known_scans` plus the `--pack` block (`pack_blocks`, #1276) (sorted; `build_schema(specs)` for a
 custom table, and the namespace `level_signals.py` checks paths against), open per-scan
 blocks, and an `if`/`then` rule that an `"available": false` block carries a string
 `reason`. The `ai_usage`, `ci_checks`, `coverage_gate`, `delivery`, `guardrails` and `agent_consistency` blocks (`scan_block_schemas.py`, #779, #781, #767, #768)
@@ -51,7 +51,7 @@ from lib.manifest.check_manifest import core_manifest, reason_codes
 from lib.run_context_types import JsonDict, SignalsDocument
 from lib.scan_block_schemas import BLOCK_SCHEMAS
 from lib.scan_registry import ScanSpec
-from lib.signals import SIGNAL_SCANS, known_scans
+from lib.signals import PACK_BLOCKS, SIGNAL_SCANS, known_scans
 
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "references" / "signals.schema.json"
 SCHEMA_ID = "https://github.com/bjcoombs/ai-native-toolkit/skills/assess/references/signals.schema.json"
@@ -134,15 +134,33 @@ def described_blocks(known: Iterable[str]) -> dict[str, JsonDict]:
     return {name: described_block(name) for name in [*BLOCK_SCHEMAS, *coded] if name in known}
 
 
+_CHECK_VALUE: JsonDict = {"anyOf": [
+    {"type": "boolean"}, {"type": "integer", "minimum": 0},
+    {"type": "object", "properties": {"available": {"const": False}, "reason": {"type": "string"}},
+     "required": ["available"]}]}
+
+
+def pack_blocks() -> dict[str, JsonDict]:
+    """The ``--pack`` block (``signals.PACK_BLOCKS``, #1276): each pack's check values by check id."""
+    return {"pack": {
+        "type": "object",
+        "description": ("Present only with --pack (lib/pack_checks.py): {<pack>: {<check>: value}}, read "
+                        "at pack.<pack>.<check>. A value is a boolean (exists, key_exists), a file count "
+                        "(glob_count, contains) or {available: false} when the check could not be "
+                        "answered; never a path or file text."),
+        "additionalProperties": {"type": "object", "additionalProperties": _CHECK_VALUE},
+    }}
+
+
 def build_schema(specs: Sequence[ScanSpec] = SIGNAL_SCANS) -> JsonDict:
     """The full document schema, ready to serialise (``specs``: the scan table)."""
     document = type_schema(SignalsDocument)
-    # Sorted, so a scan added anywhere in the registry adds one line here.
-    known = sorted(known_scans(specs))
+    # Sorted, so a scan added anywhere in the registry adds one line here; the --pack block too.
+    known = sorted({*known_scans(specs), *PACK_BLOCKS})
     scans = document["properties"]["scans"]
     scans["propertyNames"] = {"enum": known}
     # The blocks a fleet reader compares (#779) name their fields; each keeps the reason rule.
-    scans["properties"] = described_blocks(known)
+    scans["properties"] = {**described_blocks(known), **pack_blocks()}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": SCHEMA_ID,

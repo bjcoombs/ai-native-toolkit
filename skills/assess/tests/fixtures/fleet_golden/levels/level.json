@@ -1,0 +1,368 @@
+{
+  "commits": {
+    "grpa/sub/deep/svc2": {
+      "dirty": false,
+      "head_sha": "21e1de3ec0f388c1b0be12d52e78f08ed4e0a22e"
+    },
+    "grpa/svc1": {
+      "dirty": false,
+      "head_sha": "0acb5e8d7b7a98d345cd7e5e20dd351b68f52618"
+    },
+    "grpb/lib1": {
+      "dirty": false,
+      "head_sha": "80545eaaf825042c9848c0474c45b1436755a2ff"
+    }
+  },
+  "level_result_version": 4,
+  "levels_version": "fleet-golden-1",
+  "plugin_version": "0.0.0",
+  "repos": {
+    "grpa/sub/deep/svc2": {
+      "conditions": [
+        {
+          "counted": false,
+          "grade": "declared",
+          "id": "instructions.1",
+          "level": 1,
+          "row": "instructions",
+          "state": "met"
+        },
+        {
+          "counted": false,
+          "grade": "declared",
+          "id": "observability.1",
+          "level": 1,
+          "row": "observability",
+          "state": "unmet"
+        }
+      ],
+      "counted": [],
+      "level_result_version": 4,
+      "levels_version": "fleet-golden-1",
+      "listed": [
+        "instructions.1"
+      ],
+      "next_step": null,
+      "not_measured": [],
+      "step": null,
+      "tags": [
+        {
+          "conditions": 1,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "behaviour"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "contracts"
+        },
+        {
+          "conditions": 1,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "docs"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "structure"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "agent_context"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "agent_runtime"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "governance"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "supply_chain"
+        }
+      ],
+      "tally": {
+        "measured": 0,
+        "met": 0,
+        "not_measured": 0
+      }
+    },
+    "grpa/svc1": {
+      "conditions": [
+        {
+          "counted": false,
+          "grade": "declared",
+          "id": "instructions.1",
+          "level": 1,
+          "row": "instructions",
+          "state": "met"
+        },
+        {
+          "counted": false,
+          "grade": "declared",
+          "id": "observability.1",
+          "level": 1,
+          "row": "observability",
+          "state": "unmet"
+        }
+      ],
+      "counted": [],
+      "level_result_version": 4,
+      "levels_version": "fleet-golden-1",
+      "listed": [
+        "instructions.1"
+      ],
+      "next_step": null,
+      "not_measured": [],
+      "step": null,
+      "tags": [
+        {
+          "conditions": 1,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "behaviour"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "contracts"
+        },
+        {
+          "conditions": 1,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "docs"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "structure"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "agent_context"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "agent_runtime"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "governance"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "supply_chain"
+        }
+      ],
+      "tally": {
+        "measured": 0,
+        "met": 0,
+        "not_measured": 0
+      }
+    },
+    "grpb/lib1": {
+      "conditions": [
+        {
+          "counted": false,
+          "grade": "declared",
+          "id": "instructions.1",
+          "level": 1,
+          "row": "instructions",
+          "state": "unmet"
+        },
+        {
+          "counted": false,
+          "grade": "declared",
+          "id": "observability.1",
+          "level": 1,
+          "row": "observability",
+          "state": "unmet"
+        }
+      ],
+      "counted": [],
+      "level_result_version": 4,
+      "levels_version": "fleet-golden-1",
+      "listed": [],
+      "next_step": null,
+      "not_measured": [],
+      "step": null,
+      "tags": [
+        {
+          "conditions": 1,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "behaviour"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "contracts"
+        },
+        {
+          "conditions": 1,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "docs"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "structure"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "agent_context"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "agent_runtime"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "governance"
+        },
+        {
+          "conditions": 0,
+          "countable": 0,
+          "countable_not_measured": [],
+          "measured": 0,
+          "met": 0,
+          "not_measured": [],
+          "set_aside": 0,
+          "tag": "supply_chain"
+        }
+      ],
+      "tally": {
+        "measured": 0,
+        "met": 0,
+        "not_measured": 0
+      }
+    }
+  },
+  "toolkit_commit": "0000000000000000000000000000000000000000"
+}

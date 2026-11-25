@@ -23,7 +23,8 @@ Writes are narrow and fail closed:
   ``run.json`` at the stamp version this code writes) and its stamp agrees on
   maturity-model version and rules hash (``rules_sha256``, #952: an entry from before it
   differs from a run that records one), window, output mode, scan selection, path hashing and
-  ``--fleet-config`` hash and ``--platform`` (absent before #714: ``false``), and
+  ``--fleet-config`` hash and ``--platform`` (absent before #714: ``false``) and practice
+  packs (``packs``, #1276: absent reads as none), and
   holds the same repository set (so a partial ``--from-list`` rerun never
   replaces the full-fleet entry); otherwise ``entry_conflict`` names why, the entry is kept, and
   ``choose_entry`` moves on to a suffixed sibling (``<date>.2``, ``<date>.3``,
@@ -44,7 +45,7 @@ or the distinct ones sorted and joined by `+`. Fails closed: `safe_component` re
 name that is not one plain path component, `entry_dir` refuses a symlinked directory on
 the way, and `entry_conflict` keeps a same-day entry that is not this tool's (no readable
 `run.json` at the current stamp version) or whose stamp differs in maturity-model version or
-rules hash (#952), window, output mode, scan selection, path hashing or `--fleet-config` hash, or that holds a different
+rules hash (#952), window, output mode, scan selection, path hashing, `--fleet-config` hash or practice packs (#1276), or that holds a different
 repository set (`entry_repos`), so a partial rerun never replaces a full-fleet entry;
 `choose_entry` then moves to
 `<date>.2`, `<date>.3`, ... (the first free or matching, up to `MAX_SAME_DAY`).
@@ -86,8 +87,10 @@ HISTORY_FILES = (REPOS_FILE, GROUPS_FILE, RUN_FILE)  # written in this order: ru
 # level.json: each repository's stored Step, which the Step movement grid reads (#941)
 OPTIONAL_HISTORY_FILES = (FRESHNESS_FILE, FLEET_DATA_FILE, "demotions.json", LEVEL_FILE)
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$")
+# packs (#1276): a same-day rerun under other practice packs is kept beside the earlier entry,
+# and a bare --compare never takes a run under other packs as its baseline.
 _MATCH_KEYS = ("levels_version", "rules_sha256", "window", "counts_only", "scans", "paths_hashed", "fleet_config_sha256",
-               "platform", "managed_settings")
+               "platform", "managed_settings", "packs")
 # Keys a bare --compare baseline may leave unrecorded: an entry from before #952 is still a
 # baseline, and compare.json then says its rules were not recorded.
 _UNRECORDED_OK = frozenset({"rules_sha256"})

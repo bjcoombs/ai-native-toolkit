@@ -574,3 +574,34 @@ def test_a_same_day_entry_from_before_714_is_replaced_by_an_offline_run_only(tmp
     entry = _entry_with(tmp_path, old)
     assert entry_conflict(entry, {**STAMP, "platform": False}) is None
     assert "different platform" in (entry_conflict(entry, {**STAMP, "platform": True}) or "")
+
+
+# --- practice packs (#1276) --------------------------------------------------------------
+
+PACK_A = {"name": "team", "version": "1", "sha256": "a" * 64}
+PACK_B = {"name": "team", "version": "1", "sha256": "b" * 64}
+
+
+def test_runs_differing_only_in_packs_are_kept_side_by_side(tmp_path):
+    """A same-day rerun under other packs goes beside the earlier entry, never over it."""
+    root = tmp_path / "hist"
+    plain, _ = choose_entry(root, "org", "2026-11-25", STAMP, REPOS)
+    _put(plain, STAMP)
+    packed = {**STAMP, "packs": [PACK_A]}
+    second, passed = choose_entry(root, "org", "2026-11-25", packed, REPOS)
+    assert second.name == "2026-11-25.2" and "different packs" in passed[0]
+    _put(second, packed)
+    third, passed = choose_entry(root, "org", "2026-11-25", {**STAMP, "packs": [PACK_B]}, REPOS)
+    assert third.name == "2026-11-25.3" and len(passed) == 2
+    # the same packs reuse their own entry; an empty list reads as no pack
+    assert choose_entry(root, "org", "2026-11-25", packed, REPOS) == (second, [passed[0]])
+    assert choose_entry(root, "org", "2026-11-25", {**STAMP, "packs": []}, REPOS)[0] == plain
+
+
+def test_a_bare_compare_never_takes_a_run_under_other_packs(tmp_path):
+    org = tmp_path / "org"
+    _put(org / "2026-11-20", STAMP)
+    _put(org / "2026-11-21", {**STAMP, "packs": [PACK_A]})
+    assert latest_matching(org, STAMP) == org / "2026-11-20"
+    assert latest_matching(org, {**STAMP, "packs": [PACK_A]}) == org / "2026-11-21"
+    assert latest_matching(org, {**STAMP, "packs": [PACK_B]}) is None

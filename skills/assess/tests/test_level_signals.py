@@ -145,6 +145,14 @@ def test_scan_names_come_from_the_published_schema() -> None:
     assert scan_names() == frozenset(known_scans())
 
 
+def test_the_pack_block_is_published_but_never_a_scan_a_criterion_names() -> None:
+    """#1276: the schema allows the --pack block, but only a run's own packs make a pack path valid."""
+    from lib.level_signals import SCHEMA_PATH, signal_path_validator
+    enum = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))["properties"]["scans"]["propertyNames"]["enum"]
+    assert "pack" in enum and "pack" not in scan_names()
+    assert not signal_path_validator()("team", "pack.available")
+
+
 @pytest.mark.parametrize("path", [
     "observability.rung",                          # typed block, scalar leaf
     "agent_environment.layer5_cap.applies",        # nested typed field

@@ -50,7 +50,7 @@ from lib.counts_only.content_free import apply_cli as apply_counts_only, validat
 from lib.testing.coverage_report import load_coverage_data
 from lib.level_signals import signal_path_validator
 from lib.pack_layering import pack_sources
-from lib.packs import Pack, PackError, load_pack, pack_identity
+from lib.packs import Pack, PackError, load_packs, pack_identity
 from lib.model_change import model_name
 from lib.profiles import ModelChoice, ProfileError, add_model_arguments, chosen_model, run_level
 from lib.profiles import profile_names, single_repo_choice
@@ -146,19 +146,6 @@ def _scan(
     ctx: dict[str, Any] = {}
     run_scans(ctx, scan_inputs)
     return ctx, scan_inputs
-
-
-def load_packs(paths: list[str]) -> tuple[Pack, ...]:
-    """Each ``--pack`` file through ``lib.packs.load_pack``, in pass order; ``PackError`` on a
-    load error or on two packs of one name, whose signals would share ``pack.<name>``."""
-    packs: list[Pack] = []
-    for path in paths:
-        pack = load_pack(Path(path))
-        if any(p["name"] == pack["name"] for p in packs):
-            raise PackError(f"{Path(path).name}: a pack named {pack['name']!r} was already passed; "
-                            "each --pack needs its own [pack] name")
-        packs.append(pack)
-    return tuple(packs)
 
 
 def _model_differs(level_block: Any, model: ModelChoice | None) -> bool:
