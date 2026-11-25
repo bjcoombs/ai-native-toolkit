@@ -227,3 +227,20 @@ def test_a_mutation_refresh_of_a_run_without_pack_rows_reads_no_packs() -> None:
     golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
     assert assess_core._recorded_packs(run_level(golden, None)) == []
     assert assess_core._recorded_packs(None) == []
+
+
+def test_a_mutation_refresh_with_an_edited_pack_is_refused(
+        tmp_path: Path, packs: tuple[Pack, ...], capsys: pytest.CaptureFixture[str]) -> None:
+    """The packs block records each pack's sha256: a pack edited since the run is refused."""
+    import assess_core
+    from lib.packs import pack_identity
+    repo = tmp_path / "target"
+    (repo / ".assess").mkdir(parents=True)
+    ctx = _ctx(tmp_path, packs)
+    ctx["level"] = run_level(ctx, _choice(packs))
+    (repo / ".assess" / "run-context.json").write_text(json.dumps(ctx), encoding="utf-8")
+    assert ctx["packs"] == [pack_identity(p) for p in packs]
+    edited = _load(tmp_path, "team", TEAM.replace('title = "Owner named"', 'title = "Owner set"'))
+    both = (packs[0], edited)
+    assert assess_core.run_opt_in_mutation(repo, model=_choice(both), packs=both) == 2
+    assert "unedited" in capsys.readouterr().err

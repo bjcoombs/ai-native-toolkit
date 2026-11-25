@@ -50,7 +50,7 @@ from lib.counts_only.content_free import apply_cli as apply_counts_only, validat
 from lib.testing.coverage_report import load_coverage_data
 from lib.level_signals import signal_path_validator
 from lib.pack_layering import pack_sources
-from lib.packs import Pack, PackError, load_pack
+from lib.packs import Pack, PackError, load_pack, pack_identity
 from lib.model_change import model_name
 from lib.profiles import ModelChoice, ProfileError, add_model_arguments, chosen_model, run_level
 from lib.profiles import profile_names, single_repo_choice
@@ -189,7 +189,7 @@ def _model_hint(level_block: dict[str, Any]) -> str:
 
 
 def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
-                        model: ModelChoice | None = None) -> int:
+                        model: ModelChoice | None = None, packs: tuple[Pack, ...] = ()) -> int:
     """Re-run the Layer-1 test-pressure scan with the bounded mutation pass ON.
 
     The consent-gated counterpart to the default read-only scan in
@@ -216,7 +216,9 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
     so a refresh never recounts a profile run under
     another model (#1150). Likewise the packs whose rows the ``level`` block holds (each
     condition's ``source``, #1274) must be the ones layered onto ``model``, in order, or it
-    returns 2 naming them, so a refresh never drops a pack's practices.
+    returns 2 naming them, so a refresh never drops a pack's practices; and ``packs``, the
+    ``--pack`` files passed now, must match the run context's ``packs`` block by name, version
+    and sha256, in order, so a pack edited since the run is refused too.
 
     The treemap overlay (regenerated separately by the orchestrator) then reads
     the refreshed ``test_pressure.per_file`` so covered-but-unpinned files get
@@ -248,6 +250,10 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
         named = ", ".join(recorded) or "none with rows"
         print(f"--opt-in-mutation needs every --pack whose rows the run layered, in the same order; "
               f"the run's packs: {named}", file=sys.stderr)
+        return 2
+    if [pack_identity(p) for p in packs] != (ctx.get("packs") or []):
+        print("--opt-in-mutation needs the same --pack files the run used, unedited and in the same order; "
+              "the run context's packs block names them", file=sys.stderr)
         return 2
 
     # Only focus entries with test evidence: mutating a file with no test yields
@@ -384,7 +390,7 @@ def main(argv: list[str] | None = None) -> int:
     # the default model with no pack row layered onto it is the run's default (None)
     model = None if choice.kind == "default" and not pack_sources(choice.model) else choice
     if parsed.opt_in_mutation:
-        return run_opt_in_mutation(repo_root, scope=parsed.scope, model=model)
+        return run_opt_in_mutation(repo_root, scope=parsed.scope, model=model, packs=packs)
     run_date = datetime.now().strftime("%Y-%m-%d")
     try:
         ctx = build_and_publish_run(
