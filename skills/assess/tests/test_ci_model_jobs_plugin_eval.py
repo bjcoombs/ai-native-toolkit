@@ -183,3 +183,38 @@ def test_a_gitlab_plugin_eval_job_counts_on_the_command_not_an_echoed_key(tmp_pa
 ])
 def test_versioned_pips_and_more_managers_install_without_a_sign(command: str, signs: list[str]) -> None:
     assert _step(command) == signs
+
+
+# --- an apostrophe outside quotes (a heredoc's "don't") --------------------------------------
+
+_HEREDOC = "jobs:\n  j:\n    steps:\n      - run: |\n          cat <<EOF > notes.md\n          We don't gate this.\n" \
+           "          EOF\n          claude plugin eval .\n"
+
+
+@pytest.mark.parametrize(("text", "signs"), [
+    # An unclosed ' stops at the end of its line, so a later command is read.
+    (_HEREDOC, ["agent_cli"]),
+    ("evals:\n  script: |\n    cat <<EOF\n    it's late\n    EOF\n    claude plugin eval .\n", ["agent_cli"]),
+    ("jobs:\n  j:\n    steps:\n      - run: |\n          make it's\n          OUT=\"$(claude plugin eval .)\"\n",
+     ["agent_cli"]),
+    # Mirrors: a closed single-quoted mention, on one line or over several, still names it only.
+    ("jobs:\n  j:\n    steps:\n      - run: git commit -m 'claude plugin eval .'\n", []),
+    ("jobs:\n  j:\n    steps:\n      - run: |\n          git commit -m 'next:\n          claude plugin eval .'\n"
+     "          make test\n", []),
+    (_HEREDOC.replace("          claude plugin eval .\n", "          git commit -m \"claude plugin eval .\"\n"), []),
+    # Known limitation: a heredoc apostrophe still pairs with a later quote, here the one opening
+    # ``-m '``, so the quoted text after it is read. Reading a heredoc body as data would fix this.
+    (_HEREDOC.replace("          claude plugin eval .\n", "          git commit -m 'x; claude plugin eval .'\n"),
+     ["agent_cli"]),
+])
+def test_an_unclosed_apostrophe_stops_at_the_end_of_its_line(text: str, signs: list[str]) -> None:
+    assert _signs(text) == signs
+
+
+@pytest.mark.parametrize(("text", "runs"), [
+    ("don't\nmake a", "don_\nmake a"),                         # the newline is kept
+    ("x $(don't\nmake a)", "x $(don_\nmake a)"),
+    ("a 'b\nc' d", "a _ d"),                                   # a closed quote spans lines
+])
+def test_command_text_ends_an_unclosed_single_quote_at_its_line(text: str, runs: str) -> None:
+    assert command_text(text) == runs
