@@ -319,7 +319,7 @@ def _good_action(rank: int = 1) -> dict:
         "effort": "small",
         "files": [".golangci.yml"],
         "first_step": "Add cyclop under linters",
-        "done_when": "golangci-lint run passes with the rule active",
+        "done_when": "`golangci-lint run` passes with the rule active",
         "scope_fence": "Only .golangci.yml; no source edits",
     }
 
