@@ -3109,7 +3109,7 @@
         },
         {
           "code": "gitlab_rules_unevaluated",
-          "means": "A GitLab job holds a secrets scan but runs under rules, only/except or a when that is not evaluated. So it is not known whether the scan runs on each change.",
+          "means": "A GitLab job holds a secrets scan but runs under rules, only/except or a when that is not evaluated. Or its merged definitions could not be settled. So it is not known whether the scan runs on each change.",
           "next_step": "Nothing to change for the reading: a plain job with no rules, or a GitHub workflow, is read in full."
         },
         {

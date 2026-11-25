@@ -87,11 +87,14 @@ class IncludedFile:
 class Slot:
     """One place in GitLab's merge order (#1180): an included file read (``file`` indexes
     ``Resolution.files``), or an include this run could not read (``file`` None) that may define
-    the jobs ``jobs`` names (None: any job). ``conditional``: under an include with ``rules:``."""
+    the jobs ``jobs`` names (None: any job). ``conditional``: under an include with ``rules:``.
+    ``include``: an unread include item as written, ``<kind>: <source>``, so a reader can tell
+    which include it is (#1204); None for a read file, the gate and a repeated file."""
 
     file: int | None
     conditional: bool = False
     jobs: frozenset[str] | None = None
+    include: str | None = None
 
 
 @dataclass(frozen=True)
@@ -275,6 +278,11 @@ def _project_source(root: Path, project: str, ref: str | None) -> _Source | Incl
     return _Source(clone, head, "head") if head is not None else "not_cloned"
 
 
+def _written(item: IncludeItem) -> str:
+    """An include item as written, ``<kind>: <source>`` (``Slot.include``)."""
+    return f"{item.kind}: {item.source}"
+
+
 class _Walk:
     def __init__(self, repo_root: Path, root: Path | None) -> None:
         self.repo_root = repo_root
@@ -291,7 +299,7 @@ class _Walk:
         self.records.append({"kind": item.kind, "id": ident, "status": status,
                              "ref_basis": basis if status == "resolved" else None, "depth": depth})
         if status not in SETTLED:   # an include not read may define any job (#1180)
-            self.slots.append(Slot(None, self.conditional))
+            self.slots.append(Slot(None, self.conditional, include=_written(item)))
 
     def gate(self, item: IncludeItem, ident: str | None, depth: int, conditional: bool) -> None:
         """The toolkit's gate template: settled, except for the jobs it defines (#1152, #1180)."""
@@ -416,7 +424,7 @@ class _Walk:
         status = self.read_all(source, paths, depth, line)
         if status != "resolved":
             self.records[at] = {**self.records[at], "status": status, "ref_basis": None}
-            self.slots.append(Slot(None, self.conditional))
+            self.slots.append(Slot(None, self.conditional, include=_written(item)))
 
 
 @functools.lru_cache(maxsize=8)

@@ -23,7 +23,8 @@ ON_CHANGE = "on: [push, pull_request]\n"
 
 def _repo(root: Path, files: dict[str, str], remote: str | None = None) -> Path:
     """Write ``files``; a GitHub workflow with no ``on:`` line gets ``ON_CHANGE``, so a case states
-    only the step it tests (the trigger rule has its own tests)."""
+    only the step it tests (the trigger rule has its own tests). With a ``remote`` the files are a
+    git repository's, staged: the reader reads the files git tracks (#1204)."""
     for rel, text in files.items():
         if "/workflows/" in rel and not any(ln.startswith(("on:", "true:", "'on':", '"on":')) for ln in text.splitlines()):
             text = ON_CHANGE + text
@@ -33,6 +34,7 @@ def _repo(root: Path, files: dict[str, str], remote: str | None = None) -> Path:
     if remote is not None:
         subprocess.run(["git", "init", "-q", str(root)], check=True, capture_output=True)
         subprocess.run(["git", "-C", str(root), "remote", "add", "origin", remote], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
     return root
 
 
@@ -281,7 +283,8 @@ def test_a_manual_stage_hook_is_not_run_by_ci(tmp_path: Path) -> None:
     root = _repo(tmp_path, {".pre-commit-config.yaml": cfg,
                             ".github/workflows/x.yml": "steps:\n  - run: pre-commit run --all-files\n"})
     block = scan_secrets_guard(root)
-    assert block["ci"]["present"] is False and block["configured"] is True  # level 1 still lists it
+    # A hook that runs only by hand never guards a commit, so level 1 does not list it either (#1204).
+    assert block["ci"]["present"] is False and block["configured"] is False
 
 
 def test_pre_commit_run_without_a_secrets_hook_is_not_a_scan(tmp_path: Path) -> None:
@@ -494,7 +497,8 @@ def test_a_template_override_that_extends_is_not_measured(tmp_path: Path) -> Non
 
 @pytest.mark.parametrize("key", ['"extends": .mr', "'rules':\n    - if: $CI_COMMIT_TAG"])
 def test_a_quoted_condition_key_is_not_measured(tmp_path: Path, key: str) -> None:
-    text = f".mr:\n  script: [echo]\nsecrets:\n  {key}\n  script:\n    - gitleaks detect\n"
+    # The parent holds rules: an ``extends:`` is followed now (#1204), and its rules are not evaluated.
+    text = f".mr:\n  rules:\n    - if: $CI_MERGE_REQUEST_IID\nsecrets:\n  {key}\n  script:\n    - gitleaks detect\n"
     assert scan_secrets_guard(_repo(tmp_path, {".gitlab-ci.yml": text}))["ci"]["rules_unevaluated"] == ["gitleaks"]
 
 
