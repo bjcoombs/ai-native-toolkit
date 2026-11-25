@@ -339,9 +339,10 @@ def test_findings_section_verbatim() -> None:
 
 
 def test_findings_section_empty_fallback() -> None:
-    assert render_findings_section({"findings_markdown": "   "}) == \
-        "_No cross-practice findings recorded._"
-    assert render_findings_section({}) == "_No cross-practice findings recorded._"
+    # the section keeps its heading above the fallback line (#1253)
+    empty = "## Cross-Practice Findings (Keyhole Readiness)\n\n_No cross-practice findings recorded._"
+    assert render_findings_section({"findings_markdown": "   "}) == empty
+    assert render_findings_section({}) == empty
 
 
 # --------------------------------------------------------------------------

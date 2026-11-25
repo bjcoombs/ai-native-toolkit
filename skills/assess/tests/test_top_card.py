@@ -148,7 +148,7 @@ def test_without_an_open_action_the_card_falls_back_to_the_gate_or_the_next_run(
     assert below[-1] == "Done when: the next `/assess` run reads that a coverage gate is enforced."
     top = card_lines(_top(), MODEL, KNOWN)  # type: ignore[arg-type]
     assert top[-2:] == ["Start here: run `/assess` again after your next change",
-                        "Done when: that run still holds every gate."]
+                        "Done when: the next `/assess` run still holds every gate."]
 
 
 def test_first_action_reads_the_first_open_entry_by_rank(tmp_path: Path) -> None:
@@ -189,8 +189,9 @@ def test_the_markdown_bolds_the_lead_and_links_the_glossary_terms_once() -> None
     assert f"[measured catalogue conditions]({GLOSSARY_URL}#catalogue-coverage) met" in md
     assert f"[verified]({GLOSSARY_URL}#evidence-grade)" in md
     assert all("](" not in line for line in lines)
-    # "Steps" is not "Step": the no-Steps lead links nothing
-    assert card_markdown(["This maturity model defines no Steps."]) == "**This maturity model defines no Steps.**"
+    # the no-Steps lead links "Steps" to the same entry (#1253: every line carries a link)
+    assert card_markdown(["This maturity model defines no Steps."]) == \
+        f"**This maturity model defines no [Steps]({GLOSSARY_URL}#step).**"
 
 
 def test_the_card_lines_are_plain_english() -> None:

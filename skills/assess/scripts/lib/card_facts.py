@@ -16,17 +16,30 @@ maturity model that produced it:
   gate waits on, that is, outside rows 1..``level`` of every gate of every Step. They are
   advice: none of them moves the Step.
 
-Tests: ``tests/test_top_card.py``.
+``CardFact`` is one line of the report's first screen with the ``fact_id`` that names it:
+``lib/top_card.py`` (``card_facts``), ``lib/profiles.py`` (``model_facts``) and
+``assess_report.py`` (``report_facts``) each return their lines as facts, and
+``tests/test_card_construction.py`` fails a first screen that states one fact twice or holds a
+line no fact function wrote (#1253).
+
+Tests: ``tests/test_top_card.py``, ``tests/test_card_construction.py``.
 """
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, TypedDict
 
 from lib.level_result_types import Blocker
 from lib.levels import MaturityModel
 
-__all__ = ["advisories", "blocking_gates", "step_gate_ids", "step_name", "top_step"]
+__all__ = ["CardFact", "advisories", "blocking_gates", "step_gate_ids", "step_name", "top_step"]
+
+
+class CardFact(TypedDict):
+    """One line of the report's first screen and the id of the fact it states."""
+
+    fact_id: str
+    text: str
 
 
 def blocking_gates(level: Any) -> list[Blocker]:

@@ -25,6 +25,15 @@ ${BODY}"
 
 When several PRs share one marathon, the standalone build fires on the **first** version-changing merge. The final merged tree must therefore carry the highest version (have the last-merging PR bump one step higher; see [the version hot file](./marathon.md#the-version-hot-file)), otherwise the published `standalone-skills-v<version>` bundle is missing the later PRs and no further build re-fires for that version.
 
+## Cold-reader check for a card change
+
+A release that changes the report's top card (the lines above the first section heading, built in `skills/assess/scripts/lib/top_card.py` and pinned by the goldens `skills/assess/tests/fixtures/golden/card-*.md`) gets one cold-reader check before it ships. The construction tests (`skills/assess/tests/test_card_construction.py`) hold each fact to one line, the word budget and a number, link or command on every line; they cannot tell whether a stranger understands the card.
+
+1. Render the card from one golden, such as `card-below-top-step.md`, or from a real run's `.assess/deterministic-report.md`.
+2. Give it to a reader with no access to the repository: a person who has not worked on it, or a fresh model session with nothing but the card.
+3. Ask two questions: "What state is this repository in?" and "What would you do first?"
+4. Record the reader's answers in the release PR under "Cold-reader check", with the golden or report used. An answer that names the wrong Step or the wrong first task is a card fault: fix the wording before the release.
+
 ## Version-freeze notes
 
 While a version freeze holds, a PR leaves every version counter at its value on `main` and records the bump it would have made as a note file, `skills/assess/changes/<issue>.<counter>.md`, holding one or more markdown bullets. It lists the counter in its PR body under "Version bumps for the release PR". It never writes an `Unreleased` block into a history file: each PR adds its own file, so two PRs that change the same counter do not conflict. The counter names, the file that assigns each one and its history file are in [the notes README](../../skills/assess/changes/README.md).

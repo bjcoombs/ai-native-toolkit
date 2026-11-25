@@ -18,6 +18,7 @@ from lib import core_scans
 from lib.fleet.fleet_level import repo_level
 from lib.level_signals import signal_path_validator
 from lib.level_tally import LEVEL_READS, default_model
+from lib.top_card import PROFILES_URL
 from lib.profiles import (PROFILES_DIR, ModelChoice, ProfileError, add_model_arguments, model_lines,
                           non_default_ids, profile_names, profile_path, resolve, single_repo_choice)
 from test_headline import ci2  # noqa: F401 - ci2 is a fixture
@@ -242,7 +243,9 @@ def test_a_profile_run_names_the_profile_at_the_top_of_the_report(ci2: Path) -> 
     lines = ctx["headline"]["summary_lines"]
     assert lines[0] == "Maturity model: profile handover, not the default."
     assert lines[1].startswith("Not ready for handover (profile: handover). Missing: ")
-    assert ctx["headline"]["summary_markdown"].startswith(lines[0])
+    # the markdown links the profile to its file (#1253)
+    assert ctx["headline"]["summary_markdown"].startswith(
+        f"Maturity model: [profile handover]({PROFILES_URL}/handover.toml), not the default.")
 
 
 def _fleet_cli() -> Any:
@@ -301,7 +304,7 @@ def test_the_step_line_keeps_its_glossary_link_under_a_profile() -> None:
     choice = resolve("handover", None)
     level = core_scans.level(*(_blocks().get(k) for k in LEVEL_READS), choice)
     paragraphs = core_scans.headline(level, None, choice)["summary_markdown"].split("\n\n")
-    assert paragraphs[0] == "Maturity model: profile handover, not the default."
+    assert paragraphs[0] == f"Maturity model: [profile handover]({PROFILES_URL}/handover.toml), not the default."
     assert paragraphs[2].startswith("**Holding [Step](") and "#step) 4 of 4" in paragraphs[2]
 
 

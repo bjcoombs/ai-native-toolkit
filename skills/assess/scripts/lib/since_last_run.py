@@ -90,7 +90,7 @@ __all__ = ["ClosedAction", "SinceLastRun", "closed_actions", "gate_changes", "si
 
 _SHA = re.compile(r"[0-9a-f]{7,40}")
 # #1256: a run with no committed baseline becomes the baseline; the top card states it once (#1252)
-FIRST_RUN = "This run is your baseline; the next run reports what moved."
+FIRST_RUN = "This run is your baseline; the next `/assess` run reports what moved."
 # Why ``closed`` is unknown, as the line words each ``closed_reason`` code.
 UNKNOWN_CLOSED = {
     "no_previous_commit": "the previous run recorded no commit",

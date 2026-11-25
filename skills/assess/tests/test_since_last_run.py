@@ -295,7 +295,7 @@ def test_a_log_without_a_committed_baseline_makes_this_run_the_baseline(repo: Pa
         block = since_last_run(_level("met", "unmet"), repo / ".assess", repo)
         assert (block["first_run"], block["closed_reason"]) == (True, None)
         assert block["lines"] == [FIRST_RUN]
-        assert FIRST_RUN == "This run is your baseline; the next run reports what moved."
+        assert FIRST_RUN == "This run is your baseline; the next `/assess` run reports what moved."
         assert not any("not known" in line for line in block["lines"])
 
 
