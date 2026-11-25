@@ -1,4 +1,4 @@
-"""Tests for the shields.io endpoint badge (lib/badge.py).
+"""Tests for the shields.io endpoint badge (lib/report/badge.py).
 
 The badge is a self-description, so the contract under test is honesty: its
 message is the deterministic headline summary (the Step and the verified tally,
@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from lib.badge import (
+from lib.report.badge import (
     badge_exists,
     headline_badge,
     step_color,

@@ -8,7 +8,7 @@ section per diagram, the SVG embedded with a relative, clickable image link,
 or the skip reason in its place. Every ``## `` section opens with a line starting
 ``In place:`` (``lib/vocabulary.IN_PLACE``, #743) that says what this run already has
 before the question and any next step. The report ends with "How this was measured"
-(the scans that ran and were skipped, ``lib/measured_appendix.py``, #794).
+(the scans that ran and were skipped, ``lib/report/measured_appendix.py``, #794).
 ``write_diagrams`` writes the SVGs and the
 report beside ``groups.jsonl``, removing any diagram file a previous run left
 that this run did not draw, so a stale picture never sits beside new data;
@@ -331,7 +331,7 @@ def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None,
     section when given (``lib/fleet/fleet_credit.py``), the opportunities section when given
     (``lib/fleet/fleet_opportunities_section.py``), then each diagram embedded with a relative
     link, or why it was skipped, then the "How this was measured" section when given
-    (``lib/measured_appendix.py``). ``packs``, the "Practice packs" section of a ``--pack`` run
+    (``lib/report/measured_appendix.py``). ``packs``, the "Practice packs" section of a ``--pack`` run
     (``lib/fleet/fleet_packs.py``, #1276), follows the opportunities."""
     lines = ["# Fleet diagrams", ""]
     if front is not None:

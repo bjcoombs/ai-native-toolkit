@@ -1,4 +1,4 @@
-"""Tests for lib/gate_cost.py: the CI gate's Actions cost estimate.
+"""Tests for lib/report/gate_cost.py: the CI gate's Actions cost estimate.
 
 GitHub is faked with a `gh` shell script first on PATH (the pattern in
 test_config_drift.py), so the real subprocess path through lib/hosting/gh_cli.py runs.
@@ -20,7 +20,7 @@ from assess_test_support import skip_without_posix_shell
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.gate_cost import MINUTES_PER_RUN, estimate_gate_cost
+from lib.report.gate_cost import MINUTES_PER_RUN, estimate_gate_cost
 
 FAKE_GH = """#!/bin/sh
 echo "$*" >> "$FAKE_GH/log"
@@ -147,7 +147,7 @@ def test_gate_cost_private_unknown_when_repo_view_fails(world) -> None:
 
 
 def test_gate_cost_capped_at_listing_limit(world, monkeypatch: pytest.MonkeyPatch) -> None:
-    import lib.gate_cost as gate_cost
+    import lib.report.gate_cost as gate_cost
 
     monkeypatch.setattr(gate_cost, "PR_LIMIT", 3)
     world.serve("prs.json", _merged(3, NOW))

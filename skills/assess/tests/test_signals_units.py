@@ -15,7 +15,7 @@ import pytest
 
 import assess_signals
 from lib import signals
-from lib.catalog import build_catalog
+from lib.report.catalog import build_catalog
 from lib.counts_only.content_free import HASH_PREFIX, counts_only_scans, hash_value
 from lib.counts_only.counts_only_rules import HASHED_PATH, classify
 from lib.signals_schema import SCHEMA_PATH

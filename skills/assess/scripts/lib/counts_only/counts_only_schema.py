@@ -55,7 +55,7 @@ from lib.docs.doc_claims import DocClaimsBlock
 from lib.instructions.agent_consistency import AgentConsistencyBlock
 from lib.docs.doc_complexity_join import DocUnit
 from lib.docs.doc_staleness import DocStalenessBlock, DocStalenessRow
-from lib.gap_actions import GapAction
+from lib.report.gap_actions import GapAction
 from lib.instructions.guardrails import GuardrailsBlock
 from lib.instructions.instruction_placement import InstructionPlacementBlock
 from lib.skill_disclosure import SkillDisclosureBlock

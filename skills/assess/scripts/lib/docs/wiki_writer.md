@@ -1,6 +1,6 @@
-# `lib/wiki_writer.py`
+# `lib/report/wiki_writer.py`
 
-The full reference for `skills/assess/scripts/lib/wiki_writer.py`, whose module docstring holds the summary.
+The full reference for `skills/assess/scripts/lib/report/wiki_writer.py`, whose module docstring holds the summary.
 
 Renders and writes the `.assess/` wiki files (`index.md`, `log.md`,
 `hotspots/*.md`) from string templates. No LLM calls. Pure string formatting + file IO.

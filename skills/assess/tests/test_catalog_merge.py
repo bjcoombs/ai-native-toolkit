@@ -24,12 +24,12 @@ from typing import Any
 
 import pytest
 
-import lib.catalog as catalog_mod
+import lib.report.catalog as catalog_mod
 import lib.counts_only.content_free as content_free
 import lib.manifest.check_manifest as cm
-from lib.catalog import build_catalog, render_json
-from lib.catalog_html import render_html
-from lib.catalog_md import render_markdown
+from lib.report.catalog import build_catalog, render_json
+from lib.report.catalog_html import render_html
+from lib.report.catalog_md import render_markdown
 from lib.counts_only.counts_only_rules import RULES
 from lib.scoring.level_signals import load_default_levels
 from lib.signals import known_scans

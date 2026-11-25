@@ -436,7 +436,7 @@ class FindingPaths(TypedDict):
 
 
 class ReviewedPath(TypedDict):
-    """A finding path a committed review cleared (``lib.reviewed_findings``)."""
+    """A finding path a committed review cleared (``lib.report.reviewed_findings``)."""
 
     path: str
     completed_sha: str

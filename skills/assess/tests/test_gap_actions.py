@@ -1,7 +1,7 @@
-"""Unit tests for lib.gap_actions: the deterministic Top 3 gap candidates."""
+"""Unit tests for lib.report.gap_actions: the deterministic Top 3 gap candidates."""
 from __future__ import annotations
 
-from lib.gap_actions import REACHABILITY_FLOOR, build_gap_actions
+from lib.report.gap_actions import REACHABILITY_FLOOR, build_gap_actions
 
 SOFTWARE = {"available": True, "archetype": "software"}
 KB = {"available": True, "archetype": "knowledge-base"}
@@ -127,7 +127,7 @@ def _placement(lines: int, flagged: bool, relocatable: list[str] | None = None) 
 
 
 def test_a_flagged_instruction_file_gets_a_remove_action_with_its_measured_cost() -> None:
-    from lib.gap_actions import REMOVAL_FINDING, REMOVE_MODE
+    from lib.report.gap_actions import REMOVAL_FINDING, REMOVE_MODE
     (gap,) = build_gap_actions(None, None, None, None, instruction_placement=_placement(312, True, ["Go tooling"]))
     assert (gap["signal"], gap["finding"], gap["mode"], gap["paths"]) == (
         "instruction_placement", REMOVAL_FINDING, REMOVE_MODE, ["CLAUDE.md"])
@@ -143,7 +143,7 @@ def test_the_trigger_is_the_scans_own_flag_never_a_second_size() -> None:
 
 
 def test_finalize_gives_a_removal_the_remove_mode_and_keeps_keyhole_modes() -> None:
-    from lib.gap_actions import REMOVAL_FINDING, action_mode
+    from lib.report.gap_actions import REMOVAL_FINDING, action_mode
     from lib.keyhole.keyhole_signals import mode_for_finding
     assert action_mode(REMOVAL_FINDING) == "remove"
     assert action_mode("lying_map") == mode_for_finding("lying_map")
@@ -160,7 +160,7 @@ def test_counts_only_keeps_a_removals_cost_mode_and_finding_and_drops_its_words(
 
 
 def test_action_mode_values_close_over_every_mode_finalize_writes() -> None:
-    from lib.gap_actions import ACTION_MODE_VALUES, REMOVAL_FINDING, action_mode
+    from lib.report.gap_actions import ACTION_MODE_VALUES, REMOVAL_FINDING, action_mode
     from lib.keyhole.keyhole_signals import FINDING_MODES
     assert {action_mode(f) for f in [*FINDING_MODES, REMOVAL_FINDING, None]} <= ACTION_MODE_VALUES
     assert "remove" in ACTION_MODE_VALUES

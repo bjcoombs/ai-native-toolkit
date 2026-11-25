@@ -40,7 +40,7 @@ from lib.docs.doc_complexity_join import _extract_file_ccn, _high_ccn_threshold,
 from lib.complexity.stats_rows import code_band_paths
 from lib.graph.import_graph import is_graph_source
 from lib.keyhole.liveness_scan import STATIC_REACHABILITY_CAVEAT
-from lib.reviewed_findings import mark_reviewed, open_findings, render_reviewed_markdown
+from lib.report.reviewed_findings import mark_reviewed, open_findings, render_reviewed_markdown
 from lib.run_context_types import (
     AttentionRow, BehaviourBlock, BehaviourFields, CoChangePair, CouplingRow, DerivedFinding,
     DocumentationBlock, FindingPaths, FindingProducts, JsonDict, KeyholeConcern, KeyholeIntegration,
@@ -1410,7 +1410,7 @@ def finding_products(
     ``archived_finding_paths`` carries those out for the `excluded_as_archive`
     disclosure. Equal-score rows order by hotspot rank, then finding severity,
     then path. A top score of 1 prescribes only its rank-1 row. A reviewed path
-    (``lib.reviewed_findings``) shows only in the markdown's "Reviewed" section.
+    (``lib.report.reviewed_findings``) shows only in the markdown's "Reviewed" section.
     """
     open_ = open_findings(findings)
     attention, archived = exclude_archive_from_attention(

@@ -1,6 +1,6 @@
 """Emit the frozen-harness CI workflow for /assess (the third end-of-run offer).
 
-Thin CLI over ``lib.ci_workflow.emit_ci_workflow``. The orchestrator (SKILL.md
+Thin CLI over ``lib.report.ci_workflow.emit_ci_workflow``. The orchestrator (SKILL.md
 Step 6.5) runs this after the user accepts the "freeze this into a repeatable
 check?" offer. It writes ``.github/workflows/assess-gate.yml`` into the target
 repo, pinning a published toolkit release and baking in the toolchain it found.
@@ -45,7 +45,7 @@ import sys
 from pathlib import Path
 
 from lib.plugin_version import UNKNOWN, read_version
-from lib.ci_workflow import DEFAULT_PATHS_IGNORE, emit_ci_workflow, find_path_filtered_workflow
+from lib.report.ci_workflow import DEFAULT_PATHS_IGNORE, emit_ci_workflow, find_path_filtered_workflow
 
 
 _REPO = "bjcoombs/ai-native-toolkit"

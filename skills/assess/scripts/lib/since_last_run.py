@@ -25,7 +25,7 @@ this run's publish step overwrites any of them:
   the credit that run showed survives its log entry being replaced;
 - **closed actions**: the entries of the whole-repo ``.assess/actions.json`` *as committed
   at HEAD*, the one file finalize writes whatever the run's scope (``actions`` and
-  ``completed``, as ``lib/reviewed_findings.py`` reads them) with ``status: "done"``
+  ``completed``, as ``lib/report/reviewed_findings.py`` reads them) with ``status: "done"``
   and a ``completed_sha`` that is on HEAD's history and is not an ancestor of the commit
   the previous run measured (``measured_commit.head_sha``). An action closed before the
   previous run is not credited again, and a branch commit squashed or rebased away is never
@@ -83,7 +83,7 @@ from lib.prior_level import (Baseline, PruningEntry, as_prior_level, build_prior
                              load_baseline, load_prior_level, load_pruning, model_key)
 from lib.profiles import model_for_level
 from lib.pruning_ledger import ledger_lines, removal, update_ledger
-from lib.reviewed_findings import action_entries
+from lib.report.reviewed_findings import action_entries
 from lib.run_context_types_since import ClosedAction, SinceLastRun
 
 __all__ = ["ClosedAction", "SinceLastRun", "closed_actions", "gate_changes", "since_last_run"]

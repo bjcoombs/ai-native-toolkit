@@ -297,8 +297,7 @@ def test_an_unavailable_side_is_the_signal_named(data: dict[str, Any], missing: 
 
 
 def test_the_catalog_never_counts_a_hazard() -> None:
-    from lib import catalog
-
+    from lib.report import catalog
     raw = _default()
     raw["rows"][5]["levels"][0]["polarity"] = "hazard"  # layer-5-ci.1, a counted ci_executed signal
     signals = {"ci_checks.enforced_check_runs": {"evidence": "ci_executed", "title": "CI"}}

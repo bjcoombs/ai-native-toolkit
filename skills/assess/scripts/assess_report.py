@@ -31,7 +31,7 @@ It renders:
   finding, #1254), and
 - the regression deltas (graduated / new / regressed / restructured / persistent), and
 - "How this was measured": the scans that ran and were skipped, with the catalog link
-  (``lib/measured_appendix.py``, #794).
+  (``lib/report/measured_appendix.py``, #794).
 
 It deliberately does NOT reproduce (these require LLM judgement and are written
 elsewhere by the orchestrator, see SKILL.md):
@@ -67,7 +67,7 @@ from lib.card_facts import CardFact
 from lib.fleet.runner import repository_name
 from lib.assess_diagrams_review import build_all
 from lib.scoring.headline import GLOSSARY_URL, as_headline
-from lib.measured_appendix import measured_section
+from lib.report.measured_appendix import measured_section
 from lib.scan_plan import not_run_text
 
 # The findings section's heading, as lib/keyhole/keyhole_signals.render_findings_markdown writes

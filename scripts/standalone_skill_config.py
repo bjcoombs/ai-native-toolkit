@@ -122,7 +122,7 @@ SKILLS: dict[str, dict[str, Any]] = {
                 "false claim can still be kept out of the report. Write the scorecard's "
                 "`evidence` list to `$REPO_ROOT/.assess/.cache/evidence.json` (after "
                 '`mkdir -p "$REPO_ROOT/.assess/.cache"`), then run '
-                '`uv run scripts/lib/evidence_check.py "$REPO_ROOT" '
+                '`uv run scripts/lib/report/evidence_check.py "$REPO_ROOT" '
                 '"$REPO_ROOT/.assess/.cache/evidence.json" --json '
                 '"$REPO_ROOT/.assess/.cache/evidence-checked.json"`. '
                 "It prints `verified N, rejected M` and exits 0 (all hold) or 1 (some "

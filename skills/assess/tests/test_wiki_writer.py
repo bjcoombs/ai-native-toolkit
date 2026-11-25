@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 
-from lib.wiki_writer import (
+from lib.report.wiki_writer import (
     HotspotEntry,
     LogEntry,
     append_log_entry,

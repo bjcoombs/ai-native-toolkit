@@ -5,7 +5,7 @@
 id = "core.gate_cost_estimate"
 kind = "collector"
 title = "Gate cost estimate"
-callable = "lib.gate_cost:estimate_gate_cost"
+callable = "lib.report.gate_cost:estimate_gate_cost"
 publishes = ["gate_cost_estimate"]
 reads = ["repo_root"]
 stage = "read_side"

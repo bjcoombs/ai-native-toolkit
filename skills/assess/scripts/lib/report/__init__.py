@@ -1,0 +1,1 @@
+"""The report artefacts a run writes: the .assess/ wiki pages and their state, the badge, the findings snapshot and the reviews that clear findings, the evidence check, the gap actions, the anomaly flags, the "How this was measured" appendix, the gate workflow and its cost estimate, and the measures catalog with its Markdown, HTML, configure and truth-tag views (#917)."""

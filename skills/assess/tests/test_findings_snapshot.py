@@ -8,7 +8,7 @@ from assess_core import build_and_publish_run
 from assess_core_helpers import _minimal_repo
 from assess_gate import evaluate, format_verdict, main
 from lib.artifact_schema import ASSESS_METHOD_VERSION
-from lib.findings_snapshot import (
+from lib.report.findings_snapshot import (
     FINDINGS_SNAPSHOT_FILE,
     build_snapshot,
     committed_prior,

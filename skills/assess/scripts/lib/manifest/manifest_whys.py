@@ -32,7 +32,7 @@ reads the block its signal path starts with; a finding reads the block or collec
 inputs name; a collector that a row or finding reads, directly or through another
 collector, reads everything in its ``reads``. A collector's read of its own block does not
 count (``run_header`` publishes ``diff`` and reads the private ``diff`` collector). This is
-the catalog's "Used by" relation (``lib.catalog._used_by``) closed over ``reads``. The
+the catalog's "Used by" relation (``lib.report.catalog._used_by``) closed over ``reads``. The
 catalog renders the token as "Run plumbing". Imports only ``check_validation``,
 ``levels_fields`` and ``vocabulary``, so ``check_manifest`` can import it.
 """

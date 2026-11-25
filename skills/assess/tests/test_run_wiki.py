@@ -1,4 +1,4 @@
-"""Tests for lib/run_wiki.py: the hotspot pages, index.md rows and graduation
+"""Tests for lib/report/run_wiki.py: the hotspot pages, index.md rows and graduation
 records one run writes.
 
 Moved out of test_assess_core.py when assess_core's helpers split into
@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 
 from assess_core import build_and_publish_run
-from lib import run_wiki
-from lib.wiki_writer import (
+from lib.report import run_wiki
+from lib.report.wiki_writer import (
     hotspot_page_source_path,
     hotspot_page_status,
     is_retired_status,
@@ -31,7 +31,7 @@ def test_unfinalized_hotspot_page_uses_neutral_pointer_not_placeholder(tmp_path:
     "Suggested actions" body must read as intentional, not as unfinished work
     (issue #165).
     """
-    from lib.wiki_writer import UNFINALIZED_ACTIONS_POINTER, slug_for_path
+    from lib.report.wiki_writer import UNFINALIZED_ACTIONS_POINTER, slug_for_path
 
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -62,7 +62,7 @@ def test_hotspot_page_carries_growth_profile_when_file_accretes(git_repo) -> Non
     """A top-hotspot file that the accretion scan flags (monotonic growth, low
     deletion across several commits) gets the growth-profile line wired into its
     generated hotspot page - tasks 4+5 end-to-end."""
-    from lib.wiki_writer import slug_for_path
+    from lib.report.wiki_writer import slug_for_path
 
     repo, commit = git_repo
     src = repo / "src"
@@ -108,7 +108,7 @@ def test_hotspot_page_omits_growth_profile_when_scan_unavailable(tmp_path: Path)
     """Graceful degradation: outside a git repo the accretion scan is
     unavailable, so the hotspot page is still written - just without a growth
     line. Hotspot generation never depends on the scan succeeding."""
-    from lib.wiki_writer import slug_for_path
+    from lib.report.wiki_writer import slug_for_path
 
     repo = tmp_path / "repo"  # not a git repo
     repo.mkdir()
@@ -137,7 +137,7 @@ def test_hotspot_page_omits_growth_profile_when_scan_unavailable(tmp_path: Path)
 def test_unfinalized_actions_pointer_carries_no_placeholder_marker() -> None:
     """The neutral pointer text itself must be free of TODO-style markers - it is
     the default that ships when a page is never finalized."""
-    from lib.wiki_writer import UNFINALIZED_ACTIONS_POINTER
+    from lib.report.wiki_writer import UNFINALIZED_ACTIONS_POINTER
 
     lowered = UNFINALIZED_ACTIONS_POINTER.lower()
     for marker in ("pending", "todo", "placeholder", "fixme", "tbd"):

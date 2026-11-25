@@ -36,7 +36,7 @@ Every `test_*.py` file in this directory has a row below.
 | `assess_core_helpers.py` | repo-seeding helpers shared by `test_assess_core.py` and the lib suites split from it (not a test module) |
 | `test_assess_finalize.py` | `scripts/assess_finalize.py` - LLM write-back; placeholder substitution in `log.md` and `hotspots/*.md` |
 | `test_assess_gate.py` | `scripts/assess_gate.py` - CI regression gate; complexity and containment threshold checks and exit codes |
-| `test_findings_snapshot.py` | `lib/findings_snapshot.py` + `scripts/assess_gate.py` - the committed `findings.json`, the method-version comparison and the gate note it prints |
+| `test_findings_snapshot.py` | `lib/report/findings_snapshot.py` + `scripts/assess_gate.py` - the committed `findings.json`, the method-version comparison and the gate note it prints |
 | `test_assess_report.py` | `scripts/assess_report.py` - deterministic report renderer; template substitution, section renderers, conditional fallbacks |
 | `test_emit_workflow.py` | `scripts/assess_emit_workflow.py` - CLI wrapper for the frozen-harness workflow emitter; default derivation, arg parsing, path filters and the path-filter default |
 | `test_decomposition_parity.py` | `scripts/assess_core.py` + `scripts/assess_report.py` - parity harness; guards that the deterministic pipeline produces byte-for-byte identical output after the Part 3 SKILL.md decomposition |
@@ -79,10 +79,10 @@ Every `test_*.py` file in this directory has a row below.
 | `test_liveness_scan.py` | `lib/keyhole/liveness_scan.py` - dead-code tool output parsers, observability rungs, the anchored on-call runbook name and the test and fixture exclusion (#823), graceful degradation when tools are absent |
 | `test_instrumentation_scan.py` | `lib/keyhole/instrumentation_scan.py` - observability rung 1 from manifests (whole names, Cargo and mix dependency keys), standard-library loggers in source and collector configs, each with a test and fixture false-credit case, and the recorded kinds (#823) |
 | `test_test_pressure.py` | `lib/test_pressure/` - mutation tier output parsing, cheap heuristics (test/source ratio, assertion density, gap signal) |
-| `test_ci_workflow.py` | `lib/ci_workflow.py` - template substitution (version, branch, tool steps, path filters), path-filtered workflow detection, literal-dollar escaping, YAML well-formedness, and the `actions/checkout` pin matching this repo's gate workflow and `README.md` |
+| `test_ci_workflow.py` | `lib/report/ci_workflow.py` - template substitution (version, branch, tool steps, path filters), path-filtered workflow detection, literal-dollar escaping, YAML well-formedness, and the `actions/checkout` pin matching this repo's gate workflow and `README.md` |
 | `test_stats_diff.py` | `lib/complexity/stats_diff.py` - hotspot transition classification (graduated, regressed, restructured, new, persistent; restructured when the worst function falls while summed complexity rises) and sidecar loading |
 | `test_stats_rows.py` | `lib/complexity/stats_rows.py` + `scripts/complexity-treemap.py` - the top-10 lists and the uncapped `files` key, that the doc-complexity join sees a complex file outside every top list, and the one-time diff disarm from the stats schema bump |
-| `test_wiki_writer.py` | `lib/wiki_writer.py` - wiki file rendering (index, log, hotspot pages) and HotspotEntry / LogEntry dataclass behaviour |
+| `test_wiki_writer.py` | `lib/report/wiki_writer.py` - wiki file rendering (index, log, hotspot pages) and HotspotEntry / LogEntry dataclass behaviour |
 | `test_git_commit_info.py` | `lib/git_churn.py` (`git_commit_info`) - commit snapshot with SHA/timestamp for staleness warnings |
 | `test_instruction_bloat.py` | `lib/instructions/agent_instructions_grader.py` - score on always-on size and share (#560): always-on lines past 200, fetch-on-need lines, neither gated on the share flag, B cap past 400 loaded lines, and the grade matching its `instruction_placement` record |
 | `test_instruction_grading_robustness.py` | `lib/instructions/agent_instructions_grader.py`, `lib/instructions/instruction_placement.py` - wording and padding inside a section never lower the penalty (#619): prose padding a command fence, heading renames and `Never` lines on a size-signalled section, a section crossing `LONG_SECTION_MIN_LINES` at the relocatable cap or near the B cap, and a property sweep over always-on to fetch-on-need moves |
@@ -105,10 +105,10 @@ Every `test_*.py` file in this directory has a row below.
 | `test_review_automation.py` | `lib/ci/review_automation.py` and `shared_tooling.step_uses` - AI review committed in CI (pinned actions and GitLab components, the `[review] ai_review_components` list, review app config files, tracked-only credit), the `review_evidence` truth table, a headless Layer 7 floor of 1 on a GitHub and a GitLab fixture, and a failed platform read keeping the offline credit |
 | `test_shared_tooling.py` | `lib/ci/shared_tooling.py` - shared CI sources and agent marketplaces: GitLab includes, GitHub reusable workflows, marketplace manifests and `extraKnownMarketplaces`, tracked-only credit, and the distinct-marketplace roll-up fixture from #550 |
 | `test_agent_ops.py` | `lib/agents/agent_ops.py` - agent-operations guardrail scan (Layer 8 evidence) |
-| `test_anomaly_detector.py` | `lib/anomaly_detector.py` - anomaly detection on run output |
+| `test_anomaly_detector.py` | `lib/report/anomaly_detector.py` - anomaly detection on run output |
 | `test_archetype.py` | `lib/keyhole/archetype.py` - repository archetype detection |
 | `test_assess_config.py` | `lib/assess_config.py` - the working-notes keys in `.assess/config.toml` |
-| `test_badge.py` | `lib/badge.py` - the shields.io endpoint badge: the headline summary as its message, colour by Step |
+| `test_badge.py` | `lib/report/badge.py` - the shields.io endpoint badge: the headline summary as its message, colour by Step |
 | `test_claude_config.py` | `lib/instructions/claude_config.py` - legacy command files and Claude Code frontmatter the runtime ignores, plugin path overrides, scope, and the unchanged run-context of an unconfigured repo |
 | `test_config_drift.py` | `lib/hosting/config_drift.py` + `lib/hosting/gh_cli.py` - committed GitHub-config snapshots against the live setting, and the shared `gh` helper |
 | `test_review_reality_gitlab.py` | `lib/hosting/gitlab_cli.py` + the GitLab path of `lib/hosting/review_reality.py` - provider detection, `glab` refusal mapping, merged merge request approvals |
@@ -122,10 +122,10 @@ Every `test_*.py` file in this directory has a row below.
 | `test_diff_reliability.py` | `lib/complexity/diff_reliability.py` - cross-run diff reliability: version stamps, tool-version changes, schema changes |
 | `test_doc_provenance.py` | `lib/docs/doc_provenance.py` - provenance-aware staleness of generated docs |
 | `test_doc_claims.py` | `lib/docs/doc_claims.py` - claim checks across the doc set and cross-document contradictions |
-| `test_evidence_check.py` | `lib/evidence_check.py` - deterministic re-check of scorer evidence |
-| `test_scorer_evidence.py` | `lib/evidence_check.py` - the layer scorer's structured evidence contract |
-| `test_gap_actions.py` | `lib/gap_actions.py` - the deterministic Top 3 gap candidates |
-| `test_gate_cost.py` | `lib/gate_cost.py` - the CI gate's Actions cost estimate |
+| `test_evidence_check.py` | `lib/report/evidence_check.py` - deterministic re-check of scorer evidence |
+| `test_scorer_evidence.py` | `lib/report/evidence_check.py` - the layer scorer's structured evidence contract |
+| `test_gap_actions.py` | `lib/report/gap_actions.py` - the deterministic Top 3 gap candidates |
+| `test_gate_cost.py` | `lib/report/gate_cost.py` - the CI gate's Actions cost estimate |
 | `test_generated_files.py` | `lib/complexity/generated_files.py` - generated-file header sniff and long-line detector |
 | `test_git_churn.py` | `lib/git_churn.py` - churn-degeneracy detector |
 | `test_instruction_claims.py` | `lib/instructions/instruction_claims.py` - verifying claims in agent instruction files |
@@ -146,18 +146,18 @@ Every `test_*.py` file in this directory has a row below.
 | `test_promissory_markers_literals.py` | `lib/keyhole/promissory_markers.py` and `lib/keyhole/python_regions.py` - marker text in Python string literals, quoted directives and config files is data, not a marker; docstrings and real comments still count and age |
 | `test_raw_source.py` | `lib/complexity/raw_source.py` - raw-source subtree detection |
 | `test_review_reality.py` | `lib/hosting/review_reality.py` - review-automation evidence from merged PRs |
-| `test_reviewed_findings.py` | `lib/reviewed_findings.py` - a done review in the committed `.assess/actions.json` clears `self_referential_tests` from attention and the prescribed actions while the source is unchanged since `completed_sha` (the path keeps a `reviewed` note in `derived_findings`), a later source change re-flags it, entries that do not clear, the mutation refresh, counts-only, and `assess_finalize` keeping done entries under `completed` (#721) |
+| `test_reviewed_findings.py` | `lib/report/reviewed_findings.py` - a done review in the committed `.assess/actions.json` clears `self_referential_tests` from attention and the prescribed actions while the source is unchanged since `completed_sha` (the path keeps a `reviewed` note in `derived_findings`), a later source change re-flags it, entries that do not clear, the mutation refresh, counts-only, and `assess_finalize` keeping done entries under `completed` (#721) |
 | `test_delivery.py` | `lib/hosting/delivery.py` + `lib/hosting/merged_sample.py` - delivery figures over a recorded, scrubbed `gh pr list` response (`fixtures/platform/`), the windowed two-read GitHub sample and one-read GitLab sample |
 | `test_gitlab_notes.py` | `lib/hosting/gitlab_notes.py` - GitLab merge-request note classification (markers, agent accounts, unmarked access-token notes as automation, the author's own notes), the `gitlab_note_facts` spec and the GitLab `delivery` note figures |
 | `test_platform_argv_contract.py` | every `PLATFORM_SCANS` scan through recording `gh`/`glab` stubs: each argv names its target (`--repo`, `repos/<slug>`, `users/<login>`, `--hostname`), as the argv-keyed response cache needs |
-| `test_run_wiki.py` | `lib/run_wiki.py` - hotspot pages, `index.md` rows and graduation records for one run |
+| `test_run_wiki.py` | `lib/report/run_wiki.py` - hotspot pages, `index.md` rows and graduation records for one run |
 | `test_scan_registry.py` | `lib/scan_registry.py` - the declared scan table and the loop that runs it |
 | `test_sibling_tests.py` | `lib/testing/sibling_tests.py` - the one sibling-test resolver |
 | `test_import_credit.py` | `lib/testing/import_credit.py` - the import tier of the sibling-test probe |
 | `test_structure_drift.py` | `lib/keyhole/structure_drift.py` - Tier 0 path-existence structure-drift signal |
 | `test_test_focus.py` | `lib/testing/test_focus.py` - `compute_test_focus` and mutation scope |
 | `test_vault_queries.py` | `lib/docs/vault_queries.py` - vault-native navigation query parser |
-| `test_wiki_state.py` | `lib/wiki_state.py` - first-flagged dates and their rekeying through the rename map |
+| `test_wiki_state.py` | `lib/report/wiki_state.py` - first-flagged dates and their rekeying through the rename map |
 | `test_run_setup.py` | `lib/run_setup.py` + `lib/core_scans.py` + `lib/run_publish.py` - the setup-stage scan adapters and the publish step |
 | `test_scan_registry_degrade.py` | `lib/scan_registry.py` - degrade by construction: every scan-table entry without a `GATE_REASONS` reason is forced to raise and the run carries the unavailable marker downstream |
 | `test_scc_coverage.py` | `lib/complexity/scc_coverage.py` - the implausibly-low scc complexity check, calibrated on real scc output for an under-counted shell script |
@@ -178,8 +178,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_check_manifest.py` | `checks/core.toml` (its fragments merged) against the scan registry, the headless tables, `ROOTS`, the default maturity model and `level_signals.SIGNAL_INPUTS`, in both directions; the manifest against `references/check-manifest.schema.json`. The agreement test: each failure names the scan, signal, condition or finding that disagrees (`test_registry_matches_manifest` for a scan). The tables generated from the manifest (#795): the finding tables, the coupling thresholds and the counts-only `RULES` follow an edited copy of the manifest; the structure reason codes match `import_graph.STRUCTURE_REASON_CODES` |
 | `test_check_manifest_fragments.py` | The fragment layout (#982): a root that lists `fragments` merges one file per collector by kind and in listed order into the single-file document; an id in two fragments fails naming both files; missing, unlisted, repeated and misnamed fragments are load errors; the core manifest is one fragment per collector |
 | `test_check_manifest_loader.py` | `lib/manifest/check_manifest.py` (the strict loader: allowed keys, types, ids, the registry rules and cross-references) and `lib/manifest/check_validation.py` (structured errors and the Levenshtein suggestion, with Meridian's test tables) |
-| `test_catalog.py` | The measures catalog (`lib/catalog.py`, `lib/catalog_md.py`, `scripts/gen_catalog.py`). `test_committed_catalog_is_current` is the staleness test: `docs/what-we-measure.md` and `references/measures.json` must equal what the generator writes (run `make catalog`). Also: every known scan, registry scan, row, criterion and finding is listed, grades and counting, determinism, the retired vocabulary stays out, and the truth-tag frame (#870): each condition listed once under its first tag, tag pairs, Step gates, links and the empty-tag and no-Steps wording |
-| `test_measured_appendix.py` | `lib/measured_appendix.py`: the "How this was measured" section of the fleet `report.md` and the deterministic `/assess` report (scans that ran, scans skipped with their reasons, the catalog link) |
+| `test_catalog.py` | The measures catalog (`lib/report/catalog.py`, `lib/report/catalog_md.py`, `scripts/gen_catalog.py`). `test_committed_catalog_is_current` is the staleness test: `docs/what-we-measure.md` and `references/measures.json` must equal what the generator writes (run `make catalog`). Also: every known scan, registry scan, row, criterion and finding is listed, grades and counting, determinism, the retired vocabulary stays out, and the truth-tag frame (#870): each condition listed once under its first tag, tag pairs, Step gates, links and the empty-tag and no-Steps wording |
+| `test_measured_appendix.py` | `lib/report/measured_appendix.py`: the "How this was measured" section of the fleet `report.md` and the deterministic `/assess` report (scans that ran, scans skipped with their reasons, the catalog link) |
 | `test_hollow_conditions.py` | `levels/default.toml` - hollow cases: the cheapest committed change that meets each condition must not be credited; a case the model still credits is `xfail(strict=True)` naming its fixing issue, and that fix removes the mark (#784) |
 | `test_layer_grades.py` | `lib/scoring/layer_grades.py` - deterministic layer grades as a registered signals block, with a counts-only rule |
 | `test_history_window.py` | `lib/history_window.py` - the one history-window grammar shared by `lib/git_churn.py`, `lib/ai_usage.py`, `lib/fleet_activity.py` and `lib/signals.py`, and the shallow-boundary reachability check |
@@ -225,9 +225,9 @@ Every `test_*.py` file in this directory has a row below.
 | `test_assess_delivery.py` | `skills/assess-pr/SKILL.md` + `skills/assess-findings/SKILL.md` (relative to the repo root) - the delivery text contract: on a read-only target the first upstream offer is issues linking the fork-hosted report, filed items are single-concern with repository-native "Done when" checks, and the report never narrates a scorer-draft correction |
 | `test_no_contributions_scan.py` | `skills/assess-pr/SKILL.md` (relative to the repo root) - extracts and runs the marked no-contributions bash block |
 | `test_uninstall.py` | `references/uninstall.md` + `scripts/assess_core.py` - run-context pointer, doc completeness, and the uninstall offer |
-| `test_scope.py` | `/assess <path>` monorepo scoping across `lib/docs/doc_graph.py`, `lib/git_churn.py`, `lib/badge.py` and `lib/wiki_writer.py` |
-| `test_log_supersede.py` | `lib/wiki_writer.py` - `log.md` entry replacement and re-chain across core runs and finalize |
-| `test_hotspot_orphan_invariant.py` | `lib/wiki_writer.py` - executable invariant for the hotspot wiki |
+| `test_scope.py` | `/assess <path>` monorepo scoping across `lib/docs/doc_graph.py`, `lib/git_churn.py`, `lib/report/badge.py` and `lib/report/wiki_writer.py` |
+| `test_log_supersede.py` | `lib/report/wiki_writer.py` - `log.md` entry replacement and re-chain across core runs and finalize |
+| `test_hotspot_orphan_invariant.py` | `lib/report/wiki_writer.py` - executable invariant for the hotspot wiki |
 | `test_self_architecture.py` | `scripts/lib/` - the inward-only layering contract and the lib module docstring check |
 | `test_self_dogfood.py` | the whole deterministic core - it must obey the signals it computes |
 

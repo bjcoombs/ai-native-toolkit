@@ -80,10 +80,10 @@ from typing import Any, NotRequired, TypedDict, cast
 # scripts/ is on sys.path (pyproject pythonpath); lib is a package under it.
 import lib.manifest.check_manifest as cm
 from lib.assess_config import GateConfig, load_gate_config, load_gate_config_file
-from lib.findings_snapshot import committed_prior, method_change
+from lib.report.findings_snapshot import committed_prior, method_change
 from lib.gate_loss import (held_at_baseline, model_change_reason, no_baseline, not_compared, split_lost,
                            step_change)
-from lib.reviewed_findings import open_findings
+from lib.report.reviewed_findings import open_findings
 from lib.run_context_types import DerivedFinding, JsonDict, MethodChange
 from lib.scan_plan import not_run_text
 

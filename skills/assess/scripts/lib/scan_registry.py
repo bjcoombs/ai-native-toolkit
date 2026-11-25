@@ -110,7 +110,7 @@ from lib.testing.coverage_gate import detect_coverage_gate
 from lib.hosting.delivery import scan_delivery
 from lib.external_ci import no_external_ci, read_external_ci
 from lib.docs.doc_claims import scan_doc_claims
-from lib.gate_cost import estimate_gate_cost
+from lib.report.gate_cost import estimate_gate_cost
 from lib.hosting.gitlab_notes import gitlab_note_facts
 from lib.instructions.instruction_claims import scan_instruction_claims
 from lib.instructions.instruction_files import nested_instruction_surface

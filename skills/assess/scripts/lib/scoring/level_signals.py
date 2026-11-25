@@ -147,7 +147,7 @@ conditions #744 lists without counting. The module doc records the rulings (plat
 reads are their own class; instruction files stay declared but still gate Steps).
 `level_tally.py` reads it to count conditions; `levels.py` does not.
 `counts_toward_level(grade)` is that rule for a grade (`measured` and `verified` count;
-`lib/catalog.py` reads it). `UNMEASURED_VALUES`
+`lib/report/catalog.py` reads it). `UNMEASURED_VALUES`
 names the values that mean "could not be measured" with the tally's reason code
 (`test_pressure.mutation_run` false: `needs_full_run`; `promissory_markers.aging_reliable`
 false: `degenerate_history`). A new criterion signal needs its own signal entry with an `evidence` class in `checks/core/`, which generates `SIGNAL_INPUTS` (#953), and a removed one loses it (the table holds exactly the default signals, plus those of a `STAGED_BLOCKS` block, #1322).

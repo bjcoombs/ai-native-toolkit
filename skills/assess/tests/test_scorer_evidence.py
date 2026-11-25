@@ -1,7 +1,7 @@
 """Contract for the layer scorer's structured evidence (issue #361).
 
 The scorer returns an ``evidence`` list beside its prose; the orchestrator
-re-checks it with ``lib.evidence_check`` between scoring and report writing, and
+re-checks it with ``lib.report.evidence_check`` between scoring and report writing, and
 the findings step cites only verified entries. These tests pin the three halves:
 
 1. The scorer definition states the evidence schema with one example per kind,
@@ -17,7 +17,7 @@ import json
 import re
 from pathlib import Path
 
-from lib.evidence_check import KINDS, check_evidence
+from lib.report.evidence_check import KINDS, check_evidence
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCORER = REPO_ROOT / "agents" / "assess-layer-scorer.md"
@@ -68,13 +68,13 @@ def test_findings_cites_only_verified_evidence():
 
 
 def test_orchestrator_runs_the_check_by_script_path():
-    # An /assess run's cwd is the target repo, where `python -m lib.evidence_check`
+    # An /assess run's cwd is the target repo, where `python -m lib.report.evidence_check`
     # fails with "No module named lib" and exits 1 - the same code as "an entry was
     # rejected". The call must name the script by path, like every sibling call.
     text = ASSESS_SKILL.read_text(encoding="utf-8")
     window = text.split("## Step 3: Score the Layers\n", 1)[1].split("## Step 7.5", 1)[0]
-    assert '"${CLAUDE_SKILL_DIR}/scripts/lib/evidence_check.py"' in window
-    assert "-m lib.evidence_check" not in window
+    assert '"${CLAUDE_SKILL_DIR}/scripts/lib/report/evidence_check.py"' in window
+    assert "-m lib.report.evidence_check" not in window
     assert "<!-- chat-replace:evidence-check -->" in window
 
 
@@ -90,7 +90,7 @@ def test_step4_names_the_check_by_the_substituted_skill_dir():
     # substituted into the skill text before the model reads it, so the call
     # carries an absolute path and needs no re-resolution in the shell.
     para = _step4_check_paragraph()
-    assert '"${CLAUDE_SKILL_DIR}/scripts/lib/evidence_check.py"' in para
+    assert '"${CLAUDE_SKILL_DIR}/scripts/lib/report/evidence_check.py"' in para
     assert "SKILL_DIR=" not in para
     assert "$SKILL_DIR" not in para
     assert "CLAUDE_PLUGIN_ROOT" not in para

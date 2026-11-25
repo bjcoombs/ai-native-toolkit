@@ -1,4 +1,4 @@
-"""Tests for lib/evidence_check.py - deterministic re-check of scorer evidence.
+"""Tests for lib/report/evidence_check.py - deterministic re-check of scorer evidence.
 
 Each evidence entry is re-checked with exists() or a literal substring search.
 A false entry lands in ``evidence_rejected`` with its kind and arguments intact
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.evidence_check import check_evidence, is_referenced_in
+from lib.report.evidence_check import check_evidence, is_referenced_in
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 
@@ -190,7 +190,7 @@ def test_cli_writes_both_lists_to_the_json_out_file(repo: Path, tmp_path_factory
         {"layer": 0, "kind": "path_absent", "path": "docs/guide.md"},
     ]), encoding="utf-8")
     proc = subprocess.run(
-        [sys.executable, "-m", "lib.evidence_check", str(repo), str(ev),
+        [sys.executable, "-m", "lib.report.evidence_check", str(repo), str(ev),
          "--json", str(out)],
         cwd=SCRIPTS_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
@@ -206,7 +206,7 @@ def test_cli_refuses_input_that_is_not_a_flat_array(repo: Path, tmp_path_factory
     ev = out_dir / "ev.json"
     ev.write_text(json.dumps({"evidence": []}), encoding="utf-8")
     proc = subprocess.run(
-        [sys.executable, "-m", "lib.evidence_check", str(repo), str(ev),
+        [sys.executable, "-m", "lib.report.evidence_check", str(repo), str(ev),
          "--json", str(out_dir / "out.json")],
         cwd=SCRIPTS_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
@@ -338,8 +338,7 @@ def test_walk_does_not_read_previous_assess_output(repo: Path) -> None:
 
 
 def test_needle_spanning_a_read_chunk_boundary_is_found(repo: Path) -> None:
-    from lib import evidence_check
-
+    from lib.report import evidence_check
     needle = "scripts/boundary.sh"
     pad = "x" * (evidence_check._CHUNK - 5)
     (repo / "docs" / "big.txt").write_text(pad + needle + "\n", encoding="utf-8")
@@ -359,7 +358,7 @@ def test_cli_refuses_a_root_that_is_not_a_directory(tmp_path: Path) -> None:
     ev = tmp_path / "ev.json"
     ev.write_text(json.dumps([{"layer": 0, "kind": "path_absent", "path": "x"}]), encoding="utf-8")
     proc = subprocess.run(
-        [sys.executable, "-m", "lib.evidence_check", str(tmp_path / "nope"), str(ev),
+        [sys.executable, "-m", "lib.report.evidence_check", str(tmp_path / "nope"), str(ev),
          "--json", str(tmp_path / "out.json")],
         cwd=SCRIPTS_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
     )
@@ -372,7 +371,7 @@ def test_cli_refuses_evidence_that_is_not_utf8(repo: Path, tmp_path_factory) -> 
     ev = out_dir / "ev.json"
     ev.write_bytes(b'[{"layer": 0, "kind": "path_exists", "path": "docs/\xff.md"}]')
     proc = subprocess.run(
-        [sys.executable, "-m", "lib.evidence_check", str(repo), str(ev),
+        [sys.executable, "-m", "lib.report.evidence_check", str(repo), str(ev),
          "--json", str(out_dir / "out.json")],
         cwd=SCRIPTS_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
     )
@@ -404,7 +403,7 @@ def test_cli_exits_2_when_the_json_output_cannot_be_written(repo: Path, tmp_path
     ev = out_dir / "ev.json"
     ev.write_text(json.dumps([{"layer": 0, "kind": "path_absent", "path": "docs/guide.md"}]), encoding="utf-8")
     proc = subprocess.run(
-        [sys.executable, "-m", "lib.evidence_check", str(repo), str(ev),
+        [sys.executable, "-m", "lib.report.evidence_check", str(repo), str(ev),
          "--json", str(out_dir / "missing-dir" / "out.json")],
         cwd=SCRIPTS_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
     )

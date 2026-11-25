@@ -11,9 +11,9 @@ from html.parser import HTMLParser
 
 import gen_catalog
 
-from lib.catalog import Catalog, build_catalog
-from lib.catalog_configure import CHECKOUT, EXAMPLE_EXCLUDED, INTRO, options
-from lib.catalog_html import LEDE, SECTION_LEDES, inline, render_html
+from lib.report.catalog import Catalog, build_catalog
+from lib.report.catalog_configure import CHECKOUT, EXAMPLE_EXCLUDED, INTRO, options
+from lib.report.catalog_html import LEDE, SECTION_LEDES, inline, render_html
 from lib.plain_english import lint
 from lib.vocabulary import banned_hits
 

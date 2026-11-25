@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from lib.fleet.fleet_diagrams import report_markdown
-from lib.measured_appendix import CATALOG_URL, HEADING, measured_section
+from lib.report.measured_appendix import CATALOG_URL, HEADING, measured_section
 from lib.vocabulary import banned_hits
 
 NAMES = ["ci_checks", "structure", "review_reality", "config_drift", "behaviour", "delivery",
