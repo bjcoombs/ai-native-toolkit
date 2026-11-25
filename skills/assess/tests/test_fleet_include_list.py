@@ -148,13 +148,24 @@ def test_a_counts_only_or_hashed_run_is_refused(entry: dict[str, Any], tmp_path:
     assert not (tmp_path / "include-projects.txt").exists()
 
 
-def test_seeds_dedupe_and_refuse_a_bad_path() -> None:
-    assert fil.seeds({}) == []
-    assert fil.seeds({"not_cloned_includes": [{"project": "G/A"}, {"project": "g/a"}]}) == ["g/a"]
-    with pytest.raises(fil.IncludeListError, match="not a GitLab path"):
-        fil.seeds({"not_cloned_includes": [{"project": "../etc"}]})
+def test_seeds_dedupe_and_set_aside_a_path_that_is_no_project() -> None:
+    assert fil.seeds({}) == ([], [])
+    assert fil.seeds({"not_cloned_includes": [{"project": "G/A"}, {"project": "g/a"}]}) == (["g/a"], [])
+    odd = [{"project": "$ci_project_namespace/ci-templates"}, {"project": "g/a"}, {"project": "solo"},
+           {"project": "solo"}]
+    assert fil.seeds({"not_cloned_includes": odd}) == (["g/a"], ["$ci_project_namespace/ci-templates", "solo"])
     with pytest.raises(fil.IncludeListError, match="not a list"):
         fil.seeds({"not_cloned_includes": {"project": "g/a"}})
+
+
+def test_a_variable_path_in_the_run_is_reported_and_the_rest_checked(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    run = {"not_cloned_includes": [{"project": "$ci_project_namespace/ci-templates"}, {"project": "grp/a"}]}
+    (tmp_path / "run.json").write_text(json.dumps(run), encoding="utf-8")
+    assert cli.main([str(tmp_path), "--host", "h"], FakeApi({"grp/a": {}})) == 0
+    shown = capsys.readouterr().out
+    assert "1 not looked up" in shown and "`$ci_project_namespace/ci-templates`" in shown
+    assert (tmp_path / "include-projects.txt").read_text(encoding="utf-8").endswith("grp/a\n")
 
 
 def test_missing_run_json_exits_2(tmp_path: Path) -> None:

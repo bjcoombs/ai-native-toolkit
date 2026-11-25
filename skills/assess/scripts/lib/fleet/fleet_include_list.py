@@ -26,6 +26,9 @@ fetches every include project the user can read. ghsync itself is unchanged.
   project costs one clone; the next fleet run then resolves the includes exactly. A project
   whose tree or a file could not be read, or with more YAML files than the cap, is
   ``partial`` and the report names it.
+- **Unusable entries**: fleet records an include path built from a CI variable as
+  ``not_cloned`` too; ``seeds`` sets such an entry aside and ``report`` names it, so the other
+  projects are still checked.
 - **Output**: ``list_file`` is the ``--porcelain`` format ghsync reads, a ``#`` header then one
   path per line, sorted; a reachable project is written as the API spells its path when that
   differs from the include only in case. ``report`` is the Markdown summary: the counts, then
@@ -109,14 +112,17 @@ def include_project(item: IncludeItem) -> str | None:
     return None
 
 
-def seeds(run: Mapping[str, Any]) -> list[str]:
-    """The include projects a ``--full`` fleet ``run.json`` names, in its order, deduplicated.
+def seeds(run: Mapping[str, Any]) -> tuple[list[str], list[str]]:
+    """The include projects a ``--full`` fleet ``run.json`` names, in its order, deduplicated,
+    and the entries that name no project the API can look up: fleet records a path built from a
+    CI variable (``$CI_PROJECT_NAMESPACE/ci-templates``) as ``not_cloned`` too.
 
     Raises IncludeListError for a run that did not name them (counts-only or hashed)."""
     entries = run.get("not_cloned_includes") or []
     if not isinstance(entries, list):
         raise IncludeListError("run.json not_cloned_includes is not a list")
     out: list[str] = []
+    unusable: list[str] = []
     for entry in entries:
         project = entry.get("project") if isinstance(entry, Mapping) else None
         if not isinstance(project, str) or project.startswith("h:"):
@@ -124,10 +130,11 @@ def seeds(run: Mapping[str, Any]) -> list[str]:
                 "run.json does not name the include projects: run fleet with --full")
         path = _valid(project)
         if path is None:
-            raise IncludeListError(f"run.json names an include project that is not a GitLab path: {project!r}")
-        if path not in out:
+            if project not in unusable:
+                unusable.append(project)
+        elif path not in out:
             out.append(path)
-    return out
+    return out, unusable
 
 
 def walk(start: Sequence[str], api: IncludeApi, max_depth: int = MAX_DEPTH) -> list[Checked]:
@@ -163,7 +170,8 @@ def list_file(checked: Sequence[Checked]) -> str:
     return HEADER + "".join(f"{p}\n" for p in paths)
 
 
-def report(checked: Sequence[Checked], list_path: str, host: str) -> str:
+def report(checked: Sequence[Checked], list_path: str, host: str,
+           unusable: Sequence[str] = ()) -> str:
     """The Markdown summary: how many were reachable, and each unreachable one with its status."""
     reachable = sum(c.status == "reachable" for c in checked)
     missing = [c for c in checked if c.status != "reachable"]
@@ -175,6 +183,9 @@ def report(checked: Sequence[Checked], list_path: str, host: str) -> str:
                   "| Project | Status | Named by |", "|---|---|---|"]
         lines += [f"| `{c.project}` | {c.status} | {f'`{c.via}`' if c.via else 'the fleet run'} |"
                   for c in missing]
+    if unusable:
+        lines += ["", f"{len(unusable)} not looked up, because the path is no project path "
+                  "(a CI variable, or a single segment): " + ", ".join(f"`{u}`" for u in unusable)]
     partial = [c.project for c in checked if c.partial]
     if partial:
         lines += ["", f"{len(partial)} reachable but not fully read, so an include they hold may be "

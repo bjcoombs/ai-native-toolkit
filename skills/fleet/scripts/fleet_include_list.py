@@ -56,7 +56,7 @@ def main(argv: list[str] | None = None, api: IncludeApi | None = None) -> int:
         run = json.loads((out / "run.json").read_text(encoding="utf-8"))
         if not isinstance(run, dict):
             raise IncludeListError("run.json is not a JSON object")
-        start = seeds(run)
+        start, unusable = seeds(run)
     except (OSError, json.JSONDecodeError, IncludeListError) as e:
         print(f"fleet_include_list: {e}", file=sys.stderr)
         return 2
@@ -68,7 +68,7 @@ def main(argv: list[str] | None = None, api: IncludeApi | None = None) -> int:
         return 3
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(list_file(checked), encoding="utf-8", newline="\n")
-    sys.stdout.write(report(checked, target.as_posix(), host))
+    sys.stdout.write(report(checked, target.as_posix(), host, unusable))
     return 0
 
 
