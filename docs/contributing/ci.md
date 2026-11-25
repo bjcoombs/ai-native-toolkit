@@ -43,7 +43,7 @@ git add -A && git commit
 
 mypy runs `strict` over all of `skills/assess/scripts/` (lib, orchestrators, renderers) with `disallow_any_generics` on for every module and no per-module exception, so a bare `dict` or `list` fails. Known shapes are `TypedDict`s: shared run-context rows and the orchestrators' file shapes, the stats sidecar and `finalize-input.json`, live in `lib/run_context_types.py`; `dict[str, Any]` is for blocks whose keys genuinely vary.
 
-It also covers the `scripts/` build and contract tooling in full, where per-module overrides relax just the flags the floor-protected modules (`floor_anchor.py`, `contract/`, `canaries/`) fail today, and `floor_check.py` stays out. A third run covers `skills/fleet/scripts` and `skills/marathon/scripts`, from `skills/assess` with its locked tools and the same strict settings.
+It also covers the `scripts/` build and contract tooling in full, where per-module overrides relax just the flags the floor-protected modules (`floor_anchor.py`, `contract/`, `canaries/`) fail today, and `floor_check.py` stays out. A third run covers `skills/fleet/scripts`, `skills/marathon/scripts` and `skills/refine/scripts`, from `skills/assess` with its locked tools and the same strict settings.
 
 A new function needs annotations to pass. Both gates enable `ignore-without-code`, so a bare `# type: ignore` fails; the trailing reason (`# type: ignore[code]  # reason`) is a convention mypy cannot check.
 

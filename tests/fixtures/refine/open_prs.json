@@ -1,0 +1,44 @@
+[
+  {
+    "number": 201,
+    "title": "fix: parser",
+    "files": [
+      {
+        "path": "src/widgets/parser.py",
+        "additions": 1,
+        "deletions": 0
+      }
+    ],
+    "closingIssuesReferences": []
+  },
+  {
+    "number": 202,
+    "title": "feat: scope",
+    "files": [
+      {
+        "path": "README.md",
+        "additions": 1,
+        "deletions": 0
+      }
+    ],
+    "closingIssuesReferences": [
+      {
+        "id": "I108",
+        "number": 108,
+        "url": "https://github.com/acme/widgets/issues/108"
+      }
+    ]
+  },
+  {
+    "number": 203,
+    "title": "docs: guide",
+    "files": [
+      {
+        "path": "docs/guide.md",
+        "additions": 1,
+        "deletions": 0
+      }
+    ],
+    "closingIssuesReferences": []
+  }
+]

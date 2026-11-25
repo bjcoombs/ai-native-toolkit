@@ -249,7 +249,7 @@ jobs:
         if: ${{ !cancelled() && matrix.suite == 'scripts-contract' }}
         shell: bash
         run: >-
-          uv run --python 3.11 --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4"
+          uv run --python 3.11 --with pytest --with pyyaml --with jsonschema --with "pytest-xdist>=3.6,<4"
           pytest -ra -p no:cacheprovider -n auto --dist loadfile tests/
           --ignore-glob='tests/test_ghsync*.py' --ignore-glob='tests/test_ghreport*.py'
 
