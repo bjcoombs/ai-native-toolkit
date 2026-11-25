@@ -68,6 +68,43 @@ def test_clarified_scope_comment_supplies_sections(plan):
     assert by_number(plan)[108]["missing_sections"] == []
 
 
+PROSE_BODY = ("## Problem Statement\n\nbody problem\n\n"
+              "## Success Criteria\n\nIt should work well once fixed.\n")
+
+
+def clarified(created_at, text):
+    return {"body": "<!-- triage:clarified-scope -->\n" + text, "createdAt": created_at}
+
+
+def criteria_result(definition, comments):
+    issue = refine_platform.github_issue({"number": 70, "body": PROSE_BODY,
+                                          "createdAt": "2026-11-01T00:00:00Z", "comments": comments})
+    return refine_checks.all_sections(issue, definition), refine_checks._criteria_item(issue, definition)
+
+
+def test_later_clarified_checklist_replaces_prose_criteria(definition):
+    sections, (status, _, _) = criteria_result(definition, [
+        clarified("2026-11-02T00:00:00Z", "## Success Criteria\n\n- `make check` exits 0\n")])
+    assert sections["Success Criteria"].strip() == "- `make check` exits 0"
+    assert status == "needs_judgement"
+    _, (prose_status, _, _) = criteria_result(definition, [])
+    assert prose_status == "fail"
+
+
+def test_newest_clarified_comment_wins(definition):
+    # Listed newest first, so the creation time, not the list order, decides.
+    sections, _ = criteria_result(definition, [
+        clarified("2026-11-03T00:00:00Z", "## Success Criteria\n\n- newer `a`\n"),
+        clarified("2026-11-02T00:00:00Z", "## Success Criteria\n\n- older `b`\n")])
+    assert sections["Success Criteria"].strip() == "- newer `a`"
+
+
+def test_clarified_comment_leaves_sections_it_lacks_alone(definition):
+    sections, _ = criteria_result(definition, [
+        clarified("2026-11-02T00:00:00Z", "## Success Criteria\n\n- `make check` exits 0\n")])
+    assert sections["Problem Statement"].strip() == "body problem"
+
+
 def test_heading_inside_code_fence_is_not_a_section(definition):
     text = "```\n## Impact\nfenced\n```\n## Problem Statement\n\nreal\n"
     assert set(refine_checks.section_texts(text, definition)) == {"Problem Statement"}
