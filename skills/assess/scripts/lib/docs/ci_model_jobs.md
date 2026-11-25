@@ -91,7 +91,7 @@ A job is `unknown` (with `reason`) and never ungated or gated when:
   naming a provider key: the callee is scanned on its own;
 - `secret_only`: see above;
 - `condition_unread`: a label or event `if:` joined with `||`, holding a negation (`!`, `!=`), or
-  whose label or event test is itself compared with `false` (`contains(...labels...) == false`;
+  whose label or event test is itself compared with `false`, in either order (`contains(...labels...) == false`;
   a guard beside it, `github.event.pull_request.draft == false`, is not), or a job or step `if:` on a value
   this reader does not follow (`steps.`, `needs.`, `vars.`, `env.`, `inputs.`), such as a
   changed-files job's output, which may be a paths gate;

@@ -85,6 +85,21 @@ def test_a_negative_event_requirement_does_not_narrow(tmp_path: Path, condition:
     assert (job["state"], job["gates"]) == (state, [])
 
 
+def test_a_false_guard_beside_an_event_requirement_still_narrows(tmp_path: Path) -> None:
+    jobs = _with_if("github.event_name == 'pull_request' && startsWith(github.head_ref, 'dependabot') == false")
+    job = _job(_workflow(tmp_path, "  push:\n  pull_request:\n    paths: ['prompts/**']", jobs))
+    assert (job["state"], job["triggers"], job["gates"]) == ("gated", ["pull_request"], ["event_if"])
+
+
+@pytest.mark.parametrize("condition", [
+    "false == contains(github.event.pull_request.labels.*.name, 'skip-evals')",
+    "contains(github.event.pull_request.labels.*.name, 'skip-evals') == false",
+])
+def test_a_label_test_compared_with_false_either_way_reads_unknown(tmp_path: Path, condition: str) -> None:
+    job = _job(_workflow(tmp_path, "  pull_request:", _with_if(condition)))
+    assert (job["state"], job["reason"]) == ("unknown", "condition_unread")
+
+
 def test_a_positive_event_requirement_still_narrows_to_a_gated_route(tmp_path: Path) -> None:
     jobs = _with_if("github.event_name == 'push'")
     job = _job(_workflow(tmp_path, "  push:\n    paths: [p/**]\n  pull_request:", jobs))

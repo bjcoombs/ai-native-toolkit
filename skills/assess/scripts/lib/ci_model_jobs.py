@@ -132,7 +132,7 @@ _EVENT_IF = re.compile(r"github\.event_name\s*==\s*['\"](\w+)['\"]")
 _OPAQUE = re.compile(r"\b(?:steps|needs|vars|env|inputs)\.")
 # ``<operand> == false``: it negates a gate only when the operand is the label or event test itself
 # (a call or a parenthesised test, or a label path), never a guard beside it (``draft == false``).
-_FALSE = re.compile(r"(\S+)\s*==\s*['\"]?false\b", re.IGNORECASE)
+_FALSE = re.compile(r"(\S+)\s*==\s*['\"]?false\b|\bfalse['\"]?\s*==\s*(\S+)", re.IGNORECASE)
 # A literal never-true if: (``false``, ``${{ false }}``): the step or job never runs.
 _NEVER = re.compile(r"""^(["']?)(?:false|\$\{\{\s*false\s*\}\})\1$""", re.IGNORECASE)
 _QUOTED_ON = re.compile(r"""^(["'])on\1\s*:(.*)$""")
@@ -347,8 +347,35 @@ def _negated(condition: str) -> bool:
     """A condition joined with ``||``, holding a negation, or comparing the label or event test
     itself with false (``contains(...labels...) == false``; ``draft == false`` beside it is not)."""
     return "||" in condition or "!" in condition or any(
-        operand.endswith(")") or _LABEL.search(operand) or "event_name" in operand
-        for operand in _FALSE.findall(condition))
+        _is_test(_operand(condition, match)) for match in _FALSE.finditer(condition))
+
+
+def _operand(condition: str, match: re.Match[str]) -> str:
+    """The operand compared with false: a token, or the whole call or parenthesised group a
+    ``)`` closes (``contains(...)`` or ``(a == b)``), in either order (``false == x``)."""
+    if match.group(1) is None:
+        start = match.start(2)
+        if "(" not in match.group(2):
+            return match.group(2)
+        depth = 0
+        for i in range(start, len(condition)):
+            depth += {"(": 1, ")": -1}.get(condition[i], 0)
+            if depth == 0 and condition[i] == ")":
+                return condition[start:i + 1]
+        return condition[start:]
+    end = match.end(1)
+    if not match.group(1).endswith(")"):
+        return match.group(1)
+    depth = 0
+    for i in range(end - 1, -1, -1):
+        depth += {")": 1, "(": -1}.get(condition[i], 0)
+        if depth == 0:
+            return condition[i:end]
+    return condition[:end]
+
+
+def _is_test(operand: str) -> bool:
+    return bool(_LABEL.search(operand)) or "event_name" in operand
 
 
 def _narrowed(route: _Route, condition: str) -> _Route:
