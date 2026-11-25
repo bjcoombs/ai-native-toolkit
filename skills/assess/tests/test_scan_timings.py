@@ -27,13 +27,13 @@ def test_a_stage_refreshes_the_total_as_the_sum_of_stages():
 def test_summary_names_the_total_and_the_slowest_scans_slowest_first():
     block = {"total_seconds": 12.04, "stages": {"setup": 12.04},
              "scans": {"a": 1.0, "b": 5.0, "c": 5.0, "d": 0.2}}
-    assert summary_line(block) == "timings: total 12.0s; slowest scans: b 5.0s, c 5.0s, a 1.0s"
+    assert summary_line(block) == "timings: scans total 12.0s; slowest scans: b 5.0s, c 5.0s, a 1.0s"
 
 
 def test_summary_without_a_block_or_scans_says_so():
     assert summary_line(None) == "timings: not recorded"
     empty = {"total_seconds": 0.0, "stages": {}, "scans": {}}
-    assert summary_line(empty) == "timings: total 0.0s; slowest scans: none"
+    assert summary_line(empty) == "timings: scans total 0.0s; slowest scans: none"
 
 
 def test_counts_only_checks_leave_the_timings_block_out():

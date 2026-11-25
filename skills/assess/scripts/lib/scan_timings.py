@@ -55,9 +55,13 @@ def timed(inputs: MutableMapping[str, Any], kind: Literal["stages", "scans"], ke
 
 
 def summary_line(block: TimingsBlock | None, slowest: int = SLOWEST) -> str:
-    """One line naming the total and the ``slowest`` scans, slowest first, ties by key."""
+    """One line naming the scan stages' total and the ``slowest`` scans, slowest first, ties by key.
+
+    The publish step and the counts-only write run after the scans and are not counted, so the
+    total reads lower than the script's own wall time; the line says ``scans total`` for that.
+    """
     if not block:
         return "timings: not recorded"
     ranked = sorted(block["scans"].items(), key=lambda kv: (-kv[1], kv[0]))[:slowest]
     named = ", ".join(f"{key} {seconds:.1f}s" for key, seconds in ranked) or "none"
-    return f"timings: total {block['total_seconds']:.1f}s; slowest scans: {named}"
+    return f"timings: scans total {block['total_seconds']:.1f}s; slowest scans: {named}"

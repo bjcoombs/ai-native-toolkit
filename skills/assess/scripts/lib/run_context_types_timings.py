@@ -13,7 +13,8 @@ class TimingsBlock(TypedDict):
 
     ``stages`` maps each ``scan_registry.STAGES`` stage to its wall time and ``scans``
     each scan key that ran to its own, both in run order; a scan the plan skipped
-    has no entry. ``total_seconds`` is the sum of the stages. A diagnostic only:
+    has no entry. ``total_seconds`` is the sum of the scan stages: the publish step and
+    the counts-only write that follow are not counted. A diagnostic only:
     it differs on every run, so counts-only output and the golden normalisation
     leave it out.
     """
