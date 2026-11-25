@@ -769,7 +769,7 @@ def main(argv: list[str] | None = None) -> int:
     _diagrams(out_dir, args.no_diagrams, maturity_model, public, window, history=history, comparison=comparison,
               credit=credit, coverage=coverage_line(coverage, len(rows)),
               opportunities=lambda: opportunities_section(data, achieved), data=data, earlier=earlier, achieved=achieved,
-              groups=[g["group"] for g in groups], includes=includes_section(stamp.get("unresolved_includes")))
+              groups=[g["group"] for g in groups], includes=includes_section(stamp.get("not_cloned_includes")))
     _print_summary(rows, path, groups_path, agent_clusters, freshness, freshness_path, deleter)
     return 0
 

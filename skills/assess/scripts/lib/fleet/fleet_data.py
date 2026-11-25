@@ -236,7 +236,7 @@ class DataRepo(TypedDict):
 # (#1355; run.json and report.md carry them). A test fails when FleetStamp
 # gains a field that is neither copied below nor listed here.
 RUN_EXCLUDED = frozenset({"fleet_stamp_version", "fleet_config_entries", "coverage", "collectors", "packs",
-                          "unresolved_includes"})
+                          "not_cloned_includes"})
 
 
 class RunDetails(TypedDict):

@@ -3,7 +3,7 @@
 Fleet resolves GitLab CI includes offline from the ghsync root (``lib/ci_includes.py``), and
 ``scans.ci_checks.includes`` records each item per repository. An item whose ``kind`` is
 ``project`` or ``component`` and whose ``status`` is ``not_cloned`` names a project the root
-holds no clone of, so the CI jobs it carries were not read. ``unresolved_includes`` rolls
+holds no clone of, so the CI jobs it carries were not read. ``not_cloned_includes`` rolls
 those records up across the run's scanned rows: one entry per include project, with its
 ``kind`` and how many repositories include it (a repository counts once per project however
 many items name it), most-included first, then ``project`` before ``component``, then by id.
@@ -20,14 +20,14 @@ kept in every mode, so a counts-only ``run.json`` or ``report.md`` names no incl
 ``includes_section`` renders the ``report.md`` section from that list, or None when the run
 found no such include, so a fleet without GitLab includes writes the report it wrote before.
 
-CI include projects not cloned under the ghsync root (#1355). `unresolved_includes(rows,
+CI include projects not cloned under the ghsync root (#1355). `not_cloned_includes(rows,
 counts_only=, paths_hashed=)` rolls each ok row's `scans.ci_checks.includes` records with kind
-`project` or `component` and status `not_cloned` into one `UnresolvedInclude` per project
+`project` or `component` and status `not_cloned` into one `NotClonedInclude` per project
 (`project`, `kind`, `repositories`; a component's project is its path without the name),
 sorted by repositories descending, project before component, then id.
 `project` is the clear path under `--full`, the row's hashed include id under hashing, and
 null in plain counts-only output (the `HASHED_PATH` rule). `fleet_stamp.build_stamp` writes the
-list to `run.json` as `unresolved_includes` (only when non-empty); `includes_section` is the
+list to `run.json` as `not_cloned_includes` (only when non-empty); `includes_section` is the
 `report.md` section `fleet_diagrams.report_markdown` places after the coverage line. Tests:
 `tests/test_fleet_includes.py`.
 """
@@ -44,7 +44,7 @@ NOT_CLONED = "not_cloned"
 _PREFIXES = ("gitlab_project:", "gitlab_component:")  # lib/ci_includes.py include ids
 
 
-class UnresolvedInclude(TypedDict):
+class NotClonedInclude(TypedDict):
     project: str | None  # clear path under --full, hashed id under hashing, None in plain counts-only
     kind: str  # one of INCLUDE_PROJECT_KINDS
     repositories: int  # repositories that include it at any depth
@@ -67,8 +67,8 @@ def _key(ident: str, kind: str) -> str:
     return ident
 
 
-def unresolved_includes(rows: Sequence[FleetRow], *, counts_only: bool,
-                        paths_hashed: bool) -> list[UnresolvedInclude]:
+def not_cloned_includes(rows: Sequence[FleetRow], *, counts_only: bool,
+                        paths_hashed: bool) -> list[NotClonedInclude]:
     """Each include project not cloned under the root, once, with its repository count."""
     counts: dict[tuple[str, str], int] = {}
     for row in rows:
@@ -95,13 +95,13 @@ def _repos(n: int) -> str:
     return f"{n} repository" if n == 1 else f"{n} repositories"
 
 
-def includes_section(entries: Sequence[UnresolvedInclude] | None) -> str | None:
+def includes_section(entries: Sequence[NotClonedInclude] | None) -> str | None:
     """The ``report.md`` section naming each include project not cloned, or None without one."""
     if not entries:
         return None
     named = any(e["project"] is not None for e in entries)
     lines = ["## CI include projects not cloned", "",
-             f"{IN_PLACE} CI includes from every cloned project were read. "
+             f"{IN_PLACE} every CI include project cloned under the root was looked up. "
              f"{len(entries)} include {'project is' if len(entries) == 1 else 'projects are'} "
              "not cloned under the root, so the CI jobs they hold were not read. Clone them "
              "(ghsync `--from-list`) and run again to measure that CI.", ""]

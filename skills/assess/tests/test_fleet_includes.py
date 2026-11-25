@@ -50,14 +50,14 @@ def _rows() -> list[FleetRow]:
 
 
 def test_three_repositories_including_one_project_list_it_once_with_count_3_and_its_kind() -> None:
-    assert fi.unresolved_includes(_rows(), counts_only=False, paths_hashed=False) == [
+    assert fi.not_cloned_includes(_rows(), counts_only=False, paths_hashed=False) == [
         {"project": MISSING, "kind": "project", "repositories": 3},
         {"project": "grp/components", "kind": "component", "repositories": 1},
     ]
 
 
 def test_counts_only_keeps_counts_and_kind_and_drops_the_path() -> None:
-    entries = fi.unresolved_includes(_rows(), counts_only=True, paths_hashed=False)
+    entries = fi.not_cloned_includes(_rows(), counts_only=True, paths_hashed=False)
     assert entries == [{"project": None, "kind": "project", "repositories": 3},
                        {"project": None, "kind": "component", "repositories": 1}]
 
@@ -65,7 +65,7 @@ def test_counts_only_keeps_counts_and_kind_and_drops_the_path() -> None:
 def test_hashed_runs_keep_the_rows_hashed_id_so_it_joins_repos_jsonl() -> None:
     rows = [_row("g/a", [_record("project", "h:0123456789abcdef")]),
             _row("g/b", [_record("project", "h:0123456789abcdef")])]
-    assert fi.unresolved_includes(rows, counts_only=True, paths_hashed=True) == [
+    assert fi.not_cloned_includes(rows, counts_only=True, paths_hashed=True) == [
         {"project": "h:0123456789abcdef", "kind": "project", "repositories": 2}]
 
 
@@ -75,7 +75,7 @@ def test_rows_without_ci_includes_give_no_entry() -> None:
     bare = _row("g/b", [])
     bare["scans"] = {}
     dropped = _row("g/c", [_record("project", None)])  # an id counts-only output dropped
-    assert fi.unresolved_includes([row, bare, dropped], counts_only=True, paths_hashed=False) == []
+    assert fi.not_cloned_includes([row, bare, dropped], counts_only=True, paths_hashed=False) == []
     assert fi.includes_section([]) is None
     assert fi.includes_section(None) is None
 
@@ -87,15 +87,15 @@ def test_the_stamp_carries_the_list_only_when_there_is_one_and_matches_its_schem
                               "paths_hashed": False, "scans": None}
     stamp = build_stamp(_rows(), **kwargs)
     jsonschema.validate(stamp, build_stamp_schema())
-    assert [e["repositories"] for e in stamp["unresolved_includes"]] == [3, 1]
+    assert [e["repositories"] for e in stamp["not_cloned_includes"]] == [3, 1]
     assert (MISSING in json.dumps(stamp)) is not counts_only
-    assert "unresolved_includes" not in build_stamp([_row("g/a", [])], **kwargs)
-    assert "unresolved_includes" in RUN_EXCLUDED
+    assert "not_cloned_includes" not in build_stamp([_row("g/a", [])], **kwargs)
+    assert "not_cloned_includes" in RUN_EXCLUDED
 
 
 def test_the_report_section_names_projects_under_full_and_none_in_counts_only() -> None:
-    full = fi.includes_section(fi.unresolved_includes(_rows(), counts_only=False, paths_hashed=False))
-    counts = fi.includes_section(fi.unresolved_includes(_rows(), counts_only=True, paths_hashed=False))
+    full = fi.includes_section(fi.not_cloned_includes(_rows(), counts_only=False, paths_hashed=False))
+    counts = fi.includes_section(fi.not_cloned_includes(_rows(), counts_only=True, paths_hashed=False))
     assert full is not None and counts is not None
     assert f"| `{MISSING}` | project | 3 repositories |" in full
     assert "| `grp/components` | component | 1 repository |" in full
@@ -121,14 +121,14 @@ def test_a_fleet_run_lists_the_project_once_and_a_counts_only_run_names_no_inclu
     assert fleet_cli.main([str(root), "--no-history", "--scans", "ci_checks", "--out", str(counts)]) == 0
 
     stamp = json.loads((full / "run.json").read_text(encoding="utf-8"))
-    assert stamp["unresolved_includes"] == [
+    assert stamp["not_cloned_includes"] == [
         {"project": MISSING, "kind": "project", "repositories": 3},
         {"project": "grp/components", "kind": "component", "repositories": 3},
     ]
     assert f"`{MISSING}`" in (full / "report.md").read_text(encoding="utf-8")
 
     counted = json.loads((counts / "run.json").read_text(encoding="utf-8"))
-    assert [(e["project"], e["kind"], e["repositories"]) for e in counted["unresolved_includes"]] == [
+    assert [(e["project"], e["kind"], e["repositories"]) for e in counted["not_cloned_includes"]] == [
         (None, "project", 3), (None, "component", 3)]
     for name in ("run.json", "report.md"):
         text = (counts / name).read_text(encoding="utf-8")
