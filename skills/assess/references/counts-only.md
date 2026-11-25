@@ -16,7 +16,8 @@ under `scans` in its `--out` document the same way, keeps only the code
 of an unavailable block's `reason` (`no_remote`, `not_registered`, or
 `unavailable`), and writes `stamp.target_head` as null.
 
-Every number, boolean and null in every block is kept.
+Every number, boolean and null in every block is kept. The `timings`
+diagnostic block is left out whole: it differs on every run.
 A string is kept only when its field is listed below as a path or a
 token; every other string, listed or not, is dropped. A dropped list of
 strings is replaced by its length. A token is kept only while it is a

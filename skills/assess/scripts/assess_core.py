@@ -63,6 +63,7 @@ from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
 from lib.scan_plan import ScanPlan, run_plan
 from lib.scan_registry import run_scans
 from lib.scan_registry import safe as _safe
+from lib.scan_timings import TIMINGS_KEY, summary_line
 from lib.testing.test_focus import mutation_scope
 from lib.test_pressure import scan_test_pressure
 
@@ -108,6 +109,9 @@ def build_run_context(
     ``packs`` are the ``--pack`` files (``lib.packs.load_pack``, #1273), in pass order: the
     ``pack_checks`` entry evaluates their checks into the ``pack`` and ``packs`` blocks, and
     with none (the default) neither block is written.
+
+    The ``timings`` block, last, holds each stage's and each scan's wall time
+    (``lib.scan_timings``, #1380): a diagnostic that differs on every run.
     """
     return _scan(repo_root, run_date, non_interactive, scope, model, managed_settings, plan, packs)[0]
 
@@ -145,6 +149,8 @@ def _scan(
     }
     ctx: dict[str, Any] = {}
     run_scans(ctx, scan_inputs)
+    # A diagnostic, last in the context: counts-only and the golden normalisation leave it out (#1380)
+    ctx[TIMINGS_KEY] = scan_inputs[TIMINGS_KEY]
     return ctx, scan_inputs
 
 
@@ -401,6 +407,8 @@ def main(argv: list[str] | None = None) -> int:
         # from the counts-only document, beside it, so a hashed run has hashed pictures (#943).
         write_all(assess_dir, counts_only_diagrams(content_free), COUNTS_ONLY_FILES)
     print(json.dumps(ctx["diff"]))
+    # stdout carries the diff as JSON for callers; the timing summary goes to stderr (#1380)
+    print(summary_line(ctx.get(TIMINGS_KEY)), file=sys.stderr)
     return 0
 
 

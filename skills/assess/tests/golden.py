@@ -52,6 +52,8 @@ _VOLATILE_TOP_LEVEL = (
     "prior_findings_snapshot",
     # The prior-level.json read back from disk (#940), the same way.
     "prior_level",
+    # Wall time per stage and per scan (#1380): a diagnostic that differs every run.
+    "timings",
 )
 
 #: Sub-keys of ``measured_commit`` that identify the specific commit/work-tree
