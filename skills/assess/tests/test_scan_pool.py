@@ -19,6 +19,11 @@ def test_default_jobs_is_the_cpu_count_capped(monkeypatch):
     assert pool.default_jobs() == 1
 
 
+def test_share_of_cpus_splits_the_cpus_between_processes(monkeypatch):
+    monkeypatch.setattr(pool.os, "cpu_count", lambda: 16)
+    assert [pool.share_of_cpus(n) for n in (1, 2, 4, 16, 64, 0)] == [8, 8, 4, 1, 1, 8]
+
+
 @pytest.mark.parametrize("text", ["0", "-2", "two", "1.5"])
 def test_jobs_below_one_or_not_a_number_is_a_usage_error(text):
     parser = argparse.ArgumentParser()
@@ -69,49 +74,48 @@ def test_jobs_one_runs_in_index_order_on_the_calling_thread():
 
 
 def test_independent_entries_overlap_and_a_dependent_waits():
-    """Two independent sleepers run together; the dependent one starts after its producer."""
-    started: dict[int, float] = {}
-    ended: dict[int, float] = {}
+    """Entry 0 cannot finish until entry 1 has run, so they must overlap; entry 2 reads entry 0
+    and starts only after it has finished. Ordered by events, not sleep margins."""
+    one_ran = threading.Event()
+    zero_done = threading.Event()
+    seen: dict[str, bool] = {}
 
-    def sleeper(i, seconds):
-        def run():
-            started[i] = time.perf_counter()
-            time.sleep(seconds)
-            ended[i] = time.perf_counter()
-        return run
+    def zero():
+        seen["overlapped"] = one_ran.wait(timeout=10)
+        zero_done.set()
 
-    work = [sleeper(0, 0.3), sleeper(1, 0.05), sleeper(2, 0.01)]
-    finished, threads = _run(3, [frozenset(), frozenset(), frozenset({0})], 4, work)
-    assert sorted(finished) == [0, 1, 2]
+    def two():
+        seen["after_zero"] = zero_done.is_set()
+
+    finished, threads = _run(3, [frozenset(), frozenset(), frozenset({0})], 4,
+                             [zero, one_ran.set, two])
+    assert seen == {"overlapped": True, "after_zero": True}
     assert finished.index(1) < finished.index(0) < finished.index(2)  # completion order
-    assert started[1] < ended[0]  # 1 did not wait for 0
-    assert started[2] >= ended[0]  # 2 waited for the entry it reads
     assert all(name.startswith("scan") for name in threads)
 
 
 def test_the_earliest_failure_is_raised_after_the_entries_before_it_ran():
-    """Entry 3 fails first in time; entry 1 (slow) still runs and fails, so its error is the
-    one raised, as a jobs-1 run would raise it; entries after the earliest failure never start."""
+    """Entry 3 fails in prepare, at submission, before any call ends; entry 1's call fails later
+    but is earlier in the table, so its error is raised, as a jobs-1 run would raise it. Entry 4
+    becomes ready only when entry 2 finishes, after the failure at 3, so it never starts."""
     ran: list[int] = []
 
-    def ok(i, seconds=0.0):
+    def ok(i):
         def run():
-            time.sleep(seconds)
             ran.append(i)
         return run
 
-    def boom(i, seconds=0.0):
+    def boom(i):
         def run():
-            time.sleep(seconds)
+            time.sleep(0.05)
             raise RuntimeError(f"entry {i}")
         return run
 
-    work = [ok(0), boom(1, 0.2), ok(2, 0.1), boom(3), ok(4)]
-    # 4 becomes ready when 2 finishes, after 3 has failed, so it is never started
+    work = [ok(0), boom(1), ok(2), ok(3), ok(4)]
     deps = [frozenset(), frozenset(), frozenset(), frozenset(), frozenset({2})]
     with pytest.raises(RuntimeError, match="entry 1"):
-        _run(5, deps, 4, work)
-    assert 4 not in ran and {0, 2} <= set(ran)
+        _run(5, deps, 4, work, fail=frozenset({3}))
+    assert sorted(ran) == [0, 2]
 
 
 def test_a_prepare_failure_is_raised_in_index_order():
@@ -120,16 +124,20 @@ def test_a_prepare_failure_is_raised_in_index_order():
         _run(3, [frozenset()] * 3, 2, work, fail=frozenset({1, 2}))
 
 
-def test_fleet_passes_scan_jobs_to_each_repository_scan(tmp_path):
+def test_fleet_passes_scan_jobs_to_each_repository_scan(tmp_path, monkeypatch):
     """#1381: /fleet --scan-jobs reaches assess_signals --jobs; unset, the child's default."""
     from lib.fleet.fleet_cli_args import parse_args
     from lib.fleet.runner import ScanOptions, signals_command
 
+    monkeypatch.setattr(pool.os, "cpu_count", lambda: 16)
     command = signals_command(tmp_path / "c", tmp_path / "o.json", ScanOptions(scan_jobs=3))
     assert command[-2:] == ["--jobs", "3"]
     assert "--jobs" not in signals_command(tmp_path / "c", tmp_path / "o.json", ScanOptions())
     out = str(tmp_path / "out")
     assert parse_args([str(tmp_path), "--out", out, "--scan-jobs", "2"]).scan_jobs == 2
-    assert parse_args([str(tmp_path), "--out", out]).scan_jobs is None
+    # by default the CPUs are split between the repositories scanned at once
+    assert parse_args([str(tmp_path), "--out", out, "--jobs", "16"]).scan_jobs == 1
+    assert parse_args([str(tmp_path), "--out", out, "--jobs", "4"]).scan_jobs == 4
+    assert parse_args([str(tmp_path), "--out", out, "--jobs", "1"]).scan_jobs == pool.JOBS_CAP
     with pytest.raises(SystemExit):
         parse_args([str(tmp_path), "--out", out, "--scan-jobs", "0"])

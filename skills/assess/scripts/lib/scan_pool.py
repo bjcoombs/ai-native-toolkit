@@ -24,7 +24,8 @@ Threads suit the scans: most of their time is spent in subprocesses (git, lizard
 reading files. A process pool would need every value and callable to pickle, and no
 timing so far shows a pure-Python scan worth it. ``default_jobs`` is the CPU count capped at
 ``JOBS_CAP``; ``add_jobs_argument`` gives ``assess_core.py`` and ``assess_signals.py`` the same
-``--jobs`` flag. Tests: ``tests/test_scan_pool.py``, ``tests/test_scan_registry.py``.
+``--jobs`` flag, and ``share_of_cpus`` is the per-repository default ``/fleet`` passes its children
+(``fleet.py --scan-jobs``), so N repositories at a time do not each start a full pool. Tests: ``tests/test_scan_pool.py``, ``tests/test_scan_registry.py``.
 """
 from __future__ import annotations
 
@@ -43,6 +44,13 @@ JOBS_CAP = 8
 def default_jobs() -> int:
     """The CPU count, capped at ``JOBS_CAP``; at least 1."""
     return max(1, min(os.cpu_count() or 1, JOBS_CAP))
+
+
+def share_of_cpus(parallel: int) -> int:
+    """Scans per process when ``parallel`` processes scan at once (``fleet.py --jobs``): the CPU
+    count split between them, capped at ``JOBS_CAP``, at least 1. At fleet's default of one
+    repository per CPU that is 1, each repository's scans running one after another."""
+    return max(1, min((os.cpu_count() or 1) // max(1, parallel), JOBS_CAP))
 
 
 def jobs_value(text: str) -> int:
