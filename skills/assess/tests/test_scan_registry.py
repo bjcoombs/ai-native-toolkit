@@ -399,7 +399,7 @@ def test_timings_go_to_the_inputs_never_to_the_context():
     assert block["total_seconds"] == round(sum(block["stages"].values()), 3)
 
 
-def test_timings_block_is_written_and_left_out_of_counts_only(tmp_path):
+def test_timings_block_is_written_and_left_out_of_counts_only(tmp_path, capsys):
     """#1380: run-context.json carries per-stage and per-scan wall time; the counts-only
     copy carries none, and stdout stays the diff while stderr gets the one-line summary."""
     import json
@@ -410,6 +410,9 @@ def test_timings_block_is_written_and_left_out_of_counts_only(tmp_path):
 
     repo = _minimal_repo(tmp_path)
     assert main([str(repo), "--non-interactive", "--counts-only"]) == 0
+    out, err = capsys.readouterr()
+    json.loads(out)  # stdout is still only the diff JSON
+    assert "timings: scans total " in err and "; slowest scans: " in err
     ctx = json.loads((repo / ".assess" / "run-context.json").read_text(encoding="utf-8"))
     block = ctx[TIMINGS_KEY]
     assert set(block) == {"total_seconds", "stages", "scans"}
@@ -419,4 +422,4 @@ def test_timings_block_is_written_and_left_out_of_counts_only(tmp_path):
 
     content_free = json.loads((repo / ".assess" / COUNTS_ONLY_FILE).read_text(encoding="utf-8"))
     assert TIMINGS_KEY not in content_free
-    assert "seconds" not in json.dumps(content_free)
+    assert "total_seconds" not in json.dumps(content_free)
