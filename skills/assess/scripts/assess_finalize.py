@@ -7,6 +7,12 @@ sets a score.
 After the LLM writes assess-report.md, it also writes finalize-input.json with
 its derived values and invokes this script to update the wiki files in place.
 
+Every path below is under the run's artefact directory, resolved from the run
+scope the way the core resolves it (``lib.run_scope``): ``{repo_root}/.assess/``
+for a whole-repo run, ``{repo_root}/.assess/<slug>/`` for a ``--scope`` run
+(#1291). A scoped finalize reads and writes only its own directory and leaves
+the whole-repo files unchanged.
+
 Reads (in order; first hit wins):
     {repo_root}/.assess/.cache/finalize-input.json  (preferred - transient cache)
     {repo_root}/.assess/finalize-input.json         (legacy - written to working tree)
@@ -31,7 +37,9 @@ Then re-renders the top card's Start here and Done when from that actions.json
 
 Run:
     uv run assess_finalize.py <repo_root>
-    uv run assess_finalize.py <repo_root> --drop-entry <run_id>
+    uv run assess_finalize.py <repo_root> --scope <path>
+        (a scoped run: pass the same --scope the core run took)
+    uv run assess_finalize.py <repo_root> [--scope <path>] --drop-entry <run_id>
         (replaces a never-finalized log entry that blocks finalize with a
         one-line tombstone and re-chains the log; finalized entries are refused)
 """
@@ -40,6 +48,7 @@ Run:
 # ///
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import sys
@@ -56,6 +65,7 @@ from lib.evidence_check import check_evidence, describe
 from lib.gap_actions import action_mode
 from lib.testing.mutation_cap import layer6_cap_violation
 from lib.reviewed_findings import action_entries, carried_completed, reopened_status
+from lib.run_scope import assess_dir_for, resolve_scope
 from lib.run_context_types import ActionLifecycle, FinalizeInput, JsonDict
 from lib.wiki_writer import (
     find_log_entry,
@@ -137,11 +147,12 @@ def _validate_no_earlier_same_date_placeholders(assess_dir: Path, target: int | 
             heading = next(
                 (ln for ln in content.splitlines() if ln.startswith("## ")), "?"
             )
+            scope = " --scope <path>" if assess_dir.parent.name == ".assess" else ""
             raise FinalizeValidationError(
                 f"log.md entry run_id={stale_id} ({heading}) for {day} still "
                 "carries unfilled placeholders; an earlier same-date run was "
                 "never finalized. Its run-context is gone, so drop it with: "
-                f"assess_finalize.py <repo_root> --drop-entry {stale_id}, then "
+                f"assess_finalize.py <repo_root>{scope} --drop-entry {stale_id}, then "
                 "re-run finalize. Deleting it by hand breaks the log chain."
             )
 
@@ -635,19 +646,21 @@ def _validate_finalize_input(
     return _validate_evidence(data, repo_root)
 
 
-def finalize_run(*, assess_dir: Path) -> None:
+def finalize_run(*, assess_dir: Path, repo_root: Path | None = None) -> None:
     """Read finalize-input.json, validate it against run-context.json, apply it
     to log.md and hotspot pages, then delete the input file.
 
     Fail-closed: run-context.json is read and every invariant checked *before*
     any write, including the re-check of any ``evidence`` list against the
-    repository root (the parent of ``assess_dir``). Any violation raises
+    repository root (``repo_root``; the parent of ``assess_dir`` when omitted,
+    which is right only for a whole-repo run). Any violation raises
     ``FinalizeValidationError`` and nothing is written.
     """
     input_path = _locate_input(assess_dir)
     data: FinalizeInput = json.loads(input_path.read_text(encoding="utf-8"))
     ctx = _load_run_context(assess_dir)
-    tolerated = _validate_finalize_input(data, ctx, repo_root=assess_dir.parent)
+    root = assess_dir.parent if repo_root is None else repo_root
+    tolerated = _validate_finalize_input(data, ctx, repo_root=root)
     target = _log_target(assess_dir, ctx.get("run_id") or data.get("run_id"))
     _validate_no_earlier_same_date_placeholders(assess_dir, target)
     _finalize_log(
@@ -719,19 +732,29 @@ def drop_unfinalized_entry(*, assess_dir: Path, run_id: str) -> None:
     rewrite_log_entry(assess_dir, idx, tombstone)
 
 
-def main() -> int:
-    args = sys.argv[1:]
-    usage = "Usage: assess_finalize.py <repo_root> [--drop-entry <run_id>]"
-    if len(args) not in (1, 3) or (len(args) == 3 and args[1] != "--drop-entry"):
-        print(usage, file=sys.stderr)
-        return 2
-    repo_root = Path(args[0]).resolve()
-    assess_dir = repo_root / ".assess"
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="assess_finalize.py", description="Fill the placeholders the /assess core left for the model."
+    )
+    parser.add_argument("repo_root", type=Path)
+    parser.add_argument(
+        "--scope", type=Path, metavar="SUBDIR",
+        help="The --scope the core run took: finalize then reads and writes .assess/<slug>/.",
+    )
+    parser.add_argument("--drop-entry", metavar="RUN_ID")
+    args = parser.parse_args(argv)
+    repo_root = args.repo_root.resolve()
     try:
-        if len(args) == 3:
-            drop_unfinalized_entry(assess_dir=assess_dir, run_id=args[2])
+        _, _, slug = resolve_scope(repo_root, args.scope)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    assess_dir = assess_dir_for(repo_root, slug)
+    try:
+        if args.drop_entry is not None:
+            drop_unfinalized_entry(assess_dir=assess_dir, run_id=args.drop_entry)
         else:
-            finalize_run(assess_dir=assess_dir)
+            finalize_run(assess_dir=assess_dir, repo_root=repo_root)
     except FinalizeValidationError as e:
         # Fail-closed: a violated invariant means finalize wrote nothing. Name
         # the specific violation and exit non-zero so the run surfaces it.

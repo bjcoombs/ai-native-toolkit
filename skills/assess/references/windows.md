@@ -55,7 +55,7 @@ python "$AssessDir/scripts/doc-graph-svg.py" "$REPO_ROOT" -o "$REPO_ROOT/.assess
 python "$AssessDir/scripts/assess_core.py" "$REPO_ROOT"
 
 # later steps follow the same pattern
-python "$AssessDir/scripts/assess_finalize.py" "$REPO_ROOT"
+python "$AssessDir/scripts/assess_finalize.py" "$REPO_ROOT"   # add --scope $SCOPE on a scoped run
 
 # headless signals only
 python "$AssessDir/scripts/assess_signals.py" "$REPO_ROOT" --out "$env:TEMP/signals.json" --counts-only

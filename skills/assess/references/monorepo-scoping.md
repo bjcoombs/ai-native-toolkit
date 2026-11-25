@@ -66,6 +66,12 @@ The opt-in mutation re-run must be given the same scope so it finds the scoped
 run-context: `assess_core.py "$REPO_ROOT" --opt-in-mutation --scope "$SCOPE"`, plus the
 run's `--profile` or `--levels` and every `--pack`.
 
+Finalize takes the same scope, so it reads `finalize-input.json` from
+`$ASSESS_DIR/.cache/` and writes `actions.json`, the log entry, the hotspot pages and
+the report card's Start here and Done when under `.assess/<slug>/` only:
+`assess_finalize.py "$REPO_ROOT" --scope "$SCOPE"`. Without `--scope` it finalizes the
+whole-repo `.assess/` instead, and the scoped card keeps the core's wording.
+
 ## What "scoped" means per signal
 
 - **Complexity / hotspots** - only files under the scope are scored; the
