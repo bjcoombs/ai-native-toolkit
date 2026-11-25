@@ -107,6 +107,7 @@ def test_only_refine_and_workflow_token_secrets(caller: str) -> None:
     for name in (caller, CALLERS[caller]):
         text = (WORKFLOWS / name).read_text(encoding="utf-8")
         assert set(re.findall(r"secrets\.(\w+)", text)) <= {"REFINE_ANTHROPIC_API_KEY", "anthropic_api_key",
+                                                              "CLAUDE_CODE_OAUTH_TOKEN", "claude_code_oauth_token",
                                                               "REFINE_PROJECT_TOKEN", "project_token"}
 
 
@@ -152,7 +153,18 @@ def test_reusable_credential_inputs(name: str) -> None:
     assert call["secrets"]["anthropic_api_key"]["required"] is False
     with_ = _model_step(name)["with"]
     assert with_["anthropic_api_key"] == "${{ secrets.anthropic_api_key }}"
-    assert with_["anthropic_federation_rule_id"] == "${{ inputs.anthropic_federation_rule_id }}"
+    for key in ("anthropic_federation_rule_id", "anthropic_organization_id", "anthropic_service_account_id",
+                "anthropic_workspace_id"):
+        assert with_[key] == f"${{{{ steps.gate.outputs.auth == 'wif' && inputs.{key} || '' }}}}", key
+    assert call["secrets"]["claude_code_oauth_token"]["required"] is False
+    assert with_["claude_code_oauth_token"] == \
+        "${{ steps.gate.outputs.auth == 'oauth' && secrets.claude_code_oauth_token || '' }}"
+
+
+@pytest.mark.parametrize("caller", ["refine-triage.yml", "refine-dedupe.yml"])
+def test_callers_pass_the_claude_code_oauth_token(caller: str) -> None:
+    secrets = next(iter(_load(caller)["jobs"].values()))["secrets"]
+    assert secrets["claude_code_oauth_token"] == "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}"
 
 
 @pytest.mark.parametrize("name", sorted(CALLERS.values()))
@@ -405,3 +417,64 @@ def test_apply_job_runs_no_model_and_reads_the_plan_artifact(name: str) -> None:
     digest = next(i for i, s in enumerate(plan_steps) if s.get("id") == "digest")
     model = next(i for i, s in enumerate(plan_steps) if s.get("id") == "model")
     assert digest < model
+
+
+# ── the Claude Code OAuth token stays in the read-only model step ────────
+
+def _uses_oauth(node: Any) -> bool:
+    return "claude_code_oauth_token" in json.dumps(node)
+
+
+@pytest.mark.parametrize("name", MODEL_WORKFLOWS)
+def test_oauth_token_reaches_only_the_read_only_model_step(name: str) -> None:
+    jobs = _load(name)["jobs"]
+    for job_id, job in jobs.items():
+        writes = {k for k, v in job["permissions"].items() if v == "write"} - NOT_A_REPO_WRITE
+        if job_id != "plan" or writes:
+            assert not _uses_oauth(job), f"{job_id} holds a write token or runs no model"
+    plan = jobs["plan"]
+    assert not _uses_oauth(plan.get("env", {})), "a job-level env would hand the token to every step"
+    holders = [s.get("id") for s in plan["steps"] if _uses_oauth(s)]
+    assert holders == ["gate", "model"]
+    gate = next(s for s in plan["steps"] if s.get("id") == "gate")
+    # The gate sees only whether the token is set, never its value.
+    assert gate["env"]["HAS_OAUTH"] == "${{ secrets.claude_code_oauth_token != '' }}"
+    assert "secrets." not in gate["run"]
+
+
+def _run_gate(tmp_path: Path, name: str, key: bool, wif: bool, oauth: bool,
+              trusted: bool = True) -> "tuple[int, Dict[str, str], str]":
+    gate = next(s for s in _steps(_load(name)) if s.get("id") == "gate")
+    schema = tmp_path / ".refine-toolkit" / "skills" / "refine" / "scripts"
+    schema.mkdir(parents=True, exist_ok=True)
+    for f in ("triage-plan.schema.json", "dedupe-plan.schema.json"):
+        (schema / f).write_text("{}", encoding="utf-8")
+    out = tmp_path / "out"
+    out.write_text("", encoding="utf-8")
+    env = {"PATH": os.environ["PATH"], "GITHUB_OUTPUT": str(out), "HAS_KEY": str(key).lower(),
+           "HAS_WIF": str(wif).lower(), "HAS_OAUTH": str(oauth).lower(), "TRUSTED": str(trusted).lower()}
+    proc = subprocess.run(["bash", "-e", "-c", gate["run"]], env=env, cwd=tmp_path, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace", check=False)
+    lines = out.read_text(encoding="utf-8").splitlines()
+    outputs = dict(line.split("=", 1) for line in lines if "=" in line)
+    return proc.returncode, outputs, proc.stdout
+
+
+@needs_bash
+@pytest.mark.skipif(shutil.which("jq") is None, reason="the gate step reads the plan schema with jq")
+@pytest.mark.parametrize("name", MODEL_WORKFLOWS)
+@pytest.mark.parametrize("key, wif, oauth, auth", [
+    (True, True, True, "api_key"), (True, False, True, "api_key"),
+    (False, True, True, "wif"), (False, False, True, "oauth")])
+def test_gate_picks_key_then_federation_then_oauth(tmp_path: Path, name: str, key: bool, wif: bool,
+                                                  oauth: bool, auth: str) -> None:
+    code, outputs, _ = _run_gate(tmp_path, name, key, wif, oauth)
+    assert code == 0 and outputs["auth"] == auth and outputs["run"] == "true"
+
+
+@needs_bash
+@pytest.mark.parametrize("name", MODEL_WORKFLOWS)
+def test_gate_fails_fast_with_no_credential(tmp_path: Path, name: str) -> None:
+    code, outputs, stdout = _run_gate(tmp_path, name, False, False, False)
+    assert code == 1 and "run" not in outputs
+    assert "::error::No refiner credential is set" in stdout and "claude_code_oauth_token" in stdout

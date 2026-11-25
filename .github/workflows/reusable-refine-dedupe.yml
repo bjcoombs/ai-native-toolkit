@@ -51,6 +51,9 @@ on:
     secrets:
       anthropic_api_key:
         required: false
+      claude_code_oauth_token:
+        description: Used only when neither the API key nor Workload Identity Federation is set; as in reusable-refine-triage.yml.
+        required: false
 
 jobs:
   # The model runs here, with a token that can read issues but write
@@ -141,12 +144,23 @@ jobs:
         env:
           HAS_KEY: ${{ secrets.anthropic_api_key != '' }}
           HAS_WIF: ${{ inputs.anthropic_federation_rule_id != '' && inputs.anthropic_organization_id != '' }}
+          HAS_OAUTH: ${{ secrets.claude_code_oauth_token != '' }}
           TRUSTED: ${{ github.event_name == 'workflow_dispatch' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association) }}
         run: |
-          if [ "$HAS_KEY" != "true" ] && [ "$HAS_WIF" != "true" ]; then
-            echo "::notice::No refiner credential is set; the model step is skipped."
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          elif [ "$TRUSTED" != "true" ]; then
+          # Credential order: the API key, then Workload Identity Federation,
+          # then the Claude Code OAuth token. Only the chosen one reaches the
+          # model step.
+          if [ "$HAS_KEY" = "true" ]; then
+            echo "auth=api_key" >> "$GITHUB_OUTPUT"
+          elif [ "$HAS_WIF" = "true" ]; then
+            echo "auth=wif" >> "$GITHUB_OUTPUT"
+          elif [ "$HAS_OAUTH" = "true" ]; then
+            echo "auth=oauth" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::No refiner credential is set. Pass the anthropic_api_key secret, the Workload Identity Federation inputs (anthropic_federation_rule_id and anthropic_organization_id) or the claude_code_oauth_token secret."
+            exit 1
+          fi
+          if [ "$TRUSTED" != "true" ]; then
             echo "::notice::The author has no write access; only the exact-duplicate check runs."
             echo "run=false" >> "$GITHUB_OUTPUT"
           else
@@ -176,10 +190,11 @@ jobs:
         with:
           github_token: ${{ github.token }}
           anthropic_api_key: ${{ secrets.anthropic_api_key }}
-          anthropic_federation_rule_id: ${{ inputs.anthropic_federation_rule_id }}
-          anthropic_organization_id: ${{ inputs.anthropic_organization_id }}
-          anthropic_service_account_id: ${{ inputs.anthropic_service_account_id }}
-          anthropic_workspace_id: ${{ inputs.anthropic_workspace_id }}
+          anthropic_federation_rule_id: ${{ steps.gate.outputs.auth == 'wif' && inputs.anthropic_federation_rule_id || '' }}
+          anthropic_organization_id: ${{ steps.gate.outputs.auth == 'wif' && inputs.anthropic_organization_id || '' }}
+          anthropic_service_account_id: ${{ steps.gate.outputs.auth == 'wif' && inputs.anthropic_service_account_id || '' }}
+          anthropic_workspace_id: ${{ steps.gate.outputs.auth == 'wif' && inputs.anthropic_workspace_id || '' }}
+          claude_code_oauth_token: ${{ steps.gate.outputs.auth == 'oauth' && secrets.claude_code_oauth_token || '' }}
           prompt: "/dedupe REPO: ${{ github.repository }} ISSUE: ${{ inputs.issue_number }} VERDICT: .refine/verdict.json"
           claude_args: |
             --model ${{ inputs.model }}
