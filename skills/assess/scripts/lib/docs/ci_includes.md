@@ -98,10 +98,12 @@ disk, returns its text so those scans read the included jobs too:
   repository root). Input defaults may differ, as a mirror pins its own version and clone URL.
   A component's name is no evidence (#1179): any host or group can publish an
   ``ai-native-toolkit/assess-gate`` that runs tests. One with no clone (``no_root``,
-  ``not_cloned``), a pin the clone lacks (``ref_missing``) or a build without the template
-  stays unread, so the test signal reads null, never a false 0; one whose file differs (another
-  job, an added ``before_script:``, a gate from another release) is ``resolved`` and read like
-  any template. That template's one job runs the AI-readiness gate and never the
+  ``not_cloned``) or a pin the clone lacks (``ref_missing``) stays unread, so the test signal
+  reads null, never a false 0. One whose file differs (another job, an added
+  ``before_script:``, a gate from another release) is ``resolved`` and read like any
+  template, as is every component in a build without ``GATE_TEMPLATE`` (a standalone copy):
+  a file that runs tests then reads true, and the gate's own job reads null, since its
+  ``$[[ inputs ]]`` lines are ``unreadable`` in the merge. That template's one job runs the AI-readiness gate and never the
   project's tests, so it does not leave the test signal unknown. It counts as read
   (``Resolution.unresolved`` and ``ci_checks.unresolved_includes`` skip it) with no file
   and no ``ref_basis``. Every other ``remote:`` stays ``not_offline``.
