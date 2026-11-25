@@ -48,9 +48,9 @@ It runs `glab auth status` for the host first, then checks each project through 
 403 (`no_access`) or another refusal (`error`) is named on stdout with its status and the
 project that included it. The run records the project, not the files it includes, so a
 reachable project's nested includes are read from every YAML file on its default branch (up
-to 50), and each new project named there is checked one level deeper, to fleet's
-nested-include depth (5). An extra project costs one clone; the next fleet run reads the
+to `MAX_FILES` in `lib/ci/ci_includes.py`), and each new project named there is checked one level deeper, to fleet's
+nested-include depth (`MAX_DEPTH` there). An extra project costs one clone; the next fleet run reads the
 includes exactly. A reachable project whose tree or a file could not be read, or that holds more
-than 50 YAML files, is named as not fully read, since an include it holds may be missing. Exit codes: `0` list written, `2` no `run.json` or a run that does not name
+YAML files than `MAX_FILES`, is named as not fully read, since an include it holds may be missing. Exit codes: `0` list written, `2` no `run.json` or a run that does not name
 the projects, `3` the host could not be read (no `glab`, not logged in, unreachable), and
 nothing is written. Logic: `lib/fleet/fleet_include_list.py`.

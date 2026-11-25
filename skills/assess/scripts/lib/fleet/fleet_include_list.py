@@ -59,8 +59,9 @@ TREE_MAX_PAGES = 10  # a template project with more entries is read in part
 HEADER = "# CI include projects for ghsync --from-list, from a fleet run (fleet_include_list.py)\n"
 # A path segment GitLab allows; a CI variable ($VAR) or a template expression is not one.
 _SEGMENT = re.compile(r"^(?!\.+$)[a-z0-9_.][a-z0-9_.-]*$")
-# Reasons that mean the host, not one project, could not be read.
-_HOST_FAILURES = ("glab_not_installed", "not_authenticated", "unreachable", "glab_timeout")
+# Reasons that mean the host, not one project, could not be read. A timeout is not one: after
+# ``open`` passes, one slow read is that project's ``error`` or ``partial``, not the whole run's.
+_HOST_FAILURES = ("glab_not_installed", "not_authenticated", "unreachable")
 
 
 class IncludeListError(Exception):

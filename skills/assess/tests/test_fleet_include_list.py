@@ -205,6 +205,7 @@ def test_glab_access_maps_each_answer(monkeypatch: pytest.MonkeyPatch) -> None:
         "projects/g%2Fdenied": GhUnavailable("no_access: refused (403 Forbidden)"),
         "projects/g%2Fodd": GhUnavailable("glab_error: failed", "502"),
         "projects/g%2Flist": [],
+        "projects/g%2Fslow": GhUnavailable("glab_timeout: `glab api` gave no answer within 20s"),
     })
     api = fil.GlabIncludeApi("gitlab.example.com")
     assert api.access("g/ok") == fil.ProjectAccess("reachable", "G/ok", "main")
@@ -213,6 +214,7 @@ def test_glab_access_maps_each_answer(monkeypatch: pytest.MonkeyPatch) -> None:
     assert api.access("g/denied").status == "no_access"
     assert api.access("g/odd").status == "error"
     assert api.access("g/list").status == "error"
+    assert api.access("g/slow").status == "error"  # one slow project, not the whole host
 
 
 def test_open_checks_the_login_first(monkeypatch: pytest.MonkeyPatch) -> None:
