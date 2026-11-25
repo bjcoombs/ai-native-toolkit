@@ -130,3 +130,15 @@ def test_a_miss_names_where_the_function_was_reported() -> None:
     outcome, detail = LP.judge(REL, READ_ALL[0], context)["vulture"]
     assert outcome == "MISSED"
     assert detail.endswith("classify reported at pkg\\a\\b\\long_module.py")
+
+
+def test_require_all_fails_a_scanner_that_was_not_measured(tmp_path: Path) -> None:
+    co = tmp_path / "co"
+    rel = LP.long_rel(co)
+    module = rel.removesuffix(".py").replace("/", ".")
+    signals = _signals(LP.FILE_COMPLEXITY, [module], 1)
+    docs = _write_docs(tmp_path, signals, {})  # no dead_code block: vulture not measured
+    assert LP.main(["check", str(co), *map(str, docs)]) == 0
+    assert LP.main(["check", "--require-all", str(co), *map(str, docs)]) == 1
+    full = _write_docs(tmp_path, signals, _context([{"path": rel, "symbol": LP.LONG_FUNCTION}]))
+    assert LP.main(["check", "--require-all", str(co), *map(str, full)]) == 0

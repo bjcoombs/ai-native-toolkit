@@ -7,7 +7,7 @@ that the scanners then read a file at such a path.
 
 Usage:
   python longpath.py build CHECKOUT
-  python longpath.py check CHECKOUT SIGNALS_JSON RUN_CONTEXT_JSON
+  python longpath.py check [--require-all] CHECKOUT SIGNALS_JSON RUN_CONTEXT_JSON
 
 ``build`` makes a git repository at CHECKOUT, with ``core.longpaths=true`` in
 its own config as a ghsync clone has it, holding one Python module whose
@@ -30,7 +30,10 @@ Each scanner reads as ``read``, ``not measured`` (its block is unavailable
 and says why, which is an honest reading), ``known gap`` (listed in
 ``KNOWN_GAPS`` with its issue) or ``MISSED``: the block reports a reading
 that leaves the long file out, the silent under-read #1405 guards against.
-Only ``MISSED`` fails the step.
+``MISSED`` always fails. With ``--require-all``, which the workflow passes
+because it installs every scanner, ``not measured`` fails too: a step whose
+scanners all lost their blocks would otherwise pass while testing nothing.
+A scanner tolerated there belongs in ``KNOWN_GAPS``.
 """
 from __future__ import annotations
 
@@ -202,7 +205,7 @@ def _long_paths_enabled() -> str:
         return "unset"
 
 
-def check(checkout: Path, signals_path: Path, context_path: Path) -> int:
+def check(checkout: Path, signals_path: Path, context_path: Path, require_all: bool = False) -> int:
     rel = long_rel(checkout)
     absolute = os.path.abspath(checkout / rel)
     print(f"long module: {len(absolute)} characters (limit {LIMIT}); LongPathsEnabled: {_long_paths_enabled()}")
@@ -215,15 +218,22 @@ def check(checkout: Path, signals_path: Path, context_path: Path) -> int:
     missed = sorted(s for s, (outcome, _) in results.items() if outcome == "MISSED")
     if missed:
         print(f"scanners that left out the long file: {', '.join(missed)}")
-    return 1 if missed else 0
+    unmeasured = sorted(s for s, (outcome, _) in results.items() if outcome == "not measured")
+    if require_all and unmeasured:
+        print(f"scanners not measured under --require-all: {', '.join(unmeasured)}")
+    return 1 if missed or (require_all and unmeasured) else 0
 
 
 def main(argv: list[str]) -> int:
     if len(argv) == 2 and argv[0] == "build":
         print(build(Path(argv[1])))
         return 0
-    if len(argv) == 4 and argv[0] == "check":
-        return check(Path(argv[1]), Path(argv[2]), Path(argv[3]))
+    if argv[:1] == ["check"]:
+        rest = argv[1:]
+        require_all = rest[:1] == ["--require-all"]
+        rest = rest[1:] if require_all else rest
+        if len(rest) == 3:
+            return check(Path(rest[0]), Path(rest[1]), Path(rest[2]), require_all)
     print(__doc__, file=sys.stderr)
     return 2
 
