@@ -32,7 +32,7 @@ ISSUE="$ARGUMENTS"                        # empty, or one open issue number
 if [ -n "$ISSUE" ] && ! printf '%s' "$ISSUE" | grep -qE '^[0-9]+$'; then echo "usage: /refine [issue-number]"; exit 2; fi
 S="${CLAUDE_SKILL_DIR}/scripts"
 REPO=$(gh repo view --json nameWithOwner | jq -r .nameWithOwner)
-WORK=$(mktemp -d)
+WORK=$(mktemp -d); echo "WORK=$WORK"   # note the path: shell variables do not survive between Bash calls
 python3 "$S/refine.py" --repo "$REPO" ${ISSUE:+--issue "$ISSUE"} --out "$WORK/verdict.json"
 ```
 
@@ -57,9 +57,12 @@ Research many issues in turn, not in parallel, and keep each plan to what the ev
 
 ## Step 4: Dry-run the writes
 
-Run every plan through the apply step in dry-run. `REFINE_MODE` is unset, so the scripts send nothing; they read the tracker, apply every guardrail and log what live mode would do:
+Run every plan through the apply step in dry-run. The block unsets `REFINE_MODE`, so the scripts send nothing; they read the tracker, apply every guardrail and log what live mode would do:
 
 ```bash
+unset REFINE_MODE                          # a REFINE_MODE=live left in the shell would send every write
+S="${CLAUDE_SKILL_DIR}/scripts"; WORK="<the path Step 1 printed>"
+REPO=$(gh repo view --json nameWithOwner | jq -r .nameWithOwner)
 export GH_REPO="$REPO" REFINE_STATE_DIR="$WORK/state"
 export REFINE_ALLOWED_LABELS="${REFINE_ALLOWED_LABELS:-agent-ready,needs-triage,bug,enhancement,documentation,question}"   # the workflows' default
 for plan in "$WORK"/plan-*.json; do

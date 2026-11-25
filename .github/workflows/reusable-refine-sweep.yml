@@ -14,9 +14,10 @@ name: Refine sweep (reusable)
 #      job sets Status, Size and Verdict on the issues' items in that GitHub
 #      project (refine_project.py). With no project number it is skipped.
 #
-# Permissions: grant `contents: read` and `issues: write` in the caller. The
-# job declares the same two, so it never runs with more, whatever the caller
-# grants. No job here uses actions/cache or a setup-* cache.
+# Permissions: grant `contents: read`, `issues: write` and
+# `pull-requests: read` in the caller. The `sweep` job declares those three
+# and the `project` job only reads, so neither runs with more, whatever the
+# caller grants. No job here uses actions/cache or a setup-* cache.
 on:
   workflow_call:
     inputs:
