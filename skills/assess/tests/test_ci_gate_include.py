@@ -7,6 +7,7 @@ signal null (not measured), never a false 0.
 """
 from __future__ import annotations
 
+import hashlib
 import re
 import subprocess
 from collections.abc import Iterator
@@ -164,3 +165,21 @@ def test_a_gate_mirror_under_rules_stays_conditional(tmp_path: Path) -> None:
     resolution = resolve_includes(app, root)
     assert resolution.includes[0]["status"] == "toolkit_gate"
     assert resolution.slots[0].conditional and resolution.slots[0].jobs == ci_includes.TOOLKIT_GATE_JOBS
+
+
+# --- the template body is an input to four collectors (lib/README.md) ----------
+
+# The sha256 of the shipped gate's lines below ``---``, recorded at these collector revisions.
+GATE_BODY_SHA256 = "b09841c1c95a88582ea8ef36431cb58bbd5d00bfffca2502895fe94b7b92bfc7"
+GATE_READERS = ("core.ci_checks", "core.secrets_guard", "core.review_automation", "core.ci_model_jobs")
+
+
+def test_a_gate_body_edit_is_recorded_with_the_collector_revisions() -> None:
+    """A body edit changes what four collectors report for a gate mirror, and the fleet golden
+    holds no mirror. Bump each GATE_READERS revision, then record the new digest here."""
+    body = ci_includes._shipped_gate()
+    assert body is not None
+    digest = hashlib.sha256("\n".join(body).encode("utf-8")).hexdigest()
+    assert digest == GATE_BODY_SHA256, (
+        "templates/assess-gate.yml changed below `---`: bump the `revision` of "
+        f"{', '.join(GATE_READERS)} in checks/core/, then set GATE_BODY_SHA256 = {digest!r}")

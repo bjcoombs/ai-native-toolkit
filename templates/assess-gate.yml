@@ -13,7 +13,8 @@
 #
 # /assess recognises a component mirror of this gate by the lines below `---`
 # (skills/assess/scripts/lib/ci_includes.py, #1179). An edit there bumps the
-# `revision` of the collectors skills/assess/scripts/lib/README.md lists.
+# `revision` of the collectors skills/assess/scripts/lib/README.md lists;
+# skills/assess/tests/test_ci_gate_include.py fails until it does.
 #
 # The job runs on merge request pipelines only. It fails when a Step gate the
 # committed baseline (.assess/prior-level.json) held now reads unmet, and on
