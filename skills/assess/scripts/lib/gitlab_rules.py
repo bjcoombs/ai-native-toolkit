@@ -1,6 +1,6 @@
 """Reads a GitLab ``rules:`` list the way GitLab runs it, per ordinary pipeline (issue #884).
 
-``lib.ci_triggers`` asks this of each GitLab job and of a top-level ``workflow: rules:``.
+``lib.ci.ci_triggers`` asks this of each GitLab job and of a top-level ``workflow: rules:``.
 The answer is read per ordinary pipeline: a merge request pipeline
 (``CI_PIPELINE_SOURCE == "merge_request_event"``) and a branch push pipeline
 (``"push"`` with ``CI_COMMIT_BRANCH`` set and no ``CI_COMMIT_TAG``). Each gives

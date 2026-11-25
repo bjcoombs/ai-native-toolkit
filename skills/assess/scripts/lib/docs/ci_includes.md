@@ -1,7 +1,7 @@
 # ci_includes: GitLab CI includes and the merged configuration (#766, #1180)
 
-Reference for `lib/ci_includes.py` (with `lib/ci_include_items.py`, the `include:` parser, and
-`lib/ci_merged_view.py`, the line view). The module docstring has the summary.
+Reference for `lib/ci/ci_includes.py` (with `lib/ci/ci_include_items.py`, the `include:` parser, and
+`lib/ci/ci_merged_view.py`, the line view). The module docstring has the summary.
 
 ## The merged configuration (#1180)
 

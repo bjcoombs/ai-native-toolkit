@@ -7,7 +7,7 @@ kind = "collector"
 title = "Review evidence"
 summary = "An AI review step committed in CI, or a reviewed merged change."
 issues = [696]
-callable = "lib.review_automation:review_evidence"
+callable = "lib.ci.review_automation:review_evidence"
 publishes = ["review_evidence"]
 reads = ["review_automation", "review_reality"]
 stage = "post_offers"
@@ -15,7 +15,7 @@ platform_pass = true
 headless = { review_evidence = "registered" }
 whys.review_evidence = "It records whether changes get a second reader at all, from a committed AI review step or a reviewed merged change, so review is credited where it happens."
 shapes = [
-  { path = "review_evidence", type = "lib.review_automation:ReviewEvidenceBlock" },
+  { path = "review_evidence", type = "lib.ci.review_automation:ReviewEvidenceBlock" },
 ]
 revision = 2
 unknown_reasons = [

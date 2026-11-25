@@ -101,7 +101,7 @@ from lib.agents.agent_harness import scan_agent_harness
 from lib.agents.agent_ops import scan_agent_ops
 from lib.agent_outcome import scan_agent_outcome
 from lib.ai_usage import scan_ai_usage
-from lib.ci_checks import scan_ci_checks
+from lib.ci.ci_checks import scan_ci_checks
 from lib.claude_config import scan_claude_config
 from lib.hosting.config_drift import scan_config_drift
 from lib.degrade import safe as safe  # re-exported: callers import it from here
@@ -120,7 +120,7 @@ from lib.secrets_guard import scan_secrets_guard
 from lib.backlog_ready import scan_backlog_ready
 from lib.skill_script_tests import scan_skill_script_tests
 from lib.skill_personal_data import scan_skill_personal_data
-from lib.ci_model_jobs import scan_ci_model_jobs
+from lib.ci.ci_model_jobs import scan_ci_model_jobs
 from lib.pack_checks import IDENTITY_BLOCK, PACK_BLOCK
 from lib.pack_checks import collect as collect_packs
 from lib.hosting.org_security_policy import scan_org_security_policy
@@ -129,9 +129,9 @@ from lib.layer_grades import scan_layer_grades
 from lib.hosting.merged_sample import merged_sample, offline_merged_sample
 from lib.hosting.gitlab_ci_lint import no_merged_ci, read_merged_ci
 from lib.guardrails import scan_guardrails
-from lib.review_automation import review_evidence, scan_review_automation
+from lib.ci.review_automation import review_evidence, scan_review_automation
 from lib.hosting.review_reality import review_reality_from_sample
-from lib.shared_tooling import scan_shared_tooling
+from lib.ci.shared_tooling import scan_shared_tooling
 from lib.manifest.check_manifest import core_manifest
 from lib.scan_plan import ScanPlan
 from lib.unit_levels import READS as UNIT_LEVEL_READS
@@ -435,7 +435,7 @@ SCANS: tuple[ScanSpec, ...] = (
     # The fleet settings sections (#706): the repository's own `.assess/config.toml`
     # sections here; the headless signals run provides them merged with `--fleet-config`.
     _spec("fleet_config", rs.fleet_config),
-    # The ghsync root GitLab includes resolve against (#766, lib/ci_includes.py):
+    # The ghsync root GitLab includes resolve against (#766, lib/ci/ci_includes.py):
     # None here; the headless signals run provides `--ghsync-root`.
     _spec("ghsync_root", rs.ghsync_root),
     _spec("measured_commit", rs.measured_commit),
@@ -615,7 +615,7 @@ SCANS: tuple[ScanSpec, ...] = (
     # `ghsync_root`, #766; under --platform, GitLab's merged configuration where one did
     # not, #796). enforced_check_runs (#775) leaves out masked
     # checks and checks off the ordinary triggers (lib/ci_masking.py,
-    # lib/ci_triggers.py); Layer 5 level 1 of the default maturity model reads it.
+    # lib/ci/ci_triggers.py); Layer 5 level 1 of the default maturity model reads it.
     # lint_runs (#782) is the same test for lint lines; Layer 3 level 1 reads it.
     # Offline itself; under --platform it also reads external_ci (#928, lib/external_ci.py):
     # the check runs and statuses of the sampled merged pull requests, at most two GETs each.

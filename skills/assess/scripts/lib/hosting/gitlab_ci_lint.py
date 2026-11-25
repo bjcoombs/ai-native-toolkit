@@ -1,6 +1,6 @@
 """GitLab's merged CI configuration, read through the CI lint API (issue #796, #766 part 2).
 
-``lib/ci_includes.py`` resolves a ``.gitlab-ci.yml`` include offline when the
+``lib/ci/ci_includes.py`` resolves a ``.gitlab-ci.yml`` include offline when the
 included file is cloned in the ghsync root. An include it cannot read (a
 template project that is not cloned, a ``template:`` or ``remote:`` file)
 leaves ``ci_checks.test_or_lint_configured`` null. This module asks GitLab for the
@@ -65,11 +65,11 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from lib.ci_includes import resolve_includes
+from lib.ci.ci_includes import resolve_includes
 from lib.counts_only.content_free import reason_code
 from lib.hosting.gh_cli import GhUnavailable
 from lib.hosting.gitlab_cli import glab_api, open_gitlab
-from lib.merged_ci import NOT_NEEDED, NOT_READ, MergedCi
+from lib.ci.merged_ci import NOT_NEEDED, NOT_READ, MergedCi
 
 
 def no_merged_ci(_repo_root: Path, _ghsync_root: Path | None = None) -> MergedCi:

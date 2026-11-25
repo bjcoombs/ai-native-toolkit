@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from lib.check_command import is_info_invocation, is_lint_run
-from lib.ci_checks import check_commands, enforced_check_commands, scan_ci_checks
+from lib.ci.ci_checks import check_commands, enforced_check_commands, scan_ci_checks
 from lib.ci_exempt import exempt_segments, unquoted
 from lib.ci_masking import split_statements, unmasked_lines
 from lib.command_index import ci_config_files

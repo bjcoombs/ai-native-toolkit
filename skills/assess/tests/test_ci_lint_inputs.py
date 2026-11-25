@@ -1,4 +1,4 @@
-"""Tests for lib/ci_lint_inputs.py: lint action steps that only install the linter (#893).
+"""Tests for lib/ci/ci_lint_inputs.py: lint action steps that only install the linter (#893).
 
 Each case is pinned against the action's own documented behaviour: astral-sh/ruff-action and
 chartboost/ruff-action run ``ruff <args> <src>`` (``args`` defaults to ``check``; the astral
@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from lib.ci_checks import scan_ci_checks
-from lib.ci_lint_inputs import LintInputs, read_lint_inputs
+from lib.ci.ci_checks import scan_ci_checks
+from lib.ci.ci_lint_inputs import LintInputs, read_lint_inputs
 
 
 def _step(uses: str, with_block: str = "", extra: str = "") -> str:

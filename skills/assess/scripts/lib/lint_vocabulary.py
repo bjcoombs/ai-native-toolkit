@@ -13,7 +13,7 @@ file or network access. Gradle's arguments are read by ``lib.runner_args``.
   2 on #926: ``pint --test``, ``php-cs-fixer fix --dry-run``, ``swift-format lint``,
   ``dotnet format --verify-no-changes``, ``clang-format --dry-run --Werror``,
   ``mix format --check-formatted``, ``dart format --set-exit-if-changed``). Its rewrite mode
-  (``clang-format -i``) is read by ``lib.ci_lint_gates``: a gate only when a later line of
+  (``clang-format -i``) is read by ``lib.ci.ci_lint_gates``: a gate only when a later line of
   the same job runs ``git diff --exit-code``.
 - ``subcommand_lint``: build-tool lint subcommands and tasks: ``mix credo``, ``mix dialyzer``
   (not ``--plt``, which only builds the lookup table), ``dart analyze``, ``flutter analyze``,
@@ -22,7 +22,7 @@ file or network access. Gradle's arguments are read by ``lib.runner_args``.
   ``spotlessApply``, ``detektBaseline``) and a task named after ``-x``.
 - ``compiler_gate``: a compiler run with warnings as errors (``mix compile
   --warnings-as-errors``, ``-Werror`` on a compile or CMake line, ``dotnet build
-  -warnaserror``). Not a lint run (maintainer decision 1); ``lib.ci_checks`` reads it as the
+  -warnaserror``). Not a lint run (maintainer decision 1); ``lib.ci.ci_checks`` reads it as the
   null reason ``compiler_gate_only`` when it is the only static gate.
 - ``dotnet_build``: a ``dotnet build`` / ``dotnet msbuild`` / ``msbuild`` line, which runs the
   Roslyn analysers a committed project file configures (``analysers_in_build``).

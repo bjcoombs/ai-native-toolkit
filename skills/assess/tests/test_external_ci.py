@@ -13,7 +13,7 @@ import pytest
 
 from assess_test_support import skip_without_posix_shell
 from lib import external_ci as ext
-from lib.ci_checks import scan_ci_checks
+from lib.ci.ci_checks import scan_ci_checks
 from lib.testing.coverage_gate import detect_coverage_gate
 from lib.external_ci_rules import NOT_READ, ExternalCi, as_external, known_app, known_context
 from lib.hosting.gh_cli import GhUnavailable, GithubRepo

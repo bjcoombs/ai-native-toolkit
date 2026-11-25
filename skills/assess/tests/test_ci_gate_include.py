@@ -1,4 +1,4 @@
-"""The toolkit's GitLab gate include is recognised by a known source only (#1179, lib/ci_includes.py).
+"""The toolkit's GitLab gate include is recognised by a known source only (#1179, lib/ci/ci_includes.py).
 
 A component named ``ai-native-toolkit/assess-gate`` on any host or group is not the gate by its
 name. It settles only when the file read from its clone runs what ``templates/assess-gate.yml``
@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from lib import ci_includes
-from lib.ci_checks import scan_ci_checks
-from lib.ci_includes import GATE_TEMPLATE, is_toolkit_gate, is_toolkit_gate_text, merged_config, resolve_includes
+from lib.ci import ci_includes
+from lib.ci.ci_checks import scan_ci_checks
+from lib.ci.ci_includes import GATE_TEMPLATE, is_toolkit_gate, is_toolkit_gate_text, merged_config, resolve_includes
 
 SHIPPED = GATE_TEMPLATE.read_text(encoding="utf-8")
 LOOKALIKE = "gl.test/other/ai-native-toolkit/assess-gate@3.0.0"

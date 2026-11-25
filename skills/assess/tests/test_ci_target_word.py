@@ -18,7 +18,7 @@ import pytest
 from lib.agent_consistency import check_commands
 from lib.agents.agent_environment import scan_agent_environment
 from lib.check_command import check_verdict, is_check_name
-from lib.ci_checks import scan_ci_checks
+from lib.ci.ci_checks import scan_ci_checks
 from lib.ci_scripts import Present, runs_missing
 from lib.testing.coverage_gate import detect_coverage_gate
 from lib.named_check import is_named_check, is_named_check_name, unread_ci_target

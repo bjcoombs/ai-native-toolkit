@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.ci_checks import scan_ci_checks
+from lib.ci.ci_checks import scan_ci_checks
 from lib.ci_compound import compound_core, segment_core
 from lib.ci_exempt import piped_groups, piped_members
 from lib.ci_masking import split_statements

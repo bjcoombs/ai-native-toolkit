@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 from lib.check_command import check_verdict, is_lint_run, may_check
-from lib.ci_checks import scan_ci_checks
+from lib.ci.ci_checks import scan_ci_checks
 from lib.runner_args import (
     gradle_build_verdict, gradle_dry_run, gradle_project, gradle_runs_in, gradle_task_paths,
     gradle_tasks, gradle_tests_in_check)

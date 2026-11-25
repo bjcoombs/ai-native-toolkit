@@ -13,13 +13,13 @@ set through the ``check_command.CHECK_NAMES`` context variable for the one call,
 stay installs. ``unread_ci_target(text)`` is a command that reads as a check only under
 that vocabulary and false under ``CHECK_WORDS`` (``python ci.py``, ``source ci.sh``,
 ``cargo ci``, ``./gradlew ci``, ``mvn ci``, ``go ci``, whose ``./ci.sh`` and ``make ci``
-siblings already read null): ``lib.ci_lines._line_may_check`` counts it as a target whose
+siblings already read null): ``lib.ci.ci_lines._line_may_check`` counts it as a target whose
 recipe is not read, so Layer 5 and Layer 3 read null with ``check_target``, never a false 0.
 ``may_lint_named(text)`` is ``check_command.may_lint`` under the instruction vocabulary;
 ``lib.testing.coverage_ci._indirect`` reads it, so a CI line running only ``make ci`` keeps the
 coverage gate's null ``indirect_run`` rather than a false ``not_run_in_ci``.
 ``instruction_words`` runs a function under that vocabulary (the decorator behind the
-three above). ``lib.ci_checks`` wraps its missing-check test (``ci_scripts.runs_missing``) in it, so a missing
+three above). ``lib.ci.ci_checks`` wraps its missing-check test (``ci_scripts.runs_missing``) in it, so a missing
 ``./ci.sh`` still reads ``script_not_found`` (#937), and ``named_count(count, texts)`` is
 true when ``count`` finds a check line under it, so a masked ``./ci.sh || true`` reads
 ``not_enforced``. Both are false readings or null ones, never credit: a committed ``./ci.sh``
@@ -28,7 +28,7 @@ never reads its body (``echo deploy`` was credited before #951).
 ``setup_ci_target(text)`` (#1033) is a ``ci`` name that also names setup or a build
 (``make deploy-ci``, ``npm run build:ci``, ``./scripts/deploy-ci.sh``, ``make ci-deploy``):
 a part of the name is in ``check_command.SETUP_TARGETS``. It runs no check, so it is never
-an ``unread_ci_target`` and ``lib.ci_lines._line_may_check`` reads it false, as it reads
+an ``unread_ci_target`` and ``lib.ci.ci_lines._line_may_check`` reads it false, as it reads
 ``make deploy``; the instruction side (``is_named_check``, ``may_lint_named``) is unchanged.
 ``sourced_env(text)`` is a sourced environment file (``. venv/bin/activate``, ``source .env``,
 ``. ./env.sh``): ``_line_may_check`` reads it false too, since it runs no check.
@@ -93,7 +93,7 @@ def named_count(count: Callable[[str], int], texts: Iterable[str]) -> bool:
 def unread_ci_target(text: str) -> bool:
     """A command whose check reading rests on the name ``ci`` alone, which the CI vocabulary
     reads false (``python ci.py``, ``source ci.sh``, ``cargo ci``, ``./gradlew ci``, ``mvn ci``,
-    ``go ci``): ``lib.ci_checks`` reads it as an unread target (null), never as no check."""
+    ``go ci``): ``lib.ci.ci_checks`` reads it as an unread target (null), never as no check."""
     return check_verdict(text) is False and is_named_check(text) and not setup_ci_target(text)
 
 

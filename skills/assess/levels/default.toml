@@ -60,7 +60,7 @@
 #   known lint action (golangci-lint-action, ruff-action, super-linter,
 #   reviewdog/action-*, lint-action, markdownlint-cli2-action; an unknown
 #   third-party action is not read), under the same masking and
-#   trigger rules as Layer 5 (lib/ci_masking.py, lib/ci_triggers.py): a
+#   trigger rules as Layer 5 (lib/ci_masking.py, lib/ci/ci_triggers.py): a
 #   masked lint step (ruff check . || true) or one off the ordinary triggers
 #   does not count. A linter asked only for --version, --help or -V does not
 #   run. A check target or script that may run a linter inside it (make
@@ -145,7 +145,7 @@
 #   (shallow) or degenerate history, a target that is not a git work tree, or
 #   no mapped doc leaves the share null, so the row is unknown, never a false
 #   fresh or a false 0.
-# - Layer 7 level 1 reads review_evidence.present (lib/review_automation.py):
+# - Layer 7 level 1 reads review_evidence.present (lib/ci/review_automation.py):
 #   an AI review step committed in CI (review_automation: a pinned review
 #   action or GitLab review component, a [review] ai_review_components entry,
 #   or an AI review app's config file, git-tracked only) or a reviewed merged
@@ -162,7 +162,7 @@
 #   set +e script body that never re-raises the status (lib/ci_masking.py).
 #   || echo, a pipe without pipefail and allow_failure inherited through
 #   default:/extends: are known limits and still count. The check must also
-#   run on ordinary changes (lib/ci_triggers.py): a workflow only on
+#   run on ordinary changes (lib/ci/ci_triggers.py): a workflow only on
 #   workflow_dispatch or schedule, or a GitLab job kept off ordinary
 #   pipelines by when: manual, only: or rules:, does not count, and triggers
 #   the reader cannot settle (no on: key, a custom rules: if:) read unknown.
@@ -277,7 +277,7 @@
 #   Graded measured (head_structure) for both sources: the guide and a policy in the tree
 #   are read at the commit, an owner's policy by a live GitHub read, and policy.source
 #   (repo or org) names which.
-# - Model-backed CI jobs are gated reads ci_model_jobs.ungated (lib/ci_model_jobs.py,
+# - Model-backed CI jobs are gated reads ci_model_jobs.ungated (lib/ci/ci_model_jobs.py,
 #   #1242): no CI job that calls a model API (an eval harness, an agent action or the Claude
 #   Code CLI, a model-provider secret, pytest -m eval or an evals/ path) runs on every
 #   default-branch push or every pull request update without a gate: a paths filter, a

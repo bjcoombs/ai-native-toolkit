@@ -52,7 +52,7 @@ from lib.fleet.fleet_method import CollectorRevision
 from lib.packs import PackIdentity
 from lib.fleet.fleet_stamp import FleetStamp
 from lib.history_window import WINDOW_PATTERN
-from lib.review_automation import KINDS
+from lib.ci.review_automation import KINDS
 from lib.run_context_types import JsonDict
 from lib.signals import known_scans
 from lib.signals_schema import described_blocks, pack_blocks, type_schema
@@ -79,7 +79,7 @@ def build_schema() -> JsonDict:
     scans = next(branch for branch in props["scans"]["anyOf"] if branch.get("type") == "object")
     scans["properties"] = {"review_automation": {
         "type": "object",
-        "description": ("AI review in CI (lib/review_automation.py): present is true when a "
+        "description": ("AI review in CI (lib/ci/review_automation.py): present is true when a "
                         "git-tracked CI step, GitLab component or include, or AI review app config "
                         "runs an AI review; kinds names which (ci_action, ci_component, config_file)."),
         "properties": {"present": {"type": "boolean"},

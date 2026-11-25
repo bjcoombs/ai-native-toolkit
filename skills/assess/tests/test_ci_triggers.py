@@ -1,12 +1,12 @@
-"""Tests for lib/ci_triggers.py and the trigger half of ci_checks.enforced_check_runs (issue #775)."""
+"""Tests for lib/ci/ci_triggers.py and the trigger half of ci_checks.enforced_check_runs (issue #775)."""
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from lib.ci_checks import scan_ci_checks
-from lib.ci_triggers import gitlab_line_triggers, workflow_events, workflow_trigger
+from lib.ci.ci_checks import scan_ci_checks
+from lib.ci.ci_triggers import gitlab_line_triggers, workflow_events, workflow_trigger
 from lib.level_signals import load_default_levels
 from lib.levels import Group, evaluate
 

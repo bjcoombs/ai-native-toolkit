@@ -1,6 +1,6 @@
 """How Gradle and the Python script runners read their own arguments (issue #1046).
 
-One parser, shared by the CI-line reader (``lib.check_command``, ``lib.ci_lines``,
+One parser, shared by the CI-line reader (``lib.check_command``, ``lib.ci.ci_lines``,
 ``lib.lint_vocabulary``) and the coverage gate (``lib.testing.coverage_ci``, #954). Every
 rule was checked against Gradle 9.4, pdm 2.29.7 and poethepoet 0.49.0.
 
@@ -20,7 +20,7 @@ Gradle:
   names ``check``. Other commands come back unchanged.
 - ``gradle_skips_tests(words)``: a Gradle run whose ``test`` task is excluded with no other
   test task named (``check -x test`` still runs ``check``'s other tasks, never the tests):
-  ``lib.ci_lines`` reads it as ``command_flags.maven_skips_tests`` (#799), a target it
+  ``lib.ci.ci_lines`` reads it as ``command_flags.maven_skips_tests`` (#799), a target it
   cannot settle. ``runs_no_task(words)``: a Gradle dry run or ``make_runs_no_recipe``.
 - ``gradle_build_verdict(words)`` (#1124): ``build`` depends on ``check``, which runs the
   tests with a JVM or Android plugin. True where ``gradle_tests_in_check`` read such a

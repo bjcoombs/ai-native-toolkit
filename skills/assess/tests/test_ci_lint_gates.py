@@ -1,4 +1,4 @@
-"""Tests for lib/ci_lint_gates.py and the issue #926 ``lint_runs`` states in lib/ci_checks.py:
+"""Tests for lib/ci/ci_lint_gates.py and the issue #926 ``lint_runs`` states in lib/ci/ci_checks.py:
 a rewrite-then-diff formatter gate, compiler warnings as errors (``compiler_gate_only``), .NET
 analysers in the build (``analysers_in_build``) and Layer 3 aligned with Layer 5 on unread
 targets (``check_target``)."""
@@ -9,8 +9,8 @@ from typing import Any
 
 import pytest
 
-from lib.ci_checks import scan_ci_checks
-from lib.ci_lint_gates import dotnet_props, job_ids, rewrite_gated
+from lib.ci.ci_checks import scan_ci_checks
+from lib.ci.ci_lint_gates import dotnet_props, job_ids, rewrite_gated
 from lib.counts_only.content_free import counts_only_scans
 from lib.level_signals import load_default_levels
 from lib.levels import Group, evaluate

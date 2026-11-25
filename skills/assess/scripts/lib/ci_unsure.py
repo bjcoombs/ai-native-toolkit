@@ -45,7 +45,7 @@ group followed on its line by a re-raise (``pytest || { echo x; }; exit 1``) rea
 ``uncalled_functions`` names the body statements of a function no statement outside it
 calls, which ``ci_masking`` masks (#1061). Not read: a check before ``&&`` inside a
 subshell or function with a later statement there (it stays credited), and a formatter gate whose
-``git diff --exit-code`` has a fallback that can pass (``lib.ci_lint_gates`` reads it as
+``git diff --exit-code`` has a fallback that can pass (``lib.ci.ci_lint_gates`` reads it as
 no gate, false, not null).
 
 Inward-only imports: stdlib, ``lib.ci_statements`` and ``lib.ci_exempt``; never

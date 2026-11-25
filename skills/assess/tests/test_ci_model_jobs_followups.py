@@ -1,4 +1,4 @@
-"""lib/ci_model_jobs.py: the #1249 follow-ups to the model-backed CI gating reader (#1242).
+"""lib/ci/ci_model_jobs.py: the #1249 follow-ups to the model-backed CI gating reader (#1242).
 
 Each case reads the right way, and its mirror still reads as before. No false-credit case reads
 gated or met.
@@ -13,7 +13,7 @@ import pytest
 
 import lib.level_tally as lt
 from lib.ci_masking import IndentTree, parse_lines
-from lib.ci_model_jobs import scan_ci_model_jobs, signs_in
+from lib.ci.ci_model_jobs import scan_ci_model_jobs, signs_in
 
 CID = "model-ci-gated.1"
 EVAL_STEPS = """jobs:

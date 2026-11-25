@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from assess_test_support import use_real_lizard
 
-from lib.ci_checks import scan_ci_checks
+from lib.ci.ci_checks import scan_ci_checks
 from lib.counts_only.content_free import counts_only_scans
 from lib.keyhole.promissory_markers import scan_promissory_markers
 from lib.graph.structure_graph import analyze_structure

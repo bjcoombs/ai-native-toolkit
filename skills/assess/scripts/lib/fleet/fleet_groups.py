@@ -91,7 +91,7 @@ from lib.fleet.fleet_agent_building import AgentBuildingCounts, group_counts
 from lib.counts_only.content_free import reason_code
 from lib.levels import Aggregation, Evaluation, MaturityModel, RowResult, evaluate
 from lib.run_context_types import JsonDict
-from lib.shared_tooling import distinct_ids
+from lib.ci.shared_tooling import distinct_ids
 from lib.signals import FULL_RUN_ONLY_REASONS, NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS
 
 # Not bumped for the 2.0.0 maturity-model key renames (#670): readers reject any other

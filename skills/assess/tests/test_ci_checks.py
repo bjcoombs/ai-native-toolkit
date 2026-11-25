@@ -1,4 +1,4 @@
-"""Tests for lib/ci_checks.py: does CI run a test or lint command (#698), and can it fail the job (#775)?"""
+"""Tests for lib/ci/ci_checks.py: does CI run a test or lint command (#698), and can it fail the job (#775)?"""
 from __future__ import annotations
 
 import subprocess
@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from lib.ci_checks import check_commands, count_check_lines, enforced_check_commands, scan_ci_checks
+from lib.ci.ci_checks import check_commands, count_check_lines, enforced_check_commands, scan_ci_checks
 from lib.ci_masking import split_statements, unmasked_lines
-from lib.shared_tooling import pulls_jobs_from_elsewhere
+from lib.ci.shared_tooling import pulls_jobs_from_elsewhere
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 

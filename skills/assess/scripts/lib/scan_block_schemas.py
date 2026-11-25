@@ -30,8 +30,8 @@ from `skills/assess`.
 """
 from __future__ import annotations
 
-from lib.ci_includes import KINDS, STATUSES
-from lib.merged_ci import MERGED_STATUSES
+from lib.ci.ci_includes import KINDS, STATUSES
+from lib.ci.merged_ci import MERGED_STATUSES
 from lib.run_context_types import JsonDict
 
 _NUM_OR_NULL: JsonDict = {"type": ["number", "null"]}
@@ -137,8 +137,8 @@ AGENT_OUTCOME: JsonDict = {
 
 CI_CHECKS: JsonDict = {
     "description": (
-        "Does CI run a test or lint check (lib/ci_checks.py), read from the git-tracked CI "
-        "files and the GitLab includes resolved offline (lib/ci_includes.py: local files, and "
+        "Does CI run a test or lint check (lib/ci/ci_checks.py), read from the git-tracked CI "
+        "files and the GitLab includes resolved offline (lib/ci/ci_includes.py: local files, and "
         "project or component files of clones in the --ghsync-root). test_or_lint_configured is true "
         "when an own or included CI line runs one, false when none does and every include "
         "resolved, and null (unknown) when a CI file pulls jobs from a file this run could not "
@@ -148,7 +148,7 @@ CI_CHECKS: JsonDict = {
         "apart in merged_check_commands; a template resolved offline wins. enforced_check_runs (issue #775) is the same test with "
         "masked checks left out (|| true, continue-on-error: true, allow_failure: true, set +e "
         "without a re-raise; lib/ci_masking.py) and checks off the ordinary triggers left out "
-        "(lib/ci_triggers.py); masked_check_commands and off_trigger_check_commands count the "
+        "(lib/ci/ci_triggers.py); masked_check_commands and off_trigger_check_commands count the "
         "lines left out. lint_runs (issue #782) is the enforced test for lint lines only (Layer 3 "
         "level 1); a check target or script that may run a linter inside it reads null. "
         "CI files of other systems are not parsed (issues #787, #928): unread_ci_files counts "
@@ -355,7 +355,7 @@ COVERAGE_GATE: JsonDict = {
             {"type": ["boolean", "null"]},
             "The Layer 6 level 1 signal (issue #921): threshold_meets_minimum with a CI run "
             "required. True when it is true and an enforced CI line (unmasked, on ordinary "
-            "triggers; lib/ci_masking.py, lib/ci_triggers.py) passes a counted threshold of at "
+            "triggers; lib/ci_masking.py, lib/ci/ci_triggers.py) passes a counted threshold of at "
             "least 50 itself or runs the tool that reads it; null when threshold_meets_minimum "
             "is null or the run cannot be told (see enforced_basis); false otherwise."),
         "enforced_basis": _field(
