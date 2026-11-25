@@ -315,7 +315,8 @@ def test_a_workflow_in_a_subfolder_is_not_read(tmp_path: Path) -> None:
     ("Make your codebase agent-ready:\n\n- add tests\n", False),  # prose, not a label
     ("## Backlog kept agent-ready\n\n- one\n", False),
     ("Label an issue `ready` when:\n\n- it has criteria\n", True),
-    ("Use the 'ready' label when:\n* it has criteria\n", True),
+    ("Use the `ready` label when:\n* it has criteria\n", True),
+    ("Set status to \"ready\" when done.\n\n- one\n", False),  # a quoted word, not the label
     ("Issues marked \"triage/accepted\" meet these:\n- one\n", True),
     ("## `refine::ready`\n\n- has success criteria\n", True),  # a GitLab scoped label
     ("## `refine::readying`\n\n- not the label\n", False),

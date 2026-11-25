@@ -32,8 +32,8 @@ lives in the maintainers' heads, so each issue an agent picks up restates it in 
   drops ``.assess/``, ``tests/fixtures/`` and the like) has a heading or paragraph naming a ready
   label with a list under it: a list item in the heading's section, or one after the paragraph.
   Fenced code is skipped. A label counts only in backticks or quotes, so prose ("the ready label",
-  "make the code agent-ready") is no label; a one-word label keeps its case (a `READY` constant is
-  not ``ready``). A GitLab scoped label (``refine::ready``) is one token.
+  "make the code agent-ready") is no label; a one-word label counts only in backticks and keeps its
+  case (a quoted "ready" or a `READY` constant is not ``ready``). A GitLab scoped label (``refine::ready``) is one token.
 - ``stale_job_safe``: true when no step uses ``actions/stale``, or every such step leaves ready
   issues open: ``days-before-issue-stale`` / ``days-before-stale`` or ``days-before-issue-close``
   / ``days-before-close`` negative (never), or ``exempt-issue-labels`` naming a ready label (a
@@ -126,10 +126,13 @@ def _token(label: str) -> re.Pattern[str]:
 
 
 def _named(label: str) -> re.Pattern[str]:
-    """A label as written in documentation: in backticks or quotes. A one-word label keeps its
-    case, so a constant (`READY`) is not the label ``ready``; any other ignores case."""
-    flags = re.I if re.search(r"[-/:\s]", label) else 0
-    return re.compile(rf"[`'\"]{re.escape(label)}[`'\"]", flags)
+    """A label as written in documentation: in backticks or quotes. A one-word label must sit in
+    backticks and keep its case, so neither a quoted word ("ready") nor a constant (`READY`) is
+    the label ``ready``; any other label ignores case."""
+    word = re.escape(label)
+    if re.search(r"[-/:\s]", label):
+        return re.compile(rf"[`'\"]{word}[`'\"]", re.I)
+    return re.compile(rf"`{word}`")
 
 
 def _unbalanced(value: str) -> bool:
