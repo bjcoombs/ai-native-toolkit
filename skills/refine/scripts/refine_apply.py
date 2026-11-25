@@ -125,11 +125,18 @@ def apply_settled(w: Writer, verdict: Json, issue: int) -> None:
 
 
 def _attempt(w: Writer, fn: Any, *args: Any) -> None:
-    """Run one write; a refusal is logged and the run goes on."""
+    """Run one write; a refusal or a failed `gh` call is logged and the run goes on.
+
+    A `gh` failure is counted in `w.failures`, so the command still exits 3
+    once every other write has had its turn.
+    """
     try:
         fn(*args)
     except Refused as exc:
         print(f"refused: {exc}", file=sys.stderr)
+    except GhError as exc:
+        w.failures += 1
+        print(f"gh failed: {exc}", file=sys.stderr)
 
 
 def apply_triage(w: Writer, verdict: Json, issue: int, plan: Json) -> None:
@@ -257,7 +264,7 @@ def run(args: argparse.Namespace, runner: Runner) -> int:
             apply_dedupe(w, args.issue, plan)
     elif args.command == "sweep":
         apply_sweep(w, verdict)
-    return 0
+    return 3 if w.failures else 0
 
 
 def main(argv: Optional[Sequence[str]] = None, runner: Runner = gh_runner) -> int:

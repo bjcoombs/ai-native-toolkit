@@ -207,7 +207,8 @@ def test_blocked_by_edge_posts_the_numeric_id(tmp_path: Path) -> None:
 
 def test_blocked_by_refuses_self_and_two_cycles(tmp_path: Path) -> None:
     w, gh = writer(tmp_path, {"issues/101/dependencies/blocked_by": "dependencies_none.json",
-                              "issues/100/dependencies/blocked_by": "dependencies_101.json"})
+                              "issues/100/dependencies/blocked_by": "dependencies_101.json",
+                              "issues/100": "issue_100_open.json"})
     with pytest.raises(Refused, match="itself"):
         w.add_blocked_by(101, 101)
     with pytest.raises(Refused, match="cycle"):
@@ -218,7 +219,7 @@ def test_blocked_by_refuses_self_and_two_cycles(tmp_path: Path) -> None:
 # ── questions and the ready-buffer report ────────────────────────────────
 
 def test_questions_batched_into_one_comment_on_the_questions_issue(tmp_path: Path) -> None:
-    w, gh = writer(tmp_path, {}, REFINE_QUESTIONS_ISSUE="#50")
+    w, gh = writer(tmp_path, {"issues/50/comments": "comments_none.json"}, REFINE_QUESTIONS_ISSUE="#50")
     assert w.post_questions([{"issue": 101, "question": "Split it?"}, {"issue": 104, "question": "Who owns it?"}]) == 2
     assert len(gh.writes) == 1
     assert gh.writes[0][:3] == ["issue", "comment", "50"]
@@ -297,7 +298,8 @@ def test_script_missing_from_the_caps_is_refused(tmp_path: Path) -> None:
 
 
 def test_dry_run_makes_no_write_and_logs_every_action(tmp_path: Path) -> None:
-    w, gh = writer(tmp_path, {**DUP_ROUTES, **OPEN_103, "issues/101/comments": "comments_none.json"},
+    w, gh = writer(tmp_path, {**DUP_ROUTES, **OPEN_103, "issues/101/comments": "comments_none.json",
+                              "issues/50/comments": "comments_none.json"},
                    live=False, REFINE_QUESTIONS_ISSUE="50")
     w.edit_labels(103, ["agent-ready"], [], verdict())
     w.close_duplicate(101, 100, verdict())
@@ -328,3 +330,33 @@ def test_json_values_flattens_paginated_pages() -> None:
     assert refine_write.json_values('[{"a": 1}]\n[{"a": 2}]') == [{"a": 1}, {"a": 2}]
     with pytest.raises(refine_write.GhError):
         refine_write.json_values("not json")
+
+
+# ── review round 1 (#1336) ───────────────────────────────────────────────
+
+def test_triage_label_removed_only_with_the_ready_label(tmp_path: Path) -> None:
+    w, gh = writer(tmp_path, OPEN_101)
+    result = w.edit_labels(101, ["bug"], ["needs-triage"], verdict())
+    assert result["removed"] == [] and any("needs-triage" in r for r in result["refused"])
+    assert gh.writes == [["issue", "edit", "101", "--repo", "acme/widgets", "--add-label", "bug"]]
+
+
+def test_cap_counts_only_the_refiners_duplicate_closes(tmp_path: Path) -> None:
+    w, gh = writer(tmp_path, {**DUP_ROUTES, "issues/events": "repo_events_mixed_closes.json"})
+    assert w.bot_closes_in_window() == 9
+    w.close_duplicate(101, 100, verdict())
+    assert gh.writes[-1][-1] == "state_reason=duplicate"
+
+
+def test_same_questions_not_posted_twice(tmp_path: Path) -> None:
+    w, gh = writer(tmp_path, {"issues/50/comments": "comments_questions_asked.json"}, REFINE_QUESTIONS_ISSUE="50")
+    assert w.post_questions([{"issue": 101, "question": "Split it?"}]) == 0
+    assert gh.writes == []
+
+
+def test_blocker_that_is_a_pull_request_refused_before_other_reads(tmp_path: Path) -> None:
+    w, gh = writer(tmp_path, {"issues/101/dependencies/blocked_by": "dependencies_none.json",
+                              "issues/90": '{"id": 1, "number": 90, "state": "open", "pull_request": {}}'})
+    with pytest.raises(Refused, match="pull request"):
+        w.add_blocked_by(101, 90)
+    assert gh.writes == []

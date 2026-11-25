@@ -8,7 +8,8 @@ and `refine_apply.py` turns that plan into calls to these functions. The
 rules below are enforced here, in code, whatever the plan says:
 
 - **Label allow-list.** Only labels named in `REFINE_ALLOWED_LABELS` are
-  added or removed. The ready label is never removed by the refiner.
+  added or removed. The refiner never removes the ready label, and removes
+  the triage label only when it adds the ready label.
 - **Never re-apply a removed label.** A label a person (not the bot) removed
   from an issue is never added back.
 - **The ready label** (`agent-ready` by default) is added only when the
@@ -17,11 +18,12 @@ rules below are enforced here, in code, whatever the plan says:
   the plan with no open question. Adding it removes the triage label.
 - **Duplicate closes.** Only a pair the refinement script reported as
   `exact` and `closable`, with both issues still open, the duplicate never
-  reopened by a person, and fewer than `REFINE_CLOSE_CAP` bot closes in the
-  last 7 days. The close comment links the surviving issue and names the
+  reopened by a person, and fewer than `REFINE_CLOSE_CAP` duplicate closes
+  by `REFINE_BOT_LOGIN` in the last 7 days. The close comment links the surviving issue and names the
   `/reopen` route.
 - **Questions** for the maintainer go into one comment per run on the issue
-  named by `REFINE_QUESTIONS_ISSUE`.
+  named by `REFINE_QUESTIONS_ISSUE`, skipped when the refiner already posted
+  the same comment there.
 - **Call caps.** `CLAUDE_CODE_SCRIPT_CAPS` (a JSON object, script name to
   count) caps how many times each write script runs in one job. When it is
   set, a script it does not name is refused.
@@ -165,6 +167,7 @@ class Writer:
         self.run = runner
         self.now = now or datetime.now(timezone.utc)
         self.closes_this_run = 0
+        self.failures = 0
 
     # ── plumbing ─────────────────────────────────────────────────────────
 
@@ -248,6 +251,9 @@ class Writer:
         if self.s.ready_label in to_remove:
             refused.append(f"{self.s.ready_label}: only a person removes it")
             to_remove.remove(self.s.ready_label)
+        if self.s.triage_label in to_remove:
+            refused.append(f"{self.s.triage_label}: removed only when the ready label goes on")
+            to_remove.remove(self.s.triage_label)
         return to_add, to_remove, refused
 
     def _apply_ready_rule(self, number: int, to_add: List[str], to_remove: List[str], current: Set[str],
@@ -329,8 +335,19 @@ class Writer:
 
     # ── close-duplicate.sh ───────────────────────────────────────────────
 
+    def _is_refiner_close(self, e: Json) -> bool:
+        if e.get("event") != "closed" or (e.get("actor") or {}).get("login") != self.s.bot_login:
+            return False
+        if "pull_request" in (e.get("issue") or {}):
+            return False
+        return e.get("state_reason") in ("duplicate", None)
+
     def bot_closes_in_window(self) -> int:
-        """Issues the bot closed in the last 7 days, read newest first from the events API.
+        """Duplicate closes by the refiner's bot in the last 7 days, newest first from the events API.
+
+        Counted: `closed` events whose actor is `REFINE_BOT_LOGIN`, on an issue
+        (not a pull request), with `state_reason` `duplicate` or no reason
+        recorded. Other bots' closes, merges and pull requests do not count.
 
         Reading stops at the first event older than the window. When the page
         limit runs out first, the count is treated as the cap: fail closed.
@@ -345,7 +362,7 @@ class Writer:
                 created = parse_time(str(e.get("created_at", "")))
                 if created is None or created < since:
                     return count
-                if e.get("event") == "closed" and self._is_bot(e.get("actor")):
+                if self._is_refiner_close(e):
                     count += 1
         return max(count, self.s.close_cap)
 
@@ -419,12 +436,12 @@ class Writer:
         existing = json_values(self.run(["api", f"repos/{self.s.repo}/issues/{number}/dependencies/blocked_by"]))
         if any(isinstance(i, dict) and i.get("number") == blocker for i in existing):
             return False
-        reverse = json_values(self.run(["api", f"repos/{self.s.repo}/issues/{blocker}/dependencies/blocked_by"]))
-        if any(isinstance(i, dict) and i.get("number") == number for i in reverse):
-            raise self.refuse(script, number, f"#{blocker} is already blocked by #{number}; that is a cycle")
         target = self.issue(blocker)
         if "pull_request" in target:
             raise self.refuse(script, number, f"#{blocker} is a pull request, not an issue")
+        reverse = json_values(self.run(["api", f"repos/{self.s.repo}/issues/{blocker}/dependencies/blocked_by"]))
+        if any(isinstance(i, dict) and i.get("number") == number for i in reverse):
+            raise self.refuse(script, number, f"#{blocker} is already blocked by #{number}; that is a cycle")
         self._write(script, "blocked-by", number,
                     ["api", "-X", "POST", f"repos/{self.s.repo}/issues/{number}/dependencies/blocked_by",
                      "-F", f"issue_id={int(target['id'])}"],
@@ -445,6 +462,8 @@ class Writer:
             raise self.refuse(script, 0, "REFINE_QUESTIONS_ISSUE is not set")
         lines = [f"- #{int(q['issue'])}: {neutralise(str(q['question']))}" for q in items]
         body = "\n".join([QUESTIONS_MARKER, "Questions from the refiner that need a maintainer's call:", "", *lines])
+        if any(str(c.get("body", "")) == body and self._is_bot(c.get("user")) for c in self.comments(target)):
+            return 0
         self._write(script, "questions", target,
                     ["issue", "comment", str(target), "--repo", self.s.repo, "--body", body],
                     f"{len(items)} question(s)")

@@ -47,6 +47,8 @@ class FakeGh:
         for key in sorted(self.routes, key=len, reverse=True):
             if path == key or path.startswith(key + "?"):
                 value = self.routes[key]
+                if value == "!fail":
+                    raise refine_write.GhError(f"gh api {path} failed: HTTP 404")
                 if value.endswith(".json"):
                     return (FIXTURES / value).read_text(encoding="utf-8")
                 return value

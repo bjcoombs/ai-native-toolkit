@@ -106,7 +106,8 @@ def test_triage_plan_applied_in_order(tmp_path: Path) -> None:
 
 
 def test_model_cannot_add_the_ready_label_through_labels_add(tmp_path: Path) -> None:
-    w, gh = writer(tmp_path, {"issues/101": "issue_101_open.json", "issues/101/events": "events_bot_only.json"},
+    w, gh = writer(tmp_path, {"issues/101": "issue_101_open.json", "issues/101/events": "events_bot_only.json",
+                              "issues/50/comments": "comments_none.json"},
                    REFINE_QUESTIONS_ISSUE="50")
     plan = _triage(ready=False, labels_add=["agent-ready"], size=None, blocked_by=[], questions=["Split it?"])
     refine_apply.apply_triage(w, verdict(), 101, plan)
@@ -121,10 +122,34 @@ def test_triage_dry_run_makes_zero_writes(tmp_path: Path) -> None:
         "issues/101/comments": "comments_none.json", "issues/100": "issue_100_open.json",
         "issues/101/dependencies/blocked_by": "dependencies_none.json",
         "issues/100/dependencies/blocked_by": "dependencies_none.json",
+        "issues/50/comments": "comments_none.json",
     }, live=False, REFINE_QUESTIONS_ISSUE="50")
     refine_apply.apply_triage(w, verdict(), 101, _triage(questions=["Is the API stable?"], ready=False))
     assert gh.writes == []
     assert [a["action"] for a in actions(tmp_path)] == ["size-marker", "blocked-by", "edit-labels", "questions"]
+
+
+def test_failed_gh_call_does_not_stop_the_rest_of_the_plan(tmp_path: Path) -> None:
+    w, gh = writer(tmp_path, {
+        "issues/101": "issue_101_open.json", "issues/101/events": "events_bot_only.json",
+        "issues/101/comments": "comments_none.json", "issues/404": "!fail",
+        "issues/101/dependencies/blocked_by": "dependencies_none.json",
+    })
+    refine_apply.apply_triage(w, verdict(), 101, _triage(blocked_by=[404]))
+    assert w.failures == 1
+    assert [" ".join(a[:2]) for a in gh.writes] == ["issue comment", "issue edit"]
+
+
+def test_cli_exits_three_after_a_failed_gh_call(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GH_REPO", "acme/widgets")
+    monkeypatch.setenv("REFINE_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("REFINE_MODE", "dry-run")
+
+    def failing(args: object) -> str:
+        raise refine_apply.GhError("HTTP 502")
+
+    code = refine_apply.main(["sweep", "--verdict", str(FIXTURES / "verdict.json")], runner=failing)
+    assert code == 3
 
 
 def test_settled_ready_issue_labelled_without_a_model(tmp_path: Path) -> None:

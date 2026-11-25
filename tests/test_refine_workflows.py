@@ -167,7 +167,11 @@ def test_model_step_guardrails(name: str) -> None:
 def test_model_step_gated_on_credential_and_author(name: str) -> None:
     steps = _steps(_load(name))
     gate = next(s for s in steps if s.get("id") == "gate")
-    assert "OWNER" in gate["env"]["TRUSTED"] and "COLLABORATOR" in gate["env"]["TRUSTED"]
+    trusted = gate["env"]["TRUSTED"]
+    assert "OWNER" in trusted and "COLLABORATOR" in trusted
+    assert "github.event.comment.author_association" not in trusted or \
+        "github.event.issue.author_association) &&" in trusted, "the issue author must be trusted too"
+    assert "github.event.issue.author_association" in trusted
     assert _model_step(name)["if"] == "steps.gate.outputs.run == 'true'"
     final = next(s for s in steps if s.get("name") == "Report final status")
     assert "check-model-run.sh" in final["run"]

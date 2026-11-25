@@ -22,9 +22,10 @@ name: Refine triage (reusable)
 # Federation. A called workflow cannot ask for more than its caller grants.
 #
 # allowed_non_write_users is left unset on purpose. The model step runs only
-# for an issue or comment from an OWNER, MEMBER or COLLABORATOR; an outside
-# contributor's issue gets the deterministic steps here and the scheduled
-# sweep, never a model run its author can steer.
+# when the issue's author, and on a comment the commenter too, is an OWNER,
+# MEMBER or COLLABORATOR. An outside contributor's issue gets the
+# deterministic steps here and the scheduled sweep, never a model run its
+# author can steer.
 on:
   workflow_call:
     inputs:
@@ -158,7 +159,14 @@ jobs:
         env:
           HAS_KEY: ${{ secrets.anthropic_api_key != '' }}
           HAS_WIF: ${{ inputs.anthropic_federation_rule_id != '' && inputs.anthropic_organization_id != '' }}
-          TRUSTED: ${{ github.event_name == 'workflow_dispatch' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association || github.event.issue.author_association) }}
+          # Both the issue's author and, on a comment, the commenter must have
+          # write access: a maintainer's comment on an outside contributor's
+          # issue does not start a model run over that contributor's text.
+          TRUSTED: >-
+            ${{ github.event_name == 'workflow_dispatch' ||
+                (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association) &&
+                 (github.event.comment == null ||
+                  contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))) }}
         run: |
           if [ "$HAS_KEY" != "true" ] && [ "$HAS_WIF" != "true" ]; then
             echo "::notice::No refiner credential is set; the model step is skipped."
