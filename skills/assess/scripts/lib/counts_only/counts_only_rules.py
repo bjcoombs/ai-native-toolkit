@@ -297,7 +297,7 @@ FLEET_DATA_KEPT: Final = frozenset({
     "opportunities.step_lifts.gate",
     # #1276: the practice packs' roll-up, the pack author's own names, versions, ids and titles
     "packs.name", "packs.version", "packs.sha256", "packs.practices.condition", "packs.practices.row",
-    "packs.practices.title",
+    "packs.practices.title", "packs.practices.polarity",
 })
 
 

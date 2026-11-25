@@ -227,8 +227,8 @@ def page_bundle(data: Mapping[str, Any], achievements: Mapping[str, Any] | None,
     }
     if data.get("packs"):  # each pack's practices fleet-wide: names, titles and counts only
         bundle["packs"] = [{"name": p["name"], "version": p["version"], "repos": p["repos"],
-                            "practices": [{k: q[k] for k in ("title", "level", "met", "measured", "not_measured")}
-                                          for q in p["practices"]]} for p in data["packs"]]
+                            "practices": [{k: q[k] for k in ("title", "level", "met", "measured", "not_measured", "polarity")
+                                           if k in q} for q in p["practices"]]} for p in data["packs"]]
     return bundle
 
 

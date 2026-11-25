@@ -1245,6 +1245,11 @@
                 },
                 "not_measured": {
                   "type": "integer"
+                },
+                "polarity": {
+                  "enum": [
+                    "hazard"
+                  ]
                 }
               },
               "required": [

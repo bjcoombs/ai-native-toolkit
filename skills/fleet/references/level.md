@@ -32,7 +32,8 @@ names its `source` (the base model or the pack). The envelope then gains `packs`
 pack, in pass order, its `name`, `version`, `sha256`, `repos` and `practices[]` with `met`,
 `measured` and `not_measured`, the same roll-up `fleet-data.json` carries. A repository
 whose `.assess/config.toml` excludes a pack condition is in neither column, so
-`measured + not_measured` can be less than `repos`. Without `--pack`
+`measured + not_measured` can be less than `repos`. A hazard level carries
+`polarity: "hazard"`, and its `met` counts the repositories free of the harm. Without `--pack`
 the file is unchanged.
 
 Each result applies the owner exclusions of the repository's own `.assess/config.toml`

@@ -18,14 +18,18 @@ text; ``signals.PACK_BLOCKS``). The pack identities are the run stamp's ``packs`
 
 **Roll-up** (``pack_roll_up``): for each pack, in pass order, its ``name``, ``version`` and
 ``sha256`` and each practice it adds: every condition of a row whose ``source`` is the pack, in
-model order, with ``met`` (the repositories where it holds: met, or unmet for a hazard),
-``measured`` (met or unmet) and ``not_measured`` (a check unavailable, a signal absent, or a
+model order, with ``met`` (the repositories where it holds: met, or, for a hazard level,
+unmet, which is a repository free of the harm), ``measured`` (met or unmet) and ``not_measured`` (a check unavailable, a signal absent, or a
 ``requires`` not measured), each over ``repos``, the scanned repositories. A repository where
 a pack check could not be answered is not measured, never unmet; one whose own
 ``.assess/config.toml`` excludes the condition (``not_applicable``, #910) is in neither column,
 so ``measured + not_measured`` can fall short of ``repos``. The practices come from the model,
 so a pack's rows are listed at zero counts when no repository scanned. A pack with checks but no
-rows lists no practice. ``level.json`` (``fleet_level``) and ``fleet-data.json``
+rows lists no practice. A hazard level (``polarity = "hazard"``, ``lib/levels_fields.py``)
+names a harm, so its practice carries ``polarity: "hazard"`` and ``report.md`` and the page
+list it apart, counted as "Repositories free of it", never as "meet it". The level tally
+counts no hazard at all (``lib/level_tally.py``); this inversion is the roll-up's alone.
+``level.json`` (``fleet_level``) and ``fleet-data.json``
 (``fleet_data``) carry it as ``packs``, written only when a pack was passed, so a run without
 ``--pack`` writes the files it wrote before; ``report.md`` gets ``packs_section``, and
 ``fleet-view.html`` a Practice packs section (``fleet_page_data``).
@@ -39,7 +43,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, NamedTuple, TypedDict
+from typing import Any, Literal, NamedTuple, NotRequired, TypedDict
 
 from lib.level_result_types import LevelResult
 from lib.level_signals import signal_path_validator
@@ -59,6 +63,7 @@ class PackPractice(TypedDict):
     met: int  # repositories where it holds
     measured: int  # repositories where it was met or unmet
     not_measured: int  # scanned repositories where it could not be read
+    polarity: NotRequired[Literal["hazard"]]  # a hazard level: ``met`` counts repositories free of the harm
 
 
 class PackRollUp(TypedDict):
@@ -129,7 +134,8 @@ def pack_roll_up(model: MaturityModel | None, identities: Sequence[Mapping[str, 
         practices: dict[str, PackPractice] = {
             condition_id(row["id"], lvl["level"]): {
                 "condition": condition_id(row["id"], lvl["level"]), "row": row["id"], "title": row["title"],
-                "level": lvl["level"], "met": 0, "measured": 0, "not_measured": 0}
+                "level": lvl["level"], "met": 0, "measured": 0, "not_measured": 0,
+                **({"polarity": "hazard"} if lvl.get("polarity") == "hazard" else {})}  # type: ignore[typeddict-item]
             for row in model["rows"] if row.get("source") == name for lvl in row["levels"]}
         for result in scanned:
             for c in result["conditions"]:
@@ -166,8 +172,12 @@ def packs_section(roll_up: Sequence[Mapping[str, Any]] | None) -> str | None:
         if not pack["practices"]:
             lines += ["This pack adds checks only, no practice to score.", ""]
             continue
-        lines += ["| Practice | Repositories that meet it | Measured | Not measured |", "|---|---|---|---|"]
-        lines += [f"| {_practice_words(p)} | {p['met']} | {p['measured']} | {p['not_measured']} |"
-                  for p in pack["practices"]]
-        lines.append("")
+        for hazard, head in ((False, "| Practice | Repositories that meet it |"),
+                             (True, "| Hazard | Repositories free of it |")):
+            rows = [p for p in pack["practices"] if (p.get("polarity") == "hazard") == hazard]
+            if rows:
+                lines += [f"{head} Measured | Not measured |", "|---|---|---|---|"]
+                lines += [f"| {_practice_words(p)} | {p['met']} | {p['measured']} | {p['not_measured']} |"
+                          for p in rows]
+                lines.append("")
     return "\n".join(lines)

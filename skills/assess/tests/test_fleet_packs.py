@@ -278,6 +278,32 @@ def test_a_levels_file_holding_the_default_model_names_its_rows_default(tmp_path
     with pytest.raises(PackError):
         fp.fleet_model(copy, copy.name, [named_default])
 
+
+HAZARD = TEAM.replace('id = "team-adrs"', 'id = "team-envfiles"').replace(
+    'title = "Decision records"\nscope', 'title = "Committed .env files"\nscope').replace(
+    'truth = ["docs"]', 'truth = ["docs"]\n  polarity = "hazard"')
+
+
+def test_a_hazard_row_is_labelled_free_of_it_never_meet_it() -> None:
+    """A hazard names a harm: its count is the repositories free of it, and both the report and
+    the page say so, apart from the practices."""
+    from lib.fleet.fleet_page_assets import SCRIPT
+    model = layer_packs(parse_levels(_toml(LEVELS)), "levels.toml", [parse_pack(_toml(HAZARD))])
+    result = {"conditions": [{"id": "team-envfiles.1", "row": "team-envfiles", "level": 1, "state": "unmet",
+                              "polarity": "hazard", "source": "team"}]}
+    roll = fp.pack_roll_up(model, [{"name": "team", "version": "1", "sha256": "s"}], [result])  # type: ignore[list-item]
+    practice = roll[0]["practices"][0]
+    assert practice["polarity"] == "hazard" and practice["met"] == 1
+    section = fp.packs_section(roll)  # type: ignore[arg-type]
+    assert section is not None
+    assert "| Hazard | Repositories free of it | Measured | Not measured |" in section
+    assert "| Committed .env files | 1 | 1 | 0 |" in section
+    assert "Repositories that meet it" not in section
+    assert 'q.polarity === "hazard" ? " free of it" : " meet it"' in SCRIPT
+    plain = fp.pack_roll_up(layer_packs(parse_levels(_toml(LEVELS)), "levels.toml", [parse_pack(_toml(TEAM))]),
+                            [{"name": "team", "version": "1", "sha256": "s"}], [None])
+    assert "polarity" not in plain[0]["practices"][0]
+
 def _toml(text: str) -> dict[str, object]:
     import tomllib
     return tomllib.loads(text)
