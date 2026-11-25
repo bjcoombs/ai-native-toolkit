@@ -119,7 +119,7 @@ _EVAL_TESTS = re.compile(r"\bpytest\b[^;&|]*\s-m\s+[\"']?evals?\b|\b(?:pytest|py
 _EXCLUDED = re.compile(r"--(?:ignore|ignore-glob|deselect|exclude)(?:=|\s+)\S+")
 # An install or add subcommand in command position (``pip install``, ``python -m pip install``,
 # ``poetry add``), read with quoted text dropped: never a word of a prompt (``claude -p 'add tests'``).
-_INSTALL = re.compile(r"(?:^|[;&|(]\s*)(?:(?!-p\b|--print\b)[\w.@/=:+-]+\s+){1,3}(?:install|add)\b")
+_INSTALL = re.compile(r"(?:^|[;&|(]\s*)(?:(?!-p\b|--print\b)[\w.@/=:+-]+\s+){1,3}(?:install|add)(?=\s|$)")
 _QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
 # The keys whose entries hand a job a secret; a key named anywhere else (a step ``name:``) is no sign.
 _SECRET_KEYS = frozenset({"env", "with", "secrets", "variables"})
