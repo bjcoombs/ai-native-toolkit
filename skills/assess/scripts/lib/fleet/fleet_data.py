@@ -232,9 +232,11 @@ class DataRepo(TypedDict):
 # --fleet-config section counts (the sha256 is the comparability key) and the --discovered
 # coverage counts (#745; run.json and report.md carry them) and the collector revisions (#952;
 # run.json carries them, the rules hash is copied) and the practice packs (#1273; the
-# document's own ``packs`` roll-up names each, #1276). A test fails when FleetStamp
+# document's own ``packs`` roll-up names each, #1276) and the CI include projects not cloned
+# (#1355; run.json and report.md carry them). A test fails when FleetStamp
 # gains a field that is neither copied below nor listed here.
-RUN_EXCLUDED = frozenset({"fleet_stamp_version", "fleet_config_entries", "coverage", "collectors", "packs"})
+RUN_EXCLUDED = frozenset({"fleet_stamp_version", "fleet_config_entries", "coverage", "collectors", "packs",
+                          "not_cloned_includes"})
 
 
 class RunDetails(TypedDict):

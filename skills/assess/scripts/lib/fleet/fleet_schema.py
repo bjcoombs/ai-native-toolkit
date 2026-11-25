@@ -50,6 +50,7 @@ from lib.fleet.fleet_doc_freshness import (
 )
 from lib.fleet.fleet_method import CollectorRevision
 from lib.packs import PackIdentity
+from lib.fleet.fleet_includes import INCLUDE_PROJECT_KINDS, NotClonedInclude
 from lib.fleet.fleet_stamp import FleetStamp
 from lib.history_window import WINDOW_PATTERN
 from lib.ci.review_automation import KINDS
@@ -131,14 +132,19 @@ def build_schema() -> JsonDict:
 
 
 def build_stamp_schema() -> JsonDict:
-    """The ``run.json`` schema. ``scans`` (a name list), ``collectors`` (#952) and ``packs``
-    (#1273) are mapped here; ``type_schema`` has no list mapping."""
+    """The ``run.json`` schema. ``scans`` (a name list), ``collectors`` (#952), ``packs``
+    (#1273) and ``not_cloned_includes`` (#1355, its ``kind`` an enum) are mapped here;
+    ``type_schema`` has no list mapping."""
     hints = get_type_hints(FleetStamp)
-    lists = ("scans", "collectors", "packs")
+    lists = ("scans", "collectors", "packs", "not_cloned_includes")
     props: JsonDict = {name: type_schema(hint) for name, hint in hints.items() if name not in lists}
     props["scans"] = {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]}
     props["collectors"] = {"anyOf": [{"type": "array", "items": type_schema(CollectorRevision)}, {"type": "null"}]}
     props["packs"] = {"type": "array", "items": type_schema(PackIdentity)}
+    include = type_schema(NotClonedInclude)
+    include["properties"]["kind"] = {"enum": list(INCLUDE_PROJECT_KINDS)}
+    include["properties"]["repositories"] = {"type": "integer", "minimum": 1}
+    props["not_cloned_includes"] = {"type": "array", "items": include}
     props["scan_date"] = {"type": "string", "pattern": r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
     props["window"] = {"type": "string", "pattern": f"^{WINDOW_PATTERN}$"}
     return {

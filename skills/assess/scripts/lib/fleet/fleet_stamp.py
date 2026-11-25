@@ -42,6 +42,12 @@ stays 1. A rules difference is a rule reason, re-scored like a ``levels_version`
 run without one writes the stamp it wrote before; a stamp without it reads as no pack, and a
 packs difference is a rule reason. The stamp version stays 1.
 
+``not_cloned_includes`` (#1355, ``lib/fleet/fleet_includes.py``) lists each CI include project
+not cloned under the root: ``project``, ``kind`` and how many repositories include it. The
+path is clear only under ``--full``, the hashed include id under hashing and null in plain
+counts-only output. It is written only when the run found one and is no comparability key, so
+the stamp version stays 1.
+
 The stamp holds no absolute path, salt, timing or input mode, so a root run,
 a list run and any ``--jobs`` value over unchanged checkouts on the same day
 write a byte-identical ``run.json`` (with ``--discovered``, a list run that leaves
@@ -57,7 +63,9 @@ without one, absent before #706 and read as null, so the stamp version stays 1),
 false through `fleet_legacy.stamp_value`), and `coverage` (#745: the `--discovered`
 counts from `fleet_coverage.py`; null without a listing, absent before #745, not a
 comparability key), and `rules_sha256` and `collectors` (#952: the rules hash and core
-collector revisions from `fleet_method.method_keys(model)`; absent before #952, unrecorded). No path,
+collector revisions from `fleet_method.method_keys(model)`; absent before #952, unrecorded), and
+`not_cloned_includes` (#1355: the CI include projects not cloned, from `fleet_includes.py`;
+written only when non-empty, the path named only under `--full`). No path,
 salt, timing or input mode, so a
 root run, a list run and any `--jobs` give the same bytes on the same day (with
 `--discovered`, `coverage` counts the checkouts a list run left out). `write_stamp`
@@ -74,6 +82,7 @@ from typing import TypedDict
 
 from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_coverage import Coverage
+from lib.fleet.fleet_includes import NotClonedInclude, not_cloned_includes
 from lib.fleet.fleet_method import CollectorRevision, method_keys
 from lib.levels import MaturityModel
 from lib.packs import PackIdentity
@@ -102,6 +111,7 @@ class _LaterStampKeys(TypedDict, total=False):
     rules_sha256: str | None  # the rules scored with (lib/fleet/fleet_method.py); None without --levels or before #952
     collectors: list[CollectorRevision] | None  # every core collector's revision; None before #952
     packs: list[PackIdentity]  # each --pack's name, version and sha256 (#1273); absent: no pack
+    not_cloned_includes: list[NotClonedInclude]  # CI include projects not cloned (#1355); absent: none
 
 
 class FleetStamp(_LaterStampKeys):
@@ -161,6 +171,9 @@ def build_stamp(
     }
     if packs:  # absent without a pack, so such a run writes the stamp it wrote before #1273
         stamp["packs"] = list(packs)
+    includes = not_cloned_includes(rows, counts_only=counts_only, paths_hashed=paths_hashed)
+    if includes:  # absent without one, so such a run writes the stamp it wrote before #1355
+        stamp["not_cloned_includes"] = includes
     return stamp
 
 

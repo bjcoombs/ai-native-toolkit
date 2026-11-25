@@ -22,8 +22,10 @@ it. Schema: [`references/run.schema.json`](run.schema.json).
 | `collectors` | Every core collector's `id` and `revision` (`skills/assess/checks/core.toml`), sorted by `id` (#952). A revision is bumped when the collector's output changes; a test enforces this for the collectors the fleet golden exercises. A new collector needs no bump: `make regen` records it. Not a comparability key: a change is a note in `compare.json`. Absent in a run from before #952. |
 | `repositories` | `selected` (every row), `scanned_ok` (rows `ok`), `failed` (rows `failed`) and `qualifying` (rows `ok` with `active` true). |
 | `coverage` | The [`--discovered`](../SKILL.md#coverage---discovered) counts: `discoverable`, `assessed`, `archived_or_empty`, `not_cloned`, `failed_scan`, `excluded_by_filters` and `not_in_listing`. `null` without `--discovered` (coverage unknown), and absent in a run from before #745. Counts only, and not a comparability key. |
+| `not_cloned_includes` | Each GitLab CI include project not cloned under the ghsync root (#1355), so the CI jobs it holds were not read: `project`, `kind` (`project` or `component`; a component counts as its project, the path without the component name) and `repositories` (how many include it, at any depth), most-included first. `project` is the path under `--full`, the hashed include id under `--hash-paths` (it joins `ci_checks.includes` in `repos.jsonl`) and `null` in plain counts-only output. Written only when the run found one; `report.md` then lists the same projects under "CI include projects not cloned". Not a comparability key. Unlike the per-repository `ci_checks.unresolved_includes` count in `repos.jsonl`, it holds only `not_cloned` items. |
 
 The stamp holds no path, salt, timing or input mode: a root run, a list run and
 any `--jobs` over unchanged checkouts on the same day write the same bytes. A list
 run that leaves a checkout out differs in `repositories` (`selected`, `scanned_ok`) and,
-with `--discovered`, in `coverage` (`excluded_by_filters`).
+with `--discovered`, in `coverage` (`excluded_by_filters`). Under `--full`, `not_cloned_includes`
+names include projects, which are not paths on this machine.

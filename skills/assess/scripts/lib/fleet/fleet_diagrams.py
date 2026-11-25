@@ -38,6 +38,7 @@ is the trend's runs (`fleet_trends`), `None` when the run is not kept in the his
 `comparison` is the result `_keep_and_compare` wrote. `report_markdown` opens with the
 front screen when given (`lib/fleet/fleet_front.py`, #1255: Step counts, moves, one change away,
 gates ranked, team links), then the `fleet_coverage.coverage_line` paragraph when given, then the
+`fleet_includes.includes_section` (CI include projects not cloned, #1355) when given, then the
 `fleet_credit` section when given, then the `fleet_opportunities_section` section when
 given, then embeds each with a relative clickable image link or says
 why it is not drawn, then the `measured_appendix` section when given (`fleet.py` passes it,
@@ -323,8 +324,10 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
 
 def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None,
                     coverage: str | None = None, opportunities: str | None = None,
-                    measured: str | None = None, front: str | None = None, packs: str | None = None) -> str:
-    """``report.md``: the front screen when given (``lib/fleet/fleet_front.py``, #1255), the coverage line when given (``lib/fleet/fleet_coverage.py``), the credit
+                    measured: str | None = None, front: str | None = None, packs: str | None = None,
+                    includes: str | None = None) -> str:
+    """``report.md``: the front screen when given (``lib/fleet/fleet_front.py``, #1255), the coverage line when given (``lib/fleet/fleet_coverage.py``),
+    the CI include projects not cloned when given (``lib/fleet/fleet_includes.py``, #1355), the credit
     section when given (``lib/fleet/fleet_credit.py``), the opportunities section when given
     (``lib/fleet/fleet_opportunities_section.py``), then each diagram embedded with a relative
     link, or why it was skipped, then the "How this was measured" section when given
@@ -337,6 +340,8 @@ def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None,
         lines += [coverage, ""]
     lines += ["Drawn from this run's output with no model call; unknown is hatched and named, "
               "never drawn as zero.", ""]
+    if includes is not None:
+        lines += [includes.rstrip("\n"), ""]
     for section in (credit, opportunities, packs):
         if section is not None:
             lines += [section.rstrip("\n"), ""]
@@ -377,11 +382,14 @@ def _write(path: Path, content: str) -> Path:
 
 def write_diagrams(out_dir: Path, diagrams: Sequence[Diagram], credit: str | None = None,
                    coverage: str | None = None, opportunities: str | None = None,
-                   measured: str | None = None, front: str | None = None, packs: str | None = None) -> list[Path]:
-    """Write the drawn SVGs and ``report.md`` (with ``front``, ``coverage``, ``credit`` and
-    ``opportunities`` first and ``measured`` last) under ``out_dir``; returns the paths written."""
+                   measured: str | None = None, front: str | None = None, packs: str | None = None,
+                   includes: str | None = None) -> list[Path]:
+    """Write the drawn SVGs and ``report.md`` (``front`` and ``coverage`` first, then after the
+    preamble ``includes``, ``credit``, ``opportunities`` and ``packs``, and ``measured`` last) under
+    ``out_dir``; returns the paths written."""
     clear_diagrams(out_dir)
     written = [_write(out_dir / d["file"], d["svg"]) for d in diagrams if d["svg"] is not None]
     written.append(_write(out_dir / REPORT_FILE,
-                          report_markdown(diagrams, credit, coverage, opportunities, measured, front, packs)))
+                          report_markdown(diagrams, credit, coverage, opportunities, measured, front, packs,
+                                          includes)))
     return written
