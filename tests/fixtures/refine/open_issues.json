@@ -236,21 +236,24 @@
           "login": "maintainer"
         },
         "body": "A question first.",
-        "createdAt": "2026-11-20T09:00:00Z"
+        "createdAt": "2026-11-20T09:00:00Z",
+        "authorAssociation": "OWNER"
       },
       {
         "author": {
           "login": "maintainer"
         },
         "body": "<!-- triage:clarified-scope -->\nClarified scope.\n\n## Technical Context\n\nThe technical context of case 108: t108w0tec t108w1tec t108w2tec t108w3tec t108w4tec t108w5tec.\n\n## Impact\n\nThe impact of case 108: t108w0imp t108w1imp t108w2imp t108w3imp t108w4imp t108w5imp.\n\n## Root Cause\n\nThe root cause of case 108: t108w0roo t108w1roo t108w2roo t108w3roo t108w4roo t108w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 108: t108w0sol t108w1sol t108w2sol t108w3sol t108w4sol t108w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n",
-        "createdAt": "2026-11-20T09:00:00Z"
+        "createdAt": "2026-11-20T09:00:00Z",
+        "authorAssociation": "OWNER"
       },
       {
         "author": {
           "login": "maintainer"
         },
         "body": "<!-- refine:size 3 -->\nOne module and its tests, one reviewer sitting.",
-        "createdAt": "2026-11-22T09:00:00Z"
+        "createdAt": "2026-11-22T09:00:00Z",
+        "authorAssociation": "OWNER"
       }
     ]
   },
@@ -527,21 +530,24 @@
           "login": "maintainer"
         },
         "body": "<!-- refine:size 8 -->\nFirst guess.",
-        "createdAt": "2026-11-23T10:00:00Z"
+        "createdAt": "2026-11-23T10:00:00Z",
+        "authorAssociation": "OWNER"
       },
       {
         "author": {
           "login": "maintainer"
         },
         "body": "<!-- refine:size 2 -->\nSplit off the docs; the rest is one PR.",
-        "createdAt": "2026-11-24T10:00:00Z"
+        "createdAt": "2026-11-24T10:00:00Z",
+        "authorAssociation": "OWNER"
       },
       {
         "author": {
           "login": "maintainer"
         },
         "body": "Size: 13 points is a line inside a later ordinary comment.",
-        "createdAt": "2026-11-24T11:00:00Z"
+        "createdAt": "2026-11-24T11:00:00Z",
+        "authorAssociation": "OWNER"
       }
     ]
   },

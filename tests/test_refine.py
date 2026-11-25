@@ -143,6 +143,20 @@ def test_marker_must_be_the_first_line(definition):
     assert refine_checks.size_reading(issue, definition) == (None, None)
 
 
+@pytest.mark.parametrize("author, association, counted", [
+    ({"login": "outsider"}, "NONE", False),
+    ({"login": "outsider"}, "CONTRIBUTOR", False),
+    ({"login": "maintainer"}, "OWNER", True),
+    ({"login": "github-actions"}, "NONE", True),
+])
+def test_size_marker_counts_only_from_a_trusted_author(definition, author, association, counted):
+    issue = refine_platform.github_issue({"number": 9, "createdAt": "2026-11-01T00:00:00Z", "body": "Size: 8 points",
+        "comments": [{"author": author, "authorAssociation": association,
+                      "body": "<!-- refine:size 1 -->\nsmall", "createdAt": "2026-11-02T00:00:00Z"}]})
+    expected = (1, "marker") if counted else (8, "body")
+    assert refine_checks.size_reading(issue, definition) == expected
+
+
 def test_unsized_issue_needs_sizing_and_is_not_otherwise_held(plan):
     issue = by_number(plan)[119]
     assert issue["unsized"] is True

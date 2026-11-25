@@ -89,7 +89,7 @@ def test_github_issue_maps_the_graphql_shapes():
         "number": 7, "title": "t", "body": "", "state": "open", "state_reason": "not_planned",
         "labels": ["a", "b"], "created_at": "2026-11-01T00:00:00Z", "closed_at": None, "url": "u",
         "blocked_by": [{"number": 3, "state": "closed"}], "sub_issues_total": 2,
-        "comments": [{"body": "c", "created_at": "2026-11-02T00:00:00Z"}],
+        "comments": [{"body": "c", "created_at": "2026-11-02T00:00:00Z", "trusted": False}],
     }
 
 

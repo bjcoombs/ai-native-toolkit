@@ -101,8 +101,19 @@ def _lower(value: Optional[str]) -> Optional[str]:
     return value.lower() if value else None
 
 
+# Comment authors whose size markers count: people with write access, and
+# the Actions bot the refiner writes as (gh reports its login without [bot]).
+TRUSTED_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
+TRUSTED_BOTS = frozenset({"github-actions", "github-actions[bot]"})
+
+
+def _trusted(c: Json) -> bool:
+    login = str((c.get("author") or {}).get("login") or "")
+    return str(c.get("authorAssociation") or "") in TRUSTED_ASSOCIATIONS or login in TRUSTED_BOTS
+
+
 def _comments(raw: Json) -> List[Comment]:
-    return [Comment(body=str(c.get("body") or ""), created_at=str(c.get("createdAt") or ""))
+    return [Comment(body=str(c.get("body") or ""), created_at=str(c.get("createdAt") or ""), trusted=_trusted(c))
             for c in raw.get("comments") or []]
 
 

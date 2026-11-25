@@ -26,7 +26,9 @@ Text sources: the issue body plus every comment whose first line is
 The size comes from two producers, whichever is newer: a comment whose first
 line matches `size_marker` (`<!-- refine:size N -->`, written by `/issues`
 triage and the refiner with a one-line reason) or a `size_pattern` line in the
-body. The body is dated by the
+body. A marker counts only from a trusted author (`Comment.trusted`: an owner,
+member, collaborator or the Actions bot), because the marker does not render
+and anyone can post one. The body is dated by the
 issue's creation, since the host reports no body edit time, so any marker
 comment is newer than the body line.
 
@@ -140,7 +142,7 @@ def size_reading(issue: Issue, definition: Definition) -> Tuple[Optional[int], O
     for order, comment in enumerate(issue["comments"], 1):
         lines = comment["body"].strip().splitlines()
         match = marker.fullmatch(lines[0].strip()) if lines else None
-        if match:
+        if match and comment["trusted"]:
             found.append((comment["created_at"], order, int(match.group(1)), "marker"))
     if not found:
         return None, None

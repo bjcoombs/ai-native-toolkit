@@ -21,6 +21,9 @@ class Blocker(TypedDict):
 class Comment(TypedDict):
     body: str
     created_at: str
+    # The author is the repository owner, a member, a collaborator or the
+    # Actions bot. Only a trusted comment's size marker counts (#1321).
+    trusted: bool
 
 
 class Issue(TypedDict):
