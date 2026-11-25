@@ -162,6 +162,7 @@ from lib.fleet_activity import window_start
 from lib.fleet.fleet_agent_building import AgentClusters, clusters, write_clusters
 from lib.fleet.fleet_doc_freshness import FreshnessResult, freshness_rows, summary_line, write_freshness
 from lib.fleet.fleet_cleanup import CloneDeleter
+from lib.fleet.fleet_includes import includes_section
 from lib.fleet.fleet_coverage import Discovered, DiscoveryError, coverage_line, read_discovery, reconcile
 from lib.fleet.fleet_compare import (
     Comparison,
@@ -417,7 +418,7 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
               comparison: Comparison | None = None, credit: str | None = None,
               coverage: str | None = None, opportunities: Callable[[], str | None] | None = None,
               data: FleetData | None = None, earlier: FleetRun | str | None = None, achieved: Achievements | None = None,
-              groups: Sequence[str] = ()) -> None:
+              groups: Sequence[str] = (), includes: str | None = None) -> None:
     """Draw the diagrams, their report and fleet-view.html (#946), or clear them; a failure never changes the exit code."""
     try:
         if no_diagrams:
@@ -435,7 +436,7 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
         ok = [row["scans"] for row in rows if row["status"] == "ok" and row["scans"] is not None]
         write_diagrams(out_dir, diagrams, credit, coverage, opportunities() if opportunities else None,
                        measured_section(ok), front_section(front, len(rows)),
-                       packs_section(data.get("packs") if data is not None else None))
+                       packs_section(data.get("packs") if data is not None else None), includes)
         write_page(out_dir, data, achieved, maturity_model, diagrams, front)
     except Exception as e:  # noqa: BLE001 - a diagram never fails a completed run
         print(f"fleet: diagrams: not written ({type(e).__name__}: {e})", file=sys.stderr)
@@ -768,7 +769,7 @@ def main(argv: list[str] | None = None) -> int:
     _diagrams(out_dir, args.no_diagrams, maturity_model, public, window, history=history, comparison=comparison,
               credit=credit, coverage=coverage_line(coverage, len(rows)),
               opportunities=lambda: opportunities_section(data, achieved), data=data, earlier=earlier, achieved=achieved,
-              groups=[g["group"] for g in groups])
+              groups=[g["group"] for g in groups], includes=includes_section(stamp.get("unresolved_includes")))
     _print_summary(rows, path, groups_path, agent_clusters, freshness, freshness_path, deleter)
     return 0
 
