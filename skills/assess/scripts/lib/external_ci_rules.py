@@ -1,7 +1,7 @@
 """The external-CI reading and its allowlist, with no network client (issue #928).
 
 ``lib/external_ci.py`` reads the check runs and commit statuses of sampled merged
-pull requests and returns an :class:`ExternalCi`; ``lib/ci_checks.py`` reads that
+pull requests and returns an :class:`ExternalCi`; ``lib/ci/ci_checks.py`` reads that
 value through :func:`as_external`. The two live apart so the offline ``ci_checks``
 scan never imports a platform client (``lib.hosting.gh_cli``).
 

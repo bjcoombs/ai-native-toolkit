@@ -6,14 +6,14 @@ id = "core.shared_tooling"
 kind = "collector"
 title = "Shared tooling"
 issues = [566]
-callable = "lib.shared_tooling:scan_shared_tooling"
+callable = "lib.ci.shared_tooling:scan_shared_tooling"
 publishes = ["shared_tooling"]
 reads = ["repo_root"]
 stage = "post_offers"
 headless = { shared_tooling = "registered" }
 whys.shared_tooling = "exempt: plumbing"
 shapes = [
-  { path = "shared_tooling", type = "lib.shared_tooling:SharedToolingBlock" },
+  { path = "shared_tooling", type = "lib.ci.shared_tooling:SharedToolingBlock" },
 ]
 revision = 1
   [entries.privacy]

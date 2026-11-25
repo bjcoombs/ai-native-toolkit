@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.ci_checks import scan_ci_checks
+from lib.ci.ci_checks import scan_ci_checks
 from lib.ci_composite import inline_composites
 
 

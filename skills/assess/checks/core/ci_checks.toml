@@ -7,7 +7,7 @@ kind = "collector"
 title = "CI runs a test or lint command"
 summary = "Whether a GitHub Actions or GitLab CI line runs a test or lint command. Whether such a line can fail its job on ordinary changes: not masked, and not outside the ordinary triggers. Whether such a line runs a linter. The value is null when no check is found but a CI file pulls its jobs from elsewhere. It is also null when no check is found and the tree tracks a CI file the scan does not parse. It is null under --platform when most sampled merged pull requests carry an external CI check. It is null when a root Prow OWNERS_ALIASES is the only CI evidence."
 issues = [698, 775, 782, 787, 919, 920, 928, 1152, 1179, 1180]
-callable = "lib.ci_checks:scan_ci_checks"
+callable = "lib.ci.ci_checks:scan_ci_checks"
 publishes = ["ci_checks"]
 reads = ["repo_root", "ghsync_root", "gitlab_merged_ci", "external_ci"]
 stage = "post_offers"
@@ -15,7 +15,7 @@ platform_pass = true
 headless = { ci_checks = "registered" }
 whys.ci_checks = "It reads whether CI runs tests or linters on ordinary changes in a way that can stop the job, so \"it passed\" means a check ran and could have said no."
 shapes = [
-  { path = "ci_checks", type = "lib.ci_checks:CiChecksBlock" },
+  { path = "ci_checks", type = "lib.ci.ci_checks:CiChecksBlock" },
 ]
 revision = 8
 unknown_reasons = [

@@ -4,8 +4,8 @@
 than one place (the root file over an included job, an ``extends:`` parent, a ``default:``
 script) read wrong that way: an included scan job turned off by a root ``when: never`` read as a
 scan, and a visible job that runs a hidden template's scan through ``extends:`` read as none.
-This module builds on the shared resolver, ``lib.ci_includes.merged_config`` with
-``lib.ci_merged_view`` (see ``lib/docs/ci_includes.md``):
+This module builds on the shared resolver, ``lib.ci.ci_includes.merged_config`` with
+``lib.ci.ci_merged_view`` (see ``lib/docs/ci_includes.md``):
 
 - ``scan_texts(config, resolution, hides)`` returns each text to read with the lines to hold
   back: the root file and each included file with their merged jobs blanked, then the rendered
@@ -27,16 +27,16 @@ This module builds on the shared resolver, ``lib.ci_includes.merged_config`` wit
   longer turns the scan off; one inside ``workflow:`` may or may not apply, so it reads
   unevaluated. A truthy value (``true``, ``1``, ``yes``) turns it off.
 
-Inward-only: ``lib.ci_includes``, ``lib.ci_merged_view``, ``lib.secrets_guard_lines``. Tests:
+Inward-only: ``lib.ci.ci_includes``, ``lib.ci.ci_merged_view``, ``lib.secrets_guard_lines``. Tests:
 ``tests/test_secrets_guard.py``, ``tests/test_secrets_guard_resolved.py``.
 """
 from __future__ import annotations
 
 import re
 
-from lib.ci_include_items import include_items
-from lib.ci_includes import MergedConfig, Resolution
-from lib.ci_merged_view import merged_jobs, merged_view
+from lib.ci.ci_include_items import include_items
+from lib.ci.ci_includes import MergedConfig, Resolution
+from lib.ci.ci_merged_view import merged_jobs, merged_view
 from lib.secrets_guard_lines import block_end, code_lines
 
 GITLAB_CI = ".gitlab-ci.yml"

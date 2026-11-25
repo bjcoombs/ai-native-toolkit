@@ -13,7 +13,7 @@ sign search on it does not credit a name the command only mentions:
   double quotes, still pairs with it, and a closed single-quoted span may run over lines;
 - a ``#`` comment is cut, and an ``echo`` or ``printf`` is dropped with its arguments.
 
-Used by ``lib.ci_model_jobs`` for the ``claude plugin eval`` sign. Tests:
+Used by ``lib.ci.ci_model_jobs`` for the ``claude plugin eval`` sign. Tests:
 ``tests/test_ci_model_jobs_plugin_eval.py``.
 """
 from __future__ import annotations

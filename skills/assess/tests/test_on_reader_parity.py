@@ -4,8 +4,8 @@ from __future__ import annotations
 import pytest
 import yaml
 
-from lib import ci_triggers, shared_tooling
-from lib.review_automation import runs_on_changes
+from lib.ci import ci_triggers, shared_tooling
+from lib.ci.review_automation import runs_on_changes
 
 _JOB = "jobs:\n  a:\n    runs-on: x\n    steps:\n      - run: pytest\n"
 

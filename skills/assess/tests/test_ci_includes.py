@@ -1,4 +1,4 @@
-"""Tests for lib/ci_includes.py: GitLab CI includes resolved offline from the ghsync root (#766)."""
+"""Tests for lib/ci/ci_includes.py: GitLab CI includes resolved offline from the ghsync root (#766)."""
 from __future__ import annotations
 
 import json
@@ -8,11 +8,11 @@ from pathlib import Path
 import pytest
 
 import assess_signals
-from lib import ci_includes
-from lib.ci_checks import scan_ci_checks
-from lib.ci_includes import IncludeItem, include_items, resolve_includes
+from lib.ci import ci_includes
+from lib.ci.ci_checks import scan_ci_checks
+from lib.ci.ci_includes import IncludeItem, include_items, resolve_includes
 from lib.counts_only.content_free import counts_only_scans
-from lib.review_automation import scan_review_automation
+from lib.ci.review_automation import scan_review_automation
 
 
 def _commit(repo: Path, files: dict[str, str], *, branch: str = "main", tag: str | None = None) -> None:

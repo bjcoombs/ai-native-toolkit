@@ -12,7 +12,7 @@ import pytest
 
 from lib.check_command import check_verdict, is_check_command, is_lint_command, is_lint_run, may_lint
 from lib.agents.agent_environment import scan_agent_environment
-from lib.ci_checks import scan_ci_checks
+from lib.ci.ci_checks import scan_ci_checks
 
 _ISSUE_RUNNERS = [
     "dotnet test", "swift test", "mix test", "bundle exec rspec", "deno test",

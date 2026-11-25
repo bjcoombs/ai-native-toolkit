@@ -1,6 +1,6 @@
 """GitLab's merged configuration (issue #1180): include overrides, extends: and default:.
 
-The resolver (``lib.ci_includes.merged_config``) and its line view (``lib.ci_merged_view``),
+The resolver (``lib.ci.ci_includes.merged_config``) and its line view (``lib.ci.ci_merged_view``),
 read through ``ci_checks``. Each false-credit case has a mirror that still reads as before, and
 every case the resolver cannot settle reads as not measured, never as met.
 """
@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from lib.ci_checks import scan_ci_checks
-from lib.ci_includes import TOOLKIT_GATE_JOBS, include_items, merged_config, resolve_includes
-from lib.ci_merged_view import merged_view
+from lib.ci.ci_checks import scan_ci_checks
+from lib.ci.ci_includes import TOOLKIT_GATE_JOBS, include_items, merged_config, resolve_includes
+from lib.ci.ci_merged_view import merged_view
 
 REPO = Path(__file__).resolve().parents[3]
 LINT = "lint:\n  script:\n    - ruff check .\n"

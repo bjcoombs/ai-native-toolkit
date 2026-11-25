@@ -4,7 +4,7 @@
 check target of a runner ``lib.command_resolver`` models (``make test``,
 ``npm run check``, ``tox``, ``uv run pytest``, the program after ``uv run``) or a
 committed script named for a check (``./scripts/test.sh``). An install command
-such as ``npm ci`` or ``uv sync --extra test`` is never a check. ``lib.ci_checks``
+such as ``npm ci`` or ``uv sync --extra test`` is never a check. ``lib.ci.ci_checks``
 applies it to CI lines, ``lib.named_check`` to instruction files. ``is_lint_run`` and
 ``may_lint`` (#782) feed ``ci_checks.lint_runs``: a linter that runs, and a check whose
 recipe may run one. ``hatch run``, ``pdm [run]`` and ``poe`` are read through, and a Gradle
@@ -350,7 +350,7 @@ def is_lint_run(text: str) -> bool:
     ``hatch fmt --check`` and ``hatch run``
     of a linter program (``hatch run ruff check .``) count too, and a package-manager test
     alias (``npm test``, ``npx jest``) does not. ``is_lint_command`` keeps its
-    meaning: ``lib.ci_checks.test_or_lint_configured`` and Layer 5 read it unchanged.
+    meaning: ``lib.ci.ci_checks.test_or_lint_configured`` and Layer 5 read it unchanged.
     """
     first = command_words(text)
     outer = (_outer_wrapper(first) or _plain_wrapper(first)) if first else None
@@ -459,7 +459,7 @@ _DOCKER_RUN_FLAGS = frozenset({
     "--security-opt", "--tmpfs", "--volumes-from", "--cidfile", "--log-driver", "--log-opt",
 })
 # A program named alone as a bare YAML list item (``- rspec``, ``- make`` under ``needs:``)
-# is a value unless its parent key is a script key (``lib.ci_lines._lone_check``).
+# is a value unless its parent key is a script key (``lib.ci.ci_lines._lone_check``).
 BARE_RUN_PROGRAMS = ALWAYS_CHECK | TEST_PROGRAMS | TARGET_RUNNERS
 _TARGET_FLAGS = frozenset({
     "-C", "-f", "--file", "--makefile", "--directory", "--dir", "-d", "--taskfile",
@@ -585,7 +585,7 @@ def _plain_wrapper(words: list[str]) -> list[str] | None:
 
 def is_format_rewrite(text: str) -> bool:
     """A formatter run that rewrites files in place (``clang-format -i``, ``mix format``,
-    ``xargs clang-format-21 -i``): ``lib.ci_lint_gates`` reads it as a gate only when a
+    ``xargs clang-format-21 -i``): ``lib.ci.ci_lint_gates`` reads it as a gate only when a
     later line of the job runs ``git diff --exit-code`` (#926)."""
     words = command_words(text)
     return bool(words) and not is_info_invocation(text) and formatter_mode(

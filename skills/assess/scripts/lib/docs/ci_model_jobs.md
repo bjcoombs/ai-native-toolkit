@@ -1,6 +1,6 @@
 # ci_model_jobs: model-backed CI jobs and their gates (#1242)
 
-Reference for `lib/ci_model_jobs.py`. The module docstring has the summary and the block shape.
+Reference for `lib/ci/ci_model_jobs.py`. The module docstring has the summary and the block shape.
 
 ## Why
 
@@ -45,7 +45,7 @@ ungated, reads unknown (`secret_only`). A secret beside any other sign is a mode
 | `label` | `types: [labeled]`, or a job or step `if:` on `github.event.pull_request.labels` or `github.event.label` | |
 | `event_if` | a job `if:` requiring `github.event_name ==` a non-ordinary event. Sign steps under different recognised gates (one `label`, one `event_if`) combine them | |
 | `tags_only` | a push filtered to tags with no branch filter | |
-| `event_trigger` | no ordinary event fires the workflow, and every event is one GitHub documents (`GATING_EVENTS`: schedule, `workflow_dispatch`, comments ...) | the job runs in neither a branch nor a merge request pipeline (`lib.ci_triggers`) |
+| `event_trigger` | no ordinary event fires the workflow, and every event is one GitHub documents (`GATING_EVENTS`: schedule, `workflow_dispatch`, comments ...) | the job runs in neither a branch nor a merge request pipeline (`lib.ci.ci_triggers`) |
 | `changes` | | the job runs in an ordinary pipeline only through a `rules:` item holding `changes:` |
 
 A job `if:` that requires an ordinary event (`github.event_name == 'pull_request'`) narrows the
@@ -62,11 +62,11 @@ superseded run, but the last push of every update still runs the job.
 
 GitLab `changes` is read by rewriting the file (`without_changes`): each `rules:` item holding
 `changes:` becomes one that never matches (the pipeline of a change outside its paths), line
-numbers kept, and `lib.ci_triggers.gitlab_line_triggers` reads the job again. A job that ran before and
+numbers kept, and `lib.ci.ci_triggers.gitlab_line_triggers` reads the job again. A job that ran before and
 no longer runs in an ordinary pipeline is gated by `changes`; one that still does is ungated.
 So a docs-skip rule (`changes: [docs/**]` with `when: never`, then `when: always`) is not a
 gate: a source change reaches the later rule. This differs from GitHub `paths-ignore`, which counts.
-GitLab jobs are read as GitLab merges them (#1180): `lib.ci_merged_view` over
+GitLab jobs are read as GitLab merges them (#1180): `lib.ci.ci_merged_view` over
 `ci_includes.merged_config` blanks each job whose keys come from more than one place (the root
 file and an include, `extends:`, a `default:` script key) and renders it once with its
 effective keys. So a root `- when: always` over an included schedule-only job reads ungated, and

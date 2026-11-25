@@ -1,6 +1,6 @@
 """Read the steps of a local composite action a workflow step uses (issues #923, #1194).
 
-``lib.ci_checks`` reads a workflow line by line, so a step ``uses: ./.github/actions/check``
+``lib.ci.ci_checks`` reads a workflow line by line, so a step ``uses: ./.github/actions/check``
 whose ``action.yml`` runs ``ruff check .`` and ``pytest`` used to read as no command.
 ``inline_composites(text, read_local)`` returns the workflow text with each such action's
 ``run:`` steps and known lint action steps copied in after the calling step, as sibling
@@ -13,9 +13,9 @@ steps of the same job:
   A step with a ``run:`` key is copied. A copied ``run: ./ci.sh`` is read by ``lib.ci_scripts``
   as any CI line is, so a committed script's body can still upgrade it.
 - **Known lint actions (#1194).** A step that ``uses:`` an action the line tests read as a lint
-  step (``lib.ci_lines.lint_step_action``: ``LINT_ACTIONS``, the reviewdog actions,
+  step (``lib.ci.ci_lines.lint_step_action``: ``LINT_ACTIONS``, the reviewdog actions,
   ``MAY_LINT_ACTIONS``) is copied whole, ``with:`` block included, its ``${{ inputs.<name> }}``
-  values filled as below, so ``lib.ci_lint_inputs`` reads it as the same step written in the
+  values filled as below, so ``lib.ci.ci_lint_inputs`` reads it as the same step written in the
   workflow: ``args: --version`` is install only, an unfilled input is unsure (null). Any other
   remote action is dropped: its code is not read, so it is never credited, as at the top level.
 - **Nested local actions (#1194).** A step that ``uses:`` another local action is followed the
@@ -42,14 +42,14 @@ steps of the same job:
   default like any other input. Below the top level the nested step is not kept, so its
   value is filled in like any other input (#1194). The step's other lines (an ``env:`` value such as ``CMD:
   ${{ inputs.cmd }}``) take the literal values too, never marked unknown, so
-  ``lib.ci_expressions`` can read ``run: $CMD`` (#1164).
+  ``lib.ci.ci_expressions`` can read ``run: $CMD`` (#1164).
 - **Unknown, never 0.** ``inline_composites`` returns ``(text, unknown)``
-  (``lib.ci_matrix.Expanded``); ``lib.ci_checks`` reads the unknown lines as ``check_target``
+  (``lib.ci.ci_matrix.Expanded``); ``lib.ci.ci_checks`` reads the unknown lines as ``check_target``
   (null) unless masked, as for a matrix command.
 
 The structure comes from ``lib.ci_masking``'s indentation model; there is no YAML parser.
 Only GitHub workflow text is read. Inward-only imports: ``lib.ci_action_inputs``,
-``lib.ci_continuations``, ``lib.ci_lines``, ``lib.ci_masking``, ``lib.ci_matrix``. Tests:
+``lib.ci.ci_continuations``, ``lib.ci.ci_lines``, ``lib.ci_masking``, ``lib.ci.ci_matrix``. Tests:
 ``tests/test_ci_composite_matrix.py``, ``tests/test_ci_composite_lint.py``.
 """
 from __future__ import annotations
@@ -58,10 +58,10 @@ import re
 from typing import Literal, NamedTuple
 
 from lib.ci_action_inputs import INPUT_KEYS, ReadLocal, local_action_paths
-from lib.ci_continuations import join_continued
-from lib.ci_lines import lint_step_action
+from lib.ci.ci_continuations import join_continued
+from lib.ci.ci_lines import lint_step_action
 from lib.ci_masking import IndentTree, parse_lines
-from lib.ci_matrix import CMD_EXPR, Expanded, scalar
+from lib.ci.ci_matrix import CMD_EXPR, Expanded, scalar
 
 _CALLER_KEYS = frozenset({"continue-on-error", "if"})
 _MAX_DEPTH = 8   # nested levels followed below the action a workflow calls
@@ -229,7 +229,7 @@ def _copies(action: str, passed: dict[str, str | None], read_local: ReadLocal, i
                 copied += inner   # each inner copy carries the caller keys already
                 continue
             copied += [(line, "uses:" in raw) for raw, line in zip(step.lines, shifted, strict=True)]
-        elif step.kind == "lint":   # read by lib.ci_lint_inputs as a top-level step is
+        elif step.kind == "lint":   # read by lib.ci.ci_lint_inputs as a top-level step is
             copied += [(_fill(line, given), False) for line in shifted]
         else:
             for j, line in enumerate(shifted):

@@ -7,14 +7,14 @@ kind = "collector"
 title = "Model-backed CI jobs"
 summary = "Each GitHub Actions or GitLab CI job that calls a model API. Signs are an eval harness, an agent action, the Claude Code CLI, a model-provider secret, pytest -m eval or an evals/ path. For each job, whether a gate stops it running on every push or pull request update. Gates are a paths filter, a schedule or manual trigger only, a label, or GitLab rules:changes."
 issues = [1242]
-callable = "lib.ci_model_jobs:scan_ci_model_jobs"
+callable = "lib.ci.ci_model_jobs:scan_ci_model_jobs"
 publishes = ["ci_model_jobs"]
 reads = ["repo_root", "ghsync_root"]
 stage = "post_offers"
 headless = { ci_model_jobs = "registered" }
 whys.ci_model_jobs = "A CI job that calls a model costs money on every run. If it runs on every merge and every pull request update, the cost grows with the number of changes agents make, not with changes to the prompts it tests."
 shapes = [
-  { path = "ci_model_jobs", type = "lib.ci_model_jobs:CiModelJobsBlock" },
+  { path = "ci_model_jobs", type = "lib.ci.ci_model_jobs:CiModelJobsBlock" },
 ]
 revision = 4
 unknown_reasons = [

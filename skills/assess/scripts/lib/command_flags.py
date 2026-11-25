@@ -22,7 +22,7 @@ so it is not one. A cluster is read left to right up to the first letter that ta
 was checked against bash 3.2 and 5.3, dash and GNU make. ``maven_skips_tests(words)`` is a Maven
 run with ``-DskipTests`` or ``-Dmaven.test.skip`` (not ``=false``) and lifecycle phases only
 (``mvn -DskipTests verify``; an option's value such as ``-pl :mod`` is not a goal, and a plugin
-goal is ``prefix:goal``): ``lib.ci_checks`` reads it as a target it cannot settle (#799).
+goal is ``prefix:goal``): ``lib.ci.ci_checks`` reads it as a target it cannot settle (#799).
 Tests: ``tests/test_check_command.py``.
 """
 from __future__ import annotations

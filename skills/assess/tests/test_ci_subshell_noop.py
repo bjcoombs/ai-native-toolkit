@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from lib.ci_checks import enforced_check_commands
+from lib.ci.ci_checks import enforced_check_commands
 from lib.ci_masking import unmasked_lines
 from lib.ci_statements import _same_line_keep, split_statements
 

@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from lib.check_command import check_verdict, is_lint_run, may_check, may_lint
-from lib.ci_checks import scan_ci_checks
+from lib.ci.ci_checks import scan_ci_checks
 from lib.lint_vocabulary import gradle_tasks as lint_gradle_tasks
 from lib.runner_args import (
     NO_PYPROJECT, SCRIPT, gradle_dry_run, gradle_run, gradle_skips_tests, gradle_tasks, pdm_scripts,

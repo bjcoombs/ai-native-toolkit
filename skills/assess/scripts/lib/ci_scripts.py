@@ -12,7 +12,7 @@ flags are read, so ``bash scripts/test.sh --ci`` runs ``scripts/test.sh``, and a
 cluster ending in ``o`` / ``O`` takes the next word (``bash -o pipefail ./ci.sh``,
 ``bash -euo pipefail ./ci.sh``, GitHub's ``--noprofile --norc -eo pipefail``).
 
-``present_in(root, tracked)`` is the predicate ``lib.ci_checks`` reads a script against.
+``present_in(root, tracked)`` is the predicate ``lib.ci.ci_checks`` reads a script against.
 A script is present at its path, or as the suffix of a tracked path under a directory
 (``cd svc && ./ci.sh``, ``working-directory:``). The suffix match is lenient on purpose:
 any tracked ``*/ci.sh``, even under ``testdata/``, credits a root ``./ci.sh``, because the
@@ -24,9 +24,9 @@ path.
 ``committed(text, present)`` is false only when ``text`` runs a script that ``present``
 says the tree does not hold; with no predicate every script reads present. A CI check or
 lint step that runs such a script reads ``enforced_basis`` / ``lint_basis``
-``script_not_found`` (null) in ``lib.ci_checks``, never true. ``runs_missing(test)`` turns a
-``lib.ci_checks`` line test into the one that flags such a line: ``test`` holds with every
-script read as present and fails with ``present``. ``lib.ci_checks`` builds its missing-check
+``script_not_found`` (null) in ``lib.ci.ci_checks``, never true. ``runs_missing(test)`` turns a
+``lib.ci.ci_checks`` line test into the one that flags such a line: ``test`` holds with every
+script read as present and fails with ``present``. ``lib.ci.ci_checks`` builds its missing-check
 test under ``named_check.instruction_words``, so a missing ``./ci.sh`` stays
 ``script_not_found`` after #951. Tests:
 ``tests/test_check_command.py`` (``script_path``) and ``tests/test_ci_checks.py``.
@@ -39,7 +39,7 @@ resolves outside the checkout is never read (#799), so a script is followed one 
 inside the repository. The form decides the
 start state: ``. x`` / ``source x`` is sourced, ``bash -e x`` takes the shell's flags, ``./x``
 its shebang, and only when git records the file as executable (mode 100755), since a
-``./x`` of a 100644 file exits 126 and gates nothing. ``lib.ci_checks`` adds it to its check and lint line tests, so a read body only
+``./x`` of a 100644 file exits 126 and gates nothing. ``lib.ci.ci_checks`` adds it to its check and lint line tests, so a read body only
 upgrades a name reading: ``./ci.sh`` that ends in ``pytest`` reads true; one it cannot show
 keeps the name's reading (``check_target``, or true for ``./test.sh``).
 

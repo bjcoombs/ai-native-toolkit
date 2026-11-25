@@ -12,10 +12,10 @@ import pytest
 from assess_test_support import skip_without_posix_shell
 
 import lib.hosting.gitlab_ci_lint as gitlab_ci_lint
-from lib.ci_checks import scan_ci_checks
+from lib.ci.ci_checks import scan_ci_checks
 from lib.counts_only.content_free import counts_only_scans
-from lib.merged_ci import NOT_NEEDED, NOT_READ, MergedCi, as_merged
-from lib.review_automation import scan_review_automation
+from lib.ci.merged_ci import NOT_NEEDED, NOT_READ, MergedCi, as_merged
+from lib.ci.review_automation import scan_review_automation
 from lib.signals import collect
 from test_fleet import make_repo
 from test_fleet_cli import fleet_cli
@@ -231,14 +231,14 @@ def test_a_child_pipeline_keeps_a_check_free_merge_unknown(tmp_path, own, merged
 
 
 def test_child_pipeline_reads_a_job_key_only():
-    from lib.ci_checks import child_pipeline
+    from lib.ci.ci_checks import child_pipeline
     assert child_pipeline("child:\n  trigger:\n    include: a.yml\n")
     assert not child_pipeline("trigger: x\nbuild:\n  script:\n    - echo trigger: no\n")
 
 
 def test_a_top_level_trigger_job_after_a_blank_line_is_not_a_child_pipeline():
     # `^\s+` crossed the blank line's newline and read the job name as a `trigger:` key (#958).
-    from lib.ci_checks import child_pipeline
+    from lib.ci.ci_checks import child_pipeline
     assert not child_pipeline("build:\n  script: make\n\ntrigger:\n  script: x\n")
     assert child_pipeline("build:\n  script: make\n\nchild:\n\n  trigger:\n    include: a.yml\n")
 
@@ -250,7 +250,7 @@ def test_include_sources_records_a_padded_duplicate_once():
 
 
 def test_conditional_include_reads_only_the_include_section():
-    from lib.ci_checks import conditional_include
+    from lib.ci.ci_checks import conditional_include
     assert not conditional_include(INCLUDE.format(project="a/b") + "t:\n  rules:\n    - if: $X\n")
     assert not conditional_include("include:\n  - local: /a.yml  # rules: none\n")
 

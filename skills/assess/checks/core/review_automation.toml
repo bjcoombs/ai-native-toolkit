@@ -6,7 +6,7 @@ id = "core.review_automation"
 kind = "collector"
 title = "AI review committed in CI"
 issues = [696]
-callable = "lib.review_automation:scan_review_automation"
+callable = "lib.ci.review_automation:scan_review_automation"
 publishes = ["review_automation"]
 reads = ["repo_root", "fleet_config", "ghsync_root", "gitlab_merged_ci"]
 stage = "post_offers"
@@ -14,7 +14,7 @@ platform_pass = true
 headless = { review_automation = "registered" }
 whys.review_automation = "A review step committed in CI reviews every change it runs on, and is evidence a headless run can read without platform access."
 shapes = [
-  { path = "review_automation", type = "lib.review_automation:ReviewAutomationBlock" },
+  { path = "review_automation", type = "lib.ci.review_automation:ReviewAutomationBlock" },
 ]
 revision = 3
   [entries.privacy]

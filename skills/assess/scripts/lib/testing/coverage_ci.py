@@ -7,7 +7,7 @@ Layer 6 level 1 signal (and the Step 4 ``coverage_gate`` gate) reads
 *and* an enforced CI line that runs it. Enforced is #775's rule, reused
 unchanged: the line survives ``lib.ci_masking.unmasked_lines`` (no ``|| true``,
 ``continue-on-error``, ``allow_failure`` or ``set +e``) and its workflow or job
-runs on ordinary changes (``lib.ci_triggers``). GitHub Actions workflows and
+runs on ordinary changes (``lib.ci.ci_triggers``). GitHub Actions workflows and
 ``.gitlab-ci.yml`` are read, as ``ci_checks`` reads them.
 
 How a gate is run, by where it is written:
@@ -141,9 +141,9 @@ any enforced run of the tool anywhere in the repository credits the scope's conf
 runs in is not resolved, except for a Gradle run (`Run.cwd`, `lib.testing.ci_workdir`): `-p app`
 or `cd app` runs an unqualified task in `app` and its subprojects only, so a gate in `lib`
 reads null (#1162), and the Gradle root is the nearest settings file at or above that
-directory (#1163, `lib.runner_args.gradle_runs_in`). Imports `lib.ci_checks`, `lib.ci_masking`, `lib.ci_triggers`,
+directory (#1163, `lib.runner_args.gradle_runs_in`). Imports `lib.ci.ci_checks`, `lib.ci_masking`, `lib.ci.ci_triggers`,
 `lib.command_index`, `lib.command_resolver`, `lib.check_command`, `lib.testing.ci_workdir`, `lib.testing.coverage_activation`,
-`lib.testing.coverage_codecov` (a Codecov patch or ``auto`` status is skipped, #882) and `lib.shared_tooling`; never `lib.testing.coverage_gate` (which calls it) or an orchestrator.
+`lib.testing.coverage_codecov` (a Codecov patch or ``auto`` status is skipped, #882) and `lib.ci.shared_tooling`; never `lib.testing.coverage_gate` (which calls it) or an orchestrator.
 Tests: `tests/test_coverage_ci.py`, `tests/test_coverage_ci_edges.py` (#954),
 `tests/test_gradle_workdir.py` (#1162).
 """
@@ -161,7 +161,7 @@ from lib.ci_masking import mask_lines
 from lib.testing.coverage_activation import Activation, below, covers
 from lib.testing.coverage_codecov import is_patch
 from lib.named_check import may_lint_named
-from lib.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, workflow_trigger
+from lib.ci.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, workflow_trigger
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.unread_ci import unread_ci_paths
 from lib.testing.ci_workdir import exact_cwd
@@ -169,7 +169,7 @@ from lib.command_resolver import command_words, extract_commands
 from lib.runner_args import (
     GRADLE, SCRIPT, gradle_dry_run, gradle_roots, gradle_roots_set, gradle_runs_in,
     gradle_tasks as gradle_tasks, partly_excluded, pdm_scripts, pdm_scripts_set, script_run)
-from lib.shared_tooling import pulls_jobs_from_elsewhere
+from lib.ci.shared_tooling import pulls_jobs_from_elsewhere
 
 EnforcedBasis = Literal[
     "ci_run", "no_gate", "threshold_below_minimum", "threshold_not_read", "unknown_trigger",

@@ -78,7 +78,7 @@ from the model.
 
 GitLab includes (#766): every scan of a ROOT run gets ``--ghsync-root ROOT``, so a
 repository's ``include: project:`` / ``component:`` files are read from the clones
-in the same root (``lib/ci_includes.py``) and ``ci_checks`` and ``review_automation``
+in the same root (``lib/ci/ci_includes.py``) and ``ci_checks`` and ``review_automation``
 see the jobs in shared templates; a template that is not cloned stays unknown.
 A ``--from-list`` run passes ROOT when one is given. With ``--delete-after`` no root
 is passed (a template clone could be deleted before a repository including it is

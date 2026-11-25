@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 from lib.scan_registry import SCANS
-from lib.shared_tooling import (
+from lib.ci.shared_tooling import (
     distinct_ids,
     github_reusable_workflows,
     gitlab_includes,

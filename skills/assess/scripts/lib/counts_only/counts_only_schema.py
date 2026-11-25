@@ -37,7 +37,7 @@ from lib.agents.agent_building import AgentBuildingBlock
 from lib.agents.agent_environment import AgentEnvironmentBlock
 from lib.agents.agent_harness import AgentHarnessBlock
 from lib.agent_instructions_grader import SensitiveFinding
-from lib.ci_checks import CiChecksBlock
+from lib.ci.ci_checks import CiChecksBlock
 from lib.agent_outcome import AgentOutcomeBlock
 from lib.ai_usage import AiUsageBlock
 from lib.counts_only.block_shapes import (
@@ -62,7 +62,7 @@ from lib.skill_disclosure import SkillDisclosureBlock
 from lib.secrets_guard import SecretsGuardBlock
 from lib.skill_script_tests import SkillScriptTestsBlock
 from lib.skill_personal_data import SkillPersonalDataBlock
-from lib.ci_model_jobs import CiModelJobsBlock
+from lib.ci.ci_model_jobs import CiModelJobsBlock
 from lib.backlog_ready import BacklogReadyBlock
 from lib.contributor_files import ContributorFilesBlock
 from lib.hosting.org_security_policy import OrgSecurityPolicyBlock
@@ -98,8 +98,8 @@ from lib.level_result_types import Headline, LevelResult, OwnerExclusionsBlock
 from lib.run_context_types_since import SinceLastRun
 from lib.prior_level import PriorLevelBlock
 from lib.complexity.scc_coverage import UnreliableCcnRow
-from lib.review_automation import ReviewAutomationBlock, ReviewEvidenceBlock
-from lib.shared_tooling import SharedToolingBlock
+from lib.ci.review_automation import ReviewAutomationBlock, ReviewEvidenceBlock
+from lib.ci.shared_tooling import SharedToolingBlock
 from lib.unit_discovery import UnitsBlock
 from lib.unit_levels import UnitLevelsBlock
 from lib.unit_rollup import UnitRollUpBlock

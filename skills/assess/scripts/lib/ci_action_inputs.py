@@ -1,6 +1,6 @@
 """Which ``with:`` inputs of a GitHub Actions step are shell commands? (issue #799)
 
-``lib.ci_checks`` reads a workflow line by line, so a ``run:`` or ``script:`` key under a
+``lib.ci.ci_checks`` reads a workflow line by line, so a ``run:`` or ``script:`` key under a
 ``uses:`` step's ``with:`` reads as shell whatever the action does with it. An action decides
 that, so ``read_inputs(text, read_local)`` sorts each ``run``, ``script`` and ``command``
 input of a step (or a job calling a reusable workflow) that has a ``uses:`` key:
@@ -18,10 +18,10 @@ input of a step (or a job calling a reusable workflow) that has a ``uses:`` key:
 - **Declared** (any other action). The action's code is not read, so the command may or may
   not run and may or may not fail the job. Its lines stay in the text, so
   ``test_or_lint_configured`` counts them, and their indexes come back in ``declared``:
-  ``lib.ci_checks`` reads them as ``check_target`` (null), never as an enforced run.
+  ``lib.ci.ci_checks`` reads them as ``check_target`` (null), never as an enforced run.
 
 Other ``with:`` inputs (``args:``, ``ref:``) are left as they were. ``read_local(path)`` returns
-a committed file's text inside the checkout, or None; ``lib.ci_checks`` passes one that reads
+a committed file's text inside the checkout, or None; ``lib.ci.ci_checks`` passes one that reads
 tracked files only and never a path outside the repository. The structure comes from
 ``lib.ci_masking``'s indentation model; there is no YAML parser. Every line keeps its index.
 

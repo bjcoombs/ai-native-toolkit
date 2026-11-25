@@ -48,7 +48,7 @@ a job-level ``defaults`` working directory reads unresolved, not resolved; step 
 conditions and matrix values are not read; a run from the root is credited even when
 its test paths name another package.
 
-Only runs on ordinary triggers count (``lib.ci_triggers``): a ``workflow_dispatch`` or
+Only runs on ordinary triggers count (``lib.ci.ci_triggers``): a ``workflow_dispatch`` or
 ``schedule``-only run is skipped, and one whose triggers are not settled reads unresolved.
 Runs are read with the repository's pdm scripts (``CiRuns.pdm_scripts``, #1046), so ``pdm run
 pytest`` with a ``pytest`` script is the script, not pytest.

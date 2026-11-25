@@ -28,7 +28,7 @@ Run:
 
 ``--ghsync-root DIR`` names the ghsync root holding the target: GitLab
 ``include: project:`` and ``component:`` files are then read from the clones
-under it (``lib/ci_includes.py``, #766). ``fleet.py`` passes its ROOT.
+under it (``lib/ci/ci_includes.py``, #766). ``fleet.py`` passes its ROOT.
 
 ``--scope PATH`` (#866) measures one folder of the target, as ``assess_core --scope``
 does: the scans that read the scope (suppressions, the doc graph and staleness, structure,
@@ -138,7 +138,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--ghsync-root", metavar="DIR",
         help="The ghsync root (<root>/<path>/<repo>-main) holding the target: GitLab include: "
-             "project: and component: files are read from the clones under it (lib/ci_includes.py). "
+             "project: and component: files are read from the clones under it (lib/ci/ci_includes.py). "
              "Without it only local: includes resolve.",
     )
     parser.add_argument(

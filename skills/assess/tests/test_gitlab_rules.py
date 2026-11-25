@@ -1,12 +1,12 @@
-"""Tests for lib/gitlab_rules.py and the GitLab rules half of lib/ci_triggers.py (issue #884)."""
+"""Tests for lib/gitlab_rules.py and the GitLab rules half of lib/ci/ci_triggers.py (issue #884)."""
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from lib.ci_checks import scan_ci_checks
-from lib.ci_triggers import gitlab_line_triggers
+from lib.ci.ci_checks import scan_ci_checks
+from lib.ci.ci_triggers import gitlab_line_triggers
 from lib.gitlab_rules import Context, Rule, Truth, evaluate, outcome
 
 _NIGHTLY = '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'

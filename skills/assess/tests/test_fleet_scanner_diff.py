@@ -16,7 +16,7 @@ from test_fleet_groups import LEVELS
 
 NESTED = "skills/assess/scripts/lib/instruction_files.py"
 PRODUCERS = {"nested_instructions": frozenset({NESTED}),
-             "shared_tooling": frozenset({"skills/assess/scripts/lib/shared_tooling.py"})}
+             "shared_tooling": frozenset({"skills/assess/scripts/lib/ci/shared_tooling.py"})}
 EARLIER = [_row("grpa/svc1", _scans(5))]
 LATER = [_row("grpa/svc1", _scans(0))]  # teamdocs 2 -> 0 on nested_instructions
 
@@ -132,7 +132,7 @@ def test_git_changed_files_lists_lib_files_between_two_commits(tmp_path):
 
 def test_producers_map_each_block_to_its_defining_module_and_what_it_reads():
     producer_map = sd.producers()
-    assert f"{sd.LIB_PATH}/ci_checks.py" in producer_map["ci_checks"]
+    assert f"{sd.LIB_PATH}/ci/ci_checks.py" in producer_map["ci_checks"]
     assert f"{sd.LIB_PATH}/check_command.py" in producer_map["ci_checks"]
     assert f"{sd.LIB_PATH}/graph/import_graph.py" in producer_map["structure"]  # via the core's structure_scan
     assert all(f"{sd.LIB_PATH}/run_context_types.py" not in paths for paths in producer_map.values())
@@ -140,8 +140,8 @@ def test_producers_map_each_block_to_its_defining_module_and_what_it_reads():
     # a lib/ package and its relative imports (lib/test_pressure/)
     assert f"{sd.LIB_PATH}/test_pressure/mutation.py" in producer_map["test_pressure"]
     assert f"{sd.LIB_PATH}/test_pressure/__init__.py" in producer_map["test_pressure"]
-    blocks = sd.changed_blocks(_changed(f"{sd.LIB_PATH}/ci_checks.py"), producer_map)
-    assert blocks["ci_checks"] == [f"{sd.LIB_PATH}/ci_checks.py"]
+    blocks = sd.changed_blocks(_changed(f"{sd.LIB_PATH}/ci/ci_checks.py"), producer_map)
+    assert blocks["ci_checks"] == [f"{sd.LIB_PATH}/ci/ci_checks.py"]
 
 
 # --- row attribution -----------------------------------------------------------

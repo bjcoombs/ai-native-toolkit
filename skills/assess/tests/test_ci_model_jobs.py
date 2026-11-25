@@ -1,4 +1,4 @@
-"""lib/ci_model_jobs.py and the model-ci-gated condition (#1242): model-backed CI jobs and their gates."""
+"""lib/ci/ci_model_jobs.py and the model-ci-gated condition (#1242): model-backed CI jobs and their gates."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,7 +9,7 @@ import pytest
 import lib.level_tally as lt
 from lib.counts_only.content_free import counts_only
 from lib.ci_masking import IndentTree, parse_lines
-from lib.ci_model_jobs import GATES, scan_ci_model_jobs, signs_in, without_changes
+from lib.ci.ci_model_jobs import GATES, scan_ci_model_jobs, signs_in, without_changes
 
 CID = "model-ci-gated.1"
 REPO = Path(__file__).resolve().parents[3]

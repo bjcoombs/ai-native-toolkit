@@ -4,8 +4,8 @@
 first word as its program, so a segment that opens a compound command was never a check:
 ``if ! pytest`` reads ``if``, ``{ pytest`` reads ``{``, ``f() { pytest`` reads ``f()`` and
 ``(pytest)`` reads the single word ``(pytest)``. ``compound_core(text)`` rewrites one CI
-line's text so each segment starts at the command it runs, and ``lib.ci_lint_gates.line_commands``
-(the per-line reader ``lib.ci_lines`` and ``lib.ci_checks`` share) reads the rewrite:
+line's text so each segment starts at the command it runs, and ``lib.ci.ci_lint_gates.line_commands``
+(the per-line reader ``lib.ci.ci_lines`` and ``lib.ci.ci_checks`` share) reads the rewrite:
 
 - the keywords ``if``, ``elif``, ``while``, ``until``, ``then``, ``do`` and ``else`` are dropped,
   and a ``!`` right after a condition keyword (``if ! pytest``);

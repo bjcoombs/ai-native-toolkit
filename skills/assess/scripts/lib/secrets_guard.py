@@ -12,7 +12,7 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
 
 **What counts** (the tool names in ``SECRET_TOOLS``). Only files git tracks are read
 (``lib.command_index.repo_files``, #1204), from the work tree, as ``ci_checks`` and
-``lib.ci_includes`` read them: an untracked file is never read, and an uncommitted edit to a
+``lib.ci.ci_includes`` read them: an untracked file is never read, and an uncommitted edit to a
 tracked file is read as it stands.
 
 - ``pre_commit``: a root ``.pre-commit-config.yaml`` (or ``.yml``) whose ``repo:`` or ``id:``
@@ -26,7 +26,7 @@ tracked file is read as it stands.
   tool as a command (its name, then a subcommand, a flag or the end of the line; ``git secrets``
   reads as ``git-secrets``), or that includes GitLab's ``Secret-Detection.gitlab-ci.yml`` template
   (or its component). A GitHub workflow is read as ``ci_checks`` reads it
-  (``lib.ci_expressions.follow_workflow``): a local composite action's steps, matrix commands and
+  (``lib.ci.ci_expressions.follow_workflow``): a local composite action's steps, matrix commands and
   a ``$NAME`` command a literal ``env:`` sets are read through. A visible ``secret_detection``
   job counts only as an override of that template, never alone. Comments, whole-line or
   trailing, never count, so neither does a ``gitleaks:allow`` note or a ``.gitleaks.toml`` path.
@@ -57,7 +57,7 @@ tracked file is read as it stands.
   tool (``gitleaks-docker`` runs gitleaks), and a hook whose ``stages:`` leaves out the stage the
   run uses (``pre-commit``, or the one ``--hook-stage`` names) is not selected.
 - GitLab CI is read as GitLab merges it (``lib.secrets_guard_gitlab`` over
-  ``lib.ci_includes.merged_config``, #1204): a job defined in the root file and an include, or
+  ``lib.ci.ci_includes.merged_config``, #1204): a job defined in the root file and an include, or
   through ``extends:``, is read once with its effective keys, so a root ``when: never`` or
   ``script:`` over an included scan job removes it and a visible job running a hidden template's
   scan counts. A merged job the resolver does not settle (``unresolved``, or ``open`` while an
@@ -99,7 +99,7 @@ tracked file is read as it stands.
   stating a reason (``delegated_bypass`` false). That bypass is recorded and attributed, like an
   admin overriding a failing CI check, so level 2 still counts it; likewise
   (``ci_includes_unresolved``) when a GitLab include that could hold a scan was not read, since
-  ``.gitlab-ci.yml``'s includes are read through ``lib.ci_includes``;
+  ``.gitlab-ci.yml``'s includes are read through ``lib.ci.ci_includes``;
   a GitHub Enterprise Server or ``*.ghe.com`` remote is not recognised as GitHub yet, so it reads
   unmet with no CI scan although those platforms offer secret scanning; on any other remote, or
   none, there is no such setting, and no CI scan reads unmet.
@@ -137,8 +137,8 @@ from collections.abc import Mapping
 from typing import TypedDict
 
 from lib.ci_action_inputs import ReadLocal
-from lib.ci_expressions import follow_workflow
-from lib.ci_includes import SETTLED, merged_config, resolve_includes
+from lib.ci.ci_expressions import follow_workflow
+from lib.ci.ci_includes import SETTLED, merged_config, resolve_includes
 from lib.command_index import ci_config_files, repo_files
 from lib.secrets_guard_gitlab import GITLAB_CI, scan_texts, template_state
 from lib.secrets_guard_hooks import (
@@ -524,7 +524,7 @@ def ci_guard(root: Path, ghsync_root: Path | None = None, hooks: HookStages | No
             tools.update(found)
     unresolved = 0
     config = merged_config(root, ghsync_root) if GITLAB_CI in tracked else None
-    if config is not None:  # .gitlab-ci.yml and its includes, as GitLab merges them (lib.ci_includes)
+    if config is not None:  # .gitlab-ci.yml and its includes, as GitLab merges them (lib.ci.ci_includes)
         resolution = resolve_includes(root, ghsync_root)  # a project include resolves from a ghsync clone
         # GitLab's own secret-detection component is the scan, read by its path; it hides nothing.
         unresolved = sum(r["status"] not in SETTLED and r["kind"] in _HIDING_KINDS

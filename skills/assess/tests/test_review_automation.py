@@ -15,7 +15,7 @@ from lib.hosting.merged_sample import UNSUPPORTED_HOST_REASON
 from lib.fleet.fleet_platform import failed_blocks, join
 from lib.level_signals import load_default_levels
 from lib.levels import evaluate_row
-from lib.review_automation import (
+from lib.ci.review_automation import (
     REVIEW_CONFIG_FILES,
     is_review_action,
     is_review_component,
@@ -23,7 +23,7 @@ from lib.review_automation import (
     scan_review_automation,
 )
 from lib.scan_registry import SCANS
-from lib.shared_tooling import action_repo, step_uses, workflow_events
+from lib.ci.shared_tooling import action_repo, step_uses, workflow_events
 from lib.signals import NETWORK_REASON, PLATFORM_SCANS, build_document
 
 WORKFLOW = """\

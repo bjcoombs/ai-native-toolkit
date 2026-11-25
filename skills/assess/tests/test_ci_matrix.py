@@ -1,9 +1,9 @@
-"""Tests for lib/ci_matrix.py: matrix commands copied out per value, or left unknown (#923)."""
+"""Tests for lib/ci/ci_matrix.py: matrix commands copied out per value, or left unknown (#923)."""
 from __future__ import annotations
 
 import pytest
 
-from lib.ci_matrix import expand_matrix
+from lib.ci.ci_matrix import expand_matrix
 
 
 def _job(matrix: str, steps: str) -> str:

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from lib.check_command import is_lint_run
-from lib.ci_checks import scan_ci_checks
+from lib.ci.ci_checks import scan_ci_checks
 from lib.runner_envs import env_commands, read_envs, reads_runner_envs
 
 TOX_LINT = "[tox]\nenv_list = py, lint\n\n[testenv:lint]\ncommands =\n    ruff check {posargs:.}\n"

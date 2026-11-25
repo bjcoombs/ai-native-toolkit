@@ -215,7 +215,7 @@ FULL_RUN_ONLY_REASONS: frozenset[str] = frozenset(
 # ``--platform`` because it is a dependency of a listed scan.
 # ``merged_sample`` (lib/hosting/merged_sample.py, #715) is that shared sample: ``review_reality``
 # and ``delivery`` read it, and #716 extends the same two blocks on GitLab.
-# ``review_evidence`` (lib/review_automation.py, #696) is offline itself but reads
+# ``review_evidence`` (lib/ci/review_automation.py, #696) is offline itself but reads
 # ``review_reality``, so the platform pass rebuilds it from the measured block.
 # ``review_automation`` and ``ci_checks`` are offline too, but read the private network
 # spec ``gitlab_merged_ci`` (lib/hosting/gitlab_ci_lint.py, #796): GitLab's merged CI

@@ -1,4 +1,4 @@
-"""lib/ci_model_jobs.py (#1249): ``claude plugin eval`` is an ``agent_cli`` sign, and more package
+"""lib/ci/ci_model_jobs.py (#1249): ``claude plugin eval`` is an ``agent_cli`` sign, and more package
 managers' install lines are not signs.
 
 Each recognised form has a mirror: a job that only installs or names the CLI (in an ``echo``, a
@@ -14,7 +14,7 @@ import pytest
 
 import lib.level_tally as lt
 from lib.ci_masking import IndentTree, parse_lines
-from lib.ci_model_jobs import scan_ci_model_jobs, signs_in
+from lib.ci.ci_model_jobs import scan_ci_model_jobs, signs_in
 from lib.ci_shell_text import command_text
 
 CID = "model-ci-gated.1"

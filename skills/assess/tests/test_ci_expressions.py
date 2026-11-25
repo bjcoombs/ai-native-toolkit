@@ -1,6 +1,6 @@
 """Issues #1164 and #1165: a command or ``continue-on-error`` given as an expression or a
 shell variable reads unknown with a reason, never a false 0 and never enforced
-(``lib.ci_expressions``, ``lib.ci_matrix``, ``lib.ci_composite``)."""
+(``lib.ci.ci_expressions``, ``lib.ci.ci_matrix``, ``lib.ci_composite``)."""
 from __future__ import annotations
 
 import subprocess
@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from lib.ci_checks import scan_ci_checks
-from lib.ci_expressions import settle_expressions
+from lib.ci.ci_checks import scan_ci_checks
+from lib.ci.ci_expressions import settle_expressions
 
 
 def _scan(root: Path, files: dict[str, str]) -> tuple[object, ...]:

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from lib.ci_checks import scan_ci_checks
-from lib.ci_triggers import gitlab_line_triggers
+from lib.ci.ci_checks import scan_ci_checks
+from lib.ci.ci_triggers import gitlab_line_triggers
 
 _NIGHTLY = '.nightly:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == "schedule"\n'
 _MR = '.mr:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == "merge_request_event"\n'

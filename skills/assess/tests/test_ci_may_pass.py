@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.ci_checks import scan_ci_checks
+from lib.ci.ci_checks import scan_ci_checks
 from lib.ci_masking import mask_lines
 from lib.testing.coverage_gate import detect_coverage_gate
 
