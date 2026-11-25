@@ -1,0 +1,55 @@
+# The six sections of docs/contributing/definition-of-ready.md, in its order.
+# GitHub renders each field label as a `### <label>` heading in the issue body,
+# which is the heading the refinement script (#1320) will look for. Keep each label equal to
+# a name in that document's `sections` list (tests/test_issue_forms.py).
+name: Task, bug or feature
+description: Describe a change with a problem statement and checkable success criteria.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An issue is ready for an agent when it meets the checklist in
+        [the definition of ready](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/contributing/definition-of-ready.md).
+        Problem Statement and Success Criteria are required here; the other sections can follow in triage.
+  - type: textarea
+    id: problem-statement
+    attributes:
+      label: Problem Statement
+      description: What is wrong or missing, and who it affects. Describe the problem, not the fix.
+    validations:
+      required: true
+  - type: textarea
+    id: technical-context
+    attributes:
+      label: Technical Context
+      description: Files, modules, commands or prior issues involved. Paths relative to the repository root.
+    validations:
+      required: false
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: What changes for users or contributors once this is fixed.
+    validations:
+      required: false
+  - type: textarea
+    id: root-cause
+    attributes:
+      label: Root Cause
+      description: Why the problem exists, if known.
+    validations:
+      required: false
+  - type: textarea
+    id: solution-requirements
+    attributes:
+      label: Solution Requirements
+      description: What any fix must do. Numbered items.
+    validations:
+      required: false
+  - type: textarea
+    id: success-criteria
+    attributes:
+      label: Success Criteria
+      description: Numbered items, each checkable by a command or a test, with the command and its expected output.
+    validations:
+      required: true
