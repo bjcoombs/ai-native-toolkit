@@ -456,7 +456,7 @@ cat > "$REPO_ROOT/.assess/.cache/finalize-input.json" <<'EOF'
       "effort": "small",
       "files": [".golangci.yml"],
       "first_step": "Add 'cyclop' with max-complexity: 15 under linters",
-      "done_when": "golangci-lint run passes with the rule active; no new suppressions added",
+      "done_when": "`golangci-lint run` passes with the rule active; no new suppressions added",
       "scope_fence": "Only .golangci.yml; do not edit source files to chase pre-existing violations"
     }
   ]

@@ -33,7 +33,9 @@ Writes (when the input carries an ``actions`` array):
                                           preserves done state across re-runs)
 
 Then re-renders the top card's Start here and Done when from that actions.json
-(lib/card_refresh.py, #1252) in run-context.json and assess-report.md.
+(lib/card_refresh.py, #1252) in run-context.json and assess-report.md, and warns on
+stderr, naming the action, for each Top 3 ``done_when`` with no backticked command or path,
+link or number (lib/card_lint.py, the card's own line rule, #1300).
 
 Run:
     uv run assess_finalize.py <repo_root>
@@ -59,6 +61,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.action_conditions import condition_errors
+from lib.card_lint import done_when_warnings
 from lib.card_refresh import refresh_card
 from lib.headline import as_headline
 from lib.evidence_check import check_evidence, describe
@@ -673,6 +676,9 @@ def finalize_run(*, assess_dir: Path, repo_root: Path | None = None) -> None:
     actions = data.get("actions")
     if isinstance(actions, list) and actions:
         _write_actions_contract(assess_dir, actions, run_id=ctx.get("run_id"))
+        kept = [a for a in actions if isinstance(a, dict) and ACTION_REQUIRED_KEYS <= set(a)]
+        for w in done_when_warnings(kept):  # the card's Done when lint, on the entries written
+            print(f"finalize: warning: {w}", file=sys.stderr)
     # The core worded the card before this run's Top 3 existed: name its first open action now.
     card_warning = refresh_card(assess_dir)
     if card_warning:
