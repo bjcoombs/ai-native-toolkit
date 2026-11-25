@@ -62,8 +62,8 @@ from lib.run_wiki import refresh_log_readiness
 from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
 from lib.scan_plan import ScanPlan, run_plan
 from lib.scan_registry import run_scans
-from lib.scan_timings import TIMINGS_KEY, summary_line
 from lib.scan_registry import safe as _safe
+from lib.scan_timings import TIMINGS_KEY, summary_line
 from lib.testing.test_focus import mutation_scope
 from lib.test_pressure import scan_test_pressure
 
