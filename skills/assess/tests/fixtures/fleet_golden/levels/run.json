@@ -70,7 +70,7 @@
     },
     {
       "id": "core.ci_model_jobs",
-      "revision": 2
+      "revision": 3
     },
     {
       "id": "core.claude_config",
