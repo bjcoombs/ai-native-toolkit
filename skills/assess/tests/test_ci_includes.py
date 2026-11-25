@@ -279,6 +279,13 @@ def test_a_renamed_component_reads_its_new_project_clone(tmp_path: Path) -> None
     assert [(r["status"], r["rename"]) for r in records] == [("resolved", "followed")]
 
 
+def test_a_gate_after_a_followed_project_carries_no_rename(tmp_path: Path) -> None:
+    gate = "  - remote: https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v1/templates/assess-gate.yml\n"
+    root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL}, ci=OLD_INCLUDE + gate)
+    records = resolve_includes(app, root, MOVED).includes
+    assert [(r["status"], r["rename"]) for r in records] == [("resolved", "followed"), ("toolkit_gate", None)]
+
+
 def test_the_rename_token_survives_counts_only_output(tmp_path: Path) -> None:
     root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL}, ci=OLD_INCLUDE)
     out = counts_only_scans({"ci_checks": scan_ci_checks(app, root, include_renames=MOVED)})

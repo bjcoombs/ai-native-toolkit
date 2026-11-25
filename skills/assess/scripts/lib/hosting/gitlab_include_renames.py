@@ -26,7 +26,9 @@ calls :func:`no_include_renames`, which reads nothing, and every include with no
 - **What counts as checked.** An answer (the project, at any path) or ``not_found`` puts the
   path in ``IncludeRenames.checked``; an answer under another path adds ``(old, new)`` to
   ``moved``. A refused or failed read leaves the path unchecked, so its record says
-  ``not_checked`` rather than claim a look-up that did not happen. A host-wide failure
+  ``not_checked`` rather than claim a look-up that did not happen. GitLab answers 404 for a
+  project the token cannot see as for one that does not exist, so ``checked`` means no
+  visible move, not that the project was never renamed. A host-wide failure
   (``glab`` missing, not logged in, unreachable) stops the asking.
 
 Paths are compared lower-cased, as GitLab compares them and as ``ci_includes`` writes include
@@ -55,7 +57,9 @@ def _unread(repo_root: Path, ghsync_root: Path, renames: IncludeRenames) -> set[
     out: set[str] = set()
     for record in resolve_includes(repo_root, ghsync_root, renames).includes:
         prefix, ident = _PREFIXES.get(record["kind"]), record["id"]
-        if record["status"] != "not_cloned" or prefix is None or ident is None:
+        # rename null: a clone at the written path whose HEAD does not resolve, not a move
+        if record["status"] != "not_cloned" or record["rename"] is None or prefix is None \
+                or ident is None:
             continue
         path = ident[len(prefix):]
         if record["kind"] == "component":

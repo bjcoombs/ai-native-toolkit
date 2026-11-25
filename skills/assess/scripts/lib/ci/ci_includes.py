@@ -387,11 +387,11 @@ class _Walk:
             self.records.append({"kind": "unknown", "id": None, "status": "unparsed",
                                  "ref_basis": None, "depth": depth, "rename": None})
         for item in items:
+            self.rename = None  # before the gate: a remote gate never carries a project's rename
             if is_toolkit_gate(item.kind, item.source) and depth <= MAX_DEPTH:
                 self.gate(item, None, depth, self.conditional or item.conditional)
                 continue
             outer, self.conditional = self.conditional, self.conditional or item.conditional
-            self.rename = None
             self.one(item, here, depth, item.line if top_line is None else top_line)
             self.conditional = outer
 

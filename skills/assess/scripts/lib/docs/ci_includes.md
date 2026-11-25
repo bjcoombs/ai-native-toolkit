@@ -77,7 +77,7 @@ id as written.
 | `rename` | Meaning |
 |----------|---------|
 | `followed` | No clone at the written path; read from the clone at the path the API answered under. |
-| `checked` | No clone at the written path; the API answered (or said not found), and no clone exists at a new path. |
+| `checked` | No clone at the written path; the API answered (or said not found), and no clone exists at a new path. GitLab answers 404 for a project the token cannot see as for one that does not exist, so `checked` is no visible move, not proof the project was never renamed. |
 | `not_checked` | No clone at the written path, and no lookup answered: an offline run, a refused read, or no GitLab remote. |
 | null | Every other include, a cloned project included. |
 
