@@ -97,6 +97,7 @@ def test_installing_or_naming_the_cli_is_not_a_sign(command: str) -> None:
     ("jobs:\n  j:\n    steps:\n      - run: |\n          # claude plugin eval .\n          make test\n", []),
     ("jobs:\n  j:\n    steps:\n      - run: |\n          echo \"next:\n          claude plugin eval\"\n", []),
     ("evals:\n  script:\n    - echo \"claude plugin eval\"\n", []),
+    ("jobs:\n  j:\n    steps:\n      - run: |\n          make test\n        name: Skip claude plugin eval\n", []),
     ("evals:\n  script:\n    - >\n      npm install -g\n      @anthropic-ai/claude-code\n", []),
 ])
 def test_a_multi_line_body_is_read_as_the_shell_reads_it(text: str, signs: list[str]) -> None:

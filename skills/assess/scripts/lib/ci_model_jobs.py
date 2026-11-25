@@ -222,10 +222,10 @@ def _list(tree: IndentTree, i: int) -> list[str] | None:
 
 def _block_text(tree: IndentTree, i: int) -> str:
     """A block scalar's lines as the shell reads them: a ``\\`` continuation (or a folded ``>``)
-    joins the next line. A ``- >`` list item's lines may sit at its own key column, where
+    joins the next line. A keyless ``- >`` list item's lines may sit at its own key column, where
     ``parse_lines`` does not own them, so its lines are those indented past its dash."""
     body = [tree.lines[j].value for j in range(i + 1, len(tree.lines)) if tree.owner[j] == i]
-    if tree.lines[i].dash:
+    if tree.lines[i].dash and not tree.lines[i].key:  # a ``- run: |`` step's siblings are keys
         end = next((j for j in range(i + 1, len(tree.lines))
                     if tree.lines[j].structural and tree.lines[j].indent <= tree.lines[i].indent), len(tree.lines))
         body = [(f"{x.key}: " if x.key else "") + x.value for x in tree.lines[i + 1:end]]
