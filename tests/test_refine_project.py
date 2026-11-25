@@ -180,6 +180,23 @@ def test_a_missing_field_stops_before_any_write(tmp_path: Path, drop: str) -> No
         project(tmp_path, gh)
 
 
+def test_a_truncated_item_list_stops_before_any_write(tmp_path: Path) -> None:
+    gh = FakeProjectGh([item(5)])
+    real = gh.__call__
+
+    def truncated(args: Sequence[str]) -> str:
+        out = real(args)
+        if args[1] == "item-list":
+            data = json.loads(out)
+            data["totalCount"] = rp.ITEM_LIMIT + 1
+            return json.dumps(data)
+        return out
+
+    with pytest.raises(rp.ProjectError, match="only 1 were listed"):
+        rp.Project(3, "acme", FIXTURE_REPO, settings(tmp_path), truncated)
+    assert gh.writes == []
+
+
 def test_a_missing_status_option_stops_before_any_write(tmp_path: Path) -> None:
     fields = json.loads(json.dumps(FIELDS))
     fields["fields"][0]["options"] = [o for o in fields["fields"][0]["options"] if o["name"] != "Blocked"]

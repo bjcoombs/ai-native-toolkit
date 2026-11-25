@@ -30,7 +30,9 @@ marker or a `Size: N points` body line), cleared when the issue has none.
 **Verdict:** the verdict's `verdict`.
 
 Only a field whose value differs is written, so a second run with nothing
-changed makes no write. The project's fields must be named `Status`
+changed makes no write. A project with more items than one `item-list` call
+returns (2000) stops the run before any write, since an unlisted item would
+read as missing. The project's fields must be named `Status`
 (single select, with the six options above), `Size` (number) and `Verdict`
 (single select: `ready`, `needs_judgement`, `not_ready`); a missing field or
 option stops the run before any write (exit 2).
@@ -58,7 +60,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, Sequence, Set
+from typing import Any, Callable, Dict, Optional, Sequence, Set
 
 from refine_write import QUESTIONS_MARKER, GhError, Json, Runner, Settings, Writer, gh_runner, json_values
 
@@ -106,7 +108,7 @@ def status_for(entry: Json, ready_label: str, in_progress_label: str, waiting: S
     return STATUS_NEEDS_REFINEMENT
 
 
-def waiting_issues(comments: Sequence[Json], is_bot: Any) -> Set[int]:
+def waiting_issues(comments: Sequence[Json], is_bot: Callable[[Any], bool]) -> Set[int]:
     """Issues named in a refiner questions comment with no later reply naming them.
 
     `comments` are the questions issue's comments, oldest first (the REST
@@ -175,6 +177,11 @@ class Project:
         self.fields: Dict[str, Json] = {str(f.get("name")): f for f in fields}
         self._check_shape()
         items = _one(self.run(["project", "item-list", self.number, *where, "--limit", str(ITEM_LIMIT)]))
+        listed, total = len(items.get("items", [])), int(items.get("totalCount") or 0)
+        if total > listed:
+            # An item past the limit would read as missing and be rewritten every run.
+            raise ProjectError(f"the project has {total} items and only {listed} were listed; "
+                               f"the sync reads at most {ITEM_LIMIT}")
         self.items: Dict[int, Json] = {}
         for item in items.get("items", []):
             content = item.get("content") or {}

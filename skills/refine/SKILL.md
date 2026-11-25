@@ -61,7 +61,7 @@ Run every plan through the apply step in dry-run. `REFINE_MODE` is unset, so the
 
 ```bash
 export GH_REPO="$REPO" REFINE_STATE_DIR="$WORK/state"
-export REFINE_ALLOWED_LABELS="$(gh label list --limit 200 --json name | jq -r '[.[].name] | join(",")')"
+export REFINE_ALLOWED_LABELS="${REFINE_ALLOWED_LABELS:-agent-ready,needs-triage,bug,enhancement,documentation,question}"   # the workflows' default
 for plan in "$WORK"/plan-*.json; do
   n=$(jq -r .issue "$plan")
   python3 "$S/refine_apply.py" triage --verdict "$WORK/verdict.json" --issue "$n" --plan "$plan"
