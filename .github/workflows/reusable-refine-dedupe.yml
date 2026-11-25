@@ -28,13 +28,6 @@ on:
       issue_number:
         type: number
         required: true
-      toolkit_repository:
-        type: string
-        default: bjcoombs/ai-native-toolkit
-      toolkit_ref:
-        description: The toolkit release tag (v1.2.3) or full commit sha; keep it equal to the ref in your `uses:` line. Not needed in the toolkit repository itself.
-        type: string
-        default: ''
       model:
         description: A Sonnet-class model.
         type: string
@@ -78,6 +71,7 @@ jobs:
     outputs:
       model: ${{ steps.route.outputs.model }}
       planned: ${{ steps.save.outputs.planned }}
+      verdict_sha256: ${{ steps.digest.outputs.sha256 }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -92,40 +86,37 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      # In the toolkit's own repository the scripts come from the
-      # default-branch checkout above. Elsewhere they come from the toolkit
-      # at a release tag (v<semver>) or a full commit sha. A branch name is
-      # refused. Only the sha is immutable: a tag can be moved, so pin the
-      # sha when the toolkit must not change under you.
-      - name: Validate the toolkit ref
+      # The refinement scripts come from the commit this reusable workflow was
+      # called at (job.workflow_repository at job.workflow_sha): the ref the
+      # caller pinned in its `uses:` line. No input chooses the code, and a
+      # missing or malformed value fails the job.
+      - name: Pin the refinement scripts to this workflow's commit
         id: toolkit
         env:
-          TOOLKIT_REPO: ${{ inputs.toolkit_repository }}
-          TOOLKIT_REF: ${{ inputs.toolkit_ref }}
+          TOOLKIT_REPO: ${{ job.workflow_repository }}
+          TOOLKIT_SHA: ${{ job.workflow_sha }}
         run: |
-          if [ "$TOOLKIT_REPO" = "$GITHUB_REPOSITORY" ]; then
-            echo "source=local" >> "$GITHUB_OUTPUT"
-          elif [[ "$TOOLKIT_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || "$TOOLKIT_REF" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "source=external" >> "$GITHUB_OUTPUT"
-            echo "ref=$TOOLKIT_REF" >> "$GITHUB_OUTPUT"
-          else
-            echo "::error::toolkit_ref must be a release tag (v1.2.3) or a full commit sha, not '${TOOLKIT_REF}'."
+          if [ "$TOOLKIT_REPO" != "bjcoombs/ai-native-toolkit" ] && [ "$TOOLKIT_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::The refinement scripts come only from bjcoombs/ai-native-toolkit or this repository, not '${TOOLKIT_REPO}'."
+            exit 1
+          fi
+          if [[ ! "$TOOLKIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The refinement scripts are pinned only to a full commit sha, not '${TOOLKIT_SHA}'."
             exit 1
           fi
 
-      - name: Use this repository's refinement scripts
-        if: steps.toolkit.outputs.source == 'local'
-        run: ln -s . .refine-toolkit
-
       - name: Check out the refinement scripts
-        if: steps.toolkit.outputs.source == 'external'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          repository: ${{ inputs.toolkit_repository }}
-          ref: ${{ steps.toolkit.outputs.ref }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: .refine-toolkit
           fetch-depth: 1
           persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            skills/refine/
+            docs/contributing/definition-of-ready.md
 
       - name: Write the deterministic verdict
         timeout-minutes: 5
@@ -133,6 +124,12 @@ jobs:
           mkdir -p .refine
           python3 .refine-toolkit/skills/refine/scripts/refine.py --repo "$GH_REPO" --issue "$ISSUE" \
             --out .refine/verdict.json
+
+      # The apply job trusts this verdict for agent-ready and closes, so its
+      # digest is taken before the model runs and checked again in apply.
+      - name: Record the verdict digest
+        id: digest
+        run: echo "sha256=$(sha256sum .refine/verdict.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Route
         id: route
@@ -245,46 +242,47 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      # In the toolkit's own repository the scripts come from the
-      # default-branch checkout above. Elsewhere they come from the toolkit
-      # at a release tag (v<semver>) or a full commit sha. A branch name is
-      # refused. Only the sha is immutable: a tag can be moved, so pin the
-      # sha when the toolkit must not change under you.
-      - name: Validate the toolkit ref
+      # The refinement scripts come from the commit this reusable workflow was
+      # called at (job.workflow_repository at job.workflow_sha): the ref the
+      # caller pinned in its `uses:` line. No input chooses the code, and a
+      # missing or malformed value fails the job.
+      - name: Pin the refinement scripts to this workflow's commit
         id: toolkit
         env:
-          TOOLKIT_REPO: ${{ inputs.toolkit_repository }}
-          TOOLKIT_REF: ${{ inputs.toolkit_ref }}
+          TOOLKIT_REPO: ${{ job.workflow_repository }}
+          TOOLKIT_SHA: ${{ job.workflow_sha }}
         run: |
-          if [ "$TOOLKIT_REPO" = "$GITHUB_REPOSITORY" ]; then
-            echo "source=local" >> "$GITHUB_OUTPUT"
-          elif [[ "$TOOLKIT_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || "$TOOLKIT_REF" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "source=external" >> "$GITHUB_OUTPUT"
-            echo "ref=$TOOLKIT_REF" >> "$GITHUB_OUTPUT"
-          else
-            echo "::error::toolkit_ref must be a release tag (v1.2.3) or a full commit sha, not '${TOOLKIT_REF}'."
+          if [ "$TOOLKIT_REPO" != "bjcoombs/ai-native-toolkit" ] && [ "$TOOLKIT_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::The refinement scripts come only from bjcoombs/ai-native-toolkit or this repository, not '${TOOLKIT_REPO}'."
+            exit 1
+          fi
+          if [[ ! "$TOOLKIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The refinement scripts are pinned only to a full commit sha, not '${TOOLKIT_SHA}'."
             exit 1
           fi
 
-      - name: Use this repository's refinement scripts
-        if: steps.toolkit.outputs.source == 'local'
-        run: ln -s . .refine-toolkit
-
       - name: Check out the refinement scripts
-        if: steps.toolkit.outputs.source == 'external'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          repository: ${{ inputs.toolkit_repository }}
-          ref: ${{ steps.toolkit.outputs.ref }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: .refine-toolkit
           fetch-depth: 1
           persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            skills/refine/scripts/
 
       - name: Fetch the verdict and plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: refine-dedupe-plan-${{ inputs.issue_number }}-${{ github.run_attempt }}
           path: .refine
+
+      - name: Check the verdict is the one written before the model ran
+        env:
+          EXPECTED: ${{ needs.plan.outputs.verdict_sha256 }}
+        run: echo "$EXPECTED  .refine/verdict.json" | sha256sum --check --strict
 
       - name: Close an exact duplicate (no model)
         if: needs.plan.outputs.model == 'false'

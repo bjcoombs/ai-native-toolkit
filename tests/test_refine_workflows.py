@@ -135,7 +135,7 @@ def test_reusable_is_workflow_call_only_and_safe_by_default(name: str) -> None:
 @pytest.mark.parametrize("name", sorted(CALLERS.values()))
 def test_reusable_inputs_cover_mode_labels_and_close_cap(name: str) -> None:
     inputs = set(_load(name)["on"]["workflow_call"]["inputs"])
-    assert {"enabled", "mode", "toolkit_repository", "toolkit_ref"} <= inputs
+    assert {"enabled", "mode"} <= inputs
     if name != "reusable-refine-dedupe.yml":
         assert {"ready_label", "triage_label", "allowed_labels", "questions_issue"} <= inputs
     if name != "reusable-refine-triage.yml":
@@ -256,75 +256,79 @@ def test_every_write_script_runs_one_refine_write_subcommand() -> None:
         assert re.search(r'exec python3 "\$\(dirname "\$0"\)/refine_write\.py" [a-z-]+ "\$@"', text), name
 
 
+# ── the refinement scripts: pinned to the workflow's own commit ─────────
+
+SPARSE_READS = {"skills/refine/", "docs/contributing/definition-of-ready.md"}
+SPARSE_WRITES = {"skills/refine/scripts/"}
+
+
+def _jobs_steps(name: str) -> "List[tuple[str, List[Dict[str, Any]]]]":
+    return [(job_id, job["steps"]) for job_id, job in _load(name)["jobs"].items()]
+
+
 @pytest.mark.parametrize("name", sorted(CALLERS.values()))
-def test_toolkit_scripts_come_from_the_default_branch_in_this_repository(name: str) -> None:
-    for job in _load(name)["jobs"].values():
-        steps = job["steps"]
+def test_scripts_are_checked_out_at_the_workflow_sha_only(name: str) -> None:
+    assert not {"toolkit_repository", "toolkit_ref"} & set(_load(name)["on"]["workflow_call"]["inputs"]), \
+        "no input chooses the code that runs with a write token"
+    for job_id, steps in _jobs_steps(name):
         assert steps[0]["with"]["ref"] == "${{ github.event.repository.default_branch }}"
-        link = next(s for s in steps if s.get("run") == "ln -s . .refine-toolkit")
-        assert link["if"] == "steps.toolkit.outputs.source == 'local'"
-    for caller, reusable in CALLERS.items():
-        if reusable == name:
-            job = next(iter(_load(caller)["jobs"].values()))
-            assert "toolkit_repository" not in job["with"], "the default names this repository"
+        pin = next(s for s in steps if s.get("id") == "toolkit")
+        assert pin["env"] == {"TOOLKIT_REPO": "${{ job.workflow_repository }}", "TOOLKIT_SHA": "${{ job.workflow_sha }}"}
+        ext = next(s for s in steps if s.get("with", {}).get("path") == ".refine-toolkit")
+        assert steps.index(pin) < steps.index(ext)
+        assert ext["with"]["repository"] == "${{ job.workflow_repository }}"
+        assert ext["with"]["ref"] == "${{ job.workflow_sha }}"
+        assert ext["with"]["persist-credentials"] is False
+        sparse = set(ext["with"]["sparse-checkout"].split())
+        writes = job_id in ("apply", "reopen")
+        assert sparse == (SPARSE_WRITES if writes else SPARSE_READS), job_id
 
 
+@pytest.mark.parametrize("name", sorted(CALLERS.values()))
+def test_write_jobs_run_only_the_refine_scripts(name: str) -> None:
+    for job_id, steps in _jobs_steps(name):
+        runs = " ".join(str(s.get("run", "")) for s in steps)
+        for banned in ("pip ", "pip3 ", "uv ", "npm ", "make ", "setup.py"):
+            assert banned not in runs, (job_id, banned)
+        if job_id in ("apply", "reopen"):
+            assert "refine.py" not in runs, "the write job runs only refine_apply.py and the write scripts"
 
-# ── toolkit ref: immutable refs only ─────────────────────────────────────
 
-def _validate_step(name: str) -> Dict[str, Any]:
-    steps = next(iter(_load(name)["jobs"].values()))["steps"]
-    return next(s for s in steps if s.get("id") == "toolkit")
+def _pin_step(name: str) -> Dict[str, Any]:
+    return next(s for s in _load(name)["jobs"][next(iter(_load(name)["jobs"]))]["steps"] if s.get("id") == "toolkit")
 
 
-def _run_validate(tmp_path: Path, name: str, repo: str, ref: str) -> "tuple[int, str]":
-    out = tmp_path / "out"
-    out.write_text("", encoding="utf-8")
-    env = {"PATH": os.environ["PATH"], "GITHUB_OUTPUT": str(out), "GITHUB_REPOSITORY": "bjcoombs/ai-native-toolkit",
-           "TOOLKIT_REPO": repo, "TOOLKIT_REF": ref}
-    proc = subprocess.run(["bash", "-c", _validate_step(name)["run"]], env=env, capture_output=True, text=True,
+def _run_pin(tmp_path: Path, name: str, repo: str, sha: str, caller: str = "acme/widgets") -> int:
+    env = {"PATH": os.environ["PATH"], "GITHUB_REPOSITORY": caller, "TOOLKIT_REPO": repo, "TOOLKIT_SHA": sha}
+    proc = subprocess.run(["bash", "-c", _pin_step(name)["run"]], env=env, capture_output=True, text=True,
                           encoding="utf-8", errors="replace", check=False)
-    return proc.returncode, out.read_text(encoding="utf-8")
+    return proc.returncode
 
 
 needs_bash = pytest.mark.skipif(sys.platform == "win32" or shutil.which("bash") is None,
                                 reason="the step runs under bash on Linux runners")
+SHA = "4411a9e9b0283becf4b924f7bce360fd7756c78c"
 
 
 @needs_bash
 @pytest.mark.parametrize("name", sorted(CALLERS.values()))
-@pytest.mark.parametrize("ref", ["main", "develop", "refs/heads/main", "v1", "v1.2", "v1.2.3-rc1", "4411a9e", "",
-                                 "v1.2.3; curl evil", "4411A9E9B0283BECF4B924F7BCE360FD7756C78C"])
-def test_branch_or_loose_toolkit_ref_fails_the_job(tmp_path: Path, name: str, ref: str) -> None:
-    code, out = _run_validate(tmp_path, name, "acme/toolkit-fork", ref)
-    assert code == 1 and out == ""
+@pytest.mark.parametrize("sha", ["main", "refs/heads/main", "v3.0.0", "4411a9e", "", f"{SHA}; curl evil", SHA.upper()])
+def test_branch_name_or_loose_ref_fails_the_job(tmp_path: Path, name: str, sha: str) -> None:
+    assert _run_pin(tmp_path, name, "bjcoombs/ai-native-toolkit", sha) == 1
 
 
 @needs_bash
 @pytest.mark.parametrize("name", sorted(CALLERS.values()))
-@pytest.mark.parametrize("ref", ["v3.0.0", "v12.40.7", "4411a9e9b0283becf4b924f7bce360fd7756c78c"])
-def test_release_tag_or_full_sha_is_checked_out(tmp_path: Path, name: str, ref: str) -> None:
-    code, out = _run_validate(tmp_path, name, "acme/toolkit-fork", ref)
-    assert code == 0 and out == f"source=external\nref={ref}\n"
+@pytest.mark.parametrize("repo", ["attacker/ai-native-toolkit", "bjcoombs/ai-native-toolkit-fork", ""])
+def test_scripts_from_another_repository_fail_the_job(tmp_path: Path, name: str, repo: str) -> None:
+    assert _run_pin(tmp_path, name, repo, SHA) == 1
 
 
 @needs_bash
 @pytest.mark.parametrize("name", sorted(CALLERS.values()))
-def test_toolkit_repository_itself_uses_the_default_branch_checkout(tmp_path: Path, name: str) -> None:
-    code, out = _run_validate(tmp_path, name, "bjcoombs/ai-native-toolkit", "main")
-    assert code == 0 and out == "source=local\n"
-
-
-@pytest.mark.parametrize("name", sorted(CALLERS.values()))
-def test_checkout_uses_only_the_validated_ref(name: str) -> None:
-    text = (WORKFLOWS / name).read_text(encoding="utf-8")
-    assert "ref: ${{ inputs.toolkit_ref }}" not in text
-    assert _load(name)["on"]["workflow_call"]["inputs"]["toolkit_ref"]["default"] == ""
-    for job in _load(name)["jobs"].values():
-        ext = next(s for s in job["steps"] if s.get("with", {}).get("path") == ".refine-toolkit")
-        assert ext["with"]["ref"] == "${{ steps.toolkit.outputs.ref }}"
-        assert ext["if"] == "steps.toolkit.outputs.source == 'external'"
-        assert ext["with"]["persist-credentials"] is False
+@pytest.mark.parametrize("repo", ["bjcoombs/ai-native-toolkit", "acme/widgets"])
+def test_toolkit_or_own_repository_at_a_full_sha_passes(tmp_path: Path, name: str, repo: str) -> None:
+    assert _run_pin(tmp_path, name, repo, SHA) == 0
 
 
 @pytest.mark.parametrize("name", sorted(CALLERS.values()))
@@ -334,7 +338,6 @@ def test_no_cache_in_jobs_with_a_write_token(name: str) -> None:
         assert not uses.startswith("actions/cache"), uses
         assert not uses.startswith("actions/setup-"), uses
         assert "cache" not in step.get("with", {}), uses
-
 
 
 # ── the model never holds a write token (#1336 review) ───────────────────
@@ -372,3 +375,8 @@ def test_apply_job_runs_no_model_and_reads_the_plan_artifact(name: str) -> None:
     assert re.fullmatch(r"actions/download-artifact@[0-9a-f]{40}", download["uses"])
     runs = " ".join(str(s.get("run", "")) for s in apply["steps"])
     assert "--plan .refine/plan.json" in runs, "the plan is validated by refine_apply.py before any write"
+    assert 'sha256sum --check --strict' in runs, "apply checks the verdict digest taken before the model ran"
+    plan_steps = jobs["plan"]["steps"]
+    digest = next(i for i, s in enumerate(plan_steps) if s.get("id") == "digest")
+    model = next(i for i, s in enumerate(plan_steps) if s.get("id") == "model")
+    assert digest < model
