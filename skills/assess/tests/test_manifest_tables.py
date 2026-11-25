@@ -135,7 +135,7 @@ def test_level_reads_are_pinned_to_the_tally_order() -> None:
     """core_scans.level zips its blocks with LEVEL_READS, then reads the run's model choice
     (#1150), so the manifest list must match."""
     level = next(s for s in sr.SCANS if s.key == "level")
-    assert sr.pinned_reads(level, (*LEVEL_READS, "maturity_model")) is level
-    swapped = (LEVEL_READS[1], LEVEL_READS[0], *LEVEL_READS[2:], "maturity_model")
+    assert sr.pinned_reads(level, (*LEVEL_READS, "maturity_model", "pack")) is level
+    swapped = (LEVEL_READS[1], LEVEL_READS[0], *LEVEL_READS[2:], "maturity_model", "pack")
     with pytest.raises(sr.ScanRegistryError, match="zips"):
         sr.pinned_reads(level, swapped)

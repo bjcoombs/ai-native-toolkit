@@ -9,7 +9,8 @@ the scans a model reads are known up front.
 `plan_scans(blocks, table)` is the set of registry keys a run needs: the frame
 (`frame_keys`: every non-degrading setup entry, which is the run's own state and the publish
 step's inputs, plus `FRAME_SCANS`: the headline, the level with its owner exclusions, the
-offers, the decline markers and the anomalies), the collector of every block in `blocks`,
+offers, the decline markers, the anomalies and the practice pack checks, #1273, which
+write nothing without ``--pack``), the collector of every block in `blocks`,
 and every entry those read, transitively. `MODEL_READERS` (`level`) read whatever the model
 names, so their declared reads (the default model's blocks) are not followed: the blocks
 passed in stand for them; `OPTIONAL_READS` (the top card's unit roll-up) are not followed
@@ -49,10 +50,14 @@ NOT_RUN_CODE = "not_run"
 # Entries every narrowed run keeps besides the setup gates: the level and the headline
 # worded from it (with what changed since the last run), the owner's exclusions the level
 # reads, the offers and decline markers the orchestrator reads, the anomalies, the
-# generated-file disclosure and the plugin version.
+# generated-file disclosure and the plugin version. And the practice pack checks (#1273): a
+# plan needs them whenever a pack is passed or the model reads a ``pack.`` path, and without
+# --pack the entry writes nothing, while a skipped entry would leave a not-run marker under
+# ``pack`` and ``packs``; so it is always in the frame.
 FRAME_SCANS: tuple[str, ...] = (
     "plugin_version", "decline", "owner_exclusions", "offers_block", "excluded_generated",
     "uninstall_instructions_path", "anomalies", "level", "since_last_run", "headline",
+    "pack_checks",
 )
 
 # Entries whose reads are the model's blocks, not a fixed list: the model decides.

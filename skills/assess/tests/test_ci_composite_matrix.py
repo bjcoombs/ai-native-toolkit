@@ -1,4 +1,4 @@
-"""Issue #923: ``lib.ci_checks`` follows a local composite action one level and reads a
+"""Issue #923: ``lib.ci_checks`` follows a local composite action (nested ones too, #1194) and reads a
 literal matrix command (``lib.ci_composite``, ``lib.ci_matrix``), in both directions."""
 from __future__ import annotations
 
@@ -95,10 +95,17 @@ def test_only_a_local_composite_is_read(tmp_path: Path, uses: str, files: dict[s
 _NULL = (None, None, "check_target", None, "check_target")
 
 
-def test_a_nested_local_action_is_not_followed_and_reads_null(tmp_path: Path) -> None:
+def test_a_nested_local_action_is_followed(tmp_path: Path) -> None:
+    # #1194: nested local composites are followed (cycles and unreadable ones read null,
+    # tests/test_ci_composite_lint.py).
     outer = "runs:\n  using: composite\n  steps:\n    - name: x\n      uses: ./.github/actions/inner\n"
     files = _wf(_CALL) | {_ACT: outer, ".github/actions/inner/action.yml": _action("pytest")}
-    assert _scan(tmp_path, files) == _NULL
+    assert _scan(tmp_path, files)[:3] == (True, True, "enforced_check")
+
+
+def test_a_missing_nested_local_action_reads_null(tmp_path: Path) -> None:
+    outer = "runs:\n  using: composite\n  steps:\n    - name: x\n      uses: ./.github/actions/inner\n"
+    assert _scan(tmp_path, _wf(_CALL) | {_ACT: outer}) == _NULL
 
 
 def test_a_masked_nested_local_action_reads_false(tmp_path: Path) -> None:
