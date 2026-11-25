@@ -73,7 +73,9 @@ PROSE_BODY = ("## Problem Statement\n\nbody problem\n\n"
 
 
 def clarified(created_at, text):
-    return {"body": "<!-- triage:clarified-scope -->\n" + text, "createdAt": created_at}
+    # From the maintainer: only a trusted author's clarified scope counts.
+    return {"body": "<!-- triage:clarified-scope -->\n" + text, "createdAt": created_at,
+            "author": {"login": "maintainer"}, "authorAssociation": "OWNER"}
 
 
 def criteria_result(definition, comments):
@@ -178,6 +180,30 @@ def test_marker_must_be_the_first_line(definition):
     issue = refine_platform.github_issue({"number": 9, "createdAt": "2026-11-01T00:00:00Z", "comments": [
         {"body": "Context first.\n<!-- refine:size 2 -->", "createdAt": "2026-11-02T00:00:00Z"}]})
     assert refine_checks.size_reading(issue, definition) == (None, None)
+
+
+@pytest.mark.parametrize("author, association, counted", [
+    ({"login": "outsider"}, "NONE", False),
+    ({"login": "outsider"}, "CONTRIBUTOR", False),
+    ({"login": "maintainer"}, "OWNER", True),
+    ({"login": "github-actions"}, "NONE", True),
+])
+def test_size_marker_counts_only_from_a_trusted_author(definition, author, association, counted):
+    issue = refine_platform.github_issue({"number": 9, "createdAt": "2026-11-01T00:00:00Z", "body": "Size: 8 points",
+        "comments": [{"author": author, "authorAssociation": association,
+                      "body": "<!-- refine:size 1 -->\nsmall", "createdAt": "2026-11-02T00:00:00Z"}]})
+    expected = (1, "marker") if counted else (8, "body")
+    assert refine_checks.size_reading(issue, definition) == expected
+
+
+def test_clarified_scope_counts_only_from_a_trusted_author():
+    comment = {"body": "<!-- triage:clarified-scope -->\n## Success Criteria\n\n1. done", "createdAt": "2026-11-02T00:00:00Z"}
+    outsider = refine_platform.github_issue({"number": 9, "createdAt": "2026-11-01T00:00:00Z", "body": "b",
+        "comments": [{**comment, "author": {"login": "x"}, "authorAssociation": "NONE"}]})
+    owner = refine_platform.github_issue({"number": 9, "createdAt": "2026-11-01T00:00:00Z", "body": "b",
+        "comments": [{**comment, "author": {"login": "m"}, "authorAssociation": "OWNER"}]})
+    assert refine_checks.text_sources(outsider) == ["b"]
+    assert len(refine_checks.text_sources(owner)) == 2
 
 
 def test_unsized_issue_needs_sizing_and_is_not_otherwise_held(plan):

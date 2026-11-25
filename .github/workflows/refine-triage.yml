@@ -1,0 +1,44 @@
+name: Refine triage
+
+# This repository's caller for reusable-refine-triage.yml (issue #1321).
+# Settings are repository variables:
+#   REFINE_ENABLED          the kill switch: anything but `true` skips the run
+#   REFINE_MODE             `live` writes; unset or anything else is a dry-run
+#   REFINE_QUESTIONS_ISSUE  the issue that collects questions for the maintainer
+# The credential is the secret REFINE_ANTHROPIC_API_KEY, or the Workload
+# Identity Federation variables below.
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+# The union of what the reusable workflow's jobs declare. The model runs in
+# a job with `issues: read`; only the apply job, which runs no model, gets
+# `issues: write`. pull-requests: read lets refine.py read open pull requests
+# for its overlap check. id-token: write is the OIDC token Workload Identity
+# Federation exchanges; it writes nothing to the repository.
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  id-token: write
+
+jobs:
+  triage:
+    if: >-
+      vars.REFINE_ENABLED == 'true' &&
+      (github.event_name == 'issues' ||
+       (!github.event.issue.pull_request && github.event.comment.user.type != 'Bot'))
+    uses: ./.github/workflows/reusable-refine-triage.yml
+    with:
+      enabled: ${{ vars.REFINE_ENABLED == 'true' }}
+      mode: ${{ vars.REFINE_MODE || 'dry-run' }}
+      issue_number: ${{ github.event.issue.number }}
+      questions_issue: ${{ vars.REFINE_QUESTIONS_ISSUE }}
+      anthropic_federation_rule_id: ${{ vars.REFINE_ANTHROPIC_FEDERATION_RULE_ID }}
+      anthropic_organization_id: ${{ vars.REFINE_ANTHROPIC_ORGANIZATION_ID }}
+      anthropic_service_account_id: ${{ vars.REFINE_ANTHROPIC_SERVICE_ACCOUNT_ID }}
+      anthropic_workspace_id: ${{ vars.REFINE_ANTHROPIC_WORKSPACE_ID }}
+    secrets:
+      anthropic_api_key: ${{ secrets.REFINE_ANTHROPIC_API_KEY }}

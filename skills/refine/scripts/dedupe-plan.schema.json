@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dedupe-plan.schema.json",
+  "title": "Refiner dedupe plan",
+  "description": "What the /dedupe command returns for one issue (issue #1321): at most three open issues that may cover the same work. A candidate is only ever named in a comment; closing needs an exact pair from the refinement script.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["issue", "candidates", "summary"],
+  "properties": {
+    "issue": {"type": "integer", "minimum": 1},
+    "candidates": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["number", "reason"],
+        "properties": {
+          "number": {"type": "integer", "minimum": 1},
+          "reason": {"type": "string", "maxLength": 300}
+        }
+      }
+    },
+    "summary": {"type": "string", "maxLength": 1000}
+  }
+}

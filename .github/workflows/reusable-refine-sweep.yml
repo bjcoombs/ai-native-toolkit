@@ -1,0 +1,139 @@
+name: Refine sweep (reusable)
+
+# The scheduled backlog refinement pass (issues #1321, #1327). No model runs.
+# Adopt it with one `uses:` line from a scheduled workflow; refine-sweep.yml
+# is the reference caller.
+#
+#   1. skills/refine/scripts/refine.py checks every open issue.
+#   2. A settled, ready issue gets the ready label, unless a person removed it.
+#   3. Exact duplicate pairs with both issues open are closed, under the
+#      weekly close cap.
+#   4. The ready-buffer depth and the critical path are posted to the
+#      questions issue, as one comment edited in place.
+#
+# Permissions: grant `contents: read` and `issues: write` in the caller. The
+# job declares the same two, so it never runs with more, whatever the caller
+# grants. No job here uses actions/cache or a setup-* cache.
+on:
+  workflow_call:
+    inputs:
+      enabled:
+        description: Kill switch. Pass `vars.REFINE_ENABLED == 'true'`; false skips the job.
+        type: boolean
+        default: false
+      mode:
+        description: "`live` writes; any other value, including empty, is a dry-run."
+        type: string
+        default: dry-run
+      ready_label:
+        type: string
+        default: agent-ready
+      triage_label:
+        type: string
+        default: needs-triage
+      allowed_labels:
+        type: string
+        default: agent-ready,needs-triage,bug,enhancement,documentation,question
+      close_cap:
+        description: The most duplicate closes the bot may make in any 7 days.
+        type: number
+        default: 10
+      builder_slots:
+        description: Builder slots; the ready-buffer target is twice this.
+        type: number
+        default: 5
+      questions_issue:
+        description: The issue that receives the ready-buffer report.
+        type: string
+        default: ''
+
+jobs:
+  sweep:
+    if: inputs.enabled
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # refine.py reads open pull requests for its overlap check.
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    concurrency:
+      group: refine-sweep-${{ github.repository }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      REFINE_MODE: ${{ inputs.mode }}
+      REFINE_READY_LABEL: ${{ inputs.ready_label }}
+      REFINE_TRIAGE_LABEL: ${{ inputs.triage_label }}
+      REFINE_ALLOWED_LABELS: ${{ inputs.allowed_labels }}
+      REFINE_CLOSE_CAP: ${{ inputs.close_cap }}
+      REFINE_QUESTIONS_ISSUE: ${{ inputs.questions_issue }}
+      CLAUDE_CODE_SCRIPT_CAPS: '{"edit-issue-labels.sh":30,"close-duplicate.sh":10,"post-buffer-report.sh":1}'
+      APPLY: .refine-toolkit/skills/refine/scripts/refine_apply.py
+    steps:
+      - name: Check out the repository (default branch)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      # The refinement scripts come from the commit this reusable workflow was
+      # called at (job.workflow_repository at job.workflow_sha): the ref the
+      # caller pinned in its `uses:` line. No input chooses the code, and a
+      # missing or malformed value fails the job.
+      - name: Pin the refinement scripts to this workflow's commit
+        id: toolkit
+        env:
+          TOOLKIT_REPO: ${{ job.workflow_repository }}
+          TOOLKIT_SHA: ${{ job.workflow_sha }}
+        run: |
+          if [ "$TOOLKIT_REPO" != "bjcoombs/ai-native-toolkit" ] && [ "$TOOLKIT_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::The refinement scripts come only from bjcoombs/ai-native-toolkit or this repository, not '${TOOLKIT_REPO}'."
+            exit 1
+          fi
+          if [[ ! "$TOOLKIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The refinement scripts are pinned only to a full commit sha, not '${TOOLKIT_SHA}'."
+            exit 1
+          fi
+
+      - name: Check out the refinement scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .refine-toolkit
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            skills/refine/
+            docs/contributing/definition-of-ready.md
+
+      - name: Write the deterministic verdict
+        timeout-minutes: 5
+        env:
+          SLOTS: ${{ inputs.builder_slots }}
+        run: |
+          mkdir -p .refine
+          python3 .refine-toolkit/skills/refine/scripts/refine.py --repo "$GH_REPO" \
+            --builder-slots "$SLOTS" --out .refine/verdict.json
+
+      - name: Apply the sweep (no model)
+        timeout-minutes: 8
+        run: python3 "$APPLY" sweep --verdict .refine/verdict.json
+
+      - name: Write the job summary
+        if: always()
+        run: python3 "$APPLY" summary >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload the verdict and actions
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: refine-sweep-${{ github.run_attempt }}
+          path: |
+            .refine/
+            ${{ runner.temp }}/refine/actions.jsonl
+          if-no-files-found: ignore

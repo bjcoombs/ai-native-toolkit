@@ -1,0 +1,320 @@
+[
+  {
+    "id": 700,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": "duplicate",
+    "created_at": "2026-11-24T00:00:00Z",
+    "issue": {
+      "number": 300
+    }
+  },
+  {
+    "id": 701,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": "duplicate",
+    "created_at": "2026-11-24T01:00:00Z",
+    "issue": {
+      "number": 301
+    }
+  },
+  {
+    "id": 702,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": "duplicate",
+    "created_at": "2026-11-24T02:00:00Z",
+    "issue": {
+      "number": 302
+    }
+  },
+  {
+    "id": 703,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": "duplicate",
+    "created_at": "2026-11-24T03:00:00Z",
+    "issue": {
+      "number": 303
+    }
+  },
+  {
+    "id": 704,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": "duplicate",
+    "created_at": "2026-11-24T04:00:00Z",
+    "issue": {
+      "number": 304
+    }
+  },
+  {
+    "id": 705,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": "duplicate",
+    "created_at": "2026-11-24T05:00:00Z",
+    "issue": {
+      "number": 305
+    }
+  },
+  {
+    "id": 706,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": "duplicate",
+    "created_at": "2026-11-24T06:00:00Z",
+    "issue": {
+      "number": 306
+    }
+  },
+  {
+    "id": 707,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": "duplicate",
+    "created_at": "2026-11-24T07:00:00Z",
+    "issue": {
+      "number": 307
+    }
+  },
+  {
+    "id": 708,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": "duplicate",
+    "created_at": "2026-11-24T08:00:00Z",
+    "issue": {
+      "number": 308
+    }
+  },
+  {
+    "id": 720,
+    "event": "closed",
+    "actor": {
+      "login": "dependabot[bot]",
+      "id": 49699333,
+      "type": "Bot"
+    },
+    "state_reason": null,
+    "created_at": "2026-11-23T00:00:00Z",
+    "issue": {
+      "number": 400,
+      "pull_request": {
+        "url": "x"
+      }
+    }
+  },
+  {
+    "id": 721,
+    "event": "closed",
+    "actor": {
+      "login": "dependabot[bot]",
+      "id": 49699333,
+      "type": "Bot"
+    },
+    "state_reason": null,
+    "created_at": "2026-11-23T01:00:00Z",
+    "issue": {
+      "number": 401,
+      "pull_request": {
+        "url": "x"
+      }
+    }
+  },
+  {
+    "id": 722,
+    "event": "closed",
+    "actor": {
+      "login": "dependabot[bot]",
+      "id": 49699333,
+      "type": "Bot"
+    },
+    "state_reason": null,
+    "created_at": "2026-11-23T02:00:00Z",
+    "issue": {
+      "number": 402,
+      "pull_request": {
+        "url": "x"
+      }
+    }
+  },
+  {
+    "id": 723,
+    "event": "closed",
+    "actor": {
+      "login": "dependabot[bot]",
+      "id": 49699333,
+      "type": "Bot"
+    },
+    "state_reason": null,
+    "created_at": "2026-11-23T03:00:00Z",
+    "issue": {
+      "number": 403,
+      "pull_request": {
+        "url": "x"
+      }
+    }
+  },
+  {
+    "id": 740,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": null,
+    "created_at": "2026-11-22T00:00:00Z",
+    "issue": {
+      "number": 500,
+      "pull_request": {
+        "url": "x"
+      }
+    }
+  },
+  {
+    "id": 741,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": null,
+    "created_at": "2026-11-22T01:00:00Z",
+    "issue": {
+      "number": 501,
+      "pull_request": {
+        "url": "x"
+      }
+    }
+  },
+  {
+    "id": 742,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": null,
+    "created_at": "2026-11-22T02:00:00Z",
+    "issue": {
+      "number": 502,
+      "pull_request": {
+        "url": "x"
+      }
+    }
+  },
+  {
+    "id": 743,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": null,
+    "created_at": "2026-11-22T03:00:00Z",
+    "issue": {
+      "number": 503,
+      "pull_request": {
+        "url": "x"
+      }
+    }
+  },
+  {
+    "id": 760,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": "completed",
+    "created_at": "2026-11-21T00:00:00Z",
+    "issue": {
+      "number": 600
+    }
+  },
+  {
+    "id": 761,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": "completed",
+    "created_at": "2026-11-21T01:00:00Z",
+    "issue": {
+      "number": 601
+    }
+  },
+  {
+    "id": 762,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": "completed",
+    "created_at": "2026-11-21T02:00:00Z",
+    "issue": {
+      "number": 602
+    }
+  },
+  {
+    "id": 799,
+    "event": "closed",
+    "actor": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "state_reason": "duplicate",
+    "created_at": "2026-11-10T00:00:00Z",
+    "issue": {
+      "number": 699
+    }
+  }
+]

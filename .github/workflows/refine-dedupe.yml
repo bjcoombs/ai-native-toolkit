@@ -1,0 +1,39 @@
+name: Refine dedupe
+
+# This repository's caller for reusable-refine-dedupe.yml (issue #1321).
+# Settings as in refine-triage.yml.
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: The issue to check for duplicates
+        required: true
+        type: number
+
+# The union of what the reusable workflow's jobs declare. The model runs in
+# a job with `issues: read`; only the apply job, which runs no model, gets
+# `issues: write`. pull-requests: read lets refine.py read open pull requests
+# for its overlap check. id-token: write is the OIDC token Workload Identity
+# Federation exchanges; it writes nothing to the repository.
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  id-token: write
+
+jobs:
+  dedupe:
+    if: vars.REFINE_ENABLED == 'true'
+    uses: ./.github/workflows/reusable-refine-dedupe.yml
+    with:
+      enabled: ${{ vars.REFINE_ENABLED == 'true' }}
+      mode: ${{ vars.REFINE_MODE || 'dry-run' }}
+      issue_number: ${{ github.event.issue.number || inputs.issue_number }}
+      anthropic_federation_rule_id: ${{ vars.REFINE_ANTHROPIC_FEDERATION_RULE_ID }}
+      anthropic_organization_id: ${{ vars.REFINE_ANTHROPIC_ORGANIZATION_ID }}
+      anthropic_service_account_id: ${{ vars.REFINE_ANTHROPIC_SERVICE_ACCOUNT_ID }}
+      anthropic_workspace_id: ${{ vars.REFINE_ANTHROPIC_WORKSPACE_ID }}
+    secrets:
+      anthropic_api_key: ${{ secrets.REFINE_ANTHROPIC_API_KEY }}

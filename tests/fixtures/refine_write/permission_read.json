@@ -1,0 +1,9 @@
+{
+  "permission": "read",
+  "role_name": "triage",
+  "user": {
+    "login": "mallory",
+    "id": 610932,
+    "type": "User"
+  }
+}

@@ -1,0 +1,12 @@
+[
+  {
+    "id": 501,
+    "user": {
+      "login": "github-actions[bot]",
+      "id": 7067056,
+      "type": "Bot"
+    },
+    "body": "<!-- refine:size 3 -->\nOne module and its test.",
+    "created_at": "2026-11-21T10:00:00Z"
+  }
+]

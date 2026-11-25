@@ -1,0 +1,12 @@
+[
+  {
+    "id": 505,
+    "user": {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "type": "Bot"
+    },
+    "body": "<!-- refine:questions -->\nQuestions from the refiner that need a maintainer's call:\n\n- #101: Split it?",
+    "created_at": "2026-11-24T10:00:00Z"
+  }
+]
