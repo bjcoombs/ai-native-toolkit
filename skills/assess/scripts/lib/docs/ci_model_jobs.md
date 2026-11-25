@@ -14,7 +14,7 @@ runs nobody priced.
 | Sign | Read from |
 |---|---|
 | `eval_harness` | a `run:` or `script:` command: `promptfoo eval` / `redteam`, `deepeval test`, `oaieval`, `inspect eval`, `lm_eval` / `lm-eval`, `ragas` |
-| `agent_cli` | a command running `claude -p` or `claude --print` (also through `npx @anthropic-ai/claude-code`) |
+| `agent_cli` | a command running `claude -p` or `claude --print`, or `claude plugin eval` (also through `npx @anthropic-ai/claude-code`). `plugin eval` is read with options before or after `plugin` and `eval`, as a quoted command (`run: "claude plugin eval ."`, `sh -c '...'`) and across the lines of a block `run:` or `script:` (a `\` continuation, a folded `>`, a GitLab `- >` item), and inside a `$(...)` or backtick span in double quotes (`OUT="$(claude plugin eval .)"`, read by `lib.ci_shell_text`); a quoted argument (`git commit -m "..."`), an `echo` or `printf` and a `#` comment naming it are not read |
 | `agent_action` | a step `uses:` one of `AGENT_ACTIONS`: `anthropics/claude-code-action`, `anthropics/claude-code-base-action`, `openai/codex-action`, `google-github-actions/run-gemini-cli` |
 | `provider_secret` | an `env:`, `with:`, `secrets:` or GitLab `variables:` entry of the job names one of `PROVIDER_SECRETS` (as the key or in `secrets.<NAME>`); a step `name:` naming one is not a sign |
 | `eval_tests` | a command running `pytest -m eval` / `-m evals`, or a runner (`pytest`, `python`, `node`, `npx` ...) given a path under `evals/` |
@@ -22,7 +22,8 @@ runs nobody priced.
 A command line that installs (`pip install ragas`, `python -m pip install`, `poetry add`) is never a sign. The
 install or add word counts only as the subcommand of a package manager (`pip`, `uv`, `npm`, `yarn`,
 `poetry`, `apt-get` ...), with up to three options or `global` / `tool` / `pip` between them, also
-inside `sh -c "..."`. A prompt word (`claude -p 'add regression tests'`) does not hide the command,
+inside `sh -c "..."`. The managers include versioned pips (`pip3.11`), `pipenv`, `rye`, `pixi` and
+`hatch`, with `python` also allowed between (`uv python install`). A prompt word (`claude -p 'add regression tests'`) does not hide the command,
 and a `claude -p` line is an `agent_cli` sign even when it also installs (`npm install -g ... && claude -p ...`). Nor is an `evals/` path a runner is told to leave out
 (`--ignore`, `--ignore-glob`, `--deselect`, `--exclude`): keeping evals out of a job is the remedy. A secret named inside a command is
 not a sign either. A workflow-level `env:` secret reaches every job, so it is a sign of each. A step
@@ -114,8 +115,9 @@ job `env:`, or in a step that only sets it, neither gates nor ungates a job. Eit
 - A line that installs and then runs an eval harness (`pip install ragas && ragas ...`) is read as
   an install line, so the harness is not found.
 - A quoted event key under `on:` (`"push":`) is not read; a quoted `"on":` is.
-- `agent_cli` is `claude -p` / `--print` only: another Claude Code subcommand that calls a model
-  (`claude plugin eval`) is not a sign.
+- `agent_cli` is `claude -p` / `--print` and `claude plugin eval` only: another Claude Code
+  subcommand that calls a model is not a sign. `claude -p` is still read line by line, without
+  the echo and comment blanking `plugin eval` gets.
 - Only workflow files directly under `.github/workflows/` and `.gitlab-ci.yml` (with its
   includes, reported at the include line of the repository's own file) are read.
 - GitLab `only: changes:` is not read as a gate.

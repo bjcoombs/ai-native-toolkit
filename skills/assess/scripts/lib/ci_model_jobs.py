@@ -10,7 +10,8 @@ Full reference: lib/docs/ci_model_jobs.md.
 
 **A model-backed job** (``signs``): a ``run:`` or ``script:`` line runs an eval harness
 (``eval_harness``: promptfoo eval, deepeval test, oaieval, inspect eval, lm_eval, ragas) or the
-Claude Code CLI in print mode (``agent_cli``: ``claude -p``); a step uses an agent action
+Claude Code CLI in print mode or on a plugin eval suite (``agent_cli``: ``claude -p``,
+``claude plugin eval``, never one named in an ``echo`` or a comment); a step uses an agent action
 (``agent_action``, ``AGENT_ACTIONS``, also inside a repo-local action the step uses); an ``env:``,
 ``with:``, ``secrets:`` or ``variables:`` entry of the job or the workflow names a model-provider
 secret (``provider_secret``, ``PROVIDER_SECRETS``; a step ``name:`` naming one is not a sign); or a
@@ -56,7 +57,8 @@ when a job is unknown (``trigger_unresolved``) or a job or include could not be 
 (``unread`` above 0: ``ci_jobs_unread``), else 0. With no model-backed job, ``model_jobs`` is 0
 and the condition is not measured (``no_model_jobs``, ``signal_grades.EMPTY_DENOMINATORS``);
 with none found but ``unread`` above 0, ``model_jobs`` is null and the reason is ``ci_jobs_unread``.
-Tests: ``tests/test_ci_model_jobs.py``, ``tests/test_ci_model_jobs_followups.py`` (#1249).
+Tests: ``tests/test_ci_model_jobs.py``, ``tests/test_ci_model_jobs_followups.py`` and
+``tests/test_ci_model_jobs_plugin_eval.py`` (#1249).
 """
 from __future__ import annotations
 
@@ -69,6 +71,7 @@ from lib.ci_action_inputs import ReadLocal, local_action_paths
 from lib.ci_includes import GITLAB_CI, merged_config, resolve_includes
 from lib.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci_merged_view import merged_jobs, merged_view
+from lib.ci_shell_text import command_text
 from lib.ci_triggers import gitlab_line_triggers, workflow_events
 from lib.command_index import ci_config_files, read_config, repo_files
 
@@ -119,9 +122,14 @@ _EVAL_TESTS = re.compile(r"\bpytest\b[^;&|]*\s-m\s+[\"']?evals?\b|\b(?:pytest|py
 _EXCLUDED = re.compile(r"--(?:ignore|ignore-glob|deselect|exclude)(?:=|\s+)\S+")
 # An install or add subcommand of a package manager (``pip install``, ``sudo python3 -m pip install``,
 # ``poetry add``, ``sh -c "pip install x"``), never a bare word of a prompt (``claude -p 'add tests'``).
-_INSTALL = re.compile(r"(?:^|[\s;&|(\"'/])(?:pip3?|pipx|uv|poetry|pdm|conda|mamba|micromamba|npm|pnpm|yarn|bun|"
-                      r"deno|apt(?:-get)?|apk|dnf|yum|brew|gem|cargo|go|composer|dotnet)"
-                      r"\s+(?:(?:-\S+|global|tool|pip)\s+){0,3}(?:install|add)(?=[\s\"']|$)")
+_INSTALL = re.compile(r"(?:^|[\s;&|(\"'/])(?:pip(?:\d+(?:\.\d+)?)?|pipx|pipenv|uv|poetry|pdm|rye|pixi|hatch|conda|mamba|"
+                      r"micromamba|npm|pnpm|yarn|bun|deno|apt(?:-get)?|apk|dnf|yum|brew|gem|cargo|go|composer|dotnet)"
+                      r"\s+(?:(?:-\S+|global|tools?|pip|python)\s+){0,3}(?:install|add)(?=[\s\"']|$)")
+# ``claude plugin eval`` (#1249): options before or after ``plugin`` and ``eval``, also through
+# ``npx @anthropic-ai/claude-code``. Read on ``command_text``: an echo or comment naming it is no sign.
+_OPTS = r"(?:[ \t]+-[\w-]+(?:=\S+|[ \t]+(?!-|plugin\b|eval\b)[^\s;&|]+)?)*"
+_PLUGIN_EVAL = re.compile(r"(?:^|[\s;&|(/=])(?:claude|@anthropic-ai/claude-code(?:@\S+)?)" + _OPTS
+                          + r"[ \t]+plugin" + _OPTS + r"[ \t]+eval(?=[\s;&|)]|$)", re.M)
 # The keys whose entries hand a job a secret; a key named anywhere else (a step ``name:``) is no sign.
 _SECRET_KEYS = frozenset({"env", "with", "secrets", "variables"})
 _SECRET = re.compile(r"\b(?:" + "|".join(PROVIDER_SECRETS) + r")\b")
@@ -211,6 +219,19 @@ def _list(tree: IndentTree, i: int) -> list[str] | None:
     return [tree.lines[k].value.strip("'\"") for k in children]
 
 
+def _block_text(tree: IndentTree, i: int) -> str:
+    """A block scalar's lines as the shell reads them: a ``\\`` continuation (or a folded ``>``)
+    joins the next line. A keyless ``- >`` list item's lines may sit at its own key column, where
+    ``parse_lines`` does not own them, so its lines are those indented past its dash."""
+    body = [tree.lines[j].value for j in range(i + 1, len(tree.lines)) if tree.owner[j] == i]
+    if tree.lines[i].dash and not tree.lines[i].key:  # a ``- run: |`` step's siblings are keys
+        end = next((j for j in range(i + 1, len(tree.lines))
+                    if tree.lines[j].structural and tree.lines[j].indent <= tree.lines[i].indent), len(tree.lines))
+        body = [(f"{x.key}: " if x.key else "") + x.value for x in tree.lines[i + 1:end]]
+    text = ("\n" if tree.lines[i].value[:1] == "|" else " ").join(body)
+    return re.sub(r"\\\n", " ", text)
+
+
 def signs_in(tree: IndentTree, lines: range) -> list[str]:
     """The sign tokens in ``lines`` of one job (see the module doc)."""
     found: set[str] = set()
@@ -231,10 +252,14 @@ def signs_in(tree: IndentTree, lines: range) -> list[str]:
                 found.add("provider_secret")
             continue
         command = raw if not line.structural or line.dash or line.key in _BODY_KEYS else ""
-        if not command or command[:1] in ("|", ">"):
+        if command[:1] in ("|", ">"):  # a block body is read whole, so a continued command is one
+            if _PLUGIN_EVAL.search(command_text(_block_text(tree, i))):
+                found.add("agent_cli")
             continue
-        if _CLI.search(command):  # a print-mode run counts even beside an install (or a prompt naming one)
-            found.add("agent_cli")
+        if not command:
+            continue
+        if _CLI.search(command) or (line.structural and _PLUGIN_EVAL.search(command_text(command))):
+            found.add("agent_cli")  # counts even beside an install (or a prompt naming one)
         if _INSTALL.search(command):
             continue
         if _EVAL.search(command):
