@@ -112,6 +112,8 @@ job `env:`, or in a step that only sets it, neither gates nor ungates a job. Eit
 - A line that installs and then runs a model command (`npm install -g x && claude -p ...`) is read as
   an install line, so the command is not found.
 - A quoted event key under `on:` (`"push":`) is not read; a quoted `"on":` is.
+- `agent_cli` is `claude -p` / `--print` only: another Claude Code subcommand that calls a model
+  (`claude plugin eval`) is not a sign.
 - Only workflow files directly under `.github/workflows/` and `.gitlab-ci.yml` (with its
   includes, reported at the include line of the repository's own file) are read.
 - GitLab `only: changes:` is not read as a gate.
