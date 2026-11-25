@@ -73,7 +73,7 @@ from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci.ci_merged_view import merged_jobs, merged_view
 from lib.ci.ci_shell_text import command_text
 from lib.ci.ci_triggers import gitlab_line_triggers, workflow_events
-from lib.command_index import ci_config_files, read_config, repo_files
+from lib.instructions.command_index import ci_config_files, read_config, repo_files
 
 State = Literal["gated", "ungated", "unknown"]
 

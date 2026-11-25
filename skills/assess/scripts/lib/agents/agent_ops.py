@@ -74,7 +74,7 @@ from lib.ci.ci_action_inputs import local_action_paths
 from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci.ci_model_jobs import signs_in
 from lib.ci.ci_triggers import workflow_events
-from lib.command_index import NOOP_COMMANDS, ci_config_files, read_config, repo_files
+from lib.instructions.command_index import NOOP_COMMANDS, ci_config_files, read_config, repo_files
 from lib.counts_only.block_shapes import AgentWorkflow
 from lib.agents.managed_settings import managed_permissions, not_read, read_managed_settings
 from lib.git_churn import is_tracked, tracked_files

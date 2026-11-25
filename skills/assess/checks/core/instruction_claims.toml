@@ -5,7 +5,7 @@
 id = "core.instruction_claims"
 kind = "collector"
 title = "Instruction claims"
-callable = "lib.instruction_claims:scan_instruction_claims"
+callable = "lib.instructions.instruction_claims:scan_instruction_claims"
 publishes = ["instruction_claims"]
 reads = ["repo_root", "instruction_files"]
 stage = "post_offers"

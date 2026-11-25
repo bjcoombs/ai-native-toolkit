@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.agent_instructions_grader import (
+from lib.instructions.agent_instructions_grader import (
     BASELINE_POINTS,
     COMMAND_CAP,
     EXTERNAL_CAP,
@@ -24,7 +24,7 @@ from lib.agent_instructions_grader import (
     grade_instructions,
     scan_sensitive_content,
 )
-from lib.instruction_content import RepoContext, build_repo_context
+from lib.instructions.instruction_content import RepoContext, build_repo_context
 
 
 @pytest.fixture

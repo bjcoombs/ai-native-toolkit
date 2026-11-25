@@ -142,7 +142,7 @@ runs in is not resolved, except for a Gradle run (`Run.cwd`, `lib.testing.ci_wor
 or `cd app` runs an unqualified task in `app` and its subprojects only, so a gate in `lib`
 reads null (#1162), and the Gradle root is the nearest settings file at or above that
 directory (#1163, `lib.runner_args.gradle_runs_in`). Imports `lib.ci.ci_checks`, `lib.ci.ci_masking`, `lib.ci.ci_triggers`,
-`lib.command_index`, `lib.command_resolver`, `lib.ci.check_command`, `lib.testing.ci_workdir`, `lib.testing.coverage_activation`,
+`lib.instructions.command_index`, `lib.instructions.command_resolver`, `lib.ci.check_command`, `lib.testing.ci_workdir`, `lib.testing.coverage_activation`,
 `lib.testing.coverage_codecov` (a Codecov patch or ``auto`` status is skipped, #882) and `lib.ci.shared_tooling`; never `lib.testing.coverage_gate` (which calls it) or an orchestrator.
 Tests: `tests/test_coverage_ci.py`, `tests/test_coverage_ci_edges.py` (#954),
 `tests/test_gradle_workdir.py` (#1162).
@@ -162,10 +162,10 @@ from lib.testing.coverage_activation import Activation, below, covers
 from lib.testing.coverage_codecov import is_patch
 from lib.named_check import may_lint_named
 from lib.ci.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, workflow_trigger
-from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
+from lib.instructions.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.unread_ci import unread_ci_paths
 from lib.testing.ci_workdir import exact_cwd
-from lib.command_resolver import command_words, extract_commands
+from lib.instructions.command_resolver import command_words, extract_commands
 from lib.runner_args import (
     GRADLE, SCRIPT, gradle_dry_run, gradle_roots, gradle_roots_set, gradle_runs_in,
     gradle_tasks as gradle_tasks, partly_excluded, pdm_scripts, pdm_scripts_set, script_run)

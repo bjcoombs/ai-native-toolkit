@@ -10,7 +10,7 @@ publishes = ["sensitive_instruction_content"]
 reads = ["instruction_grading"]
 stage = "read_side"
 shapes = [
-  { path = "sensitive_instruction_content.{}", type = "lib.agent_instructions_grader:SensitiveFinding" },
+  { path = "sensitive_instruction_content.{}", type = "lib.instructions.agent_instructions_grader:SensitiveFinding" },
 ]
 revision = 1
   [entries.privacy]

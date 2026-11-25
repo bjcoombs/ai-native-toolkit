@@ -53,7 +53,7 @@ Only runs on ordinary triggers count (``lib.ci.ci_triggers``): a ``workflow_disp
 Runs are read with the repository's pdm scripts (``CiRuns.pdm_scripts``, #1046), so ``pdm run
 pytest`` with a ``pytest`` script is the script, not pytest.
 
-Inward-only imports: stdlib, ``lib.testing.coverage_activation``, ``lib.testing.coverage_ci``, ``lib.command_index``, ``lib.testing.ci_workdir`` (the working-directory reading above, #1162),
+Inward-only imports: stdlib, ``lib.testing.coverage_activation``, ``lib.testing.coverage_ci``, ``lib.instructions.command_index``, ``lib.testing.ci_workdir`` (the working-directory reading above, #1162),
 ``lib.docs.doc_graph``, ``lib.assess_config`` and ``lib.runner_args``; never ``lib.testing.coverage_gate`` (which calls it)
 or an orchestrator. Tests: ``tests/test_coverage_root_config.py``.
 """
@@ -65,7 +65,7 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path, PurePosixPath
 
 from lib.assess_config import is_user_excluded
-from lib.command_index import CI_CONFIG_FILES, read_config
+from lib.instructions.command_index import CI_CONFIG_FILES, read_config
 from lib.testing.coverage_activation import Activation, read_activation
 from lib.runner_args import pdm_scripts_set
 from lib.testing.ci_workdir import move, run_cwd

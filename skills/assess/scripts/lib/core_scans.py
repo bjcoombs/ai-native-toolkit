@@ -57,7 +57,7 @@ from lib.docs.doc_complexity_join import analyze_doc_complexity_join
 from lib.docs.doc_graph import build_doc_graph
 from lib.docs.doc_staleness import analyze_doc_staleness
 from lib.gap_actions import build_gap_actions
-from lib.instruction_files import (
+from lib.instructions.instruction_files import (
     broken_instruction_refs,
     detect_ancestor_instructions,
     instruction_file_size,

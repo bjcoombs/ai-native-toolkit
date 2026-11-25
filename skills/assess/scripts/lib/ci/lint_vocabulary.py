@@ -2,7 +2,7 @@
 
 ``lib.ci.check_command`` reads these words for ``is_lint_command`` and ``is_lint_run``; this
 module holds the vocabulary so that file stays under the size ratchet. All of it reads the
-words of one command (``lib.command_resolver.command_words``) and nothing else: pure, no
+words of one command (``lib.instructions.command_resolver.command_words``) and nothing else: pure, no
 file or network access. Gradle's arguments are read by ``lib.runner_args``.
 
 - ``ANALYSER_PROGRAMS``: linters and static analysers that check in any mode (``phpstan``,

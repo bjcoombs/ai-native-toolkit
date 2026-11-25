@@ -101,7 +101,7 @@ from lib.git_churn import git_commit_info
 from lib.history_window import split_window
 from lib.headless_layers import HEADLESS_SCANS as LAYER_SCANS
 from lib.headless_static import HEADLESS_SCANS as STATIC_SCANS
-from lib.instruction_files import grade_instruction_files
+from lib.instructions.instruction_files import grade_instruction_files
 from lib.pack_checks import PACK_BLOCK
 from lib.packs import Pack
 from lib.plugin_version import read_version

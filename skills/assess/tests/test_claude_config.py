@@ -1,4 +1,4 @@
-"""Tests for lib/claude_config.py - legacy commands and ignored frontmatter.
+"""Tests for lib/instructions/claude_config.py - legacy commands and ignored frontmatter.
 
 Claude Code drops an unrecognised frontmatter field without an error, so each
 test plants one kind of silently-ignored configuration and checks the scan names
@@ -14,8 +14,8 @@ import pytest
 
 import lib.scan_registry as reg
 from assess_core import build_and_publish_run
-from lib.claude_config import FileKind, check_file, parse_frontmatter, scan_claude_config
-from lib.claude_config_fields import (
+from lib.instructions.claude_config import FileKind, check_file, parse_frontmatter, scan_claude_config
+from lib.instructions.claude_config_fields import (
     AGENT_FIELDS,
     COMMAND_FIELDS,
     SKILL_FIELDS,

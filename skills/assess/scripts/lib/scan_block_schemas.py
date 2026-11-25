@@ -454,7 +454,7 @@ REVIEW_REALITY: JsonDict = {
 # Block name -> the block's described fields (no ``type``; each generator adds its own rules).
 GUARDRAILS: JsonDict = {
     "description": (
-        "Guardrails stated (lib/guardrails.py): the gates the repository configures at HEAD "
+        "Guardrails stated (lib/instructions/guardrails.py): the gates the repository configures at HEAD "
         "(a ruff or flake8 complexity limit, the coverage floor from coverage_gate, pre-commit "
         "hooks, mypy strict) and whether a graded instruction file states each one's rule and "
         "threshold on one line."),
@@ -491,10 +491,10 @@ GUARDRAILS: JsonDict = {
 }
 
 _SYSTEMS: JsonDict = {"type": ["array", "integer"],
-                      "description": "Agent system ids (lib/agent_systems.py SYSTEMS)."}
+                      "description": "Agent system ids (lib/instructions/agent_systems.py SYSTEMS)."}
 AGENT_CONSISTENCY: JsonDict = {
     "description": (
-        "Cross-agent instruction consistency (lib/agent_consistency.py): the root instruction "
+        "Cross-agent instruction consistency (lib/instructions/agent_consistency.py): the root instruction "
         "files of every agent system present at HEAD (Claude Code, AGENTS.md, Copilot, Cursor, "
         "Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue, Zed), the check commands and "
         "thresholds they disagree on, and how each links to one canonical file."),

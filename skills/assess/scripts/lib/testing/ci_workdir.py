@@ -24,7 +24,7 @@ for a Gradle run, #1162):
   ``||`` (``cd app || cd ../lib``).
 
 ``PurePosixPath()`` is the repository root. Inward-only imports: stdlib and
-``lib.command_index``; never an orchestrator. Tests: ``tests/test_coverage_root_config.py``,
+``lib.instructions.command_index``; never an orchestrator. Tests: ``tests/test_coverage_root_config.py``,
 ``tests/test_gradle_workdir.py``.
 """
 from __future__ import annotations
@@ -33,7 +33,7 @@ import re
 from collections.abc import Sequence
 from pathlib import PurePosixPath
 
-from lib.command_index import ci_line_text
+from lib.instructions.command_index import ci_line_text
 
 # Runner flags that run the command in another directory.
 _DIRECTORY_FLAGS = {"uv": ("--directory",), "poetry": ("-C", "--directory")}

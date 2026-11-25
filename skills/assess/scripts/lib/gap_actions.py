@@ -57,7 +57,7 @@ from __future__ import annotations
 
 from typing import NotRequired, TypedDict
 
-from lib.instruction_placement import ALWAYS_ON_FLAG_LINES
+from lib.instructions.instruction_placement import ALWAYS_ON_FLAG_LINES
 from lib.keyhole.keyhole_signals import FINDING_MODE_VALUES, is_archive_path, mode_for_finding
 from lib.run_context_types import JsonDict
 

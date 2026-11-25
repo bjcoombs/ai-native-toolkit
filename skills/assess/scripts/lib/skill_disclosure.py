@@ -82,8 +82,8 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import TypedDict
 
-from lib.claude_config import parse_frontmatter
-from lib.instruction_placement import LOADED_IN_FULL_MIN_TOKENS, est_tokens, fence_mask, skill_and_agent_files
+from lib.instructions.claude_config import parse_frontmatter
+from lib.instructions.instruction_placement import LOADED_IN_FULL_MIN_TOKENS, est_tokens, fence_mask, skill_and_agent_files
 
 # --- thresholds (#1045; sources in the module doc) -------------------------------------
 

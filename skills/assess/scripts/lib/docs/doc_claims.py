@@ -94,7 +94,7 @@ from typing import Any, NamedTuple, TypedDict
 from lib.assess_config import is_user_excluded
 from lib.docs.doc_graph import is_excluded_path, is_repo_file
 from lib.git_churn import tracked_files
-from lib.instruction_claims import (
+from lib.instructions.instruction_claims import (
     Claim,
     count_within_tolerance,
     empty_block,

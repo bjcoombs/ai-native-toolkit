@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from lib.agent_instructions_grader import F_GRADE_CUTOFF
+from lib.instructions.agent_instructions_grader import F_GRADE_CUTOFF
 from lib.run_context_types import JsonDict
 
 

@@ -69,8 +69,8 @@ from pathlib import Path
 from typing import NotRequired, TypedDict
 
 from lib.assess_config import is_user_excluded
-from lib.agent_instructions_grader import CREDENTIAL_PLACEHOLDERS, scan_sensitive_content
-from lib.instruction_placement import skill_and_agent_files
+from lib.instructions.agent_instructions_grader import CREDENTIAL_PLACEHOLDERS, scan_sensitive_content
+from lib.instructions.instruction_placement import skill_and_agent_files
 
 GRADER_KINDS = ("private_key", "cloud_key", "credential", "ssh_or_host", "ip_address", "home_path")
 KINDS = (*GRADER_KINDS, "email", "phone")

@@ -68,7 +68,7 @@ from typing import Literal, NotRequired, TypedDict
 from lib.assess_config import load_backlog_ready_labels
 from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci.ci_triggers import workflow_events
-from lib.command_index import ci_config_files, read_config, repo_files
+from lib.instructions.command_index import ci_config_files, read_config, repo_files
 from lib.docs.doc_graph import is_excluded_path
 
 UNTRIAGED_LABELS = ("needs-triage", "needs triage", "untriaged", "triage", "status: needs triage")

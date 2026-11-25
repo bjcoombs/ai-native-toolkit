@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.gap_actions import REMOVAL_FINDING, REMOVE_MODE
-from lib.instruction_placement import ALWAYS_ON_FLAG_LINES
+from lib.instructions.instruction_placement import ALWAYS_ON_FLAG_LINES
 from test_headline import _commit, _run
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"

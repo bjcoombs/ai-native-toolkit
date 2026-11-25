@@ -216,7 +216,7 @@
 #   comparing go tool cover to a number, which the scan does not read
 #   (coverage_gate.unmeasured_reason go_rust_gate_form_not_read). Level 2 reads
 #   test_pressure.mutation_run, which a headless run does not build.
-# - Guardrails stated reads guardrails.stated_pct (lib/guardrails.py, #767):
+# - Guardrails stated reads guardrails.stated_pct (lib/instructions/guardrails.py, #767):
 #   the share of the gates the repository configures (a ruff or flake8
 #   complexity limit, a coverage floor, pre-commit hooks, mypy strict) that a
 #   graded instruction file states, the rule and its threshold on one line.
@@ -224,10 +224,10 @@
 #   gate found has nothing to state, so the share is null and the row is
 #   unknown, never 0. Graded measured: it cross-checks the config against the
 #   instruction text at the commit, as instruction_claims.failed does.
-# - Cross-agent consistency reads agent_consistency (lib/agent_consistency.py,
+# - Cross-agent consistency reads agent_consistency (lib/instructions/agent_consistency.py,
 #   #768): the root instruction files of every agent system present (Claude
 #   Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q,
-#   Kiro, Continue, Zed; lib/agent_systems.py). Level 1 is no conflict: no
+#   Kiro, Continue, Zed; lib/instructions/agent_systems.py). Level 1 is no conflict: no
 #   test or lint command one system names and another does not, and no two
 #   systems whose coverage, complexity or line-length numbers share none.
 #   Level 2 adds every system linked to one canonical file (AGENTS.md when

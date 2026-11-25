@@ -1,4 +1,4 @@
-"""Tests for lib/agent_systems.py and lib/agent_consistency.py (issue #768): every
+"""Tests for lib/instructions/agent_systems.py and lib/instructions/agent_consistency.py (issue #768): every
 agent system's instruction files are discovered with their scope, and the root
 files are compared for divergent check commands and thresholds and for a link
 to one canonical file."""
@@ -11,15 +11,15 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from lib.agent_consistency import (
+from lib.instructions.agent_consistency import (
     check_commands,
     pointer_line,
     scan_agent_consistency,
     thresholds,
 )
-from lib.agent_systems import SYSTEMS, aider_read_files, match_system_file, might_match
+from lib.instructions.agent_systems import SYSTEMS, aider_read_files, match_system_file, might_match
 from lib.counts_only.content_free import counts_only_scans
-from lib.instruction_files import nested_instruction_surface
+from lib.instructions.instruction_files import nested_instruction_surface
 from lib.levels import evaluate_row
 from lib.level_signals import load_default_levels
 

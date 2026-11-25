@@ -1,7 +1,7 @@
 """Is a shell command one an agent runs to check its work? (issues #514, #698)
 
 ``is_check_command`` classifies one command by the target it runs: a test or
-check target of a runner ``lib.command_resolver`` models (``make test``,
+check target of a runner ``lib.instructions.command_resolver`` models (``make test``,
 ``npm run check``, ``tox``, ``uv run pytest``, the program after ``uv run``) or a
 committed script named for a check (``./scripts/test.sh``). An install command
 such as ``npm ci`` or ``uv sync --extra test`` is never a check. ``lib.ci.ci_checks``
@@ -22,7 +22,7 @@ from contextvars import ContextVar
 from pathlib import PurePosixPath
 
 from lib.command_flags import SHELLS, make_args, shell_args, shell_string
-from lib.command_resolver import RUNNERS, command_words
+from lib.instructions.command_resolver import RUNNERS, command_words
 from lib.runner_envs import env_commands
 from lib.runner_args import (
     SCRIPT, gradle_build_verdict, gradle_run, gradle_tasks, is_gradle, runs_no_task, script_run)

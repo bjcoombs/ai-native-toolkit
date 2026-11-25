@@ -180,9 +180,8 @@ puts `lib/` first on `sys.path`, not `scripts/`, so such a shim first inserts `s
 New code imports the new path.
 
 - **`agents/`**: what a repository builds with agents and how an agent runs in it, the
-  Layer 8 inputs. `agent_identity` is shared core, and `agent_consistency`, `agent_systems`
-  and `agent_instructions_grader` wait for the `instructions` group, so all four stay at the
-  root. Files: `__init__.py`, `agent_building.py`, `agent_building_vocab.py`, `agent_environment.py`, `agent_harness.py`, `agent_manifests.py`, `agent_ops.py`, `managed_settings.py`.
+  Layer 8 inputs. `agent_identity` is shared core and stays at the root; `agent_consistency`,
+  `agent_systems` and `agent_instructions_grader` moved with the `instructions` group. Files: `__init__.py`, `agent_building.py`, `agent_building_vocab.py`, `agent_environment.py`, `agent_harness.py`, `agent_manifests.py`, `agent_ops.py`, `managed_settings.py`.
 - **`ci/`**: CI configuration read offline, the `ci` group (#1392, #1393): the committed CI
   files read line by line (continuations, matrices, expressions, triggers), GitLab `include:`
   items resolved offline and the merged line view, and the blocks built from them: CI checks
@@ -223,6 +222,13 @@ New code imports the new path.
   library's `platform` module for any script run by path from `lib/` (decision 9 on #917).
   `external_ci`, `external_ci_rules`, `gitlab_rules` and `unread_ci` (#884, #928) postdate the
   #917 module map and stay at the root. Files: `__init__.py`, `config_drift.py`, `delivery.py`, `gh_cli.py`, `github_secret_scanning.py`, `gitlab_ci_lint.py`, `gitlab_cli.py`, `gitlab_notes.py`, `merged_sample.py`, `org_security_policy.py`, `platform_cli.py`, `review_reality.py`.
+- **`instructions/`**: agent instruction files read offline, the `instructions` group (#1394):
+  discovery of root, nested and path-scoped files and their scope globs, section placement,
+  content and claim checks, the always-loaded budget, the grader and the per-file records it
+  scores, the agent systems a repository configures and the consistency between their files,
+  the Claude Code configuration and its documented field sets, the guardrails the files
+  declare, and the commands they name with the per-repo index those commands resolve against.
+  Files: `__init__.py`, `agent_consistency.py`, `agent_instructions_grader.py`, `agent_systems.py`, `claude_config.py`, `claude_config_fields.py`, `command_index.py`, `command_resolver.py`, `guardrails.py`, `instruction_budget.py`, `instruction_claims.py`, `instruction_content.py`, `instruction_discovery.py`, `instruction_files.py`, `instruction_globs.py`, `instruction_placement.py`.
 - **`keyhole/`** ([README](keyhole/README.md)): the keyhole-readiness signals and findings, and the Layer 1 liveness
   inputs: accretion, promissory markers, structure drift, hidden coupling, understanding,
   archetype and the Dart and JVM capability entries. `promissory_markers` and

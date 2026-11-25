@@ -35,7 +35,7 @@ from lib.change_coupling import RenameMap, build_rename_map
 from lib.context_blocks import generated_exclusion
 from lib.complexity.diff_reliability import compute_diff_reliability, prior_stamps, stats_tool_versions
 from lib.git_churn import git_commit_info, window_from_churn_label
-from lib.instruction_files import grade_instruction_files
+from lib.instructions.instruction_files import grade_instruction_files
 from lib.plugin_version import read_version
 from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
 from lib.complexity.stats_diff import StatsDiff, diff_stats, load_stats

@@ -36,7 +36,7 @@ from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 from lib.agents.agent_building import AgentBuildingBlock
 from lib.agents.agent_environment import AgentEnvironmentBlock
 from lib.agents.agent_harness import AgentHarnessBlock
-from lib.agent_instructions_grader import SensitiveFinding
+from lib.instructions.agent_instructions_grader import SensitiveFinding
 from lib.ci.ci_checks import CiChecksBlock
 from lib.agent_outcome import AgentOutcomeBlock
 from lib.ai_usage import AiUsageBlock
@@ -48,16 +48,16 @@ from lib.counts_only.block_shapes import (
     ReviewRealityBlock,
     StructureDriftBlock,
 )
-from lib.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
+from lib.instructions.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
 from lib.counts_only.counts_only_rules import PATH_KEYED_MAPS
 from lib.hosting.delivery import DeliveryBlock
 from lib.docs.doc_claims import DocClaimsBlock
-from lib.agent_consistency import AgentConsistencyBlock
+from lib.instructions.agent_consistency import AgentConsistencyBlock
 from lib.docs.doc_complexity_join import DocUnit
 from lib.docs.doc_staleness import DocStalenessBlock, DocStalenessRow
 from lib.gap_actions import GapAction
-from lib.guardrails import GuardrailsBlock
-from lib.instruction_placement import InstructionPlacementBlock
+from lib.instructions.guardrails import GuardrailsBlock
+from lib.instructions.instruction_placement import InstructionPlacementBlock
 from lib.skill_disclosure import SkillDisclosureBlock
 from lib.secrets_guard import SecretsGuardBlock
 from lib.skill_script_tests import SkillScriptTestsBlock

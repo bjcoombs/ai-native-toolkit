@@ -1,10 +1,10 @@
-"""Tests for lib/instruction_globs.py: scope frontmatter parsing and the lenient
+"""Tests for lib/instructions/instruction_globs.py: scope frontmatter parsing and the lenient
 glob matcher behind the dead-glob finding."""
 from __future__ import annotations
 
 import pytest
 
-from lib.instruction_globs import (
+from lib.instructions.instruction_globs import (
     expand_braces,
     is_true,
     pattern_matches_any,

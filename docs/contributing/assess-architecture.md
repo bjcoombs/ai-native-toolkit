@@ -8,7 +8,7 @@ The deterministic core in `skills/assess/scripts/lib/` does all data work; the L
 
 Key modules:
 
-- `lib/agent_instructions_grader.py` - heuristic scoring of CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .github/copilot-instructions.md (regex + arithmetic, no AI).
+- `lib/instructions/agent_instructions_grader.py` - heuristic scoring of CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .github/copilot-instructions.md (regex + arithmetic, no AI).
 - `lib/complexity/stats_diff.py` - cross-run comparison (graduated/regressed/new/persistent hotspots).
 - `lib/wiki_writer.py` - renders `index.md`, `log.md`, `hotspots/*.md` from templates.
 - `lib/anomaly_detector.py` - flags suspicious run results for self-feedback.

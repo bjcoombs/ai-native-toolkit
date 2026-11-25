@@ -1,12 +1,12 @@
-"""Tests for lib/command_index.py: the per-repo target index the resolver reads."""
+"""Tests for lib/instructions/command_index.py: the per-repo target index the resolver reads."""
 from __future__ import annotations
 
 import json
 import subprocess
 from pathlib import Path
 
-import lib.command_index as command_index
-from lib.command_index import TargetSet, build_index, repo_files
+import lib.instructions.command_index as command_index
+from lib.instructions.command_index import TargetSet, build_index, repo_files
 
 
 def _write(root: Path, files: dict[str, str]) -> Path:

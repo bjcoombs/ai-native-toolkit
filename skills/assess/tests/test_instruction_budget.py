@@ -1,4 +1,4 @@
-"""Tests for lib/instruction_budget.py: @import discovery and resolution, and the
+"""Tests for lib/instructions/instruction_budget.py: @import discovery and resolution, and the
 always-loaded instruction budget for Claude Code and Codex."""
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-import lib.instruction_budget as budget
-from lib.instruction_budget import (
+import lib.instructions.instruction_budget as budget
+from lib.instructions.instruction_budget import (
     CODEX_MAX_BYTES,
     claude_code_budget,
     codex_budget,

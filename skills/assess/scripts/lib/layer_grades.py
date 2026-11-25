@@ -74,7 +74,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Literal, TypedDict
 
-from lib.instruction_files import GRADE_RANK
+from lib.instructions.instruction_files import GRADE_RANK
 
 InstructionPresence = Literal["root", "nested_only", "none"]
 
