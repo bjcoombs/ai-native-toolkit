@@ -8,9 +8,9 @@ sign search on it does not credit a name the command only mentions:
 - a ``$(...)`` or backtick span inside double quotes runs, so its command is kept on its own
   line, read the same way (``OUT="$(claude plugin eval .)"``, ``echo "$(...)"``); single quotes
   keep nothing;
-- a ``'`` with no closing quote (the apostrophe of ``don't`` in a heredoc body) ends at the end of
-  its line, so it never blanks the commands after it; a closed single-quoted span may still run
-  over lines;
+- a ``'`` with no later ``'`` in the text (the apostrophe of ``don't`` in a heredoc body) ends
+  at the end of its line, so it does not blank the commands after it; a later ``'``, even inside
+  double quotes, still pairs with it, and a closed single-quoted span may run over lines;
 - a ``#`` comment is cut, and an ``echo`` or ``printf`` is dropped with its arguments.
 
 Used by ``lib.ci_model_jobs`` for the ``claude plugin eval`` sign. Tests:
