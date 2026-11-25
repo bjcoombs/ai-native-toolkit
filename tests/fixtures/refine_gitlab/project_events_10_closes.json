@@ -1,0 +1,132 @@
+[
+  {
+    "id": 700,
+    "action_name": "closed",
+    "target_type": "Issue",
+    "target_iid": 100,
+    "author_username": "project_42_bot_abc",
+    "author": {
+      "id": 711,
+      "username": "project_42_bot_abc",
+      "name": "Project_42_Bot_Abc"
+    },
+    "created_at": "2026-11-24T00:00:00.000Z"
+  },
+  {
+    "id": 701,
+    "action_name": "closed",
+    "target_type": "Issue",
+    "target_iid": 101,
+    "author_username": "project_42_bot_abc",
+    "author": {
+      "id": 711,
+      "username": "project_42_bot_abc",
+      "name": "Project_42_Bot_Abc"
+    },
+    "created_at": "2026-11-24T00:00:00.000Z"
+  },
+  {
+    "id": 702,
+    "action_name": "closed",
+    "target_type": "Issue",
+    "target_iid": 102,
+    "author_username": "project_42_bot_abc",
+    "author": {
+      "id": 711,
+      "username": "project_42_bot_abc",
+      "name": "Project_42_Bot_Abc"
+    },
+    "created_at": "2026-11-24T00:00:00.000Z"
+  },
+  {
+    "id": 703,
+    "action_name": "closed",
+    "target_type": "Issue",
+    "target_iid": 103,
+    "author_username": "project_42_bot_abc",
+    "author": {
+      "id": 711,
+      "username": "project_42_bot_abc",
+      "name": "Project_42_Bot_Abc"
+    },
+    "created_at": "2026-11-24T00:00:00.000Z"
+  },
+  {
+    "id": 704,
+    "action_name": "closed",
+    "target_type": "Issue",
+    "target_iid": 104,
+    "author_username": "project_42_bot_abc",
+    "author": {
+      "id": 711,
+      "username": "project_42_bot_abc",
+      "name": "Project_42_Bot_Abc"
+    },
+    "created_at": "2026-11-24T00:00:00.000Z"
+  },
+  {
+    "id": 705,
+    "action_name": "closed",
+    "target_type": "Issue",
+    "target_iid": 105,
+    "author_username": "project_42_bot_abc",
+    "author": {
+      "id": 711,
+      "username": "project_42_bot_abc",
+      "name": "Project_42_Bot_Abc"
+    },
+    "created_at": "2026-11-24T00:00:00.000Z"
+  },
+  {
+    "id": 706,
+    "action_name": "closed",
+    "target_type": "Issue",
+    "target_iid": 106,
+    "author_username": "project_42_bot_abc",
+    "author": {
+      "id": 711,
+      "username": "project_42_bot_abc",
+      "name": "Project_42_Bot_Abc"
+    },
+    "created_at": "2026-11-24T00:00:00.000Z"
+  },
+  {
+    "id": 707,
+    "action_name": "closed",
+    "target_type": "Issue",
+    "target_iid": 107,
+    "author_username": "project_42_bot_abc",
+    "author": {
+      "id": 711,
+      "username": "project_42_bot_abc",
+      "name": "Project_42_Bot_Abc"
+    },
+    "created_at": "2026-11-24T00:00:00.000Z"
+  },
+  {
+    "id": 708,
+    "action_name": "closed",
+    "target_type": "Issue",
+    "target_iid": 108,
+    "author_username": "project_42_bot_abc",
+    "author": {
+      "id": 711,
+      "username": "project_42_bot_abc",
+      "name": "Project_42_Bot_Abc"
+    },
+    "created_at": "2026-11-24T00:00:00.000Z"
+  },
+  {
+    "id": 709,
+    "action_name": "closed",
+    "target_type": "Issue",
+    "target_iid": 109,
+    "author_username": "project_42_bot_abc",
+    "author": {
+      "id": 711,
+      "username": "project_42_bot_abc",
+      "name": "Project_42_Bot_Abc"
+    },
+    "created_at": "2026-11-24T00:00:00.000Z"
+  }
+]

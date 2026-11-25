@@ -1,0 +1,36 @@
+[
+  {
+    "id": 9005,
+    "iid": 5,
+    "project_id": 42,
+    "title": "Old crash",
+    "description": "x",
+    "state": "closed",
+    "labels": [],
+    "author": {
+      "id": 224,
+      "username": "bob",
+      "name": "Bob"
+    },
+    "created_at": "2026-10-01T00:00:00.000Z",
+    "closed_at": "2026-11-10T00:00:00.000Z",
+    "web_url": "https://gitlab.example.com/acme/widgets/-/issues/5"
+  },
+  {
+    "id": 9006,
+    "iid": 6,
+    "project_id": 42,
+    "title": "Ancient",
+    "description": "y",
+    "state": "closed",
+    "labels": [],
+    "author": {
+      "id": 224,
+      "username": "bob",
+      "name": "Bob"
+    },
+    "created_at": "2025-01-01T00:00:00.000Z",
+    "closed_at": "2025-02-01T00:00:00.000Z",
+    "web_url": "https://gitlab.example.com/acme/widgets/-/issues/6"
+  }
+]

@@ -1,0 +1,22 @@
+[
+  {
+    "id": 1,
+    "username": "maintainer",
+    "access_level": 40
+  },
+  {
+    "id": 2,
+    "username": "reporter",
+    "access_level": 20
+  },
+  {
+    "id": 3,
+    "username": "guest",
+    "access_level": 10
+  },
+  {
+    "id": 4,
+    "username": "project_42_bot_abc",
+    "access_level": 20
+  }
+]

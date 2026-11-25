@@ -1,6 +1,6 @@
 # Backlog refinement
 
-How another repository adopts the refiner: three GitHub workflows that check issues against a definition of ready, label the ready ones, close exact duplicates and keep a project board in step. Back to the [Map of Content](./index.md). For a one-off pass from your terminal, run [`/refine`](../skills/refine/SKILL.md) instead; it reads the same verdict and asks before each write.
+How another repository adopts the refiner: three GitHub workflows that check issues against a definition of ready, label the ready ones, close exact duplicates and keep a project board in step, or one GitLab CI template that does the same on GitLab ([GitLab](#gitlab)). Back to the [Map of Content](./index.md). For a one-off pass from your terminal, run [`/refine`](../skills/refine/SKILL.md) instead; it reads the same verdict and asks before each write.
 
 **Live mode is not ready yet.** Four review points from the first release can cause a wrong `agent-ready` label or a wrong duplicate close: [#1341](https://github.com/bjcoombs/ai-native-toolkit/issues/1341). Run in dry-run until that issue is closed. Dry-run is the default and writes nothing.
 
@@ -141,3 +141,41 @@ The sweep can keep a GitHub project's `Status`, `Size` and `Verdict` fields in s
 - **Size** comes from the `<!-- refine:size N -->` marker or a `Size: N points` line, and is cleared when the issue has neither. **Verdict** is `refine.py`'s verdict.
 - An open issue missing from the project is added. A project with more than 2000 items stops the sync before it writes. Only a field whose value differs is written, at most 500 writes a run, and nothing is written in dry-run.
 - The sync is the only writer of these three fields; a value set by hand is put back on the next sweep.
+
+## GitLab
+
+GitLab has no CI trigger for a new issue, so one template, `templates/refine.yml` (relative to the toolkit root), runs everything from a pipeline schedule: the sweep over every open issue, plus triage and dedupe for each issue opened since the last successful scheduled pipeline. It reads and writes through `glab`, with the same `refine.py` verdict, the same prompts, and the same write scripts and caps as the GitHub workflows. Add it to `.gitlab-ci.yml`:
+
+```yaml
+include:
+  - remote: https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v4.0.0/templates/refine.yml
+```
+
+| Job | Model | Token | What it does |
+|---|---|---|---|
+| `refine-verdict` | no | `REFINE_READ_TOKEN` | `refine.py --platform gitlab` writes the verdict and lists the new issues |
+| `refine-plan` | yes, read-only | `REFINE_READ_TOKEN` | For each new issue the script left unsettled, `/triage-issue` and `/dedupe` return plans. Its tools are the read-only `gh.sh` and Read of the verdict. It runs only when the issue's author is a Reporter or above |
+| `refine-apply` | no | `REFINE_WRITE_TOKEN` | Checks each plan against its schema, applies it or the settled verdict through the write scripts, then runs the sweep on a scheduled or manual pipeline |
+
+Set it up:
+
+1. **Tokens.** Create two project access tokens: one with the `read_api` scope and the Reporter role, stored as the masked CI/CD variable `REFINE_READ_TOKEN`; one with the `api` scope and the Reporter role, stored as `REFINE_WRITE_TOKEN` with its environment scope set to `refine-apply`. Only the `refine-apply` job names that environment, so the model's job never receives the write token; the two read jobs fail if they see it. Protect the environment to choose who may run it.
+2. **Credential and spend limit.** Store a Claude Console API key from a workspace with a monthly spend limit as the masked variable `REFINE_ANTHROPIC_API_KEY`. Workload Identity Federation is GitHub-only for now. Without the key, the model job is skipped and the deterministic steps still run.
+3. **Schedule.** Add a pipeline schedule on the default branch, for example `17 6,18 * * *`. The jobs run only on the default branch, in scheduled, manual (`web`) and trigger pipelines, so they run in every scheduled pipeline there, not only the refiner's own. If the project has other schedules, set `REFINE_ENABLED` as a variable on the refiner's schedule (and as `variables[REFINE_ENABLED]=true` in the webhook URL below) rather than project-wide. Each run triages the issues opened since the last `refine-apply` job that succeeded on the default branch outside a webhook pipeline, so a failed run leaves its issues for the next one.
+4. **Kill switch, dry-run, live.** As on GitHub: nothing runs until the variable `REFINE_ENABLED` is `true` (unset it, or set it to `false`, wherever you set it), and writes are logged, not sent, until `REFINE_MODE` is `live`. In dry-run `REFINE_WRITE_TOKEN` may be left unset; `refine-apply` then reads with the read token. Each run keeps the verdict, the plans and `.refine/actions.jsonl` as job artifacts.
+5. **Pipeline variables.** Set the project's minimum role to use pipeline variables to Maintainer, so a manual pipeline cannot set `REFINE_MODE` or the settings below.
+
+Settings are CI/CD variables with the GitHub inputs' defaults: `REFINE_QUESTIONS_ISSUE`, `REFINE_READY_LABEL`, `REFINE_TRIAGE_LABEL`, `REFINE_ALLOWED_LABELS`, `REFINE_MAX_POINTS`, `REFINE_CLOSE_CAP`, `REFINE_BUILDER_SLOTS` and `REFINE_MODEL`, plus `REFINE_MAX_NEW_ISSUES` (20), the most new issues one run triages, and `REFINE_BOT_LOGIN`, which defaults to the write token's user. The template's inputs choose the code and tools, never a variable: `toolkit_ref` (a release tag or a full commit sha; keep a tag equal to the tag in the include line), `toolkit_url`, `image`, `plan_image`, `claude_code_version`, `glab_version`, `glab_sha256` and `stage`. The project sync is GitHub-only.
+
+**Faster path: a webhook.** To triage a new issue within a minute rather than at the next schedule, create a pipeline trigger token (Settings > CI/CD > Pipeline trigger tokens) and a project webhook on Issues events pointing at `https://<gitlab host>/api/v4/projects/<project id>/ref/<default branch>/trigger/pipeline?token=<trigger token>`. GitLab hands the webhook body to the jobs as `TRIGGER_PAYLOAD`: a newly opened issue is triaged and deduplicated at once, and any other issue event ends the pipeline in `refine-verdict` with nothing to do. The sweep stays on the schedule.
+
+**Readiness on GitLab.**
+
+- **Issue templates.** Markdown templates under `.gitlab/issue_templates/` stand in for GitHub's issue forms: give them the six section headings of your definition of ready. As on GitHub, `refine.py` checks the issue body, not the template.
+- **Scoped labels.** `refine::ready` and `refine::triage` work as the ready and triage labels; set `REFINE_READY_LABEL`, `REFINE_TRIAGE_LABEL` and `REFINE_ALLOWED_LABELS` to match, and the definition of ready's `labels` too.
+- **Blocked-by edges.** Linked issues of type `blocks` stand in for GitHub's blocked-by edges; the refiner reads and writes them in the same project. They need GitLab Premium; on Free every issue reads no edge, and adding one fails.
+- **Trusted comments.** A size marker or clarified-scope comment counts when its author is a project member at Reporter or above, or the refiner's bot.
+- **Not read on GitLab:** child tasks, so a large issue must be split rather than marked decomposed, and close reasons.
+- **`/reopen`.** GitLab runs `/reopen` itself as a quick action, so there is no reopen job. The refiner never closes an issue again once it has been reopened, and it neutralises any line starting with `/` in the comments it writes, so issue or model text cannot run a quick action.
+
+This template follows GitLab's documentation and has not been run on a real GitLab instance.

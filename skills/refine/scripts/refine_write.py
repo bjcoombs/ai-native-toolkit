@@ -53,7 +53,8 @@ rules below are enforced here, in code, whatever the plan says:
 Exit codes: 0 done (individual labels may have been dropped, listed on
 stderr); 2 usage error; 3 `gh` failed; 4 a guardrail refused the call.
 
-Python 3.8 compatible and stdlib only, plus `gh` on PATH.
+Python 3.8 compatible and stdlib only, plus `gh` on PATH, or `glab` when
+`REFINE_PLATFORM` is `gitlab` (`refine_write_gitlab.GitLabWriter`, #1327).
 """
 from __future__ import annotations
 
@@ -158,13 +159,15 @@ class Settings:
 
     def __init__(self, env: Optional[Dict[str, str]] = None) -> None:
         e = dict(os.environ if env is None else env)
-        self.repo = e.get("GH_REPO") or e.get("GITHUB_REPOSITORY") or ""
+        self.platform = e.get("REFINE_PLATFORM") or "github"  # "gitlab": refine_write_gitlab.GitLabWriter
+        self.repo = e.get("GH_REPO") or e.get("GITHUB_REPOSITORY") or e.get("CI_PROJECT_PATH") or ""
         self.live = e.get("REFINE_MODE", "") == "live"
         self.ready_label = e.get("REFINE_READY_LABEL") or DEFAULT_READY
         self.triage_label = e.get("REFINE_TRIAGE_LABEL") or DEFAULT_TRIAGE
         self.allowed_labels: Set[str] = set(_csv(e.get("REFINE_ALLOWED_LABELS", "")))
         self.allowed_labels |= {self.ready_label, self.triage_label}
         self.bot_login = e.get("REFINE_BOT_LOGIN") or DEFAULT_BOT
+        self.bot_login_set = bool(e.get("REFINE_BOT_LOGIN"))
         self.close_cap = int(e.get("REFINE_CLOSE_CAP") or DEFAULT_CLOSE_CAP)
         self.max_points = int(e.get("REFINE_MAX_POINTS") or DEFAULT_MAX_POINTS)
         q = e.get("REFINE_QUESTIONS_ISSUE", "").strip().lstrip("#")
@@ -249,6 +252,55 @@ class Writer:
     def comments(self, number: int) -> List[Json]:
         data = json_values(self.run(["api", "--paginate", f"repos/{self.s.repo}/issues/{number}/comments?per_page=100"]))
         return [c for c in data if isinstance(c, dict)]
+
+    # ── host calls: GitHub here, GitLab in refine_write_gitlab.GitLabWriter ─
+    # The reads return GitHub's REST shapes; the GitLab writer maps its host's
+    # JSON onto them, so every rule above and below reads one shape.
+
+    def repo_events_page(self, page: int) -> List[Json]:
+        """One page of the repository's issue events, newest first."""
+        return [e for e in json_values(self.run(["api", f"repos/{self.s.repo}/issues/events?per_page=100&page={page}"]))
+                if isinstance(e, dict)]
+
+    def blocked_by(self, number: int) -> Set[int]:
+        """The issues `number` is blocked by now."""
+        data = json_values(self.run(["api", f"repos/{self.s.repo}/issues/{number}/dependencies/blocked_by"]))
+        return {int(i["number"]) for i in data if isinstance(i, dict) and isinstance(i.get("number"), int)}
+
+    def is_writer(self, login: str) -> bool:
+        perm = self._read(["api", f"repos/{self.s.repo}/collaborators/{login}/permission"])
+        return str((perm or {}).get("role_name") or (perm or {}).get("permission") or "") in WRITE_ROLES
+
+    def rendered(self, body: str) -> str:
+        """`body` as the host stores it, for comparing with a comment read back."""
+        return body
+
+    def labels_args(self, number: int, add: Sequence[str], remove: Sequence[str]) -> List[str]:
+        args = ["issue", "edit", str(number), "--repo", self.s.repo]
+        if add:
+            args += ["--add-label", ",".join(add)]
+        if remove:
+            args += ["--remove-label", ",".join(remove)]
+        return args
+
+    def comment_args(self, number: int, body: str) -> List[str]:
+        return ["issue", "comment", str(number), "--repo", self.s.repo, "--body", self.rendered(body)]
+
+    def comment_update_args(self, number: int, comment_id: int, body: str) -> List[str]:
+        return ["api", "-X", "PATCH", f"repos/{self.s.repo}/issues/comments/{comment_id}", "-f",
+                f"body={self.rendered(body)}"]
+
+    def close_args(self, number: int) -> List[str]:
+        return ["api", "-X", "PATCH", f"repos/{self.s.repo}/issues/{number}",
+                "-f", "state=closed", "-f", "state_reason=duplicate"]
+
+    def reopen_args(self, number: int) -> List[str]:
+        return ["api", "-X", "PATCH", f"repos/{self.s.repo}/issues/{number}",
+                "-f", "state=open", "-f", "state_reason=reopened"]
+
+    def blocked_by_args(self, number: int, blocker: Json) -> List[str]:
+        return ["api", "-X", "POST", f"repos/{self.s.repo}/issues/{number}/dependencies/blocked_by",
+                "-F", f"issue_id={int(blocker['id'])}"]
 
     def _is_bot(self, actor: Any) -> bool:
         if not isinstance(actor, dict):
@@ -361,12 +413,7 @@ class Writer:
         if to_add or to_remove:
             # The cap counts only a call that writes, so a vetoed entry leaves it for later ones.
             self.take_cap(script)
-            args = ["issue", "edit", str(number), "--repo", self.s.repo]
-            if to_add:
-                args += ["--add-label", ",".join(to_add)]
-            if to_remove:
-                args += ["--remove-label", ",".join(to_remove)]
-            self._write(script, "edit-labels", number, args,
+            self._write(script, "edit-labels", number, self.labels_args(number, to_add, to_remove),
                         f"add {to_add or '-'} remove {to_remove or '-'}")
         return {"added": to_add, "removed": to_remove, "refused": refused}
 
@@ -393,8 +440,7 @@ class Writer:
             raise self.refuse(script, number, "no open candidate to name")
         body = "\n".join([DUPLICATES_MARKER, "The refiner found issues that may cover the same work:", "",
                           *lines, "", "Nothing has been closed. A maintainer decides whether to merge them."])
-        self._write(script, "comment-duplicates", number,
-                    ["issue", "comment", str(number), "--repo", self.s.repo, "--body", body],
+        self._write(script, "comment-duplicates", number, self.comment_args(number, body),
                     f"possible duplicates {named}")
         return named
 
@@ -422,7 +468,7 @@ class Writer:
         since = self.now - timedelta(days=CLOSE_WINDOW_DAYS)
         count = 0
         for page in range(1, EVENT_PAGES + 1):
-            batch = json_values(self.run(["api", f"repos/{self.s.repo}/issues/events?per_page=100&page={page}"]))
+            batch = self.repo_events_page(page)
             if not batch:
                 return count
             for e in batch:
@@ -462,12 +508,9 @@ class Writer:
             "If this is wrong, comment `/reopen` on this issue. The issue author or anyone "
             "with write access can do that, and it reopens the issue with no model involved.",
         ])
-        self._write(script, "comment-close", number,
-                    ["issue", "comment", str(number), "--repo", self.s.repo, "--body", body],
+        self._write(script, "comment-close", number, self.comment_args(number, body),
                     f"duplicate of #{survivor}")
-        self._write(script, "close-duplicate", number,
-                    ["api", "-X", "PATCH", f"repos/{self.s.repo}/issues/{number}",
-                     "-f", "state=closed", "-f", "state_reason=duplicate"],
+        self._write(script, "close-duplicate", number, self.close_args(number),
                     f"closed as duplicate of #{survivor}")
         self.closed_this_run.add(number)
 
@@ -498,8 +541,7 @@ class Writer:
         # The cap counts only a call that writes, so a marker already in place costs nothing.
         self.take_cap(script)
         body = SIZE_MARKER.format(points=points) + "\n" + neutralise(reason)
-        self._write(script, "size-marker", number,
-                    ["issue", "comment", str(number), "--repo", self.s.repo, "--body", body],
+        self._write(script, "size-marker", number, self.comment_args(number, body),
                     f"size {points}")
         self.sized_this_run[number] = points
         return True
@@ -511,19 +553,15 @@ class Writer:
         script = "add-blocked-by.sh"
         if blocker == number:
             raise self.refuse(script, number, "an issue cannot block itself")
-        existing = json_values(self.run(["api", f"repos/{self.s.repo}/issues/{number}/dependencies/blocked_by"]))
-        if any(isinstance(i, dict) and i.get("number") == blocker for i in existing):
+        if blocker in self.blocked_by(number):
             return False
         target = self.issue(blocker)
         if "pull_request" in target:
             raise self.refuse(script, number, f"#{blocker} is a pull request, not an issue")
-        reverse = json_values(self.run(["api", f"repos/{self.s.repo}/issues/{blocker}/dependencies/blocked_by"]))
-        if any(isinstance(i, dict) and i.get("number") == number for i in reverse):
+        if number in self.blocked_by(blocker):
             raise self.refuse(script, number, f"#{blocker} is already blocked by #{number}; that is a cycle")
         self.take_cap(script)
-        self._write(script, "blocked-by", number,
-                    ["api", "-X", "POST", f"repos/{self.s.repo}/issues/{number}/dependencies/blocked_by",
-                     "-F", f"issue_id={int(target['id'])}"],
+        self._write(script, "blocked-by", number, self.blocked_by_args(number, target),
                     f"blocked by #{blocker}")
         return True
 
@@ -541,10 +579,10 @@ class Writer:
             raise self.refuse(script, 0, "REFINE_QUESTIONS_ISSUE is not set")
         lines = [f"- #{int(q['issue'])}: {neutralise(str(q['question']))}" for q in items]
         body = "\n".join([QUESTIONS_MARKER, "Questions from the refiner that need a maintainer's call:", "", *lines])
-        if any(str(c.get("body", "")) == body and self._is_bot(c.get("user")) for c in self.comments(target)):
+        if any(str(c.get("body", "")) == self.rendered(body) and self._is_bot(c.get("user"))
+               for c in self.comments(target)):
             return 0
-        self._write(script, "questions", target,
-                    ["issue", "comment", str(target), "--repo", self.s.repo, "--body", body],
+        self._write(script, "questions", target, self.comment_args(target, body),
                     f"{len(items)} question(s)")
         return len(items)
 
@@ -562,12 +600,10 @@ class Writer:
                 if REPORT_MARKER in str(c.get("body", "")) and self._is_bot(c.get("user"))]
         if mine:
             cid = int(mine[-1]["id"])
-            self._write(script, "report-update", target,
-                        ["api", "-X", "PATCH", f"repos/{self.s.repo}/issues/comments/{cid}", "-f", f"body={text}"],
+            self._write(script, "report-update", target, self.comment_update_args(target, cid, text),
                         "ready-buffer report updated")
         else:
-            self._write(script, "report-create", target,
-                        ["issue", "comment", str(target), "--repo", self.s.repo, "--body", text],
+            self._write(script, "report-create", target, self.comment_args(target, text),
                         "ready-buffer report posted")
 
     # ── reopen-duplicate.sh ──────────────────────────────────────────────
@@ -582,25 +618,19 @@ class Writer:
         if (info.get("closed_by") or {}).get("login") != self.s.bot_login:
             raise self.refuse(script, number, "the refiner did not close it, so a person reopens it")
         author = str((info.get("user") or {}).get("login", ""))
-        if commenter != author:
-            perm = self._read(["api", f"repos/{self.s.repo}/collaborators/{commenter}/permission"])
-            role = str((perm or {}).get("role_name") or (perm or {}).get("permission") or "")
-            if role not in WRITE_ROLES:
-                raise self.refuse(script, number, f"{commenter} is neither the author nor a writer")
-        self._write(script, "reopen", number,
-                    ["api", "-X", "PATCH", f"repos/{self.s.repo}/issues/{number}",
-                     "-f", "state=open", "-f", "state_reason=reopened"],
+        if commenter != author and not self.is_writer(commenter):
+            raise self.refuse(script, number, f"{commenter} is neither the author nor a writer")
+        self._write(script, "reopen", number, self.reopen_args(number),
                     f"reopened at the request of {commenter}")
         if self.s.triage_label in self.removed_by_person(number):
             self._record({"mode": "live" if self.s.live else "dry-run", "script": script, "action": "refused",
                           "issue": number, "detail": f"{self.s.triage_label}: a person removed it from this issue"})
         else:
-            self._write(script, "label-reopened", number,
-                        ["issue", "edit", str(number), "--repo", self.s.repo, "--add-label", self.s.triage_label],
+            self._write(script, "label-reopened", number, self.labels_args(number, [self.s.triage_label], []),
                         f"add {self.s.triage_label}")
         self._write(script, "comment-reopened", number,
-                    ["issue", "comment", str(number), "--repo", self.s.repo, "--body",
-                     REOPEN_MARKER + "\nReopened. The refiner will not close this issue as a duplicate again."],
+                    self.comment_args(number, REOPEN_MARKER + "\nReopened. The refiner will not close this issue "
+                                      "as a duplicate again."),
                     "reopen acknowledged")
 
 
@@ -733,10 +763,20 @@ def dispatch(args: argparse.Namespace, w: Writer) -> None:
         w.reopen(args.issue, args.commenter)
 
 
-def main(argv: Optional[Sequence[str]] = None, runner: Runner = gh_runner) -> int:
+def make_writer(settings: Settings, runner: Optional[Runner] = None) -> Writer:
+    """The writer for `settings.platform`: GitHub through `gh`, GitLab through `glab` (#1327)."""
+    if settings.platform == "gitlab":
+        from refine_write_gitlab import GitLabWriter, glab_runner
+        return GitLabWriter(settings, runner or glab_runner)
+    if settings.platform != "github":
+        raise ValueError(f"REFINE_PLATFORM must be github or gitlab, not {settings.platform!r}")
+    return Writer(settings, runner or gh_runner)
+
+
+def main(argv: Optional[Sequence[str]] = None, runner: Optional[Runner] = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        w = Writer(Settings(), runner)
+        w = make_writer(Settings(), runner)
         dispatch(args, w)
     except Refused as exc:
         print(f"refused: {exc}", file=sys.stderr)

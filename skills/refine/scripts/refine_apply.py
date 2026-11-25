@@ -43,7 +43,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
-from refine_write import GhError, Json, Refused, Runner, Settings, Writer, gh_runner, verdict_entry
+from refine_write import GhError, Json, Refused, Runner, Settings, Writer, make_writer, verdict_entry
 
 HERE = Path(__file__).resolve().parent
 SCHEMAS = {"triage": HERE / "triage-plan.schema.json", "dedupe": HERE / "dedupe-plan.schema.json"}
@@ -261,7 +261,7 @@ def _parser() -> argparse.ArgumentParser:
     return p
 
 
-def run(args: argparse.Namespace, runner: Runner) -> int:
+def run(args: argparse.Namespace, runner: Optional[Runner]) -> int:
     settings = Settings()
     if args.command == "summary":
         print(summary(settings))
@@ -273,7 +273,7 @@ def run(args: argparse.Namespace, runner: Runner) -> int:
     if args.command == "dedupe-route":
         print(f"model={'false' if exact_pair(verdict, args.issue) else 'true'}")
         return 0
-    w = Writer(settings, runner)
+    w = make_writer(settings, runner)
     if args.command == "settled":
         apply_settled(w, verdict, args.issue)
     elif args.command == "dedupe-exact":
@@ -289,7 +289,7 @@ def run(args: argparse.Namespace, runner: Runner) -> int:
     return 3 if w.failures else 0
 
 
-def main(argv: Optional[Sequence[str]] = None, runner: Runner = gh_runner) -> int:
+def main(argv: Optional[Sequence[str]] = None, runner: Optional[Runner] = None) -> int:
     args = _parser().parse_args(argv)
     try:
         return run(args, runner)

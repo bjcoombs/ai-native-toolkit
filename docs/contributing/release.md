@@ -58,8 +58,9 @@ When `.claude-plugin/plugin.json` moves, move the GitLab gate pin with it in the
 - [ ] `templates/assess-gate.yml`: the `toolkit_ref` input default (`v<version>`) and the include line in its header comment.
 - [ ] `README.md` ("Use in GitLab CI"): the `include: remote:` line.
 - [ ] `README.md` ("Use the refiner in your repository") and `docs/refine.md`: the `@v<version>` on every `reusable-refine-*.yml` `uses:` line.
+- [ ] `templates/refine.yml`: the `toolkit_ref` input default and the include line in its header comment, and the `include:` line in `docs/refine.md` ("GitLab").
 
-`skills/assess/tests/test_gitlab_gate.py::test_toolkit_pin_follows_the_plugin_version` fails until all three match `plugin.json`, and `tests/test_refine_adoption_docs.py` until the refiner pins do.
+`skills/assess/tests/test_gitlab_gate.py::test_toolkit_pin_follows_the_plugin_version` fails until all three match `plugin.json`, and `tests/test_refine_adoption_docs.py` and `tests/test_refine_gitlab_template.py` until the refiner pins do.
 
 After the hand bump of `plugin.json`, run `make catalog` once more: `docs/checks.html` stamps the plugin version into its header and CI examples, and `make fold` ran `make regen` before the bump. `tests/test_catalog.py` reports the page stale until then.
 

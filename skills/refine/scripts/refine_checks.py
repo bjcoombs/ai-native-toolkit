@@ -166,7 +166,8 @@ def size_points(issue: Issue, definition: Definition) -> Optional[int]:
 
 def _issue_refs(text: str, repo: str) -> Set[int]:
     refs = {int(n) for n in re.findall(r"(?<![\w/])#(\d+)\b", text)}
-    url = re.compile(r"https://github\.com/" + re.escape(repo) + r"/issues/(\d+)")
+    # A GitHub issue URL, or a GitLab one on any host (`<host>/<group>/<project>/-/issues/<n>`).
+    url = re.compile(r"https://(?:github\.com/" + re.escape(repo) + r"|[^/\s]+/" + re.escape(repo) + r"/-)/issues/(\d+)")
     return refs | {int(n) for n in url.findall(text)}
 
 

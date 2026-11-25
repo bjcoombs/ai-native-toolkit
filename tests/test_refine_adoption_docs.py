@@ -5,7 +5,8 @@ in a fenced YAML block must name a reusable workflow on disk, pass only
 inputs and secrets its `workflow_call` declares (and every required one),
 and pin the tag of the current plugin version. Every `include: remote:` line
 that fetches a toolkit template must name a template on disk, pass only
-inputs its `spec:inputs` header declares, and pin the same tag. The release
+inputs its `spec:inputs` header declares, and pin the same tag; the refine
+page's GitLab section includes `templates/refine.yml`. The release
 PR moves the pins with `.claude-plugin/plugin.json`
 (`docs/contributing/release.md`).
 """
@@ -71,6 +72,8 @@ def test_the_docs_carry_the_examples() -> None:
     assert {j["uses"].split("@")[0].rsplit("/", 1)[1] for _, j in _uses(page)} == set(REFINE_CALLERS)
     assert any("reusable-refine-" in j["uses"] for _, j in _uses(readme))
     assert _includes(readme), "README.md's GitLab section has an include: remote: line"
+    assert [REMOTE_RE.match(i["remote"]).group(2) for i in _includes(page)] == ["templates/refine.yml"], \
+        "docs/refine.md's GitLab section includes the refiner template (#1327)"
 
 
 @pytest.mark.parametrize("doc", DOCS, ids=lambda p: p.name)
