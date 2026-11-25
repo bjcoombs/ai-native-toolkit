@@ -14,7 +14,10 @@ writes nothing):
     {repo_root}/.assess/badge.json, findings.json
 
 Run:
-    uv run assess_core.py <repo_root>
+    uv run assess_core.py <repo_root> [--jobs N]
+
+``--jobs N`` (#1381) runs at most N scans at a time (``lib/scan_pool.py``; default the CPU
+count capped at 8). run-context.json is the same for every N apart from ``timings``.
 
 The LLM still writes assess-report.md (the prose-heavy summary).
 The LLM reads run-context.json to ground that prose in deterministic data.
@@ -61,6 +64,7 @@ from lib.assess_config import load_managed_settings_opt_in
 from lib.run_wiki import refresh_log_readiness
 from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
 from lib.scan_plan import ScanPlan, run_plan
+from lib.scan_pool import add_jobs_argument
 from lib.scan_registry import run_scans
 from lib.scan_registry import safe as _safe
 from lib.scan_timings import TIMINGS_KEY, summary_line
@@ -72,7 +76,7 @@ def build_run_context(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
     scope: Path | None = None, model: ModelChoice | None = None, managed_settings: bool = False,
     plan: ScanPlan | None = None,
-    packs: tuple[Pack, ...] = (),
+    packs: tuple[Pack, ...] = (), jobs: int = 1,
 ) -> dict[str, Any]:
     """Run the deterministic pipeline and return the structured context dict.
 
@@ -112,15 +116,19 @@ def build_run_context(
 
     The ``timings`` block, last, holds each stage's and each scan's wall time
     (``lib.scan_timings``, #1380): a diagnostic that differs on every run.
+
+    ``jobs`` (``--jobs``, #1381) is how many scans run at a time (``lib.scan_pool``); the
+    context is the same for every value, ``timings`` apart. The CLI defaults to
+    ``scan_pool.default_jobs``; 1 runs the table one scan after another.
     """
-    return _scan(repo_root, run_date, non_interactive, scope, model, managed_settings, plan, packs)[0]
+    return _scan(repo_root, run_date, non_interactive, scope, model, managed_settings, plan, packs, jobs)[0]
 
 
 def build_and_publish_run(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
     scope: Path | None = None, model: ModelChoice | None = None, managed_settings: bool = False,
     plan: ScanPlan | None = None,
-    packs: tuple[Pack, ...] = (),
+    packs: tuple[Pack, ...] = (), jobs: int = 1,
 ) -> dict[str, Any]:
     """``build_run_context``, then the publish step that writes the artifacts.
 
@@ -128,7 +136,8 @@ def build_and_publish_run(
     run-context.json, and fills the context keys only it can know
     (``pruned_hotspots``, ``log_integrity``, ``prior_findings_snapshot``, ...).
     """
-    ctx, scan_inputs = _scan(repo_root, run_date, non_interactive, scope, model, managed_settings, plan, packs)
+    ctx, scan_inputs = _scan(repo_root, run_date, non_interactive, scope, model, managed_settings, plan, packs,
+                             jobs)
     publish_run(ctx, scan_inputs)
     return ctx
 
@@ -136,7 +145,7 @@ def build_and_publish_run(
 def _scan(
     repo_root: Path, run_date: str, non_interactive: bool, scope: Path | None,
     model: ModelChoice | None = None, managed_settings: bool = False, plan: ScanPlan | None = None,
-    packs: tuple[Pack, ...] = (),
+    packs: tuple[Pack, ...] = (), jobs: int = 1,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Run the scan table; return the context and the inputs it filled."""
     scan_inputs: dict[str, Any] = {
@@ -148,7 +157,7 @@ def _scan(
         "packs": packs,
     }
     ctx: dict[str, Any] = {}
-    run_scans(ctx, scan_inputs)
+    run_scans(ctx, scan_inputs, jobs=jobs)
     # A diagnostic, last in the context: counts-only and the golden normalisation leave it out (#1380)
     ctx[TIMINGS_KEY] = scan_inputs[TIMINGS_KEY]
     return ctx, scan_inputs
@@ -366,6 +375,7 @@ def main(argv: list[str] | None = None) -> int:
             "context records each pack's name, version and sha256."
         ),
     )
+    add_jobs_argument(parser)
     add_counts_only_arguments(parser)
     parsed = parser.parse_args(argv)
     validate_counts_only_args(parser, parsed)
@@ -391,7 +401,7 @@ def main(argv: list[str] | None = None) -> int:
             non_interactive=parsed.non_interactive,
             scope=parsed.scope, model=model, plan=run_plan(model, parsed.all_scans),
             managed_settings=parsed.managed_settings or load_managed_settings_opt_in(repo_root),
-            packs=packs,
+            packs=packs, jobs=parsed.jobs,
         )
     except ValueError as e:
         # Invalid --scope (missing path or outside the repo). Report cleanly

@@ -1,7 +1,8 @@
 """Per-stage and per-scan wall time for one /assess run (#1380), a diagnostic only.
 
-``scan_registry.run_scans`` times each scan it calls and each stage it runs with
-``timed`` and records the seconds in the inputs mapping under ``TIMINGS_KEY``, never
+``scan_registry.run_scans`` times each scan it calls and each stage it runs (with
+``timed``, or ``record`` for a time taken elsewhere) and records the seconds in the
+inputs mapping under ``TIMINGS_KEY``, never
 in the run context it fills, so a caller that compares two run contexts built by
 ``run_scans`` sees no difference. ``assess_core`` copies the block into the run
 context as ``timings`` (``lib.run_context_types_timings.TimingsBlock``) and prints
@@ -48,10 +49,18 @@ def timed(inputs: MutableMapping[str, Any], kind: Literal["stages", "scans"], ke
     try:
         yield
     finally:
-        block = timings_block(inputs)
-        block[kind][key] = round(time.perf_counter() - start, _PLACES)
-        if kind == "stages":
-            block["total_seconds"] = round(sum(block["stages"].values()), _PLACES)
+        record(inputs, kind, key, time.perf_counter() - start)
+
+
+def record(inputs: MutableMapping[str, Any], kind: Literal["stages", "scans"], key: str,
+           seconds: float) -> None:
+    """Store ``seconds`` under ``timings[kind][key]``, rounded to the millisecond; a stage's
+    time also refreshes ``total_seconds``. A pooled stage (``lib/scan_pool.py``, #1381) times
+    each scan on its pool thread and records it here from the calling thread."""
+    block = timings_block(inputs)
+    block[kind][key] = round(seconds, _PLACES)
+    if kind == "stages":
+        block["total_seconds"] = round(sum(block["stages"].values()), _PLACES)
 
 
 def summary_line(block: TimingsBlock | None, slowest: int = SLOWEST) -> str:

@@ -2,7 +2,8 @@
 
 ``parse_args`` builds the parser, parses ``argv`` and enforces every rule that needs
 no file read: ROOT or ``--from-list``, ``--discovered`` needs ROOT, the hashing flags
-apply to counts-only output, positive ``--jobs``/``--timeout`` and platform limits,
+apply to counts-only output, positive ``--jobs``/``--timeout`` and platform limits, a
+``--scan-jobs`` of 1 or more (``lib/scan_pool.jobs_value``, #1381),
 ``--profile`` resolved to its shipped ``--levels`` file (``lib/profiles.py``, #1150),
 ``--monorepo-units`` and ``--pack`` need a model, and a ``--compare`` value that is not a run
 directory (it most likely swallowed ROOT). A broken rule exits 2 through
@@ -26,6 +27,7 @@ from lib.fleet.fleet_stamp import RUN_FILE
 from lib.fleet.runner import DEFAULT_TIMEOUT, REPOS_FILE
 from lib.scoring.levels import add_renamed_flag
 from lib.profiles import ProfileError, add_model_arguments, profile_path
+from lib.scan_pool import jobs_value
 from lib.signals import platform_only_error
 
 
@@ -104,6 +106,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--jobs", type=int, default=os.cpu_count() or 1,
                         help="Repositories scanned in parallel (default: CPU count).")
+    parser.add_argument("--scan-jobs", type=jobs_value, default=None, metavar="N",
+                        help="Scans run at a time inside each repository scan (assess_signals --jobs; "
+                             "default: its own, the CPU count capped at 8). Rows are the same for every N.")
     parser.add_argument("--window", default=None,
                         help="History window passed to assess_signals, e.g. 6mo, 90d (default: its own).")
     parser.add_argument("--scans", default=None,

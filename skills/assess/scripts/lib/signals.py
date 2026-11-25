@@ -404,14 +404,15 @@ def collect(
     repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     window: str = DEFAULT_WINDOW, fleet_config: FleetConfig | None = None, platform: bool = False,
     ghsync_root: Path | None = None, scope: Path | None = None, managed_settings: bool = False,
-    packs: Sequence[Pack] = (),
+    packs: Sequence[Pack] = (), jobs: int = 1,
 ) -> dict[str, JsonDict]:
     """Run the selected scans (and what they read); one block per name.
 
     Offline unless ``platform``: then a network scan in ``PLATFORM_SCANS``, or one
     a listed scan reads, runs its network ``fn``. Offline, a ``PLATFORM_ONLY_SCANS``
     name gets no block at all. With ``packs`` the ``pack_checks`` entry runs whatever the
-    selection and its ``pack`` block is added (``PACK_BLOCKS``, #1276).
+    selection and its ``pack`` block is added (``PACK_BLOCKS``, #1276). ``jobs`` scans run at
+    a time (``lib/scan_pool.py``, #1381); the blocks are the same for every value.
     """
     inputs = build_inputs(repo_root, window, fleet_config, ghsync_root, scope, managed_settings, packs)
     needed = _with_dependencies(selected, specs, inputs) | ({PACK_ENTRY} if packs else set())
@@ -429,7 +430,7 @@ def collect(
             ctx[spec.key] = _unavailable(NETWORK_REASON)
     if runnable:
         for stage in STAGES:
-            run_scans(ctx, inputs, stage, runnable)
+            run_scans(ctx, inputs, stage, runnable, jobs=jobs)
     blocks = {name: ctx.get(name, _unavailable(UNREGISTERED_REASON)) for name in selected
               if platform or name not in PLATFORM_ONLY_SCANS}
     if packs:
@@ -517,7 +518,7 @@ def build_document(
     toolkit_root: Path = TOOLKIT_ROOT, specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     fleet_config: FleetConfig | None = None, platform: bool = False,
     ghsync_root: Path | None = None, scope: Path | None = None, units: bool = False,
-    managed_settings: bool = False, packs: Sequence[Pack] = (),
+    managed_settings: bool = False, packs: Sequence[Pack] = (), jobs: int = 1,
 ) -> SignalsDocument:
     """The whole signals document. Raises ``UnknownScanError`` or ``ValueError`` on bad arguments.
 
@@ -533,5 +534,5 @@ def build_document(
             "signals_schema_version": SIGNALS_SCHEMA_VERSION,
             "stamp": build_stamp(repo_root, window, toolkit_root, scope, managed_settings),
             "scans": collect(repo_root, selected, specs, window, fleet_config, platform,
-                             ghsync_root, scope, managed_settings, packs),
+                             ghsync_root, scope, managed_settings, packs, jobs),
         }
