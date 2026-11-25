@@ -20,8 +20,9 @@ rules below are enforced here, in code, whatever the plan says:
   label goes on (`current_size`): it must still be present when the verdict
   had one, at most `REFINE_MAX_POINTS`, and equal to the plan's size when
   the plan sized the issue. An issue the verdict found `unsized` must read
-  a size by then, or have been sized by this run (in dry-run no marker is
-  posted, so the size the run recorded stands in). `refine_apply.apply_triage` also withholds the
+  a size by then, or have been sized by this run: a marker this run posted
+  (live) or recorded (dry-run) stands in when the re-read finds none, so a
+  read that lags the write does not withhold the label. `refine_apply.apply_triage` also withholds the
   label when a required size write or any planned blocked-by edge was
   refused or failed. Adding it removes the triage label.
 - **Duplicate closes.** Only a pair the refinement script reported as
