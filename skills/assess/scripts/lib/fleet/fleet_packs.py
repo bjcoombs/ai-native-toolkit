@@ -87,9 +87,16 @@ def load_fleet_packs(paths: Sequence[str]) -> FleetPacks:
 
 def fleet_model(levels: Path, base_source: str, packs: Sequence[Pack]) -> MaturityModel:
     """The ``--levels`` model with each pack's rows layered on, every pack path allowed;
-    ``LevelsError`` or ``PackError`` on a fault. Without packs it is ``load_levels`` alone."""
+    ``LevelsError`` or ``PackError`` on a fault. Without packs it is ``load_levels`` alone.
+
+    ``base_source`` names the base rows (a profile's name or the ``--levels`` file name), but a
+    file holding the default model (a ``default-<date>`` version) is ``default``, as ``/assess``
+    names it: copying or renaming the file never changes ``source`` and so the rules hash, and a
+    pack named ``default`` is refused here as there."""
     validator = signal_path_validator(packs)
-    return layer_packs(load_levels(levels, validator), base_source, packs, validator)
+    model = load_levels(levels, validator)
+    base = "default" if model["version"].startswith("default-") else base_source
+    return layer_packs(model, base, packs, validator)
 
 
 def pack_copies(directory: Path, fleet_packs: FleetPacks) -> tuple[Path, ...]:

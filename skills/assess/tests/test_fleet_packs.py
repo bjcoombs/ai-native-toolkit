@@ -262,6 +262,22 @@ def test_an_owner_excluded_condition_is_in_neither_column() -> None:
     assert roll[0]["repos"] == 1
     assert (roll[0]["practices"][0]["measured"], roll[0]["practices"][0]["not_measured"]) == (0, 0)
 
+
+def test_a_levels_file_holding_the_default_model_names_its_rows_default(tmp_path: Path) -> None:
+    """The base source does not depend on the file name, so a copy keeps the rules hash."""
+    from lib.signal_grades import DEFAULT_LEVELS
+    copy = tmp_path / "renamed.toml"
+    copy.write_text(DEFAULT_LEVELS.read_text(encoding="utf-8"), encoding="utf-8")
+    team = parse_pack(_toml(TEAM))
+    model = fp.fleet_model(copy, copy.name, [team])
+    assert {row.get("source") for row in model["rows"]} == {"default", "team"}
+    custom = tmp_path / "levels.toml"
+    custom.write_text(LEVELS, encoding="utf-8")
+    assert fp.fleet_model(custom, custom.name, [team])["rows"][0].get("source") == "levels.toml"
+    named_default = parse_pack(_toml(TEAM.replace('name = "team"', 'name = "default"').replace("pack.team.", "pack.default.")))
+    with pytest.raises(PackError):
+        fp.fleet_model(copy, copy.name, [named_default])
+
 def _toml(text: str) -> dict[str, object]:
     import tomllib
     return tomllib.loads(text)
