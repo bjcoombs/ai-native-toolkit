@@ -181,3 +181,37 @@ def test_the_fleet_schema_writes_a_literal_as_an_enum() -> None:
     from lib.fleet.fleet_group_schema import type_schema
     assert type_schema(Literal["skill", "agents"]) == {"enum": ["skill", "agents"]}
     assert type_schema(Literal["skill"] | None) == {"anyOf": [{"enum": ["skill"]}, {"type": "null"}]}
+
+
+# --- per-practice counts per org unit (#1366, part 1 of #1314) -----------------------
+
+def _practice_counts(privacy: fd.Privacy) -> dict[str, dict[str, dict[str, int]]]:
+    """Each org unit's ``row -> {met, measured, repos}``, keyed by the unit's clear key."""
+    keys = {privacy.key(k): k for k in ("ownership/grp", "ownership/grp/other", "ownership/grp/sub",
+                                       "system/checkout")}
+    return {keys[u["key"]]: {lv["row"]: {"met": lv["met"], "measured": lv["measured"], "repos": lv["repos"]}
+                             for lv in u["levels"]}
+            for v in build(privacy)["views"] for u in v["units"]}
+
+
+@pytest.mark.parametrize("name", sorted(VARIANTS))
+def test_each_org_unit_counts_met_of_measured_per_practice(name: str) -> None:
+    """met: measured repositories at the row's top level; measured: a known level; repos: every
+    repository below the unit. proj3's unknown docs and the failed proj4 count in repos only."""
+    assert _practice_counts(VARIANTS[name]) == {
+        # docs: proj1 at 2 of 2, proj2 at 1 of 2; ci: proj1 and proj3 at 1 of 1, proj2 at 0
+        "ownership/grp": {"docs": {"met": 1, "measured": 2, "repos": 4},
+                          "ci": {"met": 2, "measured": 3, "repos": 4}},
+        "ownership/grp/sub": {"docs": {"met": 1, "measured": 2, "repos": 2},
+                              "ci": {"met": 1, "measured": 2, "repos": 2}},
+        "ownership/grp/other": {"docs": {"met": 0, "measured": 0, "repos": 1},
+                                "ci": {"met": 1, "measured": 1, "repos": 1}},
+        "system/checkout": {"docs": {"met": 1, "measured": 1, "repos": 2},
+                            "ci": {"met": 1, "measured": 1, "repos": 2}},
+    }
+
+
+def test_met_never_exceeds_measured_and_a_row_with_no_levels_is_never_met() -> None:
+    assert fd.row_roll_up("r", [(2, 2), (1, 2), (None, 2), (0, 0)]) == {
+        "row": "r", "met": 1, "measured": 2, "repos": 4, "lowest_level": 1}
+    assert fd.row_roll_up("r", []) == {"row": "r", "met": 0, "measured": 0, "repos": 0, "lowest_level": None}

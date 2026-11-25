@@ -47,11 +47,11 @@ def test_three_level_gitlab_tree_and_roll_ups() -> None:
     }
     org = units["ownership/grp"]
     # docs: proj1 level 2 of 2, proj2 level 1 of 2; proj3 unknown and proj4 failed are excluded, not 0
-    assert _level(org, "docs") == {"row": "docs", "measured": 2, "repos": 4, "lowest_level": 1}
+    assert _level(org, "docs") == {"row": "docs", "met": 1, "measured": 2, "repos": 4, "lowest_level": 1}
     assert (_level(org, "ci")["measured"], _level(org, "ci")["lowest_level"]) == (3, 0)
     assert "overall" not in org
     other = units["ownership/grp/other"]
-    assert _level(other, "docs") == {"row": "docs", "measured": 0, "repos": 1, "lowest_level": None}
+    assert _level(other, "docs") == {"row": "docs", "met": 0, "measured": 0, "repos": 1, "lowest_level": None}
     assert [m["id"] for m in data["model"]] == ["org2fa", "docs", "ci"]
     assert all(lv["row"] != "org2fa" for u in units.values() for lv in u["levels"])
 
@@ -198,7 +198,8 @@ def test_the_roll_up_names_no_average_and_no_weakest_repository(privacy: fd.Priv
     data = build(privacy)
     assert not _keys(data) & {"mean_share", "weakest", "overall", "share"}
     rolls = [lv for v in data["views"] for u in v["units"] for lv in u["levels"]]
-    assert rolls and all(set(lv) == {"row", "measured", "repos", "lowest_level"} for lv in rolls)
+    assert rolls and all(set(lv) == {"row", "met", "measured", "repos", "lowest_level"} for lv in rolls)
+    assert all(lv["met"] <= lv["measured"] for lv in rolls)
     assert all(lv["measured"] <= lv["repos"] for lv in rolls)
     assert all((lv["lowest_level"] is None) == (lv["measured"] == 0) for lv in rolls)
 

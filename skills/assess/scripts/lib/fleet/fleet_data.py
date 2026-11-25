@@ -15,8 +15,11 @@ One JSON document per run, beside ``groups.jsonl``, holding:
 unit and each ``team`` row, over every repository below the unit: how many were
 measured of how many (``measured``, ``repos``: "8 of 12 measured") and the lowest
 level a measured repository holds on the row (``lowest_level``; None when none was
-measured). An unknown or failed repository counts in ``repos`` only,
-never as 0. ``org`` rows read a group's ghreport settings, not a repository, so
+measured). ``met`` (#1366, part 1 of #1314) counts the measured repositories at the row's
+top level, the practice held, as ``opportunities.in_place`` counts them fleet-wide: so each
+unit carries ``row -> {met, measured, repos}``, the counts a per-unit practice chart plots as
+met of measured, never a mean across repositories. An unknown or failed repository counts in
+``repos`` only, never as 0. ``org`` rows read a group's ghreport settings, not a repository, so
 they have no per-repository cell or unit roll-up; their levels stay in
 ``groups.jsonl``.
 
@@ -84,7 +87,7 @@ with hashing, the same ``--hash-salt``) give the same bytes.
 the unit trees and the repository rows. `repo_cells` evaluates each `team` row per
 repository (`levels.evaluate_row`) with the criterion behind the level (`signal`, `value`,
 or `reason` when unknown; `not_scanned` for a failed row) and its manifest `why` (#1128). `row_roll_up` gives each unit,
-per team row, `measured` of `repos` and `lowest_level`, the lowest known level below it. Version 2 (#772) holds no average and names no
+per team row, `met` (at the row's top level, #1366) and `measured` of `repos` and `lowest_level`, the lowest known level below it. Version 2 (#772) holds no average and names no
 repository: no `mean_share`, `weakest` or `overall`. `org` rows stay in `groups.jsonl`.
 `Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
 names and owners and writes a non-token value as `set`; with a salt every unit and
@@ -165,6 +168,7 @@ class ModelRow(TypedDict):
 
 class RowRollUp(TypedDict):
     row: str
+    met: int  # #1366: measured repositories at the row's top level
     measured: int  # repositories below with a known level on the row
     repos: int  # every repository below, measured or not
     lowest_level: int | None  # the lowest known level; None when none was measured
@@ -357,10 +361,11 @@ Member = tuple[int | None, int]  # (level or None, top level) of one repository 
 
 
 def row_roll_up(row_id: str, members: Sequence[Member]) -> RowRollUp:
-    """One team row over the repositories below a unit: measured of all, and the lowest level."""
-    known = [level for level, top in members if level is not None and top > 0]
-    return {"row": row_id, "measured": len(known), "repos": len(members),
-            "lowest_level": min(known) if known else None}
+    """One team row over the repositories below a unit: met and measured of all, and the lowest level."""
+    known = [(level, top) for level, top in members if level is not None and top > 0]
+    return {"row": row_id, "met": sum(level == top for level, top in known),
+            "measured": len(known), "repos": len(members),
+            "lowest_level": min(level for level, _ in known) if known else None}
 
 
 def _below(tree: Tree) -> dict[str, list[str]]:
