@@ -8,7 +8,7 @@ Holding: 1 of 2 Step 3 gates held · 0 of 5 [measured catalogue conditions](http
 
 Blocks Step 3: CI does not turn red when a check breaks.
 
-Since last run: gate changes not known; closed actions not known (no baseline is committed yet, and this run's result cannot be recorded as one).
+Since last run: gate changes [not known](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#not-measured); closed actions not known (no baseline is committed yet, and this run's result cannot be recorded as one).
 
 Start here: [Make CI turn red when a check breaks](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates)
 

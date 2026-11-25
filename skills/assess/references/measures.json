@@ -6030,6 +6030,21 @@
       "private": false
     },
     {
+      "name": "pack_checks",
+      "title": "Practice pack checks",
+      "publishes": [
+        "pack",
+        "packs"
+      ],
+      "reads": [
+        "repo_root",
+        "excludes",
+        "packs"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "level",
       "title": "Verified tally and Step",
       "publishes": [
@@ -6061,7 +6076,8 @@
         "structure_drift",
         "test_pressure",
         "owner_exclusions",
-        "maturity_model"
+        "maturity_model",
+        "pack"
       ],
       "network": false,
       "private": false

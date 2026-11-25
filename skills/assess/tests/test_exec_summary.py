@@ -76,7 +76,7 @@ def test_ci2_report_opens_with_the_card(ci2: Path) -> None:  # noqa: F811 - the 
     ctx = _run(ci2, "2026-11-22")
     head = ctx["headline"]
     assert head["summary_lines"][0].startswith(f"Step {ctx['level']['step']} of 4: ")
-    assert "This run is your baseline; the next run reports what moved." in head["summary_lines"]
+    assert "This run is your baseline; the next `/assess` run reports what moved." in head["summary_lines"]
     assert sum(line.startswith("Start here") for line in head["summary_lines"]) == 1
     report = subprocess.run([sys.executable, str(SCRIPTS / "assess_report.py"), str(ci2), "--stdout"],
                             capture_output=True, encoding="utf-8", errors="replace", check=True).stdout

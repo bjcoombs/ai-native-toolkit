@@ -11,7 +11,8 @@ It renders:
   gates held, the gate that blocks the next Step, what moved since the last run, and one
   Start here and Done when, each fact once, pasted from the ``headline`` block's
   ``summary_markdown``, then the fixed glossary line (``GLOSSARY_LINE``) linking each term
-  to ``docs/glossary.md``,
+  to ``docs/glossary.md``; ``report_facts(ctx)`` gives the lines the report adds there with
+  their fact ids (``narrowed``, ``glossary``, #1253),
 - "Catalogue Coverage" (``lib/headline.py``, #747, #844, #1083): the conditions not measured
   with their reasons, the model version and the per-tag strip, pasted from the run context's
   ``headline`` block, then the monorepo unit roll-up,
@@ -21,7 +22,9 @@ It renders:
   not drawn,
 - a metrics dashboard (complexity profile, churn window, total LOC),
 - the top-hotspots table,
-- the keyhole-readiness summary + the six cross-practice findings (the generated-files
+- the keyhole-readiness summary + the six cross-practice findings, whose heading
+  (``FINDINGS_HEADING``) stays above the not-run line on a narrowed run, as the Structure
+  Drift heading does (#1253) (the generated-files
   disclosure follows them, so its ``<details>`` fold never sits above a ``lying_map``
   finding, #1254), and
 - the regression deltas (graduated / new / regressed / restructured / persistent), and
@@ -58,10 +61,15 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.assess_diagrams import diagrams_section
+from lib.card_facts import CardFact
 from lib.assess_diagrams_review import build_all
 from lib.headline import GLOSSARY_URL, as_headline
 from lib.measured_appendix import measured_section
 from lib.scan_plan import not_run_text
+
+# The findings section's heading, as lib/keyhole/keyhole_signals.render_findings_markdown writes
+# it; a narrowed run keeps it above its not-run line (#1253).
+FINDINGS_HEADING = "## Cross-Practice Findings (Keyhole Readiness)"
 
 # Caps on rows rendered so a pathological repo can't bloat the frozen report.
 # The structured arrays in run-context.json keep the full lists.
@@ -346,10 +354,10 @@ def render_findings_section(ctx: dict[str, Any]) -> str:
     """
     skipped = _not_run(ctx, "findings_markdown")
     if skipped is not None:
-        return skipped
+        return f"{FINDINGS_HEADING}\n\n{skipped}"
     markdown: str | None = ctx.get("findings_markdown")
     if not markdown or not markdown.strip():
-        return "_No cross-practice findings recorded._"
+        return f"{FINDINGS_HEADING}\n\n_No cross-practice findings recorded._"
     return markdown.strip()
 
 
@@ -610,10 +618,16 @@ def render_summary_section(ctx: dict[str, Any]) -> str:
     headline has none (unavailable, or a context written before it); the glossary line always
     renders."""
     markdown = as_headline(ctx.get("headline"))["summary_markdown"]
+    facts = report_facts(ctx) if markdown else report_facts(ctx)[-1:]
+    return "".join(f"{text}\n\n" for text in [markdown, *(f["text"] for f in facts)] if text)
+
+
+def report_facts(ctx: dict[str, Any]) -> list[CardFact]:
+    """The first-screen lines the report adds under the card, each with its fact id: the
+    narrowed-run line when a scan plan narrowed the run, then the glossary line."""
     narrowed = _narrowed_line(ctx)
-    if markdown and narrowed:
-        markdown = f"{markdown}\n\n{narrowed}"
-    return f"{markdown}\n\n{GLOSSARY_LINE}\n\n" if markdown else f"{GLOSSARY_LINE}\n\n"
+    facts: list[CardFact] = [{"fact_id": "narrowed", "text": narrowed}] if narrowed else []
+    return [*facts, {"fact_id": "glossary", "text": GLOSSARY_LINE}]
 
 
 def _narrowed_line(ctx: dict[str, Any]) -> str:
@@ -709,7 +723,9 @@ def _structure_drift_section(ctx: dict[str, Any], repo_name: str) -> str:
     """Template-ready structure-drift block: the rendered section followed by a
     blank line, or ``""`` when there's nothing to render (the surrounding blank
     line in the template then collapses on the final ``rstrip``)."""
-    section = format_structure_drift_findings(ctx.get("structure_drift"), repo_name)
+    skipped = _not_run(ctx, "structure_drift")
+    section = (f"## Structure Drift\n\n{skipped}" if skipped is not None
+               else format_structure_drift_findings(ctx.get("structure_drift"), repo_name))
     return f"\n{section.rstrip()}\n" if section else ""
 
 

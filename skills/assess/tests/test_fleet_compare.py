@@ -290,3 +290,22 @@ def test_a_stamp_from_before_714_reads_as_no_platform_pass():
     old: Any = {k: v for k, v in _stamp(EARLIER).items() if k != "platform"}
     assert fc.comparability(old, _stamp(LATER)) == ([], [])
     assert fc.comparability(old, _stamp(LATER, platform=True))[0] != []
+
+
+TEAM = {"name": "team", "version": "2026.11", "sha256": "a" * 64}
+
+
+def test_two_stamps_differing_only_in_packs_give_the_rule_reason():
+    """#1273: a run scored with another practice pack is not comparable, like a rules change."""
+    then, now = _stamp(EARLIER, packs=[TEAM]), _stamp(LATER, packs=[{**TEAM, "sha256": "b" * 64}])
+    reasons, _ = fc.comparability(then, now)
+    assert reasons == ["practice packs changed team@aaaaaaaaaaaa->team@bbbbbbbbbbbb"]
+    assert fc.comparability(_stamp(EARLIER, packs=[TEAM]), _stamp(LATER, packs=[TEAM])) == ([], [])
+
+
+def test_a_stamp_without_packs_reads_as_no_pack():
+    """A stamp written before #1273, or by a run without --pack, has no packs key."""
+    assert "packs" not in _stamp(EARLIER)
+    assert fc.comparability(_stamp(EARLIER), _stamp(LATER, packs=[])) == ([], [])
+    reasons, _ = fc.comparability(_stamp(EARLIER), _stamp(LATER, packs=[TEAM]))
+    assert reasons == ["practice packs changed none->team@aaaaaaaaaaaa"]

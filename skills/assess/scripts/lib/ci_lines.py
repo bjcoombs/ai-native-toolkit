@@ -8,7 +8,8 @@ file's lines that a line test accepts, reading each bare list item's parent key 
 key). The line tests are ``_line_runs_check`` (``check_command.is_check_command`` or
 ``is_lint_command``), ``_line_runs_lint`` (``is_lint_run`` or a ``uses:`` step of a known
 lint action, ``lint_action`` over ``LINT_ACTIONS``), ``_line_may_lint`` (``may_lint`` or a
-``MAY_LINT_ACTIONS`` step) and ``_line_may_check`` (``may_check``: a target whose recipe is
+``MAY_LINT_ACTIONS`` step; ``lint_step_action`` names either action kind for
+``lib.ci_composite``, #1194) and ``_line_may_check`` (``may_check``: a target whose recipe is
 not read); ``_skipped_check`` flags a Maven or Gradle run with its tests skipped (#799, #1046).
 
 Inward-only imports: ``lib.check_command``, ``lib.ci_lint_gates``, ``lib.ci_scripts``,
@@ -88,6 +89,12 @@ def lint_action(line: str) -> bool:
     name = _action(line)
     return name in LINT_ACTIONS or (name.startswith("reviewdog/action-")
                                     and name not in _REVIEWDOG_NOT_LINT)
+
+
+def lint_step_action(line: str) -> bool:
+    """A ``uses:`` line of an action the line tests read as a lint step: a known lint action
+    or a ``MAY_LINT_ACTIONS`` one (``lib.ci_composite`` copies these out of a composite, #1194)."""
+    return lint_action(line) or _action(line) in MAY_LINT_ACTIONS
 
 
 def _line_runs_lint(line: str, *, script_item: bool = True, present: Present | None = None) -> bool:

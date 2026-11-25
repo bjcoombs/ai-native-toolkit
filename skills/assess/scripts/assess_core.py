@@ -49,6 +49,7 @@ from lib.counts_only.content_free import add_cli_arguments as add_counts_only_ar
 from lib.counts_only.content_free import apply_cli as apply_counts_only, validate_cli_args as validate_counts_only_args
 from lib.testing.coverage_report import load_coverage_data
 from lib.level_signals import signal_path_validator
+from lib.packs import Pack, PackError, load_pack
 from lib.model_change import model_name
 from lib.profiles import ModelChoice, ProfileError, add_model_arguments, chosen_model, run_level
 from lib.profiles import profile_names, single_repo_choice
@@ -69,6 +70,7 @@ def build_run_context(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
     scope: Path | None = None, model: ModelChoice | None = None, managed_settings: bool = False,
     plan: ScanPlan | None = None,
+    packs: tuple[Pack, ...] = (),
 ) -> dict[str, Any]:
     """Run the deterministic pipeline and return the structured context dict.
 
@@ -101,14 +103,19 @@ def build_run_context(
     ``plan`` (``lib.scan_plan.run_plan``, #1268) runs only the scans the model needs; each
     skipped block reads ``not run under <model>`` and the ``scan_plan`` key records the plan.
     None runs every scan, as the default model and ``--all-scans`` do.
+
+    ``packs`` are the ``--pack`` files (``lib.packs.load_pack``, #1273), in pass order: the
+    ``pack_checks`` entry evaluates their checks into the ``pack`` and ``packs`` blocks, and
+    with none (the default) neither block is written.
     """
-    return _scan(repo_root, run_date, non_interactive, scope, model, managed_settings, plan)[0]
+    return _scan(repo_root, run_date, non_interactive, scope, model, managed_settings, plan, packs)[0]
 
 
 def build_and_publish_run(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
     scope: Path | None = None, model: ModelChoice | None = None, managed_settings: bool = False,
     plan: ScanPlan | None = None,
+    packs: tuple[Pack, ...] = (),
 ) -> dict[str, Any]:
     """``build_run_context``, then the publish step that writes the artifacts.
 
@@ -116,7 +123,7 @@ def build_and_publish_run(
     run-context.json, and fills the context keys only it can know
     (``pruned_hotspots``, ``log_integrity``, ``prior_findings_snapshot``, ...).
     """
-    ctx, scan_inputs = _scan(repo_root, run_date, non_interactive, scope, model, managed_settings, plan)
+    ctx, scan_inputs = _scan(repo_root, run_date, non_interactive, scope, model, managed_settings, plan, packs)
     publish_run(ctx, scan_inputs)
     return ctx
 
@@ -124,6 +131,7 @@ def build_and_publish_run(
 def _scan(
     repo_root: Path, run_date: str, non_interactive: bool, scope: Path | None,
     model: ModelChoice | None = None, managed_settings: bool = False, plan: ScanPlan | None = None,
+    packs: tuple[Pack, ...] = (),
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Run the scan table; return the context and the inputs it filled."""
     scan_inputs: dict[str, Any] = {
@@ -132,10 +140,24 @@ def _scan(
         "maturity_model": model,
         "managed_settings": managed_settings,
         "plan": plan,
+        "packs": packs,
     }
     ctx: dict[str, Any] = {}
     run_scans(ctx, scan_inputs)
     return ctx, scan_inputs
+
+
+def load_packs(paths: list[str]) -> tuple[Pack, ...]:
+    """Each ``--pack`` file through ``lib.packs.load_pack``, in pass order; ``PackError`` on a
+    load error or on two packs of one name, whose signals would share ``pack.<name>``."""
+    packs: list[Pack] = []
+    for path in paths:
+        pack = load_pack(Path(path))
+        if any(p["name"] == pack["name"] for p in packs):
+            raise PackError(f"{Path(path).name}: a pack named {pack['name']!r} was already passed; "
+                            "each --pack needs its own [pack] name")
+        packs.append(pack)
+    return tuple(packs)
 
 
 def _model_differs(level_block: Any, model: ModelChoice | None) -> bool:
@@ -318,12 +340,26 @@ def main(argv: list[str] | None = None) -> int:
             "the whole report. The default model always runs every scan."
         ),
     )
+    parser.add_argument(
+        "--pack", action="append", default=[], metavar="FILE",
+        help=(
+            "A practice pack (<name>.pack.toml, lib/packs.py) whose checks this run evaluates "
+            "offline against the repository's files, under pack.<name>.<check>; repeat for "
+            "several. A --levels model may read those paths. The run context records each "
+            "pack's name, version and sha256."
+        ),
+    )
     add_counts_only_arguments(parser)
     parsed = parser.parse_args(argv)
     validate_counts_only_args(parser, parsed)
     repo_root = Path(parsed.repo_root).resolve()
     try:
-        choice = single_repo_choice(parsed.profile, parsed.levels, signal_path_validator())
+        packs = load_packs(parsed.pack)
+    except PackError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    try:
+        choice = single_repo_choice(parsed.profile, parsed.levels, signal_path_validator(packs), packs)
     except ProfileError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -337,6 +373,7 @@ def main(argv: list[str] | None = None) -> int:
             non_interactive=parsed.non_interactive,
             scope=parsed.scope, model=model, plan=run_plan(model, parsed.all_scans),
             managed_settings=parsed.managed_settings or load_managed_settings_opt_in(repo_root),
+            packs=packs,
         )
     except ValueError as e:
         # Invalid --scope (missing path or outside the repo). Report cleanly

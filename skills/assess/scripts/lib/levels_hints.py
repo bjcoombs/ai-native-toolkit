@@ -8,7 +8,8 @@ path(s): team:coverage.gate (row 'coverage-80')``, and adds two things to each p
   paths a criterion can name in that scope (``lib.level_signals.published_paths``) and keeps
   up to three. The entry then ends ``did you mean coverage_gate.configured or
   coverage_gate.available?``. With no close path it points at ``docs/what-we-measure.md``,
-  which lists every signal.
+  which lists every signal. A ``pack.<pack>.<check>`` path (#1273) instead says to pass
+  ``--pack`` with that pack's file: such a path is accepted only for a pack passed on the run.
 - **the line.** ``UnknownSignalError.located(text)`` adds ``line N``: the first line of the
   model file at or after the row's ``id`` line that holds the path in double or single
   quotes (a TOML basic or literal string).
@@ -57,6 +58,10 @@ def closest(scope: str, path: str, limit: int = 3) -> list[str]:
 
 
 def _fix(scope: str, path: str) -> str:
+    if scope == "team" and path.startswith("pack."):
+        pack = path.split(".")[1]
+        return (f"a pack signal reads a check of a pack passed on the same run: pass --pack with the "
+                f"file of pack {pack!r}, and check that it defines this check")
     names = closest(scope, path)
     if not names:
         return f"no signal has a close name; {CATALOG} lists them all"

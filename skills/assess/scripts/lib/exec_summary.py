@@ -15,7 +15,9 @@
   deterministic report (``assess_report.py``) and the findings template paste verbatim at the
   very top.
 
-The card reads the ``since_last_run`` block, the ``unit_rollup`` block (the sibling unit that
+``summary_facts`` returns the same lines with the fact id of each (``profiles.model_facts``
+then ``top_card.card_facts``), for the construction tests (``tests/test_card_construction.py``,
+#1253). The card reads the ``since_last_run`` block, the ``unit_rollup`` block (the sibling unit that
 already holds the blocking gate), the measured commit and the first open action of
 ``<assess_dir>/actions.json`` (``top_card.read_first_action``). A headline that is unavailable
 keeps the fields empty. Under counts-only the three fields are dropped.
@@ -34,10 +36,19 @@ from typing import Any, cast
 from lib.headline import headline
 from lib.level_result_types import Headline, LevelResult
 from lib.levels import MaturityModel
-from lib.profiles import ModelChoice, chosen_model, model_lines
-from lib.top_card import GATE_TASK, STEP_GATES_URL, CardAction, card_lines, card_markdown, read_first_action
+from lib.card_facts import CardFact
+from lib.profiles import ModelChoice, chosen_model, model_facts
+from lib.top_card import GATE_TASK, STEP_GATES_URL, CardAction, card_facts, card_markdown, read_first_action
 
-__all__ = ["GATE_TASK", "STEP_GATES_URL", "run_headline", "summarised"]
+__all__ = ["GATE_TASK", "STEP_GATES_URL", "run_headline", "summarised", "summary_facts"]
+
+
+def summary_facts(level: LevelResult, model: MaturityModel, since: Any, choice: ModelChoice | None = None,
+                  rollup: Any = None, head_sha: str | None = None,
+                  action: CardAction | None = None) -> list[CardFact]:
+    """The card's lines with their fact ids: the model lines of a profile or ``--levels`` run,
+    then the card."""
+    return [*model_facts(level, choice), *card_facts(level, model, since, rollup, head_sha, action)]
 
 
 def summarised(block: Headline, level: Any, since: Any, model: MaturityModel,
@@ -49,12 +60,12 @@ def summarised(block: Headline, level: Any, since: Any, model: MaturityModel,
     if block.get("available") is not True or not isinstance(level, dict) or "tally" not in level:
         return block
     result = cast(LevelResult, level)  # narrowed by the tally check above
-    named = model_lines(result, choice)
-    card = card_lines(result, model, since, rollup, head_sha, action)
-    lines = [*named, *card]
-    start = next((line for line in card if line.startswith("Start here:")), "")
+    facts = summary_facts(result, model, since, choice, rollup, head_sha, action)
+    lines = [f["text"] for f in facts]
+    start = next((f["text"] for f in facts if f["fact_id"] == "start_here"), "")
+    named = sum(1 for f in facts if f["fact_id"].startswith("model"))
     return {**block, "summary_lines": lines, "call_to_action": start,
-            "summary_markdown": card_markdown(lines, lead_at=len(named))}
+            "summary_markdown": card_markdown(lines, lead_at=named)}
 
 
 def _head_sha(measured: Any) -> str | None:
