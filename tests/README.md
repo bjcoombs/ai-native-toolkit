@@ -26,7 +26,7 @@ rule in `CLAUDE.md`, this file is usually the one that fails.
 | `test_make_regen.py` | `make regen` rewrites every generated file and nothing else |
 | `test_merge_queue_workflows.py`, `test_windows_workflow.py` | The required checks report on merge-queue groups and on the split Windows run |
 | `pytest_shard.py`, `test_pytest_shard.py` | The shard plugin that splits the Windows run, and its test |
-| `test_windows_docs.py`, `test_windows_smoke_check_svg.py` | The Windows setup guide and the SVG check in the Windows smoke step |
+| `test_windows_docs.py`, `test_windows_smoke_check_svg.py`, `test_windows_smoke_longpath.py` | The Windows setup guide, the SVG check in the Windows smoke step, and the long-path fixture and scanner check |
 | `test_issue_forms.py` | The issue forms, the machine-readable block in `docs/contributing/definition-of-ready.md` and the `needs-triage` workflow's trigger and permissions |
 | `test_landing_page.py` | The skill index on the GitHub Pages landing page |
 | `test_marathon_flow_metrics.py` | The marathon flow metrics script |

@@ -431,6 +431,29 @@ jobs:
           uv run --locked --python 3.11 python ../../tests/fixtures/windows_smoke/check_fleet_rows.py \
             "$RUNNER_TEMP/fleet-list/repos.jsonl" acme/gadget acme/widget
 
+      # A ghsync GitLab layout nests the full project path, so a deep tree passes
+      # the 260-character path limit (#1269). longpath.py builds a repository
+      # with core.longpaths=true (as a ghsync clone has it) and one module whose
+      # absolute path is over 300 characters, then checks that lizard
+      # (complexity), grimp (structure), vulture (liveness) and rg (markers)
+      # each read it. vulture is not a locked dependency, so --with puts it on
+      # PATH for assess_core.py. A scanner that reports a reading without the
+      # file fails the step; with every scanner installed, --require-all also
+      # fails one whose block is unavailable (#1405).
+      - name: Smoke the scanners on a path over 260 characters
+        if: ${{ !cancelled() && matrix.suite == 'smoke' }}
+        shell: bash
+        working-directory: skills/assess
+        run: |
+          co="$RUNNER_TEMP/longpath-estate/acme/deep/deep-main"
+          uv run --locked --python 3.11 python ../../tests/fixtures/windows_smoke/longpath.py build "$co"
+          git -C "$co" config --get core.longpaths
+          uv run --locked --python 3.11 python scripts/assess_signals.py "$co" \
+            --out "$RUNNER_TEMP/longpath-signals.json"
+          uv run --locked --python 3.11 --with "vulture==2.14" python scripts/assess_core.py "$co" > /dev/null
+          uv run --locked --python 3.11 python ../../tests/fixtures/windows_smoke/longpath.py check --require-all \
+            "$co" "$RUNNER_TEMP/longpath-signals.json" "$co/.assess/run-context.json"
+
       # tests/fixtures/windows_smoke/contract holds run "smoke": freeze evidence
       # with a passing kill test, verifier results and the provenance token, so
       # both gates open. A run with no record must be refused by both.

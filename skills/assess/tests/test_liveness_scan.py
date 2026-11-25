@@ -553,3 +553,29 @@ def test_scorer_doc_names_every_dead_code_status() -> None:
     doc = (repo_root / "agents" / "assess-layer-scorer.md").read_text(encoding="utf-8")
     missing = sorted(s for s in emitted if f"`{s}`" not in doc)
     assert not missing, f"assess-layer-scorer.md does not name: {missing}"
+
+
+def test_dead_code_candidate_paths_are_posix(tmp_path: Path, monkeypatch) -> None:
+    """vulture on Windows prints backslash paths, sometimes after ``.\\``; the
+    candidates carry repo-relative POSIX paths, and the exclude filter still
+    applies to them (#1405)."""
+    _write(tmp_path, "pkg/deep/mod.py", "def unused(): pass")
+    _write(tmp_path, "regulatory-raw/loader.py", "def unused(): pass")
+    monkeypatch.setattr(liveness.shutil, "which", lambda _tool: "/usr/bin/" + _tool)
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd, 3,
+            stdout=(
+                "pkg\\deep\\mod.py:1: unused function 'unused' (60% confidence)\n"
+                ".\\pkg\\deep\\mod.py:1: unused variable 'x' (60% confidence)\n"
+                "./app.py:1: unused function 'main' (60% confidence)\n"
+                "regulatory-raw\\loader.py:1: unused function 'unused' (60% confidence)\n"
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(liveness.subprocess, "run", fake_run)
+    r = scan_dead_code(tmp_path, extra_exclude_dirs={"regulatory-raw"}).as_dict()
+    assert [c["path"] for c in r["candidates"]] == [
+        "pkg/deep/mod.py", "pkg/deep/mod.py", "app.py"]
