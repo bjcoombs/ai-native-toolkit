@@ -65,7 +65,8 @@ def _signs(text: str) -> list[str]:
     ("      - uses: anthropics/claude-code-action@v1", "agent_action"),
     ("      - uses: 'openai/codex-action@main'", "agent_action"),
     ("        env:\n          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}", "provider_secret"),
-    ("          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}", "provider_secret"),
+    ("      - uses: x/y@v1\n        with:\n          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}",
+     "provider_secret"),
 ])
 def test_each_sign_is_found(line: str, sign: str) -> None:
     assert sign in _signs("jobs:\n  j:\n    steps:\n" + line + "\n")

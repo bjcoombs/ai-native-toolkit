@@ -577,7 +577,7 @@ _MEASURE_HINTS = {
                          "code patches. The policy is not measured (`org_policy_not_read`) when the "
                          "repository holds none and the owner's shared `.github` repository was not "
                          "read: run with `--platform`, or `/assess` with `gh` signed in.",
-    "ci_model_jobs": "Not measured (`no_model_jobs`) when no committed CI job calls a model API. "
+    "ci_model_jobs": "Not measured (`no_model_jobs`) when no model-calling CI job is detected. "
                      "Not measured (`trigger_unresolved`, `ci_jobs_unread`) when none is ungated but a "
                      "trigger, a condition or a job this reader cannot read could still run one on every change.",
     "secrets_guard": "Level 2 is not measured (`secret_scanning_not_read`) on a GitHub repository with "

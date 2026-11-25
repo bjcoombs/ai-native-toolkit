@@ -16,10 +16,12 @@ runs nobody priced.
 | `eval_harness` | a `run:` or `script:` command: `promptfoo eval` / `redteam`, `deepeval test`, `oaieval`, `inspect eval`, `lm_eval` / `lm-eval`, `ragas` |
 | `agent_cli` | a command running `claude -p` or `claude --print` (also through `npx @anthropic-ai/claude-code`) |
 | `agent_action` | a step `uses:` one of `AGENT_ACTIONS`: `anthropics/claude-code-action`, `anthropics/claude-code-base-action`, `openai/codex-action`, `google-github-actions/run-gemini-cli` |
-| `provider_secret` | an `env:` or `with:` line of the job names one of `PROVIDER_SECRETS` (as the key or in `secrets.<NAME>`) |
+| `provider_secret` | an `env:`, `with:`, `secrets:` or GitLab `variables:` entry of the job names one of `PROVIDER_SECRETS` (as the key or in `secrets.<NAME>`); a step `name:` naming one is not a sign |
 | `eval_tests` | a command running `pytest -m eval` / `-m evals`, or a runner (`pytest`, `python`, `node`, `npx` ...) given a path under `evals/` |
 
-A command line that installs (`pip install ragas`) is never a sign. Nor is an `evals/` path a runner is told to leave out
+A command line that installs (`pip install ragas`, `python -m pip install`, `poetry add`) is never a sign. The
+install or add subcommand is read in command position only, with quoted text dropped, so a prompt
+(`claude -p 'add regression tests'`) still shows the command. Nor is an `evals/` path a runner is told to leave out
 (`--ignore`, `--ignore-glob`, `--deselect`, `--exclude`): keeping evals out of a job is the remedy. A secret named inside a command is
 not a sign either. A workflow-level `env:` secret reaches every job, so it is a sign of each. A step
 that `uses:` a repo-local action (`./.github/actions/x`) carries the signs of that action's
@@ -35,16 +37,17 @@ ungated, reads unknown (`secret_only`). A secret beside any other sign is a mode
 
 | Gate | GitHub Actions | GitLab CI |
 |---|---|---|
-| `paths` | `paths:` or `paths-ignore:` on every ordinary event (`push`, `pull_request`, `pull_request_target`, `merge_group`) that fires the workflow; a `paths:` list holding a catch-all (`**`, `**/*`, `*`) and a `paths-ignore:` that is empty or only catch-alls gate nothing | |
+| `paths` | `paths:` or `paths-ignore:` on every ordinary event (`push`, `pull_request`, `pull_request_target`, `merge_group`) that fires the workflow. A `paths:` list is read in order, as GitHub reads it (the last match wins): it gates nothing when a catch-all (`**`, `**/*`) is not followed by a `!` exclusion, so `['**', '!docs/**']` gates and `['!docs/**', '**']` does not. A `paths-ignore:` that is empty or only catch-alls gates nothing. GitHub's `*` does not match `/`, so `paths: ['*']` (root files only) gates | |
 | `pr_types` | pull request `types:` without `synchronize` | |
 | `label` | `types: [labeled]`, or a job or step `if:` on `github.event.pull_request.labels` or `github.event.label` | |
-| `event_if` | a job `if:` requiring `github.event_name ==` a non-ordinary event | |
+| `event_if` | a job `if:` requiring `github.event_name ==` a non-ordinary event. Sign steps under different recognised gates (one `label`, one `event_if`) combine them | |
 | `tags_only` | a push filtered to tags with no branch filter | |
 | `event_trigger` | no ordinary event fires the workflow, and every event is one GitHub documents (`GATING_EVENTS`: schedule, `workflow_dispatch`, comments ...) | the job runs in neither a branch nor a merge request pipeline (`lib.ci_triggers`) |
 | `changes` | | the job runs in an ordinary pipeline only through a `rules:` item holding `changes:` |
 
 A job `if:` that requires an ordinary event (`github.event_name == 'pull_request'`) narrows the
 job's triggers to that event; when none of the ungated events is left, the job is gated (`event_if`).
+Only a positive requirement narrows: `(github.event_name == 'push') == false` or `!=` does not.
 
 A `paths-ignore:` counts as a gate whatever it names, so `paths-ignore: ['docs/**']` reads gated
 although it skips only docs-only changes. The reader does not compare the patterns with the
@@ -60,7 +63,14 @@ numbers kept, and `lib.ci_triggers.gitlab_line_triggers` reads the job again. A 
 no longer runs in an ordinary pipeline is gated by `changes`; one that still does is ungated.
 So a docs-skip rule (`changes: [docs/**]` with `when: never`, then `when: always`) is not a
 gate: a source change reaches the later rule. This differs from GitHub `paths-ignore`, which counts.
-`extends:` and `workflow: rules:` are read as `ci_triggers` reads them.
+GitLab jobs are read as GitLab merges them (#1180): `lib.ci_merged_view` over
+`ci_includes.merged_config` blanks each job whose keys come from more than one place (the root
+file and an include, `extends:`, a `default:` script key) and renders it once with its
+effective keys. So a root `- when: always` over an included schedule-only job reads ungated, and
+a job whose model `script:` comes from a hidden `extends:` template is found. A merged job is
+reported at its definition in the repository's own file, else at the include line that led to
+it. `MergedJob.open` (an include not read may also define the job) is not applied: that include
+already counts in `unread`. `workflow: rules:` are read as `ci_triggers` reads them.
 
 ## Unknown, never a guess
 
@@ -69,19 +79,28 @@ A job is `unknown` (with `reason`) and never ungated or gated when:
 - `on_unread`: the workflow's `on` cannot be listed, or names an event this reader does not
   know (an expression such as `${{ fromJSON(x) }}`, a typo);
 - `filters_unread`: an event's filters are a flow mapping or a `types:` that is not a list;
-- `called_workflow`: only `workflow_call` / `workflow_run` fire it and no workflow of the
-  repository calls it. A called workflow's route is the worst of its local callers' routes and
-  its own other events (ungated, then unknown, then gated); its jobs' own `if:` and step
-  conditions then apply. A `workflow_run` trigger adds an unknown route. A job-level
-  `uses: ./.github/workflows/x.yml` is never read as a composite: the callee is scanned itself;
+- `called_workflow`: a `workflow_call` that no workflow of the repository calls (callers in
+  other repositories run it on events this reader cannot see), even beside a `workflow_dispatch`,
+  or a `workflow_run`. A called workflow's jobs take each route that reaches it: each local
+  caller's route and its own other events. The job's own `if:` and step conditions apply to each
+  route, then the worst is taken (ungated, then unknown, then gated), so a callee job requiring
+  `pull_request` under a bare `push` caller and a bare `pull_request` caller reads ungated.
+  Caller routes are resolved to a fixed point, so A on `pull_request` calling B calling C carries
+  A's route to C. A caller job whose `if:` is never true registers no route. A job-level
+  `uses: ./.github/workflows/x.yml` is never a model job itself, even with a `secrets:` entry
+  naming a provider key: the callee is scanned on its own;
 - `secret_only`: see above;
-- `condition_unread`: a label or event `if:` joined with `||`, holding a negation (`!`, `!=`) or
-  compared with `false`, or a job or step `if:` on a value
+- `condition_unread`: a label or event `if:` joined with `||`, holding a negation (`!`, `!=`), or
+  whose label or event test is itself compared with `false` (`contains(...labels...) == false`;
+  a guard beside it, `github.event.pull_request.draft == false`, is not), or a job or step `if:` on a value
   this reader does not follow (`steps.`, `needs.`, `vars.`, `env.`, `inputs.`), such as a
   changed-files job's output, which may be a paths gate;
-- `rules_unread`: GitLab rules this reader cannot settle.
+- `rules_unread`: GitLab rules this reader cannot settle;
+- `merge_unread`: a GitLab job whose merge `ci_merged_view` cannot settle (an include under
+  `rules:`, an anchor merge, an `extends:` parent not read; `MergedJob.unresolved`).
 
-`unread` counts jobs that call a reusable workflow from another repository, GitLab includes
+`unread` counts jobs that call a reusable workflow from another repository under a route that
+is not gated (a schedule- or dispatch-only caller does not count), GitLab includes
 that were not read, and tracked CI files that could not be read (empty, over the size limit). With no
 model-backed job found but `unread` above 0, `model_jobs` is null and the reason is `ci_jobs_unread`, not
 `no_model_jobs`. The step gate reads only the lines that show a model call: a provider key in a
@@ -90,12 +109,9 @@ job `env:`, or in a step that only sets it, neither gates nor ungates a job. Eit
 
 ## Known limits
 
-- GitLab `extends:` is read for rules, not for commands: a model command inherited from a
-  template is not found.
-- `paths: ['**', '!docs/**']` reads as no gate, though it acts like `paths-ignore: ['docs/**']`.
-- An install word inside a command's arguments (`claude -p 'add tests'`) hides the command.
-- Two sign steps with different recognised gates (one `label`, one `event_if`) read ungated.
-
+- A line that installs and then runs a model command (`npm install -g x && claude -p ...`) is read as
+  an install line, so the command is not found.
+- A quoted event key under `on:` (`"push":`) is not read; a quoted `"on":` is.
 - Only workflow files directly under `.github/workflows/` and `.gitlab-ci.yml` (with its
   includes, reported at the include line of the repository's own file) are read.
 - GitLab `only: changes:` is not read as a gate.
