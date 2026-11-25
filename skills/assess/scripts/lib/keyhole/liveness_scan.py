@@ -6,7 +6,9 @@ best-effort -- they degrade to "not assessed" rather than ever blocking the asse
 **Dead-code tier (cheap, traditional).** Flags *intra-repo* candidate-dead code
 (unused exports / unreferenced symbols) using a language-appropriate tool when
 one is on PATH (``vulture`` for Python, ``ts-prune``/``knip`` for TS/JS,
-``staticcheck``/``deadcode`` for Go, clippy for Rust). The hard limit, stated in
+``staticcheck``/``deadcode`` for Go, clippy for Rust). Each candidate path is
+repo-relative POSIX on every platform: a tool's backslashes and leading ``./``
+are normalised before the exclude and scope filters (#1405). The hard limit, stated in
 the report: static reachability proves "nothing in *this* repo calls it", never
 "no external consumer calls it." Cross-boundary liveness needs the next tier.
 
@@ -289,6 +291,18 @@ def _js_ts_dominant(repo_root: Path, extra_dirs: set[str],
     return ("javascript" if js > ts else "typescript"), ts, js
 
 
+def _posix_rel(path_str: str) -> str:
+    """A tool-reported relative path with ``/`` separators and no leading ``./``.
+
+    vulture on Windows prints ``pkg\\mod.py`` (or ``.\\pkg\\mod.py``); the
+    run-context carries repo-relative POSIX paths on every platform (#1405).
+    """
+    posix = path_str.replace("\\", "/")
+    while posix.startswith("./"):
+        posix = posix[2:]
+    return posix
+
+
 def _candidate_in_scope(repo_root: Path, rel_path: str, scope: Path | None) -> bool:
     """True if a tool-reported candidate path lies within `scope`.
 
@@ -414,8 +428,11 @@ def scan_dead_code(repo_root: Path, run: bool = True,
             continue
         # Keep the signal about THIS repo: drop candidates under vendored/build
         # dirs OR under user-supplied excludes (regulatory-raw, etc.).
+        parsed = spec["parser"](proc.stdout)
+        for c in parsed:
+            c["path"] = _posix_rel(c["path"])
         found = [
-            c for c in spec["parser"](proc.stdout)
+            c for c in parsed
             if not _under_excluded(
                 c["path"],
                 extra_exclude_dirs=extra_dirs,

@@ -123,3 +123,10 @@ def test_an_unavailable_dead_code_block_names_its_tool_reasons() -> None:
                              "tools": [{"tool": "vulture", "status": "absent", "reason": "vulture not on PATH"}]}}
     assert LP.judge(REL, READ_ALL[0], context)["vulture"] == (
         "not measured", "dead_code unavailable: vulture: vulture not on PATH")
+
+
+def test_a_miss_names_where_the_function_was_reported() -> None:
+    context = _context([{"path": REL.replace("/", "\\"), "symbol": LP.LONG_FUNCTION}])
+    outcome, detail = LP.judge(REL, READ_ALL[0], context)["vulture"]
+    assert outcome == "MISSED"
+    assert detail.endswith("classify reported at pkg\\a\\b\\long_module.py")

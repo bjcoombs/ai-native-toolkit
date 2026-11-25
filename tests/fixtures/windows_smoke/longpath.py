@@ -166,7 +166,13 @@ def judge(rel: str, signals: dict[str, Any], context: dict[str, Any]) -> dict[st
         hits = [c for c in dead.get("candidates") or []
                 if isinstance(c, dict) and c.get("path") == rel and c.get("symbol") == LONG_FUNCTION]
         tools = ", ".join(f"{t.get('tool')}={t.get('status')}" for t in dead.get("tools") or [] if isinstance(t, dict))
-        out["vulture"] = ("read" if hits else "MISSED", f"dead_code tools: {tools or 'none'}")
+        # On a miss, where the tool did report the function shows a path-form fault.
+        elsewhere = sorted({str(c.get("path")) for c in dead.get("candidates") or []
+                            if isinstance(c, dict) and c.get("symbol") == LONG_FUNCTION} - {rel})
+        detail = f"dead_code tools: {tools or 'none'}"
+        if not hits and elsewhere:
+            detail += f"; {LONG_FUNCTION} reported at {', '.join(elsewhere)}"
+        out["vulture"] = ("read" if hits else "MISSED", detail)
     else:
         out["vulture"] = ("not measured", str(why))
 
