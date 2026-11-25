@@ -33,7 +33,10 @@ def make_checkout(path: Path, files: dict[str, str] | None = None, remote: str |
     if remote:
         _git(path, "remote", "add", "origin", remote)
     _git(path, "add", "-A")
-    _git(path, "commit", "-q", "-m", "init")
+    # No auto maintenance: git commit otherwise starts a detached `git maintenance run
+    # --auto` that holds .git/objects/maintenance.lock after commit returns, so a .git
+    # snapshot taken next races it (#1250).
+    _git(path, "-c", "maintenance.auto=false", "commit", "-q", "-m", "init")
     return path
 
 
@@ -356,6 +359,11 @@ def _git_dir_state(checkout: Path) -> dict[str, bytes]:
     return {p.relative_to(git_dir).as_posix(): p.read_bytes() for p in sorted(git_dir.rglob("*")) if p.is_file()}
 
 
+def _changed_entries(before: dict[str, bytes], after: dict[str, bytes]) -> list[str]:
+    """The ``.git`` paths added, removed or rewritten between two snapshots, by name."""
+    return sorted(key for key in before.keys() | after.keys() if before.get(key) != after.get(key))
+
+
 @pytest.mark.parametrize(("change", "dirty"), [
     (lambda r: None, False),
     (lambda r: (r / "CLAUDE.md").unlink(), True),
@@ -425,7 +433,7 @@ def test_a_dirty_checkout_is_scanned_from_head_and_never_written(tmp_path):
         assert fleet.remote_path(tree) == "grp/r"  # platform scans read the same origin
         assert fleet.checkout_problem(tree) is None
     assert list(scratch.iterdir()) == []  # the copy is removed
-    assert _git_dir_state(repo) == before  # nothing written into the target, .git included
+    assert _changed_entries(before, _git_dir_state(repo)) == []  # nothing written into the target, .git included
     assert not (repo / "CLAUDE.md").exists()
 
 
