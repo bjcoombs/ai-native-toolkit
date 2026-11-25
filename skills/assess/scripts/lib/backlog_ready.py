@@ -21,7 +21,7 @@ lives in the maintainers' heads, so each issue an agent picks up restates it in 
   folder): GitLab issue templates are not read yet.
 - ``untriaged_on_open``: a workflow (directly under ``.github/workflows/``) triggered by
   ``issues`` with type ``opened`` (no ``types`` means every type) has a step that names an
-  untriaged label beside a label-adding call (``--add-label``, ``addLabels``, an ``add-labels``
+  untriaged label as the argument of a label-adding call (``--add-label``, ``addLabels``, an ``add-labels``
   input, ``gh issue create --label``, or a ``labels:`` input of an action named for adding labels
   or ``labeler``); removing or listing by label is no sign, and ``name:``, ``if:`` and comment
   lines do not count. Null
@@ -92,7 +92,7 @@ _ADDING_ACTION = re.compile(r"^\s*(?:-\s+)?uses\s*:\s*[\"']?[\w.-]+/[\w.-]*(?:ad
 _LABELS_INPUT = re.compile(r"^\s*(?:-\s+)?labels\s*:", re.I)
 # The stale action's scope inputs: with one set, only issues carrying those labels go stale.
 _STALE_SCOPE = ("only-labels", "only-issue-labels", "any-of-labels", "any-of-issue-labels")
-_SKIP_KEYS = frozenset({"name", "if"})
+_SKIP_KEYS = frozenset({"name", "if", "id"})
 _HEADING = re.compile(r"^\s{0,3}(#{1,6})\s")
 _LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+\S")
 _FENCE = re.compile(r"^\s{0,3}(```|~~~)")
@@ -232,20 +232,46 @@ def _step_spans(tree: IndentTree, jobs: int) -> list[range]:
     return spans
 
 
+_GH_LABEL_ARG = re.compile(r"""--(?:add-)?label(?:\s+|=)("[^"]*"|'[^']*'|[^\s;&|]+)""")
+
+
+def _call_window(kept: list[str], i: int) -> str:
+    """Line ``i`` and the lines after it indented deeper: the call or input and its arguments."""
+    indent = len(kept[i]) - len(kept[i].lstrip())
+    out = [kept[i]]
+    for line in kept[i + 1:]:
+        if line.strip() and len(line) - len(line.lstrip()) <= indent:
+            break
+        out.append(line)
+    return "\n".join(out)
+
+
+def _added_text(kept: list[str]) -> str:
+    """The text that names the labels one step adds: a ``gh`` flag's argument, or the window of an
+    ``addLabels`` call, an ``add-labels`` input or an adding action's ``labels:`` input."""
+    adding_action = any(_ADDING_ACTION.match(ln) for ln in kept)
+    parts: list[str] = []
+    for i, line in enumerate(kept):
+        if re.search(r"\bgh\s", line) and _ADDS_LABEL.search(line):
+            parts += [arg.strip("'\"").replace(",", " , ") for arg in _GH_LABEL_ARG.findall(line)]
+        elif _ADDS_LABEL.search(line) or (adding_action and _LABELS_INPUT.match(line)):
+            parts.append(_call_window(kept, i))
+    return "\n".join(parts)
+
+
 def _applies_label(text: str, labels: tuple[str, ...]) -> bool:
-    """True when one step names an untriaged label beside a label-adding call (see the module doc)."""
+    """True when one step adds an untriaged label (see the module doc)."""
     raw = text.splitlines()
     tree = IndentTree(parse_lines(raw))
     jobs = _top(tree, "jobs")
     if jobs is None:
         return False
     for span in _step_spans(tree, jobs):
-        kept = [strip_comment(raw[i]) for i in span if i < len(raw) and not raw[i].lstrip().startswith("#")
-                and tree.lines[i].key not in _SKIP_KEYS]
-        adds = any(_ADDS_LABEL.search(ln) for ln in kept) or (
-            any(_ADDING_ACTION.match(ln) for ln in kept) and any(_LABELS_INPUT.match(ln) for ln in kept))
-        if adds and any(
-                _token(label).search("\n".join(kept)) for label in labels):
+        # each line keeps its indent, which bounds a call's argument window
+        kept = [raw[i][:len(raw[i]) - len(raw[i].lstrip())] + strip_comment(raw[i]) for i in span
+                if i < len(raw) and not raw[i].lstrip().startswith("#") and tree.lines[i].key not in _SKIP_KEYS]
+        added = _added_text(kept)
+        if added and any(_token(label).search(added) for label in labels):
             return True
     return False
 
@@ -338,12 +364,14 @@ def documents_ready_label(text: str, ready: tuple[str, ...]) -> bool:
     """True when a heading or paragraph naming a ready label has a list under it."""
     patterns = [_named(label) for label in ready]
     armed_heading: int | None = None  # the level of a heading that names a label
-    in_para = para_names = pending = fenced = False
+    in_para = para_names = pending = False
+    fence = ""  # the marker that opened the current fenced block
     for line in text.splitlines():
-        if _FENCE.match(line):
-            fenced = not fenced
+        marker = _FENCE.match(line)
+        if marker is not None and (not fence or marker.group(1) == fence):
+            fence = "" if fence else marker.group(1)
             continue
-        if fenced:
+        if fence:
             continue
         names = any(p.search(line) for p in patterns)
         heading = _HEADING.match(line)

@@ -248,6 +248,10 @@ def test_the_issues_opened_trigger(tmp_path: Path, on: str, met: bool) -> None:
     "      - uses: actions/github-script@v7\n        with:\n          script: |\n"
     "            github.rest.issues.addLabels({owner, repo, issue_number, labels: ['status: needs triage']})\n",
     "      - run: gh issue edit 1 --add-label \"needs triage\"\n",
+    "      - run: gh issue edit 1 --add-label bug,needs-triage\n",
+    "      - uses: actions/github-script@v7\n        with:\n          script: |\n"
+    "            await github.rest.issues.addLabels({\n              owner, repo, issue_number,\n"
+    "              labels: ['needs-triage'],\n            })\n",
     "      - uses: andymckay/labeler@1.0.4\n        with:\n          add-labels: \"needs-triage\"\n",
 ])
 def test_label_adding_steps(tmp_path: Path, step: str) -> None:
@@ -281,6 +285,8 @@ def test_a_block_scalar_exempt_list_is_read(indicator: str) -> None:
     "      - uses: actions-ecosystem/action-remove-labels@v1\n        with:\n          labels: needs-triage\n",
     "      - run: gh issue list --label needs-triage\n",  # lists, adds nothing
     "      - uses: andymckay/labeler@1.0.4\n        with:\n          remove-labels: needs-triage\n",
+    "      - id: triage\n        run: gh issue edit 1 --add-label bug\n",  # a step id
+    "      - run: gh issue edit 1 --add-label bug --body-file triage.md\n",  # a path
 ])
 def test_lookalikes_are_not_an_untriaged_label(tmp_path: Path, step: str) -> None:
     wf = "on:\n  issues:\n    types: [opened]\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n" + step
@@ -313,6 +319,7 @@ def test_a_workflow_in_a_subfolder_is_not_read(tmp_path: Path) -> None:
     ("The `agent-ready` label is applied by hand.\n\nOther text.\n\n- unrelated\n", False),
     ("## agent-ready\n\nNo list here.\n\n## Other\n\n- unrelated\n", False),
     ("```\n## agent-ready\n- in code\n```\n", False),
+    ("```\n~~~\n## `agent-ready`\n- still in code\n```\n", False),  # a ~~~ inside ``` closes nothing
     ("- `agent-ready`: the agent-ready label\n", False),  # a list item naming it, no criteria
 ])
 def test_ready_label_documentation(text: str, met: bool) -> None:
