@@ -22,13 +22,14 @@ hashed id); a counts-only run links only the ``teams.md`` index, so the front sc
 group or repository. The page fills its own links (the ownership view's team units, by label).
 
 `front_screen(model, data, moves)` -> `FrontScreen`; `report_teams(groups, mode)` the report's
-links; `front_section(front, repos)` the Markdown section, opening with ``In place:`` (#743).
+links; `guarded_front(model, data, moves_of, groups, mode)` both, never raising (an error becomes a
+``skipped`` reason naming its class, as a diagram's renderer does); `front_section(front, repos)` the Markdown section, opening with ``In place:`` (#743).
 Tests: `tests/test_fleet_front.py`.
 """
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, TypedDict
 from urllib.parse import quote
 
@@ -139,6 +140,32 @@ def front_screen(model: MaturityModel | None, data: Mapping[str, Any] | None,
     return front
 
 
+def _skipped(reason: str) -> FrontScreen:
+    return {"skipped": reason, "steps": [], "not_measured": 0, "moved": None, "one_change": 0, "gates": [],
+            "teams": [], "teams_index": None}
+
+
+def guarded_front(model: MaturityModel | None, data: Mapping[str, Any] | None,
+                  moves_of: Callable[[], StepMoves | None], groups: Sequence[str] = (),
+                  mode: str | None = None) -> tuple[FrontScreen, StepMoves | None]:
+    """The front screen with the report's team links, and the Step moves it read; never raises.
+
+    A Step movement count or a front screen that raises becomes a front screen whose ``skipped``
+    reason names the error class (and no moves), so one broken summary never costs the report,
+    the diagrams or the clearing of an earlier run's files."""
+    try:
+        moves = moves_of()
+    except Exception as e:  # noqa: BLE001 - the front screen never fails a completed run
+        return _skipped(f"the Step movement counts raised {type(e).__name__}."), None
+    try:
+        front = front_screen(model, data, moves)
+        if mode is not None:
+            front["teams"], front["teams_index"] = report_teams(groups, mode)
+    except Exception as e:  # noqa: BLE001 - the front screen never fails a completed run
+        return _skipped(f"the front screen raised {type(e).__name__}."), moves
+    return front, moves
+
+
 def report_teams(groups: Sequence[str], mode: str) -> tuple[list[TeamLink], str | None]:
     """The report's team links, alphabetical by id, and the counts-only index link (see the docstring)."""
     if mode == COUNTS_ONLY:
@@ -167,7 +194,7 @@ def front_section(front: FrontScreen, repos: int) -> str:
         in_place = f"{IN_PLACE} {_plural(measured)} with a measured Step."
     lines = [f"## {TITLE}", "", in_place, "", QUESTION, ""]
     if front["skipped"] is not None:
-        lines += [f"No Step counts: {front['skipped']}", ""]
+        lines += [f"Not drawn: skipped: {front['skipped']}", ""]
     else:
         lines += ["| Step | Repositories |", "|------|--------------|"]
         lines += [f"| Step {s['step']}{' · ' + s['name'] if s['name'] else ''} | {s['count']} |" for s in front["steps"]]

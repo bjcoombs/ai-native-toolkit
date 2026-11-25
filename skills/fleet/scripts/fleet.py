@@ -169,7 +169,8 @@ from lib.fleet.fleet_compare import (
     write_comparison,
 )
 from lib.fleet.fleet_diagrams import REPORT_FILE, build_diagrams, clear_diagrams, step_moves_for, write_diagrams
-from lib.fleet.fleet_front import front_screen, front_section, report_teams
+from lib.fleet.fleet_front import front_section, guarded_front
+from lib.fleet.fleet_step_movement import StepMoves
 from lib.fleet.fleet_page_data import mode_of
 from lib.fleet.fleet_page import write_page
 from lib.fleet.fleet_achievements import (
@@ -415,14 +416,15 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
         if no_diagrams:
             clear_diagrams(out_dir)
             return
-        moves = None
-        if maturity_model is not None and maturity_model.get("steps") and data is not None and earlier is not None:
-            moves = step_moves_for(maturity_model, data, earlier, comparison)  # one computation: grid and front screen
+        def moves_of() -> StepMoves | None:  # one computation: the grid and the front screen
+            if maturity_model is None or not maturity_model.get("steps") or data is None or earlier is None:
+                return None
+            return step_moves_for(maturity_model, data, earlier, comparison)
+        # guarded: a raise becomes a skip line, so the report is still written and stale files cleared
+        front, moves = guarded_front(maturity_model, data, moves_of, groups,
+                                     mode_of(data) if data is not None else None)
         diagrams = build_diagrams(maturity_model, rows, window, history=history, comparison=comparison,
                                   data=data, earlier=earlier, moves=moves)
-        front = front_screen(maturity_model, data, moves)
-        if data is not None:
-            front["teams"], front["teams_index"] = report_teams(groups, mode_of(data))
         ok = [row["scans"] for row in rows if row["status"] == "ok" and row["scans"] is not None]
         write_diagrams(out_dir, diagrams, credit, coverage, opportunities() if opportunities else None,
                        measured_section(ok), front_section(front, len(rows)))

@@ -6,6 +6,7 @@ Goldens: ``tests/fixtures/fleet_front/`` (regenerate with
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -97,6 +98,50 @@ def test_movement_counts_up_down_and_same_and_leaves_the_lanes_out() -> None:
 def test_without_steps_the_front_screen_says_why(model: Any, data: Any, why: str) -> None:
     front = front_screen(model, data)
     section = front_section(front, 7)
-    assert why in (front["skipped"] or "") and f"No Step counts: {front['skipped']}" in section
+    assert why in (front["skipped"] or "") and f"Not drawn: skipped: {front['skipped']}" in section
     assert section.splitlines()[2] == f"{IN_PLACE} 7 repositories in this run, scanned with no model call."
     assert "| Step |" not in section and "One change away" not in section
+
+
+# --- a front screen that raises never costs the report (PR review) ------------------------
+
+
+def _raise(*_args: object, **_kwargs: object) -> Any:
+    raise ValueError("front bug")
+
+
+def test_guarded_front_turns_a_raise_into_a_skip_line(monkeypatch: pytest.MonkeyPatch) -> None:
+    import lib.fleet.fleet_front as ff
+    data = fpf.run(fpf.DATES[-1], fpf.VARIANTS["full"])
+    front, moves = ff.guarded_front(fdf.model(), data, _raise, ["grp/sub"], FULL)
+    assert front["skipped"] == "the Step movement counts raised ValueError." and moves is None
+    monkeypatch.setattr(ff, "front_screen", _raise)
+    front, moves = ff.guarded_front(fdf.model(), data, lambda: fpf.MOVES, ["grp/sub"], FULL)
+    assert front["skipped"] == "the front screen raised ValueError." and moves == fpf.MOVES
+    section = front_section(front, 4)
+    assert section.startswith(f"## {TITLE}\n\n{IN_PLACE}") and "Not drawn: skipped: the front screen raised" in section
+
+
+@pytest.mark.parametrize("broken", ["front_screen", "step_moves_for"])
+def test_a_raising_front_screen_still_writes_the_report_and_clears_stale_files(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, broken: str) -> None:
+    import lib.fleet.fleet_front as ff
+    from test_fleet_achievements_cli import STEP_LEVELS, _root
+    from test_fleet_cli import fleet_cli
+    root = _root(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "levels.toml").write_text(STEP_LEVELS, encoding="utf-8")
+    args = [str(root), "--levels", "levels.toml", "--history-dir", "hist", "--out", "out"]
+    assert fleet_cli.main(args) == 0  # a first run, so the second has an earlier run to compare
+    out = tmp_path / "out"
+    for stale in ("report.md", "quadrant.svg", "slope.svg", "step-movement.svg"):
+        (out / stale).write_text("STALE", encoding="utf-8")
+    monkeypatch.setattr(ff if broken == "front_screen" else fleet_cli, broken, _raise)
+    assert fleet_cli.main([*args, "--compare"]) == 0
+    report = (out / "report.md").read_text(encoding="utf-8")
+    assert "STALE" not in report and re.findall(r"^## (.*)$", report, re.M)[0] == TITLE
+    assert "Not drawn: skipped: the " in report.split("\n## ", 2)[1]
+    assert "## What changed and who earned it" in report and "## Shared tooling" in report  # the rest is written
+    assert (out / "fleet-view.html").is_file()
+    for name in ("quadrant.svg", "slope.svg", "step-movement.svg"):
+        assert not (out / name).exists() or (out / name).read_text(encoding="utf-8") != "STALE", name

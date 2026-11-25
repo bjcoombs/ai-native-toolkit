@@ -6,7 +6,7 @@ In place: 15 repositories in this run, scanned with no model call.
 
 How many repositories sit at each Step, what moved since the last run, and which gate would move the most repositories?
 
-No Step counts: the maturity model defines no Steps.
+Not drawn: skipped: the maturity model defines no Steps.
 
 Drawn from this run's output with no model call; unknown is hatched and named, never drawn as zero.
 

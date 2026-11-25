@@ -279,7 +279,7 @@ SCRIPT = r"""
     if (!f) { return ""; }
     var out = "<h2>Fleet at a glance</h2>";
     if (f.skipped) {
-      out += "<p>No Step counts: " + esc(f.skipped) + "</p>";
+      out += "<p>Not drawn: skipped: " + esc(f.skipped) + "</p>";
     } else {
       out += "<ul>" + f.steps.map(function (s) {
         return "<li>" + esc(stepName(bundle, s.step)) + ": " + esc(repos(s.count)) + "</li>";
