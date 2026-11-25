@@ -23,9 +23,10 @@ are not reachable through `gh.sh`:
 - `new-issues [--payload <file>] [--max <n>] [--fallback-hours <h>]` prints
   the issues to triage this run, one number per line. With a webhook payload
   (`TRIGGER_PAYLOAD`), only the issue it opened; otherwise every issue opened
-  since the newest successful scheduled pipeline other than this one
-  (`CI_PIPELINE_ID`), or in the last `--fallback-hours` when there is none,
-  oldest first, at most `--max`.
+  since the newest earlier `refine-apply` job that succeeded on the default
+  branch (`CI_DEFAULT_BRANCH`) outside a webhook pipeline, or in the last
+  `--fallback-hours` when there is none, oldest first, at most `--max`. A
+  failed run therefore leaves its issues for the next one.
 - `trusted-author --issue <n>` prints `true` when the issue's author is a
   project member at Reporter or above, else `false`: the model runs only on
   such an issue, as the GitHub workflows run it only for an OWNER, MEMBER or
@@ -53,6 +54,8 @@ from refine_platform_gitlab import (
 
 STATES = {"open": "opened", "opened": "opened", "closed": "closed", "all": "all"}
 MAX_LIST = 100
+APPLY_JOB = "refine-apply"
+JOB_PAGES = 5
 # gh flags that take a value and change only the output format or ordering.
 IGNORED_VALUE_FLAGS = frozenset({"--json", "--jq", "-q", "--template", "-t", "--sort", "--order", "--author", "-A",
                                  "--assignee", "-a", "--milestone", "-m", "--app", "--mention", "--match"})
@@ -114,11 +117,7 @@ class Reader:
             if data.get("object_kind") == "issue" and attrs.get("action") == "open" and isinstance(attrs.get("iid"), int):
                 return [int(attrs["iid"])]
             return []
-        current = str(self.env.get("CI_PIPELINE_ID") or "")
-        runs = self.get(f"projects/{self.p}/pipelines?source=schedule&status=success&order_by=id&sort=desc&per_page=5")
-        last = next((str(r.get("created_at")) for r in runs
-                     if isinstance(r, dict) and str(r.get("id")) != current and r.get("created_at")), "")
-        since = iso(last) or (now - timedelta(hours=fallback_hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        since = self.last_run() or (now - timedelta(hours=fallback_hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
         rows = self.get(f"projects/{self.p}/issues?state=opened&created_after={since}"
                         "&order_by=created_at&sort=asc&per_page=100", paginate=True)
         numbers = [int(r["iid"]) for r in rows if isinstance(r, dict) and isinstance(r.get("iid"), int)]
@@ -126,6 +125,27 @@ class Reader:
             print(f"refine: {len(numbers)} new issues since {since}; triaging the oldest {limit}, "
                   "the sweep covers the rest", file=sys.stderr)
         return numbers[:limit]
+
+    def last_run(self) -> str:
+        """When the newest earlier `refine-apply` job that succeeded on the default branch was created, or "".
+
+        A webhook pipeline's run handles one issue, so it does not count; nor
+        does this pipeline (`CI_PIPELINE_ID`). Only the newest JOB_PAGES pages
+        of successful jobs are read.
+        """
+        current = str(self.env.get("CI_PIPELINE_ID") or "")
+        branch = str(self.env.get("CI_DEFAULT_BRANCH") or "")
+        for page in range(1, JOB_PAGES + 1):
+            jobs = [j for j in self.get(f"projects/{self.p}/jobs?scope[]=success&per_page=100&page={page}")
+                    if isinstance(j, dict)]
+            for j in jobs:
+                pipeline = j.get("pipeline") or {}
+                if (j.get("name") == APPLY_JOB and j.get("created_at") and str(pipeline.get("id")) != current
+                        and (not branch or j.get("ref") == branch) and pipeline.get("source") != "trigger"):
+                    return iso(j["created_at"])
+            if len(jobs) < 100:
+                break
+        return ""
 
     def trusted_author(self, number: int) -> bool:
         login = username(self.one(f"projects/{self.p}/issues/{number}").get("author"))

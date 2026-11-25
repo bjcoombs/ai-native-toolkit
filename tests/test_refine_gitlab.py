@@ -160,7 +160,7 @@ def test_a_refused_or_failed_glab_read_exits_3(tmp_path):
 
 # ── the reader behind gh.sh, and the CI helpers ──────────────────────────
 
-ENV = {"GH_REPO": PROJECT, "CI_PIPELINE_ID": "300"}
+ENV = {"GH_REPO": PROJECT, "CI_PIPELINE_ID": "300", "CI_DEFAULT_BRANCH": "main"}
 
 
 def read(argv, routes, capsys, env=None):
@@ -201,15 +201,17 @@ def test_new_issues_from_a_webhook_payload(capsys):
     assert (code, out.strip()) == (0, "")
 
 
-def test_new_issues_since_the_last_other_scheduled_pipeline(capsys):
-    routes = {"P/pipelines": "pipelines_schedule.json", "P/issues": "issues_new.json"}
+def test_new_issues_since_the_last_successful_apply_on_the_default_branch(capsys):
+    routes = {"P/jobs": "jobs_success.json", "P/issues": "issues_new.json"}
     code, out, fake = read(["new-issues", "--max", "1"], routes, capsys)
     assert code == 0 and out.split() == ["1"], "oldest first, at most --max"
-    assert "created_after=2026-11-24T18:17:00Z" in fake.paths()[1], "this pipeline (300) is not the last run"
+    # Not this pipeline (300), not a webhook pipeline (299), not another branch (298), not another job (297).
+    assert "created_after=2026-11-24T18:17:00Z" in fake.paths()[1]
+    assert "scope[]=success" in fake.paths()[0]
 
 
 def test_new_issues_fall_back_to_a_window_with_no_earlier_run(capsys):
-    routes = {"P/pipelines": "[]", "P/issues": "issues_new.json"}
+    routes = {"P/jobs": "[]", "P/issues": "issues_new.json"}
     code, out, fake = read(["new-issues", "--fallback-hours", "6"], routes, capsys)
     assert code == 0 and out.split() == ["1", "2"]
     assert "created_after=2026-11-25T06:00:00Z" in fake.paths()[1]

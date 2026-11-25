@@ -11,8 +11,10 @@
 #
 # GitLab has no CI trigger for a new issue, so a pipeline schedule on the
 # default branch does the work: the sweep over every open issue, plus triage
-# and dedupe for each issue opened since the last successful scheduled
-# pipeline. A project webhook calling a pipeline trigger token is an optional
+# and dedupe for each issue opened since the last refine-apply job that
+# succeeded there. The jobs run in every scheduled pipeline on the default
+# branch; with other schedules, set REFINE_ENABLED on the refiner's schedule
+# only. A project webhook calling a pipeline trigger token is an optional
 # faster path for new issues (docs/refine.md).
 #
 # Three jobs, so the model never holds a token that can write:

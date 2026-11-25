@@ -1,0 +1,52 @@
+[
+  {
+    "id": 10,
+    "name": "refine-apply",
+    "ref": "main",
+    "created_at": "2026-11-25T12:00:00.000Z",
+    "pipeline": {
+      "id": 300,
+      "source": "schedule"
+    }
+  },
+  {
+    "id": 9,
+    "name": "refine-apply",
+    "ref": "main",
+    "created_at": "2026-11-25T09:00:00.000Z",
+    "pipeline": {
+      "id": 299,
+      "source": "trigger"
+    }
+  },
+  {
+    "id": 8,
+    "name": "refine-apply",
+    "ref": "feature",
+    "created_at": "2026-11-25T08:00:00.000Z",
+    "pipeline": {
+      "id": 298,
+      "source": "schedule"
+    }
+  },
+  {
+    "id": 7,
+    "name": "test",
+    "ref": "main",
+    "created_at": "2026-11-25T07:00:00.000Z",
+    "pipeline": {
+      "id": 297,
+      "source": "push"
+    }
+  },
+  {
+    "id": 6,
+    "name": "refine-apply",
+    "ref": "main",
+    "created_at": "2026-11-24T18:17:00.000Z",
+    "pipeline": {
+      "id": 296,
+      "source": "schedule"
+    }
+  }
+]
