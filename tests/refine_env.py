@@ -12,6 +12,7 @@ from typing import List, Sequence
 
 REPO = Path(__file__).resolve().parent.parent
 SCRIPTS = REPO / "skills" / "refine" / "scripts"
+ENTRY = REPO / "skills" / "refine" / "scripts" / "refine.py"
 FIXTURES = REPO / "tests" / "fixtures" / "refine"
 DEFINITION = REPO / "docs" / "contributing" / "definition-of-ready.md"
 SCHEMA = SCRIPTS / "refine-output.schema.json"

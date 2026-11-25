@@ -15,7 +15,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from refine_env import DEFINITION, FIXTURE_REPO, NOW, SCHEMA, SCRIPTS, RecordedRunner, recorded_backlog
+from refine_env import DEFINITION, ENTRY, FIXTURE_REPO, NOW, SCHEMA, SCRIPTS, RecordedRunner, recorded_backlog
 
 import refine  # noqa: E402  (refine_env put the scripts on sys.path)
 import refine_checks  # noqa: E402
@@ -331,7 +331,7 @@ def test_script_runs_by_path(tmp_path):
     # The scheduled workflow calls the file directly; a by-path run must resolve its siblings.
     import subprocess
     import sys
-    proc = subprocess.run([sys.executable, str(SCRIPTS / "refine.py"), "--help"], capture_output=True,
+    proc = subprocess.run([sys.executable, str(ENTRY), "--help"], capture_output=True,
                           encoding="utf-8", errors="replace", check=False)
     assert proc.returncode == 0
     assert "--dry-run" in proc.stdout
