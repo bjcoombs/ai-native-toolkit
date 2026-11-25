@@ -38,7 +38,13 @@ named key, so a later field (the #939 ``why``) is an added key, never a restruct
   private inputs other scans read.
 - ``signals``: each signal a criterion reads, with its type, collector, input class and
   grade.
-- ``findings``: each derived finding, in report order, with its inputs and rules.
+- ``findings``: each derived finding, with its inputs, rules and report ``order``.
+
+**Stable order (#1239).** Every list a new check adds to is sorted by a stable key: rows by
+id (``stable_model``, so tag lists and links follow condition ids), scans, collectors and
+findings by name, signals by path, links by source. A check's entries land at a fixed place
+whatever order its sources declare them in, so two PRs that add different checks change
+different lines of the generated files and merge cleanly. No count is written.
 
 (#789 step 2, #794)
 `build_catalog(manifest=None, model=None)` joins the check manifest (`checks/core.toml` and its
@@ -54,8 +60,7 @@ the manifest, `input_class`, `grade`, `counts`), `scans` (one per `signals.known
 counts-only patterns, split by block for a spread collector), `used_by` (`rows`, `conditions`,
 `findings`), `unknown_reasons` (the generic `not_registered`, `network` or `platform_only`
 reason plus the manifest's declared ones), `evidence` per signal and `grades`), `collectors`
-(every `scan_registry.SCANS` entry), `signals` (in the order the model's criteria first read
-them, not manifest order, since fragments group signals by collector) and `findings`. `sources` (`catalog.SOURCES`) lists the
+(every `scan_registry.SCANS` entry), `signals` (sorted by path) and `findings` (sorted by name). `sources` (`catalog.SOURCES`) lists the
 files it is generated from, repo-relative; `skills/assess/checks/core/*.toml` names the
 manifest fragments as a glob (#994). A scan no criterion reads is
 graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
@@ -67,6 +72,7 @@ commit or version string is read, so a version-only bump of the model leaves it 
 """
 from __future__ import annotations
 
+import copy
 import json
 from collections.abc import Mapping, Sequence
 from typing import Literal, NotRequired, TypedDict
@@ -414,17 +420,11 @@ def _scans(manifest: cm.CheckManifest, rows: Sequence[CatalogRow],
     return out
 
 
-def _model_order(signals: Sequence[cm.SignalEntry], model: MaturityModel) -> list[cm.SignalEntry]:
-    """Signals in the order the model's criteria first read them, then any it does not read.
-
-    The manifest groups signals by collector (one fragment each, #982); the catalog lists
-    them in maturity-model order, row by row."""
-    rank: dict[str, int] = {}
-    for row in model["rows"]:
-        for level in row["levels"]:
-            for criterion in level["criteria"]:
-                rank.setdefault(criterion["signal"], len(rank))
-    return sorted(signals, key=lambda s: rank.get(s["path"], len(rank)))
+def stable_model(model: MaturityModel) -> MaturityModel:
+    """``model`` with its rows sorted by id, so a new row lands at a fixed place (#1239)."""
+    out = copy.copy(model)
+    out["rows"] = sorted(model["rows"], key=lambda r: r["id"])
+    return out
 
 
 def build_catalog(manifest: cm.CheckManifest | None = None,
@@ -432,7 +432,8 @@ def build_catalog(manifest: cm.CheckManifest | None = None,
     """The catalog of the core manifest and the default maturity model (or the given ones)."""
     manifest = cm.load_manifest() if manifest is None else manifest
     model = load_default_levels() if model is None else model
-    signals = _model_order(cm.signals(manifest), model)
+    model = stable_model(model)
+    signals = sorted(cm.signals(manifest), key=lambda s: s["path"])
     by_path = {s["path"]: s for s in signals}
     truth = {condition_id(r["id"], lv["level"]): list(lv["truth"]) for r in model["rows"] for lv in r["levels"]}
     steps = ct.steps(model, truth)
@@ -447,11 +448,12 @@ def build_catalog(manifest: cm.CheckManifest | None = None,
                               for t in TRUTH_TAGS}),
         tag_pairs=ct.tag_pairs(levels),
         steps=steps,
-        links=ct.links(model),
-        scans=_scans(manifest, rows, signals),
-        collectors=[CatalogCollector(name=cm.scan_key(c), title=c["title"], publishes=list(c["publishes"]),
-                                     reads=list(c["reads"]), network=bool(c.get("network")),
-                                     private=bool(c.get("private"))) for c in cm.collectors(manifest)],
+        links=sorted(ct.links(model), key=lambda link: (link["source"], link["kind"], link["target"])),
+        scans=sorted(_scans(manifest, rows, signals), key=lambda s: s["name"]),
+        collectors=sorted((CatalogCollector(name=cm.scan_key(c), title=c["title"], publishes=list(c["publishes"]),
+                                            reads=list(c["reads"]), network=bool(c.get("network")),
+                                            private=bool(c.get("private"))) for c in cm.collectors(manifest)),
+                          key=lambda c: c["name"]),
         signals=[CatalogSignal(path=s["path"], title=s["title"], type=s["type"], collector=s["collector"],
                                input_class=s["evidence"],
                                grade=grade_of(s["evidence"]),
@@ -461,7 +463,7 @@ def build_catalog(manifest: cm.CheckManifest | None = None,
                                  suppressed_when=f.get("suppressed_when", ""),
                                  prune_missing_paths=bool(f.get("prune_missing_paths")),
                                  why=mw.why_of(f), why_source=mw.why_source_of(f))
-                  for f in cm.findings(manifest)],
+                  for f in sorted(cm.findings(manifest), key=lambda f: f["name"])],
     )
 
 

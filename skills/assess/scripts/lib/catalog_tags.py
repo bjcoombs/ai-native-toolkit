@@ -13,7 +13,8 @@
 - ``steps``: the model's autonomy Steps in order, each gate with the conditions it covers
   (its row's conditions 1..``level``) and their tags; ``added_gates`` names the gates new at
   that Step, since gates accumulate.
-- ``links``: every ``requires``, ``guarded_by`` and ``eq_signal`` relation, in model order.
+- ``links``: every ``requires``, ``guarded_by`` and ``eq_signal`` relation, in model order
+  (``lib.catalog`` sorts them by source).
   ``source`` is a condition id (a criterion key for ``eq_signal``); ``target`` is a condition
   id (a signal path for ``eq_signal``).
 
@@ -35,7 +36,7 @@ LinkKind = Literal["requires", "guarded_by", "eq_signal"]
 class CatalogTag(TypedDict):
     id: str
     title: str
-    conditions: list[str]  # every condition carrying the tag, in model order
+    conditions: list[str]  # every condition carrying the tag, in the order given (lib.catalog: by id)
     listed: list[str]  # those whose first tag this is: their table rows sit in this tag's section
     shared: list[str]  # those carrying another tag as well
     why: str  # what the tag keeps honest for an agent (#939)
