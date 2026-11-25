@@ -11,18 +11,29 @@ rules below are enforced here, in code, whatever the plan says:
   added or removed. The refiner never removes the ready label, and removes
   the triage label only when it adds the ready label.
 - **Never re-apply a removed label.** A label a person (not the bot) removed
-  from an issue is never added back.
+  from an issue is never added back, including the triage label on
+  `/reopen`. A vetoed label does not use a call from the cap.
 - **The ready label** (`agent-ready` by default) is added only when the
   refinement script's verdict for the issue has no failing check, no open-PR
   overlap and no exact duplicate, and every judgement item is resolved by
-  the plan with no open question. Adding it removes the triage label.
+  the plan with no open question. The size is read again just before the
+  label goes on (`current_size`): it must still be present when the verdict
+  had one, at most `REFINE_MAX_POINTS`, and equal to the plan's size when
+  the plan sized the issue. `refine_apply.apply_triage` also withholds the
+  label when a required size write or any planned blocked-by edge was
+  refused or failed. Adding it removes the triage label.
 - **Duplicate closes.** Only a pair the refinement script reported as
-  `exact` and `closable`, with both issues still open, the duplicate never
-  reopened by a person, and fewer than `REFINE_CLOSE_CAP` duplicate closes
-  by `REFINE_BOT_LOGIN` in the last 7 days. The close comment links the surviving issue and names the
+  `exact` and `closable`, with both issues still open, their title and body
+  still equal under `refine_duplicates.normalise` when read fresh, the
+  duplicate never reopened by a person, and fewer than `REFINE_CLOSE_CAP`
+  duplicate closes by `REFINE_BOT_LOGIN` in the last 7 days, each close
+  counted once. The close comment links the surviving issue and names the
   `/reopen` route.
 - **Sizes.** A size marker goes only on an issue the refinement script
-  reported `unsized`, so a size a person wrote is never overridden.
+  reported `unsized` and that still reads unsized now, so a size a person
+  wrote, before or after the verdict, is never overridden. The current size
+  is the newest trusted `refine:size` marker, else the last body line
+  matching `REFINE_SIZE_PATTERN` (default: a `Size: <n> points` line).
 - **Questions** for the maintainer go into one comment per run on the issue
   named by `REFINE_QUESTIONS_ISSUE`, skipped when the refiner already posted
   the same comment there.
@@ -44,12 +55,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
+
+from refine_duplicates import normalise
 
 Runner = Callable[[Sequence[str]], str]
 Json = Dict[str, Any]
@@ -59,6 +73,8 @@ DEFAULT_TRIAGE = "needs-triage"
 DEFAULT_BOT = "github-actions[bot]"
 DEFAULT_CLOSE_CAP = 10
 DEFAULT_MAX_POINTS = 3
+DEFAULT_SIZE_PATTERN = r"Size: (\d+) points?"
+SIZE_MARKER_RE = re.compile(r"<!-- refine:size (\d+) -->")
 CLOSE_WINDOW_DAYS = 7
 EVENT_PAGES = 10
 FIBONACCI = (1, 2, 3, 5, 8, 13, 21)
@@ -145,6 +161,7 @@ class Settings:
         self.bot_login = e.get("REFINE_BOT_LOGIN") or DEFAULT_BOT
         self.close_cap = int(e.get("REFINE_CLOSE_CAP") or DEFAULT_CLOSE_CAP)
         self.max_points = int(e.get("REFINE_MAX_POINTS") or DEFAULT_MAX_POINTS)
+        self.size_pattern = re.compile(e.get("REFINE_SIZE_PATTERN") or DEFAULT_SIZE_PATTERN)
         q = e.get("REFINE_QUESTIONS_ISSUE", "").strip().lstrip("#")
         self.questions_issue: Optional[int] = int(q) if q.isdigit() else None
         caps = e.get("CLAUDE_CODE_SCRIPT_CAPS", "").strip()
@@ -169,7 +186,7 @@ class Writer:
         self.s = settings
         self.run = runner
         self.now = now or datetime.now(timezone.utc)
-        self.closes_this_run = 0
+        self.closed_this_run: Set[int] = set()
         self.failures = 0
 
     # ── plumbing ─────────────────────────────────────────────────────────
@@ -242,6 +259,34 @@ class Writer:
                     out.add(str(name))
         return out
 
+    def current_size(self, number: int, info: Optional[Json] = None) -> Optional[int]:
+        """The size as it reads now: the newest trusted marker, else the last body size line."""
+        latest: Optional[int] = None
+        for c in self.comments(number):
+            if not (self._is_bot(c.get("user")) or c.get("author_association") in TRUSTED_ASSOCIATIONS):
+                continue
+            match = SIZE_MARKER_RE.fullmatch(str(c.get("body", "")).split("\n", 1)[0].strip())
+            if match:
+                latest = int(match.group(1))
+        if latest is not None:
+            return latest
+        body = str((info if info is not None else self.issue(number)).get("body") or "")
+        found = list(self.s.size_pattern.finditer(body))
+        return int(found[-1].group(1)) if found else None
+
+    def size_drift(self, number: int, info: Optional[Json], verdict: Optional[Json], plan: Optional[Json]) -> str:
+        """Why the size as it reads now no longer supports the ready label, or ""."""
+        entry = verdict_entry(verdict, number) or {}
+        current = self.current_size(number, info)
+        if current is None:
+            return "the issue no longer reads a size" if entry.get("size_points") is not None else ""
+        if current > self.s.max_points:
+            return f"the size now reads {current}, above {self.s.max_points}"
+        planned = (plan or {}).get("size") if entry.get("unsized") is True else None
+        if isinstance(planned, int) and current != planned:
+            return f"the size now reads {current}, not the plan's {planned}"
+        return ""
+
     # ── edit-issue-labels.sh ─────────────────────────────────────────────
 
     def _screen_labels(self, add: Sequence[str], remove: Sequence[str]) -> Tuple[List[str], List[str], List[str]]:
@@ -259,15 +304,15 @@ class Writer:
             to_remove.remove(self.s.triage_label)
         return to_add, to_remove, refused
 
-    def _apply_ready_rule(self, number: int, to_add: List[str], to_remove: List[str], current: Set[str],
+    def _apply_ready_rule(self, number: int, to_add: List[str], to_remove: List[str], info: Json,
                           verdict: Optional[Json], plan: Optional[Json]) -> Optional[str]:
         """Keep the ready label in `to_add` only when the rule allows it; return the refusal."""
         if self.s.ready_label not in to_add:
             return None
-        if self.s.ready_label in current:
+        if self.s.ready_label in _label_names(info):
             to_add.remove(self.s.ready_label)
             return None
-        reason = ready_blocker(number, verdict, plan, self.s.max_points)
+        reason = ready_blocker(number, verdict, plan, self.s.max_points) or self.size_drift(number, info, verdict, plan)
         if reason:
             to_add.remove(self.s.ready_label)
             return f"{self.s.ready_label}: {reason}"
@@ -281,16 +326,15 @@ class Writer:
                     verdict: Optional[Json] = None, plan: Optional[Json] = None) -> Json:
         """Add and remove labels under the allow-list, the veto and the ready rule."""
         script = "edit-issue-labels.sh"
-        self.take_cap(script)
         to_add, to_remove, refused = self._screen_labels(add, remove)
         info = self.issue(number)
         if info.get("state") != "open":
             raise self.refuse(script, number, "the issue is not open")
-        current = {str(lbl.get("name")) for lbl in info.get("labels", []) if isinstance(lbl, dict)}
+        current = _label_names(info)
         vetoed = self.removed_by_person(number)
         refused += [f"{label}: a person removed it from this issue" for label in to_add if label in vetoed]
         to_add = [a for a in to_add if a not in vetoed]
-        ready_refusal = self._apply_ready_rule(number, to_add, to_remove, current, verdict, plan)
+        ready_refusal = self._apply_ready_rule(number, to_add, to_remove, info, verdict, plan)
         if ready_refusal:
             refused.append(ready_refusal)
         to_add = [a for a in to_add if a not in current]
@@ -299,6 +343,8 @@ class Writer:
             self._record({"mode": "live" if self.s.live else "dry-run", "script": script,
                           "action": "refused", "issue": number, "detail": reason})
         if to_add or to_remove:
+            # The cap counts only a call that writes, so a vetoed entry leaves it for later ones.
+            self.take_cap(script)
             args = ["issue", "edit", str(number), "--repo", self.s.repo]
             if to_add:
                 args += ["--add-label", ",".join(to_add)]
@@ -350,7 +396,9 @@ class Writer:
 
         Counted: `closed` events whose actor is `REFINE_BOT_LOGIN`, on an issue
         (not a pull request), with `state_reason` `duplicate` or no reason
-        recorded. Other bots' closes, merges and pull requests do not count.
+        recorded. Other bots' closes, merges and pull requests do not count,
+        nor do closes of issues this run closed: `close_duplicate` adds those
+        once from `closed_this_run`, so each close counts once in either mode.
 
         Reading stops at the first event older than the window. When the page
         limit runs out first, the count is treated as the cap: fail closed.
@@ -365,7 +413,7 @@ class Writer:
                 created = parse_time(str(e.get("created_at", "")))
                 if created is None or created < since:
                     return count
-                if self._is_refiner_close(e):
+                if self._is_refiner_close(e) and (e.get("issue") or {}).get("number") not in self.closed_this_run:
                     count += 1
         return max(count, self.s.close_cap)
 
@@ -379,12 +427,15 @@ class Writer:
             raise self.refuse(script, number, f"no exact, closable pair with #{survivor} in the verdict")
         if survivor == number:
             raise self.refuse(script, number, "an issue cannot duplicate itself")
-        for n in (number, survivor):
-            if self.issue(n).get("state") != "open":
+        fresh = {n: self.issue(n) for n in (number, survivor)}
+        for n, info in fresh.items():
+            if info.get("state") != "open":
                 raise self.refuse(script, number, f"#{n} is not open")
+        if not same_text(fresh[number], fresh[survivor]):
+            raise self.refuse(script, number, f"the title or body no longer matches #{survivor} exactly")
         if any(e.get("event") == "reopened" for e in self.events(number)):
             raise self.refuse(script, number, "a person reopened it before; not closing again")
-        used = self.bot_closes_in_window() + self.closes_this_run
+        used = self.bot_closes_in_window() + len(self.closed_this_run)
         if used >= self.s.close_cap:
             raise self.refuse(script, number, f"weekly close cap reached ({used} of {self.s.close_cap})")
         body = "\n".join([
@@ -402,16 +453,17 @@ class Writer:
                     ["api", "-X", "PATCH", f"repos/{self.s.repo}/issues/{number}",
                      "-f", "state=closed", "-f", "state_reason=duplicate"],
                     f"closed as duplicate of #{survivor}")
-        self.closes_this_run += 1
+        self.closed_this_run.add(number)
 
     # ── write-size-marker.sh ─────────────────────────────────────────────
 
     def write_size_marker(self, number: int, points: int, reason: str, verdict: Optional[Json]) -> bool:
         """Post a sizing comment for an unsized issue; skip when the newest marker already says `points`.
 
-        Only an issue the refinement script reported `unsized` may be sized,
-        so the refiner never overrides a size a person wrote in the body or in
-        an earlier marker.
+        Only an issue the refinement script reported `unsized`, and that
+        still reads unsized now, may be sized, so the refiner never overrides
+        a size a person wrote in the body or in a marker, before or after the
+        verdict.
         """
         script = "write-size-marker.sh"
         self.take_cap(script)
@@ -422,16 +474,11 @@ class Writer:
         entry = verdict_entry(verdict, number)
         if entry is None or entry.get("unsized") is not True:
             raise self.refuse(script, number, "the issue already has a size, or no verdict says it is unsized")
-        latest: Optional[int] = None
-        for c in self.comments(number):
-            if not (self._is_bot(c.get("user")) or c.get("author_association") in TRUSTED_ASSOCIATIONS):
-                continue
-            first = str(c.get("body", "")).split("\n", 1)[0].strip()
-            for p in FIBONACCI:
-                if first == SIZE_MARKER.format(points=p):
-                    latest = p
+        latest = self.current_size(number)
         if latest == points:
             return False
+        if latest is not None:
+            raise self.refuse(script, number, f"the issue reads size {latest} now, written after the verdict")
         body = SIZE_MARKER.format(points=points) + "\n" + neutralise(reason)
         self._write(script, "size-marker", number,
                     ["issue", "comment", str(number), "--repo", self.s.repo, "--body", body],
@@ -525,9 +572,13 @@ class Writer:
                     ["api", "-X", "PATCH", f"repos/{self.s.repo}/issues/{number}",
                      "-f", "state=open", "-f", "state_reason=reopened"],
                     f"reopened at the request of {commenter}")
-        self._write(script, "label-reopened", number,
-                    ["issue", "edit", str(number), "--repo", self.s.repo, "--add-label", self.s.triage_label],
-                    f"add {self.s.triage_label}")
+        if self.s.triage_label in self.removed_by_person(number):
+            self._record({"mode": "live" if self.s.live else "dry-run", "script": script, "action": "refused",
+                          "issue": number, "detail": f"{self.s.triage_label}: a person removed it from this issue"})
+        else:
+            self._write(script, "label-reopened", number,
+                        ["issue", "edit", str(number), "--repo", self.s.repo, "--add-label", self.s.triage_label],
+                        f"add {self.s.triage_label}")
         self._write(script, "comment-reopened", number,
                     ["issue", "comment", str(number), "--repo", self.s.repo, "--body",
                      REOPEN_MARKER + "\nReopened. The refiner will not close this issue as a duplicate again."],
@@ -539,6 +590,16 @@ def parse_time(value: str) -> Optional[datetime]:
         return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
     except ValueError:
         return None
+
+
+def _label_names(info: Json) -> Set[str]:
+    return {str(lbl.get("name")) for lbl in info.get("labels", []) if isinstance(lbl, dict)}
+
+
+def same_text(a: Json, b: Json) -> bool:
+    """The exact-duplicate rule of `refine_duplicates`: normalised title and body both equal."""
+    return (normalise(str(a.get("title") or "")) == normalise(str(b.get("title") or ""))
+            and normalise(str(a.get("body") or "")) == normalise(str(b.get("body") or "")))
 
 
 def verdict_entry(verdict: Optional[Json], number: int) -> Optional[Json]:

@@ -20,7 +20,9 @@ makes every change through `refine_write.Writer`, which holds the rules.
   for a person or a later run.
 - **triage.** Size marker, blocked-by edges, labels (the ready label only
   through the plan's `ready` and the rule in `refine_write.ready_blocker`),
-  then the plan's questions in one batch.
+  then the plan's questions in one batch. The ready label is withheld when
+  the size write an `unsized` issue needs, or any planned blocked-by edge,
+  was refused or failed; the refusal is logged in the actions log.
 - **dedupe-route / dedupe-exact / dedupe.** An exact, closable pair is closed
   with no model; otherwise the model's candidates are named in one comment,
   never closed. `dedupe-route` makes the same decision with no write, for the
@@ -127,29 +129,43 @@ def apply_settled(w: Writer, verdict: Json, issue: int) -> None:
     w.edit_labels(issue, [w.s.ready_label], [], verdict, None)
 
 
-def _attempt(w: Writer, fn: Any, *args: Any) -> None:
+def _attempt(w: Writer, fn: Any, *args: Any) -> bool:
     """Run one write; a refusal or a failed `gh` call is logged and the run goes on.
 
-    A `gh` failure is counted in `w.failures`, so the command still exits 3
-    once every other write has had its turn.
+    Returns True when the call went through, including a no-op such as a
+    marker or edge already in place. A `gh` failure is counted in
+    `w.failures`, so the command still exits 3 once every other write has had
+    its turn.
     """
     try:
         fn(*args)
+        return True
     except Refused as exc:
         print(f"refused: {exc}", file=sys.stderr)
     except GhError as exc:
         w.failures += 1
         print(f"gh failed: {exc}", file=sys.stderr)
+    return False
 
 
 def apply_triage(w: Writer, verdict: Json, issue: int, plan: Json) -> None:
+    withheld: List[str] = []
     if plan["size"] is not None:
-        _attempt(w, w.write_size_marker, issue, plan["size"], plan["size_reason"] or "sized by the refiner", verdict)
+        sized = _attempt(w, w.write_size_marker, issue, plan["size"],
+                         plan["size_reason"] or "sized by the refiner", verdict)
+        if not sized and (verdict_entry(verdict, issue) or {}).get("unsized") is True:
+            withheld.append(f"the size write for #{issue} did not go through")
     for blocker in plan["blocked_by"]:
-        _attempt(w, w.add_blocked_by, issue, blocker)
+        if not _attempt(w, w.add_blocked_by, issue, blocker):
+            withheld.append(f"the blocked-by edge to #{blocker} did not go through")
     add = [a for a in plan["labels_add"] if a != w.s.ready_label]
     if plan["ready"] and not plan["questions"]:
-        add.append(w.s.ready_label)
+        if withheld:
+            for reason in withheld:
+                w.refuse("edit-issue-labels.sh", issue, f"{w.s.ready_label}: {reason}")
+                print(f"refused: {w.s.ready_label}: {reason}", file=sys.stderr)
+        else:
+            add.append(w.s.ready_label)
     if add or plan["labels_remove"]:
         _attempt(w, w.edit_labels, issue, add, plan["labels_remove"], verdict, plan)
     _attempt(w, w.post_questions, [{"issue": issue, "question": q} for q in plan["questions"]])

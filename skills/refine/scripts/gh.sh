@@ -11,7 +11,8 @@
 #   gh.sh search issues <query> [flags]
 #   gh.sh label list [flags]
 #
-# --web is refused, and so is any --repo other than the job's GH_REPO.
+# --web is refused, and so is any --repo other than the job's GH_REPO, and
+# any URL argument outside https://github.com/<GH_REPO>/.
 set -euo pipefail
 
 refuse() { echo "gh.sh: refused: $*" >&2; exit 4; }
@@ -27,6 +28,11 @@ for arg in "$@"; do
   case "$arg" in
     --web | -w) refuse "--web is not allowed" ;;
     --repo=* | -R=*) [ "${arg#*=}" = "${GH_REPO:-}" ] || refuse "only ${GH_REPO:-the job repository} may be read" ;;
+    *://* | *github.com/*)
+      case "$arg" in
+        "https://github.com/${GH_REPO:-}/"* | "github.com/${GH_REPO:-}/"*) ;;
+        *) refuse "an issue URL must point at ${GH_REPO:-the job repository}" ;;
+      esac ;;
   esac
   if [ "$prev" = "--repo" ] || [ "$prev" = "-R" ]; then
     [ "$arg" = "${GH_REPO:-}" ] || refuse "only ${GH_REPO:-the job repository} may be read"
