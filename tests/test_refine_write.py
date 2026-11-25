@@ -3,8 +3,9 @@
 Each test drives one `refine_write.Writer` operation with a `FakeGh` runner
 (`refine_write_env.py`) and asserts which writes reached `gh`.
 """
+import json
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 import pytest
 from refine_write_env import FIXTURES, actions, verdict, writer
@@ -12,8 +13,10 @@ from refine_write_env import FIXTURES, actions, verdict, writer
 import refine_write
 from refine_write import Refused
 
-OPEN_101 = {"issues/101": "issue_101_open.json", "issues/101/events": "events_bot_only.json"}
-OPEN_103 = {"issues/103": "issue_103_open.json", "issues/103/events": "events_bot_only.json"}
+OPEN_101 = {"issues/101": "issue_101_open.json", "issues/101/events": "events_bot_only.json",
+            "issues/101/comments": "comments_none.json"}
+OPEN_103 = {"issues/103": "issue_103_open.json", "issues/103/events": "events_bot_only.json",
+            "issues/103/comments": "comments_none.json"}
 
 
 def _plan(**kw: object) -> Dict[str, object]:
@@ -21,6 +24,18 @@ def _plan(**kw: object) -> Dict[str, object]:
                                "size_reason": "one module", "blocked_by": [], "questions": [], "summary": ""}
     plan.update(kw)
     return plan
+
+
+def _comment(points: int, association: str = "MEMBER") -> str:
+    return json.dumps([{"id": 9, "user": {"login": "maintainer", "type": "User"}, "author_association": association,
+                        "body": f"<!-- refine:size {points} -->\nbigger than it looks",
+                        "created_at": "2026-11-25T11:00:00Z"}])
+
+
+def _issue(number: int, **kw: object) -> str:
+    data = json.loads((FIXTURES / f"issue_{number}_open.json").read_text(encoding="utf-8"))
+    data.update(kw)
+    return json.dumps(data)
 
 
 # ── label allow-list and veto ────────────────────────────────────────────
@@ -78,7 +93,7 @@ def test_ready_refused_when_the_plan_leaves_a_question(tmp_path: Path) -> None:
 
 
 def test_ready_applied_when_the_plan_resolves_judgement(tmp_path: Path) -> None:
-    w, gh = writer(tmp_path, OPEN_101)
+    w, gh = writer(tmp_path, {**OPEN_101, "issues/101/comments": _comment(2, "OWNER")})
     w.edit_labels(101, ["agent-ready"], [], verdict(), _plan())
     assert gh.writes[0][-4:] == ["--add-label", "agent-ready", "--remove-label", "needs-triage"]
 
@@ -179,7 +194,7 @@ def test_candidates_not_listed_twice(tmp_path: Path) -> None:
 # ── size markers and blocked-by edges ────────────────────────────────────
 
 def test_size_marker_is_the_first_line(tmp_path: Path) -> None:
-    w, gh = writer(tmp_path, {"issues/101/comments": "comments_none.json"})
+    w, gh = writer(tmp_path, {"issues/101": "issue_101_open.json", "issues/101/comments": "comments_none.json"})
     assert w.write_size_marker(101, 5, "two modules\nand docs", verdict())
     assert gh.writes[0][-1] == "<!-- refine:size 5 -->\ntwo modules and docs"
 
@@ -251,7 +266,8 @@ def test_report_created_when_none_exists(tmp_path: Path) -> None:
     ("carol", {"collaborators/carol/permission": "permission_write.json"}),
 ])
 def test_reopen_by_author_or_writer(tmp_path: Path, commenter: str, routes: Dict[str, str]) -> None:
-    w, gh = writer(tmp_path, {"issues/102": "issue_102_closed_duplicate.json", **routes})
+    w, gh = writer(tmp_path, {"issues/102": "issue_102_closed_duplicate.json",
+                              "issues/102/events": "events_bot_only.json", **routes})
     w.reopen(102, commenter)
     assert gh.writes[0] == ["api", "-X", "PATCH", "repos/acme/widgets/issues/102",
                             "-f", "state=open", "-f", "state_reason=reopened"]
@@ -276,7 +292,7 @@ def test_reopen_refused(tmp_path: Path, number: int, commenter: str, routes: Dic
 # ── call caps and dry-run ────────────────────────────────────────────────
 
 def test_call_cap_refuses_the_next_run(tmp_path: Path) -> None:
-    w, gh = writer(tmp_path, {"issues/101/comments": "comments_none.json"}, caps={"write-size-marker.sh": 1})
+    w, gh = writer(tmp_path, {"issues/101": "issue_101_open.json", "issues/101/comments": "comments_none.json"}, caps={"write-size-marker.sh": 1})
     w.write_size_marker(101, 2, "small", verdict())
     with pytest.raises(Refused, match="call cap reached \\(1 of 1\\)"):
         w.write_size_marker(101, 3, "bigger", verdict())
@@ -284,7 +300,7 @@ def test_call_cap_refuses_the_next_run(tmp_path: Path) -> None:
 
 
 def test_call_cap_persists_across_processes(tmp_path: Path) -> None:
-    routes = {"issues/101/comments": "comments_none.json"}
+    routes = {"issues/101": "issue_101_open.json", "issues/101/comments": "comments_none.json"}
     first, _ = writer(tmp_path, routes, caps={"write-size-marker.sh": 1})
     first.write_size_marker(101, 2, "small", verdict())
     second, gh = writer(tmp_path, routes, caps={"write-size-marker.sh": 1})
@@ -294,7 +310,8 @@ def test_call_cap_persists_across_processes(tmp_path: Path) -> None:
 
 
 def test_script_missing_from_the_caps_is_refused(tmp_path: Path) -> None:
-    w, gh = writer(tmp_path, {}, caps={"edit-issue-labels.sh": 1})
+    w, gh = writer(tmp_path, {"issues/101": "issue_101_open.json", "issues/101/comments": "comments_none.json"},
+                   caps={"edit-issue-labels.sh": 1})
     with pytest.raises(Refused, match="not named in CLAUDE_CODE_SCRIPT_CAPS"):
         w.write_size_marker(101, 2, "small", verdict())
 
@@ -375,8 +392,106 @@ def test_size_marker_refused_when_the_issue_already_has_a_size(tmp_path: Path) -
 
 
 def test_untrusted_marker_does_not_block_the_refiners_size(tmp_path: Path) -> None:
-    w, gh = writer(tmp_path, {"issues/101/comments": '[{"id": 9, "user": {"login": "outsider", "type": "User"}, '
+    w, gh = writer(tmp_path, {"issues/101": "issue_101_open.json",
+                              "issues/101/comments": '[{"id": 9, "user": {"login": "outsider", "type": "User"}, '
                                                      '"author_association": "NONE", '
                                                      '"body": "<!-- refine:size 3 -->"}]'})
     assert w.write_size_marker(101, 3, "one module", verdict())
     assert len(gh.writes) == 1
+
+
+# ── live-mode fixes (issue #1341) ────────────────────────────────────────
+
+@pytest.mark.parametrize("routes, now", [
+    ({"issues/101/comments": _comment(8)}, "8"),
+    ({"issues/101/comments": "comments_none.json", "issues/101": _issue(101, body="...\nSize: 5 points")}, "5"),
+])
+def test_size_marker_refused_when_a_size_was_written_after_the_verdict(
+        tmp_path: Path, routes: Dict[str, str], now: str) -> None:
+    w, gh = writer(tmp_path, {"issues/101": "issue_101_open.json", **routes})
+    with pytest.raises(Refused, match=f"reads size {now} now"):
+        w.write_size_marker(101, 2, "one module", verdict())
+    assert gh.writes == []
+
+
+@pytest.mark.parametrize("number, routes, plan, reason", [
+    (101, {"issues/101/comments": _comment(3)}, {"size": 2}, "size now reads 3, not the plan's 2"),
+    (103, {"issues/103/comments": _comment(8, "OWNER")}, None, "size now reads 8, above 3"),
+    (103, {"issues/103": _issue(103, body="...")}, None, "reads no size"),
+    (101, {}, {"size": 2}, "reads no size"),
+])
+def test_ready_refused_when_the_size_reads_differently_now(
+        tmp_path: Path, number: int, routes: Dict[str, str], plan: Optional[Dict[str, object]], reason: str) -> None:
+    w, gh = writer(tmp_path, {**OPEN_101, **OPEN_103, **routes})
+    result = w.edit_labels(number, ["agent-ready"], [], verdict(), None if plan is None else _plan(**plan))
+    assert any(reason in r for r in result["refused"]), result["refused"]
+    assert gh.writes == []
+
+
+@pytest.mark.parametrize("edit", [{"body": "... and one more detail"}, {"title": "Crash on save as PDF"}])
+def test_close_refused_when_the_fresh_text_no_longer_matches(tmp_path: Path, edit: Dict[str, str]) -> None:
+    w, gh = writer(tmp_path, {**DUP_ROUTES, "issues/101": _issue(101, **edit)})
+    with pytest.raises(Refused, match="no longer matches #100 exactly"):
+        w.close_duplicate(101, 100, verdict())
+    assert gh.writes == []
+
+
+def test_close_still_made_when_only_case_and_markdown_differ(tmp_path: Path) -> None:
+    w, gh = writer(tmp_path, {**DUP_ROUTES, "issues/101": _issue(101, title="**crash  ON save**")})
+    w.close_duplicate(101, 100, verdict())
+    assert gh.writes[-1][-1] == "state_reason=duplicate"
+
+
+def test_a_close_from_this_run_counts_once(tmp_path: Path) -> None:
+    own = json.dumps([{"event": "closed", "actor": {"login": "github-actions[bot]", "type": "Bot"},
+                       "issue": {"number": 101}, "state_reason": "duplicate", "created_at": "2026-11-25T11:59:00Z"},
+                      {"event": "labeled", "created_at": "2026-11-01T00:00:00Z"}])
+    w, gh = writer(tmp_path, {**DUP_ROUTES, "issues/events": own})
+    w.close_duplicate(101, 100, verdict())
+    assert w.bot_closes_in_window() == 0 and w.closed_this_run == {101}
+
+
+def test_reopen_leaves_out_a_triage_label_a_person_removed(tmp_path: Path) -> None:
+    vetoed = json.dumps([{"event": "unlabeled", "label": {"name": "needs-triage"},
+                          "actor": {"login": "bjcoombs", "type": "User"}}])
+    w, gh = writer(tmp_path, {"issues/102": "issue_102_closed_duplicate.json", "issues/102/events": vetoed})
+    w.reopen(102, "alice")
+    assert [a[:2] for a in gh.writes] == [["api", "-X"], ["issue", "comment"]]
+    assert any(a["action"] == "refused" and "needs-triage" in str(a["detail"]) for a in actions(tmp_path))
+
+
+def test_vetoed_label_call_does_not_use_the_cap(tmp_path: Path) -> None:
+    w, gh = writer(tmp_path, {**OPEN_101, "issues/103": "issue_103_open.json",
+                              "issues/103/events": "events_vetoed.json"}, caps={"edit-issue-labels.sh": 1})
+    w.edit_labels(103, ["agent-ready"], [], verdict())
+    w.edit_labels(101, ["bug"], [], verdict())
+    assert gh.writes == [["issue", "edit", "101", "--repo", "acme/widgets", "--add-label", "bug"]]
+
+
+def test_ready_applied_by_the_definition_s_own_size_pattern(tmp_path: Path) -> None:
+    v = verdict()
+    v["definition"] = {**v["definition"], "size_pattern": "Points: (\\d+)"}  # type: ignore[dict-item]
+    w, gh = writer(tmp_path, {**OPEN_103, "issues/103": _issue(103, body="...\nPoints: 2")})
+    w.edit_labels(103, ["agent-ready"], [], v)
+    assert gh.writes[0][-4:] == ["--add-label", "agent-ready", "--remove-label", "needs-triage"]
+
+
+def test_existing_marker_and_edge_cost_no_call_from_the_cap(tmp_path: Path) -> None:
+    w, gh = writer(tmp_path, {"issues/101": "issue_101_open.json", "issues/101/comments": "comments_size_3.json",
+                              "issues/101/dependencies/blocked_by": '[{"number": 100}]'},
+                   caps={"write-size-marker.sh": 0, "add-blocked-by.sh": 0})
+    assert w.write_size_marker(101, 3, "same", verdict()) is False
+    assert w.add_blocked_by(101, 100) is False
+    unsized, _ = writer(tmp_path, {"issues/101": "issue_101_open.json", "issues/101/comments": "comments_none.json"},
+                        caps={"write-size-marker.sh": 0})
+    with pytest.raises(Refused, match="call cap reached"):
+        unsized.write_size_marker(101, 5, "a real write", verdict())
+    assert gh.writes == []
+
+
+def test_size_marker_from_another_bot_is_not_a_size(tmp_path: Path) -> None:
+    other = json.dumps([{"id": 9, "user": {"login": "renovate[bot]", "type": "Bot"}, "author_association": "NONE",
+                         "body": "<!-- refine:size 8 -->"}])
+    w, gh = writer(tmp_path, {"issues/101": "issue_101_open.json", "issues/101/comments": other})
+    assert w.current_size(101, verdict()) is None
+    assert w.write_size_marker(101, 2, "one module", verdict())

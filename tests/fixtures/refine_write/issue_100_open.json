@@ -3,7 +3,7 @@
   "id": 9000100,
   "node_id": "I_kw100",
   "number": 100,
-  "title": "Issue 100",
+  "title": "Crash on save",
   "user": {
     "login": "alice",
     "id": 8376572,

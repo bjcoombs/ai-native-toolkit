@@ -155,6 +155,8 @@ class ClosedWindow(TypedDict):
 class DefinitionRef(TypedDict):
     path: str
     version: int
+    size_pattern: str
+    size_marker: str
 
 
 class Summary(TypedDict):

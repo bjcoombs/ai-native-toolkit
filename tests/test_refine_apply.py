@@ -138,6 +138,46 @@ def test_failed_gh_call_does_not_stop_the_rest_of_the_plan(tmp_path: Path) -> No
     refine_apply.apply_triage(w, verdict(), 101, _triage(blocked_by=[404]))
     assert w.failures == 1
     assert [" ".join(a[:2]) for a in gh.writes] == ["issue comment", "issue edit"]
+    assert gh.writes[1][-2:] == ["--add-label", "bug"]
+
+
+TRIAGE_ROUTES = {
+    "issues/101": "issue_101_open.json", "issues/101/events": "events_bot_only.json",
+    "issues/101/comments": "comments_none.json", "issues/100": "issue_100_open.json",
+    "issues/101/dependencies/blocked_by": "dependencies_none.json",
+    "issues/100/dependencies/blocked_by": "dependencies_none.json",
+}
+
+
+def test_ready_withheld_when_the_required_size_write_is_refused(tmp_path: Path) -> None:
+    w, gh = writer(tmp_path, TRIAGE_ROUTES, REFINE_MAX_POINTS="5")
+    refine_apply.apply_triage(w, verdict(), 101, _triage(size=4))
+    assert [" ".join(a[:2]) for a in gh.writes] == ["api -X", "issue edit"]
+    assert gh.writes[1][-2:] == ["--add-label", "bug"]
+    assert any(a["action"] == "refused" and "size write" in str(a["detail"]) for a in actions(tmp_path))
+
+
+@pytest.mark.parametrize("blocker, routes", [
+    (101, {}),
+    (90, {"issues/90": '{"id": 1, "number": 90, "state": "open", "pull_request": {}}'}),
+    (100, {"issues/100/dependencies/blocked_by": "dependencies_101.json"}),
+])
+def test_ready_withheld_when_a_blocked_by_edge_is_refused(tmp_path: Path, blocker: int,
+                                                          routes: Dict[str, str]) -> None:
+    w, gh = writer(tmp_path, {**TRIAGE_ROUTES, **routes})
+    refine_apply.apply_triage(w, verdict(), 101, _triage(blocked_by=[blocker]))
+    assert [" ".join(a[:2]) for a in gh.writes] == ["issue comment", "issue edit"]
+    assert gh.writes[1][-2:] == ["--add-label", "bug"]
+    assert any(a["action"] == "refused" and f"blocked-by edge to #{blocker}" in str(a["detail"])
+               for a in actions(tmp_path))
+
+
+def test_ready_kept_when_the_edge_and_marker_already_exist(tmp_path: Path) -> None:
+    w, gh = writer(tmp_path, {**TRIAGE_ROUTES, "issues/101/comments": "comments_size_3.json",
+                              "issues/101/dependencies/blocked_by": '[{"number": 100}]'})
+    refine_apply.apply_triage(w, verdict(), 101, _triage(size=3, blocked_by=[100]))
+    assert gh.writes == [["issue", "edit", "101", "--repo", "acme/widgets",
+                          "--add-label", "bug,agent-ready", "--remove-label", "needs-triage"]]
 
 
 def test_cli_exits_three_after_a_failed_gh_call(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -153,7 +193,8 @@ def test_cli_exits_three_after_a_failed_gh_call(tmp_path: Path, monkeypatch: pyt
 
 
 def test_settled_ready_issue_labelled_without_a_model(tmp_path: Path) -> None:
-    w, gh = writer(tmp_path, {"issues/103": "issue_103_open.json", "issues/103/events": "events_bot_only.json"})
+    w, gh = writer(tmp_path, {"issues/103": "issue_103_open.json", "issues/103/events": "events_bot_only.json",
+                              "issues/103/comments": "comments_none.json"})
     refine_apply.apply_settled(w, verdict(), 103)
     refine_apply.apply_settled(w, verdict(), 104)
     assert len(gh.writes) == 1 and gh.writes[0][2] == "103"
@@ -171,6 +212,7 @@ def test_dedupe_exact_closes_without_a_model(tmp_path: Path) -> None:
 def test_sweep_labels_closes_and_reports(tmp_path: Path) -> None:
     w, gh = writer(tmp_path, {
         "issues/103": "issue_103_open.json", "issues/103/events": "events_bot_only.json",
+        "issues/103/comments": "comments_none.json",
         "issues/101": "issue_101_open.json", "issues/100": "issue_100_open.json",
         "issues/101/events": "events_bot_only.json", "issues/events": "repo_events_9_closes.json",
         "issues/50/comments": "comments_report.json",
@@ -188,7 +230,8 @@ def test_report_body_carries_depth_and_critical_path() -> None:
 
 
 def test_summary_table_lists_dry_run_actions(tmp_path: Path) -> None:
-    w, _ = writer(tmp_path, {"issues/101/comments": "comments_none.json"}, live=False)
+    w, _ = writer(tmp_path, {"issues/101": "issue_101_open.json", "issues/101/comments": "comments_none.json"},
+                  live=False)
     w.write_size_marker(101, 2, "small", verdict())
     text = refine_apply.summary(w.s)
     assert "dry-run (nothing was written)" in text and "| write-size-marker.sh | size-marker | #101 |" in text
@@ -232,7 +275,9 @@ needs_bash = pytest.mark.skipif(sys.platform == "win32" or shutil.which("bash") 
 @needs_bash
 @pytest.mark.parametrize("args", [["issue", "view", "12", "--comments"], ["issue", "list", "--state", "open"],
                                   ["search", "issues", "crash"], ["label", "list"],
-                                  ["issue", "view", "1", "--repo", "acme/widgets"]])
+                                  ["issue", "view", "1", "--repo", "acme/widgets"],
+                                  ["issue", "view", "https://github.com/acme/widgets/issues/7"],
+                                  ["search", "issues", "crash at https://example.com/x"]])
 def test_gh_sh_passes_reads_through(tmp_path: Path, args: List[str]) -> None:
     proc = _gh_sh(tmp_path, *args)
     assert proc.returncode == 0, proc.stderr
@@ -244,7 +289,10 @@ def test_gh_sh_passes_reads_through(tmp_path: Path, args: List[str]) -> None:
                                   ["issue", "comment", "12", "--body", "x"], ["api", "repos/a/b/issues"],
                                   ["pr", "merge", "1"], ["issue", "view", "1", "--web"],
                                   ["issue", "view", "1", "--repo", "other/repo"],
-                                  ["issue", "view", "1", "--repo=other/repo"], ["issue"]])
+                                  ["issue", "view", "1", "--repo=other/repo"], ["issue"],
+                                  ["issue", "view", "https://github.com/other/repo/issues/1"],
+                                  ["issue", "view", "https://github.com/acme/widgets-fork/issues/1"],
+                                  ["issue", "view", "github.com/other/repo/issues/1"]])
 def test_gh_sh_refuses_everything_else(tmp_path: Path, args: List[str]) -> None:
     proc = _gh_sh(tmp_path, *args)
     assert proc.returncode == 4
