@@ -232,6 +232,14 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `archetype.reason` | dropped |
 | `archetype.kb_maintenance.gist` | dropped |
 
+## backlog_ready
+
+| Field | Kept as |
+|---|---|
+| `backlog_ready.required_form_field_reason` | token |
+| `backlog_ready.untriaged_on_open_reason` | token |
+| `backlog_ready.stale_job_safe_reason` | token |
+
 ## broken_instruction_refs
 
 | Field | Kept as |

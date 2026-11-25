@@ -349,6 +349,24 @@ It tells a documentation repository from a software one, so the report does not 
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
 
+### `backlog_ready`: Backlog kept agent-ready (intake configuration)
+
+An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up.
+
+Whether new issues are asked for structure (an issue form with a required field), marked untriaged when they arrive (a workflow on issues opened that adds an untriaged label), and judged against a documented ready label with its criteria, and whether a stale job can close a ready issue. Committed files only.
+
+- Collector: `core.backlog_ready`, reading `repo_root`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `backlog_ready.required_form_field_reason` token, `backlog_ready.stale_job_safe_reason` token, `backlog_ready.untriaged_on_open_reason` token.
+- Used by: no row or finding yet.
+- Evidence: `backlog_ready.ready_label_documented` config_text (config_only), `backlog_ready.required_form_field` config_text (config_only), `backlog_ready.stale_job_safe` config_text (config_only), `backlog_ready.untriaged_on_open` config_text (config_only).
+- Not measured when:
+  - `form_unreadable`: No issue form read has a required field, and a form could not be read: a tab indent, an unclosed flow collection, or no top-level body list. Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue.
+  - `gitlab_templates`: The repository is on GitLab and holds no GitHub issue form. A GitLab issue template is Markdown with no required fields, so the form signal is not measured. Nothing to change: required fields are not measured on GitLab.
+  - `workflow_unreadable`: No workflow read adds an untriaged label when an issue opens, and a workflow's on: key could not be read. Nothing to change if that workflow labels new issues; a plain on: issues: types: [opened] lets the scan read it.
+  - `stale_input_unresolved`: No stale job can close a ready issue for certain, but one sets its close days or exempt labels to an expression this reader does not follow. Nothing to change if the job exempts the ready label; a literal exempt-issue-labels or days-before-issue-close: -1 lets the scan read it.
+
 ### `behaviour`: Keyhole blocks: behaviour
 
 It reads which files change together in history, so coupling the import graph does not show, and modules safe to change in isolation, are both found.
@@ -1121,6 +1139,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `anomalies` | Anomalies | `run_header` | `anomalies` | no |
 | `archetype` | Repository archetype | `repo_root` | `archetype` | no |
 | `assess_dir` | Artifact directory | `repo_root`, `run_scope` | private input | no |
+| `backlog_ready` | Backlog kept agent-ready (intake configuration) | `repo_root` | `backlog_ready` | no |
 | `broken_instruction_refs` | Broken instruction references | `doc_graph`, `instruction_grading` | `broken_instruction_refs` | no |
 | `churn_degenerate` | Degenerate churn history | `doc_staleness` | `churn_degenerate` | no |
 | `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci` | `ci_checks` | no |

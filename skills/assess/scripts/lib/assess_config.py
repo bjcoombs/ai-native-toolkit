@@ -37,6 +37,12 @@ pattern = "^inhouse-agent"
 [review]
 [platform]
 
+# Backlog-ready label lists (issue #1322), read by `lib/backlog_ready.py` through
+# `load_backlog_ready_labels`: each non-empty list replaces its default.
+[backlog_ready]
+untriaged_labels = ["needs-triage"]
+ready_labels = ["agent-ready"]
+
 # Central guardrails (issue #1153): read this machine's Claude Code managed settings
 # for the agent permissions practice, as `assess_core.py --managed-settings` does. A
 # single-repository option: /fleet and assess_signals.py never read it.
@@ -87,6 +93,8 @@ folder->source provenance map (issue #178) consumed by `doc_provenance.py`, and 
 `assess_core.py` and `doc-graph-svg.py`. `resolve_excludes`
 is the single shared path that combines config excludes with CLI `--exclude`; both the treemap
 CLI and `doc-graph-svg.py` call it, so every artifact computes over the identical doc/code set.
+`load_backlog_ready_labels` returns the `[backlog_ready]` `untriaged_labels` and
+`ready_labels` lists (issue #1322), each replacing its default when it holds a string.
 Degrades silently on missing or malformed config rather than blocking the run. The
 `[ai_usage]`, `[review]` and `[platform]` sections are read by `fleet_config.py`, not here
 (they extend a `--fleet-config` file, #706).
@@ -183,6 +191,19 @@ def load_managed_settings_opt_in(repo_root: Path) -> bool:
     for a fleet."""
     section = load_config(repo_root).get("agent_ops")
     return isinstance(section, dict) and section.get("managed_settings") is True
+
+
+def load_backlog_ready_labels(repo_root: Path, untriaged: tuple[str, ...],
+                              ready: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...], bool]:
+    """``[backlog_ready]`` ``untriaged_labels`` and ``ready_labels`` (#1322), each replacing the
+    default passed in when it is a list holding at least one non-blank string; the flag is true
+    when either list came from the config. A missing or malformed section keeps both defaults."""
+    section = load_config(repo_root).get("backlog_ready")
+    if not isinstance(section, dict):
+        return untriaged, ready, False
+    got = [tuple(x.strip() for x in _string_list(section, key) if x.strip())
+           for key in ("untriaged_labels", "ready_labels")]
+    return got[0] or untriaged, got[1] or ready, bool(got[0] or got[1])
 
 
 def _string_list(config: TomlTable, key: str) -> list[str]:

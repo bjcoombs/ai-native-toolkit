@@ -1,0 +1,18 @@
+name: Feature request
+description: Ask for a change, with the success criteria an agent can check.
+labels: ["feat"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Say what problem this solves before proposing a fix.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+    validations:
+      required: true
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Success criteria

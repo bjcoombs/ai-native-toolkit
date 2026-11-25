@@ -107,6 +107,7 @@ fragments = [
   "github_secret_scanning",
   "contributor_files",
   "secrets_guard",
+  "backlog_ready",
   "gap_actions",
   "agent_consistency",
   "ai_usage",
