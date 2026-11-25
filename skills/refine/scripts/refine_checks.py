@@ -12,7 +12,7 @@ and marks the rest `needs_judgement`:
 |---|---|---|
 | `sections-present` | definition, script | heading match per the block; `missing_sections` |
 | `criteria-checkable` | definition, judgement | fail when Success Criteria holds no list item; otherwise judgement, with each item that has no code span and names no test as a hint |
-| `sized` | definition, script | `Size: <n> points` at most `max_points`, or sub-issues; `size_points` |
+| `sized` | definition, script | the newer of a `<!-- refine:size N -->` marker comment and a `Size: <n> points` body line is at most `max_points`, or the issue has sub-issues; with neither the issue is `unsized` (needs sizing, `needs_judgement`), never `fail` |
 | `blockers-recorded` | definition, judgement | fail when prose says "blocked by" or "depends on" an issue that has no blocked-by edge; otherwise judgement |
 | `no-open-question` | definition, judgement | always judgement |
 | overlap with an open PR | `/issues` "Overlap Sweep" | an open PR that closes the issue, or changes a file the issue names in a code span; `overlaps` |
@@ -23,7 +23,12 @@ detail saying so, so a new checklist row degrades to a reader, not to a pass.
 
 Text sources: the issue body plus every comment whose first line is
 `<!-- triage:clarified-scope -->`, which the definition lets supply a section.
-A later source overrides an earlier size line.
+The size comes from two producers, whichever is newer: a comment whose first
+line matches `size_marker` (`<!-- refine:size N -->`, written by `/issues`
+triage and the refiner with a one-line reason) or a `size_pattern` line in the
+body. The body is dated by the
+issue's creation, since the host reports no body edit time, so any marker
+comment is newer than the body line.
 
 Section match: a heading at one of `heading_levels` whose text equals the
 name (trimmed, any case) has content when a line before the next heading of
@@ -55,7 +60,7 @@ _PATH_SPAN = re.compile(r"`([\w.\-/]+)`")
 
 def text_sources(issue: Issue) -> List[str]:
     """The body, then each clarified-scope comment, in order."""
-    clarified = [c for c in issue["comments"] if c.lstrip().startswith(CLARIFIED_MARKER)]
+    clarified = [c["body"] for c in issue["comments"] if c["body"].lstrip().startswith(CLARIFIED_MARKER)]
     return [issue["body"]] + clarified
 
 
@@ -121,14 +126,29 @@ def unanchored(items: List[str]) -> List[str]:
     return [i for i in items if not _CODE_SPAN.search(i) and not _TEST_REF.search(i)]
 
 
+def size_reading(issue: Issue, definition: Definition) -> Tuple[Optional[int], Optional[str]]:
+    """(points, source): the newer of the last body size line and the last size marker comment.
+
+    `source` is "marker" or "body"; (None, None) when the issue has neither.
+    """
+    found: List[Tuple[str, int, int, str]] = []  # (time, order, points, source)
+    body_matches = list(re.compile(definition["size_pattern"]).finditer(issue["body"]))
+    if body_matches:
+        found.append((issue["created_at"], 0, int(body_matches[-1].group(1)), "body"))
+    marker = re.compile(definition["size_marker"])
+    for order, comment in enumerate(issue["comments"], 1):
+        lines = comment["body"].strip().splitlines()
+        match = marker.fullmatch(lines[0].strip()) if lines else None
+        if match:
+            found.append((comment["created_at"], order, int(match.group(1)), "marker"))
+    if not found:
+        return None, None
+    _, _, points, source = max(found)
+    return points, source
+
+
 def size_points(issue: Issue, definition: Definition) -> Optional[int]:
-    """The last `size_pattern` match across the text sources, or None."""
-    pattern = re.compile(definition["size_pattern"])
-    points: Optional[int] = None
-    for source in text_sources(issue):
-        for match in pattern.finditer(source):
-            points = int(match.group(1))
-    return points
+    return size_reading(issue, definition)[0]
 
 
 def _issue_refs(text: str, repo: str) -> Set[int]:
@@ -200,14 +220,14 @@ def _criteria_item(issue: Issue, definition: Definition) -> Tuple[str, str, List
     return "needs_judgement", detail, loose
 
 
-def _sized_item(points: Optional[int], subs: int, max_points: int) -> Tuple[str, str]:
+def _sized_item(points: Optional[int], source: Optional[str], subs: int, max_points: int) -> Tuple[str, str]:
     if subs > 0:
         return "pass", f"decomposed into {subs} sub-issue(s)"
     if points is None:
-        return "fail", "no size line and no sub-issues"
+        return "needs_judgement", "unsized: needs sizing (no refine:size comment and no size line)"
     if points > max_points:
         return "fail", f"{points} points exceeds {max_points} with no sub-issues"
-    return "pass", f"{points} point(s)"
+    return "pass", f"{points} point(s), from the {source}"
 
 
 def _blockers_item(issue: Issue, repo: str) -> Tuple[str, str, List[str]]:
@@ -224,7 +244,7 @@ def checklist(issue: Issue, definition: Definition, repo: str) -> List[Checklist
     """Every checklist item from the definition, in its order, with a status."""
     results: List[ChecklistResult] = []
     missing = missing_sections(issue, definition)
-    points = size_points(issue, definition)
+    points, source = size_reading(issue, definition)
     for entry in definition["checklist"]:
         item, check = entry["id"], entry["check"]
         hints: List[str] = []
@@ -233,7 +253,7 @@ def checklist(issue: Issue, definition: Definition, repo: str) -> List[Checklist
         elif item == "criteria-checkable":
             status, detail, hints = _criteria_item(issue, definition)
         elif item == "sized":
-            status, detail = _sized_item(points, issue["sub_issues_total"], definition["max_points"])
+            status, detail = _sized_item(points, source, issue["sub_issues_total"], definition["max_points"])
         elif item == "blockers-recorded":
             status, detail, hints = _blockers_item(issue, repo)
         else:

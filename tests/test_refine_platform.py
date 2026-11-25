@@ -68,12 +68,13 @@ def test_github_issue_maps_the_graphql_shapes():
         "number": 7, "title": "t", "body": None, "state": "OPEN", "stateReason": "NOT_PLANNED",
         "labels": [{"name": "b"}, {"name": "a"}], "createdAt": "2026-11-01T00:00:00Z",
         "url": "u", "blockedBy": {"nodes": [{"number": 3, "state": "CLOSED"}], "totalCount": 1},
-        "subIssuesSummary": {"total": 2}, "comments": [{"body": "c"}],
+        "subIssuesSummary": {"total": 2}, "comments": [{"body": "c", "createdAt": "2026-11-02T00:00:00Z"}],
     })
     assert issue == {
         "number": 7, "title": "t", "body": "", "state": "open", "state_reason": "not_planned",
         "labels": ["a", "b"], "created_at": "2026-11-01T00:00:00Z", "closed_at": None, "url": "u",
-        "blocked_by": [{"number": 3, "state": "closed"}], "sub_issues_total": 2, "comments": ["c"],
+        "blocked_by": [{"number": 3, "state": "closed"}], "sub_issues_total": 2,
+        "comments": [{"body": "c", "created_at": "2026-11-02T00:00:00Z"}],
     }
 
 
@@ -120,6 +121,7 @@ heading_levels: [2]
 empty_markers: []
 max_points: 3
 size_pattern: 'Size: (\\d+)'
+size_marker: '<!-- refine:size (\\d+) -->'
 labels:
   triage: needs-triage
   ready: agent-ready
@@ -140,6 +142,7 @@ def test_valid_block_loads():
     ("heading_levels: [2]", "heading_levels: [two]", "heading_levels"),
     ("sections: [A]", "sections: [1]", "sections"),
     ("size_pattern: 'Size: (\\d+)'", "size_pattern: '('", "size_pattern"),
+    ("size_marker: '<!-- refine:size (\\d+) -->'", "size_marker: 'no group'", "size_marker"),
 ])
 def test_malformed_block_is_refused(old, new, match):
     with pytest.raises(refine_definition.DefinitionError, match=match):

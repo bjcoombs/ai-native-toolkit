@@ -10,7 +10,7 @@ the builder slots; `meets_target` compares the two.
 **Critical path**: the longest chain of open issues joined by blocked-by
 edges, counted in issues, ties broken towards lower issue numbers so the
 answer is the same on every run. Edges to issues outside the open set are
-ignored. `points` sums the size lines along the path and `unsized` counts the
+ignored. `points` sums the sizes along the path (`size_reading`) and `unsized` counts the
 issues on it with none. Issues on a dependency cycle, or blocked behind one,
 have no longest path; they are listed in `cycle_members` and left out.
 

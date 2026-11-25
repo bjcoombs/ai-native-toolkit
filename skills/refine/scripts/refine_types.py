@@ -18,6 +18,11 @@ class Blocker(TypedDict):
     state: str  # "open" or "closed"
 
 
+class Comment(TypedDict):
+    body: str
+    created_at: str
+
+
 class Issue(TypedDict):
     number: int
     title: str
@@ -30,7 +35,7 @@ class Issue(TypedDict):
     url: str
     blocked_by: List[Blocker]
     sub_issues_total: int
-    comments: List[str]
+    comments: List[Comment]
 
 
 class PullRequest(TypedDict):
@@ -57,6 +62,7 @@ class Definition(TypedDict):
     empty_markers: List[str]
     max_points: int
     size_pattern: str
+    size_marker: str
     labels: Labels
     checklist: List[ChecklistEntry]
 
@@ -111,6 +117,8 @@ class IssuePlan(TypedDict):
     missing_sections: List[str]
     checklist: List[ChecklistResult]
     size_points: Optional[int]
+    size_source: Optional[str]  # "marker", "body" or None
+    unsized: bool
     sub_issues: int
     blocked_by: List[Blocker]
     overlaps: List[Overlap]
@@ -151,6 +159,7 @@ class Summary(TypedDict):
     reported_issues: int
     verdicts: Dict[str, int]
     settled: int
+    unsized: int
     untriaged: int
     duplicate_pairs: Dict[str, int]
 

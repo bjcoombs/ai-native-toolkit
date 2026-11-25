@@ -82,6 +82,8 @@ def issue_plan(issue: Issue, definition: Definition, repo: str, prs: List[PullRe
     reasons += [_overlap_reason(o) for o in overlaps]
     reasons += [f"exact duplicate of #{d['survivor']}" for d in dups
                 if d["kind"] == "exact" and d["survivor"] != issue["number"]]
+    points, source = checks.size_reading(issue, definition)
+    unsized = points is None and issue["sub_issues_total"] == 0
     blocked = bool(reasons)
     reasons += [f"{r['id']}: needs judgement ({r['detail']})" for r in items if r["status"] == "needs_judgement"]
     if blocked:
@@ -94,7 +96,7 @@ def issue_plan(issue: Issue, definition: Definition, repo: str, prs: List[PullRe
         number=issue["number"], title=issue["title"], url=issue["url"], labels=issue["labels"],
         created_at=issue["created_at"], verdict=verdict, settled=verdict != "needs_judgement",
         reasons=reasons, missing_sections=checks.missing_sections(issue, definition), checklist=items,
-        size_points=checks.size_points(issue, definition), sub_issues=issue["sub_issues_total"],
+        size_points=points, size_source=source, unsized=unsized, sub_issues=issue["sub_issues_total"],
         blocked_by=issue["blocked_by"], overlaps=overlaps, duplicates=dups,
         untriaged_days=checks.untriaged_days(issue, definition, now),
     )
@@ -127,7 +129,8 @@ def build_plan(backlog: Backlog, definition: Definition, definition_path: str, n
     summary = Summary(
         open_issues=len(open_issues), reported_issues=len(plans),
         verdicts={v: sum(1 for p in plans if p["verdict"] == v) for v in VERDICTS},
-        settled=sum(1 for p in plans if p["settled"]), untriaged=len(untriaged),
+        settled=sum(1 for p in plans if p["settled"]), unsized=sum(1 for p in plans if p["unsized"]),
+        untriaged=len(untriaged),
         duplicate_pairs={k: sum(1 for p in pairs if p["kind"] == k) for k in ("exact", "near")},
     )
     return Plan(
@@ -151,8 +154,9 @@ def build_plan(backlog: Backlog, definition: Definition, definition_path: str, n
 def resolve_definition(arg: Optional[str]) -> Path:
     if arg:
         return Path(arg)
-    local = Path.cwd() / DEFAULT_PATH
-    return local if local.is_file() else TOOLKIT_ROOT / DEFAULT_PATH
+    # Relative when found under the current directory, so the plan names it
+    # the same way on every machine.
+    return DEFAULT_PATH if DEFAULT_PATH.is_file() else TOOLKIT_ROOT / DEFAULT_PATH
 
 
 def _parse_now(value: Optional[str]) -> datetime:

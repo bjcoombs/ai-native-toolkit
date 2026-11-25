@@ -26,7 +26,7 @@ import subprocess
 from datetime import date
 from typing import Any, Callable, Dict, List, Optional, Protocol, Sequence
 
-from refine_types import Blocker, Issue, PullRequest
+from refine_types import Blocker, Comment, Issue, PullRequest
 
 Runner = Callable[[Sequence[str]], str]
 
@@ -93,8 +93,9 @@ def _lower(value: Optional[str]) -> Optional[str]:
     return value.lower() if value else None
 
 
-def _comment_bodies(raw: Json) -> List[str]:
-    return [str(c.get("body") or "") for c in raw.get("comments") or []]
+def _comments(raw: Json) -> List[Comment]:
+    return [Comment(body=str(c.get("body") or ""), created_at=str(c.get("createdAt") or ""))
+            for c in raw.get("comments") or []]
 
 
 def _blockers(raw: Json) -> List[Blocker]:
@@ -118,7 +119,7 @@ def github_issue(raw: Json) -> Issue:
         url=str(raw.get("url") or ""),
         blocked_by=_blockers(raw),
         sub_issues_total=int(summary.get("total") or 0),
-        comments=_comment_bodies(raw),
+        comments=_comments(raw),
     )
 
 

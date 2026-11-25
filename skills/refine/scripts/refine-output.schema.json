@@ -72,6 +72,7 @@
         "open_issues",
         "reported_issues",
         "settled",
+        "unsized",
         "untriaged",
         "verdicts"
       ],
@@ -92,6 +93,10 @@
           }
         },
         "settled": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unsized": {
           "type": "integer",
           "minimum": 0
         },
@@ -125,8 +130,10 @@
           "reasons",
           "settled",
           "size_points",
+          "size_source",
           "sub_issues",
           "title",
+          "unsized",
           "untriaged_days",
           "url",
           "verdict"
@@ -221,6 +228,18 @@
               "null"
             ],
             "minimum": 0
+          },
+          "size_source": {
+            "enum": [
+              "marker",
+              "body",
+              null
+            ],
+            "description": "Where size_points came from: a <!-- refine:size N --> comment or a size line in the body, whichever is newer."
+          },
+          "unsized": {
+            "type": "boolean",
+            "description": "No size from either source and no sub-issues: the issue needs sizing."
           },
           "sub_issues": {
             "type": "integer",

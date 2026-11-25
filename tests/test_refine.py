@@ -64,10 +64,8 @@ def test_empty_form_field_counts_as_missing(plan):
     assert by_number(plan)[107]["missing_sections"] == ["Impact"]
 
 
-def test_clarified_scope_comment_supplies_sections_and_size(plan):
-    issue = by_number(plan)[108]
-    assert issue["missing_sections"] == []
-    assert issue["size_points"] == 3
+def test_clarified_scope_comment_supplies_sections(plan):
+    assert by_number(plan)[108]["missing_sections"] == []
 
 
 def test_heading_inside_code_fence_is_not_a_section(definition):
@@ -114,13 +112,45 @@ def test_size_over_the_limit_without_sub_issues_fails(plan):
 
 def test_decomposed_parent_is_sized_without_a_size_line(plan):
     issue = by_number(plan)[106]
-    assert issue["size_points"] is None
+    assert (issue["size_points"], issue["unsized"]) == (None, False)
     assert item(issue, "sized") == {"id": "sized", "check": "script", "status": "pass",
                                      "detail": "decomposed into 2 sub-issue(s)", "hints": []}
 
 
 def test_size_within_the_limit_passes(plan):
-    assert item(by_number(plan)[101], "sized")["status"] == "pass"
+    issue = by_number(plan)[101]
+    assert item(issue, "sized")["status"] == "pass"
+    assert (issue["size_points"], issue["size_source"], issue["unsized"]) == (2, "body", False)
+
+
+def test_size_marker_comment_sizes_the_issue(plan):
+    issue = by_number(plan)[108]
+    assert (issue["size_points"], issue["size_source"]) == (3, "marker")
+    assert item(issue, "sized")["detail"] == "3 point(s), from the marker"
+
+
+def test_newest_size_marker_overrides_the_body_line(plan):
+    # Body says 5, a marker said 8, a newer marker says 2; a size line in an
+    # ordinary later comment is not a producer.
+    issue = by_number(plan)[118]
+    assert (issue["size_points"], issue["size_source"]) == (2, "marker")
+    assert item(issue, "sized")["status"] == "pass"
+
+
+def test_marker_must_be_the_first_line(definition):
+    issue = refine_platform.github_issue({"number": 9, "createdAt": "2026-11-01T00:00:00Z", "comments": [
+        {"body": "Context first.\n<!-- refine:size 2 -->", "createdAt": "2026-11-02T00:00:00Z"}]})
+    assert refine_checks.size_reading(issue, definition) == (None, None)
+
+
+def test_unsized_issue_needs_sizing_and_is_not_otherwise_held(plan):
+    issue = by_number(plan)[119]
+    assert issue["unsized"] is True
+    sized = item(issue, "sized")
+    assert sized["status"] == "needs_judgement"
+    assert sized["detail"].startswith("unsized: needs sizing")
+    assert issue["verdict"] == "needs_judgement"
+    assert plan["summary"]["unsized"] == 1
 
 
 # --- Blockers ---------------------------------------------------------------
@@ -173,7 +203,7 @@ def test_near_pairs_are_reported_and_never_closable(plan):
 # --- Untriaged ---------------------------------------------------------------
 
 def test_untriaged_counts_eight_days_not_six(plan):
-    untriaged = {u["number"]: u for u in plan["untriaged"]}
+    untriaged = {u["number"]: u for u in plan["untriaged"]}  # 118, 119: unlabelled, 1-2 days
     assert untriaged == {103: {"number": 103, "days": 8, "reason": "no_labels"}}
     assert by_number(plan)[117]["untriaged_days"] is None  # unlabelled, 6 days
     assert by_number(plan)[104]["untriaged_days"] is None  # needs-triage, 6 days
@@ -208,7 +238,7 @@ def test_verdicts_and_settled(plan):
     assert issues[101]["settled"] is False
     assert issues[102]["settled"] is True
     counts = plan["summary"]["verdicts"]
-    assert sum(counts.values()) == len(plan["issues"]) == plan["summary"]["open_issues"] == 17
+    assert sum(counts.values()) == len(plan["issues"]) == plan["summary"]["open_issues"] == 19
     assert counts["ready"] == 0
 
 
@@ -234,7 +264,7 @@ def test_unknown_checklist_item_needs_judgement(definition):
 def test_ready_buffer_against_twice_the_builder_slots(plan):
     buffer = plan["buffer"]
     # 105, 110, 111: open blocker. 106: decomposed parent. 108: an open PR closes it.
-    # 103, 104, 117: no ready label. 114's only blocker is closed.
+    # 103, 104, 117, 118, 119: no ready label. 114's only blocker is closed.
     assert buffer["issues"] == [101, 102, 107, 109, 112, 113, 114, 115, 116]
     assert (buffer["depth"], buffer["builder_slots"], buffer["target"], buffer["meets_target"]) == (9, 2, 4, True)
 
@@ -266,7 +296,7 @@ def test_single_issue_mode_reports_one_issue_with_backlog_wide_blocks(tmp_path):
     assert code == 0
     assert [p["number"] for p in data["issues"]] == [103]
     assert data["issue"] == 103
-    assert data["summary"]["open_issues"] == 17
+    assert data["summary"]["open_issues"] == 19
     assert data["buffer"]["depth"] == 9
 
 
@@ -308,7 +338,7 @@ def test_definition_defaults_to_this_checkout(monkeypatch, tmp_path):
     local = tmp_path / "docs" / "contributing" / "definition-of-ready.md"
     local.parent.mkdir(parents=True)
     shutil.copy(DEFINITION, local)
-    assert refine.resolve_definition(None) == local
+    assert refine.resolve_definition(None) == Path("docs") / "contributing" / "definition-of-ready.md"
 
 
 def test_the_adapter_only_makes_read_calls():

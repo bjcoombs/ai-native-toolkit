@@ -160,6 +160,18 @@ def _str_list(data: Any, key: str) -> List[str]:
     return list(values)
 
 
+def _regex(data: Any, key: str) -> str:
+    """A key holding a regular expression with one integer group."""
+    pattern = _require(data, key, str)
+    try:
+        compiled = re.compile(pattern)
+    except re.error as exc:
+        raise DefinitionError(f"{key} does not compile: {exc}") from exc
+    if compiled.groups < 1:
+        raise DefinitionError(f"{key} needs a group that captures the points")
+    return str(pattern)
+
+
 def definition_from_block(block: str) -> Definition:
     """Validate a parsed block into a `Definition`."""
     data = parse_yaml_subset(block)
@@ -173,11 +185,8 @@ def definition_from_block(block: str) -> Definition:
         if check not in ("script", "judgement"):
             raise DefinitionError(f"checklist check must be script or judgement, got {check!r}")
         checklist.append(ChecklistEntry(id=_require(entry, "id", str), check=check))
-    pattern = _require(data, "size_pattern", str)
-    try:
-        re.compile(pattern)
-    except re.error as exc:
-        raise DefinitionError(f"size_pattern does not compile: {exc}") from exc
+    pattern = _regex(data, "size_pattern")
+    marker = _regex(data, "size_marker")
     return Definition(
         version=_require(data, "version", int),
         sections=_str_list(data, "sections"),
@@ -185,6 +194,7 @@ def definition_from_block(block: str) -> Definition:
         empty_markers=_str_list(data, "empty_markers"),
         max_points=_require(data, "max_points", int),
         size_pattern=pattern,
+        size_marker=marker,
         labels=Labels(triage=_require(labels, "triage", str), ready=_require(labels, "ready", str)),
         checklist=checklist,
     )
