@@ -13,8 +13,8 @@ or a backticked command or path. One rule, applied in two places:
 - ``carries_evidence(text)``: True when ``text`` holds a digit, a link or a backticked span;
 - ``lint_errors(paragraphs)``: the paragraphs that carry none, in order;
 - ``done_when_warnings(actions)``: one warning per action whose string ``done_when`` carries
-  none; an entry that is not a mapping, or has no string ``done_when``, is skipped (finalize
-  drops malformed entries on its own).
+  none; an entry that is not a mapping, or has no string ``done_when``, is skipped. Finalize
+  passes only the entries it writes to ``actions.json``, so a dropped entry is not linted.
 
 Tests: ``tests/test_card_lint.py``, ``tests/test_card_construction.py``.
 """

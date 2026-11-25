@@ -676,7 +676,8 @@ def finalize_run(*, assess_dir: Path, repo_root: Path | None = None) -> None:
     actions = data.get("actions")
     if isinstance(actions, list) and actions:
         _write_actions_contract(assess_dir, actions, run_id=ctx.get("run_id"))
-        for w in done_when_warnings(actions):  # the card's Done when lint, on the model's text
+        kept = [a for a in actions if isinstance(a, dict) and ACTION_REQUIRED_KEYS <= set(a)]
+        for w in done_when_warnings(kept):  # the card's Done when lint, on the entries written
             print(f"finalize: warning: {w}", file=sys.stderr)
     # The core worded the card before this run's Top 3 existed: name its first open action now.
     card_warning = refresh_card(assess_dir)

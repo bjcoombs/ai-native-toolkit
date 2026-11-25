@@ -62,3 +62,19 @@ def test_finalize_is_quiet_on_a_backticked_command(
 ) -> None:
     _finalize(tmp_assess_dir, COMMAND)
     assert "done_when" not in capsys.readouterr().err
+
+
+def test_finalize_skips_an_entry_it_drops(
+    tmp_assess_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A malformed entry is dropped with its own warning and never linted."""
+    _seed_log_md(tmp_assess_dir)
+    _seed_run_context(tmp_assess_dir)
+    dropped = {k: v for k, v in {**_good_action(rank=2), "done_when": PROSE}.items()
+               if k != "scope_fence"}
+    (tmp_assess_dir / "finalize-input.json").write_text(
+        json.dumps({**_base_input(), "actions": [_good_action(rank=1), dropped]}),
+        encoding="utf-8")
+    finalize_run(assess_dir=tmp_assess_dir)
+    err = capsys.readouterr().err
+    assert "dropping malformed entry" in err and PROSE not in err
