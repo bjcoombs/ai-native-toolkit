@@ -13,7 +13,7 @@ import pytest
 import lib.fleet.fleet_include_list as fil
 from lib.ci.ci_include_items import IncludeItem
 from lib.ci.ci_includes import MAX_DEPTH, MAX_FILES
-from lib.command_index import MAX_CONFIG_BYTES
+from lib.instructions.command_index import MAX_CONFIG_BYTES
 from lib.hosting.gh_cli import GhUnavailable
 
 SCRIPT = Path(__file__).resolve().parents[2] / "fleet" / "scripts" / "fleet_include_list.py"

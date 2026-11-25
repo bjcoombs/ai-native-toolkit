@@ -52,7 +52,7 @@ from urllib.parse import quote
 from lib.ci.ci_include_items import IncludeItem, include_items
 from lib.ci.ci_includes import MAX_DEPTH, MAX_FILES
 from lib.ci.shared_tooling import component_source
-from lib.command_index import MAX_CONFIG_BYTES
+from lib.instructions.command_index import MAX_CONFIG_BYTES
 from lib.hosting.gh_cli import GhUnavailable
 from lib.hosting.gitlab_cli import GitlabProject, glab_api, glab_auth
 
