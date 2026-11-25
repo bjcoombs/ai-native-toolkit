@@ -134,6 +134,7 @@ from lib.hosting.review_reality import review_reality_from_sample
 from lib.ci.shared_tooling import scan_shared_tooling
 from lib.manifest.check_manifest import core_manifest
 from lib.scan_plan import ScanPlan
+from lib.scan_timings import timed
 from lib.unit_levels import READS as UNIT_LEVEL_READS
 from lib.unit_readings import OWN_READS as UNIT_OWN_READS
 from lib.unit_readings import UNIT_EXTERNAL_READS, UnitTable, unit_table
@@ -320,6 +321,10 @@ def run_scans(
     ``plan`` (``lib/scan_plan.py``, #1268; by default the ``plan`` input) runs only ``plan.scans``: a skipped
     entry's value is ``plan.marker()``, written where its value would have gone
     (each spread key, the inputs for a private entry), and it is never called.
+
+    Each stage's and each called entry's wall time goes into ``inputs["timings"]``
+    (``lib/scan_timings.py``, #1380), never into ``ctx``: a diagnostic that differs
+    on every run.
     """
     table = tuple(SCANS if specs is None else specs)
     # ``plan`` is optional for callers that predate it (#1268): absent means every scan runs
@@ -329,21 +334,28 @@ def run_scans(
             run_scans(ctx, inputs, each, table, plan)
         return
     spread = frozenset(name for each in table for name in each.spread)
-    for spec in table:
-        if spec.stage != stage:
-            continue
-        if plan is not None and not plan.runs(spec.key):
-            value, degraded = plan.marker(), True
-        else:
-            args = tuple(_resolve(spec, name, inputs, ctx, spread) for name in spec.reads)
+    with timed(inputs, "stages", stage):
+        for spec in table:
+            if spec.stage == stage:
+                _run_one(spec, ctx, inputs, plan, spread)
+
+
+def _run_one(spec: ScanSpec, ctx: dict[str, Any], inputs: MutableMapping[str, Any],
+             plan: ScanPlan | None, spread: frozenset[str]) -> None:
+    """Run (or skip, under ``plan``) one entry and write its value; a run entry is timed."""
+    if plan is not None and not plan.runs(spec.key):
+        value, degraded = plan.marker(), True
+    else:
+        args = tuple(_resolve(spec, name, inputs, ctx, spread) for name in spec.reads)
+        with timed(inputs, "scans", spec.key):
             value, degraded = _call(spec, args)
-        if spec.spread:
-            _spread(spec, ctx, value, degraded)
-            inputs[spec.key] = value
-        elif spec.private:
-            inputs[spec.key] = value
-        else:
-            ctx[spec.key] = value
+    if spec.spread:
+        _spread(spec, ctx, value, degraded)
+        inputs[spec.key] = value
+    elif spec.private:
+        inputs[spec.key] = value
+    else:
+        ctx[spec.key] = value
 
 
 # The reasons an entry may give for opting out of the degrade wrapper (#418

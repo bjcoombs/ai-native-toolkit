@@ -452,6 +452,7 @@ def test_unconfigured_repo_run_context_is_unchanged_but_for_the_block(git_repo) 
     assert "claude_config" not in without
     for ctx in (without, with_block):
         ctx.pop("run_id")
+        ctx.pop("timings")  # wall time differs on every run (#1380)
         ctx.pop("claude_config", None)
     assert json.dumps(without, indent=2) == json.dumps(with_block, indent=2)
 
