@@ -1,6 +1,6 @@
 # The six sections of docs/contributing/definition-of-ready.md, in its order.
 # GitHub renders each field label as a `### <label>` heading in the issue body,
-# which is the heading the refinement script looks for. Keep each label equal to
+# which is the heading the refinement script (#1320) will look for. Keep each label equal to
 # a name in that document's `sections` list (tests/test_issue_forms.py).
 name: Task, bug or feature
 description: Describe a change with a problem statement and checkable success criteria.

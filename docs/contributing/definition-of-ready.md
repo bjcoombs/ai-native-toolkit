@@ -2,11 +2,11 @@
 
 When an issue in this repository is ready for an agent to pick up, and what the two triage labels mean. Back to the [Map of Content](../index.md).
 
-Most issues here are filed by agents with `gh issue create --body` or the REST API, which bypass the issue forms under `.github/ISSUE_TEMPLATE/` (relative to the repository root). This document, not the forms, is therefore the source of truth: the refinement script checks issue bodies against it, and the forms only ask humans in the web UI for the same sections.
+Most issues here are filed by agents with `gh issue create --body` or the REST API, which bypass the issue forms under `.github/ISSUE_TEMPLATE/` (relative to the repository root). This document, not the forms, is therefore the source of truth: the refinement script (#1320, under `skills/refine/scripts/`) will check issue bodies against it, and the forms only ask humans in the web UI for the same sections.
 
 ## Machine-readable definition
 
-The refinement script reads this block and holds no second copy of it. It is the only fenced `yaml` block in this file; `tests/test_issue_forms.py` fails if a second one appears or if the block loses a section or a label.
+The refinement script will read this block (#1320) and hold no second copy of it. It is the only fenced `yaml` block in this file; `tests/test_issue_forms.py` fails if a second one appears or if the block loses a section or a label.
 
 ```yaml
 version: 1
@@ -34,7 +34,7 @@ labels:
   triage: needs-triage
   ready: agent-ready
 # One entry per checklist item below, keyed by the item's heading.
-# `script`: the refinement script decides it. `judgement`: a person, or the
+# `script`: the refinement script (#1320) will decide it. `judgement`: a person, or the
 # refiner model under the rule in "Who may apply agent-ready", decides it.
 checklist:
   - id: sections-present
@@ -63,19 +63,19 @@ The body has the six sections in `sections`, each with content: Problem Statemen
 
 Every item under Success Criteria is checkable by a command or a test, and names that command or test with its expected result. "Works well" is not a criterion; "`make check` exits 0" is. A criterion that can only be checked after merge says so.
 
-**Check: judgement.** The script can flag a criterion that holds no inline code as a hint, but whether a command actually checks the claim needs a reader.
+**Check: judgement.** The script may flag a criterion that holds no inline code as a hint, but whether a command actually checks the claim needs a reader.
 
 ### `sized`
 
 The issue is sized at 3 points or fewer (a `Size: <n> points` line matching `size_pattern`, at most `max_points`), or it is decomposed: it has sub-issues that carry the work, each meeting this checklist on its own.
 
-**Check: script.** It reads the size line and the issue's sub-issues from the API. With neither, the item is not met.
+**Check: script.** The script will read the size line and the issue's sub-issues from the API. With neither, the item is not met.
 
 ### `blockers-recorded`
 
 Every issue or pull request this one depends on is recorded as a blocked-by edge (`gh api repos/<owner>/<repo>/issues/<n>/dependencies/blocked_by`), not only named in prose. An issue may be ready while its blockers are still open; the edge is what lets the marathon order the work.
 
-**Check: judgement.** The script can list the edges, but whether a dependency exists that no edge records needs a reader.
+**Check: judgement.** The script will list the edges, but whether a dependency exists that no edge records needs a reader.
 
 ### `no-open-question`
 

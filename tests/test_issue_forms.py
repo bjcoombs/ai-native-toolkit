@@ -2,7 +2,7 @@
 
 Issues filed through `gh issue create --body` or the REST API bypass the forms, so
 the definition of ready in `docs/contributing/definition-of-ready.md` is the source
-of truth. Its one fenced `yaml` block is what the refinement script (#1320) reads,
+of truth. Its one fenced `yaml` block is what the refinement script (#1320) will read,
 so these tests pin that block's shape, the forms that ask humans for the same
 sections, and the workflow that marks every new issue as untriaged.
 """
