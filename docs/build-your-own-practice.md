@@ -117,6 +117,105 @@ The format is a list of tests that must all hold. Some rules need another shape:
 - **OR.** One level cannot say "this test or that test". For one signal, use `in` with a list of values. For two signals, write two rows, and read the result of each.
 - **NOT.** There is no NOT. Use the opposite operator: `ne` for `eq`, `not_in` for `in`, `lt` for `gte`. For a harm rather than a practice, add `polarity = "hazard"` to the level. The report lists a hazard that is met, and the tally never counts it.
 - **Arithmetic.** A test cannot add, subtract or divide two signals. It can compare a signal with a fixed value. It can also check that two signals are equal, with `eq_signal` in place of `value`. Choose a signal that already holds the number you need, such as a percent.
-- **A signal no scan measures.** The model reads only what the scans measure. "Every service has a runbook" needs a scan that looks for runbooks. Open an issue on the toolkit to ask for the signal.
+- **A signal no scan measures.** The model reads only what the scans measure. A pack check can test for a file, a count of files, a text in a file or a key in a config file. [Section 7](#7-add-a-check-the-core-does-not-measure) shows how. A signal that needs code to compute, such as one that parses the source, needs a new scan. Open an issue on the toolkit to ask for it.
 
 When a rule needs one of these, the closest test is often good enough. Write its limit in a comment next to the row, so the next reader knows what the practice does not check.
+
+## 7. Add a check the core does not measure
+
+Your team may hold a practice that no scan measures, such as "a domain glossary exists under `docs/`". A practice pack adds that check. A pack is a TOML file whose name ends in `.pack.toml`, and `/assess` reads it with `--pack`.
+
+A pack check reads only the files of the repository. It never runs a program, so a pack from another team is safe to run. Each check has one rule:
+
+- `exists` is true when a file or folder is present.
+- `glob_count` counts the files that match a pattern, such as `docs/adr/*.md`.
+- `contains` counts the files that match a pattern and hold a given text.
+- `key_exists` is true when a TOML, YAML or JSON file holds a key, such as `metadata.owner` in `service.yaml`.
+
+Save this pack as `team.pack.toml` in your repository:
+
+<!-- guide-example: pack -->
+```toml
+[pack]
+name = "team"
+version = "2026.11"
+
+[[checks]]
+id = "glossary"
+title = "Domain glossary"
+why = "Agents need the words of the domain before they change the code."
+exists = "docs/glossary.md"
+```
+
+What each line does:
+
+- `name` names the pack, in small letters, digits and `_`. Two packs in one run need two names.
+- `version` names this edition of the pack. Change it after each edit. The report also keeps a hash of the pack, so two editions never look the same.
+- `id` is a short name for the check, unique in the pack.
+- `title` and `why` say what the check looks for and why it matters to the team.
+- `exists` is the rule. The path starts at the root of the repository and uses `/`. A path that leaves the repository, such as `../notes.md`, stops the pack from loading.
+
+The check gives the signal `pack.team.glossary`: the word `pack`, the pack name, then the check id. Its value is true or false. A practice reads it like any other signal. Add this row to the end of `my-team.toml`, after the row of section 2:
+
+<!-- guide-example: pack-row -->
+```toml
+[[rows]]
+id = "glossary"
+title = "Domain glossary"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["docs"]
+  criteria = [
+    { signal = "pack.team.glossary", op = "eq", value = true },
+  ]
+```
+
+A pack cannot hold a `[[rows]]` table yet, so the row lives in your copy of the model.
+
+Pass both files to `/assess`:
+
+<!-- guide-example: pack-run -->
+```sh
+/assess --levels my-team.toml --pack team.pack.toml
+```
+
+A model that reads `pack.team.glossary` stops with an error when the run has no `--pack team.pack.toml`. The error names `--pack`.
+
+Take the repository of section 5, with the gate at 85 percent. When `docs/glossary.md` is present, the summary reads:
+
+<!-- guide-example: pack-result-met -->
+```text
+Maturity model: my-team.toml, a custom file, not the default.
+Every practice met (model: my-team.toml).
+Not in the default model: Coverage gate of at least 80; Domain glossary.
+```
+
+Delete `docs/glossary.md` and run it again. The second line names the practice that is not met:
+
+<!-- guide-example: pack-result-unmet -->
+```text
+Maturity model: my-team.toml, a custom file, not the default.
+Not every practice met (model: my-team.toml). Missing: Domain glossary (not met) [not in the default model].
+Not in the default model: Coverage gate of at least 80; Domain glossary.
+```
+
+The value of each check is in the `pack` block of `.assess/run-context.json`, and the practice is the condition `glossary.1` of the `level` block. The `packs` block holds the name, version and hash of each pack. No path and no text from your files goes into either block.
+
+A pack holds rules only. A key that would run a program, such as `command`, `run` or `script`, stops the pack from loading. Here the check asks for a shell command in place of its rule:
+
+<!-- guide-example: pack-command -->
+```toml
+command = "test -f docs/glossary.md"
+```
+
+The run stops with this error:
+
+<!-- guide-example: pack-command-error -->
+```text
+error: checks[0].command: a pack never runs code. Express the check as one rule: exists, glob_count, contains, key_exists. Installed-package collectors are out of scope; see #1266.
+```
+
+Write the check as one of the four rules. A check that needs a program, such as one that parses the source code, needs a new scan in the toolkit.
