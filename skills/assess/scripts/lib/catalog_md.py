@@ -27,7 +27,7 @@ cover and their tags) and the requires, guard and equality links. A tag with no 
 a model with no Steps, and no guard or equality link are each said in words.
 
 **Stable layout (#1239).** Each check has its own lines: a table row per criterion, a section
-per scan, a row per finding and per collector, each sorted by id or name (``lib.catalog``). No
+per scan, a row per finding and per collector, a line per shared condition, each sorted by id or name (``lib.catalog``). No
 line holds a count or total that every new check would rewrite, so two PRs that add different
 checks change different lines and merge cleanly; ``tests/test_catalog_merge.py`` merges two.
 
@@ -184,7 +184,7 @@ def _tag_opening(tag: CatalogTag) -> list[str]:
     why = [tag["why"], ""] if tag["why"] else []
     if not tag["conditions"]:
         return [*why, f"Tag `{tag['id']}`. No condition carries this tag yet.", ""]
-    return [*why, f"Tag `{tag['id']}`.", ""]
+    return why
 
 
 def _tag_section(tag: CatalogTag, lines: dict[str, list[Line]], first: dict[str, str]) -> list[str]:
@@ -194,8 +194,8 @@ def _tag_section(tag: CatalogTag, lines: dict[str, list[Line]], first: dict[str,
         out += [*_table(rows), ""]
     elsewhere = [cid for cid in tag["conditions"] if cid not in tag["listed"]]
     if elsewhere:
-        out += ["Also carries this tag, listed under its first tag: "
-                + ", ".join(f"`{cid}` ({tag_title(first[cid])})" for cid in elsewhere) + ".", ""]
+        out += ["Also carries this tag, listed under its first tag:", "",
+                *(f"- `{cid}` ({tag_title(first[cid])})" for cid in elsewhere), ""]
     return out
 
 
@@ -217,10 +217,9 @@ def _by_tag(catalog: Catalog) -> list[str]:
 
 def _relations(catalog: Catalog) -> list[str]:
     out = ["## How the tags relate", "", "### Shared conditions", "",
-           "Each pair of tags that share a condition, with the conditions both carry.", ""]
-    for pair in catalog["tag_pairs"]:
-        out.append(f"- `{pair['tags'][0]}` and `{pair['tags'][1]}`: "
-                   + ", ".join(f"`{c}`" for c in pair["conditions"]) + ".")
+           "Each pair of tags that share a condition, one line per condition both carry.", ""]
+    out += [f"- `{pair['tags'][0]}` and `{pair['tags'][1]}`: `{c}`"
+            for pair in catalog["tag_pairs"] for c in pair["conditions"]]
     if not catalog["tag_pairs"]:
         out.append("No two tags share a condition yet.")
     out += ["", "### Step gates", "",

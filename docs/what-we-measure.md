@@ -43,8 +43,6 @@ Each condition carries one or more truth tags: the truth it keeps honest. A cond
 
 That the code's behaviour is checked by something that runs on every change, not taken on trust.
 
-Tag `behaviour`.
-
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `layer-5-ci.1` CI runs your tests or linters, and an error stops the job | `ci_checks` | A CI check runs on ordinary changes and can stop its job: is true (`ci_checks.enforced_check_runs eq true`) | `verified` | yes | `ci_runs_tests` | positive | - | - | This turns "the agent says it works" into "CI says it works": a check that can stop its job runs on ordinary changes, so a broken change turns the job red where everyone can see it. | Add a CI step that runs your test or lint command on pull requests, without \|\| true, continue-on-error or allow_failure. |
@@ -62,8 +60,6 @@ Tag `contracts`. No condition carries this tag yet.
 
 That what an agent reads about the code is still true of the code.
 
-Tag `docs`.
-
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `contributor-files.1` A newcomer can learn how to send a change | `contributor_files` | A contributing guide is committed: is true (`contributor_files.guide.present eq true`) | `measured` | yes | - | positive | - | - | A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue. | Commit a CONTRIBUTING.md that says how to build, test and shape a change, at the root, in .github/ or in docs/. |
@@ -71,13 +67,13 @@ Tag `docs`.
 | `doc-freshness.1` Most mapped docs keep pace with their code | `doc_staleness` | Share of mapped docs outrun by their code: is at most 50 (`doc_staleness.summary.stale_pct lte 50`) | `measured` | yes | - | positive | - | - | An agent reads the docs as true. A doc whose code has moved on misleads it about that code. | Refresh the docs the report lists under doc freshness. |
 | `doc-freshness.2` Four in five mapped docs keep pace | `doc_staleness` | Share of mapped docs outrun by their code: is at most 20 (`doc_staleness.summary.stale_pct lte 20`) | `measured` | yes | - | positive | - | - | With four in five mapped docs keeping pace with their code, an agent can take most of what it reads at its word. | Refresh the docs the report lists under doc freshness, oldest first. |
 
-Also carries this tag, listed under its first tag: `layer-0-instructions.2` (Agent context).
+Also carries this tag, listed under its first tag:
+
+- `layer-0-instructions.2` (Agent context)
 
 ### Structure
 
 That the code is shaped so an agent can work on one part without holding the whole repository in mind.
-
-Tag `structure`.
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -93,8 +89,6 @@ Tag `structure`.
 ### Agent context
 
 That an agent starts each task knowing how this repository works and how to check its own change.
-
-Tag `agent_context`.
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -112,8 +106,6 @@ Tag `agent_context`.
 
 That an agent can see the system it changes run, and confirm a change there, not only in the code.
 
-Tag `agent_runtime`.
-
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `layer-1-liveness.1` Some runtime telemetry is committed | `observability` | Observability rung: is at least 1 (`observability.rung gte 1`) | `declared` | no, listed | - | positive | - | - | Telemetry in the code is what any view of the running system is built on. Without it, there is nothing for an agent or a person to read when checking how a change behaves in use. | Add a telemetry dependency, a runbook or an OBSERVABILITY.md so an agent can see the system run. |
@@ -125,8 +117,6 @@ Tag `agent_runtime`.
 ### Governance
 
 That people stay in the loop on what agents change, and that what agents may do is agreed and visible.
-
-Tag `governance`.
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -143,18 +133,18 @@ Tag `governance`.
 
 That an agent builds and tests against the same dependency versions as CI and everyone else.
 
-Tag `supply_chain`.
+Also carries this tag, listed under its first tag:
 
-Also carries this tag, listed under its first tag: `layer-5-ci.2` (Agent runtime).
+- `layer-5-ci.2` (Agent runtime)
 
 ## How the tags relate
 
 ### Shared conditions
 
-Each pair of tags that share a condition, with the conditions both carry.
+Each pair of tags that share a condition, one line per condition both carry.
 
-- `docs` and `agent_context`: `layer-0-instructions.2`.
-- `agent_runtime` and `supply_chain`: `layer-5-ci.2`.
+- `docs` and `agent_context`: `layer-0-instructions.2`
+- `agent_runtime` and `supply_chain`: `layer-5-ci.2`
 
 ### Step gates
 

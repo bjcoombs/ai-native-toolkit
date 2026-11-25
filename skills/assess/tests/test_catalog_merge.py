@@ -9,7 +9,9 @@ the merged files equal what a regeneration of both checks together writes, so ``
 after the merge leaves no diff.
 
 Two checks whose keys sort next to each other in a list still insert at the same spot and
-conflict; the probes are named so they land apart, as most new checks do.
+conflict; the probes are named so they land apart, as most new checks do. A JSON list with one
+element is the other limit: two additions to it always meet, because a new element changes the
+separator on its neighbour's line (the "same shared tags" case).
 """
 from __future__ import annotations
 
@@ -39,8 +41,8 @@ FILES = ("checks.html", "measures.json", "what-we-measure.md", "counts-only.md")
 class Probe:
     """A new check named ``name``: the template collector's entries and row, renamed, plus a finding."""
 
-    def __init__(self, name: str, tag: str) -> None:
-        self.name, self.tag = name, tag
+    def __init__(self, name: str, *tags: str) -> None:
+        self.name, self.tags = name, list(tags)
 
     def _renamed(self, value: Any) -> Any:
         text = json.dumps(value).replace(TEMPLATE, self.name).replace(
@@ -58,7 +60,7 @@ class Probe:
     def row(self, model: Any) -> Any:
         row = copy.deepcopy(next(r for r in model["rows"] if r["id"] == TEMPLATE.replace("_", "-")))
         renamed = self._renamed(row)
-        renamed["levels"][0]["truth"] = [self.tag]
+        renamed["levels"][0]["truth"] = self.tags
         return renamed
 
 
@@ -98,25 +100,32 @@ def repo(tmp_path: Path) -> Iterator[Path]:
     yield tmp_path
 
 
-CASES = {
-    "different tags": (Probe("doc_probe", "docs"), Probe("review_probe", "governance")),
-    "same tag": (Probe("doc_probe", "behaviour"), Probe("trace_probe", "behaviour")),
+# case -> (the two probes, the files expected to conflict). Two conditions shared by the same
+# pair of tags both join that pair's JSON list, which holds one id today: in a one-element list
+# every insertion meets the same line (the only element, or its separator), so measures.json
+# conflicts there and `make regen` resolves it. The Markdown and the page give each shared id
+# its own line and merge.
+CASES: dict[str, tuple[tuple[Probe, Probe], set[str]]] = {
+    "different tags": ((Probe("doc_probe", "docs"), Probe("review_probe", "governance")), set()),
+    "same tag": ((Probe("doc_probe", "behaviour"), Probe("trace_probe", "behaviour")), set()),
+    "same shared tags": ((Probe("doc_probe", "agent_context", "docs"),
+                          Probe("trace_probe", "agent_context", "docs")), {"measures.json"}),
 }
 
 
 @pytest.mark.parametrize("case", sorted(CASES))
 def test_two_branches_adding_different_checks_merge_cleanly(case: str, repo: Path,
                                                             monkeypatch: pytest.MonkeyPatch) -> None:
-    a, b = CASES[case]
+    (a, b), expected = CASES[case]
     _commit(repo, _render([], monkeypatch), "base")
-    _git(repo, "branch", "check-b")
+    assert _git(repo, "branch", "check-b").returncode == 0
     _commit(repo, _render([a], monkeypatch), f"add {a.name}")
     assert _git(repo, "checkout", "-q", "check-b").returncode == 0
     _commit(repo, _render([b], monkeypatch), f"add {b.name}")
     assert _git(repo, "checkout", "-q", "main").returncode == 0
     merged = _git(repo, "merge", "--no-edit", "check-b")
-    conflicted = _git(repo, "diff", "--name-only", "--diff-filter=U").stdout.split()
-    assert merged.returncode == 0 and not conflicted, f"conflict in {conflicted}: {merged.stdout}"
+    conflicted = set(_git(repo, "diff", "--name-only", "--diff-filter=U").stdout.split())
+    assert conflicted == expected and (merged.returncode == 0) == (not expected), merged.stdout
     regenerated = _render([a, b], monkeypatch)
-    for name in FILES:  # make regen after the merge writes the merged bytes: no diff
+    for name in sorted(set(FILES) - expected):  # make regen after the merge leaves no diff
         assert (repo / name).read_text(encoding="utf-8") == regenerated[name], name

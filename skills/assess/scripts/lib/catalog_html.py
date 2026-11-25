@@ -88,6 +88,7 @@ p { margin: 0; max-width: 72ch; }
 a { color: var(--teal); }
 .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--teal); }
 .lede, .tagwhy, .note { color: var(--muted); }
+ul.note { margin: 0; padding-left: 20px; }
 .tagwhy { font-style: italic; }
 header, section, .tagsec, .option { display: grid; gap: 12px; }
 input[type=search] { width: 100%; max-width: 420px; box-sizing: border-box; padding: 9px 12px; border: 1px solid var(--line);
@@ -204,8 +205,8 @@ def card(row: CatalogRow, level: CatalogLevel, scans: dict[str, CatalogScan]) ->
 def _tag_section(tag: CatalogTag, cards: list[str], shared_elsewhere: list[str]) -> str:
     body = list(cards)
     if shared_elsewhere:
-        links = ", ".join(f'<a href="#{_e(c)}"><code>{_e(c)}</code></a>' for c in shared_elsewhere)
-        body.append(f'<p class="note">Also carries this tag, shown under its first tag: {links}.</p>')
+        body += ['<p class="note">Also carries this tag, shown under its first tag:</p>', '<ul class="note">',
+                 *(f'<li><a href="#{_e(c)}"><code>{_e(c)}</code></a></li>' for c in shared_elsewhere), "</ul>"]
     if not cards and not shared_elsewhere:
         body = ['<p class="empty">No condition carries this tag yet.</p>']
     return "\n".join([f'<section class="tagsec" id="tag-{_e(tag["id"])}"><div><h2>{_e(tag["title"])} '
