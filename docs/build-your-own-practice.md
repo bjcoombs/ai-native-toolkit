@@ -2,7 +2,7 @@
 
 `/assess` scores a repository against a maturity model. The model is a TOML file of practices, and each practice reads signals that `/assess` already measures. Your team may hold a practice of its own, such as "a coverage gate of at least 80". You can add it to a copy of the model yourself.
 
-This guide adds that one practice, runs it and reads the result. Each example file, result and error below is checked by a test (`skills/assess/tests/test_build_your_own_practice.py`), so they match the code.
+This guide adds that one practice, runs it and reads the result. Section 7 adds a check of your own through a practice pack. Each example file, result and error below is checked by a test (`skills/assess/tests/test_build_your_own_practice.py`), so they match the code.
 
 ## 1. Make a copy
 
@@ -149,7 +149,7 @@ exists = "docs/glossary.md"
 
 What each line does:
 
-- `name` names the pack, in small letters, digits and `_`. Two packs in one run need two names.
+- `name` names the pack, in small letters, digits and `_`, and starts with a letter. Two packs in one run need two names.
 - `version` names this edition of the pack. Change it after each edit. The report also keeps a hash of the pack, so two editions never look the same.
 - `id` is a short name for the check, unique in the pack.
 - `title` and `why` say what the check looks for and why it matters to the team.
