@@ -66,6 +66,7 @@ STEP_LEG = {
     "Smoke the SVG scripts on Python 3.12": "smoke",
     "Smoke fleet.py over a ghsync-layout root": "smoke",
     "Smoke fleet.py --from-list": "smoke",
+    "Smoke the scanners on a path over 260 characters": "smoke",
     "Smoke start_gate.py and complete_gate.py": "smoke",
 }
 
@@ -286,3 +287,21 @@ def test_ripgrep_step_fails_unless_rg_is_the_pinned_version() -> None:
     tail = run[run.rindex("rg --version"):]
     assert "^ripgrep $([regex]::Escape($env:RG_VERSION))(\\s|$)" in tail
     assert "exit 1" in tail
+
+
+def test_long_path_step_builds_the_fixture_and_runs_the_scanners() -> None:
+    # #1405: the scanners must read a file past Windows' 260-character limit
+    # in a checkout configured as ghsync clones it (core.longpaths=true).
+    _, job = _matrix_job(_jobs())
+    step = next(s for s in job["steps"] if s.get("name") == "Smoke the scanners on a path over 260 characters")
+    run = step["run"]
+    assert step["shell"] == "bash"
+    assert step["working-directory"] == "skills/assess"
+    assert "continue-on-error" not in step
+    build = run.index("tests/fixtures/windows_smoke/longpath.py build")
+    signals = run.index("scripts/assess_signals.py")
+    core = run.index("scripts/assess_core.py")
+    check = run.index("tests/fixtures/windows_smoke/longpath.py check")
+    assert build < signals < core < check
+    assert "config --get core.longpaths" in run
+    assert (REPO / "tests" / "fixtures" / "windows_smoke" / "longpath.py").is_file()
