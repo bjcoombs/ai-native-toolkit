@@ -1,4 +1,4 @@
-"""Tests for lib/instruction_placement.py: the per-section always-on versus
+"""Tests for lib/instructions/instruction_placement.py: the per-section always-on versus
 fetch-on-need split of instruction, agent and skill files (issue #559)."""
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.instruction_placement import (
+from lib.instructions.instruction_placement import (
     ALWAYS_ON_FLAG_LINES,
     LOADED_IN_FULL_MIN_LINES,
     LOADED_IN_FULL_MIN_TOKENS,
@@ -239,8 +239,8 @@ def test_a_short_skill_under_both_thresholds_is_not_reported(tmp_path: Path) -> 
 
 
 def test_est_tokens_is_the_always_on_grading_estimate() -> None:
-    from lib.instruction_budget import CHARS_PER_TOKEN
-    from lib.instruction_placement import est_tokens
+    from lib.instructions.instruction_budget import CHARS_PER_TOKEN
+    from lib.instructions.instruction_placement import est_tokens
 
     assert CHARS_PER_TOKEN == 4 and est_tokens("x" * 9) == 3 and est_tokens("") == 0
 

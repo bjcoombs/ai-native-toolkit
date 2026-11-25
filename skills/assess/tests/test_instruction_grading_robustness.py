@@ -21,7 +21,7 @@ from collections.abc import Callable
 
 import pytest
 
-from lib.agent_instructions_grader import (
+from lib.instructions.agent_instructions_grader import (
     ALWAYS_ON_GRADE_CAP_LINES,
     ALWAYS_ON_LINES_PER_POINT,
     RELOCATABLE_LINES_PER_POINT,
@@ -31,7 +31,7 @@ from lib.agent_instructions_grader import (
     loaded_equivalent_lines,
     placement_penalty,
 )
-from lib.instruction_placement import LONG_SECTION_MIN_LINES, PlacementFile, analyse_file
+from lib.instructions.instruction_placement import LONG_SECTION_MIN_LINES, PlacementFile, analyse_file
 
 RELOCATABLE_CAP_LINES = RELOCATABLE_MAX_PENALTY * RELOCATABLE_LINES_PER_POINT
 

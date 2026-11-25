@@ -60,8 +60,8 @@ from typing import Literal
 from lib.ci.check_command import is_format_rewrite
 from lib.ci.ci_compound import compound_core
 from lib.ci.ci_masking import unmasked_lines
-from lib.command_index import ci_line_text, read_config
-from lib.command_resolver import Command, command_words, extract_commands
+from lib.instructions.command_index import ci_line_text, read_config
+from lib.instructions.command_resolver import Command, command_words, extract_commands
 from lib.ci.lint_vocabulary import compiler_gate, dotnet_build
 
 GateBasis = Literal["analysers_in_build", "compiler_gate_only"]

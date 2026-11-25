@@ -7,14 +7,14 @@ kind = "collector"
 title = "Cross-agent instruction consistency"
 summary = "Compares the root instruction files of every agent system present: Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue and Zed. It finds check commands one file names and another does not, and thresholds that conflict. It checks whether each file links to one canonical file, and gives the pointer line for each system that does not."
 issues = [768]
-callable = "lib.agent_consistency:scan_agent_consistency"
+callable = "lib.instructions.agent_consistency:scan_agent_consistency"
 publishes = ["agent_consistency"]
 reads = ["repo_root", "excludes"]
 stage = "post_offers"
 headless = { agent_consistency = "registered" }
 whys.agent_consistency = "It compares the instruction files of every agent system present, so each agent is told the same checks and thresholds, from one source."
 shapes = [
-  { path = "agent_consistency", type = "lib.agent_consistency:AgentConsistencyBlock" },
+  { path = "agent_consistency", type = "lib.instructions.agent_consistency:AgentConsistencyBlock" },
 ]
 revision = 1
   [entries.privacy]

@@ -7,7 +7,7 @@ from lib.ci.check_command import (
     check_verdict, is_check_command, is_check_name, is_lint_command, is_lint_run, may_lint)
 from lib.ci.ci_scripts import script_path
 from lib.command_flags import make_args, shell_args, shell_string
-from lib.command_resolver import command_words
+from lib.instructions.command_resolver import command_words
 
 
 @pytest.mark.parametrize(("text", "expected"), [

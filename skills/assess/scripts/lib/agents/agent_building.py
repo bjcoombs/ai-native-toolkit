@@ -96,7 +96,7 @@ from lib.agents.agent_building_vocab import (
 from lib.agents.agent_manifests import reader_for
 from lib.docs.doc_graph import is_excluded_path
 from lib.git_churn import tracked_files
-from lib.instruction_files import INSTRUCTION_FILE_PATHS
+from lib.instructions.instruction_files import INSTRUCTION_FILE_PATHS
 
 AgentClass = Literal["builds-agent", "builds-mcp-server", "uses-agent-tooling", "none"]
 CLASSES: tuple[AgentClass, ...] = ("builds-agent", "builds-mcp-server", "uses-agent-tooling", "none")

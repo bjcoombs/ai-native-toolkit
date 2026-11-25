@@ -332,7 +332,7 @@ def test_a_subshell_matrix_value_is_not_a_run(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("command", ["dash -eo nounset ci.sh", "bash -eo nounset ci.sh", "dash ci.sh"])
 def test_a_shell_flag_cluster_takes_its_value(tmp_path: Path, command: str) -> None:
-    from lib.command_resolver import resolve
+    from lib.instructions.command_resolver import resolve
     root = _repo(tmp_path, {"ci.sh": "pytest\n"})
     assert resolve(command, root).verdict == "resolved"
 

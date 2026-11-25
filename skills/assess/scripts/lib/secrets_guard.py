@@ -11,7 +11,7 @@ The tendency it compensates for is guardrail erosion: a token pasted into a conf
 "just for now" is never removed, and nothing at the door stops the next one.
 
 **What counts** (the tool names in ``SECRET_TOOLS``). Only files git tracks are read
-(``lib.command_index.repo_files``, #1204), from the work tree, as ``ci_checks`` and
+(``lib.instructions.command_index.repo_files``, #1204), from the work tree, as ``ci_checks`` and
 ``lib.ci.ci_includes`` read them: an untracked file is never read, and an uncommitted edit to a
 tracked file is read as it stands.
 
@@ -139,7 +139,7 @@ from typing import TypedDict
 from lib.ci.ci_action_inputs import ReadLocal
 from lib.ci.ci_expressions import follow_workflow
 from lib.ci.ci_includes import SETTLED, merged_config, resolve_includes
-from lib.command_index import ci_config_files, repo_files
+from lib.instructions.command_index import ci_config_files, repo_files
 from lib.secrets_guard_gitlab import GITLAB_CI, scan_texts, template_state
 from lib.secrets_guard_hooks import (
     PRE_COMMIT_FILES as PRE_COMMIT_FILES, HookStages, PreCommitGuard as PreCommitGuard, hook_id, hook_stage,

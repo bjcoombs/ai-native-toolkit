@@ -11,7 +11,7 @@ from lib.ci.check_command import is_check_command
 from lib.ci.ci_checks import check_commands, enforced_check_commands, scan_ci_checks
 from lib.ci.ci_continuations import join_continued, join_folded
 from lib.command_flags import maven_skips_tests
-from lib.command_index import ci_line_text
+from lib.instructions.command_index import ci_line_text
 
 
 def _git(root: Path, *args: str) -> None:

@@ -77,7 +77,7 @@ from typing import TypedDict
 
 from lib.assess_config import is_user_excluded
 from lib.git_churn import GIT_TIMEOUT_SECONDS
-from lib.instruction_placement import skill_and_agent_files
+from lib.instructions.instruction_placement import skill_and_agent_files
 
 SCRIPT_EXTENSIONS = frozenset({".py", ".sh", ".bash", ".js", ".mjs", ".cjs", ".ts", ".rb"})
 SKIP_DIRS = frozenset({"tests", "test", "fixtures", "examples", "__pycache__", "node_modules", ".venv",

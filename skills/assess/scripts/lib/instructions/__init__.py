@@ -1,0 +1,1 @@
+"""Agent instruction files read offline: discovery, globs, placement, content, claims and the instruction budget, the grader and its file records, the agent systems and cross-file consistency, the Claude Code settings and their documented fields, the guardrails they declare, and the commands they name with the index those commands resolve against (#917)."""

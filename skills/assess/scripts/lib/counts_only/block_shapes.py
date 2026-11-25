@@ -14,7 +14,7 @@ names it. Every block may also degrade to ``{"available": false, "reason"}``, wh
 
 - ``agent_ops`` (``lib.agents.agent_ops.scan_agent_ops``)
 - ``coverage_gate`` (``lib.testing.coverage_gate.detect_coverage_gate``)
-- ``instruction_claims`` (``lib.instruction_claims.scan_instruction_claims``)
+- ``instruction_claims`` (``lib.instructions.instruction_claims.scan_instruction_claims``)
 - ``promissory_markers`` (``lib.keyhole.promissory_markers.MarkerScan.summary``)
 - ``review_reality`` (``lib.hosting.review_reality.summarize`` and its GitLab twin)
 - ``structure_drift`` (``lib.context_blocks._structure_drift_block``; the headless

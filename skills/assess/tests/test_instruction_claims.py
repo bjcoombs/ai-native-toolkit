@@ -1,4 +1,4 @@
-"""Tests for lib/instruction_claims.py - verifying claims in agent instruction files.
+"""Tests for lib/instructions/instruction_claims.py - verifying claims in agent instruction files.
 
 An instruction file that says "`scripts/check-x.sh` is enforced in CI" or "Node
 20.11.0 is pinned in `.nvmrc`" makes a checkable promise. The scan extracts each
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.instruction_claims import extract_claims, scan_instruction_claims
+from lib.instructions.instruction_claims import extract_claims, scan_instruction_claims
 
 ENFORCED = "# Agents\n\nKeep changes small.\n\n`scripts/check-x.sh` is enforced in CI.\n"
 WORKFLOW_WITHOUT = (
@@ -249,7 +249,7 @@ def test_count_within_ten_percent_or_two_verifies(counted: Path) -> None:
 
 
 def test_count_tolerance_is_the_larger_of_ten_percent_or_two() -> None:
-    from lib.instruction_claims import count_within_tolerance
+    from lib.instructions.instruction_claims import count_within_tolerance
 
     assert count_within_tolerance(5, 7)
     assert not count_within_tolerance(4, 7)

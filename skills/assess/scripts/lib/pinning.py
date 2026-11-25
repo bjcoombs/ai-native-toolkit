@@ -2,7 +2,7 @@
 
 One row per dependency manifest outside the built-in and ``.assess/config.toml``
 excludes, with the lockfile found for it. Read from the files at HEAD
-(``lib.command_index.repo_files``); nothing is installed or resolved.
+(``lib.instructions.command_index.repo_files``); nothing is installed or resolved.
 
 | Manifest | Lock | Ecosystem |
 |---|---|---|
@@ -69,7 +69,7 @@ from pathlib import Path, PurePosixPath
 from typing import Literal, TypedDict
 
 from lib.assess_config import is_user_excluded
-from lib.command_index import RepoIndex
+from lib.instructions.command_index import RepoIndex
 from lib.docs.doc_graph import is_excluded_path
 
 PinNote = Literal["skipped_library", "direct_pins_only"]

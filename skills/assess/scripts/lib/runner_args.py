@@ -56,7 +56,7 @@ a scan whose first argument is the repository root: ``ci_checks.scan_ci_checks``
 ``pdm_scripts_set`` (``coverage_ci`` and ``coverage_root_config`` set ``CiRuns.pdm_scripts``
 where they classify the coverage gate's runs). Outside one (an instruction file) they are not read,
 and ``pdm X`` is read as a script by name. Inward-only imports: stdlib,
-``lib.command_flags`` and ``lib.command_index``; never ``lib.ci.check_command`` or an orchestrator.
+``lib.command_flags`` and ``lib.instructions.command_index``; never ``lib.ci.check_command`` or an orchestrator.
 Tests: ``tests/test_runner_args.py``, ``tests/test_gradle_tasks.py``,
 ``tests/test_gradle_workdir.py``.
 """
@@ -73,7 +73,7 @@ from pathlib import Path, PurePosixPath
 from typing import ParamSpec, TypeVar
 
 from lib.command_flags import make_runs_no_recipe
-from lib.command_index import read_config, repo_files
+from lib.instructions.command_index import read_config, repo_files
 
 GRADLE = frozenset({"gradle", "gradlew"})
 _GRADLE_DRY_RUN = frozenset({"--dry-run", "--task-graph"})

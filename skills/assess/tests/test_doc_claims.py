@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from lib.docs.doc_claims import doc_claim_files, find_contradictions, scan_doc_claims
-from lib.instruction_claims import extract_claims, scan_instruction_claims
+from lib.instructions.instruction_claims import extract_claims, scan_instruction_claims
 
 PIN_311 = "# Setup\n\nPython 3.11 is pinned in `.python-version`.\n"
 PIN_312 = "# Setup\n\nRead this first.\n\nPython 3.12 is pinned in `.python-version`.\n"

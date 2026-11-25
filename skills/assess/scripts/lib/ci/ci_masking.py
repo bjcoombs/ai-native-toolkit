@@ -183,7 +183,7 @@ from lib.ci.ci_statements import (
 from lib.ci.ci_unsure import (
     condition_raises, group_call_unsure, opaque_flags, or_arm_unsure, piped_calls, uncalled_functions,
     until_break_flags)
-from lib.command_index import ci_line_text
+from lib.instructions.command_index import ci_line_text
 
 __all__ = ["IndentTree", "parse_lines", "split_statements", "strip_comment", "unmasked_lines"]
 

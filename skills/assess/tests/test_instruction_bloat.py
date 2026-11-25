@@ -1,6 +1,6 @@
 """Tests for the instruction-file score on always-on size and share (issue #560).
 
-The grader splits the file on its headings (``lib.instruction_placement``) and
+The grader splits the file on its headings (``lib.instructions.instruction_placement``) and
 charges two kinds of line: always-on lines past 200, and fetch-on-need lines
 that a pointer would replace. For a fixed split, both only grow as lines are added. This
 replaced the #517 whole-file curve, its skills-delegation halving and its word
@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.agent_instructions_grader import (
+from lib.instructions.agent_instructions_grader import (
     ALWAYS_ON_GRADE_CAP_LINES,
     ALWAYS_ON_MAX_PENALTY,
     RELOCATABLE_MAX_PENALTY,
@@ -24,9 +24,9 @@ from lib.agent_instructions_grader import (
     grade_instructions,
     placement_penalty,
 )
-from lib.instruction_content import build_repo_context
-from lib.instruction_files import grade_instruction_files
-from lib.instruction_placement import (
+from lib.instructions.instruction_content import build_repo_context
+from lib.instructions.instruction_files import grade_instruction_files
+from lib.instructions.instruction_placement import (
     ALWAYS_ON_FLAG_LINES,
     PlacementFile,
     analyse_file,

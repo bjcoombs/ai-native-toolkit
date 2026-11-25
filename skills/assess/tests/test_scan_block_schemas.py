@@ -12,7 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.agent_consistency import AgentConsistencyBlock
+from lib.instructions.agent_consistency import AgentConsistencyBlock
 from lib.agent_outcome import AgentOutcomeBlock
 from lib.ai_usage import AiUsageBlock
 from lib.counts_only.block_shapes import ReviewRealityBlock
@@ -20,7 +20,7 @@ from lib.ci.ci_checks import CiChecksBlock
 from lib.counts_only.content_free import counts_only_scans
 from lib.testing.coverage_gate import CoverageGateBlock
 from lib.hosting.delivery import DeliveryBlock
-from lib.guardrails import GuardrailsBlock
+from lib.instructions.guardrails import GuardrailsBlock
 from lib.layer_grades import LayerGradesBlock
 from lib.fleet.fleet_schema import build_schema as build_row_schema
 from lib.scan_block_schemas import BLOCK_SCHEMAS

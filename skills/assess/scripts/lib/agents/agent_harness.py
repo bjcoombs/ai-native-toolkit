@@ -94,10 +94,10 @@ from typing import Any, Literal, TypedDict
 from urllib.parse import urlsplit, urlunsplit
 
 from lib.assess_config import is_user_excluded
-from lib.claude_config import parse_frontmatter
+from lib.instructions.claude_config import parse_frontmatter
 from lib.git_churn import tracked_files
 from lib.ci.shared_tooling import ON_KEY
-from lib.instruction_files import INSTRUCTION_FILE_PATHS
+from lib.instructions.instruction_files import INSTRUCTION_FILE_PATHS
 
 ItemKind = Literal[
     "settings_hook", "frontmatter_hook", "env", "api_key_helper", "mcp_server", "cursor_hook",

@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypedDict
 
-from lib.command_index import MAX_CONFIG_BYTES
+from lib.instructions.command_index import MAX_CONFIG_BYTES
 from lib.git_churn import tracked_files
 from lib.ci.ci_include_items import (
     KINDS as KINDS, IncludeItem as IncludeItem, IncludeKind as IncludeKind, _split_flow, _unquote,

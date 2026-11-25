@@ -84,15 +84,15 @@ Every `test_*.py` file in this directory has a row below.
 | `test_stats_rows.py` | `lib/complexity/stats_rows.py` + `scripts/complexity-treemap.py` - the top-10 lists and the uncapped `files` key, that the doc-complexity join sees a complex file outside every top list, and the one-time diff disarm from the stats schema bump |
 | `test_wiki_writer.py` | `lib/wiki_writer.py` - wiki file rendering (index, log, hotspot pages) and HotspotEntry / LogEntry dataclass behaviour |
 | `test_git_commit_info.py` | `lib/git_churn.py` (`git_commit_info`) - commit snapshot with SHA/timestamp for staleness warnings |
-| `test_instruction_bloat.py` | `lib/agent_instructions_grader.py` - score on always-on size and share (#560): always-on lines past 200, fetch-on-need lines, neither gated on the share flag, B cap past 400 loaded lines, and the grade matching its `instruction_placement` record |
-| `test_instruction_grading_robustness.py` | `lib/agent_instructions_grader.py`, `lib/instruction_placement.py` - wording and padding inside a section never lower the penalty (#619): prose padding a command fence, heading renames and `Never` lines on a size-signalled section, a section crossing `LONG_SECTION_MIN_LINES` at the relocatable cap or near the B cap, and a property sweep over always-on to fetch-on-need moves |
-| `test_instruction_placement.py` | `lib/instruction_placement.py` - section splitting, the always-on and fetch-on-need signals (an absolute 60-line `long_section` in a file with two headed sections, `scoped_paths` never pointing a nested file at its own subtree), suggested homes and the `loaded_in_full` list, including root `agents/*.md` agent definitions in a repo with no plugin manifest and the documents kept out of it (#559, #560, #662) |
-| `test_command_resolver.py` | `lib/command_resolver.py` - command extraction and per-runner resolution (resolved / missing / external / unknown) |
-| `test_command_index.py` | `lib/command_index.py` - the per-repo target index: config parsing, tracked files, lenient families |
-| `test_instruction_content.py` | `lib/instruction_content.py` - stale path and symbol references, directory trees, overview headings, README overlap |
+| `test_instruction_bloat.py` | `lib/instructions/agent_instructions_grader.py` - score on always-on size and share (#560): always-on lines past 200, fetch-on-need lines, neither gated on the share flag, B cap past 400 loaded lines, and the grade matching its `instruction_placement` record |
+| `test_instruction_grading_robustness.py` | `lib/instructions/agent_instructions_grader.py`, `lib/instructions/instruction_placement.py` - wording and padding inside a section never lower the penalty (#619): prose padding a command fence, heading renames and `Never` lines on a size-signalled section, a section crossing `LONG_SECTION_MIN_LINES` at the relocatable cap or near the B cap, and a property sweep over always-on to fetch-on-need moves |
+| `test_instruction_placement.py` | `lib/instructions/instruction_placement.py` - section splitting, the always-on and fetch-on-need signals (an absolute 60-line `long_section` in a file with two headed sections, `scoped_paths` never pointing a nested file at its own subtree), suggested homes and the `loaded_in_full` list, including root `agents/*.md` agent definitions in a repo with no plugin manifest and the documents kept out of it (#559, #560, #662) |
+| `test_command_resolver.py` | `lib/instructions/command_resolver.py` - command extraction and per-runner resolution (resolved / missing / external / unknown) |
+| `test_command_index.py` | `lib/instructions/command_index.py` - the per-repo target index: config parsing, tracked files, lenient families |
+| `test_instruction_content.py` | `lib/instructions/instruction_content.py` - stale path and symbol references, directory trees, overview headings, README overlap |
 | `test_accretion_ratchet.py` | `lib/keyhole/accretion_ratchet.py` - the accretion-ratchet scanner (files that only ever grow) |
 | `test_accretion_ratchet_threshold.py` | `lib/keyhole/accretion_ratchet.py` - regression: the caller's `--deletion-threshold` is the cut applied |
-| `test_agent_instructions_grader.py` | `lib/agent_instructions_grader.py` - heuristic grading of agent instruction files, the verified-commands vs directive-monolith fixture pair, findings |
+| `test_agent_instructions_grader.py` | `lib/instructions/agent_instructions_grader.py` - heuristic grading of agent instruction files, the verified-commands vs directive-monolith fixture pair, findings |
 | `test_agent_harness.py` | `lib/agents/agent_harness.py` - the committed agent harness inventory and its secret-exposure findings: a planted fixture with one of each finding kind, a clean fixture with the near misses, and this repository |
 | `test_agent_environment.py` | `lib/agents/agent_environment.py` - the agent working-environment block: the CI-only, eligible-for-Present and malformed `copilot-setup-steps.yml` fixtures, each setup source, check-command classification, lockfile rows, and the `gh` CI-duration probe against a fake `gh` |
 | `test_check_command.py` | `lib/ci/check_command.py` - the lint classifier: linters run directly or through `uv run` / `npx` / `python -m`, lint targets of runners and scripts, and installs or bare list items that are not lint |
@@ -109,7 +109,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_archetype.py` | `lib/keyhole/archetype.py` - repository archetype detection |
 | `test_assess_config.py` | `lib/assess_config.py` - the working-notes keys in `.assess/config.toml` |
 | `test_badge.py` | `lib/badge.py` - the shields.io endpoint badge: the headline summary as its message, colour by Step |
-| `test_claude_config.py` | `lib/claude_config.py` - legacy command files and Claude Code frontmatter the runtime ignores, plugin path overrides, scope, and the unchanged run-context of an unconfigured repo |
+| `test_claude_config.py` | `lib/instructions/claude_config.py` - legacy command files and Claude Code frontmatter the runtime ignores, plugin path overrides, scope, and the unchanged run-context of an unconfigured repo |
 | `test_config_drift.py` | `lib/hosting/config_drift.py` + `lib/hosting/gh_cli.py` - committed GitHub-config snapshots against the live setting, and the shared `gh` helper |
 | `test_review_reality_gitlab.py` | `lib/hosting/gitlab_cli.py` + the GitLab path of `lib/hosting/review_reality.py` - provider detection, `glab` refusal mapping, merged merge request approvals |
 | `test_gitlab_protected_branches.py` | `lib/hosting/gitlab_cli.branch_protection` + the GitLab paths of `lib/hosting/config_drift.py` and `lib/hosting/review_reality.py` - wildcard protected-branch matching, 403/404 as unavailable, GitLab protected-branch snapshots, rules scoped to all protected branches |
@@ -128,11 +128,11 @@ Every `test_*.py` file in this directory has a row below.
 | `test_gate_cost.py` | `lib/gate_cost.py` - the CI gate's Actions cost estimate |
 | `test_generated_files.py` | `lib/complexity/generated_files.py` - generated-file header sniff and long-line detector |
 | `test_git_churn.py` | `lib/git_churn.py` - churn-degeneracy detector |
-| `test_instruction_claims.py` | `lib/instruction_claims.py` - verifying claims in agent instruction files |
-| `test_instruction_budget.py` | `lib/instruction_budget.py` - `@import` resolution and the always-loaded budget per tool |
-| `test_instruction_discovery.py` | `lib/instruction_discovery.py` - nested and path-scoped instruction files, their scopes and integrity findings (fixture monorepo) |
-| `test_instruction_files.py` | `lib/instruction_files.py` - instruction-file discovery and grading, alias grade inheritance, broken references, sensitive content, ancestor cascade (through `build_run_context`) |
-| `test_instruction_globs.py` | `lib/instruction_globs.py` - scope frontmatter parsing and glob matching |
+| `test_instruction_claims.py` | `lib/instructions/instruction_claims.py` - verifying claims in agent instruction files |
+| `test_instruction_budget.py` | `lib/instructions/instruction_budget.py` - `@import` resolution and the always-loaded budget per tool |
+| `test_instruction_discovery.py` | `lib/instructions/instruction_discovery.py` - nested and path-scoped instruction files, their scopes and integrity findings (fixture monorepo) |
+| `test_instruction_files.py` | `lib/instructions/instruction_files.py` - instruction-file discovery and grading, alias grade inheritance, broken references, sensitive content, ancestor cascade (through `build_run_context`) |
+| `test_instruction_globs.py` | `lib/instructions/instruction_globs.py` - scope frontmatter parsing and glob matching |
 | `test_interactivity.py` | `lib/interactivity.py` - the non-interactive consent contract |
 | `test_jvm_capabilities.py` | `lib/keyhole/jvm_capabilities.py` - the capability-driven JVM offer flow |
 | `test_mutation_cap.py` | `lib/testing/mutation_cap.py` - the `test_pressure` block shape and the Layer 6 mutation-not-run cap |

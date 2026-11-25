@@ -26,7 +26,7 @@ command or environment that is not read gives nothing, so the line keeps its nul
   ``-f``, a parametrized name (``lint-3.12``), positional arguments after ``--``.
 
 A command that itself runs tox or nox is not returned (no loop). Inward-only imports: stdlib
-and ``lib.command_index``. Tests: ``tests/test_runner_envs.py``.
+and ``lib.instructions.command_index``. Tests: ``tests/test_runner_envs.py``.
 """
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import ParamSpec, TypeVar
 
-from lib.command_index import read_config, repo_files
+from lib.instructions.command_index import read_config, repo_files
 
 _TOX_CONFIGS = frozenset({"tox.ini", "tox.toml"})
 _TOX_RUN = frozenset({"run", "r"})

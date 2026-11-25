@@ -95,14 +95,14 @@ import lib.manifest.check_manifest as cm
 from lib import core_scans as cs
 from lib import run_setup as rs
 from lib.agents.agent_building import scan_agent_building
-from lib.agent_consistency import scan_agent_consistency
+from lib.instructions.agent_consistency import scan_agent_consistency
 from lib.agents.agent_environment import scan_agent_environment
 from lib.agents.agent_harness import scan_agent_harness
 from lib.agents.agent_ops import scan_agent_ops
 from lib.agent_outcome import scan_agent_outcome
 from lib.ai_usage import scan_ai_usage
 from lib.ci.ci_checks import scan_ci_checks
-from lib.claude_config import scan_claude_config
+from lib.instructions.claude_config import scan_claude_config
 from lib.hosting.config_drift import scan_config_drift
 from lib.degrade import safe as safe  # re-exported: callers import it from here
 from lib.degrade import unavailable
@@ -112,9 +112,9 @@ from lib.external_ci import no_external_ci, read_external_ci
 from lib.docs.doc_claims import scan_doc_claims
 from lib.gate_cost import estimate_gate_cost
 from lib.hosting.gitlab_notes import gitlab_note_facts
-from lib.instruction_claims import scan_instruction_claims
-from lib.instruction_files import nested_instruction_surface
-from lib.instruction_placement import scan_instruction_placement
+from lib.instructions.instruction_claims import scan_instruction_claims
+from lib.instructions.instruction_files import nested_instruction_surface
+from lib.instructions.instruction_placement import scan_instruction_placement
 from lib.skill_disclosure import scan_skill_disclosure
 from lib.secrets_guard import scan_secrets_guard
 from lib.backlog_ready import scan_backlog_ready
@@ -128,7 +128,7 @@ from lib.hosting.github_secret_scanning import scan_github_secret_scanning
 from lib.layer_grades import scan_layer_grades
 from lib.hosting.merged_sample import merged_sample, offline_merged_sample
 from lib.hosting.gitlab_ci_lint import no_merged_ci, read_merged_ci
-from lib.guardrails import scan_guardrails
+from lib.instructions.guardrails import scan_guardrails
 from lib.ci.review_automation import review_evidence, scan_review_automation
 from lib.hosting.review_reality import review_reality_from_sample
 from lib.ci.shared_tooling import scan_shared_tooling
@@ -567,7 +567,7 @@ SCANS: tuple[ScanSpec, ...] = (
     _spec("instruction_claims", scan_instruction_claims),
     # Claude Code configuration (Layer 0): legacy command files and skill,
     # command and agent frontmatter the runtime silently ignores, checked
-    # against the documented field sets pinned in lib/claude_config_fields.py.
+    # against the documented field sets pinned in lib/instructions/claude_config_fields.py.
     # available: false when the run root has no .claude/ and no plugin
     # manifest. Last in the table so every earlier key keeps its position.
     _spec("claude_config", scan_claude_config),
@@ -677,7 +677,7 @@ SCANS: tuple[ScanSpec, ...] = (
     # Cross-agent instruction consistency (issue #768): whether the root
     # instruction files of every agent system present (Claude Code, AGENTS.md,
     # Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue,
-    # Zed; lib/agent_systems.py) name the same check commands and thresholds,
+    # Zed; lib/instructions/agent_systems.py) name the same check commands and thresholds,
     # and whether each links to one canonical file. Feeds the agent-consistency row.
     _spec("agent_consistency", scan_agent_consistency),
     # AI-assisted change share (issue #547): commits in the churn window with an

@@ -4,7 +4,7 @@ Layer 5 level 1 of the default maturity model reads this block, so the CI row
 measures CI rather than the instruction file Layer 0 already scores. The
 evidence is static, read from the files at HEAD:
 
-- The CI configuration files ``lib.command_index`` indexes: GitHub Actions
+- The CI configuration files ``lib.instructions.command_index`` indexes: GitHub Actions
   workflows (``.github/workflows/*.yml|yaml``) and ``.gitlab-ci.yml``. Other CI
   systems are not parsed (issues #787, #928): ``unread_ci_files`` counts the tracked
   files of the ones this scan knows (``lib.unread_ci``: Jenkins, CircleCI, Azure
@@ -397,7 +397,7 @@ from lib.ci.ci_masking import mask_lines, unmasked_lines
 from lib.named_check import instruction_words, named_count
 from lib.ci.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
 from lib.ci.ci_scripts import ScriptTree, runs_missing
-from lib.command_index import CI_CONFIG_FILES, ci_config_files, read_config, repo_files
+from lib.instructions.command_index import CI_CONFIG_FILES, ci_config_files, read_config, repo_files
 from lib.dot_source import dot_as_source
 from lib.runner_args import reads_pdm_scripts
 from lib.runner_envs import reads_runner_envs

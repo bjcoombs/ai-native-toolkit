@@ -616,7 +616,7 @@ def _walk(root: Path, base: Path, excludes: Excludes,
 def walk_named(root: Path, excludes: Excludes, names: set[str],
                base: Path | None = None) -> Iterator[Path]:
     """Repo-relative files under ``base`` (default ``root``) whose name is in ``names``, by
-    the same bounded, excluding walk the coverage scan uses (``lib.guardrails`` reads it)."""
+    the same bounded, excluding walk the coverage scan uses (``lib.instructions.guardrails`` reads it)."""
     return _walk(root, base or root, excludes, lambda name, _parts: name in names)
 
 

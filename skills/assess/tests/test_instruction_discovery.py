@@ -1,4 +1,4 @@
-"""Tests for lib/instruction_discovery.py (issue #511): nested and path-scoped
+"""Tests for lib/instructions/instruction_discovery.py (issue #511): nested and path-scoped
 instruction files are discovered, graded with their scope, measured into the
 always-loaded budget, and checked for the four scope-integrity defects and
 the informational mirror (issue #589)."""
@@ -11,9 +11,9 @@ from typing import Any
 
 import pytest
 
-import lib.instruction_discovery as discovery
+import lib.instructions.instruction_discovery as discovery
 from lib.git_churn import tracked_files
-from lib.instruction_files import nested_instruction_surface
+from lib.instructions.instruction_files import nested_instruction_surface
 
 ROOT_AGENTS = "\n".join(f"- Always run check number {i} before pushing." for i in range(8))
 

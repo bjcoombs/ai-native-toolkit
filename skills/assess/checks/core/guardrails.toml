@@ -7,14 +7,14 @@ kind = "collector"
 title = "Guardrails stated"
 summary = "Lists the gates the repository configures: a ruff or flake8 complexity limit, the coverage floor, pre-commit hooks and mypy strict. It checks whether a graded instruction file states each gate's rule and threshold. An unstated gate carries a ready one-line snippet."
 issues = [767]
-callable = "lib.guardrails:scan_guardrails"
+callable = "lib.instructions.guardrails:scan_guardrails"
 publishes = ["guardrails"]
 reads = ["repo_root", "instruction_files", "coverage_gate", "excludes", "scope"]
 stage = "post_offers"
 headless = { guardrails = "registered" }
 whys.guardrails = "It lists the gates the repository configures and whether an instruction file states each rule and threshold, so an agent learns a gate before CI turns red on it."
 shapes = [
-  { path = "guardrails", type = "lib.guardrails:GuardrailsBlock" },
+  { path = "guardrails", type = "lib.instructions.guardrails:GuardrailsBlock" },
 ]
 revision = 2
   [entries.privacy]

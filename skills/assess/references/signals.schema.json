@@ -171,7 +171,7 @@
               "reason"
             ]
           },
-          "description": "Cross-agent instruction consistency (lib/agent_consistency.py): the root instruction files of every agent system present at HEAD (Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue, Zed), the check commands and thresholds they disagree on, and how each links to one canonical file.",
+          "description": "Cross-agent instruction consistency (lib/instructions/agent_consistency.py): the root instruction files of every agent system present at HEAD (Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue, Zed), the check commands and thresholds they disagree on, and how each links to one canonical file.",
           "properties": {
             "available": {
               "type": "boolean"
@@ -185,7 +185,7 @@
                 "array",
                 "integer"
               ],
-              "description": "Agent system ids (lib/agent_systems.py SYSTEMS)."
+              "description": "Agent system ids (lib/instructions/agent_systems.py SYSTEMS)."
             },
             "systems_total": {
               "type": "integer",
@@ -248,14 +248,14 @@
                       "array",
                       "integer"
                     ],
-                    "description": "Agent system ids (lib/agent_systems.py SYSTEMS)."
+                    "description": "Agent system ids (lib/instructions/agent_systems.py SYSTEMS)."
                   },
                   "missing_from": {
                     "type": [
                       "array",
                       "integer"
                     ],
-                    "description": "Agent system ids (lib/agent_systems.py SYSTEMS)."
+                    "description": "Agent system ids (lib/instructions/agent_systems.py SYSTEMS)."
                   },
                   "stated": {
                     "type": "array"
@@ -1065,7 +1065,7 @@
               "reason"
             ]
           },
-          "description": "Guardrails stated (lib/guardrails.py): the gates the repository configures at HEAD (a ruff or flake8 complexity limit, the coverage floor from coverage_gate, pre-commit hooks, mypy strict) and whether a graded instruction file states each one's rule and threshold on one line.",
+          "description": "Guardrails stated (lib/instructions/guardrails.py): the gates the repository configures at HEAD (a ruff or flake8 complexity limit, the coverage floor from coverage_gate, pre-commit hooks, mypy strict) and whether a graded instruction file states each one's rule and threshold on one line.",
           "properties": {
             "available": {
               "type": "boolean"

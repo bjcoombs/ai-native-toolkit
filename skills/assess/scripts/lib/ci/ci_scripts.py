@@ -17,7 +17,7 @@ A script is present at its path, or as the suffix of a tracked path under a dire
 (``cd svc && ./ci.sh``, ``working-directory:``). The suffix match is lenient on purpose:
 any tracked ``*/ci.sh``, even under ``testdata/``, credits a root ``./ci.sh``, because the
 CI line's working directory is not resolved. A path outside what git tracks by design is
-not missing, as in ``lib.command_resolver``: an excluded tree (``./vendor/bin/phpunit``,
+not missing, as in ``lib.instructions.command_resolver``: an excluded tree (``./vendor/bin/phpunit``,
 ``build/``) or a gitignored path that a step installs or builds. Answers are cached per
 path.
 
@@ -43,8 +43,8 @@ its shebang, and only when git records the file as executable (mode 100755), sin
 upgrades a name reading: ``./ci.sh`` that ends in ``pytest`` reads true; one it cannot show
 keeps the name's reading (``check_target``, or true for ``./test.sh``).
 
-Inward-only imports: ``lib.ci.check_command``, ``lib.command_index``,
-``lib.command_resolver``, ``lib.docs.doc_graph``, ``lib.ci.lint_vocabulary`` and ``lib.script_body``; never an
+Inward-only imports: ``lib.ci.check_command``, ``lib.instructions.command_index``,
+``lib.instructions.command_resolver``, ``lib.docs.doc_graph``, ``lib.ci.lint_vocabulary`` and ``lib.script_body``; never an
 orchestrator.
 """
 from __future__ import annotations
@@ -54,8 +54,8 @@ from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
 from lib.ci.check_command import BARE_RUN_PROGRAMS, LINT_PROGRAMS, TYPE_PROGRAMS
-from lib.command_index import is_gitignored
-from lib.command_resolver import RUNNERS, command_words
+from lib.instructions.command_index import is_gitignored
+from lib.instructions.command_resolver import RUNNERS, command_words
 from lib.docs.doc_graph import is_excluded_path
 from lib.ci.lint_vocabulary import ANALYSER_PROGRAMS, program_name
 from lib.script_body import body_runs, start_state

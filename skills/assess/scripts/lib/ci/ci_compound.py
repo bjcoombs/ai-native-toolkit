@@ -1,6 +1,6 @@
 """Read the command inside a compound-command lead on one CI line (issue #1061).
 
-``lib.command_resolver.extract_commands`` splits a line into segments and reads each segment's
+``lib.instructions.command_resolver.extract_commands`` splits a line into segments and reads each segment's
 first word as its program, so a segment that opens a compound command was never a check:
 ``if ! pytest`` reads ``if``, ``{ pytest`` reads ``{``, ``f() { pytest`` reads ``f()`` and
 ``(pytest)`` reads the single word ``(pytest)``. ``compound_core(text)`` rewrites one CI

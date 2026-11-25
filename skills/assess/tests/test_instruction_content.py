@@ -1,4 +1,4 @@
-"""Tests for lib/instruction_content.py: stale references, trees, overviews, README overlap."""
+"""Tests for lib/instructions/instruction_content.py: stale references, trees, overviews, README overlap."""
 from __future__ import annotations
 
 import subprocess
@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from lib import instruction_content
-from lib.instruction_content import (
+from lib.instructions import instruction_content
+from lib.instructions.instruction_content import (
     build_repo_context,
     check_paths,
     check_symbols,

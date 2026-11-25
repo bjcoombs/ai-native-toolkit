@@ -31,7 +31,7 @@ import re
 import shlex
 from pathlib import PurePosixPath
 
-from lib.command_resolver import command_words
+from lib.instructions.command_resolver import command_words
 
 SHELLS = frozenset({"bash", "sh", "zsh", "dash"})
 # Shell options that take the next word (``bash -o pipefail x.sh``, ``bash --rcfile f x.sh``);

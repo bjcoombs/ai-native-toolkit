@@ -1,4 +1,4 @@
-"""Tests for lib/instruction_files.py: instruction-file discovery and grading, alias
+"""Tests for lib/instructions/instruction_files.py: instruction-file discovery and grading, alias
 grade inheritance, broken references, sensitive content and the ancestor
 cascade, driven through build_run_context.
 

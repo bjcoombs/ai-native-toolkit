@@ -10,7 +10,7 @@ a repository with complete CI and no way to bootstrap or check locally read as
 Present. This block is the evidence for the Layer 5 cap that closes that gap.
 
 Everything but ``ci_duration`` is static and deterministic, read from the files
-at HEAD (``lib.command_index.repo_files``):
+at HEAD (``lib.instructions.command_index.repo_files``):
 
 - ``setup``: committed setup an agent runs. ``copilot_setup_steps``
   (``.github/workflows/copilot-setup-steps.yml``, credited only when it passes
@@ -24,7 +24,7 @@ at HEAD (``lib.command_index.repo_files``):
 - ``check``: the test and check entry points the repository defines (package
   scripts, Makefile and justfile targets, tox, nox, pytest, go, cargo, maven,
   gradle), and the check commands each graded instruction file names, resolved
-  with ``lib.command_resolver``; only the files an agent loads at session start
+  with ``lib.instructions.command_resolver``; only the files an agent loads at session start
   count (``AGENT_LOADED``), not a review-bot prompt. ``named`` lists the ones that resolve. A check
   is classified by the target it runs (``make test``, ``npm run ci``, the
   program after ``uv run``), so an install command such as ``npm ci`` or
@@ -107,8 +107,8 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Literal, NotRequired, TypedDict
 
 from lib.named_check import is_named_check, is_named_check_name
-from lib.command_index import RepoIndex, build_index
-from lib.command_resolver import extract_commands, resolve
+from lib.instructions.command_index import RepoIndex, build_index
+from lib.instructions.command_resolver import extract_commands, resolve
 from lib.hosting.gh_cli import GhUnavailable, gh_json, open_github
 from lib.pinning import PinningBlock, PinRow, counted, pin_rows, pinning_block
 

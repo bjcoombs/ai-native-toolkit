@@ -5,7 +5,7 @@ A CI line that runs ``make ci``, ``npm run ci`` or ``./ci.sh`` reads null at Lay
 and its recipe is not read. An instruction file that tells the agent to run ``make ci``
 is naming how to verify the work, which is what Layer 0 measures, so
 ``lib.agents.agent_environment`` (``check.named``, ``check.entry_points``) and
-``lib.agent_consistency`` (``check_commands``) read through this module, whose
+``lib.instructions.agent_consistency`` (``check_commands``) read through this module, whose
 vocabulary is ``INSTRUCTION_CHECK_WORDS`` (``CHECK_WORDS`` plus ``ci``).
 ``is_named_check(text)`` is ``check_command.is_check_command`` under that vocabulary,
 set through the ``check_command.CHECK_NAMES`` context variable for the one call, and
@@ -47,7 +47,7 @@ from pathlib import PurePosixPath
 from lib.ci.check_command import (
     CHECK_NAMES, CHECK_WORDS, SETUP_TARGETS, check_verdict, is_check_command, is_check_name,
     may_lint)
-from lib.command_resolver import command_words
+from lib.instructions.command_resolver import command_words
 
 INSTRUCTION_CHECK_WORDS = CHECK_WORDS | {"ci"}
 P = ParamSpec("P")

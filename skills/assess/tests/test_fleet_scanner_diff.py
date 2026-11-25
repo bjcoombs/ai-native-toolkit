@@ -14,7 +14,7 @@ from lib.fleet.fleet_scanner_diff import ScannerDiff, scanner_diff
 from test_fleet_compare import _row, _row_move, _scans, _stamp
 from test_fleet_groups import LEVELS
 
-NESTED = "skills/assess/scripts/lib/instruction_files.py"
+NESTED = "skills/assess/scripts/lib/instructions/instruction_files.py"
 PRODUCERS = {"nested_instructions": frozenset({NESTED}),
              "shared_tooling": frozenset({"skills/assess/scripts/lib/ci/shared_tooling.py"})}
 EARLIER = [_row("grpa/svc1", _scans(5))]

@@ -449,7 +449,7 @@ def test_no_git_reports_no_bulk_commits(tmp_path: Path) -> None:
 
 def test_instruction_freshness_skips_bulk_commit(git_repo) -> None:
     """The instruction grader's clock shares the bulk-commit skip."""
-    from lib.instruction_files import grade_instruction_files
+    from lib.instructions.instruction_files import grade_instruction_files
 
     repo, commit = git_repo
     _bulk_fixture(repo, commit)
@@ -556,7 +556,7 @@ def test_shallow_clone_marks_scan_incomplete(git_repo, tmp_path: Path) -> None:
 def test_non_doc_instruction_file_skips_bulk_commit(git_repo) -> None:
     """`.cursorrules` is outside the docs' pathspec; the per-file route applies
     the same bulk skip."""
-    from lib.instruction_files import grade_instruction_files
+    from lib.instructions.instruction_files import grade_instruction_files
 
     repo, commit = git_repo
     _write(repo, ".cursorrules", "Prefer small functions.\n")

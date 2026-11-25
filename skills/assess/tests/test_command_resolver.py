@@ -1,4 +1,4 @@
-"""Tests for lib/command_resolver.py: command extraction and per-runner resolution.
+"""Tests for lib/instructions/command_resolver.py: command extraction and per-runner resolution.
 
 Each runner is checked in three repo states: the target exists (resolved), the
 config exists without the target (missing), and the config is absent
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.command_resolver import EXTERNAL_TOOLS, Command, build_index, extract_commands, resolve
+from lib.instructions.command_resolver import EXTERNAL_TOOLS, Command, build_index, extract_commands, resolve
 
 FULL_REPO: dict[str, str] = {
     "package.json": json.dumps({

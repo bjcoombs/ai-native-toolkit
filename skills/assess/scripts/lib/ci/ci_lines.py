@@ -13,7 +13,7 @@ lint action, ``lint_action`` over ``LINT_ACTIONS``), ``_line_may_lint`` (``may_l
 not read); ``_skipped_check`` flags a Maven or Gradle run with its tests skipped (#799, #1046).
 
 Inward-only imports: ``lib.ci.check_command``, ``lib.ci.ci_lint_gates``, ``lib.ci.ci_scripts``,
-``lib.command_flags``, ``lib.command_index``, ``lib.command_resolver``,
+``lib.command_flags``, ``lib.instructions.command_index``, ``lib.instructions.command_resolver``,
 ``lib.ci.lint_vocabulary``, ``lib.named_check`` and ``lib.runner_args``; never ``lib.ci.ci_checks`` or an orchestrator.
 Tests: ``tests/test_ci_checks.py``, ``tests/test_ci_false_credit.py``.
 """
@@ -29,8 +29,8 @@ from lib.ci.ci_compound import compound_core
 from lib.ci.ci_lint_gates import line_commands
 from lib.ci.ci_scripts import Present, committed, script_runs
 from lib.command_flags import maven_skips_tests
-from lib.command_index import ci_line_text
-from lib.command_resolver import command_words
+from lib.instructions.command_index import ci_line_text
+from lib.instructions.command_resolver import command_words
 from lib.ci.lint_vocabulary import dotnet_build
 from lib.named_check import setup_ci_target, sourced_env, unread_ci_target
 from lib.runner_args import gradle_skips_tests
