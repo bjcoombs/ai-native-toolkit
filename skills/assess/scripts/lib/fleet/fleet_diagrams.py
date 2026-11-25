@@ -384,8 +384,9 @@ def write_diagrams(out_dir: Path, diagrams: Sequence[Diagram], credit: str | Non
                    coverage: str | None = None, opportunities: str | None = None,
                    measured: str | None = None, front: str | None = None, packs: str | None = None,
                    includes: str | None = None) -> list[Path]:
-    """Write the drawn SVGs and ``report.md`` (with ``front``, ``coverage``, ``credit`` and
-    ``opportunities`` first and ``measured`` last) under ``out_dir``; returns the paths written."""
+    """Write the drawn SVGs and ``report.md`` (``front`` and ``coverage`` first, then after the
+    preamble ``includes``, ``credit``, ``opportunities`` and ``packs``, and ``measured`` last) under
+    ``out_dir``; returns the paths written."""
     clear_diagrams(out_dir)
     written = [_write(out_dir / d["file"], d["svg"]) for d in diagrams if d["svg"] is not None]
     written.append(_write(out_dir / REPORT_FILE,
