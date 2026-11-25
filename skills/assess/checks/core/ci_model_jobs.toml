@@ -16,7 +16,7 @@ whys.ci_model_jobs = "A CI job that calls a model costs money on every run. If i
 shapes = [
   { path = "ci_model_jobs", type = "lib.ci_model_jobs:CiModelJobsBlock" },
 ]
-revision = 2
+revision = 3
 unknown_reasons = [
   { code = "no_model_jobs", block = "ci_model_jobs", means = "With model_jobs at 0, no model-calling CI job was detected, so there is nothing to gate. A model call inside a script file a job runs is not read.", next_step = "Nothing to change." },
   { code = "trigger_unresolved", block = "ci_model_jobs", means = "The ungated count is null and ungated_reason holds this code. No model-backed job is ungated, but one could not be settled. Examples are an unreadable on: key, a label if: joined with ||, or a job that only names a provider secret. A GitLab merge that is not settled reads the same way.", next_step = "Nothing to change if the job is gated; a plain paths:, schedule: or label condition lets the scan read it." },
