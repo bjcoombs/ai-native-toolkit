@@ -770,8 +770,11 @@ provider_default_branch() {
 provider_clone() {
     local path=$1
     local dest=$2
+    # core.longpaths goes on the clone itself, on every platform: the first
+    # checkout runs inside git clone, so setting it afterwards is too late
+    # for a tree past Windows' 260-character limit. Elsewhere it is a no-op.
     # --partial / --filter and --shallow-since apply to new clones only.
-    local -a opts=()
+    local -a opts=(-c core.longpaths=true)
     if [ -n "${CLONE_FILTER:-}" ]; then
         opts+=("--filter=$CLONE_FILTER")
     fi
@@ -785,14 +788,10 @@ provider_clone() {
             if [ "$QUIET_MODE" = true ]; then
                 opts+=(-q)
             fi
-            if [ ${#opts[@]} -gt 0 ]; then
-                gh repo clone "$ORG/$path" "$dest" -- "${opts[@]}" 2>&1
-            else
-                gh repo clone "$ORG/$path" "$dest" 2>&1
-            fi
+            gh repo clone "$ORG/$path" "$dest" -- "${opts[@]}" 2>&1
             ;;
         gitlab)
-            git clone -q ${opts[@]+"${opts[@]}"} "$(gitlab_clone_url "$path")" "$dest" 2>&1
+            git clone -q "${opts[@]}" "$(gitlab_clone_url "$path")" "$dest" 2>&1
             ;;
         *)
             echo "Unknown provider: $PROVIDER"
@@ -1454,10 +1453,12 @@ update_repo() {
             mkdir -p "$main_path"
             mkdir -p "$repo_path/worktree"
 
-            if provider_clone "$repo" "$main_path"; then
-                # Enable long path support — required on Windows for repos with
-                # deep directory trees (200+ char filenames)
-                git -C "$main_path" config core.longpaths true
+            local clone_out clone_ok=true
+            clone_out=$(provider_clone "$repo" "$main_path") || clone_ok=false
+            if [ -n "$clone_out" ]; then
+                printf '%s\n' "$clone_out"
+            fi
+            if [ "$clone_ok" = true ]; then
                 echo "$repo" >> "${GHSYNC_STATUS_DIR}/updated"
                 if [ "$QUIET_MODE" = false ]; then
                     clear_line
@@ -1466,7 +1467,14 @@ update_repo() {
             else
                 clear_line
                 echo "*** Failed to clone $repo"
-                echo "$repo" >> "${GHSYNC_STATUS_DIR}/failed"
+                # Git for Windows reports a path past MAX_PATH as "Filename
+                # too long"; name the cause so it is not lost in the output.
+                case "$clone_out" in
+                    *"Filename too long"*)
+                        echo "$repo (failed: path too long, see core.longpaths)" >> "${GHSYNC_STATUS_DIR}/failed" ;;
+                    *)
+                        echo "$repo" >> "${GHSYNC_STATUS_DIR}/failed" ;;
+                esac
                 # Remove only what this clone created: the checkout, the empty
                 # worktree dir, then each parent directory left empty up to
                 # the root. A shared parent (a/b for a/b/repo) that holds
