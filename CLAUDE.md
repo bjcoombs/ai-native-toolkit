@@ -4,7 +4,7 @@ In-repo contract for agents editing `ai-native-toolkit`. Repo-specific rules onl
 
 ## Scope of this repo
 
-Source for the `ai-native-toolkit` Claude Code plugin. Portable skills (`/assess`, `/huddle`, `/deslop`, `/ghsync`, `/skill-forge`, `/semantic-compress`, `/doc-contradictions`), user-invoked framework skills (`/6hats`, `/understand`), opt-in personal workflow skills (`/tm`, `/issues`, `/fix-pr`, `/fix-develop`, `/tm-marathon-config-example`), and team-orchestration library skills (`marathon`, `pr-review-merge`, `ab-equivalence`) composed by the other skills rather than invoked standalone. Every component is a skill under `skills/<name>/SKILL.md` or an agent under `agents/`; there is no `commands/` directory.
+Source for the `ai-native-toolkit` Claude Code plugin. Portable skills (`/assess`, `/huddle`, `/deslop`, `/ghsync`, `/skill-forge`, `/semantic-compress`, `/doc-contradictions`), user-invoked framework skills (`/6hats`, `/understand`), opt-in personal workflow skills (`/tm`, `/issues`, `/refine`, `/fix-pr`, `/fix-develop`, `/tm-marathon-config-example`), and team-orchestration library skills (`marathon`, `pr-review-merge`, `ab-equivalence`) composed by the other skills rather than invoked standalone. Every component is a skill under `skills/<name>/SKILL.md` or an agent under `agents/`; there is no `commands/` directory.
 
 The deliverable is markdown, plus a Python deterministic core under `skills/assess/scripts/` (with `lib/`) and a standalone-skill build under `scripts/`. No application runtime. The pytest suites, the ruff + mypy gates and the floor checks gate merge.
 
@@ -56,7 +56,7 @@ Semver; the version lives in `.claude-plugin/plugin.json` under `.version`.
 - `description` - **must include a `TRIGGER` clause** naming the user phrases that should activate the skill; Claude Code's router matches on it. Exception: a user-invoked skill must *not* carry one.
 - Bundled executables go under `skills/<name>/scripts/`, reference docs under `skills/<name>/references/`.
 
-**User-invoked skills** (`/tm`, `/issues`, `/fix-pr`, `/fix-develop`, `/6hats`, `/understand`, `/tm-marathon-config-example`) are slash-command-only:
+**User-invoked skills** (`/tm`, `/issues`, `/refine`, `/fix-pr`, `/fix-develop`, `/6hats`, `/understand`, `/tm-marathon-config-example`) are slash-command-only:
 
 - `disable-model-invocation: true` - Claude never loads the skill on its own, so a workflow that commits, pushes or spawns a team cannot fire off a `description` match. Uploaded to Claude Desktop / claude.ai it shows Trigger "Slash command", not "Slash command + auto".
 - `description` - shown in `/help` and the slash menu, with no `TRIGGER` clause, because the router never reads it. `tests/test_plugin_contract.py::test_skill_has_trigger_clause` enforces both directions.

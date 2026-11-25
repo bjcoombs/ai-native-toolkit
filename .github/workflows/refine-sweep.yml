@@ -1,7 +1,9 @@
 name: Refine sweep
 
 # This repository's caller for reusable-refine-sweep.yml (issue #1321): twice
-# a day, no model. Settings as in refine-triage.yml.
+# a day, no model. Settings as in refine-triage.yml, plus the project sync:
+#   REFINE_PROJECT_NUMBER   the backlog project to keep in sync; unset skips it
+#   REFINE_PROJECT_TOKEN    secret: a token with the `project` scope
 on:
   schedule:
     - cron: '17 6,18 * * *'
@@ -22,3 +24,6 @@ jobs:
       enabled: ${{ vars.REFINE_ENABLED == 'true' }}
       mode: ${{ vars.REFINE_MODE || 'dry-run' }}
       questions_issue: ${{ vars.REFINE_QUESTIONS_ISSUE }}
+      project_number: ${{ vars.REFINE_PROJECT_NUMBER }}
+    secrets:
+      project_token: ${{ secrets.REFINE_PROJECT_TOKEN }}
