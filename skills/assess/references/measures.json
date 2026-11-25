@@ -2958,7 +2958,7 @@
         },
         {
           "code": "trigger_unresolved",
-          "means": "ungated_reason: no model-backed job is ungated, but one could not be settled. Examples are an unreadable on: key, a label if: joined with ||, a job that only names a provider secret, or a GitLab merge that is not settled.",
+          "means": "ungated_reason: no model-backed job is ungated, but one could not be settled. Examples are an unreadable on: key, a label if: joined with ||, or a job that only names a provider secret. A GitLab merge that is not settled reads the same way.",
           "next_step": "Nothing to change if the job is gated; a plain paths:, schedule: or label condition lets the scan read it."
         },
         {

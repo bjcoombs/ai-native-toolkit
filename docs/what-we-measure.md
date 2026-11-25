@@ -587,7 +587,7 @@ Each GitHub Actions or GitLab CI job that calls a model API. Signs are an eval h
 - Evidence: `ci_model_jobs.ungated` head_structure (measured).
 - Not measured when:
   - `no_model_jobs`: model_jobs is 0: no model-calling CI job detected, so there is nothing to gate. A model call inside a script file a job runs is not read. Nothing to change.
-  - `trigger_unresolved`: ungated_reason: no model-backed job is ungated, but one could not be settled. Examples are an unreadable on: key, a label if: joined with ||, a job that only names a provider secret, or a GitLab merge that is not settled. Nothing to change if the job is gated; a plain paths:, schedule: or label condition lets the scan read it.
+  - `trigger_unresolved`: ungated_reason: no model-backed job is ungated, but one could not be settled. Examples are an unreadable on: key, a label if: joined with ||, or a job that only names a provider secret. A GitLab merge that is not settled reads the same way. Nothing to change if the job is gated; a plain paths:, schedule: or label condition lets the scan read it.
   - `ci_jobs_unread`: ungated_reason: every model-backed job found is gated. But a job calls a reusable workflow from another repository on a route that is not gated, or a GitLab include was not read. An ungated job may sit there. Nothing to change: this reads as not measured until those files can be read.
 
 ### `org_security_policy`: Owner's shared security policy
