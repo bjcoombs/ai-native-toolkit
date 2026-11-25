@@ -249,3 +249,17 @@ def test_gh_sh_refuses_everything_else(tmp_path: Path, args: List[str]) -> None:
     proc = _gh_sh(tmp_path, *args)
     assert proc.returncode == 4
     assert proc.stdout == ""
+
+
+@pytest.mark.parametrize("issue, expected", [(101, "model=false"), (105, "model=true")])
+def test_dedupe_route_decides_without_any_gh_call(capsys: pytest.CaptureFixture[str], tmp_path: Path,
+                                                  monkeypatch: pytest.MonkeyPatch, issue: int, expected: str) -> None:
+    monkeypatch.setenv("GH_REPO", "acme/widgets")
+    monkeypatch.setenv("REFINE_STATE_DIR", str(tmp_path))
+
+    def no_gh(args: object) -> str:
+        raise AssertionError("dedupe-route runs in the read-only plan job and must not call gh")
+
+    code = refine_apply.main(["dedupe-route", "--verdict", str(FIXTURES / "verdict.json"), "--issue", str(issue)],
+                             runner=no_gh)
+    assert code == 0 and capsys.readouterr().out.strip() == expected

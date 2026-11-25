@@ -5,22 +5,23 @@ name: Refine triage (reusable)
 # `issue_comment: created`; refine-triage.yml in this repository is the
 # reference caller.
 #
-# Order of work, with no model until the last possible step:
-#   1. skills/refine/scripts/refine.py writes the deterministic verdict.
-#   2. A settled issue is handled with no model (refine_apply.py settled).
-#   3. Otherwise the /triage-issue command runs. It may read through gh.sh
-#      and nothing else, and returns a JSON plan; it never writes.
-#   4. refine_apply.py applies the plan through the write scripts, which
-#      hold the label allow-list, the agent-ready rule and the call caps.
+# Two jobs, so the model never holds a write token:
+#   plan   (issues: read) refine.py writes the deterministic verdict. If the
+#          script left the issue unsettled, the /triage-issue command runs
+#          with only gh.sh reads allowed and returns a JSON plan. The verdict
+#          and plan go to `apply` as an artifact.
+#   apply  (issues: write, no model) validates the plan against its schema
+#          and applies it, or the settled verdict, through the write scripts,
+#          which hold the label allow-list, the agent-ready rule and the caps.
 #
 # A `/reopen` comment on an issue the refiner closed as a duplicate runs the
 # `reopen` job instead: no model.
 #
-# Permissions: the `reopen` job declares `contents: read` and
-# `issues: write`. The `triage` job declares none, so it takes the caller's
-# grant. Grant `contents: read` and `issues: write`, and add
-# `id-token: write` only when you authenticate with Workload Identity
-# Federation. A called workflow cannot ask for more than its caller grants.
+# Permissions: each job declares its own. A called job cannot ask for more
+# than its caller grants, so the caller grants their union: `contents: read`,
+# `issues: write`, `pull-requests: read` (refine.py reads open pull requests
+# for its overlap check) and `id-token: write` (the plan job's OIDC token for
+# Workload Identity Federation; it is not a write to the repository).
 #
 # allowed_non_write_users is left unset on purpose. The model step runs only
 # when the issue's author, and on a comment the commenter too, is an OWNER,
@@ -90,7 +91,10 @@ on:
         required: false
 
 jobs:
-  triage:
+  # The model runs here, with a token that can read issues but write
+  # nothing: a prompt-injected `gh issue close` fails even if it runs. The
+  # job hands its verdict and plan to `apply` as an artifact.
+  plan:
     if: >-
       inputs.enabled &&
       github.event.issue.state != 'closed' &&
@@ -98,20 +102,21 @@ jobs:
       !(github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/reopen'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      id-token: write
     concurrency:
       group: refine-triage-${{ github.repository }}-${{ inputs.issue_number }}
       cancel-in-progress: true
+    outputs:
+      model: ${{ steps.route.outputs.model }}
+      planned: ${{ steps.save.outputs.planned }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       ISSUE: ${{ inputs.issue_number }}
-      REFINE_MODE: ${{ inputs.mode }}
-      REFINE_READY_LABEL: ${{ inputs.ready_label }}
-      REFINE_TRIAGE_LABEL: ${{ inputs.triage_label }}
-      REFINE_ALLOWED_LABELS: ${{ inputs.allowed_labels }}
-      REFINE_MAX_POINTS: ${{ inputs.max_points }}
-      REFINE_QUESTIONS_ISSUE: ${{ inputs.questions_issue }}
-      CLAUDE_CODE_SCRIPT_CAPS: '{"edit-issue-labels.sh":1,"write-size-marker.sh":1,"add-blocked-by.sh":5,"post-questions.sh":1}'
       APPLY: .refine-toolkit/skills/refine/scripts/refine_apply.py
     steps:
       # The default branch only, never code from an issue or a pull request.
@@ -168,10 +173,6 @@ jobs:
         id: route
         run: python3 "$APPLY" route --verdict .refine/verdict.json --issue "$ISSUE" >> "$GITHUB_OUTPUT"
 
-      - name: Apply a settled verdict (no model)
-        if: steps.route.outputs.model == 'false'
-        run: python3 "$APPLY" settled --verdict .refine/verdict.json --issue "$ISSUE"
-
       - name: Check the credential and the author
         id: gate
         if: steps.route.outputs.model == 'true'
@@ -191,7 +192,7 @@ jobs:
             echo "::notice::No refiner credential is set; the model step is skipped."
             echo "run=false" >> "$GITHUB_OUTPUT"
           elif [ "$TRUSTED" != "true" ]; then
-            echo "::notice::The author has no write access; this issue waits for the scheduled sweep."
+            echo "::notice::The author has no write access; this issue waits for a maintainer's comment or a manual dispatch."
             echo "run=false" >> "$GITHUB_OUTPUT"
           else
             echo "run=true" >> "$GITHUB_OUTPUT"
@@ -208,7 +209,10 @@ jobs:
             [ -e ".claude/commands/$(basename "$f")" ] || cp "$f" .claude/commands/
           done
 
-      - name: Research the issue (model, read-only)
+      # Default permission mode: in a run with no one to ask, a tool not on
+      # --allowedTools is denied, never reviewed. The allow-list is the
+      # read-only gh.sh wrapper and Read of the verdict.
+      - name: Research the issue (model, read-only token)
         id: model
         if: steps.gate.outputs.run == 'true'
         timeout-minutes: 10
@@ -222,22 +226,21 @@ jobs:
           anthropic_service_account_id: ${{ inputs.anthropic_service_account_id }}
           anthropic_workspace_id: ${{ inputs.anthropic_workspace_id }}
           prompt: "/triage-issue REPO: ${{ github.repository }} ISSUE: ${{ inputs.issue_number }} VERDICT: .refine/verdict.json"
-          # The command's allowed-tools name only gh.sh and Read; auto mode
-          # reviews anything else, and the disallowed tools never run.
           claude_args: |
             --model ${{ inputs.model }}
             --max-turns 30
-            --permission-mode auto
+            --allowedTools "Bash(./.refine-toolkit/skills/refine/scripts/gh.sh:*),Read(./.refine/**)"
             --disallowedTools "WebFetch,WebSearch,Write,Edit,MultiEdit,NotebookEdit"
             --json-schema '${{ steps.gate.outputs.schema }}'
 
-      - name: Apply the plan (no model)
+      - name: Save the plan
+        id: save
         if: steps.model.outcome == 'success' && steps.model.outputs.structured_output != ''
         env:
           PLAN: ${{ steps.model.outputs.structured_output }}
         run: |
           printf '%s' "$PLAN" > .refine/plan.json
-          python3 "$APPLY" triage --verdict .refine/verdict.json --issue "$ISSUE" --plan .refine/plan.json
+          echo "planned=true" >> "$GITHUB_OUTPUT"
 
       - name: Report final status
         if: always() && steps.gate.outputs.run == 'true'
@@ -247,18 +250,106 @@ jobs:
           EXEC_FILE: ${{ steps.model.outputs.execution_file }}
         run: bash .refine-toolkit/skills/refine/scripts/check-model-run.sh
 
+      - name: Hand the verdict and plan to the apply job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: refine-triage-plan-${{ inputs.issue_number }}-${{ github.run_attempt }}
+          path: .refine/
+          if-no-files-found: error
+
+  # No model runs here. The plan is validated against its schema before
+  # anything is applied, and every write goes through the write scripts.
+  apply:
+    needs: plan
+    if: inputs.enabled && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    concurrency:
+      group: refine-triage-apply-${{ github.repository }}-${{ inputs.issue_number }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      ISSUE: ${{ inputs.issue_number }}
+      REFINE_MODE: ${{ inputs.mode }}
+      REFINE_READY_LABEL: ${{ inputs.ready_label }}
+      REFINE_TRIAGE_LABEL: ${{ inputs.triage_label }}
+      REFINE_ALLOWED_LABELS: ${{ inputs.allowed_labels }}
+      REFINE_MAX_POINTS: ${{ inputs.max_points }}
+      REFINE_QUESTIONS_ISSUE: ${{ inputs.questions_issue }}
+      CLAUDE_CODE_SCRIPT_CAPS: '{"edit-issue-labels.sh":1,"write-size-marker.sh":1,"add-blocked-by.sh":5,"post-questions.sh":1}'
+      APPLY: .refine-toolkit/skills/refine/scripts/refine_apply.py
+    steps:
+      # The default branch only, never code from an issue or a pull request.
+      - name: Check out the repository (default branch)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      # In the toolkit's own repository the scripts come from the
+      # default-branch checkout above. Elsewhere they come from the toolkit
+      # at a release tag (v<semver>) or a full commit sha. A branch name is
+      # refused. Only the sha is immutable: a tag can be moved, so pin the
+      # sha when the toolkit must not change under you.
+      - name: Validate the toolkit ref
+        id: toolkit
+        env:
+          TOOLKIT_REPO: ${{ inputs.toolkit_repository }}
+          TOOLKIT_REF: ${{ inputs.toolkit_ref }}
+        run: |
+          if [ "$TOOLKIT_REPO" = "$GITHUB_REPOSITORY" ]; then
+            echo "source=local" >> "$GITHUB_OUTPUT"
+          elif [[ "$TOOLKIT_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || "$TOOLKIT_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "source=external" >> "$GITHUB_OUTPUT"
+            echo "ref=$TOOLKIT_REF" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::toolkit_ref must be a release tag (v1.2.3) or a full commit sha, not '${TOOLKIT_REF}'."
+            exit 1
+          fi
+
+      - name: Use this repository's refinement scripts
+        if: steps.toolkit.outputs.source == 'local'
+        run: ln -s . .refine-toolkit
+
+      - name: Check out the refinement scripts
+        if: steps.toolkit.outputs.source == 'external'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ inputs.toolkit_repository }}
+          ref: ${{ steps.toolkit.outputs.ref }}
+          path: .refine-toolkit
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Fetch the verdict and plan
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: refine-triage-plan-${{ inputs.issue_number }}-${{ github.run_attempt }}
+          path: .refine
+
+      - name: Apply a settled verdict (no model)
+        if: needs.plan.outputs.model == 'false'
+        run: python3 "$APPLY" settled --verdict .refine/verdict.json --issue "$ISSUE"
+
+      - name: Apply the plan (no model)
+        if: needs.plan.outputs.planned == 'true'
+        run: python3 "$APPLY" triage --verdict .refine/verdict.json --issue "$ISSUE" --plan .refine/plan.json
+
       - name: Write the job summary
         if: always()
         run: python3 "$APPLY" summary >> "$GITHUB_STEP_SUMMARY" || true
 
-      - name: Upload the verdict, plan and actions
+      - name: Upload the actions
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
-          name: refine-triage-${{ inputs.issue_number }}-${{ github.run_attempt }}
-          path: |
-            .refine/
-            ${{ runner.temp }}/refine/actions.jsonl
+          name: refine-triage-actions-${{ inputs.issue_number }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/refine/actions.jsonl
           if-no-files-found: ignore
 
   reopen:

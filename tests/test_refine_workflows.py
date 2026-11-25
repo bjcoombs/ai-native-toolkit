@@ -27,7 +27,15 @@ CALLERS = {"refine-triage.yml": "reusable-refine-triage.yml",
            "refine-sweep.yml": "reusable-refine-sweep.yml"}
 MODEL_WORKFLOWS = ("reusable-refine-triage.yml", "reusable-refine-dedupe.yml")
 DISALLOWED = {"WebFetch", "WebSearch", "Write", "Edit", "MultiEdit", "NotebookEdit"}
-MODEL_JOBS = {"triage", "dedupe"}
+JOB_PERMISSIONS = {
+    "plan": {"contents": "read", "issues": "read", "pull-requests": "read", "id-token": "write"},
+    "apply": {"contents": "read", "issues": "write"},
+    "reopen": {"contents": "read", "issues": "write"},
+    "sweep": {"contents": "read", "issues": "write", "pull-requests": "read"},
+}
+# A scope a job may hold as write without being able to change the repository:
+# the OIDC token Workload Identity Federation exchanges for a Claude API token.
+NOT_A_REPO_WRITE = {"id-token"}
 WRITE_SCRIPTS = {p.name for p in SCRIPTS.glob("*.sh")} - {"gh.sh", "check-model-run.sh"}
 
 
@@ -63,7 +71,10 @@ def test_caller_triggers() -> None:
 @pytest.mark.parametrize("caller", sorted(CALLERS))
 def test_caller_permissions_are_issues_write_and_reads_only(caller: str) -> None:
     doc = _load(caller)
-    assert doc["permissions"] == {"contents": "read", "issues": "write", "pull-requests": "read"}
+    expected = {"contents": "read", "issues": "write", "pull-requests": "read"}
+    if caller != "refine-sweep.yml":
+        expected["id-token"] = "write"  # the plan job's OIDC token for Workload Identity Federation
+    assert doc["permissions"] == expected
     for job in doc["jobs"].values():
         assert "permissions" not in job
 
@@ -114,17 +125,11 @@ def test_reusable_is_workflow_call_only_and_safe_by_default(name: str) -> None:
     assert inputs["mode"]["default"] == "dry-run"
     assert "permissions" not in doc
     for job_id, job in doc["jobs"].items():
-        if job_id in MODEL_JOBS:
-            # Takes the caller's grant, so a caller using Workload Identity
-            # Federation can add id-token: write; a called job cannot widen it.
-            assert "permissions" not in job
-        elif job_id == "sweep":
-            assert job["permissions"] == {"contents": "read", "issues": "write", "pull-requests": "read"}
-        else:
-            assert job["permissions"] == {"contents": "read", "issues": "write"}
+        assert job["permissions"] == JOB_PERMISSIONS[job_id], job_id
         assert str(job["if"]).lstrip().startswith("inputs.enabled")
         assert isinstance(job["timeout-minutes"], int)
-        assert job["env"]["REFINE_MODE"] == "${{ inputs.mode }}"
+        if job_id != "plan":
+            assert job["env"]["REFINE_MODE"] == "${{ inputs.mode }}"
 
 
 @pytest.mark.parametrize("name", sorted(CALLERS.values()))
@@ -156,7 +161,8 @@ def test_per_issue_concurrency(name: str) -> None:
             assert job["concurrency"]["cancel-in-progress"] is False
             continue
         assert "${{ inputs.issue_number }}" in group, job_id
-        assert job["concurrency"]["cancel-in-progress"] is (job_id != "reopen")
+        # The plan job is cancelled by a newer event; a job that writes never is.
+        assert job["concurrency"]["cancel-in-progress"] is (job_id == "plan")
 
 
 @pytest.mark.parametrize("name", MODEL_WORKFLOWS)
@@ -165,7 +171,10 @@ def test_model_step_guardrails(name: str) -> None:
     assert re.fullmatch(r"anthropics/claude-code-action@[0-9a-f]{40}", step["uses"]), "pin the action to a sha"
     assert isinstance(step["timeout-minutes"], int)
     args = step["with"]["claude_args"]
-    assert "--permission-mode auto" in args
+    assert "--permission-mode" not in args, "default mode: a tool off the allow-list is denied, never reviewed"
+    allowed = re.search(r'--allowedTools "([^"]+)"', args)
+    assert allowed and allowed.group(1).split(",") == [
+        "Bash(./.refine-toolkit/skills/refine/scripts/gh.sh:*)", "Read(./.refine/**)"]
     assert "--max-turns" in args and "--json-schema" in args
     disallowed = re.search(r'--disallowedTools "([^"]+)"', args)
     assert disallowed and set(disallowed.group(1).split(",")) >= DISALLOWED
@@ -191,12 +200,16 @@ def test_model_step_gated_on_credential_and_author(name: str) -> None:
 
 @pytest.mark.parametrize("name", sorted(CALLERS.values()))
 def test_write_script_caps_name_real_scripts(name: str) -> None:
-    for job in _load(name)["jobs"].values():
+    for job_id, job in _load(name)["jobs"].items():
+        if job_id == "plan":
+            assert "CLAUDE_CODE_SCRIPT_CAPS" not in job["env"], "the plan job runs no write script"
+            continue
         caps = json.loads(job["env"]["CLAUDE_CODE_SCRIPT_CAPS"])
         assert caps and set(caps) <= WRITE_SCRIPTS
         assert all(isinstance(v, int) and v >= 1 for v in caps.values())
     if name != "reusable-refine-triage.yml":
-        close = json.loads(next(iter(_load(name)["jobs"].values()))["env"]["CLAUDE_CODE_SCRIPT_CAPS"])
+        job_id = "apply" if name == "reusable-refine-dedupe.yml" else "sweep"
+        close = json.loads(_load(name)["jobs"][job_id]["env"]["CLAUDE_CODE_SCRIPT_CAPS"])
         assert close["close-duplicate.sh"] <= 10
 
 
@@ -321,3 +334,41 @@ def test_no_cache_in_jobs_with_a_write_token(name: str) -> None:
         assert not uses.startswith("actions/cache"), uses
         assert not uses.startswith("actions/setup-"), uses
         assert "cache" not in step.get("with", {}), uses
+
+
+
+# ── the model never holds a write token (#1336 review) ───────────────────
+
+@pytest.mark.parametrize("name", MODEL_WORKFLOWS)
+def test_model_job_has_no_write_scope(name: str) -> None:
+    jobs = _load(name)["jobs"]
+    model_jobs = [j for j, job in jobs.items()
+                  if any("claude-code-action" in str(s.get("uses", "")) for s in job["steps"])]
+    assert model_jobs == ["plan"]
+    writes = {k for k, v in jobs["plan"]["permissions"].items() if v == "write"} - NOT_A_REPO_WRITE
+    assert writes == set()
+
+
+@pytest.mark.parametrize("name", MODEL_WORKFLOWS)
+def test_model_step_sees_only_the_read_only_job_token(name: str) -> None:
+    plan = _load(name)["jobs"]["plan"]
+    step = _model_step(name)
+    assert step["with"]["github_token"] == "${{ github.token }}"
+    assert plan["env"]["GH_TOKEN"] == "${{ github.token }}"
+    assert "env" not in step
+    text = yaml.safe_dump(plan)
+    assert "secrets.GITHUB_TOKEN" not in text and "REFINE_MODE" not in text
+
+
+@pytest.mark.parametrize("name", MODEL_WORKFLOWS)
+def test_apply_job_runs_no_model_and_reads_the_plan_artifact(name: str) -> None:
+    jobs = _load(name)["jobs"]
+    apply = jobs["apply"]
+    assert apply["needs"] == "plan" and "needs.plan.result == 'success'" in apply["if"]
+    assert not any("claude-code-action" in str(s.get("uses", "")) for s in apply["steps"])
+    upload = next(s for s in jobs["plan"]["steps"] if str(s.get("uses", "")).startswith("actions/upload-artifact@"))
+    download = next(s for s in apply["steps"] if str(s.get("uses", "")).startswith("actions/download-artifact@"))
+    assert upload["with"]["name"] == download["with"]["name"]
+    assert re.fullmatch(r"actions/download-artifact@[0-9a-f]{40}", download["uses"])
+    runs = " ".join(str(s.get("run", "")) for s in apply["steps"])
+    assert "--plan .refine/plan.json" in runs, "the plan is validated by refine_apply.py before any write"

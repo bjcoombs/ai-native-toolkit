@@ -13,12 +13,16 @@ on:
   issue_comment:
     types: [created]
 
-# pull-requests: read lets refine.py read open pull requests for its overlap
-# check; nothing here writes to a pull request.
+# The union of what the reusable workflow's jobs declare. The model runs in
+# a job with `issues: read`; only the apply job, which runs no model, gets
+# `issues: write`. pull-requests: read lets refine.py read open pull requests
+# for its overlap check. id-token: write is the OIDC token Workload Identity
+# Federation exchanges; it writes nothing to the repository.
 permissions:
   contents: read
   issues: write
   pull-requests: read
+  id-token: write
 
 jobs:
   triage:

@@ -9,6 +9,7 @@ makes every change through `refine_write.Writer`, which holds the rules.
     refine_apply.py route  --verdict V --issue N    # prints model=true|false
     refine_apply.py settled --verdict V --issue N   # a settled issue, no model
     refine_apply.py triage --verdict V --issue N --plan P
+    refine_apply.py dedupe-route --verdict V --issue N   # prints model=true|false, writes nothing
     refine_apply.py dedupe-exact --verdict V --issue N   # prints model=true|false
     refine_apply.py dedupe --verdict V --issue N --plan P
     refine_apply.py sweep  --verdict V
@@ -20,8 +21,10 @@ makes every change through `refine_write.Writer`, which holds the rules.
 - **triage.** Size marker, blocked-by edges, labels (the ready label only
   through the plan's `ready` and the rule in `refine_write.ready_blocker`),
   then the plan's questions in one batch.
-- **dedupe-exact / dedupe.** An exact, closable pair is closed with no model;
-  otherwise the model's candidates are named in one comment, never closed.
+- **dedupe-route / dedupe-exact / dedupe.** An exact, closable pair is closed
+  with no model; otherwise the model's candidates are named in one comment,
+  never closed. `dedupe-route` makes the same decision with no write, for the
+  read-only job that runs the model.
 - **sweep.** The scheduled run: ready label on settled `ready` issues, exact
   duplicate closes under the weekly cap, and the ready-buffer report.
 
@@ -231,7 +234,7 @@ def _read(path: str) -> Json:
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="refine_apply.py", description="Apply refiner plans (issue #1321).")
     sub = p.add_subparsers(dest="command", required=True)
-    for name in ("route", "settled", "triage", "dedupe-exact", "dedupe"):
+    for name in ("route", "settled", "triage", "dedupe-route", "dedupe-exact", "dedupe"):
         s = sub.add_parser(name)
         s.add_argument("--verdict", required=True)
         s.add_argument("--issue", type=int, required=True)
@@ -250,6 +253,9 @@ def run(args: argparse.Namespace, runner: Runner) -> int:
     verdict = _read(args.verdict)
     if args.command == "route":
         print(f"model={'true' if route(verdict, args.issue) else 'false'}")
+        return 0
+    if args.command == "dedupe-route":
+        print(f"model={'false' if exact_pair(verdict, args.issue) else 'true'}")
         return 0
     w = Writer(settings, runner)
     if args.command == "settled":
