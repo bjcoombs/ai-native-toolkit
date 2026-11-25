@@ -222,6 +222,10 @@ def test_a_disabled_caller_registers_no_route(tmp_path: Path) -> None:
     ("python -m pip install deepeval", []),
     ("npm install -g @anthropic-ai/claude-code", []),
     ("poetry add ragas", []),
+    ("sudo python3 -m pip install ragas", []),
+    ("docker run img sh -c \"pip install ragas\"", []),
+    ("uv pip install deepeval", []),
+    ("yarn global add promptfoo", []),
 ])
 def test_install_is_read_in_command_position_only(command: str, signs: list[str]) -> None:
     assert _signs(f"jobs:\n  j:\n    steps:\n      - run: {command}\n") == signs

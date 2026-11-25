@@ -15,7 +15,7 @@ Claude Code CLI in print mode (``agent_cli``: ``claude -p``); a step uses an age
 ``with:``, ``secrets:`` or ``variables:`` entry of the job or the workflow names a model-provider
 secret (``provider_secret``, ``PROVIDER_SECRETS``; a step ``name:`` naming one is not a sign); or a
 command runs ``pytest -m eval`` or a path under ``evals/`` (``eval_tests``). An install line
-(``pip install ragas``, the subcommand in command position, quoted text dropped) is not a sign,
+(``pip install ragas``, a package manager's install or add subcommand) is not a sign,
 and a step or job whose ``if:`` is never true is not read.
 
 **A gate** (``GATES``): ``paths`` (``paths:`` or ``paths-ignore:`` on every ordinary event that
@@ -117,10 +117,11 @@ _EVAL_TESTS = re.compile(r"\bpytest\b[^;&|]*\s-m\s+[\"']?evals?\b|\b(?:pytest|py
 # A path a runner is told to leave out (``pytest --ignore=evals/``): keeping evals out of a job is the
 # remedy, never a sign.
 _EXCLUDED = re.compile(r"--(?:ignore|ignore-glob|deselect|exclude)(?:=|\s+)\S+")
-# An install or add subcommand in command position (``pip install``, ``python -m pip install``,
-# ``poetry add``), read with quoted text dropped: never a word of a prompt (``claude -p 'add tests'``).
-_INSTALL = re.compile(r"(?:^|[;&|(]\s*)(?:(?!-p\b|--print\b)[\w.@/=:+-]+\s+){1,3}(?:install|add)(?=\s|$)")
-_QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
+# An install or add subcommand of a package manager (``pip install``, ``sudo python3 -m pip install``,
+# ``poetry add``, ``sh -c "pip install x"``), never a bare word of a prompt (``claude -p 'add tests'``).
+_INSTALL = re.compile(r"(?:^|[\s;&|(\"'/])(?:pip3?|pipx|uv|poetry|pdm|conda|mamba|micromamba|npm|pnpm|yarn|bun|"
+                      r"deno|apt(?:-get)?|apk|dnf|yum|brew|gem|cargo|go|composer|dotnet)"
+                      r"\s+(?:(?:-\S+|global|tool|pip)\s+){0,3}(?:install|add)(?=[\s\"']|$)")
 # The keys whose entries hand a job a secret; a key named anywhere else (a step ``name:``) is no sign.
 _SECRET_KEYS = frozenset({"env", "with", "secrets", "variables"})
 _SECRET = re.compile(r"\b(?:" + "|".join(PROVIDER_SECRETS) + r")\b")
@@ -230,7 +231,7 @@ def signs_in(tree: IndentTree, lines: range) -> list[str]:
                 found.add("provider_secret")
             continue
         command = raw if not line.structural or line.dash or line.key in _BODY_KEYS else ""
-        if not command or command[:1] in ("|", ">") or _INSTALL.search(_QUOTED.sub("''", command)):
+        if not command or command[:1] in ("|", ">") or _INSTALL.search(command):
             continue
         if _EVAL.search(command):
             found.add("eval_harness")

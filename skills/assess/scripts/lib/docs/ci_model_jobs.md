@@ -20,8 +20,9 @@ runs nobody priced.
 | `eval_tests` | a command running `pytest -m eval` / `-m evals`, or a runner (`pytest`, `python`, `node`, `npx` ...) given a path under `evals/` |
 
 A command line that installs (`pip install ragas`, `python -m pip install`, `poetry add`) is never a sign. The
-install or add subcommand is read in command position only, with quoted text dropped, so a prompt
-(`claude -p 'add regression tests'`) still shows the command. Nor is an `evals/` path a runner is told to leave out
+install or add word counts only as the subcommand of a package manager (`pip`, `uv`, `npm`, `yarn`,
+`poetry`, `apt-get` ...), with up to three options or `global` / `tool` / `pip` between them, also
+inside `sh -c "..."`. A prompt word (`claude -p 'add regression tests'`) does not hide the command. Nor is an `evals/` path a runner is told to leave out
 (`--ignore`, `--ignore-glob`, `--deselect`, `--exclude`): keeping evals out of a job is the remedy. A secret named inside a command is
 not a sign either. A workflow-level `env:` secret reaches every job, so it is a sign of each. A step
 that `uses:` a repo-local action (`./.github/actions/x`) carries the signs of that action's
