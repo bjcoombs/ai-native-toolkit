@@ -220,6 +220,8 @@ FULL_RUN_ONLY_REASONS: frozenset[str] = frozenset(
 # ``review_automation`` and ``ci_checks`` are offline too, but read the private network
 # spec ``gitlab_merged_ci`` (lib/hosting/gitlab_ci_lint.py, #796): GitLab's merged CI
 # configuration where an include did not resolve offline.
+# ``ci_checks`` also reads ``gitlab_include_renames`` (lib/hosting/gitlab_include_renames.py,
+# #1357): an include project with no clone, looked up across a rename.
 # ``secrets_guard`` (lib/secrets_guard.py, #1173) is offline too, but reads
 # ``github_secret_scanning``, so the pass rebuilds it from the read setting.
 PLATFORM_SCANS: tuple[str, ...] = ("review_reality", "delivery", "review_evidence",

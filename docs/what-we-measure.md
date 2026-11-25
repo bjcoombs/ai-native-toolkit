@@ -394,10 +394,10 @@ It reads whether CI runs tests or linters on ordinary changes in a way that can 
 
 Whether a GitHub Actions or GitLab CI line runs a test or lint command. Whether such a line can fail its job on ordinary changes: not masked, and not outside the ordinary triggers. Whether such a line runs a linter. The value is null when no check is found but a CI file pulls its jobs from elsewhere. It is also null when no check is found and the tree tracks a CI file the scan does not parse. It is null under --platform when most sampled merged pull requests carry an external CI check. It is null when a root Prow OWNERS_ALIASES is the only CI evidence.
 
-- Collector: `core.ci_checks`, reading `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci`.
+- Collector: `core.ci_checks`, reading `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci`, `gitlab_include_renames`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `ci_checks.basis` token, `ci_checks.enforced_basis` token, `ci_checks.includes.id` id, `ci_checks.includes.kind` token, `ci_checks.includes.ref_basis` token, `ci_checks.includes.status` token, `ci_checks.lint_basis` token, `ci_checks.merged_config` token, `ci_checks.merged_config_reason` token, `ci_checks.reason` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `ci_checks.basis` token, `ci_checks.enforced_basis` token, `ci_checks.includes.id` id, `ci_checks.includes.kind` token, `ci_checks.includes.ref_basis` token, `ci_checks.includes.rename` token, `ci_checks.includes.status` token, `ci_checks.lint_basis` token, `ci_checks.merged_config` token, `ci_checks.merged_config_reason` token, `ci_checks.reason` drop.
 - Used by: row `layer-3-linters`, row `layer-5-ci`.
 - Evidence: `ci_checks.enforced_check_runs` ci_executed (verified), `ci_checks.lint_runs` ci_executed (verified).
 - Not measured when:
@@ -1143,7 +1143,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `backlog_ready` | Backlog kept agent-ready (intake configuration) | `repo_root` | `backlog_ready` | no |
 | `broken_instruction_refs` | Broken instruction references | `doc_graph`, `instruction_grading` | `broken_instruction_refs` | no |
 | `churn_degenerate` | Degenerate churn history | `doc_staleness` | `churn_degenerate` | no |
-| `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci` | `ci_checks` | no |
+| `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci`, `gitlab_include_renames` | `ci_checks` | no |
 | `ci_model_jobs` | Model-backed CI jobs | `repo_root`, `ghsync_root` | `ci_model_jobs` | no |
 | `claude_config` | Claude Code configuration | `repo_root`, `scope`, `excludes` | `claude_config` | no |
 | `config_drift` | Configuration drift | `repo_root` | `config_drift` | yes |
@@ -1170,6 +1170,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `gate_cost_estimate` | Gate cost estimate | `repo_root` | `gate_cost_estimate` | yes |
 | `ghsync_root` | ghsync root for GitLab includes | `repo_root` | private input | no |
 | `github_secret_scanning` | GitHub secret scanning | `repo_root` | `github_secret_scanning` | yes |
+| `gitlab_include_renames` | GitLab CI include projects looked up across a rename | `repo_root`, `ghsync_root` | private input | yes |
 | `gitlab_merged_ci` | GitLab merged CI configuration | `repo_root`, `ghsync_root` | private input | yes |
 | `gitlab_note_facts` | GitLab merge request notes | `merged_sample`, `fleet_config` | private input | yes |
 | `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope` | `guardrails` | no |

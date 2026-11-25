@@ -30,7 +30,7 @@ from `skills/assess`.
 """
 from __future__ import annotations
 
-from lib.ci.ci_includes import KINDS, STATUSES
+from lib.ci.ci_includes import KINDS, RENAME_BASES, STATUSES
 from lib.ci.merged_ci import MERGED_STATUSES
 from lib.run_context_types import JsonDict
 
@@ -199,6 +199,12 @@ CI_CHECKS: JsonDict = {
                                     "HEAD (no pin), or from the work tree; null when not "
                                     "resolved."),
                 "depth": _field(_INT, "Include level: 1 for the repository's own include."),
+                "rename": _field({"enum": [*RENAME_BASES, None]},
+                                 "A project or component with no clone at its written path "
+                                 "(#1357): followed (read from the clone at the path GitLab's "
+                                 "API answered under), checked (looked up, no clone at a new "
+                                 "path) or not_checked (offline, or not answered); null for "
+                                 "every other include."),
             }}},
             "One record per include item, nested includes after their parent; no file name "
             "or text."),

@@ -149,7 +149,7 @@ def test_a_mirror_of_the_gate_with_its_own_input_defaults_reads_settled(tmp_path
     app = _app(tmp_path, "$CI_SERVER_FQDN/Other/AI-Native-Toolkit/assess-gate@3.0.0")
     block = scan_ci_checks(app, root)
     assert block["includes"] == [{"kind": "component", "id": "gitlab_component:other/ai-native-toolkit/assess-gate",
-                                  "status": "toolkit_gate", "ref_basis": None, "depth": 1}]
+                                  "status": "toolkit_gate", "ref_basis": None, "depth": 1, "rename": None}]
     assert resolve_includes(app, root).unresolved == 0
     assert block["test_or_lint_configured"] is False
     config = merged_config(app, root)

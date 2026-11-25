@@ -63,6 +63,28 @@ include it is: the secrets guard counts only the Secret-Detection include's own 
   URL; a `component:` settles only through `is_toolkit_gate_text`, below. Its slot defines
   `TOOLKIT_GATE_JOBS`, so a same-named job stays `include_order`.
 
+## Renamed projects (#1357)
+
+A `project:` or `component:` include written against a project's old path has no clone there
+once the project is renamed or moved. `resolve_includes(repo_root, ghsync_root, renames)` and
+`merged_config(...)` take an `IncludeRenames`, made under `--platform` by the private network
+spec `gitlab_include_renames` (`lib/hosting/gitlab_include_renames.py`): each include project
+with no clone is read through `glab api projects/<path>`, and GitLab answers an old path with the
+project at its new one. A path answered under a new path that is cloned in the ghsync root reads
+from that clone; nothing is cloned or checked out at the old path. The record keeps the include
+id as written.
+
+| `rename` | Meaning |
+|----------|---------|
+| `followed` | No clone at the written path; read from the clone at the path the API answered under. |
+| `checked` | No clone at the written path; the API answered (or said not found), and no clone exists at a new path. |
+| `not_checked` | No clone at the written path, and no lookup answered: an offline run, a refused read, or no GitLab remote. |
+| null | Every other include, a cloned project included. |
+
+Only `ci_checks` reads the lookup. `review_automation`, `secrets_guard`, `ci_model_jobs` and the
+CI lint request still resolve by the written path; under `--platform` the first two also read
+GitLab's merged configuration, which follows the rename on GitLab's side.
+
 ## Include resolution (#766)
 
 GitLab CI includes resolved offline, from the ghsync root (issue #766).

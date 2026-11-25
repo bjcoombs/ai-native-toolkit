@@ -10,7 +10,7 @@ import pytest
 import assess_signals
 from lib.ci import ci_includes
 from lib.ci.ci_checks import scan_ci_checks
-from lib.ci.ci_includes import IncludeItem, include_items, resolve_includes
+from lib.ci.ci_includes import IncludeItem, IncludeRenames, include_items, resolve_includes
 from lib.counts_only.content_free import counts_only_scans
 from lib.ci.review_automation import scan_review_automation
 
@@ -98,7 +98,7 @@ def test_a_project_include_resolves_from_the_root_and_runs_the_check(tmp_path: P
     assert (block["test_or_lint_configured"], block["basis"]) == (True, "check_command")
     assert (block["check_commands"], block["included_check_commands"]) == (0, 1)
     assert block["includes"] == [{"kind": "project", "id": "gitlab_project:grp/ci-templates",
-                                  "status": "resolved", "ref_basis": "ref", "depth": 1}]
+                                  "status": "resolved", "ref_basis": "ref", "depth": 1, "rename": None}]
     assert (block["resolved_includes"], block["unresolved_includes"]) == (1, 0)
 
 
@@ -190,7 +190,7 @@ def test_a_component_resolves_from_its_project_clone(tmp_path: Path) -> None:
     block = scan_ci_checks(app, root)
     assert block["test_or_lint_configured"] is True
     assert block["includes"][0] == {"kind": "component", "id": "gitlab_component:grp/comps/unit",
-                                    "status": "resolved", "ref_basis": "ref", "depth": 1}
+                                    "status": "resolved", "ref_basis": "ref", "depth": 1, "rename": None}
 
 
 def test_a_cycle_reads_each_file_once_and_depth_is_bounded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -224,7 +224,7 @@ def test_a_differently_cased_project_path_reads_the_clone_on_every_os(tmp_path: 
     root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL}, ci=ci)
     block = scan_ci_checks(app, root)
     assert block["includes"] == [{"kind": "project", "id": "gitlab_project:grp/ci-templates",
-                                  "status": "resolved", "ref_basis": "ref", "depth": 1}]
+                                  "status": "resolved", "ref_basis": "ref", "depth": 1, "rename": None}]
     assert block["test_or_lint_configured"] is True
     # The clone is named with its on-disk case, so the walk sees the same path on every OS.
     assert ci_includes._clone(root, "Grp/CI-Templates") == _clone(root, "grp/ci-templates").resolve()
@@ -234,6 +234,55 @@ def test_a_different_project_path_still_does_not_match(tmp_path: Path) -> None:
     ci = "include:\n  - project: Grp/CI-Template\n    file: /templates/test.yml\n"
     root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL}, ci=ci)
     assert scan_ci_checks(app, root)["includes"][0]["status"] == "not_cloned"
+
+
+# --- a project renamed since the include was written (#1357) -------------------
+
+OLD_INCLUDE = "include:\n  - project: Grp/Old-Templates\n    file: /templates/test.yml\n    ref: main\n"
+MOVED = IncludeRenames(frozenset({"grp/old-templates"}), (("grp/old-templates", "grp/ci-templates"),))
+
+
+def test_an_old_path_the_api_redirects_to_a_cloned_project_resolves_to_that_clone(tmp_path: Path) -> None:
+    root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL}, ci=OLD_INCLUDE)
+    block = scan_ci_checks(app, root, include_renames=MOVED)
+    assert block["includes"] == [{"kind": "project", "id": "gitlab_project:grp/old-templates",
+                                  "status": "resolved", "ref_basis": "ref", "depth": 1,
+                                  "rename": "followed"}]
+    assert (block["test_or_lint_configured"], block["included_check_commands"]) == (True, 1)
+    # no checkout at the old path: the clone at the new path is the one read
+    assert not (root / "grp" / "old-templates").exists()
+
+
+def test_offline_the_old_path_reads_not_cloned_and_says_the_rename_was_not_checked(tmp_path: Path) -> None:
+    root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL}, ci=OLD_INCLUDE)
+    block = scan_ci_checks(app, root)
+    assert [(r["status"], r["rename"]) for r in block["includes"]] == [("not_cloned", "not_checked")]
+    assert block["test_or_lint_configured"] is None
+
+
+def test_a_path_looked_up_with_no_clone_at_a_new_path_says_checked(tmp_path: Path) -> None:
+    root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL}, ci=OLD_INCLUDE)
+    looked = IncludeRenames(frozenset({"grp/old-templates"}))
+    elsewhere = IncludeRenames(frozenset({"grp/old-templates"}), (("grp/old-templates", "grp/gone"),))
+    unanswered = IncludeRenames(frozenset({"grp/other"}))
+    for renames, rename in ((looked, "checked"), (elsewhere, "checked"), (unanswered, "not_checked")):
+        records = resolve_includes(app, root, renames).includes
+        assert [(r["status"], r["rename"]) for r in records] == [("not_cloned", rename)]
+
+
+def test_a_renamed_component_reads_its_new_project_clone(tmp_path: Path) -> None:
+    root, app = _root_with_template(tmp_path, {"README.md": "x\n"},
+                                    ci="include:\n  - component: gl.test/grp/old-comps/unit@1.0\n")
+    _commit(_clone(root, "grp/comps"), {"templates/unit/template.yml": TEST_TPL}, tag="1.0")
+    renames = IncludeRenames(frozenset({"grp/old-comps"}), (("grp/old-comps", "grp/comps"),))
+    records = resolve_includes(app, root, renames).includes
+    assert [(r["status"], r["rename"]) for r in records] == [("resolved", "followed")]
+
+
+def test_the_rename_token_survives_counts_only_output(tmp_path: Path) -> None:
+    root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL}, ci=OLD_INCLUDE)
+    out = counts_only_scans({"ci_checks": scan_ci_checks(app, root, include_renames=MOVED)})
+    assert out["ci_checks"]["includes"][0]["rename"] == "followed"  # a dropped field fails here
 
 
 def test_two_clones_differing_only_in_case_are_ambiguous(tmp_path: Path) -> None:
@@ -451,7 +500,7 @@ def test_the_gate_include_runs_no_project_tests(tmp_path: Path) -> None:
                                     "build:\n  script:\n    - make build\n"})
     block = scan_ci_checks(app, None)
     assert block["includes"] == [{"kind": "remote", "id": None, "status": "toolkit_gate",
-                                  "ref_basis": None, "depth": 1}]
+                                  "ref_basis": None, "depth": 1, "rename": None}]
     assert block["unresolved_includes"] == 0 and block["resolved_includes"] == 1
     assert block["test_or_lint_configured"] is False
     assert resolve_includes(app, None).unresolved == 0

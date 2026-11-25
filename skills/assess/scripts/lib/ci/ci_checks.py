@@ -93,8 +93,11 @@ GitLab includes are resolved offline where the included file is on disk
 ``ghsync_root`` (``assess_signals --ghsync-root``; ``fleet.py`` passes its
 ROOT). Each resolved file's lines are classified the same way and counted in
 ``included_check_commands``. ``includes`` lists one record per include item
-(kind, id, status, ref_basis, depth; never a file name or text), with the
-``resolved_includes`` / ``unresolved_includes`` counts. The toolkit's own regression gate
+(kind, id, status, ref_basis, depth, rename; never a file name or text), with the
+``resolved_includes`` / ``unresolved_includes`` counts. Under ``--platform`` an include project
+with no clone at its written path is looked up through the API and, where GitLab answers under a
+new path that is cloned, read from that clone (``gitlab_include_renames``, #1357); ``rename``
+says ``followed``, ``checked`` or ``not_checked``. The toolkit's own regression gate
 template (status ``toolkit_gate``, ``ci_includes.SETTLED``, #1152) counts as resolved: its
 one job runs no project tests. A component counts only when its cloned file is that template;
 a name alone stays unread (#1179).
@@ -382,7 +385,8 @@ from typing import Literal, NotRequired, TypedDict
 from lib.ci.ci_action_inputs import Inputs, ReadLocal, read_inputs
 from lib.ci.ci_expressions import follow_workflow
 from lib.ci.ci_continuations import join_continued
-from lib.ci.ci_includes import SETTLED, IncludeRecord, Resolution, merged_config, resolve_includes
+from lib.ci.ci_includes import (
+    SETTLED, IncludeRecord, IncludeRenames, Resolution, merged_config, resolve_includes)
 from lib.ci.ci_merged_view import merged_view
 from lib.ci.ci_lint_gates import line_compiler_gate, line_dotnet_build, lint_gate, rewrite_gated
 from lib.ci.ci_lint_inputs import NO_INPUTS, LintInputs, read_lint_inputs
@@ -592,11 +596,15 @@ def _local_reader(root: Path, tracked: frozenset[str]) -> ReadLocal:
 @reads_pdm_scripts   # a [tool.pdm.scripts] name is a script, not a program (#1046)
 @reads_runner_envs   # tox -e lint / nox -s lint read through to their commands (#1180)
 def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
-                   merged_ci: object = None, external_ci: object = None) -> CiChecksBlock:
+                   merged_ci: object = None, external_ci: object = None,
+                   include_renames: object = None) -> CiChecksBlock:
     """Build the ``ci_checks`` block for the repository at ``repo_root``. ``merged_ci`` is the
-    ``gitlab_merged_ci`` reading (``lib/hosting/gitlab_ci_lint.py``) and ``external_ci`` the
-    ``external_ci`` one (``lib/external_ci.py``); anything else is not read."""
+    ``gitlab_merged_ci`` reading (``lib/hosting/gitlab_ci_lint.py``), ``external_ci`` the
+    ``external_ci`` one (``lib/external_ci.py``) and ``include_renames`` the
+    ``gitlab_include_renames`` one (``lib/hosting/gitlab_include_renames.py``, #1357); anything
+    else is not read."""
     root = repo_root.resolve()
+    renames = include_renames if isinstance(include_renames, IncludeRenames) else None
     merged = as_merged(merged_ci)
     tracked = repo_files(root)
     files = ci_config_files(tracked)
@@ -609,7 +617,7 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     included = 0
     elsewhere = 0  # files whose pulled jobs this run cannot read
     partial_merge = False  # the merged configuration may lack jobs (a rules: include, a child pipeline)
-    resolution = resolve_includes(root, ghsync_root) if any(f in CI_CONFIG_FILES for f in files) else None
+    resolution = resolve_includes(root, ghsync_root, renames) if any(f in CI_CONFIG_FILES for f in files) else None
     reader = _local_reader(root, tracked)
     followed = {rel: follow_workflow(read_config(root, rel), reader)
                 for rel in files if rel not in CI_CONFIG_FILES}   # #923, #1164, #1165
@@ -645,7 +653,7 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
                                               runs_missing(_line_runs_lint))
     ) + (_line_may_lint, _line_may_check, line_compiler_gate, line_dotnet_build)
     # GitLab's merge (#1180): jobs whose keys come from several places read as merged.
-    config = merged_config(root, ghsync_root) if resolution is not None else None
+    config = merged_config(root, ghsync_root, renames) if resolution is not None else None
     view = merged_view(config) if config is not None and config.sources[0] == texts.get(".gitlab-ci.yml") else None
     tallies = [_trigger_tally(view.texts[0] if view and rel in CI_CONFIG_FILES else texts[rel],
                               workflows.get(rel), tests, inputs[rel].declared,

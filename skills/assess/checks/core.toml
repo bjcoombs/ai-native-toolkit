@@ -95,6 +95,7 @@ fragments = [
   "review_automation",
   "review_evidence",
   "external_ci",
+  "gitlab_include_renames",
   "ci_checks",
   "agent_building",
   "layer_grades",

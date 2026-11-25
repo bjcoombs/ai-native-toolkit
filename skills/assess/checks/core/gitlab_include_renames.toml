@@ -1,0 +1,16 @@
+# Check manifest fragment: the gitlab_include_renames collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.gitlab_include_renames"
+kind = "collector"
+title = "GitLab CI include projects looked up across a rename"
+issues = [1357]
+callable = "lib.hosting.gitlab_include_renames:read_include_renames"
+offline_callable = "lib.hosting.gitlab_include_renames:no_include_renames"
+publishes = []
+reads = ["repo_root", "ghsync_root"]
+stage = "post_offers"
+private = true
+network = true
+revision = 1

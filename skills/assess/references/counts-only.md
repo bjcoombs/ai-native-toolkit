@@ -259,6 +259,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `ci_checks.includes.id` | external id (hashed when hashing is on) |
 | `ci_checks.includes.status` | token |
 | `ci_checks.includes.ref_basis` | token |
+| `ci_checks.includes.rename` | token |
 | `ci_checks.merged_config` | token |
 | `ci_checks.merged_config_reason` | token |
 

@@ -15,6 +15,14 @@ never published. ``resolve_includes(repo_root, ghsync_root)`` returns a ``Resolu
 ``files`` (``IncludedFile(text, depth, line)``), ``includes``, ``root`` (the repository's own
 file text) and ``slots``, GitLab's merge order (#1180).
 
+**Renamed projects** (#1357): ``resolve_includes(..., renames)`` takes the ``IncludeRenames``
+the ``--platform`` lookup made (``lib/hosting/gitlab_include_renames.py``). A project with no
+clone at its written path that the API answered for under a new path reads from the clone at
+that new path, never a checkout at the old one. Each ``project`` / ``component`` record with no
+clone at its written path carries ``rename``: ``followed`` (read through the new path),
+``checked`` (looked up, no clone at a new path) or ``not_checked`` (offline, or not answered);
+every other record has ``rename`` null.
+
 **The merged configuration** (#1180): ``merged_config(repo_root, ghsync_root)`` applies
 GitLab's precedence across the root file and every included file. Included files merge in
 order, a nested include before the file that includes it, and the root file last, so a later
@@ -28,9 +36,9 @@ duplicate key (``unreadable``), an ``extends:`` parent not found (``extends_miss
 or more than 11 levels, an unreadable ``inherit:``. ``open`` says an include this run could
 not read may also define the job. Line readers use ``lib.ci.ci_merged_view``.
 
-Deterministic for fixed checkouts; read only (``GIT_OPTIONAL_LOCKS=0``); no network.
+Deterministic for fixed checkouts and renames; read only (``GIT_OPTIONAL_LOCKS=0``); no network.
 Full reference: lib/docs/ci_includes.md. Tests: ``tests/test_ci_includes.py``,
-``tests/test_ci_merged_config.py``.
+``tests/test_ci_merged_config.py``, ``tests/test_ci_include_renames.py``.
 """
 from __future__ import annotations
 
@@ -54,6 +62,10 @@ MAX_DEPTH = 5
 MAX_FILES = 50
 
 RefBasis = Literal["ref", "head", "worktree"]
+# A project include with no clone at its written path (#1357): read through the path the API
+# redirected it to, looked up with no clone found there, or not looked up (offline).
+RenameBasis = Literal["followed", "checked", "not_checked"]
+RENAME_BASES: tuple[RenameBasis, ...] = ("followed", "checked", "not_checked")
 IncludeStatus = Literal[
     "resolved", "toolkit_gate", "no_root", "not_cloned", "file_missing", "not_offline", "glob", "bad_path",
     "depth_limit", "file_limit", "unparsed", "ref_missing",
@@ -72,6 +84,23 @@ class IncludeRecord(TypedDict):
     status: IncludeStatus
     ref_basis: RefBasis | None  # how the file was read; None when not resolved
     depth: int  # 1: the repository's own .gitlab-ci.yml names it
+    rename: RenameBasis | None  # #1357: set only on a project or component with no clone at its path
+
+
+@dataclass(frozen=True)
+class IncludeRenames:
+    """The ``--platform`` project lookup (#1357): ``checked`` holds every project path the API
+    answered for (lower-cased), and ``moved`` each one it answered under another path, as
+    ``(old, new)`` pairs. Hashable, so ``resolve_includes`` stays cached."""
+
+    checked: frozenset[str] = frozenset()
+    moved: tuple[tuple[str, str], ...] = ()
+
+    def basis(self, project: str) -> RenameBasis:
+        return "checked" if project.lower() in self.checked else "not_checked"
+
+    def target(self, project: str) -> str | None:
+        return next((new for old, new in self.moved if old == project.lower()), None)
 
 
 @dataclass(frozen=True)
@@ -262,12 +291,25 @@ def _clone(root: Path, project: str) -> Path | None:
     return resolved
 
 
-def _project_source(root: Path, project: str, ref: str | None) -> _Source | IncludeStatus:
+def _project_source(root: Path, project: str, ref: str | None,
+                    renames: IncludeRenames | None = None
+                    ) -> tuple[_Source | IncludeStatus, RenameBasis | None]:
     """The clone and commit an item reads, or why it cannot: ``not_cloned``, or
-    ``ref_missing`` for a named ref the clone does not hold or that is no plain ref name."""
-    clone = _clone(root, project)
+    ``ref_missing`` for a named ref the clone does not hold or that is no plain ref name. With
+    no clone at ``project``, a clone at the path the API moved it to (#1357), and the rename
+    basis; None when the written path is cloned."""
+    clone, rename = _clone(root, project), None
     if clone is None:
-        return "not_cloned"
+        rename = renames.basis(project) if renames is not None else "not_checked"
+        moved = renames.target(project) if renames is not None else None
+        clone = _clone(root, moved) if moved is not None else None
+        if clone is None:
+            return "not_cloned", rename
+        rename = "followed"
+    return _read_at(clone, ref), rename
+
+
+def _read_at(clone: Path, ref: str | None) -> _Source | IncludeStatus:
     if ref is not None and ref.strip():
         pinned = pin(ref)  # None for a CI variable: a version the file does not say
         for candidate in ((pinned, f"refs/remotes/origin/{pinned}") if pinned else ()):
@@ -284,9 +326,12 @@ def _written(item: IncludeItem) -> str:
 
 
 class _Walk:
-    def __init__(self, repo_root: Path, root: Path | None) -> None:
+    def __init__(self, repo_root: Path, root: Path | None,
+                 renames: IncludeRenames | None = None) -> None:
         self.repo_root = repo_root
         self.root = root
+        self.renames = renames
+        self.rename: RenameBasis | None = None  # of the project item being recorded (#1357)
         self.files: list[IncludedFile] = []
         self.records: list[IncludeRecord] = []
         self.seen: set[tuple[str, str | None, str]] = set()
@@ -297,7 +342,8 @@ class _Walk:
     def record(self, item: IncludeItem, ident: str | None, status: IncludeStatus,
                basis: RefBasis | None, depth: int) -> None:
         self.records.append({"kind": item.kind, "id": ident, "status": status,
-                             "ref_basis": basis if status == "resolved" else None, "depth": depth})
+                             "ref_basis": basis if status == "resolved" else None, "depth": depth,
+                             "rename": self.rename})
         if status not in SETTLED:   # an include not read may define any job (#1180)
             self.slots.append(Slot(None, self.conditional, include=_written(item)))
 
@@ -339,12 +385,13 @@ class _Walk:
         items, _has_section, dropped = include_items(text)
         for _ in range(dropped):
             self.records.append({"kind": "unknown", "id": None, "status": "unparsed",
-                                 "ref_basis": None, "depth": depth})
+                                 "ref_basis": None, "depth": depth, "rename": None})
         for item in items:
             if is_toolkit_gate(item.kind, item.source) and depth <= MAX_DEPTH:
                 self.gate(item, None, depth, self.conditional or item.conditional)
                 continue
             outer, self.conditional = self.conditional, self.conditional or item.conditional
+            self.rename = None
             self.one(item, here, depth, item.line if top_line is None else top_line)
             self.conditional = outer
 
@@ -389,7 +436,7 @@ class _Walk:
                 self.record(item, ident, "bad_path", None, depth)
                 return
             paths = []
-        source = _project_source(self.root, project, ref)
+        source, self.rename = _project_source(self.root, project, ref, self.renames)
         if isinstance(source, str):
             self.record(item, ident, source, None, depth)
             return
@@ -428,15 +475,17 @@ class _Walk:
 
 
 @functools.lru_cache(maxsize=8)
-def resolve_includes(repo_root: Path, ghsync_root: Path | None = None) -> Resolution:
+def resolve_includes(repo_root: Path, ghsync_root: Path | None = None,
+                     renames: IncludeRenames | None = None) -> Resolution:
     """Every include of ``repo_root``'s ``.gitlab-ci.yml``, resolved where the file is on
-    disk (see the module docstring). Cached: ``ci_checks`` and ``review_automation`` share it."""
+    disk (see the module docstring); ``renames`` maps a moved project to its clone (#1357).
+    Cached: ``ci_checks`` and ``review_automation`` share it."""
     repo_root = repo_root.resolve()
     own = _Source(repo_root, None, "worktree", tracked_files(repo_root))
     text = own.read(GITLAB_CI)
     if text is None:
         return EMPTY
-    walk = _Walk(repo_root, ghsync_root.resolve() if ghsync_root is not None else None)
+    walk = _Walk(repo_root, ghsync_root.resolve() if ghsync_root is not None else None, renames)
     walk.seen.add((str(repo_root), None, GITLAB_CI))
     walk.walk(text, own, 1, None)
     return Resolution(tuple(walk.files), tuple(walk.records), text, tuple(walk.slots))
@@ -713,10 +762,11 @@ class _Merge:
 
 
 @functools.lru_cache(maxsize=8)
-def merged_config(repo_root: Path, ghsync_root: Path | None = None) -> MergedConfig | None:
+def merged_config(repo_root: Path, ghsync_root: Path | None = None,
+                  renames: IncludeRenames | None = None) -> MergedConfig | None:
     """GitLab's merged configuration for ``repo_root`` (#1180; module docstring), or None
     without a readable ``.gitlab-ci.yml``. Built from ``resolve_includes``."""
-    resolution = resolve_includes(repo_root, ghsync_root)
+    resolution = resolve_includes(repo_root, ghsync_root, renames)
     if resolution.root is None:
         return None
     merge = _Merge(resolution)
