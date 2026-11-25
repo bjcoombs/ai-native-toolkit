@@ -216,6 +216,8 @@ def test_a_disabled_caller_registers_no_route(tmp_path: Path) -> None:
     ("claude -p 'add regression tests'", ["agent_cli"]),
     ("claude -p \"install the fixtures, then add tests\"", ["agent_cli"]),
     ("claude -p add tests", ["agent_cli"]),
+    ("claude -p \"Run npm install and fix tests\"", ["agent_cli"]),
+    ("npm install -g @anthropic-ai/claude-code && claude -p review", ["agent_cli"]),
     ("npx promptfoo eval -c add.yaml", ["eval_harness"]),
     # Mirrors: an install in command position is still never a sign.
     ("pip install ragas", []),

@@ -231,12 +231,14 @@ def signs_in(tree: IndentTree, lines: range) -> list[str]:
                 found.add("provider_secret")
             continue
         command = raw if not line.structural or line.dash or line.key in _BODY_KEYS else ""
-        if not command or command[:1] in ("|", ">") or _INSTALL.search(command):
+        if not command or command[:1] in ("|", ">"):
+            continue
+        if _CLI.search(command):  # a print-mode run counts even beside an install (or a prompt naming one)
+            found.add("agent_cli")
+        if _INSTALL.search(command):
             continue
         if _EVAL.search(command):
             found.add("eval_harness")
-        if _CLI.search(command):
-            found.add("agent_cli")
         if _EVAL_TESTS.search(_EXCLUDED.sub(" ", command)):
             found.add("eval_tests")
     return sorted(found)

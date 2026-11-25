@@ -22,7 +22,8 @@ runs nobody priced.
 A command line that installs (`pip install ragas`, `python -m pip install`, `poetry add`) is never a sign. The
 install or add word counts only as the subcommand of a package manager (`pip`, `uv`, `npm`, `yarn`,
 `poetry`, `apt-get` ...), with up to three options or `global` / `tool` / `pip` between them, also
-inside `sh -c "..."`. A prompt word (`claude -p 'add regression tests'`) does not hide the command. Nor is an `evals/` path a runner is told to leave out
+inside `sh -c "..."`. A prompt word (`claude -p 'add regression tests'`) does not hide the command,
+and a `claude -p` line is an `agent_cli` sign even when it also installs (`npm install -g ... && claude -p ...`). Nor is an `evals/` path a runner is told to leave out
 (`--ignore`, `--ignore-glob`, `--deselect`, `--exclude`): keeping evals out of a job is the remedy. A secret named inside a command is
 not a sign either. A workflow-level `env:` secret reaches every job, so it is a sign of each. A step
 that `uses:` a repo-local action (`./.github/actions/x`) carries the signs of that action's
@@ -110,8 +111,8 @@ job `env:`, or in a step that only sets it, neither gates nor ungates a job. Eit
 
 ## Known limits
 
-- A line that installs and then runs a model command (`npm install -g x && claude -p ...`) is read as
-  an install line, so the command is not found.
+- A line that installs and then runs an eval harness (`pip install ragas && ragas ...`) is read as
+  an install line, so the harness is not found.
 - A quoted event key under `on:` (`"push":`) is not read; a quoted `"on":` is.
 - `agent_cli` is `claude -p` / `--print` only: another Claude Code subcommand that calls a model
   (`claude plugin eval`) is not a sign.
