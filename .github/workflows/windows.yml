@@ -436,7 +436,8 @@ jobs:
       # with core.longpaths=true (as a ghsync clone has it) and one module whose
       # absolute path is over 300 characters, then checks that lizard
       # (complexity), grimp (structure), vulture (liveness) and rg (markers)
-      # each read it. A scanner whose block is unavailable reads as not
+      # each read it. vulture is not a locked dependency, so --with puts it on
+      # PATH for assess_core.py. A scanner whose block is unavailable reads as not
       # measured with its reason; one that reports a reading without the file
       # fails the step (#1405).
       - name: Smoke the scanners on a path over 260 characters
@@ -449,7 +450,7 @@ jobs:
           git -C "$co" config --get core.longpaths
           uv run --locked --python 3.11 python scripts/assess_signals.py "$co" \
             --out "$RUNNER_TEMP/longpath-signals.json"
-          uv run --locked --python 3.11 python scripts/assess_core.py "$co" > /dev/null
+          uv run --locked --python 3.11 --with "vulture==2.14" python scripts/assess_core.py "$co" > /dev/null
           uv run --locked --python 3.11 python ../../tests/fixtures/windows_smoke/longpath.py check \
             "$co" "$RUNNER_TEMP/longpath-signals.json" "$co/.assess/run-context.json"
 

@@ -13,7 +13,7 @@ Usage:
 its own config as a ghsync clone has it, holding one Python module whose
 absolute path is longer than 260 characters (``LONG_MODULE`` under a chain of
 packages). The module's file-aggregate cyclomatic complexity is
-``FILE_CCN``, which no other file in the repository reaches; it holds a
+``FILE_COMPLEXITY``, which no other file in the repository reaches; it holds a
 function nothing calls and one bare TODO marker. On Windows the files are written
 through the ``\\\\?\\`` prefix, so the fixture exists whatever the machine's
 LongPathsEnabled setting; whether each scanner then reads it is the test.
@@ -21,7 +21,7 @@ LongPathsEnabled setting; whether each scanner then reads it is the test.
 ``check`` reads ``assess_signals.py``'s output and ``assess_core.py``'s
 run-context.json and reports one line per scanner:
 
-- complexity (lizard): ``stats_summary.ccn.max`` is ``FILE_CCN``;
+- complexity (lizard): ``stats_summary.ccn.max`` is ``FILE_COMPLEXITY``;
 - structure (grimp): ``structure.footprints`` lists the long module;
 - liveness (vulture): ``dead_code.candidates`` lists the long module's path;
 - markers (rg): ``promissory_markers.todo_bare`` counts the long module's TODO.
@@ -48,9 +48,11 @@ TARGET = 300
 SEGMENT = "deeply_nested_package_for_windows_long_paths"
 LONG_MODULE = "long_module.py"
 LONG_FUNCTION = "classify"
-LONG_CCN = 9
+LONG_BRANCHES = 9
+# stats_summary's cyclomatic-complexity key.
+CCN_KEY = "ccn"
 # lizard's file-aggregate ccn: classify plus tidy (ccn 1).
-FILE_CCN = LONG_CCN + 1
+FILE_COMPLEXITY = LONG_BRANCHES + 1
 # Scanner name -> issue that tracks a fix it needs. A scanner listed here that
 # misses the long file reads as "known gap" rather than failing the step.
 KNOWN_GAPS: dict[str, str] = {}
@@ -59,7 +61,7 @@ APP = 'from pkg import short\n\n\ndef main():\n    return short.helper()\n'
 SHORT = "def helper():\n    return 1\n"
 LONG_SOURCE = (
     "def classify(x):\n"
-    + "".join(f"    {'if' if i == 1 else 'elif'} x == {i}:\n        return {i}\n" for i in range(1, LONG_CCN))
+    + "".join(f"    {'if' if i == 1 else 'elif'} x == {i}:\n        return {i}\n" for i in range(1, LONG_BRANCHES))
     + "    return 0\n"
     + "\n\n"
     + "def tidy():\n"
@@ -128,7 +130,10 @@ def _unavailable(block: dict[str, Any] | None, name: str) -> str | None:
     if block is None:
         return f"no {name} block"
     if block.get("available") is False:
-        return f"{name} unavailable: {block.get('reason') or 'no reason given'}"
+        # dead_code keeps its reasons on each tool entry, not on the block.
+        tools = [f"{t.get('tool')}: {t.get('reason')}" for t in block.get("tools") or []
+                 if isinstance(t, dict) and t.get("reason")]
+        return f"{name} unavailable: {block.get('reason') or '; '.join(tools) or 'no reason given'}"
     return None
 
 
@@ -141,9 +146,9 @@ def judge(rel: str, signals: dict[str, Any], context: dict[str, Any]) -> dict[st
     stats = _block(scans, "stats_summary")
     why = _unavailable(stats, "stats_summary")
     if why is None and stats is not None:
-        ccn_max = (stats.get("ccn") or {}).get("max")
-        hit = ccn_max == FILE_CCN
-        out["lizard"] = ("read" if hit else "MISSED", f"stats_summary.ccn.max={ccn_max}, long module ccn {FILE_CCN}")
+        complexity_max = (stats.get(CCN_KEY) or {}).get("max")
+        hit = complexity_max == FILE_COMPLEXITY
+        out["lizard"] = ("read" if hit else "MISSED", f"stats_summary.ccn.max={complexity_max}, long module ccn {FILE_COMPLEXITY}")
     else:
         out["lizard"] = ("not measured", str(why))
 

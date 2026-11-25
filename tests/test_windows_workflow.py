@@ -304,4 +304,6 @@ def test_long_path_step_builds_the_fixture_and_runs_the_scanners() -> None:
     check = run.index("tests/fixtures/windows_smoke/longpath.py check")
     assert build < signals < core < check
     assert "config --get core.longpaths" in run
+    # vulture is not in the locked environment; without it liveness is not measured.
+    assert '--with "vulture==' in run[signals:check]
     assert (REPO / "tests" / "fixtures" / "windows_smoke" / "longpath.py").is_file()

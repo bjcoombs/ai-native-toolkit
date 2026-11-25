@@ -39,7 +39,7 @@ def _context(candidates: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 READ_ALL = (
-    _signals(LP.FILE_CCN, ["pkg", MODULE], 1),
+    _signals(LP.FILE_COMPLEXITY, ["pkg", MODULE], 1),
     _context([{"path": REL, "symbol": LP.LONG_FUNCTION}]),
 )
 
@@ -86,7 +86,7 @@ def test_an_unavailable_block_is_not_measured_with_its_reason() -> None:
 
 def test_a_known_gap_is_named_with_its_issue(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(LP, "KNOWN_GAPS", {"grimp": "#9999"})
-    signals = _signals(LP.FILE_CCN, ["pkg"], 1)
+    signals = _signals(LP.FILE_COMPLEXITY, ["pkg"], 1)
     outcome, detail = LP.judge(REL, signals, READ_ALL[1])["grimp"]
     assert outcome == "known gap"
     assert detail.endswith("tracked in #9999")
@@ -103,7 +103,7 @@ def test_check_fails_only_on_a_missed_scanner(tmp_path: Path, capsys: pytest.Cap
     co = tmp_path / "co"
     rel = LP.long_rel(co)
     module = rel.removesuffix(".py").replace("/", ".")
-    good = (_signals(LP.FILE_CCN, [module], 1), _context([{"path": rel, "symbol": LP.LONG_FUNCTION}]))
+    good = (_signals(LP.FILE_COMPLEXITY, [module], 1), _context([{"path": rel, "symbol": LP.LONG_FUNCTION}]))
     assert LP.check(co, *_write_docs(tmp_path, *good)) == 0
     assert "lizard: read" in capsys.readouterr().out
     unavailable: dict[str, Any] = {"scans": {}}
@@ -116,3 +116,10 @@ def test_check_fails_only_on_a_missed_scanner(tmp_path: Path, capsys: pytest.Cap
 def test_main_refuses_unknown_arguments() -> None:
     assert LP.main([]) == 2
     assert LP.main(["check", "a"]) == 2
+
+
+def test_an_unavailable_dead_code_block_names_its_tool_reasons() -> None:
+    context = {"dead_code": {"available": False, "candidates": [],
+                             "tools": [{"tool": "vulture", "status": "absent", "reason": "vulture not on PATH"}]}}
+    assert LP.judge(REL, READ_ALL[0], context)["vulture"] == (
+        "not measured", "dead_code unavailable: vulture: vulture not on PATH")
