@@ -222,6 +222,9 @@
                       "row": {
                         "type": "string"
                       },
+                      "met": {
+                        "type": "integer"
+                      },
                       "measured": {
                         "type": "integer"
                       },
@@ -238,6 +241,7 @@
                     "required": [
                       "lowest_level",
                       "measured",
+                      "met",
                       "repos",
                       "row"
                     ],
