@@ -43,8 +43,11 @@ Signal per file (most to least actionable):
 
 Test-file evidence comes from `lib/testing/sibling_tests.has_sibling_test`, the same
 resolver behind the hotspot page's ``Has test file`` row, so the two never
-disagree in one run. The evidence is a file's existence, so the core never
-spells it as coverage.
+disagree in one run. That resolver also reads a skill's script as tested when
+a test outside the skill folder names it, by the skill-script-tests check's
+``tested_elsewhere`` matcher (#1233), so ``tests/test_ghsync*.py`` credits
+``skills/ghsync/scripts/ghsync.sh`` here as it does there. The evidence is a
+file's existence, so the core never spells it as coverage.
 
 Mutation scope: `mutation_scope` takes the paths of the entries that carry test
 evidence (``covered_but_hollow``, ``sibling_test_only``). Mutating a file with no

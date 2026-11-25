@@ -255,6 +255,21 @@ def test_unsupported_test_signal_when_no_coverage_and_no_sibling(tmp_path: Path)
     assert entry["suggested_action"] == "measure_coverage"
 
 
+def test_skill_script_tested_from_top_level_tests_reads_test_file_present(tmp_path: Path) -> None:
+    """#1233: a skill's script tested only from the top-level tests/ reads as
+    having a test file, as the skill-script-tests check's tested_elsewhere does."""
+    _touch(tmp_path, "skills/ghsync/SKILL.md")
+    _touch(tmp_path, "skills/ghsync/scripts/ghsync.sh")
+    _touch(tmp_path, "skills/ghsync/scripts/untested.sh")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_ghsync_clone.py").write_text(
+        'SCRIPT = ROOT / "skills" / "ghsync" / "scripts" / "ghsync.sh"\n', encoding="utf-8")
+    hot = ["skills/ghsync/scripts/ghsync.sh", "skills/ghsync/scripts/untested.sh"]
+    block = compute_test_focus(hot, None, None, repo_root=tmp_path)
+    assert _entry(block, hot[0])["test_signal"] == "sibling_test_only"
+    assert _entry(block, hot[1])["test_signal"] == "unsupported"
+
+
 def test_unsupported_test_signal_ranks_within_band(tmp_path: Path) -> None:
     """unsupported has its own severity rank: less tested ranks higher, so a file
     with no test found anywhere outranks a sibling-tested one in the same band,

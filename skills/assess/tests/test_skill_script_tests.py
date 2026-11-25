@@ -181,3 +181,20 @@ def test_fifty_untested_skill_units_read_the_test_files_once(tmp_path: Path,
     units = [u for u in _read(repo)["units"] if u["path"].startswith("skills/")]
     assert len(units) == 50 and all(u["blocks"]["skill_script_tests"]["skills_untested"] == 1 for u in units)
     assert sorted(reads) == sorted(f"test_s{i}.py" for i in range(1, 50, 2))  # each file once
+
+
+def test_one_script_tested_elsewhere_uses_the_same_matcher(tmp_path: Path) -> None:
+    """#1233: the per-script question the sibling-test probe asks, answered by the
+    ``tested_elsewhere`` matcher, script by script."""
+    repo = _plugin(tmp_path, {
+        "skills/ghsync/SKILL.md": SKILL.format("ghsync"), "skills/ghsync/scripts/ghsync.sh": "echo\n",
+        "skills/ghsync/scripts/other.sh": "echo\n", "skills/ghsync/tests/helper.sh": "echo\n",
+        "tools/loose.sh": "echo\n",
+        "tests/test_ghsync.py": 'SCRIPT = ROOT / "skills/ghsync/scripts/ghsync.sh"\nX = "loose.sh"\n',
+    })
+    assert sst.script_tested_elsewhere(repo, "skills/ghsync/scripts/ghsync.sh") is True
+    assert sst.script_tested_elsewhere(repo, "skills/ghsync/scripts/other.sh") is False  # not named
+    assert sst.script_tested_elsewhere(repo, "skills/ghsync/tests/helper.sh") is False  # under tests/
+    assert sst.script_tested_elsewhere(repo, "skills/ghsync/SKILL.md") is False  # not a script
+    assert sst.script_tested_elsewhere(repo, "tools/loose.sh") is False  # in no skill folder
+    assert sst.script_tested_elsewhere(repo, "../outside.sh") is False

@@ -5,6 +5,8 @@ Reads ``.assess/run-context.json`` and renders a Markdown report from a stdlib
 tokens and produces the same report for the same context, on every PR forever.
 
 It renders:
+- the title, the repository's name from its ``origin`` remote, else the checkout
+  directory's name (``lib.fleet.runner.repository_name``, #1230),
 - the header: the run date, the `/assess` version (left out when the run read none,
   ``made_by``, #1166) and the measured commit,
 - the top card first, before any ``## `` heading (``lib/top_card.py``, #1252): the Step, the
@@ -62,6 +64,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.assess_diagrams import diagrams_section
 from lib.card_facts import CardFact
+from lib.fleet.runner import repository_name
 from lib.assess_diagrams_review import build_all
 from lib.headline import GLOSSARY_URL, as_headline
 from lib.measured_appendix import measured_section
@@ -759,7 +762,7 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 0
-    report = render_report(ctx, repo_root.name, repo_root / ".assess")
+    report = render_report(ctx, repository_name(repo_root), repo_root / ".assess")
     if to_stdout:
         # UTF-8 and LF whatever the console: the report holds "·" and other
         # non-ASCII text, which cp1252 on Windows would garble or refuse, and

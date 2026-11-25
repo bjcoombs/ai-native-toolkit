@@ -26,8 +26,12 @@ Layers, narrowest first:
   ``app/unit-tests/`` or Dart's ``test/unit/`` that do not mirror the path),
   then a test file that imports the source (``MATCH_IMPORT``: a large test
   split by concern into ``test_foo_<family>.py`` files, none named after
-  ``foo.py``; the scan lives in :mod:`lib.testing.import_credit`), then a bounded flat
-  tree holding the bare name (``MATCH_FLAT``, weaker).
+  ``foo.py``; the scan lives in :mod:`lib.testing.import_credit`), then, for a
+  skill's script only, a test file outside the skill folder that names it
+  (``MATCH_ELSEWHERE``: ``tests/test_ghsync.py`` for
+  ``skills/ghsync/scripts/ghsync.sh``, by the ``tested_elsewhere`` matcher of
+  :mod:`lib.skill_script_tests`, so the two checks agree in one run, #1233), then
+  a bounded flat tree holding the bare name (``MATCH_FLAT``, weaker).
 - :func:`has_sibling_test` - the yes/no/unknown verdict the hotspot page and the
   focus signal both read, with a flat-only match dropped for a bare name that
   more than one hot file shares (:func:`shared_name_keys`).
@@ -64,9 +68,10 @@ the basename tier keys, so the built-in excludes and the tracked-files rule
 apply to it unchanged, and the files are read only when a probe reaches it.
 
 Inward-only: stdlib plus ``lib.git_churn`` / ``lib.docs.doc_graph`` /
-``lib.testing.import_credit``, imports no orchestrator. Beyond the index, file I/O is
-existence checks (``is_file`` / ``is_dir``) bounded by
-:data:`MAX_ANCESTOR_LEVELS`. Never raises.
+``lib.testing.import_credit`` / ``lib.skill_script_tests``, imports no orchestrator.
+Beyond the index and the skill tier's test-file read (cached per run in
+:mod:`lib.skill_script_tests`), file I/O is existence checks (``is_file`` /
+``is_dir``) bounded by :data:`MAX_ANCESTOR_LEVELS`. Never raises.
 
 The one sibling-test resolver. Holds the test-file naming idioms (`<stem>_test`,
 `.test`, `.spec`, `_spec`, `test_<stem>`, `<stem>Test`, `<stem>Tests`, with a
@@ -79,7 +84,8 @@ layered probe: `find_colocated_test` (beside the source or in an adjacent test
 directory), `sibling_test_match` (then a `tests/` / `test/` / `spec/` tree at any
 ancestor mirroring the source path, then a conventionally named test anywhere in
 the repository - a parallel tree such as `app/unit-tests/` or Dart's
-`test/unit/` - then a test file that imports the source (`import_credit.py`), then a flat
+`test/unit/` - then a test file that imports the source (`import_credit.py`), then for a
+skill's script a test outside the skill folder naming it (`skill_script_tests`, #1233), then a flat
 tree within two components),
 and `has_sibling_test` (the yes/no/unknown verdict, dropping a flat-only match
 on a bare name more than one hot file shares). Three consumers read it and must
@@ -110,6 +116,7 @@ from pathlib import Path
 
 from lib.docs.doc_graph import EXCLUDE_DIRS, is_excluded_path
 from lib.git_churn import tracked_files
+from lib.skill_script_tests import script_tested_elsewhere
 from lib.testing.import_credit import BATS_SUFFIX, FileReader, ImportCredits
 
 # Test-file name builders keyed off a source file's stem + suffix (``.ext``
@@ -154,6 +161,7 @@ MATCH_DIRECT = "direct"  # co-located, mirrored, or the file is itself a test
 MATCH_BASENAME = "basename"  # a same-named test elsewhere, closest source wins
 MATCH_IMPORT = "import"  # a test file imports the source
 MATCH_FLAT = "flat"  # only a bounded flat tree held the bare name
+MATCH_ELSEWHERE = "skill_elsewhere"  # a skill script named by a test outside its skill folder
 
 
 @dataclass(frozen=True)
@@ -425,6 +433,8 @@ def sibling_test_match(
             return MATCH_BASENAME
         if index.imports is not None and index.imports.credits(posix):
             return MATCH_IMPORT
+        if script_tested_elsewhere(repo_root, posix):
+            return MATCH_ELSEWHERE
         return tree
     except (OSError, ValueError):
         return None
@@ -444,6 +454,6 @@ def has_sibling_test(
     except (OSError, ValueError):
         return None
     match = sibling_test_match(repo_root, rel_path, index)
-    if match in (MATCH_DIRECT, MATCH_BASENAME, MATCH_IMPORT):
+    if match in (MATCH_DIRECT, MATCH_BASENAME, MATCH_IMPORT, MATCH_ELSEWHERE):
         return True
     return match == MATCH_FLAT and _flat_keys(rel_path).isdisjoint(shared_names)

@@ -53,6 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import assess_core
 import assess_report
+from lib.fleet.runner import repository_name
 
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "tour"
 SAMPLE_FILE = "sample.toml"
@@ -278,7 +279,8 @@ def run(repo: Path) -> TourResult:
     env = _git_env("Tour <tour@example.com>", "2026-01-01T00:00:00+00:00")
     run_date = _git(repo, env, "log", "-1", "--format=%cs").strip()
     ctx = assess_core.build_and_publish_run(repo_root=repo, run_date=run_date, non_interactive=True)
-    report = assess_report.render_report(assess_report.load_context(repo), repo.name, repo / ".assess")
+    report = assess_report.render_report(assess_report.load_context(repo), repository_name(repo),
+                                        repo / ".assess")
     out = repo / ".assess" / REPORT_NAME
     out.write_bytes(report.encode("utf-8"))
     level = ctx.get("level") or {}
