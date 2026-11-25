@@ -12,7 +12,7 @@
 #   gh.sh label list [flags]
 #
 # --web is refused, and so is any --repo other than the job's GH_REPO, and
-# any URL argument outside https://github.com/<GH_REPO>/.
+# any URL argument to `issue view` outside https://github.com/<GH_REPO>/.
 set -euo pipefail
 
 refuse() { echo "gh.sh: refused: $*" >&2; exit 4; }
@@ -28,12 +28,19 @@ for arg in "$@"; do
   case "$arg" in
     --web | -w) refuse "--web is not allowed" ;;
     --repo=* | -R=*) [ "${arg#*=}" = "${GH_REPO:-}" ] || refuse "only ${GH_REPO:-the job repository} may be read" ;;
-    *://* | *github.com/*)
-      case "$arg" in
-        "https://github.com/${GH_REPO:-}/"* | "github.com/${GH_REPO:-}/"*) ;;
-        *) refuse "an issue URL must point at ${GH_REPO:-the job repository}" ;;
-      esac ;;
   esac
+  # gh issue view takes an issue URL in place of a number and then ignores
+  # --repo, so every URL-like argument to it must name the job repository.
+  # Search text is not an issue selector and is left alone.
+  if [ "$1 $2" = "issue view" ]; then
+    case "$arg" in
+      *://* | *github.com/*)
+        case "$arg" in
+          "https://github.com/${GH_REPO:-}/"* | "github.com/${GH_REPO:-}/"*) ;;
+          *) refuse "a URL argument must point at ${GH_REPO:-the job repository}" ;;
+        esac ;;
+    esac
+  fi
   if [ "$prev" = "--repo" ] || [ "$prev" = "-R" ]; then
     [ "$arg" = "${GH_REPO:-}" ] || refuse "only ${GH_REPO:-the job repository} may be read"
   fi

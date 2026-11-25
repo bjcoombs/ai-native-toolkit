@@ -19,7 +19,9 @@ rules below are enforced here, in code, whatever the plan says:
   the plan with no open question. The size is read again just before the
   label goes on (`current_size`): it must still be present when the verdict
   had one, at most `REFINE_MAX_POINTS`, and equal to the plan's size when
-  the plan sized the issue. `refine_apply.apply_triage` also withholds the
+  the plan sized the issue. An issue the verdict found `unsized` must read
+  a size by then, or have been sized by this run (in dry-run no marker is
+  posted, so the size the run recorded stands in). `refine_apply.apply_triage` also withholds the
   label when a required size write or any planned blocked-by edge was
   refused or failed. Adding it removes the triage label.
 - **Duplicate closes.** Only a pair the refinement script reported as
@@ -32,8 +34,10 @@ rules below are enforced here, in code, whatever the plan says:
 - **Sizes.** A size marker goes only on an issue the refinement script
   reported `unsized` and that still reads unsized now, so a size a person
   wrote, before or after the verdict, is never overridden. The current size
-  is the newest trusted `refine:size` marker, else the last body line
-  matching `REFINE_SIZE_PATTERN` (default: a `Size: <n> points` line).
+  is the newest trusted comment whose first line matches the definition's
+  `size_marker`, else the last body line matching its `size_pattern`; both
+  patterns come from the verdict's `definition` block, so the writer reads a
+  size the way `refine.py` did.
 - **Questions** for the maintainer go into one comment per run on the issue
   named by `REFINE_QUESTIONS_ISSUE`, skipped when the refiner already posted
   the same comment there.
@@ -74,7 +78,7 @@ DEFAULT_BOT = "github-actions[bot]"
 DEFAULT_CLOSE_CAP = 10
 DEFAULT_MAX_POINTS = 3
 DEFAULT_SIZE_PATTERN = r"Size: (\d+) points?"
-SIZE_MARKER_RE = re.compile(r"<!-- refine:size (\d+) -->")
+DEFAULT_SIZE_MARKER = r"<!-- refine:size (\d+) -->"
 CLOSE_WINDOW_DAYS = 7
 EVENT_PAGES = 10
 FIBONACCI = (1, 2, 3, 5, 8, 13, 21)
@@ -161,7 +165,6 @@ class Settings:
         self.bot_login = e.get("REFINE_BOT_LOGIN") or DEFAULT_BOT
         self.close_cap = int(e.get("REFINE_CLOSE_CAP") or DEFAULT_CLOSE_CAP)
         self.max_points = int(e.get("REFINE_MAX_POINTS") or DEFAULT_MAX_POINTS)
-        self.size_pattern = re.compile(e.get("REFINE_SIZE_PATTERN") or DEFAULT_SIZE_PATTERN)
         q = e.get("REFINE_QUESTIONS_ISSUE", "").strip().lstrip("#")
         self.questions_issue: Optional[int] = int(q) if q.isdigit() else None
         caps = e.get("CLAUDE_CODE_SCRIPT_CAPS", "").strip()
@@ -187,6 +190,7 @@ class Writer:
         self.run = runner
         self.now = now or datetime.now(timezone.utc)
         self.closed_this_run: Set[int] = set()
+        self.sized_this_run: Dict[int, int] = {}
         self.failures = 0
 
     # ── plumbing ─────────────────────────────────────────────────────────
@@ -259,30 +263,35 @@ class Writer:
                     out.add(str(name))
         return out
 
-    def current_size(self, number: int, info: Optional[Json] = None) -> Optional[int]:
+    def current_size(self, number: int, verdict: Optional[Json], info: Optional[Json] = None) -> Optional[int]:
         """The size as it reads now: the newest trusted marker, else the last body size line."""
+        pattern, marker = size_rules(verdict)
         latest: Optional[int] = None
         for c in self.comments(number):
             if not (self._is_bot(c.get("user")) or c.get("author_association") in TRUSTED_ASSOCIATIONS):
                 continue
-            match = SIZE_MARKER_RE.fullmatch(str(c.get("body", "")).split("\n", 1)[0].strip())
+            match = marker.fullmatch(str(c.get("body", "")).split("\n", 1)[0].strip())
             if match:
                 latest = int(match.group(1))
         if latest is not None:
             return latest
         body = str((info if info is not None else self.issue(number)).get("body") or "")
-        found = list(self.s.size_pattern.finditer(body))
+        found = list(pattern.finditer(body))
         return int(found[-1].group(1)) if found else None
 
     def size_drift(self, number: int, info: Optional[Json], verdict: Optional[Json], plan: Optional[Json]) -> str:
         """Why the size as it reads now no longer supports the ready label, or ""."""
         entry = verdict_entry(verdict, number) or {}
-        current = self.current_size(number, info)
+        current = self.current_size(number, verdict, info)
+        planned = (plan or {}).get("size") if entry.get("unsized") is True else None
         if current is None:
-            return "the issue no longer reads a size" if entry.get("size_points") is not None else ""
+            current = self.sized_this_run.get(number)
+        if current is None:
+            if entry.get("size_points") is not None or entry.get("unsized") is True:
+                return "the issue reads no size"
+            return ""
         if current > self.s.max_points:
             return f"the size now reads {current}, above {self.s.max_points}"
-        planned = (plan or {}).get("size") if entry.get("unsized") is True else None
         if isinstance(planned, int) and current != planned:
             return f"the size now reads {current}, not the plan's {planned}"
         return ""
@@ -466,7 +475,6 @@ class Writer:
         verdict.
         """
         script = "write-size-marker.sh"
-        self.take_cap(script)
         if points not in FIBONACCI:
             raise self.refuse(script, number, f"{points} is not a Fibonacci size {FIBONACCI}")
         if not reason.strip():
@@ -474,15 +482,19 @@ class Writer:
         entry = verdict_entry(verdict, number)
         if entry is None or entry.get("unsized") is not True:
             raise self.refuse(script, number, "the issue already has a size, or no verdict says it is unsized")
-        latest = self.current_size(number)
+        latest = self.current_size(number, verdict)
         if latest == points:
+            self.sized_this_run[number] = points
             return False
         if latest is not None:
             raise self.refuse(script, number, f"the issue reads size {latest} now, written after the verdict")
+        # The cap counts only a call that writes, so a marker already in place costs nothing.
+        self.take_cap(script)
         body = SIZE_MARKER.format(points=points) + "\n" + neutralise(reason)
         self._write(script, "size-marker", number,
                     ["issue", "comment", str(number), "--repo", self.s.repo, "--body", body],
                     f"size {points}")
+        self.sized_this_run[number] = points
         return True
 
     # ── add-blocked-by.sh ────────────────────────────────────────────────
@@ -490,7 +502,6 @@ class Writer:
     def add_blocked_by(self, number: int, blocker: int) -> bool:
         """Add a blocked-by edge through the dependencies API."""
         script = "add-blocked-by.sh"
-        self.take_cap(script)
         if blocker == number:
             raise self.refuse(script, number, "an issue cannot block itself")
         existing = json_values(self.run(["api", f"repos/{self.s.repo}/issues/{number}/dependencies/blocked_by"]))
@@ -502,6 +513,7 @@ class Writer:
         reverse = json_values(self.run(["api", f"repos/{self.s.repo}/issues/{blocker}/dependencies/blocked_by"]))
         if any(isinstance(i, dict) and i.get("number") == number for i in reverse):
             raise self.refuse(script, number, f"#{blocker} is already blocked by #{number}; that is a cycle")
+        self.take_cap(script)
         self._write(script, "blocked-by", number,
                     ["api", "-X", "POST", f"repos/{self.s.repo}/issues/{number}/dependencies/blocked_by",
                      "-F", f"issue_id={int(target['id'])}"],
@@ -590,6 +602,13 @@ def parse_time(value: str) -> Optional[datetime]:
         return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
     except ValueError:
         return None
+
+
+def size_rules(verdict: Optional[Json]) -> Tuple["re.Pattern[str]", "re.Pattern[str]"]:
+    """(size_pattern, size_marker) from the verdict's definition block, else the defaults."""
+    definition = (verdict or {}).get("definition") or {}
+    return (re.compile(str(definition.get("size_pattern") or DEFAULT_SIZE_PATTERN)),
+            re.compile(str(definition.get("size_marker") or DEFAULT_SIZE_MARKER)))
 
 
 def _label_names(info: Json) -> Set[str]:

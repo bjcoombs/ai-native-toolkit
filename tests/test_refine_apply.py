@@ -276,7 +276,8 @@ needs_bash = pytest.mark.skipif(sys.platform == "win32" or shutil.which("bash") 
 @pytest.mark.parametrize("args", [["issue", "view", "12", "--comments"], ["issue", "list", "--state", "open"],
                                   ["search", "issues", "crash"], ["label", "list"],
                                   ["issue", "view", "1", "--repo", "acme/widgets"],
-                                  ["issue", "view", "https://github.com/acme/widgets/issues/7"]])
+                                  ["issue", "view", "https://github.com/acme/widgets/issues/7"],
+                                  ["search", "issues", "crash at https://example.com/x"]])
 def test_gh_sh_passes_reads_through(tmp_path: Path, args: List[str]) -> None:
     proc = _gh_sh(tmp_path, *args)
     assert proc.returncode == 0, proc.stderr

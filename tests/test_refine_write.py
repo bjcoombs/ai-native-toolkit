@@ -26,6 +26,18 @@ def _plan(**kw: object) -> Dict[str, object]:
     return plan
 
 
+def _comment(points: int, association: str = "MEMBER") -> str:
+    return json.dumps([{"id": 9, "user": {"login": "maintainer", "type": "User"}, "author_association": association,
+                        "body": f"<!-- refine:size {points} -->\nbigger than it looks",
+                        "created_at": "2026-11-25T11:00:00Z"}])
+
+
+def _issue(number: int, **kw: object) -> str:
+    data = json.loads((FIXTURES / f"issue_{number}_open.json").read_text(encoding="utf-8"))
+    data.update(kw)
+    return json.dumps(data)
+
+
 # ── label allow-list and veto ────────────────────────────────────────────
 
 def test_label_outside_allow_list_is_refused(tmp_path: Path) -> None:
@@ -81,7 +93,7 @@ def test_ready_refused_when_the_plan_leaves_a_question(tmp_path: Path) -> None:
 
 
 def test_ready_applied_when_the_plan_resolves_judgement(tmp_path: Path) -> None:
-    w, gh = writer(tmp_path, OPEN_101)
+    w, gh = writer(tmp_path, {**OPEN_101, "issues/101/comments": _comment(2, "OWNER")})
     w.edit_labels(101, ["agent-ready"], [], verdict(), _plan())
     assert gh.writes[0][-4:] == ["--add-label", "agent-ready", "--remove-label", "needs-triage"]
 
@@ -298,7 +310,8 @@ def test_call_cap_persists_across_processes(tmp_path: Path) -> None:
 
 
 def test_script_missing_from_the_caps_is_refused(tmp_path: Path) -> None:
-    w, gh = writer(tmp_path, {}, caps={"edit-issue-labels.sh": 1})
+    w, gh = writer(tmp_path, {"issues/101": "issue_101_open.json", "issues/101/comments": "comments_none.json"},
+                   caps={"edit-issue-labels.sh": 1})
     with pytest.raises(Refused, match="not named in CLAUDE_CODE_SCRIPT_CAPS"):
         w.write_size_marker(101, 2, "small", verdict())
 
@@ -389,18 +402,6 @@ def test_untrusted_marker_does_not_block_the_refiners_size(tmp_path: Path) -> No
 
 # ── live-mode fixes (issue #1341) ────────────────────────────────────────
 
-def _comment(points: int, association: str = "MEMBER") -> str:
-    return json.dumps([{"id": 9, "user": {"login": "maintainer", "type": "User"}, "author_association": association,
-                        "body": f"<!-- refine:size {points} -->\nbigger than it looks",
-                        "created_at": "2026-11-25T11:00:00Z"}])
-
-
-def _issue(number: int, **kw: object) -> str:
-    data = json.loads((FIXTURES / f"issue_{number}_open.json").read_text(encoding="utf-8"))
-    data.update(kw)
-    return json.dumps(data)
-
-
 @pytest.mark.parametrize("routes, now", [
     ({"issues/101/comments": _comment(8)}, "8"),
     ({"issues/101/comments": "comments_none.json", "issues/101": _issue(101, body="...\nSize: 5 points")}, "5"),
@@ -416,7 +417,8 @@ def test_size_marker_refused_when_a_size_was_written_after_the_verdict(
 @pytest.mark.parametrize("number, routes, plan, reason", [
     (101, {"issues/101/comments": _comment(3)}, {"size": 2}, "size now reads 3, not the plan's 2"),
     (103, {"issues/103/comments": _comment(8, "OWNER")}, None, "size now reads 8, above 3"),
-    (103, {"issues/103": _issue(103, body="...")}, None, "no longer reads a size"),
+    (103, {"issues/103": _issue(103, body="...")}, None, "reads no size"),
+    (101, {}, {"size": 2}, "reads no size"),
 ])
 def test_ready_refused_when_the_size_reads_differently_now(
         tmp_path: Path, number: int, routes: Dict[str, str], plan: Optional[Dict[str, object]], reason: str) -> None:
@@ -464,3 +466,24 @@ def test_vetoed_label_call_does_not_use_the_cap(tmp_path: Path) -> None:
     w.edit_labels(103, ["agent-ready"], [], verdict())
     w.edit_labels(101, ["bug"], [], verdict())
     assert gh.writes == [["issue", "edit", "101", "--repo", "acme/widgets", "--add-label", "bug"]]
+
+
+def test_ready_applied_by_the_definition_s_own_size_pattern(tmp_path: Path) -> None:
+    v = verdict()
+    v["definition"] = {**v["definition"], "size_pattern": "Points: (\\d+)"}  # type: ignore[dict-item]
+    w, gh = writer(tmp_path, {**OPEN_103, "issues/103": _issue(103, body="...\nPoints: 2")})
+    w.edit_labels(103, ["agent-ready"], [], v)
+    assert gh.writes[0][-4:] == ["--add-label", "agent-ready", "--remove-label", "needs-triage"]
+
+
+def test_existing_marker_and_edge_cost_no_call_from_the_cap(tmp_path: Path) -> None:
+    w, gh = writer(tmp_path, {"issues/101": "issue_101_open.json", "issues/101/comments": "comments_size_3.json",
+                              "issues/101/dependencies/blocked_by": '[{"number": 100}]'},
+                   caps={"write-size-marker.sh": 0, "add-blocked-by.sh": 0})
+    assert w.write_size_marker(101, 3, "same", verdict()) is False
+    assert w.add_blocked_by(101, 100) is False
+    unsized, _ = writer(tmp_path, {"issues/101": "issue_101_open.json", "issues/101/comments": "comments_none.json"},
+                        caps={"write-size-marker.sh": 0})
+    with pytest.raises(Refused, match="call cap reached"):
+        unsized.write_size_marker(101, 5, "a real write", verdict())
+    assert gh.writes == []

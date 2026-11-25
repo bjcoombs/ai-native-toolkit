@@ -6,7 +6,9 @@
   "dry_run": false,
   "definition": {
     "path": "docs/contributing/definition-of-ready.md",
-    "version": 1
+    "version": 1,
+    "size_pattern": "Size: (\\d+) points?",
+    "size_marker": "<!-- refine:size (\\d+) -->"
   },
   "issue": null,
   "summary": {
