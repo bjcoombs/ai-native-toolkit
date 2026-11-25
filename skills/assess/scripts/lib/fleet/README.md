@@ -15,7 +15,7 @@ command line is `skills/fleet/scripts/fleet.py`; this package holds everything i
 
 | Job | Modules |
 |---|---|
-| Run setup and output | `fleet_cli_args`, `fleet_stamp`, `fleet_method`, `fleet_hashed`, `fleet_cleanup`, `fleet_coverage`, `fleet_includes`, `fleet_platform`, `fleet_labels` |
+| Run setup and output | `fleet_cli_args`, `fleet_stamp`, `fleet_method`, `fleet_hashed`, `fleet_cleanup`, `fleet_coverage`, `fleet_includes`, `fleet_include_list`, `fleet_platform`, `fleet_labels` |
 | Published schemas | `fleet_schema`, `fleet_group_schema`, `fleet_level_schema`, `fleet_data_schema`, `fleet_achievements_schema` |
 | Levels, Steps and tags | `fleet_level`, `fleet_maturity`, `fleet_data_steps`, `fleet_data_tags`, `fleet_data_units`, `fleet_units`, `fleet_repo_facts`, `fleet_step_*`, `fleet_why` |
 | History and comparison | `fleet_history`, `fleet_compare`, `fleet_scanner_diff`, `fleet_rescore`, `fleet_trends`, `fleet_legacy`, `condition_effect`, `condition_demotion` |
