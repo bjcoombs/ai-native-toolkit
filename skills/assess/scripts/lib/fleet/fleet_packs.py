@@ -25,10 +25,10 @@ a pack check could not be answered is not measured, never unmet; one whose own
 ``.assess/config.toml`` excludes the condition (``not_applicable``, #910) is in neither column,
 so ``measured + not_measured`` can fall short of ``repos``. The practices come from the model,
 so a pack's rows are listed at zero counts when no repository scanned. A pack with checks but no
-rows lists no practice. A hazard level (``polarity = "hazard"``, ``lib/levels_fields.py``)
+rows lists no practice. A hazard level (``polarity = "hazard"``, ``lib/scoring/levels_fields.py``)
 names a harm, so its practice carries ``polarity: "hazard"`` and ``report.md`` and the page
 list it apart, counted as "Repositories free of it", never as "meet it". The level tally
-counts no hazard at all (``lib/level_tally.py``); this inversion is the roll-up's alone.
+counts no hazard at all (``lib/scoring/level_tally.py``); this inversion is the roll-up's alone.
 ``level.json`` (``fleet_level``) and ``fleet-data.json``
 (``fleet_data``) carry it as ``packs``, written only when a pack was passed, so a run without
 ``--pack`` writes the files it wrote before; ``report.md`` gets ``packs_section``, and
@@ -45,9 +45,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, NamedTuple, NotRequired, TypedDict
 
-from lib.level_result_types import LevelResult
-from lib.level_signals import signal_path_validator
-from lib.levels import MaturityModel, condition_id, load_levels
+from lib.scoring.level_result_types import LevelResult
+from lib.scoring.level_signals import signal_path_validator
+from lib.scoring.levels import MaturityModel, condition_id, load_levels
 from lib.pack_layering import layer_packs
 from lib.packs import Pack, PackIdentity, pack_identity, read_packs
 

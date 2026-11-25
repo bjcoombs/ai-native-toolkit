@@ -284,7 +284,7 @@ FLEET_DATA_KEPT: Final = frozenset({
     "opportunities.biggest_lift.done_when", "opportunities.biggest_lift.text",
     "opportunities.shared_templates.row", "opportunities.shared_templates.signal",
     "opportunities.shared_templates.text",
-    # #944: the level result's ids, states and reason codes (lib/level_tally.py), copied as
+    # #944: the level result's ids, states and reason codes (lib/scoring/level_tally.py), copied as
     # level.json writes them, and the model's Step gates
     "repos.next_step.blockers.kind", "repos.next_step.blockers.gate", "repos.next_step.blockers.condition",
     "repos.next_step.blockers.state", "repos.next_step.blockers.reason",

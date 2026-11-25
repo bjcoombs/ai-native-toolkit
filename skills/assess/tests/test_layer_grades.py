@@ -1,4 +1,4 @@
-"""lib/layer_grades.py: deterministic layer grades as a registered signals block."""
+"""lib/scoring/layer_grades.py: deterministic layer grades as a registered signals block."""
 from __future__ import annotations
 
 import json
@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from lib.counts_only.content_free import counts_only_scans
-from lib.layer_grades import scan_layer_grades
+from lib.scoring.layer_grades import scan_layer_grades
 from lib.scan_registry import SCANS
 from lib.signals import known_scans
 

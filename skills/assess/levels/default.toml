@@ -1,7 +1,7 @@
 # Default /assess maturity model: a deterministic approximation of the 0-8 layers.
 #
-# Loaded by lib/level_signals.py (load_default_levels) and evaluated by
-# lib/levels.py. Each row is one layer; level 1 stands for Partial and level 2
+# Loaded by lib/scoring/level_signals.py (load_default_levels) and evaluated by
+# lib/scoring/levels.py. Each row is one layer; level 1 stands for Partial and level 2
 # for Present, so level 0 is Missing. Team rows read one repository's signals
 # (a headless document's "scans", or a full run-context.json) and roll up by
 # the minimum across the repositories passed in.
@@ -298,9 +298,9 @@
 #   (agent_workflows_unread) when only another repository's reusable workflow may
 #   hold the agent.
 #
-# Conditions, the verified tally and Steps (lib/level_tally.py, #744): each
+# Conditions, the verified tally and Steps (lib/scoring/level_tally.py, #744): each
 # row level is also one condition, <row id>.<level>. Only conditions whose
-# signals are measured or verified (lib/level_signals.py) are counted; the
+# signals are measured or verified (lib/scoring/level_signals.py) are counted; the
 # rest are listed. A condition reads its own criteria; "requires" names a real
 # dependency (mutation credit needs CI running tests). The [[steps]] at the end
 # are the autonomy Steps. A Step needs its gates and nothing else, each a
@@ -309,7 +309,7 @@
 # per Step. There is no count threshold (#1083), so a condition added to the
 # model never moves a Step.
 #
-# Truth tags (lib/levels_fields.py, #843): every condition carries "truth",
+# Truth tags (lib/scoring/levels_fields.py, #843): every condition carries "truth",
 # one or more of behaviour, contracts, docs, structure, agent_context,
 # agent_runtime, governance and supply_chain: the truth it keeps honest. Tags
 # replace layers as the organising frame; the row ids keep their layer
@@ -317,7 +317,7 @@
 # #843. A condition with several tags counts once. Tags change no level, no
 # tally and no Step.
 #
-# Exit review (lib/levels_fields.py, #1086): a condition may carry
+# Exit review (lib/scoring/levels_fields.py, #1086): a condition may carry
 # predicted = "lower_revert" | "lower_rework" | "none" and review = YYYY-MM-DD
 # (an unquoted TOML date), both or neither: the direction it should move the
 # agent-outcome measure (#1085) and when /fleet history is checked for it. No

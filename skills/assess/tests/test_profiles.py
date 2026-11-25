@@ -16,8 +16,8 @@ import pytest
 
 from lib import core_scans
 from lib.fleet.fleet_level import repo_level
-from lib.level_signals import signal_path_validator
-from lib.level_tally import LEVEL_READS, default_model
+from lib.scoring.level_signals import signal_path_validator
+from lib.scoring.level_tally import LEVEL_READS, default_model
 from lib.top_card import PROFILES_URL
 from lib.profiles import (PROFILES_DIR, ModelChoice, ProfileError, add_model_arguments, model_lines,
                           non_default_ids, profile_names, profile_path, resolve, single_repo_choice)
@@ -366,7 +366,7 @@ def test_a_custom_model_labels_the_summary(tmp_path: Path) -> None:
 
 
 def test_the_default_runs_summary_is_unchanged() -> None:
-    from lib.headline import headline
+    from lib.scoring.headline import headline
 
     level = core_scans.level(*(_blocks().get(k) for k in LEVEL_READS), None)
     plain = headline(level, default_model())["summary"]

@@ -12,8 +12,8 @@ from typing import Any
 
 from lib.card_refresh import refresh_card, refreshed, refreshed_report
 from lib.exec_summary import run_headline, summarised
-from lib.headline import headline
-from lib.level_tally import default_model
+from lib.scoring.headline import headline
+from lib.scoring.level_tally import default_model
 from lib.top_card import card_lines, card_markdown
 
 MODEL = default_model()

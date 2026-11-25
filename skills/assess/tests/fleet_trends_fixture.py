@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from lib.fleet.fleet_diagrams import build_diagrams, report_markdown
 from lib.fleet.fleet_groups import FLEET_GROUP_VERSION, GroupRow, RowLevel
 from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, FleetStamp
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 from lib.fleet.fleet_trends import TrendRun, history_runs, render_trend, series_runs, trend_run
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_trends"

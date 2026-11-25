@@ -20,8 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from lib.assess_diagrams_tags import tag_whys
 from lib.fleet.fleet_tag_profile import FILE, FleetTagRow, render, tag_profile
-from lib.level_result_types import TagCell
-from lib.level_tally import default_model
+from lib.scoring.level_result_types import TagCell
+from lib.scoring.level_tally import default_model
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_diagrams"
 

@@ -2,14 +2,14 @@
 
 **Data** (``tag_profile``). One ``FleetTagRow`` per truth tag, every tag of ``TRUTH_TAGS`` in
 that fixed order, from each repository's per-tag tally (``repos[].tags``, #1073: the
-headline strip's cells, ``lib.level_tags.tag_cells``), never a second tally. A repository is
+headline strip's cells, ``lib.scoring.level_tags.tag_cells``), never a second tally. A repository is
 measured on a tag when its cell has ``measured`` above 0; its share is ``met`` over
 ``measured``. ``median``, ``p25`` and ``p75`` are those shares' percentiles with
 ``numpy.percentile``'s linear interpolation (``lib.class_sizes.percentile``), rounded to 4
 places, and null when no repository was measured on the tag: never 0. ``repos`` counts the
 repositories with a per-tag tally (scanned, with a model) and ``measured`` those measured on
 the tag. ``conditions`` and ``countable`` come from the maturity model through
-``lib.level_tags.tag_rows`` over a blank evaluation (a condition's grade is the model's, so
+``lib.scoring.level_tags.tag_rows`` over a blank evaluation (a condition's grade is the model's, so
 whether it can count is the same in every repository). The rows carry tag tokens and
 numbers only, so they name no repository. None without a maturity model.
 
@@ -34,11 +34,11 @@ from typing import TypedDict
 import lib.fleet.fleet_svg as svg
 from lib.assess_diagrams import wrap
 from lib.class_sizes import percentile
-from lib.level_result_types import TagCell
-from lib.level_tags import conditions_label, tag_rows
-from lib.level_tally import level_result
-from lib.levels import MaturityModel
-from lib.levels_fields import TRUTH_TAG_TITLES
+from lib.scoring.level_result_types import TagCell
+from lib.scoring.level_tags import conditions_label, tag_rows
+from lib.scoring.level_tally import level_result
+from lib.scoring.levels import MaturityModel
+from lib.scoring.levels_fields import TRUTH_TAG_TITLES
 from lib.vocabulary import IN_PLACE
 
 FILE = "tag-profile.svg"
@@ -64,7 +64,7 @@ TICKS = (0, 25, 50, 75, 100)
 class FleetTagRow(TypedDict):
     """One truth tag of ``fleet-data.json`` ``tag_profile`` (#940)."""
 
-    tag: str  # one of lib.levels_fields.TRUTH_TAGS
+    tag: str  # one of lib.scoring.levels_fields.TRUTH_TAGS
     conditions: int  # the model's conditions with this tag; 0: none carries it yet
     countable: int  # of those, the ones the tally can count by grade
     repos: int  # repositories with a per-tag tally (scanned, with a maturity model)

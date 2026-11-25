@@ -10,8 +10,8 @@ import pytest
 import lib.fleet.fleet_groups as fg
 from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
 from lib.fleet.fleet_group_schema import SCHEMA_PATH, build_schema, render, type_schema
-from lib.levels import parse_levels
-from lib.level_signals import DEFAULT_LEVELS, load_default_levels
+from lib.scoring.levels import parse_levels
+from lib.scoring.level_signals import DEFAULT_LEVELS, load_default_levels
 from test_fleet_cli import fleet_cli, froot  # noqa: F401 - froot is a fixture
 
 LEVELS_TOML = """\

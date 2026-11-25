@@ -1,6 +1,6 @@
 """Machine codes of unavailable-block reasons, shared by counts-only output and the tally.
 
-Moved out of ``lib.counts_only.content_free`` (which re-exports both) so ``lib/level_tally.py``
+Moved out of ``lib.counts_only.content_free`` (which re-exports both) so ``lib/scoring/level_tally.py``
 reads the same codes without importing the scanners' block shapes (#744).
 
 `reason_code` (the `code` of a `code: sentence` reason, else `unavailable`) and `reason_token`

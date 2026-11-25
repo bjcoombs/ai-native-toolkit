@@ -15,9 +15,9 @@ import pytest
 import lib.assess_diagrams_tags as td
 from assess_diagrams_tags_fixture import FIXTURES, LEVEL, PRIOR, PRIOR_OTHER, TAGS, goldens
 from lib.assess_diagrams_review import ALL_FILES, build_all
-from lib.level_tally import default_model, level_result
-from lib.level_tags import conditions_label
-from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
+from lib.scoring.level_tally import default_model, level_result
+from lib.scoring.level_tags import conditions_label
+from lib.scoring.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
 from lib.vocabulary import banned_hits
 from svg_cascade import overridden_text_attributes
 
@@ -154,7 +154,7 @@ def test_a_same_model_earlier_run_that_measured_nothing_says_so() -> None:
 
 def _exclude(*tags: str, grades: tuple[str, ...] = ("measured", "verified")) -> dict[str, str]:
     """``row_state`` of each tag when the owner excludes every countable condition with it."""
-    from lib.level_tags import truth_map
+    from lib.scoring.level_tags import truth_map
     model = default_model()
     graded = level_result(model, {})["conditions"]
     truth = truth_map(model)
@@ -177,8 +177,8 @@ def test_an_owner_exclusion_reads_set_aside_never_listed() -> None:
 
 
 def test_countable_grades_are_the_tally_counted_grades() -> None:
-    from lib.level_tags import COUNTABLE_GRADES
-    from lib.level_tally import COUNTED_GRADES
+    from lib.scoring.level_tags import COUNTABLE_GRADES
+    from lib.scoring.level_tally import COUNTED_GRADES
     assert COUNTABLE_GRADES == COUNTED_GRADES
 
 

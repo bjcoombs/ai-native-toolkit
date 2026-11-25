@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from lib.assess_diagrams import diagrams_section
 from lib.assess_diagrams_tags import TAG_FILE, tag_diagrams
-from lib.level_result_types import TagRow
+from lib.scoring.level_result_types import TagRow
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "assess_diagrams"
 

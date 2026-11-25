@@ -29,8 +29,8 @@ import pytest
 
 import assess_tour
 from lib.card_facts import step_name, top_step
-from lib.headline import GLOSSARY_URL
-from lib.level_tally import default_model
+from lib.scoring.headline import GLOSSARY_URL
+from lib.scoring.level_tally import default_model
 from lib.top_card import GATE_GAP, GATE_TASK, STEP_GATES_URL
 
 LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")

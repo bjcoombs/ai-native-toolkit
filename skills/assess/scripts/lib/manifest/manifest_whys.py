@@ -12,7 +12,7 @@ Where each why lives:
 - a scan: the ``whys`` table of the collector that publishes it, keyed by the scan name,
   the same keys as the collector's ``headless`` table (a spread collector such as
   ``run_header`` reports several scans, each with its own why);
-- a truth tag (``lib.levels_fields.TRUTH_TAGS``): ``[tags.<id>] why`` in the root manifest
+- a truth tag (``lib.scoring.levels_fields.TRUTH_TAGS``): ``[tags.<id>] why`` in the root manifest
   (``checks/core.toml``), not in a fragment;
 - a signal: none. A signal entry that carries ``why`` is rejected; the catalog shows the why
   of each condition the signal feeds.
@@ -43,7 +43,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, NotRequired, TypedDict
 
 from lib.manifest.check_validation import ValidationError, finding
-from lib.levels_fields import TRUTH_TAGS
+from lib.scoring.levels_fields import TRUTH_TAGS
 from lib.vocabulary import banned_hits, prose
 
 PLUMBING = "exempt: plumbing"

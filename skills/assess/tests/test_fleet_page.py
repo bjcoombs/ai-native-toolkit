@@ -214,7 +214,7 @@ def test_embedded_json_cannot_close_its_script_block() -> None:
 @pytest.mark.parametrize("mode", [[], ["--full"], ["--hash-salt", "s3cret"]], ids=["counts-only", "full", "hashed"])
 def test_fleet_writes_the_page_and_names_no_repository_outside_full(froot: Path, tmp_path: Path,  # noqa: F811 - froot is a pytest fixture
                                                                     mode: list[str]) -> None:
-    from lib.level_signals import DEFAULT_LEVELS
+    from lib.scoring.level_signals import DEFAULT_LEVELS
     out = tmp_path / "out"
     history = ["--no-history"] if mode == ["--full"] else ["--history-dir", str(tmp_path / "h")]
     assert fleet_cli.main([str(froot), "--levels", str(DEFAULT_LEVELS), *history, "--out", str(out), *mode]) == 0
@@ -282,8 +282,8 @@ def test_keys_not_in_this_run_never_reach_the_page_by_their_raw_name(name: str) 
 
 def test_the_shipped_model_s_gate_ids_carry_no_layer_number() -> None:
     """Gate ids reach the page as written, so the shipped ones must be layer-free."""
-    from lib.level_signals import DEFAULT_LEVELS
-    from lib.levels import load_levels
+    from lib.scoring.level_signals import DEFAULT_LEVELS
+    from lib.scoring.levels import load_levels
     gates = {g["id"] for s in load_levels(DEFAULT_LEVELS).get("steps", []) for g in s["gates"]}
     assert gates and not [g for g in gates if re.search(r"layer", g, re.I)]
 

@@ -237,6 +237,12 @@ New code imports the new path.
 - **`manifest/`**: the check manifest loader (`checks/core.toml` and its fragments), its
   structured validation errors, and the `why` rules the loader applies to every entry
   (#939). Files: `__init__.py`, `check_manifest.py`, `check_validation.py`, `manifest_whys.py`.
+- **`scoring/`**: maturity models and how a run is scored against them, the `scoring` group
+  (#1395): the model loader with its condition fields, unknown-path hints and starter copy,
+  the input class and grade of each signal a condition reads, the verified tally with its
+  per-tag rows and result types, the layer and signal grades, the headline, the action
+  conditions and the next-step guidance. `signal_grades` locates `levels/default.toml` from
+  its own path (`parents[3]`). Files: `__init__.py`, `action_conditions.py`, `headline.py`, `layer_grades.py`, `level_result_types.py`, `level_signals.py`, `level_tags.py`, `level_tally.py`, `levels.py`, `levels_fields.py`, `levels_hints.py`, `levels_starter.py`, `next_step_guidance.py`, `signal_grades.py`.
 - **`test_pressure/`** (predates #917): write-side truth pressure, with a facade
   `__init__.py` that re-exports the package's names. Files: `__init__.py`, `aggregate.py`, `common.py`, `heuristics.py`, `mutation.py`, `mutmut3.py`, `reason_paths.py`.
 - **`testing/`** ([README](testing/README.md)): the Layer 6 test signals outside `test_pressure/`: the coverage gate and
@@ -264,7 +270,7 @@ on one that is not linked.
 | `lib.keyhole.keyhole_signals` | [keyhole_signals.md](docs/keyhole_signals.md) | How the signal modules become the five run-context blocks and the named findings |
 | `lib.keyhole.liveness_scan` | [liveness_scan.md](docs/liveness_scan.md) | The dead-code, test and runtime inputs to liveness |
 | `lib.keyhole.promissory_markers` | [promissory_markers.md](docs/promissory_markers.md) | TODO, deprecation, lint-suppression and disabled-test markers |
-| `lib.levels` | [levels.md](docs/levels.md) | Loading a maturity model and evaluating it from signals |
+| `lib.scoring.levels` | [levels.md](docs/levels.md) | Loading a maturity model and evaluating it from signals |
 | `lib.manifest.check_manifest` | [check_manifest.md](docs/check_manifest.md) | The check manifest loader and its schema |
 | `lib.testing.coverage_gate` | [coverage_gate.md](docs/coverage_gate.md) | Whether a line-coverage threshold is configured |
 | `lib.wiki_writer` | [wiki_writer.md](docs/wiki_writer.md) | Writing the `.assess/` wiki pages |

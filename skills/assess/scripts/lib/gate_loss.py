@@ -37,8 +37,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from lib.level_tally import default_model, gate_blockers
-from lib.levels import StepDef
+from lib.scoring.level_tally import default_model, gate_blockers
+from lib.scoring.levels import StepDef
 from lib.model_change import changed_models
 from lib.prior_level import model_key
 from lib.profiles import model_for_level, profile_names

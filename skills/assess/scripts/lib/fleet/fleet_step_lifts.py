@@ -37,8 +37,8 @@ from typing import Any, TypedDict
 
 import lib.fleet.fleet_svg as svg
 from lib.assess_diagrams import wrap
-from lib.level_result_types import LevelResult
-from lib.levels import MaturityModel, condition_id
+from lib.scoring.level_result_types import LevelResult
+from lib.scoring.levels import MaturityModel, condition_id
 from lib.vocabulary import IN_PLACE
 
 FILE = "one-change-away.svg"

@@ -93,8 +93,8 @@ from lib.run_context_types import (
 from lib.run_context_types import (
     BehaviourBlock as _BehaviourBlock,
 )
-from lib.layer_grades import LayerGradesBlock
-from lib.level_result_types import Headline, LevelResult, OwnerExclusionsBlock
+from lib.scoring.layer_grades import LayerGradesBlock
+from lib.scoring.level_result_types import Headline, LevelResult, OwnerExclusionsBlock
 from lib.run_context_types_since import SinceLastRun
 from lib.prior_level import PriorLevelBlock
 from lib.complexity.scc_coverage import UnreliableCcnRow

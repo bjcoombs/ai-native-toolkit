@@ -30,7 +30,7 @@ from typing import Any
 from lib.artifact_schema import ASSESS_METHOD_VERSION
 from lib.assess_diagrams_review import build_all, write_all
 from lib.badge import write_headline_badge
-from lib.headline import as_headline
+from lib.scoring.headline import as_headline
 from lib.findings_snapshot import build_snapshot, load_snapshot, write_snapshot
 from lib.prior_level import load_prior_level, write_prior_level
 from lib.since_last_run import baseline_record, pruning_record

@@ -38,9 +38,9 @@ from assess_report import FINDINGS_HEADING, render_report, report_facts
 from lib.card_facts import CardFact
 from lib.card_lint import LINK, lint_errors
 from lib.exec_summary import summarised, summary_facts
-from lib.headline import headline
+from lib.scoring.headline import headline
 from lib.keyhole.keyhole_signals import render_findings_markdown
-from lib.level_tally import default_model
+from lib.scoring.level_tally import default_model
 from lib.top_card import FACT_IDS, PROFILES_URL
 from test_headline import ci2  # noqa: F401 - ci2 is a fixture
 from test_top_card import FIRST, KNOWN, ROLLUP, SHA, _below, _top

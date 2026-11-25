@@ -36,7 +36,7 @@ from lib.fleet.fleet_achievements import KINDS, REPO_VIEW, Achievements, NextSte
 from lib.fleet.fleet_step_targets import TargetProgress
 from lib.fleet.fleet_next_steps import code
 from lib.fleet.fleet_rescore import NOW_MEASURED, UP
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 from lib.vocabulary import IN_PLACE
 
 TITLE = "What changed and who earned it"

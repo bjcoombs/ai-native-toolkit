@@ -75,7 +75,7 @@ from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 from lib.fleet.fleet_trends import MATCH_KEYS
 from lib.fleet.fleet_view import read_repos
 from lib.fleet.runner import STATUS_OK, FleetRow
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 
 CONDITION_EFFECT_FILE = "condition_effect.json"
 CONDITION_EFFECT_VERSION = 1

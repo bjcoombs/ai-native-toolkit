@@ -28,9 +28,9 @@ from lib.counts_only.content_free import HASH_PREFIX, counts_only
 from lib.testing.coverage_gate import detect_coverage_gate
 from lib.headless_layers import structure_drift as headless_structure_drift
 from lib.instructions.instruction_claims import scan_instruction_claims
-from lib.level_signals import _ROOTS, load_default_levels
-from lib.levels import LevelsError, load_levels
-from lib.level_signals import signal_path_validator
+from lib.scoring.level_signals import _ROOTS, load_default_levels
+from lib.scoring.levels import LevelsError, load_levels
+from lib.scoring.level_signals import signal_path_validator
 from lib.keyhole.promissory_markers import scan_promissory_markers
 from lib.hosting.review_reality import summarize
 

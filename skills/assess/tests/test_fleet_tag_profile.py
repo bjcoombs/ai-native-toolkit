@@ -20,10 +20,10 @@ from lib.assess_diagrams_tags import tag_whys
 from lib.class_sizes import percentile
 from lib.fleet.fleet_diagrams import build_diagrams
 from lib.fleet.fleet_rescore import rescore
-from lib.level_result_types import TagCell
-from lib.level_tally import default_model
-from lib.level_tags import conditions_label
-from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
+from lib.scoring.level_result_types import TagCell
+from lib.scoring.level_tally import default_model
+from lib.scoring.level_tags import conditions_label
+from lib.scoring.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
 from lib.vocabulary import banned_hits
 from svg_cascade import overridden_text_attributes
 

@@ -3,7 +3,7 @@
 The fleet rolls up by truth tag, as the single-repository headline does, and no longer by layer.
 
 **Per repository** (``repo_tags``): ``tags`` is the headline's per-tag strip
-(``lib.headline.tag_cells``, #844) over the repository's level result
+(``lib.scoring.headline.tag_cells``, #844) over the repository's level result
 (``lib.fleet.fleet_level.repo_level``, the function ``level.json`` is written from), so it
 equals the ``tags`` of that repository's own headline by construction. One cell per truth
 tag a condition of the result carries, in ``TRUTH_TAGS`` order: ``met``, ``measured`` and
@@ -34,10 +34,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, TypedDict, cast
 
-from lib.headline import tag_cells
-from lib.level_result_types import LevelResult, TagCell
-from lib.levels import MaturityModel
-from lib.levels_fields import TRUTH_TAGS
+from lib.scoring.headline import tag_cells
+from lib.scoring.level_result_types import LevelResult, TagCell
+from lib.scoring.levels import MaturityModel
+from lib.scoring.levels_fields import TRUTH_TAGS
 
 COUNTS = ("met", "measured", "verified", "not_measured", "hazards", "declined")
 

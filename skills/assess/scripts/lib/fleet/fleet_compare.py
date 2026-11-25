@@ -94,7 +94,7 @@ from lib.fleet.fleet_level import LEVEL_FILE
 from lib.fleet.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow, RowLevel
 from lib.fleet.fleet_legacy import stamp_value, upgrade
 from lib.fleet.fleet_method import METHOD_PREFIXES, method_notes, rule_reasons
-from lib.levels import floor_of
+from lib.scoring.levels import floor_of
 from lib.signal_aliases import renamed
 from lib.fleet.fleet_view import FleetViewError, load_groups, read_repos
 from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp

@@ -46,9 +46,9 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, TypedDict
 
-from lib.level_result_types import LevelResult, NextStep, Tally
-from lib.level_tally import EXCLUDED_BY_OWNER, gate_blockers
-from lib.levels import StepDef, StepGate
+from lib.scoring.level_result_types import LevelResult, NextStep, Tally
+from lib.scoring.level_tally import EXCLUDED_BY_OWNER, gate_blockers
+from lib.scoring.levels import StepDef, StepGate
 
 
 class RepoExclusion(TypedDict):
@@ -62,7 +62,7 @@ class GateBlocker(TypedDict):
     """A Step gate that does not hold, as tokens only (#945)."""
 
     gate: str  # the gate id of the model's [[steps]]
-    state: str  # the blocking condition's state (lib.level_tally.STATES)
+    state: str  # the blocking condition's state (lib.scoring.level_tally.STATES)
     disposition: str | None  # "excluded_by_owner" when the owner excluded it, else None
 
 

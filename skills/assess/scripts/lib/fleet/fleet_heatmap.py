@@ -78,7 +78,7 @@ from lib.fleet.fleet_view import (
     level_columns,
     run_levels_version,
 )
-from lib.levels import MaturityModel, floor_of
+from lib.scoring.levels import MaturityModel, floor_of
 
 UNKNOWN_FILL = "url(#fleet-unknown)"
 _UNKNOWN_PATTERN = hatch_pattern("fleet-unknown", "#ffffff", "#8c8c8c")

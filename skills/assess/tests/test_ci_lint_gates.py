@@ -12,8 +12,8 @@ import pytest
 from lib.ci.ci_checks import scan_ci_checks
 from lib.ci.ci_lint_gates import dotnet_props, job_ids, rewrite_gated
 from lib.counts_only.content_free import counts_only_scans
-from lib.level_signals import load_default_levels
-from lib.levels import Group, evaluate
+from lib.scoring.level_signals import load_default_levels
+from lib.scoring.levels import Group, evaluate
 
 _HEAD = "on: [push, pull_request]\njobs:\n"
 

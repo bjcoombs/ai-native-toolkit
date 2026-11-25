@@ -2,8 +2,8 @@
 
 Every place that states where a repository stands reads these functions: the top card
 (``lib/top_card.py``), the badge message and the ``log.md`` readiness line
-(``headline.summary``, worded by ``lib/headline.py``). None of them words anything; the
-wording lives with the card. Each takes a ``LevelResult`` (``lib/level_tally.py``) and the
+(``headline.summary``, worded by ``lib/scoring/headline.py``). None of them words anything; the
+wording lives with the card. Each takes a ``LevelResult`` (``lib/scoring/level_tally.py``) and the
 maturity model that produced it:
 
 - ``blocking_gates(level)``: the gate blockers of the next Step, in Step order; ``[]`` at
@@ -29,8 +29,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, TypedDict
 
-from lib.level_result_types import Blocker
-from lib.levels import MaturityModel
+from lib.scoring.level_result_types import Blocker
+from lib.scoring.levels import MaturityModel
 
 __all__ = ["CardFact", "advisories", "blocking_gates", "step_gate_ids", "step_name", "top_step"]
 

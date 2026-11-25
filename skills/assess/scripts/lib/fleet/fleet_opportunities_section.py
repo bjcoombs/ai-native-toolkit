@@ -28,7 +28,7 @@ from lib.fleet.fleet_data import FleetData
 from lib.fleet.fleet_next_steps import code, text
 from lib.fleet.fleet_opportunities import PER_LIST, TITLE, Opportunities
 from lib.fleet.fleet_tooling_map import KINDS
-from lib.headline import GATE_CHANGE
+from lib.scoring.headline import GATE_CHANGE
 from lib.vocabulary import IN_PLACE
 
 INTRO = ("Computed from this run's data with no model call. Each line is a change and what it "

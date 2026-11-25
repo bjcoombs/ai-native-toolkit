@@ -17,9 +17,9 @@ import pytest
 
 from assess_report import GLOSSARY_LINE, render_summary_section
 from lib.assess_diagrams import waffle_caption
-from lib.headline import GLOSSARY_URL
-from lib.levels import load_levels
-from lib.signal_grades import DEFAULT_LEVELS, INPUT_GRADES
+from lib.scoring.headline import GLOSSARY_URL
+from lib.scoring.levels import load_levels
+from lib.scoring.signal_grades import DEFAULT_LEVELS, INPUT_GRADES
 from lib.vocabulary import banned_hits
 
 REPO_ROOT = Path(__file__).resolve().parents[3]

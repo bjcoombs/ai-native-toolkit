@@ -14,7 +14,7 @@ Reads the ``repos.jsonl`` rows ``lib/fleet/runner.py`` builds and writes one
   block is available; additive, so rows written before it lack the key;
 - the group settings joined from ghreport's settings fragments (#565);
 - each maturity model row's whole level, or ``unknown``, with the aggregation rule used,
-  evaluated by ``lib/levels.py`` (#563), and the row's ``top_level`` (its number of
+  evaluated by ``lib/scoring/levels.py`` (#563), and the row's ``top_level`` (its number of
   levels, #684), so a history entry can be read as a share of top level without the
   maturity model file. There is no second threshold config. ``top_level`` is
   additive: rows written before #684 lack it, and readers fall back.
@@ -33,7 +33,7 @@ Reads the ``repos.jsonl`` rows ``lib/fleet/runner.py`` builds and writes one
 Maturity model inputs:
 
 - ``team`` rows run against each repository's ``scans`` map, the namespace
-  ``lib/level_signals.py`` validates (``nested_instructions.available``). A
+  ``lib/scoring/level_signals.py`` validates (``nested_instructions.available``). A
   failed repository joins the roll-up with no signals, so its level is unknown
   and a ``min`` team row never reads better than the evidence allows.
 - ``org`` rows run against the group's ghreport fragment (#565), the
@@ -89,7 +89,7 @@ from lib.counts_only.counts_only_rules import TOKEN_RE
 from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_agent_building import AgentBuildingCounts, group_counts
 from lib.counts_only.content_free import reason_code
-from lib.levels import Aggregation, Evaluation, MaturityModel, RowResult, evaluate
+from lib.scoring.levels import Aggregation, Evaluation, MaturityModel, RowResult, evaluate
 from lib.run_context_types import JsonDict
 from lib.ci.shared_tooling import distinct_ids
 from lib.signals import FULL_RUN_ONLY_REASONS, NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS

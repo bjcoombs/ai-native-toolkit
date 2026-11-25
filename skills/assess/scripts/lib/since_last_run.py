@@ -76,9 +76,9 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from lib.headline import GATE_NOUN
-from lib.level_tally import default_model, gate_blockers
-from lib.levels import StepDef
+from lib.scoring.headline import GATE_NOUN
+from lib.scoring.level_tally import default_model, gate_blockers
+from lib.scoring.levels import StepDef
 from lib.prior_level import (Baseline, PruningEntry, as_prior_level, build_prior_level, default_level,
                              load_baseline, load_prior_level, load_pruning, model_key)
 from lib.profiles import model_for_level

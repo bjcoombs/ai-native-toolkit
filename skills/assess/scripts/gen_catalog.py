@@ -1,7 +1,7 @@
 """Write the measures catalog: ``docs/what-we-measure.md``, ``references/measures.json`` and ``docs/checks.html``.
 
 All three are generated from the check manifest (``checks/core.toml``), the default maturity
-model (``levels/default.toml``) and the signal input classes (``lib/level_signals.py``) by
+model (``levels/default.toml``) and the signal input classes (``lib/scoring/level_signals.py``) by
 ``lib.catalog``, ``lib.catalog_md`` (#794) and ``lib.catalog_html`` (#1236). The page also
 stamps the toolkit version from ``.claude-plugin/plugin.json`` into its header and CI examples,
 so a version bump needs a regen too. ``tests/test_catalog.py`` fails when a committed

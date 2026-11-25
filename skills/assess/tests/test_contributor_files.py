@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 import lib.hosting.org_security_policy as osp
-import lib.level_tally as lt
+import lib.scoring.level_tally as lt
 import lib.manifest.check_manifest as cm
 from lib.contributor_files import scan_contributor_files
 from lib.hosting.gh_cli import GhUnavailable, GithubRepo

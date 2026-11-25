@@ -15,7 +15,7 @@ from assess_report import render_report
 from lib import core_scans as cs
 from lib import unit_rollup as ur
 from lib.counts_only.content_free import counts_only
-from lib.level_tally import default_model
+from lib.scoring.level_tally import default_model
 from lib.scan_registry import SCANS
 from test_unit_readings import MONOREPO, _write
 
@@ -77,8 +77,8 @@ def test_the_fixture_rolls_up_to_the_lowest_unit(run: dict[str, Any]) -> None:
 
 def test_the_repository_step_and_headline_are_untouched(run: dict[str, Any]) -> None:
     from lib.exec_summary import summarised
-    from lib.headline import run_context_headline
-    from lib.level_tally import run_context_level
+    from lib.scoring.headline import run_context_headline
+    from lib.scoring.level_tally import run_context_level
     expected = summarised(run_context_headline(run["level"]), run["level"], run.get("since_last_run"),
                           default_model(), None, run.get("unit_rollup"), run["measured_commit"].get("head_sha"))
     assert run["headline"] == expected

@@ -40,7 +40,7 @@ ASSESS_SCRIPTS = Path(__file__).resolve().parents[2] / "assess" / "scripts"
 sys.path.insert(0, str(ASSESS_SCRIPTS))
 
 from lib.fleet.fleet_targets_import import ImportResult, TargetsImportError, dumps_targets, import_rows
-from lib.levels import LevelsError, load_levels
+from lib.scoring.levels import LevelsError, load_levels
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

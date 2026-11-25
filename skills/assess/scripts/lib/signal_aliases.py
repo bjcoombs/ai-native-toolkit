@@ -6,7 +6,7 @@ meaning is unchanged; a change of meaning is never aliased, #774). 2.2.0 (#911, 
 ``ci_checks.test_or_lint_runs`` is ``ci_checks.test_or_lint_configured`` and
 ``coverage_gate.enforced`` is ``coverage_gate.configured``. Three readers apply the table:
 
-- ``dealias_model`` (``lib.levels.parse_levels``, before validation): a ``--levels`` model
+- ``dealias_model`` (``lib.scoring.levels.parse_levels``, before validation): a ``--levels`` model
   copied from 2.1.0 that names an old path in a team row's ``signal`` or ``eq_signal`` loads
   with the new path, and one ``deprecated signal path`` line per distinct old path goes to
   stderr. Org rows are left alone (their paths are ghreport's, not a scan's).

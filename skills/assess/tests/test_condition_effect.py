@@ -11,7 +11,7 @@ import pytest
 
 import lib.fleet.condition_effect as ce
 from lib.fleet.runner import FLEET_ROW_VERSION
-from lib.levels import parse_levels
+from lib.scoring.levels import parse_levels
 from fleet_trends_fixture import stamp
 
 SIGNAL = "doc_staleness.summary.stale_pct"

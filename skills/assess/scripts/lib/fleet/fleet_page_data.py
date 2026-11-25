@@ -47,8 +47,8 @@ import base64
 from collections.abc import Mapping, Sequence
 from typing import Any, TypedDict
 
-from lib.levels import MaturityModel
-from lib.levels_fields import TRUTH_TAG_TITLES
+from lib.scoring.levels import MaturityModel
+from lib.scoring.levels_fields import TRUTH_TAG_TITLES
 
 PAGE_VERSION = 1
 FULL, HASHED, COUNTS_ONLY = "full", "hashed", "counts_only"

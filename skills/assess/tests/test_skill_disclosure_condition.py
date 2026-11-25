@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-import lib.level_tally as lt
+import lib.scoring.level_tally as lt
 import lib.manifest.check_manifest as cm
 import lib.unit_readings as ur
 from lib.skill_disclosure import scan_skill_disclosure

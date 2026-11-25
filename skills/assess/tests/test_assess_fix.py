@@ -22,7 +22,7 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import assess_fix as cli  # noqa: E402 - a path constant precedes the sys.path bootstrap
-from lib.level_tally import default_model, level_result  # noqa: E402 - a path constant precedes the sys.path bootstrap
+from lib.scoring.level_tally import default_model, level_result  # noqa: E402 - a path constant precedes the sys.path bootstrap
 from lib.run_context_types_fix import Delivery  # noqa: E402 - a path constant precedes the sys.path bootstrap
 from lib.starter_delivery import deliver, tree_clean  # noqa: E402 - a path constant precedes the sys.path bootstrap
 

@@ -20,8 +20,8 @@ from lib.fleet.fleet_data_units import unit_rows
 from lib.fleet.fleet_learn_from import MAX_NAMES, NextGate, Sibling, holds, learn_from, line, next_gate
 from lib.fleet.fleet_opportunities_section import opportunities_section
 from lib.fleet.fleet_publish import check_strings
-from lib.headline import GATE_CHANGE
-from lib.level_tally import default_model
+from lib.scoring.headline import GATE_CHANGE
+from lib.scoring.level_tally import default_model
 
 INSTR = "layer-0-instructions.1"
 CI = "layer-5-ci.1"

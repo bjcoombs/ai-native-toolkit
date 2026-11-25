@@ -1,7 +1,7 @@
 """The exit rule: demote a condition with no measured effect on agent outcomes by its review date (#1086).
 
 A condition enters the maturity model on the #842 discrimination rule and states a
-predicted direction and a review date (``predicted`` and ``review``, ``lib/levels_fields.py``).
+predicted direction and a review date (``predicted`` and ``review``, ``lib/scoring/levels_fields.py``).
 This module is the way out. It reads the fleet's effect estimates
 (``lib.fleet.condition_effect``) and decides, for each condition with a review date, one
 ``status``:
@@ -57,12 +57,12 @@ from pathlib import Path
 from typing import TypedDict, cast
 
 from lib.fleet.condition_effect import ConditionEffectDoc, MeasureEffect
-from lib.level_tally import gate_conditions
-from lib.levels import MaturityModel
+from lib.scoring.level_tally import gate_conditions
+from lib.scoring.levels import MaturityModel
 
 DEMOTIONS_FILE = "demotions.json"
 DEMOTIONS_VERSION = 1
-# The agent_outcome shares each predicted direction is checked on (lib/levels_fields.py PREDICTIONS).
+# The agent_outcome shares each predicted direction is checked on (lib/scoring/levels_fields.py PREDICTIONS).
 PREDICTION_MEASURES: dict[str, tuple[str, ...]] = {
     "lower_revert": ("revert_share",),
     "lower_rework": ("rework_share",),

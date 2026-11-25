@@ -11,7 +11,7 @@ import pytest
 
 import lib.manifest.check_manifest as cm
 import lib.manifest.manifest_whys as mw
-from lib.levels_fields import TRUTH_TAGS
+from lib.scoring.levels_fields import TRUTH_TAGS
 
 COND_KEY = "layer-5-ci.1:ci_checks.enforced_check_runs"
 PLUMBING_SCANS = {"delivery", "gate_cost_estimate", "shared_tooling", "agent_building", "ai_usage",

@@ -16,8 +16,8 @@ import pytest
 from assess_report import render_report
 from lib.card_facts import advisories, blocking_gates, step_gate_ids, step_name, top_step
 from lib.exec_summary import summarised
-from lib.headline import GLOSSARY_URL, headline
-from lib.level_tally import default_model
+from lib.scoring.headline import GLOSSARY_URL, headline
+from lib.scoring.level_tally import default_model
 from lib.plain_english import lint
 from lib.since_last_run import FIRST_RUN
 from lib.top_card import (GATE_GAP, GATE_TASK, STEP_GATES_URL, card_lines, card_markdown, first_action,

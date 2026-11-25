@@ -10,8 +10,8 @@ import pytest
 from lib.counts_only.content_free import counts_only
 from lib.testing.coverage_gate import detect_coverage_gate
 from lib.instructions.guardrails import scan_guardrails
-from lib.level_signals import load_default_levels
-from lib.levels import evaluate
+from lib.scoring.level_signals import load_default_levels
+from lib.scoring.levels import evaluate
 
 PYPROJECT = (
     "[project]\nname = 'x'\nversion = '0.1.0'\n\n"

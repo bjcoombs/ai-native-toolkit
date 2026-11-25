@@ -57,7 +57,7 @@ from lib.fleet.fleet_achievements import REPO_VIEW
 from lib.fleet.fleet_data import FleetData
 from lib.fleet.fleet_publish import MAX_ID, PublishError, decode_doc_id, doc_id
 from lib.fleet.fleet_targets import TARGET_VIEWS, TargetSpec, parse_targets
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 
 NOTE_MAX = 280
 _DATA_KEYS = frozenset({"step", "note"})

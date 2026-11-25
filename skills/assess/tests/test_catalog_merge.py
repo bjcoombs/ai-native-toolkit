@@ -31,7 +31,7 @@ from lib.catalog import build_catalog, render_json
 from lib.catalog_html import render_html
 from lib.catalog_md import render_markdown
 from lib.counts_only.counts_only_rules import RULES
-from lib.level_signals import load_default_levels
+from lib.scoring.level_signals import load_default_levels
 from lib.signals import known_scans
 
 TEMPLATE = "skill_script_tests"  # the collector each probe is copied from

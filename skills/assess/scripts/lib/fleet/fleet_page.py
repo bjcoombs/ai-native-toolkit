@@ -27,7 +27,7 @@ from typing import Any
 
 from lib.fleet.fleet_page_assets import SCRIPT, STYLE
 from lib.fleet.fleet_page_data import PageBundle, page_bundle, picture
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 
 PAGE_FILE = "fleet-view.html"
 # The drawn diagrams the page embeds, in page order: #940's tag pictures, then #941's Step pictures.

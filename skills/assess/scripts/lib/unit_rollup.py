@@ -55,9 +55,9 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Literal, TypedDict
 
 from lib.fleet.fleet_learn_from import Sibling, condition_states, ecosystems, learn_from, line, next_gate
-from lib.headline import GATE_CHANGE
-from lib.level_tally import default_model
-from lib.levels import MaturityModel, StepDef
+from lib.scoring.headline import GATE_CHANGE
+from lib.scoring.level_tally import default_model
+from lib.scoring.levels import MaturityModel, StepDef
 
 SECTION = "unit_rollup"
 READS = ("unit_levels", "units")

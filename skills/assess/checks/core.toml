@@ -123,7 +123,7 @@ fragments = [
   "headline",
 ]
 
-# The why of each truth tag (lib/levels_fields.py TRUTH_TAGS, #939): one table per tag,
+# The why of each truth tag (lib/scoring/levels_fields.py TRUTH_TAGS, #939): one table per tag,
 # which the catalog opens each tag section with.
 
 [tags.behaviour]

@@ -50,7 +50,7 @@ from typing import Any, TypedDict, cast
 from lib.fleet.runner import FLEET_ROW_VERSION, REPOS_FILE, FleetRow
 from lib.fleet.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow, RowLevel
 from lib.fleet.fleet_legacy import upgrade
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 
 STATUS_LEVEL = "level"
 STATUS_UNKNOWN = "unknown"

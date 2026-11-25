@@ -11,7 +11,7 @@ from lib.gate_loss import (
     split_lost,
     step_change,
 )
-from lib.level_tally import default_model
+from lib.scoring.level_tally import default_model
 
 
 def _conditions(states: dict[str, str]) -> list[dict[str, Any]]:

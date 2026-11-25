@@ -51,7 +51,7 @@ import lib.fleet.fleet_svg as svg
 from lib.fleet.fleet_compare import CAUSE_LEVEL, Comparison
 from lib.fleet.fleet_maturity import SCOPE, Cell, floor_mean, has_floor, mean_share
 from lib.fleet.fleet_svg import THEMED_HATCH, LinearScale
-from lib.levels import MaturityModel, floor_of
+from lib.scoring.levels import MaturityModel, floor_of
 
 TITLE = "Fleet maturity, before and after"
 FILE = "slope.svg"

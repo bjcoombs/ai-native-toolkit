@@ -37,8 +37,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypedDict
 
 import lib.manifest.check_manifest as cm
-from lib.level_tally import EXCLUSIONS_BLOCK, default_model, model_blocks
-from lib.levels import MaturityModel
+from lib.scoring.level_tally import EXCLUSIONS_BLOCK, default_model, model_blocks
+from lib.scoring.levels import MaturityModel
 
 if TYPE_CHECKING:
     from lib.profiles import ModelChoice

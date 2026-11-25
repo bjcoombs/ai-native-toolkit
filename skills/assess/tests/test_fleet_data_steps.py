@@ -13,8 +13,8 @@ from lib.fleet.runner import FleetRow
 from lib.fleet.fleet_data_steps import NO_STEPS, GateBlocker, RepoSteps, repo_steps, step_hold, step_roll_up
 from lib.fleet.fleet_level import fleet_levels
 from lib.fleet.fleet_units import build_trees, empty_map
-from lib.level_result_types import Blocker
-from lib.levels import StepDef
+from lib.scoring.level_result_types import Blocker
+from lib.scoring.levels import StepDef
 
 
 def _units(data: fd.FleetData, view: str) -> dict[str, fd.DataUnit]:

@@ -21,7 +21,7 @@ Load errors (``PackError``), raised before any scan:
 - a row id defined by two sources, naming both: no silent override;
 - a ``requires`` naming a condition of a later pack (a pack row may require the base model or
   an earlier pack, never a later one), or a condition no source defines;
-- a pack row signal path ``validator`` rejects (``lib.levels.validate_paths``).
+- a pack row signal path ``validator`` rejects (``lib.scoring.levels.validate_paths``).
 
 ``pack_sources(model)`` lists the pack names a layered model holds rows from, in order;
 ``row_source(model, row_id)`` is one row's source, or None for an unlayered model.
@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from lib.levels import LevelsError, MaturityModel, PathValidator, Row, condition_id, validate_paths
+from lib.scoring.levels import LevelsError, MaturityModel, PathValidator, Row, condition_id, validate_paths
 from lib.packs import Pack, PackError
 
 __all__ = ["layer_packs", "pack_sources", "row_source"]

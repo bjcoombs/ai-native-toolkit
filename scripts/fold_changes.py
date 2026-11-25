@@ -71,7 +71,7 @@ COUNTERS: dict[str, Counter] = {
         noun="rule changes",
     ),
     "level_result": Counter(
-        Path("skills/assess/scripts/lib/level_tally.py"),
+        Path("skills/assess/scripts/lib/scoring/level_tally.py"),
         re.compile(r"^LEVEL_RESULT_VERSION = (?P<value>[0-9]+)$"),
         "int",
     ),

@@ -15,7 +15,7 @@ It renders:
   ``summary_markdown``, then the fixed glossary line (``GLOSSARY_LINE``) linking each term
   to ``docs/glossary.md``; ``report_facts(ctx)`` gives the lines the report adds there with
   their fact ids (``narrowed``, ``glossary``, #1253),
-- "Catalogue Coverage" (``lib/headline.py``, #747, #844, #1083): the conditions not measured
+- "Catalogue Coverage" (``lib/scoring/headline.py``, #747, #844, #1083): the conditions not measured
   with their reasons, the model version and the per-tag strip, pasted from the run context's
   ``headline`` block, then the monorepo unit roll-up,
 - the diagram sections (``lib/assess_diagrams.py``, #942, and
@@ -66,7 +66,7 @@ from lib.assess_diagrams import diagrams_section
 from lib.card_facts import CardFact
 from lib.fleet.runner import repository_name
 from lib.assess_diagrams_review import build_all
-from lib.headline import GLOSSARY_URL, as_headline
+from lib.scoring.headline import GLOSSARY_URL, as_headline
 from lib.measured_appendix import measured_section
 from lib.scan_plan import not_run_text
 

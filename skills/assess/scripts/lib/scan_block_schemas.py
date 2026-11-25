@@ -552,7 +552,7 @@ AGENT_CONSISTENCY: JsonDict = {
 # The deterministic Layer 0 grade and where the instruction files are (#620, #821).
 LAYER_GRADES: JsonDict = {
     "description": (
-        "Deterministic layer grades (lib/layer_grades.py): the best instruction-file grade and "
+        "Deterministic layer grades (lib/scoring/layer_grades.py): the best instruction-file grade and "
         "where the agent instruction files are. Tokens and a boolean, kept whole by counts-only "
         "output; no path is carried."),
     "properties": {

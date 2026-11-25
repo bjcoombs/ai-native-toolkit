@@ -12,7 +12,7 @@ from lib.fleet.fleet_diagrams import report_markdown
 from lib.fleet.fleet_opportunities import MIN_INCLUDERS, Opportunities, build_opportunities
 from lib.fleet.fleet_opportunities_section import opportunities_section
 from lib.fleet.fleet_units import build_trees, empty_map
-from lib.levels import MaturityModel, parse_levels
+from lib.scoring.levels import MaturityModel, parse_levels
 from lib.run_context_types import JsonDict
 
 SOURCE = "gitlab_project:grp/ci-templates"

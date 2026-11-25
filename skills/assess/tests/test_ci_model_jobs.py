@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-import lib.level_tally as lt
+import lib.scoring.level_tally as lt
 from lib.counts_only.content_free import counts_only
 from lib.ci.ci_masking import IndentTree, parse_lines
 from lib.ci.ci_model_jobs import GATES, scan_ci_model_jobs, signs_in, without_changes

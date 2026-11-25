@@ -29,7 +29,7 @@ from typing import Any, TypedDict
 
 import lib.fleet.fleet_svg as svg
 from lib.assess_diagrams import wrap
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 from lib.vocabulary import IN_PLACE
 
 FILE = "step-funnel.svg"

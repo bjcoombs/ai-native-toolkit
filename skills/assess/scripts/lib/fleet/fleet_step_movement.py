@@ -49,7 +49,7 @@ from lib.fleet.fleet_method import RULE_KEYS, rule_reasons, rules_sha256
 from lib.fleet.fleet_stamp import FleetStamp
 from lib.fleet.fleet_level import repo_level
 from lib.fleet.runner import STATUS_OK, FleetRow
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 from lib.signal_aliases import aliased
 from lib.vocabulary import IN_PLACE
 

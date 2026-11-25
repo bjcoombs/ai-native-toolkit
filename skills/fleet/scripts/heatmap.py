@@ -44,7 +44,7 @@ from lib.fleet.fleet_view import (
     groups_file,
     load_groups,
 )
-from lib.levels import add_renamed_flag, LevelsError, load_levels, MaturityModel
+from lib.scoring.levels import add_renamed_flag, LevelsError, load_levels, MaturityModel
 
 HEATMAP_FILE = "heatmap.svg"
 

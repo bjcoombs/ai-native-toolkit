@@ -435,7 +435,7 @@ def test_main_no_args_is_usage_error(capsys):
 def _gate_conditions(states: dict[str, str]) -> list[dict]:
     """Every condition a default-model Step gate reads, met unless ``states`` names
     the gate (``{"ci_runs_tests": "unmet"}`` sets each of its conditions)."""
-    from lib.level_tally import default_model
+    from lib.scoring.level_tally import default_model
     out: dict[str, dict] = {}
     for step in default_model().get("steps", []):
         for g in step["gates"]:

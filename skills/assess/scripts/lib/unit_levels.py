@@ -49,10 +49,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, NotRequired, TypedDict
 
-from lib.headline import verified_count
-from lib.level_result_types import LevelResult, NextStep
-from lib.level_tally import LEVEL_READS, default_model, level_result, run_exclusions
-from lib.levels import MaturityModel
+from lib.scoring.headline import verified_count
+from lib.scoring.level_result_types import LevelResult, NextStep
+from lib.scoring.level_tally import LEVEL_READS, default_model, level_result, run_exclusions
+from lib.scoring.levels import MaturityModel
 from lib.unit_readings import Origin
 
 SECTION = "unit_levels"

@@ -43,12 +43,12 @@ from lib.since_last_run import baseline_record, pruning_record
 from lib.assess_diagrams_review import COUNTS_ONLY_FILES, build_all, counts_only_diagrams, write_all
 from lib.badge import write_headline_badge
 from lib.exec_summary import run_headline
-from lib.headline import as_headline
+from lib.scoring.headline import as_headline
 from lib.counts_only.content_free import COUNTS_ONLY_FILE
 from lib.counts_only.content_free import add_cli_arguments as add_counts_only_arguments
 from lib.counts_only.content_free import apply_cli as apply_counts_only, validate_cli_args as validate_counts_only_args
 from lib.testing.coverage_report import load_coverage_data
-from lib.level_signals import signal_path_validator
+from lib.scoring.level_signals import signal_path_validator
 from lib.pack_layering import pack_sources
 from lib.packs import Pack, PackError, load_packs, pack_identity
 from lib.model_change import model_name

@@ -1,4 +1,4 @@
-"""The level result's per-tag rows (``lib/level_tags.py``, #940) and the one tally they share with the headline strip."""
+"""The level result's per-tag rows (``lib/scoring/level_tags.py``, #940) and the one tally they share with the headline strip."""
 from __future__ import annotations
 
 import json
@@ -7,12 +7,12 @@ from typing import Any, cast
 
 import pytest
 
-from lib.headline import headline, tag_cells as headline_tag_cells
-from lib.level_result_types import LevelResult
-from lib.level_tags import tag_cells, tag_rows
-from lib.level_tally import default_model, dumps_level, level_result, run_context_level
-from lib.levels import MaturityModel
-from lib.levels_fields import TRUTH_TAGS
+from lib.scoring.headline import headline, tag_cells as headline_tag_cells
+from lib.scoring.level_result_types import LevelResult
+from lib.scoring.level_tags import tag_cells, tag_rows
+from lib.scoring.level_tally import default_model, dumps_level, level_result, run_context_level
+from lib.scoring.levels import MaturityModel
+from lib.scoring.levels_fields import TRUTH_TAGS
 
 GOLDEN = Path(__file__).resolve().parent / "fixtures" / "golden"
 

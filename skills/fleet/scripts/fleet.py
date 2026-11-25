@@ -240,7 +240,7 @@ from lib.fleet.fleet_trends import TrendRun, history_runs, series_runs, trend_ru
 from lib.fleet.fleet_view import FleetViewError
 from lib.fleet.fleet_method import rules_sha256
 from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, FleetStamp, build_stamp, write_stamp
-from lib.levels import LevelsError, MaturityModel
+from lib.scoring.levels import LevelsError, MaturityModel
 from lib.packs import PackError
 from lib.run_context_types import JsonDict
 from lib.scan_plan import fleet_scans

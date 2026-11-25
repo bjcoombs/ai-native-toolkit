@@ -12,7 +12,7 @@ the maturity-model version and the committed config::
     ]
 
 - ``id`` is a condition id of the default maturity model (``<row id>.<level>``,
-  ``lib.levels.condition_id``). Required.
+  ``lib.scoring.levels.condition_id``). Required.
 - ``reason`` is required and non-empty. An entry without one is skipped, so the
   condition stays in force.
 - ``kind`` is one of ``KINDS``; it defaults to ``other`` only when the key is left
@@ -27,7 +27,7 @@ first entry. A ``[checks]`` that is not a table, or an ``exclude`` that is not a
 list (a single inline table, say), is one skipped entry with index 0 and code
 ``not_a_list``, never a silent no-op.
 
-``lib.level_tally`` reads the exclusions in force: an excluded condition reads
+``lib.scoring.level_tally`` reads the exclusions in force: an excluded condition reads
 ``not_applicable`` with ``disposition: excluded_by_owner``, leaves the
 denominator, never earns, and never holds a Step gate, so the Step it gates
 stays unreachable while it is excluded (#744 decision). The headless runner
@@ -61,8 +61,8 @@ from pathlib import Path
 from typing import Any
 
 from lib.assess_config import load_config
-from lib.level_result_types import OwnerExclusion, OwnerExclusionsBlock, SkippedExclusion
-from lib.level_tally import condition_ids, default_model
+from lib.scoring.level_result_types import OwnerExclusion, OwnerExclusionsBlock, SkippedExclusion
+from lib.scoring.level_tally import condition_ids, default_model
 
 SECTION = "checks"
 KEY = "exclude"

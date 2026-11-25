@@ -75,7 +75,7 @@ from lib.fleet.fleet_compare import Comparison, FleetRun
 from lib.fleet.fleet_page import PAGE_FILE
 from lib.fleet.fleet_tag_profile import FleetTagRow
 from lib.fleet.fleet_trends import TrendRun
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 
 REPORT_FILE = "report.md"
 # Each diagram's report heading and question, by file: the one source for a drawn

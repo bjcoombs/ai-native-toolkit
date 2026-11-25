@@ -15,7 +15,7 @@ from lib.fleet.fleet_compare import FleetRun, compare, comparability, comparison
 from lib.fleet.condition_demotion import with_demotions
 from lib.fleet.fleet_stamp import FleetStamp, build_stamp
 from lib.manifest.check_manifest import collectors, core_manifest
-from lib.levels import MaturityModel, parse_levels
+from lib.scoring.levels import MaturityModel, parse_levels
 from lib.packs import PackIdentity
 from test_fleet_rescore import BASE, DATES, KEY, NOW, V1, _data, _entry, _rows, _stamp
 
@@ -243,7 +243,7 @@ def test_an_unrecorded_rules_hash_is_not_native_credit_across_two_rescored_entri
 
 def test_a_profile_resolved_model_changes_the_hash() -> None:
     # fleet.py turns --profile into its --levels file (lib/profiles.py, #1170) and hashes the loaded model
-    from lib.levels import load_levels
+    from lib.scoring.levels import load_levels
     from lib.profiles import profile_path
 
     default = load_levels(Path(__file__).resolve().parents[1] / "levels" / "default.toml")

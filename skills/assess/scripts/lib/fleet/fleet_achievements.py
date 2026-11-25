@@ -17,7 +17,7 @@ adds a floor status this predicate decides what a floor earns; nothing else read
 ``status``.
 
 **A subject's level on a row** in one run is the row's roll-up rule
-(``lib.levels.share_level``; ``min`` is share 1) over its *measured* members, those
+(``lib.scoring.levels.share_level``; ``min`` is share 1) over its *measured* members, those
 with a known level; ``measured`` is that set of repository keys. No measured member:
 no level.
 
@@ -82,7 +82,7 @@ targets on a row were retired in #945.
 level: among the measured members one level below the next level, the next-level
 criterion (their cell ``signal``) shared by the most of them, the repositories it
 applies to, how many must reach the next level for the subject to move (``needed``)
-and the change and "done when" from ``lib.next_step_guidance`` (the team next-steps
+and the change and "done when" from ``lib.scoring.next_step_guidance`` (the team next-steps
 wording). ``targets`` gives each Step target's progress: the lowest Step, the Steps to go,
 and the target Step's missing gates with the repositories each holds back
 (``fleet_step_targets.target_progress``).
@@ -141,8 +141,8 @@ from lib.fleet.fleet_step_targets import (
     target_order,
     target_progress,
 )
-from lib.levels import MaturityModel, Row, share_level
-from lib.next_step_guidance import guidance
+from lib.scoring.levels import MaturityModel, Row, share_level
+from lib.scoring.next_step_guidance import guidance
 
 # Bump on any change to the shapes below; #705 and #744 read it.
 # History: skills/assess/changes/history/achievements.md, newest entry first.
@@ -558,7 +558,7 @@ def _wording(row: Row, level: int, signal: str) -> tuple[str, str]:
         if 0 < level <= len(row["levels"]) else []
     if not criteria:
         return f"Meet {code(signal)}.", f"the next fleet run reads {code(signal)} met."
-    # an eq_signal criterion's value is a second path, not an operand to set (lib/levels_fields.py)
+    # an eq_signal criterion's value is a second path, not an operand to set (lib/scoring/levels_fields.py)
     words = None if "eq_signal" in criteria[0] else guidance(signal, criteria[0]["op"], criteria[0]["value"])
     if words is None:
         return f"Meet {expression(criteria[0])}.", f"the next fleet run reads {expression(criteria[0])}."

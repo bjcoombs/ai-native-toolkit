@@ -27,8 +27,8 @@ from collections.abc import Mapping, Sequence
 from itertools import combinations
 from typing import Literal, TypedDict
 
-from lib.levels import MaturityModel, condition_id
-from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
+from lib.scoring.levels import MaturityModel, condition_id
+from lib.scoring.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
 
 LinkKind = Literal["requires", "guarded_by", "eq_signal"]
 

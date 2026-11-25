@@ -34,7 +34,7 @@ from typing import Any, NamedTuple
 from lib.fleet.fleet_achievements import REPO_VIEW
 from lib.fleet.fleet_step_targets import Target
 from lib.fleet.fleet_units import VIEWS, Tree
-from lib.levels import MaturityModel
+from lib.scoring.levels import MaturityModel
 
 TARGET_VIEWS = (*VIEWS, REPO_VIEW)
 _KEYS = frozenset({"view", "unit", "step"})

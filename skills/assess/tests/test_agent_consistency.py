@@ -20,8 +20,8 @@ from lib.instructions.agent_consistency import (
 from lib.instructions.agent_systems import SYSTEMS, aider_read_files, match_system_file, might_match
 from lib.counts_only.content_free import counts_only_scans
 from lib.instructions.instruction_files import nested_instruction_surface
-from lib.levels import evaluate_row
-from lib.level_signals import load_default_levels
+from lib.scoring.levels import evaluate_row
+from lib.scoring.level_signals import load_default_levels
 
 AGENTS = "# Agents\n\nRun `make test` before every commit.\n"
 
