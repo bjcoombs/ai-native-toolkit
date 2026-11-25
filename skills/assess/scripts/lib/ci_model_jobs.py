@@ -71,6 +71,7 @@ from lib.ci_action_inputs import ReadLocal, local_action_paths
 from lib.ci_includes import GITLAB_CI, merged_config, resolve_includes
 from lib.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci_merged_view import merged_jobs, merged_view
+from lib.ci_shell_text import command_text
 from lib.ci_triggers import gitlab_line_triggers, workflow_events
 from lib.command_index import ci_config_files, read_config, repo_files
 
@@ -125,12 +126,10 @@ _INSTALL = re.compile(r"(?:^|[\s;&|(\"'/])(?:pip(?:\d+(?:\.\d+)?)?|pipx|pipenv|u
                       r"micromamba|npm|pnpm|yarn|bun|deno|apt(?:-get)?|apk|dnf|yum|brew|gem|cargo|go|composer|dotnet)"
                       r"\s+(?:(?:-\S+|global|tools?|pip|python)\s+){0,3}(?:install|add)(?=[\s\"']|$)")
 # ``claude plugin eval`` (#1249): options before or after ``plugin`` and ``eval``, also through
-# ``npx @anthropic-ai/claude-code``. Read on ``_command_text``, so an echo or comment naming it is no sign.
+# ``npx @anthropic-ai/claude-code``. Read on ``command_text``: an echo or comment naming it is no sign.
 _OPTS = r"(?:[ \t]+-[\w-]+(?:=\S+|[ \t]+(?!-|plugin\b|eval\b)[^\s;&|]+)?)*"
 _PLUGIN_EVAL = re.compile(r"(?:^|[\s;&|(/=])(?:claude|@anthropic-ai/claude-code(?:@\S+)?)" + _OPTS
                           + r"[ \t]+plugin" + _OPTS + r"[ \t]+eval(?=[\s;&|)]|$)", re.M)
-_ECHO = re.compile(r"(?:^|(?<=[;&|(\n]))[ \t]*(?:echo|printf)\b[^;&|\n]*", re.M)
-_SHELL_C = re.compile(r"(?:^|[;&|(\n])\s*$|\s-c\s*$")
 # The keys whose entries hand a job a secret; a key named anywhere else (a step ``name:``) is no sign.
 _SECRET_KEYS = frozenset({"env", "with", "secrets", "variables"})
 _SECRET = re.compile(r"\b(?:" + "|".join(PROVIDER_SECRETS) + r")\b")
@@ -233,31 +232,6 @@ def _block_text(tree: IndentTree, i: int) -> str:
     return re.sub(r"\\\n", " ", text)
 
 
-def _command_text(text: str) -> str:
-    """``text`` with what the shell does not run blanked: a quoted argument (``-m "..."``) becomes
-    ``_`` unless it is itself a command (the whole value, or after ``sh -c``), a ``#`` comment
-    is cut, and an ``echo`` or ``printf`` is dropped with its arguments."""
-    out: list[str] = []
-    i = 0
-    while i < len(text):
-        ch = text[i]
-        if ch in "'\"":
-            end = i + 1
-            while end < len(text) and text[end] != ch:
-                end += 2 if ch == '"' and text[end] == "\\" else 1
-            inner = text[i + 1:end]
-            out.append(_command_text(inner) if _SHELL_C.search("".join(out)) else "_")
-            i = end + 1
-            continue
-        if ch == "#" and (i == 0 or text[i - 1].isspace()):
-            end = text.find("\n", i)
-            i = len(text) if end < 0 else end
-            continue
-        out.append(ch)
-        i += 1
-    return _ECHO.sub(" ", "".join(out))
-
-
 def signs_in(tree: IndentTree, lines: range) -> list[str]:
     """The sign tokens in ``lines`` of one job (see the module doc)."""
     found: set[str] = set()
@@ -279,12 +253,12 @@ def signs_in(tree: IndentTree, lines: range) -> list[str]:
             continue
         command = raw if not line.structural or line.dash or line.key in _BODY_KEYS else ""
         if command[:1] in ("|", ">"):  # a block body is read whole, so a continued command is one
-            if _PLUGIN_EVAL.search(_command_text(_block_text(tree, i))):
+            if _PLUGIN_EVAL.search(command_text(_block_text(tree, i))):
                 found.add("agent_cli")
             continue
         if not command:
             continue
-        if _CLI.search(command) or (line.structural and _PLUGIN_EVAL.search(_command_text(command))):
+        if _CLI.search(command) or (line.structural and _PLUGIN_EVAL.search(command_text(command))):
             found.add("agent_cli")  # counts even beside an install (or a prompt naming one)
         if _INSTALL.search(command):
             continue

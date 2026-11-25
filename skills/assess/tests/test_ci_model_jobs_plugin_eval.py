@@ -15,6 +15,7 @@ import pytest
 import lib.level_tally as lt
 from lib.ci_masking import IndentTree, parse_lines
 from lib.ci_model_jobs import scan_ci_model_jobs, signs_in
+from lib.ci_shell_text import command_text
 
 CID = "model-ci-gated.1"
 
@@ -102,6 +103,40 @@ def test_installing_or_naming_the_cli_is_not_a_sign(command: str) -> None:
 ])
 def test_a_multi_line_body_is_read_as_the_shell_reads_it(text: str, signs: list[str]) -> None:
     assert _signs(text) == signs
+
+
+# --- claude plugin eval: a command substitution inside double quotes ------------------------
+
+@pytest.mark.parametrize(("text", "signs"), [
+    # The shell runs a $(...) or backtick span inside double quotes, so its command is read.
+    ("jobs:\n  j:\n    steps:\n      - run: OUT=\"$(claude plugin eval . --json)\"\n", ["agent_cli"]),
+    ("jobs:\n  j:\n    steps:\n      - run: |\n          set -e\n          OUT=\"$(claude plugin eval . --json)\"\n"
+     "          echo \"$OUT\"\n", ["agent_cli"]),
+    ("jobs:\n  j:\n    steps:\n      - run: echo \"$(claude plugin eval .)\"\n", ["agent_cli"]),
+    ("jobs:\n  j:\n    steps:\n      - run: OUT=\"`claude plugin eval .`\"\n", ["agent_cli"]),
+    ("jobs:\n  j:\n    steps:\n      - run: OUT=\"$(cd \"x\" && claude plugin eval .)\"\n", ["agent_cli"]),
+    # Mirrors: plain quoted text, or a substitution that only echoes the name, runs no eval.
+    ("jobs:\n  j:\n    steps:\n      - run: echo \"claude plugin eval\"\n", []),
+    ("jobs:\n  j:\n    steps:\n      - run: |\n          echo \"claude plugin eval\"\n", []),
+    ("jobs:\n  j:\n    steps:\n      - run: OUT=\"$(echo claude plugin eval)\"\n", []),
+    ("jobs:\n  j:\n    steps:\n      - run: echo \"$(date)\" \"claude plugin eval\"\n", []),
+])
+def test_a_substitution_inside_double_quotes_is_read_as_a_command(text: str, signs: list[str]) -> None:
+    assert _signs(text) == signs
+
+
+@pytest.mark.parametrize(("text", "runs"), [
+    ('OUT="$(make a)"', "OUT=\nmake a\n_"),
+    ('OUT="x `make a` y $(make b)"', "OUT=\nmake a\n\nmake b\n_"),
+    ('OUT="$(f "a)b" (c))"', 'OUT=\nf _ (c)\n_'),            # a quote and parentheses inside
+    ("OUT='$(make a)'", "OUT=_"),                              # single quotes run nothing
+    ('echo "plain"', " "),
+    ('echo "$(echo hidden)"', " \n \n_"),
+    ('a "q\\"\\$(x)" b', "a _ b"),                           # an escaped quote or $ is text
+    ('a "q\\"$(x)" b', "a \nx\n_ b"),                         # past an escaped quote, $(...) runs
+])
+def test_command_text_keeps_what_a_double_quoted_substitution_runs(text: str, runs: str) -> None:
+    assert command_text(text) == runs
 
 
 def test_a_github_plugin_eval_job_on_every_pull_request_reads_ungated(tmp_path: Path) -> None:
