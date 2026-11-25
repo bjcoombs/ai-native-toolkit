@@ -207,8 +207,6 @@ def test_cli_invalid_plan_exits_five(tmp_path: Path, monkeypatch: pytest.MonkeyP
 def test_fixture_verdict_matches_the_refine_output_schema() -> None:
     schema_path = SCRIPTS / "refine-output.schema.json"
     jsonschema = pytest.importorskip("jsonschema")
-    if not schema_path.is_file():
-        pytest.skip("refine.py and its schema are not on this branch yet (#1320)")
     jsonschema.validate(verdict(), json.loads(schema_path.read_text(encoding="utf-8")))
 
 

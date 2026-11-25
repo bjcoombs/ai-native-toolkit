@@ -86,9 +86,9 @@ jobs:
 
       # In the toolkit's own repository the scripts come from the
       # default-branch checkout above. Elsewhere they come from the toolkit
-      # at an immutable ref: a release tag (v<semver>) or a full commit sha.
-      # A branch name is refused, so a moving ref never runs with this
-      # job's write token.
+      # at a release tag (v<semver>) or a full commit sha. A branch name is
+      # refused. Only the sha is immutable: a tag can be moved, so pin the
+      # sha when the toolkit must not change under you.
       - name: Validate the toolkit ref
         id: toolkit
         env:
