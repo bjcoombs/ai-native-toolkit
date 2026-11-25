@@ -144,7 +144,7 @@ jobs:
       # --with at the same range the two dev groups pin; parallel as above.
       - name: Run pytest
         run: >-
-          uv run --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4"
+          uv run --with pytest --with pyyaml --with jsonschema --with "pytest-xdist>=3.6,<4"
           pytest -v -n auto --dist loadfile tests/
 
   lint:
@@ -177,11 +177,11 @@ jobs:
         run: uv run --locked ruff check .
         working-directory: skills/assess
 
-      # The fleet and marathon skill scripts (#1208) run on skills/assess's
-      # locked ruff; skills/fleet/ruff.toml and skills/marathon/ruff.toml extend
+      # The fleet, marathon and refine skill scripts (#1208, #1320) run on skills/assess's
+      # locked ruff; skills/fleet/ruff.toml, skills/marathon/ruff.toml and skills/refine/ruff.toml extend
       # its rules, so the gate is the same one.
-      - name: Ruff lint + complexity gate (skills/fleet, skills/marathon)
-        run: uv run --locked ruff check ../fleet/scripts ../marathon/scripts
+      - name: Ruff lint + complexity gate (skills/fleet, skills/marathon, skills/refine)
+        run: uv run --locked ruff check ../fleet/scripts ../marathon/scripts ../refine/scripts
         working-directory: skills/assess
 
       - name: Ruff lint + complexity gate (scripts)
@@ -196,11 +196,11 @@ jobs:
         run: uv run --locked mypy
         working-directory: skills/assess
 
-      # The fleet and marathon skill scripts (#1208) under the same strict
+      # The fleet, marathon and refine skill scripts (#1208, #1320) under the same strict
       # config: run from skills/assess, its mypy_path resolves the lib/ the
       # fleet scripts import, so those calls are checked, not Any.
-      - name: Mypy type gate (skills/fleet, skills/marathon)
-        run: uv run --locked mypy ../fleet/scripts ../marathon/scripts
+      - name: Mypy type gate (skills/fleet, skills/marathon, skills/refine)
+        run: uv run --locked mypy ../fleet/scripts ../marathon/scripts ../refine/scripts
         working-directory: skills/assess
 
       # Same gate, full strict, for the build pipeline and contract tooling;

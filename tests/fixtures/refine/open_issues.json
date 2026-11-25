@@ -1,0 +1,519 @@
+[
+  {
+    "number": 101,
+    "title": "widgets: add a frobnicator",
+    "body": "Size: 2 points.\n\n## Problem Statement\n\nThe problem statement of case 101: t101w0pro t101w1pro t101w2pro t101w3pro t101w4pro t101w5pro.\n\n## Technical Context\n\nThe technical context of case 101: t101w0tec t101w1tec t101w2tec t101w3tec t101w4tec t101w5tec.\n\n## Impact\n\nThe impact of case 101: t101w0imp t101w1imp t101w2imp t101w3imp t101w4imp t101w5imp.\n\n## Root Cause\n\nThe root cause of case 101: t101w0roo t101w1roo t101w2roo t101w3roo t101w4roo t101w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 101: t101w0sol t101w1sol t101w2sol t101w3sol t101w4sol t101w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n\nThis exact text appears twice.\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [
+      {
+        "id": "Lagent-ready",
+        "name": "agent-ready",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "createdAt": "2026-11-10T09:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/101",
+    "blockedBy": {
+      "nodes": [],
+      "totalCount": 0
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": []
+  },
+  {
+    "number": 102,
+    "title": "widgets: missing root cause",
+    "body": "Size: 2 points.\n\n## Problem Statement\n\nThe problem statement of case 102: t102w0pro t102w1pro t102w2pro t102w3pro t102w4pro t102w5pro.\n\n## Technical Context\n\nThe technical context of case 102: t102w0tec t102w1tec t102w2tec t102w3tec t102w4tec t102w5tec.\n\n## Impact\n\nThe impact of case 102: t102w0imp t102w1imp t102w2imp t102w3imp t102w4imp t102w5imp.\n\n## Solution Requirements\n\nThe solution requirements of case 102: t102w0sol t102w1sol t102w2sol t102w3sol t102w4sol t102w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [
+      {
+        "id": "Lagent-ready",
+        "name": "agent-ready",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "createdAt": "2026-11-20T09:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/102",
+    "blockedBy": {
+      "nodes": [],
+      "totalCount": 0
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": []
+  },
+  {
+    "number": 103,
+    "title": "Widgets: add a FROBNICATOR!",
+    "body": "Size: 2 points.\n\n### Problem Statement\n\nThe problem statement of case 101: t101w0pro t101w1pro t101w2pro t101w3pro t101w4pro t101w5pro.\n\n### Technical Context\n\nThe technical context of case 101: t101w0tec t101w1tec t101w2tec t101w3tec t101w4tec t101w5tec.\n\n### Impact\n\nThe impact of case 101: t101w0imp t101w1imp t101w2imp t101w3imp t101w4imp t101w5imp.\n\n### Root Cause\n\nThe root cause of case 101: t101w0roo t101w1roo t101w2roo t101w3roo t101w4roo t101w5roo.\n\n### Solution Requirements\n\nThe solution requirements of case 101: t101w0sol t101w1sol t101w2sol t101w3sol t101w4sol t101w5sol.\n\n### Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n\nThis exact text appears twice.\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [],
+    "createdAt": "2026-11-17T11:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/103",
+    "blockedBy": {
+      "nodes": [],
+      "totalCount": 0
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": []
+  },
+  {
+    "number": 104,
+    "title": "widgets: rename the knob",
+    "body": "Size: 2 points.\n\n## Problem Statement\n\nThe problem statement of case 104: t104w0pro t104w1pro t104w2pro t104w3pro t104w4pro t104w5pro.\n\n## Technical Context\n\nThe technical context of case 104: t104w0tec t104w1tec t104w2tec t104w3tec t104w4tec t104w5tec.\n\n## Impact\n\nThe impact of case 104: t104w0imp t104w1imp t104w2imp t104w3imp t104w4imp t104w5imp.\n\n## Root Cause\n\nThe root cause of case 104: t104w0roo t104w1roo t104w2roo t104w3roo t104w4roo t104w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 104: t104w0sol t104w1sol t104w2sol t104w3sol t104w4sol t104w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n\nFirst take on the knob.\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [
+      {
+        "id": "Lneeds-triage",
+        "name": "needs-triage",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "createdAt": "2026-11-19T12:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/104",
+    "blockedBy": {
+      "nodes": [],
+      "totalCount": 0
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": []
+  },
+  {
+    "number": 105,
+    "title": "widgets: rename the knob",
+    "body": "Size: 5 points\n\n## Problem Statement\n\nThe problem statement of case 105: t105w0pro t105w1pro t105w2pro t105w3pro t105w4pro t105w5pro.\n\n## Technical Context\n\nThe technical context of case 105: t105w0tec t105w1tec t105w2tec t105w3tec t105w4tec t105w5tec.\n\n## Impact\n\nThe impact of case 105: t105w0imp t105w1imp t105w2imp t105w3imp t105w4imp t105w5imp.\n\n## Root Cause\n\nThe root cause of case 105: t105w0roo t105w1roo t105w2roo t105w3roo t105w4roo t105w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 105: t105w0sol t105w1sol t105w2sol t105w3sol t105w4sol t105w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n\nSecond, larger take on the knob.\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [
+      {
+        "id": "Lagent-ready",
+        "name": "agent-ready",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "createdAt": "2026-11-20T09:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/105",
+    "blockedBy": {
+      "nodes": [
+        {
+          "id": "I101",
+          "number": 101,
+          "state": "OPEN",
+          "title": "#101",
+          "url": "https://github.com/acme/widgets/issues/101"
+        }
+      ],
+      "totalCount": 1
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": []
+  },
+  {
+    "number": 106,
+    "title": "widgets: knob epic",
+    "body": "## Problem Statement\n\nThe problem statement of case 106: t106w0pro t106w1pro t106w2pro t106w3pro t106w4pro t106w5pro.\n\n## Technical Context\n\nThe technical context of case 106: t106w0tec t106w1tec t106w2tec t106w3tec t106w4tec t106w5tec.\n\n## Impact\n\nThe impact of case 106: t106w0imp t106w1imp t106w2imp t106w3imp t106w4imp t106w5imp.\n\n## Root Cause\n\nThe root cause of case 106: t106w0roo t106w1roo t106w2roo t106w3roo t106w4roo t106w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 106: t106w0sol t106w1sol t106w2sol t106w3sol t106w4sol t106w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [
+      {
+        "id": "Lagent-ready",
+        "name": "agent-ready",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "createdAt": "2026-11-20T09:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/106",
+    "blockedBy": {
+      "nodes": [
+        {
+          "id": "I105",
+          "number": 105,
+          "state": "OPEN",
+          "title": "#105",
+          "url": "https://github.com/acme/widgets/issues/105"
+        }
+      ],
+      "totalCount": 1
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 2
+    },
+    "comments": []
+  },
+  {
+    "number": 107,
+    "title": "widgets: depends on prose only",
+    "body": "Size: 2 points.\n\n## Problem Statement\n\nThe problem statement of case 107: t107w0pro t107w1pro t107w2pro t107w3pro t107w4pro t107w5pro.\n\n## Technical Context\n\nThe technical context of case 107: t107w0tec t107w1tec t107w2tec t107w3tec t107w4tec t107w5tec.\n\n## Impact\n\n_No response_\n\n## Root Cause\n\nThe root cause of case 107: t107w0roo t107w1roo t107w2roo t107w3roo t107w4roo t107w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 107: t107w0sol t107w1sol t107w2sol t107w3sol t107w4sol t107w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n\nBlocked by #101. Needs the frobnicator.\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [
+      {
+        "id": "Lagent-ready",
+        "name": "agent-ready",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "createdAt": "2026-11-20T09:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/107",
+    "blockedBy": {
+      "nodes": [],
+      "totalCount": 0
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": []
+  },
+  {
+    "number": 108,
+    "title": "widgets: scope from a comment",
+    "body": "## Problem Statement\n\nThe knob is wrong.\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [
+      {
+        "id": "Lagent-ready",
+        "name": "agent-ready",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "createdAt": "2026-11-20T09:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/108",
+    "blockedBy": {
+      "nodes": [],
+      "totalCount": 0
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": [
+      {
+        "author": {
+          "login": "maintainer"
+        },
+        "body": "A question first.",
+        "createdAt": "2026-11-20T09:00:00Z"
+      },
+      {
+        "author": {
+          "login": "maintainer"
+        },
+        "body": "<!-- triage:clarified-scope -->\nClarified scope.\n\nSize: 3 points\n\n## Technical Context\n\nThe technical context of case 108: t108w0tec t108w1tec t108w2tec t108w3tec t108w4tec t108w5tec.\n\n## Impact\n\nThe impact of case 108: t108w0imp t108w1imp t108w2imp t108w3imp t108w4imp t108w5imp.\n\n## Root Cause\n\nThe root cause of case 108: t108w0roo t108w1roo t108w2roo t108w3roo t108w4roo t108w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 108: t108w0sol t108w1sol t108w2sol t108w3sol t108w4sol t108w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n",
+        "createdAt": "2026-11-20T09:00:00Z"
+      }
+    ]
+  },
+  {
+    "number": 109,
+    "title": "widgets: touch the parser",
+    "body": "Size: 2 points.\n\n## Problem Statement\n\nThe problem statement of case 109: t109w0pro t109w1pro t109w2pro t109w3pro t109w4pro t109w5pro.\n\n## Technical Context\n\nThe technical context of case 109: t109w0tec t109w1tec t109w2tec t109w3tec t109w4tec t109w5tec.\n\n## Impact\n\nThe impact of case 109: t109w0imp t109w1imp t109w2imp t109w3imp t109w4imp t109w5imp.\n\n## Root Cause\n\nThe root cause of case 109: t109w0roo t109w1roo t109w2roo t109w3roo t109w4roo t109w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 109: t109w0sol t109w1sol t109w2sol t109w3sol t109w4sol t109w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n\nEdit `src/widgets/parser.py` and `docs/`.\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [
+      {
+        "id": "Lagent-ready",
+        "name": "agent-ready",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "createdAt": "2026-11-20T09:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/109",
+    "blockedBy": {
+      "nodes": [],
+      "totalCount": 0
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": []
+  },
+  {
+    "number": 110,
+    "title": "widgets: cycle a",
+    "body": "Size: 2 points.\n\n## Problem Statement\n\nThe problem statement of case 110: t110w0pro t110w1pro t110w2pro t110w3pro t110w4pro t110w5pro.\n\n## Technical Context\n\nThe technical context of case 110: t110w0tec t110w1tec t110w2tec t110w3tec t110w4tec t110w5tec.\n\n## Impact\n\nThe impact of case 110: t110w0imp t110w1imp t110w2imp t110w3imp t110w4imp t110w5imp.\n\n## Root Cause\n\nThe root cause of case 110: t110w0roo t110w1roo t110w2roo t110w3roo t110w4roo t110w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 110: t110w0sol t110w1sol t110w2sol t110w3sol t110w4sol t110w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [
+      {
+        "id": "Lagent-ready",
+        "name": "agent-ready",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "createdAt": "2026-11-20T09:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/110",
+    "blockedBy": {
+      "nodes": [
+        {
+          "id": "I111",
+          "number": 111,
+          "state": "OPEN",
+          "title": "#111",
+          "url": "https://github.com/acme/widgets/issues/111"
+        }
+      ],
+      "totalCount": 1
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": []
+  },
+  {
+    "number": 111,
+    "title": "widgets: cycle b",
+    "body": "Size: 2 points.\n\n## Problem Statement\n\nThe problem statement of case 111: t111w0pro t111w1pro t111w2pro t111w3pro t111w4pro t111w5pro.\n\n## Technical Context\n\nThe technical context of case 111: t111w0tec t111w1tec t111w2tec t111w3tec t111w4tec t111w5tec.\n\n## Impact\n\nThe impact of case 111: t111w0imp t111w1imp t111w2imp t111w3imp t111w4imp t111w5imp.\n\n## Root Cause\n\nThe root cause of case 111: t111w0roo t111w1roo t111w2roo t111w3roo t111w4roo t111w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 111: t111w0sol t111w1sol t111w2sol t111w3sol t111w4sol t111w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [
+      {
+        "id": "Lagent-ready",
+        "name": "agent-ready",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "createdAt": "2026-11-20T09:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/111",
+    "blockedBy": {
+      "nodes": [
+        {
+          "id": "I110",
+          "number": 110,
+          "state": "OPEN",
+          "title": "#110",
+          "url": "https://github.com/acme/widgets/issues/110"
+        }
+      ],
+      "totalCount": 1
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": []
+  },
+  {
+    "number": 112,
+    "title": "widgets: reopened report",
+    "body": "Size: 1 point\n\n## Problem Statement\n\nThe problem statement of case 90: t90w0pro t90w1pro t90w2pro t90w3pro t90w4pro t90w5pro.\n\n## Technical Context\n\nThe technical context of case 90: t90w0tec t90w1tec t90w2tec t90w3tec t90w4tec t90w5tec.\n\n## Impact\n\nThe impact of case 90: t90w0imp t90w1imp t90w2imp t90w3imp t90w4imp t90w5imp.\n\n## Root Cause\n\nThe root cause of case 90: t90w0roo t90w1roo t90w2roo t90w3roo t90w4roo t90w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 90: t90w0sol t90w1sol t90w2sol t90w3sol t90w4sol t90w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n\nFiled once, closed as completed, filed again.\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [
+      {
+        "id": "Lagent-ready",
+        "name": "agent-ready",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "createdAt": "2026-11-21T09:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/112",
+    "blockedBy": {
+      "nodes": [],
+      "totalCount": 0
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": []
+  },
+  {
+    "number": 113,
+    "title": "widgets: refiled after rejection",
+    "body": "Size: 1 point\n\n## Problem Statement\n\nThe problem statement of case 91: t91w0pro t91w1pro t91w2pro t91w3pro t91w4pro t91w5pro.\n\n## Technical Context\n\nThe technical context of case 91: t91w0tec t91w1tec t91w2tec t91w3tec t91w4tec t91w5tec.\n\n## Impact\n\nThe impact of case 91: t91w0imp t91w1imp t91w2imp t91w3imp t91w4imp t91w5imp.\n\n## Root Cause\n\nThe root cause of case 91: t91w0roo t91w1roo t91w2roo t91w3roo t91w4roo t91w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 91: t91w0sol t91w1sol t91w2sol t91w3sol t91w4sol t91w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n\nClosed as not planned, then filed again.\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [
+      {
+        "id": "Lagent-ready",
+        "name": "agent-ready",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "createdAt": "2026-11-21T09:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/113",
+    "blockedBy": {
+      "nodes": [],
+      "totalCount": 0
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": []
+  },
+  {
+    "number": 114,
+    "title": "widgets: long text one",
+    "body": "Size: 2 points.\n\n## Problem Statement\n\nThe problem statement of case 115: t115w0pro t115w1pro t115w2pro t115w3pro t115w4pro t115w5pro.\n\n## Technical Context\n\nThe technical context of case 115: t115w0tec t115w1tec t115w2tec t115w3tec t115w4tec t115w5tec.\n\n## Impact\n\nThe impact of case 115: t115w0imp t115w1imp t115w2imp t115w3imp t115w4imp t115w5imp.\n\n## Root Cause\n\nThe root cause of case 115: t115w0roo t115w1roo t115w2roo t115w3roo t115w4roo t115w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 115: t115w0sol t115w1sol t115w2sol t115w3sol t115w4sol t115w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n\nword0 word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23 word24 word25 word26 word27 word28 word29 word30 word31 word32 word33 word34 word35 word36 word37 word38 word39 word40 word41 word42 word43 word44 word45 word46 word47 word48 word49 word50 word51 word52 word53 word54 word55 word56 word57 word58 word59\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [
+      {
+        "id": "Lagent-ready",
+        "name": "agent-ready",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "createdAt": "2026-11-20T09:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/114",
+    "blockedBy": {
+      "nodes": [
+        {
+          "id": "I90",
+          "number": 90,
+          "state": "CLOSED",
+          "title": "#90",
+          "url": "https://github.com/acme/widgets/issues/90"
+        }
+      ],
+      "totalCount": 1
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": []
+  },
+  {
+    "number": 115,
+    "title": "widgets: long text two",
+    "body": "Size: 2 points.\n\n## Problem Statement\n\nThe problem statement of case 115: t115w0pro t115w1pro t115w2pro t115w3pro t115w4pro t115w5pro.\n\n## Technical Context\n\nThe technical context of case 115: t115w0tec t115w1tec t115w2tec t115w3tec t115w4tec t115w5tec.\n\n## Impact\n\nThe impact of case 115: t115w0imp t115w1imp t115w2imp t115w3imp t115w4imp t115w5imp.\n\n## Root Cause\n\nThe root cause of case 115: t115w0roo t115w1roo t115w2roo t115w3roo t115w4roo t115w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 115: t115w0sol t115w1sol t115w2sol t115w3sol t115w4sol t115w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n\nword0 word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23 word24 word25 word26 word27 word28 word29 changed30 word31 word32 word33 word34 word35 word36 word37 word38 word39 word40 word41 word42 word43 word44 word45 word46 word47 word48 word49 word50 word51 word52 word53 word54 word55 word56 word57 word58 word59\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [
+      {
+        "id": "Lagent-ready",
+        "name": "agent-ready",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "createdAt": "2026-11-20T09:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/115",
+    "blockedBy": {
+      "nodes": [],
+      "totalCount": 0
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": []
+  },
+  {
+    "number": 116,
+    "title": "widgets: loose criteria",
+    "body": "Size: 2 points.\n\n## Problem Statement\n\nThe problem statement of case 116: t116w0pro t116w1pro t116w2pro t116w3pro t116w4pro t116w5pro.\n\n## Technical Context\n\nThe technical context of case 116: t116w0tec t116w1tec t116w2tec t116w3tec t116w4tec t116w5tec.\n\n## Impact\n\nThe impact of case 116: t116w0imp t116w1imp t116w2imp t116w3imp t116w4imp t116w5imp.\n\n## Root Cause\n\nThe root cause of case 116: t116w0roo t116w1roo t116w2roo t116w3roo t116w4roo t116w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 116: t116w0sol t116w1sol t116w2sol t116w3sol t116w4sol t116w5sol.\n\n## Success Criteria\n\n- It works well.\n- `pytest tests/test_knob.py` exits 0.\n- The knob turns,\n  smoothly.\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [
+      {
+        "id": "Lagent-ready",
+        "name": "agent-ready",
+        "description": "",
+        "color": "ededed"
+      }
+    ],
+    "createdAt": "2026-11-20T09:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/116",
+    "blockedBy": {
+      "nodes": [],
+      "totalCount": 0
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": []
+  },
+  {
+    "number": 117,
+    "title": "widgets: no criteria items",
+    "body": "Size: 2 points.\n\n## Problem Statement\n\nThe problem statement of case 117: t117w0pro t117w1pro t117w2pro t117w3pro t117w4pro t117w5pro.\n\n## Technical Context\n\nThe technical context of case 117: t117w0tec t117w1tec t117w2tec t117w3tec t117w4tec t117w5tec.\n\n## Impact\n\nThe impact of case 117: t117w0imp t117w1imp t117w2imp t117w3imp t117w4imp t117w5imp.\n\n## Root Cause\n\nThe root cause of case 117: t117w0roo t117w1roo t117w2roo t117w3roo t117w4roo t117w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 117: t117w0sol t117w1sol t117w2sol t117w3sol t117w4sol t117w5sol.\n\n## Success Criteria\n\nIt should work.\n",
+    "state": "OPEN",
+    "stateReason": null,
+    "labels": [],
+    "createdAt": "2026-11-19T10:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/acme/widgets/issues/117",
+    "blockedBy": {
+      "nodes": [],
+      "totalCount": 0
+    },
+    "subIssuesSummary": {
+      "completed": 0,
+      "percentCompleted": 0,
+      "total": 0
+    },
+    "comments": []
+  }
+]

@@ -1,0 +1,244 @@
+"""Per-issue readiness checks for the refinement script: pure functions over one `Issue` (issue #1320).
+
+The readiness rules are shared with `/issues` triage (`skills/issues/SKILL.md`,
+section "Triage Mode"): an issue is `agent-ready` only when its scope is
+clear, it overlaps no open PR, it is sized to one PR and its dependencies are
+blocked-by edges. The definition of ready
+(`docs/contributing/definition-of-ready.md`, "Ready checklist") writes those
+rules as five checklist items. This module decides what a script can decide
+and marks the rest `needs_judgement`:
+
+| Item / rule | Source | Here |
+|---|---|---|
+| `sections-present` | definition, script | heading match per the block; `missing_sections` |
+| `criteria-checkable` | definition, judgement | fail when Success Criteria holds no list item; otherwise judgement, with each item that has no code span and names no test as a hint |
+| `sized` | definition, script | `Size: <n> points` at most `max_points`, or sub-issues; `size_points` |
+| `blockers-recorded` | definition, judgement | fail when prose says "blocked by" or "depends on" an issue that has no blocked-by edge; otherwise judgement |
+| `no-open-question` | definition, judgement | always judgement |
+| overlap with an open PR | `/issues` "Overlap Sweep" | an open PR that closes the issue, or changes a file the issue names in a code span; `overlaps` |
+
+An item the definition marks `judgement` is never passed by the script; an
+item it marks `script` with no evaluator here is `needs_judgement` with a
+detail saying so, so a new checklist row degrades to a reader, not to a pass.
+
+Text sources: the issue body plus every comment whose first line is
+`<!-- triage:clarified-scope -->`, which the definition lets supply a section.
+A later source overrides an earlier size line.
+
+Section match: a heading at one of `heading_levels` whose text equals the
+name (trimmed, any case) has content when a line before the next heading of
+the same or a higher level is neither blank nor an `empty_markers` entry. A
+deeper heading inside the section counts as content. Lines inside code fences
+are never headings.
+
+Python 3.8 compatible and stdlib only.
+"""
+from __future__ import annotations
+
+import re
+from datetime import datetime, timezone
+from typing import Dict, Iterator, List, Optional, Set, Tuple
+
+from refine_types import ChecklistResult, Definition, Issue, Overlap, PullRequest
+
+CLARIFIED_MARKER = "<!-- triage:clarified-scope -->"
+UNTRIAGED_DAYS = 7
+
+_HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
+_FENCE = re.compile(r"^\s*(```|~~~)")
+_LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*)$")
+_CODE_SPAN = re.compile(r"`[^`]+`")
+_TEST_REF = re.compile(r"\btest_\w+|\btests?/\S+|\bpytest\b|\.py\b")
+_BLOCKER_PHRASE = re.compile(r"(?i)\b(?:blocked by|depends on)\b")
+_PATH_SPAN = re.compile(r"`([\w.\-/]+)`")
+
+
+def text_sources(issue: Issue) -> List[str]:
+    """The body, then each clarified-scope comment, in order."""
+    clarified = [c for c in issue["comments"] if c.lstrip().startswith(CLARIFIED_MARKER)]
+    return [issue["body"]] + clarified
+
+
+def _headings(lines: List[str]) -> Iterator[Tuple[int, int, str]]:
+    """(line index, level, text) of each heading outside code fences."""
+    fenced = False
+    for idx, line in enumerate(lines):
+        if _FENCE.match(line):
+            fenced = not fenced
+            continue
+        match = None if fenced else _HEADING.match(line)
+        if match:
+            yield idx, len(match.group(1)), match.group(2).strip()
+
+
+def section_texts(text: str, definition: Definition) -> Dict[str, str]:
+    """Each named section with content, keyed by its name from the definition."""
+    lines = text.splitlines()
+    heads = list(_headings(lines))
+    wanted = {name.strip().lower(): name for name in definition["sections"]}
+    markers = {m.strip() for m in definition["empty_markers"]}
+    found: Dict[str, str] = {}
+    for pos, (idx, level, title) in enumerate(heads):
+        name = wanted.get(title.lower())
+        if name is None or level not in definition["heading_levels"] or name in found:
+            continue
+        end = next((h[0] for h in heads[pos + 1:] if h[1] <= level), len(lines))
+        body = lines[idx + 1:end]
+        if any(ln.strip() and ln.strip() not in markers for ln in body):
+            found[name] = "\n".join(body)
+    return found
+
+
+def all_sections(issue: Issue, definition: Definition) -> Dict[str, str]:
+    """Sections from every text source; an earlier source wins a tie."""
+    merged: Dict[str, str] = {}
+    for source in text_sources(issue):
+        for name, body in section_texts(source, definition).items():
+            merged.setdefault(name, body)
+    return merged
+
+
+def missing_sections(issue: Issue, definition: Definition) -> List[str]:
+    """The definition's sections with no content in any text source, in definition order."""
+    present = all_sections(issue, definition)
+    return [name for name in definition["sections"] if name not in present]
+
+
+def criteria_items(section: str) -> List[str]:
+    """The list items of a Success Criteria section, continuation lines joined."""
+    items: List[str] = []
+    for line in section.splitlines():
+        match = _LIST_ITEM.match(line)
+        if match:
+            items.append(match.group(1).strip())
+        elif items and line.strip():
+            items[-1] = items[-1] + " " + line.strip()
+    return items
+
+
+def unanchored(items: List[str]) -> List[str]:
+    """Items with no code span and no test reference: hints for the reader."""
+    return [i for i in items if not _CODE_SPAN.search(i) and not _TEST_REF.search(i)]
+
+
+def size_points(issue: Issue, definition: Definition) -> Optional[int]:
+    """The last `size_pattern` match across the text sources, or None."""
+    pattern = re.compile(definition["size_pattern"])
+    points: Optional[int] = None
+    for source in text_sources(issue):
+        for match in pattern.finditer(source):
+            points = int(match.group(1))
+    return points
+
+
+def _issue_refs(text: str, repo: str) -> Set[int]:
+    refs = {int(n) for n in re.findall(r"(?<![\w/])#(\d+)\b", text)}
+    url = re.compile(r"https://github\.com/" + re.escape(repo) + r"/issues/(\d+)")
+    return refs | {int(n) for n in url.findall(text)}
+
+
+def prose_blockers(issue: Issue, repo: str) -> Set[int]:
+    """Issues named after "blocked by" or "depends on", up to the end of the sentence."""
+    found: Set[int] = set()
+    for source in text_sources(issue):
+        for match in _BLOCKER_PHRASE.finditer(source):
+            tail = re.split(r"\.\s|\n", source[match.end():], maxsplit=1)[0]
+            found |= _issue_refs(tail, repo)
+    found.discard(issue["number"])
+    return found
+
+
+def overlaps(issue: Issue, prs: List[PullRequest]) -> List[Overlap]:
+    """Open PRs that close this issue or change a file it names (`/issues` Overlap Sweep)."""
+    named = set()
+    for source in text_sources(issue):
+        named |= {p.lstrip("./") for p in _PATH_SPAN.findall(source) if "/" in p or "." in p.strip(".")}
+    dirs = {p for p in named if p.endswith("/")}
+    out: List[Overlap] = []
+    for pr in prs:
+        if issue["number"] in pr["closes"]:
+            out.append(Overlap(pr=pr["number"], kind="closes", files=[]))
+            continue
+        hit = sorted(f for f in pr["files"] if f in named or any(f.startswith(d) for d in dirs))
+        if hit:
+            out.append(Overlap(pr=pr["number"], kind="files", files=hit))
+    return out
+
+
+def untriaged_days(issue: Issue, definition: Definition, now: datetime) -> Optional[int]:
+    """Whole days open when the issue is untriaged for more than 7 days, else None.
+
+    Untriaged: it carries the triage label, or no label at all.
+    """
+    labels = issue["labels"]
+    if labels and definition["labels"]["triage"] not in labels:
+        return None
+    created = datetime.fromisoformat(issue["created_at"].replace("Z", "+00:00")).astimezone(timezone.utc)
+    age = now - created
+    if age.total_seconds() <= UNTRIAGED_DAYS * 86400:
+        return None
+    return age.days
+
+
+def _result(item_id: str, check: str, status: str, detail: str, hints: Optional[List[str]] = None) -> ChecklistResult:
+    return ChecklistResult(id=item_id, check=check, status=status, detail=detail, hints=hints or [])
+
+
+def _sections_item(missing: List[str]) -> Tuple[str, str]:
+    if missing:
+        return "fail", "missing: " + ", ".join(missing)
+    return "pass", "all sections present"
+
+
+def _criteria_item(issue: Issue, definition: Definition) -> Tuple[str, str, List[str]]:
+    section = all_sections(issue, definition).get("Success Criteria")
+    items = criteria_items(section) if section is not None else []
+    if not items:
+        return "fail", "Success Criteria holds no list item", []
+    loose = unanchored(items)
+    detail = f"{len(items)} item(s); {len(loose)} with no code span or test reference"
+    return "needs_judgement", detail, loose
+
+
+def _sized_item(points: Optional[int], subs: int, max_points: int) -> Tuple[str, str]:
+    if subs > 0:
+        return "pass", f"decomposed into {subs} sub-issue(s)"
+    if points is None:
+        return "fail", "no size line and no sub-issues"
+    if points > max_points:
+        return "fail", f"{points} points exceeds {max_points} with no sub-issues"
+    return "pass", f"{points} point(s)"
+
+
+def _blockers_item(issue: Issue, repo: str) -> Tuple[str, str, List[str]]:
+    edges = {b["number"] for b in issue["blocked_by"]}
+    unrecorded = sorted(prose_blockers(issue, repo) - edges)
+    if unrecorded:
+        names = ", ".join(f"#{n}" for n in unrecorded)
+        return "fail", f"prose names {names} as a blocker with no blocked-by edge", []
+    detail = f"{len(edges)} blocked-by edge(s)" if edges else "no blocked-by edges"
+    return "needs_judgement", detail, ["confirm no dependency is missing an edge"]
+
+
+def checklist(issue: Issue, definition: Definition, repo: str) -> List[ChecklistResult]:
+    """Every checklist item from the definition, in its order, with a status."""
+    results: List[ChecklistResult] = []
+    missing = missing_sections(issue, definition)
+    points = size_points(issue, definition)
+    for entry in definition["checklist"]:
+        item, check = entry["id"], entry["check"]
+        hints: List[str] = []
+        if item == "sections-present":
+            status, detail = _sections_item(missing)
+        elif item == "criteria-checkable":
+            status, detail, hints = _criteria_item(issue, definition)
+        elif item == "sized":
+            status, detail = _sized_item(points, issue["sub_issues_total"], definition["max_points"])
+        elif item == "blockers-recorded":
+            status, detail, hints = _blockers_item(issue, repo)
+        else:
+            status, detail = "needs_judgement", "no script check for this item"
+        if check == "judgement" and status == "pass":
+            status = "needs_judgement"
+        results.append(_result(item, check, status, detail, hints))
+    return results

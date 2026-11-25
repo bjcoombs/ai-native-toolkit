@@ -26,7 +26,7 @@ make check                  # every merge-gating suite, lint and type check: run
 make test-assess            # skills/assess pytest, with its coverage floor
 make test-scripts           # scripts/ pytest, with its coverage floor
 make test-contract          # plugin contract pytest (tests/)
-make lint                   # ruff and mypy for both packages and the fleet and marathon scripts
+make lint                   # ruff and mypy for both packages and the fleet, marathon and refine scripts
 make regen                  # rewrite every generated file and golden; run after a conflict in one
 
 bash scripts/build-standalone-skills.sh   # standalone ZIPs into dist/standalone-skills/
@@ -85,7 +85,7 @@ Claude Code's docs call flat `commands/<name>.md` files the older form of skills
 - Relative markdown links resolve. For an illustrative file mention use inline code (`` `CLAUDE.md` ``), not a clickable link.
 - No line-starting git conflict marker in any authored markdown; write a marker as inline code.
 - mypy `strict` with `disallow_any_generics`: no bare `dict` or `list` (use a `TypedDict`; shared run-context and orchestrator file shapes live in `lib/run_context_types.py`), and every `# type: ignore` carries a code.
-- **File-size ratchet.** Python files under `skills/assess/`, `skills/fleet/`, `skills/marathon/` and `scripts/` stay under 800 lines, or under their `[ceilings]` entry in `.file-size-ratchet.toml`. Split a file rather than raise its ceiling; a ceiling follows its file down.
+- **File-size ratchet.** Python files under `skills/assess/`, `skills/fleet/`, `skills/marathon/`, `skills/refine/` and `scripts/` stay under 800 lines, or under their `[ceilings]` entry in `.file-size-ratchet.toml`. Split a file rather than raise its ceiling; a ceiling follows its file down.
 - **Coverage floor.** `fail_under` in each package's `pyproject.toml` (93 for `skills/assess`, 91 for `scripts/`) only rises; lowering it needs a stated reason in the PR.
 - `/assess` layering is inward-only: a `lib/` module never imports an orchestrator script (`skills/assess/tests/test_self_architecture.py`). Add a test alongside any change to a deterministic module, and update its module docstring (a one-sentence summary line, then the details; the per-module reference), or the `lib/docs/<module>.md` its docstring points at, with it. `skills/assess/scripts/lib/README.md` holds the co-change seam map and the cross-module notes.
 - `instructions_grade` is `Optional[str]`: `null` means no instruction file at any known location, a different remediation from F.

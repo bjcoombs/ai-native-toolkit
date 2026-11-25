@@ -1,0 +1,511 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "refine-output.schema.json",
+  "title": "Backlog refinement plan",
+  "description": "Output of skills/refine/scripts/refine.py (issue #1320): readiness verdicts, duplicates, untriaged issues, the ready buffer and the critical path. Read-only: nothing in it has been applied.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "buffer",
+    "closed_window",
+    "critical_path",
+    "definition",
+    "dry_run",
+    "duplicates",
+    "generated_at",
+    "issue",
+    "issues",
+    "platform",
+    "repository",
+    "schema_version",
+    "summary",
+    "untriaged"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1"
+    },
+    "generated_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "repository": {
+      "type": "string"
+    },
+    "platform": {
+      "enum": [
+        "github",
+        "gitlab"
+      ]
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "definition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "version"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "issue": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "duplicate_pairs",
+        "open_issues",
+        "reported_issues",
+        "settled",
+        "untriaged",
+        "verdicts"
+      ],
+      "properties": {
+        "open_issues": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reported_issues": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "verdicts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "settled": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "untriaged": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duplicate_pairs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "blocked_by",
+          "checklist",
+          "created_at",
+          "duplicates",
+          "labels",
+          "missing_sections",
+          "number",
+          "overlaps",
+          "reasons",
+          "settled",
+          "size_points",
+          "sub_issues",
+          "title",
+          "untriaged_days",
+          "url",
+          "verdict"
+        ],
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "ready",
+              "needs_judgement",
+              "not_ready"
+            ]
+          },
+          "settled": {
+            "type": "boolean",
+            "description": "True when the verdict needs no judgement: ready, or not_ready from a script check, an open-PR overlap or an exact duplicate."
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "missing_sections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "checklist": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "check",
+                "detail",
+                "hints",
+                "id",
+                "status"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "check": {
+                  "enum": [
+                    "script",
+                    "judgement"
+                  ]
+                },
+                "status": {
+                  "enum": [
+                    "pass",
+                    "fail",
+                    "needs_judgement"
+                  ]
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "hints": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "size_points": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "sub_issues": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "blocked_by": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "number",
+                "state"
+              ],
+              "properties": {
+                "number": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "state": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "overlaps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "files",
+                "kind",
+                "pr"
+              ],
+              "properties": {
+                "pr": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "kind": {
+                  "enum": [
+                    "closes",
+                    "files"
+                  ]
+                },
+                "files": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "duplicates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "basis",
+                "closable",
+                "kind",
+                "number",
+                "similarity",
+                "survivor"
+              ],
+              "properties": {
+                "number": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "kind": {
+                  "enum": [
+                    "exact",
+                    "near"
+                  ]
+                },
+                "basis": {
+                  "enum": [
+                    "title_and_body",
+                    "title",
+                    "body"
+                  ]
+                },
+                "similarity": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "survivor": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "closable": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "untriaged_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "duplicates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "basis",
+          "closable",
+          "duplicate",
+          "kept",
+          "kind",
+          "similarity"
+        ],
+        "properties": {
+          "kept": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "duplicate": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "kind": {
+            "enum": [
+              "exact",
+              "near"
+            ]
+          },
+          "basis": {
+            "enum": [
+              "title_and_body",
+              "title",
+              "body"
+            ]
+          },
+          "similarity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "closable": {
+            "type": "boolean"
+          }
+        },
+        "description": "A duplicate pair. Only an exact pair whose duplicate is open is closable; near pairs are for review."
+      }
+    },
+    "untriaged": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "days",
+          "number",
+          "reason"
+        ],
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "days": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "enum": [
+              "needs_triage_label",
+              "no_labels"
+            ]
+          }
+        }
+      }
+    },
+    "buffer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "builder_slots",
+        "depth",
+        "issues",
+        "meets_target",
+        "rule",
+        "target"
+      ],
+      "properties": {
+        "depth": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "builder_slots": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "target": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "meets_target": {
+          "type": "boolean"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "rule": {
+          "type": "string"
+        }
+      }
+    },
+    "critical_path": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cycle_members",
+        "issues",
+        "length",
+        "points",
+        "unsized"
+      ],
+      "properties": {
+        "length": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "points": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unsized": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "cycle_members": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "closed_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "count",
+        "days",
+        "truncated"
+      ],
+      "properties": {
+        "days": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

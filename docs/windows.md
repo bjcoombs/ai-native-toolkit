@@ -121,10 +121,10 @@ need it.
 
 ```bash
 uv --directory skills/assess run --locked ruff check .
-uv --directory skills/assess run --locked ruff check ../fleet/scripts ../marathon/scripts
+uv --directory skills/assess run --locked ruff check ../fleet/scripts ../marathon/scripts ../refine/scripts
 uv --directory scripts run --locked ruff check .
 uv --directory skills/assess run --locked mypy
-uv --directory skills/assess run --locked mypy ../fleet/scripts ../marathon/scripts
+uv --directory skills/assess run --locked mypy ../fleet/scripts ../marathon/scripts ../refine/scripts
 uv --directory scripts run --locked mypy
 ```
 
@@ -138,7 +138,7 @@ uv --directory scripts lock --check
 uv --directory skills/assess run --locked pytest -v -n auto --dist loadfile --cov=scripts --cov-report=term --cov-report=xml:coverage.xml
 uv --directory skills/assess run --locked pytest -v -p no:xdist -m cpu_budget --no-cov
 uv --directory scripts run --locked pytest -v -n auto --dist loadfile --cov=. --cov-report=term --cov-report=xml:coverage.xml
-uv run --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4" pytest -v -n auto --dist loadfile tests/
+uv run --with pytest --with pyyaml --with jsonschema --with "pytest-xdist>=3.6,<4" pytest -v -n auto --dist loadfile tests/
 ```
 
 then the four `make lint` lines above.
