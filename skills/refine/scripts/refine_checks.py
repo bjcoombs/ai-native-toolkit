@@ -22,7 +22,11 @@ item it marks `script` with no evaluator here is `needs_judgement` with a
 detail saying so, so a new checklist row degrades to a reader, not to a pass.
 
 Text sources: the issue body plus every comment whose first line is
-`<!-- triage:clarified-scope -->`, which the definition lets supply a section.
+`<!-- triage:clarified-scope -->`, which the definition lets supply or replace
+a section. A clarified-scope comment replaces the body's version of each
+section it contains and leaves the others alone; between comments the newest
+wins (by creation time, then comment order), the same newest-wins rule the
+size marker follows.
 The size comes from two producers, whichever is newer: a comment whose first
 line matches `size_marker` (`<!-- refine:size N -->`, written by `/issues`
 triage and the refiner with a one-line reason) or a `size_pattern` line in the
@@ -60,9 +64,11 @@ _PATH_SPAN = re.compile(r"`([\w.\-/]+)`")
 
 
 def text_sources(issue: Issue) -> List[str]:
-    """The body, then each clarified-scope comment, in order."""
-    clarified = [c["body"] for c in issue["comments"] if c["body"].lstrip().startswith(CLARIFIED_MARKER)]
-    return [issue["body"]] + clarified
+    """The body, then each clarified-scope comment, oldest first (creation time, then comment order)."""
+    clarified = sorted(
+        (c["created_at"], order, c["body"]) for order, c in enumerate(issue["comments"])
+        if c["body"].lstrip().startswith(CLARIFIED_MARKER))
+    return [issue["body"]] + [body for _, _, body in clarified]
 
 
 def _headings(lines: List[str]) -> Iterator[Tuple[int, int, str]]:
@@ -96,11 +102,14 @@ def section_texts(text: str, definition: Definition) -> Dict[str, str]:
 
 
 def all_sections(issue: Issue, definition: Definition) -> Dict[str, str]:
-    """Sections from every text source; an earlier source wins a tie."""
+    """Sections from every text source; the newest source holding a section wins.
+
+    A clarified-scope comment replaces the body's version of each section it
+    contains; a section it lacks keeps the body's (or an older comment's) version.
+    """
     merged: Dict[str, str] = {}
     for source in text_sources(issue):
-        for name, body in section_texts(source, definition).items():
-            merged.setdefault(name, body)
+        merged.update(section_texts(source, definition))
     return merged
 
 

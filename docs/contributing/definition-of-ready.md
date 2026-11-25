@@ -59,7 +59,7 @@ An issue is ready when every item holds. Each heading is the item's `id` in the 
 
 ### `sections-present`
 
-The body has the six sections in `sections`, each with content: Problem Statement, Technical Context, Impact, Root Cause, Solution Requirements, Success Criteria. A clarified-scope comment (first line `<!-- triage:clarified-scope -->`) may supply a section the body lacks.
+The body has the six sections in `sections`, each with content: Problem Statement, Technical Context, Impact, Root Cause, Solution Requirements, Success Criteria. A clarified-scope comment (first line `<!-- triage:clarified-scope -->`) may supply a section the body lacks or replace the body's version of a section it contains, and the newest comment holding a section wins.
 
 **Check: script.** Heading match as the block describes; order is not checked. A section whose only content is `_No response_`, which GitHub writes for an empty optional form field, counts as missing.
 
