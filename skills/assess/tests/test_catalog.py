@@ -57,9 +57,11 @@ def test_catalog_order_is_independent_of_the_manifest_order() -> None:
     assert render_json(build_catalog(cm.parse_manifest(data))) \
         == render_json(build_catalog(cm.parse_manifest(shuffled)))
     catalog = build_catalog()
-    for key, field in (("signals", "path"), ("scans", "name"), ("collectors", "name"), ("findings", "name"),
-                       ("rows", "id")):
-        names = [str(e[field]) for e in catalog[key]]  # type: ignore[literal-required]
+    for key, names in (("signals", [s["path"] for s in catalog["signals"]]),
+                       ("scans", [s["name"] for s in catalog["scans"]]),
+                       ("collectors", [c["name"] for c in catalog["collectors"]]),
+                       ("findings", [f["name"] for f in catalog["findings"]]),
+                       ("rows", [r["id"] for r in catalog["rows"]])):
         assert names == sorted(names), key
 
 

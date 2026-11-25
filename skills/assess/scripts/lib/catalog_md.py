@@ -205,7 +205,7 @@ def _by_tag(catalog: Catalog) -> list[str]:
            "Each condition carries one or more truth tags: the truth it keeps honest. A condition "
            "holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. "
            "A condition with several tags is listed under its first tag and named under the others "
-           "as shared; it counts once. Conditions are sorted by id.", ""]
+           "as shared; a level result counts it once. Conditions are sorted by id.", ""]
     out += [f"- {t['title']} (`{t['id']}`)" for t in catalog["tags"]]
     out.append("")
     lines = _lines(catalog)

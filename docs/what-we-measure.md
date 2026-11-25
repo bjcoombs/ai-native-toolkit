@@ -28,7 +28,7 @@ A scan that feeds no maturity-model criterion is `unclassified` until its eviden
 
 ## Conditions by truth tag
 
-Each condition carries one or more truth tags: the truth it keeps honest. A condition holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. A condition with several tags is listed under its first tag and named under the others as shared; it counts once. Conditions are sorted by id.
+Each condition carries one or more truth tags: the truth it keeps honest. A condition holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. A condition with several tags is listed under its first tag and named under the others as shared; a level result counts it once. Conditions are sorted by id.
 
 - Behaviour (`behaviour`)
 - Contracts (`contracts`)

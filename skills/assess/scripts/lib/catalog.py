@@ -421,7 +421,11 @@ def _scans(manifest: cm.CheckManifest, rows: Sequence[CatalogRow],
 
 
 def stable_model(model: MaturityModel) -> MaturityModel:
-    """``model`` with its rows sorted by id, so a new row lands at a fixed place (#1239)."""
+    """``model`` with its rows sorted by id, so a new row lands at a fixed place (#1239).
+
+    The catalog trades the model's read-side to write-side progression for this order on
+    purpose: a row keyed by its id has one place whatever PR adds it, so parallel additions
+    merge cleanly. ``levels/default.toml`` and every report keep the model's own order."""
     out = copy.copy(model)
     out["rows"] = sorted(model["rows"], key=lambda r: r["id"])
     return out
