@@ -6363,7 +6363,7 @@
       "collector": "core.backlog_ready",
       "input_class": "config_text",
       "grade": "config_only",
-      "null_means": "form_unreadable: a form could not be read and none read has a required field; gitlab_templates: a GitLab repository, whose issue templates have no required fields"
+      "null_means": "form_unreadable: a form could not be read and none read has a required field; gitlab_templates: a GitLab repository, whose issue templates are not read yet"
     },
     {
       "path": "backlog_ready.stale_job_safe",

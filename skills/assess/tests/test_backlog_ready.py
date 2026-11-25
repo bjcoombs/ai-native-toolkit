@@ -191,7 +191,7 @@ def test_a_gitlab_repository_reads_the_form_not_measured(tmp_path: Path) -> None
     assert (block["required_form_field"], block["required_form_field_reason"]) == (None, "gitlab_templates")
     assert (block["untriaged_on_open"], block["untriaged_on_open_reason"]) == (None, "gitlab_ci_not_read")
     assert _condition(block)["state"] == "unmet"  # no ready label documented
-    (root / "CONTRIBUTING.md").write_text("## refine::ready\n\n- has success criteria\n", encoding="utf-8")
+    (root / "CONTRIBUTING.md").write_text("## `refine::ready`\n\n- has success criteria\n", encoding="utf-8")
     block = scan_backlog_ready(root)
     assert block["ready_label_documented"] is True
     assert _condition(block)["state"] == "not_measured"  # never unmet for want of a GitHub file
@@ -247,6 +247,23 @@ def test_label_adding_steps(tmp_path: Path, step: str) -> None:
     assert scan_backlog_ready(_repo(tmp_path, {TRIAGE: wf}))["untriaged_on_open"] is True
 
 
+def test_label_and_call_must_share_a_step(tmp_path: Path) -> None:
+    wf = ("on:\n  issues:\n    types: [opened]\njobs:\n  triage:\n    runs-on: ubuntu-latest\n    steps:\n"
+          "      - run: echo needs-triage\n      - run: gh issue edit 1 --add-label bug\n")
+    assert scan_backlog_ready(_repo(tmp_path, {TRIAGE: wf}))["untriaged_on_open"] is False
+
+
+@pytest.mark.parametrize("indicator", [">-", "|"])
+def test_a_block_scalar_exempt_list_is_read(indicator: str) -> None:
+    from lib.backlog_ready import _with_inputs
+    from lib.ci_masking import IndentTree, parse_lines
+    text = (f"jobs:\n  s:\n    steps:\n      - uses: actions/stale@v9\n        with:\n"
+            f"          exempt-issue-labels: {indicator}\n            pinned,\n            agent-ready\n")
+    tree = IndentTree(parse_lines(text.splitlines()))
+    uses = next(i for i, ln in enumerate(tree.lines) if ln.key == "uses")
+    assert stale_state(_with_inputs(tree, uses), READY_LABELS) == "safe"
+
+
 @pytest.mark.parametrize("step", [
     "      - name: needs-triage --add-label\n        run: echo hi\n",  # a step name
     "      # gh issue edit --add-label needs-triage\n      - run: echo hi\n",  # a comment
@@ -271,12 +288,16 @@ def test_a_workflow_in_a_subfolder_is_not_read(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(("text", "met"), [
     ("## `agent-ready`\n\nSome words.\n\n- has criteria\n", True),
-    ("## Agent-ready\n\n### Criteria\n\n1. has criteria\n", True),
+    ("## The `Agent-ready` label\n\n### Criteria\n\n1. has criteria\n", True),
+    ("State `READY` then:\n\n- start\n", False),  # a constant, not the label
+    ("A documented ready label is the bar:\n\n- one\n", False),  # prose
+    ("Make your codebase agent-ready:\n\n- add tests\n", False),  # prose, not a label
+    ("## Backlog kept agent-ready\n\n- one\n", False),
     ("Label an issue `ready` when:\n\n- it has criteria\n", True),
-    ("Use the ready label when:\n* it has criteria\n", True),
-    ("Issues marked triage/accepted meet these:\n- one\n", True),
-    ("## refine::ready\n\n- has success criteria\n", True),  # a GitLab scoped label
-    ("## refine::readying\n\n- not the label\n", False),
+    ("Use the 'ready' label when:\n* it has criteria\n", True),
+    ("Issues marked \"triage/accepted\" meet these:\n- one\n", True),
+    ("## `refine::ready`\n\n- has success criteria\n", True),  # a GitLab scoped label
+    ("## `refine::readying`\n\n- not the label\n", False),
     ("When you are ready to merge:\n\n- push\n", False),  # prose, no label
     ("The `agent-ready` label is applied by hand.\n\nOther text.\n\n- unrelated\n", False),
     ("## agent-ready\n\nNo list here.\n\n## Other\n\n- unrelated\n", False),

@@ -20,25 +20,25 @@ lives in the maintainers' heads, so each issue an agent picks up restates it in 
   repository holds no GitHub issue form and is on GitLab (``.gitlab-ci.yml`` or a ``.gitlab/``
   folder): GitLab issue templates are not read yet.
 - ``untriaged_on_open``: a workflow (directly under ``.github/workflows/``) triggered by
-  ``issues`` with type ``opened`` (no ``types`` means every type) names an untriaged label in its
-  jobs, on a line that is not a ``name:``, ``if:`` or comment, beside a label-adding call
-  (``--add-label``, ``--label``, ``addLabels``, ``add-labels`` or a ``labels:`` input). Null
+  ``issues`` with type ``opened`` (no ``types`` means every type) has a step that names an
+  untriaged label beside a label-adding call (``--add-label``, ``--label``, ``addLabels``,
+  ``add-labels`` or a ``labels:`` input); ``name:``, ``if:`` and comment lines do not count. Null
   ``workflow_unreadable`` when none does and a workflow's ``on`` could not be read. Null
   ``gitlab_ci_not_read`` on a GitLab repository with no GitHub workflow: GitLab has no CI trigger
   for a new issue, and its counterpart, a scheduled refinement job, is not read yet.
 - ``ready_label_documented``: a Markdown file at HEAD (``lib.docs.doc_graph.is_excluded_path``
   drops ``.assess/``, ``tests/fixtures/`` and the like) has a heading or paragraph naming a ready
   label with a list under it: a list item in the heading's section, or one after the paragraph.
-  Fenced code is skipped. A label with ``-``, ``/``, ``:`` or a space matches as a whole token; a
-  one-word label (``ready``) only in backticks or quotes or beside the word "label", so prose
-  ("ready to merge") is no label. A GitLab scoped label (``refine::ready``) is one token.
+  Fenced code is skipped. A label counts only in backticks or quotes, so prose ("the ready label",
+  "make the code agent-ready") is no label; a one-word label keeps its case (a `READY` constant is
+  not ``ready``). A GitLab scoped label (``refine::ready``) is one token.
 - ``stale_job_safe``: true when no step uses ``actions/stale``, or every such step leaves ready
   issues open: ``days-before-issue-stale`` / ``days-before-stale`` or ``days-before-issue-close``
-  / ``days-before-close`` negative (never), or ``exempt-issue-labels`` naming a ready label. The
-  action's default closes after 7 days, so a step with none of these is unsafe (false). Null
+  / ``days-before-close`` negative (never), or ``exempt-issue-labels`` naming a ready label (a
+  block scalar's lines are joined). The action's default closes after 7 days, so a step with none of these is unsafe (false). Null
   ``stale_input_unresolved`` when no step is unsafe but one sets an input to an expression.
 
-**Labels.** Matching ignores case. ``UNTRIAGED_LABELS`` and ``READY_LABELS`` are the defaults; a
+**Labels.** Matching ignores case, except a one-word label in documentation (above). ``UNTRIAGED_LABELS`` and ``READY_LABELS`` are the defaults; a
 ``[backlog_ready]`` table in ``.assess/config.toml`` replaces either list
 (``assess_config.load_backlog_ready_labels``), and ``labels_from_config`` says so.
 
@@ -116,11 +116,10 @@ def _token(label: str) -> re.Pattern[str]:
 
 
 def _named(label: str) -> re.Pattern[str]:
-    """A label as written in documentation: a distinctive one bare, a one-word one marked."""
-    if re.search(r"[-/:\s]", label):
-        return _token(label)
-    word = re.escape(label)
-    return re.compile(rf"[`'\"]{word}[`'\"]|(?<![\w-]){word}\s+label\b|\blabel\s*:?\s+[`'\"]?{word}(?![\w-])", re.I)
+    """A label as written in documentation: in backticks or quotes. A one-word label keeps its
+    case, so a constant (`READY`) is not the label ``ready``; any other ignores case."""
+    flags = re.I if re.search(r"[-/:\s]", label) else 0
+    return re.compile(rf"[`'\"]{re.escape(label)}[`'\"]", flags)
 
 
 def _unbalanced(value: str) -> bool:
@@ -213,19 +212,30 @@ def _issue_types(tree: IndentTree, lines: list[str]) -> list[str] | None:
     return [_scalar(tree.lines[k].value) for k in tree.children(types)]
 
 
+def _step_spans(tree: IndentTree, jobs: int) -> list[range]:
+    """The line span of each step under ``jobs`` (an item of a job's ``steps:`` list)."""
+    spans: list[range] = []
+    for job in tree.children(jobs):
+        steps = _child(tree, job, "steps")
+        for item in tree.items(steps) if steps is not None else []:
+            spans.append(range(min(item), max(tree.subtree(k).stop for k in item)))
+    return spans
+
+
 def _applies_label(text: str, labels: tuple[str, ...]) -> bool:
-    """True when the jobs name an untriaged label beside a label-adding call (see the module doc)."""
-    tree = IndentTree(parse_lines(text.splitlines()))
+    """True when one step names an untriaged label beside a label-adding call (see the module doc)."""
+    raw = text.splitlines()
+    tree = IndentTree(parse_lines(raw))
     jobs = _top(tree, "jobs")
     if jobs is None:
         return False
-    raw = text.splitlines()
-    kept = [raw[i] for i in tree.subtree(jobs) if i < len(raw) and not raw[i].lstrip().startswith("#")
-            and tree.lines[i].key not in _SKIP_KEYS]
-    joined = "\n".join(strip_comment(ln) for ln in kept)
-    if not any(_ADDS_LABEL.search(ln) for ln in kept):
-        return False
-    return any(_token(label).search(joined) for label in labels)
+    for span in _step_spans(tree, jobs):
+        kept = [strip_comment(raw[i]) for i in span if i < len(raw) and not raw[i].lstrip().startswith("#")
+                and tree.lines[i].key not in _SKIP_KEYS]
+        if any(_ADDS_LABEL.search(ln) for ln in kept) and any(
+                _token(label).search("\n".join(kept)) for label in labels):
+            return True
+    return False
 
 
 def _untriaged(texts: dict[str, str], labels: tuple[str, ...]) -> tuple[bool | None, str | None]:
@@ -247,11 +257,19 @@ def _untriaged(texts: dict[str, str], labels: tuple[str, ...]) -> tuple[bool | N
 
 
 def _with_inputs(tree: IndentTree, uses: int) -> dict[str, str]:
+    """A step's ``with:`` inputs; a block scalar (``>-``, ``|``) has its lines joined by commas."""
     step = tree.siblings[tree.mapping_of[uses]]
     with_key = next((k for k in step if tree.lines[k].key == "with"), None)
     if with_key is None:
         return {}
-    return {tree.lines[k].key.lower(): _scalar(tree.lines[k].value) for k in tree.children(with_key)}
+    inputs: dict[str, str] = {}
+    for k in tree.children(with_key):
+        value = tree.lines[k].value
+        if re.match(r"^[|>][-+0-9]*$", value):
+            owned = [tree.lines[i].value for i, owner in enumerate(tree.owner) if owner == k]
+            value = ",".join(v for v in owned if v)
+        inputs[tree.lines[k].key.lower()] = _scalar(value)
+    return inputs
 
 
 def _negative(value: str | None) -> bool | None:

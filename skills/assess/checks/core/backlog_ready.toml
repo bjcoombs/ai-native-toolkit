@@ -39,7 +39,7 @@ collector = "core.backlog_ready"
 path = "backlog_ready.required_form_field"
 type = "bool"
 evidence = "config_text"
-null_means = "form_unreadable: a form could not be read and none read has a required field; gitlab_templates: a GitLab repository, whose issue templates have no required fields"
+null_means = "form_unreadable: a form could not be read and none read has a required field; gitlab_templates: a GitLab repository, whose issue templates are not read yet"
 
 [[entries]]
 id = "core:backlog_ready.untriaged_on_open"
