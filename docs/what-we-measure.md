@@ -353,7 +353,7 @@ It tells a documentation repository from a software one, so the report does not 
 
 An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up.
 
-Whether new issues are asked for structure (an issue form with a required field), marked untriaged when they arrive (a workflow on issues opened that adds an untriaged label), and judged against a documented ready label with its criteria, and whether a stale job can close a ready issue. Committed files only.
+How new issues are taken in, read from committed files. An issue form has a required field. A workflow on issues opened adds an untriaged label. A ready label is documented with its criteria. No stale job can close a ready issue.
 
 - Collector: `core.backlog_ready`, reading `repo_root`.
 - Network: no.
@@ -362,10 +362,10 @@ Whether new issues are asked for structure (an issue form with a required field)
 - Used by: no row or finding yet.
 - Evidence: `backlog_ready.ready_label_documented` config_text (config_only), `backlog_ready.required_form_field` config_text (config_only), `backlog_ready.stale_job_safe` config_text (config_only), `backlog_ready.untriaged_on_open` config_text (config_only).
 - Not measured when:
-  - `form_unreadable`: No issue form read has a required field, and a form could not be read: a tab indent, an unclosed flow collection, or no top-level body list. Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue.
+  - `form_unreadable`: No issue form read has a required field, and a form could not be read. Causes are a tab indent, an unclosed flow collection, or no top-level body list. Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue.
   - `gitlab_templates`: The repository is on GitLab and holds no GitHub issue form. A GitLab issue template is Markdown with no required fields, so the form signal is not measured. Nothing to change: required fields are not measured on GitLab.
   - `workflow_unreadable`: No workflow read adds an untriaged label when an issue opens, and a workflow's on: key could not be read. Nothing to change if that workflow labels new issues; a plain on: issues: types: [opened] lets the scan read it.
-  - `stale_input_unresolved`: No stale job can close a ready issue for certain, but one sets its close days or exempt labels to an expression this reader does not follow. Nothing to change if the job exempts the ready label; a literal exempt-issue-labels or days-before-issue-close: -1 lets the scan read it.
+  - `stale_input_unresolved`: No stale job is sure to close a ready issue. But one sets its close days or exempt labels to an expression, which this reader does not follow. Nothing to change if the job exempts the ready label; a literal exempt-issue-labels or days-before-issue-close: -1 lets the scan read it.
 
 ### `behaviour`: Keyhole blocks: behaviour
 

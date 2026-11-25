@@ -2276,7 +2276,7 @@
     {
       "name": "backlog_ready",
       "title": "Backlog kept agent-ready (intake configuration)",
-      "summary": "Whether new issues are asked for structure (an issue form with a required field), marked untriaged when they arrive (a workflow on issues opened that adds an untriaged label), and judged against a documented ready label with its criteria, and whether a stale job can close a ready issue. Committed files only.",
+      "summary": "How new issues are taken in, read from committed files. An issue form has a required field. A workflow on issues opened adds an untriaged label. A ready label is documented with its criteria. No stale job can close a ready issue.",
       "collector": "core.backlog_ready",
       "reads": [
         "repo_root"
@@ -2300,7 +2300,7 @@
       "unknown_reasons": [
         {
           "code": "form_unreadable",
-          "means": "No issue form read has a required field, and a form could not be read: a tab indent, an unclosed flow collection, or no top-level body list.",
+          "means": "No issue form read has a required field, and a form could not be read. Causes are a tab indent, an unclosed flow collection, or no top-level body list.",
           "next_step": "Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue."
         },
         {
@@ -2315,7 +2315,7 @@
         },
         {
           "code": "stale_input_unresolved",
-          "means": "No stale job can close a ready issue for certain, but one sets its close days or exempt labels to an expression this reader does not follow.",
+          "means": "No stale job is sure to close a ready issue. But one sets its close days or exempt labels to an expression, which this reader does not follow.",
           "next_step": "Nothing to change if the job exempts the ready label; a literal exempt-issue-labels or days-before-issue-close: -1 lets the scan read it."
         }
       ],
