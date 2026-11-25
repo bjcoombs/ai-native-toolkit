@@ -236,6 +236,8 @@ def test_a_required_key_outside_validations_is_not_a_required_field() -> None:
     ("on: issues\n", True),
     ("on:\n  issues: {types: [opened]}\n", True),
     ("on:\n  issues:\n    types: [labeled]\n", False),
+    ("on: {issues: {types: [labeled]}}\n", False),
+    ("on: {issues: {types: [opened, labeled]}}\n", True),
     ("on:\n  pull_request:\n", False),
 ])
 def test_the_issues_opened_trigger(tmp_path: Path, on: str, met: bool) -> None:
@@ -249,6 +251,7 @@ def test_the_issues_opened_trigger(tmp_path: Path, on: str, met: bool) -> None:
     "            github.rest.issues.addLabels({owner, repo, issue_number, labels: ['status: needs triage']})\n",
     "      - run: gh issue edit 1 --add-label \"needs triage\"\n",
     "      - run: gh issue edit 1 --add-label bug,needs-triage\n",
+    "      - run: gh issue create --title t --label needs-triage\n",
     "      - uses: actions/github-script@v7\n        with:\n          script: |\n"
     "            await github.rest.issues.addLabels({\n              owner, repo, issue_number,\n"
     "              labels: ['needs-triage'],\n            })\n",
@@ -287,6 +290,7 @@ def test_a_block_scalar_exempt_list_is_read(indicator: str) -> None:
     "      - uses: andymckay/labeler@1.0.4\n        with:\n          remove-labels: needs-triage\n",
     "      - id: triage\n        run: gh issue edit 1 --add-label bug\n",  # a step id
     "      - run: gh issue edit 1 --add-label bug --body-file triage.md\n",  # a path
+    "      - run: gh issue list --label triage | xargs -n1 gh issue edit --add-label bug\n",  # a filter
 ])
 def test_lookalikes_are_not_an_untriaged_label(tmp_path: Path, step: str) -> None:
     wf = "on:\n  issues:\n    types: [opened]\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n" + step

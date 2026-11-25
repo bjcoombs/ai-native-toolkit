@@ -206,6 +206,10 @@ def _issue_types(tree: IndentTree, lines: list[str]) -> list[str] | None:
     on = next((i for i, raw in enumerate(lines) if _ON.match(raw)), None)
     if on is None:
         return []
+    flow = strip_comment(lines[on].split(":", 1)[1])
+    if flow.startswith("{"):  # ``on: {issues: {types: [labeled]}}``
+        match = re.search(r"issues\s*:\s*\{[^{}]*?types\s*:\s*(\[[^\]]*\]|[\w-]+)", flow)
+        return [] if match is None else [w.strip(" '\"") for w in match.group(1).strip("[]").split(",")]
     issues = _child(tree, on, "issues")
     if issues is None:
         return []  # a flow ``on: [issues]`` or ``on: issues``: every type
@@ -232,7 +236,20 @@ def _step_spans(tree: IndentTree, jobs: int) -> list[range]:
     return spans
 
 
-_GH_LABEL_ARG = re.compile(r"""--(?:add-)?label(?:\s+|=)("[^"]*"|'[^']*'|[^\s;&|]+)""")
+_GH_ADD_ARG = re.compile(r"""--add-label(?:\s+|=)("[^"]*"|'[^']*'|[^\s;&|]+)""")
+_GH_CREATE_ARG = re.compile(r"""--label(?:\s+|=)("[^"]*"|'[^']*'|[^\s;&|]+)""")
+_SEGMENTS = re.compile(r"\|\|?|;|&&")
+
+
+def _gh_added(line: str) -> list[str]:
+    """The labels a shell line's ``gh`` commands add: ``--add-label`` anywhere, ``--label`` only in a
+    ``gh issue create`` segment (elsewhere it filters a list). Segments split on ``|``, ``;``, ``&&``."""
+    out: list[str] = []
+    for segment in _SEGMENTS.split(line):
+        out += _GH_ADD_ARG.findall(segment)
+        if re.search(r"\bgh\s+issue\s+create\b", segment):
+            out += _GH_CREATE_ARG.findall(segment)
+    return [arg.strip("'\"").replace(",", " , ") for arg in out]
 
 
 def _call_window(kept: list[str], i: int) -> str:
@@ -253,7 +270,7 @@ def _added_text(kept: list[str]) -> str:
     parts: list[str] = []
     for i, line in enumerate(kept):
         if re.search(r"\bgh\s", line) and _ADDS_LABEL.search(line):
-            parts += [arg.strip("'\"").replace(",", " , ") for arg in _GH_LABEL_ARG.findall(line)]
+            parts += _gh_added(line)
         elif _ADDS_LABEL.search(line) or (adding_action and _LABELS_INPUT.match(line)):
             parts.append(_call_window(kept, i))
     return "\n".join(parts)
