@@ -189,6 +189,12 @@ def test_a_gitlab_repository_reads_the_form_not_measured(tmp_path: Path) -> None
     (root / ".gitlab-ci.yml").write_text("test:\n  script: [make test]\n", encoding="utf-8")
     block = scan_backlog_ready(root)
     assert (block["required_form_field"], block["required_form_field_reason"]) == (None, "gitlab_templates")
+    assert (block["untriaged_on_open"], block["untriaged_on_open_reason"]) == (None, "gitlab_ci_not_read")
+    assert _condition(block)["state"] == "unmet"  # no ready label documented
+    (root / "CONTRIBUTING.md").write_text("## refine::ready\n\n- has success criteria\n", encoding="utf-8")
+    block = scan_backlog_ready(root)
+    assert block["ready_label_documented"] is True
+    assert _condition(block)["state"] == "not_measured"  # never unmet for want of a GitHub file
 
 
 def test_an_empty_repository_reads_unmet(tmp_path: Path) -> None:
@@ -269,6 +275,8 @@ def test_a_workflow_in_a_subfolder_is_not_read(tmp_path: Path) -> None:
     ("Label an issue `ready` when:\n\n- it has criteria\n", True),
     ("Use the ready label when:\n* it has criteria\n", True),
     ("Issues marked triage/accepted meet these:\n- one\n", True),
+    ("## refine::ready\n\n- has success criteria\n", True),  # a GitLab scoped label
+    ("## refine::readying\n\n- not the label\n", False),
     ("When you are ready to merge:\n\n- push\n", False),  # prose, no label
     ("The `agent-ready` label is applied by hand.\n\nOther text.\n\n- unrelated\n", False),
     ("## agent-ready\n\nNo list here.\n\n## Other\n\n- unrelated\n", False),

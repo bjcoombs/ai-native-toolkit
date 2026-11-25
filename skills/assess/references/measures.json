@@ -2305,8 +2305,13 @@
         },
         {
           "code": "gitlab_templates",
-          "means": "The repository is on GitLab and holds no GitHub issue form. A GitLab issue template is Markdown with no required fields, so the form signal is not measured.",
-          "next_step": "Nothing to change: required fields are not measured on GitLab."
+          "means": "The repository is on GitLab and holds no GitHub issue form. GitLab issue templates are not read yet, so the form signal is not measured.",
+          "next_step": "Nothing to change: GitLab issue templates will be read in a later release."
+        },
+        {
+          "code": "gitlab_ci_not_read",
+          "means": "The repository is on GitLab and holds no GitHub workflow. GitLab has no CI trigger for a new issue, and a scheduled refinement job is not read yet.",
+          "next_step": "Nothing to change: GitLab refinement jobs will be read in a later release."
         },
         {
           "code": "workflow_unreadable",
@@ -6376,7 +6381,7 @@
       "collector": "core.backlog_ready",
       "input_class": "config_text",
       "grade": "config_only",
-      "null_means": "workflow_unreadable: no workflow read adds an untriaged label on issues opened, and a workflow's on: key could not be read"
+      "null_means": "workflow_unreadable: no workflow read adds an untriaged label on issues opened, and a workflow's on: key could not be read; gitlab_ci_not_read: a GitLab repository, whose scheduled refinement jobs are not read yet"
     },
     {
       "path": "ci_checks.enforced_check_runs",

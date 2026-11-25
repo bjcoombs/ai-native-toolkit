@@ -18,18 +18,20 @@ lives in the maintainers' heads, so each issue an agent picks up restates it in 
   ``form_unreadable`` when no form has one and a form could not be read (a tab indent, an
   unclosed flow collection, no top-level ``body`` list). Null ``gitlab_templates`` when the
   repository holds no GitHub issue form and is on GitLab (``.gitlab-ci.yml`` or a ``.gitlab/``
-  folder): a GitLab issue template is Markdown with no required fields.
+  folder): GitLab issue templates are not read yet.
 - ``untriaged_on_open``: a workflow (directly under ``.github/workflows/``) triggered by
   ``issues`` with type ``opened`` (no ``types`` means every type) names an untriaged label in its
   jobs, on a line that is not a ``name:``, ``if:`` or comment, beside a label-adding call
   (``--add-label``, ``--label``, ``addLabels``, ``add-labels`` or a ``labels:`` input). Null
-  ``workflow_unreadable`` when none does and a workflow's ``on`` could not be read.
+  ``workflow_unreadable`` when none does and a workflow's ``on`` could not be read. Null
+  ``gitlab_ci_not_read`` on a GitLab repository with no GitHub workflow: GitLab has no CI trigger
+  for a new issue, and its counterpart, a scheduled refinement job, is not read yet.
 - ``ready_label_documented``: a Markdown file at HEAD (``lib.docs.doc_graph.is_excluded_path``
   drops ``.assess/``, ``tests/fixtures/`` and the like) has a heading or paragraph naming a ready
   label with a list under it: a list item in the heading's section, or one after the paragraph.
   Fenced code is skipped. A label with ``-``, ``/``, ``:`` or a space matches as a whole token; a
   one-word label (``ready``) only in backticks or quotes or beside the word "label", so prose
-  ("ready to merge") is no label.
+  ("ready to merge") is no label. A GitLab scoped label (``refine::ready``) is one token.
 - ``stale_job_safe``: true when no step uses ``actions/stale``, or every such step leaves ready
   issues open: ``days-before-issue-stale`` / ``days-before-stale`` or ``days-before-issue-close``
   / ``days-before-close`` negative (never), or ``exempt-issue-labels`` naming a ready label. The
@@ -67,11 +69,12 @@ from lib.command_index import ci_config_files, read_config, repo_files
 from lib.docs.doc_graph import is_excluded_path
 
 UNTRIAGED_LABELS = ("needs-triage", "needs triage", "untriaged", "triage", "status: needs triage")
-READY_LABELS = ("agent-ready", "ready", "triage/accepted", "status: ready")
+READY_LABELS = ("agent-ready", "ready", "triage/accepted", "status: ready", "refine::ready")
 
 REASON_FORM = "form_unreadable"
 REASON_GITLAB = "gitlab_templates"
 REASON_WORKFLOW = "workflow_unreadable"
+REASON_GITLAB_CI = "gitlab_ci_not_read"
 REASON_STALE = "stale_input_unresolved"
 
 FORM_DIR = ".github/ISSUE_TEMPLATE/"
@@ -359,6 +362,8 @@ def scan_backlog_ready(repo_root: Path) -> BacklogReadyBlock:
     else:
         block["required_form_field"] = False
     block["untriaged_on_open"], reason = _untriaged(workflows, untriaged)
+    if block["untriaged_on_open"] is False and not workflows and _on_gitlab(files):
+        block["untriaged_on_open"], reason = None, REASON_GITLAB_CI
     if reason is not None:
         block["untriaged_on_open_reason"] = reason
     block["stale_job_safe"], reason, block["stale_jobs"] = _stale(workflows, ready)
