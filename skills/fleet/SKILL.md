@@ -168,7 +168,7 @@ list file, and pass it with `--from-list`.
 - [`condition_effect.json` and `demotions.json`](references/condition-effect.md): each condition's estimated effect on agent outcomes, and the exit rule's demotions.
 - [Database projection and publishing](references/publish.md): the artifact database writes, access rules, size guard and the publish step.
 - [`agent_clusters.json`](references/agent-clusters.md): agent clusters.
-- [`run.json`](references/run.md): the run stamp.
+- [`run.json`](references/run.md): the run stamp, and `fleet_include_list.py`, which writes a ghsync `--from-list` file of the CI include projects the run could not read.
 - [`--fleet-config`](references/fleet-config.md): the `--fleet-config` sections and keys.
 - [`--platform`](references/platform.md): the platform pass.
 - [Run history and comparison](references/history.md): the run history, `--compare` and `compare.json`.

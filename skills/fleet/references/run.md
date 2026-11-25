@@ -29,3 +29,27 @@ any `--jobs` over unchanged checkouts on the same day write the same bytes. A li
 run that leaves a checkout out differs in `repositories` (`selected`, `scanned_ok`) and,
 with `--discovered`, in `coverage` (`excluded_by_filters`). Under `--full`, `not_cloned_includes`
 names include projects, which are not paths on this machine.
+
+### Cloning the include projects
+
+`scripts/fleet_include_list.py` turns `not_cloned_includes` into a file ghsync's
+`--from-list` clones (#1356). It needs a `--full` run, the only mode that names the
+projects, and `glab` logged in to the GitLab host:
+
+```bash
+uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_include_list.py" fleet-out --host gitlab.example.com
+```
+
+Then clone them into the same root with `/ghsync --provider gitlab --host gitlab.example.com
+--from-list fleet-out/include-projects.txt`, and run fleet again.
+
+It checks each project through the API. A reachable one goes into the list
+(`--output`, default `OUT/include-projects.txt`); one that answers 404 (`not_found`), 401 or
+403 (`no_access`) or another refusal (`error`) is named on stdout with its status and the
+project that included it. The run records the project, not the files it includes, so a
+reachable project's nested includes are read from every YAML file on its default branch (up
+to 50), and each new project named there is checked one level deeper, to fleet's
+nested-include depth (5). An extra project costs one clone; the next fleet run reads the
+includes exactly. Exit codes: `0` list written, `2` no `run.json` or a run that does not name
+the projects, `3` the host could not be read (no `glab`, not logged in, unreachable), and
+nothing is written. Logic: `lib/fleet/fleet_include_list.py`.
