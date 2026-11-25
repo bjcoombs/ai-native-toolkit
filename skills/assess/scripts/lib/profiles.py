@@ -43,6 +43,14 @@ same lines as ``card_facts.CardFact`` entries with the fact ids ``model``, ``mod
    in the default model: <practice>; ...``; a missing practice among them carries ``[not in
    the default model]`` on line 2 too.
 
+Practice packs (#1274). ``single_repo_choice`` layers each ``--pack``'s rows onto the chosen
+model (``lib.pack_layering.layer_packs``), so the choice keeps its kind and name and its model
+holds the pack rows, each with its ``source``. A practice from a pack reads ``<title> [pack
+<name>]`` on every line above, and one more fact, ``model_packs``, follows them, for the
+default model too: ``Practice packs company, team: <practice> [pack company] (in place);
+<practice> [pack team] (not met).``, every pack condition in model order with its state.
+With no pack row the lines are as before.
+
 ``model_for_level(level)`` is the model a ``level`` block names, the default or a shipped profile
 (None for a custom model); ``since_last_run``, the committed baseline and the gate read a run's
 own Steps through it (#1184).
@@ -67,8 +75,9 @@ from lib.level_result_types import ConditionResult, LevelResult
 from lib.level_tally import DEFAULT_BLOCKS, default_model, level_result, model_blocks, run_context_level
 from lib.level_tally import run_exclusions
 from lib.levels import LevelsError, MaturityModel, PathValidator, load_levels
+from lib.pack_layering import layer_packs, pack_sources, row_source
 from lib.packs import SIGNAL_PREFIX as PACK_BLOCK
-from lib.packs import Pack
+from lib.packs import Pack, PackError
 from lib.prior_level import model_key
 from lib.signal_grades import DEFAULT_LEVELS
 
@@ -192,8 +201,13 @@ def single_repo_choice(profile: str | None, levels: str | Path | None,
     """``resolve``, refusing a model that reads a block the single-repository level does not.
     With ``packs`` (``--pack``, #1273) the level also reads the ``pack`` block, so a model may
     read ``pack.<pack>.<check>``; ``lib.level_signals.signal_path_validator(packs)`` refuses a
-    path of a pack that was not passed, naming ``--pack``."""
+    path of a pack that was not passed, naming ``--pack``. Each pack's rows are layered onto
+    the model (``lib.pack_layering.layer_packs``, #1274); a layering error is a ``ProfileError``."""
     choice = resolve(profile, levels, validator)
+    try:
+        choice = ModelChoice(layer_packs(choice.model, choice.name, packs, validator), choice.kind, choice.name)
+    except PackError as e:
+        raise ProfileError(str(e)) from e
     readable = {*DEFAULT_BLOCKS, *((PACK_BLOCK,) if packs else ())}
     outside = sorted(set(model_blocks(choice.model)) - readable)
     if outside:
@@ -241,6 +255,9 @@ def _practice(cid: str, model: MaturityModel) -> str:
     """A condition in words: its row's title, with the level when it is above 1."""
     row_id, _, number = cid.rpartition(".")
     title = next((row["title"] for row in model["rows"] if row["id"] == row_id), row_id)
+    source = row_source(model, row_id)
+    if source is not None and source in pack_sources(model):
+        title = f"{title} [pack {source}]"
     return title if number == "1" else f"{title}, level {number}"
 
 
@@ -256,11 +273,19 @@ def _readiness(level: LevelResult, choice: ModelChoice, foreign: set[str]) -> st
     return " ".join([f"{not_ready} ({choice.label}).", *(f"Missing: {part}." for part in parts)])
 
 
+def _packs_fact(level: LevelResult, model: MaturityModel, packs: list[str]) -> CardFact:
+    """Every condition of a pack row with its state, naming its pack (#1274)."""
+    parts = [f"{_practice(c['id'], model)} ({'in place' if _holds(c) else _state_words(c)})"
+             for c in level["conditions"] if c.get("source") in packs]
+    return {"fact_id": "model_packs", "text": f"Practice packs {', '.join(packs)}: {'; '.join(parts)}."}
+
+
 def model_facts(level: LevelResult, choice: ModelChoice | None) -> list[CardFact]:
     """The summary lines naming a non-default model and whether it holds, each with its fact
-    id; ``[]`` for the default."""
+    id, then the practice packs line when a pack added rows; ``[]`` for the default alone."""
+    packs = pack_sources(choice.model) if choice is not None else []
     if choice is None or choice.kind == "default":
-        return []
+        return [_packs_fact(level, choice.model, packs)] if choice is not None and packs else []
     first = (f"Maturity model: profile {choice.name}, not the default." if choice.kind == "profile"
              else f"Maturity model: {choice.name}{CUSTOM_MODEL_SUFFIX}")
     foreign = non_default_ids(choice.model)
@@ -269,6 +294,8 @@ def model_facts(level: LevelResult, choice: ModelChoice | None) -> list[CardFact
     if foreign:
         facts.append({"fact_id": "model_extra", "text": "Not in the default model: "
                       f"{'; '.join(_practice(c, choice.model) for c in foreign)}."})
+    if packs:
+        facts.append(_packs_fact(level, choice.model, packs))
     return facts
 
 

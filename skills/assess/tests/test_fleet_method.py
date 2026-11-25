@@ -281,3 +281,37 @@ def test_pack_reasons_compare_name_and_sha_in_order() -> None:
     assert fm.pack_reasons({}, {"packs": []}) == []
     assert fm.pack_reasons({}, {"packs": [TEAM]}) == ["practice packs changed none->team@cccccccccccc"]
     assert fm.rule_reasons({"packs": [TEAM]}, {}) == ["practice packs changed team@cccccccccccc->none"]
+
+
+# --- pack rows layered onto the model (#1274) ------------------------------------------
+
+
+def _pack_with_rows(name: str, row_ids: tuple[str, ...]) -> Any:
+    from lib.packs import parse_pack
+    return parse_pack({
+        "pack": {"name": name, "version": "1"},
+        "rows": [{"id": rid, "title": rid, "scope": "team", "aggregation": "min",
+                  "levels": [{"level": 1, "truth": ["docs"],
+                              "criteria": [{"signal": f"pack.{name}.c", "op": "eq", "value": True}]}]}
+                 for rid in row_ids]})
+
+
+def test_adding_one_pack_row_changes_the_rules_hash() -> None:
+    from lib.pack_layering import layer_packs
+    base = fm.rules_sha256(V1)
+    no_rows = {**_pack_with_rows("team", ("glossary",)), "rows": []}
+    assert fm.rules_sha256(layer_packs(V1, "levels.toml", [no_rows])) == base
+    one = layer_packs(V1, "levels.toml", [_pack_with_rows("team", ("glossary",))])
+    two = layer_packs(V1, "levels.toml", [_pack_with_rows("team", ("glossary", "owner"))])
+    assert len({base, fm.rules_sha256(one), fm.rules_sha256(two)}) == 3
+
+
+def test_moving_a_pack_row_to_another_pack_changes_the_rules_hash() -> None:
+    from lib.pack_layering import layer_packs
+    company = _pack_with_rows("company", ("glossary",))
+    team = _pack_with_rows("team", ("owner",))
+    moved = {**_pack_with_rows("team", ("owner",)), "rows": [*company["rows"], *team["rows"]]}
+    first = layer_packs(V1, "levels.toml", [company, team])
+    second = layer_packs(V1, "levels.toml", [{**company, "rows": []}, moved])
+    assert [r["id"] for r in first["rows"]] == [r["id"] for r in second["rows"]]
+    assert fm.rules_sha256(first) != fm.rules_sha256(second)
