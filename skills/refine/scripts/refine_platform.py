@@ -138,6 +138,7 @@ class Backlog(Protocol):
 
     platform: str
     repo: str
+    open_truncated: bool
     closed_truncated: bool
 
     def open_issues(self) -> List[Issue]: ...
@@ -155,6 +156,7 @@ class GitHubBacklog:
     def __init__(self, repo: str, runner: Runner = run_gh_readonly) -> None:
         self.repo = repo
         self._run = runner
+        self.open_truncated = False
         self.closed_truncated = False
 
     def _list(self, args: List[str]) -> List[Json]:
@@ -166,6 +168,7 @@ class GitHubBacklog:
     def open_issues(self) -> List[Issue]:
         rows = self._list(["issue", "list", "--repo", self.repo, "--state", "open",
                            "--limit", str(LIST_LIMIT), "--json", OPEN_ISSUE_FIELDS])
+        self.open_truncated = len(rows) >= LIST_LIMIT
         return [github_issue(r) for r in rows]
 
     def closed_issues_since(self, since: date) -> List[Issue]:

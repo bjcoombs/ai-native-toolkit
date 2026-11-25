@@ -161,6 +161,27 @@ def test_prose_blocker_without_an_edge_fails(plan):
     assert "#101" in result["detail"]
 
 
+def blockers_of(definition, body, open_numbers):
+    issue = refine_platform.github_issue({"number": 50, "body": body, "createdAt": NOW})
+    items = refine_checks.checklist(issue, definition, FIXTURE_REPO, open_numbers)
+    return next(r for r in items if r["id"] == "blockers-recorded")
+
+
+def test_negated_blocker_phrase_names_no_blocker(definition):
+    result = blockers_of(definition, "Not blocked by anything; #12 was the old plan. No longer depends on #13.", {12, 13})
+    assert result["status"] == "needs_judgement"
+    assert result["hints"] == ["confirm no dependency is missing an edge"]
+
+
+def test_closed_prose_blocker_is_a_hint_not_a_failure(definition):
+    result = blockers_of(definition, "Blocked by #12 and #13.", {13})
+    assert result["status"] == "fail"
+    assert result["detail"] == "prose names open #13 as a blocker with no blocked-by edge"
+    result = blockers_of(definition, "Depends on #12.", {13})
+    assert result["status"] == "needs_judgement"
+    assert result["hints"][0] == "prose names #12 as a blocker; it is not open, so no edge is needed"
+
+
 def test_recorded_edges_still_need_judgement(plan):
     result = item(by_number(plan)[105], "blockers-recorded")
     assert result["status"] == "needs_judgement"
@@ -221,6 +242,15 @@ def test_open_pr_closing_the_issue_holds_it(plan):
     issue = by_number(plan)[108]
     assert issue["overlaps"] == [{"pr": 202, "kind": "closes", "files": []}]
     assert issue["verdict"] == "not_ready"
+
+
+def test_dot_path_overlap_keeps_its_leading_dot():
+    issue = refine_platform.github_issue({"number": 60, "createdAt": NOW,
+                                          "body": "Edit `.github/workflows/tests.yml` and `./Makefile`."})
+    prs = [refine_platform.github_pull_request({"number": 7, "files": [
+        {"path": ".github/workflows/tests.yml"}, {"path": "Makefile"}, {"path": "github/workflows/tests.yml"}]})]
+    assert refine_checks.overlaps(issue, prs) == [
+        {"pr": 7, "kind": "files", "files": [".github/workflows/tests.yml", "Makefile"]}]
 
 
 def test_named_file_and_directory_overlap(plan):
@@ -285,6 +315,7 @@ def test_output_validates_against_the_schema(tmp_path):
     assert data["dry_run"] is True
     assert data["generated_at"] == NOW
     assert data["closed_window"] == {"days": 90, "count": 2, "truncated": False}
+    assert data["open_truncated"] is False
 
 
 def test_without_dry_run_the_flag_is_false(tmp_path):

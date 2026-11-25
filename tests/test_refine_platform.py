@@ -86,6 +86,14 @@ def test_closed_list_at_the_search_cap_is_marked_truncated():
     assert backlog.closed_truncated is True
 
 
+def test_open_list_at_the_cap_is_marked_truncated():
+    rows = '[' + ",".join('{"number": %d}' % n for n in range(1, refine_platform.LIST_LIMIT + 1)) + ']'
+    backlog = refine_platform.GitHubBacklog(FIXTURE_REPO, runner=lambda args: rows)
+    assert backlog.open_truncated is False
+    backlog.open_issues()
+    assert backlog.open_truncated is True
+
+
 def test_non_array_output_is_an_error():
     backlog = refine_platform.GitHubBacklog(FIXTURE_REPO, runner=lambda args: "{}")
     with pytest.raises(refine_platform.GhError):

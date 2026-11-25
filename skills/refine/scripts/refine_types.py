@@ -178,4 +178,5 @@ class Plan(TypedDict):
     untriaged: List[Untriaged]
     buffer: Buffer
     critical_path: CriticalPath
+    open_truncated: bool
     closed_window: ClosedWindow

@@ -13,7 +13,7 @@ and marks the rest `needs_judgement`:
 | `sections-present` | definition, script | heading match per the block; `missing_sections` |
 | `criteria-checkable` | definition, judgement | fail when Success Criteria holds no list item; otherwise judgement, with each item that has no code span and names no test as a hint |
 | `sized` | definition, script | the newer of a `<!-- refine:size N -->` marker comment and a `Size: <n> points` body line is at most `max_points`, or the issue has sub-issues; with neither the issue is `unsized` (needs sizing, `needs_judgement`), never `fail` |
-| `blockers-recorded` | definition, judgement | fail when prose says "blocked by" or "depends on" an issue that has no blocked-by edge; otherwise judgement |
+| `blockers-recorded` | definition, judgement | fail when prose says "blocked by" or "depends on" (not negated) an open issue that has no blocked-by edge; a closed one is a hint; otherwise judgement |
 | `no-open-question` | definition, judgement | always judgement |
 | overlap with an open PR | `/issues` "Overlap Sweep" | an open PR that closes the issue, or changes a file the issue names in a code span; `overlaps` |
 
@@ -55,6 +55,7 @@ _LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*)$")
 _CODE_SPAN = re.compile(r"`[^`]+`")
 _TEST_REF = re.compile(r"\btest_\w+|\btests?/\S+|\bpytest\b|\.py\b")
 _BLOCKER_PHRASE = re.compile(r"(?i)\b(?:blocked by|depends on)\b")
+_NEGATION = re.compile(r"(?i)(?:\bnot|n't|\bno longer|\bnever)\s+$")
 _PATH_SPAN = re.compile(r"`([\w.\-/]+)`")
 
 
@@ -158,10 +159,15 @@ def _issue_refs(text: str, repo: str) -> Set[int]:
 
 
 def prose_blockers(issue: Issue, repo: str) -> Set[int]:
-    """Issues named after "blocked by" or "depends on", up to the end of the sentence."""
+    """Issues named after "blocked by" or "depends on", up to the end of the sentence.
+
+    A negated phrase ("not blocked by", "no longer depends on") names no blocker.
+    """
     found: Set[int] = set()
     for source in text_sources(issue):
         for match in _BLOCKER_PHRASE.finditer(source):
+            if _NEGATION.search(source[max(0, match.start() - 16):match.start()]):
+                continue
             tail = re.split(r"\.\s|\n", source[match.end():], maxsplit=1)[0]
             found |= _issue_refs(tail, repo)
     found.discard(issue["number"])
@@ -172,7 +178,7 @@ def overlaps(issue: Issue, prs: List[PullRequest]) -> List[Overlap]:
     """Open PRs that close this issue or change a file it names (`/issues` Overlap Sweep)."""
     named = set()
     for source in text_sources(issue):
-        named |= {p.lstrip("./") for p in _PATH_SPAN.findall(source) if "/" in p or "." in p.strip(".")}
+        named |= {p[2:] if p.startswith("./") else p for p in _PATH_SPAN.findall(source) if "/" in p or "." in p.strip(".")}
     dirs = {p for p in named if p.endswith("/")}
     out: List[Overlap] = []
     for pr in prs:
@@ -230,18 +236,31 @@ def _sized_item(points: Optional[int], source: Optional[str], subs: int, max_poi
     return "pass", f"{points} point(s), from the {source}"
 
 
-def _blockers_item(issue: Issue, repo: str) -> Tuple[str, str, List[str]]:
+def _blockers_item(issue: Issue, repo: str, open_numbers: Optional[Set[int]]) -> Tuple[str, str, List[str]]:
+    """Fail only on an open issue named as a blocker in prose with no edge.
+
+    A closed (or unknown) issue named that way orders nothing, so it is a hint
+    for the reader, not a failure. With `open_numbers` None every named issue
+    counts as open.
+    """
     edges = {b["number"] for b in issue["blocked_by"]}
-    unrecorded = sorted(prose_blockers(issue, repo) - edges)
-    if unrecorded:
-        names = ", ".join(f"#{n}" for n in unrecorded)
-        return "fail", f"prose names {names} as a blocker with no blocked-by edge", []
+    unrecorded = prose_blockers(issue, repo) - edges
+    still_open = sorted(n for n in unrecorded if open_numbers is None or n in open_numbers)
+    if still_open:
+        names = ", ".join(f"#{n}" for n in still_open)
+        return "fail", f"prose names open {names} as a blocker with no blocked-by edge", []
+    hints = [f"prose names #{n} as a blocker; it is not open, so no edge is needed"
+             for n in sorted(unrecorded)]
     detail = f"{len(edges)} blocked-by edge(s)" if edges else "no blocked-by edges"
-    return "needs_judgement", detail, ["confirm no dependency is missing an edge"]
+    return "needs_judgement", detail, hints + ["confirm no dependency is missing an edge"]
 
 
-def checklist(issue: Issue, definition: Definition, repo: str) -> List[ChecklistResult]:
-    """Every checklist item from the definition, in its order, with a status."""
+def checklist(issue: Issue, definition: Definition, repo: str,
+              open_numbers: Optional[Set[int]] = None) -> List[ChecklistResult]:
+    """Every checklist item from the definition, in its order, with a status.
+
+    `open_numbers` is the set of open issue numbers, for `blockers-recorded`.
+    """
     results: List[ChecklistResult] = []
     missing = missing_sections(issue, definition)
     points, source = size_reading(issue, definition)
@@ -255,7 +274,7 @@ def checklist(issue: Issue, definition: Definition, repo: str) -> List[Checklist
         elif item == "sized":
             status, detail = _sized_item(points, source, issue["sub_issues_total"], definition["max_points"])
         elif item == "blockers-recorded":
-            status, detail, hints = _blockers_item(issue, repo)
+            status, detail, hints = _blockers_item(issue, repo, open_numbers)
         else:
             status, detail = "needs_judgement", "no script check for this item"
         if check == "judgement" and status == "pass":

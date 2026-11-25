@@ -38,7 +38,7 @@ import json
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Set
 
 import refine_checks as checks
 from refine_definition import DEFAULT_PATH, DefinitionError, load_definition
@@ -73,9 +73,9 @@ def _overlap_reason(o: Overlap) -> str:
 
 
 def issue_plan(issue: Issue, definition: Definition, repo: str, prs: List[PullRequest],
-               pairs: List[DuplicatePair], now: datetime) -> IssuePlan:
+               pairs: List[DuplicatePair], now: datetime, open_numbers: Optional[Set[int]] = None) -> IssuePlan:
     """One issue's verdict, the reasons for it and the check results behind it."""
-    items = checks.checklist(issue, definition, repo)
+    items = checks.checklist(issue, definition, repo, open_numbers)
     overlaps = checks.overlaps(issue, prs)
     dups = _duplicate_refs(issue["number"], pairs)
     reasons = [f"{r['id']}: {r['detail']}" for r in items if r["status"] == "fail"]
@@ -123,7 +123,9 @@ def build_plan(backlog: Backlog, definition: Definition, definition_path: str, n
     pairs = find_duplicates(open_issues, closed)
     pairs_by = by_issue(pairs)
     reported = [i for i in open_issues if only is None or i["number"] == only]
-    plans = [issue_plan(i, definition, backlog.repo, prs, pairs_by.get(i["number"], []), now) for i in reported]
+    open_numbers = {i["number"] for i in open_issues}
+    plans = [issue_plan(i, definition, backlog.repo, prs, pairs_by.get(i["number"], []), now, open_numbers)
+             for i in reported]
     points = {i["number"]: checks.size_points(i, definition) for i in open_issues}
     untriaged = _untriaged(open_issues, definition, now)
     summary = Summary(
@@ -147,6 +149,7 @@ def build_plan(backlog: Backlog, definition: Definition, definition_path: str, n
         untriaged=untriaged,
         buffer=ready_buffer(open_issues, prs, definition["labels"]["ready"], builder_slots),
         critical_path=critical_path(open_issues, points),
+        open_truncated=backlog.open_truncated,
         closed_window=ClosedWindow(days=CLOSED_WINDOW_DAYS, count=len(closed), truncated=backlog.closed_truncated),
     )
 

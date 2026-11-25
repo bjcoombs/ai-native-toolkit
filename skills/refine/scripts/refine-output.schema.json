@@ -15,6 +15,7 @@
     "generated_at",
     "issue",
     "issues",
+    "open_truncated",
     "platform",
     "repository",
     "schema_version",
@@ -503,6 +504,10 @@
           }
         }
       }
+    },
+    "open_truncated": {
+      "type": "boolean",
+      "description": "True when the open-issue list reached the 1000-row cap, so issues may be missing."
     },
     "closed_window": {
       "type": "object",
