@@ -42,6 +42,7 @@ Workflow (personal setup, opt-in - see [Adapting for your workflow](../README.md
 |-------|----------|-------------|
 | `/tm` | [`tm/SKILL.md`](./tm/SKILL.md) | Task Master orchestration - starts, reviews, or cleans up tasks based on current state |
 | `/issues` | [`issues/SKILL.md`](./issues/SKILL.md) | GitHub-issue marathon - triage open issues, then run agent-ready ones to merge with Agent Teams |
+| `/refine` | [`refine/SKILL.md`](./refine/SKILL.md) | Backlog refinement on demand - the refiner workflows' checks and guarded writes from the command line, read-only until you confirm each write. Bundled: `scripts/refine.py` (the verdict), `scripts/refine_apply.py` and the write scripts, `scripts/refine_project.py` (the project sync) and the workflow prompts under `commands/` |
 | `/fix-pr` | [`fix-pr/SKILL.md`](./fix-pr/SKILL.md) | Autonomous PR fixing loop - iterates on CI failures and review comments until green |
 | `/fix-develop` | [`fix-develop/SKILL.md`](./fix-develop/SKILL.md) | Autonomous fix loop for failing CI on the repo's default branch |
 | `/tm-marathon-config-example` | [`tm-marathon-config-example/SKILL.md`](./tm-marathon-config-example/SKILL.md) | Reference configuration block to drop into a project's `CLAUDE.md` for marathon-mode `/tm` and `/issues` |

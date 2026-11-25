@@ -62,6 +62,7 @@ Personal workflows (opt-in - see [Adapting for your workflow](../README.md#adapt
 
 - [`/tm`](../skills/tm/SKILL.md) - Task Master orchestration: starts, reviews, or cleans up tasks by current state.
 - [`/issues`](../skills/issues/SKILL.md) - GitHub-issue marathon: triage open issues, then run agent-ready ones to merge with Agent Teams.
+- [`/refine`](../skills/refine/SKILL.md) - backlog refinement on demand: check issues against the definition of ready, then apply only the writes you confirm. Adopting the refiner workflows in another repository: [Backlog refinement](./refine.md).
 - [`/fix-pr`](../skills/fix-pr/SKILL.md) - autonomous PR fixing loop: iterates on CI failures and review comments until green.
 - [`/fix-develop`](../skills/fix-develop/SKILL.md) - autonomous fix loop for failing CI on the default branch.
 - [`/tm-marathon-config-example`](../skills/tm-marathon-config-example/SKILL.md) - reference configuration block for marathon-mode `/tm` and `/issues`.

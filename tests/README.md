@@ -33,4 +33,6 @@ rule in `CLAUDE.md`, this file is usually the one that fails.
 | `test_refine.py`, `test_refine_platform.py`, `refine_env.py` | The backlog refinement script in `skills/refine/scripts/`, replaying recorded `gh` output from `fixtures/refine/` |
 | `test_refine_workflows.py`, `test_refine_write.py`, `test_refine_apply.py`, `refine_write_env.py` | The refiner workflows' triggers, permissions, tool limits, call caps and `workflow_call` inputs, and the write scripts' guardrails in `skills/refine/scripts/`, replaying recorded `gh` output from `fixtures/refine_write/` |
 | `test_skill_forge_instruction_files.py` | `/skill-forge` on instruction files such as `CLAUDE.md` and `AGENTS.md` |
+| `test_refine_project.py` | The sweep's project sync (`skills/refine/scripts/refine_project.py`): the Status table, open questions, no-op reruns, dry-run, the write cap and the project-shape check, replaying recorded `gh project` output |
+| `test_refine_adoption_docs.py` | The `uses:` and `include:` examples in `README.md` and `docs/refine.md` against the real workflow and template paths, inputs, secrets and release pin |
 | `fixtures/` | Inputs for the Windows smoke checks and the recorded `gh` output for the refinement script |

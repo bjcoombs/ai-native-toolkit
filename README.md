@@ -243,6 +243,26 @@ To post the summary as a merge request note too, add a project access token with
 
 The other inputs are `mr_note`, `toolkit_ref` (keep it equal to the tag in the include line), `toolkit_url` (for a mirror on a self-hosted GitLab), `image` and `stage`. The file follows the CI/CD component layout (`templates/assess-gate.yml` with `spec: inputs`), so a team that mirrors this repository onto its GitLab can include it as a component instead: `component: $CI_SERVER_FQDN/<group>/ai-native-toolkit/assess-gate@<version>`. `/assess` recognises that component form only when the mirror is cloned under `--ghsync-root`; otherwise the include reads as unread, and the CI test signal reads not measured.
 
+### Use the refiner in your repository
+
+Backlog refinement as three GitHub workflows any repository calls with one `uses:` line each: triage when an issue is opened or commented on, duplicate detection when one is opened, and a sweep twice a day. A script checks each issue against your definition of ready; only an issue it cannot settle goes to a model, which runs with a read-only token and returns a plan that a job with no model applies under fixed rules. The sweep can also keep a GitHub project's Status, Size and Verdict fields in sync.
+
+```yaml
+jobs:
+  sweep:
+    if: vars.REFINE_ENABLED == 'true'
+    uses: bjcoombs/ai-native-toolkit/.github/workflows/reusable-refine-sweep.yml@v4.0.0
+    with:
+      enabled: ${{ vars.REFINE_ENABLED == 'true' }}
+      mode: ${{ vars.REFINE_MODE || 'dry-run' }}
+```
+
+- **Secrets.** `REFINE_ANTHROPIC_API_KEY` for triage and dedupe, from a Console workspace with a monthly spend limit; `REFINE_PROJECT_TOKEN` only for the project sync.
+- **Kill switch.** Nothing runs until the variable `REFINE_ENABLED` is `true`.
+- **Dry-run first.** Writes are logged, not sent, until `REFINE_MODE` is `live`. Stay in dry-run until [#1341](https://github.com/bjcoombs/ai-native-toolkit/issues/1341) is closed.
+
+The workflows first ship in the release after 4.0.0. All three callers, the settings and the project fields: [Backlog refinement](docs/refine.md). For a one-off pass from the terminal, use `/refine`.
+
 > **Portability split.** The framework pieces (`/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`, `/ghsync`, `/ghreport`, `/fleet`, `/doc-contradictions`, `/6hats`, `/understand` and their agents) are portable and work in any Claude Code session (`/fleet`'s `ROOT` mode reads the `<repo>-main` + `worktree/` layout that `/ghsync` creates). The workflow commands (`/tm`, `/issues`, `/fix-pr`, `/fix-develop`) bake in one author's daily setup: a `<repo>-main/` + `worktree/` layout, GitHub + `gh` CLI, Task Master, CodeRabbit/claude[bot] review threads, and the Agent Teams capability flag. See [Adapting](#adapting-for-your-workflow) before relying on them in a different setup.
 
 ## Install
@@ -411,6 +431,7 @@ Workflow (personal setup, opt-in - see [Adapting](#adapting-for-your-workflow)):
 |---------|-------------|
 | [`/tm`](skills/tm/SKILL.md) | Task Master orchestration - context-aware: starts, reviews, or cleans up tasks based on current state |
 | [`/issues`](skills/issues/SKILL.md) | GitHub-issue marathon - triage open issues (tag `agent-ready` or post clarifying questions), then run agent-ready ones to merge with Agent Teams; mirrors `/tm`'s plan-then-marathon flow |
+| [`/refine [issue]`](skills/refine/SKILL.md) | Backlog refinement on demand - check open issues against the definition of ready, research the ones that need judgement, and apply only the labels, sizes and blocked-by edges you confirm one by one. The same checks run as GitHub workflows: [Use the refiner in your repository](#use-the-refiner-in-your-repository) |
 | [`/tm-marathon-config-example`](skills/tm-marathon-config-example/SKILL.md) | Reference configuration block to drop into a project's `CLAUDE.md` for marathon-mode `/tm` and `/issues` |
 | [`/fix-pr`](skills/fix-pr/SKILL.md) | Autonomous PR fixing loop - iterates on CI failures and review comments until green |
 | [`/fix-develop`](skills/fix-develop/SKILL.md) | Autonomous fix loop for failing CI on the repo's default branch |
