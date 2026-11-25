@@ -10,6 +10,9 @@ name: Refine sweep (reusable)
 #      weekly close cap.
 #   4. The ready-buffer depth and the critical path are posted to the
 #      questions issue, as one comment edited in place.
+#   5. With a `project_number` and the `project_token` secret, the `project`
+#      job sets Status, Size and Verdict on the issues' items in that GitHub
+#      project (refine_project.py). With no project number it is skipped.
 #
 # Permissions: grant `contents: read` and `issues: write` in the caller. The
 # job declares the same two, so it never runs with more, whatever the caller
@@ -46,6 +49,22 @@ on:
         description: The issue that receives the ready-buffer report.
         type: string
         default: ''
+      in_progress_label:
+        description: The label that puts an issue in the project's In progress column.
+        type: string
+        default: in-progress
+      project_number:
+        description: The GitHub project whose Status, Size and Verdict fields the sweep keeps in sync. Empty skips the sync.
+        type: string
+        default: ''
+      project_owner:
+        description: The project's owner, a user or an organization. Empty means the repository's owner.
+        type: string
+        default: ''
+    secrets:
+      project_token:
+        description: A token with the `project` scope for the project sync. GITHUB_TOKEN cannot write a user's project.
+        required: false
 
 jobs:
   sweep:
@@ -137,3 +156,99 @@ jobs:
             .refine/
             ${{ runner.temp }}/refine/actions.jsonl
           if-no-files-found: ignore
+
+  # Keeps the project's Status, Size and Verdict in step with the backlog.
+  # It runs after the sweep, so a ready label the sweep added shows the same
+  # run, and computes its own verdict rather than trusting an artifact. The
+  # project token is the only write credential here: the job's GITHUB_TOKEN
+  # reads issues and nothing else.
+  project:
+    if: inputs.enabled && inputs.project_number != '' && !cancelled()
+    needs: sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    concurrency:
+      group: refine-project-${{ github.repository }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      REFINE_MODE: ${{ inputs.mode }}
+      REFINE_READY_LABEL: ${{ inputs.ready_label }}
+      REFINE_IN_PROGRESS_LABEL: ${{ inputs.in_progress_label }}
+      REFINE_QUESTIONS_ISSUE: ${{ inputs.questions_issue }}
+      PROJECT_NUMBER: ${{ inputs.project_number }}
+      PROJECT_OWNER: ${{ inputs.project_owner || github.repository_owner }}
+      APPLY: .refine-toolkit/skills/refine/scripts/refine_apply.py
+    steps:
+      - name: Check out the repository (default branch)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Pin the refinement scripts to this workflow's commit
+        id: toolkit
+        env:
+          TOOLKIT_REPO: ${{ job.workflow_repository }}
+          TOOLKIT_SHA: ${{ job.workflow_sha }}
+        run: |
+          if [ "$TOOLKIT_REPO" != "bjcoombs/ai-native-toolkit" ] && [ "$TOOLKIT_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::The refinement scripts come only from bjcoombs/ai-native-toolkit or this repository, not '${TOOLKIT_REPO}'."
+            exit 1
+          fi
+          if [[ ! "$TOOLKIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The refinement scripts are pinned only to a full commit sha, not '${TOOLKIT_SHA}'."
+            exit 1
+          fi
+
+      - name: Check for the project token
+        id: token
+        env:
+          HAS_TOKEN: ${{ secrets.project_token != '' }}
+        run: |
+          if [ "$HAS_TOKEN" != "true" ]; then
+            echo "::warning::project_number is set but the project_token secret is not; the project sync is skipped."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out the refinement scripts
+        if: steps.token.outputs.run == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .refine-toolkit
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            skills/refine/
+            docs/contributing/definition-of-ready.md
+
+      - name: Write the deterministic verdict
+        if: steps.token.outputs.run == 'true'
+        timeout-minutes: 5
+        run: |
+          mkdir -p .refine
+          python3 .refine-toolkit/skills/refine/scripts/refine.py --repo "$GH_REPO" --out .refine/verdict.json
+
+      - name: Sync Status, Size and Verdict (no model)
+        if: steps.token.outputs.run == 'true'
+        timeout-minutes: 8
+        env:
+          REFINE_PROJECT_TOKEN: ${{ secrets.project_token }}
+        run: |
+          python3 .refine-toolkit/skills/refine/scripts/refine_project.py --verdict .refine/verdict.json \
+            --project-number "$PROJECT_NUMBER" --owner "$PROJECT_OWNER"
+
+      - name: Write the job summary
+        if: always() && steps.token.outputs.run == 'true'
+        run: python3 "$APPLY" summary >> "$GITHUB_STEP_SUMMARY" || true

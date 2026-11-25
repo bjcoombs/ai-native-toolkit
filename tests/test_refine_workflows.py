@@ -32,6 +32,7 @@ JOB_PERMISSIONS = {
     "apply": {"contents": "read", "issues": "write"},
     "reopen": {"contents": "read", "issues": "write"},
     "sweep": {"contents": "read", "issues": "write", "pull-requests": "read"},
+    "project": {"contents": "read", "issues": "read", "pull-requests": "read"},
 }
 # A scope a job may hold as write without being able to change the repository:
 # the OIDC token Workload Identity Federation exchanges for a Claude API token.
@@ -105,7 +106,8 @@ def test_caller_inputs_exist_in_the_reusable_workflow(caller: str) -> None:
 def test_only_refine_and_workflow_token_secrets(caller: str) -> None:
     for name in (caller, CALLERS[caller]):
         text = (WORKFLOWS / name).read_text(encoding="utf-8")
-        assert set(re.findall(r"secrets\.(\w+)", text)) <= {"REFINE_ANTHROPIC_API_KEY", "anthropic_api_key"}
+        assert set(re.findall(r"secrets\.(\w+)", text)) <= {"REFINE_ANTHROPIC_API_KEY", "anthropic_api_key",
+                                                              "REFINE_PROJECT_TOKEN", "project_token"}
 
 
 def test_triage_caller_skips_bot_comments_and_pull_requests() -> None:
@@ -201,8 +203,8 @@ def test_model_step_gated_on_credential_and_author(name: str) -> None:
 @pytest.mark.parametrize("name", sorted(CALLERS.values()))
 def test_write_script_caps_name_real_scripts(name: str) -> None:
     for job_id, job in _load(name)["jobs"].items():
-        if job_id == "plan":
-            assert "CLAUDE_CODE_SCRIPT_CAPS" not in job["env"], "the plan job runs no write script"
+        if job_id in ("plan", "project"):
+            assert "CLAUDE_CODE_SCRIPT_CAPS" not in job["env"], f"the {job_id} job runs no write script"
             continue
         caps = json.loads(job["env"]["CLAUDE_CODE_SCRIPT_CAPS"])
         assert caps and set(caps) <= WRITE_SCRIPTS
@@ -233,6 +235,29 @@ def test_sweep_runs_no_model_and_calls_refine_py() -> None:
     runs = " ".join(str(s.get("run", "")) for s in _steps(doc))
     assert "skills/refine/scripts/refine.py" in runs and '"$APPLY" sweep' in runs
     assert doc["jobs"]["sweep"]["env"]["APPLY"].endswith("skills/refine/scripts/refine_apply.py")
+
+
+def test_project_sync_is_skipped_without_a_project_and_holds_no_issue_write() -> None:
+    doc = _load("reusable-refine-sweep.yml")
+    call = doc["on"]["workflow_call"]
+    assert call["inputs"]["project_number"]["default"] == ""
+    assert call["secrets"]["project_token"]["required"] is False
+    job = doc["jobs"]["project"]
+    assert "inputs.project_number != ''" in job["if"] and job["needs"] == "sweep"
+    assert job["permissions"]["issues"] == "read", "the project token is the only write credential"
+    assert not any("claude-code-action" in str(s.get("uses", "")) for s in job["steps"])
+    token_users = [s for s in job["steps"] if "secrets.project_token" in json.dumps(s)]
+    assert [s.get("id") or s["name"] for s in token_users] == ["token", "Sync Status, Size and Verdict (no model)"]
+    sync = token_users[-1]
+    assert "skills/refine/scripts/refine_project.py" in sync["run"]
+    assert sync["env"] == {"REFINE_PROJECT_TOKEN": "${{ secrets.project_token }}"}
+    assert "project_token" not in json.dumps(job["env"])
+
+
+def test_this_repository_syncs_its_backlog_project_from_variables() -> None:
+    job = _load("refine-sweep.yml")["jobs"]["sweep"]
+    assert job["with"]["project_number"] == "${{ vars.REFINE_PROJECT_NUMBER }}"
+    assert job["secrets"] == {"project_token": "${{ secrets.REFINE_PROJECT_TOKEN }}"}
 
 
 # ── prompts and scripts ──────────────────────────────────────────────────
