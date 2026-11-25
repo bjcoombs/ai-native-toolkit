@@ -12,9 +12,10 @@ The refinement script reads this block and holds no second copy of it. It is the
 version: 1
 # The six section headings, in order. A section is present when a line is a
 # Markdown heading at one of `heading_levels` whose text equals the name,
-# compared after trimming and ignoring case, and at least one non-blank line
-# follows it before the next heading. Issue forms render `###`; the regulator
-# template agents write uses `##`.
+# compared after trimming and ignoring case, and at least one line follows it
+# before the next heading that is neither blank nor one of `empty_markers`.
+# Issue forms render `###`, and an optional form field left empty as
+# `_No response_`; the regulator template agents write uses `##`.
 sections:
   - Problem Statement
   - Technical Context
@@ -23,6 +24,8 @@ sections:
   - Solution Requirements
   - Success Criteria
 heading_levels: [2, 3]
+empty_markers:
+  - _No response_
 # Fibonacci story points. A larger issue is ready only as a parent whose
 # sub-issues carry the work.
 max_points: 3
@@ -54,7 +57,7 @@ An issue is ready when every item holds. Each heading is the item's `id` in the 
 
 The body has the six sections in `sections`, each with content: Problem Statement, Technical Context, Impact, Root Cause, Solution Requirements, Success Criteria. A clarified-scope comment (first line `<!-- triage:clarified-scope -->`) may supply a section the body lacks.
 
-**Check: script.** Heading match as the block describes; order is not checked.
+**Check: script.** Heading match as the block describes; order is not checked. A section whose only content is `_No response_`, which GitHub writes for an empty optional form field, counts as missing.
 
 ### `criteria-checkable`
 
@@ -82,7 +85,7 @@ Nothing in the body or comments waits on a human call: no unanswered question to
 
 ## Labels
 
-- **`needs-triage`**: the issue has not been triaged. `.github/workflows/issue-needs-triage.yml` applies it when an issue opens, unless the issue opens already carrying `agent-ready`. It is removed when the issue is triaged: replaced by `agent-ready`, or kept with a comment that states the open question when triage finds one.
+- **`needs-triage`**: the issue has not been triaged. `.github/workflows/issue-needs-triage.yml` applies it when an issue opens, unless the issue carries `agent-ready` by the time the job reads its labels (a few seconds after it opens). It is removed when the issue is triaged: replaced by `agent-ready`, or kept with a comment that states the open question when triage finds one.
 - **`agent-ready`**: every item in the ready checklist holds. An agent may start work on it.
 
 ### Who may apply `agent-ready`

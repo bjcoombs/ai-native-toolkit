@@ -95,6 +95,8 @@ def test_ready_block_lists_the_sections_and_labels() -> None:
     block = _ready_block()
     assert block["sections"] == SECTIONS
     assert block["labels"] == {"triage": "needs-triage", "ready": "agent-ready"}
+    # GitHub fills an empty optional form field with this text.
+    assert "_No response_" in block["empty_markers"]
 
 
 def test_ready_block_headings_match_the_document_sections() -> None:
@@ -135,5 +137,5 @@ def test_workflow_applies_the_triage_label_named_in_the_block() -> None:
     text, _ = _workflow()
     labels = _ready_block()["labels"]
     assert f"--add-label {labels['triage']}" in text
-    # An issue opened already carrying the ready label was triaged by its author.
-    assert f"'{labels['ready']}'" in text
+    # An issue already carrying the ready label when the job runs is skipped.
+    assert f'index("{labels["ready"]}")' in text

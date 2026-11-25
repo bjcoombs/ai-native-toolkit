@@ -4,12 +4,16 @@ name: Issue needs-triage
 # (docs/contributing/definition-of-ready.md, "Labels"). The refiner workflow
 # or the maintainer removes the label once the issue is settled.
 #
-# An issue that opens already carrying `agent-ready` was triaged by whoever
-# filed it (the maintainer, or /issues creating an approved decomposition), so
-# it is left alone rather than given both labels.
+# An issue that already carries `agent-ready` was triaged by whoever filed it
+# (the maintainer, or /issues creating an approved decomposition), so it is
+# left alone rather than given both labels. The labels are read when the job
+# runs, not from the event payload: /issues creates a child with a plain
+# `gh issue create` and adds `agent-ready` in a separate edit a few seconds
+# later (skills/issues/SKILL.md, "Size by Judgment"), so the payload of the
+# `opened` event never carries it.
 #
-# No checkout and no action: one `gh` call with the workflow token, which is
-# granted `issues: write` and nothing else.
+# No checkout and no action: `gh` with the workflow token, which is granted
+# `issues: write` and nothing else.
 on:
   issues:
     types: [opened]
@@ -20,7 +24,6 @@ permissions:
 jobs:
   label:
     name: apply needs-triage
-    if: ${{ !contains(github.event.issue.labels.*.name, 'agent-ready') }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -28,4 +31,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE: ${{ github.event.issue.number }}
-        run: gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --add-label needs-triage
+        run: |
+          if gh issue view "$ISSUE" --repo "$GITHUB_REPOSITORY" --json labels \
+              | jq -e '[.labels[].name] | index("agent-ready")' >/dev/null; then
+            echo "#$ISSUE already carries 'agent-ready'; leaving it untouched."
+            exit 0
+          fi
+          gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --add-label needs-triage
