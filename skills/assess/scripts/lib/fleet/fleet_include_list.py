@@ -18,7 +18,9 @@ fetches every include project the user can read. ghsync itself is unchanged.
   ``glab_error``. The same check runs again whenever a project is not ``reachable``, so a login
   lost or a host gone partway through the walk is told apart from one refused project. A
   host-wide failure (``glab`` not installed, not logged in, host unreachable), before or during
-  the walk, raises ``IncludeListError`` and nothing is written (the command exits 3).
+  the walk, raises ``IncludeListError`` and nothing is written (the command exits 3). A failure
+  on a tree or file read is not re-checked: it marks that project ``partial``, and the next
+  project that is not reachable re-checks the host.
 - **Recursion** (``walk``): ``run.json`` keeps the include project, not the files it names, so
   a reachable project's nested includes are read from every YAML file in its default branch
   (the first ``MAX_FILES`` of them, by path): a superset of the files a pipeline reads. A

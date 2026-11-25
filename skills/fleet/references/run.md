@@ -53,4 +53,4 @@ nested-include depth (`MAX_DEPTH` there). An extra project costs one clone; the 
 includes exactly. A reachable project whose tree or a file could not be read, or that holds more
 YAML files than `MAX_FILES`, or whose files name an include that is not looked up, is named as not fully read, since an include it holds may be missing. An entry whose path is no project path (built from a CI variable such as `$CI_PROJECT_NAMESPACE`, or a single segment) is named as not looked up, at any depth and with the project that named it, and the rest are still checked. Exit codes: `0` list written, `2` no `run.json` or a run that does not name
 the projects, `3` the host could not be read (no `glab`, not logged in, unreachable), before the walk or
-partway through it, and nothing is written; a project that is not reachable re-checks the login. Logic: `lib/fleet/fleet_include_list.py`.
+partway through it, and nothing is written; a project that is not reachable re-checks the login (a failed tree or file read only marks that project not fully read). Logic: `lib/fleet/fleet_include_list.py`.
