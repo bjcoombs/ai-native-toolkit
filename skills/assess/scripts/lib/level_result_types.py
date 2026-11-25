@@ -26,6 +26,9 @@ class ConditionResult(TypedDict):
     exclusion_kind: NotRequired[str]  # the exclusion's kind (lib.owner_exclusions.KINDS)
     polarity: NotRequired[str]  # "hazard" only: a harm, never counted (#843); absent: positive
     why: NotRequired[str]  # the manifest whys of its criteria, joined by a space (#939)
+    # the base model or practice pack its row came from (lib/pack_layering.py, #1274); present
+    # only when a pack added rows to the model
+    source: NotRequired[str]
 
 
 class NotMeasured(TypedDict):

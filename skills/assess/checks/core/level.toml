@@ -27,6 +27,7 @@ revision = 1
   "level.conditions.state" = "token"
   "level.conditions.reason" = "token"
   "level.conditions.polarity" = "token"
+  "level.conditions.source" = "token"
   "level.conditions.why" = "drop"
   "level.next_step.blockers.kind" = "token"
   "level.next_step.blockers.gate" = "token"

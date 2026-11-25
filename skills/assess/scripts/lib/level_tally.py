@@ -101,6 +101,8 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   and identical in `/assess` and `/fleet`. A
   `polarity = "hazard"` condition is never counted and carries `polarity: "hazard"`; a
   `guarded_by` condition reads `measured`, not `verified`, while its guard is not met (#843).
+  `source` (#1274) names the base model or practice pack the condition's row came from; it is
+  present only on a model a pack added rows to (`lib/pack_layering.py`).
 - Owner exclusions: `level_result(model, data, exclusions)` takes the `OwnerExclusion`
   entries (`owner_exclusions.py`, #910). An excluded condition is `not_applicable` whatever its
   criteria say, out of the tally and the denominator; a condition that `requires` it is
@@ -269,6 +271,8 @@ def _conditions(model: MaturityModel, data: Mapping[str, Any] | None,
                                       "state": state}
             if hazard:
                 entry["polarity"] = "hazard"
+            if "source" in row:
+                entry["source"] = row["source"]
             _mark(entry, excluded.get(cid), cid in demoted)
             built.append(entry)
     final: dict[str, tuple[str, str | None]] = {}

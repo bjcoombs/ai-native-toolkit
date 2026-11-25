@@ -26,7 +26,8 @@ folders, so they are not skipped, and a pack author whose globs reach them exclu
 ``.assess/config.toml``. A symlinked file counts only when it resolves inside the
 root, so a link pointing outside is never followed or read. ``exists`` is true for a file of
 the walk or a directory holding one; ``glob_count`` counts the walk's files whose path matches
-the glob (``*`` and ``?`` within one segment, ``**`` across any number, ``[...]`` a class);
+the glob (``packs.glob_regex``, which the loader compiles each glob with: ``*`` and ``?``
+within one segment, ``**`` across any number, ``[...]`` a class);
 ``contains`` counts the matching files holding the literal text, compared as UTF-8 bytes;
 ``key_exists`` reads the one named file with the reader its suffix picks, ignoring case as
 the loader does (``.toml`` ``tomllib``, ``.json`` ``json``, ``.yaml``/``.yml`` ``pack_yaml``),
@@ -50,7 +51,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import tomllib
 from collections.abc import Mapping, Sequence
 from functools import cached_property
@@ -59,7 +59,7 @@ from typing import Any, TypedDict
 
 from lib.assess_config import ASSESS_DIR, is_user_excluded
 from lib.pack_yaml import YamlError, lookup, parse
-from lib.packs import Pack, PackIdentity, Rule, pack_identity
+from lib.packs import Pack, PackIdentity, Rule, glob_regex, pack_identity
 
 PACK_BLOCK = "pack"
 IDENTITY_BLOCK = "packs"
@@ -80,39 +80,6 @@ class PackBlocks(TypedDict, total=False):
 
 def _unavailable(code: str) -> dict[str, Any]:
     return {"available": False, "reason": code}
-
-
-def _segment(part: str) -> str:
-    out: list[str] = []
-    i = 0
-    while i < len(part):
-        ch = part[i]
-        if ch == "*":
-            out.append("[^/]*")
-        elif ch == "?":
-            out.append("[^/]")
-        elif ch == "[" and part.find("]", i + 2) > 0:
-            end = part.find("]", i + 2)
-            body = part[i + 1:end].replace("\\", "\\\\")
-            out.append("[" + ("^" + body[1:] if body.startswith("!") else body) + "]")
-            i = end
-        else:
-            out.append(re.escape(ch))
-        i += 1
-    return "".join(out)
-
-
-def glob_regex(glob: str) -> re.Pattern[str]:
-    """The pattern a repository-relative POSIX path must fully match for ``glob``."""
-    parts = glob.split("/")
-    out: list[str] = []
-    for index, part in enumerate(parts):
-        last = index == len(parts) - 1
-        if part == "**":
-            out.append(".*" if last else "(?:[^/]+/)*")
-        else:
-            out.append(_segment(part) + ("" if last else "/"))
-    return re.compile("".join(out))
 
 
 class _Tree:

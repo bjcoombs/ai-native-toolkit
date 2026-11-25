@@ -35,6 +35,17 @@ id = "owner_set"
 title = "Service owner declared"
 why = "An agent needs to know who to ask."
 key_exists = { file = "service.yaml", key = "metadata.owner" }  # TOML, YAML or JSON key
+
+[[rows]]                   # optional: practices scored over the checks (#1274)
+id = "payments-glossary"
+title = "Domain glossary"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["docs"]
+  criteria = [{ signal = "pack.payments.glossary", op = "eq", value = true }]
 ```
 
 Rules:
@@ -52,15 +63,25 @@ Rules:
   error naming its location. A key that would run code (``CODE_KEYS``) gets its
   own error that names the fix: express the check as one of the four rules;
   #1266 says why installed-package collectors are out of scope.
-- ``[[rows]]`` is refused: rows in a pack arrive with layering (#1274).
+- A pack holds one or more ``[[checks]]`` or ``[[rows]]``. ``[[rows]]`` use the
+  ``lib/levels.py`` row grammar and are validated by its parser at load, with two
+  additions: every level declares ``truth`` (no legacy alias in a pack), and a
+  ``requires`` naming a condition outside the pack is left to layering
+  (``lib/pack_layering.py``, #1274), which checks it against the base model and the
+  earlier packs and checks every signal path. ``guarded_by`` names a condition of the
+  same pack.
+- Each ``glob_count`` and ``contains`` glob is compiled at load (``glob_regex``, the
+  pattern the collector matches with), so a malformed class such as ``docs/[z-a].md`` is
+  a load error naming the check, never a collector failure.
 - Each check publishes its result under ``pack.<pack>.<check>`` (``signal``), a
   namespace no core signal uses.
 - ``pack_identity`` gives ``{name, version, sha256}``, the ``PackIdentity`` the run
   context's ``packs`` block and the fleet stamp's ``packs`` key record (#1273).
 - ``Pack.sha256`` is the sha256 of the canonical JSON (sorted keys, no spaces,
   UTF-8) of the loaded pack: ``[pack]`` and every check's ``id``, ``title``,
-  ``why`` and rule, in file order, as ``lib/fleet/fleet_method.py`` hashes a
-  model. Any change to the file's content, the prose included, changes it;
+  ``why`` and rule, in file order, plus the parsed rows when the pack has any
+  (a pack without rows hashes as it did before #1274), as
+  ``lib/fleet/fleet_method.py`` hashes a model. Any change to the file's content, the prose included, changes it;
   formatting and comments do not.
 
 Loading is a pure function of the file: it reads that one file, touches no
@@ -75,6 +96,8 @@ import tomllib
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Literal, Mapping, TypedDict
 
+from lib.levels import LevelsError, Row, parse_levels
+
 PACK_SUFFIX = ".pack.toml"
 SIGNAL_PREFIX = "pack"
 NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -85,7 +108,7 @@ RULES = ("exists", "glob_count", "contains", "key_exists")
 # Keys that would make a pack run code. Each is refused by name, with the fix.
 CODE_KEYS = frozenset({"command", "run", "exec", "script", "shell", "callable", "entry_point", "python"})
 
-_ROOT_KEYS = frozenset({"pack", "checks"})
+_ROOT_KEYS = frozenset({"pack", "checks", "rows"})
 _PACK_KEYS = frozenset({"name", "version"})
 _CHECK_KEYS = frozenset({"id", "title", "why"}) | frozenset(RULES)
 _CONTAINS_KEYS = frozenset({"glob", "text"})
@@ -133,6 +156,7 @@ class Pack(TypedDict):
     name: str
     version: str
     checks: list[PackCheck]
+    rows: list[Row]  # practices in the lib/levels.py grammar, layered onto the model (#1274)
     sha256: str
 
 
@@ -167,9 +191,6 @@ def load_pack(path: Path) -> Pack:
 
 def parse_pack(data: Mapping[str, Any]) -> Pack:
     """Validate an already-parsed pack table; raise ``PackError`` on any fault."""
-    if "rows" in data:
-        raise PackError("rows: [[rows]] in a pack arrive with layering (#1274); "
-                        "this format takes [[checks]] only")
     _check_keys(data, _ROOT_KEYS, "pack file")
     header = data.get("pack")
     if not isinstance(header, Mapping):
@@ -177,9 +198,9 @@ def parse_pack(data: Mapping[str, Any]) -> Pack:
     _check_keys(header, _PACK_KEYS, "pack")
     name = _name(header.get("name"), "pack.name")
     version = _text(header.get("version"), "pack.version")
-    raw_checks = data.get("checks")
-    if not isinstance(raw_checks, list) or not raw_checks:
-        raise PackError("checks: a pack needs one or more [[checks]] tables")
+    raw_checks = data.get("checks", [])
+    if not isinstance(raw_checks, list) or not (raw_checks or "rows" in data):
+        raise PackError("checks: a pack needs one or more [[checks]] or [[rows]] tables")
     checks: list[PackCheck] = []
     seen: set[str] = set()
     for index, raw in enumerate(raw_checks):
@@ -188,17 +209,43 @@ def parse_pack(data: Mapping[str, Any]) -> Pack:
             raise PackError(f"checks[{index}].id: duplicate check id {check['id']!r}")
         seen.add(check["id"])
         checks.append(check)
-    return {"name": name, "version": version, "checks": checks,
-            "sha256": pack_sha256(name, version, checks)}
+    rows = _parse_rows(data["rows"], name) if "rows" in data else []
+    return {"name": name, "version": version, "checks": checks, "rows": rows,
+            "sha256": pack_sha256(name, version, checks, rows)}
 
 
-def pack_sha256(name: str, version: str, checks: list[PackCheck]) -> str:
+def pack_sha256(name: str, version: str, checks: list[PackCheck], rows: list[Row] | None = None) -> str:
     """The sha256 of the canonical JSON of a loaded pack (the derived ``signal`` left out)."""
-    body = {"pack": {"name": name, "version": version},
-            "checks": [{"id": c["id"], "title": c["title"], "why": c["why"], "rule": c["rule"]}
-                       for c in checks]}
+    body: dict[str, Any] = {
+        "pack": {"name": name, "version": version},
+        "checks": [{"id": c["id"], "title": c["title"], "why": c["why"], "rule": c["rule"]} for c in checks]}
+    if rows:
+        body["rows"] = rows
     text = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _parse_rows(raw: object, pack: str) -> list[Row]:
+    """``[[rows]]`` through ``lib.levels.parse_levels``; a ``requires`` outside the pack is
+    left to layering (``lib/pack_layering.py``), which knows the base model and earlier packs."""
+    if not isinstance(raw, list) or not raw or not all(isinstance(r, Mapping) for r in raw):
+        raise PackError("rows: must be one or more [[rows]] tables")
+    outside: set[str] = set()
+    for row in raw:
+        levels = row.get("levels")
+        for entry in levels if isinstance(levels, list) else []:
+            if not isinstance(entry, Mapping):
+                continue  # parse_levels names it
+            if "truth" not in entry:
+                raise PackError(f"rows ({row.get('id')!r}) level {entry.get('level')!r}: a pack row "
+                                "declares 'truth' on every level")
+            needs = entry.get("requires")
+            if isinstance(needs, list):
+                outside.update(n for n in needs if isinstance(n, str))
+    try:
+        return parse_levels({"version": pack, "rows": raw}, source=f"pack {pack}", known=outside)["rows"]
+    except LevelsError as exc:
+        raise PackError(f"rows: {exc}") from exc
 
 
 def _parse_check(raw: object, where: str, pack: str) -> PackCheck:
@@ -222,12 +269,12 @@ def _parse_rule(kind: str, value: object, where: str) -> Rule:
     if kind == "exists":
         return {"kind": "exists", "path": _relative(value, where)}
     if kind == "glob_count":
-        return {"kind": "glob_count", "glob": _relative(value, where)}
+        return {"kind": "glob_count", "glob": _glob(value, where)}
     if not isinstance(value, Mapping):
         raise PackError(f"{where}: must be an inline table")
     if kind == "contains":
         _check_keys(value, _CONTAINS_KEYS, where)
-        return {"kind": "contains", "glob": _relative(value.get("glob"), f"{where}.glob"),
+        return {"kind": "contains", "glob": _glob(value.get("glob"), f"{where}.glob"),
                 "text": _text(value.get("text"), f"{where}.text")}
     _check_keys(value, _KEY_EXISTS_KEYS, where)
     file = _relative(value.get("file"), f"{where}.file")
@@ -281,3 +328,47 @@ def _relative(value: object, where: str) -> str:
     if any(seg in ("", ".") for seg in segments):
         raise PackError(f"{where}: {text!r} has an empty or '.' segment; write the path in canonical form")
     return text
+
+
+def _glob(value: object, where: str) -> str:
+    """A repository-relative glob that compiles (``glob_regex``), or ``PackError`` naming the check."""
+    text = _relative(value, where)
+    try:
+        glob_regex(text)
+    except re.error as exc:
+        raise PackError(f"{where}: {text!r} is not a valid glob ({exc})") from exc
+    return text
+
+
+def _segment(part: str) -> str:
+    out: list[str] = []
+    i = 0
+    while i < len(part):
+        ch = part[i]
+        if ch == "*":
+            out.append("[^/]*")
+        elif ch == "?":
+            out.append("[^/]")
+        elif ch == "[" and part.find("]", i + 2) > 0:
+            end = part.find("]", i + 2)
+            body = part[i + 1:end].replace("\\", "\\\\")
+            out.append("[" + ("^" + body[1:] if body.startswith("!") else body) + "]")
+            i = end
+        else:
+            out.append(re.escape(ch))
+        i += 1
+    return "".join(out)
+
+
+def glob_regex(glob: str) -> re.Pattern[str]:
+    """The pattern a repository-relative POSIX path must fully match for ``glob`` (the pack
+    collector, ``lib/pack_checks.py``, matches with it; the loader compiles each glob)."""
+    parts = glob.split("/")
+    out: list[str] = []
+    for index, part in enumerate(parts):
+        last = index == len(parts) - 1
+        if part == "**":
+            out.append(".*" if last else "(?:[^/]+/)*")
+        else:
+            out.append(_segment(part) + ("" if last else "/"))
+    return re.compile("".join(out))

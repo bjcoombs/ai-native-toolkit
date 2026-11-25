@@ -49,6 +49,7 @@ from lib.counts_only.content_free import add_cli_arguments as add_counts_only_ar
 from lib.counts_only.content_free import apply_cli as apply_counts_only, validate_cli_args as validate_counts_only_args
 from lib.testing.coverage_report import load_coverage_data
 from lib.level_signals import signal_path_validator
+from lib.pack_layering import pack_sources
 from lib.packs import Pack, PackError, load_pack
 from lib.model_change import model_name
 from lib.profiles import ModelChoice, ProfileError, add_model_arguments, chosen_model, run_level
@@ -345,8 +346,9 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "A practice pack (<name>.pack.toml, lib/packs.py) whose checks this run evaluates "
             "offline against the repository's files, under pack.<name>.<check>; repeat for "
-            "several. A --levels model may read those paths. The run context records each "
-            "pack's name, version and sha256."
+            "several. A --levels model may read those paths, and a pack's own [[rows]] are "
+            "layered onto the model in pass order, each condition naming its pack. The run "
+            "context records each pack's name, version and sha256."
         ),
     )
     add_counts_only_arguments(parser)
@@ -363,7 +365,8 @@ def main(argv: list[str] | None = None) -> int:
     except ProfileError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    model = None if choice.kind == "default" else choice
+    # the default model with no pack row layered onto it is the run's default (None)
+    model = None if choice.kind == "default" and not pack_sources(choice.model) else choice
     if parsed.opt_in_mutation:
         return run_opt_in_mutation(repo_root, scope=parsed.scope, model=model)
     run_date = datetime.now().strftime("%Y-%m-%d")
