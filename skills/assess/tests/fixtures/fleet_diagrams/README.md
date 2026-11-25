@@ -13,7 +13,7 @@ A fixture fleet run for `tests/test_fleet_diagrams.py`:
   compared with the real `roll_up` and `compare`) for the slope chart: payments climbs, platform
   slips, data stays flat, web's measured set moves (`*`), mobile is new; ties on both sides
   exercise the end-label spacing.
-- `expected-quadrant.svg`, `expected-shared-tooling.svg`, `expected-slope.svg`,
+- `expected-shared-tooling.svg`, `expected-slope.svg`,
   `expected-report.md`: the golden renders.
 - `expected-tag-profile.svg` and `expected-tag-heatmap.svg`: the fleet median tag profile strip
   and the estate tag heatmap (#940) over this run. `expected-tag-profile-states.svg`

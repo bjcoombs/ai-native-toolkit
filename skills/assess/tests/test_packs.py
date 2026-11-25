@@ -180,10 +180,62 @@ def test_dotted_names_are_not_dotdot(tmp_path: Path) -> None:
     assert pack["checks"][0]["rule"] == {"kind": "glob_count", "glob": "..github/x..md"}
 
 
-def test_rows_table_is_refused_naming_layering(tmp_path: Path) -> None:
-    text = _check('exists = "a"') + '\n[[rows]]\nid = "r"\n'
-    message = _error(tmp_path, text)
-    assert "rows" in message and "#1274" in message
+ROW = '''
+[[rows]]
+id = "p-glossary"
+title = "Glossary"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["docs"]
+  criteria = [{ signal = "pack.p.c", op = "eq", value = true }]
+'''
+
+
+def test_rows_load_through_the_levels_parser(tmp_path: Path) -> None:
+    """#1274 lifts the #1272 refusal: rows parse with the lib/levels.py grammar."""
+    pack = load_pack(_write(tmp_path, _check('exists = "a"') + ROW))
+    assert [r["id"] for r in pack["rows"]] == ["p-glossary"]
+    assert pack["rows"][0]["levels"][0]["truth"] == ["docs"]
+    without = load_pack(_write(tmp_path, _check('exists = "a"')))
+    assert without["rows"] == [] and without["sha256"] != pack["sha256"]
+
+
+def test_a_pack_of_rows_alone_loads(tmp_path: Path) -> None:
+    assert load_pack(_write(tmp_path, HEADER + ROW))["checks"] == []
+
+
+def test_a_pack_with_neither_checks_nor_rows_is_refused(tmp_path: Path) -> None:
+    assert "[[rows]]" in _error(tmp_path, HEADER)
+
+
+def test_a_requires_outside_the_pack_is_left_to_layering(tmp_path: Path) -> None:
+    text = HEADER + ROW.replace('truth = ["docs"]', 'truth = ["docs"]\n  requires = ["layer-0-instructions.1"]')
+    assert load_pack(_write(tmp_path, text))["rows"][0]["levels"][0]["requires"] == ["layer-0-instructions.1"]
+
+
+@pytest.mark.parametrize("old, new, expect", [
+    ('truth = ["docs"]\n', "", "truth"),
+    ('scope = "team"', 'scope = "galaxy"', "scope"),
+    ('op = "eq"', 'op = "like"', "rows:"),
+    ('level = 1', 'level = 2', "rows:"),
+])
+def test_a_malformed_row_is_a_pack_error(tmp_path: Path, old: str, new: str, expect: str) -> None:
+    assert expect in _error(tmp_path, HEADER + ROW.replace(old, new))
+
+
+def test_a_duplicate_row_id_in_one_pack_is_refused(tmp_path: Path) -> None:
+    assert "duplicate" in _error(tmp_path, HEADER + ROW + ROW)
+
+
+@pytest.mark.parametrize("body", ['glob_count = "docs/[z-a].md"',
+                                  'contains = { glob = "src/[z-a]/*.py", text = "x" }'])
+def test_a_glob_that_does_not_compile_is_a_load_error_naming_the_check(tmp_path: Path, body: str) -> None:
+    """Carried from the #1284 review: never a collector failure that blanks both blocks."""
+    message = _error(tmp_path, _check(body))
+    assert "checks[0] ('c')" in message and "[z-a]" in message and "not a valid glob" in message
 
 
 @pytest.mark.parametrize("body, expect", [

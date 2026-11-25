@@ -49,7 +49,8 @@ from lib.counts_only.content_free import add_cli_arguments as add_counts_only_ar
 from lib.counts_only.content_free import apply_cli as apply_counts_only, validate_cli_args as validate_counts_only_args
 from lib.testing.coverage_report import load_coverage_data
 from lib.level_signals import signal_path_validator
-from lib.packs import Pack, PackError, load_pack
+from lib.pack_layering import pack_sources
+from lib.packs import Pack, PackError, load_pack, pack_identity
 from lib.model_change import model_name
 from lib.profiles import ModelChoice, ProfileError, add_model_arguments, chosen_model, run_level
 from lib.profiles import profile_names, single_repo_choice
@@ -168,6 +169,14 @@ def _model_differs(level_block: Any, model: ModelChoice | None) -> bool:
     return isinstance(recorded, str) and model_name(recorded) != model_name(version)
 
 
+def _recorded_packs(level_block: Any) -> list[str]:
+    """The packs whose rows the run's ``level`` block holds (#1274), in order: every condition
+    ``source`` after the first, which is the base model's; ``[]`` for a block without one."""
+    conditions = level_block.get("conditions") if isinstance(level_block, dict) else None
+    sources = [c["source"] for c in conditions or [] if isinstance(c, dict) and isinstance(c.get("source"), str)]
+    return list(dict.fromkeys(sources))[1:]
+
+
 def _model_hint(level_block: dict[str, Any]) -> str:
     """The flag that reruns under the model ``level_block`` names: ``the run used profile
     handover: pass --profile handover``, the default model, or a custom file's version."""
@@ -180,7 +189,7 @@ def _model_hint(level_block: dict[str, Any]) -> str:
 
 
 def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
-                        model: ModelChoice | None = None) -> int:
+                        model: ModelChoice | None = None, packs: tuple[Pack, ...] = ()) -> int:
     """Re-run the Layer-1 test-pressure scan with the bounded mutation pass ON.
 
     The consent-gated counterpart to the default read-only scan in
@@ -205,7 +214,11 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
     model), which the recount uses; a model other than the one the ``level`` block names
     returns 2 before any mutation runs, naming the flag that model needs (``_model_hint``),
     so a refresh never recounts a profile run under
-    another model (#1150).
+    another model (#1150). Likewise the packs whose rows the ``level`` block holds (each
+    condition's ``source``, #1274) must be the ones layered onto ``model``, in order, or it
+    returns 2 naming them, so a refresh never drops a pack's practices; and ``packs``, the
+    ``--pack`` files passed now, must match the run context's ``packs`` block by name, version
+    and sha256, in order, so a pack edited since the run is refused too.
 
     The treemap overlay (regenerated separately by the orchestrator) then reads
     the refreshed ``test_pressure.per_file`` so covered-but-unpinned files get
@@ -231,6 +244,16 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
     if _model_differs(ctx.get("level"), model):
         print(f"--opt-in-mutation needs the --profile or --levels the run used; {_model_hint(ctx['level'])}",
               file=sys.stderr)
+        return 2
+    recorded = _recorded_packs(ctx.get("level"))
+    if recorded != pack_sources(chosen_model(model)):
+        named = ", ".join(recorded) or "none with rows"
+        print(f"--opt-in-mutation needs every --pack whose rows the run layered, in the same order; "
+              f"the run's packs: {named}", file=sys.stderr)
+        return 2
+    if [pack_identity(p) for p in packs] != (ctx.get("packs") or []):
+        print("--opt-in-mutation needs the same --pack files the run used, unedited and in the same order; "
+              "the run context's packs block names them", file=sys.stderr)
         return 2
 
     # Only focus entries with test evidence: mutating a file with no test yields
@@ -345,8 +368,9 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "A practice pack (<name>.pack.toml, lib/packs.py) whose checks this run evaluates "
             "offline against the repository's files, under pack.<name>.<check>; repeat for "
-            "several. A --levels model may read those paths. The run context records each "
-            "pack's name, version and sha256."
+            "several. A --levels model may read those paths, and a pack's own [[rows]] are "
+            "layered onto the model in pass order, each condition naming its pack. The run "
+            "context records each pack's name, version and sha256."
         ),
     )
     add_counts_only_arguments(parser)
@@ -363,9 +387,10 @@ def main(argv: list[str] | None = None) -> int:
     except ProfileError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    model = None if choice.kind == "default" else choice
+    # the default model with no pack row layered onto it is the run's default (None)
+    model = None if choice.kind == "default" and not pack_sources(choice.model) else choice
     if parsed.opt_in_mutation:
-        return run_opt_in_mutation(repo_root, scope=parsed.scope, model=model)
+        return run_opt_in_mutation(repo_root, scope=parsed.scope, model=model, packs=packs)
     run_date = datetime.now().strftime("%Y-%m-%d")
     try:
         ctx = build_and_publish_run(

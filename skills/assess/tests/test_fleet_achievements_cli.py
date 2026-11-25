@@ -56,8 +56,8 @@ def test_a_run_credits_what_moved_since_the_history_and_reruns_byte_identical(tm
     first = json.loads((tmp_path / "o1" / "achievements.json").read_text(encoding="utf-8"))
     assert len(first["runs"]) == 1 and first["achievements"] == []
     report = (tmp_path / "o1" / "report.md").read_text(encoding="utf-8")
-    assert report.index("## What changed and who earned it") < report.index("## Opportunities") \
-        < report.index("## Activity and maturity")  # #746: opportunities after credit, before diagrams
+    assert report.index("## Fleet at a glance") < report.index("## What changed and who earned it") \
+        < report.index("## Opportunities") < report.index("## Shared tooling")  # #1255 front screen; #746 order
     assert "This run is the starting line, so there is no earlier run" in report  # kept: a real first run
     data = json.loads((tmp_path / "o1" / "fleet-data.json").read_text(encoding="utf-8"))
     assert data["fleet_data_version"] == 5 and data["opportunities"]["measured"] == 2
@@ -71,7 +71,9 @@ def test_a_run_credits_what_moved_since_the_history_and_reruns_byte_identical(tm
     doc = json.loads((tmp_path / "o2" / "achievements.json").read_text(encoding="utf-8"))
     kinds = {(a["kind"], a["unit"]) for a in doc["achievements"]}
     assert ("level_up", "grpa/svc1") in kinds and ("target_hit", "grpa/svc1") in kinds
-    assert "`grpa/svc1` reached its target of Step 2: Step 1 to Step 2." in (tmp_path / "o2" / "report.md").read_text(encoding="utf-8")
+    report2 = (tmp_path / "o2" / "report.md").read_text(encoding="utf-8")
+    assert "- Targets hit: 1, each listed in [`achievements.json`](./achievements.json)" in report2  # #1255: counted
+    assert "reached its target of Step 2" not in report2
     # #746: recent progress reads this run's level-ups from the history, display only
     assert "- `grpa/svc1` reached level" in (tmp_path / "o2" / "report.md").read_text(encoding="utf-8")
     assert (tmp_path / "o2" / "report.md").read_bytes() == (tmp_path / "o3" / "report.md").read_bytes()

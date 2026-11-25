@@ -51,6 +51,7 @@ def level_result_schema() -> JsonDict:
     condition["disposition"] = {"enum": [EXCLUDED_BY_OWNER, DEMOTED]}
     excluded["source"] = {"enum": [SOURCE_REPO]}
     condition["polarity"] = {"enum": ["hazard"], "description": "present only on a hazard condition, which is never counted (lib/levels_fields.py)"}
+    condition["source"] = {"type": "string", "description": "the base model or practice pack the row came from; present only when a pack added rows (lib/pack_layering.py)"}
     props["tags"]["items"]["properties"]["tag"] = {"enum": list(TRUTH_TAGS)}
     props["tags"]["description"] = (
         "one row per truth tag, every tag in this order (#940); met and measured are the headline strip's "

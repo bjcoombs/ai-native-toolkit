@@ -1,5 +1,13 @@
 # Fleet diagrams
 
+## Fleet at a glance
+
+In place: 15 repositories in this run, scanned with no model call.
+
+How many repositories sit at each Step, what moved since the last run, and which gate would move the most repositories?
+
+Not drawn: skipped: the maturity model defines no Steps.
+
 Drawn from this run's output with no model call; unknown is hatched and named, never drawn as zero.
 
 ## Practices in place by truth tag, across the fleet
@@ -33,14 +41,6 @@ In place: 15 repositories in this run, scanned with no model call.
 Which single change would take the most repositories to their next Step?
 
 Not drawn: skipped: the maturity model defines no Steps.
-
-## Activity and maturity
-
-In place: 14 repositories with a measured level, 9 of them at or above half the top level.
-
-Which busy repositories have the most room to grow?
-
-[![Activity and maturity](./quadrant.svg)](./quadrant.svg)
 
 ## Shared tooling
 

@@ -203,6 +203,7 @@ class Row(TypedDict):
     scope: Scope
     aggregation: Aggregation | None
     levels: list[Level]
+    source: NotRequired[str]  # the base model or pack it came from, set by lib/pack_layering.py (#1274)
 
 
 class StepGate(TypedDict):
@@ -308,10 +309,11 @@ def load_levels(path: Path, validator: PathValidator | None = None) -> MaturityM
 
 
 def parse_levels(data: Mapping[str, Any], validator: PathValidator | None = None, *,
-                 source: str = "<table>") -> MaturityModel:
+                 source: str = "<table>", known: Iterable[str] = ()) -> MaturityModel:
     """Validate an already-parsed maturity model table; raise ``LevelsError`` on any fault.
 
     ``source`` names the model in a ``MixedTruthError`` (``load_levels`` passes the path).
+    ``known`` are condition ids defined elsewhere that a ``requires`` may name (a pack's, #1274).
     """
     data = dealias_model(data)  # a 2.1.0 signal path loads under its new name (#970)
     _check_keys(data, _ROOT_KEYS, "maturity model")
@@ -330,12 +332,12 @@ def parse_levels(data: Mapping[str, Any], validator: PathValidator | None = None
         seen.add(row["id"])
         rows.append(row)
     _resolve_truth(raw_rows, rows, source)
-    _check_requires(rows)
+    _check_requires(rows, frozenset(known))
     check_guards({condition_id(r["id"], lv["level"]): lv["guarded_by"] for r in rows for lv in r["levels"]
                   if "guarded_by" in lv},
                  {condition_id(r["id"], lv["level"]): "polarity" in lv for r in rows for lv in r["levels"]})
     if validator is not None:
-        _validate_paths(rows, validator)
+        validate_paths(rows, validator)
     model: MaturityModel = {"version": version, "rows": rows}
     if "steps" in data:
         model["steps"] = _parse_steps(data["steps"], rows)
@@ -478,11 +480,11 @@ def condition_id(row_id: str, level: int) -> str:
     return f"{row_id}.{level}"
 
 
-def _check_requires(rows: list[Row]) -> None:
-    """Every ``requires`` names an existing condition, never itself, with no cycle."""
+def _check_requires(rows: list[Row], known: frozenset[str] = frozenset()) -> None:
+    """Every ``requires`` names an existing condition (or one of ``known``), never itself, with no cycle."""
     edges = {condition_id(row["id"], lv["level"]): lv.get("requires", []) for row in rows for lv in row["levels"]}
     for cid, needs in edges.items():
-        unknown = sorted(n for n in needs if n not in edges)
+        unknown = sorted(n for n in needs if n not in edges and n not in known)
         if unknown:
             raise LevelsError(f"condition {cid!r}: 'requires' names unknown condition(s) {', '.join(unknown)}")
     done: set[str] = set()
@@ -492,7 +494,7 @@ def _check_requires(rows: list[Row]) -> None:
             raise LevelsError(f"condition {cid!r}: 'requires' forms a cycle ({' -> '.join((*path, cid))})")
         if cid in done:
             return
-        for need in edges[cid]:
+        for need in edges.get(cid, ()):
             visit(need, (*path, cid))
         done.add(cid)
 
@@ -556,7 +558,7 @@ def _parse_steps(raw: Any, rows: list[Row]) -> list[StepDef]:
     return steps
 
 
-def _validate_paths(rows: list[Row], validator: PathValidator) -> None:
+def validate_paths(rows: list[Row], validator: PathValidator) -> None:
     bad = {(row["scope"], signal, row["id"]) for row in rows for level in row["levels"] for c in level["criteria"]
            for signal in (c["signal"], *([c["eq_signal"]] if "eq_signal" in c else []))
            if not validator(row["scope"], signal)}

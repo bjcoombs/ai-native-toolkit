@@ -11,16 +11,19 @@ Full reference: lib/docs/ci_model_jobs.md.
 **A model-backed job** (``signs``): a ``run:`` or ``script:`` line runs an eval harness
 (``eval_harness``: promptfoo eval, deepeval test, oaieval, inspect eval, lm_eval, ragas) or the
 Claude Code CLI in print mode (``agent_cli``: ``claude -p``); a step uses an agent action
-(``agent_action``, ``AGENT_ACTIONS``, also inside a repo-local action the step uses); an ``env:``
-or ``with:`` line of the job or the workflow names a model-provider secret (``provider_secret``,
-``PROVIDER_SECRETS``); or a command runs ``pytest -m eval`` or a path
-under ``evals/`` (``eval_tests``). An install line (``pip install ragas``) is not a sign, and a step or job whose ``if:`` is never
-true is not read.
+(``agent_action``, ``AGENT_ACTIONS``, also inside a repo-local action the step uses); an ``env:``,
+``with:``, ``secrets:`` or ``variables:`` entry of the job or the workflow names a model-provider
+secret (``provider_secret``, ``PROVIDER_SECRETS``; a step ``name:`` naming one is not a sign); or a
+command runs ``pytest -m eval`` or a path under ``evals/`` (``eval_tests``). An install line
+(``pip install ragas``, a package manager's install or add subcommand) is not a sign,
+and a step or job whose ``if:`` is never true is not read.
 
 **A gate** (``GATES``): ``paths`` (``paths:`` or ``paths-ignore:`` on every ordinary event that
-fires the job, never a catch-all ``**``), ``pr_types`` (pull request ``types:`` without ``synchronize``), ``label`` (a
+fires the job; a ``paths:`` list read in order, so a catch-all ``**`` then ``!docs/**`` filters
+and a catch-all last does not), ``pr_types`` (pull request ``types:`` without ``synchronize``), ``label`` (a
 ``labeled`` type, or a job or step ``if:`` on the pull request's labels), ``event_if`` (a job
-``if:`` that requires a schedule or manual event), ``tags_only`` (a push filtered to tags),
+``if:`` that requires a schedule or manual event; sign steps under different recognised gates
+combine them), ``tags_only`` (a push filtered to tags),
 ``event_trigger`` (no ordinary event fires the workflow, each one a known ``GATING_EVENTS`` name:
 schedule, ``workflow_dispatch``, comments) and GitLab ``changes`` (a ``rules:changes:`` the job cannot run without).
 ``concurrency`` with ``cancel-in-progress: true`` is recorded as ``cancel_superseded`` and is not
@@ -30,6 +33,15 @@ a gate: the last push of every update still runs the job.
 its trigger is definitely ordinary and every gate is definitely absent; anything this reader
 cannot settle is unknown, never ungated or gated. A job whose only sign is a provider secret
 (a deploy that stores the key) reads unknown (``secret_only``) rather than ungated.
+
+**Reusable workflows.** A called workflow's jobs take each local caller's route, resolved to a
+fixed point (A calls B calls C), with the job's own conditions applied to each route before
+the worst is taken; a ``workflow_call`` no local job calls adds an unknown route. A caller job
+is never a model job itself, and one whose ``if:`` is never true calls nothing. A remote call
+counts in ``unread`` only under a route that is not gated. **GitLab** jobs are read as GitLab
+merges them (``lib.ci_merged_view`` over ``ci_includes.merged_config``, #1180): a root override,
+an included job and an ``extends:`` template's ``script:`` read together; a merge that is not
+settled reads unknown (``merge_unread``).
 
 Block (``ci_model_jobs`` in run-context.json)::
 
@@ -44,7 +56,7 @@ when a job is unknown (``trigger_unresolved``) or a job or include could not be 
 (``unread`` above 0: ``ci_jobs_unread``), else 0. With no model-backed job, ``model_jobs`` is 0
 and the condition is not measured (``no_model_jobs``, ``signal_grades.EMPTY_DENOMINATORS``);
 with none found but ``unread`` above 0, ``model_jobs`` is null and the reason is ``ci_jobs_unread``.
-Tests: ``tests/test_ci_model_jobs.py``.
+Tests: ``tests/test_ci_model_jobs.py``, ``tests/test_ci_model_jobs_followups.py`` (#1249).
 """
 from __future__ import annotations
 
@@ -54,8 +66,9 @@ from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
 from lib.ci_action_inputs import ReadLocal, local_action_paths
-from lib.ci_includes import GITLAB_CI, resolve_includes
+from lib.ci_includes import GITLAB_CI, merged_config, resolve_includes
 from lib.ci_masking import IndentTree, parse_lines, strip_comment
+from lib.ci_merged_view import merged_jobs, merged_view
 from lib.ci_triggers import gitlab_line_triggers, workflow_events
 from lib.command_index import ci_config_files, read_config, repo_files
 
@@ -74,8 +87,8 @@ GATING_EVENTS = frozenset({
     "registry_package", "status", "watch", "branch_protection_rule", "project", "project_card",
     "project_column", "member", "image_version",
 })
-# A paths pattern that matches every file filters nothing.
-_CATCH_ALL = frozenset({"**", "**/*", "*", "./**", "/**"})
+# A paths pattern that matches every file filters nothing. GitHub's ``*`` stops at ``/``: not one.
+_CATCH_ALL = frozenset({"**", "**/*", "./**", "/**"})
 
 AGENT_ACTIONS = frozenset({
     "anthropics/claude-code-action", "anthropics/claude-code-base-action",
@@ -104,7 +117,13 @@ _EVAL_TESTS = re.compile(r"\bpytest\b[^;&|]*\s-m\s+[\"']?evals?\b|\b(?:pytest|py
 # A path a runner is told to leave out (``pytest --ignore=evals/``): keeping evals out of a job is the
 # remedy, never a sign.
 _EXCLUDED = re.compile(r"--(?:ignore|ignore-glob|deselect|exclude)(?:=|\s+)\S+")
-_INSTALL = re.compile(r"\b(?:install|add)\b")
+# An install or add subcommand of a package manager (``pip install``, ``sudo python3 -m pip install``,
+# ``poetry add``, ``sh -c "pip install x"``), never a bare word of a prompt (``claude -p 'add tests'``).
+_INSTALL = re.compile(r"(?:^|[\s;&|(\"'/])(?:pip3?|pipx|uv|poetry|pdm|conda|mamba|micromamba|npm|pnpm|yarn|bun|"
+                      r"deno|apt(?:-get)?|apk|dnf|yum|brew|gem|cargo|go|composer|dotnet)"
+                      r"\s+(?:(?:-\S+|global|tool|pip)\s+){0,3}(?:install|add)(?=[\s\"']|$)")
+# The keys whose entries hand a job a secret; a key named anywhere else (a step ``name:``) is no sign.
+_SECRET_KEYS = frozenset({"env", "with", "secrets", "variables"})
 _SECRET = re.compile(r"\b(?:" + "|".join(PROVIDER_SECRETS) + r")\b")
 _USES = re.compile(r"""^["']?([\w.-]+/[\w.-]+)""")
 _LABEL = re.compile(r"github\.event\.(?:pull_request\.labels|label\b)")
@@ -112,9 +131,12 @@ _EVENT_IF = re.compile(r"github\.event_name\s*==\s*['\"](\w+)['\"]")
 # A condition on a value this reader does not follow: a step output, another job's output (a
 # changed-files job), a variable or an input. It may be a gate, so it reads unknown.
 _OPAQUE = re.compile(r"\b(?:steps|needs|vars|env|inputs)\.")
+# ``<operand> == false``: it negates a gate only when the operand is the label or event test itself
+# (a call or a parenthesised test, or a label path), never a guard beside it (``draft == false``).
+_FALSE = re.compile(r"(\S+)\s*==\s*['\"]?false\b|\bfalse['\"]?\s*==\s*(\S+)", re.IGNORECASE)
 # A literal never-true if: (``false``, ``${{ false }}``): the step or job never runs.
-_FALSE = re.compile(r"==\s*['\"]?false\b", re.IGNORECASE)
 _NEVER = re.compile(r"""^(["']?)(?:false|\$\{\{\s*false\s*\}\})\1$""", re.IGNORECASE)
+_QUOTED_ON = re.compile(r"""^(["'])on\1\s*:(.*)$""")
 _REMOTE_WORKFLOW = re.compile(r"""^["']?[\w.-]+/[\w.-]+/\.github/workflows/""")
 _LOCAL_WORKFLOW = re.compile(r"""^["']?\./\.github/workflows/([\w.-]+\.ya?ml)""")
 
@@ -202,20 +224,33 @@ def signs_in(tree: IndentTree, lines: range) -> list[str]:
             if match and match.group(1).lower() in AGENT_ACTIONS:
                 found.add("agent_action")
         if tree.lines[tree.body(i)].key not in _BODY_KEYS:
-            # an env or with: entry, never a command passing the secret on (a deploy storing it)
-            if _SECRET.search(raw if line.structural else strip_comment(raw)) or _SECRET.search(line.key):
+            # an env, with:, secrets: or variables: entry, never a command passing the secret on
+            # (a deploy storing it) nor a step name naming it
+            handed = line.key in _SECRET_KEYS or any(tree.lines[a].key in _SECRET_KEYS for a in tree.ancestors(i))
+            if handed and (_SECRET.search(raw if line.structural else strip_comment(raw)) or _SECRET.search(line.key)):
                 found.add("provider_secret")
             continue
         command = raw if not line.structural or line.dash or line.key in _BODY_KEYS else ""
-        if not command or command[:1] in ("|", ">") or _INSTALL.search(command):
+        if not command or command[:1] in ("|", ">"):
+            continue
+        if _CLI.search(command):  # a print-mode run counts even beside an install (or a prompt naming one)
+            found.add("agent_cli")
+        if _INSTALL.search(command):
             continue
         if _EVAL.search(command):
             found.add("eval_harness")
-        if _CLI.search(command):
-            found.add("agent_cli")
         if _EVAL_TESTS.search(_EXCLUDED.sub(" ", command)):
             found.add("eval_tests")
     return sorted(found)
+
+
+def _includes_all(patterns: Sequence[str]) -> bool:
+    """Whether a ``paths:`` list, read in order (the last match wins), lets every file through:
+    ``['**', '!docs/**']`` does not, as ``paths-ignore: ['docs/**']`` does not."""
+    every = False
+    for pattern in patterns:
+        every = False if pattern.startswith("!") else every or pattern in _CATCH_ALL
+    return every
 
 
 def _event_gates(tree: IndentTree, event: int) -> list[str] | None:
@@ -232,9 +267,9 @@ def _event_gates(tree: IndentTree, event: int) -> list[str] | None:
         patterns = _list(tree, filters[key])
         if patterns is None:
             return None
-        # ``paths`` holding a catch-all, or ``paths-ignore`` of nothing or only catch-alls, filters nothing.
-        catch = any(p in _CATCH_ALL for p in patterns)
-        if (key == "paths" and patterns and not catch) or (
+        # ``paths-ignore`` of nothing or only catch-alls filters nothing; ``paths`` filters nothing
+        # when, read in order as GitHub does, a catch-all is not followed by a ``!`` exclusion.
+        if (key == "paths" and patterns and not _includes_all(patterns)) or (
                 key == "paths-ignore" and patterns and not all(p in _CATCH_ALL for p in patterns)):
             gates.append("paths")
     gates = sorted(set(gates))
@@ -248,6 +283,15 @@ def _event_gates(tree: IndentTree, event: int) -> list[str] | None:
             "branches" in filters or "branches-ignore" in filters):
         gates.append("tags_only")
     return gates
+
+
+def _on_value(key: str, value: str) -> str | None:
+    """The value of a top-level ``on`` key, or None for another key. A quoted ``"on":`` (which
+    yamllint's ``truthy`` rule asks for) parses with no key and the whole line as its value."""
+    if key in ("on", "true"):
+        return value
+    quoted = _QUOTED_ON.match(value) if not key else None
+    return quoted.group(2).strip() if quoted else None
 
 
 def _workflow_route(tree: IndentTree, text: str, direct: bool = False) -> _Route | None:
@@ -270,9 +314,9 @@ def _workflow_route(tree: IndentTree, text: str, direct: bool = False) -> _Route
             route["reason"] = "called_workflow"
             return route
         return _Route(state="gated", triggers=route["triggers"], gates=["event_trigger"], reason="")
-    on = next((i for i, line in enumerate(tree.lines)
-               if line.structural and line.level == 0 and line.key in ("on", "true")), None)
-    if on is None or tree.lines[on].value.startswith("{"):
+    on = next((i for i, line in enumerate(tree.lines)  # ``on``, ``"on"`` or ``'on'``, as workflow_events reads it
+               if line.structural and line.level == 0 and _on_value(line.key, line.value) is not None), None)
+    if on is None or str(_on_value(tree.lines[on].key, tree.lines[on].value)).startswith("{"):
         route["reason"] = "filters_unread"
         return route
     keyed = {tree.lines[k].key: k for k in tree.children(on) if not tree.lines[k].dash}
@@ -298,15 +342,51 @@ def _if_gate(condition: str) -> str | None:
     gate = ("label" if _LABEL.search(condition)
             else "event_if" if events and not set(events) & _ORDINARY else None)
     if gate is not None:  # a gate joined with ||, negated or compared with false may not limit the job
-        return "unknown" if "||" in condition or "!" in condition or _FALSE.search(condition) else gate
+        return "unknown" if _negated(condition) else gate
     return "unknown" if _OPAQUE.search(condition) else None
+
+
+def _negated(condition: str) -> bool:
+    """A condition joined with ``||``, holding a negation, or comparing the label or event test
+    itself with false (``contains(...labels...) == false``; ``draft == false`` beside it is not)."""
+    return "||" in condition or "!" in condition or any(
+        _is_test(_operand(condition, match)) for match in _FALSE.finditer(condition))
+
+
+def _operand(condition: str, match: re.Match[str]) -> str:
+    """The operand compared with false: a token, or the whole call or parenthesised group a
+    ``)`` closes (``contains(...)`` or ``(a == b)``), in either order (``false == x``)."""
+    if match.group(1) is None:
+        start = match.start(2)
+        if "(" not in match.group(2):
+            return match.group(2)
+        depth = 0
+        for i in range(start, len(condition)):
+            depth += {"(": 1, ")": -1}.get(condition[i], 0)
+            if depth == 0 and condition[i] == ")":
+                return condition[start:i + 1]
+        return condition[start:]
+    end = match.end(1)
+    if not match.group(1).endswith(")"):
+        return match.group(1)
+    depth = 0
+    for i in range(end - 1, -1, -1):
+        depth += {")": 1, "(": -1}.get(condition[i], 0)
+        if depth == 0:
+            return condition[i:end]
+    return condition[:end]
+
+
+def _is_test(operand: str) -> bool:
+    return bool(_LABEL.search(operand)) or "event_name" in operand
 
 
 def _narrowed(route: _Route, condition: str) -> _Route:
     """An ungated route cut to the ordinary events a job ``if:`` requires (``github.event_name ==
-    'pull_request'``); none of its ungated events left means the job runs only when gated."""
+    'pull_request'``); none of its ungated events left means the job runs only when gated. Only a
+    positive requirement narrows: ``(github.event_name == 'push') == false`` does not."""
     events = set(_EVENT_IF.findall(condition))
-    if route["state"] != "ungated" or not events or "||" in condition or "!" in condition or not events <= _ORDINARY:
+    if route["state"] != "ungated" or not events or _negated(condition) or not events <= _ORDINARY:
         return route
     left = [e for e in route["triggers"] if e in events]
     if not left:
@@ -314,16 +394,18 @@ def _narrowed(route: _Route, condition: str) -> _Route:
     return _Route(state="ungated", triggers=left, gates=[], reason="")
 
 
-def _apply_if(route: _Route, gate: str | None) -> _Route:
+def _apply_if(route: _Route, gate: str | list[str] | None) -> _Route:
+    """``route`` under a job or step gate: one token, ``unknown``, or the step gates combined."""
     if route["state"] != "ungated" or gate is None:
         return route
     if gate == "unknown":
         return _Route(state="unknown", triggers=route["triggers"], gates=[], reason="condition_unread")
-    return _Route(state="gated", triggers=route["triggers"], gates=[gate], reason="")
+    return _Route(state="gated", triggers=route["triggers"], gates=[gate] if isinstance(gate, str) else gate, reason="")
 
 
-def _step_gate(tree: IndentTree, job: int, lines: Sequence[int]) -> str | None:
-    """The gate shared by the steps holding every sign line, or None."""
+def _step_gate(tree: IndentTree, job: int, lines: Sequence[int]) -> str | list[str] | None:
+    """The gates on the steps holding every sign line: ``unknown`` when one is not read, None when
+    one step has none, else each recognised gate (a ``label`` step beside an ``event_if`` one)."""
     steps = _child(tree, job, "steps")
     if steps is None:
         return None
@@ -336,7 +418,9 @@ def _step_gate(tree: IndentTree, job: int, lines: Sequence[int]) -> str | None:
         gates.add(_if_gate(_text(tree, condition)) if condition is not None else None)
     if not gates or any(i < steps for i in lines):  # a sign outside the steps (job env)
         return None
-    return gates.pop() if len(gates) == 1 else "unknown" if "unknown" in gates else None
+    if "unknown" in gates:
+        return "unknown"
+    return None if None in gates else sorted(g for g in gates if g is not None)
 
 
 def _cancels(tree: IndentTree, i: int | None) -> bool:
@@ -349,6 +433,7 @@ def _cancels(tree: IndentTree, i: int | None) -> bool:
 class _Workflow:
     def __init__(self, rel: str, text: str) -> None:
         self.rel, self.text, self.tree = rel, text, _tree(text)
+        self.name = rel.rsplit("/", 1)[-1]
         self.top = _top(self.tree)
         route = _workflow_route(self.tree, text)
         assert route is not None
@@ -438,47 +523,78 @@ def _workflow_env(flow: "_Workflow") -> dict[int, list[str]]:
     return {i: ["provider_secret"] for i in lines if "provider_secret" in signs_in(flow.tree, range(i, i + 1))}
 
 
-def _base(flow: _Workflow, callers: Sequence[_Route]) -> _Route:
-    """A called workflow's route before its jobs' conditions: the worst of its own direct
-    events and its local callers' routes; unknown with no route this repository settles."""
-    routes = list(callers)
+def _bases(flow: _Workflow, callers: Sequence[_Route]) -> list[_Route | None]:
+    """The routes a workflow's jobs start from, before their own conditions: the workflow's
+    own (``[None]``) unless it is called; a called workflow's local callers' routes, its own
+    direct events, and an unknown route for ``workflow_run`` or for a ``workflow_call`` no local
+    job calls (callers in other repositories run it on events this reader cannot see)."""
+    if not (flow.called or flow.run_by_workflow):
+        return [None]
+    routes: list[_Route | None] = list(callers)
     if flow.direct is not None:
         routes.append(flow.direct)
     if flow.run_by_workflow:
         routes.append(_Route(state="unknown", triggers=["workflow_run"], gates=[], reason="called_workflow"))
-    if not callers and flow.direct is None:
-        return flow.route
-    return _worst(routes)
+    if flow.called and not callers:
+        routes.append(_Route(state="unknown", triggers=flow.route["triggers"], gates=[], reason="called_workflow"))
+    return routes
+
+
+def _routes(flow: _Workflow, job: int, lines: Sequence[int], bases: Sequence[_Route | None]) -> list[_Route]:
+    """The job's route from each base, its own ``if:`` and step gates applied to each."""
+    return [flow.job_route(job, lines, base) for base in bases]
+
+
+def _callers(flows: dict[str, _Workflow]) -> tuple[dict[str, list[_Route]], int]:
+    """Each local reusable workflow's caller routes, and the remote calls under a route that is
+    not gated (``unread``). A caller job whose ``if:`` is never true calls nothing. A caller's
+    own incoming routes are resolved first (A calls B calls C), to a fixed point."""
+    callers: dict[str, list[_Route]] = {}
+    remote = 0
+    for _ in range(len(flows) + 1):
+        found: dict[str, list[_Route]] = {}
+        remote = 0
+        for flow in flows.values():
+            bases = _bases(flow, callers.get(flow.name, []))
+            for job in flow.jobs():
+                uses = _child(flow.tree, job, "uses")
+                value = flow.tree.lines[uses].value if uses is not None else ""
+                local = _LOCAL_WORKFLOW.match(value)
+                if _never(flow.tree, flow.tree.children(job)) or not (local or _REMOTE_WORKFLOW.match(value)):
+                    continue
+                routes = _routes(flow, job, [], bases)
+                if local:
+                    into = found.setdefault(local.group(1), [])
+                    into.extend(r for r in routes if r not in into)
+                elif any(r["state"] != "gated" for r in routes):
+                    remote += 1
+        if found == callers:
+            break
+        callers = found
+    return callers, remote
 
 
 def _github(repo: Path, files: list[str], read_local: ReadLocal | None = None) -> tuple[list[ModelJob], int]:
     texts = {rel: read_config(repo, rel) for rel in files if rel.startswith(".github/")}
     unread = sum(not text.strip() for text in texts.values())  # a workflow not read may hold an ungated job
     flows = {rel: _Workflow(rel, text) for rel, text in texts.items() if text.strip()}
-    callers: dict[str, list[_Route]] = {}
-    for flow in flows.values():
-        for job in flow.jobs():
-            uses = _child(flow.tree, job, "uses")
-            value = flow.tree.lines[uses].value if uses is not None else ""
-            local = _LOCAL_WORKFLOW.match(value)
-            if local:
-                callers.setdefault(local.group(1), []).append(flow.job_route(job, []))
-            elif _REMOTE_WORKFLOW.match(value):
-                unread += 1
+    callers, remote = _callers(flows)
+    unread += remote
     found: list[ModelJob] = []
     for flow in flows.values():
         shared = _workflow_env(flow)
         for job in flow.jobs():
+            uses = _child(flow.tree, job, "uses")
+            if uses is not None and _LOCAL_WORKFLOW.match(flow.tree.lines[uses].value):
+                continue  # a local reusable-workflow call: the callee is scanned on its own
             signs = _job_signs(flow.tree, job, read_local, shared)
-            if not signs or set(signs) <= set(shared) and _child(flow.tree, job, "uses") is not None:
+            if not signs or set(signs) <= set(shared) and uses is not None:
                 continue  # nothing beyond the workflow env, in a job that only calls a workflow
             # The step gate reads the lines that show a model call; a provider key alone (a job
             # env, a step that only sets it) proves none, so it neither gates nor ungates the job.
             calls = [i for i, found_signs in signs.items() if found_signs != ["provider_secret"]]
             lines = sorted(calls or signs)
-            base = _base(flow, callers.get(flow.rel.rsplit("/", 1)[-1], [])) if (
-                flow.called or flow.run_by_workflow) else None
-            route = flow.job_route(job, lines, base)
+            route = _worst(_routes(flow, job, lines, _bases(flow, callers.get(flow.name, []))))
             cancels = flow.cancels or _cancels(flow.tree, _child(flow.tree, job, "concurrency"))
             names = sorted({s for found_signs in signs.values() for s in found_signs})
             found.append(_entry(flow.rel, flow.tree, job, "github", names, _secret_only(route, names), cancels))
@@ -528,7 +644,9 @@ def _gitlab_route(before: str, after: str) -> _Route:
     return _Route(state="unknown", triggers=triggers, gates=[], reason="rules_unread")
 
 
-def _gitlab(rel: str, text: str) -> list[ModelJob]:
+def _gitlab(rel: str, text: str, unsettled: frozenset[int] = frozenset()) -> list[ModelJob]:
+    """The model jobs of one GitLab CI text; a job whose sign line is ``unsettled`` (a merge
+    ``lib.ci_merged_view`` could not resolve) reads unknown (``merge_unread``)."""
     tree = _tree(text)
     before, after = gitlab_line_triggers(text), gitlab_line_triggers(without_changes(text))
     found: list[ModelJob] = []
@@ -539,8 +657,39 @@ def _gitlab(rel: str, text: str) -> list[ModelJob]:
         if lines:  # a line inside the job: the job's own key line reads as outside any job
             names = sorted({s for i in lines for s in signs_in(tree, range(i, i + 1))})
             route = _secret_only(_gitlab_route(before[lines[0]], after[lines[0]]), names)
+            if lines[0] in unsettled:
+                route = _Route(state="unknown", triggers=route["triggers"], gates=[], reason="merge_unread")
             found.append(_entry(rel, tree, job, "gitlab", names, route, False))
     return found
+
+
+def _gitlab_merged(repo: Path, ghsync_root: Path | None) -> tuple[list[ModelJob], int]:
+    """The GitLab model jobs as GitLab merges them (#1180, ``lib.ci_merged_view``): each file with
+    its merged jobs blanked, then each merged job rendered once with its effective keys, so a
+    root override, an included job and an ``extends:`` template's ``script:`` read together.
+    An included job is reported at the repository's own include line; a merged job at its
+    definition in the repository's own file, else at the include line that led to it."""
+    text = read_config(repo, GITLAB_CI)
+    resolution = resolve_includes(repo, ghsync_root)
+    unread = int(not text.strip()) + resolution.unresolved
+    config = merged_config(repo, ghsync_root)
+    view = merged_view(config) if config is not None and config.sources[0] == text else None
+    at = [0] + [included.line for included in resolution.files]
+    sources = list(view.texts) if view is not None else [text, *(f.text for f in resolution.files)]
+    jobs: list[ModelJob] = []
+    for n, source in enumerate(sources):
+        for job in _gitlab(GITLAB_CI, source):
+            job["line"] = at[n] or job["line"]
+            jobs.append(job)
+    if view is not None and config is not None:
+        merged = merged_jobs(config)
+        for job in _gitlab(GITLAB_CI, view.rendered, view.unsettled):
+            of = merged[int(job["job"].removeprefix("job"))]
+            own = next((d for d in of.defs if d.source == 0), None)
+            job["job"] = of.name
+            job["line"] = own.start + 1 if own is not None else at[of.defs[-1].source]
+            jobs.append(job)
+    return jobs, unread
 
 
 def scan_ci_model_jobs(repo_root: Path, ghsync_root: Path | None = None) -> CiModelJobsBlock:
@@ -556,15 +705,9 @@ def scan_ci_model_jobs(repo_root: Path, ghsync_root: Path | None = None) -> CiMo
 
     jobs, unread = _github(repo, files, read_local)
     if GITLAB_CI in files:
-        text = read_config(repo, GITLAB_CI)
-        unread += not text.strip()
-        jobs += _gitlab(GITLAB_CI, text)
-        resolution = resolve_includes(repo, ghsync_root)
-        unread += resolution.unresolved
-        for included in resolution.files:
-            for job in _gitlab(GITLAB_CI, included.text):
-                job["line"] = included.line
-                jobs.append(job)
+        gitlab_jobs, gitlab_unread = _gitlab_merged(repo, ghsync_root)
+        jobs += gitlab_jobs
+        unread += gitlab_unread
     count = {state: sum(j["state"] == state for j in jobs) for state in ("gated", "ungated", "unknown")}
     block = CiModelJobsBlock(available=True, files_read=len(files), model_jobs=len(jobs),
                              gated=count["gated"], unknown=count["unknown"], unread=unread,

@@ -147,7 +147,9 @@ def test_the_report_and_stamp_state_two_of_five_assessed_with_each_gap(tmp_path)
 
     report = (out / "report.md").read_text(encoding="utf-8")
     line = next(t for t in report.splitlines() if t.startswith("**Coverage:**"))
-    assert report.index(line) < report.index("Drawn from") < report.index("\n## ")  # the first paragraph
+    # the first paragraph after the front screen (#1255), before any other section
+    assert report.index("## Fleet at a glance") < report.index(line) < report.index("Drawn from") \
+        < report.index("\n## ", report.index("Drawn from"))
     assert "2 of 5 discoverable repositories were assessed" in line
     for part in ("1 archived or empty", "1 discovered but not cloned", "1 cloned but could not be scanned",
                  "0 excluded by filters"):

@@ -25,7 +25,9 @@ only when both agree; `unknown_repos` names the repositories whose level is open
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
 key, a missing, empty or unknown `truth` (`MixedTruthError` for a partly tagged model), a bad
 `polarity`, `guarded_by`, `eq_signal`, `predicted` or `review` (#1086), or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
-rejects. `evaluate` stamps the maturity-model version; `dumps_result` is byte-identical on
+rejects. `parse_levels(..., known=ids)` accepts a `requires` naming one of `ids`, condition ids defined
+elsewhere, and `validate_paths` is the path check on its own: `lib/packs.py` and
+`lib/pack_layering.py` use both for a practice pack's rows (#1274). `evaluate` stamps the maturity-model version; `dumps_result` is byte-identical on
 rerun. `add_renamed_flag` registers the pre-2.0.0 flag (`RENAMED_FLAG`) on a fleet script's
 parser, hidden from `--help`: any use of it exits 2 with one line naming `--levels` (#670).
 Tests: `tests/test_levels.py` with fixtures under `tests/fixtures/levels/`; the renamed

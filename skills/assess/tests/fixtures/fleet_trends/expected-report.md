@@ -34,14 +34,6 @@ Which single change would take the most repositories to their next Step?
 
 Not drawn: skipped: the maturity model defines no Steps.
 
-## Activity and maturity
-
-In place: 0 repositories in this run, scanned with no model call.
-
-Which busy repositories have the most room to grow?
-
-Not drawn: skipped: no repositories in the run.
-
 ## Shared tooling
 
 In place: 0 repositories in this run, scanned with no model call.

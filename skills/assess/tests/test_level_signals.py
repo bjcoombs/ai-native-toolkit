@@ -311,7 +311,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "agent-consistency": None,   # no instruction file: nothing to agree with
             "skill-disclosure": None, "skill-personal-data": None,  # no SKILL.md or agent file: no_skill_files
             "skill-script-tests": None,  # no skill holds a script: no_skill_scripts
-            "model-ci-gated": None,      # no CI job calls a model: no_model_jobs
+            "model-ci-gated": None,      # no model-calling CI job detected: no_model_jobs
             "contributor-files": 0,      # no CONTRIBUTING or SECURITY file
             "secrets-guard": 0,          # no secrets hook or CI scan, and no remote
         }

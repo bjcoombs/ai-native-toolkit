@@ -20,7 +20,7 @@ command line is `skills/fleet/scripts/fleet.py`; this package holds everything i
 | Levels, Steps and tags | `fleet_level`, `fleet_maturity`, `fleet_data_steps`, `fleet_data_tags`, `fleet_data_units`, `fleet_units`, `fleet_repo_facts`, `fleet_step_*`, `fleet_why` |
 | History and comparison | `fleet_history`, `fleet_compare`, `fleet_scanner_diff`, `fleet_rescore`, `fleet_trends`, `fleet_legacy`, `condition_effect`, `condition_demotion` |
 | Targets and achievements | `fleet_targets`, `fleet_targets_import`, `fleet_achievements`, `fleet_achievements_runs`, `fleet_credit` |
-| Report, pages and diagrams | `fleet_view`, `fleet_next_steps`, `fleet_opportunities`, `fleet_opportunities_section`, `fleet_learn_from`, `fleet_diagrams`, `fleet_svg`, `fleet_heatmap`, `fleet_quadrant`, `fleet_slope`, `fleet_tooling_map`, `fleet_tag_heatmap`, `fleet_tag_profile`, `fleet_agent_building`, `fleet_doc_freshness` |
+| Report, pages and diagrams | `fleet_view`, `fleet_next_steps`, `fleet_opportunities`, `fleet_opportunities_section`, `fleet_learn_from`, `fleet_front`, `fleet_diagrams`, `fleet_svg`, `fleet_heatmap`, `fleet_slope`, `fleet_tooling_map`, `fleet_tag_heatmap`, `fleet_tag_profile`, `fleet_agent_building`, `fleet_doc_freshness` |
 | The fleet page | `fleet_page`, `fleet_page_data`, `fleet_page_assets`, `fleet_page_live`, `fleet_publish`, `fleet_publish_session` |
 
 Each module's docstring says what it does. The co-change rules this package shares with the

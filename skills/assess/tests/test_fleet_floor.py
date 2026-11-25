@@ -17,7 +17,6 @@ import assess_signals
 import lib.fleet.fleet_heatmap as fh
 import lib.fleet.fleet_maturity as fm
 import lib.fleet.fleet_next_steps as ns
-import lib.fleet.fleet_quadrant as fq
 from lib import signals
 from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
 from lib.fleet.fleet_groups import FLEET_GROUP_VERSION, full_run_only_signals, group_row
@@ -179,15 +178,6 @@ def test_heatmap_draws_a_floor_apart_from_known_and_unknown():
     assert "fleet-floor" not in fh.render_heatmap([plain], columns)
 
 
-def test_the_quadrant_shows_the_floor():
-    model = _model()
-    repos = [_row("g/a", _scans()), _row("g/b", _scans(gate=False)), _row("g/c", {})]
-    points = {p["repo"]: p for p in fq.repo_points(model, repos)}
-    assert points["g/a"]["maturity"] is None and points["g/a"]["maturity_floor"] == 0.5
-    assert "maturity_floor" not in points["g/b"] and "maturity_floor" not in points["g/c"]
-    assert "g/a (level unknown, at least 0.50 with floors" in fq.render_quadrant(list(points.values()), "6mo")
-
-
 def test_next_steps_say_at_least_and_needs_a_full_assess():
     model = _model()
     rows = [_row("g/a", _scans())]
@@ -278,14 +268,6 @@ def test_charts_print_the_lower_bound_as_visible_text():
                         group_row("h", [_row("h/a", _scans(gate=False))], _model(), {})])
     assert run is not None
     assert "at least, on 2026-11-20: g 0.50" in " ".join(ft._bound_lines(run, ["g", "h"]))
-    repos = [_row("g/a", _scans(pressure={"available": True, "mutation_run": False})),
-             _row("g/b", _scans())]
-    points = fq.repo_points(_model(), repos)
-    for p in points:
-        p["commits"] = 3
-    quadrant = fq.render_quadrant(points, "6mo")
-    assert "At least, with floors (plotted repositories)" not in quadrant  # g/b is not plotted
-    assert "g/b (level unknown, at least 0.50 with floors, 3 commits)" in quadrant
 
 
 def test_rows_without_floors_render_no_floor_text():
