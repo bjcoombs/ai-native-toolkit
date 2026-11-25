@@ -81,6 +81,15 @@ First, put each plan's `questions` to the user with `AskUserQuestion`, one quest
 
 Then take the dry-run rows that are not `refused` one at a time. For each, show the issue, the change and the reason, and ask with `AskUserQuestion` (options: apply, skip). Never batch several writes into one confirmation. On apply, run the matching script once with `REFINE_MODE=live` on that command only:
 
+Each Bash call starts a new shell, so open every confirmed write with the same settings as Step 4; the live write then sees the repository and allow-list the dry-run used:
+
+```bash
+S="${CLAUDE_SKILL_DIR}/scripts"; WORK="<the path Step 1 printed>"
+export GH_REPO=$(gh repo view --json nameWithOwner | jq -r .nameWithOwner) REFINE_STATE_DIR="$WORK/state"
+export REFINE_ALLOWED_LABELS="${REFINE_ALLOWED_LABELS:-agent-ready,needs-triage,bug,enhancement,documentation,question}"
+```
+
+
 | Dry-run action | Command on confirmation |
 |---|---|
 | `size-marker` | `REFINE_MODE=live "$S/write-size-marker.sh" --issue <N> --points <P> --reason "<size_reason>" --verdict "$WORK/verdict.json"` |
