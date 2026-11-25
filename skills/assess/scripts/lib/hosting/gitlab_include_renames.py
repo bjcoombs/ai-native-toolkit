@@ -29,7 +29,7 @@ calls :func:`no_include_renames`, which reads nothing, and every include with no
   ``not_checked`` rather than claim a look-up that did not happen. GitLab answers 404 for a
   project the token cannot see as for one that does not exist, so ``checked`` means no
   visible move, not that the project was never renamed. A host-wide failure
-  (``glab`` missing, not logged in, unreachable) stops the asking.
+  (``glab`` missing, a timeout, still rate limited after retries) stops the asking.
 
 Paths are compared lower-cased, as GitLab compares them and as ``ci_includes`` writes include
 ids. Tests: ``tests/test_ci_include_renames.py``.
@@ -44,7 +44,9 @@ from lib.hosting.gh_cli import GhUnavailable
 from lib.hosting.gitlab_cli import GitlabProject, glab_api, open_gitlab
 
 _PREFIXES = {"project": "gitlab_project:", "component": "gitlab_component:"}
-_HOST_FAILURES = ("glab_not_installed", "not_authenticated", "unreachable")
+# A per-path read that says the host, not the project, failed: stop asking (``open_gitlab`` has
+# already settled the login, so these are the ones a read can still hit).
+_HOST_FAILURES = ("glab_not_installed", "glab_timeout", "rate_limited")
 
 
 def no_include_renames(_repo_root: Path, _ghsync_root: Path | None = None) -> None:

@@ -82,9 +82,11 @@ def test_not_found_is_checked_and_a_refusal_is_not(tmp_path, api):
 def test_a_host_wide_failure_stops_the_asking(tmp_path, api):
     ci = OLD + "  - project: grp/second\n    file: /t.yml\n"
     root, app = _root(tmp_path, ci)
-    api.answers["projects/grp%2Fold-templates"] = "not_authenticated: glab is not logged in"
-    assert renames_mod.read_include_renames(app, root) == IncludeRenames()
-    assert len(api.calls) == 1
+    for reason in ("glab_timeout: no answer", "rate_limited: still limited", "glab_not_installed: x"):
+        api.calls.clear()
+        api.answers["projects/grp%2Fold-templates"] = reason
+        assert renames_mod.read_include_renames(app, root) == IncludeRenames()
+        assert len(api.calls) == 1
 
 
 def test_an_answer_of_another_shape_is_not_checked(tmp_path, api, monkeypatch):
