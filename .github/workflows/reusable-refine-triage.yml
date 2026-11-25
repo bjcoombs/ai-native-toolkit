@@ -16,7 +16,8 @@ name: Refine triage (reusable)
 # A `/reopen` comment on an issue the refiner closed as a duplicate runs the
 # `reopen` job instead: no model.
 #
-# Permissions: this workflow declares none, so its jobs take the caller's
+# Permissions: the `reopen` job declares `contents: read` and
+# `issues: write`. The `triage` job declares none, so it takes the caller's
 # grant. Grant `contents: read` and `issues: write`, and add
 # `id-token: write` only when you authenticate with Workload Identity
 # Federation. A called workflow cannot ask for more than its caller grants.
@@ -46,9 +47,9 @@ on:
         type: string
         default: bjcoombs/ai-native-toolkit
       toolkit_ref:
-        description: The toolkit ref; keep it equal to the ref in your `uses:` line.
+        description: The toolkit release tag (v1.2.3) or full commit sha; keep it equal to the ref in your `uses:` line. Not needed in the toolkit repository itself.
         type: string
-        default: main
+        default: ''
       model:
         description: A Sonnet-class model.
         type: string
@@ -122,18 +123,36 @@ jobs:
           persist-credentials: false
 
       # In the toolkit's own repository the scripts come from the
-      # default-branch checkout above; elsewhere from the toolkit at the
-      # ref the caller pinned.
+      # default-branch checkout above. Elsewhere they come from the toolkit
+      # at an immutable ref: a release tag (v<semver>) or a full commit sha.
+      # A branch name is refused, so a moving ref never runs with this
+      # job's write token.
+      - name: Validate the toolkit ref
+        id: toolkit
+        env:
+          TOOLKIT_REPO: ${{ inputs.toolkit_repository }}
+          TOOLKIT_REF: ${{ inputs.toolkit_ref }}
+        run: |
+          if [ "$TOOLKIT_REPO" = "$GITHUB_REPOSITORY" ]; then
+            echo "source=local" >> "$GITHUB_OUTPUT"
+          elif [[ "$TOOLKIT_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || "$TOOLKIT_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "source=external" >> "$GITHUB_OUTPUT"
+            echo "ref=$TOOLKIT_REF" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::toolkit_ref must be a release tag (v1.2.3) or a full commit sha, not '${TOOLKIT_REF}'."
+            exit 1
+          fi
+
       - name: Use this repository's refinement scripts
-        if: inputs.toolkit_repository == github.repository
+        if: steps.toolkit.outputs.source == 'local'
         run: ln -s . .refine-toolkit
 
       - name: Check out the refinement scripts
-        if: inputs.toolkit_repository != github.repository
+        if: steps.toolkit.outputs.source == 'external'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ${{ inputs.toolkit_repository }}
-          ref: ${{ inputs.toolkit_ref }}
+          ref: ${{ steps.toolkit.outputs.ref }}
           path: .refine-toolkit
           fetch-depth: 1
           persist-credentials: false
@@ -250,6 +269,9 @@ jobs:
       startsWith(github.event.comment.body, '/reopen')
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
     concurrency:
       group: refine-reopen-${{ github.repository }}-${{ inputs.issue_number }}
       cancel-in-progress: false
@@ -268,18 +290,36 @@ jobs:
           persist-credentials: false
 
       # In the toolkit's own repository the scripts come from the
-      # default-branch checkout above; elsewhere from the toolkit at the
-      # ref the caller pinned.
+      # default-branch checkout above. Elsewhere they come from the toolkit
+      # at an immutable ref: a release tag (v<semver>) or a full commit sha.
+      # A branch name is refused, so a moving ref never runs with this
+      # job's write token.
+      - name: Validate the toolkit ref
+        id: toolkit
+        env:
+          TOOLKIT_REPO: ${{ inputs.toolkit_repository }}
+          TOOLKIT_REF: ${{ inputs.toolkit_ref }}
+        run: |
+          if [ "$TOOLKIT_REPO" = "$GITHUB_REPOSITORY" ]; then
+            echo "source=local" >> "$GITHUB_OUTPUT"
+          elif [[ "$TOOLKIT_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || "$TOOLKIT_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "source=external" >> "$GITHUB_OUTPUT"
+            echo "ref=$TOOLKIT_REF" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::toolkit_ref must be a release tag (v1.2.3) or a full commit sha, not '${TOOLKIT_REF}'."
+            exit 1
+          fi
+
       - name: Use this repository's refinement scripts
-        if: inputs.toolkit_repository == github.repository
+        if: steps.toolkit.outputs.source == 'local'
         run: ln -s . .refine-toolkit
 
       - name: Check out the refinement scripts
-        if: inputs.toolkit_repository != github.repository
+        if: steps.toolkit.outputs.source == 'external'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ${{ inputs.toolkit_repository }}
-          ref: ${{ inputs.toolkit_ref }}
+          ref: ${{ steps.toolkit.outputs.ref }}
           path: .refine-toolkit
           fetch-depth: 1
           persist-credentials: false

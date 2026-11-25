@@ -7,7 +7,11 @@ permissions, the tool limits, the call caps, the concurrency groups and
 timeouts, and the `workflow_call` inputs the callers pass.
 """
 import json
+import os
 import re
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -23,6 +27,7 @@ CALLERS = {"refine-triage.yml": "reusable-refine-triage.yml",
            "refine-sweep.yml": "reusable-refine-sweep.yml"}
 MODEL_WORKFLOWS = ("reusable-refine-triage.yml", "reusable-refine-dedupe.yml")
 DISALLOWED = {"WebFetch", "WebSearch", "Write", "Edit", "MultiEdit", "NotebookEdit"}
+MODEL_JOBS = {"triage", "dedupe"}
 WRITE_SCRIPTS = {p.name for p in SCRIPTS.glob("*.sh")} - {"gh.sh", "check-model-run.sh"}
 
 
@@ -107,9 +112,14 @@ def test_reusable_is_workflow_call_only_and_safe_by_default(name: str) -> None:
     inputs = doc["on"]["workflow_call"]["inputs"]
     assert inputs["enabled"] == {**inputs["enabled"], "type": "boolean", "default": False}
     assert inputs["mode"]["default"] == "dry-run"
-    assert "permissions" not in doc, "jobs take the caller's grant; a called workflow cannot widen it"
-    for job in doc["jobs"].values():
-        assert "permissions" not in job
+    assert "permissions" not in doc
+    for job_id, job in doc["jobs"].items():
+        if job_id in MODEL_JOBS:
+            # Takes the caller's grant, so a caller using Workload Identity
+            # Federation can add id-token: write; a called job cannot widen it.
+            assert "permissions" not in job
+        else:
+            assert job["permissions"] == {"contents": "read", "issues": "write"}
         assert str(job["if"]).lstrip().startswith("inputs.enabled")
         assert isinstance(job["timeout-minutes"], int)
         assert job["env"]["REFINE_MODE"] == "${{ inputs.mode }}"
@@ -237,10 +247,75 @@ def test_toolkit_scripts_come_from_the_default_branch_in_this_repository(name: s
         steps = job["steps"]
         assert steps[0]["with"]["ref"] == "${{ github.event.repository.default_branch }}"
         link = next(s for s in steps if s.get("run") == "ln -s . .refine-toolkit")
-        assert link["if"] == "inputs.toolkit_repository == github.repository"
-        external = next(s for s in steps if s.get("with", {}).get("path") == ".refine-toolkit")
-        assert external["if"] == "inputs.toolkit_repository != github.repository"
+        assert link["if"] == "steps.toolkit.outputs.source == 'local'"
     for caller, reusable in CALLERS.items():
         if reusable == name:
             job = next(iter(_load(caller)["jobs"].values()))
             assert "toolkit_repository" not in job["with"], "the default names this repository"
+
+
+
+# ── toolkit ref: immutable refs only ─────────────────────────────────────
+
+def _validate_step(name: str) -> Dict[str, Any]:
+    steps = next(iter(_load(name)["jobs"].values()))["steps"]
+    return next(s for s in steps if s.get("id") == "toolkit")
+
+
+def _run_validate(tmp_path: Path, name: str, repo: str, ref: str) -> "tuple[int, str]":
+    out = tmp_path / "out"
+    out.write_text("", encoding="utf-8")
+    env = {"PATH": os.environ["PATH"], "GITHUB_OUTPUT": str(out), "GITHUB_REPOSITORY": "bjcoombs/ai-native-toolkit",
+           "TOOLKIT_REPO": repo, "TOOLKIT_REF": ref}
+    proc = subprocess.run(["bash", "-c", _validate_step(name)["run"]], env=env, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", check=False)
+    return proc.returncode, out.read_text(encoding="utf-8")
+
+
+needs_bash = pytest.mark.skipif(sys.platform == "win32" or shutil.which("bash") is None,
+                                reason="the step runs under bash on Linux runners")
+
+
+@needs_bash
+@pytest.mark.parametrize("name", sorted(CALLERS.values()))
+@pytest.mark.parametrize("ref", ["main", "develop", "refs/heads/main", "v1", "v1.2", "v1.2.3-rc1", "4411a9e", "",
+                                 "v1.2.3; curl evil", "4411A9E9B0283BECF4B924F7BCE360FD7756C78C"])
+def test_branch_or_loose_toolkit_ref_fails_the_job(tmp_path: Path, name: str, ref: str) -> None:
+    code, out = _run_validate(tmp_path, name, "acme/toolkit-fork", ref)
+    assert code == 1 and out == ""
+
+
+@needs_bash
+@pytest.mark.parametrize("name", sorted(CALLERS.values()))
+@pytest.mark.parametrize("ref", ["v3.0.0", "v12.40.7", "4411a9e9b0283becf4b924f7bce360fd7756c78c"])
+def test_release_tag_or_full_sha_is_checked_out(tmp_path: Path, name: str, ref: str) -> None:
+    code, out = _run_validate(tmp_path, name, "acme/toolkit-fork", ref)
+    assert code == 0 and out == f"source=external\nref={ref}\n"
+
+
+@needs_bash
+@pytest.mark.parametrize("name", sorted(CALLERS.values()))
+def test_toolkit_repository_itself_uses_the_default_branch_checkout(tmp_path: Path, name: str) -> None:
+    code, out = _run_validate(tmp_path, name, "bjcoombs/ai-native-toolkit", "main")
+    assert code == 0 and out == "source=local\n"
+
+
+@pytest.mark.parametrize("name", sorted(CALLERS.values()))
+def test_checkout_uses_only_the_validated_ref(name: str) -> None:
+    text = (WORKFLOWS / name).read_text(encoding="utf-8")
+    assert "ref: ${{ inputs.toolkit_ref }}" not in text
+    assert _load(name)["on"]["workflow_call"]["inputs"]["toolkit_ref"]["default"] == ""
+    for job in _load(name)["jobs"].values():
+        ext = next(s for s in job["steps"] if s.get("with", {}).get("path") == ".refine-toolkit")
+        assert ext["with"]["ref"] == "${{ steps.toolkit.outputs.ref }}"
+        assert ext["if"] == "steps.toolkit.outputs.source == 'external'"
+        assert ext["with"]["persist-credentials"] is False
+
+
+@pytest.mark.parametrize("name", sorted(CALLERS.values()))
+def test_no_cache_in_jobs_with_a_write_token(name: str) -> None:
+    for step in _steps(_load(name)):
+        uses = str(step.get("uses", ""))
+        assert not uses.startswith("actions/cache"), uses
+        assert not uses.startswith("actions/setup-"), uses
+        assert "cache" not in step.get("with", {}), uses
