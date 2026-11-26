@@ -12,7 +12,7 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
 - **Sanitised.** The XML prolog, doctype and comments go. ``<script>`` and ``<foreignObject>`` go
   with everything inside them. Every ``on*`` attribute goes, and so does any attribute whose value,
   with character references decoded and whitespace removed, holds a ``javascript:`` or
-  ``vbscript:`` URL (an ``href``, or an ``<animate>``'s ``to``). So does any ``url(...)`` that is
+  ``vbscript:`` URL (an ``href``, or a ``fill``). So does any ``url(...)`` that is
   not ``#``-local, and any ``href`` that is not, apart from an ``<a>``'s: a link fetches nothing
   until followed, but a ``<use>`` or a ``url()`` would, and the page makes no network request.
 - **Allow-list.** Any other element outside ``ELEMENTS`` (the SVG drawing elements), a CDATA
@@ -27,7 +27,7 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
   read, and any ``<style>`` at-rule but ``@media``: a statement such as ``@layer a;`` would hide
   the next rule's selector from the scope check, and a selector that leaves the diagram through a
   sibling combinator (``svg.<scope> ~ *``), a CSS comment, or a brace, semicolon or line break in
-  a quoted string (each would let the selector check read the sheet differently from a browser).
+  a quoted string, or a rule nested in a style rule (each would let the selector check read the sheet differently from a browser).
   Every selector is checked against the scope after scoping, on both paths. So does a tag name not in its SVG case (``<STYLE>``),
   or an ``id``, ``class``, ``href`` or ``style`` attribute name not in lowercase (``ID=``): the
   browser folds the case, the checks here do not. An end tag is written without attributes. The
@@ -178,22 +178,35 @@ def _sanitise(svg: str) -> tuple[str, bool]:
     return "".join(out).strip(), details
 
 
-def css_selectors(css: str) -> list[str]:
-    """Every selector in ``css``, ``@media`` and other ``@`` blocks recursed into."""
-    out: list[str] = []
+def _blocks(css: str) -> list[tuple[str, str]]:
+    """The top-level ``(prelude, body)`` pairs of ``css``."""
+    out: list[tuple[str, str]] = []
     pos = 0
     while (brace := css.find("{", pos)) >= 0:
-        prelude, depth, end = css[pos:brace].strip(), 0, brace
+        depth, end = 0, brace
         for end in range(brace, len(css)):
             depth += {"{": 1, "}": -1}.get(css[end], 0)
             if depth == 0:
                 break
-        if prelude.startswith("@"):
-            out.extend(css_selectors(css[brace + 1:end]))
-        else:
-            out.extend(s.strip() for s in prelude.split(",") if s.strip())
+        out.append((css[pos:brace].strip(), css[brace + 1:end]))
         pos = end + 1
     return out
+
+
+def css_selectors(css: str) -> list[str]:
+    """Every selector in ``css``, ``@media`` and other ``@`` blocks recursed into."""
+    out: list[str] = []
+    for prelude, body in _blocks(css):
+        if prelude.startswith("@"):
+            out.extend(css_selectors(body))
+        else:
+            out.extend(s.strip() for s in prelude.split(",") if s.strip())
+    return out
+
+
+def _nested_rule(css: str) -> bool:
+    """A rule nested inside a style rule (CSS nesting), whose selector ``css_selectors`` never reads."""
+    return any(_nested_rule(body) if prelude.startswith("@") else "{" in body for prelude, body in _blocks(css))
 
 
 def root_class(markup: str) -> str | None:
@@ -224,7 +237,7 @@ def inline_svg(svg: str, scope: str) -> str | None:
     elif not re.fullmatch(r"[a-z][a-z0-9-]*", own):
         return None
     styles = "".join(re.findall(r"<style>(.*?)</style>", clean, re.S))
-    if (_HIDES_BRACES.search(styles) or not _scope_complete(clean, root_class(clean) or "")
+    if (_HIDES_BRACES.search(styles) or _nested_rule(styles) or not _scope_complete(clean, root_class(clean) or "")
             or sanitise(clean)[0] != clean or any(word in clean.lower() for word in UNSAFE)
             or _FETCH.search(clean) or "\\" in styles or re.search(r"@(?!media\b)", styles)
             or any(re.match(r"svg\.[a-z0-9-]+\s*[~+]", sel) for sel in css_selectors(styles))):
