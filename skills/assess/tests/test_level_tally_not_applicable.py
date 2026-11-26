@@ -139,3 +139,11 @@ def test_scan_not_applicable_is_none_for_other_states():
     by_id: dict[str, Any] = {c["id"]: c for c in result["conditions"]}
     assert lt.scan_not_applicable({"state": "not_measured", "reason": NO_GATES_REASON}, by_id) is None
     assert lt.scan_not_applicable({"state": "not_applicable", "reason": "requires:gone.1"}, by_id) is None
+
+
+def test_gate_note_words_only_a_scans_own_code():
+    owner_chain = {"kind": "gate", "gate": "g", "condition": "fresh.1", "state": "not_applicable",
+                   "reason": "requires:stated.1"}
+    assert gate_note(owner_chain) == ""
+    direct = {**owner_chain, "reason": NO_GATES_REASON}
+    assert "not applicable here" in gate_note(direct)

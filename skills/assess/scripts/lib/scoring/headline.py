@@ -63,7 +63,7 @@ from typing import Any
 from lib.card_facts import blocking_gates, fully_in_place
 from lib.scoring.level_result_types import Blocker, ConditionResult, Headline, LevelResult, TagCell
 from lib.scoring.level_tags import tag_cells
-from lib.scoring.level_tally import default_model, scan_not_applicable
+from lib.scoring.level_tally import NOT_APPLICABLE_REASONS, default_model, scan_not_applicable
 from lib.scoring.levels import MaturityModel, StepDef, condition_id
 
 # Bumped when the headline block's shape changes. It has no changes/ counter, so a
@@ -141,7 +141,8 @@ def gate_note(blocker: Blocker) -> str:
         return f" (excluded by owner: {kind}; the Step waits while the exclusion stands)"
     if blocker.get("state") == "not_measured":
         return f" (not measured here: {reason_word(blocker.get('reason', ''))})"
-    if blocker.get("state") == "not_applicable":
+    if blocker.get("state") == "not_applicable" and blocker.get("reason") in NOT_APPLICABLE_REASONS:
+        # a scan's own code only: a requires:<id> blocker may trace to the owner's exclusion
         return f" (not applicable here: {reason_word(blocker.get('reason', ''))}; a gate holds only when met)"
     return ""
 
