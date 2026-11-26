@@ -36,7 +36,8 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
     semicolon or line break, or is not closed on its line; an unbalanced brace; a rule nested in
     a style rule; an at-rule but ``@media`` (``@layer a;`` would hide the next selector); a
     selector leaving the diagram through a sibling combinator (``svg.<scope> ~ *``); a
-    ``position`` or ``z-index``, so a diagram cannot cover the page; and in a ``style``
+    ``position`` or ``z-index`` (a first guard only: the page that inlines the diagram
+    clips it to its own box, as the fleet page's ``contain: paint`` does); and in a ``style``
     attribute any quote at all.
 - **Scoped.** A root that already carries a class is the generator's scope (#1449): kept when it
   is complete (every id, reference and style selector under it), None otherwise. A root without a

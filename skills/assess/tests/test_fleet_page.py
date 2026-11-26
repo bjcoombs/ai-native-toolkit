@@ -708,3 +708,7 @@ def test_a_second_svg_under_a_scope_already_on_the_page_stays_an_image() -> None
     drawn = (FIXTURES_DIR / DRAWN["step-funnel.svg"]).read_text(encoding="utf-8")
     first, second = unique_scopes([picture("a.svg", "A", "Q", drawn), picture("b.svg", "B", "Q", drawn)])
     assert first["svg"] is not None and second["svg"] is None and second["src"] == first["src"]
+
+
+def test_the_page_clips_each_inlined_diagram_to_its_own_box() -> None:
+    assert ".pictures .diagram{overflow:hidden;contain:paint}" in build_page(fx.bundle("full"))

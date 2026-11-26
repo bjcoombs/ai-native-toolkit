@@ -26,7 +26,8 @@ words what it finds. Its parts:
   then the same counts as a table; above 8 spokes each spoke is labelled by its number, the title
   in the spoke's ``<title>`` and the table's practice column under the same number), Fleet pictures (the #705 design order:
   each picture inlined from its sanitised, scoped ``svg`` when it has per-part details, an ``<img>`` otherwise, with a
-  link that saves the full-size SVG, #1362).
+  link that saves the full-size SVG, #1362; ``contain: paint`` on its box clips whatever an inlined SVG
+  draws to its own figure).
 - **Pinned unit.** A per-viewer ``localStorage`` key, read and written inside try/catch; the
   page opens on the ownership root without it.
 - **Order.** Units and repositories are listed by label, never by rank.
@@ -63,6 +64,7 @@ svg.radar .outline{fill:none;stroke:var(--accent);stroke-width:2}svg.radar .poin
 table.radar-table caption{text-align:left;color:var(--muted);padding:4px 0}
 .pictures figure{margin:12px 0}.pictures img,.pictures .diagram svg{max-width:100%;height:auto;display:block}
 .pictures a.full{font-size:13px;color:var(--accent)}
+.pictures .diagram{overflow:hidden;contain:paint}
 @media (max-width:600px){main{padding:12px}h1{font-size:19px}}
 """
 
