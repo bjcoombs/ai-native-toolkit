@@ -40,7 +40,7 @@ The first is a near-miss: the positive action sits in surrounding text, so the r
 
 | Source | Statement | Latent action |
 |--------|-----------|---------------|
-| `CLAUDE.md` | "CodeRabbit re-reviews and resolves its own threads" | "let CodeRabbit resolve its threads; push code changes instead of replying" |
+| `CLAUDE.md` | "CodeRabbit resolves its own threads" | "let CodeRabbit resolve its threads; push code changes instead of replying" |
 | `marathon` | "Idle teammate != dead teammate" | "check the worktree for subagent activity before killing an idle teammate" |
 | `pr-review-merge` | "GitHub sometimes returns `mergeStateStatus: UNKNOWN` even when all checks pass" | "on UNKNOWN with green CI and zero unresolved threads, retry up to 3 times then treat as CLEAN" |
 

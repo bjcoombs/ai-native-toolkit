@@ -1,8 +1,8 @@
 # Claude Code Review Instructions
 
 Guidelines for the automated reviewer on `bjcoombs/ai-native-toolkit`. The
-workflow substitutes `{REPO}`, `{PR_NUMBER}`, `{HEAD_SHA}`, `{REPO_OWNER}`,
-`{REPO_NAME}`, and `{CURRENT_DATE}` before you read this.
+workflow prompt gives the values of `{REPO}`, `{PR_NUMBER}`, `{HEAD_SHA}`, `{REPO_OWNER}`,
+`{REPO_NAME}`, and `{CURRENT_DATE}`; substitute them wherever this file names them.
 
 Two files hold detail you read on demand (paths relative to the repo root):
 

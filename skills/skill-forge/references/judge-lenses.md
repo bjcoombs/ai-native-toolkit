@@ -33,7 +33,7 @@ The **lens count is fixed by artifact type** (5 for a skill, 4 for an instructio
 |-------|------|------------|--------------|
 | **Small** | < 100 lines | 1-2 cases (1 happy-path + 1 adversarial) | 3-round |
 | **Medium** | 100-300 lines | 3-4 cases | 5-round |
-| **Large** | > 300 lines | full 3-5 per taxonomy type | 7-round |
+| **Large** | > 300 lines | full 3-5 cases across the taxonomy types | 7-round |
 
 **The type's full lens set runs regardless of scope - dropping lenses by size re-opens the exact hole the self-forge closed** (the 5-lens-promise-undercut-by-a-3-lens-default HIGH that round 1 of the bootstrap caught). Scope scales test cases and rounds; it never scales the panel. A small target gets fewer runners, not fewer lenses.
 

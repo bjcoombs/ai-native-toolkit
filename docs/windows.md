@@ -146,7 +146,7 @@ uv --directory scripts run --locked pytest -v -n auto --dist loadfile --cov=. --
 uv run --with pytest --with pyyaml --with jsonschema --with "pytest-xdist>=3.6,<4" pytest -v -n auto --dist loadfile tests/
 ```
 
-then the four `make lint` lines above.
+then the six `make lint` lines above.
 
 `-n auto --dist loadfile` runs each suite on every core with pytest-xdist, one
 test file per worker, as CI does. To debug a failure serially, replace those

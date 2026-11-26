@@ -70,8 +70,8 @@ changes the per-repo table, headline or Needs attention list.
 | `default_branch_protection` | active org branch rulesets on `~DEFAULT_BRANCH` (or `~ALL`) of `~ALL` repositories, read in full from `orgs/{org}/rulesets/{id}` | `groups/{id}` `default_branch_protection`, else `default_branch_protection_defaults` |
 | `rulesets` | `orgs/{org}/rulesets`: count, names and enforcement | always `unknown`: GitLab has no group rulesets |
 
-On GitLab the section covers `--group`, or each top-level group you belong
-to. A GitHub personal account has no org settings, so its four fields read
+On GitLab the section covers `--group`, or each group you belong to whose
+parent group you do not belong to. A GitHub personal account has no org settings, so its four fields read
 `unknown (personal account: no org settings)`. If the GitLab group list
 cannot be read, the section still appears, as one entry for the host with
 every field `unknown (group list unreadable)`. On GitLab,

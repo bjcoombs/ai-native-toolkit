@@ -2,7 +2,7 @@
 name: fix-develop
 disable-model-invocation: true
 description: "Autonomous fix loop for failing CI on the repo's default branch"
-argument-hint: "[branch] (optional - defaults to the repo's default branch)"
+argument-hint: "[repo-path] (optional - defaults to the current repo)"
 ---
 
 # Fix Default Branch

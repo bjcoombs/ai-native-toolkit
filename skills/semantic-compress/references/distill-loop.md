@@ -11,10 +11,10 @@ The loop runs on a **confirmed** transfer set (`transfer-set-design.md`) - the o
 For each confirmed case, capture how the **original** document behaves. This is the equivalence target every candidate is measured against.
 
 <!-- chat-skip:start -->
-For each case, spawn a runner using ab-equivalence's exact `runner-prompt.md` template, unchanged - drop in the **original** document as the skill draft and the case `input` as the test-case input. The runner applies the document verbatim and returns its five-field self-report. The runner and runner-prompt are reused exactly as ab-equivalence defines them; nothing about how a single version is executed changes.
+For each case, spawn a runner using ab-equivalence's exact `runner-prompt.md` template, unchanged - drop in the **original** document as the skill draft and the case `input` as the test-case input. The runner applies the document verbatim and returns its six-field self-report. The runner and runner-prompt are reused exactly as ab-equivalence defines them; nothing about how a single version is executed changes.
 <!-- chat-skip:end -->
 
-Record the runner's full self-report per case - all five required fields - and extract the disciplines the document held the runner to:
+Record the runner's full self-report per case - all six required fields - and extract the disciplines the document held the runner to:
 
 - **`output_produced`** - the exact output the document instructed the runner to produce.
 - **`steps_followed`** / **`steps_skipped`** - each step the runner followed or skipped, with the reason for any skip.

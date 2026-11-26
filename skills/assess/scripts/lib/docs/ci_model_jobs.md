@@ -52,7 +52,7 @@ A job `if:` that requires an ordinary event (`github.event_name == 'pull_request
 job's triggers to that event; when none of the ungated events is left, the job is gated (`event_if`).
 Only a positive requirement narrows: `(github.event_name == 'push') == false` or `!=` does not.
 
-A `paths-ignore:` counts as a gate whatever it names, so `paths-ignore: ['docs/**']` reads gated
+A `paths-ignore:` that names anything but catch-alls counts as a gate, so `paths-ignore: ['docs/**']` reads gated
 although it skips only docs-only changes. The reader does not compare the patterns with the
 files the job tests.
 

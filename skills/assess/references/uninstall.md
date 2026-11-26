@@ -38,7 +38,7 @@ If the freeze-into-CI offer was accepted, a gating workflow was written:
 rm -f "$REPO_ROOT/.github/workflows/assess-gate.yml"
 ```
 
-That is the only workflow `/assess` emits. Removing it stops the gate from running on future PRs. No other CI file is touched.
+That is the only workflow the end-of-run offers emit (`--fix` and `--starter` can also write `tests.yml` and `coverage.yml`; see `fix.md`). Removing it stops the gate from running on future PRs. No other CI file is touched.
 
 ## 4. Remove decline markers
 

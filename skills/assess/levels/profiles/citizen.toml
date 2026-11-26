@@ -7,7 +7,7 @@
 #
 # A profile reuses the default model's practices and never redefines a signal:
 # every row below is a row of levels/default.toml, with the same id, title and
-# criteria, cut to its first level (tests/test_profiles.py fails on any
+# criteria, cut to fewer levels (tests/test_profiles.py fails on any
 # difference). The Steps are the default model's first three; Step 4 needs the
 # coverage gate, which this bar does not ask for.
 #

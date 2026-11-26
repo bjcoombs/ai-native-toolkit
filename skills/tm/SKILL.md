@@ -91,7 +91,7 @@ cd ~/dev/github.com/<org>/<repo>/<repo>-main
 # Search common PRD locations and filename patterns
 fd -t f "$FIRST_ARG" --extension md . | head -5
 # Also check conventional path
-ls .taskmaster/prd/$FIRST_ARG.md 2>/dev/null
+ls ~/dev/github.com/<org>/<repo>/.taskmaster/prd/$FIRST_ARG.md 2>/dev/null
 ```
 - File found → `$PLANNING_MODE = true`, `$PRD_EXISTS = true`, `$PRD_FILE = <path>`
 - No match → `$PLANNING_MODE = true`, `$PRD_EXISTS = false`
@@ -283,7 +283,7 @@ git branch <tag>--<task-id>--<slug>
 mkdir -p ../worktree/<tag>
 git worktree add ../worktree/<tag>/<task-id>--<slug> <tag>--<task-id>--<slug>
 cd ~/dev/github.com/<org>/<repo>
-task-master tags use "<tag>" && task-master set-status --id="<task-id>" --status=in-progress
+task-master tags use "<tag>" --project ~/dev/github.com/<org>/<repo> && task-master set-status --project ~/dev/github.com/<org>/<repo> --id="<task-id>" --status=in-progress
 cd ~/dev/github.com/<org>/<repo>/worktree/<tag>/<task-id>--<slug>
 ```
 
