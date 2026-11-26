@@ -67,7 +67,9 @@ gets ``snippet``, a one-line sentence an instruction file can take as written,
 built from a template and the gate's own figures, never from file text.
 
 ``stated_pct`` is the share of gates stated, as a percentage; null when no gate
-is found, so the maturity-model row reads unknown rather than a false 0.
+is found, with ``stated_pct_reason`` ``no_configured_gates`` (``NO_GATES_REASON``)
+beside it, so the maturity-model row reads not applicable rather than a false 0
+or a failed measurement (#1407).
 
 Guardrails stated (#767): does an instruction file tell an agent what the gates
 enforce? `scan_guardrails(repo_root, instruction_files, coverage_gate, excludes, scope)` runs from the
@@ -104,9 +106,9 @@ either side, or a dot before it (`v1.0`, `max10`, `80th`), states no gate. The l
 command is not required. An unstated gate carries `snippet`, a one-line sentence built
 from a template and the gate's own figures (never from file text) naming the rule, the
 threshold, the configuring file and the command that checks it. `stated_pct` is
-`stated / enforced` as a percentage, one decimal; null with no gate, so the default
-model's `guardrails-stated` row (level 1 at 50, level 2 at 100; `head_structure`, graded
-measured) reads unknown, never 0. `not_read` names the gate forms not read yet (eslint
+`stated / enforced` as a percentage, one decimal; null with no gate, with `stated_pct_reason`
+`no_configured_gates` beside it, so the default model's `guardrails-stated` row (level 1 at 50,
+level 2 at 100; `head_structure`, graded measured) reads `not_applicable` (#1407), never 0. `not_read` names the gate forms not read yet (eslint
 `complexity`, TypeScript `strict`, file-size ratchets, architecture tests, required CI
 checks and branch protection, sign-off rules). Counts-only keeps `kind`, `tool`, `rule`,
 the numbers, `file` and `stated_in` as paths, and drops `snippet` (and `not_read` to its
@@ -119,7 +121,7 @@ import re
 import tomllib
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
 from lib.run.run_scope import Scope
 from lib.testing.coverage_gate import Bases, CoverageGate, Excludes, gates_something, walk_named
@@ -145,6 +147,8 @@ NOT_READ: tuple[str, ...] = (
     "sign-off rules",
 )
 NOT_READ_SCOPED: tuple[str, ...] = ("pre-commit hook `files` and `exclude` filters",)
+# The code beside a null stated_pct: no gate configured, nothing to state (#1407).
+NO_GATES_REASON = "no_configured_gates"
 # Ruff compares C9 and C90 as the same linter-level selector (#956).
 _SELECTOR_SPECIFICITY = {"ALL": 0, "C9": 3}
 
@@ -168,6 +172,7 @@ class GuardrailsBlock(TypedDict):
     stated: int
     unstated: int
     stated_pct: float | None
+    stated_pct_reason: NotRequired[str]  # NO_GATES_REASON, when stated_pct is null
     instruction_files_read: int
     not_read: list[str]
 
@@ -554,7 +559,7 @@ def scan_guardrails(repo_root: Path | str, instruction_files: Iterable[str],
         gate["stated_in"] = where
         gate["snippet"] = None if where is not None else snippet(gate)
     stated = sum(1 for gate in gates if gate["stated"])
-    return {
+    block: GuardrailsBlock = {
         "available": True,
         "gates": gates,
         "enforced": len(gates),
@@ -564,3 +569,6 @@ def scan_guardrails(repo_root: Path | str, instruction_files: Iterable[str],
         "instruction_files_read": read,
         "not_read": [*NOT_READ, *(NOT_READ_SCOPED if bases is not None else ())],
     }
+    if not gates:
+        block["stated_pct_reason"] = NO_GATES_REASON
+    return block

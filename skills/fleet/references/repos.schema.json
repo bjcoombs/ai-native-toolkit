@@ -215,6 +215,14 @@
                   ],
                   "description": "The level 2 signal: systems not linked to the canonical file; null when not applicable."
                 },
+                "conflicts_reason": {
+                  "type": "string",
+                  "description": "fewer_than_two_systems beside a null conflicts: the tally reads the condition not applicable (#1407)."
+                },
+                "unlinked_reason": {
+                  "type": "string",
+                  "description": "fewer_than_two_systems beside a null unlinked: the tally reads the condition not applicable (#1407)."
+                },
                 "consistent": {
                   "type": [
                     "boolean",
@@ -1094,6 +1102,10 @@
                     "null"
                   ],
                   "description": "The guardrails-stated row's signal: stated as a percentage of enforced; null when no gate is found."
+                },
+                "stated_pct_reason": {
+                  "type": "string",
+                  "description": "no_configured_gates beside a null stated_pct: the row does not apply, so the tally reads it not applicable (#1407)."
                 },
                 "instruction_files_read": {
                   "type": "integer",

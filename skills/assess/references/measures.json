@@ -1867,6 +1867,7 @@
         "written": true,
         "strings_kept": {
           "agent_consistency.canonical": "path",
+          "agent_consistency.conflicts_reason": "token",
           "agent_consistency.divergences.kind": "token",
           "agent_consistency.divergences.missing_from": "token",
           "agent_consistency.divergences.named_in": "token",
@@ -1880,7 +1881,8 @@
           "agent_consistency.next_steps.symlink": "drop",
           "agent_consistency.next_steps.system": "token",
           "agent_consistency.not_read": "drop",
-          "agent_consistency.systems": "token"
+          "agent_consistency.systems": "token",
+          "agent_consistency.unlinked_reason": "token"
         }
       },
       "used_by": {
@@ -3477,7 +3479,8 @@
           "guardrails.gates.snippet": "drop",
           "guardrails.gates.stated_in": "path",
           "guardrails.gates.tool": "token",
-          "guardrails.not_read": "drop"
+          "guardrails.not_read": "drop",
+          "guardrails.stated_pct_reason": "token"
         }
       },
       "used_by": {
@@ -6308,7 +6311,7 @@
       "collector": "core.agent_consistency",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": "fewer than two agent systems: nothing to agree with"
+      "null_means": "fewer than two agent systems: nothing to agree with; conflicts_reason fewer_than_two_systems reads the condition not applicable"
     },
     {
       "path": "agent_consistency.unlinked",
@@ -6317,7 +6320,7 @@
       "collector": "core.agent_consistency",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": "fewer than two agent systems: nothing to link"
+      "null_means": "fewer than two agent systems: nothing to link; unlinked_reason fewer_than_two_systems reads the condition not applicable"
     },
     {
       "path": "agent_environment.check.named_total",
@@ -6470,7 +6473,7 @@
       "collector": "core.guardrails",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": "no gate found in the run (the scope, on a scoped run): nothing to state"
+      "null_means": "no gate found in the run (the scope, on a scoped run): nothing to state; stated_pct_reason no_configured_gates reads the condition not applicable"
     },
     {
       "path": "instruction_claims.failed",

@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 from lib.instructions.agent_consistency import (
+    NOT_APPLICABLE_REASON,
     check_commands,
     pointer_line,
     scan_agent_consistency,
@@ -20,6 +21,7 @@ from lib.instructions.agent_consistency import (
 from lib.instructions.agent_systems import SYSTEMS, aider_read_files, match_system_file, might_match
 from lib.counts_only.content_free import counts_only_scans
 from lib.instructions.instruction_files import nested_instruction_surface
+from lib.scoring.level_tally import default_model, level_result
 from lib.scoring.levels import evaluate_row
 from lib.scoring.level_signals import load_default_levels
 
@@ -98,6 +100,30 @@ def test_a_single_system_is_not_applicable_and_the_row_unknown(tmp_path: Path) -
     assert block["applicable"] is False
     assert (block["conflicts"], block["unlinked"], block["consistent"]) == (None, None, None)
     assert _row(dict(block))["status"] == "unknown"
+
+
+def test_a_single_system_reads_not_applicable_with_its_reason(tmp_path: Path) -> None:
+    """#1407: one instruction file has nothing to agree with or link to, so both conditions read
+    not applicable with the reason naming why, never not measured, and neither is counted."""
+    block = scan_agent_consistency(_repo(tmp_path, {"AGENTS.md": AGENTS}))
+    assert (block.get("conflicts_reason"), block.get("unlinked_reason")) == (
+        NOT_APPLICABLE_REASON, NOT_APPLICABLE_REASON)
+    result = level_result(default_model(), {"agent_consistency": dict(block)})
+    conds = {c["id"]: c for c in result["conditions"] if c["row"] == "agent-consistency"}
+    for cid in ("agent-consistency.1", "agent-consistency.2"):
+        assert (conds[cid]["state"], conds[cid].get("reason")) == ("not_applicable", "fewer_than_two_systems")
+        assert conds[cid]["counted"] is False and "disposition" not in conds[cid]
+    assert not any(n["id"].startswith("agent-consistency") for n in result["not_measured"])
+    # The reason tokens survive counts-only output, so /fleet reads the same state.
+    kept = counts_only_scans({"agent_consistency": dict(block)})["agent_consistency"]
+    assert (kept["conflicts_reason"], kept["unlinked_reason"]) == (
+        NOT_APPLICABLE_REASON, NOT_APPLICABLE_REASON)
+
+
+def test_two_systems_carry_no_not_applicable_reason(tmp_path: Path) -> None:
+    block = scan_agent_consistency(_repo(tmp_path, {"AGENTS.md": AGENTS, "CLAUDE.md": "@AGENTS.md\n"}))
+    assert block["applicable"] is True
+    assert "conflicts_reason" not in block and "unlinked_reason" not in block
 
 
 @pytest.mark.parametrize("path", [".windsurfrules", ".clinerules", ".rules", "CLAUDE.md",

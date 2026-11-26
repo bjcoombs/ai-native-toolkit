@@ -232,7 +232,7 @@ Compares the root instruction files of every agent system present: Claude Code, 
 - Collector: `core.agent_consistency`, reading `repo_root`, `excludes`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_consistency.canonical` path, `agent_consistency.divergences.kind` token, `agent_consistency.divergences.missing_from` token, `agent_consistency.divergences.named_in` token, `agent_consistency.divergences.stated.system` token, `agent_consistency.divergences.value` drop, `agent_consistency.files.link` token, `agent_consistency.files.path` path, `agent_consistency.files.system` token, `agent_consistency.next_steps.path` path, `agent_consistency.next_steps.pointer` drop, `agent_consistency.next_steps.symlink` drop, `agent_consistency.next_steps.system` token, `agent_consistency.not_read` drop, `agent_consistency.systems` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_consistency.canonical` path, `agent_consistency.conflicts_reason` token, `agent_consistency.divergences.kind` token, `agent_consistency.divergences.missing_from` token, `agent_consistency.divergences.named_in` token, `agent_consistency.divergences.stated.system` token, `agent_consistency.divergences.value` drop, `agent_consistency.files.link` token, `agent_consistency.files.path` path, `agent_consistency.files.system` token, `agent_consistency.next_steps.path` path, `agent_consistency.next_steps.pointer` drop, `agent_consistency.next_steps.symlink` drop, `agent_consistency.next_steps.system` token, `agent_consistency.not_read` drop, `agent_consistency.systems` token, `agent_consistency.unlinked_reason` token.
 - Used by: row `agent-consistency`.
 - Evidence: `agent_consistency.conflicts` head_structure (measured), `agent_consistency.unlinked` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.
@@ -685,7 +685,7 @@ Lists the gates the repository configures: a ruff or flake8 complexity limit, th
 - Collector: `core.guardrails`, reading `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `guardrails.gates.kind` token, `guardrails.gates.rule` token, `guardrails.gates.snippet` drop, `guardrails.gates.stated_in` path, `guardrails.gates.tool` token, `guardrails.not_read` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `guardrails.gates.kind` token, `guardrails.gates.rule` token, `guardrails.gates.snippet` drop, `guardrails.gates.stated_in` path, `guardrails.gates.tool` token, `guardrails.not_read` drop, `guardrails.stated_pct_reason` token.
 - Used by: row `guardrails-stated`.
 - Evidence: `guardrails.stated_pct` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.

@@ -491,6 +491,9 @@ GUARDRAILS: JsonDict = {
         "stated_pct": _field(
             _NUM_OR_NULL, "The guardrails-stated row's signal: stated as a percentage of "
                           "enforced; null when no gate is found."),
+        "stated_pct_reason": _field(
+            {"type": "string"}, "no_configured_gates beside a null stated_pct: the row does not "
+                                "apply, so the tally reads it not applicable (#1407)."),
         "instruction_files_read": _field(_INT, "Graded instruction files read."),
         "not_read": _STRINGS,
     },
@@ -539,6 +542,12 @@ AGENT_CONSISTENCY: JsonDict = {
         "unlinked": _field({"type": ["integer", "null"]},
                            "The level 2 signal: systems not linked to the canonical file; null "
                            "when not applicable."),
+        "conflicts_reason": _field(
+            {"type": "string"}, "fewer_than_two_systems beside a null conflicts: the tally reads "
+                                "the condition not applicable (#1407)."),
+        "unlinked_reason": _field(
+            {"type": "string"}, "fewer_than_two_systems beside a null unlinked: the tally reads "
+                                "the condition not applicable (#1407)."),
         "consistent": _field({"type": ["boolean", "null"]},
                              "No divergence and every system linked; null when not applicable."),
         "next_steps": _field(

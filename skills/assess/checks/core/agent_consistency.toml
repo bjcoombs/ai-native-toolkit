@@ -16,9 +16,11 @@ whys.agent_consistency = "It compares the instruction files of every agent syste
 shapes = [
   { path = "agent_consistency", type = "lib.instructions.agent_consistency:AgentConsistencyBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "agent_consistency.systems" = "token"
+  "agent_consistency.conflicts_reason" = "token"
+  "agent_consistency.unlinked_reason" = "token"
   "agent_consistency.canonical" = "path"
   "agent_consistency.files.path" = "path"
   "agent_consistency.files.system" = "token"
@@ -42,7 +44,7 @@ collector = "core.agent_consistency"
 path = "agent_consistency.conflicts"
 type = "number"
 evidence = "head_structure"
-null_means = "fewer than two agent systems: nothing to agree with"
+null_means = "fewer than two agent systems: nothing to agree with; conflicts_reason fewer_than_two_systems reads the condition not applicable"
 
 [[entries]]
 id = "core:agent_consistency.unlinked"
@@ -52,7 +54,7 @@ collector = "core.agent_consistency"
 path = "agent_consistency.unlinked"
 type = "number"
 evidence = "head_structure"
-null_means = "fewer than two agent systems: nothing to link"
+null_means = "fewer than two agent systems: nothing to link; unlinked_reason fewer_than_two_systems reads the condition not applicable"
 
 [[entries]]
 id = "core.cond.agent-consistency.1.conflicts"
