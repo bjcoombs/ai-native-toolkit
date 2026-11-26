@@ -7,6 +7,8 @@ guardrails: the skill comes from the base commit, the model job's scopes are
 read-only, only the post job writes, and the comparers run on Haiku.
 """
 import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -226,9 +228,20 @@ def test_assess_record_is_excluded_from_the_per_pr_scope() -> None:
     assert "--changed-from \"$BASE_SHA\"" in scope["run"] and "--exclude '.assess/**'" in scope["run"]
 
 
+@pytest.mark.skipif(shutil.which("jq") is None, reason="the gate step builds the schema with jq")
 def test_findings_schema_is_safe_inside_single_quotes() -> None:
-    """The gate step passes the schema as --json-schema '<schema>' (issue #1475)."""
+    """The gate step passes the schema as --json-schema '<schema>' (issue #1475).
+
+    The value must hold no ' and no $schema key: Claude Code rejects the
+    draft 2020-12 meta-schema URI as unknown.
+    """
     model = [s for s in _steps("check") if "claude-code-action" in str(s.get("uses", ""))]
     assert "--json-schema '${{ steps.gate.outputs.schema }}'" in model[0]["with"]["claude_args"]
+    gate = [s for s in _steps("check") if s.get("id") == "gate"][0]["run"]
+    line = [ln for ln in gate.splitlines() if ln.strip().startswith('echo "schema=')][0]
+    jq_filter = line.split("jq -c ", 1)[1].split(" ", 1)[0].strip("'")
     schema = SCRIPTS / "doc-sync-findings.schema.json"
-    assert "'" not in schema.read_text(encoding="utf-8")
+    out = subprocess.run(["jq", "-c", jq_filter, str(schema)], capture_output=True,
+                         encoding="utf-8", errors="replace", check=True).stdout
+    assert "'" not in out
+    assert "$schema" not in json.loads(out) and json.loads(out)["$defs"]["side"]

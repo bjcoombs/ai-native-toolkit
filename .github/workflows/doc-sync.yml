@@ -136,7 +136,10 @@ jobs:
             exit 1
           fi
           echo "run=true" >> "$GITHUB_OUTPUT"
-          echo "schema=$(jq -c . "$SCRIPTS/doc-sync-findings.schema.json")" >> "$GITHUB_OUTPUT"
+          # Claude Code's --json-schema validator does not load the draft
+          # 2020-12 meta-schema the file names, so the $schema key is dropped.
+          # The value goes inside single quotes below; a test keeps ' out of it.
+          echo "schema=$(jq -c 'del(.["$schema"])' "$SCRIPTS/doc-sync-findings.schema.json")" >> "$GITHUB_OUTPUT"
 
       - name: Install the comparer agent
         if: steps.gate.outputs.run == 'true'
