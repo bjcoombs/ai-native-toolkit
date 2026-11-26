@@ -96,8 +96,9 @@ _OWNER_RE = re.compile(r"^[a-z][a-z0-9_-]{0,39}$")
 _ID_RE = re.compile(r"^[a-z][a-z0-9_.:-]{0,127}$")
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _CALLABLE_RE = re.compile(r"^[a-z_][a-z0-9_.]*:[A-Za-z_][A-Za-z0-9_]*$")
-# A reason code; a trailing ``<name>`` stands for a family (``no_import_graph_<language>``).
-_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,39}(<[a-z]+>)?$")
+# A reason code; a trailing ``<name>`` stands for a family (``no_import_graph_<language>``),
+# optionally after a colon (``no_builder:<language>``, #825).
+_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,39}(:?<[a-z]+>)?$")
 _KEY_RE = re.compile(r"^([a-z0-9-]+)\.([0-9]+):([a-z0-9_.]+)$")
 
 

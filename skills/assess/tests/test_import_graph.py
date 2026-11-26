@@ -101,7 +101,7 @@ def test_a_repo_in_a_language_with_no_builder_names_it(tmp_path: Path) -> None:
     result = analyze_structure(tmp_path)
     assert result.available is False
     assert result.language is None
-    assert result.reason.startswith("no_import_graph_rust: ")
+    assert result.reason.startswith("no_builder:rust: ")
 
 
 def test_the_headless_marker_keeps_the_language_code(tmp_path: Path) -> None:
@@ -125,7 +125,7 @@ def test_a_shell_heavy_repo_names_shell_not_python(tmp_path: Path) -> None:
     """Shell is named on purpose: the reader learns what the code is (#700)."""
     for rel in ("a.sh", "b.sh", "tool.py"):
         _write(tmp_path, rel)
-    assert analyze_structure(tmp_path).reason.startswith("no_import_graph_shell: ")
+    assert analyze_structure(tmp_path).reason.startswith("no_builder:shell: ")
 
 
 def test_a_header_is_not_counted_as_c(tmp_path: Path) -> None:
@@ -309,8 +309,7 @@ def test_a_failing_builder_does_not_sink_another_language(tmp_path: Path) -> Non
     assert selection.graph is not None and selection.graph.language == "go"
 
 
-def test_with_no_dominant_builder_the_first_failure_is_the_reason(tmp_path: Path) -> None:
-    _write(tmp_path, "a.rs")
+def test_with_no_dominant_language_the_first_failure_is_the_reason(tmp_path: Path) -> None:
     first = _StubBuilder("python", None, fail="grimp failed to build import graph (x)")
     second = _StubBuilder("go", None, fail="second")
     assert select_graph(tmp_path, (first, second)).reason.startswith("grimp failed")
@@ -369,11 +368,14 @@ def test_a_go_module_beside_loose_python_scripts_reports_go(tmp_path: Path) -> N
     assert block["available"] is True and block["language"] == "go"
 
 
-def test_a_dominant_language_with_no_builder_falls_back(tmp_path: Path) -> None:
+def test_a_dominant_language_with_no_builder_has_no_stand_in(tmp_path: Path) -> None:
+    """#825: a minor language's graph never reports as the repository's structure."""
     for rel in ("a.rs", "b.rs", "c.rs", "svc/main.go"):
         _write(tmp_path, rel)
-    selection = select_graph(tmp_path, (_StubBuilder("go", ["svc"]),))
-    assert selection.graph is not None and selection.graph.language == "go"
+    stub = _StubBuilder("go", ["svc"])
+    selection = select_graph(tmp_path, (stub,))
+    assert selection.graph is None and selection.reason.startswith("no_builder:rust: ")
+    assert stub.calls == []  # no builder runs for a language nothing covers
 
 
 def test_a_builders_languages_attribute_covers_the_dominant_language(tmp_path: Path) -> None:
@@ -445,3 +447,51 @@ def test_go_test_files_and_skipped_dirs_do_not_count_toward_go(tmp_path: Path) -
 def test_is_graph_source_asks_the_covering_builder(rel: str, language: str,
                                                    graphed: bool) -> None:
     assert is_graph_source(Path(rel), language) is graphed
+
+
+# --------------------------------------------------------------------------
+# No builder for the dominant language: no stand-in (#825)
+# --------------------------------------------------------------------------
+
+def vendored_java_repo(root: Path) -> Path:
+    """50 ``.java`` files and the vendored web assets a Spring app ships beside them.
+
+    The JavaScript is two small packages that import each other, so a stand-in
+    graph would be measured (modules, edges, front doors) rather than empty.
+    """
+    for i in range(50):
+        pkg = ("api", "core", "web", "data", "util")[i % 5]
+        _write(root, f"src/main/java/com/example/{pkg}/Type{i}.java",
+               f"package com.example.{pkg};\npublic class Type{i} {{}}\n")
+    static = "src/main/resources/static/js"
+    _write(root, f"{static}/jquery.js", "module.exports = {};\n")
+    _write(root, f"{static}/app/index.js", "require('../widgets/index');\n")
+    _write(root, f"{static}/app/main.js", "require('./index');\n")
+    _write(root, f"{static}/widgets/index.js", "require('./grid');\n")
+    _write(root, f"{static}/widgets/grid.js", "require('../jquery');\n")
+    return root
+
+
+def test_vendored_javascript_never_stands_in_for_java(tmp_path: Path) -> None:
+    from lib.counts_only.content_free import counts_only, reason_code
+
+    vendored_java_repo(tmp_path)
+    assert dominant_language(tmp_path, builders=BUILDERS) == "java"
+    result = analyze_structure(tmp_path)
+    assert result.available is False and result.language is None
+    assert result.reason.startswith("no_builder:java: ")
+    assert "jdeps" in result.reason
+    marker = structure(result.as_dict())
+    assert marker == {"available": False, "reason": result.reason}
+    assert reason_code(marker["reason"]) == "no_builder:java"
+    assert counts_only({"structure": marker})["structure"] == {
+        "available": False, "reason": "no_builder:java"}
+
+
+def test_no_builder_reads_without_a_tool_when_none_is_known(tmp_path: Path) -> None:
+    for rel in ("src/a.rs", "src/b.rs", "web/index.ts"):
+        _write(tmp_path, rel)
+    selection = select_graph(tmp_path, BUILDERS)
+    assert selection.graph is None
+    assert selection.reason.startswith("no_builder:rust: ")
+    assert "would provide" not in selection.reason

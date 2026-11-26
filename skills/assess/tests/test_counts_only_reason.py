@@ -42,6 +42,11 @@ def test_structure_reason_is_a_reason_code_rule() -> None:
     ("Alice_Smith: denied", "unavailable"),
     ("alice_smith: denied", "unavailable"),
     ("no_import_graph_alice: denied", "unavailable"),
+    # #825: no_builder keeps its language, and only a known one
+    ("no_builder:java: no import graph builder covers java, ...; jdeps would provide one",
+     "no_builder:java"),
+    ("no_builder:alice: denied", "unavailable"),
+    ("no_builder: denied", "unavailable"),
 ])
 def test_reason_token_keeps_the_code_only(reason: str, code: str) -> None:
     assert reason_token(reason) == code
@@ -102,4 +107,4 @@ def test_full_counts_only_run_on_rust_repo_names_the_language(tmp_path: Path) ->
     assert assess_core.main([str(repo), "--non-interactive", "--counts-only"]) == 0
     out = json.loads((repo / ".assess" / COUNTS_ONLY_FILE).read_text(encoding="utf-8"))
     assert out["structure"]["available"] is False
-    assert out["structure"]["reason"] == "no_import_graph_rust"
+    assert out["structure"]["reason"] == "no_builder:rust"

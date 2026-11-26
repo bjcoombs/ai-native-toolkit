@@ -32,7 +32,9 @@ files and package boundaries -- and the largest is measured, its language in the
 block's ``language`` field. Nothing here assumes a language: a package boundary,
 a front door and a public surface are whatever the builder says they are. With no
 graph the reason names the repository's dominant language
-(``no_import_graph_<language>``), ``no importable Python packages found`` for a
+(``no_builder:<language>`` when no builder covers it, #825;
+``no_import_graph_<language>`` when its builder found nothing),
+``no importable Python packages found`` for a
 Python repository, or ``no_source_files``. The Python builder
 (``lib.graph.import_graph_python``) reads packages with ``grimp``.
 
@@ -56,7 +58,8 @@ source language's) is measured and its language is the block's `language` field 
 and no other language was graphed, and when nothing could be graphed (nothing measured,
 not an empty graph whose modularity 0 would read as tangled code). With no graph the
 reason names the dominant source language (issues #707, #708):
-`no_import_graph_<language>: ...` when no builder graphed it, `no importable Python
+`no_builder:<language>: ...` when no builder covers it (no other language stands in,
+#825), `no_import_graph_<language>: ...` when its builder graphed nothing, `no importable Python
 packages found` for a Python repository, `no_source_files: ...` with no source in a
 recognised language. `cross_package_edges` counts the
 import edges `front_door_ratio` is measured over; at 0 no package boundary is crossed and
@@ -69,7 +72,8 @@ was measured): modules that never import each other have no community structure,
 `no_import_edges`) and an unavailable block (`available` false; the cause is in
 `structure.reason`). A headless run reduces that block to the bare marker, whose reason
 opens with a named code (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`,
-`no_import_graph_<language>`, `no_source_files`; `lib/run/headless_layers.py`), so
+`no_builder:<language>`, `no_import_graph_<language>`, `no_source_files`;
+`lib/run/headless_layers.py`), so
 `modularity_q` is absent there rather than null. A full counts-only run keeps the same
 code as `structure.reason` (`REASON_SENTENCE_CODES`, #764). `STRUCTURE_REASON_CODES` is
 that run's allow-list, derived from `NO_SOURCE_FILES`, `INVALID_IMPORT_GRAPH`,

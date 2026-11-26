@@ -4,10 +4,12 @@
 language produced it. A builder turns a repository's source in one language into
 a :class:`ModuleGraph`; :func:`select_graph` runs every registered builder
 and returns the dominant source language's graph (or its failure), falling back
-to the largest other graph only when no builder covers that language. A repository with no graph
-gets a reason that names its dominant source language
-(``no_import_graph_rust``), so a fleet reader can tell a tooling gap from a
-repository with no code (``no_source_files``).
+to the largest other graph only when the dominant language's builder found nothing to
+graph. When no builder covers the dominant language, no other language stands in
+(#825): the reason is ``no_builder:<language>`` (``no_builder:java``), naming a
+candidate tool where one is known (``jdeps``). A covered language with nothing to
+graph reads ``no_import_graph_<language>``, so a fleet reader can tell a tooling gap
+from a repository with no code (``no_source_files``).
 
 A builder is any object with a ``language`` token and a ``build`` method (the
 :class:`ImportGraphBuilder` protocol). ``build`` returns ``None`` when the
@@ -43,11 +45,16 @@ optional `is_graph_source(rel)`, so files it skips, such as a Python app's
 `static/js/*.min.js`, never make their language dominant). A failure, a missing tool or an
 invalid graph, keeps its reason, so a missing grimp on a Python repository still reads
 `no_grimp` rather than yielding to a stray `.mjs` file. Graph sizes are never compared with
-the dominant language's graph, whose nodes can differ. When the dominant builder found
-nothing to graph (loose scripts, no package) or no builder covers the dominant language,
-the largest other graph stands in (most modules, then most internal edges, then the
-language token); with none the reason is the first builder failure in registration order, else
-`no_graph_reason`, which counts source files per language
+the dominant language's graph, whose nodes can differ. When no builder covers the
+dominant language, no builder runs and nothing stands in (#825): the reason is
+`no_builder:<language>: ...` (`no_builder_reason`), naming the candidate tool in
+`CANDIDATE_GRAPH_TOOLS` where one is known (`jdeps` for the JVM languages), so vendored
+web assets in a Java repository never report as its structure. The leading code keeps
+both parts (`reason_codes.leading_code`). When the dominant builder found nothing to
+graph (loose scripts, no package) or no language dominates, the largest other graph
+stands in (most modules, then most internal edges, then the language token); with none
+the reason is the first builder failure in registration order, else `no_graph_reason`,
+which counts source files per language
 (`LANGUAGE_BY_EXTENSION`, skipping `EXCLUDE_DIRS` and the configured excludes, within
 each `scope` root; `scope` is a `lib.run.run_scope.Scope`, #1110) and names the dominant one. A built graph that breaks the contract (a module
 missing from `package_of`, which A3 and A4 index) is treated as a builder failure
@@ -163,6 +170,16 @@ LANGUAGE_BY_EXTENSION: dict[str, str] = {
 NO_PYTHON_PACKAGES = "no importable Python packages found"
 INVALID_IMPORT_GRAPH = "invalid_import_graph"
 NO_SOURCE_FILES = "no_source_files: no source file in a language /assess recognises"
+# The code when no registered builder covers the dominant language (#825). The
+# language follows a colon: ``no_builder:java``.
+NO_BUILDER = "no_builder"
+
+# A tool that would build the graph for a language no builder covers, named in the
+# ``no_builder`` reason. jdeps reads JVM bytecode, so it serves every JVM language
+# (the ``module_graph`` candidate in ``lib.keyhole.jvm_capabilities``).
+CANDIDATE_GRAPH_TOOLS: dict[str, str] = {
+    "java": "jdeps", "kotlin": "jdeps", "scala": "jdeps", "groovy": "jdeps",
+}
 
 # Every code a ``structure.reason`` can open with or map to: the allow-list a
 # counts-only run keeps (#764). Derived from the constants above, so a new
@@ -171,6 +188,7 @@ STRUCTURE_REASON_CODES: frozenset[str] = frozenset({
     NO_SOURCE_FILES.split(":", 1)[0],
     INVALID_IMPORT_GRAPH,
     *(f"no_import_graph_{lang}" for lang in LANGUAGE_BY_EXTENSION.values()),
+    *(f"{NO_BUILDER}:{lang}" for lang in LANGUAGE_BY_EXTENSION.values()),
     *(code for _, code in REASON_SENTENCE_CODES),
 })
 
@@ -257,9 +275,12 @@ def select_graph(
     are never compared with the dominant language's graph, whose nodes can differ
     (files in one, packages in another).
 
+    When no builder covers the dominant language, no builder runs and nothing
+    stands in: the reason is :func:`no_builder_reason` (#825), so a few vendored
+    files in a minor language never report as the repository's structure.
+
     When the dominant builder found nothing to graph (loose scripts with no
-    package), or no builder covers the dominant language, another language
-    stands in: the largest graph (most modules, then edges, then the language
+    package), or no language dominates, another language stands in: the largest graph (most modules, then edges, then the language
     token), else the first failure in registration order, else
     :func:`no_graph_reason`. A graph that breaks the contract
     (:func:`graph_defect`) counts as its builder's failure.
@@ -267,6 +288,8 @@ def select_graph(
     repo_root = Path(repo_root).resolve()
     extra = extra_exclude_dirs or set()
     dominant = dominant_language(repo_root, extra, scope, builders)
+    if dominant is not None and not any(dominant in builder_languages(b) for b in builders):
+        return GraphSelection(graph=None, reason=no_builder_reason(dominant))
     graphs: list[ModuleGraph] = []
     failures: list[str] = []
     for builder in builders:
@@ -375,6 +398,17 @@ def no_graph_reason(
         return NO_PYTHON_PACKAGES
     return (f"no_import_graph_{language}: no import graph was built for {language}, "
             "the repository's dominant source language")
+
+
+def no_builder_reason(language: str) -> str:
+    """``no_builder:<language>: ...``: no registered builder covers ``language`` (#825).
+
+    Names the candidate tool from ``CANDIDATE_GRAPH_TOOLS`` when one is known.
+    """
+    tool = CANDIDATE_GRAPH_TOOLS.get(language)
+    offer = f"; {tool} would provide one" if tool else ""
+    return (f"{NO_BUILDER}:{language}: no import graph builder covers {language}, the "
+            f"repository's dominant source language, so structure is not measured{offer}")
 
 
 def is_graph_source(
