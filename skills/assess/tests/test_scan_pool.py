@@ -90,7 +90,8 @@ def test_independent_entries_overlap_and_a_dependent_waits():
     finished, threads = _run(3, [frozenset(), frozenset(), frozenset({0})], 4,
                              [zero, one_ran.set, two])
     assert seen == {"overlapped": True, "after_zero": True}
-    assert finished.index(1) < finished.index(0) < finished.index(2)  # completion order
+    # 1 and 0 may report in either order: 1 sets the event and 0 returns straight after.
+    assert finished.index(0) < finished.index(2)  # the dependent reports after its input
     assert all(name.startswith("scan") for name in threads)
 
 
