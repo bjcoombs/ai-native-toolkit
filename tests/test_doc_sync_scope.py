@@ -266,6 +266,19 @@ def test_citation_check_moves_near_lines_and_drops_misses(fixture_repo: Path) ->
     assert len(result["dropped"]) == 3
 
 
+def test_short_quote_is_dropped_and_counted(fixture_repo: Path) -> None:
+    commit(fixture_repo, "src/cache.py",
+           (fixture_repo / "src/cache.py").read_text(encoding="utf-8") + "# touched\n")
+    one = json.loads(json.dumps(PLANTED))
+    one["a"]["quote"] = "e"
+    short = json.loads(json.dumps(PLANTED))
+    short["b"]["quote"] = " " + "3" * (doc_sync_findings.MIN_QUOTE - 1) + " "
+    result = plan(fixture_repo, [one, short, PLANTED])
+    assert len(result["threads"]) == 1 and result["summary"] == []
+    assert len(result["dropped"]) == 2
+    assert all("quote shorter than" in why for why in result["dropped"])
+
+
 def test_duplicates_merge_and_text_is_cut(fixture_repo: Path) -> None:
     commit(fixture_repo, "src/cache.py",
            (fixture_repo / "src/cache.py").read_text(encoding="utf-8") + "# touched\n")

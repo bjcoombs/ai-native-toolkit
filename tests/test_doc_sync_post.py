@@ -224,3 +224,11 @@ def test_model_runs_only_for_trusted_same_repo_authors_with_the_refiner_credenti
 def test_assess_record_is_excluded_from_the_per_pr_scope() -> None:
     scope = [s for s in _steps("check") if s.get("id") == "scope"][0]
     assert "--changed-from \"$BASE_SHA\"" in scope["run"] and "--exclude '.assess/**'" in scope["run"]
+
+
+def test_findings_schema_is_safe_inside_single_quotes() -> None:
+    """The gate step passes the schema as --json-schema '<schema>' (issue #1475)."""
+    model = [s for s in _steps("check") if "claude-code-action" in str(s.get("uses", ""))]
+    assert "--json-schema '${{ steps.gate.outputs.schema }}'" in model[0]["with"]["claude_args"]
+    schema = SCRIPTS / "doc-sync-findings.schema.json"
+    assert "'" not in schema.read_text(encoding="utf-8")
