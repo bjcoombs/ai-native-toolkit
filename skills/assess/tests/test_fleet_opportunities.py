@@ -13,6 +13,7 @@ from lib.fleet.fleet_diagrams import report_markdown
 from lib.fleet.fleet_level import repo_level
 from lib.fleet.fleet_opportunities import MIN_INCLUDERS, Opportunities, build_opportunities
 from lib.fleet.fleet_opportunities_section import opportunities_section
+from lib.fleet.fleet_rescore import rescore
 from lib.scoring.headline import practices_held
 from lib.fleet.fleet_units import build_trees, empty_map
 from lib.scoring.levels import MaturityModel, parse_levels
@@ -133,6 +134,18 @@ def test_a_declared_practice_reads_the_same_on_the_radar_and_in_whats_working() 
         for unit in view["units"]:
             met = {lv["row"]: lv["met"] for lv in unit["levels"]}
             assert met == working == {"instr": 0, "ci": 1}
+
+
+def test_a_rescore_counts_met_by_the_same_rule_as_a_fresh_run() -> None:
+    """#1474: the re-score rebuilds each unit's ``met`` from the level result too, so a stored run
+    re-scored under the same model reads what a fresh run reads (the ci row counted, instr not)."""
+    rows = [_row("grp/d", instr=True, ci=True), _row("grp/e", instr=True)]
+    fresh = _data(rows)
+    again = rescore(fresh, rows, model(), Privacy().key)
+    assert again is not None
+    met = [[lv["met"] for lv in u["levels"]] for v in again["views"] for u in v["units"]]
+    assert met == [[lv["met"] for lv in u["levels"]] for v in fresh["views"] for u in v["units"]]
+    assert met and all(m == [0, 1] for m in met)
 
 
 def test_in_place_reads_the_level_results_passed_in() -> None:
