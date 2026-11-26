@@ -80,7 +80,7 @@ def test_last_commit_days_counts_from_head(dated_git_repo: Path) -> None:
     block = analyze_doc_staleness(dated_git_repo)
     days = {d["path"]: d["last_commit_days"] for d in block["docs"]}
     assert days["README.md"] == 370  # 2019-01-10 to 2020-01-15
-    assert block["summary"]["stale_pct"] is not None
+    assert block["summary"]["stale_docs"] is not None  # stale_pct waits on 20 measured docs (#822)
 
 
 def test_instruction_freshness_counts_from_head(dated_git_repo: Path) -> None:
@@ -155,6 +155,6 @@ def test_same_commit_same_signals_on_two_dates(dated_git_repo: Path, tmp_path: P
     assert isinstance(scans, dict)
     assert scans["ai_usage"]["total_commits"] == 6
     assert scans["ai_usage"]["agent_trailer_commits"] == 1
-    assert scans["doc_staleness"]["summary"]["stale_pct"] is not None
+    assert scans["doc_staleness"]["summary"]["stale_docs"] is not None
     days = {d["path"]: d["last_commit_days"] for d in scans["doc_staleness"]["docs"]}
     assert days["README.md"] == 370

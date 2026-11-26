@@ -33,45 +33,9 @@ skipped on the doc side only: a code-only sweep after a doc fix (a formatter
 run, a licence-header pass over source files) counts in full on the code side,
 which is the one route left by which a just-corrected doc can be re-flagged.
 
-Associating a doc with the code it describes uses the one ownership rule in
-``lib.docs.doc_ownership`` (nearest-ancestor base doc, then a parallel ``docs/`` tree,
-the doc's explicit code links, then repo-wide churn), the same rule the
-complexity join applies. Each row reports the method (``subject_method``), the
-rule's roots (``subject_roots``), for a parallel ``docs/`` match the deciding key and
-tie-break (``subject_match``, #817), the subject size (``subject_code_count``) and
-up to ``SUBJECT_PATHS_CAP`` of its paths (``subject_paths``), so a finding's
-subject can be checked.
-
-Churn comes from ``lib.history.git_churn`` -- the same machinery the complexity treemap
-uses, so churn is computed one way across the whole skill.
-
-Both `stale_hubs` and the `lying_map` join read the capped `ratio`. The association logic
-reuses `doc_graph`'s code-link edges. For *generated* docs it reads `doc_provenance`
-(per-doc and via the `[[generated]]` config map) and replaces the churn ratio with a
-source-vs-doc verdict. `last_commit_days` and the instruction grader's `freshness_days`
-(via `content_clock`) both read `git_churn.content_commit_clock`, and the skipped bulk
-commits are reported as `bulk_commits_skipped` (newest first, capped) with
-`bulk_commits_skipped_total`. A doc dated by the creation fallback carries
-`last_change_basis: "creation"` and confidence `low`, which keeps it out of the stale-hub
-finding; `creation_date_fallback_count` counts them. On a shallow clone the block
-carries `history_truncated: true` and `history_boundary_date`, every row is confidence
-`low`, and a doc whose newest visible change is the boundary carries
-`last_commit_days_bound: "lower"` (copied onto its `stale_hubs` entry): its age is a
-floor. Its ratio still rests only on subject commits after the boundary, so the
-boundary listing every code file does not make it stale. `summary` (#699) carries the integer
-counts a maturity model reads: `measured_docs` (rows with a code subject of their own,
-every method but `repo-baseline`), `stale_docs` (those `doc_complexity_join.is_stale`
-marks: ratio above `STALENESS_RATIO_THRESHOLD`, or a newer declared source) and
-`stale_pct` (their share, a whole percent rounded up). Both counts are null on a truncated
-or degenerate history, or with no measured doc, so the doc-freshness row reads unknown.
-A page of only generator directives (`lib.docs.doc_directives`, a mkdocstrings `::: pkg.mod`
-stub with no declared provenance) renders from code at build time: its row carries
-`directive_only: true` and ratio 0, it leaves `measured_docs`, and
-`summary.generator_directive_docs` counts it (#816).
-Paths are repo-relative POSIX (`as_posix`) on every platform. The `modularity` block's `base_doc_dir_ratio`
-is code directories holding a base doc over all code directories; a base doc in a
-directory with no code (`docs/`, `agents/`) counts in neither, so the ratio stays
-within 0-1 (tests: `tests/test_doc_modularity.py`).
+A base doc is measured against its direct-child code only, and below `MIN_MEASURED_DOCS` the
+stale share is null with its reason (#822, `lib.docs.doc_staleness_scale`). Ownership, churn,
+provenance, bulk commits, the summary. Full reference: lib/docs/doc_staleness.md.
 """
 from __future__ import annotations
 
@@ -90,6 +54,7 @@ from lib.docs.doc_graph import (
     is_repo_file,
 )
 from lib.docs.doc_ownership import (
+    NEAREST_ANCESTOR,
     REPO_BASELINE,
     SubjectSpec,
     bounded_subject_paths,
@@ -101,6 +66,16 @@ from lib.docs.doc_ownership import (
     subject_spec,
 )
 from lib.docs.doc_provenance import resolve_doc_sources, source_is_newer
+from lib.docs.doc_staleness_scale import (
+    MIN_MEASURED_DOCS,
+    TOO_FEW_MEASURED_DOCS,
+    DocStalenessNormalisation,
+    RenameEvent,
+    direct_children,
+    normalisation,
+    rename_events,
+    renamed_children_named,
+)
 from lib.docs.parallel_docs import parallel_index
 from lib.history.git_churn import (
     CHURN_WINDOWS,
@@ -138,6 +113,9 @@ class DocStalenessRow(TypedDict):
     subject_match: NotRequired[str]
     base_doc_dir: str | None
     subject_paths: list[str]
+    # #822 (lib.docs.doc_staleness_scale); absent in older blocks.
+    measured_code_count: NotRequired[int]
+    renamed_children_named: NotRequired[int]
     ratio: float
     window_ratio: float
     code_churn_since_doc_change: int | None
@@ -188,6 +166,7 @@ class DocStalenessSummary(TypedDict):
     stale_docs: int | None
     stale_pct: int | None
     generator_directive_docs: int
+    stale_pct_reason: NotRequired[str]  # the not-measured code, when null (#822)
 
 
 class DocStalenessBlock(TypedDict):
@@ -209,6 +188,7 @@ class DocStalenessBlock(TypedDict):
     declared_cross_repo: NotRequired[list[DeclaredMapping]]
     # Integer counts for a maturity model (#699); absent in blocks written before it.
     summary: NotRequired[DocStalenessSummary]
+    normalisation: NotRequired[DocStalenessNormalisation]  # the #822 rule
 
 
 # A repo at or above this many hand-written code files is "large" enough that
@@ -256,6 +236,8 @@ class DocStaleness:
     history_truncated: bool = False
     age_is_lower_bound: bool = False
     directive_only: bool = False  # generator-directive page (#816)
+    measured_code_count: int = 0  # the files the churn reads (#822)
+    renamed_children_named: int = 0
 
     @property
     def confidence(self) -> str:
@@ -280,6 +262,8 @@ class DocStaleness:
             "subject_roots": list(self.subject_roots),
             "base_doc_dir": self.base_doc_dir,
             "subject_paths": list(self.subject_paths),
+            "measured_code_count": self.measured_code_count,
+            "renamed_children_named": self.renamed_children_named,
             "ratio": round(self.ratio, 2),
             "window_ratio": round(self.window_ratio, 2),
             "code_churn_since_doc_change": self.code_churn_since_doc_change,
@@ -480,6 +464,7 @@ class _ChurnContext:
     clock: ContentClock
     generated_sources: list[tuple[str, list[str]]]
     renames_complete: bool = True
+    renames: tuple[RenameEvent, ...] = ()
 
 
 def staleness_summary(rows: list[DocStalenessRow], reliable: bool) -> DocStalenessSummary:
@@ -488,13 +473,25 @@ def staleness_summary(rows: list[DocStalenessRow], reliable: bool) -> DocStalene
     directive = sum(1 for row in rows if row.get("directive_only"))
     mapped = [row for row in rows if not row.get("directive_only") and (
         row["subject_method"] != REPO_BASELINE
-        or row.get("provenance", {}).get("source_newer") is not None)]
+        or row.get("provenance", {}).get("source_newer") is not None) and not _nothing_beside(row)]
     if not reliable or not mapped:
         return {"measured_docs": len(mapped), "stale_docs": None, "stale_pct": None,
                 "generator_directive_docs": directive}
     stale = sum(1 for row in mapped if is_stale({**row}))
-    return {"measured_docs": len(mapped), "stale_docs": stale,
-            "stale_pct": -(-100 * stale // len(mapped)), "generator_directive_docs": directive}
+    summary: DocStalenessSummary = {
+        "measured_docs": len(mapped), "stale_docs": stale,
+        "stale_pct": -(-100 * stale // len(mapped)), "generator_directive_docs": directive}
+    if len(mapped) < MIN_MEASURED_DOCS:  # a share over a handful of docs (#822)
+        summary["stale_pct"] = None
+        summary["stale_pct_reason"] = TOO_FEW_MEASURED_DOCS
+    return summary
+
+
+def _nothing_beside(row: DocStalenessRow) -> bool:
+    """A base doc with no code directly beside it and no renamed child it names:
+    nothing to measure it against (#822). A row written before #822 is measured."""
+    return (row["subject_method"] == NEAREST_ANCESTOR and row.get("measured_code_count") == 0
+            and not row.get("renamed_children_named"))
 
 
 def _resolve_docs(
@@ -556,8 +553,10 @@ def _doc_row(
 ) -> DocStaleness:
     """One doc's staleness row against its subject."""
     method = spec["method"]
-    subject = [abs_of[r] for r in subject_rels]
-    code_churn, measured = _subject_churn(subject, method, ctx)
+    # A base doc is measured against its direct children only (#822).
+    own_dir = spec["roots"][0] if method == NEAREST_ANCESTOR else None
+    measured_rels = subject_rels if own_dir is None else direct_children(subject_rels, own_dir)
+    code_churn, measured = _subject_churn([abs_of[r] for r in measured_rels], method, ctx)
     doc_churn = ctx.churn_map.get(d, 0)
     window_ratio = code_churn / max(doc_churn, 1)
     # Behind-the-subject cap: only churn after the doc's last content change
@@ -595,6 +594,9 @@ def _doc_row(
         history_truncated=ctx.clock.truncated,
         age_is_lower_bound=d in ctx.clock.lower_bound,
         directive_only=directive_only,
+        measured_code_count=len(measured_rels),
+        renamed_children_named=0 if own_dir is None
+        else renamed_children_named(d, own_dir, ctx.renames, ctx.clock.epoch(d)),
     )
 
 
@@ -706,6 +708,7 @@ def analyze_doc_staleness(
         clock=clock,
         generated_sources=generated_sources,
         renames_complete=rename_map.complete,
+        renames=rename_events(repo_root, head),
     )
 
     base_doc_dirs = build_base_doc_dirs(docs)
@@ -785,6 +788,7 @@ def analyze_doc_staleness(
             code_files, base_doc_dirs, code_dirs, pct_code_under_base,
         ),
     }
+    block["normalisation"] = normalisation()
     if declared:  # omitted when nothing is declared: the feature is opt-in
         block["declared_cross_repo"] = declared
     # A truncated (shallow) or degenerate history cannot carry the measure.

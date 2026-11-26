@@ -130,7 +130,7 @@
     },
     {
       "id": "core.doc_staleness",
-      "revision": 1
+      "revision": 2
     },
     {
       "id": "core.excluded_as_generated",

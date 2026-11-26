@@ -117,9 +117,10 @@ def _row(path: str, ratio: float, directive_only: bool = False) -> DocStalenessR
 
 
 def test_the_summary_leaves_directive_pages_out_and_counts_them() -> None:
-    rows = [_row("api.md", 0.0, directive_only=True), _row("guide.md", 9.0)]
+    rows = [_row("api.md", 0.0, directive_only=True),
+            *(_row(f"guide{i}.md", 9.0) for i in range(20))]
     assert staleness_summary(rows, reliable=True) == {
-        "measured_docs": 1, "stale_docs": 1, "stale_pct": 100, "generator_directive_docs": 1}
+        "measured_docs": 20, "stale_docs": 20, "stale_pct": 100, "generator_directive_docs": 1}
     assert staleness_summary(rows[:1], reliable=True) == {
         "measured_docs": 0, "stale_docs": None, "stale_pct": None,
         "generator_directive_docs": 1}
@@ -169,5 +170,6 @@ def test_a_stub_beside_heavy_churn_is_not_stale_and_a_guide_still_is(tmp_path: P
     assert rows["docs/sourced.md"]["provenance"]["method"] == "frontmatter"
     # The guide (churn) and the sourced page (its source is newer) are stale;
     # the stub is neither measured nor stale.
-    assert block["summary"] == {"measured_docs": 2, "stale_docs": 2, "stale_pct": 100,
-                                "generator_directive_docs": 1}
+    assert block["summary"] == {"measured_docs": 2, "stale_docs": 2, "stale_pct": None,
+                                "generator_directive_docs": 1,
+                                "stale_pct_reason": "too_few_measured_docs"}
