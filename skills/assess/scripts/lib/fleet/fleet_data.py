@@ -18,7 +18,7 @@ level a measured repository holds on the row (``lowest_level``; None when none w
 measured). ``met`` (#1366, part 1 of #1314) counts the measured repositories whose level
 result holds the row at its top level, by the same rule as ``opportunities.in_place``
 (``fleet_opportunities.rows_at_top``: ``in_place`` with ``top``, every condition counted and
-met, #1474), so a declared-only condition never counts on the radar either: so each
+met, #1474), so a declared-only condition never counts on the radar either. Each
 unit carries ``row -> {met, measured, repos}``, the counts a per-unit practice chart plots as
 met of measured, never a mean across repositories. An unknown or failed repository counts in
 ``repos`` only, never as 0. ``org`` rows read a group's ghreport settings, not a repository, so
