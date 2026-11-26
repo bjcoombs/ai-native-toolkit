@@ -63,7 +63,9 @@ def _below() -> dict[str, Any]:
                                                "condition": "layer-6-coverage.1", "state": "unmet"}]}, conds)
 
 
-IN_PLACE_ROWS = ("layer-0-instructions", "layer-1-liveness", "layer-2-design", "layer-3-linters", "doc-freshness")
+# Rows a real run can hold at their top level from counted conditions; layer-0-instructions never
+# can, since its level 1 reads a declared signal (#1334).
+IN_PLACE_ROWS = ("layer-1-liveness", "layer-2-design", "layer-3-linters", "doc-freshness", "guardrails-stated")
 
 
 def _in_place(n: int) -> dict[str, Any]:
@@ -250,15 +252,15 @@ def test_the_in_place_line_follows_the_lead_and_precedes_every_gate_line() -> No
     """#1334: strengths first. The practices fully in place by title; a row in place only for a gate
     is the Holding line's fact and is not named."""
     lines = card_lines(_in_place(2), MODEL, KNOWN)  # type: ignore[arg-type]
-    assert lines[1] == "In place: 2 practices at their top level: Agent instructions; Runtime legibility."
+    assert lines[1] == "In place: 2 practices at their top level: Runtime legibility; Code design (module structure)."
     assert lines[2].startswith("Holding: ") and lines[3].startswith("Blocks Step 4: ")
     assert "CI and the agent" not in lines[1]
 
 
 def test_the_in_place_line_names_three_and_counts_the_rest() -> None:
     line = card_lines(_in_place(5), MODEL, KNOWN)[1]  # type: ignore[arg-type]
-    assert line == ("In place: 5 practices at their top level: Agent instructions; Runtime legibility; "
-                    "Code design (module structure); and 2 more.")
+    assert line == ("In place: 5 practices at their top level: Runtime legibility; Code design (module structure); "
+                    "Linters run in CI, suppression cap; and 2 more.")
     assert "Why" not in line  # the whys are the report's In place section
 
 

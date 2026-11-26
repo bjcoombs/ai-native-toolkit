@@ -20,7 +20,8 @@ precedes every gate line.
    - a model without Steps: ``This maturity model defines no Steps.``;
 
 1a. the In place line (#1334), when a practice is fully in place: ``In place: 5 practices at their
-   top level: Agent instructions; Documentation freshness; Guardrails stated; and 2 more.``, from
+   top level: Runtime legibility; Code design (module structure); Linters run in CI, suppression
+   cap; and 2 more.``, from
    ``card_facts.fully_in_place`` (the level result's ``in_place`` rows at their top level). It names
    the first ``IN_PLACE_NAMES`` and counts the rest, so the card keeps its word budget; the
    deterministic report's In place section (``in_place_section``) lists every one with its why. A
