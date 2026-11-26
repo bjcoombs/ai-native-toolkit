@@ -4,7 +4,8 @@
 (``model``), each repository's cells (``repos[].rows``) for the fleet-wide measured share, and
 each unit's per-practice counts (``views[].units[].levels[]``: ``met``, ``measured``, ``repos``,
 #1366). No mean of levels is taken (#772): a point is the unit's ``met`` over ``measured``, the
-share of its measured repositories at the practice's top level.
+share of its measured repositories whose level result holds the practice at its top level
+(``in_place`` with ``top``, the rule of "What's working", #1474).
 
 **Axes.** One per ``team`` row of the model, in model order, kept when at least
 ``min_share`` percent (an integer, default ``RADAR_MIN_SHARE`` = 20, ``fleet.py
@@ -23,7 +24,8 @@ ranked, never overlaid, laid out as small multiples (``COLUMNS`` per line). A ne
 carries ``depth`` and ``parent`` (its parent's label); its subtitle and its table column name
 the unit it sits in, and the caption says a parent's radar redraws its children's
 repositories. No figure adds units together: ``in_place`` counts the run's repositories from
-``repos[].rows``, each once, never unit and practice pairs.
+``repos[].in_place`` (the entries with ``top``, ``card_facts.fully_in_place``, #1474), each once,
+never unit and practice pairs.
 
 **Unknown is never 0.** An axis the unit measured on no repository has no point: a hatched
 mark sits at the rim with a ``not measured`` tooltip, and the outline breaks there (a segment is
@@ -55,6 +57,7 @@ from typing import Any, TypedDict
 import lib.fleet.fleet_svg as svg
 from lib.svg_scope import SCOPES
 from lib.assess_diagrams import wrap
+from lib.card_facts import fully_in_place
 from lib.fleet.fleet_page_data import RADAR_MIN_SHARE as RADAR_MIN_SHARE, keeps_axis, measured_counts
 from lib.fleet.fleet_tag_heatmap import names_shown
 from lib.vocabulary import IN_PLACE
@@ -125,12 +128,10 @@ def _axes(data: Mapping[str, Any], min_share: int) -> tuple[list[RadarAxis], lis
 
 
 def _repos_in_place(data: Mapping[str, Any], axes: Sequence[RadarAxis]) -> int:
-    """The run's repositories at the top level on at least one kept axis, each counted once."""
+    """The run's repositories whose level result holds at least one kept axis at its top level
+    (``in_place`` with ``top``, the rule of the units' ``met``, #1474), each counted once."""
     rows = {a["row"] for a in axes}
-    tops = {row["id"]: row.get("top_level") for row in data.get("model") or []}
-    return sum(1 for repo in data.get("repos") or []
-               if any(c["row"] in rows and c.get("status") == "level" and c.get("level") is not None
-                      and c["level"] == tops.get(c["row"]) for c in repo.get("rows") or []))
+    return sum(1 for repo in data.get("repos") or [] if any(e["row"] in rows for e in fully_in_place(repo)))
 
 
 def _depth(key: str, parents: Mapping[str, str | None]) -> int:

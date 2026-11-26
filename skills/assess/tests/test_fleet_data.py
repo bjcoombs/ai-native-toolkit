@@ -46,8 +46,10 @@ def test_three_level_gitlab_tree_and_roll_ups() -> None:
         "ownership/grp/sub": ("team", "ownership/grp", 2),
     }
     org = units["ownership/grp"]
-    # docs: proj1 level 2 of 2, proj2 level 1 of 2; proj3 unknown and proj4 failed are excluded, not 0
-    assert _level(org, "docs") == {"row": "docs", "met": 1, "measured": 2, "repos": 4, "lowest_level": 1}
+    # docs: proj1 level 2 of 2, proj2 level 1 of 2; proj3 unknown and proj4 failed are excluded, not 0.
+    # met 0: the fixture's conditions are listed, never counted, so no level result holds a row at
+    # its top (#1474, the rule of opportunities.in_place)
+    assert _level(org, "docs") == {"row": "docs", "met": 0, "measured": 2, "repos": 4, "lowest_level": 1}
     assert (_level(org, "ci")["measured"], _level(org, "ci")["lowest_level"]) == (3, 0)
     assert "overall" not in org
     other = units["ownership/grp/other"]

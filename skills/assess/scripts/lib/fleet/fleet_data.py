@@ -15,9 +15,10 @@ One JSON document per run, beside ``groups.jsonl``, holding:
 unit and each ``team`` row, over every repository below the unit: how many were
 measured of how many (``measured``, ``repos``: "8 of 12 measured") and the lowest
 level a measured repository holds on the row (``lowest_level``; None when none was
-measured). ``met`` (#1366, part 1 of #1314) counts the measured repositories at the row's
-top level by ``evaluate_row``, any grade (``opportunities.in_place`` instead counts the level
-result's ``top`` rows, counted and met, #1470): so each
+measured). ``met`` (#1366, part 1 of #1314) counts the measured repositories whose level
+result holds the row at its top level, by the same rule as ``opportunities.in_place``
+(``fleet_opportunities.rows_at_top``: ``in_place`` with ``top``, every condition counted and
+met, #1474), so a declared-only condition never counts on the radar either. Each
 unit carries ``row -> {met, measured, repos}``, the counts a per-unit practice chart plots as
 met of measured, never a mean across repositories. An unknown or failed repository counts in
 ``repos`` only, never as 0. ``org`` rows read a group's ghreport settings, not a repository, so
@@ -91,7 +92,7 @@ with hashing, the same ``--hash-salt``) give the same bytes.
 the unit trees and the repository rows. `repo_cells` evaluates each `team` row per
 repository (`levels.evaluate_row`) with the criterion behind the level (`signal`, `value`,
 or `reason` when unknown; `not_scanned` for a failed row) and its manifest `why` (#1128). `row_roll_up` gives each unit,
-per team row, `met` (at the row's top level, #1366) and `measured` of `repos` and `lowest_level`, the lowest known level below it. Version 2 (#772) holds no average and names no
+per team row, `met` (at the row's top level in the level result, `rows_at_top`, #1366, #1474) and `measured` of `repos` and `lowest_level`, the lowest known level below it. Version 2 (#772) holds no average and names no
 repository: no `mean_share`, `weakest` or `overall`. `org` rows stay in `groups.jsonl`.
 `Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
 names and owners and writes a non-token value as `set`; with a salt every unit and
@@ -146,7 +147,7 @@ from lib.fleet.fleet_groups import repo_signals
 from lib.fleet.fleet_level import repo_level
 from lib.fleet.fleet_why import criterion_why
 from lib.fleet.fleet_maturity import SCOPE
-from lib.fleet.fleet_opportunities import Opportunities, build_opportunities
+from lib.fleet.fleet_opportunities import rows_at_top, Opportunities, build_opportunities
 from lib.fleet.fleet_stamp import FleetStamp, RepositoryCounts
 from lib.fleet.fleet_units import Tree
 from lib.scoring.level_result_types import InPlace, LevelResult, NextStep, Tally, TagCell
@@ -172,7 +173,7 @@ class ModelRow(TypedDict):
 
 class RowRollUp(TypedDict):
     row: str
-    met: int  # #1366: measured repositories at the row's top level
+    met: int  # #1366: measured repositories whose level result holds the row at its top (#1474)
     measured: int  # repositories below with a known level on the row
     repos: int  # every repository below, measured or not
     lowest_level: int | None  # the lowest known level; None when none was measured
@@ -362,15 +363,22 @@ def repo_cells(rows: Sequence[Row], repo: FleetRow) -> list[Cell]:
 # --- roll-up -----------------------------------------------------------------
 
 
-Member = tuple[int | None, int]  # (level or None, top level) of one repository below the unit
+Member = tuple[int | None, int, bool]  # (level or None, top level, held at top by its level result)
 
 
 def row_roll_up(row_id: str, members: Sequence[Member]) -> RowRollUp:
-    """One team row over the repositories below a unit: met and measured of all, and the lowest level."""
-    known = [(level, top) for level, top in members if level is not None and top > 0]
-    return {"row": row_id, "met": sum(level == top for level, top in known),
+    """One team row over the repositories below a unit: met and measured of all, and the lowest
+    level. A measured repository is met when its level result holds the row at its top
+    (``fleet_opportunities.rows_at_top``, #1474)."""
+    known = [(level, held) for level, top, held in members if level is not None and top > 0]
+    return {"row": row_id, "met": sum(held for _, held in known),
             "measured": len(known), "repos": len(members),
             "lowest_level": min(level for level, _ in known) if known else None}
+
+
+def roll_up_members(cells: Sequence[Cell], at_top: frozenset[str]) -> list[Member]:
+    """One repository's roll-up member per team row, from its cells and ``rows_at_top``."""
+    return [(cell["level"], cell["top_level"], cell["row"] in at_top) for cell in cells]
 
 
 def _below(tree: Tree) -> dict[str, list[str]]:
@@ -392,14 +400,17 @@ def unit_key(view: str, uid: str) -> str:
 def build_view(tree: Tree, team_rows: Sequence[Row], cells: Mapping[str, list[Cell]],
                privacy: Privacy, steps: Sequence[StepDef] = (),
                repo_step: Mapping[str, RepoSteps] | None = None,
-               tags: Mapping[str, list[TagCell] | None] | None = None) -> View:
+               tags: Mapping[str, list[TagCell] | None] | None = None,
+               *, at_top: Mapping[str, frozenset[str]]) -> View:
+    """One view's units. ``at_top`` is required: per repository, the rows its level result holds
+    at top (``rows_at_top``), so a caller cannot leave it out and read every ``met`` as 0."""
     below = _below(tree)
+    held = {r: roll_up_members(cells[r], at_top[r]) for r in cells}
     view = tree["view"]
     units: list[DataUnit] = []
     for unit in tree["units"]:
         repos = sorted(r for r in below[unit["id"]] if r in cells)  # placed but not a row: not counted
-        levels = [row_roll_up(row["id"], [(cells[r][i]["level"], cells[r][i]["top_level"]) for r in repos])
-                  for i, row in enumerate(team_rows)]
+        levels = [row_roll_up(row["id"], [held[r][i] for r in repos]) for i, row in enumerate(team_rows)]
         parent = unit["parent"]
         units.append({
             "key": privacy.key(unit_key(view, unit["id"])),
@@ -550,7 +561,9 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
         "fleet_data_version": FLEET_DATA_VERSION,
         "run": run_details(stamp),
         "model": model_rows(maturity_model),
-        "views": [build_view(tree, team_rows, cells, privacy, steps, repo_step, repo_tag) for tree in trees],
+        "views": [build_view(tree, team_rows, cells, privacy, steps, repo_step, repo_tag,
+                             at_top={repo: rows_at_top(result) for repo, result in results.items()})
+                  for tree in trees],
         "repos": sorted(repos, key=lambda r: r["key"]),
         "opportunities": build_opportunities(maturity_model, rows, privacy.key, results),
         "tag_profile": tag_profile(maturity_model, repo_tag.values()),

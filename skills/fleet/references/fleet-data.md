@@ -58,8 +58,9 @@ A mapped repository not in the run is skipped and named on stderr.
 **Roll-ups.** Per unit, one entry in `levels` per `team` row: `measured` of `repos`
 ("8 of 12 measured": an unknown or failed repository is counted in `repos`, never read
 as 0) and `lowest_level`, the lowest level a measured repository holds on the row
-(`null` when none was measured). `met` (#1366) counts the measured repositories at the row's
-top level, so each unit reads `row -> {met, measured, repos}`: "3 of 8 measured meet it",
+(`null` when none was measured). `met` (#1366) counts the measured repositories whose level
+result lists the row in `in_place` with `top` (every condition counted and met, the rule of
+`opportunities.in_place`, #1474), so each unit reads `row -> {met, measured, repos}`: "3 of 8 measured meet it",
 the counts a per-unit practice chart plots, never a mean across repositories. Each unit
 also has a `step` roll-up (#944): `measured` of `repos` (repositories with a Step; a failed one counts in `repos` only, never as Step 1),
 `lowest_step` (the lowest Step a measured repository holds, `null` when none is), and

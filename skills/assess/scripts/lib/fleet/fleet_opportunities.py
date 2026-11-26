@@ -12,6 +12,8 @@ person (the inputs are scan blocks and repository ids only).
   (``lib.fleet.fleet_level.repo_level``, the badge's source) lists the row in ``in_place`` with
   ``top``, so every condition is counted and met. A declared or config-only condition (an
   instruction file) never makes a row count, here or in the repository's badge.
+  ``rows_at_top`` is that rule for one level result; the per-unit ``met`` roll-up in
+  ``lib/fleet/fleet_data.py`` reads it too (#1474), so the radar and "What's working" agree.
 - ``biggest_lift``: the single next-level criterion whose completion would lift the most
   repositories. A repository counts toward a criterion when its row level is known, it is
   below the top level, and that criterion is the only one unmet at its next level (status
@@ -158,21 +160,23 @@ def _plural(n: int) -> str:
     return "repository" if n == 1 else "repositories"
 
 
+def rows_at_top(result: LevelResult | None) -> frozenset[str]:
+    """The row ids a level result holds at their top level: its ``in_place`` entries with
+    ``top`` (every condition counted and met, #1470). Empty for no result. The one rule the
+    fleet counts a practice in place by, in ``in_place`` and in the units' ``met`` (#1474)."""
+    return frozenset(e["row"] for e in (result.get("in_place", []) if result is not None else []) if e["top"])
+
+
 def _in_place(team_rows: Sequence[Row], ok: Sequence[FleetRow],
               results: Mapping[str, LevelResult | None]) -> list[InPlace]:
     """Per team row, the measured repositories and those whose level result holds the row at
-    its top level (``in_place`` with ``top``: every condition counted and met, #1470), so the
-    fleet counts a practice in place by the same rule as the repository's own badge."""
-    top: dict[str, set[str]] = {}
-    for r in ok:
-        result = results.get(r["repo"])
-        for entry in result.get("in_place", []) if result is not None else []:
-            if entry["top"]:
-                top.setdefault(entry["row"], set()).add(r["repo"])
+    its top level (``rows_at_top``), so the fleet counts a practice in place by the same rule
+    as the repository's own badge."""
+    top = {r["repo"]: rows_at_top(results.get(r["repo"])) for r in ok}
     out: list[InPlace] = []
     for row in team_rows:
         known = [r["repo"] for r in ok if evaluate_row(row, repo_signals(r))["level"] is not None]
-        out.append({"row": row["id"], "at_top": sum(repo in top.get(row["id"], set()) for repo in known),
+        out.append({"row": row["id"], "at_top": sum(row["id"] in top[repo] for repo in known),
                     "measured": len(known)})
     return out
 

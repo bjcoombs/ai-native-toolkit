@@ -480,7 +480,7 @@ def test_an_unmeasured_practice_breaks_the_outline_with_no_point_at_zero() -> No
     assert 'class="spoke gap"' in svg.group(1)
     assert "<polygon" not in svg.group(1)
     assert re.findall(r"<title>(grp/other, [^<]+)</title>", svg.group(1)) == [
-        "grp/other, CI gate: 1/1 measured repositories at the top level"]
+        "grp/other, CI gate: 0/1 measured repositories at the top level"]  # never counted at top (#1474)
     assert '<td class="unknown">not measured</td>' in shape
     closed = re.search(r'data-unit="grp/sub">(.*?)</svg>', shape, re.S)
     assert closed is not None and closed.group(1).count("<polygon") == 1
@@ -489,8 +489,9 @@ def test_an_unmeasured_practice_breaks_the_outline_with_no_point_at_zero() -> No
 def test_each_point_s_title_names_unit_practice_and_met_of_measured() -> None:
     _, bundle = _parts(fx.goldens()["expected-full.html"])
     shape = _shape(_root_page(bundle))
-    assert "<title>grp, Instruction docs: 1/2 measured repositories at the top level</title>" in shape
-    assert "<title>grp, CI gate: 2/3 measured repositories at the top level</title>" in shape
+    # 0: the fixture's conditions are listed, never counted, so none is held at its top (#1474)
+    assert "<title>grp, Instruction docs: 0/2 measured repositories at the top level</title>" in shape
+    assert "<title>grp, CI gate: 0/3 measured repositories at the top level</title>" in shape
 
 
 def test_a_practice_measured_in_under_a_fifth_of_the_fleet_is_not_a_spoke() -> None:
