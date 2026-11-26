@@ -12,7 +12,9 @@ writes the posting plan the `post` job applies:
 
 - **Citation check.** Each side's quote must be on its cited line, or on
   exactly one line within two of it (the line then moves there); an empty or
-  multi-line quote, a missing file or any other result drops the finding.
+  multi-line quote, a quote shorter than `MIN_QUOTE` characters once trimmed
+  (one such as `e` is on almost every line, so it proves nothing), a missing
+  file or any other result drops the finding.
 - **Excluded paths.** A finding that cites an excluded path is dropped.
 - **Dedupe.** Two findings citing the same pair of locations are one.
 - **Sort.** A high-confidence finding with at least one side in a file the
@@ -38,6 +40,7 @@ from doc_sync_types import Finding, Plan, Side
 MAX_THREADS = 10
 MAX_TEXT = 400
 MAX_QUOTE = 200
+MIN_QUOTE = 8
 CONFIDENCE_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
@@ -67,6 +70,8 @@ def check_side(repo: Path, side: Any) -> Tuple[Optional[Side], str]:
     quote = side.get("quote")
     if not isinstance(quote, str) or not quote.strip() or "\n" in quote:
         return None, "%s: empty or multi-line quote" % path
+    if len(quote.strip()) < MIN_QUOTE:
+        return None, "%s: quote shorter than %d characters" % (path, MIN_QUOTE)
     try:
         line = int(side["line"])
     except (KeyError, TypeError, ValueError):

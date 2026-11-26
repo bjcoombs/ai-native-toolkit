@@ -48,5 +48,5 @@ Return **only** a JSON array, no prose before or after it. One object per contra
 
 - `kind`: `doc-vs-doc` or `doc-vs-code`. For `doc-vs-code`, `a` is the doc and `b` is the code.
 - `path`: repo-relative. `line`: the 1-based line number holding the quote; count it from the file you read, never estimate.
-- `quote`: the exact text from that line, trimmed, at most 160 characters. The orchestrator checks it against the file and drops a finding whose quote is neither on the cited line nor on exactly one line within two of it.
+- `quote`: the exact text from that line, trimmed, at least 8 and at most 160 characters. The orchestrator checks it against the file and drops a finding whose quote is neither on the cited line nor on exactly one line within two of it.
 - `confidence`: `high` when both statements are explicit and about the same thing; `medium` when one side needs a small inference; `low` when the two may be talking about different things.
