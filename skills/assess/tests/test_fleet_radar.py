@@ -131,12 +131,16 @@ def test_units_keep_the_document_order_and_are_never_ranked() -> None:
 def test_each_point_title_holds_the_unit_the_row_and_met_over_measured() -> None:
     data = _data([_unit("ownership/a", "Payments", 4, {"docs": (2, 4), "ci": (0, 0), "tests": (1, 2)})])
     [radar] = _radars(fr.render(fr.radar_view(data)))
-    titles = re.findall(r'data-row="(\w+)" data-cell="(\w+)"><title>([^<]+)</title>', radar)
+    titles = re.findall(r'data-row="(\w+)" data-cell="(\w+)"[^>]*><title>([^<]+)</title>', radar)
     assert titles == [
         ("docs", "share", "Payments, Docs practice: 2/4 measured at the top level (4 repositories)"),
         ("ci", "not_measured", "Payments, Ci practice: not measured"),
         ("tests", "share", "Payments, Tests practice: 1/2 measured at the top level (4 repositories)"),
     ]
+    # The same values as data attributes (#1360); a point not measured leaves its counts out.
+    assert ('data-row="docs" data-cell="share" data-unit="Payments" data-practice="Docs practice" '
+            'data-met="2" data-measured="4" data-repos="4">') in radar
+    assert 'data-row="ci" data-cell="not_measured" data-unit="Payments" data-practice="Ci practice">' in radar
 
 
 def test_rings_sit_at_25_50_75_and_100_percent() -> None:

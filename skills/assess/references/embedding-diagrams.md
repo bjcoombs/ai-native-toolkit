@@ -15,7 +15,7 @@ at all.
 |---|---|---|
 | Inline `<svg>` in the page | Yes, with the helper | Each diagram is scoped (`scripts/lib/svg_scope.py`): its styles and ids stay inside it, so several can sit on one page beside the host's own `rect` and `text`. |
 | `<object type="image/svg+xml" data="...">` | Yes, with the helper | Served from the same origin as the page, or the helper cannot reach inside it. |
-| `<img src="...">`, or a CSS background | No | A picture only. Markdown image links (`![...](x.svg)`) render this way. |
+| `<img src="...">`, or a CSS background | No | A picture only. A Markdown image link renders this way. |
 
 ## The tooltip helper
 

@@ -232,7 +232,8 @@ def test_diagrams_are_drawn_from_a_real_run_and_byte_identical(tmp_path, monkeyp
     assert not (tmp_path / "d1" / "quadrant.svg").exists()  # dropped in #1255
     tooling = (tmp_path / "d1" / "shared-tooling.svg").read_text(encoding="utf-8")
     assert "1 pinned off the fleet's most common ref (dashed)" in tooling
-    assert 'stroke-dasharray="5 4"><title>grpb/lib1 → gitlab_project:grp/ci-templates @ v5' in tooling
+    assert ('stroke-dasharray="5 4" data-repo="grpb/lib1" data-item="gitlab_project:grp/ci-templates" '
+            'data-refs="v5"><title>grpb/lib1 → gitlab_project:grp/ci-templates @ v5') in tooling
 
 
 def test_the_slope_chart_is_drawn_only_with_compare(tmp_path, monkeypatch, capsys):

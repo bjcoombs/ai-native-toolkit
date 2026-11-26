@@ -136,7 +136,8 @@ def test_group_names_are_escaped_and_long_ones_truncated():
         _group(name, [_move("instructions", 0, 2)]),
     ])))
     assert "web/&lt;&amp;&gt;" in text
-    assert "x" * 40 not in re.sub(r"<title>.*?</title>", "", text)
+    # The full name is the hover text: in a <title> and its data attributes (#1360), never drawn.
+    assert "x" * 40 not in re.sub(r'<title>.*?</title>|\sdata-[\w-]+="[^"]*"', "", text)
 
 
 def test_slope_skips_say_why():
