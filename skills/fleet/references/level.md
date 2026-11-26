@@ -26,6 +26,13 @@ the maturity model as one condition, `<row id>.<level>`, and reports:
   them). A Step is held when its gates hold, and nothing else moves it (#1083): the tally
   never does. A gate reads the state of its row's conditions, not their grade, and each
   blocker is a gate (`kind: "gate"`).
+- `ceiling_step` and `held_above` (#1374): `ceiling_step` is the highest Step whose gates all
+  hold once `next_step`'s blocking gates are met, every Step between held too, so a repository
+  at Step 1 that waits only on the instruction file but already holds the Step 3 gate reads 3.
+  `held_above` lists the ids of the gates above the current Step that already hold, once each,
+  in Step order. `ceiling_step` is null and `held_above` empty when `next_step` is null.
+  Unlike the baseline's `held_gates` in `.assess/prior-level.json` (every gate the run
+  held), `held_above` leaves out the gates of Steps already held.
 
 With `--pack` (#1276), each pack's `[[rows]]` are layered onto the model and every condition
 names its `source` (the base model or the pack). The envelope then gains `packs`: for each

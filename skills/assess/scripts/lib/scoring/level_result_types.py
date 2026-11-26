@@ -92,6 +92,8 @@ class LevelResult(TypedDict):
     conditions: list[ConditionResult]
     step: int | None  # None: the model defines no Steps, or below Step 1 (next_step set, #889)
     next_step: NextStep | None  # None: no Steps, or the top Step is held
+    ceiling_step: int | None  # #1374: the Step reached once next_step's blockers hold; None with no next_step
+    held_above: list[str]  # #1374: gate ids already held above the current Step, once each, in Step order
     excluded: NotRequired[list[ExcludedCondition]]  # present only when the owner excluded a condition
     tags: NotRequired[list[TagRow]]  # #940: every truth tag, in TRUTH_TAGS order; absent before #940
 
