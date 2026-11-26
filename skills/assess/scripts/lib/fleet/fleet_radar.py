@@ -1,19 +1,28 @@
 """Practice shape by unit: one radar per unit, one axis per practice (#1367, part 2 of #1314).
 
-``radar_view(data, min_measured)`` reads ``fleet-data.json`` alone: the model's ``team`` rows
+``radar_view(data, min_share)`` reads ``fleet-data.json`` alone: the model's ``team`` rows
 (``model``), each repository's cells (``repos[].rows``) for the fleet-wide measured share, and
 each unit's per-practice counts (``views[].units[].levels[]``: ``met``, ``measured``, ``repos``,
 #1366). No mean of levels is taken (#772): a point is the unit's ``met`` over ``measured``, the
 share of its measured repositories at the practice's top level.
 
 **Axes.** One per ``team`` row of the model, in model order, kept when at least
-``min_measured`` (a share, default ``DEFAULT_MIN_MEASURED`` = 0.2, ``fleet.py
---radar-min-measured``) of the run's repositories have a known level on it; a failed
-repository counts in the denominator. The dropped practices are named in the caption.
+``min_share`` percent (an integer, default ``RADAR_MIN_SHARE`` = 20, ``fleet.py
+--radar-min-measured``) of the run's repositories have a cell with status ``level`` on it,
+compared in integers (``known * 100 >= min_share * repos``); a failed repository counts in the
+denominator, and a run with no repository keeps none. This is the rule of
+``lib.fleet.fleet_page_data.radar_axes`` (#1368), so the report's radar and the page's spokes
+keep the same practices. The dropped practices are named in the caption.
 
-**Units.** Every unit with at least one repository, in the document's order (the ownership
-view, then the system view, each sorted by key): never ranked, never overlaid. Each unit gets
-its own radar, laid out as small multiples (``COLUMNS`` per line).
+**Units nest.** ``views[].units[]`` is a tree, and each unit's counts cover every repository
+below it at any depth (``fleet_data.build_view``). Every unit with at least one repository
+gets its own radar, as the fleet page and the achievements credit each unit at every depth: in
+the document's order (the ownership view, then the system view, each sorted by key), never
+ranked, never overlaid, laid out as small multiples (``COLUMNS`` per line). A nested unit
+carries ``depth`` and ``parent`` (its parent's label); its subtitle and its table column name
+the unit it sits in, and the caption says a parent's radar redraws its children's
+repositories. No figure adds units together: ``in_place`` counts the run's repositories from
+``repos[].rows``, each once, never unit and practice pairs.
 
 **Unknown is never 0.** An axis the unit measured on no repository has no point: a hatched
 mark sits at the rim with a ``not measured`` tooltip, and the outline breaks there (a segment is
@@ -29,8 +38,9 @@ counts-only run labels units by view and place (``ownership unit 2``), so neithe
 nor the table names a unit or a repository.
 
 ``table(view)`` is the Markdown table ``report.md`` prints under the picture: one line per
-practice, one column per unit, each cell ``met/measured`` or ``not measured``. ``in_place``
-is the section's opening line, strengths first. ``render(view)`` is the SVG. Deterministic:
+practice, one column per unit (``label (in parent)`` when nested), each cell ``met/measured`` or
+``not measured``. ``in_place`` is the section's opening line, strengths first: the run's
+repositories at the top level on at least one drawn practice. ``render(view)`` is the SVG. Deterministic:
 fixed order and formatting, no date. Tests: ``tests/test_fleet_radar.py``.
 """
 from __future__ import annotations
@@ -47,7 +57,7 @@ from lib.vocabulary import IN_PLACE
 FILE = "radar.svg"
 TITLE = "Practice shape by unit"
 QUESTION = "Where is each unit strong across the practices, and where is it not yet measured?"
-DEFAULT_MIN_MEASURED = 0.2
+RADAR_MIN_SHARE = 20  # percent; the same rule and default as fleet_page_data.RADAR_MIN_SHARE (#1368)
 RINGS = (0.25, 0.5, 0.75, 1.0)
 
 PAD = 16.0
@@ -57,6 +67,7 @@ CELL_H = 270.0
 RADIUS = 72.0
 AXIS_LABEL = 12  # characters; the full title is the tooltip
 UNIT_LABEL = 36
+SUBTITLE = 44  # characters at 11px across one cell; the full line is the tooltip
 LINE_H = 18.0
 MARK = 7.0
 
@@ -64,7 +75,7 @@ MARK = 7.0
 class RadarAxis(TypedDict):
     row: str  # the maturity-model row id
     title: str
-    share: float  # the run's repositories with a known level on it, over all
+    share: float  # the run's repositories with a known level on it, over all (for display)
 
 
 class RadarPoint(TypedDict):
@@ -76,37 +87,57 @@ class RadarPoint(TypedDict):
 class RadarUnit(TypedDict):
     view: str
     label: str  # the name or key where the run allows it, else "<view> unit N"
-    repos: int
+    depth: int  # 0 for a root of its view
+    parent: str | None  # the parent unit's label; None for a root
+    repos: int  # every repository below the unit, at any depth
     points: list[RadarPoint | None]  # per kept axis; None: not measured in this unit
 
 
 class RadarView(TypedDict):
-    min_measured: float
+    min_share: int  # percent
     axes: list[RadarAxis]
     dropped: list[RadarAxis]
     units: list[RadarUnit]
+    repos: int  # the run's repositories
+    in_place: int  # the run's repositories at the top level on at least one kept axis, each once
 
 
 def _pct(share: float) -> str:
     return f"{round(share * 100)}%"
 
 
-def _axes(data: Mapping[str, Any], min_measured: float) -> tuple[list[RadarAxis], list[RadarAxis]]:
+def _axes(data: Mapping[str, Any], min_share: int) -> tuple[list[RadarAxis], list[RadarAxis]]:
     repos = data.get("repos") or []
     known: dict[str, int] = {}
     for repo in repos:
         for cell in repo.get("rows") or []:
-            if cell.get("level") is not None:
+            if cell.get("status") == "level":
                 known[cell["row"]] = known.get(cell["row"], 0) + 1
     kept: list[RadarAxis] = []
     dropped: list[RadarAxis] = []
     for row in data.get("model") or []:
         if row.get("scope") != "team":
             continue
-        share = known.get(row["id"], 0) / len(repos) if repos else 0.0
-        axis: RadarAxis = {"row": row["id"], "title": row["title"], "share": share}
-        (kept if repos and share >= min_measured else dropped).append(axis)
+        count = known.get(row["id"], 0)
+        axis: RadarAxis = {"row": row["id"], "title": row["title"], "share": count / len(repos) if repos else 0.0}
+        (kept if repos and count * 100 >= min_share * len(repos) else dropped).append(axis)
     return kept, dropped
+
+
+def _repos_in_place(data: Mapping[str, Any], axes: Sequence[RadarAxis]) -> int:
+    """The run's repositories at the top level on at least one kept axis, each counted once."""
+    rows = {a["row"] for a in axes}
+    tops = {row["id"]: row.get("top_level") for row in data.get("model") or []}
+    return sum(1 for repo in data.get("repos") or []
+               if any(c["row"] in rows and c.get("status") == "level" and c.get("level") is not None
+                      and c["level"] == tops.get(c["row"]) for c in repo.get("rows") or []))
+
+
+def _depth(key: str, parents: Mapping[str, str | None]) -> int:
+    depth, current = 0, parents.get(key)
+    while current is not None and current in parents and depth < len(parents):
+        depth, current = depth + 1, parents[current]
+    return depth
 
 
 def _label(unit: Mapping[str, Any], show: bool, view: str, index: int) -> str:
@@ -115,26 +146,29 @@ def _label(unit: Mapping[str, Any], show: bool, view: str, index: int) -> str:
     return f"{view} unit {index}"
 
 
-def radar_view(data: Mapping[str, Any], min_measured: float = DEFAULT_MIN_MEASURED) -> RadarView:
+def radar_view(data: Mapping[str, Any], min_share: int = RADAR_MIN_SHARE) -> RadarView:
     """The axes kept and dropped and every unit's points (see the module docstring)."""
-    axes, dropped = _axes(data, min_measured)
+    axes, dropped = _axes(data, min_share)
     show = names_shown(data.get("run") or {})
     units: list[RadarUnit] = []
     for view in data.get("views") or []:
-        index = 0
-        for unit in view.get("units") or []:
-            if not unit.get("repos"):
-                continue
-            index += 1
+        drawn = [u for u in view.get("units") or [] if u.get("repos")]
+        labels = {u["key"]: _label(u, show, view["view"], i) for i, u in enumerate(drawn, 1)}
+        parents = {u["key"]: u.get("parent") for u in view.get("units") or []}
+        for unit in drawn:
             counts = {lv["row"]: lv for lv in unit.get("levels") or []}
             points: list[RadarPoint | None] = []
             for axis in axes:
                 lv = counts.get(axis["row"])
                 points.append({"met": lv["met"], "measured": lv["measured"], "repos": lv["repos"]}
                               if lv and lv.get("measured") else None)
-            units.append({"view": view["view"], "label": _label(unit, show, view["view"], index),
+            parent = unit.get("parent")
+            units.append({"view": view["view"], "label": labels[unit["key"]],
+                          "depth": _depth(unit["key"], parents),
+                          "parent": labels.get(parent) if parent is not None else None,
                           "repos": unit["repos"], "points": points})
-    return {"min_measured": min_measured, "axes": axes, "dropped": dropped, "units": units}
+    return {"min_share": min_share, "axes": axes, "dropped": dropped, "units": units,
+            "repos": len(data.get("repos") or []), "in_place": _repos_in_place(data, axes)}
 
 
 def _plural(n: int, word: str) -> str:
@@ -143,12 +177,16 @@ def _plural(n: int, word: str) -> str:
     return f"{n} {word[:-1]}ies" if word.endswith("y") else f"{n} {word}s"
 
 
+def _nested(view: RadarView) -> bool:
+    return any(u["parent"] is not None for u in view["units"])
+
+
 def in_place(view: RadarView) -> str:
-    """The section's opening line: the practices every measured repository of a unit meets."""
-    full = sum(1 for u in view["units"] for p in u["points"] if p is not None and p["met"] == p["measured"])
-    return (f"{IN_PLACE} {_plural(full, 'unit and practice pair')} where every measured repository "
-            f"meets the top level, over {_plural(len(view['units']), 'unit')} and "
-            f"{_plural(len(view['axes']), 'practice')}.")
+    """The section's opening line: the run's repositories at the top level on a drawn practice,
+    each counted once however many units above it redraw it."""
+    return (f"{IN_PLACE} {view['in_place']} of the run's {_plural(view['repos'], 'repository')} meet the "
+            f"top level on at least one of the {_plural(len(view['axes']), 'practice')} drawn, each "
+            f"counted once, over {_plural(len(view['units']), 'unit')}.")
 
 
 def caption(view: RadarView) -> str:
@@ -156,9 +194,12 @@ def caption(view: RadarView) -> str:
             "(met/measured), with rings at 25, 50, 75 and 100%. One radar per unit; units are not ranked "
             "or overlaid. A hatched mark at the rim was not measured in that unit, never read as 0, "
             "and the outline breaks there.")
+    if _nested(view):
+        text += (" Units nest: a unit counts every repository below it, so a parent's radar redraws "
+                 "its children's repositories, and a nested unit names the unit it sits in.")
     if view["dropped"]:
         names = ", ".join(a["title"] for a in view["dropped"])
-        text += (f" Measured in under {_pct(view['min_measured'])} of the run's repositories, so left "
+        text += (f" Measured in under {view['min_share']}% of the run's repositories, so left "
                  f"out: {names}.")
     return text
 
@@ -190,15 +231,21 @@ def _outline(coords: Sequence[tuple[float, float] | None]) -> tuple[str, bool]:
     return " ".join(parts), False
 
 
+def _subtitle(unit: RadarUnit) -> str:
+    where = f"in {unit['parent']}, " if unit["parent"] is not None else ""
+    return f"{unit['view']} view, {where}{_plural(unit['repos'], 'repository')}"
+
+
 def _radar(unit: RadarUnit, axes: Sequence[RadarAxis], index: int, x0: float, y0: float) -> str:
     cx, cy = x0 + CELL_W / 2, y0 + 44 + RADIUS + 18
     n = len(axes)
     label = svg.truncate(unit["label"], UNIT_LABEL)
+    subtitle = _subtitle(unit)
     parts = [f'<g data-radar="{index}">',
              svg.text(x0 + 8, y0 + 18, label, size=12.5, weight="600", cls="fg",
                       tooltip=unit["label"] if label != unit["label"] else None),
-             svg.text(x0 + 8, y0 + 34, f"{unit['view']} view, {_plural(unit['repos'], 'repository')}",
-                      size=11, cls="muted")]
+             svg.text(x0 + 8, y0 + 34, svg.truncate(subtitle, SUBTITLE), size=11, cls="muted",
+                      tooltip=subtitle if len(subtitle) > SUBTITLE else None)]
     for ring in RINGS:
         parts.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{RADIUS * ring:.1f}" fill="none" class="s-rule" '
                      f'stroke-width="1" data-ring="{_pct(ring)}"/>')
@@ -258,10 +305,14 @@ def _cell(text: str) -> str:
     return text.replace("|", "\\|")
 
 
+def _column(unit: RadarUnit) -> str:
+    return _cell(unit["label"] if unit["parent"] is None else f"{unit['label']} (in {unit['parent']})")
+
+
 def table(view: RadarView) -> str:
     """The radar's numbers as a Markdown table: practice by unit, ``met/measured``."""
     lines = [f"Met/measured by practice for {_plural(len(view['units']), 'unit')}, the radar's numbers:", "",
-             "| Practice | " + " | ".join(_cell(u["label"]) for u in view["units"]) + " |",
+             "| Practice | " + " | ".join(_column(u) for u in view["units"]) + " |",
              "|---|" + "---|" * len(view["units"])]
     for i, axis in enumerate(view["axes"]):
         cells = [f"{p['met']}/{p['measured']}" if (p := u["points"][i]) is not None else "not measured"

@@ -25,15 +25,20 @@ def _model(*rows: str) -> list[dict[str, Any]]:
             *({"id": r, "scope": "team", "title": r.title() + " practice", "top_level": 2} for r in rows)]
 
 
+def _cell(row: str, level: int | None) -> dict[str, Any]:
+    return {"row": row, "status": "unknown" if level is None else "level", "level": level, "top_level": 2}
+
+
 def _repos(total: int, measured: dict[str, int]) -> list[dict[str, Any]]:
-    """``total`` repositories; the first ``measured[row]`` have a known level on ``row``."""
+    """``total`` repositories; the first ``measured[row]`` have a known level (1 of 2) on ``row``."""
     return [{"key": f"acme/repo-{i}",
-             "rows": [{"row": row, "level": 1 if i < count else None} for row, count in measured.items()]}
+             "rows": [_cell(row, 1 if i < count else None) for row, count in measured.items()]}
             for i in range(total)]
 
 
-def _unit(key: str, name: str | None, repos: int, counts: dict[str, tuple[int, int]]) -> dict[str, Any]:
-    return {"key": key, "name": name, "repos": repos,
+def _unit(key: str, name: str | None, repos: int, counts: dict[str, tuple[int, int]],
+          parent: str | None = None) -> dict[str, Any]:
+    return {"key": key, "name": name, "repos": repos, "parent": parent,
             "levels": [{"row": row, "met": met, "measured": measured, "repos": repos, "lowest_level": None}
                        for row, (met, measured) in counts.items()]}
 
@@ -93,12 +98,12 @@ def test_a_row_under_20_percent_measured_is_dropped_by_default_and_kept_when_low
     svg = fr.render(default)
     assert 'data-row="ci"' not in svg
     assert "left out: Ci practice." in fr.caption(default)
-    lowered = fr.radar_view(data, 0.1)
+    lowered = fr.radar_view(data, 10)
     assert [a["row"] for a in lowered["axes"]] == ["docs", "ci", "tests"] and lowered["dropped"] == []
     assert 'data-row="ci" data-cell="share"' in fr.render(lowered)
     # through the diagram list, as fleet.py --radar-min-measured passes it
     by_default = next(d for d in build_diagrams(model(), [], "6mo", data=data) if d["file"] == fr.FILE)
-    lowered_entry = next(d for d in build_diagrams(model(), [], "6mo", data=data, radar_min_measured=0.1)
+    lowered_entry = next(d for d in build_diagrams(model(), [], "6mo", data=data, radar_min_share=10)
                          if d["file"] == fr.FILE)
     assert "Ci practice" not in by_default.get("table", "")
     assert "| Ci practice | 1/1 |" in lowered_entry.get("table", "")
@@ -153,15 +158,50 @@ def test_the_table_is_practice_by_unit_with_met_over_measured() -> None:
 def test_in_place_counts_strengths_first() -> None:
     data = _data([_unit("ownership/a", "Payments", 4, {"docs": (4, 4), "ci": (0, 0), "tests": (1, 2)}),
                   _unit("ownership/b", "Search", 3, {"docs": (3, 3), "ci": (2, 2), "tests": (1, 3)})])
+    data["repos"][0]["rows"][0] = _cell("docs", 2)
+    data["repos"][1]["rows"][2] = _cell("tests", 2)
     assert fr.in_place(fr.radar_view(data)) == (
-        "In place: 3 unit and practice pairs where every measured repository meets the top level, "
-        "over 2 units and 3 practices.")
+        "In place: 2 of the run's 10 repositories meet the top level on at least one of the 3 "
+        "practices drawn, each counted once, over 2 units.")
+
+
+def test_a_parent_and_its_child_both_draw_but_no_total_counts_a_repository_twice() -> None:
+    """The thread on #1438: a parent unit's counts already hold its child's repositories."""
+    child = _unit("ownership/grp/sub", "Sub", 2, {"docs": (2, 2), "ci": (2, 2), "tests": (2, 2)},
+                  parent="ownership/grp")
+    parent = _unit("ownership/grp", "Grp", 2, {"docs": (2, 2), "ci": (2, 2), "tests": (2, 2)})
+    data = _data([parent, child], total=2)
+    for repo in data["repos"]:
+        repo["rows"] = [_cell(r, 2) for r in ("docs", "ci", "tests")]
+    view = fr.radar_view(data)
+    assert [(u["label"], u["depth"], u["parent"]) for u in view["units"]] == [("Grp", 0, None), ("Sub", 1, "Grp")]
+    radars = _radars(fr.render(view))
+    assert len(radars) == 2
+    assert "ownership view, 2 repositories" in radars[0]
+    assert "ownership view, in Grp, 2 repositories" in radars[1]
+    # the same two repositories sit in both units: counted once, not once per level of nesting
+    assert fr.in_place(view).startswith("In place: 2 of the run's 2 repositories ")
+    assert "Units nest: a unit counts every repository below it" in fr.caption(view)
+    assert "| Practice | Grp | Sub (in Grp) |" in fr.table(view)
+    flat = fr.radar_view(_data([_unit("ownership/a", "A", 2, {"docs": (1, 2)})], total=2))
+    assert "Units nest" not in fr.caption(flat)
+
+
+def test_the_axis_rule_is_the_page_rule_in_integers() -> None:
+    """``known * 100 >= min_share * repos`` on cells with status ``level``, as the page's spokes
+    (#1368): 3 of 15 is exactly 20% and kept."""
+    data = _data([_unit("ownership/a", "A", 15, {"docs": (1, 3)})], rows=("docs",), total=15,
+                 measured={"docs": 3})
+    assert [a["row"] for a in fr.radar_view(data)["axes"]] == ["docs"]
+    data["repos"][0]["rows"][0]["status"] = "floor"  # a level without status "level" is not counted
+    assert [a["row"] for a in fr.radar_view(data)["dropped"]] == ["docs"]
+    assert fr.radar_view(_data([], total=0))["axes"] == []
 
 
 def test_counts_only_radar_names_no_repository() -> None:
     for privacy in (fd.Privacy(), fd.Privacy(salt=SALT)):
         data = dict(build(privacy))
-        view = fr.radar_view(data, 0.0)
+        view = fr.radar_view(data, 0)
         assert view["units"]
         out = "\n".join([fr.render(view), fr.table(view), fr.in_place(view), fr.caption(view)])
         for row in ROWS:
@@ -177,9 +217,10 @@ def test_counts_only_radar_names_no_repository() -> None:
 
 
 def test_full_output_labels_each_unit_by_name() -> None:
-    view = fr.radar_view(dict(build(fd.Privacy(full=True))), 0.0)
+    view = fr.radar_view(dict(build(fd.Privacy(full=True))), 0)
     assert [u["label"] for u in view["units"]] == ["grp", "other", "sub", "Checkout"]
     assert [u["view"] for u in view["units"]] == ["ownership"] * 3 + ["system"]
+    assert [(u["depth"], u["parent"]) for u in view["units"]] == [(0, None), (1, "grp"), (1, "grp"), (0, None)]
 
 
 def test_the_real_fixture_reads_met_and_measured_from_the_units() -> None:
@@ -207,7 +248,8 @@ def test_the_report_prints_the_table_under_the_picture_and_skips_with_a_reason()
     assert radar["svg"] is not None and radar["in_place"].startswith("In place: ")
     report = report_markdown([radar])
     section = report.split(f"## {fr.TITLE}", 1)[1]
-    assert section.index("(./radar.svg)") < section.index("| Practice | grp | other | sub | Checkout |")
+    assert section.index("(./radar.svg)") < section.index(
+        "| Practice | grp | other (in grp) | sub (in grp) | Checkout |")
 
     def skipped(**kwargs: Any) -> str:
         entry = next(d for d in build_diagrams(**kwargs) if d["file"] == fr.FILE)
@@ -219,13 +261,13 @@ def test_the_report_prints_the_table_under_the_picture_and_skips_with_a_reason()
     assert "no ownership or system unit" in skipped(levels=model(), repos=[], window="6mo",
                                                     data={**data, "views": []})
     assert "--radar-min-measured" in skipped(levels=model(), repos=[], window="6mo", data=data,
-                                            radar_min_measured=0.9)
+                                            radar_min_share=90)
     org_only = {**model(), "rows": [r for r in model()["rows"] if r["scope"] == "org"]}
     assert "no team practices" in skipped(levels=org_only, repos=[], window="6mo", data=data)
 
 
 def test_the_cli_takes_a_percent_from_0_to_100(tmp_path: Any) -> None:
-    assert parse_args([str(tmp_path), "--out", str(tmp_path / "o")]).radar_min_measured == 20
+    assert parse_args([str(tmp_path), "--out", str(tmp_path / "o")]).radar_min_measured == fr.RADAR_MIN_SHARE == 20
     assert parse_args([str(tmp_path), "--out", str(tmp_path / "o"), "--radar-min-measured", "0"]).radar_min_measured == 0
     with pytest.raises(SystemExit):
         parse_args([str(tmp_path), "--out", str(tmp_path / "o"), "--radar-min-measured", "101"])

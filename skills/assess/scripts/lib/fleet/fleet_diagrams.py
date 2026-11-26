@@ -173,7 +173,7 @@ def step_moves_for(levels: MaturityModel, data: Mapping[str, Any], earlier: Flee
 
 
 def _radar(levels: MaturityModel | None, data: Mapping[str, Any] | None, repos: int,
-           min_measured: float) -> Diagram:
+           min_share: int) -> Diagram:
     entry = _entry(fleet_radar.FILE, repos)
     if levels is None:
         entry["skipped"] = NO_LEVELS
@@ -182,11 +182,11 @@ def _radar(levels: MaturityModel | None, data: Mapping[str, Any] | None, repos: 
     elif data is None:
         entry["skipped"] = "skipped: the run wrote no fleet-data.json to read the unit counts from."
     else:
-        view = fleet_radar.radar_view(data, min_measured)
+        view = fleet_radar.radar_view(data, min_share)
         if not view["units"]:
             entry["skipped"] = "skipped: no ownership or system unit holds a repository in this run."
         elif not view["axes"]:
-            entry["skipped"] = (f"skipped: no practice was measured in at least {round(min_measured * 100)}% "
+            entry["skipped"] = (f"skipped: no practice was measured in at least {min_share}% "
                                 "of the run's repositories (--radar-min-measured).")
         else:
             entry["in_place"] = fleet_radar.in_place(view)
@@ -322,7 +322,7 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
                    data: Mapping[str, Any] | None = None,
                    earlier: FleetRun | str | None = None,
                    moves: fleet_step_movement.StepMoves | None = None,
-                   radar_min_measured: float = fleet_radar.DEFAULT_MIN_MEASURED) -> list[Diagram]:
+                   radar_min_share: int = fleet_radar.RADAR_MIN_SHARE) -> list[Diagram]:
     """Every diagram for one run, in report order; never raises for a diagram's sake.
 
     ``data`` is this run's ``fleet-data.json`` (#940): its ``tag_profile`` (the per-tag roll-up,
@@ -335,7 +335,7 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
     ``comparison`` is this run's ``--compare`` result, None without ``--compare``; ``earlier``
     is the run it compared against (or the reason it could not be read), for the Step
     movement grid (#941); ``moves`` is that grid's counts when the caller already has them
-    (``step_moves_for``, shared with the front screen). ``radar_min_measured`` is the share of
+    (``step_moves_for``, shared with the front screen). ``radar_min_share`` is the percent of
     the run's repositories a practice needs measured to get a radar axis (``fleet.py
     --radar-min-measured``, #1367).
     """
@@ -346,7 +346,7 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
         _guarded(lambda: _tag_heatmap(levels, data, count), fleet_tag_heatmap.FILE, count),
         _guarded(lambda: _step_funnel(levels, data, count), fleet_step_funnel.FILE, count),
         _guarded(lambda: _step_lifts(levels, data, count), fleet_step_lifts.FILE, count),
-        _guarded(lambda: _radar(levels, data, count, radar_min_measured), fleet_radar.FILE, count),
+        _guarded(lambda: _radar(levels, data, count, radar_min_share), fleet_radar.FILE, count),
         _guarded(lambda: _tooling(repos), fleet_tooling_map.FILE, count),
         _guarded(lambda: _trend(levels, history, count), fleet_trends.FILE, count),
         _guarded(lambda: _slope(levels, comparison, count), fleet_slope.FILE, count),

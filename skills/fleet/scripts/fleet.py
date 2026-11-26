@@ -433,7 +433,7 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
         front, moves = guarded_front(maturity_model, data, moves_of, groups,
                                      mode_of(data) if data is not None else None)
         diagrams = build_diagrams(maturity_model, rows, window, history=history, comparison=comparison,
-                                  data=data, earlier=earlier, moves=moves, radar_min_measured=radar_min / 100)
+                                  data=data, earlier=earlier, moves=moves, radar_min_share=radar_min)
         ok = [row["scans"] for row in rows if row["status"] == "ok" and row["scans"] is not None]
         write_diagrams(out_dir, diagrams, credit, coverage, opportunities() if opportunities else None,
                        measured_section(ok), front_section(front, len(rows)),
