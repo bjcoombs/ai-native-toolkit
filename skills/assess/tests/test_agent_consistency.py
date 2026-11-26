@@ -457,3 +457,17 @@ def test_a_pointer_to_a_nested_path_is_no_delegation(tmp_path: Path) -> None:
     root = _repo(tmp_path, {"AGENTS.md": "See .claude/CLAUDE.md.\n",
                             ".claude/CLAUDE.md": CLAUDE_RULES})
     assert scan_agent_consistency(root)["canonical"] == "AGENTS.md"
+
+
+def test_tools_linked_to_the_pointer_agents_md_stay_linked(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {
+        "AGENTS.md": "The instructions for this repository live in [CLAUDE.md](CLAUDE.md).\n",
+        "CLAUDE.md": CLAUDE_RULES, "GEMINI.md": "@AGENTS.md\n",
+        ".cursorrules": "Follow AGENTS.md\n"})
+    block = scan_agent_consistency(root)
+    assert block["canonical"] == "CLAUDE.md"
+    assert {f["path"]: f["link"] for f in block["files"]} == {
+        "AGENTS.md": "pointer", "CLAUDE.md": "canonical", "GEMINI.md": "import",
+        ".cursorrules": "pointer"}
+    assert (block["conflicts"], block["unlinked"], block["consistent"]) == (0, 0, True)
+    assert block["next_steps"] == []
