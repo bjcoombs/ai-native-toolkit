@@ -47,6 +47,12 @@ def test_numbers_match_to_the_printed_precision_and_through_separators() -> None
     assert part_problems({"path": "docs/v2.md"}, "docs/v2.md") == []
 
 
+def test_a_number_with_the_opposite_sign_does_not_match() -> None:
+    assert part_problems({"group": "g", "change": "0.10"}, "g: -0.10") != []
+    assert part_problems({"group": "g", "change": "-0.10"}, "g: -0.10") == []
+    assert part_problems({"group": "g", "change": "+0.10"}, "g: +0.10") == []
+
+
 def test_text_tooltips_are_repeated_as_data_label() -> None:
     out = svg.text(0, 0, "Long…", tooltip='Long "name" & more')
     assert 'data-label="Long &quot;name&quot; &amp; more"' in out

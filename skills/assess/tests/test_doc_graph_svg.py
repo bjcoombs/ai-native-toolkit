@@ -417,3 +417,12 @@ def test_every_circle_carries_its_tooltip_values_as_data_attributes(svg, tmp_pat
     else:
         assert "stale-days" not in data["CLAUDE.md"] and "lines" not in data["docs/a.md"]
         assert data["docs/a.md"]["centrality"] == "0.333"
+
+
+def test_no_staleness_scan_reads_not_measured_never_zero(svg, tmp_path, monkeypatch):
+    """#1360: coloured by staleness with no scan result, no doc claims 0d stale."""
+    from svg_data_attrs import titled_parts
+
+    circles, _, markup = _render_nodes(svg, tmp_path, monkeypatch)
+    assert all("staleness not measured" in tip for _el, tip in circles.values())
+    assert not [d for _t, d, _title in titled_parts(markup) if "stale-days" in d or "subject-churn" in d]

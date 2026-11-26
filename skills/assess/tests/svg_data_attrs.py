@@ -63,11 +63,11 @@ def _decimals(token: str) -> int:
 
 
 def _same_number(value: str, token: str) -> bool:
-    """``value`` printed to ``token``'s precision reads as ``token`` (sign and commas aside)."""
+    """``value`` printed to ``token``'s precision reads as ``token``, thousands separators
+    aside. The sign must agree: ``0.10`` never matches a title's ``-0.10``."""
     shown = token.replace(",", "")
     places = _decimals(shown)
-    return abs(float(value)) == abs(round(float(shown), places)) or \
-        f"{abs(float(value)):.{places}f}" == shown.lstrip("+-")
+    return f"{float(value):.{places}f}" == f"{float(shown):.{places}f}"
 
 
 def part_problems(data: dict[str, str], title: str, root: dict[str, str] | None = None) -> list[str]:

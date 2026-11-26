@@ -84,3 +84,12 @@ def test_each_event_is_handled_once_however_many_attached_roots_it_crosses() -> 
     assert "root.addEventListener" not in listen
     helper = CODE[CODE.index("function on("):CODE.index("function listen")]
     assert "if (event.__diagramTooltip)" in helper and "event.__diagramTooltip = true" in helper
+
+
+def test_a_format_passed_to_an_attached_root_takes_effect() -> None:
+    """The page attaches itself on load, so attach(document, {format}) must update the formatter
+    the existing listeners read, not be skipped by the already-attached guard."""
+    attach = CODE[CODE.index("function attach("):CODE.index("window.DiagramTooltip")]
+    assert attach.index("__diagramTooltipFormat = options.format") < attach.index("if (!target.__diagramTooltip)")
+    listen = CODE[CODE.index("function listen"):CODE.index("function attachObject")]
+    assert listen.count("formatOf()") == 2

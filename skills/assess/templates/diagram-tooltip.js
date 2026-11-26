@@ -187,7 +187,9 @@
 
   // offset() turns an event's coordinates into the host page's: zero for an inline SVG, the
   // <object>'s position for one inside it.
-  function listen(root, format, offset) {
+  // formatOf() returns the root's current formatter, so a later attach(root, {format}) on a
+  // root already attached takes effect without a second set of listeners.
+  function listen(root, formatOf, offset) {
     on(root, "touchstart", function () { touching = true; }, {passive: true});
     on(root, "pointerdown", function (event) {
       touching = event.pointerType === "touch";
@@ -199,7 +201,7 @@
       var part = partOf(event.target);
       var at = offset();
       if (part) {
-        show(part, event.clientX + at.x, event.clientY + at.y, format);
+        show(part, event.clientX + at.x, event.clientY + at.y, formatOf());
       } else if (shown) {
         hide();
       }
@@ -235,7 +237,7 @@
       }
       blockClick = Boolean(linkOf(part)); // the first tap on a link only shows the tooltip
       var at = offset();
-      show(part, event.clientX + at.x, event.clientY + at.y, format);
+      show(part, event.clientX + at.x, event.clientY + at.y, formatOf());
     });
     on(root, "click", function (event) {
       if (!touching) {
@@ -253,14 +255,14 @@
     });
   }
 
-  function attachObject(object, format) {
+  function attachObject(object, formatOf) {
     function hook() {
       var doc = object.contentDocument;
       if (!doc || doc.__diagramTooltip) {
         return;
       }
       doc.__diagramTooltip = true;
-      listen(doc, format, function () {
+      listen(doc, function () { return object.__diagramTooltipFormat || formatOf(); }, function () {
         var box = object.getBoundingClientRect();
         return {x: box.left, y: box.top};
       });
@@ -270,19 +272,22 @@
   }
 
   function attach(root, options) {
-    var format = (options && options.format) || defaultFormat;
     var target = root || document;
+    if (options && options.format) {
+      target.__diagramTooltipFormat = options.format; // also updates a root already attached
+    }
+    function formatOf() { return target.__diagramTooltipFormat || defaultFormat; }
     if (target.localName === "object") {
-      attachObject(target, format);
+      attachObject(target, formatOf);
       return;
     }
     if (!target.__diagramTooltip) {
       target.__diagramTooltip = true;
-      listen(target, format, function () { return {x: 0, y: 0}; });
+      listen(target, formatOf, function () { return {x: 0, y: 0}; });
     }
     var objects = target.querySelectorAll ? target.querySelectorAll('object[type="image/svg+xml"]') : [];
     for (var i = 0; i < objects.length; i++) {
-      attachObject(objects[i], format);
+      attachObject(objects[i], formatOf);
     }
   }
 

@@ -306,6 +306,9 @@ class _NodePainter:
         self.size_max = max(self.sizes.values(), default=1.0) or 1.0
         self.cmap = plt.get_cmap(STALENESS_CMAP)
         self.days, self.churn, self.unmeasured = _staleness_channels(nodes, staleness or {})
+        # Docs the staleness scan measured. With no scan result at all nothing is hatched, but
+        # the tooltip and data attributes still say "not measured", never 0d (#1360).
+        self.stale_measured = {x for x in nodes if x in (staleness or {})}
         measured = [x for x in nodes if x not in self.unmeasured]
         self.day_cap, _ = adaptive_cap([self.days[x] for x in measured])
         self.churn_cap, _ = adaptive_cap([self.churn[x] for x in measured])
@@ -346,9 +349,10 @@ class _NodePainter:
     def data(self, node: str, status: str) -> str:
         """The tooltip's values as data attributes (#1360): ``data-path``, ``data-lines`` or
         ``data-centrality``, ``data-in``, ``data-out``, ``data-status`` and, coloured by
-        staleness with the staleness measured, ``data-stale-days`` and ``data-subject-churn``."""
+        staleness with the doc in the staleness scan, ``data-stale-days`` and
+        ``data-subject-churn``; a doc the scan did not measure has neither, never 0."""
         size = self.sizes.get(node, 0)
-        measured = self.colour == "staleness" and node not in self.unmeasured
+        measured = self.colour == "staleness" and node in self.stale_measured
         values: dict[str, str | int | None] = {
             "path": node,
             "lines": round(size) if self.size_mode == "lines" else None,
@@ -360,7 +364,7 @@ class _NodePainter:
 
     def tooltip(self, node: str, status: str) -> str:
         days_txt = "" if self.colour != "staleness" else (
-            "staleness not measured" if node in self.unmeasured
+            "staleness not measured" if node not in self.stale_measured
             else f"{self.days[node]:.0f}d stale, subject churn {self.churn[node]:.0f}")
         return html.escape(
             f"{node}\n{self.size_text(node)} · in {self.in_deg.get(node, 0)} · "
