@@ -24,7 +24,10 @@ Exit codes:
 Run:
     uv run assess_signals.py <repo> --out FILE.json [--scans a,b,c] [--window 6mo]
         [--counts-only [--hash-paths | --hash-salt VALUE]] [--fleet-config FILE] [--platform]
-        [--ghsync-root DIR] [--scope PATH | --units] [--pack FILE ...]
+        [--ghsync-root DIR] [--scope PATH | --units] [--pack FILE ...] [--jobs N]
+
+``--jobs N`` (#1381) runs at most N scans at a time (``lib/scan_pool.py``; default the CPU
+count capped at 8); the document is the same for every N, and 1 runs them one by one.
 
 ``--ghsync-root DIR`` names the ghsync root holding the target: GitLab
 ``include: project:`` and ``component:`` files are then read from the clones
@@ -87,6 +90,7 @@ from lib.fleet_config import FleetConfig, FleetConfigError, load_fleet_config
 from lib.packs import PackError, load_packs
 from lib.run_context_types import SignalsDocument
 from lib.run_scope import resolve_scope
+from lib.scan_pool import add_jobs_argument
 from lib.signals import (
     DEFAULT_WINDOW,
     UnknownScanError,
@@ -157,6 +161,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Add the monorepo unit scans (units, unit_readings): each unit's own readings of "
              "the scoped scans. One scoped pass per unit.",
     )
+    add_jobs_argument(parser)
     add_cli_arguments(parser)
     parsed = parser.parse_args(argv)
     validate_cli_args(parser, parsed)
@@ -220,7 +225,7 @@ def main(argv: list[str] | None = None) -> int:
     document = build_document(repo_root, requested, args.window, fleet_config=fleet_config,
                               platform=args.platform, ghsync_root=ghsync_root,
                               scope=scope, units=args.units,
-                              managed_settings=args.managed_settings, packs=packs)
+                              managed_settings=args.managed_settings, packs=packs, jobs=args.jobs)
     if args.counts_only:
         _counts_only(document, args)
     _write_atomically(out, json.dumps(document, indent=2, default=str) + "\n")

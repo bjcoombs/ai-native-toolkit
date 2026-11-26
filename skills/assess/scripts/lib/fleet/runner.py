@@ -72,7 +72,9 @@ told otherwise, from a scratch directory, with a timeout; every failure becomes 
 `failed` row with a reason token (`FAILURE_REASONS` or `scan_exit_<code>`), never
 message text. `ScanOptions.units` (`fleet.py --monorepo-units`, #866) adds `--units` to the offline
 child only (the platform pass reads no unit), so the row's scans carry `units` and
-`unit_readings`. A `scan_exit_<code>` failure's stderr tail goes to `write_stderr_tail`
+`unit_readings`. `ScanOptions.scan_jobs` (`fleet.py --scan-jobs`, #1381) passes `--jobs` to
+every child, the scans each runs at a time (by default the CPUs split between the repositories
+scanned at once); unset, the child uses its own default. A `scan_exit_<code>` failure's stderr tail goes to `write_stderr_tail`
 (`<out>/logs/<repo>.stderr`, when `ScanOptions.log_dir` is set), never into the row;
 `run_fleet` first removes the `*.stderr` files there (`clear_stderr_logs`, nothing else), and a path resolving outside it is not written.
 `remote_path` drops `.`, `..` and empty segments, so a remote-derived id cannot climb out,
@@ -230,6 +232,7 @@ class ScanOptions:
     units: bool = False  # set: assess_signals --units on the offline scan (monorepo unit rows, #866)
     managed_settings: bool = False  # set: assess_signals --managed-settings (this machine's policy, #1153)
     packs: tuple[Path, ...] = ()  # absolute: assess_signals --pack each, in order, on the offline scan (#1276)
+    scan_jobs: int | None = None  # set: assess_signals --jobs (scans at a time per repository, #1381)
 
 
 ScanFn = Callable[[Target, Path, ScanOptions], FleetRow]
@@ -561,6 +564,8 @@ def signals_command(checkout: Path, out: Path, options: ScanOptions) -> list[str
     if not options.platform:  # the offline scan evaluates the packs; the platform pass reads none
         for pack in options.packs:
             command += ["--pack", str(pack)]
+    if options.scan_jobs is not None:
+        command += ["--jobs", str(options.scan_jobs)]
     return command
 
 

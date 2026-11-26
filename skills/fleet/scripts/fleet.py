@@ -106,10 +106,11 @@ Exit codes:
        --discovered listing (the message names the line)
 
 Run:
-    uv run fleet.py ROOT --out DIR [--levels FILE | --profile NAME] [--settings PATH] [--units FILE] [--jobs N] [--window 6mo]
+    uv run fleet.py ROOT --out DIR [--levels FILE | --profile NAME] [--settings PATH] [--units FILE] [--jobs N] [--scan-jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
         [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
-        [--no-history] [--no-diagrams] [--fleet-config FILE] [--name-agent-clusters] [--discovered FILE]
+        [--no-history] [--no-diagrams] [--radar-min-measured PERCENT] [--fleet-config FILE]
+        [--name-agent-clusters] [--discovered FILE]
         [--platform [--platform-jobs N] [--platform-timeout SECONDS]] [--managed-settings] [--pack FILE ...]
     uv run fleet.py --from-list FILE [ROOT] --out DIR [...]
 """
@@ -418,7 +419,7 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
               comparison: Comparison | None = None, credit: str | None = None,
               coverage: str | None = None, opportunities: Callable[[], str | None] | None = None,
               data: FleetData | None = None, earlier: FleetRun | str | None = None, achieved: Achievements | None = None,
-              groups: Sequence[str] = (), includes: str | None = None) -> None:
+              groups: Sequence[str] = (), includes: str | None = None, radar_min: int = 20) -> None:
     """Draw the diagrams, their report and fleet-view.html (#946), or clear them; a failure never changes the exit code."""
     try:
         if no_diagrams:
@@ -432,7 +433,7 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
         front, moves = guarded_front(maturity_model, data, moves_of, groups,
                                      mode_of(data) if data is not None else None)
         diagrams = build_diagrams(maturity_model, rows, window, history=history, comparison=comparison,
-                                  data=data, earlier=earlier, moves=moves)
+                                  data=data, earlier=earlier, moves=moves, radar_min_share=radar_min)
         ok = [row["scans"] for row in rows if row["status"] == "ok" and row["scans"] is not None]
         write_diagrams(out_dir, diagrams, credit, coverage, opportunities() if opportunities else None,
                        measured_section(ok), front_section(front, len(rows)),
@@ -715,7 +716,7 @@ def main(argv: list[str] | None = None) -> int:
         scans=args.scans if args.scans is not None or scans is None else ",".join(scans),
         log_dir=out_dir / LOGS_DIR, active_since=window_start(window, today),
         ghsync_root=include_root(args), units=args.monorepo_units,
-        managed_settings=args.managed_settings,
+        managed_settings=args.managed_settings, scan_jobs=args.scan_jobs,
     )
     unwritable = _writable_out(args, out_dir)
     if unwritable is not None:
@@ -769,7 +770,8 @@ def main(argv: list[str] | None = None) -> int:
     _diagrams(out_dir, args.no_diagrams, maturity_model, public, window, history=history, comparison=comparison,
               credit=credit, coverage=coverage_line(coverage, len(rows)),
               opportunities=lambda: opportunities_section(data, achieved), data=data, earlier=earlier, achieved=achieved,
-              groups=[g["group"] for g in groups], includes=includes_section(stamp.get("not_cloned_includes")))
+              groups=[g["group"] for g in groups], includes=includes_section(stamp.get("not_cloned_includes")),
+              radar_min=args.radar_min_measured)
     _print_summary(rows, path, groups_path, agent_clusters, freshness, freshness_path, deleter)
     return 0
 

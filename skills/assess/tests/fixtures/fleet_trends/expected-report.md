@@ -34,6 +34,14 @@ Which single change would take the most repositories to their next Step?
 
 Not drawn: skipped: the maturity model defines no Steps.
 
+## Practice shape by unit
+
+In place: 0 repositories in this run, scanned with no model call.
+
+Where is each unit strong across the practices, and where is it not yet measured?
+
+Not drawn: skipped: the run wrote no fleet-data.json to read the unit counts from.
+
 ## Shared tooling
 
 In place: 0 repositories in this run, scanned with no model call.
