@@ -172,14 +172,27 @@
     }
   }
 
+  // One handler per event, however many roots it bubbles through: a host that calls
+  // attach(svg) on an SVG inside an already attached page would otherwise show the tooltip on
+  // the inner listener and hide it again on the document's (the second-tap rule).
+  function on(root, type, handler, options) {
+    root.addEventListener(type, function (event) {
+      if (event.__diagramTooltip) {
+        return;
+      }
+      event.__diagramTooltip = true;
+      handler(event);
+    }, options);
+  }
+
   // offset() turns an event's coordinates into the host page's: zero for an inline SVG, the
   // <object>'s position for one inside it.
   function listen(root, format, offset) {
-    root.addEventListener("touchstart", function () { touching = true; }, {passive: true});
-    root.addEventListener("pointerdown", function (event) {
+    on(root, "touchstart", function () { touching = true; }, {passive: true});
+    on(root, "pointerdown", function (event) {
       touching = event.pointerType === "touch";
     });
-    root.addEventListener("pointermove", function (event) {
+    on(root, "pointermove", function (event) {
       if (event.pointerType === "touch") {
         return;
       }
@@ -191,12 +204,12 @@
         hide();
       }
     });
-    root.addEventListener("pointerleave", function (event) {
+    on(root, "pointerleave", function (event) {
       if (event.pointerType !== "touch") {
         hide();
       }
     });
-    root.addEventListener("pointerout", function (event) {
+    on(root, "pointerout", function (event) {
       if (event.pointerType === "touch" || !shown) {
         return;
       }
@@ -206,7 +219,7 @@
     });
     // A tap is read on pointerup, not click: iOS Safari fires no click delegated from a
     // non-interactive SVG element.
-    root.addEventListener("pointerup", function (event) {
+    on(root, "pointerup", function (event) {
       if (event.pointerType !== "touch") {
         return;
       }
@@ -224,7 +237,7 @@
       var at = offset();
       show(part, event.clientX + at.x, event.clientY + at.y, format);
     });
-    root.addEventListener("click", function (event) {
+    on(root, "click", function (event) {
       if (!touching) {
         return; // a mouse click follows a link, as it would without the helper
       }
@@ -233,7 +246,7 @@
       }
       blockClick = false;
     });
-    root.addEventListener("keydown", function (event) {
+    on(root, "keydown", function (event) {
       if (event.key === "Escape") {
         hide();
       }
