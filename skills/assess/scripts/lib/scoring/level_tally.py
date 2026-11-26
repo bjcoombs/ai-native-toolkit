@@ -107,9 +107,9 @@ holding a gate:
 
 - `conditions[]`: `id`, `row`, `level`, `grade` (the weakest `level_signals` criterion grade;
   null for a signal with no producer class), `counted` (grade `measured` or `verified`, and
-  not excluded), `state` (`met`, `unmet`, `not_measured`, or `not_applicable` when the owner
-  excluded it; `declined` is reserved for #828) and, when not measured or held by a `requires`
-  that is not met, a `reason` code. An owner-excluded condition also carries
+  not `not_applicable`), `state` (`met`, `unmet`, `not_measured`, or `not_applicable` when the owner
+  excluded it or a scan's reason code is in `NOT_APPLICABLE_REASONS`; `declined` is reserved for #828)
+  and, when not measured, not applicable by a scan code, or held by a `requires` that is not met, a `reason` code. An owner-excluded condition also carries
   `disposition: "excluded_by_owner"` and `exclusion_kind`. `why` (#939) is the static text of
   the check manifest's whys for the condition's criteria, in criterion order, each once, joined
   by one space (`condition_why`); it is absent when no criterion has one (a caller's own model),
