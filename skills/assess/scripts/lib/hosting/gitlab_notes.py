@@ -102,7 +102,7 @@ from collections.abc import Sequence
 from typing import Any, NamedTuple
 
 from lib.agent_identity import AGENT, DEPENDENCY_BOT, TOKEN_USER, AuthorMatcher, is_agent_hint
-from lib.ai_usage import matcher_from_config
+from lib.history.ai_usage import matcher_from_config
 from lib.hosting.delivery import AI_REVIEWERS
 from lib.fleet_config import FleetConfig, review_section
 from lib.hosting.gh_cli import GhUnavailable, unavailable

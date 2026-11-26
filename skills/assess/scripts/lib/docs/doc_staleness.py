@@ -42,7 +42,7 @@ tie-break (``subject_match``, #817), the subject size (``subject_code_count``) a
 up to ``SUBJECT_PATHS_CAP`` of its paths (``subject_paths``), so a finding's
 subject can be checked.
 
-Churn comes from ``lib.git_churn`` -- the same machinery the complexity treemap
+Churn comes from ``lib.history.git_churn`` -- the same machinery the complexity treemap
 uses, so churn is computed one way across the whole skill.
 
 Both `stale_hubs` and the `lying_map` join read the capped `ratio`. The association logic
@@ -102,7 +102,7 @@ from lib.docs.doc_ownership import (
 )
 from lib.docs.doc_provenance import resolve_doc_sources, source_is_newer
 from lib.docs.parallel_docs import parallel_index
-from lib.git_churn import (
+from lib.history.git_churn import (
     CHURN_WINDOWS,
     GIT_TIMEOUT_SECONDS,
     ContentClock,
@@ -112,7 +112,7 @@ from lib.git_churn import (
     pick_churn_window,
     tracked_files,
 )
-from lib.change_coupling import RenameMap
+from lib.history.change_coupling import RenameMap
 from lib.assess_config import DeclaredMapping, declared_block
 from lib.run_context_types import BulkCommit, DocToCodeEdge
 
@@ -392,7 +392,7 @@ def _head(repo_root: Path) -> str | None:
 @lru_cache(maxsize=4)
 def _renames_at(repo_root: Path, head: str | None) -> RenameMap:
     """The rename map, built once per (repo, HEAD) for the clock and the churn."""
-    from lib.change_coupling import build_rename_map
+    from lib.history.change_coupling import build_rename_map
 
     return build_rename_map(repo_root)
 
@@ -752,7 +752,7 @@ def analyze_doc_staleness(
         # Churn-measurement reliability, independent of doc->code association
         # precision. True = the window has no usable churn signal (every file ~1
         # commit), so any finding built on `code_churn_in_window` / `ratio` must
-        # be discounted - see `lib.git_churn.churn_is_degenerate`.
+        # be discounted - see `lib.history.git_churn.churn_is_degenerate`.
         "churn_degenerate": churn_degenerate,
         "docs": rows,
         # Bulk mechanical commits (a commit touching more than half of the

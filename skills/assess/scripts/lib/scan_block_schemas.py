@@ -55,7 +55,7 @@ def _hours(what: str) -> JsonDict:
 
 AI_USAGE: JsonDict = {
     "description": (
-        "Agent involvement in the commits of the run window (lib/ai_usage.py), counted from git "
+        "Agent involvement in the commits of the run window (lib/history/ai_usage.py), counted from git "
         "history. An agent identity is matched by trailer (Co-Authored-By and similar) or by "
         "author against the accounts confirmed in [identities], the pinned agent rules and any "
         "[[ai_usage.agent_identities]] rules of --fleet-config. Counts are commits; shares are of total_commits. A lower bound: an "

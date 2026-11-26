@@ -39,7 +39,7 @@ from typing import Any
 try:
     from lib.agent_identity import coauthors_have_agent as _coauthors_have_agent
     from lib.agent_identity import identity_is_agent as _identity_is_agent
-    from lib.git_churn import churn_is_degenerate
+    from lib.history.git_churn import churn_is_degenerate
     from lib.keyhole.python_regions import PyRegions, load_regions
     from lib.path_classes import TEST_DIRS
     from lib.tool_lookup import RG_MISSING_REASON, find_rg
@@ -47,7 +47,7 @@ except ImportError:  # standalone CLI: script dir is lib/keyhole/, put scripts/ 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     from lib.agent_identity import coauthors_have_agent as _coauthors_have_agent
     from lib.agent_identity import identity_is_agent as _identity_is_agent
-    from lib.git_churn import churn_is_degenerate
+    from lib.history.git_churn import churn_is_degenerate
     from lib.keyhole.python_regions import PyRegions, load_regions
     from lib.path_classes import TEST_DIRS
     from lib.tool_lookup import RG_MISSING_REASON, find_rg

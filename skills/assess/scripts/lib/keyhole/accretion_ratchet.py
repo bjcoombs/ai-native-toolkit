@@ -73,10 +73,10 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from lib.git_churn import GIT_TIMEOUT_SECONDS, churn_is_degenerate
+    from lib.history.git_churn import GIT_TIMEOUT_SECONDS, churn_is_degenerate
 except ImportError:  # standalone CLI: script dir is lib/keyhole/, put scripts/ on path
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from lib.git_churn import GIT_TIMEOUT_SECONDS, churn_is_degenerate
+    from lib.history.git_churn import GIT_TIMEOUT_SECONDS, churn_is_degenerate
 
 # A file is flagged only when deletions are below this share of its total churn:
 # deletions / (additions + deletions). 0.15 means "fewer than ~1 deleted line

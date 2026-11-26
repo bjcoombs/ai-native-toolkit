@@ -136,7 +136,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from lib.agent_identity import AGENT, AuthorMatcher, is_agent_hint
-from lib.ai_usage import matcher_from_config
+from lib.history.ai_usage import matcher_from_config
 from lib.fleet_config import FleetConfig
 from lib.hosting.merged_sample import STATUS_BOTS, BotClassifier, MergedSample, SampleOrReason, login, parse_time
 

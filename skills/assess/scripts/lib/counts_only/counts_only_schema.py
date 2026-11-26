@@ -39,7 +39,7 @@ from lib.agents.agent_harness import AgentHarnessBlock
 from lib.instructions.agent_instructions_grader import SensitiveFinding
 from lib.ci.ci_checks import CiChecksBlock
 from lib.agent_outcome import AgentOutcomeBlock
-from lib.ai_usage import AiUsageBlock
+from lib.history.ai_usage import AiUsageBlock
 from lib.counts_only.block_shapes import (
     AgentOpsBlock,
     CoverageGateBlock,

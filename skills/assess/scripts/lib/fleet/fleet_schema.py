@@ -52,7 +52,7 @@ from lib.fleet.fleet_method import CollectorRevision
 from lib.packs import PackIdentity
 from lib.fleet.fleet_includes import INCLUDE_PROJECT_KINDS, NotClonedInclude
 from lib.fleet.fleet_stamp import FleetStamp
-from lib.history_window import WINDOW_PATTERN
+from lib.history.history_window import WINDOW_PATTERN
 from lib.ci.review_automation import KINDS
 from lib.run_context_types import JsonDict
 from lib.signals import known_scans

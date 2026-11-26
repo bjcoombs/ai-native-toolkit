@@ -77,7 +77,7 @@ from pathlib import Path
 from typing import Any, Literal, NotRequired, TypedDict
 
 from lib.ci.ci_triggers import workflow_events as _on_events
-from lib.git_churn import is_tracked, tracked_files
+from lib.history.git_churn import is_tracked, tracked_files
 
 _GITLAB_CI = ".gitlab-ci.yml"
 _WORKFLOWS_DIR = ".github/workflows"

@@ -30,7 +30,7 @@ from typing import Any, TypeVar, cast
 
 from lib.assess_config import is_user_excluded
 from lib.manifest.check_manifest import core_manifest, finding_tables
-from lib.change_coupling import (
+from lib.history.change_coupling import (
     RenameMap, authorship_analysis, build_rename_map, change_coupling_pairs, containment_ratio,
     find_self_referential_tests, fold_renames, parse_commit_file_sets, repo_top,
 )
@@ -1310,7 +1310,7 @@ def _override_contradiction_paths(archetype: JsonDict | None) -> list[str]:
     return []
 
 
-# Churn-measurement reliability (single source of truth: lib.git_churn, set on
+# Churn-measurement reliability (single source of truth: lib.history.git_churn, set on
 # the doc-staleness block). When the history is degenerate - every file ~1
 # commit (shallow clone, fresh import, squashed/extracted tree) - the churn
 # signal carries no information, so the two findings derived from it must not

@@ -9,8 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from lib import ai_usage, fleet_activity, git_churn, history_window, signals
-from lib.history_window import WINDOW_PATTERN, split_window
+from lib import signals
+from lib.history import ai_usage, fleet_activity, git_churn, history_window
+from lib.history.history_window import WINDOW_PATTERN, split_window
 
 LIB = Path(__file__).resolve().parents[1] / "scripts" / "lib"
 VALID = ["1d", "90d", "12w", "6mo", "24mo", "1y", "5y"]

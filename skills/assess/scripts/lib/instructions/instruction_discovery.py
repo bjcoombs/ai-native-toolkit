@@ -77,7 +77,7 @@ from lib.instructions.agent_systems import AIDER_CONFIG, aider_read_files, match
 from lib.instructions.instruction_content import RepoContext
 from lib.assess_config import is_user_excluded
 from lib.docs.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_repo_file
-from lib.git_churn import GIT_TIMEOUT_SECONDS, ContentClock
+from lib.history.git_churn import GIT_TIMEOUT_SECONDS, ContentClock
 from lib.instructions.instruction_budget import (
     CHARS_PER_TOKEN,
     follow_imports,

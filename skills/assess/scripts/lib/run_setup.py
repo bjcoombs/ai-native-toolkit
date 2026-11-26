@@ -31,10 +31,10 @@ from typing import Any, Protocol
 from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION, ASSESS_METHOD_VERSION
 from lib.assess_config import load_excludes
 from lib.fleet_config import FleetConfig, repo_fleet_config
-from lib.change_coupling import RenameMap, build_rename_map
+from lib.history.change_coupling import RenameMap, build_rename_map
 from lib.context_blocks import generated_exclusion
 from lib.complexity.diff_reliability import compute_diff_reliability, prior_stamps, stats_tool_versions
-from lib.git_churn import git_commit_info, window_from_churn_label
+from lib.history.git_churn import git_commit_info, window_from_churn_label
 from lib.instructions.instruction_files import grade_instruction_files
 from lib.plugin_version import read_version
 from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope

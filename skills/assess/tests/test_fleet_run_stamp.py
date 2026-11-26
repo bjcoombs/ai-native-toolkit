@@ -15,7 +15,7 @@ import lib.fleet.fleet_stamp as fleet_stamp
 from lib.fleet.runner import STATUS_FAILED, STATUS_OK, FleetRow, ScanOptions, Target, run_fleet
 from lib.fleet.fleet_cleanup import CloneDeleter, delete_clone
 from lib.fleet.fleet_schema import STAMP_SCHEMA_PATH, build_stamp_schema, render_stamp
-from lib.fleet_activity import is_active, window_start
+from lib.history.fleet_activity import is_active, window_start
 from lib.fleet.fleet_stamp import build_stamp, write_stamp
 from test_fleet import make_checkout, make_repo
 from test_fleet_cli import fleet_cli

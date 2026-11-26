@@ -67,7 +67,7 @@ The import tier reads the same index: its test and source lists are the ones
 the basename tier keys, so the built-in excludes and the tracked-files rule
 apply to it unchanged, and the files are read only when a probe reaches it.
 
-Inward-only: stdlib plus ``lib.git_churn`` / ``lib.docs.doc_graph`` /
+Inward-only: stdlib plus ``lib.history.git_churn`` / ``lib.docs.doc_graph`` /
 ``lib.testing.import_credit`` / ``lib.skill_script_tests``, imports no orchestrator.
 Beyond the index and the skill tier's test-file read (cached per run in
 :mod:`lib.skill_script_tests`), file I/O is existence checks (``is_file`` /
@@ -115,7 +115,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from lib.docs.doc_graph import EXCLUDE_DIRS, is_excluded_path
-from lib.git_churn import tracked_files
+from lib.history.git_churn import tracked_files
 from lib.skill_script_tests import script_tested_elsewhere
 from lib.testing.import_credit import BATS_SUFFIX, FileReader, ImportCredits
 

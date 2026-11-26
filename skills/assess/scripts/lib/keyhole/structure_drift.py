@@ -100,7 +100,7 @@ from lib.docs.ownership_parser import (
     parse_architecture_md,
     parse_codeowners,
 )
-from lib.git_churn import tracked_files
+from lib.history.git_churn import tracked_files
 from lib.graph.import_graph import ModuleGraph, select_graph
 from lib.run_context_types import CoChangePair, JsonDict
 
@@ -446,7 +446,7 @@ def static_grouping_relation(
     """The import-graph community grouping as a relation over file pairs.
 
     ``communities`` is ``structure_graph._detect_communities()``'s output: a list
-    of sets of *dotted module names* (e.g. ``{"lib.docs.doc_graph", "lib.git_churn"}``).
+    of sets of *dotted module names* (e.g. ``{"lib.docs.doc_graph", "lib.history.git_churn"}``).
     Each community asserts its modules belong together; we resolve every module
     name to its repo-relative source file (via the same package-root resolution
     ``structure_graph`` uses) and contribute the same-group pairs over the files.
@@ -790,7 +790,7 @@ def _compute_communities(repo_root: Path, mg: ModuleGraph | None = None) -> list
 def _compute_coupling_pairs(repo_root: Path) -> list[CoChangePair]:
     """Co-change pairs for the repo, or ``[]`` when there is no git history."""
     try:
-        from lib.change_coupling import (
+        from lib.history.change_coupling import (
             change_coupling_pairs,
             parse_commit_file_sets,
         )

@@ -132,7 +132,7 @@ from urllib.parse import quote
 
 from lib.hosting.gh_cli import GhUnavailable, gh_api, open_github, unavailable
 from lib.hosting.gitlab_cli import GitlabProject, branch_protection, open_gitlab, protected_branches
-from lib.git_churn import tracked_files
+from lib.history.git_churn import tracked_files
 
 # Metadata the API adds or rewrites on every read; never configuration.
 IGNORED_KEYS = frozenset({

@@ -97,8 +97,8 @@ from lib.assess_config import load_excludes
 from lib.counts_only.content_free import reason_code
 from lib.fleet_config import FleetConfig, repo_fleet_config
 from lib.hosting.gh_cli import NETWORK_REASON as NETWORK_REASON  # re-exported: defined beside the platform reads
-from lib.git_churn import git_commit_info
-from lib.history_window import split_window
+from lib.history.git_churn import git_commit_info
+from lib.history.history_window import split_window
 from lib.headless_layers import HEADLESS_SCANS as LAYER_SCANS
 from lib.headless_static import HEADLESS_SCANS as STATIC_SCANS
 from lib.instructions.instruction_files import grade_instruction_files

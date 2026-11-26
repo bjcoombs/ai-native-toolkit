@@ -26,14 +26,14 @@ last segment.
 Determinism: rows are sorted by ``repo`` and serialised with sorted keys, and
 carry no absolute path, duration, stderr text or per-run stamp field (the run
 stamp is ``run.json``, lib/fleet/fleet_stamp.py). An ``ok`` row's ``active`` says
-whether its ``HEAD`` was committed inside the window (lib/fleet_activity.py). Two runs over unchanged checkouts on the same day write
+whether its ``HEAD`` was committed inside the window (lib/history/fleet_activity.py). Two runs over unchanged checkouts on the same day write
 byte-identical files. ``--hash-paths`` without a salt draws one salt per run,
 so such a run joins within itself but is not byte-identical across runs. Under a
 salt the output files name each repository by its hashed id (``lib/fleet/fleet_hashed.py``).
 
 The committed tree (#907): an ``ok`` row records the ``HEAD`` it measured
 (``head_sha``) and whether tracked files differed from it (``dirty``, the
-``/assess`` definition in ``lib/git_churn.py``: untracked files and the
+``/assess`` definition in ``lib/history/git_churn.py``: untracked files and the
 tool's own ``.assess/`` outputs never count, ``.assess/config.toml`` does).
 A dirty checkout is scanned from a ``git clone --shared`` of it checked out
 at that sha in the scratch directory (``committed_tree``), with the
@@ -128,8 +128,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any, TypedDict
 
-from lib.fleet_activity import is_active
-from lib.git_churn import ASSESS_CONFIG_PATHSPEC, ASSESS_EXCLUDE_PATHSPEC
+from lib.history.fleet_activity import is_active
+from lib.history.git_churn import ASSESS_CONFIG_PATHSPEC, ASSESS_EXCLUDE_PATHSPEC
 from lib.hosting.platform_cli import CACHE_ENV
 from lib.run_context_types import JsonDict
 from lib.signals import offline_scans
@@ -461,7 +461,7 @@ def _hidden_entries(checkout: Path) -> str | None:
 def commit_state(checkout: Path) -> CommitState:
     """``HEAD``, whether tracked files differ from it, and why that is unknown when it is.
 
-    ``dirty`` is ``/assess``'s ``measured_commit.dirty`` (``lib/git_churn.py``): untracked
+    ``dirty`` is ``/assess``'s ``measured_commit.dirty`` (``lib/history/git_churn.py``): untracked
     files and ``.assess/`` outputs are left out, ``.assess/config.toml`` is not. Unlike
     ``/assess``, a submodule's own modified content is left out too
     (``--ignore-submodules=dirty``, #932). Read with optional locks off, so ``git

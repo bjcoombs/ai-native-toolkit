@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 import lib.instructions.instruction_discovery as discovery
-from lib.git_churn import tracked_files
+from lib.history.git_churn import tracked_files
 from lib.instructions.instruction_files import nested_instruction_surface
 
 ROOT_AGENTS = "\n".join(f"- Always run check number {i} before pushing." for i in range(8))

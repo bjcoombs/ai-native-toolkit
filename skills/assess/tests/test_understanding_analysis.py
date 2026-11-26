@@ -18,7 +18,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from lib.change_coupling import authorship_analysis
+from lib.history.change_coupling import authorship_analysis
 from lib.keyhole.understanding_analysis import analyze_understanding
 
 

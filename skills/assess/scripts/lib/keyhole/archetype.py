@@ -67,7 +67,7 @@ from typing import Any
 
 # Imported from doc_graph (a lib module - the inward-only layering allows it).
 from lib.docs.doc_graph import CODE_EXTENSIONS, DOC_EXTENSIONS, EXCLUDE_DIRS
-from lib.git_churn import tracked_files
+from lib.history.git_churn import tracked_files
 
 # The Karpathy LLM-wiki best-practice pointer. Surfaced in the report so a KB
 # maintainer has the canonical reference for the pattern being scored.

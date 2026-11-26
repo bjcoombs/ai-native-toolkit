@@ -82,7 +82,7 @@ from typing import NamedTuple, Protocol, TypedDict
 
 from lib.agent_identity import is_ai_assistant
 from lib.assess_config import DescribesMapping, load_describes
-from lib.git_churn import (
+from lib.history.git_churn import (
     GIT_TIMEOUT_SECONDS,
     ContentClock,
     _dt_date,

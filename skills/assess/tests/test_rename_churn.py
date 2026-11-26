@@ -14,12 +14,12 @@ from pathlib import Path
 
 import pytest
 
-import lib.change_coupling as cc
+import lib.history.change_coupling as cc
 import lib.docs.doc_staleness as ds
-import lib.git_churn as gc
+import lib.history.git_churn as gc
 from lib.docs.doc_complexity_join import analyze_doc_complexity_join
 from lib.docs.doc_staleness import analyze_doc_staleness
-from lib.git_churn import commit_epochs_by_file, git_churn_scores, pick_churn_window
+from lib.history.git_churn import commit_epochs_by_file, git_churn_scores, pick_churn_window
 
 Step = Callable[[Path], None]
 

@@ -31,7 +31,7 @@ from lib.fleet_config import (  # noqa: E402 - a path constant precedes the sys.
     parse_fleet_config,
     section_entries,
 )
-from lib.account_discovery import EVIDENCE, HistoryCommit, discover, evidence_for  # noqa: E402 - a path constant precedes the sys.path bootstrap
+from lib.history.account_discovery import EVIDENCE, HistoryCommit, discover, evidence_for  # noqa: E402 - a path constant precedes the sys.path bootstrap
 from lib.signals import collect  # noqa: E402 - a path constant precedes the sys.path bootstrap
 
 CLAUDE = ("claude[bot]", "209825114+claude[bot]@users.noreply.github.com")

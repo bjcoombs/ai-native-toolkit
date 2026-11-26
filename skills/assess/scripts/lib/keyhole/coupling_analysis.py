@@ -1,7 +1,7 @@
 """B3 static-vs-historical disagreement: the A x B cross for the /assess core.
 
 The static lens (``lib.graph.structure_graph``, A2/A3) reads the import graph and asks
-"does this *look* modular?"; the historical lens (``lib.change_coupling``, B1/B2)
+"does this *look* modular?"; the historical lens (``lib.history.change_coupling``, B1/B2)
 reads the commit log and asks "does it *behave* modularly -- do edits stay
 contained?". Each is blind to what the other sees. Where they **disagree** is
 the most valuable output of the whole assessment (PRD Signal B3 + the derived-

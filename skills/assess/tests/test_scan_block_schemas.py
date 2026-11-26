@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib.instructions.agent_consistency import AgentConsistencyBlock
 from lib.agent_outcome import AgentOutcomeBlock
-from lib.ai_usage import AiUsageBlock
+from lib.history.ai_usage import AiUsageBlock
 from lib.counts_only.block_shapes import ReviewRealityBlock
 from lib.ci.ci_checks import CiChecksBlock
 from lib.counts_only.content_free import counts_only_scans

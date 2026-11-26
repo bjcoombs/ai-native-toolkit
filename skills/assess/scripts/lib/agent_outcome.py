@@ -80,7 +80,7 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 from lib.agent_identity import AGENT, coauthors_have_ai_assistant
-from lib.ai_usage import (
+from lib.history.ai_usage import (
     REASON_NO_GIT,
     REASON_NOT_A_REPO,
     REASON_SHALLOW,
@@ -90,7 +90,7 @@ from lib.ai_usage import (
     resolve_window,
     window_commits,
 )
-from lib.account_discovery import HistoryCommit
+from lib.history.account_discovery import HistoryCommit
 from lib.fleet_config import FleetConfig
 
 GIT_TIMEOUT_SECONDS = 60
