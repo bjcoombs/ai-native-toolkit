@@ -35,7 +35,8 @@ which is the one route left by which a just-corrected doc can be re-flagged.
 
 A base doc is measured against its direct-child code only, and below `MIN_MEASURED_DOCS` the
 stale share is null with its reason (#822, `lib.docs.doc_staleness_scale`). Ownership, churn,
-provenance, bulk commits, the summary. Full reference: lib/docs/doc_staleness.md.
+provenance, bulk commits and the summary are covered in the full reference.
+Full reference: lib/docs/doc_staleness.md.
 """
 from __future__ import annotations
 
@@ -73,6 +74,7 @@ from lib.docs.doc_staleness_scale import (
     RenameEvent,
     direct_children,
     normalisation,
+    nothing_beside,
     rename_events,
     renamed_children_named,
 )
@@ -473,7 +475,7 @@ def staleness_summary(rows: list[DocStalenessRow], reliable: bool) -> DocStalene
     directive = sum(1 for row in rows if row.get("directive_only"))
     mapped = [row for row in rows if not row.get("directive_only") and (
         row["subject_method"] != REPO_BASELINE
-        or row.get("provenance", {}).get("source_newer") is not None) and not _nothing_beside(row)]
+        or row.get("provenance", {}).get("source_newer") is not None) and not nothing_beside(row)]
     if not reliable or not mapped:
         return {"measured_docs": len(mapped), "stale_docs": None, "stale_pct": None,
                 "generator_directive_docs": directive}
@@ -486,13 +488,6 @@ def staleness_summary(rows: list[DocStalenessRow], reliable: bool) -> DocStalene
         summary["stale_pct_reason"] = TOO_FEW_MEASURED_DOCS
     return summary
 
-
-def _nothing_beside(row: DocStalenessRow) -> bool:
-    """A base doc with no code beside it, no renamed child it names and no source
-    verdict: nothing to measure it against (#822). A row from before #822 is measured."""
-    return (row["subject_method"] == NEAREST_ANCESTOR and row.get("measured_code_count") == 0
-            and not row.get("renamed_children_named")
-            and row.get("provenance", {}).get("source_newer") is None)
 
 
 def _resolve_docs(

@@ -26,7 +26,8 @@ Diagrams:
   root; its length is the ``ratio`` and it reads "behind" (amber) where
   ``doc_complexity_join.is_stale`` holds, the same test as ``summary.stale_docs``. A dashed
   line marks ``STALENESS_RATIO_THRESHOLD``. Docs past the top are stated ("and K more");
-  ``repo-baseline`` docs are counted in the caption, never drawn. A truncated or degenerate
+  ``repo-baseline`` docs are counted in the caption, never drawn; a base doc with no code beside
+  it to measure (``doc_staleness_scale.nothing_beside``, #822) is left out, as the summary leaves it. A truncated or degenerate
   history draws nothing and says why, as the summary's counts read null there. Each bar
   carries ``data-path``, ``data-ratio`` and ``data-behind`` beside its ``<title>`` (#1360).
 - **Review strip** (``review-strip.svg``): one tick per sampled merged change from
@@ -60,6 +61,7 @@ from lib.assess_diagrams_tags import TAG_FILES, tag_diagrams
 from lib.assess_diagrams_packages import PACKAGE_COUNTS_ONLY_FILE, PACKAGE_FILE, package_diagrams
 from lib.docs.doc_complexity_join import STALENESS_RATIO_THRESHOLD, is_stale
 from lib.docs.doc_ownership import REPO_BASELINE
+from lib.docs.doc_staleness_scale import nothing_beside
 from lib.scoring.headline import reason_word
 from lib.counts_only.reason_codes import reason_code
 from lib.hosting.review_reality import APPROVED, BOT, NO_BOT, REVIEWED, SEQUENCE_STATES, UNKNOWN, UNREVIEWED
@@ -152,9 +154,11 @@ def _caption(body: list[str], caption: str, width: float, y: float) -> float:
 
 
 def mapped_docs(block: Mapping[str, Any]) -> list[Mapping[str, Any]]:
-    """The ``doc_staleness.docs`` rows with a code subject of their own, in block order."""
+    """The ``doc_staleness.docs`` rows with a code subject of their own, in block order.
+    A base doc with nothing beside it to measure is left out, as ``summary.measured_docs``
+    leaves it out (#822)."""
     return [r for r in block.get("docs") or [] if isinstance(r, Mapping)
-            and r.get("subject_method") != REPO_BASELINE]
+            and r.get("subject_method") != REPO_BASELINE and not nothing_beside(r)]
 
 
 def ranked_docs(block: Mapping[str, Any]) -> list[Mapping[str, Any]]:
@@ -243,7 +247,8 @@ def render_drift(block: Mapping[str, Any]) -> str:
         y += LINE_H
     key, key_h = _key(PAD, y + 8, [
         ('<rect x="{x}" y="{y}" width="14.0" height="14.0" rx="2" class="f-dr-behind"/>',
-         f"Behind its code: above {svg.tick_label(STALENESS_RATIO_THRESHOLD)}, or a newer declared source"),
+         f"Behind its code: above {svg.tick_label(STALENESS_RATIO_THRESHOLD)}, a newer declared "
+         "source, or it names a renamed file"),
         ('<rect x="{x}" y="{y}" width="14.0" height="14.0" rx="2" class="f-dr-current"/>',
          "Keeping pace with its code"),
     ])

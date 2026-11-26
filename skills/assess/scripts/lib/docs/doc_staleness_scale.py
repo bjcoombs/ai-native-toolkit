@@ -33,9 +33,11 @@ Tests: ``tests/test_doc_staleness.py`` (the #822 section).
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
-from typing import TypedDict
+from typing import Any, TypedDict
 
+from lib.docs.doc_ownership import NEAREST_ANCESTOR
 from lib.history.change_coupling import repo_top
 
 DIRECT_CHILDREN = "direct_children"
@@ -55,6 +57,17 @@ def normalisation() -> DocStalenessNormalisation:
     """The normalisation rule this module applies, as the block records it."""
     return {"base_doc_subject": DIRECT_CHILDREN, "rename_scope": DIRECT_CHILDREN,
             "min_measured_docs": MIN_MEASURED_DOCS}
+
+
+def nothing_beside(row: Mapping[str, Any]) -> bool:
+    """A base doc with no code beside it, no renamed child it names and no source
+    verdict: nothing to measure it against, so it leaves ``measured_docs`` and the
+    doc-drift map. A row from before #822 (no ``measured_code_count``) is measured."""
+    provenance = row.get("provenance")
+    verdict = provenance.get("source_newer") if isinstance(provenance, Mapping) else None
+    return (row.get("subject_method") == NEAREST_ANCESTOR
+            and row.get("measured_code_count") == 0
+            and not row.get("renamed_children_named") and verdict is None)
 
 
 def _parent(rel: str) -> str:
