@@ -47,8 +47,9 @@ prints the commands for steps 1 to 3 of the "Configuration commands" section in
 its log and job summary; the `floor enforcement` deterministic job is
 unaffected and stays green. The `floor.yml` path lock is not one of the three:
 it is descoped (`PATH_LOCK_DESCOPED` in `scripts/floor_anchor.py` is `True`), so
-the anchor never checks for it. It always emits a descope warning and never
-fails on it.
+the anchor never checks for it and never fails on it. When the three hard
+requirements pass, it emits a descope warning; when one fails, the printed
+commands end with a descope note instead.
 
 Exact configuration commands are in the "Configuration commands" section below so
 the state is reproducible.
@@ -176,9 +177,10 @@ gh secret set FLOOR_ANCHOR_TOKEN --repo "$REPO" --app dependabot   # paste the s
 # 3. Create clause iii's sign-off environment, with the repository owner as its
 #    sole required reviewer and no deployment branch policy. An environment with
 #    no required reviewer auto-approves its own deployment.
-#    The owner's numeric id: gh api "repos/$REPO" | jq .owner.id
-gh api "repos/$REPO/environments/floor-signoff" --method PUT --input - <<'JSON'
-{"reviewers": [{"type": "User", "id": <the owner's numeric user id>}]}
+#    (The anchor prints this with a placeholder for the owner's id.)
+OWNER_ID=$(gh api "repos/$REPO" | jq .owner.id)
+gh api "repos/$REPO/environments/floor-signoff" --method PUT --input - <<JSON
+{"reviewers": [{"type": "User", "id": $OWNER_ID}]}
 JSON
 
 # Org-migration only, not printed by the anchor: path-restrict floor.yml via a
@@ -231,8 +233,10 @@ were live:
 - The path-restriction check is **replaced by a loud warning** (stderr
   `::warning::` + job summary) that quotes the 422 evidence and this descope
   decision. The anchor does not query for the lock; it emits the warning on
-  every run, keyed on the explicit `PATH_LOCK_DESCOPED` constant in
-  `scripts/floor_anchor.py`, so the gap is never silently removed.
+  every run where the hard requirements pass (a failing run carries a descope
+  note in its remediation text instead), keyed on the explicit
+  `PATH_LOCK_DESCOPED` constant in `scripts/floor_anchor.py`, so the gap is
+  never silently removed.
 
 **Residual risk (stated honestly).** Without the path lock, a `floor.yml`-gut
 attack is *detected only until a gutted workflow merges* - the deterministic
