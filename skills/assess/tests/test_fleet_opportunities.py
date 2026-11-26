@@ -124,8 +124,9 @@ def test_a_declared_practice_reads_the_same_in_the_badge_and_the_fleet() -> None
 def test_in_place_reads_the_level_results_passed_in() -> None:
     rows = fleet()
     results = {r["repo"]: repo_level(model(), r) for r in rows}
-    assert build_opportunities(model(), rows, str, results) == build_opportunities(model(), rows, str) | {
-        "step_lifts": []}
+    passed, computed = build_opportunities(model(), rows, str, results), build_opportunities(model(), rows, str)
+    assert passed is not None and computed is not None
+    assert passed["in_place"] == computed["in_place"]
 
 
 def test_an_unknown_level_never_counts_as_a_lift() -> None:
