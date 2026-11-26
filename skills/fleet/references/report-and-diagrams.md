@@ -139,8 +139,8 @@ sections, in order:
    stays an image. Before inlining, the page drops `<script>`, `<foreignObject>`, every `on*`
    attribute, every `javascript:` or `vbscript:` URL and every reference that would fetch (a
    `url(...)` or `href` that is not `#`-local, a link's `href` apart). It keeps the image for any
-   element outside the SVG drawing set and for markup an HTML parser would read differently
-   (`lib/svg_inline.py` lists the cases), so the page still makes no network request. Each
+   element outside the SVG drawing set, for markup an HTML parser would read differently and for
+   any CSS outside the generators' own shape (`lib/svg_inline.py` lists the cases), so the page still makes no network request. Each
    inlined SVG keeps its generator's style scope and id prefix, or gets `fleet-page-<file>` when
    it has none, so no two diagrams share a style or an id. Each picture has a "Save full size"
    link to the SVG as drawn (`lib/fleet/fleet_page_assets.py`).

@@ -687,7 +687,8 @@ def test_two_diagrams_defining_fleet_hatch_get_unique_ids_and_their_own_pattern(
         assert refs and all(r in _ids(svg) for r in refs)
         scope = root_class(svg)
         assert scope is not None and scope.startswith("fleet-page-")
-        assert all(s.startswith(f"svg.{scope} ") for s in css_selectors(svg.split("<style>")[1].split("</style>")[0]))
+        found = css_selectors(svg.split("<style>")[1].split("</style>")[0], scope)
+        assert found and all(s.startswith(f"svg.{scope} ") for s in found)
 
 
 def test_every_style_selector_in_an_inlined_svg_starts_with_its_scope(tmp_path: Path) -> None:
@@ -699,7 +700,7 @@ def test_every_style_selector_in_an_inlined_svg_starts_with_its_scope(tmp_path: 
         scope = root_class(svg)
         assert scope is not None
         scopes.append(scope)
-        selectors = [s for css in re.findall(r"<style>(.*?)</style>", svg, re.S) for s in css_selectors(css)]
+        selectors = [s for css in re.findall(r"<style>(.*?)</style>", svg, re.S) for s in css_selectors(css, scope) or []]
         assert selectors and all(s.startswith(f"svg.{scope} ") for s in selectors)
     assert len(scopes) == len(set(scopes)) == 4
 

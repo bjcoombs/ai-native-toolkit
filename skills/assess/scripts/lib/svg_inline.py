@@ -25,35 +25,35 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
     ``<style>``; a ``<style>`` with attributes; a tag name not in its SVG case (``<STYLE>``).
   - Attributes: a value that is not double-quoted or holds a literal ``<`` or ``>``; a name that
     is not plain ASCII (``data-x\x0b``); an ``id``, ``class``, ``href`` or ``style`` name not in
-    lowercase (``ID=``); an ``&`` or a leading or trailing space in an ``href`` that is not a script URL (either
-    hides the reference from the scope check); a ``\`` in any
-    attribute but a ``data-*`` one, written or entity-encoded; an ``<a>`` ``href`` that is not http(s), a fragment or a
-    relative path.
+    lowercase (``ID=``); an ``&`` or a leading or trailing space in an ``href`` that is not a
+    script URL (either hides the reference from the scope check); a ``\`` in any attribute but a
+    ``data-*`` one, written or entity-encoded; an ``<a>`` ``href`` that is not http(s), a fragment
+    or a relative path.
   - Whitespace: only HTML's own (tab, line feed, form feed, carriage return, space) separates a
     tag's parts; a tag split on any other (``\x0b``, ``\xa0``) is unreadable, so refused. Each
     kept attribute is written again as `` name="value"``, and an end tag without attributes.
-  - CSS, in a ``<style>``'s text or a ``style`` attribute: an ``&`` or ``\`` (an entity or CSS
-    escape could spell ``url(`` or ``@import``); a comment; a string that holds a brace,
-    semicolon or line break, or is not closed on its line; an unbalanced brace; a rule nested in
-    a style rule; an at-rule but ``@media`` (``@layer a;`` would hide the next selector) or a ``;`` in a
-    rule's prelude (``@media all; body``); a ``src(`` function; a
-    selector leaving the diagram through a sibling combinator (``svg.<scope> ~ *``); a
-    ``position`` or ``z-index`` (a first guard only: the page that inlines the diagram
-    clips it to its own box, as the fleet page's ``contain: paint`` does); and in a ``style``
-    attribute any quote at all.
+- **CSS allow-list.** A ``<style>`` is kept only if the whole sheet parses as the shape the
+  generators write (``css_selectors``): rules ``svg.<scope> part part, ... { declarations }``,
+  optionally inside ``@media (prefers-color-scheme: dark)``, one level deep. A part is an element
+  name and/or ``.class`` and ``#id`` tokens, with at most one of ``:hover``, ``:not([fill])`` or
+  ``:not([text-anchor])`` (the treemap's and doc graph's), joined by single spaces. A declaration
+  (``declarations_ok``, also applied to a ``style`` attribute) is a property in ``PROPERTIES``
+  and a value of letters, digits, ``#.,%-`` and spaces, ``rgb()``/``rgba()`` of numbers and
+  ``url(#id)``; quotes only as closed pairs in ``font-family``. Anything else (a comment, an
+  escape, an entity, a string, a bad URL, nesting, another at-rule, ``position``) fails the
+  parse, so no difference between this reader and a browser's tokenizer can hide a rule. The page
+  that inlines the diagram still clips it to its own box (the fleet page's ``contain: paint``).
 - **Scoped.** A root that already carries a class is the generator's scope (#1449): kept when it
-  is complete (every id, reference and style selector under it), None otherwise. A root without a
-  class is scoped here under ``scope``. Every selector is checked against the scope after
-  scoping, on both paths.
+  is complete (every id and reference under it, every sheet on the allow-list under it), None
+  otherwise. A root without a class is scoped here under ``scope``, then checked the same way.
 - **Checked.** The result must sanitise to itself and hold none of ``<script``,
-  ``foreignObject``, ``javascript:``, ``vbscript:``, ``@import`` or ``image-set``, in any case, no
-  ``url(`` that is not ``#``-local (in a ``<style>`` too) and no backslash in a ``<style>`` (a CSS
-  escape could spell one), or it is None. An image embed never runs script or fetches, so
-  refusing is always safe.
+  ``foreignObject``, ``javascript:``, ``vbscript:``, ``@import``, ``image-set`` or ``src(``, in
+  any case, and no ``url(`` that is not ``#``-local, or it is None. An image embed never runs
+  script or fetches, so refusing is always safe.
 
 ``root_class(markup)`` reads an inlined SVG's scope back, so a page can keep scopes unique, and
-``css_selectors(css)`` lists a stylesheet's selectors, ``@media`` blocks included. Stdlib only and
-deterministic. Tests: ``tests/test_svg_inline.py``.
+``css_selectors(css, scope)`` lists a sheet's selectors, or None when it is off the allow-list.
+Stdlib only and deterministic. Tests: ``tests/test_svg_inline.py``.
 """
 from __future__ import annotations
 
@@ -85,33 +85,7 @@ _TOKEN = re.compile(
 _ATTR_PARTS = re.compile(rf"""{_WS}+([^\t\n\f\r =/>"']+)(?:{_WS}*={_WS}*("[^"]*"|'[^']*'|[^\t\n\f\r "'>]+))?""")
 _ATTR_NAME = re.compile(r"[A-Za-z_][\w:.-]*", re.A)
 _LINK = re.compile(r"(?:https?://|#|(?!//)[^:/?#]*(?:[/?#]|$))", re.A)  # http(s), a fragment or a relative path
-_STYLE_RISK = re.compile(r"position|z-index", re.I)  # a diagram must not cover the page
 _URL_SCHEME = re.compile(r"(?:java|vb)script:")
-# A CSS comment, or a brace, semicolon or line break inside a quoted string: either would make
-# the brace count in css_selectors disagree with the browser's reading of the sheet.
-_HIDES_BRACES = re.compile(r"""/\*|"[^"]*[{};\n][^"]*"|'[^']*[{};\n][^']*'""")
-
-
-def _css_misread(css: str) -> bool:
-    """CSS whose braces a browser could count differently from ``_blocks``: a comment, a string
-    that holds a brace, semicolon or line break or is never closed on its line, a ``}`` with no
-    ``{`` or a ``{`` never closed, or a position or z-index."""
-    if _HIDES_BRACES.search(css) or _STYLE_RISK.search(css):
-        return True
-    depth, pos = 0, 0
-    while pos < len(css):
-        char = css[pos]
-        if char in "\"'":
-            close = css.find(char, pos + 1)
-            if close < 0 or re.search(r"[\n\r\f{};]", css[pos + 1:close]):
-                return True
-            pos = close
-        elif char in "{}":
-            depth += 1 if char == "{" else -1
-            if depth < 0:
-                return True
-        pos += 1
-    return depth != 0
 _FETCH = re.compile(r"""url\(\s*['"]?(?!#)""", re.I)  # a url() that is not #-local
 _ROOT_CLASS = re.compile(r'<svg\b[^>]*?\sclass="([^"]*)"')
 _ID = re.compile(r'\sid="([^"]*)"')
@@ -137,7 +111,7 @@ def _safe_attrs(element: str, attrs: str) -> str | None:
             return None  # an entity can spell a CSS escape (u&#92;72l)
         if name in ("href", "xlink:href") and ("&" in raw or raw != raw.strip()):
             return None  # an entity would hide the reference from the scope check
-        if name == "style" and (re.search(r"[&'\"]", raw) or _css_misread(raw)):
+        if name == "style" and not declarations_ok(raw):
             return None
         if element == "a" and name.endswith("href") and not _LINK.match(value):
             return None  # a link goes to http(s), a fragment or a relative path only
@@ -153,13 +127,11 @@ class _Refused(Exception):
 
 
 def _text(text: str, open_names: list[str]) -> str:
-    """A text token as kept: outside the root only whitespace (dropped), in a ``<style>`` no ``&`` or ``\\``."""
+    """A text token as kept: outside the root only whitespace (dropped)."""
     if not open_names:
         if text.strip():
             raise _Refused
         return ""
-    if open_names[-1] == "style" and re.search(r"[&\\]", text):
-        raise _Refused
     return text
 
 
@@ -228,37 +200,71 @@ def _sanitise(svg: str) -> tuple[str, bool]:
     return "".join(out).strip(), details
 
 
-def _blocks(css: str) -> list[tuple[str, str]]:
-    """The top-level ``(prelude, body)`` pairs of ``css``."""
-    out: list[tuple[str, str]] = []
-    pos = 0
-    while (brace := css.find("{", pos)) >= 0:
-        depth, end = 0, brace
-        for end in range(brace, len(css)):
-            depth += {"{": 1, "}": -1}.get(css[end], 0)
-            if depth == 0:
-                break
-        out.append((css[pos:brace].strip(), css[brace + 1:end]))
-        pos = end + 1
-    return out
+# --- CSS: an allow-list. A sheet is read only if it parses whole as the shape the generators
+# write, so no tokenizer difference from a browser (bad-url tokens, strings, comments, escapes,
+# nesting) can hide a rule: every character outside the shape refuses it.
+
+# Every CSS property a generator writes today; nothing that moves a diagram off its own box.
+PROPERTIES = frozenset({"fill", "stroke", "stroke-width", "font-family", "text-anchor",
+                        "dominant-baseline", "pointer-events"})
+_DARK = "@media (prefers-color-scheme: dark)"  # the one at-rule, as fleet_svg.theme_style writes it
+_CSS_WS = "\t\n\r\f "
+# One compound selector: an element and/or classes and ids, then at most one of the three
+# pseudo-classes a generator uses (the treemap's and doc graph's :hover and :not([attr]) guards).
+_COMPOUND = re.compile(r"(?=.)(?:[a-z][a-z0-9_-]*)?(?:[.#][A-Za-z0-9_-]+)*"
+                       r"(?::hover|:not\(\[(?:fill|text-anchor)\]\))?", re.A)
+_RULE = re.compile(r"[\t\n\r\f ]*([^{}@]*)\{([^{}]*)\}", re.A)
+_DECL = re.compile(r"[\t\n\r\f ]*([a-z-]+)[\t\n\r\f ]*:[\t\n\r\f ]*(.*?)[\t\n\r\f ]*", re.S | re.A)
+_VALUE = re.compile(r"(?:[A-Za-z0-9 #.,%-]|rgba?\([0-9., %]+\)|url\(#[A-Za-z0-9_-]+\))+", re.A)
+_FONT = re.compile(r'(?:[A-Za-z0-9 ,-]|"[A-Za-z0-9 -]*")+', re.A)  # quotes only as a closed pair here
 
 
-def css_selectors(css: str) -> list[str]:
-    """Every selector in ``css``, ``@media`` and other ``@`` blocks recursed into."""
+def declarations_ok(text: str) -> bool:
+    """Every ``property: value`` in ``text`` is on the allow-list (a ``<style>`` block or a ``style`` attribute)."""
+    for decl in text.split(";"):
+        if not decl.strip(_CSS_WS):
+            continue
+        m = _DECL.fullmatch(decl)
+        if m is None or m.group(1) not in PROPERTIES:
+            return False
+        if not (_FONT if m.group(1) == "font-family" else _VALUE).fullmatch(m.group(2)):
+            return False
+    return True
+
+
+def css_selectors(css: str, scope: str) -> list[str] | None:
+    """Every selector in ``css`` when the whole sheet is on the allow-list under ``scope``, else None.
+
+    The shape: rules ``svg.<scope> part part, ... { declarations }``, each part a ``_COMPOUND``
+    and parts joined by single spaces, optionally inside one ``@media (prefers-color-scheme: dark)``
+    block at a time."""
     out: list[str] = []
-    for prelude, body in _blocks(css):
-        if prelude.startswith("@"):
-            out.extend(css_selectors(body))
-        else:
-            out.extend(s.strip() for s in prelude.split(",") if s.strip())
-    return out
-
-
-def _nested_rule(css: str) -> bool:
-    """A rule nested inside a style rule (CSS nesting), or a prelude holding a ``;`` (``@media all;
-    body`` ends the at-rule early for a browser), whose selector ``css_selectors`` never reads."""
-    return any(";" in prelude or (_nested_rule(body) if prelude.startswith("@") else "{" in body)
-               for prelude, body in _blocks(css))
+    pos, dark = 0, False
+    while True:
+        while pos < len(css) and css[pos] in _CSS_WS:
+            pos += 1
+        if pos == len(css):
+            return None if dark else out
+        if dark and css[pos] == "}":
+            dark, pos = False, pos + 1
+            continue
+        if not dark and css.startswith(_DARK, pos):
+            pos += len(_DARK)
+            while pos < len(css) and css[pos] in _CSS_WS:
+                pos += 1
+            if not css.startswith("{", pos):
+                return None
+            dark, pos = True, pos + 1
+            continue
+        m = _RULE.match(css, pos)
+        if m is None or not declarations_ok(m.group(2)):
+            return None
+        for selector in (sel.strip(_CSS_WS) for sel in m.group(1).split(",")):
+            parts = selector.split(" ")
+            if parts[0] != f"svg.{scope}" or not all(_COMPOUND.fullmatch(part) for part in parts[1:]):
+                return None
+            out.append(selector)
+        pos = m.end()
 
 
 def root_class(markup: str) -> str | None:
@@ -267,12 +273,11 @@ def root_class(markup: str) -> str | None:
 
 
 def _scope_complete(svg: str, scope: str) -> bool:
-    """Every id, ``#`` reference and style selector in ``svg`` is under ``scope``."""
-    prefix = f"{scope}-"
+    """Every id and ``#`` reference in ``svg`` is under ``scope``, and every ``<style>`` is on the
+    CSS allow-list under it."""
     refs = [a or b for a, b in _REF.findall(svg)]
-    selectors = [s for css in re.findall(r"<style>(.*?)</style>", svg, re.S) for s in css_selectors(css)]
-    return (all(i.startswith(prefix) for i in _ID.findall(svg) + refs)
-            and all(s.startswith(f"svg.{scope} ") or s == f"svg.{scope}" for s in selectors))
+    return (all(i.startswith(f"{scope}-") for i in _ID.findall(svg) + refs)
+            and all(css_selectors(css, scope) is not None for css in re.findall(r"<style>(.*?)</style>", svg, re.S)))
 
 
 def inline_svg(svg: str, scope: str) -> str | None:
@@ -288,10 +293,7 @@ def inline_svg(svg: str, scope: str) -> str | None:
             return None
     elif not re.fullmatch(r"[a-z][a-z0-9-]*", own):
         return None
-    styles = "".join(re.findall(r"<style>(.*?)</style>", clean, re.S))
-    if (_css_misread(styles) or _nested_rule(styles) or not _scope_complete(clean, root_class(clean) or "")
-            or sanitise(clean)[0] != clean or any(word in clean.lower() for word in UNSAFE)
-            or _FETCH.search(clean) or "\\" in styles or re.search(r"@(?!media\b)", styles)
-            or any(re.match(r"svg\.[a-z0-9-]+\s*[~+]", sel) for sel in css_selectors(styles))):
+    if (not _scope_complete(clean, root_class(clean) or "") or sanitise(clean)[0] != clean
+            or any(word in clean.lower() for word in UNSAFE) or _FETCH.search(clean)):
         return None
     return clean

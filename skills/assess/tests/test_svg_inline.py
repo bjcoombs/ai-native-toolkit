@@ -6,9 +6,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import re
+
 import pytest
 
-from lib.svg_inline import css_selectors, inline_svg, root_class, sanitise
+from lib.svg_inline import PROPERTIES, css_selectors, declarations_ok, inline_svg, root_class, sanitise
+from lib.svg_scope import scope_svg
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 HEAD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4"><title>root</title>'
@@ -48,7 +51,7 @@ def test_an_unscoped_svg_is_scoped_here() -> None:
     '<set attributeName="href" to="vbscript:x"/>'.replace("set", "rect"),
     "<!-- --!><img src=x onerror=alert(1)> -->",
     '<use href="https://example.com/x.svg#p"/><use xlink:href="//example.com/x.svg"/>',
-    '<rect style="fill:url(http://example.com/p)" fill="URL( \'https://example.com/q\')" width="1"/>',
+    '<rect fill="URL( \'https://example.com/q\')" width="1"/>',
 ])
 def test_unsafe_markup_is_dropped(body: str) -> None:
     out = inline_svg(_svg(body + PART), "s")
@@ -120,7 +123,8 @@ def test_markup_it_cannot_trust_or_scope_stays_an_image(svg: str) -> None:
 
 def test_a_complete_generator_scope_is_kept() -> None:
     head = '<svg class="ok" xmlns="http://www.w3.org/2000/svg"><title>r</title>'
-    body = ('<style>svg.ok rect {fill:url(#ok-p)} @media (x){svg.ok text {fill:red}} svg.ok {color:red}</style>'
+    body = ('<style>svg.ok rect {fill:url(#ok-p)} @media (prefers-color-scheme: dark){svg.ok text {fill:red}} '
+            'svg.ok {stroke:red}</style>'
             '<pattern id="ok-p"/><use href="#ok-p"/>' + PART)
     assert inline_svg(_svg(body, head), "s") == _svg(body, head)
 
@@ -150,8 +154,10 @@ def test_a_self_closed_root_has_no_details() -> None:
     assert inline_svg("<svg/>", "s") is None
 
 
-def test_css_selectors_reads_media_blocks_and_selector_lists() -> None:
-    assert css_selectors("a, b {x:1} @media (y) { c {z:2} }") == ["a", "b", "c"]
+def test_css_selectors_reads_the_dark_media_block_and_selector_lists() -> None:
+    css = "svg.s a, svg.s .b {fill:#fff} @media (prefers-color-scheme: dark){svg.s text {fill:#000}}"
+    assert css_selectors(css, "s") == ["svg.s a", "svg.s .b", "svg.s text"]
+    assert css_selectors("svg.s a {fill:#fff} @media (y) { svg.s c {fill:#fff} }", "s") is None
     assert root_class("<g/>") is None
 
 
@@ -234,3 +240,75 @@ def test_an_encoded_escape_a_semicolon_prelude_or_src_is_refused(svg: str) -> No
 def test_an_href_with_surrounding_space_is_refused(ref: str) -> None:
     head = '<svg class="fleet-x" xmlns="http://www.w3.org/2000/svg"><title>r</title>'
     assert inline_svg(_svg(ref + PART, head), "s") is None
+
+
+
+# --- the CSS allow-list (#1362, second security review) ------------------------------------
+
+BYPASS = ("{svg}a:is(url(#{p}q ( {{ ), *), body, :is( }} {svg}y) {{ background-color: rgb(1,2,3) }}")
+
+
+@pytest.mark.parametrize("scoped", [True, False])
+def test_the_bad_url_brace_bypass_is_refused(scoped: bool) -> None:
+    if scoped:
+        css = BYPASS.format(svg="svg.fleet-x ", p="fleet-x-")
+        head = '<svg class="fleet-x" xmlns="http://www.w3.org/2000/svg"><title>r</title>'
+        assert inline_svg(_svg(f"<style>{css}</style>" + PART, head), "s") is None
+    else:
+        css = BYPASS.format(svg="", p="")
+        assert inline_svg(_svg(f"<style>{css}</style>" + PART), "s") is None
+
+
+@pytest.mark.parametrize("svg", [
+    _svg('<rect\x0bdata-x=" onmouseover=document.title=1337 x"/>' + PART),
+    _svg('<style>text { content: "}\n} body { background-color: rgb(1,2,3) }</style>' + PART),
+    _svg('<style>text { font-family: "a }</style>' + PART),
+    _svg('<style>text { fill: url(#a) red; position: fixed }</style>' + PART),
+    _svg('<style>text:first-child { fill: red }</style>' + PART),
+    _svg('<style>text > g { fill: red }</style>' + PART),
+    _svg('<style>[fill] { fill: red }</style>' + PART),
+    _svg("<style>text { fill: 'red' }</style>" + PART),
+    _svg('<style>@media (prefers-color-scheme: dark) { @media (prefers-color-scheme: dark) { text {fill:red} } }</style>' + PART),
+    _svg('<rect style="fill:red;transform:scale(9)"/>' + PART),
+    _svg('<rect style="fill:url(http://example.com/p)"/>' + PART),
+])
+def test_css_off_the_allow_list_is_refused(svg: str) -> None:
+    assert inline_svg(svg.replace("\\x0b", "\x0b"), "s") is None
+
+
+def test_declarations_take_only_listed_properties_and_plain_values() -> None:
+    assert declarations_ok('fill: #fff; stroke-width: 1.5; font-family: -apple-system, "Segoe UI", sans-serif')
+    assert declarations_ok("fill: url(#s-hatch); stroke: rgb(1, 2, 3)")
+    assert not declarations_ok("fill: url(#s-hatch x)")
+    assert not declarations_ok('fill: "red"')
+    assert "position" not in PROPERTIES and "z-index" not in PROPERTIES
+
+
+def _sheets(svg: str) -> list[str]:
+    return re.findall(r"<style>(.*?)</style>", svg, re.S)
+
+
+@pytest.mark.parametrize("golden", sorted(str(p.relative_to(FIXTURES)) for p in FIXTURES.glob("*_diagrams/expected*.svg"))
+                         + sorted(str(p.relative_to(FIXTURES)) for p in FIXTURES.glob("fleet_*/expected*.svg")))
+def test_every_generator_golden_s_css_is_on_the_allow_list(golden: str) -> None:
+    svg = (FIXTURES / golden).read_text(encoding="utf-8")
+    scope = root_class(svg.split("?>", 1)[-1].strip())
+    assert scope is not None
+    for css in _sheets(svg):
+        assert css_selectors(css, scope), golden
+
+
+def test_the_treemap_radar_and_doc_graph_css_is_on_the_allow_list(tmp_path: Path) -> None:
+    import lib.fleet.fleet_data as fd
+    import lib.fleet.fleet_radar as fr
+    from fleet_data_fixture import build
+    from test_diagram_scoping import _treemap_svg
+    from lib.svg_scope import SCOPES
+    rendered = [(_treemap_svg(tmp_path), SCOPES["complexity-heatmap"]),
+                (fr.render(fr.radar_view(dict(build(fd.Privacy(full=True))))), SCOPES["radar"])]
+    source = (Path(__file__).resolve().parents[1] / "scripts" / "doc-graph-svg.py").read_text(encoding="utf-8")
+    doc_css = "".join(re.findall(r"^\s+'(  [^']*)',$", source[source.index("'<style>',"):source.index("'</style>',")], re.M))
+    rendered.append((scope_svg(f"<svg><style>{doc_css}</style></svg>", SCOPES["doc-graph"]), SCOPES["doc-graph"]))
+    for svg, scope in rendered:
+        sheets = _sheets(svg)
+        assert sheets and all(css_selectors(css, scope) for css in sheets), scope
