@@ -171,6 +171,12 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
              "are removed.",
     )
     parser.add_argument(
+        "--radar-min-measured", type=int, default=20, metavar="PERCENT",
+        help="The practice radar (radar.svg) draws an axis for a practice measured in at least this "
+             "percent of the run's repositories (default 20; 0 keeps every practice). Not part of the "
+             "run stamp.",
+    )
+    parser.add_argument(
         "--managed-settings", action="store_true",
         help="Read the Claude Code managed settings of the machine running the fleet for the agent "
              "permissions practice (#1153): a central rule credits every repository scanned, so use "
@@ -219,6 +225,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         parser.error("--hash-paths and --hash-salt apply to counts-only output, not --full")
     if args.hash_salt == "":
         parser.error("--hash-salt needs a non-empty value")
+    if not 0 <= args.radar_min_measured <= 100:
+        parser.error("--radar-min-measured must be from 0 to 100")
     if args.jobs < 1 or args.timeout < 1:
         parser.error("--jobs and --timeout must be at least 1")
     if args.scan_jobs is None:  # the CPUs split between the repositories scanned at once (#1381)
