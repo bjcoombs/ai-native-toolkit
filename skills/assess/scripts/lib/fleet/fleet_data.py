@@ -27,7 +27,9 @@ they have no per-repository cell or unit roll-up; their levels stay in
 ``next_step`` and ``tally`` exactly as ``level.json`` gives them (``lib.fleet.fleet_level.repo_level``)
 the owner's ``exclusions`` and ``gate_blockers``, every Step gate that does not hold (#945,
 which a Step target above the next Step reads), and ``in_place`` (#1334), the level result's
-practices in place with their why, which the team pages and the report open with; each unit carries a ``step`` roll-up: the lowest Step over
+practices in place with their why, for readers of the JSON (the team pages read ``groups.jsonl``
+and ``report.md`` reads ``opportunities.in_place``, whose top level is ``evaluate_row``'s, any
+grade); each unit carries a ``step`` roll-up: the lowest Step over
 its measured repositories, "N of M measured", and for the next Step how many repositories
 each gate holds back (a Step reads its gates only, #1083).
 

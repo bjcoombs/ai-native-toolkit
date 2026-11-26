@@ -300,7 +300,8 @@ Each page holds (every heading opening with an `In place:` line, as in [`report.
 
 - first, the group's strengths (#1334): the practices at the top level in every repository of
   the group (an org row: in its settings), each with its level and how many repositories hold
-  it, then the practices where the group holds the highest level any group holds this run;
+  it, then the practices where the group holds the highest level any group holds this run, each
+  with its level;
 - the group's level on every maturity model row, with the roll-up rule;
 - for each row below its top level, the unmet criteria of the next level, one
   numbered step per criterion, so a team can take or leave each on its own.
