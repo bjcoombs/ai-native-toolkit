@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from lib.decline_markers import (
+from lib.run.decline_markers import (
     build_decline_block,
     read_decline_markers,
 )

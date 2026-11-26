@@ -132,7 +132,7 @@ from lib.history.fleet_activity import is_active
 from lib.history.git_churn import ASSESS_CONFIG_PATHSPEC, ASSESS_EXCLUDE_PATHSPEC
 from lib.hosting.platform_cli import CACHE_ENV
 from lib.run_context_types import JsonDict
-from lib.signals import offline_scans
+from lib.run.signals import offline_scans
 
 # Bumped when a row's envelope (the keys below) changes. Scan blocks carry
 # their own shapes, versioned by ``signals_schema_version``.

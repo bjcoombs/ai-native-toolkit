@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from lib import scan_registry as reg
-from lib.scan_registry import ScanRegistryError, ScanSpec
-from lib.scan_plan import ScanPlan
-from lib.scan_timings import TIMINGS_KEY
+from lib.run import scan_registry as reg
+from lib.run.scan_registry import ScanRegistryError, ScanSpec
+from lib.run.scan_plan import ScanPlan
+from lib.run.scan_timings import TIMINGS_KEY
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 
@@ -317,7 +317,7 @@ def test_a_raising_doc_staleness_scan_degrades_its_keys_and_the_run_continues(
     still degrades under its own label, and its readers see the marker."""
     from assess_core import build_and_publish_run
     from assess_core_helpers import _minimal_repo
-    from lib import core_scans
+    from lib.run import core_scans
 
     def boom(*_a, **_k):
         raise RuntimeError("kaput")
@@ -334,7 +334,7 @@ def test_a_raising_doc_staleness_scan_degrades_its_keys_and_the_run_continues(
 def test_a_raising_doc_join_degrades_only_the_documentation_block(tmp_path, monkeypatch):
     from assess_core import build_and_publish_run
     from assess_core_helpers import _minimal_repo
-    from lib import core_scans
+    from lib.run import core_scans
 
     def boom(*_a, **_k):
         raise RuntimeError("kaput")
@@ -454,9 +454,9 @@ def test_default_jobs_matches_jobs_1(tmp_path, monkeypatch):
     import json
     import uuid
 
-    import lib.run_setup as rs
+    import lib.run.run_setup as rs
     from assess_core import build_run_context
-    from lib.scan_pool import default_jobs
+    from lib.run.scan_pool import default_jobs
 
     class _Clock:
         @staticmethod
@@ -480,7 +480,7 @@ def test_signals_document_is_the_same_under_jobs_4(tmp_path):
     """#1381: the headless runner's blocks do not depend on --jobs either."""
     import json
 
-    from lib.signals import build_document
+    from lib.run.signals import build_document
 
     repo = _fixture_repos(tmp_path)[1]
     one, four = (build_document(repo, jobs=jobs)["scans"] for jobs in (1, 4))

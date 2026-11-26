@@ -129,8 +129,8 @@ def test_a_scoped_runs_omission_rows_name_its_own_artifact_dir() -> None:
     file, not the whole-repo snapshot; a whole-repo run keeps .assess/."""
     from typing import cast
 
-    from lib.context_blocks import point_at_artifact_dir
-    from lib.core_scans import keyhole_blocks
+    from lib.run.context_blocks import point_at_artifact_dir
+    from lib.run.core_scans import keyhole_blocks
     from lib.run_context_types import KeyholeIntegration
 
     units = [f"u{i}" for i in range(ks.MAX_ATTENTION_UNITS + 4)]

@@ -5,7 +5,7 @@
 id = "core.hot_test_index"
 kind = "collector"
 title = "Repository test index"
-callable = "lib.core_scans:hot_test_index"
+callable = "lib.run.core_scans:hot_test_index"
 publishes = []
 reads = ["repo_root", "current"]
 stage = "setup"

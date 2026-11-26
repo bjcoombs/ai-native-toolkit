@@ -1,13 +1,13 @@
 """Headless, signals-only entry point for /assess (issue #545).
 
-Runs the deterministic scans from the registry in ``lib/scan_registry.py``
+Runs the deterministic scans from the registry in ``lib/run/scan_registry.py``
 against a repository and writes one JSON document to ``--out``. Built for
 callers scanning many repositories they may not own:
 
 - never writes into the target repository (``--out`` inside it is refused),
 - makes no network calls (network scans run offline or report unavailable),
   except under the opt-in ``--platform``, where the scans in
-  ``lib/signals.py`` ``PLATFORM_SCANS`` read GitHub or GitLab through gh or glab,
+  ``lib/run/signals.py`` ``PLATFORM_SCANS`` read GitHub or GitLab through gh or glab,
 - renders no SVG and asks no consent questions.
 
 Blocks ``assess_core.py`` assembles through its own table entries are listed as
@@ -26,7 +26,7 @@ Run:
         [--counts-only [--hash-paths | --hash-salt VALUE]] [--fleet-config FILE] [--platform]
         [--ghsync-root DIR] [--scope PATH | --units] [--pack FILE ...] [--jobs N]
 
-``--jobs N`` (#1381) runs at most N scans at a time (``lib/scan_pool.py``; default the CPU
+``--jobs N`` (#1381) runs at most N scans at a time (``lib/run/scan_pool.py``; default the CPU
 count capped at 8); the document is the same for every N, and 1 runs them one by one.
 
 ``--ghsync-root DIR`` names the ghsync root holding the target: GitLab
@@ -40,7 +40,7 @@ agent settings, the root instruction file) read the whole checkout. The stamp re
 the folder as ``scope``; counts-only output writes ``set`` in its place, or its salted hash
 under ``--hash-paths``, so ``null`` still means the whole checkout.
 
-``--units`` (#866) adds the monorepo unit scans (``lib/signals.py`` ``UNIT_SCANS``): the
+``--units`` (#866) adds the monorepo unit scans (``lib/run/signals.py`` ``UNIT_SCANS``): the
 ``units`` block and ``unit_readings``, each unit's own readings of the scoped scans with
 every condition tagged ``unit`` or ``inherited``. ``fleet.py --monorepo-units`` passes it, and the
 fleet computes each unit's Step from them. Counts-only output drops each unit's folder, or
@@ -54,7 +54,7 @@ text. ``fleet.py --pack`` passes every repository the same packs in the same ord
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     # The layer 2-4 blocks (lib/headless_layers.py): the import graph and the
+#     # The layer 2-4 blocks (lib/run/headless_layers.py): the import graph and the
 #     # file size and complexity scores. Without them each block reports
 #     # unavailable with a named reason. lizard is pinned to the treemap's version.
 #     "networkx",
@@ -89,9 +89,9 @@ from lib.counts_only.content_free import (
 from lib.fleet_config import FleetConfig, FleetConfigError, load_fleet_config
 from lib.packs import PackError, load_packs
 from lib.run_context_types import SignalsDocument
-from lib.run_scope import resolve_scope
-from lib.scan_pool import add_jobs_argument
-from lib.signals import (
+from lib.run.run_scope import resolve_scope
+from lib.run.scan_pool import add_jobs_argument
+from lib.run.signals import (
     DEFAULT_WINDOW,
     UnknownScanError,
     build_document,
@@ -130,7 +130,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--platform", action="store_true",
-        help="Make the platform reads (gh or glab) of the scans in lib/signals.py PLATFORM_SCANS "
+        help="Make the platform reads (gh or glab) of the scans in lib/run/signals.py PLATFORM_SCANS "
              "instead of reporting them unavailable. Off by default: no network call.",
     )
     parser.add_argument(

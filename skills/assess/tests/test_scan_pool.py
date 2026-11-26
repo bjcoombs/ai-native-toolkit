@@ -1,4 +1,4 @@
-"""Tests for the bounded scan pool (lib/scan_pool.py, #1381)."""
+"""Tests for the bounded scan pool (lib/run/scan_pool.py, #1381)."""
 from __future__ import annotations
 
 import argparse
@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from lib import scan_pool as pool
+from lib.run import scan_pool as pool
 
 
 def test_default_jobs_is_the_cpu_count_capped(monkeypatch):

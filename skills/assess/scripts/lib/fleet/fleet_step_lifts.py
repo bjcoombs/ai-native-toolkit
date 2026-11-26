@@ -11,23 +11,28 @@ condition must be ``unmet`` on its own criteria: a ``not_measured`` or ``not_app
 one never counts, and nor does one that is unmet only through a ``requires`` (its reason
 ``requires:<id>``), since meeting it alone changes nothing. So a repository the run could
 not see is never promised a lift. Meeting the condition holds every gate of the next Step,
-so the repository reaches it.
+so the repository reaches it, and further when the Steps above already hold their other
+gates: the lift counts toward the Step the change reaches, the level result's
+``ceiling_step`` (#1333; the next Step for a result stored before #1374), and a lift past the
+next Step is flagged ``multi_step``.
 
 Each entry is the condition id, its row and that row's model title, the first gate of the
-next Step that reads it, the Step reached and the repository count. Entries are ranked by
-count (most first), then Step, then the condition's order in the model. No entry names a
-repository, so the list reads the same in ``--full``, counts-only and hashed output.
+next Step that reads it, the Step reached, whether that is past the next Step and the
+repository count. Entries are ranked by count (most first), then Step, then the condition's
+order in the model, then single-Step before multi-Step. No entry names a repository, so the
+list reads the same in ``--full``, counts-only and hashed output.
 
 ``render`` draws ``one-change-away.svg`` from a ``fleet-data.json`` mapping: one bar per
-entry with its count, labelled with the gate and the row title (never the condition id,
-which carries a layer number). Repositories whose next Step waits on a gate that was not
+entry with its count, labelled with the gate, the row title and the Step reached (never the
+condition id, which carries a layer number); a multi-Step bar says so in its label and
+carries ``data-multi-step``. Repositories whose next Step waits on a gate that was not
 measured, or that the owner set aside, are counted on a hatched line under the bars, never
 as a lift and never as 0. Each bar's group carries its ``<title>`` values as ``data-gate``,
 ``data-practice`` and ``data-step`` (#1360). ``render`` is the stable entry point the fleet page (#946) calls.
 
 `step_lifts(model, results)` -> `list[StepLift]` (`condition`, `row`, `title`, `gate`,
-`step`, `repo_count`); `lift_condition(model, result)` is one repository's
-`(condition, gate, step)` or None. `render(data)` -> the SVG; `in_place(data)` the report's
+`step`, `multi_step`, `repo_count`); `lift_condition(model, result)` is one repository's
+`(condition, gate, step, multi_step)` or None. `render(data)` -> the SVG; `in_place(data)` the report's
 opening line. Tests: `tests/test_fleet_step_diagrams.py`.
 """
 from __future__ import annotations
@@ -39,6 +44,7 @@ from typing import Any, TypedDict
 import lib.fleet.fleet_svg as svg
 from lib.svg_scope import SCOPES
 from lib.assess_diagrams import wrap
+from lib.scoring.headline import lone_condition
 from lib.scoring.level_result_types import LevelResult
 from lib.scoring.levels import MaturityModel, condition_id
 from lib.vocabulary import IN_PLACE
@@ -46,7 +52,8 @@ from lib.vocabulary import IN_PLACE
 FILE = "one-change-away.svg"
 TITLE = "One change away from the next Step"
 QUESTION = "Which single change would take the most repositories to their next Step?"
-CAPTION = ("Each bar counts the repositories that one change would take to their next Step. "
+CAPTION = ("Each bar counts the repositories that one change would take to their next Step, by the Step "
+           "it reaches; a change that reaches past the next Step is marked a multi-Step jump. "
            "A repository waiting on a gate that was not measured is not counted.")
 
 PAD = 16.0
@@ -62,33 +69,22 @@ class StepLift(TypedDict):
     row: str  # its maturity-model row id
     title: str  # that row's model title
     gate: str  # the first gate of the next Step that reads it
-    step: int  # the Step the repositories would reach
+    step: int  # the Step the repositories would reach (#1333: past the next one when the gates above hold)
+    multi_step: bool  # #1333: the change reaches past the repositories' next Step
     repo_count: int
 
 
-def lift_condition(model: MaturityModel, result: LevelResult) -> tuple[str, str, int] | None:
-    """``(condition, gate, step)`` when meeting that one condition takes the repository to its
-    next Step; None otherwise (see the module docstring)."""
+def lift_condition(model: MaturityModel, result: LevelResult) -> tuple[str, str, int, bool] | None:
+    """``(condition, gate, step, multi_step)`` when meeting that one condition takes the repository
+    to its next Step, ``step`` the Step it reaches; None otherwise (see the module docstring)."""
     nxt = result["next_step"]
-    if result["step"] is None or nxt is None:
+    lone = lone_condition(result, model.get("steps", []))  # the test the headline reads too
+    if nxt is None or lone is None:
         return None
-    definition = next((s for s in model.get("steps", []) if s["step"] == nxt["step"]), None)
-    if definition is None:
-        return None
-    by_id = {c["id"]: c for c in result["conditions"]}
-    missing: dict[str, str] = {}
-    for gate in definition["gates"]:
-        for level in range(1, gate["level"] + 1):
-            cid = condition_id(gate["row"], level)
-            if cid in by_id and by_id[cid]["state"] != "met":
-                missing.setdefault(cid, gate["id"])
-    if len(missing) != 1:
-        return None
-    ((cid, gate_id),) = missing.items()
-    cond = by_id[cid]
-    if cond["state"] != "unmet" or cond.get("reason", "").startswith("requires:"):
-        return None
-    return cid, gate_id, nxt["step"]
+    cid, gate_id = lone
+    ceiling = result.get("ceiling_step")
+    reached = ceiling if isinstance(ceiling, int) and ceiling > nxt["step"] else nxt["step"]
+    return cid, gate_id, reached, reached > nxt["step"]
 
 
 def step_lifts(model: MaturityModel | None, results: Iterable[LevelResult | None]) -> list[StepLift]:
@@ -104,9 +100,9 @@ def step_lifts(model: MaturityModel | None, results: Iterable[LevelResult | None
             cid = condition_id(row["id"], level["level"])
             order[cid] = len(order)
             titles[cid] = (row["id"], row["title"])
-    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0][2], order[kv[0][0]]))
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0][2], order[kv[0][0]], kv[0][3]))
     return [{"condition": cid, "row": titles[cid][0], "title": titles[cid][1], "gate": gate, "step": step,
-             "repo_count": count} for (cid, gate, step), count in ranked]
+             "multi_step": multi, "repo_count": count} for (cid, gate, step, multi), count in ranked]
 
 
 def _plural(n: int) -> str:
@@ -137,7 +133,8 @@ def in_place(data: Mapping[str, Any]) -> str:
 
 
 def label(lift: StepLift) -> str:
-    return f"{lift['gate']} gate ({lift['title']}), to Step {lift['step']}"
+    jump = ", a multi-Step jump" if lift.get("multi_step") else ""
+    return f"{lift['gate']} gate ({lift['title']}), to Step {lift['step']}{jump}"
 
 
 def _notes(data: Mapping[str, Any]) -> list[str]:
@@ -167,8 +164,9 @@ def render(data: Mapping[str, Any]) -> str:
     for lift in lifts:
         name = label(lift)
         width = scale(lift["repo_count"])
+        multi = ' data-multi-step="true"' if lift.get("multi_step") else ""
         values: dict[str, str | int | None] = {"gate": lift["gate"], "practice": lift["title"], "step": lift["step"]}
-        body.append(f'<g data-condition="{svg.esc(lift["condition"])}"{svg.data_attrs(values)}>'
+        body.append(f'<g data-condition="{svg.esc(lift["condition"])}"{multi}{svg.data_attrs(values)}>'
                     f'<title>{svg.esc(name)}</title>'
                     + svg.text(PAD, y, svg.truncate(name, limit), size=12, cls="fg")
                     + f'<rect x="{PAD:.1f}" y="{y + 6:.1f}" width="{width:.1f}" height="{BAR_H:.1f}" '

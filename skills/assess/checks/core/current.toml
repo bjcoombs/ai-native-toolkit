@@ -5,7 +5,7 @@
 id = "core.current"
 kind = "collector"
 title = "Complexity stats (this run)"
-callable = "lib.run_setup:current_stats"
+callable = "lib.run.run_setup:current_stats"
 publishes = []
 reads = ["assess_dir"]
 stage = "setup"

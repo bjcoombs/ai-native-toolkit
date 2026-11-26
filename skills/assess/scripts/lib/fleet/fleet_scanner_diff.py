@@ -26,7 +26,7 @@ backstop below catches a change that kept the name.
   checkout, a commit missing from it, a shallow clone) the diff is ``unavailable``.
 
 **Producers** (``producers``): each block the headless runner publishes
-(``lib.signals.SIGNAL_SCANS``, spread keys included) maps to the module that
+(``lib.run.signals.SIGNAL_SCANS``, spread keys included) maps to the module that
 defines its callable (``fn`` and ``offline_fn``, partials unwrapped) and that
 module's static ``lib`` import closure (a package such as ``lib/test_pressure/``
 included, with its relative imports). A module defining more than one spec's
@@ -60,7 +60,7 @@ not scans, and keep their cause.
 Delta attribution for scanner changes (issue #774), read by `fleet_compare.compare`.
 
 Signal meaning convention: a scanner change that alters a signal's meaning ships under a new
-signal name or a `signals_schema_version` bump (`lib/signals.py` `SIGNALS_SCHEMA_VERSION`). An
+signal name or a `signals_schema_version` bump (`lib/run/signals.py` `SIGNALS_SCHEMA_VERSION`). An
 earlier run then reads the new signal as absent (unknown), never as a false repository move.
 A pure rename is aliased instead (`signal_aliases.SIGNAL_ALIASES`).
 
@@ -69,7 +69,7 @@ The backstop catches a change that kept the name. `scanner_diff` compares the st
 `plugin_version`). One null commit, or two null commits at different `plugin_version`s, is
 `unavailable`. Two different commits run `git diff --name-only`
 over `skills/assess/scripts/lib` in the running toolkit checkout; when git cannot answer, the
-result is `unavailable`. `producers` maps each block in `lib.signals.SIGNAL_SCANS` to its
+result is `unavailable`. `producers` maps each block in `lib.run.signals.SIGNAL_SCANS` to its
 producer modules:
 
 - the defining module of `fn` / `offline_fn` and its static `lib` import closure (a package
@@ -314,7 +314,7 @@ def _callable_module(fn: Callable[..., Any]) -> tuple[str, str] | None:
 def producers(specs: Sequence[Any] | None = None) -> dict[str, frozenset[str]]:
     """Each published block to its producer modules, toolkit-relative posix paths (module doc)."""
     if specs is None:
-        from lib.signals import SIGNAL_SCANS  # the headless table; heavy, imported on use
+        from lib.run.signals import SIGNAL_SCANS  # the headless table; heavy, imported on use
         specs = SIGNAL_SCANS
     sources: list[tuple[Any, list[tuple[str, str]]]] = []
     defined: dict[str, int] = {}

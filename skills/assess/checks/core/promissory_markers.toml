@@ -5,7 +5,7 @@
 id = "core.promissory_markers"
 kind = "collector"
 title = "Promissory markers"
-callable = "lib.core_scans:promissory_block"
+callable = "lib.run.core_scans:promissory_block"
 publishes = ["promissory_markers"]
 reads = ["promissory"]
 stage = "read_side"
@@ -13,7 +13,7 @@ unit_scope = "scoped"
 headless = { promissory_markers = "headless_variant" }
 whys.promissory_markers = "TODOs, suppressions and disabled tests that survive many edits are promises nobody kept; an agent cannot tell from the code whether one is still meant."
 headless_variants = [
-  { block = "promissory_markers", callable = "lib.headless_layers:promissory_markers", reads = ["promissory"], stage = "read_side" },
+  { block = "promissory_markers", callable = "lib.run.headless_layers:promissory_markers", reads = ["promissory"], stage = "read_side" },
 ]
 shapes = [
   { path = "promissory_markers", type = "lib.counts_only.block_shapes:PromissoryMarkersBlock" },

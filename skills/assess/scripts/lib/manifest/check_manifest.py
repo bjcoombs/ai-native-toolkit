@@ -110,7 +110,7 @@ class UnknownReason(TypedDict):
 
 
 class HeadlessVariant(TypedDict):
-    """The headless runner's own spec for a block (``lib.headless_layers``, ``lib.headless_static``)."""
+    """The headless runner's own spec for a block (``lib.run.headless_layers``, ``lib.run.headless_static``)."""
 
     block: str
     callable: str

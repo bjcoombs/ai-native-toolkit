@@ -5,7 +5,7 @@
 id = "core.test_pressure"
 kind = "collector"
 title = "Test pressure"
-callable = "lib.core_scans:test_pressure_block"
+callable = "lib.run.core_scans:test_pressure_block"
 publishes = ["test_pressure"]
 reads = ["test_pressure_scan"]
 stage = "read_side"

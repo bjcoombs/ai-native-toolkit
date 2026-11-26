@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 
 import assess_core
-import lib.scan_registry as reg
+import lib.run.scan_registry as reg
 from lib.scoring.level_signals import signal_path_validator
 from lib.scoring.level_tally import LEVEL_READS
 from lib.pack_checks import collect, glob_regex
@@ -446,7 +446,7 @@ def test_pack_flag_is_repeatable_in_pass_order(pack_file: Path, tmp_path: Path) 
 def test_a_narrowed_run_plans_the_pack_checks(repo: Path, pack_file: Path, tmp_path: Path) -> None:
     """#1268's scan plan (a --levels run) always runs pack_checks: with --pack it evaluates the
     checks, and without it writes no pack or packs key, never a not-run marker."""
-    from lib.scan_plan import run_plan
+    from lib.run.scan_plan import run_plan
     packs = (load_pack(pack_file),)
     choice = _model(tmp_path, packs)
     plan = run_plan(choice)

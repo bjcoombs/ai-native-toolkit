@@ -5,7 +5,7 @@
 id = "core.accretion_by_file"
 kind = "collector"
 title = "Accretion by file"
-callable = "lib.core_scans:accretion_by_file"
+callable = "lib.run.core_scans:accretion_by_file"
 publishes = []
 reads = ["accretion_scan"]
 stage = "setup"

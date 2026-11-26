@@ -5,14 +5,14 @@
 id = "core.archetype"
 kind = "collector"
 title = "Repository archetype"
-callable = "lib.core_scans:archetype"
+callable = "lib.run.core_scans:archetype"
 publishes = ["archetype"]
 reads = ["repo_root"]
 stage = "read_side"
 headless = { archetype = "headless_variant" }
 whys.archetype = "It tells a documentation repository from a software one, so the report does not ask a repository with no code for tests and CI on code it does not hold."
 headless_variants = [
-  { block = "archetype", callable = "lib.headless_static:archetype", reads = ["repo_root"], stage = "read_side" },
+  { block = "archetype", callable = "lib.run.headless_static:archetype", reads = ["repo_root"], stage = "read_side" },
 ]
 revision = 1
   [entries.privacy]

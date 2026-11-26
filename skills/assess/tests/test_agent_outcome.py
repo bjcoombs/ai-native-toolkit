@@ -27,7 +27,7 @@ from lib.agent_outcome import (
 )
 from lib.history.ai_usage import scan_ai_usage
 from lib.counts_only.content_free import counts_only_scans
-from lib.scan_registry import SCANS
+from lib.run.scan_registry import SCANS
 
 CLAUDE = "Claude Helper <noreply@anthropic.com>"
 DAY = 86400

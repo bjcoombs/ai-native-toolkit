@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from lib import core_scans
+from lib.run import core_scans
 from lib.fleet.fleet_level import repo_level
 from lib.scoring.level_signals import signal_path_validator
 from lib.scoring.level_tally import LEVEL_READS, default_model

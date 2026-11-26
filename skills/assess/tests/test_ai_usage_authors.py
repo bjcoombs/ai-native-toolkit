@@ -40,7 +40,7 @@ from lib.fleet_config import (
     parse_fleet_config,
 )
 from lib.scoring.level_signals import signal_path_validator
-from lib.signals import collect
+from lib.run.signals import collect
 from lib.scoring.levels import load_levels
 
 RECENT = (datetime.now(timezone.utc) - timedelta(days=30)).replace(microsecond=0).isoformat()

@@ -183,7 +183,7 @@ def test_an_api_error_past_the_root_is_unavailable(tmp_path: Path, monkeypatch: 
 
 
 def test_the_org_scan_runs_on_the_platform_pass_only() -> None:
-    import lib.signals as signals
+    import lib.run.signals as signals
 
     assert "org_security_policy" in signals.PLATFORM_SCANS
     collector = next(c for c in cm.collectors(cm.core_manifest()) if c["id"] == "core.org_security_policy")

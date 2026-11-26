@@ -2,7 +2,7 @@
 
 ``/assess --fix`` and ``/assess --starter`` run this; a plain ``/assess`` never does, and
 ``/fleet`` has no fix path at all. It reads the repository with the headless scans the Step gates
-need (``lib/signals.collect``), takes the gates blocking the next Step from the level result
+need (``lib/run/signals.collect``), takes the gates blocking the next Step from the level result
 (``lib/scoring/level_tally.level_result``, the default maturity model), and writes a starter file for
 each one, plus the deny-rule guardrail when no permission rule is committed
 (``lib/starter_files.py``). Each file is built from what the repository already has: its
@@ -53,7 +53,7 @@ from lib.exec_summary import GATE_TASK
 from lib.scoring.level_tally import default_model, level_result
 from lib.scoring.levels import MaturityModel, condition_id
 from lib.run_context_types_fix import CiSystem, Delivery, FileOutcome, FixReport, GateProof
-from lib.signals import collect
+from lib.run.signals import collect
 from lib.starter_delivery import Runner, deliver, ignored, is_git_repo, run, stage, tree_clean
 from lib.starter_files import GUARDRAIL, detect_facts, plan_files, write_files
 

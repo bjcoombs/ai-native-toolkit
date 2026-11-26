@@ -174,3 +174,32 @@ def test_the_report_skips_the_ladder_without_steps() -> None:
 
 def test_two_renders_are_byte_identical() -> None:
     assert ladder.render_ladder(_at(2), STEPS) == ladder.render_ladder(_at(2), STEPS)
+
+
+def _one_file_from_step_3() -> LevelResult:
+    """#1333: Step 1, the instruction file missing, the Step 3 gate (CI) already held."""
+    level = _at(1)
+    next(c for c in level["conditions"] if c["id"] == "layer-5-ci.1")["state"] = "met"
+    assert level["next_step"] is not None
+    level["next_step"]["blockers"][0].update({"condition": "layer-0-instructions.1", "state": "unmet"})
+    level["conditions"] = [{**c, "row": c["id"].rpartition(".")[0]} for c in level["conditions"]]
+    level.update({"ceiling_step": 3, "held_above": ["ci_runs_tests"]})
+    return level
+
+
+def test_held_gates_above_the_step_read_already_in_place() -> None:
+    content = ladder.render_ladder(_one_file_from_step_3(), STEPS)
+    assert f"{GATE_CHANGE['ci_runs_tests']} ({ladder.ALREADY})" in content
+    assert f"{GATE_CHANGE['instructions']} (not yet)" in content
+    assert f"{GATE_CHANGE['coverage_gate']} (not yet)" in content
+    # a gate held at or below the run's Step stays "in place"
+    assert f"{GATE_CHANGE['instructions']} (in place)" in ladder.render_ladder(_at(2), STEPS)
+
+
+def test_the_step_one_change_reaches_is_marked() -> None:
+    content = ladder.render_ladder(_one_file_from_step_3(), STEPS)
+    root = ET.fromstring(content.encode("utf-8"))
+    marked = [int(r.attrib["data-step"]) for r in root.iter(f"{SVG_NS}rect") if r.attrib.get("data-one-change")]
+    assert marked == [3] and ladder.ONE_CHANGE in content
+    assert ladder.ONE_CHANGE not in ladder.render_ladder(_at(1), STEPS)
+    assert _rungs(content) == {1: "here", 2: "ahead", 3: "ahead", 4: "ahead"}

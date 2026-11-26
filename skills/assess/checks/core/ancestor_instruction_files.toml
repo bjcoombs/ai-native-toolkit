@@ -5,7 +5,7 @@
 id = "core.ancestor_instruction_files"
 kind = "collector"
 title = "Ancestor instruction files"
-callable = "lib.core_scans:ancestor_instructions"
+callable = "lib.run.core_scans:ancestor_instructions"
 publishes = ["ancestor_instruction_files"]
 reads = ["repo_root"]
 stage = "read_side"

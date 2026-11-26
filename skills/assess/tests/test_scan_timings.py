@@ -1,9 +1,9 @@
-"""Tests for lib/scan_timings.py: the timings diagnostic and its one-line summary (#1380)."""
+"""Tests for lib/run/scan_timings.py: the timings diagnostic and its one-line summary (#1380)."""
 from __future__ import annotations
 
 import pytest
 
-from lib.scan_timings import TIMINGS_KEY, summary_line, timed, timings_block
+from lib.run.scan_timings import TIMINGS_KEY, summary_line, timed, timings_block
 
 
 def test_timed_records_even_when_the_body_raises():

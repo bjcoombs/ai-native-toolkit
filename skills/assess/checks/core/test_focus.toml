@@ -5,7 +5,7 @@
 id = "core.test_focus"
 kind = "collector"
 title = "Test focus"
-callable = "lib.core_scans:test_focus"
+callable = "lib.run.core_scans:test_focus"
 publishes = ["test_focus"]
 reads = ["repo_root", "current", "coverage_data", "test_pressure", "hot_test_index"]
 stage = "read_side"

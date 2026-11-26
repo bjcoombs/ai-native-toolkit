@@ -68,7 +68,7 @@ from lib.fleet.runner import repository_name
 from lib.assess_diagrams_review import build_all
 from lib.scoring.headline import GLOSSARY_URL, as_headline
 from lib.report.measured_appendix import measured_section
-from lib.scan_plan import not_run_text
+from lib.run.scan_plan import not_run_text
 
 # The findings section's heading, as lib/keyhole/keyhole_signals.render_findings_markdown writes
 # it; a narrowed run keeps it above its not-run line (#1253).
@@ -216,7 +216,7 @@ def render_hotspots_table(ctx: dict[str, Any]) -> str:
 
 def _not_run(ctx: dict[str, Any], key: str) -> str | None:
     """``_Not run under profile citizen._`` when a ``--profile`` / ``--levels`` run left the
-    scan behind ``key`` out (``lib/scan_plan.py``, #1268): never read as none or zero."""
+    scan behind ``key`` out (``lib/run/scan_plan.py``, #1268): never read as none or zero."""
     text = not_run_text(ctx.get(key))
     return None if text is None else f"_{text[0].upper()}{text[1:]}._"
 
@@ -634,7 +634,7 @@ def report_facts(ctx: dict[str, Any]) -> list[CardFact]:
 
 
 def _narrowed_line(ctx: dict[str, Any]) -> str:
-    """The card's last line on a run a scan plan narrowed (``lib/scan_plan.py``, #1268): the
+    """The card's last line on a run a scan plan narrowed (``lib/run/scan_plan.py``, #1268): the
     scans the model does not read, the unit roll-up among them, were not run, never zero."""
     plan = ctx.get("scan_plan")
     model = plan.get("model") if isinstance(plan, dict) else None

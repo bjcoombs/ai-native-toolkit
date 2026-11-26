@@ -14,7 +14,7 @@ import lib.hosting.gitlab_include_renames as renames_mod
 from lib.ci.ci_includes import IncludeRenames, resolve_includes
 from lib.hosting.gh_cli import GhUnavailable
 from lib.hosting.gitlab_cli import GitlabProject
-from lib.signals import collect
+from lib.run.signals import collect
 from test_fleet import make_repo
 
 TPL = "unit:\n  script:\n    - pytest -q\n"

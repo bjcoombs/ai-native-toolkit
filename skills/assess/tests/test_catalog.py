@@ -25,8 +25,8 @@ from lib.report.catalog_md import CONDITION_COLUMNS, render_markdown
 from lib.scoring.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
 from lib.keyhole.keyhole_signals import FINDING_ORDER
 from lib.scoring.level_signals import SIGNAL_INPUTS, counts_toward_level, load_default_levels
-from lib.scan_registry import SCANS
-from lib.signals import known_scans
+from lib.run.scan_registry import SCANS
+from lib.run.signals import known_scans
 
 SCAN_FIELDS = {"name", "title", "summary", "collector", "reads", "network", "platform", "headless",
                "privacy", "used_by", "unknown_reasons", "evidence", "grades", "why", "why_source"}

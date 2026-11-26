@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 
 from assess_core_helpers import _minimal_repo
-from lib import core_scans, run_setup
-from lib.run_publish import publish_run
-from lib.scan_registry import STAGE_SETUP, run_scans
+from lib.run import core_scans, run_setup
+from lib.run.run_publish import publish_run
+from lib.run.scan_registry import STAGE_SETUP, run_scans
 from lib.complexity.stats_diff import StatsDiff
 
 
@@ -66,7 +66,7 @@ def test_a_missing_stats_sidecar_reads_unavailable_not_zero(tmp_path: Path) -> N
     """#959: no complexity-stats.json is not a measured zero, so the empty-set rule
     (no_scored_files) never fires on it and the tally names the missing sidecar."""
     from lib.scoring import level_tally
-    from lib.run_scope import NO_STATS_REASON, load_current_stats
+    from lib.run.run_scope import NO_STATS_REASON, load_current_stats
 
     stats = _header_for(load_current_stats(tmp_path))["stats_summary"]
     assert stats["available"] is False and stats["reason"] == NO_STATS_REASON
@@ -85,7 +85,7 @@ def test_a_sidecar_before_the_class_split_reads_no_class_split() -> None:
     not measured with its code; a missing sidecar carries no class-split marker."""
     from lib.scoring import level_tally
     from lib.class_sizes import loc_by_class
-    from lib.run_scope import load_current_stats
+    from lib.run.run_scope import load_current_stats
 
     older = {"schema_version": 7, "files_scored": 3, "loc": {"p95": 40.0}}
     stats = _header_for(older)["stats_summary"]

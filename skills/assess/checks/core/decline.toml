@@ -5,7 +5,7 @@
 id = "core.decline"
 kind = "collector"
 title = "Declined optional tools"
-callable = "lib.core_scans:decline_blocks"
+callable = "lib.run.core_scans:decline_blocks"
 publishes = ["decline_markers", "reoffer_mutation", "decline_disclosures"]
 reads = ["assess_dir", "plugin_version"]
 stage = "read_side"

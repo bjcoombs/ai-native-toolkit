@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/assess/references/signals.schema.json",
   "title": "assess signals document",
-  "description": "Output of skills/assess/scripts/assess_signals.py: a run stamp plus one block per scan. Generated from lib/run_context_types.py by lib/signals_schema.py.",
+  "description": "Output of skills/assess/scripts/assess_signals.py: a run stamp plus one block per scan. Generated from lib/run_context_types.py by lib/run/signals_schema.py.",
   "type": "object",
   "properties": {
     "signals_schema_version": {

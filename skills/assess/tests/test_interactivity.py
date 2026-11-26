@@ -9,7 +9,7 @@ when CI is set.
 """
 from __future__ import annotations
 
-from lib.interactivity import (
+from lib.run.interactivity import (
     NON_INTERACTIVE_ENV,
     OFFER_TYPES,
     build_offers_block,

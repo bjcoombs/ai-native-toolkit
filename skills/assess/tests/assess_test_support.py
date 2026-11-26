@@ -13,7 +13,7 @@ load them with stand-in modules in ``sys.modules``. ``stub_heavy_deps``
 installs the stand-ins through a ``MonkeyPatch``, so they go again when the
 caller's scope ends. A stand-in left behind changes later tests in the same
 worker: ``pytest.approx`` calls ``numpy.isscalar``, and
-``lib.headless_layers.lizard_analyzer`` reads a lizard stand-in as "lizard
+``lib.run.headless_layers.lizard_analyzer`` reads a lizard stand-in as "lizard
 missing", which empties the ``stats_summary`` block (#1108). The conftest
 guard uses ``stand_in_snapshot`` and ``leaked_stand_ins`` to fail any test
 module that leaves one behind.
@@ -67,7 +67,7 @@ def use_real_lizard(monkeypatch: pytest.MonkeyPatch) -> None:
     The undo restores what stood there before: a stand-in, or no entry at all. An
     installed lizard already in place is left alone.
 
-    ``lib.headless_layers.lizard_analyzer`` reads a stand-in as "lizard not
+    ``lib.run.headless_layers.lizard_analyzer`` reads a stand-in as "lizard not
     installed", so a headless ``stats_summary`` built while one is in place reads
     ``no_lizard`` (#1117). ``stub_heavy_deps`` now removes its stand-ins when the
     loading fixture's scope ends (#831); this keeps a headless scan scored even

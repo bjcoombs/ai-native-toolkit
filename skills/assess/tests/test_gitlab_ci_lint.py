@@ -16,7 +16,7 @@ from lib.ci.ci_checks import scan_ci_checks
 from lib.counts_only.content_free import counts_only_scans
 from lib.ci.merged_ci import NOT_NEEDED, NOT_READ, MergedCi, as_merged
 from lib.ci.review_automation import scan_review_automation
-from lib.signals import collect
+from lib.run.signals import collect
 from test_fleet import make_repo
 from test_fleet_cli import fleet_cli
 

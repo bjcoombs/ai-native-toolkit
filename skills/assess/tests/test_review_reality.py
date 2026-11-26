@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from lib.counts_only.content_free import reason_code
 from lib.hosting.platform_cli import CACHE_ENV
 from lib.hosting.review_reality import scan_review_reality
-from lib.signals import collect
+from lib.run.signals import collect
 
 FAKE_GH = """#!/bin/sh
 echo "$*" >> "$FAKE_GH/log"

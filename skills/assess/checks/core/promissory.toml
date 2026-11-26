@@ -5,7 +5,7 @@
 id = "core.promissory"
 kind = "collector"
 title = "Promissory marker scan"
-callable = "lib.core_scans:promissory_scan"
+callable = "lib.run.core_scans:promissory_scan"
 publishes = []
 reads = ["repo_root", "excludes", "scope"]
 stage = "setup"

@@ -17,7 +17,7 @@ import assess_signals
 import lib.fleet.fleet_heatmap as fh
 import lib.fleet.fleet_maturity as fm
 import lib.fleet.fleet_next_steps as ns
-from lib import signals
+from lib.run import signals
 from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
 from lib.fleet.fleet_groups import FLEET_GROUP_VERSION, full_run_only_signals, group_row
 from lib.fleet.fleet_view import FleetViewError, _check_row

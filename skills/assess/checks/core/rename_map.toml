@@ -5,7 +5,7 @@
 id = "core.rename_map"
 kind = "collector"
 title = "Git rename map"
-callable = "lib.run_setup:rename_map"
+callable = "lib.run.run_setup:rename_map"
 publishes = []
 reads = ["repo_root"]
 stage = "setup"

@@ -5,7 +5,7 @@
 id = "core.offers_block"
 kind = "collector"
 title = "End-of-run offers"
-callable = "lib.core_scans:offers_blocks"
+callable = "lib.run.core_scans:offers_blocks"
 publishes = ["interactive", "offers"]
 reads = ["non_interactive"]
 stage = "read_side"

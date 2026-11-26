@@ -17,7 +17,8 @@ import pytest
 import assess_core
 from assess_core import build_and_publish_run, build_run_context
 from assess_core_helpers import _minimal_repo, _seed_assess, _write_min_stats
-from lib import artifact_schema, core_scans
+from lib import artifact_schema
+from lib.run import core_scans
 
 
 def test_archetype_block_emitted_for_software_repo(git_repo) -> None:

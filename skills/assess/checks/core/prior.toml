@@ -5,7 +5,7 @@
 id = "core.prior"
 kind = "collector"
 title = "Complexity stats (prior run)"
-callable = "lib.run_setup:prior_stats"
+callable = "lib.run.run_setup:prior_stats"
 publishes = []
 reads = ["assess_dir"]
 stage = "setup"

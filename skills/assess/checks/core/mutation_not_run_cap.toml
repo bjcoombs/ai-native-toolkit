@@ -5,7 +5,7 @@
 id = "core.mutation_not_run_cap"
 kind = "collector"
 title = "Mutation-not-run cap"
-callable = "lib.core_scans:mutation_cap"
+callable = "lib.run.core_scans:mutation_cap"
 publishes = ["mutation_not_run_cap"]
 reads = ["test_pressure"]
 stage = "read_side"

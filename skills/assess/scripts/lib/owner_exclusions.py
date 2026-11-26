@@ -19,7 +19,7 @@ the maturity-model version and the committed config::
   out. A kind that is written but unknown, empty or not a string is skipped
   rather than guessed.
 - ``excluded_by``, ``excluded_at`` and ``plugin_version`` are optional
-  provenance, named as a decline marker's (``lib/decline_markers.py``).
+  provenance, named as a decline marker's (``lib/run/decline_markers.py``).
 
 Every skipped entry is listed with a ``PROBLEMS`` code and a one-line warning on
 stderr, and the report lists it too; nothing here raises. A repeated id keeps its
@@ -31,7 +31,7 @@ list (a single inline table, say), is one skipped entry with index 0 and code
 ``not_applicable`` with ``disposition: excluded_by_owner``, leaves the
 denominator, never earns, and never holds a Step gate, so the Step it gates
 stays unreachable while it is excluded (#744 decision). The headless runner
-reports this block too (``lib.headless_static``), so ``/fleet`` applies a
+reports this block too (``lib.run.headless_static``), so ``/fleet`` applies a
 repository's own exclusions (#944). Fleet-wide exclusions (``--fleet-config``)
 wait on the method stamp (#952), so this reads the repository's own file only.
 

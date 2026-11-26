@@ -5,7 +5,7 @@
 id = "core.test_pressure_scan"
 kind = "collector"
 title = "Test pressure scan"
-callable = "lib.core_scans:test_pressure_scan"
+callable = "lib.run.core_scans:test_pressure_scan"
 publishes = []
 reads = ["repo_root", "current", "coverage_data"]
 stage = "read_side"

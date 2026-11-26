@@ -204,7 +204,7 @@ def test_core_writes_snapshot_and_stamps_method_version(tmp_path: Path) -> None:
 
 
 def test_run_header_reserves_the_snapshot_key_for_the_publish_step() -> None:
-    from lib import run_setup
+    from lib.run import run_setup
     keys = run_setup.RUN_HEADER_KEYS
     assert keys.index("assess_method_version") == keys.index("artifact_schema_version") + 1
     assert "prior_findings_snapshot" in keys

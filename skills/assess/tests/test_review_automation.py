@@ -22,9 +22,9 @@ from lib.ci.review_automation import (
     review_evidence,
     scan_review_automation,
 )
-from lib.scan_registry import SCANS
+from lib.run.scan_registry import SCANS
 from lib.ci.shared_tooling import action_repo, step_uses, workflow_events
-from lib.signals import NETWORK_REASON, PLATFORM_SCANS, build_document
+from lib.run.signals import NETWORK_REASON, PLATFORM_SCANS, build_document
 
 WORKFLOW = """\
 name: review

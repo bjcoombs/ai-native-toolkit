@@ -18,17 +18,23 @@ block uses and refuses anything else with `DefinitionError`:
 `load_definition` then checks every key the script reads is present with the
 right type, so a renamed key fails loudly instead of disabling a check.
 
+`resolve_path` finds the document the way `refine.py --definition` defaults:
+under the current directory, then under this toolkit checkout. `size_limit`
+(after `parse_override`) gives the write scripts the `max_points` the verdict records (#1439 follow-up): an explicit
+`REFINE_MAX_POINTS` above 0 overrides it, otherwise the definition decides.
+
 Python 3.8 compatible and stdlib only.
 """
 from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from refine_types import ChecklistEntry, Definition, Labels
 
 DEFAULT_PATH = Path("docs") / "contributing" / "definition-of-ready.md"
+TOOLKIT_ROOT = Path(__file__).resolve().parents[3]
 
 _FENCE_OPEN = re.compile(r"^```yaml\s*$")
 _MAP_KEY = re.compile(r"^([A-Za-z_][\w-]*):(?:\s+(.*))?$")
@@ -207,3 +213,44 @@ def load_definition(path: Path) -> Definition:
     except OSError as exc:
         raise DefinitionError(f"cannot read the definition of ready at {path.as_posix()}: {exc}") from exc
     return definition_from_block(extract_block(markdown))
+
+
+def resolve_path(arg: Optional[str] = None) -> Path:
+    """`arg`, else the definition under the current directory, else this toolkit's copy."""
+    if arg:
+        return Path(arg)
+    # Relative when found under the current directory, so the plan names it
+    # the same way on every machine.
+    return DEFAULT_PATH if DEFAULT_PATH.is_file() else TOOLKIT_ROOT / DEFAULT_PATH
+
+
+def parse_override(raw: str) -> int:
+    """`REFINE_MAX_POINTS` as an integer: 0 when empty, `DefinitionError` unless a whole number >= 0."""
+    text = raw.strip()
+    if not text:
+        return 0
+    if not re.fullmatch(r"\d+", text):
+        raise DefinitionError(f"REFINE_MAX_POINTS must be 0 (unset) or a positive integer, not {raw!r}")
+    return int(text)
+
+
+def size_limit(override: int, fallback: int, ref: Any = None) -> int:
+    """The largest size that can be ready: the `max_points` `refine.py`'s `sized` check used.
+
+    `override` (`parse_override` of `REFINE_MAX_POINTS`) wins when above 0;
+    0 means unset. Otherwise `ref`, the verdict's `definition` block, names the
+    `max_points` `refine.py` read, whichever definition file it read (the
+    verdict is digest-checked between the plan and apply jobs). A verdict
+    without one falls back to the definition at `resolve_path()`, and when
+    neither place has that document to `fallback`, which a test keeps equal to
+    this toolkit's copy.
+    """
+    if override:
+        return override
+    recorded = ref.get("max_points") if isinstance(ref, dict) else None
+    if isinstance(recorded, int) and not isinstance(recorded, bool) and recorded >= 1:
+        return recorded
+    path = resolve_path()
+    if not path.is_file():
+        return fallback
+    return int(load_definition(path)["max_points"])

@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 
 from assess_report import _render_churn_window
-from lib.context_blocks import build_stale_hubs
+from lib.run.context_blocks import build_stale_hubs
 from lib.docs.doc_staleness import analyze_doc_staleness
 
 DAY = 86400

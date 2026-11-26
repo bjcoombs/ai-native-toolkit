@@ -356,7 +356,7 @@ def bind(table: Callable[[], UnitTable], run: Callable[..., None]) -> None:
 def bound_table() -> UnitTable:
     """The bound unit table, built once."""
     if "loader" not in _BOUND:
-        raise ValueError("the unit pass is not bound: import lib.scan_registry first")
+        raise ValueError("the unit pass is not bound: import lib.run.scan_registry first")
     if "table" not in _BOUND:
         _BOUND["table"] = _BOUND["loader"]()
     table: UnitTable = _BOUND["table"]

@@ -76,7 +76,7 @@ COUNTERS: dict[str, Counter] = {
         "int",
     ),
     "signals_schema": Counter(
-        Path("skills/assess/scripts/lib/signals.py"),
+        Path("skills/assess/scripts/lib/run/signals.py"),
         re.compile(r"^SIGNALS_SCHEMA_VERSION = (?P<value>[0-9]+)$"),
         "int",
     ),

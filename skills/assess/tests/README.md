@@ -113,12 +113,12 @@ Every `test_*.py` file in this directory has a row below.
 | `test_config_drift.py` | `lib/hosting/config_drift.py` + `lib/hosting/gh_cli.py` - committed GitHub-config snapshots against the live setting, and the shared `gh` helper |
 | `test_review_reality_gitlab.py` | `lib/hosting/gitlab_cli.py` + the GitLab path of `lib/hosting/review_reality.py` - provider detection, `glab` refusal mapping, merged merge request approvals |
 | `test_gitlab_protected_branches.py` | `lib/hosting/gitlab_cli.branch_protection` + the GitLab paths of `lib/hosting/config_drift.py` and `lib/hosting/review_reality.py` - wildcard protected-branch matching, 403/404 as unavailable, GitLab protected-branch snapshots, rules scoped to all protected branches |
-| `test_context_blocks.py` | `lib/context_blocks.py` - keyhole, stale-hub, liveness, coverage-report, accretion, structure-drift and exclusion/pruning blocks in run-context |
+| `test_context_blocks.py` | `lib/run/context_blocks.py` - keyhole, stale-hub, liveness, coverage-report, accretion, structure-drift and exclusion/pruning blocks in run-context |
 | `test_coverage_gate.py` | `lib/testing/coverage_gate.py` - configured coverage-threshold detector |
 | `test_coverage_report.py` | `lib/testing/coverage_report.py` - coverage-report parser |
 | `test_dart_capabilities.py` | `lib/keyhole/dart_capabilities.py` - Dart linting and liveness capability entries |
 | `test_dart_complexity.py` | `lib/complexity/dart_complexity.py` - the approximate Dart per-function scanner |
-| `test_decline_markers.py` | `lib/decline_markers.py` - decline-marker provenance and re-offer on a major bump |
+| `test_decline_markers.py` | `lib/run/decline_markers.py` - decline-marker provenance and re-offer on a major bump |
 | `test_diff_reliability.py` | `lib/complexity/diff_reliability.py` - cross-run diff reliability: version stamps, tool-version changes, schema changes |
 | `test_doc_provenance.py` | `lib/docs/doc_provenance.py` - provenance-aware staleness of generated docs |
 | `test_doc_claims.py` | `lib/docs/doc_claims.py` - claim checks across the doc set and cross-document contradictions |
@@ -133,7 +133,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_instruction_discovery.py` | `lib/instructions/instruction_discovery.py` - nested and path-scoped instruction files, their scopes and integrity findings (fixture monorepo) |
 | `test_instruction_files.py` | `lib/instructions/instruction_files.py` - instruction-file discovery and grading, alias grade inheritance, broken references, sensitive content, ancestor cascade (through `build_run_context`) |
 | `test_instruction_globs.py` | `lib/instructions/instruction_globs.py` - scope frontmatter parsing and glob matching |
-| `test_interactivity.py` | `lib/interactivity.py` - the non-interactive consent contract |
+| `test_interactivity.py` | `lib/run/interactivity.py` - the non-interactive consent contract |
 | `test_jvm_capabilities.py` | `lib/keyhole/jvm_capabilities.py` - the capability-driven JVM offer flow |
 | `test_mutation_cap.py` | `lib/testing/mutation_cap.py` - the `test_pressure` block shape and the Layer 6 mutation-not-run cap |
 | `test_mutation_cap_partial.py` | `lib/testing/mutation_cap.py` - the Layer 6 cap holds at Partial, and finalize refuses Present, when every mutmut 3 group with records stopped at the time budget (`partial`) |
@@ -151,15 +151,15 @@ Every `test_*.py` file in this directory has a row below.
 | `test_gitlab_notes.py` | `lib/hosting/gitlab_notes.py` - GitLab merge-request note classification (markers, agent accounts, unmarked access-token notes as automation, the author's own notes), the `gitlab_note_facts` spec and the GitLab `delivery` note figures |
 | `test_platform_argv_contract.py` | every `PLATFORM_SCANS` scan through recording `gh`/`glab` stubs: each argv names its target (`--repo`, `repos/<slug>`, `users/<login>`, `--hostname`), as the argv-keyed response cache needs |
 | `test_run_wiki.py` | `lib/report/run_wiki.py` - hotspot pages, `index.md` rows and graduation records for one run |
-| `test_scan_registry.py` | `lib/scan_registry.py` - the declared scan table and the loop that runs it |
+| `test_scan_registry.py` | `lib/run/scan_registry.py` - the declared scan table and the loop that runs it |
 | `test_sibling_tests.py` | `lib/testing/sibling_tests.py` - the one sibling-test resolver |
 | `test_import_credit.py` | `lib/testing/import_credit.py` - the import tier of the sibling-test probe |
 | `test_structure_drift.py` | `lib/keyhole/structure_drift.py` - Tier 0 path-existence structure-drift signal |
 | `test_test_focus.py` | `lib/testing/test_focus.py` - `compute_test_focus` and mutation scope |
 | `test_vault_queries.py` | `lib/docs/vault_queries.py` - vault-native navigation query parser |
 | `test_wiki_state.py` | `lib/report/wiki_state.py` - first-flagged dates and their rekeying through the rename map |
-| `test_run_setup.py` | `lib/run_setup.py` + `lib/core_scans.py` + `lib/run_publish.py` - the setup-stage scan adapters and the publish step |
-| `test_scan_registry_degrade.py` | `lib/scan_registry.py` - degrade by construction: every scan-table entry without a `GATE_REASONS` reason is forced to raise and the run carries the unavailable marker downstream |
+| `test_run_setup.py` | `lib/run/run_setup.py` + `lib/run/core_scans.py` + `lib/run/run_publish.py` - the setup-stage scan adapters and the publish step |
+| `test_scan_registry_degrade.py` | `lib/run/scan_registry.py` - degrade by construction: every scan-table entry without a `GATE_REASONS` reason is forced to raise and the run carries the unavailable marker downstream |
 | `test_scc_coverage.py` | `lib/complexity/scc_coverage.py` - the implausibly-low scc complexity check, calibrated on real scc output for an under-counted shell script |
 | `test_scc_side_effects.py` | `scripts/complexity-treemap.py`, `lib/complexity/stats_rows.py`, `lib/complexity/scc_coverage.py` - side effects of adding scc: committed SVGs stay out of the treemap, `self_referential_tests` reads the code band and stays the same with and without scc, and partial per-function coverage names the backend with a file-level count |
 | `test_counts_only.py` | `lib/counts_only/content_free.py` + `lib/counts_only/counts_only_rules.py` + `lib/counts_only/counts_only_schema.py` - the content-free run-context mode: every typed string field has a keep/drop/path rule, and the counts-only document drops copied text |
@@ -182,13 +182,13 @@ Every `test_*.py` file in this directory has a row below.
 | `test_measured_appendix.py` | `lib/report/measured_appendix.py`: the "How this was measured" section of the fleet `report.md` and the deterministic `/assess` report (scans that ran, scans skipped with their reasons, the catalog link) |
 | `test_hollow_conditions.py` | `levels/default.toml` - hollow cases: the cheapest committed change that meets each condition must not be credited; a case the model still credits is `xfail(strict=True)` naming its fixing issue, and that fix removes the mark (#784) |
 | `test_layer_grades.py` | `lib/scoring/layer_grades.py` - deterministic layer grades as a registered signals block, with a counts-only rule |
-| `test_history_window.py` | `lib/history/history_window.py` - the one history-window grammar shared by `lib/history/git_churn.py`, `lib/history/ai_usage.py`, `lib/history/fleet_activity.py` and `lib/signals.py`, and the shallow-boundary reachability check |
+| `test_history_window.py` | `lib/history/history_window.py` - the one history-window grammar shared by `lib/history/git_churn.py`, `lib/history/ai_usage.py`, `lib/history/fleet_activity.py` and `lib/run/signals.py`, and the shallow-boundary reachability check |
 
 ### Headless signals and fleet suites
 
 | Suite | Pins |
 |---|---|
-| `test_signals.py` | `scripts/assess_signals.py` + `lib/signals.py` + `lib/signals_schema.py` - the headless signals entry point and its committed JSON schema |
+| `test_signals.py` | `scripts/assess_signals.py` + `lib/run/signals.py` + `lib/run/signals_schema.py` - the headless signals entry point and its committed JSON schema |
 | `test_signals_counts_only.py` | `scripts/assess_signals.py --counts-only` - the content-free headless document validates against the schema, hashes paths and shared-tooling ids, and keeps a reason on every unavailable block |
 | `test_fleet.py` | `lib/fleet/runner.py` + `lib/fleet/fleet_schema.py` - the fleet runner core: targets, per-repository rows, isolated failures |
 | `test_fleet_cli.py` | `skills/fleet/scripts/fleet.py` (relative to the repo root) - end to end over real `assess_signals` runs |

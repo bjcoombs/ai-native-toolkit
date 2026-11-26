@@ -8,11 +8,11 @@ merged configuration of exactly those repositories, so ``ci_checks`` and
 ``review_automation`` see the included jobs.
 
 It is the private ``network`` registry spec ``gitlab_merged_ci``. The headless
-runner (``lib/signals.py``) calls it only under ``--platform``, because
+runner (``lib/run/signals.py``) calls it only under ``--platform``, because
 ``ci_checks`` and ``review_automation`` are in ``signals.PLATFORM_SCANS``;
 offline it calls :func:`no_merged_ci`, which reads nothing. ``fleet --platform``
 runs it in its separate platform pass. ``assess_core`` ignores the ``network``
-flag (``lib/scan_registry.py``), so a full ``/assess`` run reads it too, as it
+flag (``lib/run/scan_registry.py``), so a full ``/assess`` run reads it too, as it
 reads ``review_reality``.
 
 Rules, in order:

@@ -18,13 +18,14 @@ rules below are enforced here, in code, whatever the plan says:
   overlap and no exact duplicate, and every judgement item is resolved by
   the plan with no open question. The size is read again just before the
   label goes on (`current_size`): it must still be present when the verdict
-  had one, at most `REFINE_MAX_POINTS`, and equal to the plan's size when
-  the plan sized the issue. An issue the verdict found `unsized` must read
-  a size by then, or have been sized by this run: a marker this run posted
-  (live) or recorded (dry-run) stands in when the re-read finds none, so a
-  read that lags the write does not withhold the label. `refine_apply.apply_triage` also withholds the
-  label when a required size write or any planned blocked-by edge was
-  refused or failed. Adding it removes the triage label.
+  had one, at most `max_points` (the one the verdict records, unless
+  `REFINE_MAX_POINTS` is above 0: `refine_definition.size_limit`),
+  and equal to the plan's size when the plan sized the issue. An issue the
+  verdict found `unsized` must read a size by then, or have been sized by this
+  run: a marker this run posted (live) or recorded (dry-run) stands in when the
+  re-read finds none, so a read that lags the write does not withhold the label.
+  `refine_apply.apply_triage` also withholds it when a required size write or a planned
+  blocked-by edge was refused or failed. Adding it removes the triage label.
 - **Duplicate closes.** Only a pair the refinement script reported as
   `exact` and `closable`, with both issues still open, their title and body
   still equal under `refine_duplicates.normalise` when read fresh, the
@@ -53,8 +54,7 @@ rules below are enforced here, in code, whatever the plan says:
 Exit codes: 0 done (individual labels may have been dropped, listed on
 stderr); 2 usage error; 3 `gh` failed; 4 a guardrail refused the call.
 
-Python 3.8 compatible and stdlib only, plus `gh` on PATH, or `glab` when
-`REFINE_PLATFORM` is `gitlab` (`refine_write_gitlab.GitLabWriter`, #1327).
+Python 3.8+, stdlib only, plus `gh` on PATH, or `glab` when `REFINE_PLATFORM` is `gitlab` (`refine_write_gitlab`, #1327).
 """
 from __future__ import annotations
 
@@ -69,6 +69,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
+from refine_definition import parse_override, size_limit
 from refine_duplicates import normalise
 
 Runner = Callable[[Sequence[str]], str]
@@ -169,7 +170,7 @@ class Settings:
         self.bot_login = e.get("REFINE_BOT_LOGIN") or DEFAULT_BOT
         self.bot_login_set = bool(e.get("REFINE_BOT_LOGIN"))
         self.close_cap = int(e.get("REFINE_CLOSE_CAP") or DEFAULT_CLOSE_CAP)
-        self.max_points = int(e.get("REFINE_MAX_POINTS") or DEFAULT_MAX_POINTS)
+        self.max_points_override = parse_override(e.get("REFINE_MAX_POINTS", ""))  # fails before any write
         q = e.get("REFINE_QUESTIONS_ISSUE", "").strip().lstrip("#")
         self.questions_issue: Optional[int] = int(q) if q.isdigit() else None
         caps = e.get("CLAUDE_CODE_SCRIPT_CAPS", "").strip()
@@ -182,6 +183,9 @@ class Settings:
         base = e.get("REFINE_STATE_DIR") or str(Path(e.get("RUNNER_TEMP") or tempfile.gettempdir()) / "refine")
         self.state_dir = Path(base)
         self.actions_log = Path(e.get("REFINE_ACTIONS_LOG") or str(self.state_dir / "actions.jsonl"))
+
+    def max_points(self, verdict: Optional[Json]) -> int:  # the limit the verdict's refine.py run used
+        return size_limit(self.max_points_override, DEFAULT_MAX_POINTS, (verdict or {}).get("definition"))
 
 
 class Writer:
@@ -349,8 +353,9 @@ class Writer:
             if entry.get("size_points") is not None or entry.get("unsized") is True:
                 return "the issue reads no size"
             return ""
-        if current > self.s.max_points:
-            return f"the size now reads {current}, above {self.s.max_points}"
+        limit = self.s.max_points(verdict)
+        if current > limit:
+            return f"the size now reads {current}, above {limit}"
         if isinstance(planned, int) and current != planned:
             return f"the size now reads {current}, not the plan's {planned}"
         return ""
@@ -380,7 +385,7 @@ class Writer:
         if self.s.ready_label in _label_names(info):
             to_add.remove(self.s.ready_label)
             return None
-        reason = ready_blocker(number, verdict, plan, self.s.max_points) or self.size_drift(number, info, verdict, plan)
+        reason = ready_blocker(number, verdict, plan, self.s.max_points(verdict)) or self.size_drift(number, info, verdict, plan)
         if reason:
             to_add.remove(self.s.ready_label)
             return f"{self.s.ready_label}: {reason}"

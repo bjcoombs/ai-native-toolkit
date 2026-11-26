@@ -32,7 +32,7 @@ import re
 ID_KEYS = frozenset({"condition", "row"})
 # State codes: listed by the helper unless the part carries data-<key>-label or -title.
 STATE_KEYS = frozenset({"category", "state", "cell", "mark", "tag", "status", "review-bot",
-                        "behind", "outline"})
+                        "behind", "outline", "multi-step"})
 # Machine codes: the title shows a word for them, never the code.
 CODE_KEYS = ID_KEYS | STATE_KEYS
 

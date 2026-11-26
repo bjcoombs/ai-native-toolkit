@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-import lib.scan_registry as reg
+import lib.run.scan_registry as reg
 from assess_core import build_and_publish_run
 from lib.instructions.claude_config import FileKind, check_file, parse_frontmatter, scan_claude_config
 from lib.instructions.claude_config_fields import (

@@ -8,7 +8,7 @@ After the LLM writes assess-report.md, it also writes finalize-input.json with
 its derived values and invokes this script to update the wiki files in place.
 
 Every path below is under the run's artefact directory, resolved from the run
-scope the way the core resolves it (``lib.run_scope``): ``{repo_root}/.assess/``
+scope the way the core resolves it (``lib.run.run_scope``): ``{repo_root}/.assess/``
 for a whole-repo run, ``{repo_root}/.assess/<slug>/`` for a ``--scope`` run
 (#1291). A scoped finalize reads and writes only its own directory and leaves
 the whole-repo files unchanged.
@@ -68,7 +68,7 @@ from lib.report.evidence_check import check_evidence, describe
 from lib.report.gap_actions import action_mode
 from lib.testing.mutation_cap import layer6_cap_violation
 from lib.report.reviewed_findings import action_entries, carried_completed, reopened_status
-from lib.run_scope import assess_dir_for, resolve_scope
+from lib.run.run_scope import assess_dir_for, resolve_scope
 from lib.run_context_types import ActionLifecycle, FinalizeInput, JsonDict
 from lib.report.wiki_writer import (
     find_log_entry,

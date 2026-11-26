@@ -5,7 +5,7 @@
 id = "core.excluded_generated"
 kind = "collector"
 title = "Excluded generated files"
-callable = "lib.core_scans:generated_exclusions"
+callable = "lib.run.core_scans:generated_exclusions"
 publishes = ["excluded_generated"]
 reads = ["current"]
 stage = "read_side"

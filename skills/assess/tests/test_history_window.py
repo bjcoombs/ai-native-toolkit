@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from lib import signals
+from lib.run import signals
 from lib.history import ai_usage, fleet_activity, git_churn, history_window
 from lib.history.history_window import WINDOW_PATTERN, split_window
 

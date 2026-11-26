@@ -1,7 +1,7 @@
 """Run-context shape for the ``timings`` diagnostic block (#1380).
 
 A sibling of ``lib/run_context_types.py``, which is at its line budget. Built by
-``lib/scan_timings.py``.
+``lib/run/scan_timings.py``.
 """
 from __future__ import annotations
 

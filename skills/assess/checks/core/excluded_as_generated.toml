@@ -5,7 +5,7 @@
 id = "core.excluded_as_generated"
 kind = "collector"
 title = "Generated-file paths"
-callable = "lib.run_setup:generated_paths"
+callable = "lib.run.run_setup:generated_paths"
 publishes = []
 reads = ["current"]
 stage = "setup"

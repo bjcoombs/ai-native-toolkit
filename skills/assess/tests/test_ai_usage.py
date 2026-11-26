@@ -21,7 +21,7 @@ from lib import agent_identity
 from lib.history import ai_usage, change_coupling
 from lib.history.ai_usage import LIMITS, resolve_window, scan_ai_usage
 from lib.history.git_churn import CHURN_WINDOWS, window_from_churn_label
-from lib.scan_registry import SCANS
+from lib.run.scan_registry import SCANS
 
 HUMAN = "Ada Person <ada.person@example.org>"
 CLAUDE = "Claude Helper <noreply@anthropic.com>"

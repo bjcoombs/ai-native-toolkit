@@ -5,7 +5,7 @@
 id = "core.churn_degenerate"
 kind = "collector"
 title = "Degenerate churn history"
-callable = "lib.core_scans:churn_degenerate"
+callable = "lib.run.core_scans:churn_degenerate"
 publishes = ["churn_degenerate"]
 reads = ["doc_staleness"]
 stage = "read_side"

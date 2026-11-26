@@ -14,15 +14,15 @@ import pytest
 from assess_test_support import use_real_lizard
 
 import assess_signals
-from lib import headless_layers as hl
-from lib import scan_registry as reg
-from lib import signals
+from lib.run import headless_layers as hl
+from lib.run import scan_registry as reg
+from lib.run import signals
 import lib.graph.import_graph_python as import_graph_python
 from lib.counts_only.content_free import reason_code
 from lib.counts_only.counts_only_rules import ID, PATH, classify
 from lib.scoring.levels import _UNAVAILABLE, evaluate, resolve_signal
 from lib.scoring.level_signals import load_default_levels
-from lib.signals_schema import SCHEMA_PATH
+from lib.run.signals_schema import SCHEMA_PATH
 
 BLOCKS = ("structure", "stats_summary", "promissory_markers", "structure_drift", "ci_checks")
 

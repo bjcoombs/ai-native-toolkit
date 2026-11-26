@@ -14,7 +14,7 @@ Regenerate all three after changing any of the types:
 The envelope is strict. ``scans`` holds the ``assess_signals`` blocks
 (``skills/assess/references/signals.schema.json``), so a block reporting
 ``"available": false`` carries a ``reason``. ``review_automation`` and the blocks in
-``lib/scan_block_schemas.py`` (``ai_usage``, ``ci_checks``, ``delivery``) are described
+``lib/run/scan_block_schemas.py`` (``ai_usage``, ``ci_checks``, ``delivery``) are described
 field by field, and ``structure`` names its reason codes (``signals_schema.described_blocks``).
 
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
@@ -55,8 +55,8 @@ from lib.fleet.fleet_stamp import FleetStamp
 from lib.history.history_window import WINDOW_PATTERN
 from lib.ci.review_automation import KINDS
 from lib.run_context_types import JsonDict
-from lib.signals import known_scans
-from lib.signals_schema import described_blocks, pack_blocks, type_schema
+from lib.run.signals import known_scans
+from lib.run.signals_schema import described_blocks, pack_blocks, type_schema
 
 # skills/assess/scripts/lib/fleet -> skills/
 SCHEMA_PATH = Path(__file__).resolve().parents[4] / "fleet" / "references" / "repos.schema.json"

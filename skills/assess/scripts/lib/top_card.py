@@ -23,7 +23,9 @@ plain text, in order:
    (``2 of 3 Step 4 gates held``). The commit is left out when the run recorded none;
 3. below the top Step only, the blocking gates, which lead every gate line:
    ``Blocks Step 4: no coverage gate is enforced.`` (``GATE_GAP``, plus ``headline.gate_note``
-   when the gate was not measured or the owner excluded it). When the monorepo unit roll-up
+   when the gate was not measured or the owner excluded it). When that one gate is all that
+   stands below a higher Step whose other gates already hold (``headline.one_change_ceiling``,
+   #1333), the line adds ``; that one change reaches Step 3.``. When the monorepo unit roll-up
    (``unit_rollup.learn_from``, #1155) names a unit that already holds the first blocking
    gate, the line adds ``` `skills/assess` already does this; copy it.```;
 4. what moved since the last run, following the dark-cockpit rule: a run with no committed
@@ -67,7 +69,7 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from lib.card_facts import CardFact, advisories, blocking_gates, step_gate_ids, step_name, top_step
-from lib.scoring.headline import GATE_CHANGE, GLOSSARY_URL, gate_note, verified_count
+from lib.scoring.headline import GATE_CHANGE, GLOSSARY_URL, gate_note, one_change_ceiling, verified_count
 from lib.scoring.levels import MaturityModel
 from lib.model_change import model_changed_line
 from lib.since_last_run import FIRST_RUN, UNKNOWN_CLOSED
@@ -77,7 +79,7 @@ __all__ = ["FACT_IDS", "GATE_GAP", "GATE_TASK", "PROFILES_URL", "STEP_GATES_URL"
            "card_markdown", "first_action", "since_line", "read_first_action", "start_lines"]
 
 # The catalog's Step gates entry: what each gate covers. measured_appendix.CATALOG_URL names the
-# same page; importing it here would close a cycle through lib.signals.
+# same page; importing it here would close a cycle through lib.run.signals.
 STEP_GATES_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates"
 
 # Each Step gate as a task a person can do. A gate id the table does not know reads
@@ -206,12 +208,15 @@ def _sibling(gate: str, rollup: Any) -> str | None:
     return None
 
 
-def _blocks(level: Mapping[str, Any], rollup: Any) -> str | None:
+def _blocks(level: Mapping[str, Any], model: MaturityModel, rollup: Any) -> str | None:
     gates = blocking_gates(level)
     nxt = level.get("next_step")
     if not gates or not isinstance(nxt, Mapping):
         return None
     line = f"Blocks Step {nxt.get('step')}: {'; '.join(_gap(b) for b in gates)}."
+    ceiling = one_change_ceiling(level, model.get("steps", []))
+    if ceiling is not None:
+        line = f"{line[:-1]}; that one change reaches Step {ceiling}."
     sibling = _sibling(str(gates[0].get("gate", "")), rollup)
     return f"{line} `{sibling}` already does this; copy it." if sibling else line
 
@@ -276,7 +281,7 @@ def card_facts(level: Any, model: MaturityModel, since: Any, rollup: Any = None,
         return []
     start, done = start_lines(level, action)
     texts = (_lead(level, model), _holding(level, model, head_sha) if top_step(model) is not None else None,
-             _blocks(level, rollup), since_line(since), start, done)
+             _blocks(level, model, rollup), since_line(since), start, done)
     return [{"fact_id": fid, "text": text} for fid, text in zip(FACT_IDS, texts) if text]
 
 
