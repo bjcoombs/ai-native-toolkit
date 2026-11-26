@@ -33,12 +33,16 @@ later, call `DiagramTooltip.attach(element)`. To word the tooltip yourself, pass
 
 What it does:
 
-- **Content.** The tooltip lists the part's `data-*` attributes, one `name: value` line each.
-  A part with no data attributes shows its `<title>` text instead. The helper never parses the
+- **Content.** The tooltip lists the part's `data-*` attributes, one `name: value` line each,
+  leaving out the machine codes (`data-category`, `data-state`, `data-cell`, `data-status`,
+  `data-tag`, `data-row` and the like, and the package map's `data-bypass`), whose meaning
+  the readable attributes beside them already give. A part with no data attributes shows its
+  `<title>` text instead. The helper never parses the
   `<title>` wording.
 - **Pointer.** Mouse and pen show the tooltip on hover and hide it when the pointer leaves the
   part.
-- **Touch.** The first tap shows it; a second tap, a tap elsewhere or Escape hides it.
+- **Touch.** The first tap shows it; a second tap, a tap elsewhere or Escape hides it. Taps
+  are read on `pointerup`, because iOS Safari fires no `click` from a plain SVG element.
 - **Links.** No diagram draws a link today. On a part inside an `<a>`, a mouse click follows
   the link; on touch the first tap shows the tooltip and the second follows the link.
 - **Theme.** It follows the viewer's light or dark scheme. A host overrides the colours with

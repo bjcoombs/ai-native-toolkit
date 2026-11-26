@@ -12,8 +12,9 @@
  * {format: function (part) { return "text"; }} to word the tooltip yourself.
  *
  * A part is the nearest element (below the root <svg>) with a <title> child. Its tooltip
- * lists the part's data-* attributes, one "name: value" line each; a part with none shows
- * its <title> text instead. Mouse and pen show it on hover and hide it on pointer leave.
+ * lists the part's data-* attributes, one "name: value" line each, leaving out machine codes
+ * such as data-category="unmet" whose meaning a readable attribute beside them already gives;
+ * a part with none shows its <title> text instead. Mouse and pen show it on hover and hide it on pointer leave.
  * Touch shows it on the first tap and hides it on a second tap, a tap elsewhere or Escape.
  * On a linked part (inside an <a>), a mouse click follows the link; on touch the first tap
  * shows the tooltip and the second follows the link.
@@ -41,6 +42,11 @@
   var tip = null;       // the one tooltip element, in the host page
   var shown = null;     // the part whose tooltip is showing
   var touching = false; // the last pointer was a finger
+  var blockClick = false; // the tap that showed a linked part's tooltip must not follow it
+  // Machine codes and values beyond the title (tests/svg_data_attrs.py CODE_KEYS and
+  // EXTRA_KEYS): the readable attributes beside them already say what they mean.
+  var SKIP = ["behind", "bypass", "category", "cell", "condition", "gate-id", "mark", "outline",
+              "review-bot", "row", "state", "status", "tag"];
 
   function ensureTip() {
     if (tip) {
@@ -83,12 +89,14 @@
     return part.closest ? part.closest("a") : null;
   }
 
-  // The part's data-* attributes, one "name: value" line each; its <title> text without any.
+  // The part's data-* attributes, one "name: value" line each, machine codes (SKIP) left out;
+  // its <title> text without any.
   function defaultFormat(part) {
     var lines = [];
     for (var i = 0; i < part.attributes.length; i++) {
       var attr = part.attributes[i];
-      if (attr.name.indexOf("data-") === 0 && attr.name !== PARKED) {
+      if (attr.name.indexOf("data-") === 0 && attr.name !== PARKED &&
+          SKIP.indexOf(attr.name.slice(5)) < 0) {
         lines.push(attr.name.slice(5).replace(/-/g, " ") + ": " + attr.value);
       }
     }
@@ -180,11 +188,14 @@
         hide();
       }
     });
-    root.addEventListener("click", function (event) {
-      var part = partOf(event.target);
-      if (!touching) {
-        return; // a mouse click follows a link, as it would without the helper
+    // A tap is read on pointerup, not click: iOS Safari fires no click delegated from a
+    // non-interactive SVG element.
+    root.addEventListener("pointerup", function (event) {
+      if (event.pointerType !== "touch") {
+        return;
       }
+      var part = partOf(event.target);
+      blockClick = false;
       if (!part) {
         hide();
         return;
@@ -193,11 +204,18 @@
         hide(); // the second tap dismisses, and on a link follows it
         return;
       }
-      if (linkOf(part)) {
-        event.preventDefault(); // the first tap on a link only shows the tooltip
-      }
+      blockClick = Boolean(linkOf(part)); // the first tap on a link only shows the tooltip
       var at = offset();
       show(part, event.clientX + at.x, event.clientY + at.y, format);
+    });
+    root.addEventListener("click", function (event) {
+      if (!touching) {
+        return; // a mouse click follows a link, as it would without the helper
+      }
+      if (blockClick) {
+        event.preventDefault();
+      }
+      blockClick = false;
     });
     root.addEventListener("keydown", function (event) {
       if (event.key === "Escape") {

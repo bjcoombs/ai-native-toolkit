@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from svg_data_attrs import CODE_KEYS, EXTRA_KEYS
+
 SKILL = Path(__file__).resolve().parents[1]
 HELPER = SKILL / "templates" / "diagram-tooltip.js"
 SOURCE = HELPER.read_text(encoding="utf-8")
@@ -36,16 +38,27 @@ def test_it_reads_data_attributes_and_falls_back_to_the_title() -> None:
 
 
 def test_it_registers_pointer_and_touch_handlers() -> None:
-    assert {"pointermove", "pointerout", "pointerleave", "pointerdown", "touchstart",
+    assert {"pointermove", "pointerout", "pointerleave", "pointerdown", "pointerup", "touchstart",
             "click", "keydown"} <= _listeners()
     assert 'pointerType === "touch"' in CODE
 
 
 def test_a_second_tap_dismisses_and_a_link_follows_on_mouse_but_not_the_first_tap() -> None:
+    # A tap is read on pointerup (iOS Safari fires no delegated click from an SVG part).
+    tap = CODE[CODE.index('addEventListener("pointerup"'):CODE.index('addEventListener("click"')]
+    assert 'pointerType !== "touch"' in tap
+    assert "shown === part" in tap and "hide()" in tap
+    assert "blockClick = Boolean(linkOf(part))" in tap
     click = CODE[CODE.index('addEventListener("click"'):CODE.index('addEventListener("keydown"')]
     assert "if (!touching)" in click and click.index("if (!touching)") < click.index("preventDefault")
-    assert "shown === part" in click and "hide()" in click
-    assert "linkOf(part)" in click and "event.preventDefault()" in click
+    assert "if (blockClick)" in click and "event.preventDefault()" in click
+
+
+def test_the_tooltip_leaves_out_the_same_machine_codes_the_title_check_does() -> None:
+    skip = re.search(r"var SKIP = \[([^\]]*)\]", CODE)
+    assert skip is not None
+    assert set(re.findall(r'"([\w-]+)"', skip.group(1))) == CODE_KEYS | EXTRA_KEYS
+    assert "SKIP.indexOf(attr.name.slice(5)) < 0" in CODE
 
 
 def test_the_tooltip_is_themed_for_both_colour_schemes() -> None:
