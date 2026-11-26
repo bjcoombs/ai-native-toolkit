@@ -7,7 +7,11 @@ phrased as an opportunity: what is already in place first, then the change that 
 next level. No team or repository is ranked, numbered or compared, and no insight names a
 person (the inputs are scan blocks and repository ids only).
 
-- ``in_place``: per ``team`` row, how many measured repositories already hold its top level.
+- ``in_place``: per ``team`` row, how many measured repositories already hold its top level,
+  by the level result's rule (#1470): a repository counts only when its own level result
+  (``lib.fleet.fleet_level.repo_level``, the badge's source) lists the row in ``in_place`` with
+  ``top``, so every condition is counted and met. A declared or config-only condition (an
+  instruction file) never makes a row count, here or in the repository's badge.
 - ``biggest_lift``: the single next-level criterion whose completion would lift the most
   repositories. A repository counts toward a criterion when its row level is known, it is
   below the top level, and that criterion is the only one unmet at its next level (status
@@ -36,7 +40,8 @@ scan under the run's salt with ``--hash-paths`` (so it joins ``repos.jsonl``'s
 
 The `opportunities` object of `fleet-data.json` (#746, parent #740), from one run's rows and
 the maturity model with no history. `in_place`: per team row, measured repositories at its
-top level. `_sole_unmet` re-evaluates each row (`levels.evaluate_row`) and keeps a
+top level, read from each repository's level result (`in_place` entries with `top`, #1470),
+never recomputed. `_sole_unmet` re-evaluates each row (`levels.evaluate_row`) and keeps a
 repository only when its level is known and exactly one criterion, status `unmet`, stands
 before its next level (unknown never counts). `biggest_lift` is the (row, level, signal)
 holding the most such repositories (ties: row order, level, signal), worded by
@@ -57,6 +62,7 @@ from typing import Any, NotRequired, TypedDict
 
 from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_groups import repo_signals
+from lib.fleet.fleet_level import repo_level
 from lib.fleet.fleet_maturity import SCOPE
 from lib.fleet.fleet_step_lifts import StepLift, step_lifts
 from lib.fleet.fleet_why import criterion_why
@@ -72,7 +78,7 @@ PER_LIST = 20  # repository names per report line; the rest are counted
 
 class InPlace(TypedDict):
     row: str
-    at_top: int  # measured repositories at the row's top level
+    at_top: int  # measured repositories whose level result holds the row at its top level (#1470)
     measured: int  # repositories with a known level on the row
 
 
@@ -152,12 +158,21 @@ def _plural(n: int) -> str:
     return "repository" if n == 1 else "repositories"
 
 
-def _in_place(team_rows: Sequence[Row], ok: Sequence[FleetRow]) -> list[InPlace]:
+def _in_place(team_rows: Sequence[Row], ok: Sequence[FleetRow],
+              results: Mapping[str, LevelResult | None]) -> list[InPlace]:
+    """Per team row, the measured repositories and those whose level result holds the row at
+    its top level (``in_place`` with ``top``: every condition counted and met, #1470), so the
+    fleet counts a practice in place by the same rule as the repository's own badge."""
+    top: dict[str, set[str]] = {}
+    for r in ok:
+        result = results.get(r["repo"])
+        for entry in result.get("in_place", []) if result is not None else []:
+            if entry["top"]:
+                top.setdefault(entry["row"], set()).add(r["repo"])
     out: list[InPlace] = []
     for row in team_rows:
-        levels = [evaluate_row(row, repo_signals(r))["level"] for r in ok]
-        known = [lv for lv in levels if lv is not None]
-        out.append({"row": row["id"], "at_top": sum(lv == len(row["levels"]) for lv in known),
+        known = [r["repo"] for r in ok if evaluate_row(row, repo_signals(r))["level"] is not None]
+        out.append({"row": row["id"], "at_top": sum(repo in top.get(row["id"], set()) for repo in known),
                     "measured": len(known)})
     return out
 
@@ -232,11 +247,14 @@ def _templates(team_rows: Sequence[Row], ok: Sequence[FleetRow], next_of: Mappin
 def build_opportunities(model: MaturityModel | None, rows: Sequence[FleetRow], key: Key,
                         results: Mapping[str, LevelResult | None] | None = None) -> Opportunities | None:
     """The run's opportunities; None without a maturity model (nothing to lift to). ``results``
-    are the rows' level results by id (``fleet_data.level_results``), for ``step_lifts``."""
+    are the rows' level results by id (``fleet_data.level_results``), for ``in_place`` and
+    ``step_lifts``; when not passed, ``in_place`` computes each scanned row's (``repo_level``)
+    and ``step_lifts`` is empty."""
     if model is None:
         return None
     team_rows = [row for row in model["rows"] if row["scope"] == SCOPE]
     ok = sorted((r for r in rows if r["status"] == STATUS_OK), key=lambda r: r["repo"])
+    levels = results if results is not None else {r["repo"]: repo_level(model, r) for r in ok}
     next_of: dict[str, list[Candidate]] = {}
     lifts: dict[Candidate, list[str]] = {}
     for repo in ok:
@@ -246,7 +264,7 @@ def build_opportunities(model: MaturityModel | None, rows: Sequence[FleetRow], k
                 continue
             next_of.setdefault(repo["repo"], []).append(cand)
             lifts.setdefault(cand, []).append(repo["repo"])
-    return {"measured": len(ok), "in_place": _in_place(team_rows, ok),
+    return {"measured": len(ok), "in_place": _in_place(team_rows, ok, levels),
             "biggest_lift": _biggest_lift(model, team_rows, lifts, key),
             "shared_templates": _templates(team_rows, ok, next_of, key),
             "step_lifts": step_lifts(model, (results or {}).values())}

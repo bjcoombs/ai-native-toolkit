@@ -13,7 +13,8 @@ Deterministic; no date.
 practice at the top level in every measured repository, then up to `MOST_HELD` held most widely, from
 `opportunities.in_place`, so the counts are stated once, there) and its "Opportunities" section from a built
 `FleetData` (so the report carries the JSON's privacy) and this run's `Achievements`:
-an `In place:` line first, then the biggest lift, the shared templates and the display-only
+an `In place:` line first (pointing at "What's working", or, when no practice is at the top level in
+any measured repository, saying so in its own words, #1470), then the biggest lift, the shared templates and the display-only
 recent progress (this run's `level_up` achievements, from the history; otherwise a
 nothing-new line, a starting-line line on a kept first run (`fleet_achievements.BASELINE_NOTE`),
 or the achievements note when the run is not kept). None when `opportunities` is null. Names are listed in key
@@ -76,6 +77,9 @@ def whats_working(opps: Opportunities, titles: dict[str, str]) -> list[str]:
 def _in_place(opps: Opportunities) -> str:
     if not opps["in_place"]:
         return f"{IN_PLACE} the maturity model has no team practices to hold."
+    if not any(p["at_top"] > 0 for p in opps["in_place"]):  # #1470: What's working lists none
+        return (f"{IN_PLACE} no measured repository holds any of the {len(opps['in_place'])} practices "
+                "at the top level yet; the changes below lift the most repositories first.")
     return (f"{IN_PLACE} the practices under [{WORKING_TITLE}]({WORKING_ANCHOR}) above, out of "
             f"{len(opps['in_place'])}; the changes below lift the most repositories next.")
 

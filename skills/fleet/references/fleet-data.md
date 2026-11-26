@@ -189,7 +189,7 @@ order), and no insight names a person.
 | Key | Value |
 |-----|-------|
 | `measured` | Repositories scanned `ok`. |
-| `in_place` | Per `team` row: `row`, `at_top` (measured repositories already at its top level) and `measured`. The report opens the section with it. |
+| `in_place` | Per `team` row: `row`, `at_top` (measured repositories whose own level result lists the row in `in_place` with `top`: every condition counted and met, the badge's rule, #1470; a declared or config-only condition never counts) and `measured`. The report opens the section with it. |
 | `biggest_lift` | The single next-level criterion whose completion would lift the most repositories: `row`, `level` (the level they would reach), `signal`, `repo_count`, `repos` (sorted keys), `gate` and `step` (the Step gate this condition is, else `null`), `change` and `done_when` (the same wording as the team pages), `why` (the check manifest's why for the criterion, `null` when none), and `text`. A repository counts only when its row level is known and that criterion is the one unmet criterion of its next level; an unknown never counts. Ties go to maturity-model row order, then level. `null` when no single change lifts a measured repository. |
 | `shared_templates` | One entry per shared CI source (a `shared_tooling.ci_source_ids` id at least 2 repositories include) and row level it would unlock: `source` (the id, such as `gitlab_project:grp/ci-templates`), `kind`, `includers`, `row`, `level`, `signal`, `repo_count`, `repos` and `text`. Its `repos` are the including repositories whose one unmet next-level criterion reads a `ci_checks.` signal: what the template would lift if it ran tests or another enforced check. Sorted by `source`, then row order. |
 

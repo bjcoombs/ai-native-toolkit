@@ -330,5 +330,6 @@ def test_the_report_has_what_is_working_ahead_of_the_opportunities():
     working = report.index("## What's working across the fleet")
     assert working < report.index("## Opportunities")
     section = report[working:report.index("## Opportunities")]
-    assert "- Instructions: 2 of 2 measured repositories at the top level." in section
+    # #1470: the instruction file is only declared, so neither repository holds that practice's top level
+    assert "- Instructions:" not in section
     assert "- CI: 1 of 2 measured repositories at the top level." in section
