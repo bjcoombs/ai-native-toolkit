@@ -6,7 +6,8 @@ model as a flat list of **conditions**, one per row level (``<row id>.<level>``,
 with no prior run, no stored state and no model in the path:
 
 - each condition's **state**: ``met``, ``unmet`` or ``not_measured`` (with a
-  reason code), or ``not_applicable`` when the owner excluded it (below).
+  reason code), or ``not_applicable`` when the owner excluded it (below) or the
+  signal does not apply to the repository (``NOT_APPLICABLE_REASONS``, #1407).
   ``declined`` is a reserved state that no rule produces yet (#828), so readers
   accept all five;
 - each condition's **grade**, the weakest ``lib.scoring.level_signals.criterion_grade``
@@ -77,6 +78,18 @@ Reason codes of a ``not_measured`` condition (the first unknown criterion's):
 - ``block_absent`` (the run has no such block, or it is null), ``no_value`` (the signal is
   missing or null) or ``type_mismatch``.
 
+**Not applicable by reason** (#1407). A sibling ``<leaf>_reason`` code in
+``NOT_APPLICABLE_REASONS`` says the signal does not apply here, not that the scan
+failed to read it: ``agent_consistency`` with fewer than two agent systems
+(``fewer_than_two_systems``) and ``guardrails`` with no configured gate
+(``no_configured_gates``). The condition reads ``not_applicable`` with that code as its
+``reason`` and no ``disposition``: never counted and not in the denominator, like an
+owner exclusion, and, like one, it never holds a gate, since gates read ``met`` only. Any
+other code keeps ``not_measured``: the scan could not read the signal. A real unmet
+criterion of the same condition still reads ``unmet``.
+``scan_not_applicable`` follows a ``requires:<id>`` chain to its root, so a reader tells a
+scan's not applicable from the owner's exclusion exactly.
+
 Every value is a count, a boolean, an id from the model or a reason code, so the
 block survives counts-only output unchanged, and ``dumps_level`` gives identical
 bytes for identical inputs. ``/assess`` writes the result as the run context's
@@ -88,13 +101,15 @@ The verified tally and the autonomy Step: result = f(commit, maturity-model vers
 one repository's signals with no prior run and no model in the path (#744). Each row level
 of the model is one condition, `<row id>.<level>`, read on its own criteria (a level does
 not need the level below; `requires` states a real dependency). `level_result(model, data)`
-returns a `LevelResult` (shapes in `level_result_types.py`):
+returns a `LevelResult` (shapes in `level_result_types.py`). A sibling `<leaf>_reason` in
+`NOT_APPLICABLE_REASONS` (#1407) reads `not_applicable` with that `reason`, uncounted, never
+holding a gate:
 
 - `conditions[]`: `id`, `row`, `level`, `grade` (the weakest `level_signals` criterion grade;
   null for a signal with no producer class), `counted` (grade `measured` or `verified`, and
-  not excluded), `state` (`met`, `unmet`, `not_measured`, or `not_applicable` when the owner
-  excluded it; `declined` is reserved for #828) and, when not measured or held by a `requires`
-  that is not met, a `reason` code. An owner-excluded condition also carries
+  not `not_applicable`), `state` (`met`, `unmet`, `not_measured`, or `not_applicable` when the owner
+  excluded it or a scan's reason code is in `NOT_APPLICABLE_REASONS`; `declined` is reserved for #828)
+  and, when not measured, not applicable by a scan code, or held by a `requires` that is not met, a `reason` code. An owner-excluded condition also carries
   `disposition: "excluded_by_owner"` and `exclusion_kind`. `why` (#939) is the static text of
   the check manifest's whys for the condition's criteria, in criterion order, each once, joined
   by one space (`condition_why`); it is absent when no criterion has one (a caller's own model),
@@ -190,8 +205,32 @@ _RUN_KIND_REASONS = {"not_registered": NEEDS_FULL_RUN, "network": NEEDS_PLATFORM
 # The codes lib.scoring.levels gives a criterion whose signal is a statistic over an empty set.
 EMPTY_SET_CODES = frozenset(code for _, code in EMPTY_DENOMINATORS.values())
 EXCLUDED_BY_OWNER = "excluded_by_owner"
+# Sibling ``<leaf>_reason`` codes that mean "does not apply to this repository", not "could not be
+# read" (#1407): lib/instructions/agent_consistency.py NOT_APPLICABLE_REASON and
+# lib/instructions/guardrails.py NO_GATES_REASON.
+NOT_APPLICABLE_REASONS = frozenset({"fewer_than_two_systems", "no_configured_gates"})
 # A condition the fleet's exit rule demoted (lib/fleet/condition_demotion.py, #1086): listed, never counted.
 DEMOTED = "demoted_by_exit_rule"
+
+
+def scan_not_applicable(cond: Mapping[str, Any], by_id: Mapping[str, Mapping[str, Any]]) -> str | None:
+    """The ``NOT_APPLICABLE_REASONS`` code behind a ``not_applicable`` condition, following its
+    ``requires:<id>`` reasons to the condition that is not applicable on its own; None when that
+    root is the owner's exclusion (or the condition is not ``not_applicable``). Readers use it to
+    tell a scan's not applicable from the owner's (#1407)."""
+    seen: set[str] = set()
+    while cond.get("state") == "not_applicable":
+        reason = cond.get("reason")
+        if isinstance(reason, str) and reason in NOT_APPLICABLE_REASONS:
+            return reason
+        if not isinstance(reason, str) or not reason.startswith("requires:") or reason in seen:
+            return None
+        seen.add(reason)
+        nxt = by_id.get(reason.split(":", 1)[1])
+        if nxt is None:
+            return None
+        cond = nxt
+    return None
 
 
 def _block_reason(data: Mapping[str, Any] | None, signal: str) -> str:
@@ -249,7 +288,8 @@ def _own_state(outcome: LevelOutcome, criteria: list[Criterion],
         return "not_measured", first["reason"]
     criterion = next(c for c in criteria if (c["signal"], c["op"], c["value"])
                      == (first["signal"], first["op"], first["value"]))
-    return "not_measured", _block_reason(data, unavailable_signal(criterion, data))
+    reason = _block_reason(data, unavailable_signal(criterion, data))
+    return ("not_applicable" if reason in NOT_APPLICABLE_REASONS else "not_measured"), reason
 
 
 def _mark(entry: ConditionResult, exclusion: ExcludedCondition | None, demoted: bool) -> None:
@@ -280,8 +320,8 @@ def _conditions(model: MaturityModel, data: Mapping[str, Any] | None,
             grade = _grade(row, level["level"])
             hazard = level.get("polarity") == "hazard"
             entry: ConditionResult = {"id": cid, "row": row["id"], "level": level["level"], "grade": grade,
-                                      "counted": (grade in COUNTED_GRADES and cid not in excluded and not hazard
-                                                  and cid not in demoted),
+                                      "counted": (grade in COUNTED_GRADES and state != "not_applicable"
+                                                  and not hazard and cid not in demoted),
                                       "state": state}
             if hazard:
                 entry["polarity"] = "hazard"

@@ -528,12 +528,14 @@ _NEEDS = "A headless scan reports the `{}` block unavailable when {}; install it
 
 # Why a signal can be unavailable, by its first path segment (the block name).
 _MEASURE_HINTS = {
-    "guardrails": "Unknown when the `guardrails` scan finds no configured gate (a ruff or "
-                  "flake8 complexity limit, a coverage floor, pre-commit hooks, mypy "
-                  "strict): with nothing to state there is no share to measure.",
-    "agent_consistency": "Not measured when fewer than two agent systems have a root "
+    "guardrails": "Not applicable when the `guardrails` scan finds no configured gate (a ruff "
+                  "or flake8 complexity limit, a coverage floor, pre-commit hooks, mypy "
+                  "strict): with nothing to state there is no share to measure "
+                  "(`stated_pct_reason: no_configured_gates`).",
+    "agent_consistency": "Not applicable when fewer than two agent systems have a root "
                          "instruction file: one system has nothing to agree with, so "
-                         "`conflicts` and `unlinked` are null (`applicable: false`).",
+                         "`conflicts` and `unlinked` are null (`applicable: false`, "
+                         "reason `fewer_than_two_systems`).",
     "structure": _NEEDS.format("structure", "grimp or networkx is not installed (`no_grimp`, "
                                "`no_networkx`)") + " With no import graph the reason names "
                  "the dominant source language: `no_import_graph_<language>` when no "

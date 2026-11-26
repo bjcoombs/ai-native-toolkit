@@ -114,6 +114,8 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | Field | Kept as |
 |---|---|
 | `agent_consistency.systems` | token |
+| `agent_consistency.conflicts_reason` | token |
+| `agent_consistency.unlinked_reason` | token |
 | `agent_consistency.canonical` | path (hashed when hashing is on) |
 | `agent_consistency.files.path` | path (hashed when hashing is on) |
 | `agent_consistency.files.system` | token |
@@ -452,6 +454,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | Field | Kept as |
 |---|---|
 | `guardrails.gates.kind` | token |
+| `guardrails.stated_pct_reason` | token |
 | `guardrails.gates.tool` | token |
 | `guardrails.gates.rule` | token |
 | `guardrails.gates.stated_in` | path (hashed when hashing is on) |

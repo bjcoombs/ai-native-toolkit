@@ -7,7 +7,8 @@ repositories at it. Each repository counts once, under the first gate of its nex
 does not hold, in model order (the level result lists its blockers in that order), so a
 Step's segments sum to its count. A segment is a gate and how it fails: ``unmet``,
 ``not_measured`` (hatched, with the reason code) or ``set_aside`` (``not_applicable``: the
-owner excluded the gate's condition or one it requires; hatched too). The top Step has one
+owner excluded the gate's condition or one it requires, or a scan's ``NOT_APPLICABLE_REASONS``
+code says it does not apply, #1407; hatched too). The top Step has one
 ``top`` segment. ``held_by_more`` counts the repositories at a Step that more than one gate
 holds back; they still count once. A Step reads its gates only (#1083), so there is no
 threshold segment.
