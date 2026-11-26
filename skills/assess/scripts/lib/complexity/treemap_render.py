@@ -8,7 +8,7 @@ misleading"). So the mechanical parts live here and each script keeps only its
 own colour mapping.
 
 Heavy deps (matplotlib/squarify/numpy) are imported here, so this module must
-only be imported by the treemap scripts -- never by the deterministic core,
+only be imported by the SVG renderers -- never by the deterministic core,
 which runs with networkx alone.
 
 Shared treemap layout and SVG primitives for the code heatmap and the doc map.

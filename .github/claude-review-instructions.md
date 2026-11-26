@@ -11,7 +11,9 @@ Two files hold detail you read on demand (paths relative to the repo root):
   resolution. Read it before you run any of those steps.
 - `.github/claude-review/assess-core-boundary.md` - the `/assess`
   deterministic-core rules. Read it whenever the diff touches
-  `skills/assess/scripts/`.
+  `skills/assess/scripts/`. It applies only there: its network limits do not
+  bind other skills' scripts, and `ghsync` and `ghreport` reach the network by
+  design.
 
 ## Project
 
@@ -19,7 +21,9 @@ Two files hold detail you read on demand (paths relative to the repo root):
 skills (`skills/<name>/SKILL.md`, including the user-invoked slash-command
 workflows) and agents (`agents/*.md`). The runtime code is the Python
 **`/assess` deterministic core** under `skills/assess/scripts/` (with `lib/`),
-the standalone-skill build pipeline under `scripts/`, and the scripts other
+`scripts/` (the standalone-skill build pipeline, floor core
+`floor_anchor.py` and `floor_check.py`, and the `contract/` gates and
+`canaries/` harness), and the scripts other
 skills ship under `skills/<name>/scripts/` (Python and bash: `fleet`,
 `ghreport`, `ghsync`, `marathon`, `refine` and `doc-contradictions` today).
 Review those to the same bar as the `/assess` core. It is a **public** repo.

@@ -5,10 +5,10 @@ is a **required** status check on the default branch. A path lock on `floor.yml`
 itself was planned as a second defence but is **descoped** (2026-07-10): GitHub
 refuses push rulesets on public, user-owned repos (see the "Honest-degrade note
 (E2)" below). This document records the proof that the required-check defence
-holds under the solo-merge setup, and the attempt at the path lock, via two
-adversarial test PRs.
+holds under the solo-merge setup, via the Attack A test PRs, and the attempt at
+the path lock (Attack B), a ruleset POST that GitHub refused.
 
-Both attack PRs are opened on throwaway branches, **never merged**, and closed
+The attack PRs are opened on throwaway branches, **never merged**, and closed
 after the outcome is recorded. Neither branch is the feature branch.
 
 ## Repo settings under test
@@ -46,8 +46,9 @@ Until all three are configured, the `floor self-anchor` job fails closed and
 prints the commands for steps 1 to 3 of the "Configuration commands" section in
 its log and job summary; the `floor enforcement` deterministic job is
 unaffected and stays green. The `floor.yml` path lock is not one of the three:
-it is descoped, `PATH_LOCK_DESCOPED` in `scripts/floor_anchor.py` is `True`, and
-a missing lock produces a warning, never a failure.
+it is descoped (`PATH_LOCK_DESCOPED` in `scripts/floor_anchor.py` is `True`), so
+the anchor never checks for it. It always emits a descope warning and never
+fails on it.
 
 Exact configuration commands are in the "Configuration commands" section below so
 the state is reproducible.
@@ -83,7 +84,7 @@ is a required check, the PR cannot merge.
 covering `.github/workflows/floor.yml`, requiring maintainer bypass.
 
 **Capability result: the defense cannot be configured on this repo.** Creating the
-push ruleset (the org-only step of the Configuration commands) returns GitHub **HTTP 422:
+push ruleset (the org-migration block in Configuration commands) returns GitHub **HTTP 422:
 "Source only org-owned repos can have push rules"**. Push rulesets with
 `file_path_restriction` are an organization-owned-repository feature and are
 unavailable on this user-owned repo. This is a capability wall, not a fixable
@@ -227,10 +228,11 @@ were live:
   `floor-signoff` environment must exist and be wired into `floor.yml` on the
   floor-core trigger. The `floor self-anchor` job still fails the PR if any
   does not hold.
-- The path-restriction check is **downgraded to a loud warning** (stderr
+- The path-restriction check is **replaced by a loud warning** (stderr
   `::warning::` + job summary) that quotes the 422 evidence and this descope
-  decision. It is keyed on the explicit `PATH_LOCK_DESCOPED` constant in
-  `scripts/floor_anchor.py`, not silently removed.
+  decision. The anchor does not query for the lock; it emits the warning on
+  every run, keyed on the explicit `PATH_LOCK_DESCOPED` constant in
+  `scripts/floor_anchor.py`, so the gap is never silently removed.
 
 **Residual risk (stated honestly).** Without the path lock, a `floor.yml`-gut
 attack is *detected only until a gutted workflow merges* - the deterministic
