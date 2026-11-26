@@ -284,7 +284,9 @@ def page_bundle(data: Mapping[str, Any], achievements: Mapping[str, Any] | None,
 def picture(file: str, title: str, question: str, svg: str) -> Picture:
     """A drawn SVG as the page embeds it: inlined when it has per-part details, always a ``data:`` URI.
 
-    A diagram without the generator's scope is scoped here as ``fleet-page-<file stem>``."""
+    A diagram without the generator's scope is scoped here as ``fleet-page-<file stem>``. ``src`` is
+    the SVG as drawn, not sanitised: the page shows it only as an ``<img>``, which runs no script and
+    fetches nothing, and offers it as a download; only the generators' own SVGs are passed in."""
     stem = re.sub(r"[^a-z0-9]+", "-", file.rsplit(".", 1)[0].lower()).strip("-")
     return {"file": file, "title": title, "question": question,
             "src": "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii"),

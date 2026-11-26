@@ -142,7 +142,8 @@ sections, in order:
    element outside the SVG drawing set and for markup an HTML parser would read differently
    (`lib/svg_inline.py` lists the cases), so the page still makes no network request. Each
    inlined SVG keeps its generator's style scope and id prefix, or gets `fleet-page-<file>` when
-   it has none, so no two diagrams share a style or an id. Each picture has a "Save full size" link to the SVG as drawn (`lib/svg_inline.py`).
+   it has none, so no two diagrams share a style or an id. Each picture has a "Save full size"
+   link to the SVG as drawn (`lib/fleet/fleet_page_assets.py`).
 
 Names follow the run's output mode. `--full` names repositories and units by their keys and
 paths and shows an exclusion's reason. A hashed run shows hashed ids. Plain counts-only shows

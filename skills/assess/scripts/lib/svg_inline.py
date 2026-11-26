@@ -23,7 +23,9 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
   element). A literal ``<`` or ``>`` in an attribute value, a ``<style>`` with attributes, and an
   ``&`` or ``\`` in a ``<style>``'s text or a ``style`` attribute (an entity or a CSS escape could
   spell ``url(`` or ``@import``) all refuse; a ``\`` refuses in any attribute but a ``data-*``
-  one. The generators write none of these.
+  one. So does an attribute that is not double-quoted, which the id and scope checks would not
+  read, and any ``<style>`` at-rule but ``@media``: a statement such as ``@layer a;`` would hide
+  the next rule's selector from the scope check. The generators write none of these.
 - **Scoped.** A root that already carries a class is the generator's scope (#1449): kept when it
   is complete (every id, reference and style selector under it), None otherwise. A root without a
   class is scoped here under ``scope``.
@@ -72,7 +74,7 @@ def _safe_attrs(element: str, attrs: str) -> str | None:
     for m in _ATTR_PARTS.finditer(attrs):
         raw = (m.group(3) or "").strip("\"'")
         name = m.group(2).lower()
-        if "<" in raw or ">" in raw or element == "style" or ("\\" in raw and not name.startswith("data-")) \
+        if not (m.group(3) or "").startswith('"') or "<" in raw or ">" in raw or element == "style" or ("\\" in raw and not name.startswith("data-")) \
                 or (name == "style" and "&" in raw):
             return None
         value = html.unescape(raw)
@@ -207,6 +209,6 @@ def inline_svg(svg: str, scope: str) -> str | None:
         return None
     styles = "".join(re.findall(r"<style>(.*?)</style>", clean, re.S))
     if (sanitise(clean)[0] != clean or any(word in clean.lower() for word in UNSAFE)
-            or _FETCH.search(clean) or "\\" in styles):
+            or _FETCH.search(clean) or "\\" in styles or re.search(r"@(?!media\b)", styles)):
         return None
     return clean

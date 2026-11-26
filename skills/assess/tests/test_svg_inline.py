@@ -44,7 +44,7 @@ def test_an_unscoped_svg_is_scoped_here() -> None:
     "<foreignObject><foreignObject>x</foreignObject><p>y</p></foreignObject>",
     '<a href="java&#x09;script:alert(1)"><text>t</text></a>',
     '<a xlink:href=" JAVASCRIPT:alert(1)"><text>t</text></a>',
-    "<rect onmouseover='alert(1)' ONCLICK=alert(1) width=\"1\"/>",
+    "<rect onmouseover=\"alert(1)\" ONCLICK=\"alert(1)\" width=\"1\"/>",
     '<set attributeName="href" to="vbscript:x"/>'.replace("set", "rect"),
     "<!-- --!><img src=x onerror=alert(1)> -->",
     '<use href="https://example.com/x.svg#p"/><use xlink:href="//example.com/x.svg"/>',
@@ -92,6 +92,12 @@ def test_unsafe_markup_is_dropped(body: str) -> None:
     _svg('<rect style="fill:u\\72l(https://evil.example/c)"/>' + PART),
     _svg('<rect style="fill:image&#45;set(\'https://evil.example/d\' 1x)"/>' + PART),
     _svg('<rect fill="u\\72l(https://evil.example/e)"/>' + PART),
+    _svg("<style>@layer a; body{display:none}</style>" + PART),
+    _svg("<style>@layer a; body{display:none}</style>" + PART,
+         head='<svg class="fleet-x" xmlns="http://www.w3.org/2000/svg"><title>r</title>'),
+    _svg("<g id='dup'>" + PART + "</g>", head='<svg class="fleet-x" xmlns="http://www.w3.org/2000/svg"><title>r</title>'),
+    _svg(PART, head="""<svg data-x='a class="evil"' class="real"><title>r</title>"""),
+    _svg("<g id=bare>" + PART + "</g>"),
 ])
 def test_markup_it_cannot_trust_or_scope_stays_an_image(svg: str) -> None:
     assert inline_svg(svg, "s") is None
