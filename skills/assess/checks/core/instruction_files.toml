@@ -5,7 +5,7 @@
 id = "core.instruction_files"
 kind = "collector"
 title = "Graded instruction files"
-callable = "lib.run_setup:graded_instruction_files"
+callable = "lib.run.run_setup:graded_instruction_files"
 publishes = []
 reads = ["instruction_grading"]
 stage = "setup"

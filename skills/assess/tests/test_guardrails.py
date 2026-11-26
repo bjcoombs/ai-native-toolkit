@@ -361,7 +361,7 @@ def test_the_registry_passes_the_scope_in_parameter_order(tmp_path: Path) -> Non
     (#1049): its reads follow the parameters, and a scoped run reports the root ruff gate."""
     import inspect
 
-    from lib.scan_registry import SCANS
+    from lib.run.scan_registry import SCANS
 
     (spec,) = [spec for spec in SCANS if spec.key == "guardrails"]
     assert spec.reads == tuple(inspect.signature(scan_guardrails).parameters)

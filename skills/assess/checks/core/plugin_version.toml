@@ -5,7 +5,7 @@
 id = "core.plugin_version"
 kind = "collector"
 title = "Plugin version"
-callable = "lib.run_setup:read_plugin_version"
+callable = "lib.run.run_setup:read_plugin_version"
 publishes = ["plugin_version"]
 reads = []
 stage = "read_side"

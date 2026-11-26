@@ -13,7 +13,8 @@ import pytest
 
 import assess_emit_workflow
 from assess_report import made_by
-from lib import plugin_version, run_setup, signals
+from lib import plugin_version
+from lib.run import run_setup, signals
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"

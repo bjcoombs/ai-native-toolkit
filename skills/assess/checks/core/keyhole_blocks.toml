@@ -5,7 +5,7 @@
 id = "core.keyhole_blocks"
 kind = "collector"
 title = "Keyhole blocks"
-callable = "lib.core_scans:keyhole_blocks"
+callable = "lib.run.core_scans:keyhole_blocks"
 publishes = ["structure", "behaviour", "documentation", "understanding", "runtime", "derived_findings", "attention", "attention_low_signal", "findings_markdown", "keyhole_summary", "prescribed_actions"]
 reads = ["keyhole", "run_scope"]
 stage = "read_side"
@@ -22,7 +22,7 @@ whys.understanding = "For each complex module it reads whether a person authored
 whys.runtime = "exempt: plumbing"
 whys.derived_findings = "exempt: plumbing"
 headless_variants = [
-  { block = "structure", callable = "lib.headless_layers:structure", reads = ["structure_scan"], stage = "read_side" },
+  { block = "structure", callable = "lib.run.headless_layers:structure", reads = ["structure_scan"], stage = "read_side" },
 ]
 shapes = [
   { path = "behaviour", type = "lib.run_context_types:BehaviourBlock" },

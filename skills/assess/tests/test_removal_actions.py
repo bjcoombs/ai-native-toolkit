@@ -128,7 +128,7 @@ def test_a_removal_that_keeps_every_gate_for_two_runs_is_credited_in_the_ledger(
 def test_a_degraded_run_keeps_the_baseline_and_the_ledger(tmp_path: Path, monkeypatch: Any) -> None:
     """#1158 success criterion: good, degraded, good. The third run still credits the action closed
     since the first and continues the ledger's hold count from where the first run left it."""
-    import lib.core_scans as cs
+    import lib.run.core_scans as cs
     from test_since_last_run import _git
     repo = _repo(tmp_path, ALWAYS_ON_FLAG_LINES + 60)
     proposal = _run(repo, "2026-11-20")

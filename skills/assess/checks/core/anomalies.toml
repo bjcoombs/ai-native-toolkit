@@ -5,7 +5,7 @@
 id = "core.anomalies"
 kind = "collector"
 title = "Anomalies"
-callable = "lib.core_scans:anomalies"
+callable = "lib.run.core_scans:anomalies"
 publishes = ["anomalies"]
 reads = ["run_header"]
 stage = "final"

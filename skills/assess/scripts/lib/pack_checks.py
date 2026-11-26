@@ -1,7 +1,7 @@
 """The pack collector (#1273, part B of #1266): every ``--pack`` check evaluated offline, counts only.
 
 ``collect(repo_root, excludes, packs)`` is the ``pack_checks`` entry of the scan table
-(``lib/scan_registry.py``), a spread entry that writes two run-context keys, and neither
+(``lib/run/scan_registry.py``), a spread entry that writes two run-context keys, and neither
 when no pack was passed, so a run without ``--pack`` writes the same ``run-context.json`` as
 before:
 

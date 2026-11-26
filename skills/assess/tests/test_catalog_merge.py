@@ -32,7 +32,7 @@ from lib.report.catalog_html import render_html
 from lib.report.catalog_md import render_markdown
 from lib.counts_only.counts_only_rules import RULES
 from lib.scoring.level_signals import load_default_levels
-from lib.signals import known_scans
+from lib.run.signals import known_scans
 
 TEMPLATE = "skill_script_tests"  # the collector each probe is copied from
 FILES = ("checks.html", "measures.json", "what-we-measure.md", "counts-only.md")

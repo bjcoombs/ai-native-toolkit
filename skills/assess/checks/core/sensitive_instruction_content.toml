@@ -5,7 +5,7 @@
 id = "core.sensitive_instruction_content"
 kind = "collector"
 title = "Sensitive instruction content"
-callable = "lib.core_scans:sensitive_instruction_content"
+callable = "lib.run.core_scans:sensitive_instruction_content"
 publishes = ["sensitive_instruction_content"]
 reads = ["instruction_grading"]
 stage = "read_side"

@@ -10,14 +10,14 @@ import jsonschema
 import pytest
 
 import assess_signals
-from lib import headless_static as hs
-from lib import scan_registry as reg
-from lib import signals
+from lib.run import headless_static as hs
+from lib.run import scan_registry as reg
+from lib.run import signals
 from lib.counts_only.content_free import counts_only_scans, reason_code
 from lib.docs.doc_staleness import DocStalenessRow, _safe_rel, staleness_summary
 from lib.scoring.level_signals import load_default_levels
 from lib.scoring.levels import evaluate
-from lib.signals_schema import SCHEMA_PATH
+from lib.run.signals_schema import SCHEMA_PATH
 
 BLOCKS = ("observability", "doc_graph", "doc_staleness", "archetype")
 # Blocks still assembled only by a full run: #697 marks them full-run-only by this code.

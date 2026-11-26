@@ -5,7 +5,7 @@
 id = "core.measured_commit"
 kind = "collector"
 title = "Measured commit"
-callable = "lib.run_setup:measured_commit"
+callable = "lib.run.run_setup:measured_commit"
 publishes = []
 reads = ["repo_root"]
 stage = "setup"

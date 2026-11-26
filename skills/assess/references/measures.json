@@ -5,8 +5,8 @@
     "skills/assess/checks/core/*.toml",
     "skills/assess/levels/default.toml",
     "skills/assess/scripts/lib/scoring/level_signals.py",
-    "skills/assess/scripts/lib/signals.py",
-    "skills/assess/scripts/lib/scan_registry.py"
+    "skills/assess/scripts/lib/run/signals.py",
+    "skills/assess/scripts/lib/run/scan_registry.py"
   ],
   "grades": [
     {

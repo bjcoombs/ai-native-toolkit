@@ -5,7 +5,7 @@
 id = "core.exclusion_disclosures"
 kind = "collector"
 title = "Exclusion disclosures"
-callable = "lib.core_scans:exclusion_disclosures"
+callable = "lib.run.core_scans:exclusion_disclosures"
 publishes = ["excluded_by_config", "excluded_as_archive", "pruned_finding_paths"]
 reads = ["keyhole", "excludes"]
 stage = "read_side"

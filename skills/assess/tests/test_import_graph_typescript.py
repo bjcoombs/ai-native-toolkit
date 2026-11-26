@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import assess_signals
-from lib.headless_layers import structure
+from lib.run.headless_layers import structure
 from lib.import_graph_builders import BUILDERS
 from lib.graph.import_graph_typescript import (
     TYPESCRIPT_BUILDER,

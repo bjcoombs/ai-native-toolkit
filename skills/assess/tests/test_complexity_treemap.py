@@ -180,9 +180,9 @@ def test_main_with_no_files_writes_a_zero_file_sidecar(treemap, monkeypatch, tmp
     """#959: with scc on PATH (it reads every language) a tree with nothing to score is a
     measured empty set. The sidecar is written (files_scored 0), so the run reads
     no_scored_files, never a missing sidecar (no_complexity_stats)."""
-    from lib import run_setup
+    from lib.run import run_setup
     from lib.scoring import level_tally
-    from lib.run_scope import load_current_stats
+    from lib.run.run_scope import load_current_stats
 
     monkeypatch.setattr(treemap, "collect", lambda *a, **k: ([], "hotspot", {}, "commits", {}))
     out = tmp_path / ".assess" / "complexity-stats.json"

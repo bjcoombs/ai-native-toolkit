@@ -5,7 +5,7 @@
 id = "core.coverage_report"
 kind = "collector"
 title = "Coverage report"
-callable = "lib.core_scans:coverage_report"
+callable = "lib.run.core_scans:coverage_report"
 publishes = ["coverage_report"]
 reads = ["repo_root", "coverage_data"]
 stage = "read_side"

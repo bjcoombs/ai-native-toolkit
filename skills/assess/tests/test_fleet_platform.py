@@ -31,7 +31,7 @@ from lib.fleet.fleet_platform import failure_reason, join, platform_scans, run_p
 from lib.fleet.fleet_schema import build_schema, build_stamp_schema
 from lib.hosting.merged_sample import PR_FIELDS
 from lib.run_context_types import JsonDict
-from lib.signals import NETWORK_REASON, PLATFORM_SCANS
+from lib.run.signals import NETWORK_REASON, PLATFORM_SCANS
 from test_fleet import make_repo
 from test_fleet_cli import fleet_cli
 

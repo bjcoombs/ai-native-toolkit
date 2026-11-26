@@ -12,14 +12,14 @@ import assess_signals
 from lib import fleet_config as fcfg
 import lib.fleet.fleet_history as fh
 import lib.fleet.fleet_trends as fleet_trends
-from lib import run_setup
-from lib import scan_registry as reg
+from lib.run import run_setup
+from lib.run import scan_registry as reg
 from lib.fleet.runner import FLEET_ROW_VERSION, ScanOptions, signals_command
 from lib.fleet.fleet_compare import FleetRun, comparability, compare
 from lib.fleet.fleet_groups import roll_up
 from lib.fleet.fleet_stamp import FleetStamp, build_stamp, write_stamp
-from lib.scan_registry import ScanSpec
-from lib.signals import build_document
+from lib.run.scan_registry import ScanSpec
+from lib.run.signals import build_document
 from test_fleet import make_repo
 from test_fleet_cli import fleet_cli
 from test_fleet_groups import LEVELS

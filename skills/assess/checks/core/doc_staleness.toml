@@ -6,7 +6,7 @@ id = "core.doc_staleness"
 kind = "collector"
 title = "Doc staleness"
 summary = "Each doc's last content change against its code subject's churn, following renames."
-callable = "lib.core_scans:doc_staleness"
+callable = "lib.run.core_scans:doc_staleness"
 publishes = ["doc_staleness"]
 reads = ["repo_root", "doc_graph", "excludes", "scope"]
 stage = "read_side"
@@ -14,7 +14,7 @@ unit_scope = "scoped"
 headless = { doc_staleness = "headless_variant" }
 whys.doc_staleness = "It compares each doc's last change with the churn in the code it describes, so a doc whose code moved on is found before an agent relies on it."
 headless_variants = [
-  { block = "doc_staleness", callable = "lib.headless_static:doc_staleness", reads = ["repo_root", "doc_graph", "excludes"], stage = "read_side" },
+  { block = "doc_staleness", callable = "lib.run.headless_static:doc_staleness", reads = ["repo_root", "doc_graph", "excludes"], stage = "read_side" },
 ]
 shapes = [
   { path = "doc_staleness", type = "lib.docs.doc_staleness:DocStalenessBlock" },

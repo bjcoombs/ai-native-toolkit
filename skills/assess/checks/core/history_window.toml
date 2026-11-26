@@ -5,7 +5,7 @@
 id = "core.history_window"
 kind = "collector"
 title = "Git history window"
-callable = "lib.run_setup:history_window"
+callable = "lib.run.run_setup:history_window"
 publishes = []
 reads = ["current"]
 stage = "setup"

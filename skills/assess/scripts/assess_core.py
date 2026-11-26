@@ -16,7 +16,7 @@ writes nothing):
 Run:
     uv run assess_core.py <repo_root> [--jobs N]
 
-``--jobs N`` (#1381) runs at most N scans at a time (``lib/scan_pool.py``; default the CPU
+``--jobs N`` (#1381) runs at most N scans at a time (``lib/run/scan_pool.py``; default the CPU
 count capped at 8). run-context.json is the same for every N apart from ``timings``.
 
 The LLM still writes assess-report.md (the prose-heavy summary).
@@ -59,15 +59,15 @@ from lib.profiles import ModelChoice, ProfileError, add_model_arguments, chosen_
 from lib.profiles import profile_names, single_repo_choice
 from lib.testing.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.testing.mutation_refresh import recorded_excludes, refresh_mutation_findings
-from lib.run_publish import publish_run
+from lib.run.run_publish import publish_run
 from lib.assess_config import load_managed_settings_opt_in
 from lib.report.run_wiki import refresh_log_readiness
-from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
-from lib.scan_plan import ScanPlan, run_plan
-from lib.scan_pool import add_jobs_argument
-from lib.scan_registry import run_scans
-from lib.scan_registry import safe as _safe
-from lib.scan_timings import TIMINGS_KEY, summary_line
+from lib.run.run_scope import assess_dir_for, load_current_stats, resolve_scope
+from lib.run.scan_plan import ScanPlan, run_plan
+from lib.run.scan_pool import add_jobs_argument
+from lib.run.scan_registry import run_scans
+from lib.run.scan_registry import safe as _safe
+from lib.run.scan_timings import TIMINGS_KEY, summary_line
 from lib.testing.test_focus import mutation_scope
 from lib.test_pressure import scan_test_pressure
 
@@ -95,18 +95,18 @@ def build_run_context(
     ``model`` is the maturity model the ``level`` and ``headline`` blocks evaluate
     (``--profile`` / ``--levels``, ``lib.profiles``, #1150); None is the default model.
 
-    Every block comes from the declared table in ``lib/scan_registry.py``. The
+    Every block comes from the declared table in ``lib/run/scan_registry.py``. The
     table only reads, so this function has no file-system side effects: it
     creates no ``.assess/`` directory and writes no artifact. The publish step
     (index.md, log.md, hotspots/*.md, badge.json, findings.json and
-    run-context.json, through ``lib.run_publish.publish_run``) is
+    run-context.json, through ``lib.run.run_publish.publish_run``) is
     ``build_and_publish_run``'s, which ``main`` calls.
 
     ``managed_settings`` (``--managed-settings`` or the ``[agent_ops] managed_settings`` config
     key, #1153) lets ``agent_ops`` read this machine's Claude Code managed settings; off, the
     agent permissions practice reads the repository alone.
 
-    ``plan`` (``lib.scan_plan.run_plan``, #1268) runs only the scans the model needs; each
+    ``plan`` (``lib.run.scan_plan.run_plan``, #1268) runs only the scans the model needs; each
     skipped block reads ``not run under <model>`` and the ``scan_plan`` key records the plan.
     None runs every scan, as the default model and ``--all-scans`` do.
 
@@ -115,9 +115,9 @@ def build_run_context(
     with none (the default) neither block is written.
 
     The ``timings`` block, last, holds each stage's and each scan's wall time
-    (``lib.scan_timings``, #1380): a diagnostic that differs on every run.
+    (``lib.run.scan_timings``, #1380): a diagnostic that differs on every run.
 
-    ``jobs`` (``--jobs``, #1381) is how many scans run at a time (``lib.scan_pool``); the
+    ``jobs`` (``--jobs``, #1381) is how many scans run at a time (``lib.run.scan_pool``); the
     context is the same for every value, ``timings`` apart. The CLI defaults to
     ``scan_pool.default_jobs``; 1 runs the table one scan after another.
     """

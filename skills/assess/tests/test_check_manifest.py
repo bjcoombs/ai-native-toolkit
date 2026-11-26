@@ -28,8 +28,8 @@ import jsonschema
 import pytest
 
 import lib.manifest.check_manifest as cm
-from lib import scan_registry as sr
-from lib import signals as sg
+from lib.run import scan_registry as sr
+from lib.run import signals as sg
 import lib.keyhole.coupling_analysis as ca
 from lib.assess_config import GATE_CONCERN_FINDINGS
 from lib.counts_only.counts_only_rules import RULES, FieldClass

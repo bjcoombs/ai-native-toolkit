@@ -5,7 +5,7 @@
 id = "core.doc_graph"
 kind = "collector"
 title = "Doc graph"
-callable = "lib.core_scans:doc_graph"
+callable = "lib.run.core_scans:doc_graph"
 publishes = ["doc_graph"]
 reads = ["repo_root", "excludes", "scope", "working_notes"]
 stage = "setup"
@@ -13,7 +13,7 @@ unit_scope = "scoped"
 headless = { doc_graph = "headless_variant" }
 whys.doc_graph = "An agent finds docs by following links from README, AGENTS.md or an index; a doc no link reaches is one it will not read."
 headless_variants = [
-  { block = "doc_graph", callable = "lib.headless_static:doc_graph", reads = ["repo_root", "excludes"], stage = "setup" },
+  { block = "doc_graph", callable = "lib.run.headless_static:doc_graph", reads = ["repo_root", "excludes"], stage = "setup" },
 ]
 shapes = [
   { path = "doc_graph", type = "lib.run_context_types:DocGraphBlock" },

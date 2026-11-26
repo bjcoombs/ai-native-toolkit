@@ -38,14 +38,14 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 from lib.counts_only.content_free import reason_code
-from lib.scan_plan import NOT_RUN_CODE, not_run_text
-from lib.signals import PLATFORM_ONLY_SCANS, PLATFORM_SCANS, known_scans
+from lib.run.scan_plan import NOT_RUN_CODE, not_run_text
+from lib.run.signals import PLATFORM_ONLY_SCANS, PLATFORM_SCANS, known_scans
 from lib.vocabulary import IN_PLACE
 
 HEADING = "## How this was measured"
 CATALOG_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md"
 # Reason codes meaning the scan did not run at all (signals.UNREGISTERED_REASON, NETWORK_REASON).
-# A --profile or --levels run's plan left the scan out (lib/scan_plan.py, #1268): skipped too.
+# A --profile or --levels run's plan left the scan out (lib/run/scan_plan.py, #1268): skipped too.
 SKIP_CODES = frozenset({"not_registered", "network", NOT_RUN_CODE})
 
 

@@ -61,8 +61,8 @@ def _running_version() -> str | None:
     """The running plugin's version from ``.claude-plugin/plugin.json``.
 
     scripts/assess_emit_workflow.py -> scripts/ -> skills/assess/ -> skills/ -> repo root.
-    The same lookup as ``lib.run_setup.read_plugin_version``, through the stdlib-only
-    ``lib.plugin_version`` (``lib.run_setup`` pulls the whole analysis stack), so the
+    The same lookup as ``lib.run.run_setup.read_plugin_version``, through the stdlib-only
+    ``lib.plugin_version`` (``lib.run.run_setup`` pulls the whole analysis stack), so the
     standalone skill reads its build's version file (#1166).
     """
     version = read_version(Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json")

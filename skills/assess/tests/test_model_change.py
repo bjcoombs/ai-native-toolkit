@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from lib import core_scans
+from lib.run import core_scans
 from lib.assess_diagrams import build_diagrams
 from lib.top_card import since_line
 from lib.scoring.level_tally import LEVEL_READS, default_model

@@ -5,7 +5,7 @@
 id = "core.superseded"
 kind = "collector"
 title = "Superseded run"
-callable = "lib.run_setup:superseded_run"
+callable = "lib.run.run_setup:superseded_run"
 publishes = []
 reads = ["assess_dir", "run_date", "measured_commit"]
 stage = "setup"

@@ -5,7 +5,7 @@
 id = "core.excludes"
 kind = "collector"
 title = "Config excludes"
-callable = "lib.run_setup:config_excludes"
+callable = "lib.run.run_setup:config_excludes"
 publishes = []
 reads = ["repo_root"]
 stage = "setup"

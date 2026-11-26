@@ -589,7 +589,7 @@ def test_gitlab_delivery_and_review_reality_share_one_notes_read(world: World) -
     from datetime import datetime, timedelta, timezone
 
     from lib.hosting.merged_sample import sample_since
-    from lib.signals import collect
+    from lib.run.signals import collect
 
     now = datetime.now(timezone.utc).replace(microsecond=0)
 

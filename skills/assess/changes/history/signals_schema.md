@@ -1,6 +1,6 @@
 # `SIGNALS_SCHEMA_VERSION` history
 
-The version history of `SIGNALS_SCHEMA_VERSION` in `skills/assess/scripts/lib/signals.py`, newest entry first.
+The version history of `SIGNALS_SCHEMA_VERSION` in `skills/assess/scripts/lib/run/signals.py`, newest entry first.
 The release PR's `make fold` writes each new entry at the top from the notes in
 [`skills/assess/changes/`](../README.md).
 

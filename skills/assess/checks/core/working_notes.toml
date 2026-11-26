@@ -5,7 +5,7 @@
 id = "core.working_notes"
 kind = "collector"
 title = "Working notes"
-callable = "lib.core_scans:working_notes"
+callable = "lib.run.core_scans:working_notes"
 publishes = []
 reads = ["repo_root"]
 stage = "setup"

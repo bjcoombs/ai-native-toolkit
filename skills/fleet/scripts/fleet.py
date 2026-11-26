@@ -57,7 +57,7 @@ runs with different configs do not compare.
 the offline scan: one more ``assess_signals.py --platform`` child per ok repository
 (``--platform-jobs`` at a time, ``--platform-timeout`` each; defaults from the
 ``[platform]`` section of ``--fleet-config``) whose ``gh``/``glab`` blocks
-(``lib/signals.py`` ``PLATFORM_SCANS``) are joined into the row by repository. It
+(``lib/run/signals.py`` ``PLATFORM_SCANS``) are joined into the row by repository. It
 never changes a row's status; a failed read is an unavailable block. ``run.json``
 records ``platform`` (true only when a platform read ran: ``--scans`` selecting no
 platform scan stamps false), and runs with and without it do not compare. With
@@ -118,7 +118,7 @@ Run:
 # requires-python = ">=3.11"
 # dependencies = [
 #     # Each scan runs assess_signals.py with this interpreter, so these are
-#     # its layer 2-4 dependencies (lib/headless_layers.py): the import graph
+#     # its layer 2-4 dependencies (lib/run/headless_layers.py): the import graph
 #     # and the file size and complexity scores. Without them each block
 #     # reports unavailable with a named reason. lizard is pinned to the
 #     # treemap's version.
@@ -244,9 +244,9 @@ from lib.fleet.fleet_stamp import FLEET_STAMP_VERSION, FleetStamp, build_stamp, 
 from lib.scoring.levels import LevelsError, MaturityModel
 from lib.packs import PackError
 from lib.run_context_types import JsonDict
-from lib.scan_plan import fleet_scans
+from lib.run.scan_plan import fleet_scans
 from lib.tool_lookup import warn_missing_packages
-from lib.signals import (
+from lib.run.signals import (
     DEFAULT_WINDOW,
     TOOLKIT_ROOT,
     UnknownScanError,

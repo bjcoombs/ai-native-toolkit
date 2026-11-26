@@ -65,7 +65,7 @@ Semantics:
   that is unavailable or absent leaves the usual rules in place: that branch is
   kept for the unmeasured count, such as a headless ``stats_summary`` without
   lizard (``no_lizard``) or a full run whose treemap step wrote no
-  ``complexity-stats.json`` (``no_complexity_stats``, ``lib.run_scope``, #959),
+  ``complexity-stats.json`` (``no_complexity_stats``, ``lib.run.run_scope``, #959),
   which must not read as a measured empty set.
 - ``actual`` in a criterion outcome is the resolved value only when it is a
   finite scalar; an object, a list or a non-finite number is reported as null

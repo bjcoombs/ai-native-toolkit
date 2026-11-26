@@ -19,7 +19,7 @@ from lib.instructions.instruction_placement import (
     scan_instruction_placement,
     split_sections,
 )
-from lib.scan_registry import SCANS
+from lib.run.scan_registry import SCANS
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 

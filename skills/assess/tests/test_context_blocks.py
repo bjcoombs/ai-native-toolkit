@@ -1,4 +1,4 @@
-"""Tests for lib/context_blocks.py: scan results serialised into run-context
+"""Tests for lib/run/context_blocks.py: scan results serialised into run-context
 blocks (keyhole, stale hubs, liveness, coverage report, accretion, structure
 drift, exclusion and pruning disclosures).
 
@@ -17,7 +17,7 @@ from assess_core_helpers import (
     _seed_assess,
     _write_min_stats,
 )
-from lib import context_blocks, core_scans, headless_layers
+from lib.run import context_blocks, core_scans, headless_layers
 from lib.counts_only.content_free import counts_only
 
 
@@ -125,7 +125,7 @@ def test_stale_hubs_sort_deweights_low_confidence(tmp_path: Path) -> None:
     """A precise-subject hub at half the raw priority of a baseline hub still
     outranks it. The sort multiplies low-confidence priority by 0.5.
     """
-    from lib.context_blocks import build_stale_hubs
+    from lib.run.context_blocks import build_stale_hubs
 
     doc_graph = {
         "available": True,

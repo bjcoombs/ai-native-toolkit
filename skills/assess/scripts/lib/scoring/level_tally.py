@@ -176,7 +176,7 @@ COUNTED_GRADES = frozenset({"measured", "verified"})
 _GRADE_ORDER = ("config_only", "declared", "measured", "verified")
 NEEDS_FULL_RUN = "needs_full_run"
 NEEDS_PLATFORM = "needs_platform"
-# Block reason codes that a different kind of run would measure (lib.signals).
+# Block reason codes that a different kind of run would measure (lib.run.signals).
 _RUN_KIND_REASONS = {"not_registered": NEEDS_FULL_RUN, "network": NEEDS_PLATFORM}
 # The codes lib.scoring.levels gives a criterion whose signal is a statistic over an empty set.
 EMPTY_SET_CODES = frozenset(code for _, code in EMPTY_DENOMINATORS.values())
@@ -474,7 +474,7 @@ def model_blocks(model: MaturityModel) -> tuple[str, ...]:
 DEFAULT_BLOCKS = model_blocks(default_model())
 # The run-context block holding the owner's exclusions (lib/owner_exclusions.py).
 EXCLUSIONS_BLOCK = "owner_exclusions"
-# The run-context blocks the ``level`` entry reads, in order (lib/scan_registry.py).
+# The run-context blocks the ``level`` entry reads, in order (lib/run/scan_registry.py).
 LEVEL_READS = (*DEFAULT_BLOCKS, EXCLUSIONS_BLOCK)
 
 

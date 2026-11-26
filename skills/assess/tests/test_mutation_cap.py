@@ -10,7 +10,7 @@ from pathlib import Path
 
 from assess_core import build_and_publish_run
 from assess_core_helpers import _minimal_repo
-from lib import core_scans
+from lib.run import core_scans
 
 
 # ════════════════════════════════════════════════════════════════════════════

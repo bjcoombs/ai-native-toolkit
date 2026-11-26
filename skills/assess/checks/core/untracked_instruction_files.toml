@@ -5,7 +5,7 @@
 id = "core.untracked_instruction_files"
 kind = "collector"
 title = "Untracked instruction files"
-callable = "lib.core_scans:untracked_instruction_files"
+callable = "lib.run.core_scans:untracked_instruction_files"
 publishes = ["untracked_instruction_files"]
 reads = ["instruction_grading"]
 stage = "read_side"

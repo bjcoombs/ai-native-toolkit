@@ -23,10 +23,10 @@ Reads the ``repos.jsonl`` rows ``lib/fleet/runner.py`` builds and writes one
   no data. Absent otherwise, never null; rows written before #697 lack it.
 - a team row's ``full_run_only`` (#697): the missing signals only a full
   ``/assess`` run measures, each one unavailable in every repository missing it
-  because its block carries a ``lib.signals.FULL_RUN_ONLY_REASONS`` code
+  because its block carries a ``lib.run.signals.FULL_RUN_ONLY_REASONS`` code
   (``not_registered``, ``network``). A failed scan or a mistyped value is a
   plain gap, so such a signal is not listed, and so is one in a
-  ``lib.signals.PLATFORM_SCANS`` block, which ``fleet --platform`` measures
+  ``lib.run.signals.PLATFORM_SCANS`` block, which ``fleet --platform`` measures
   (``platform_signals``). Only on an ``unknown`` row (a known
   row's missing signals do not decide its level); absent when empty.
 
@@ -92,7 +92,7 @@ from lib.counts_only.content_free import reason_code
 from lib.scoring.levels import Aggregation, Evaluation, MaturityModel, RowResult, evaluate
 from lib.run_context_types import JsonDict
 from lib.ci.shared_tooling import distinct_ids
-from lib.signals import FULL_RUN_ONLY_REASONS, NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS
+from lib.run.signals import FULL_RUN_ONLY_REASONS, NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS
 
 # Not bumped for the 2.0.0 maturity-model key renames (#670): readers reject any other
 # version, so lib/fleet/fleet_legacy.py maps the old keys and earlier history lines still load.

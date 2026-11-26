@@ -23,7 +23,7 @@ import pytest
 import lib.fleet.runner as fleet
 import lib.fleet.fleet_cleanup as fleet_cleanup
 from lib.fleet.fleet_cleanup import delete_clone
-from lib.run_scope import resolve_scope
+from lib.run.run_scope import resolve_scope
 from test_fleet import make_checkout
 from test_fleet_run_stamp import _pushed_repo, _row, _target
 

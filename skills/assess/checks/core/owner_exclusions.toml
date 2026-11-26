@@ -7,7 +7,7 @@ kind = "collector"
 title = "Owner exclusions"
 summary = "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why."
 issues = [910]
-callable = "lib.core_scans:owner_exclusions"
+callable = "lib.run.core_scans:owner_exclusions"
 publishes = ["owner_exclusions"]
 reads = ["repo_root"]
 stage = "read_side"
@@ -16,7 +16,7 @@ gate_reason = "self_degrading"
 headless = { owner_exclusions = "headless_variant" }
 whys.owner_exclusions = "It reads the checks a repository's owners have committed as not applying to them, so the Step holds a team only to practices it has not deliberately set aside, and each exclusion stays visible and reviewable in the repository."
 headless_variants = [
-  { block = "owner_exclusions", callable = "lib.headless_static:owner_exclusions", reads = ["repo_root"], stage = "read_side" },
+  { block = "owner_exclusions", callable = "lib.run.headless_static:owner_exclusions", reads = ["repo_root"], stage = "read_side" },
 ]
 shapes = [
   { path = "owner_exclusions", type = "lib.scoring.level_result_types:OwnerExclusionsBlock" },

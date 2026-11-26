@@ -5,7 +5,7 @@
 id = "core.liveness_blocks"
 kind = "collector"
 title = "Liveness blocks"
-callable = "lib.core_scans:liveness_blocks"
+callable = "lib.run.core_scans:liveness_blocks"
 publishes = ["dead_code", "observability", "capability_offers", "language_capabilities"]
 reads = ["liveness"]
 stage = "read_side"
@@ -16,7 +16,7 @@ headless = { dead_code = "unregistered", observability = "headless_variant" }
 whys.dead_code = "Code nothing in the repository calls still costs an agent reading time and can be kept alive by mistake; candidates are listed for a person to check, since callers outside the repository are not visible."
 whys.observability = "It reads how far the repository gives an agent a view of the running system: telemetry emitted, a runbook that says where it lives, and a path the agent can query."
 headless_variants = [
-  { block = "observability", callable = "lib.headless_static:observability", reads = ["repo_root", "excludes"], stage = "read_side" },
+  { block = "observability", callable = "lib.run.headless_static:observability", reads = ["repo_root", "excludes"], stage = "read_side" },
 ]
 shapes = [
   { path = "dead_code", type = "lib.run_context_types:DeadCodeBlock" },

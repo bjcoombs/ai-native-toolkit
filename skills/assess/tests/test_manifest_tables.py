@@ -10,7 +10,7 @@ from typing import Any, cast
 import pytest
 
 import lib.manifest.check_manifest as cm
-from lib import scan_registry as sr
+from lib.run import scan_registry as sr
 from lib.scoring.level_tally import LEVEL_READS
 from lib.scoring.signal_grades import INPUT_GRADES, SIGNAL_INPUTS
 

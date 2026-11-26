@@ -20,7 +20,7 @@ from lib.report.badge import headline_badge
 from lib.scoring.headline import as_headline
 from lib.docs.doc_graph import build_doc_graph, discover_doc_files
 from lib.history.git_churn import git_churn_scores
-from lib.run_scope import resolve_scope
+from lib.run.run_scope import resolve_scope
 from test_complexity_treemap import stubbed_treemap
 from lib.report.wiki_writer import HotspotEntry, write_index
 

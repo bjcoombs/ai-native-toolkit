@@ -5,7 +5,7 @@
 id = "core.run_id"
 kind = "collector"
 title = "Run id"
-callable = "lib.run_setup:new_run_id"
+callable = "lib.run.run_setup:new_run_id"
 publishes = []
 reads = []
 stage = "setup"

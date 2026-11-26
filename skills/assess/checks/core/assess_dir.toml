@@ -5,7 +5,7 @@
 id = "core.assess_dir"
 kind = "collector"
 title = "Artifact directory"
-callable = "lib.run_setup:run_assess_dir"
+callable = "lib.run.run_setup:run_assess_dir"
 publishes = []
 reads = ["repo_root", "run_scope"]
 stage = "setup"

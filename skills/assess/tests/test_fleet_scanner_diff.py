@@ -188,7 +188,7 @@ def test_row_signals_reads_fleet_data_cells():
 
 
 def test_the_toolkit_root_holds_the_lib_directory_it_diffs():
-    from lib.signals import TOOLKIT_ROOT
+    from lib.run.signals import TOOLKIT_ROOT
 
     assert sd.TOOLKIT_ROOT == TOOLKIT_ROOT
     assert (sd.TOOLKIT_ROOT / sd.LIB_PATH).is_dir()

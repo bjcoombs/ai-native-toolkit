@@ -28,7 +28,7 @@ from _pytest.mark.structures import ParameterSet
 from lib.scoring.level_signals import load_default_levels
 from lib.scoring.levels import Group, evaluate
 from lib.keyhole.promissory_markers import scan_promissory_markers
-from lib.signals import build_document
+from lib.run.signals import build_document
 
 _ISSUES = "https://github.com/bjcoombs/ai-native-toolkit/issues/"
 _NONE_FILED = "hollow: no fixing issue filed"

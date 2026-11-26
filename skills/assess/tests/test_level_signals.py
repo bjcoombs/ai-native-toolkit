@@ -26,7 +26,7 @@ from lib.scoring.level_signals import (
     signal_path_validator,
     team_path_ok,
 )
-from lib.signals import build_document, known_scans
+from lib.run.signals import build_document, known_scans
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN_RUN_CONTEXT = FIXTURES / "golden" / "run-context-baseline.json"

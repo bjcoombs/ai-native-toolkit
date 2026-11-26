@@ -1,4 +1,4 @@
-"""Tests for lib/scan_block_schemas.py: the described scan blocks (issue #779)."""
+"""Tests for lib/run/scan_block_schemas.py: the described scan blocks (issue #779)."""
 from __future__ import annotations
 
 import os
@@ -23,9 +23,9 @@ from lib.hosting.delivery import DeliveryBlock
 from lib.instructions.guardrails import GuardrailsBlock
 from lib.scoring.layer_grades import LayerGradesBlock
 from lib.fleet.fleet_schema import build_schema as build_row_schema
-from lib.scan_block_schemas import BLOCK_SCHEMAS
-from lib.signals import collect
-from lib.signals_schema import REASON_KEPT, build_schema, described_block
+from lib.run.scan_block_schemas import BLOCK_SCHEMAS
+from lib.run.signals import collect
+from lib.run.signals_schema import REASON_KEPT, build_schema, described_block
 
 TYPED = {"ai_usage": AiUsageBlock, "ci_checks": CiChecksBlock, "coverage_gate": CoverageGateBlock,
          "delivery": DeliveryBlock, "guardrails": GuardrailsBlock,

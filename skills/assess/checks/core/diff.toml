@@ -5,7 +5,7 @@
 id = "core.diff"
 kind = "collector"
 title = "Stats diff against the prior run"
-callable = "lib.run_setup:stats_diff"
+callable = "lib.run.run_setup:stats_diff"
 publishes = []
 reads = ["prior", "current", "excluded_as_generated"]
 stage = "setup"

@@ -47,8 +47,8 @@ from pathlib import Path
 from typing import Any
 
 from lib.run_context_types import FindingPaths, FindingsSnapshot, MethodChange, PathMove
-from lib.run_scope import assess_dir_for
-from lib.scan_plan import not_run_text
+from lib.run.run_scope import assess_dir_for
+from lib.run.scan_plan import not_run_text
 
 FINDINGS_SNAPSHOT_FILE = "findings.json"
 

@@ -5,7 +5,7 @@
 id = "core.first_flagged"
 kind = "collector"
 title = "First-flagged hotspot dates"
-callable = "lib.run_setup:first_flagged"
+callable = "lib.run.run_setup:first_flagged"
 publishes = []
 reads = ["assess_dir", "rename_map"]
 stage = "setup"
