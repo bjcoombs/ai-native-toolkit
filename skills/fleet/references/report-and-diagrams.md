@@ -104,7 +104,15 @@ sections, in order:
    repositories with a cell per maturity-model row, and a repository's detail. Hovering a cell
    names its state, the next condition and what the next Step needs. A not-measured cell is
    hatched with its reason, never 0.
-6. **Fleet pictures**: the drawn tag and Step SVGs.
+6. **Practice shape**: one radar chart for each unit in the shown unit's subtree, by name,
+   never overlaid. A spoke is a maturity-model practice measured in at least 20% of the
+   fleet's repositories; its point is the unit's repositories at the top level out of those
+   measured (met/measured, a count and never a mean), with rings at 25, 50, 75 and 100%.
+   Hovering a point names the unit, the practice and met/measured. A practice with nothing
+   measured in the unit breaks the outline and has no point, never 0. A table under the charts
+   gives the same counts, practice by unit. Above 8 spokes each spoke is labelled by its number,
+   which the table's practice column repeats; hovering the spoke names the practice.
+7. **Fleet pictures**: the drawn tag and Step SVGs.
 
 Names follow the run's output mode. `--full` names repositories and units by their keys and
 paths and shows an exclusion's reason. A hashed run shows hashed ids. Plain counts-only shows
