@@ -12,8 +12,13 @@ first child is a ``<title>`` (after any text, as a truncated ``<text>`` label ha
 - **Complete.** Every number the title prints is one an attribute carries, once the string
   values are taken out of the title, so a value shown only in the title fails.
 
-``CODE_KEYS`` hold machine codes (``data-category="unmet"``, ``data-state``) whose title
-shows a word for them, not the code itself; ``EXTRA_KEYS`` hold values a part carries beyond
+``CODE_KEYS`` hold machine codes whose title shows a word for them, not the code itself. They
+come in two kinds. ``ID_KEYS`` are model ids (``data-row``, ``data-condition``) that a readable
+attribute on the same part names; the tooltip helper never lists them. ``STATE_KEYS`` record
+a state (``data-category="unmet"``, ``data-cell="not_measured"``, ``data-status="orphan"``);
+the helper lists one unless the part carries its readable twin (``data-category-label``,
+``data-tag-title``), because for some parts the code is the only record of the state once the
+helper mutes the ``<title>``. ``EXTRA_KEYS`` hold values a part carries beyond
 its title (the package map's ``data-bypass="0"``, where the title names no bypass). A value
 the root ``<svg>`` carries once for every part (the treemap's ``data-churn-window``) counts
 as carried for each part's title too.
@@ -23,9 +28,13 @@ from __future__ import annotations
 import html
 import re
 
+# Model ids a readable attribute on the same part names: the tooltip helper never lists them.
+ID_KEYS = frozenset({"condition", "row"})
+# State codes: listed by the helper unless the part carries data-<key>-label or -title.
+STATE_KEYS = frozenset({"category", "state", "cell", "mark", "tag", "status", "review-bot",
+                        "behind", "outline"})
 # Machine codes: the title shows a word for them, never the code.
-CODE_KEYS = frozenset({"category", "state", "cell", "mark", "tag", "condition", "row", "status",
-                       "review-bot", "behind", "outline", "gate-id"})
+CODE_KEYS = ID_KEYS | STATE_KEYS
 
 # Values a part carries beyond what its title prints.
 EXTRA_KEYS = frozenset({"bypass"})

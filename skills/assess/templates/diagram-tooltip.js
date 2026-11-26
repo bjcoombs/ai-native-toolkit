@@ -12,9 +12,13 @@
  * {format: function (part) { return "text"; }} to word the tooltip yourself.
  *
  * A part is the nearest element (below the root <svg>) with a <title> child. Its tooltip
- * lists the part's data-* attributes, one "name: value" line each, leaving out machine codes
- * such as data-category="unmet" whose meaning a readable attribute beside them already gives;
- * a part with none shows its <title> text instead. Mouse and pen show it on hover and hide it on pointer leave.
+ * lists the part's data-* attributes, one "name: value" line each. It leaves out a code that
+ * has a readable twin on the same part (data-category beside data-category-label, data-tag
+ * beside data-tag-title) and the model ids data-row and data-condition, which the readable
+ * data-practice and data-gate name; state codes with no twin (data-cell="not_measured",
+ * data-status="orphan") stay, since the muted <title> no longer says them. A part with no
+ * data attributes shows its <title> text instead. Mouse and pen show it on hover and hide it
+ * on pointer leave.
  * Touch shows it on the first tap and hides it on a second tap, a tap elsewhere or Escape.
  * On a linked part (inside an <a>), a mouse click follows the link; on touch the first tap
  * shows the tooltip and the second follows the link.
@@ -43,10 +47,10 @@
   var shown = null;     // the part whose tooltip is showing
   var touching = false; // the last pointer was a finger
   var blockClick = false; // the tap that showed a linked part's tooltip must not follow it
-  // Machine codes and values beyond the title (tests/svg_data_attrs.py CODE_KEYS and
-  // EXTRA_KEYS): the readable attributes beside them already say what they mean.
-  var SKIP = ["behind", "bypass", "category", "cell", "condition", "gate-id", "mark", "outline",
-              "review-bot", "row", "state", "status", "tag"];
+  // Model ids a readable attribute on the same part names (tests/svg_data_attrs.py ID_KEYS).
+  var IDS = ["condition", "row"];
+  // A code is left out when the part carries its readable twin: data-<key>-label or -title.
+  var TWINS = ["-label", "-title"];
 
   function ensureTip() {
     if (tip) {
@@ -89,14 +93,26 @@
     return part.closest ? part.closest("a") : null;
   }
 
-  // The part's data-* attributes, one "name: value" line each, machine codes (SKIP) left out;
-  // its <title> text without any.
+  function hidden(part, key) {
+    if (IDS.indexOf(key) >= 0) {
+      return true;
+    }
+    for (var i = 0; i < TWINS.length; i++) {
+      if (part.hasAttribute("data-" + key + TWINS[i])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // The part's data-* attributes, one "name: value" line each, an id or a twinned code left
+  // out (hidden); its <title> text without any.
   function defaultFormat(part) {
     var lines = [];
     for (var i = 0; i < part.attributes.length; i++) {
       var attr = part.attributes[i];
       if (attr.name.indexOf("data-") === 0 && attr.name !== PARKED &&
-          SKIP.indexOf(attr.name.slice(5)) < 0) {
+          !hidden(part, attr.name.slice(5))) {
         lines.push(attr.name.slice(5).replace(/-/g, " ") + ": " + attr.value);
       }
     }

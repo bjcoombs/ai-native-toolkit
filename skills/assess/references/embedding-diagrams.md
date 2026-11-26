@@ -33,11 +33,13 @@ later, call `DiagramTooltip.attach(element)`. To word the tooltip yourself, pass
 
 What it does:
 
-- **Content.** The tooltip lists the part's `data-*` attributes, one `name: value` line each,
-  leaving out the machine codes (`data-category`, `data-state`, `data-cell`, `data-status`,
-  `data-tag`, `data-row` and the like, and the package map's `data-bypass`), whose meaning
-  the readable attributes beside them already give. A part with no data attributes shows its
-  `<title>` text instead. The helper never parses the
+- **Content.** The tooltip lists the part's `data-*` attributes, one `name: value` line each.
+  It leaves out the model ids `data-row` and `data-condition`, which `data-practice` and
+  `data-gate` name, and a code beside its readable twin (`data-category` beside
+  `data-category-label`, `data-state` beside `data-state-label`, `data-tag` beside
+  `data-tag-title`). A state code with no twin stays, such as `data-cell="not_measured"` or
+  `data-status="orphan"`: with the `<title>` muted, it is the only record of that state. A part
+  with no data attributes shows its `<title>` text instead. The helper never parses the
   `<title>` wording.
 - **Pointer.** Mouse and pen show the tooltip on hover and hide it when the pointer leaves the
   part.
