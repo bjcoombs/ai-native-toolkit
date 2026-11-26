@@ -29,6 +29,22 @@ def _cell(row: str, level: int | None) -> dict[str, Any]:
     return {"row": row, "status": "unknown" if level is None else "level", "level": level, "top_level": 2}
 
 
+def _top(row: str) -> dict[str, Any]:
+    """A level result's ``in_place`` entry holding ``row`` at its top level (#1474)."""
+    return {"row": row, "level": 2, "top": True, "gates": []}
+
+
+def test_in_place_reads_the_level_result_not_the_cell_level() -> None:
+    """#1474: a cell at the top level whose level result does not hold the row at top (a
+    declared-only condition) is not in place, as the unit's ``met`` and "What's working"."""
+    data = _data([_unit("ownership/a", "Payments", 2, {"docs": (0, 2)})], rows=("docs",), total=2)
+    data["repos"][0]["rows"][0] = _cell("docs", 2)
+    data["repos"][0]["in_place"] = [{"row": "docs", "level": 2, "top": False, "gates": []}]
+    assert fr.in_place(fr.radar_view(data)).startswith("In place: 0 of the run's 2 repositories ")
+    data["repos"][1]["in_place"] = [_top("docs")]
+    assert fr.in_place(fr.radar_view(data)).startswith("In place: 1 of the run's 2 repositories ")
+
+
 def _repos(total: int, measured: dict[str, int]) -> list[dict[str, Any]]:
     """``total`` repositories; the first ``measured[row]`` have a known level (1 of 2) on ``row``."""
     return [{"key": f"acme/repo-{i}",
@@ -164,6 +180,8 @@ def test_in_place_counts_strengths_first() -> None:
                   _unit("ownership/b", "Search", 3, {"docs": (3, 3), "ci": (2, 2), "tests": (1, 3)})])
     data["repos"][0]["rows"][0] = _cell("docs", 2)
     data["repos"][1]["rows"][2] = _cell("tests", 2)
+    data["repos"][0]["in_place"] = [_top("docs")]
+    data["repos"][1]["in_place"] = [_top("tests"), {"row": "ci", "level": 1, "top": False, "gates": []}]
     assert fr.in_place(fr.radar_view(data)) == (
         "In place: 2 of the run's 10 repositories meet the top level on at least one of the 3 "
         "practices drawn, each counted once, over 2 units.")
@@ -177,6 +195,7 @@ def test_a_parent_and_its_child_both_draw_but_no_total_counts_a_repository_twice
     data = _data([parent, child], total=2)
     for repo in data["repos"]:
         repo["rows"] = [_cell(r, 2) for r in ("docs", "ci", "tests")]
+        repo["in_place"] = [_top(r) for r in ("docs", "ci", "tests")]
     view = fr.radar_view(data)
     assert [(u["label"], u["depth"], u["parent"]) for u in view["units"]] == [("Grp", 0, None), ("Sub", 1, "Grp")]
     radars = _radars(fr.render(view))
@@ -231,7 +250,8 @@ def test_the_real_fixture_reads_met_and_measured_from_the_units() -> None:
     view = fr.radar_view(dict(build(fd.Privacy(full=True))))
     assert [a["row"] for a in view["axes"]] == ["docs", "ci"]  # 2 of 4 and 3 of 4 measured
     other = next(u for u in view["units"] if u["label"] == "other")
-    assert other["points"] == [None, {"met": 1, "measured": 1, "repos": 1}]
+    # proj3 is at level 1 of 1 on ci, but its level result does not list ci in in_place with top (#1474)
+    assert other["points"] == [None, {"met": 0, "measured": 1, "repos": 1}]
 
 
 def test_two_renders_are_byte_identical_the_cascade_is_clean_and_the_words_pass() -> None:

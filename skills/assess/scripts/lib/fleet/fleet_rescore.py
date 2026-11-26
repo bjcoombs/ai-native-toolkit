@@ -59,7 +59,7 @@ Deterministic: lines sorted by repository key then maturity-model row order.
 Re-scores a stored run under the current maturity model and builds the Recount (#771).
 `rescore` rebuilds a history entry's `FleetData` in memory from its stored scans:
 cells from `fleet_data.repo_cells` (values through `Privacy().value`) and each unit's row
-roll-ups (`row_roll_up`) over the stored placements (a version 1 entry's `mean_share` and
+roll-ups (`row_roll_up`, `met` by `fleet_opportunities.rows_at_top`, #1474) over the stored placements (a version 1 entry's `mean_share` and
 `overall` are dropped, #772), with the Step fields and the per-tag tally (`tag_fields`,
 `fleet_data_tags.tag_roll_up`, #1073) and the fleet tag profile (`fleet_tag_profile.tag_profile`,
 #940) rebuilt too; None when a stored key does not join under the run's key
@@ -85,10 +85,12 @@ from lib.fleet.fleet_data import (
     DataRepo,
     DataUnit,
     FleetData,
+    Member,
     Privacy,
     View,
     model_rows,
     level_results,
+    roll_up_members,
     public_steps,
     public_tags,
     repo_cells,
@@ -98,6 +100,7 @@ from lib.fleet.fleet_data import (
 )
 from lib.fleet.fleet_data_steps import RepoSteps, step_roll_up
 from lib.fleet.fleet_data_tags import tag_roll_up
+from lib.fleet.fleet_opportunities import rows_at_top
 from lib.fleet.fleet_tag_profile import tag_profile
 from lib.scoring.level_result_types import TagCell
 from lib.fleet.fleet_maturity import SCOPE
@@ -159,6 +162,7 @@ def rescore(data: FleetData, rows: Sequence[FleetRow], model: MaturityModel,
     cells: dict[str, list[Cell]] = {}
     steps: dict[str, RepoSteps] = {}
     tags: dict[str, list[TagCell] | None] = {}
+    held: dict[str, list[Member]] = {}
     for repo in data["repos"]:
         row = by_key.get(repo["key"])
         if row is None or (row["status"] == STATUS_OK and not isinstance(row["scans"], dict)):
@@ -169,6 +173,7 @@ def rescore(data: FleetData, rows: Sequence[FleetRow], model: MaturityModel,
         results = level_results(model, [scanned])
         steps[repo["key"]] = public_steps(step_fields(model, [scanned], results)[scanned["repo"]], Privacy())
         tags[repo["key"]] = public_tags(tag_fields(model, results)[scanned["repo"]], Privacy())
+        held[repo["key"]] = roll_up_members(cells[repo["key"]], rows_at_top(results[scanned["repo"]]))
     repos: list[DataRepo] = [cast(DataRepo, {**{k: v for k, v in repo.items() if k != "mean_share"},
                                              "rows": cells[repo["key"]], **steps[repo["key"]],
                                              "tags": tags[repo["key"]]})
@@ -179,8 +184,7 @@ def rescore(data: FleetData, rows: Sequence[FleetRow], model: MaturityModel,
         units: list[DataUnit] = []
         for unit in view["units"]:
             mine = members[unit["key"]]
-            levels = [row_roll_up(row["id"], [(cells[k][i]["level"], cells[k][i]["top_level"]) for k in mine])
-                      for i, row in enumerate(team_rows)]
+            levels = [row_roll_up(row["id"], [held[k][i] for k in mine]) for i, row in enumerate(team_rows)]
             step = step_roll_up(model.get("steps", []), [steps[k] for k in mine])
             units.append(cast(DataUnit, {**{k: v for k, v in unit.items() if k != "overall"}, "levels": levels,
                                          "step": step, "tags": tag_roll_up([tags[k] for k in mine])}))

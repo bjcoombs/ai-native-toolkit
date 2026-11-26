@@ -196,22 +196,29 @@ def _practice_counts(privacy: fd.Privacy) -> dict[str, dict[str, dict[str, int]]
 
 @pytest.mark.parametrize("name", sorted(VARIANTS))
 def test_each_org_unit_counts_met_of_measured_per_practice(name: str) -> None:
-    """met: measured repositories at the row's top level; measured: a known level; repos: every
-    repository below the unit. proj3's unknown docs and the failed proj4 count in repos only."""
+    """met: measured repositories whose level result holds the row at its top (#1474); measured: a
+    known level; repos: every repository below the unit. proj3's unknown docs and the failed proj4
+    count in repos only."""
     assert _practice_counts(VARIANTS[name]) == {
-        # docs: proj1 at 2 of 2, proj2 at 1 of 2; ci: proj1 and proj3 at 1 of 1, proj2 at 0
-        "ownership/grp": {"docs": {"met": 1, "measured": 2, "repos": 4},
-                          "ci": {"met": 2, "measured": 3, "repos": 4}},
-        "ownership/grp/sub": {"docs": {"met": 1, "measured": 2, "repos": 2},
-                              "ci": {"met": 1, "measured": 2, "repos": 2}},
+        # docs: proj1 at 2 of 2, proj2 at 1 of 2; ci: proj1 and proj3 at 1 of 1, proj2 at 0. No
+        # level result lists a row in in_place with top, so none is met (opportunities.in_place: 0)
+        "ownership/grp": {"docs": {"met": 0, "measured": 2, "repos": 4},
+                          "ci": {"met": 0, "measured": 3, "repos": 4}},
+        "ownership/grp/sub": {"docs": {"met": 0, "measured": 2, "repos": 2},
+                              "ci": {"met": 0, "measured": 2, "repos": 2}},
         "ownership/grp/other": {"docs": {"met": 0, "measured": 0, "repos": 1},
-                                "ci": {"met": 1, "measured": 1, "repos": 1}},
-        "system/checkout": {"docs": {"met": 1, "measured": 1, "repos": 2},
-                            "ci": {"met": 1, "measured": 1, "repos": 2}},
+                                "ci": {"met": 0, "measured": 1, "repos": 1}},
+        "system/checkout": {"docs": {"met": 0, "measured": 1, "repos": 2},
+                            "ci": {"met": 0, "measured": 1, "repos": 2}},
     }
 
 
 def test_met_never_exceeds_measured_and_a_row_with_no_levels_is_never_met() -> None:
-    assert fd.row_roll_up("r", [(2, 2), (1, 2), (None, 2), (0, 0)]) == {
+    assert fd.row_roll_up("r", [(2, 2, True), (1, 2, False), (None, 2, False), (0, 0, False)]) == {
         "row": "r", "met": 1, "measured": 2, "repos": 4, "lowest_level": 1}
     assert fd.row_roll_up("r", []) == {"row": "r", "met": 0, "measured": 0, "repos": 0, "lowest_level": None}
+
+
+def test_met_reads_the_level_result_not_the_row_level() -> None:
+    # #1474: at the top level by evaluate_row but not held at top by the level result: not met
+    assert fd.row_roll_up("r", [(2, 2, False), (2, 2, True)])["met"] == 1

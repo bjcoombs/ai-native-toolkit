@@ -121,6 +121,20 @@ def test_a_declared_practice_reads_the_same_in_the_badge_and_the_fleet() -> None
     assert "- Instructions:" not in section
 
 
+
+def test_a_declared_practice_reads_the_same_on_the_radar_and_in_whats_working() -> None:
+    """#1474: a unit holding one repository whose instruction file is only declared gives the
+    same answer in the radar's per-unit ``met`` as in "What's working"."""
+    repo = _row("grp/d", instr=True, ci=True)
+    data = _data([repo])
+    opps = data["opportunities"]
+    assert opps is not None
+    working = {p["row"]: p["at_top"] for p in opps["in_place"]}
+    for view in data["views"]:
+        for unit in view["units"]:
+            met = {lv["row"]: lv["met"] for lv in unit["levels"]}
+            assert met == working == {"instr": 0, "ci": 1}
+
 def test_in_place_reads_the_level_results_passed_in() -> None:
     rows = fleet()
     results = {r["repo"]: repo_level(model(), r) for r in rows}
