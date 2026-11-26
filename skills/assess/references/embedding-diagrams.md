@@ -17,6 +17,11 @@ at all.
 | `<object type="image/svg+xml" data="...">` | Yes, with the helper | Served from the same origin as the page, or the helper cannot reach inside it. |
 | `<img src="...">`, or a CSS background | No | A picture only. A Markdown image link renders this way. |
 
+A page builder that inlines a diagram passes it through `inline_svg` in
+`skills/assess/scripts/lib/svg_inline.py` (relative to the repository root): it sanitises the
+markup, keeps or adds the scope, and returns None for a diagram that should stay an image. The
+fleet page uses it (#1362).
+
 ## The tooltip helper
 
 `skills/assess/templates/diagram-tooltip.js` (relative to the repository root) is a single

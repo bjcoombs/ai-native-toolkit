@@ -46,18 +46,23 @@ sets for ``radar.svg``. ``radar_axes`` picks them, the one count the bundle work
 only; its team links are replaced by the ownership view's team units under the labels above, so
 a counts-only page shows ``team N``.
 
-Deterministic: lists in input order (the inputs are sorted), labels by sorted key, the SVGs
-as base64 ``data:`` URIs. `page_bundle(data, achievements, model, pictures)` -> `PageBundle`.
+**Pictures** (#1362): each drawn SVG as a base64 ``data:`` URI (the image fallback and the
+full-size link) and, when it has per-part details, as sanitised and scoped markup to inline
+(``lib/svg_inline.py``); ``unique_scopes`` keeps one inlined SVG per scope on the page.
+
+Deterministic: lists in input order (the inputs are sorted), labels by sorted key. `page_bundle(data, achievements, model, pictures)` -> `PageBundle`.
 Tests: `tests/test_fleet_page.py`.
 """
 from __future__ import annotations
 
 import base64
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any, TypedDict
 
 from lib.scoring.levels import MaturityModel
 from lib.scoring.levels_fields import TRUTH_TAG_TITLES
+from lib.svg_inline import inline_svg, root_class
 
 PAGE_VERSION = 1
 RADAR_MIN_SHARE = 20  # percent of the fleet's repositories a row needs measured to be a spoke (#1314)
@@ -68,7 +73,8 @@ class Picture(TypedDict):
     file: str
     title: str
     question: str
-    src: str  # a data: URI
+    src: str  # a data: URI of the SVG as drawn: the image fallback and the full-size link
+    svg: str | None  # the sanitised, scoped markup to inline (lib/svg_inline.py), or None for an image
 
 
 class Radar(TypedDict):
@@ -264,7 +270,7 @@ def page_bundle(data: Mapping[str, Any], achievements: Mapping[str, Any] | None,
                      "missing": [{k: g[k] for k in ("gate", "held", "not_measured", "excluded")}
                                  for g in t.get("missing_gates") or []]} for t in ach.get("targets") or []
                     if t["unit"] in label],
-        "pictures": list(pictures),
+        "pictures": unique_scopes(pictures),
         "front": _front(front, data, label),
         "radar": {"min_share": RADAR_MIN_SHARE, "axes": radar_axes(data, rows)},
     }
@@ -276,6 +282,25 @@ def page_bundle(data: Mapping[str, Any], achievements: Mapping[str, Any] | None,
 
 
 def picture(file: str, title: str, question: str, svg: str) -> Picture:
-    """A drawn SVG as the page embeds it: an image ``data:`` URI, so each keeps its own styles."""
+    """A drawn SVG as the page embeds it: inlined when it has per-part details, always a ``data:`` URI.
+
+    A diagram without the generator's scope is scoped here as ``fleet-page-<file stem>``."""
+    stem = re.sub(r"[^a-z0-9]+", "-", file.rsplit(".", 1)[0].lower()).strip("-")
     return {"file": file, "title": title, "question": question,
-            "src": "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii")}
+            "src": "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii"),
+            "svg": inline_svg(svg, f"fleet-page-{stem}")}
+
+
+def unique_scopes(pictures: Sequence[Picture]) -> list[Picture]:
+    """``pictures`` with any inlined SVG whose scope an earlier one took left an image."""
+    taken: set[str] = set()
+    out: list[Picture] = []
+    for p in pictures:
+        markup = p.get("svg")
+        scope = root_class(markup) if markup else None
+        if scope in taken:
+            p = {**p, "svg": None}
+        elif scope is not None:
+            taken.add(scope)
+        out.append(p)
+    return out
