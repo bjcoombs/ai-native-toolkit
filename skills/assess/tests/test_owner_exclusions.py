@@ -217,9 +217,9 @@ def test_the_headline_names_an_excluded_gate_and_counts_exclusions():
     from lib.top_card import card_lines
     level = lt.level_result(model, signals, [_exclude("ci.1")])
     lines = hl.headline(level, model)["lines"]
-    card = card_lines(level, model, None)
+    blocks = next(line for line in card_lines(level, model, None) if line.startswith("Blocks "))
     assert ("CI does not turn red when a check breaks (excluded by owner: measured elsewhere; the Step waits while "
-            "the exclusion stands)") in card[2]
+            "the exclusion stands)") in blocks
     assert "· 1 not applicable (excluded by owner) ·" in lines[0]
     plain = hl.headline(lt.level_result(model, signals), model)["lines"]
     assert "excluded" not in " ".join(plain)
