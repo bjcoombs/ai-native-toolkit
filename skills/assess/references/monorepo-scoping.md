@@ -42,6 +42,8 @@ SCOPE_ARGS=(); for s in "${SCOPES[@]}"; do SCOPE_ARGS+=(--scope "$s"); done
 SCOPE_SLUG=$(cd "<assess-skill-dir>/scripts" && uv run --locked python -c \
   'import sys; from pathlib import Path; from lib.run.run_scope import resolve_scope; print(resolve_scope(Path(sys.argv[1]), [Path(a) for a in sys.argv[2:]])[2])' \
   "$REPO_ROOT" "${SCOPES[@]}")
+ASSESS_DIR="$REPO_ROOT/.assess/$SCOPE_SLUG"   # replaces the one-folder ASSESS_DIR above
+mkdir -p "$ASSESS_DIR"
 ```
 <!-- chat-skip:end -->
 

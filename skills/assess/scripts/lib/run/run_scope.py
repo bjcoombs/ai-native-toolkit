@@ -2,14 +2,18 @@
 
 `Scope` (#1110) is the union of folders a run measures: one or more ``--scope`` values,
 each a path or a glob (``skills/*-review``) matched from the repository root. Its
-`roots` are the absolute folders (sorted, a root inside another dropped), `contains(path)`
+`roots` are the absolute folders (sorted, a root inside another dropped; `folders` keeps it,
+for the scans that glob or look for config from each named folder), `contains(path)`
 tells whether a path lies under one of them, and `slug` names the artifact directory: the
-path with separators hyphenated for one plain folder (as before #1110), else ``scope-``
+path with separators hyphenated for one folder named by path (as before #1110; an
+existing folder named ``app/[locale]`` is a path, not a glob), else ``scope-``
 and a stable hash over the sorted patterns. `label` is the repo-relative text the run
 context and the signals stamp carry: the folder, or the sorted patterns joined by ``,``.
 `scope_roots(scope, root)` is where a walk starts: the scope's roots, or the root.
 A root inside another is dropped from `roots` but its pattern stays in `patterns`, so the
 label and slug name what was asked: ``a`` plus ``a/b`` measures ``a`` under a hashed slug.
+A glob keeps only the folders it matches, never a file or a built-in excluded tree.
+`scope_folders(scope, root)` is `folders`, or the root.
 `resolve_scope` turns the ``--scope`` arguments into `(Scope, label, slug)`, raising
 `ValueError` for a missing or outside-repo path or a pattern that matches nothing
 (naming it); a whole-repo run returns `(None, None, "")`. `assess_dir_for` names
@@ -41,11 +45,15 @@ _GLOB_CHARS = frozenset("*?[")
 @dataclass(frozen=True)
 class Scope:
     """The folders a scoped run measures: ``patterns`` as given (sorted, repo-relative
-    POSIX), ``roots`` the absolute folders they name (sorted, nested roots dropped)."""
+    POSIX), ``roots`` the absolute folders they name (sorted, nested roots dropped, so a
+    walk reads each file once), ``folders`` every folder named, nested ones kept (for a
+    scan that globs from each folder), and ``globbed`` whether any pattern was a glob."""
 
     repo_root: Path
     patterns: tuple[str, ...]
     roots: tuple[Path, ...]
+    folders: tuple[Path, ...]
+    globbed: bool = False
 
     @classmethod
     def of(cls, repo_root: Path, folder: Path) -> Scope:
@@ -53,7 +61,7 @@ class Scope:
         root = repo_root.resolve()
         path = (folder if folder.is_absolute() else root / folder).resolve()
         rel = path.relative_to(root).as_posix() if path.is_relative_to(root) else path.as_posix()
-        return cls(root, (rel,), (path,))
+        return cls(root, (rel,), (path,), (path,))
 
     def contains(self, path: Path) -> bool:
         """True when ``path`` (absolute, or relative to the repository) lies under a root."""
@@ -68,7 +76,7 @@ class Scope:
     @property
     def slug(self) -> str:
         """``.assess/<slug>/``: the hyphenated folder for one plain path, else a hash."""
-        if len(self.patterns) == 1 and not _GLOB_CHARS & set(self.patterns[0]):
+        if len(self.patterns) == 1 and not self.globbed:
             return self.patterns[0].replace("/", "-")
         digest = hashlib.sha256("\n".join(self.patterns).encode("utf-8")).hexdigest()
         return f"scope-{digest[:12]}"
@@ -85,21 +93,31 @@ def scope_roots(scope: Scope | None, root: Path) -> tuple[Path, ...]:
     return scope.roots if scope is not None else (root.resolve(),)
 
 
-def _matches(repo_root: Path, raw: Path) -> tuple[str, list[Path]]:
-    """One ``--scope`` value as (its pattern text, the absolute paths it names)."""
+def scope_folders(scope: Scope | None, root: Path) -> tuple[Path, ...]:
+    """Every folder the scope names, nested ones kept, or ``root`` resolved."""
+    return scope.folders if scope is not None else (root.resolve(),)
+
+
+def _matches(repo_root: Path, raw: Path) -> tuple[str, list[Path], bool]:
+    """One ``--scope`` value as (its pattern text, the absolute paths it names, whether it
+    was a glob). An existing path is literal even when its name holds ``[`` (``app/[locale]``);
+    a glob keeps only the folders it matches, never a file or a built-in excluded tree
+    (``.git``, ``.assess``, ``node_modules``)."""
+    from lib.docs.doc_graph import is_excluded_path  # doc_graph imports this module
     text = raw.as_posix()
-    if raw.is_absolute() or not _GLOB_CHARS & set(text):
+    if raw.is_absolute() or not _GLOB_CHARS & set(text) or (repo_root / raw).exists():
         path = (raw if raw.is_absolute() else repo_root / raw).resolve()
         if not path.exists():
             raise ValueError(f"scope path does not exist: {path}")
         if not path.is_relative_to(repo_root):
             raise ValueError(f"scope path is not under repo root {repo_root}: {path}")
-        return path.relative_to(repo_root).as_posix(), [path]
+        return path.relative_to(repo_root).as_posix(), [path], False
     found = sorted({m.resolve() for m in repo_root.glob(text)
-                    if m.resolve().is_relative_to(repo_root)})
+                    if m.is_dir() and m.resolve().is_relative_to(repo_root)
+                    and not is_excluded_path(m.resolve().relative_to(repo_root))})
     if not found:
         raise ValueError(f"scope pattern matches nothing: {text}")
-    return text.rstrip("/"), found
+    return text.rstrip("/"), found, True
 
 
 def resolve_scope(repo_root: Path, scope: RequestedScope) -> ResolvedScope:
@@ -121,13 +139,15 @@ def resolve_scope(repo_root: Path, scope: RequestedScope) -> ResolvedScope:
     root = repo_root.resolve()
     patterns: set[str] = set()
     paths: set[Path] = set()
+    globbed = False
     for raw in raws:
-        pattern, found = _matches(root, Path(raw))
+        pattern, found, is_glob = _matches(root, Path(raw))
         patterns.add(pattern)
         paths.update(found)
+        globbed = globbed or is_glob
     roots = tuple(p for p in sorted(paths)
                   if not any(p != q and p.is_relative_to(q) for q in paths))
-    resolved = Scope(root, tuple(sorted(patterns)), roots)
+    resolved = Scope(root, tuple(sorted(patterns)), roots, tuple(sorted(paths)), globbed)
     return resolved, resolved.label, resolved.slug
 
 

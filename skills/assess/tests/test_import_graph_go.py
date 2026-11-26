@@ -229,7 +229,7 @@ def test_scope_keeps_only_packages_inside_it(tmp_path: Path) -> None:
     assert graph is not None
     assert graph.modules == ["store", "store/cache", "store/db"]
     assert graph.edges["store"] == {"store/cache", "store/db"}
-    assert GO_BUILDER.build(tmp_path, set(), Scope(tmp_path.resolve(), ("nowhere",), (tmp_path.resolve() / "nowhere",))) is None
+    assert GO_BUILDER.build(tmp_path, set(), Scope.of(tmp_path, Path("nowhere"))) is None
 
 
 def test_an_unreadable_file_is_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

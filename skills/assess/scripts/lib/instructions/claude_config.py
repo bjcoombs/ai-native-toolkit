@@ -79,7 +79,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, TypedDict
 
-from lib.run.run_scope import Scope, scope_roots
+from lib.run.run_scope import Scope, scope_folders
 from lib.assess_config import is_user_excluded
 from lib.instructions.claude_config_fields import (
     AGENT_EXPERIMENTAL_FIELDS,
@@ -549,7 +549,7 @@ def scan_claude_config(
     findings are repo-relative.
     """
     repo = repo_root.resolve()
-    roots = scope_roots(scope, repo)
+    roots = scope_folders(scope, repo)  # nested folders kept; _dedupe drops a file reached twice
     plugins = [r for r in roots if (r / ".claude-plugin" / "plugin.json").is_file()]
     plugin_repo = bool(plugins)
     if not plugin_repo and not any((r / ".claude").is_dir() for r in roots):

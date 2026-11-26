@@ -105,8 +105,30 @@ def test_a_glob_names_every_folder_it_matches(repo: Path) -> None:
     assert scope.contains(repo / "pkgs/c/c.py") and not scope.contains(repo / "README.md")
 
 
-def test_a_root_inside_another_is_dropped(repo: Path) -> None:
-    assert _scope(repo, "pkgs", "pkgs/a").roots == ((repo / "pkgs").resolve(),)
+def test_a_root_inside_another_is_dropped_from_the_walk_but_kept_as_a_folder(repo: Path) -> None:
+    scope = _scope(repo, "pkgs", "pkgs/a")
+    assert scope.roots == ((repo / "pkgs").resolve(),)
+    assert scope.folders == ((repo / "pkgs").resolve(), (repo / "pkgs/a").resolve())
+
+
+def test_a_glob_keeps_folders_only_and_skips_excluded_trees(repo: Path) -> None:
+    scope = _scope(repo, "*")
+    assert [r.relative_to(repo.resolve()).as_posix() for r in scope.roots] == ["pkgs"]
+    with pytest.raises(ValueError, match=r"matches nothing: \*\.md"):
+        _scope(repo, "*.md")
+
+
+def test_an_existing_folder_with_glob_characters_is_a_path(tmp_path: Path) -> None:
+    (tmp_path / "app" / "[locale]").mkdir(parents=True)
+    scope, label, slug = resolve_scope(tmp_path, [Path("app/[locale]")])
+    assert scope is not None and scope.roots == ((tmp_path / "app" / "[locale]").resolve(),)
+    assert (label, slug) == ("app/[locale]", "app-[locale]")
+
+
+def test_nested_folders_keep_their_own_docs(tmp_path: Path) -> None:
+    root = _write(tmp_path / "n", {"pkgs/a/docs/x.md": "# x\n", "pkgs/a/tools/docs/y.md": "# y\n"})
+    both = set(doc_claim_files(root, NO_EXCLUDES, _scope(root, "pkgs/a", "pkgs/a/tools")))
+    assert both == {"pkgs/a/docs/x.md", "pkgs/a/tools/docs/y.md"}
 
 
 def test_the_slug_is_stable_under_reordering_and_keeps_one_folder_unchanged(repo: Path) -> None:
