@@ -63,7 +63,7 @@ from typing import Any
 from lib.card_facts import blocking_gates, fully_in_place
 from lib.scoring.level_result_types import Blocker, ConditionResult, Headline, LevelResult, TagCell
 from lib.scoring.level_tags import tag_cells
-from lib.scoring.level_tally import default_model
+from lib.scoring.level_tally import NOT_APPLICABLE_REASONS, default_model
 from lib.scoring.levels import MaturityModel, StepDef, condition_id
 
 # Bumped when the headline block's shape changes. It has no changes/ counter, so a
@@ -113,6 +113,8 @@ REASON_WORDS = {
     "scan_failed": "scan did not complete",
     "no_scored_files": "no files scored",
     "no_manifests": "no manifests read",
+    "fewer_than_two_systems": "fewer than two agent systems",
+    "no_configured_gates": "no configured gate",
     "no_complexity_stats": "no complexity stats written",
 }
 # Words an unlisted code is never shown with (lib/vocabulary.py, #743), and what reads instead.
@@ -139,6 +141,8 @@ def gate_note(blocker: Blocker) -> str:
         return f" (excluded by owner: {kind}; the Step waits while the exclusion stands)"
     if blocker.get("state") == "not_measured":
         return f" (not measured here: {reason_word(blocker.get('reason', ''))})"
+    if blocker.get("state") == "not_applicable":
+        return f" (not applicable here: {reason_word(blocker.get('reason', ''))}; a gate holds only when met)"
     return ""
 
 
@@ -245,9 +249,15 @@ def _tally_line(level: LevelResult) -> str:
     reasons = Counter(entry["reason"] for entry in level["not_measured"])
     detail = ", ".join(f"{reason_word(code)}: {n}" for code, n in sorted(reasons.items()))
     line = f"Catalogue coverage: {tally['not_measured']} not measured" + (f" ({detail})" if detail else "")
+    # not_applicable by a scan's reason (level_tally.NOT_APPLICABLE_REASONS, #1407), apart from
+    # the owner's exclusions and the conditions that require one
+    apart = [c["reason"] for c in level["conditions"]
+             if c["state"] == "not_applicable" and c.get("reason") in NOT_APPLICABLE_REASONS]
+    if apart:
+        words = ", ".join(f"{reason_word(code)}: {n}" for code, n in sorted(Counter(apart).items()))
+        line += f" · {len(apart)} not applicable here ({words})"
     if level.get("excluded"):
-        # only an exclusion makes a condition not_applicable, directly or through `requires`
-        gone = sum(c["state"] == "not_applicable" for c in level["conditions"])
+        gone = sum(c["state"] == "not_applicable" for c in level["conditions"]) - len(apart)
         line += f" · {gone} not applicable (excluded by owner)"
     return line + f" · model {level['levels_version']}"
 

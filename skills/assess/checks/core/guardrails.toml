@@ -16,9 +16,10 @@ whys.guardrails = "It lists the gates the repository configures and whether an i
 shapes = [
   { path = "guardrails", type = "lib.instructions.guardrails:GuardrailsBlock" },
 ]
-revision = 2
+revision = 3
   [entries.privacy]
   "guardrails.gates.kind" = "token"
+  "guardrails.stated_pct_reason" = "token"
   "guardrails.gates.tool" = "token"
   "guardrails.gates.rule" = "token"
   "guardrails.gates.stated_in" = "path"
@@ -33,7 +34,7 @@ collector = "core.guardrails"
 path = "guardrails.stated_pct"
 type = "number"
 evidence = "head_structure"
-null_means = "no gate found in the run (the scope, on a scoped run): nothing to state"
+null_means = "no gate found in the run (the scope, on a scoped run): nothing to state; stated_pct_reason no_configured_gates reads the condition not applicable"
 
 [[entries]]
 id = "core.cond.guardrails-stated.1.stated_pct"

@@ -227,7 +227,7 @@
 #   graded instruction file states, the rule and its threshold on one line.
 #   Level 1 is half of them stated, level 2 all of them. A repository with no
 #   gate found has nothing to state, so the share is null and the row is
-#   unknown, never 0. Graded measured: it cross-checks the config against the
+#   not applicable (no_configured_gates, #1407), never 0. Graded measured: it cross-checks the config against the
 #   instruction text at the commit, as instruction_claims.failed does.
 # - Cross-agent consistency reads agent_consistency (lib/instructions/agent_consistency.py,
 #   #768): the root instruction files of every agent system present (Claude
@@ -238,7 +238,7 @@
 #   Level 2 adds every system linked to one canonical file (AGENTS.md when
 #   present) by symlink, import or pointer line, and requires level 1. With
 #   fewer than two systems there is nothing to agree with: both signals are
-#   null and the row is unknown, never 0. Graded measured: it compares the
+#   null and the row is not applicable (fewer_than_two_systems, #1407), never 0. Graded measured: it compares the
 #   files and their links at the commit, as instruction_claims.failed does.
 # - Skill disclosure reads skill_disclosure.files_breaking (lib/skill_disclosure.py,
 #   #1045): every SKILL.md and agent definition has a body of 500 lines or fewer, 5000

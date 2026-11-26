@@ -32,7 +32,9 @@ Claude Code to run ``make test`` while ``.windsurfrules`` still says ``npm test`
 ``conflicts`` (divergences, the level 1 signal of the ``agent-consistency``
 row) and ``unlinked`` (systems not linked, level 2) are null, and
 ``applicable`` false, when fewer than two systems are present: one system has
-nothing to agree with, so the row reads not measured, never 0. Each unlinked
+nothing to agree with. Each null signal then carries a sibling ``conflicts_reason``
+or ``unlinked_reason``, ``fewer_than_two_systems`` (``NOT_APPLICABLE_REASON``), so
+the tally reads the row not applicable, never 0 and never not measured (#1407). Each unlinked
 system gets a ``next_steps`` entry, on its own single-file location (``CLAUDE.md``)
 before a supplementary rule file, with the exact pointer line for its tool
 (``@AGENTS.md`` for an import-capable tool, ``#[[file:AGENTS.md]]`` for Kiro,
@@ -67,8 +69,9 @@ a leading heading or list ordinal such as `## 2. Coverage` or `1. ` is dropped f
 and `unlinked` (systems not linked) are the default model's `agent-consistency` row
 signals, level 1 `conflicts == 0` and level 2 `unlinked == 0` with `requires` level 1,
 both `head_structure` (graded measured). With fewer than two systems `applicable` is
-false and `conflicts`, `unlinked` and `consistent` are null, so the row reads unknown,
-never 0. `next_steps` holds one `ConsistencyStep` per unlinked system, on the system's own
+false and `conflicts`, `unlinked` and `consistent` are null, each null signal with a sibling
+`conflicts_reason` / `unlinked_reason` `fewer_than_two_systems`, so the tally reads the row
+`not_applicable` (#1407), never 0. `next_steps` holds one `ConsistencyStep` per unlinked system, on the system's own
 single-file location (`CLAUDE.md`) when it has one, else its first unlinked file (#960): `pointer`, the
 exact line for its tool (`pointer_line`: `@AGENTS.md` relative to the file for Claude
 Code and Gemini CLI, `#[[file:AGENTS.md]]` for Kiro, `read: AGENTS.md` in
@@ -90,7 +93,7 @@ import posixpath
 import re
 from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 from lib.instructions.agent_systems import AIDER_CONFIG, SYSTEM_BY_ID, SYSTEM_ORDER
 from lib.ci.check_command import ALWAYS_CHECK, LINT_PROGRAMS, is_lint_command
@@ -104,6 +107,8 @@ from lib.instructions.instruction_discovery import InstructionCandidate, collect
 Link = Literal["canonical", "symlink", "import", "pointer", "config_read", "mirror", "independent"]
 LINKED: frozenset[str] = frozenset({"canonical", "symlink", "import", "pointer", "config_read"})
 CANONICAL_NAME = "AGENTS.md"
+# The code beside a null conflicts / unlinked: fewer than two systems, nothing to compare (#1407).
+NOT_APPLICABLE_REASON = "fewer_than_two_systems"
 THRESHOLD_KEYWORDS: dict[str, re.Pattern[str]] = {
     "coverage": re.compile(r"\bcoverage\b", re.IGNORECASE),
     "complexity": re.compile(r"\bcomplexity\b", re.IGNORECASE),
@@ -175,7 +180,9 @@ class AgentConsistencyBlock(TypedDict):
     files: list[ConsistencyFile]
     divergences: list[Divergence]
     conflicts: int | None
+    conflicts_reason: NotRequired[str]  # NOT_APPLICABLE_REASON, when conflicts is null
     unlinked: int | None
+    unlinked_reason: NotRequired[str]  # NOT_APPLICABLE_REASON, when unlinked is null
     consistent: bool | None
     next_steps: list[ConsistencyStep]
     not_read: list[str]
@@ -359,7 +366,7 @@ def check_consistency(repo_root: Path, cands: list[InstructionCandidate],
             "symlink": f"ln -sf {_rel_from(path, canon.rel)} {path}"
             if _primary(system, path) else None,
         })
-    return {
+    block: AgentConsistencyBlock = {
         "available": True,
         "systems": systems,
         "systems_total": len(systems),
@@ -373,6 +380,10 @@ def check_consistency(repo_root: Path, cands: list[InstructionCandidate],
         "next_steps": steps,
         "not_read": list(NOT_READ),
     }
+    if not applicable:
+        block["conflicts_reason"] = NOT_APPLICABLE_REASON
+        block["unlinked_reason"] = NOT_APPLICABLE_REASON
+    return block
 
 
 def scan_agent_consistency(
