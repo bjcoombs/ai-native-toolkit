@@ -5,7 +5,7 @@
 # cloned at a pinned tag. Add it to a project's .gitlab-ci.yml:
 #
 #   include:
-#     - remote: https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v4.0.0/templates/assess-gate.yml
+#     - remote: https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v4.1.0/templates/assess-gate.yml
 #
 # This file sits at templates/<name>.yml with a spec:inputs header, the CI/CD
 # component layout, so a GitLab mirror of this repository can also publish it
@@ -35,7 +35,7 @@ spec:
       default: true
     toolkit_ref:
       description: The ai-native-toolkit release tag the job runs (a tag or branch name, not a commit SHA). Keep it equal to the tag in the include line.
-      default: v4.0.0
+      default: v4.1.0
     toolkit_url:
       description: Where to clone the toolkit from, for a mirror on a self-hosted GitLab.
       default: https://github.com/bjcoombs/ai-native-toolkit.git

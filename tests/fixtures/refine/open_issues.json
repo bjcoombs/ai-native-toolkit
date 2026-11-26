@@ -107,7 +107,7 @@
   {
     "number": 105,
     "title": "widgets: rename the knob",
-    "body": "Size: 5 points\n\n## Problem Statement\n\nThe problem statement of case 105: t105w0pro t105w1pro t105w2pro t105w3pro t105w4pro t105w5pro.\n\n## Technical Context\n\nThe technical context of case 105: t105w0tec t105w1tec t105w2tec t105w3tec t105w4tec t105w5tec.\n\n## Impact\n\nThe impact of case 105: t105w0imp t105w1imp t105w2imp t105w3imp t105w4imp t105w5imp.\n\n## Root Cause\n\nThe root cause of case 105: t105w0roo t105w1roo t105w2roo t105w3roo t105w4roo t105w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 105: t105w0sol t105w1sol t105w2sol t105w3sol t105w4sol t105w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n\nSecond, larger take on the knob.\n",
+    "body": "Size: 13 points\n\n## Problem Statement\n\nThe problem statement of case 105: t105w0pro t105w1pro t105w2pro t105w3pro t105w4pro t105w5pro.\n\n## Technical Context\n\nThe technical context of case 105: t105w0tec t105w1tec t105w2tec t105w3tec t105w4tec t105w5tec.\n\n## Impact\n\nThe impact of case 105: t105w0imp t105w1imp t105w2imp t105w3imp t105w4imp t105w5imp.\n\n## Root Cause\n\nThe root cause of case 105: t105w0roo t105w1roo t105w2roo t105w3roo t105w4roo t105w5roo.\n\n## Solution Requirements\n\nThe solution requirements of case 105: t105w0sol t105w1sol t105w2sol t105w3sol t105w4sol t105w5sol.\n\n## Success Criteria\n\n1. `make check` exits 0.\n2. The widget renders.\n\nSecond, larger take on the knob.\n",
     "state": "OPEN",
     "stateReason": null,
     "labels": [

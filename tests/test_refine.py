@@ -365,7 +365,7 @@ def test_ready_buffer_against_twice_the_builder_slots(plan):
 
 
 def test_critical_path_and_cycles(plan):
-    assert plan["critical_path"] == {"length": 3, "points": 7, "unsized": 1,
+    assert plan["critical_path"] == {"length": 3, "points": 15, "unsized": 1,
                                      "issues": [101, 105, 106], "cycle_members": [110, 111]}
 
 

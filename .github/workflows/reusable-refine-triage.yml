@@ -60,7 +60,7 @@ on:
       max_points:
         description: The largest size that can be agent-ready; match max_points in your definition of ready.
         type: number
-        default: 3
+        default: 8
       questions_issue:
         description: The issue that collects questions for the maintainer. Empty keeps questions in the job summary.
         type: string
