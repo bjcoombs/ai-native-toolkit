@@ -124,7 +124,7 @@ Pass any of these under `with:`. Labels must exist in the repository.
 | `mode` | all | `dry-run` | `live` writes; anything else is a dry-run |
 | `ready_label`, `triage_label` | triage, sweep | `agent-ready`, `needs-triage` | The two readiness labels; match `labels` in your definition of ready |
 | `allowed_labels` | triage, sweep | `agent-ready,needs-triage,bug,enhancement,documentation,question` | The only labels the refiner may add or remove |
-| `max_points` | triage | 3 | The largest size that can be `agent-ready`; match `max_points` in your definition of ready |
+| `max_points` | triage | 0 | Overrides `max_points` in your definition of ready, the largest size that can be `agent-ready`; 0 uses the definition's value |
 | `close_cap` | dedupe, sweep | 10 | The most duplicate closes the refiner may make in any 7 days |
 | `builder_slots` | sweep | 5 | The ready-buffer target is twice this |
 | `model` | triage, dedupe | `sonnet` | The model the read-only plan job runs |

@@ -46,7 +46,7 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Set
 
 import refine_checks as checks
-from refine_definition import DEFAULT_PATH, DefinitionError, load_definition
+from refine_definition import DefinitionError, load_definition, resolve_path
 from refine_duplicates import by_issue, find_duplicates
 from refine_graph import critical_path, ready_buffer
 from refine_platform import Backlog, GhError, GitHubBacklog, ReadOnlyViolation
@@ -59,7 +59,6 @@ SCHEMA_VERSION = "1"
 CLOSED_WINDOW_DAYS = 90
 DEFAULT_BUILDER_SLOTS = 5
 VERDICTS = ("ready", "needs_judgement", "not_ready")
-TOOLKIT_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _duplicate_refs(number: int, pairs: List[DuplicatePair]) -> List[DuplicateRef]:
@@ -161,11 +160,7 @@ def build_plan(backlog: Backlog, definition: Definition, definition_path: str, n
 
 
 def resolve_definition(arg: Optional[str]) -> Path:
-    if arg:
-        return Path(arg)
-    # Relative when found under the current directory, so the plan names it
-    # the same way on every machine.
-    return DEFAULT_PATH if DEFAULT_PATH.is_file() else TOOLKIT_ROOT / DEFAULT_PATH
+    return resolve_path(arg)
 
 
 def _parse_now(value: Optional[str]) -> datetime:

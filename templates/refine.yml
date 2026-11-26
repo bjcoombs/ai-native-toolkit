@@ -88,7 +88,7 @@ spec:
     REFINE_READY_LABEL: agent-ready
     REFINE_TRIAGE_LABEL: needs-triage
     REFINE_ALLOWED_LABELS: agent-ready,needs-triage,bug,enhancement,documentation,question
-    REFINE_MAX_POINTS: "3"
+    REFINE_MAX_POINTS: "0"  # 0: max_points from the definition of ready
     REFINE_CLOSE_CAP: "10"
     REFINE_BUILDER_SLOTS: "5"
     REFINE_MODEL: sonnet

@@ -18,17 +18,23 @@ block uses and refuses anything else with `DefinitionError`:
 `load_definition` then checks every key the script reads is present with the
 right type, so a renamed key fails loudly instead of disabling a check.
 
+`resolve_path` finds the document the way `refine.py --definition` defaults:
+under the current directory, then under this toolkit checkout. `size_limit`
+gives the write scripts the same `max_points` (#1439 follow-up): an explicit
+`REFINE_MAX_POINTS` above 0 overrides it, otherwise the definition decides.
+
 Python 3.8 compatible and stdlib only.
 """
 from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from refine_types import ChecklistEntry, Definition, Labels
 
 DEFAULT_PATH = Path("docs") / "contributing" / "definition-of-ready.md"
+TOOLKIT_ROOT = Path(__file__).resolve().parents[3]
 
 _FENCE_OPEN = re.compile(r"^```yaml\s*$")
 _MAP_KEY = re.compile(r"^([A-Za-z_][\w-]*):(?:\s+(.*))?$")
@@ -207,3 +213,34 @@ def load_definition(path: Path) -> Definition:
     except OSError as exc:
         raise DefinitionError(f"cannot read the definition of ready at {path.as_posix()}: {exc}") from exc
     return definition_from_block(extract_block(markdown))
+
+
+def resolve_path(arg: Optional[str] = None) -> Path:
+    """`arg`, else the definition under the current directory, else this toolkit's copy."""
+    if arg:
+        return Path(arg)
+    # Relative when found under the current directory, so the plan names it
+    # the same way on every machine.
+    return DEFAULT_PATH if DEFAULT_PATH.is_file() else TOOLKIT_ROOT / DEFAULT_PATH
+
+
+def size_limit(override: str, fallback: int) -> int:
+    """The largest size that can be ready: what `refine.py`'s `sized` check uses.
+
+    `override` (`REFINE_MAX_POINTS`) wins when it is an integer above 0; empty
+    or 0 means unset. Otherwise `max_points` comes from the definition at
+    `resolve_path()`. When neither place has the document, as in a write job
+    that checks out only the scripts for a repository with no definition of
+    its own, `refine.py` read this toolkit's copy, so `fallback` is returned;
+    a test keeps it equal to that copy's `max_points`.
+    """
+    raw = override.strip()
+    value = int(raw) if raw else 0
+    if value < 0:
+        raise DefinitionError(f"REFINE_MAX_POINTS must be 0 (unset) or a positive integer, not {raw!r}")
+    if value:
+        return value
+    path = resolve_path()
+    if not path.is_file():
+        return fallback
+    return int(load_definition(path)["max_points"])

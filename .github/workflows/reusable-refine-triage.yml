@@ -58,9 +58,11 @@ on:
         type: string
         default: agent-ready,needs-triage,bug,enhancement,documentation,question
       max_points:
-        description: The largest size that can be agent-ready; match max_points in your definition of ready.
+        description: >-
+          Overrides max_points in your definition of ready, the largest size that can be agent-ready.
+          0 (the default) uses the definition's value.
         type: number
-        default: 3
+        default: 0
       questions_issue:
         description: The issue that collects questions for the maintainer. Empty keeps questions in the job summary.
         type: string
