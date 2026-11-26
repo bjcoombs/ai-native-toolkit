@@ -393,3 +393,35 @@ def test_extract_path_refs_suffixes_default_and_widened() -> None:
     seg = "we render `.mdx` pages; see `guide.mdx` and `notes.md`"
     assert _extract_path_refs(seg) == {"notes.md"}
     assert _extract_path_refs(seg, (".md", ".mdx")) == {".mdx", "guide.mdx", "notes.md"}
+
+
+def test_parse_ownership_paths_are_posix_on_windows(tmp_path: Path, monkeypatch) -> None:
+    """The resolvers as Windows runs them: each `Path` they return stringifies with
+    backslashes. The ownership block still records forward-slash paths, so one repo
+    reads the same on every platform (#1493)."""
+    from pathlib import PurePath, PureWindowsPath
+
+    import lib.docs.ownership_parser as ownership_parser
+
+    real_resolve = ownership_parser._resolve_ref
+    real_match = ownership_parser._match_glob
+
+    def windows_resolve(ref: str, repo_root: Path, rel_paths: set[str]) -> set[PurePath]:
+        return {PureWindowsPath(p) for p in real_resolve(ref, repo_root, rel_paths)}
+
+    def windows_match(pattern: str, rel_paths: list[str]) -> set[PurePath]:
+        return {PureWindowsPath(p) for p in real_match(pattern, rel_paths)}
+
+    monkeypatch.setattr(ownership_parser, "_resolve_ref", windows_resolve)
+    monkeypatch.setattr(ownership_parser, "_match_glob", windows_match)
+    repo = _init_repo(tmp_path)
+    _write(repo, "src/core/a.py")
+    _write(repo, "CODEOWNERS", "src/** @a\n")
+    _write(repo, "ARCHITECTURE.md", "## Core\nowns `src/core`\n")
+    _commit_all(repo)
+
+    summary = parse_ownership(repo)
+    globs = {g["pattern"]: g["matched_files"] for g in summary["codeowners_globs"]}
+    modules = {m["module"]: m["files"] for m in summary["architecture_modules"]}
+    assert globs["src/**"] == ["src/core/a.py"]
+    assert modules["ARCHITECTURE.md::Core"] == ["src/core/a.py"]
