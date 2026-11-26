@@ -195,6 +195,9 @@ def test_model_job_is_read_only_and_only_post_writes() -> None:
     args = model[0]["with"]["claude_args"]
     for tool in ("Bash", "Write", "Edit", "WebFetch", "WebSearch"):
         assert tool in args.split("--disallowedTools")[1]
+    denied = args.split("--disallowedTools")[1].split("\n")[0]
+    for secret in ("Read(//proc/**)", "Read(//home/runner/work/_temp/**)", "Read(//tmp/**)", "Read(~/.*/**)"):
+        assert secret in denied
     allowed = args.split("--allowedTools")[1].split("\n")[0]
     assert "Bash" not in allowed and "Write" not in allowed
     assert model[0]["uses"].split("@")[1].split()[0].isalnum() and len(model[0]["uses"].split("@")[1]) >= 40

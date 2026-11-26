@@ -145,8 +145,13 @@ jobs:
           cp agents/doc-contradictions-comparer.md .claude/agents/
 
       # Default permission mode: in a run with no one to ask, a tool not on
-      # --allowedTools is denied. The allow-list is subagents and reads of
-      # the pull request, the scope file and the skill; no Bash, no writes.
+      # --allowedTools is denied. The allow-list is subagents, Read of the
+      # pull request, the scope file and the skill, and Grep and Glob, which
+      # take no path scope of their own. Claude Code applies Read deny rules
+      # to Grep and Glob too, so the deny-list closes the places a credential
+      # sits: process environments (/proc), the runner's temp files, where
+      # step outputs and env files live, /tmp, /etc and the home directory's
+      # dot-directories. No Bash, no writes.
       - name: Compare the touched clusters (model, read-only token)
         id: model
         if: steps.gate.outputs.run == 'true'
@@ -177,7 +182,7 @@ jobs:
             --model sonnet
             --max-turns 60
             --allowedTools "Agent,Task,Read(./pr-head/**),Read(./.doc-sync/**),Read(./skills/doc-contradictions/**),Grep,Glob"
-            --disallowedTools "Bash,Write,Edit,MultiEdit,NotebookEdit,WebFetch,WebSearch,Read(//proc/**)"
+            --disallowedTools "Bash,Write,Edit,MultiEdit,NotebookEdit,WebFetch,WebSearch,Read(//proc/**),Read(//etc/**),Read(//tmp/**),Read(//home/runner/work/_temp/**),Read(~/.*/**)"
             --json-schema '${{ steps.gate.outputs.schema }}'
 
       - name: Check the citations (no model)
