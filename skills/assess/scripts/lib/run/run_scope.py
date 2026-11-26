@@ -8,6 +8,8 @@ path with separators hyphenated for one plain folder (as before #1110), else ``s
 and a stable hash over the sorted patterns. `label` is the repo-relative text the run
 context and the signals stamp carry: the folder, or the sorted patterns joined by ``,``.
 `scope_roots(scope, root)` is where a walk starts: the scope's roots, or the root.
+A root inside another is dropped from `roots` but its pattern stays in `patterns`, so the
+label and slug name what was asked: ``a`` plus ``a/b`` measures ``a`` under a hashed slug.
 `resolve_scope` turns the ``--scope`` arguments into `(Scope, label, slug)`, raising
 `ValueError` for a missing or outside-repo path or a pattern that matches nothing
 (naming it); a whole-repo run returns `(None, None, "")`. `assess_dir_for` names

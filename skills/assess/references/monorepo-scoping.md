@@ -29,11 +29,16 @@ ASSESS_DIR="$REPO_ROOT/.assess/$SCOPE_SLUG"
 mkdir -p "$ASSESS_DIR"
 ```
 
-For several folders or a glob the slug is `scope-` and a 12-character hash of the sorted
-patterns, so let the core compute it rather than `tr`:
+For several folders or a glob, hold them in an array and pass the same `SCOPE_ARGS` to
+every script below in place of `--scope "$SCOPE"`. Quote each glob: the shell would
+otherwise expand `skills/*-review` into paths, and a script given the expanded paths
+writes to a different slug than one given the glob. The slug is `scope-` and a
+12-character hash of the sorted patterns, so let the core compute it rather than `tr`:
 
 <!-- chat-skip:start -->
 ```bash
+SCOPES=(services/api 'skills/*-review')   # quoted: the script matches the glob, not the shell
+SCOPE_ARGS=(); for s in "${SCOPES[@]}"; do SCOPE_ARGS+=(--scope "$s"); done
 SCOPE_SLUG=$(cd "<assess-skill-dir>/scripts" && uv run --locked python -c \
   'import sys; from pathlib import Path; from lib.run.run_scope import resolve_scope; print(resolve_scope(Path(sys.argv[1]), [Path(a) for a in sys.argv[2:]])[2])' \
   "$REPO_ROOT" "${SCOPES[@]}")
