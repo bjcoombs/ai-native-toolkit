@@ -26,7 +26,9 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
   one. So does an attribute that is not double-quoted, which the id and scope checks would not
   read, and any ``<style>`` at-rule but ``@media``: a statement such as ``@layer a;`` would hide
   the next rule's selector from the scope check, and a selector that leaves the diagram through a
-  sibling combinator (``svg.<scope> ~ *``). An end tag is written without attributes. The
+  sibling combinator (``svg.<scope> ~ *``). So does a tag name not in its SVG case (``<STYLE>``),
+  or an ``id``, ``class``, ``href`` or ``style`` attribute name not in lowercase (``ID=``): the
+  browser folds the case, the checks here do not. An end tag is written without attributes. The
   generators write none of these.
 - **Scoped.** A root that already carries a class is the generator's scope (#1449): kept when it
   is complete (every id, reference and style selector under it), None otherwise. A root without a
@@ -54,6 +56,9 @@ ELEMENTS = frozenset({
     "polygon", "path", "text", "tspan", "textpath", "pattern", "lineargradient", "radialgradient",
     "stop", "clippath", "mask", "marker", "use", "symbol", "a", "metadata"})
 DROPPED = frozenset({"script", "foreignobject"})  # removed with their contents
+CAMEL = {"lineargradient": "linearGradient", "radialgradient": "radialGradient", "clippath": "clipPath",
+         "textpath": "textPath"}  # the SVG spelling of a mixed-case element name
+CHECKED_ATTRS = frozenset({"id", "class", "href", "xlink:href", "style"})  # read by the checks in lowercase
 TEXT_ONLY = frozenset({"title", "desc", "style"})  # no child element: see the module docstring
 UNSAFE = ("<script", "foreignobject", "javascript:", "vbscript:", "@import", "image-set")
 
@@ -76,6 +81,8 @@ def _safe_attrs(element: str, attrs: str) -> str | None:
     for m in _ATTR_PARTS.finditer(attrs):
         raw = (m.group(3) or "").strip("\"'")
         name = m.group(2).lower()
+        if name in CHECKED_ATTRS and m.group(2) != name:
+            return None
         if not (m.group(3) or "").startswith('"') or "<" in raw or ">" in raw or element == "style" or ("\\" in raw and not name.startswith("data-")) \
                 or (name == "style" and "&" in raw):
             return None
@@ -140,6 +147,8 @@ def _sanitise(svg: str) -> tuple[str, bool]:
         name, close, empty = m.group("name").lower(), bool(m.group("close")), m.group("empty")
         if not skipping:
             _check_tag(name, close, open_names, closed)
+            if name not in DROPPED and m.group("name") != CAMEL.get(name, name):
+                raise _Refused  # the checks read tag names in their SVG case
         if skipping or name in DROPPED:
             if not empty:
                 skipping += -1 if close else 1
