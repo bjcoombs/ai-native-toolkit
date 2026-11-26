@@ -36,9 +36,10 @@ bytes. An unreadable entry is passed over, never an error. An earlier
 
 `earlier_runs` reads the history entries the engine replays: `run.json` passing
 `fleet_compare.comparability` against this run and a `fleet-data.json` at a version in
-`READABLE_FLEET_DATA_VERSIONS` (1 to 4: version 1's roll-up is not read, #772;
+`READABLE_FLEET_DATA_VERSIONS` (1 to 5: version 1's roll-up is not read, #772;
 version 3 only adds `opportunities`, #746; version 4 only adds the per-repository Step
-fields, #944, #945; every version from 1 to `FLEET_DATA_VERSION`, so a bump keeps the one before it),
+fields, #944, #945; version 5 only adds `unit_rows`, #866;
+every version from 1 to `FLEET_DATA_VERSION`, so a bump keeps the one before it),
 one per date before this run's (`fleet_history.one_per_date`). An entry is dated by its
 `run.json` `scan_date`, not the stamp copy in `fleet-data.json`, which is read only when
 the entry has no `run.json` (#780). Unreadable entries are passed over. With the run's

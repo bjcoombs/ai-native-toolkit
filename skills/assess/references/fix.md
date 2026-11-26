@@ -1,6 +1,6 @@
 # Writing the basics for the next gate (`--fix` and `--starter`, issue #1154)
 
-Loaded by `/assess` when the arguments contain `--fix` or `--starter`. Only these two arguments let `/assess` write starter files into the target; every other run writes nothing outside `.assess/`, and `/fleet` has no fix path.
+Loaded by `/assess` when the arguments contain `--fix` or `--starter`. Only these two arguments let `/assess` write starter files into the target; every other run writes nothing outside `.assess/` unless an end-of-run offer is accepted, and `/fleet` has no fix path.
 
 - **`--fix`:** run the assessment as usual, then run the fix script on `$REPO_ROOT`. It writes a file for each gate blocking the next Step.
 - **`--starter`:** for an empty or new repository, such as one a scaffolding flow just created. Skip the assessment steps and run the script with `--starter`; it writes a file for every gate up to the top Step. Add `--language <name>` and `--check-command "<command>"` when the repository has no source or build file yet, and `--ci github|gitlab` when it has no remote.

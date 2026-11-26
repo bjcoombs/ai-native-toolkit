@@ -13,7 +13,7 @@ version: 1
 # The six section headings, in order. A section is present when a line is a
 # Markdown heading at one of `heading_levels` whose text equals the name,
 # compared after trimming and ignoring case, and at least one line follows it
-# before the next heading that is neither blank nor one of `empty_markers`.
+# before the next heading of the same or a higher level that is neither blank nor one of `empty_markers`.
 # Issue forms render `###`, and an optional form field left empty as
 # `_No response_`; the regulator template agents write uses `##`.
 sections:

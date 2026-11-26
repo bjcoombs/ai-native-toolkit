@@ -43,7 +43,7 @@ to an existing check edits its own fragment only. `read_manifest(path)` returns 
 document unvalidated (the registry-agreement tests read it), and `fragment_names(path)` the
 list. A single-file manifest (any third-party owner) loads as before.
 
-The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` and
+The manifest has `manifest_version` (1 or 2; the core is 2), `owner`, an optional `owner_version` and
 `[[entries]]` of four kinds:
 
 - `collector`: one `scan_registry.ScanSpec`, id `core.<scan key>`, in scan-table order.

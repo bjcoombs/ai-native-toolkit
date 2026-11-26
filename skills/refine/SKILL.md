@@ -47,7 +47,7 @@ One table, sorted by verdict then number:
 | Issue | Title | Verdict | Size | Why |
 |---|---|---|---|---|
 
-Under it, the exact duplicate pairs with `closable: true`, the near pairs (never closed), the buffer depth and target, the critical path, and `open_truncated` when the backlog passed 1000 open issues. With `--issue`, show that one issue's checklist item by item instead.
+Under it, the exact duplicate pairs with `closable: true`, the near pairs (never closed), the buffer depth and target, the critical path, and `open_truncated` when the open-issue listing reached its 1000-issue cap. With `--issue`, show that one issue's checklist item by item instead.
 
 ## Step 3: Research the issues that need judgement
 

@@ -13,7 +13,7 @@ Logic: `lib/fleet/fleet_achievements.py` (engine), `lib/fleet/fleet_achievements
 **Comparable runs.** A history entry is replayed when its `run.json` passes the
 `--compare` rule against this run (plugin major version, maturity-model version, window,
 output mode, scans, path hashing, `--fleet-config`, `--platform`) and it holds a
-`fleet-data.json` at version 1 or 2 (version 1 entries carry the old roll-up, which the
+`fleet-data.json` at any version from 1 to the current one (version 1 entries carry the old roll-up, which the
 engine does not read). One run per date, dates before this run's. Without
 the history (`--no-history`, `--full`) only this run is read: no achievement, just next
 steps, with `note` saying why.

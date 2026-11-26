@@ -41,7 +41,7 @@ the load) and `[[steps]]` (`StepDef`: `step` numbered 1..K, `name` and `gates`, 
 below and adds at least one, or the load fails. A Step needs its gates and nothing else (#1083): a `threshold`
 key, the count of met conditions earlier models carried, fails the load with a message
 naming its removal. A model without them loads exactly as before.
-Each level also carries `truth` (#843), and three additive fields ride along, all defined in
+Each level also carries `truth` (#843), and five additive fields ride along, all defined in
 `levels_fields.py`. `load_levels` passes the file path to `parse_levels` (`source=`) so a
 `MixedTruthError` names the model file. `LevelsError` and `MixedTruthError` are defined in
 `levels_fields.py` and re-exported here, so callers keep importing them from `lib.scoring.levels`.

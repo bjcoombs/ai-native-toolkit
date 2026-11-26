@@ -50,7 +50,7 @@ Breadth medians are over files with at least one commit in the window.
 | vite | 12 months | 1246 | 5 | 0.990 | 0.721 | 8 of 10 | `config.ts`, `plugins/css.ts`, `utils.ts` | `plugins/css.ts`, `config.ts`, `build.ts` | yes | 2.7% |
 | vite | 24 months | 2712 | 8 | 0.985 | 0.727 | 9 of 10 | `config.ts`, `plugins/css.ts`, `build.ts` | `plugins/css.ts`, `config.ts`, `build.ts` | no (order only) | 5.6% |
 
-This repository's rows are identical because every scored file's recorded history starts inside the last six months. The `/assess` code moved to its current paths on 2026-05-21, and neither the churn count nor the breadth follows renames. So its one swap is a single observation, not three.
+This repository's rows are identical because every scored file's recorded history starts inside the last six months. The `/assess` code moved to its current paths on 2026-05-21, and the breadth does not follow renames (the churn count does, since issue #425). So its one swap is a single observation, not three.
 
 In vite's 6-month window, `packages/create-vite/src/index.ts` rises from 13 to 4 on a breadth of 19, taken from the weekly "update all non-major dependencies" PRs. That entrant is not defensible: dependency bumps touch many files without making the file harder to change.
 

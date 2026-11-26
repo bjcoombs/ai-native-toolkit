@@ -41,7 +41,7 @@ Deterministic and offline.
 | `named` | `true` with `--name-agent-clusters`. |
 | `evidence_repos` | Scanned repositories with an available `agent_building` block. |
 | `builds_agent_repos`, `clustered_repos` | `builds-agent` repositories, and how many of them are in a cluster. |
-| `clusters` | Largest first, then by SDK union and pairing (never by name): `id` (`c1`, `c2` ...), `agent_class`, `size`, `groups` (distinct groups spanned), `sdks` (union), `shared_sdks` (intersection), `pairing`. Only with `--name-agent-clusters`: `repo_ids` and `group_ids`. |
+| `clusters` | Largest first, then by SDK union and pairing (by name only to break a full tie, and only with `--name-agent-clusters`): `id` (`c1`, `c2` ...), `agent_class`, `size`, `groups` (distinct groups spanned), `sdks` (union), `shared_sdks` (intersection), `pairing`. Only with `--name-agent-clusters`: `repo_ids` and `group_ids`. |
 
 Without the naming flag no repository id or group name appears in the file, so a
 cluster says that two teams build similar agents without saying which.

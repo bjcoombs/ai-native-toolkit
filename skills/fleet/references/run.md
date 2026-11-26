@@ -15,7 +15,7 @@ it. Schema: [`references/run.schema.json`](run.schema.json).
 | `paths_hashed` | `true` with `--hash-paths` or `--hash-salt` (never the salt). |
 | `scans` | The `--scans` names, deduplicated and sorted (`--scans a,a` stamps `["a"]`); `null` for all. |
 | `fleet_config_sha256` | sha256 of the `--fleet-config` file's canonical form; `null` without one. A comparability key. Absent in a run from before #706, which reads as `null`. |
-| `fleet_config_entries` | Entries per section (`ai_usage`, `review`, `platform`): a list counts its items, any other key 1. `null` without `--fleet-config`. Never a pattern or value. |
+| `fleet_config_entries` | Entries per section (`ai_usage`, `identities`, `review`, `platform`): a list counts its items, any other key 1. `null` without `--fleet-config`. Never a pattern or value. |
 | `platform` | `true` when `--platform` ran a platform read; `false` without it, and also when `--scans` selects no platform scan (nothing was read). A comparability key. Absent in a run from before #714, which reads as `false`. |
 | `managed_settings` | `true` when `--managed-settings` read the Claude Code managed settings of the machine that ran the fleet (#1153); `false` without it. A comparability key. Absent in a run from before #1153, which reads as `false`. |
 | `rules_sha256` | sha256 of the rules of the maturity model the run scored with (#952): the loaded `--levels` model without its `version`, row titles and Step names. `null` without `--levels`. Two runs under one `levels_version` with different rules are not compared directly: the history replay re-scores the earlier run, and `--compare` refuses the pair. Absent in a run from before #952, which reads as not recorded: such a run compares by `levels_version` alone, with a note. |
