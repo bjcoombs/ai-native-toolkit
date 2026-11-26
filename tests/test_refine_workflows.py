@@ -509,3 +509,20 @@ def test_plan_schema_is_safe_inside_single_quotes(tmp_path: Path, name: str) -> 
     passed = json.loads(outputs["schema"])
     assert "$schema" not in passed
     assert passed == {k: v for k, v in source.items() if k != "$schema"}
+
+
+@pytest.mark.parametrize("name", MODEL_WORKFLOWS)
+def test_plan_upload_includes_the_hidden_refine_directory(name: str) -> None:
+    """upload-artifact skips hidden files by default, so `.refine/` uploaded nothing (issue #1478)."""
+    uploads = [s for s in _steps(_load(name)) if str(s.get("uses", "")).startswith("actions/upload-artifact@")
+               and s["with"]["path"].startswith(".")]
+    assert len(uploads) == 1 and uploads[0]["with"]["path"] == ".refine/"
+    assert uploads[0]["with"]["include-hidden-files"] is True
+
+
+def test_dispatched_issue_number_is_passed_as_a_number() -> None:
+    """A workflow_dispatch number input reaches `inputs` as a string, and a
+    string for a `type: number` workflow_call input fails the run before any
+    job starts (issue #1478)."""
+    passed = _load("refine-dedupe.yml")["jobs"]["dedupe"]["with"]["issue_number"]
+    assert passed == "${{ github.event.issue.number || fromJSON(inputs.issue_number) }}"

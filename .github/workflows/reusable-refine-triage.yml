@@ -276,6 +276,8 @@ jobs:
           name: refine-triage-plan-${{ inputs.issue_number }}-${{ github.run_attempt }}
           path: .refine/
           if-no-files-found: error
+          # upload-artifact skips hidden files by default, and .refine/ is one.
+          include-hidden-files: true
 
   # No model runs here. The plan is validated against its schema before
   # anything is applied, and every write goes through the write scripts.
