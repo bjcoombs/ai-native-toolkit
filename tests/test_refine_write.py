@@ -100,8 +100,8 @@ def test_ready_applied_when_the_plan_resolves_judgement(tmp_path: Path) -> None:
 
 def test_ready_refused_when_the_plan_size_exceeds_max_points(tmp_path: Path) -> None:
     w, gh = writer(tmp_path, OPEN_101)
-    result = w.edit_labels(101, ["agent-ready"], [], verdict(), _plan(size=5))
-    assert any("not between 1 and 3" in r for r in result["refused"])
+    result = w.edit_labels(101, ["agent-ready"], [], verdict(), _plan(size=13))
+    assert any("not between 1 and 8" in r for r in result["refused"])
     assert gh.writes == []
 
 
@@ -416,7 +416,7 @@ def test_size_marker_refused_when_a_size_was_written_after_the_verdict(
 
 @pytest.mark.parametrize("number, routes, plan, reason", [
     (101, {"issues/101/comments": _comment(3)}, {"size": 2}, "size now reads 3, not the plan's 2"),
-    (103, {"issues/103/comments": _comment(8, "OWNER")}, None, "size now reads 8, above 3"),
+    (103, {"issues/103/comments": _comment(13, "OWNER")}, None, "size now reads 13, above 8"),
     (103, {"issues/103": _issue(103, body="...")}, None, "reads no size"),
     (101, {}, {"size": 2}, "reads no size"),
 ])

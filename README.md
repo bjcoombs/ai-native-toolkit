@@ -216,7 +216,7 @@ The same gate runs on GitLab merge request pipelines. Add these three lines to y
 
 ```yaml
 include:
-  - remote: https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v4.0.0/templates/assess-gate.yml
+  - remote: https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v4.1.0/templates/assess-gate.yml
     inputs: { config: .assess/config.toml }
 ```
 
@@ -251,7 +251,7 @@ Backlog refinement as three GitHub workflows any repository calls with one `uses
 jobs:
   sweep:
     if: vars.REFINE_ENABLED == 'true'
-    uses: bjcoombs/ai-native-toolkit/.github/workflows/reusable-refine-sweep.yml@v4.0.0
+    uses: bjcoombs/ai-native-toolkit/.github/workflows/reusable-refine-sweep.yml@v4.1.0
     with:
       enabled: ${{ vars.REFINE_ENABLED == 'true' }}
       mode: ${{ vars.REFINE_MODE || 'dry-run' }}
