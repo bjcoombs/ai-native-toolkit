@@ -176,6 +176,39 @@ def test_each_enforcement_trigger_phrase_makes_a_claim(phrase: str) -> None:
     assert [(c.kind, c.path) for c in claims] == [("enforcement", "scripts/lint.sh")]
 
 
+@pytest.mark.parametrize("sentence", [
+    # vercel/next.js AGENTS.md:262 and :435 (#819): CI is the topic, not the enforcer.
+    "It contains the `scripts/pr-status.js` commands, prioritization, review-thread"
+    " workflow, and CI reproduction guidance.",
+    "CI failure and PR review triage with `scripts/pr-status.js`.",
+    "Use `scripts/triage.sh` to read CI failures.",
+    "`scripts/repro.sh` helps with CI reproduction.",
+    "Debug CI with `x.sh`.",
+])
+def test_a_sentence_that_only_mentions_ci_makes_no_claim(sentence: str) -> None:
+    assert extract_claims(sentence + "\n") == []
+
+
+@pytest.mark.parametrize("sentence", [
+    "`scripts/check.sh` runs in CI.",
+    "`scripts/check.sh` is run in CI.",
+    "`scripts/check.sh` is executed by CI.",
+    "`scripts/check.sh` runs on CI.",
+    "`scripts/check.sh` is checked in CI.",
+    "`scripts/check.sh` executes in CI.",
+    "`scripts/check.sh` must pass in CI.",
+    "CI runs `scripts/check.sh` on every push.",
+    "The CI job calls `scripts/check.sh`.",
+    "CI fails if `scripts/check.sh` exits non-zero.",
+    "CI will fail if `scripts/check.sh` exits non-zero.",
+    "CI jobs fail if `scripts/check.sh` exits non-zero.",
+    "`scripts/check.sh` blocks CI on a failure.",
+])
+def test_an_enforcement_verb_tied_to_ci_makes_a_claim(sentence: str) -> None:
+    claims = extract_claims(sentence + "\n")
+    assert [(c.kind, c.path) for c in claims] == [("enforcement", "scripts/check.sh")]
+
+
 def test_duplicate_file_through_a_symlink_is_scanned_once(repo: Path) -> None:
     (repo / "CLAUDE.md").write_text(ENFORCED, encoding="utf-8")
     (repo / "AGENTS.md").symlink_to("CLAUDE.md")
