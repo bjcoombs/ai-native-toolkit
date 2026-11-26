@@ -49,7 +49,11 @@ the dominant language's graph, whose nodes can differ. When no builder covers th
 dominant language, no builder runs and nothing stands in (#825): the reason is
 `no_builder:<language>: ...` (`no_builder_reason`), naming the candidate tool in
 `CANDIDATE_GRAPH_TOOLS` where one is known (`jdeps` for the JVM languages), so vendored
-web assets in a Java repository never report as its structure. The leading code keeps
+web assets in a Java repository never report as its structure. The count is the same for
+every language: `COUNT_SKIP_DIRS` (vendored and test trees such as `third_party/`) and test
+or minified file names (`counts_toward_dominance`) are skipped before a builder's own hook,
+and `GLUE_LANGUAGES` (shell) wins only when no other language has a file, so a Go module
+beside vendored C, or a Python package beside many scripts, keeps its graph. The leading code keeps
 both parts (`reason_codes.leading_code`). When the dominant builder found nothing to
 graph (loose scripts, no package) or no language dominates, the largest other graph
 stands in (most modules, then most internal edges, then the language token); with none
@@ -135,9 +139,9 @@ EXCLUDE_DIRS = frozenset({
 })
 
 # Source extension -> language token. The token is the reason-code suffix, so it
-# stays lower-case ASCII with no separator. Shell counts: a shell-heavy repository
+# stays lower-case ASCII with no separator. Shell counts: a shell-only repository
 # reads no_builder:shell, which tells a fleet reader what the code is rather
-# than that there is none. ``.h`` does not: C, C++ and Objective-C share it, so a
+# than that there is none (beside any other language it is glue, ``GLUE_LANGUAGES``). ``.h`` does not: C, C++ and Objective-C share it, so a
 # header-heavy C++ repository would read as C.
 LANGUAGE_BY_EXTENSION: dict[str, str] = {
     ".py": "python",
@@ -164,6 +168,22 @@ LANGUAGE_BY_EXTENSION: dict[str, str] = {
     ".pl": "perl",
     ".sh": "shell", ".bash": "shell", ".zsh": "shell",
 }
+
+# Directories and file names left out of the dominant-language count for every
+# language (#825), on top of ``EXCLUDE_DIRS`` (which already drops ``tests`` and
+# ``test``): vendored trees, test trees and minified bundles. They narrow the
+# count only; no builder's walk reads them, so no graph changes.
+COUNT_SKIP_DIRS = frozenset({
+    "third_party", "third-party", "thirdparty", "external", "extern", "deps", "vendored",
+    "__tests__", "testdata", "spec", "specs",
+})
+_COUNT_SKIP_STEM_SUFFIXES = ("_test", "_spec", ".test", ".spec", ".min")
+
+# Scripting glue that never carries an import graph. It counts toward the
+# dominant language only when no other language has a file, so a shell-only
+# repository still reads no_builder:shell, and a Python or TypeScript repository
+# with more scripts than modules keeps its own graph (#825).
+GLUE_LANGUAGES = frozenset({"shell"})
 
 # Reason when the dominant language is Python and no importable package exists;
 # the headless runner maps it to ``no_python_packages``.
@@ -347,7 +367,10 @@ def language_counts(
     ``is_graph_source(rel: Path) -> bool`` (``rel`` relative to the walk's
     start); a file of that language then counts only when it says True, so files
     the builder skips (minified bundles, declarations, tests, tool configs) do
-    not make their language dominant.
+    not make their language dominant. Every language, covered or not, first
+    skips ``COUNT_SKIP_DIRS`` and test or minified file names
+    (:func:`counts_toward_dominance`), so vendored C under ``third_party/`` never
+    outnumbers a Go module (#825).
     """
     extra = extra_exclude_dirs or set()
     filters: dict[str, Callable[[Path], bool]] = {}
@@ -359,10 +382,11 @@ def language_counts(
     counts: Counter[str] = Counter()
     for start, (dirpath, dirnames, filenames) in ((s, w) for s in scope_roots(scope, repo_root)
                                                   for w in os.walk(s)):
-        dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDE_DIRS and d not in extra)
+        dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDE_DIRS and d not in extra
+                             and d not in COUNT_SKIP_DIRS)
         for name in filenames:
             language = LANGUAGE_BY_EXTENSION.get(os.path.splitext(name)[1].lower())
-            if language is None:
+            if language is None or not counts_toward_dominance(name):
                 continue
             check = filters.get(language)
             if check is not None and not check(Path(dirpath, name).relative_to(start)):
@@ -378,12 +402,22 @@ def dominant_language(
     """The language with the most source files (ties by name), or None.
 
     ``builders`` narrows each covered language to the files its builder graphs
-    (:func:`language_counts`).
+    (:func:`language_counts`). A ``GLUE_LANGUAGES`` language (shell) wins only
+    when no other language has a file (#825).
     """
     counts = language_counts(repo_root, extra_exclude_dirs, scope, builders)
-    if not counts:
+    real = Counter({lang: n for lang, n in counts.items() if lang not in GLUE_LANGUAGES})
+    pool = real or counts
+    if not pool:
         return None
-    return min(counts, key=lambda lang: (-counts[lang], lang))
+    return min(pool, key=lambda lang: (-pool[lang], lang))
+
+
+def counts_toward_dominance(name: str) -> bool:
+    """False for a test or minified file name (``a_test.rs``, ``a.spec.rb``,
+    ``test_a.py``, ``a.min.js``), which no language's count includes (#825)."""
+    stem = os.path.splitext(name)[0].lower()
+    return not (stem.startswith("test_") or stem.endswith(_COUNT_SKIP_STEM_SUFFIXES))
 
 
 def no_graph_reason(

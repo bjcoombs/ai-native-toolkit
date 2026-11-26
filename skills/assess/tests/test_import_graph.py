@@ -121,9 +121,10 @@ def test_a_python_repo_without_packages_keeps_no_python_packages(tmp_path: Path)
     assert structure(result.as_dict())["reason"].startswith("no_python_packages:")
 
 
-def test_a_shell_heavy_repo_names_shell_not_python(tmp_path: Path) -> None:
-    """Shell is named on purpose: the reader learns what the code is (#700)."""
-    for rel in ("a.sh", "b.sh", "tool.py"):
+def test_a_shell_only_repo_names_shell(tmp_path: Path) -> None:
+    """Shell is named on purpose: the reader learns what the code is (#700). It is
+    dominant only with no other language (#825)."""
+    for rel in ("a.sh", "b.sh"):
         _write(tmp_path, rel)
     assert analyze_structure(tmp_path).reason.startswith("no_builder:shell: ")
 
@@ -415,7 +416,9 @@ def test_files_a_builder_skips_do_not_make_their_language_dominant(tmp_path: Pat
     for rel in ("static/js/jquery.min.js", "static/js/vendor.min.js", "static/js/x.min.js",
                 "types/api.d.ts", "web/__tests__/a.js", "vite.config.js"):
         _write(tmp_path, rel)
-    assert dominant_language(tmp_path) == "javascript"  # every file, no builder rules
+    # Without builders the shared skips drop the bundles and __tests__ (#825); the
+    # TypeScript hook still drops the tool config.
+    assert language_counts(tmp_path)["javascript"] == 1
     assert dominant_language(tmp_path, builders=BUILDERS) == "python"
     assert language_counts(tmp_path, builders=BUILDERS)["javascript"] == 0
     block = analyze_structure(tmp_path).as_dict()
@@ -428,7 +431,9 @@ def test_go_test_files_and_skipped_dirs_do_not_count_toward_go(tmp_path: Path) -
     _write(tmp_path, "app/a.py", "")
     for rel in ("svc/a_test.go", "svc/b_test.go", "vendor/x/x.go", "_tools/t.go"):
         _write(tmp_path, rel, "package x\n")
-    assert dominant_language(tmp_path) == "go"
+    # The shared skips drop _test.go for every run (#825); only the Go hook drops _tools/.
+    assert language_counts(tmp_path)["go"] == 1
+    assert language_counts(tmp_path, builders=BUILDERS)["go"] == 0
     assert dominant_language(tmp_path, builders=BUILDERS) == "python"
 
 
@@ -497,14 +502,53 @@ def test_no_builder_reads_without_a_tool_when_none_is_known(tmp_path: Path) -> N
     assert "would provide" not in selection.reason
 
 
-def test_an_uncovered_plurality_wins_over_a_covered_graph(tmp_path: Path) -> None:
-    """#825 review: dominance is the plurality of files, so more shell scripts than
-    TypeScript modules read no_builder:shell; the TypeScript graph no longer stands in.
-    Pinned so a change to how uncovered languages count is a visible decision."""
-    _write(tmp_path, "web/index.ts", "import './util';\n")
-    _write(tmp_path, "web/util.ts", "export const x = 1;\n")
-    for i in range(3):
-        _write(tmp_path, f"scripts/s{i}.sh", "echo hi\n")
-    assert dominant_language(tmp_path, builders=BUILDERS) == "shell"
+def test_an_uncovered_majority_wins_over_a_covered_graph(tmp_path: Path) -> None:
+    """#825: a Rust-majority repository with a small Python package reads
+    no_builder:rust; the Python graph does not stand in."""
+    for rel in ("src/a.rs", "src/b.rs", "src/c.rs", "src/d.rs"):
+        _write(tmp_path, rel)
+    _write(tmp_path, "tools/pkg/__init__.py", "")
+    _write(tmp_path, "tools/pkg/a.py", "from tools.pkg import b\n")
+    _write(tmp_path, "tools/pkg/b.py", "")
+    assert dominant_language(tmp_path, builders=BUILDERS) == "rust"
     selection = select_graph(tmp_path, BUILDERS)
-    assert selection.graph is None and selection.reason.startswith("no_builder:shell: ")
+    assert selection.graph is None and selection.reason.startswith("no_builder:rust: ")
+
+
+def test_shell_glue_never_outnumbers_a_python_package(tmp_path: Path) -> None:
+    """#825: shell carries no import graph, so many scripts beside a Python
+    package leave Python dominant and its graph measured."""
+    _write(tmp_path, "app/__init__.py", "")
+    _write(tmp_path, "app/views.py", "from app import models\n")
+    _write(tmp_path, "app/models.py", "")
+    for i in range(10):
+        _write(tmp_path, f"scripts/s{i}.sh", "echo hi\n")
+    assert language_counts(tmp_path, builders=BUILDERS)["shell"] == 10
+    assert dominant_language(tmp_path, builders=BUILDERS) == "python"
+    block = analyze_structure(tmp_path).as_dict()
+    assert block["available"] is True and block["language"] == "python"
+
+
+def test_vendored_c_under_third_party_never_outnumbers_a_go_module(tmp_path: Path) -> None:
+    """#825: third_party/ and test or minified file names are skipped for every
+    language, so vendored C leaves the Go module dominant and its graph measured."""
+    _write(tmp_path, "go.mod", "module example.com/m\n")
+    _write(tmp_path, "svc/svc.go", 'package svc\nimport "example.com/m/util"\n')
+    _write(tmp_path, "util/util.go", "package util\n")
+    for i in range(6):
+        _write(tmp_path, f"third_party/zlib/z{i}.c", "int x;\n")
+    _write(tmp_path, "native/a_test.c", "int y;\n")
+    _write(tmp_path, "native/b.spec.c", "int z;\n")
+    assert language_counts(tmp_path, builders=BUILDERS)["c"] == 0
+    assert dominant_language(tmp_path, builders=BUILDERS) == "go"
+    block = analyze_structure(tmp_path).as_dict()
+    assert block["available"] is True and block["language"] == "go"
+
+
+@pytest.mark.parametrize(("name", "counted"), [
+    ("a.rs", True), ("a_test.rs", False), ("a.spec.rb", False), ("a_spec.rb", False),
+    ("test_a.py", False), ("a.test.ts", False), ("a.min.js", False), ("contest.py", True),
+])
+def test_counts_toward_dominance_skips_test_and_minified_names(name: str, counted: bool) -> None:
+    from lib.graph.import_graph import counts_toward_dominance
+    assert counts_toward_dominance(name) is counted
