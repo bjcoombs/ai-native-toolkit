@@ -163,6 +163,8 @@ def _check_tag(name: str, close: bool, open_names: list[str], closed: bool) -> N
     if open_names and open_names[-1] in TEXT_ONLY and not (close and name == open_names[-1]):
         raise _Refused
     if name in DROPPED:
+        if close:
+            raise _Refused  # an end tag for a dropped element that never opened
         return
     if name not in ELEMENTS or closed or (not open_names and (name != "svg" or close)):
         raise _Refused
@@ -198,8 +200,6 @@ def _sanitise(svg: str) -> tuple[str, bool]:
             if name not in DROPPED and m.group("name") != CAMEL.get(name, name):
                 raise _Refused  # the checks read tag names in their SVG case
         if skipping or name in DROPPED:
-            if close and not skipping:
-                raise _Refused  # an end tag for a dropped element that never opened
             if not empty:
                 skipping += -1 if close else 1
             continue
