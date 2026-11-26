@@ -12,6 +12,7 @@ The CI reference for `ai-native-toolkit`, moved out of the root `CLAUDE.md` so i
 - `.github/workflows/issue-needs-triage.yml` adds the `needs-triage` label to each newly opened issue that does not already carry `agent-ready`, with an `issues: write` token and no checkout ([Definition of ready](./definition-of-ready.md)).
 - `.github/workflows/mutation.yml` runs mutation testing weekly (see [Mutation testing](#mutation-testing)).
 - `.github/workflows/codeql.yml` (workflow `Security`) runs CodeQL and `pip-audit` (see [Security scanning](#security-scanning)).
+- `.github/workflows/doc-sync.yml` (workflow `Doc sync`) runs `/doc-contradictions` on each pull request to `main`, scoped to the doc clusters it touches; not required (see [Doc sync](#doc-sync)).
 - `.github/workflows/build-standalone-skills.yml` publishes the standalone skill ZIPs on a version bump (see [Standalone skill pipeline](./standalone-skills.md)).
 - `.github/release.yml` configures categorised release notes for `gh release create --generate-notes`. See the file for the label-to-category mapping.
 
@@ -43,7 +44,7 @@ git add -A && git commit
 
 mypy runs `strict` over all of `skills/assess/scripts/` (lib, orchestrators, renderers) with `disallow_any_generics` on for every module and no per-module exception, so a bare `dict` or `list` fails. Known shapes are `TypedDict`s: shared run-context rows and the orchestrators' file shapes, the stats sidecar and `finalize-input.json`, live in `lib/run_context_types.py`; `dict[str, Any]` is for blocks whose keys genuinely vary.
 
-It also covers the `scripts/` build and contract tooling in full, where per-module overrides relax just the flags the floor-protected modules (`floor_anchor.py`, `contract/`, `canaries/`) fail today, and `floor_check.py` stays out. A third run covers `skills/fleet/scripts`, `skills/marathon/scripts` and `skills/refine/scripts`, from `skills/assess` with its locked tools and the same strict settings.
+It also covers the `scripts/` build and contract tooling in full, where per-module overrides relax just the flags the floor-protected modules (`floor_anchor.py`, `contract/`, `canaries/`) fail today, and `floor_check.py` stays out. A third run covers `skills/fleet/scripts`, `skills/marathon/scripts`, `skills/refine/scripts` and `skills/doc-contradictions/scripts`, from `skills/assess` with its locked tools and the same strict settings.
 
 A new function needs annotations to pass. Both gates enable `ignore-without-code`, so a bare `# type: ignore` fails; the trailing reason (`# type: ignore[code]  # reason`) is a convention mypy cannot check.
 
@@ -57,7 +58,7 @@ The `plugin contract pytest` job (`tests/test_plugin_contract.py`) runs these ov
 
 ## File-size ratchet
 
-`tests/test_file_size_ratchet.py` (in `plugin contract pytest`) holds every Python file under `skills/assess/`, `scripts/`, `skills/fleet/` and `skills/marathon/` to the `default_limit` (800 lines) in `.file-size-ratchet.toml`. Files already over it are listed under `[ceilings]` at their line count and may shrink but not grow.
+`tests/test_file_size_ratchet.py` (in `plugin contract pytest`) holds every Python file under `skills/assess/`, `scripts/`, `skills/fleet/`, `skills/marathon/`, `skills/refine/` and `skills/doc-contradictions/` to the `default_limit` (800 lines) in `.file-size-ratchet.toml`. Files already over it are listed under `[ceilings]` at their line count and may shrink but not grow.
 
 The ceiling follows the file down: a file more than the larger of `shrink_slack_lines` (20) and `shrink_slack_percent` (2) percent of its ceiling below it fails until the ceiling is lowered to the current count, and an entry must be deleted once its file drops to the limit. A file over its limit gets split; raise a ceiling only for justified growth, with a one-line `reason`.
 
@@ -103,6 +104,18 @@ The `/assess` opt-in mutation pass runs this config as checked out, narrowed to 
 - `pip-audit` goes red on a known vulnerability or, under `--strict`, on a resolver error, so read the log before acting.
 
 Fix the code rather than dismissing an alert to clear it.
+
+## Doc sync
+
+`.github/workflows/doc-sync.yml` runs `/doc-contradictions` on each pull request to `main`, over only the documents and code the pull request touched ([#1453](https://github.com/bjcoombs/ai-native-toolkit/issues/1453)). It is not a required check and is not in branch protection.
+
+- **Scope.** `skills/doc-contradictions/scripts/doc_clusters.py --changed-from <base sha>` builds the skill's clusters on the pull request's head and keeps those holding a changed document or a changed subject-code file, plus the cross-cluster pass when a changed file is a hub. `.assess/` is excluded: in the full pass on [#1223](https://github.com/bjcoombs/ai-native-toolkit/issues/1223), 33 of the 54 rejected findings cited that generated run record. With no cluster touched, the model never runs.
+- **Model.** A Sonnet orchestrator fans out one `doc-contradictions-comparer` per cluster on Haiku (`CLAUDE_CODE_SUBAGENT_MODEL=haiku`, and `model: haiku` in the agent file). Its tools are subagents and reads of the pull request's files: no Bash, no writes. It runs only for a pull request from a branch of this repository whose author is an owner, member or collaborator. The credential is the secret `REFINE_ANTHROPIC_API_KEY`, then the refiner's Workload Identity Federation variables, then `CLAUDE_CODE_OAUTH_TOKEN`, the refiner's order.
+- **Isolation.** The skill, the agent and the scripts are checked out from the pull request's base commit; the head is checked out under `pr-head/` as data, and no script or skill from it runs. The workflow file itself comes from the pull request's merge ref, as for every `pull_request` workflow, so the trusted-author gate is the control on who can change what runs. On the pull request that adds the scripts, the base has none, so the check skips. The `check` job holds `contents: read` and `pull-requests: read` (and `id-token: write` for Workload Identity Federation); only the `post` job, which runs no model, holds `pull-requests: write`.
+- **Findings.** `doc_sync_findings.py` checks every citation against the file, as Step 5 of the skill does, and drops the rest. A high-confidence finding with a side in a changed file becomes a review thread on that line (or on the file, when the line is outside the diff), so an open thread holds the merge under the marathon's resolved-threads rule (branch protection does not require conversation resolution) until the document is fixed or the thread is answered. Everything else goes into one `Doc sync` summary comment, edited on each push, which does not block. A run that could not check (over the cluster limit, no credential, model failure) always writes the summary, except when the scope step itself fails, which leaves only the red `check` job; a clean run or a change touching no cluster writes one only to update an earlier one. Model-written text has `@` mentions neutralised. A thread is posted once per finding across pushes.
+- **Off switch.** Set the repository variable `DOC_SYNC_ENABLED` to `false`.
+
+The false-positive rate over its first two weeks is recorded on #1453 before anyone decides whether to make it required.
 
 ## Coverage floor
 

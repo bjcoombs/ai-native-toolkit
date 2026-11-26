@@ -1,7 +1,7 @@
 ---
 name: doc-contradictions
 description: "Find contradictions in a repository's documentation: rules that conflict between two documents, and document claims that contradict the code they describe. Clusters the docs by the doc graph and shared subject code, fans out one read-only Haiku comparison subagent per cluster plus a cross-cluster pass over hub documents, and writes a Markdown report with one entry per contradiction citing both sides as path:line with a confidence. Excludes historical intent records (docs/design/, docs/superpowers/) by default. TRIGGER when the user types /doc-contradictions, asks to find docs that contradict each other or the code, wants a stale-claim or doc-drift check, asks 'do our docs disagree?', 'is the README still true?', or follows an /assess recommendation to check the doc set for contradictions."
-argument-hint: "[path] [--no-default-excludes] [--exclude <glob>]..."
+argument-hint: "[path] [--no-default-excludes] [--exclude <glob>]... [--changed-from <ref>]"
 ---
 
 # doc-contradictions: where do the docs disagree with each other or the code?
@@ -28,8 +28,11 @@ The orchestrator never judges whether two statements contradict. It **only clust
 | `path` | the current repository root | the repository to scan |
 | `--no-default-excludes` | off | also scan `docs/design/` and `docs/superpowers/` |
 | `--exclude <glob>` | none | exclude more paths; repeatable |
+| `--changed-from <ref>` | off | check only what changed since `ref`: the clusters holding a changed doc or a changed subject-code file, plus the cross-cluster pass when a changed file is a hub |
 
 **Why the default excludes.** `docs/design/` and `docs/superpowers/` hold historical intent records: specs and plans that describe what was intended at the time and are not kept in step with the code. A design doc that proposed one value when the code shipped another is history, not a contradiction. Pass `--no-default-excludes` to audit them anyway.
+
+**Scoping to a change.** With `--changed-from <ref>`, Steps 1 and 2 run as code, not by hand: `python3 "${CLAUDE_SKILL_DIR}/scripts/doc_clusters.py" --repo "$REPO_ROOT" --changed-from <ref>`, passing `--no-default-excludes` and each `--exclude` through. It compares the merge base of `ref` and `HEAD` with the work tree, and prints the clusters, the hubs and their subject code, and whether the cross-cluster pass runs. Use them as printed and go to Step 3; with no cluster and no cross-cluster pass, write the report with `Contradictions: 0` and no comparer runs. A changed file that no longer exists still selects the clusters whose docs name it. The script builds the same clusters without the flag, so a full run may use it too. The `doc-sync` pull request check (`.github/workflows/doc-sync.yml`) runs this mode against each pull request's base; `docs/contributing/ci.md` describes it.
 
 ## Step 1: enumerate the documents
 
@@ -122,6 +125,7 @@ Write `$REPO_ROOT/.doc-contradictions/report.md` (create the directory) and prin
 
 - Repository: <REPO_ROOT basename>
 - Documents scanned: <n> in <k> clusters; cross-cluster pass over <h> hub docs (or: skipped, one cluster)
+- Scope: changed from `<ref>`, <k> of <K> clusters (only with `--changed-from`)
 - Excluded: docs/design/ (<n> docs), docs/superpowers/ (<n> docs)<, user globs>
 - Dropped (cited an excluded path): <n>
 - Comparison model: haiku (<k + 1> comparer runs)

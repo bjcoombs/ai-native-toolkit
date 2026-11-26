@@ -102,10 +102,10 @@ regen:
 
 lint:
 	cd skills/assess && uv run --locked ruff check .
-	cd skills/assess && uv run --locked ruff check ../fleet/scripts ../marathon/scripts ../refine/scripts
+	cd skills/assess && uv run --locked ruff check ../fleet/scripts ../marathon/scripts ../refine/scripts ../doc-contradictions/scripts
 	cd scripts && uv run --locked ruff check .
 	cd skills/assess && uv run --locked mypy
-	cd skills/assess && uv run --locked mypy ../fleet/scripts ../marathon/scripts ../refine/scripts
+	cd skills/assess && uv run --locked mypy ../fleet/scripts ../marathon/scripts ../refine/scripts ../doc-contradictions/scripts
 	cd scripts && uv run --locked mypy
 
 # Release PR only (#1011): write the version notes in skills/assess/changes/ into

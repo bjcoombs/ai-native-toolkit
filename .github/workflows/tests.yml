@@ -177,11 +177,11 @@ jobs:
         run: uv run --locked ruff check .
         working-directory: skills/assess
 
-      # The fleet, marathon and refine skill scripts (#1208, #1320) run on skills/assess's
-      # locked ruff; skills/fleet/ruff.toml, skills/marathon/ruff.toml and skills/refine/ruff.toml extend
+      # The fleet, marathon, refine and doc-contradictions skill scripts (#1208, #1320, #1453) run on skills/assess's
+      # locked ruff; skills/fleet/ruff.toml, skills/marathon/ruff.toml, skills/refine/ruff.toml and skills/doc-contradictions/ruff.toml extend
       # its rules, so the gate is the same one.
-      - name: Ruff lint + complexity gate (skills/fleet, skills/marathon, skills/refine)
-        run: uv run --locked ruff check ../fleet/scripts ../marathon/scripts ../refine/scripts
+      - name: Ruff lint + complexity gate (skills/fleet, skills/marathon, skills/refine, skills/doc-contradictions)
+        run: uv run --locked ruff check ../fleet/scripts ../marathon/scripts ../refine/scripts ../doc-contradictions/scripts
         working-directory: skills/assess
 
       - name: Ruff lint + complexity gate (scripts)
@@ -196,11 +196,11 @@ jobs:
         run: uv run --locked mypy
         working-directory: skills/assess
 
-      # The fleet, marathon and refine skill scripts (#1208, #1320) under the same strict
+      # The fleet, marathon, refine and doc-contradictions skill scripts (#1208, #1320, #1453) under the same strict
       # config: run from skills/assess, its mypy_path resolves the lib/ the
       # fleet scripts import, so those calls are checked, not Any.
-      - name: Mypy type gate (skills/fleet, skills/marathon, skills/refine)
-        run: uv run --locked mypy ../fleet/scripts ../marathon/scripts ../refine/scripts
+      - name: Mypy type gate (skills/fleet, skills/marathon, skills/refine, skills/doc-contradictions)
+        run: uv run --locked mypy ../fleet/scripts ../marathon/scripts ../refine/scripts ../doc-contradictions/scripts
         working-directory: skills/assess
 
       # Same gate, full strict, for the build pipeline and contract tooling;

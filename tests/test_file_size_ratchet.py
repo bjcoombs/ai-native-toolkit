@@ -135,7 +135,7 @@ def test_config_entries_are_well_formed() -> None:
 def test_roots_cover_the_fleet_and_marathon_scripts() -> None:
     # #1214: fleet.py reached 863 lines while skills/fleet sat outside every root.
     roots = load_config()["roots"]
-    for root in ("skills/fleet", "skills/marathon"):
+    for root in ("skills/fleet", "skills/marathon", "skills/doc-contradictions"):
         assert root in roots, f"{CONFIG_NAME} `roots` must cover {root}"
         assert python_files(REPO, [root]), f"no Python files found under {root}"
 
