@@ -48,7 +48,9 @@ architecture-doc boundary references only when the docs name two or more distinc
 sorted at the boundary for byte-identical output. The one inversion is that it *reads*
 inline-code path spans (a path written as code is the boundary declaration we want) where
 the doc graph strips them. This is the parsing foundation the structure-drift signals
-consume; it owns no drift logic itself.
+consume; it owns no drift logic itself. `parse_ownership` writes every path with
+`.as_posix()`, so the ownership block reads the same on Windows as on Linux and macOS
+(#1493, tests in `tests/test_ownership_parser.py`).
 """
 from __future__ import annotations
 
@@ -562,11 +564,11 @@ def parse_ownership(repo_root: Path) -> OwnershipSummary:
         "available": True,
         "reason": "",
         "codeowners_globs": [
-            {"pattern": pattern, "matched_files": sorted(str(p) for p in files)}
+            {"pattern": pattern, "matched_files": sorted(p.as_posix() for p in files)}
             for pattern, files in sorted(codeowners.items())
         ],
         "architecture_modules": [
-            {"module": module, "files": sorted(str(p) for p in files)}
+            {"module": module, "files": sorted(p.as_posix() for p in files)}
             for module, files in sorted(architecture.items())
         ],
         "empty_globs": empty,
