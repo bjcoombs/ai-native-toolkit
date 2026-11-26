@@ -4,7 +4,8 @@ Every run draws diagrams from its own rows, with no model call, and writes them 
 `groups.jsonl` with `DIR/report.md` embedding each one as a relative image link (it renders
 in GitHub and GitLab Markdown previews). A diagram that cannot be drawn is skipped and the
 report says why in one line; stderr names it too. A diagram failure never changes the exit
-code, and the run history still keeps only its three files. `--no-diagrams` turns this off.
+code, and it adds nothing to the run history: the files kept per run are listed in
+[`history.md`](history.md#run-history-and-comparison). `--no-diagrams` turns this off.
 The report opens with the front screen, "Fleet at a glance", then the
 [coverage line](../SKILL.md#coverage---discovered), then "What changed and who
 earned it" (see [`achievements.json`](achievements.md#output-achievementsjson)), then "What's

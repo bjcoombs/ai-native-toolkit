@@ -9,14 +9,24 @@ build is caught here.
 
 ## Freeze stage
 
-The CLI-class null artifact is a no-op entrypoint (a script that reads nothing
-and prints nothing, exit 0). Executed against it:
+The CLI-class null artifact is the empty repo of PRD B1: no working
+entrypoint. The harness models it as an absent one, driving the contract
+against `__does_not_exist__.py`, a script that does not exist
+(`porcelain_kill_test_results()` in `scripts/canaries/run_canaries.py`).
+Executed against it:
 
-- KG1: exit code would be 0 - but KG2 and KG3 both FAIL (no expected output, no
-  usage error), so the contract is not vacuous. The kill-test passes; the
-  contract may freeze. (KG1 alone passing against a no-op is why a contract needs
-  output/behaviour criteria, not just an exit-code criterion - the vacuous
-  fixture shows the failure mode where the *only* criterion is absence-satisfiable.)
+- KG1: FAIL. `python3` exits non-zero when the script is missing.
+- KG2: FAIL. Nothing reaches stdout, so it is not `expected_stdout.txt`.
+- KG3: FAIL. The non-zero exit comes with Python's missing-file error on
+  stderr, not a usage message.
+
+Every criterion fails against the null artifact, so B1 (red-contract-first,
+applied per criterion in `scripts/contract/freeze.py`) passes and the contract
+may freeze. An exit-code criterion carries no weight alone: against a no-op
+entrypoint that exits 0, KG1 would pass, and one criterion that passes against
+the null artifact is enough for B1 to refuse the contract. That is the vacuous
+failure mode the vacuous-contract fixture (`tests/canaries/vacuous-contract/`)
+shows.
 
 ## Cold-exit stage (against `reference_implementation/`)
 

@@ -14,7 +14,7 @@ Key modules:
 - `lib/report/anomaly_detector.py` - flags suspicious run results for self-feedback.
 - `scripts/assess_core.py` - orchestrator; writes `run-context.json` for the LLM to read.
 - `scripts/assess_signals.py` - headless, signals-only entry point for fleet scans (issue #545): `assess_signals.py <repo> --out FILE.json [--scans a,b,c] [--window 6mo]` runs the offline registered scans (`lib/run/signals.py`) and writes one JSON document outside the target. No `.assess/` writes, no network, no SVG, no consent prompts; network and still-unregistered scans report `{"available": false, "reason": ...}`. The output shape is published as `skills/assess/references/signals.schema.json`, generated from `lib/run_context_types.py` by `lib/run/signals_schema.py`. `--counts-only` (optionally `--hash-paths` or `--hash-salt VALUE`) makes the document content-free through `lib/counts_only/content_free.py`; the fields kept per block are listed in `skills/assess/references/counts-only.md`.
-- `scripts/assess_finalize.py` - LLM write-back; reads `.assess/finalize-input.json` and replaces deterministic-core placeholders in `log.md` and `hotspots/*.md` with the LLM-derived score and per-file actions.
+- `scripts/assess_finalize.py` - LLM write-back; reads `.assess/.cache/finalize-input.json` (falling back to the legacy `.assess/finalize-input.json` in the working tree) and replaces deterministic-core placeholders in `log.md` and `hotspots/*.md` with the LLM-derived score and per-file actions.
 
 Tests live in `skills/assess/tests/` and run via `uv run --with pytest pytest`. Add a test alongside any change to a deterministic module: that is the contract that lets the output be trusted regardless of which LLM is driving.
 
@@ -36,7 +36,7 @@ Each `/assess` run reads the prior state from this directory and adds to it. Hot
 
 ## The LLM write-back pattern
 
-The deterministic core writes log and hotspot files with placeholders. After the LLM derives the score, top action, and per-hotspot suggestions, it writes `.assess/finalize-input.json` and invokes `assess_finalize.py` to replace the placeholders in place. The deterministic core stays ignorant of LLM-derived content while the wiki still has every value filled.
+The deterministic core writes log and hotspot files with placeholders. After the LLM derives the score, top action, and per-hotspot suggestions, it writes `.assess/.cache/finalize-input.json` and invokes `assess_finalize.py` to replace the placeholders in place. The deterministic core stays ignorant of LLM-derived content while the wiki still has every value filled.
 
 ## Schema convention
 

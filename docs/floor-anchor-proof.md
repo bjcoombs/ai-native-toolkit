@@ -1,11 +1,14 @@
 # Floor Anchor Proof (PRD criterion 5 / E2)
 
 The floor's markers and clause checks only bite while `.github/workflows/floor.yml`
-is a **required** status check on the default branch and while `floor.yml` itself
-is **path-restricted** against self-merge edits. This document records the proof
-that both hold under the solo-merge setup, via two adversarial test PRs.
+is a **required** status check on the default branch. A path lock on `floor.yml`
+itself was planned as a second defence but is **descoped** (2026-07-10): GitHub
+refuses push rulesets on public, user-owned repos (see the "Honest-degrade note
+(E2)" below). This document records the proof that the required-check defence
+holds under the solo-merge setup, via the Attack A test PRs, and the attempt at
+the path lock (Attack B), a ruleset POST that GitHub refused.
 
-Both attack PRs are opened on throwaway branches, **never merged**, and closed
+The attack PRs are opened on throwaway branches, **never merged**, and closed
 after the outcome is recorded. Neither branch is the feature branch.
 
 ## Repo settings under test
@@ -29,17 +32,24 @@ maintainer -- FLOOR.md clause iii):
    `plugin contract pytest`, `Validate PR title`) without disturbing them. Two
    contexts, so neither the deterministic layer nor the anchor layer can be
    silently dropped.
-2. **Path restriction.** An active push ruleset with a `file_path_restriction`
-   rule covering `.github/workflows/floor.yml`, requiring maintainer bypass to
-   modify that path.
-3. **Anchor read token.** `FLOOR_ANCHOR_TOKEN` repo secret -- a fine-grained PAT
-   with `Administration: read` -- so the `floor self-anchor` job can query the
-   settings above. (The default `GITHUB_TOKEN` cannot read branch protection or
-   rulesets.)
+2. **Anchor read token.** `FLOOR_ANCHOR_TOKEN` secret, set in both the Actions
+   and the Dependabot secret stores -- a fine-grained PAT with two repository
+   permissions: `Administration: read` for branch protection and rulesets, and
+   `Environments: read` for the `floor-signoff` environment. A token with only
+   the first fails the anchor with HTTP 403 on the environment. (The default
+   `GITHUB_TOKEN` cannot read branch protection or rulesets.)
+3. **Sign-off environment.** A `floor-signoff` deployment environment whose sole
+   required reviewer is the repository owner, wired into `floor.yml` on the
+   floor-core trigger (FLOOR.md clause iii).
 
 Until all three are configured, the `floor self-anchor` job fails closed and
-prints the exact commands below in its log and job summary; the `floor
-enforcement` deterministic job is unaffected and stays green.
+prints the commands for steps 1 to 3 of the "Configuration commands" section in
+its log and job summary; the `floor enforcement` deterministic job is
+unaffected and stays green. The `floor.yml` path lock is not one of the three:
+it is descoped (`PATH_LOCK_DESCOPED` in `scripts/floor_anchor.py` is `True`), so
+the anchor never checks for it and never fails on it. When the three hard
+requirements pass, it emits a descope warning; when one fails, the printed
+commands end with a descope note instead.
 
 Exact configuration commands are in the "Configuration commands" section below so
 the state is reproducible.
@@ -75,7 +85,7 @@ is a required check, the PR cannot merge.
 covering `.github/workflows/floor.yml`, requiring maintainer bypass.
 
 **Capability result: the defense cannot be configured on this repo.** Creating the
-push ruleset (step 2 of the Configuration commands) returns GitHub **HTTP 422:
+push ruleset (the org-migration block in Configuration commands) returns GitHub **HTTP 422:
 "Source only org-owned repos can have push rules"**. Push rulesets with
 `file_path_restriction` are an organization-owned-repository feature and are
 unavailable on this user-owned repo. This is a capability wall, not a fixable
@@ -87,7 +97,7 @@ explicit descope decision rather than shipping as documentation.
 | PR number | n/a -- attack not run (defense unconfigurable) |
 | Push/merge result | Ruleset creation blocked: GitHub 422 "Source only org-owned repos can have push rules" |
 | Mergeable? | n/a |
-| Outcome | Maintainer descope decision **pending** (see the honest-degrade note below) |
+| Outcome | Descoped by the maintainer on 2026-07-10 (see the honest-degrade note below) |
 
 ## Attack A (canonical) -- marathon marker removal
 
@@ -137,7 +147,10 @@ count-masked variant.
 
 ## Configuration commands
 
-Reproducible settings, run by the maintainer (owner/admin) out-of-band:
+Reproducible settings, run by the maintainer (owner/admin) out-of-band. Steps 1
+to 3 are the commands `remediation()` in `scripts/floor_anchor.py` prints when
+the anchor fails closed. The last block, the path lock, is maintainer-only: the
+anchor never prints it, because the lock is descoped.
 
 ```bash
 REPO=bjcoombs/ai-native-toolkit
@@ -153,7 +166,25 @@ gh api "repos/$REPO/branches/main/protection/required_status_checks" \
   -f 'checks[][context]=floor enforcement' \
   -f 'checks[][context]=floor self-anchor'
 
-# 2. Path-restrict floor.yml via a push ruleset (maintainer bypass).
+# 2. Create the anchor read token secret: a fine-grained PAT with BOTH
+#    'Administration: read' and 'Environments: read'. Without the second the
+#    anchor fails with HTTP 403 on the floor-signoff environment. Actions and
+#    Dependabot read separate secret stores, so the same PAT is set twice;
+#    setting only the first leaves every Dependabot PR red on the anchor.
+gh secret set FLOOR_ANCHOR_TOKEN --repo "$REPO"   # paste the PAT when prompted
+gh secret set FLOOR_ANCHOR_TOKEN --repo "$REPO" --app dependabot   # paste the same PAT again
+
+# 3. Create clause iii's sign-off environment, with the repository owner as its
+#    sole required reviewer and no deployment branch policy. An environment with
+#    no required reviewer auto-approves its own deployment.
+#    (The anchor prints this with a placeholder for the owner's id.)
+OWNER_ID=$(gh api "repos/$REPO" | jq .owner.id)
+gh api "repos/$REPO/environments/floor-signoff" --method PUT --input - <<JSON
+{"reviewers": [{"type": "User", "id": $OWNER_ID}]}
+JSON
+
+# Org-migration only, not printed by the anchor: path-restrict floor.yml via a
+#    push ruleset (maintainer bypass).
 #    DESCOPED (2026-07-10): this POST is known to fail with HTTP 422 on public,
 #    user-owned repos ("Source public repos cannot have push rules" / "Source
 #    only org-owned repos can have push rules"). Retained for the org-migration
@@ -173,19 +204,13 @@ gh api "repos/$REPO/rulesets" --method POST --input - <<'JSON'
   ]
 }
 JSON
-
-# 3. Create the anchor read token secret (fine-grained PAT, Administration: read).
-#    Actions and Dependabot read separate secret stores, so the same PAT is set
-#    twice; setting only the first leaves every Dependabot PR red on the anchor.
-gh secret set FLOOR_ANCHOR_TOKEN --repo "$REPO"   # paste the PAT when prompted
-gh secret set FLOOR_ANCHOR_TOKEN --repo "$REPO" --app dependabot   # paste the same PAT again
 ```
 
 ## Honest-degrade note (E2)
 
 **Descope decision (maintainer, 2026-07-10).** GitHub structurally refuses push
-rulesets on public, user-owned repos, so the `floor.yml` path lock (step 2, an
-active push ruleset with a `file_path_restriction` rule) **cannot be created on
+rulesets on public, user-owned repos, so the `floor.yml` path lock (the
+org-migration block in Configuration commands, an active push ruleset with a `file_path_restriction` rule) **cannot be created on
 this repo**. Observed evidence from attempting the ruleset creation:
 
 ```
@@ -205,10 +230,13 @@ were live:
   `floor-signoff` environment must exist and be wired into `floor.yml` on the
   floor-core trigger. The `floor self-anchor` job still fails the PR if any
   does not hold.
-- The path-restriction check is **downgraded to a loud warning** (stderr
+- The path-restriction check is **replaced by a loud warning** (stderr
   `::warning::` + job summary) that quotes the 422 evidence and this descope
-  decision. It is keyed on the explicit `PATH_LOCK_DESCOPED` constant in
-  `scripts/floor_anchor.py`, not silently removed.
+  decision. The anchor does not query for the lock; it emits the warning on
+  every run where the hard requirements pass (a failing run carries a descope
+  note in its remediation text instead), keyed on the explicit
+  `PATH_LOCK_DESCOPED` constant in `scripts/floor_anchor.py`, so the gap is
+  never silently removed.
 
 **Residual risk (stated honestly).** Without the path lock, a `floor.yml`-gut
 attack is *detected only until a gutted workflow merges* - the deterministic
@@ -219,7 +247,7 @@ enforcement` + `floor self-anchor`), code review, and the retro boundary
 (FLOOR.md clause iii's out-of-band maintainer sign-off). These are process
 controls, not the mechanical file-path lock they replace.
 
-The push-ruleset creation attempt (step 2 in Configuration commands) was
+The push-ruleset creation attempt (the org-migration block in Configuration commands) was
 observed to fail on 2026-07-10 with:
 
 ```

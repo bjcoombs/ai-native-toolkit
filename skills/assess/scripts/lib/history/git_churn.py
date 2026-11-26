@@ -1,14 +1,14 @@
 """Shared git-churn machinery for the /assess deterministic core.
 
-`complexity-treemap.py` (code heatmap), `docs-staleness-treemap.py` (docs
-heatmap) and `doc_staleness.py` (Layer 0 staleness metric) all need the same
+`complexity-treemap.py` (code heatmap), `doc-graph-svg.py` (doc map, coloured
+by staleness) and `doc_staleness.py` (Layer 0 staleness metric) all need the same
 two things: a per-file commit count over a window, and a way to pick a window
 that gives a visible gradient. This module is the single source for both so
 churn is computed one way, not three (PRD: "do not reinvent churn").
 
 Shared git-churn machinery: per-file commit counts over a configurable window, plus
 `git_commit_info` for snapshotting the exact SHA and timestamp at run time. Used by the
-code heatmap, the doc-staleness heatmap, and `doc_staleness.py` - churn is computed
+code heatmap, the doc map, and `doc_staleness.py` - churn is computed
 one way, not three. Pure subprocess + stdlib, no heavy dependencies.
 `bulk_commit_need(population)` is the one bulk-commit rule (#333): the content clock
 applies it over the repo's docs, `fleet_doc_freshness` over a service's tracked files.

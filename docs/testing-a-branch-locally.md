@@ -17,12 +17,12 @@ WT=~/dev/github.com/bjcoombs/ai-native-toolkit/worktree/<branch>   # the worktre
 cd <target-repo>                                                   # repo under test
 mkdir -p .assess
 uv run "$WT/skills/assess/scripts/complexity-treemap.py"      "$PWD" -o .assess/complexity-heatmap.svg      --stats .assess/complexity-stats.json
-uv run "$WT/skills/assess/scripts/docs-staleness-treemap.py" "$PWD" -o .assess/docs-staleness-heatmap.svg   --stats .assess/docs-staleness-stats.json
+uv run "$WT/skills/assess/scripts/doc-graph-svg.py"          "$PWD" -o .assess/doc-graph.svg
 uv run "$WT/skills/assess/scripts/assess_core.py"            "$PWD"
 # Then inspect the structured signals the LLM scores against:
 jq 'keys' .assess/run-context.json
 jq '(.doc_graph | del(.link_parents)), .doc_staleness.association, (.stale_hubs | if type == "array" then .[:5] else . end), .observability, .dead_code.tools' .assess/run-context.json
-open .assess/complexity-heatmap.svg .assess/docs-staleness-heatmap.svg
+open .assess/complexity-heatmap.svg .assess/doc-graph.svg
 ```
 
 Run the merge-gating checks too. `make setup` syncs both uv projects from their

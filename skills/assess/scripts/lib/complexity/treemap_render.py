@@ -1,18 +1,19 @@
 """Shared treemap layout + SVG primitives.
 
-The code heatmap (``complexity-treemap.py``) and the docs-staleness heatmap
-(``docs-staleness-treemap.py``) use the *same visual grammar* -- size, hue,
-saturation, squarified layout, hover tooltips -- but with opposite risk models
-(code red = "hard to change safely"; docs red = "actively misleading"). So the
-mechanical parts live here and each script keeps only its own colour mapping.
+The code heatmap (``complexity-treemap.py``) and the doc map
+(``doc-graph-svg.py``, which absorbed the old docs-staleness treemap) share one
+visual grammar -- hue, blend toward grey, hover tooltips -- but with opposite
+risk models (code red = "hard to change safely"; docs red = "actively
+misleading"). So the mechanical parts live here and each script keeps only its
+own colour mapping.
 
 Heavy deps (matplotlib/squarify/numpy) are imported here, so this module must
-only be imported by the treemap scripts -- never by the deterministic core,
+only be imported by the SVG renderers -- never by the deterministic core,
 which runs with networkx alone.
 
-Shared treemap layout and SVG primitives for the code heatmap and the doc-staleness
-heatmap. Pulls `matplotlib`, `squarify`, and `numpy`. Must not be imported by the
-deterministic core (which runs with `networkx` alone) - only by the treemap scripts.
+Shared treemap layout and SVG primitives for the code heatmap and the doc map.
+Pulls `matplotlib`, `squarify`, and `numpy`. Must not be imported by the
+deterministic core (which runs with `networkx` alone) - only by the SVG renderers.
 Also holds `plural(n, singular)`, the count-agreement helper both SVG renderers use
 for generated text ("1 island", "9 islands").
 
