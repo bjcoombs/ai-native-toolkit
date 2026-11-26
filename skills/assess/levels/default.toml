@@ -125,8 +125,13 @@
 #   letter, since /assess weighs it with the instruction text. Level 2 reads
 #   the size of the always-loaded Claude Code instruction text (root
 #   CLAUDE.md or, without one, AGENTS.md, its imports, unscoped
-#   .claude/rules); a repository whose only instruction file is for another
-#   tool (.cursorrules, Copilot) reaches level 1 with that size 0. Level 2
+#   .claude/rules). With no file loaded (a repository whose only instruction
+#   file is for another tool, .cursorrules or Copilot) the budget criterion
+#   reads not measured (no_loaded_instructions, budget.claude_code.files
+#   empty), never met. instruction_claims.failed eq 0 reads not measured
+#   (no_instruction_claims) when no claim was checked (instruction_claims.total
+#   0): no false claim among none is not a claim that holds (#827,
+#   signal_grades.EMPTY_DENOMINATORS). Level 2
 #   also needs a named check command that resolves
 #   (agent_environment.check.named_total): a Makefile target with no
 #   prerequisite whose recipe runs only true, :, exit 0 or echo lines (with

@@ -10,7 +10,7 @@ The classification data `level_signals.py` documents and re-exports: `InputClass
 `INPUT_GRADES`, `LISTED_GRADES`, `STAGED_BLOCKS` (blocks whose signals a test model reads before
 their row enters a shipped model, #1322), `SIGNAL_INPUTS`, `UNMEASURED_VALUES`, `EMPTY_DENOMINATORS` (signal
 to its set's count and the code when that count is 0, read by `levels.py`: `no_source_files`,
-`no_manifests`) and the `DEFAULT_LEVELS` path, importing only `lib.manifest.check_manifest` (which imports only
+`no_manifests`, `no_instruction_claims`, `no_loaded_instructions`) and the `DEFAULT_LEVELS` path, importing only `lib.manifest.check_manifest` (which imports only
 `lib.manifest.check_validation` and `lib.manifest.manifest_whys`, neither a scanner), so `level_tally.py` and the run context's `level` entry read them
 without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
 `tests/test_level_tally.py`, `tests/test_manifest_tables.py`.
@@ -57,7 +57,8 @@ UNMEASURED_VALUES: dict[str, tuple[bool, str]] = {
     "promissory_markers.aging_reliable": (False, "degenerate_history"),
 }
 
-# Signal -> (its denominator's path, the tally's reason code when that count is 0).
+# Signal -> (its denominator's path, the tally's reason code when that count is 0). The
+# denominator is a count, or a list whose length is the count.
 # A statistic over an empty set is not a measurement: a p95 of no files is 0 and
 # would pass any "at most" test (#906).
 EMPTY_DENOMINATORS: dict[str, tuple[str, str]] = {
@@ -74,4 +75,10 @@ EMPTY_DENOMINATORS: dict[str, tuple[str, str]] = {
     "skill_personal_data.files_with_personal_data": ("skill_personal_data.files_considered", "no_skill_files"),
     # No model-backed CI job is not a gated one (#1242).
     "ci_model_jobs.ungated": ("ci_model_jobs.model_jobs", "no_model_jobs"),
+    # No instruction claim checked is not an instruction set with no false claim (#827).
+    "instruction_claims.failed": ("instruction_claims.total", "no_instruction_claims"),
+    # No file loaded at launch is not an instruction set within its budget (#827). The set is
+    # the loaded file list, counted by its length (lib/scoring/levels.py `_empty_set`).
+    "nested_instructions.budget.claude_code.lines": (
+        "nested_instructions.budget.claude_code.files", "no_loaded_instructions"),
 }

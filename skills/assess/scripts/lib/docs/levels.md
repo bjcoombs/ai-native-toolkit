@@ -5,7 +5,7 @@ The full reference for `skills/assess/scripts/lib/scoring/levels.py`, whose modu
 Loads a caller-supplied maturity model (TOML via stdlib `tomllib`) and evaluates it
 from signals with no model in the path. A criterion over a signal in
 `signal_grades.EMPTY_DENOMINATORS` whose set's count reads exactly 0 is `unknown`, with
-the table's code as its `reason` (`no_source_files`, #906 and #820; `no_manifests`, #927), so row levels and the tally agree. Rows carry an id, a title, a scope (`org`:
+the table's code as its `reason` (`no_source_files`, #906 and #820; `no_manifests`, #927; `no_instruction_claims` and `no_loaded_instructions`, #827; a denominator that is a list, such as `nested_instructions.budget.claude_code.files`, counts by its length), so row levels and the tally agree. Rows carry an id, a title, a scope (`org`:
 once per group from the group settings; `team`: per repository from its
 `run-context.json`, rolled up by the declared `min` or `share` rule) and whole levels
 numbered 1..K, each a list of criteria (`eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`,

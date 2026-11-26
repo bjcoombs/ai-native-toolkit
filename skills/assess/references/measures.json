@@ -6476,7 +6476,7 @@
       "collector": "core.instruction_claims",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": ""
+      "null_means": "no_instruction_claims: the instruction files make no claim this check reads (instruction_claims.total 0), so there is nothing to hold"
     },
     {
       "path": "layer_grades.instruction_file_present",
@@ -6494,7 +6494,7 @@
       "collector": "core.nested_instructions",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": ""
+      "null_means": "no_loaded_instructions: Claude Code loads no instruction line at launch (budget.claude_code.files is empty), so there is no budget to keep"
     },
     {
       "path": "observability.rung",

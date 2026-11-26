@@ -580,6 +580,11 @@ _MEASURE_HINTS = {
     "ci_model_jobs": "Not measured (`no_model_jobs`) when no model-calling CI job is detected. "
                      "Not measured (`trigger_unresolved`, `ci_jobs_unread`) when none is ungated but a "
                      "trigger, a condition or a job this reader cannot read could still run one on every change.",
+    "instruction_claims": "Not measured (`no_instruction_claims`) when the instruction files make no "
+                          "claim this check reads (a script run in CI, a pinned version, a file count): "
+                          "no false claim among none is not a claim that holds.",
+    "nested_instructions": "The always-loaded budget is not measured (`no_loaded_instructions`) when "
+                           "Claude Code loads no instruction file at launch: there is no budget to keep.",
     "secrets_guard": "Level 2 is not measured (`secret_scanning_not_read`) on a GitHub repository with "
                      "no secrets scan in CI when its push protection setting was not read: run with "
                      "`--platform`, or `/assess` with `gh` signed in, as a repository admin, organization owner or security "

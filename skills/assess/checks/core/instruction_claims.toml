@@ -28,6 +28,7 @@ collector = "core.instruction_claims"
 path = "instruction_claims.failed"
 type = "number"
 evidence = "head_structure"
+null_means = "no_instruction_claims: the instruction files make no claim this check reads (instruction_claims.total 0), so there is nothing to hold"
 
 [[entries]]
 id = "core.cond.layer-0-instructions.2.failed"

@@ -251,7 +251,9 @@ def test_schema_mapper_rejects_an_unknown_type():
 
 def test_fleet_run_writes_group_rows_byte_identically(froot, tmp_path):  # noqa: F811 - froot is a pytest fixture imported by name
     maturity_model = tmp_path / "rub.toml"
-    maturity_model.write_text(LEVELS_TOML, encoding="utf-8")
+    # Real scans: presence reads words, since `lines gt 0` reads not measured with no file
+    # loaded (the empty-set rule, #827, signal_grades.EMPTY_DENOMINATORS).
+    maturity_model.write_text(LEVELS_TOML.replace("claude_code.lines", "claude_code.words"), encoding="utf-8")
     settings = tmp_path / "settings.json"
     settings.write_text(json.dumps([_fragment("grpa", "on"), _fragment("grpb", "off")]), encoding="utf-8")
     argv = [str(froot), "--levels", str(maturity_model), "--settings", str(settings)]
