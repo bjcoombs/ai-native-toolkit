@@ -17,10 +17,12 @@ Two files hold detail you read on demand (paths relative to the repo root):
 
 `ai-native-toolkit` is a **Claude Code plugin**. The deliverable is markdown:
 skills (`skills/<name>/SKILL.md`, including the user-invoked slash-command
-workflows) and agents (`agents/*.md`). The only runtime code is the Python
-**`/assess` deterministic core** under `skills/assess/scripts/` (with `lib/`)
-plus the standalone-skill build pipeline under `scripts/`. It is a **public**
-repo.
+workflows) and agents (`agents/*.md`). The runtime code is the Python
+**`/assess` deterministic core** under `skills/assess/scripts/` (with `lib/`),
+the standalone-skill build pipeline under `scripts/`, and the scripts other
+skills ship under `skills/<name>/scripts/` (Python and bash: `fleet`,
+`ghreport`, `ghsync`, `marathon`, `refine` and `doc-contradictions` today).
+Review those to the same bar as the `/assess` core. It is a **public** repo.
 
 The product's thesis is **truth-pressure**: honest, navigable docs and
 write-side enforcement (types, schemas, linters) over convention. Hold this

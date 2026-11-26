@@ -61,8 +61,10 @@ jobs:
             Context:
             - This is a Claude Code plugin repo. The deliverable is markdown
               (skills at skills/<name>/SKILL.md, agents at agents/<name>.md);
-              the only runtime code is the Python
-              `/assess` deterministic core under `skills/assess/`. It is a PUBLIC repo.
+              the runtime code is the Python `/assess` deterministic core
+              under `skills/assess/`, the standalone-skill build pipeline under
+              `scripts/`, and the Python and bash scripts other skills ship
+              under `skills/<name>/scripts/`. It is a PUBLIC repo.
             - The latest Claude models are the 4.x family (Opus 4.x / Sonnet 4.x /
               Haiku 4.x) - do not flag these as invalid versions.
             - CI may still be running - check with `gh pr checks ${{ github.event.pull_request.number }}`.
