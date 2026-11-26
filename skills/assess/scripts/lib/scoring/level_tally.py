@@ -87,6 +87,8 @@ failed to read it: ``agent_consistency`` with fewer than two agent systems
 owner exclusion, and, like one, it never holds a gate, since gates read ``met`` only. Any
 other code keeps ``not_measured``: the scan could not read the signal. A real unmet
 criterion of the same condition still reads ``unmet``.
+``scan_not_applicable`` follows a ``requires:<id>`` chain to its root, so a reader tells a
+scan's not applicable from the owner's exclusion exactly.
 
 Every value is a count, a boolean, an id from the model or a reason code, so the
 block survives counts-only output unchanged, and ``dumps_level`` gives identical
@@ -209,6 +211,26 @@ EXCLUDED_BY_OWNER = "excluded_by_owner"
 NOT_APPLICABLE_REASONS = frozenset({"fewer_than_two_systems", "no_configured_gates"})
 # A condition the fleet's exit rule demoted (lib/fleet/condition_demotion.py, #1086): listed, never counted.
 DEMOTED = "demoted_by_exit_rule"
+
+
+def scan_not_applicable(cond: Mapping[str, Any], by_id: Mapping[str, Mapping[str, Any]]) -> str | None:
+    """The ``NOT_APPLICABLE_REASONS`` code behind a ``not_applicable`` condition, following its
+    ``requires:<id>`` reasons to the condition that is not applicable on its own; None when that
+    root is the owner's exclusion (or the condition is not ``not_applicable``). Readers use it to
+    tell a scan's not applicable from the owner's (#1407)."""
+    seen: set[str] = set()
+    while cond.get("state") == "not_applicable":
+        reason = cond.get("reason")
+        if isinstance(reason, str) and reason in NOT_APPLICABLE_REASONS:
+            return reason
+        if not isinstance(reason, str) or not reason.startswith("requires:") or reason in seen:
+            return None
+        seen.add(reason)
+        nxt = by_id.get(reason.split(":", 1)[1])
+        if nxt is None:
+            return None
+        cond = nxt
+    return None
 
 
 def _block_reason(data: Mapping[str, Any] | None, signal: str) -> str:

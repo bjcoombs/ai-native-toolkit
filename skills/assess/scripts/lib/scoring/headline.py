@@ -63,7 +63,7 @@ from typing import Any
 from lib.card_facts import blocking_gates, fully_in_place
 from lib.scoring.level_result_types import Blocker, ConditionResult, Headline, LevelResult, TagCell
 from lib.scoring.level_tags import tag_cells
-from lib.scoring.level_tally import NOT_APPLICABLE_REASONS, default_model
+from lib.scoring.level_tally import default_model, scan_not_applicable
 from lib.scoring.levels import MaturityModel, StepDef, condition_id
 
 # Bumped when the headline block's shape changes. It has no changes/ counter, so a
@@ -251,8 +251,8 @@ def _tally_line(level: LevelResult) -> str:
     line = f"Catalogue coverage: {tally['not_measured']} not measured" + (f" ({detail})" if detail else "")
     # not_applicable by a scan's reason (level_tally.NOT_APPLICABLE_REASONS, #1407), apart from
     # the owner's exclusions and the conditions that require one
-    apart = [c["reason"] for c in level["conditions"]
-             if c["state"] == "not_applicable" and c.get("reason") in NOT_APPLICABLE_REASONS]
+    by_id = {c["id"]: c for c in level["conditions"]}
+    apart = [code for c in level["conditions"] if (code := scan_not_applicable(c, by_id)) is not None]
     if apart:
         words = ", ".join(f"{reason_word(code)}: {n}" for code, n in sorted(Counter(apart).items()))
         line += f" · {len(apart)} not applicable here ({words})"

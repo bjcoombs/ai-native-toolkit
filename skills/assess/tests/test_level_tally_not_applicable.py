@@ -104,3 +104,38 @@ def test_a_not_applicable_condition_never_unlocks_a_dependent():
     cond = _cond(result, "fresh.1")
     assert (cond["state"], cond["reason"]) == ("not_applicable", "requires:stated.1")
     assert result["tally"]["met"] == 0
+
+
+def _chain(stale: int = 0, exclusions: tuple[dict[str, Any], ...] = ()) -> lt.LevelResult:
+    model = parse_levels({"version": "fixture-1407", "rows": [
+        {"id": "stated", "title": "stated", "scope": "team", "aggregation": "min",
+         "levels": [{"level": 1, "criteria": GTE}]},
+        {"id": "fresh", "title": "fresh", "scope": "team", "aggregation": "min",
+         "levels": [{"level": 1, "requires": ["stated.1"],
+                     "criteria": [{"signal": DOC, "op": "lte", "value": 10}]}]}],
+        "steps": [{"step": 1, "name": "Assisted"},
+                  {"step": 2, "name": "Gated", "gates": [{"id": "fresh", "row": "fresh", "level": 1}]}]})
+    return lt.level_result(model, _block(None, NO_GATES_REASON, stale=stale), exclusions)
+
+
+def test_a_dependent_of_a_scan_not_applicable_reads_as_the_scans_not_the_owners():
+    result = _chain()
+    by_id = {c["id"]: c for c in result["conditions"]}
+    assert lt.scan_not_applicable(by_id["fresh.1"], by_id) == NO_GATES_REASON
+    assert gate_state(result, {"id": "fresh", "row": "fresh", "level": 1}) == "not applicable"
+    assert result["step"] == 1
+
+
+def test_a_dependent_of_an_owner_exclusion_still_reads_excluded_by_owner():
+    result = _chain(exclusions=({"id": "stated.1", "kind": "not_applicable"},))
+    by_id = {c["id"]: c for c in result["conditions"]}
+    assert lt.scan_not_applicable(by_id["fresh.1"], by_id) is None
+    assert lt.scan_not_applicable(by_id["stated.1"], by_id) is None
+    assert gate_state(result, {"id": "fresh", "row": "fresh", "level": 1}) == "excluded by owner"
+
+
+def test_scan_not_applicable_is_none_for_other_states():
+    result = _chain()
+    by_id: dict[str, Any] = {c["id"]: c for c in result["conditions"]}
+    assert lt.scan_not_applicable({"state": "not_measured", "reason": NO_GATES_REASON}, by_id) is None
+    assert lt.scan_not_applicable({"state": "not_applicable", "reason": "requires:gone.1"}, by_id) is None
