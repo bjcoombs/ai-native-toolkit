@@ -109,6 +109,18 @@ def test_drift_behind_matches_the_staleness_test() -> None:
     assert generated[0]["behind"] is True and generated[0]["ratio"] == 0.0  # a newer declared source
 
 
+def test_drift_leaves_out_a_base_doc_with_nothing_beside_it() -> None:
+    """#822: the drift map and ``summary.measured_docs`` count the same docs, and a doc
+    stale only because it names a renamed file reads behind at ratio 0."""
+    row = {"path": "AGENTS.md", "subject_method": "nearest-ancestor", "subject_roots": [""],
+           "ratio": 0.0, "measured_code_count": 0}
+    assert rd.mapped_docs({"docs": [row]}) == []
+    renamed = {**row, "measured_code_count": 1, "renamed_children_named": 1}
+    [bar] = rd.drift_bars({"docs": [renamed]})
+    assert bar["behind"] is True and bar["ratio"] == 0.0
+    assert "or it names a renamed file" in _svg(CTX, rd.DRIFT_FILE)
+
+
 def test_drift_labels_name_the_subject_root_and_the_rest() -> None:
     shared = rd.drift_bars({"docs": [DOCS[-2]]})[0]
     assert rd._subject_label(shared) == "describes lib/a and 2 more"

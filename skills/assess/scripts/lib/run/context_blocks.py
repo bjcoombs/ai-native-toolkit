@@ -19,7 +19,8 @@ Tier 1 counts `keyhole_signals` computed. With no ownership map the block is
 reason; a raising scan still omits the block. `structure_drift_tier_0` builds the
 same block with Tier 1 unavailable, or None with no map, for the headless runner
 (`headless_layers.py`). `build_stale_hubs` joins doc-graph PageRank with doc staleness (low-confidence
-baseline entries rank at half weight). `attach_liveness_blocks`,
+baseline entries rank at half weight; a hub that names a renamed direct child ranks at least at
+the staleness line and carries `renamed_children_named`, #822). `attach_liveness_blocks`,
 `coverage_report_block`, `attach_keyhole_blocks` and `attach_exclusion_disclosures`
 copy the liveness, coverage, keyhole and exclusion-disclosure blocks into the context.
 `point_at_artifact_dir` points the findings markdown's omission rows at a scoped run's
@@ -34,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.complexity.generated_files import matches_generated_name
+from lib.docs.doc_complexity_join import STALENESS_RATIO_THRESHOLD
 from lib.run_context_types import KeyholeIntegration
 from lib.run.degrade import safe as _safe
 from lib.keyhole.structure_drift import (
@@ -276,6 +278,9 @@ def build_stale_hubs(
         if s is None:
             continue
         priority = round(hub["pagerank"] * s["ratio"], 3)
+        renamed = int(s.get("renamed_children_named") or 0)
+        if renamed:  # names a path that no longer exists: stale at any ratio (#822)
+            priority = max(priority, round(hub["pagerank"] * STALENESS_RATIO_THRESHOLD, 3))
         confidence = s.get("confidence", "high")
         entry = {
             "path": hub["path"],
@@ -287,6 +292,8 @@ def build_stale_hubs(
             "confidence": confidence,
             "priority": priority,
         }
+        if renamed:
+            entry["renamed_children_named"] = renamed
         # A shallow clone's boundary age is a lower bound (issue #544).
         if "last_commit_days_bound" in s:
             entry["last_commit_days_bound"] = s["last_commit_days_bound"]

@@ -406,6 +406,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `doc_staleness.declared_cross_repo.scope` | path (hashed when hashing is on) |
 | `doc_staleness.declared_cross_repo.status` | token |
 | `doc_staleness.declared_cross_repo.reason` | token |
+| `doc_staleness.summary.stale_pct_reason` | token |
+| `doc_staleness.normalisation.base_doc_subject` | token |
+| `doc_staleness.normalisation.rename_scope` | token |
 
 ## excluded_generated
 

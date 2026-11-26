@@ -15,6 +15,7 @@ import pytest
 
 import fleet_step_diagrams_fixture as fx
 import lib.fleet.fleet_step_funnel as funnel
+import lib.fleet.fleet_svg as fsvg
 import lib.fleet.fleet_step_lifts as lifts
 import lib.fleet.fleet_step_movement as movement
 from lib.fleet.fleet_compare import load_run, stored_steps
@@ -24,7 +25,7 @@ from lib.fleet.fleet_history import OPTIONAL_HISTORY_FILES
 from lib.fleet.fleet_level import LEVEL_FILE
 from lib.fleet.fleet_opportunities import build_opportunities
 from lib.scoring.level_result_types import LevelResult
-from lib.scoring.level_signals import DEFAULT_LEVELS
+from lib.scoring.level_signals import DEFAULT_LEVELS, load_default_levels
 from lib.scoring.levels import MaturityModel, condition_id
 from lib.vocabulary import banned_hits
 from svg_cascade import overridden_text_attributes
@@ -82,7 +83,7 @@ def test_a_not_measured_gate_is_hatched_with_its_reason_and_a_failed_scan_is_nev
     assert sum(b["count"] for b in view["bars"]) == 6  # the failed scan is in no bar
     svg = funnel.render(fx.MODEL, fx.data())
     assert 'fill="url(#fleet-step-funnel-fleet-hatch)"' in svg and "data-mark=\"hatched\"" in svg
-    assert "agent_use was not measured (needs_platform)" in svg
+    assert "Agent use was not measured (needs_platform)" in svg
     assert "never drawn at Step 1: 1 scan_timeout" in svg
 
 
@@ -92,7 +93,47 @@ def test_an_owner_set_aside_gate_is_its_own_hatched_segment() -> None:
     blocker.update(state="not_applicable", disposition="excluded_by_owner")
     view = funnel.funnel_view(fx.MODEL, data)
     assert ("instructions", "set_aside", 1) in [(s["gate"], s["kind"], s["count"]) for s in view["bars"][0]["segments"]]
-    assert "the owner set instructions aside" in funnel.render(fx.MODEL, data)
+    assert "the owner set Agent instructions aside" in funnel.render(fx.MODEL, data)
+
+
+def _bar_tops(svg: str) -> dict[int, float]:
+    """Each Step group's first bar rect y, keyed by its ``data-step``."""
+    root = ET.fromstring(svg)
+    return {int(g.attrib["data-step"]): float(next(g.iter(f"{SVG_NS}rect")).attrib["y"])
+            for g in root.iter(f"{SVG_NS}g") if "data-step" in g.attrib}
+
+
+def test_funnel_reads_in_ladder_order() -> None:
+    # the top Step first and Step 1 last, as the /assess Step ladder reads (#1330)
+    tops = _bar_tops(funnel.render(fx.MODEL, fx.data()))
+    assert sorted(tops, key=tops.__getitem__) == sorted(tops, reverse=True)
+    assert tops[max(tops)] < tops[1]
+
+
+def test_funnel_names_gates_by_row_title() -> None:
+    svg = funnel.render(fx.MODEL, fx.data())
+    labels = [t.text or "" for t in ET.fromstring(svg).iter(f"{SVG_NS}text")]
+    held = [t for t in labels if t.startswith(("3 held by", "1 where"))]
+    assert "3 held by Agent instructions" in held and "1 where Agent use was not measured (needs_platform)" in held
+    gate_ids = {g["id"] for s in fx.MODEL["steps"] for g in s["gates"]} - {"instructions"}
+    assert not [t for t in labels for gid in gate_ids if gid in t]
+
+
+def test_funnel_canvas_holds_every_segment_line_under_the_shipped_model() -> None:
+    # the shipped row titles are longer than gate ids: every segment line, not measured with a
+    # reason code included, stays inside the viewBox
+    model = load_default_levels()
+    steps = sorted(model["steps"], key=lambda s: s["step"])
+    repos = [{"step": below["step"], "next_step": {"blockers": [
+        {"gate": g["id"], "state": state, "reason": "needs_platform" if state == "not_measured" else None}]}}
+        for below, above in zip(steps, steps[1:]) for g in above["gates"]
+        for state in ("unmet", "not_measured", "not_applicable")]
+    out = funnel.render(model, {"repos": repos})
+    root = ET.fromstring(out)
+    width = float(root.attrib["viewBox"].split()[2])
+    overflow = [t.text for t in root.iter(f"{SVG_NS}text") if t.attrib.get("text-anchor", "start") == "start"
+                and float(t.attrib["x"]) + fsvg.text_width(t.text or "", float(t.attrib.get("font-size", 12))) > width]
+    assert overflow == []
 
 
 # --- one change away ------------------------------------------------------------

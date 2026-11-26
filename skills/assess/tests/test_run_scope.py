@@ -39,6 +39,10 @@ from lib.run.run_scope import Scope, resolve_scope, scope_roots
 from lib.testing.coverage_gate import detect_coverage_gate
 from test_unit_readings import MONOREPO, _write
 
+# A base doc beside billing's code, so its doc freshness is measured (#822: a base doc
+# reads only the code directly beside it).
+BILLING_README = {"services/billing/billing/README.md": "# Billing package\n"}
+
 CLAUDE = "Claude Helper <noreply@anthropic.com>"
 NO_EXCLUDES: tuple[set[str], list[str]] = (set(), [])
 
@@ -210,7 +214,7 @@ def test_a_two_folder_count_is_the_sum_of_its_disjoint_folders(repo: Path, name:
 
 @pytest.fixture(scope="module")
 def mono(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    return _write(tmp_path_factory.mktemp("mono") / "repo", MONOREPO)
+    return _write(tmp_path_factory.mktemp("mono") / "repo", {**MONOREPO, **BILLING_README})
 
 
 def _met(repo: Path, *raw: str) -> set[str]:
@@ -220,7 +224,11 @@ def _met(repo: Path, *raw: str) -> set[str]:
     return {c["id"] for c in ctx["level"]["conditions"] if c["state"] == "met"}
 
 
-def test_a_two_folder_run_meets_the_union_of_its_folders_conditions(mono: Path) -> None:
+def test_a_two_folder_run_meets_the_union_of_its_folders_conditions(
+        mono: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Doc freshness tells the folders apart: billing's package README sits beside its code,
+    # web has no doc. The fixture is far below the 20-doc floor (#822), so lower it here.
+    monkeypatch.setattr("lib.docs.doc_staleness.MIN_MEASURED_DOCS", 1)
     billing, web = _met(mono, "services/billing"), _met(mono, "web")
     assert billing != web
     assert _met(mono, "services/billing", "web") == billing | web

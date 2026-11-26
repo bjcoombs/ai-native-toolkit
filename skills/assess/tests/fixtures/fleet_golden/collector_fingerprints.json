@@ -162,11 +162,11 @@
     },
     "core.doc_staleness": {
       "repos": {
-        "grpa/sub/deep/svc2": "4e8ed42e0e18c9d26ca6f25f3815ddf0b2628eff21ef56b78f72470952716620",
-        "grpa/svc1": "5f152a32a33f327e9cdb9eb1ed0efa1b187a1f886303e2a59e25289ace9e70c2",
-        "grpb/lib1": "e117562f2eeec270a985abb8e4e626086cf5f673514b9c0d7dd60bbd0aa177ba"
+        "grpa/sub/deep/svc2": "00f688acc88bab9674b04b146cc5d91971266e56344df732a65993cc2a3c271e",
+        "grpa/svc1": "c05c032f26a2baf10ebf6c327909ddd72234e2480de356c8380eab2d7b842362",
+        "grpb/lib1": "0cfe046839ca6ca79636661ec0bf5402d4c73d507b695d12f8d1cef29ba7b1c4"
       },
-      "revision": 1
+      "revision": 2
     },
     "core.gap_actions": {
       "repos": {

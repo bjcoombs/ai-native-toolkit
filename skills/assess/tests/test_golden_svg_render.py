@@ -331,7 +331,9 @@ def test_doc_graph_staleness_maps_to_red_hue(doc_graph_svg):
     # Exact golden lock (see fixture FIXTURE.md): oldest doc caps at darkest red,
     # same-day docs sit at the pale OrRd end.
     assert circles["old.md"]["fill"] == "#7f0000"
-    assert circles["README.md"]["fill"] == "#fff7ec"
+    # README.md owns src/app.py but has no code beside it, so its subject churn
+    # is 0 and it blends to grey (#822: a base doc reads its direct children).
+    assert circles["README.md"]["fill"] == "#d1d1d6"
     assert circles["guide.md"]["fill"] == "#fff7ec"
 
 

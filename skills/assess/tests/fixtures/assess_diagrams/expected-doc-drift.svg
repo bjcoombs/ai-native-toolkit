@@ -72,7 +72,7 @@
 <text x="322.4" y="608.0" font-size="11" text-anchor="start" class="t-fg">0.25</text>
 <text x="16.0" y="638.0" font-size="12" text-anchor="start" class="t-muted">And 3 more mapped docs, not drawn</text>
 <rect x="16.0" y="654.0" width="14.0" height="14.0" rx="2" class="f-dr-behind"/>
-<text x="38.0" y="665.0" font-size="12" text-anchor="start" class="t-fg">Behind its code: above 2, or a newer declared source</text>
+<text x="38.0" y="665.0" font-size="12" text-anchor="start" class="t-fg">Behind its code: above 2, a newer declared source, or it names a renamed file</text>
 <rect x="16.0" y="674.0" width="14.0" height="14.0" rx="2" class="f-dr-current"/>
 <text x="38.0" y="685.0" font-size="12" text-anchor="start" class="t-fg">Keeping pace with its code</text>
 <text x="16.0" y="710.0" font-size="12" text-anchor="start" class="t-fg">The longest bars are the docs whose code has moved most since the doc last changed, so they are</text>

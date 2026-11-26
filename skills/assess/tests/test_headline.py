@@ -283,7 +283,12 @@ def _finalize(repo: Path, run_id: str, condition: str) -> subprocess.CompletedPr
                           capture_output=True, encoding="utf-8", errors="replace")
 
 
-def test_ci2_headline_badge_report_and_log_agree(ci2: Path):
+def test_ci2_headline_badge_report_and_log_agree(ci2: Path, monkeypatch: pytest.MonkeyPatch):
+    # A doc beside the code and the 20-doc floor lowered, so doc freshness is a practice in
+    # place and the In place line shows (#822: a base doc reads only the code beside it).
+    (ci2 / "src" / "README.md").write_text("# src\n", encoding="utf-8", newline="\n")
+    _commit(ci2, "2026-11-03T10:00:00Z", "three")
+    monkeypatch.setattr("lib.docs.doc_staleness.MIN_MEASURED_DOCS", 1)
     first = _run(ci2, "2026-11-21")
     badge1 = json.loads((ci2 / ".assess" / "badge.json").read_text(encoding="utf-8"))
     second = _run(ci2, "2026-11-22")

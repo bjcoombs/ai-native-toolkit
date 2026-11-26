@@ -165,6 +165,24 @@ def test_stale_hubs_sort_deweights_low_confidence(tmp_path: Path) -> None:
     assert hubs[0]["priority"] == 42.0
 
 
+def test_a_hub_naming_a_renamed_child_ranks_at_the_stale_line() -> None:
+    """#822: a hub stale only because it names a renamed direct child (ratio 0)
+    ranks at least at pagerank x the staleness line, above a fresh hub."""
+    from lib.run.context_blocks import build_stale_hubs
+
+    doc_graph = {"available": True, "hubs": [{"path": "a.md", "pagerank": 0.5},
+                                             {"path": "b.md", "pagerank": 0.5}]}
+    row = {"last_commit_days": 3, "code_churn_in_window": 0, "ratio": 0.0,
+           "subject_method": "nearest-ancestor", "confidence": "high"}
+    doc_staleness = {"available": True, "docs": [
+        {**row, "path": "a.md", "ratio": 1.0},
+        {**row, "path": "b.md", "renamed_children_named": 1}]}
+    hubs = build_stale_hubs(doc_graph, doc_staleness)
+    assert [h["path"] for h in hubs] == ["b.md", "a.md"]
+    assert hubs[0]["priority"] == 1.0 and hubs[0]["renamed_children_named"] == 1
+    assert "renamed_children_named" not in hubs[1]
+
+
 def test_failed_liveness_scan_is_not_scored_rung_0(tmp_path: Path, monkeypatch) -> None:
     """A failed liveness scan must read as 'not assessed' (rung null), not as a
     genuine rung 0 (no observability) - conflating them mis-scores Layer 1."""
