@@ -41,7 +41,13 @@ and the top-level record may be absent when only profiles have run. A run whose 
 practice-pack rows (#1274) keeps its own record under ``models``, keyed by the base model and
 each pack in model order (``default--company--team``, ``PACK_KEY_JOIN``, #1276): runs with and
 without packs, or with other packs, never share a record, so "since last run" never reads a
-pack coming or going as gates gained or lost. ``base_model_key`` is the base alone, which
+pack coming or going as gates gained or lost. A pack record also holds ``packs``, each pack's
+``{name, version, sha256}`` as the run context's ``packs`` block names it (#1316): a pack
+edited in place keeps its name and so its record, and ``pack_change(record, level, packs)``
+names the packs whose content the record was not counted with, so "since last run"
+(``model_change.across_packs``) and the tag strip compare no gate or share against it. A
+record written before #1316 holds no ``packs``: its packs read as not recorded, never as the
+same. ``base_model_key`` is the base alone, which
 ``profiles.model_for_level`` reads. ``model_key(level)`` names
 the record a run reads and writes (``default``, a profile name, or None for a custom
 ``--levels`` model, which keeps none), and ``record_for(prior, level)`` returns that record as
@@ -63,6 +69,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
+from lib.packs import PackIdentity
 from lib.scoring.level_result_types import TagRow
 from lib.scoring.levels_fields import TRUTH_TAGS
 
@@ -107,6 +114,8 @@ class ModelRecord(TypedDict):
     levels_version: str  # the profile version the tags were counted under
     tags: list[TagRow]
     baseline: NotRequired[Baseline]  # absent with no measured commit
+    # a pack record's packs as counted, in model order (#1316); absent before #1316
+    packs: NotRequired[list[PackIdentity]]
 
 
 class PriorLevel(TypedDict):
@@ -202,9 +211,15 @@ def _valid_record(value: Any) -> bool:
         and _valid_tags(value.get("tags"))
 
 
+def _valid_packs(value: Any) -> bool:
+    return isinstance(value, list) and all(
+        isinstance(p, Mapping) and all(isinstance(p.get(k), str) for k in ("name", "version", "sha256"))
+        for p in value)
+
+
 def _models(value: Any) -> dict[str, ModelRecord]:
     """The readable profile records of a ``models`` value; a malformed record is dropped alone,
-    and a malformed baseline inside a record is dropped from it."""
+    and a malformed baseline or ``packs`` inside a record is dropped from it."""
     if not isinstance(value, Mapping):
         return {}
     out: dict[str, ModelRecord] = {}
@@ -213,6 +228,8 @@ def _models(value: Any) -> dict[str, ModelRecord]:
             kept = dict(record)
             if "baseline" in kept and not _valid_baseline(kept["baseline"]):
                 del kept["baseline"]
+            if "packs" in kept and not _valid_packs(kept["packs"]):
+                del kept["packs"]
             out[name] = cast(ModelRecord, kept)
     return out
 
@@ -268,6 +285,30 @@ def model_key(level: Any) -> str | None:
     return base if base is None or not packs else PACK_KEY_JOIN.join([base, *packs])
 
 
+def _identities(packs: Any) -> dict[str, PackIdentity]:
+    """Each pack of ``packs`` (the run context's ``packs`` block, or the loaded ``--pack`` files)
+    by name, as ``{name, version, sha256}``."""
+    out: dict[str, PackIdentity] = {}
+    for p in packs if isinstance(packs, (list, tuple)) else ():
+        if isinstance(p, Mapping) and all(isinstance(p.get(k), str) for k in ("name", "version", "sha256")):
+            out[p["name"]] = {"name": p["name"], "version": p["version"], "sha256": p["sha256"]}
+    return out
+
+
+def pack_change(record: Any, level: Any, packs: Any) -> tuple[list[str], list[str]]:
+    """``(changed, not_recorded)``: the packs of ``level`` (``level_packs``) whose sha256 in
+    ``packs``, this run's, differs from the one ``record`` was counted with, and those ``record``
+    names no sha256 for (a record written before #1316), in model order (#1316). Both are empty
+    when ``record`` is None or ``packs`` does not name every pack: nothing to compare with."""
+    now = _identities(packs)
+    names = level_packs(level)
+    if not isinstance(record, Mapping) or not names or any(n not in now for n in names):
+        return [], []
+    then = _identities(record.get("packs"))
+    return ([n for n in names if n in then and then[n]["sha256"] != now[n]["sha256"]],
+            [n for n in names if n not in then])
+
+
 def record_for(prior: Any, level: Any) -> PriorLevel | None:
     """The record of ``level``'s model in a read ``prior-level.json`` (``as_prior_level``), as a
     ``PriorLevel`` view: the top level for the default model, ``models[<name>]`` for a profile;
@@ -316,7 +357,7 @@ def default_level(level: Any) -> bool:
 
 
 def _content(assess_dir: Path, level: Any, baseline: Baseline | None,
-             pruning: list[PruningEntry] | None) -> PriorLevel | None:
+             pruning: list[PruningEntry] | None, packs: Any = None) -> PriorLevel | None:
     """The file to write for this run: its own model's record replaced, every other kept."""
     key = model_key(level)
     built = build_prior_level(level, baseline, pruning if key == "default" else None)
@@ -333,6 +374,9 @@ def _content(assess_dir: Path, level: Any, baseline: Baseline | None,
         record: ModelRecord = {"levels_version": built["levels_version"], "tags": built["tags"]}
         if "baseline" in built:
             record["baseline"] = built["baseline"]
+        counted = _identities(packs)
+        if level_packs(level) and all(n in counted for n in level_packs(level)):
+            record["packs"] = [counted[n] for n in level_packs(level)]
         models[key] = record
         kept = {k: v for k, v in (existing or {}).items() if k != "models"}
         out = cast(PriorLevel, {**kept, "prior_level_version": PRIOR_LEVEL_VERSION})
@@ -342,7 +386,7 @@ def _content(assess_dir: Path, level: Any, baseline: Baseline | None,
 
 
 def write_prior_level(assess_dir: Path, level: Any, baseline: Baseline | None = None,
-                      pruning: list[PruningEntry] | None = None) -> Path | None:
+                      pruning: list[PruningEntry] | None = None, packs: Any = None) -> Path | None:
     """Write this run's ``prior-level.json`` (sorted keys, LF).
 
     A run whose level block has no tags (a degraded level) leaves the existing file untouched
@@ -350,14 +394,15 @@ def write_prior_level(assess_dir: Path, level: Any, baseline: Baseline | None = 
     run compares with. A run writes only its own model's record (#1184): a default run the top
     level, keeping every profile record; a profile run ``models[<name>]``, keeping the default
     record and the pruning ledger, which only a default run writes, and leaving a file it cannot
-    read as it is. A custom ``--levels`` run writes nothing (#1150). A symlink in the file's place is removed, never written through. A file
+    read as it is. A custom ``--levels`` run writes nothing (#1150). ``packs`` is the run
+    context's ``packs`` block: a pack record stores each of its packs' identities (#1316). A symlink in the file's place is removed, never written through. A file
     that cannot be written (``OSError``) is named on stderr and skipped, as
     ``assess_diagrams.write_diagrams`` does: the record never stops a run. Returns the path
     written, or None."""
     path = assess_dir / PRIOR_LEVEL_FILE
     if model_key(level) is None:
         return None
-    content = _content(assess_dir, level, baseline, pruning)
+    content = _content(assess_dir, level, baseline, pruning, packs)
     try:
         if path.is_symlink():
             path.unlink(missing_ok=True)

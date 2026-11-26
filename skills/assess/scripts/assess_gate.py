@@ -23,7 +23,8 @@ snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
   A loss counts only against the committed baseline: one ``since_last_run`` read from an
   earlier ``run-context.json`` left on disk is a warn line. Without the opt-in a lost
   gate is a warn line only. A run whose gates were not compared across maturity models
-  (``gate_loss.not_compared``, #1150) prints a warn line naming why, never "clean snapshot";
+  (``gate_loss.not_compared``, #1150; or across a practice pack's content, #1316) prints a warn
+  line naming why, never "clean snapshot";
   with ``fail_on_gate_loss`` on and a committed baseline, a run whose previous run used another
   model (the ``since_last_run`` model-changed line names both) fails: "gates not compared: model
   changed (the default model -> profile handover); cannot confirm no gate was lost". With no
@@ -81,7 +82,7 @@ from typing import Any, NotRequired, TypedDict, cast
 import lib.manifest.check_manifest as cm
 from lib.assess_config import GateConfig, load_gate_config, load_gate_config_file
 from lib.report.findings_snapshot import committed_prior, method_change
-from lib.gate_loss import (held_at_baseline, model_change_reason, no_baseline, not_compared, split_lost,
+from lib.gate_loss import (held_at_baseline, model_change_reason, no_baseline, not_compared, pack_change_reason, split_lost,
                            step_change)
 from lib.report.reviewed_findings import open_findings
 from lib.run_context_types import DerivedFinding, JsonDict, MethodChange
@@ -245,7 +246,7 @@ def check_gate_loss(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
     # loss, so the opt-in fails with that reason rather than reading "could not check" as clean.
     # With no committed baseline a model change came from a run-context.json left on disk, which
     # can only warn, as a lost gate read from it does.
-    changed = model_change_reason(ctx)
+    changed = model_change_reason(ctx) or pack_change_reason(ctx)  # or a pack edited since (#1316)
     if changed is not None and not no_baseline(ctx):
         return [{"metric": "gates_not_compared", "count": 0, "paths": [], "reason": changed}]
     unmet = held_at_baseline(ctx, split_lost(ctx)[0])

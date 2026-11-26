@@ -294,7 +294,7 @@ def run_opt_in_mutation(repo_root: Path, scope: RequestedScope = None,
         # The tag profile strip reads the earlier run from ctx["prior_level"]; the recounted tags
         # are this run's, so they replace prior-level.json (#940).
         write_all(assess_dir, build_all(ctx, model_rows(model)))
-        write_prior_level(assess_dir, ctx["level"], baseline_record(ctx), pruning_record(ctx))
+        write_prior_level(assess_dir, ctx["level"], baseline_record(ctx), pruning_record(ctx), ctx.get("packs"))
     # E1 crosses the refreshed survivor density with this run's hotspots; the
     # findings, attention and report products are rebuilt from it.
     refresh_mutation_findings(

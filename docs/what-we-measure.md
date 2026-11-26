@@ -1218,7 +1218,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `secrets_guard` | Secrets guard | `repo_root`, `scope`, `ghsync_root`, `github_secret_scanning` | `secrets_guard` | no |
 | `sensitive_instruction_content` | Sensitive instruction content | `instruction_grading` | `sensitive_instruction_content` | no |
 | `shared_tooling` | Shared tooling | `repo_root` | `shared_tooling` | no |
-| `since_last_run` | Since last run | `level`, `assess_dir`, `repo_root`, `superseded`, `instruction_placement` | `since_last_run` | no |
+| `since_last_run` | Since last run | `level`, `assess_dir`, `repo_root`, `superseded`, `instruction_placement`, `packs` | `since_last_run` | no |
 | `skill_disclosure` | Skill disclosure | `repo_root`, `scope`, `excludes` | `skill_disclosure` | no |
 | `skill_personal_data` | Personal data in skill text | `repo_root`, `scope`, `excludes` | `skill_personal_data` | no |
 | `skill_script_tests` | Skill script tests | `repo_root`, `scope`, `excludes` | `skill_script_tests` | no |

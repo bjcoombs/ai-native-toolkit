@@ -71,7 +71,8 @@ from lib.scoring.level_result_types import LevelResult, OwnerExclusionsBlock
 from lib.scoring.level_tally import LEVEL_READS
 from lib.keyhole.liveness_scan import scan_liveness
 from lib.owner_exclusions import owner_exclusions_block
-from lib.model_change import across_models, previous_levels_version, units_label
+from lib.model_change import across_models, across_packs, previous_levels_version, units_label
+from lib.prior_level import load_prior_level, record_for
 from lib.profiles import ModelChoice, run_level
 from lib.unit_discovery import UnitsBlock, scan_units
 from lib.unit_levels import UnitLevelsBlock, unit_levels as unit_levels_block
@@ -439,7 +440,7 @@ def headline(level_block: Any, since_block: Any, choice: ModelChoice | None, rol
 
 
 def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path, superseded: Any,
-                   instruction_placement: Any) -> SinceLastRun:
+                   instruction_placement: Any, packs: Any = None) -> SinceLastRun:
     """The run context's ``since_last_run`` block (#1083): actions closed, gates gained or
     lost and the next blocker, against the run-context the previous run left (or, for a run
     that supersedes a same-day run on the same commit, against that run's own baseline)."""
@@ -447,4 +448,7 @@ def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path, supersed
     # A gate is never compared across maturity models (#1150): a profile run after a default one
     # says the model changed instead.
     # Each model reads its own committed record and Steps (#1184), so two runs of one profile compare.
-    return across_models(block, level_block, previous_levels_version(assess_dir, superseded, level_block))
+    block = across_models(block, level_block, previous_levels_version(assess_dir, superseded, level_block))
+    # Nor against a record counted under another content of a pack of the same name (#1316):
+    # ``packs`` is the run context's packs block, each pack's name, version and sha256.
+    return across_packs(block, level_block, record_for(load_prior_level(assess_dir), level_block), packs, superseded)

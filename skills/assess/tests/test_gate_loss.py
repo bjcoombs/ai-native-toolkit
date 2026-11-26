@@ -84,3 +84,18 @@ def test_held_at_baseline_keeps_only_gates_the_baseline_held():
     ctx = _ctx(["ci_runs_tests"], ["instructions"], 2)
     assert held_at_baseline(ctx, ["instructions", "ci_runs_tests"]) == ["instructions"]
     assert held_at_baseline(_ctx([], None, 2), ["instructions"]) == []
+
+
+def test_a_pack_change_is_a_reason_gates_were_not_compared():
+    """A pack edited since the committed record compares no gate (#1316): the gate says why."""
+    from lib.gate_loss import not_compared, pack_change_reason
+    from lib.model_change import PACK_CHANGED, PACK_NOT_RECORDED
+
+    changed = {"since_last_run": {"lines": [PACK_CHANGED.format("company, team")]}}
+    assert pack_change_reason(changed) == "pack changed (company, team)"
+    assert (not_compared(changed)
+            == "pack changed (company, team); commit this run's record so the next run compares gates")
+    unrecorded = {"since_last_run": {"lines": [PACK_NOT_RECORDED.format("team")]}}
+    assert pack_change_reason(unrecorded) == "pack not recorded (team)"
+    assert pack_change_reason({"since_last_run": {"lines": ["Gates gained: none"]}}) is None
+    assert not_compared({}) is None

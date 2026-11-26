@@ -97,7 +97,7 @@ def publish_run(ctx: dict[str, Any], state: Mapping[str, Any]) -> None:
     # The /assess diagrams (#942, #943), drawn from the finished context; the report links them.
     # The waffle titles its rows from the run's own model, so a --pack row reads its title (#1315).
     write_all(assess_dir, build_all(ctx, model_rows(state.get("maturity_model"))))
-    write_prior_level(assess_dir, ctx.get("level"), baseline_record(ctx), pruning_record(ctx))
+    write_prior_level(assess_dir, ctx.get("level"), baseline_record(ctx), pruning_record(ctx), ctx.get("packs"))
     # The committed findings snapshot (#554): read the previous one back before
     # overwriting it, so the gate can explain a method-version change by the
     # findings that appeared and cleared since.

@@ -26,6 +26,12 @@ module keeps the parts of the report that compare or redraw the level on that sa
   (default → handover); gates not compared``: a gate is never reported gained or lost across
   models. Closed actions stay, because they are commits, not gates. ``model_changed_line``
   gives that line back for the executive summary (``lib/exec_summary.py``).
+- ``across_packs(block, level, record, packs)`` does the same when a practice pack of the run
+  changed content since ``record``, the run's own committed record, was counted (#1316): a
+  pack edited in place keeps its name and so its record, so its sha256 tells the edit apart.
+  ``PACK_CHANGED`` names the changed packs, and ``PACK_NOT_RECORDED`` those a record written
+  before #1316 holds no sha256 for, which are never read as unchanged. A run that supersedes a
+  same-day run on the same commit keeps the pack lines that run showed.
 - ``units_label(block, choice)`` marks the monorepo unit roll-up "(default model)" when the
   run's own model is not the default, since the unit pass still reads the default model.
 
@@ -39,19 +45,22 @@ from pathlib import Path
 from typing import Any, cast
 
 from lib.scoring.level_tally import default_model
-from lib.prior_level import load_prior_level, record_for
+from lib.prior_level import load_prior_level, pack_change, record_for
 from lib.profiles import CUSTOM_MODEL_SUFFIX, ModelChoice, model_for_level
 from lib.run_context_types_since import SinceLastRun
 from lib.unit_rollup import UnitRollUpBlock
 
-__all__ = ["CUSTOM_NOT_DRAWN", "MODEL_CHANGED", "across_models", "changed_models", "custom_run", "model_changed_line",
+__all__ = ["CUSTOM_NOT_DRAWN", "MODEL_CHANGED", "PACK_CHANGED", "PACK_NOT_RECORDED", "across_models", "across_packs", "changed_models", "custom_run", "model_changed_line",
            "model_for_level",
            "model_name", "previous_levels_version", "units_label"]
 
 MODEL_CHANGED = "Model changed since last run ({} → {}); gates not compared"
+PACK_CHANGED = "Pack changed since last run ({}); gates not compared"
+PACK_NOT_RECORDED = "Pack contents not recorded by last run ({}); gates not compared"
 CUSTOM_NOT_DRAWN = ("the run used a custom maturity model (--levels), which the report cannot redraw; "
                     "the summary at the top names it and lists what is missing.")
 _GATE_LINES = ("Gates gained:", "Gates lost:")
+_PACK_HEADS = (PACK_CHANGED.partition("(")[0], PACK_NOT_RECORDED.partition("(")[0])
 
 
 def model_name(version: str) -> str:
@@ -111,10 +120,32 @@ def across_models(block: SinceLastRun, level: Any, previous: str | None) -> Sinc
     if (block.get("available") is not True or block.get("first_run") or previous is None
             or current is None or model_name(previous) == model_name(current)):
         return block
-    line = MODEL_CHANGED.format(model_name(previous), model_name(current))
+    return _not_compared(block, [MODEL_CHANGED.format(model_name(previous), model_name(current))])
+
+
+def across_packs(block: SinceLastRun, level: Any, record: Any, packs: Any, superseded: Any = None) -> SinceLastRun:
+    """``block``, with no gate comparison when a pack of the run changed since ``record`` (#1316).
+
+    A run that supersedes a same-day run on the same commit inherits that run's gate changes,
+    and ``record`` is then the superseded run's own, so the pack lines that run showed are
+    carried over: an inherited "not compared" keeps its reason."""
+    if block.get("available") is not True or block.get("first_run"):
+        return block
+    changed, unrecorded = pack_change(record, level, packs)
+    added = [*([PACK_CHANGED.format(", ".join(changed))] if changed else []),
+             *([PACK_NOT_RECORDED.format(", ".join(unrecorded))] if unrecorded else [])]
+    inherited = superseded.get("since_last_run") if isinstance(superseded, Mapping) else None
+    if not added and isinstance(inherited, Mapping) and inherited.get("available") is True:
+        lines = inherited.get("lines")
+        added = [e for e in lines if isinstance(e, str) and e.startswith(_PACK_HEADS)] if isinstance(lines, list) else []
+    return _not_compared(block, added) if added else block
+
+
+def _not_compared(block: SinceLastRun, added: list[str]) -> SinceLastRun:
+    """``block`` with ``gates_gained`` and ``gates_lost`` None and their lines replaced by ``added``."""
     lines = [entry for entry in block["lines"] if not entry.startswith(_GATE_LINES)]
     at = next((i for i, entry in enumerate(lines) if entry.startswith("Next blocker:")), len(lines))
-    lines.insert(at, line)
+    lines[at:at] = added
     return cast(SinceLastRun, {**block, "gates_gained": None, "gates_lost": None,
                                "lines": lines, "markdown": _markdown(lines)})
 

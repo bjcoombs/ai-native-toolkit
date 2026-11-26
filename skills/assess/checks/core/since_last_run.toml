@@ -9,7 +9,7 @@ summary = "Actions closed since the previous run with their commits (actions.jso
 issues = [1083]
 callable = "lib.run.core_scans:since_last_run"
 publishes = ["since_last_run"]
-reads = ["level", "assess_dir", "repo_root", "superseded", "instruction_placement"]
+reads = ["level", "assess_dir", "repo_root", "superseded", "instruction_placement", "packs"]
 stage = "post_offers"
 shapes = [
   { path = "since_last_run", type = "lib.run_context_types_since:SinceLastRun" },

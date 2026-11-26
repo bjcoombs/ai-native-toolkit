@@ -391,8 +391,9 @@ def test_the_level_scan_reads_the_pack_block() -> None:
 
 def test_a_run_without_pack_writes_the_same_run_context_as_the_table_without_packs(repo: Path) -> None:
     """Requirement 8: the table as it was before #1273 (no pack_checks entry, the level entry
-    without its pack read) and today's table give byte-identical run contexts with no --pack."""
-    before = tuple(replace(s, reads=s.reads[:-1]) if s.key == "level" else s
+    without its pack read, since_last_run without its packs read, #1316) and today's table give
+    byte-identical run contexts with no --pack."""
+    before = tuple(replace(s, reads=s.reads[:-1]) if s.key in ("level", "since_last_run") else s
                    for s in reg.SCANS if s.key != "pack_checks")
     reg.validate(before, reg.PROVIDED_INPUTS - {"packs"})
     outputs = []

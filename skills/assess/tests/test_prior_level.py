@@ -328,3 +328,134 @@ def test_runs_with_and_without_packs_never_share_a_record(tmp_path: Path) -> Non
     assert default_view is not None and default_view["tags"] == plain["tags"]
     assert record_for(both, _packed("team")) is not None
     assert record_for(both, _packed("company")) is None  # other packs, another record
+
+
+# --- a pack edited in place (#1316) ---------------------------------------------------------
+
+_PACK = '''[pack]
+name = "company"
+version = "2026.11"
+
+[[checks]]
+id = "claude"
+title = "claude"
+why = "A practice of the company."
+exists = "{path}"
+
+[[rows]]
+id = "company-claude"
+title = "Instructions kept"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["docs"]
+  criteria = [{{ signal = "pack.company.claude", op = "eq", value = true }}]
+'''
+
+
+def _pack_run(repo: Path, pack: Path, day: str) -> dict[str, Any]:
+    """One ``--pack`` run on ``day``, wired as ``assess_core.main`` wires it."""
+    from assess_core import build_and_publish_run
+    from lib.packs import load_packs
+    from lib.profiles import single_repo_choice
+    from lib.scoring.level_signals import signal_path_validator
+
+    packs = load_packs([str(pack)])
+    choice = single_repo_choice(None, None, signal_path_validator(packs), packs)
+    return build_and_publish_run(repo_root=repo, run_date=day, non_interactive=True, model=choice, packs=packs)
+
+
+def test_edited_pack_reports_pack_change(repo: Path, tmp_path: Path) -> None:
+    """A pack edited in place keeps its name, so its record names it too: the next run reads the
+    recorded sha256, reports the pack change and compares no gate against the stale record."""
+    from lib.model_change import PACK_CHANGED
+    from lib.prior_level import model_key, record_for
+
+    pack = tmp_path / "company.pack.toml"
+    pack.write_text(_PACK.format(path="CLAUDE.md"), encoding="utf-8")
+    first = _pack_run(repo, pack, "2026-11-22")
+    stored = json.loads((repo / ".assess" / PRIOR_LEVEL_FILE).read_text(encoding="utf-8"))
+    assert model_key(first["level"]) == "default--company"
+    assert stored["models"]["default--company"]["packs"] == first["packs"]
+
+    pack.write_text(_PACK.format(path="docs/missing.md"), encoding="utf-8")  # same name, edited row
+    second = _pack_run(repo, pack, "2026-11-23")
+    since = second["since_last_run"]
+    assert second["packs"][0]["name"] == "company" and second["packs"] != first["packs"]
+    assert since["gates_gained"] is None and since["gates_lost"] is None
+    assert PACK_CHANGED.format("company") in since["lines"]
+    assert not [line for line in since["lines"] if line.startswith(("Gates gained:", "Gates lost:"))]
+    strip = (repo / ".assess" / "tag-profile.svg").read_text(encoding="utf-8")
+    assert 'data-mark="prior"' not in strip and "pack company changed since the earlier run" in strip
+    record = record_for(json.loads((repo / ".assess" / PRIOR_LEVEL_FILE).read_text(encoding="utf-8")),
+                        second["level"])
+    assert record is not None and record.get("packs") == second["packs"]  # the edit is the new record
+
+    third = _pack_run(repo, pack, "2026-11-24")  # the pack unchanged since: gates compare again
+    assert third["since_last_run"]["gates_lost"] == []
+    assert PACK_CHANGED.format("company") not in third["since_last_run"]["lines"]
+
+
+def _identity(name: str, sha: str) -> dict[str, str]:
+    return {"name": name, "version": "2026.11", "sha256": sha}
+
+
+def test_pack_change_names_changed_and_unrecorded_packs(tmp_path: Path) -> None:
+    from lib.prior_level import pack_change, record_for
+
+    level = _packed("company", "team")
+    write_prior_level(tmp_path, level, packs=[_identity("company", "a"), _identity("team", "b")])
+    record = record_for(load_prior_level(tmp_path), level)
+    assert record is not None and [p["name"] for p in record.get("packs", [])] == ["company", "team"]
+    assert pack_change(record, level, [_identity("company", "a"), _identity("team", "b")]) == ([], [])
+    assert pack_change(record, level, [_identity("company", "a"), _identity("team", "c")]) == (["team"], [])
+    before = {k: v for k, v in record.items() if k != "packs"}  # a record written before #1316
+    assert pack_change(before, level, [_identity("company", "a"), _identity("team", "b")]) == ([], ["company", "team"])
+    assert pack_change(record, level, None) == ([], [])  # this run's packs unknown: nothing to compare
+    assert pack_change(None, level, [_identity("company", "a")]) == ([], [])
+    assert pack_change(record, _level(), []) == ([], [])  # no pack row: the base record
+
+
+def test_a_malformed_packs_list_is_dropped_from_its_record_alone(tmp_path: Path) -> None:
+    from lib.prior_level import record_for
+
+    level = _packed("team")
+    write_prior_level(tmp_path, level, packs=[_identity("team", "b")])
+    stored = json.loads((tmp_path / PRIOR_LEVEL_FILE).read_text(encoding="utf-8"))
+    stored["models"]["default--team"]["packs"] = [{"name": "team"}]
+    record = record_for(stored, level)
+    assert record is not None and "packs" not in record and record["tags"] == level["tags"]
+
+
+def test_across_packs_drops_the_gate_lines_and_names_the_packs() -> None:
+    from lib.model_change import PACK_CHANGED, PACK_NOT_RECORDED, across_packs
+
+    level = _packed("company", "team")
+    block: Any = {"available": True, "first_run": False, "gates_gained": [], "gates_lost": [],
+                  "lines": ["Gates gained: none", "Gates lost: none", "Next blocker: x"], "markdown": ""}
+    record = {"packs": [_identity("company", "a")]}
+    out = across_packs(block, level, record, [_identity("company", "z"), _identity("team", "b")])
+    assert out["gates_gained"] is None and out["gates_lost"] is None
+    assert out["lines"] == [PACK_CHANGED.format("company"), PACK_NOT_RECORDED.format("team"), "Next blocker: x"]
+    same = {"packs": [_identity("company", "a"), _identity("team", "b")]}
+    assert across_packs(block, level, same, [_identity("company", "a"), _identity("team", "b")]) is block
+    assert across_packs({**block, "first_run": True}, level, record, [_identity("company", "z")])["gates_lost"] == []
+
+
+def test_a_superseding_run_keeps_the_pack_change_it_inherits() -> None:
+    """A same-day re-run on the same commit inherits the superseded run's null gate changes; the
+    record on disk is then that run's, so the pack line it showed is carried, not lost (#1316)."""
+    from lib.model_change import PACK_CHANGED, across_packs
+
+    level = _packed("company")
+    now = [_identity("company", "z")]
+    shown = PACK_CHANGED.format("company")
+    block: Any = {"available": True, "first_run": False, "gates_gained": None, "gates_lost": None,
+                  "lines": ["Next blocker: x"], "markdown": ""}
+    superseded = {"since_last_run": {"available": True, "lines": [shown, "Next blocker: x"]}}
+    out = across_packs(block, level, {"packs": now}, now, superseded)
+    assert out["lines"] == [shown, "Next blocker: x"] and out["gates_lost"] is None
+    plain = {"since_last_run": {"available": True, "lines": ["Next blocker: x"]}}
+    assert across_packs(block, level, {"packs": now}, now, plain) is block
