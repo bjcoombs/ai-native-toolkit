@@ -734,7 +734,7 @@ def render(files: list[tuple[Path, int, float, str]],
     tokens = (tokens_by_path if tokens_by_path is not None
               else est_tokens_by_path(files))
     overrides = _survivor_overrides(files, survivor_density)
-    tree = build_tree(files_colored, root, aux_data, aux_label or "",
+    tree = build_tree(files_colored, root, aux_data, (aux_label or "") if aux_data else "",
                       node_overrides=overrides or None, size_by=tokens)
     W, H = 1600.0, 1000.0
     rects: list[Rect] = []

@@ -10,12 +10,13 @@ resolves to whichever pattern comes first (#1312, #1358).
 
 - **Root.** The root ``<svg>`` gets ``class="<scope>"``.
 - **Styles.** Every selector in every ``<style>`` is prefixed with ``svg.<scope>``, inside
-  ``@media`` blocks too, so a rule reaches only elements of this SVG. Each rule gains the
+  ``@media`` blocks too, and an ``#id`` in a selector gets the same prefix as the ids, so a rule reaches only elements of this SVG. Each rule gains the
   same specificity, so the order of rules within the sheet still decides between them.
 - **Ids.** Every ``id="X"`` becomes ``id="<scope>-X"``, and every ``url(#X)`` and
-  ``href="#X"`` reference follows it. Only tag markup and ``<style>`` are rewritten:
-  text nodes (``<title>`` tooltips and labels holding repository file paths) are left
-  as written, so a path containing ``url(#`` or ``id="`` stays intact.
+  ``href="#X"`` reference follows it. Only tag markup and ``<style>`` are rewritten, and
+  in a tag only ``id``, ``href`` and the reference-bearing attributes (``fill``,
+  ``stroke``, ``marker-*``, ``clip-path``, ``mask``, ``filter``): text nodes and data
+  attributes holding repository file paths stay as written, even a path ``url(#x)``.
 
 The scope is fixed per diagram kind (``SCOPES`` lists them), so output stays
 byte-identical for the same inputs. Two diagrams of the same kind on one page (two
@@ -58,9 +59,12 @@ _STYLE = re.compile(r"(<style>)(.*?)(</style>)", re.S)
 _TAG = re.compile(r"<[^<>]+>")
 _ID = re.compile(r'(\sid=")([^"]+)(")')
 _URL = re.compile(r"(url\(#)([^)]+)(\))")
-# An attribute whose whole value is one reference (fill="url(#p)"); a data-path that merely
-# contains "url(#" is left alone.
-_URL_VALUE = re.compile(r'(="url\(#)([^)"]+)(\)")')
+# A reference-bearing attribute (fill="url(#p)", marker-end=...); a data attribute is never
+# rewritten, even one whose whole value reads url(#x).
+_URL_VALUE = re.compile(
+    r'(\s(?:fill|stroke|marker-start|marker-mid|marker-end|clip-path|mask|filter)="url\(#)'
+    r'([^)"]+)(\)")')
+_ID_SELECTOR = re.compile(r"#([\w-]+)")
 _HREF = re.compile(r'(\s(?:xlink:)?href="#)([^"]+)(")')
 
 
@@ -107,7 +111,10 @@ def scope_css(css: str, scope: str) -> str:
         if prelude.strip().startswith("@"):
             out.append(f"{prelude}{{{scope_css(css[brace + 1:end], scope)}}}")
         else:
-            selectors = ",".join(f"svg.{scope} {sel}" for sel in _split_selectors(prelude))
+            id_prefix = f"#{scope}-"
+            selectors = ",".join(
+                "svg.{} {}".format(scope, _ID_SELECTOR.sub(lambda m: id_prefix + m.group(1), sel))
+                for sel in _split_selectors(prelude))
             out.append(f"{lead}{selectors} {css[brace:end + 1]}")
         pos = end + 1
 

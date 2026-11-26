@@ -250,6 +250,19 @@ def test_every_block_rect_carries_its_title_values_as_data_attributes(render_lib
     assert 'data-churn-window="last 12mo"' in svg.split("\n")[1]
 
 
+def test_degenerate_churn_writes_no_commits_and_no_window(treemap, render_lib, tmp_path, monkeypatch):
+    """A flat churn axis is dropped: no block carries data-commits="0" and the root has no
+    data-churn-window (the <title> shows no commits either)."""
+    a = Path("/repo/a.py")
+    monkeypatch.setattr(treemap, "plt", type("P", (), {"get_cmap": staticmethod(lambda _n: lambda _v: (0.5, 0.2, 0.1, 1.0))}))
+    monkeypatch.setattr(treemap, "layout", lambda node, x, y, w, h, out: out.append((0.0, 0.0, w, h, node.children[0])))
+    out = tmp_path / "flat.svg"
+    treemap.render([(a, 10, 3.0, "lizard")], Path("/repo"), out, "t", aux_data={a: 1},
+                   aux_label="commits (last 12mo)", tokens_by_path={a: 40}, churn_degenerate=True)
+    svg = out.read_text(encoding="utf-8")
+    assert "data-commits" not in svg and "data-churn-window" not in svg and "commits (" not in svg
+
+
 def test_unmeasured_values_are_left_out_never_written_as_0(render_lib):
     """No token estimate, no churn axis: data-tokens and data-commits are absent; blocks
     coloured by churn carry commits and no ccn."""

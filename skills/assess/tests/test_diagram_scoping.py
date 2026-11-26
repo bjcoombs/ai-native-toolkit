@@ -155,6 +155,13 @@ def test_scope_svg_leaves_text_nodes_alone_and_rewrites_a_url_in_style() -> None
     assert "<title>a/url(#x) id=\"y\".py</title>" in out and "<text>see url(#x)</text>" in out
     assert 'data-path="a/url(#x) id=&quot;y&quot;.py"' in out
     assert "svg.kind rect {fill:url(#kind-p)}" in out
+    assert scope_svg('<svg><rect data-path="url(#x)" fill="url(#x)"/></svg>', "kind") == (
+        '<svg class="kind"><rect data-path="url(#x)" fill="url(#kind-x)"/></svg>')
+
+
+def test_an_id_selector_follows_the_id_it_names() -> None:
+    out = scope_svg('<svg><style>#label{fill:red}</style><text id="label">x</text></svg>', "kind")
+    assert "svg.kind #kind-label {fill:red}" in out and 'id="kind-label"' in out
 
 
 def test_scoping_an_already_scoped_document_raises() -> None:
