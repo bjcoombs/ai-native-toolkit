@@ -528,16 +528,20 @@ _NEEDS = "A headless scan reports the `{}` block unavailable when {}; install it
 
 # Why a signal can be unavailable, by its first path segment (the block name).
 _MEASURE_HINTS = {
-    "guardrails": "Unknown when the `guardrails` scan finds no configured gate (a ruff or "
-                  "flake8 complexity limit, a coverage floor, pre-commit hooks, mypy "
-                  "strict): with nothing to state there is no share to measure.",
-    "agent_consistency": "Not measured when fewer than two agent systems have a root "
+    "guardrails": "Not applicable when the `guardrails` scan finds no configured gate (a ruff "
+                  "or flake8 complexity limit, a coverage floor, pre-commit hooks, mypy "
+                  "strict): with nothing to state there is no share to measure "
+                  "(`stated_pct_reason: no_configured_gates`).",
+    "agent_consistency": "Not applicable when fewer than two agent systems have a root "
                          "instruction file: one system has nothing to agree with, so "
-                         "`conflicts` and `unlinked` are null (`applicable: false`).",
+                         "`conflicts` and `unlinked` are null (`applicable: false`, "
+                         "reason `fewer_than_two_systems`).",
     "structure": _NEEDS.format("structure", "grimp or networkx is not installed (`no_grimp`, "
                                "`no_networkx`)") + " With no import graph the reason names "
-                 "the dominant source language: `no_import_graph_<language>` when no "
-                 "builder graphs that language, `no_python_packages` for a Python "
+                 "the dominant source language: `no_builder:<language>` when no "
+                 "builder covers that language (the reason names a tool that would, "
+                 "such as `jdeps`), `no_import_graph_<language>` when its builder "
+                 "found nothing to graph, `no_python_packages` for a Python "
                  "repository with no importable package, `no_source_files` with no "
                  "source at all. An import graph with no edges leaves "
                  "`modularity_q` null (`modularity_reason: no_import_edges`): modules "
@@ -563,8 +567,9 @@ _MEASURE_HINTS = {
                      "from an older toolkit, which measured it in a full run only.",
     "doc_staleness": "Measured from git history: unavailable (`not_git_root`) outside a git work "
                      "tree, and the stale share is null on a shallow clone or a history where "
-                     "every file has about one commit (rescan a full-history clone), or when no "
-                     "doc describes a part of the code of its own.",
+                     "every file has about one commit (rescan a full-history clone), when no "
+                     "doc describes a part of the code of its own, or below 20 measured docs "
+                     "(`too_few_measured_docs`).",
     "review_reality": "Unavailable (`unsupported_host`) when the remote's host is not GitHub or a "
                       "GitLab host glab reaches (Bitbucket, Azure DevOps, GitHub Enterprise): "
                       "neither `--platform` nor `/assess` reads merged changes there; sign glab "
@@ -580,6 +585,11 @@ _MEASURE_HINTS = {
     "ci_model_jobs": "Not measured (`no_model_jobs`) when no model-calling CI job is detected. "
                      "Not measured (`trigger_unresolved`, `ci_jobs_unread`) when none is ungated but a "
                      "trigger, a condition or a job this reader cannot read could still run one on every change.",
+    "instruction_claims": "Not measured (`no_instruction_claims`) when the instruction files make no "
+                          "claim this check reads (a script run in CI, a pinned version, a file count): "
+                          "no false claim among none is not a claim that holds.",
+    "nested_instructions": "The always-loaded budget is not measured (`no_loaded_instructions`) when "
+                           "Claude Code loads no instruction file at launch: there is no budget to keep.",
     "secrets_guard": "Level 2 is not measured (`secret_scanning_not_read`) on a GitHub repository with "
                      "no secrets scan in CI when its push protection setting was not read: run with "
                      "`--platform`, or `/assess` with `gh` signed in, as a repository admin, organization owner or security "

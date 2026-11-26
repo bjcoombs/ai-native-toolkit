@@ -186,7 +186,7 @@ def test_every_next_step_and_hint_the_shipped_model_can_render_is_supportive() -
                     worded = guidance(signal, criterion["op"], criterion["value"], unmet)
                     if worded is not None:
                         texts[f"{row['id']}.{number} {signal}"] = f"{worded['change']}\n{worded['done_when']}"
-    for code in ("scan_failed", "missing_checkout", "no_python_packages", "build_failed"):
+    for code in ("scan_failed", "missing_checkout", "no_python_packages", "build_failed", "no_builder:java"):
         texts[f"reason {code}"] = reason_word(code)
     assert len(texts) > 40
     hits = [f"{term!r} in {name}: {text}" for name, content in texts.items()

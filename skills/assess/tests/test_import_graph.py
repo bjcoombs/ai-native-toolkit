@@ -101,7 +101,7 @@ def test_a_repo_in_a_language_with_no_builder_names_it(tmp_path: Path) -> None:
     result = analyze_structure(tmp_path)
     assert result.available is False
     assert result.language is None
-    assert result.reason.startswith("no_import_graph_rust: ")
+    assert result.reason.startswith("no_builder:rust: ")
 
 
 def test_the_headless_marker_keeps_the_language_code(tmp_path: Path) -> None:
@@ -121,11 +121,12 @@ def test_a_python_repo_without_packages_keeps_no_python_packages(tmp_path: Path)
     assert structure(result.as_dict())["reason"].startswith("no_python_packages:")
 
 
-def test_a_shell_heavy_repo_names_shell_not_python(tmp_path: Path) -> None:
-    """Shell is named on purpose: the reader learns what the code is (#700)."""
-    for rel in ("a.sh", "b.sh", "tool.py"):
+def test_a_shell_only_repo_names_shell(tmp_path: Path) -> None:
+    """Shell is named on purpose: the reader learns what the code is (#700). It is
+    dominant only with no other language (#825)."""
+    for rel in ("a.sh", "b.sh"):
         _write(tmp_path, rel)
-    assert analyze_structure(tmp_path).reason.startswith("no_import_graph_shell: ")
+    assert analyze_structure(tmp_path).reason.startswith("no_builder:shell: ")
 
 
 def test_a_header_is_not_counted_as_c(tmp_path: Path) -> None:
@@ -309,8 +310,7 @@ def test_a_failing_builder_does_not_sink_another_language(tmp_path: Path) -> Non
     assert selection.graph is not None and selection.graph.language == "go"
 
 
-def test_with_no_dominant_builder_the_first_failure_is_the_reason(tmp_path: Path) -> None:
-    _write(tmp_path, "a.rs")
+def test_with_no_dominant_language_the_first_failure_is_the_reason(tmp_path: Path) -> None:
     first = _StubBuilder("python", None, fail="grimp failed to build import graph (x)")
     second = _StubBuilder("go", None, fail="second")
     assert select_graph(tmp_path, (first, second)).reason.startswith("grimp failed")
@@ -369,11 +369,14 @@ def test_a_go_module_beside_loose_python_scripts_reports_go(tmp_path: Path) -> N
     assert block["available"] is True and block["language"] == "go"
 
 
-def test_a_dominant_language_with_no_builder_falls_back(tmp_path: Path) -> None:
+def test_a_dominant_language_with_no_builder_has_no_stand_in(tmp_path: Path) -> None:
+    """#825: a minor language's graph never reports as the repository's structure."""
     for rel in ("a.rs", "b.rs", "c.rs", "svc/main.go"):
         _write(tmp_path, rel)
-    selection = select_graph(tmp_path, (_StubBuilder("go", ["svc"]),))
-    assert selection.graph is not None and selection.graph.language == "go"
+    stub = _StubBuilder("go", ["svc"])
+    selection = select_graph(tmp_path, (stub,))
+    assert selection.graph is None and selection.reason.startswith("no_builder:rust: ")
+    assert stub.calls == []  # no builder runs for a language nothing covers
 
 
 def test_a_builders_languages_attribute_covers_the_dominant_language(tmp_path: Path) -> None:
@@ -413,7 +416,9 @@ def test_files_a_builder_skips_do_not_make_their_language_dominant(tmp_path: Pat
     for rel in ("static/js/jquery.min.js", "static/js/vendor.min.js", "static/js/x.min.js",
                 "types/api.d.ts", "web/__tests__/a.js", "vite.config.js"):
         _write(tmp_path, rel)
-    assert dominant_language(tmp_path) == "javascript"  # every file, no builder rules
+    # Without builders the shared skips drop the bundles and __tests__ (#825); the
+    # TypeScript hook still drops the tool config.
+    assert language_counts(tmp_path)["javascript"] == 1
     assert dominant_language(tmp_path, builders=BUILDERS) == "python"
     assert language_counts(tmp_path, builders=BUILDERS)["javascript"] == 0
     block = analyze_structure(tmp_path).as_dict()
@@ -426,7 +431,9 @@ def test_go_test_files_and_skipped_dirs_do_not_count_toward_go(tmp_path: Path) -
     _write(tmp_path, "app/a.py", "")
     for rel in ("svc/a_test.go", "svc/b_test.go", "vendor/x/x.go", "_tools/t.go"):
         _write(tmp_path, rel, "package x\n")
-    assert dominant_language(tmp_path) == "go"
+    # The shared skips drop _test.go for every run (#825); only the Go hook drops _tools/.
+    assert language_counts(tmp_path)["go"] == 1
+    assert language_counts(tmp_path, builders=BUILDERS)["go"] == 0
     assert dominant_language(tmp_path, builders=BUILDERS) == "python"
 
 
@@ -445,3 +452,103 @@ def test_go_test_files_and_skipped_dirs_do_not_count_toward_go(tmp_path: Path) -
 def test_is_graph_source_asks_the_covering_builder(rel: str, language: str,
                                                    graphed: bool) -> None:
     assert is_graph_source(Path(rel), language) is graphed
+
+
+# --------------------------------------------------------------------------
+# No builder for the dominant language: no stand-in (#825)
+# --------------------------------------------------------------------------
+
+def vendored_java_repo(root: Path) -> Path:
+    """50 ``.java`` files and the vendored web assets a Spring app ships beside them.
+
+    The JavaScript is two small packages that import each other, so a stand-in
+    graph would be measured (modules, edges, front doors) rather than empty.
+    """
+    for i in range(50):
+        pkg = ("api", "core", "web", "data", "util")[i % 5]
+        _write(root, f"src/main/java/com/example/{pkg}/Type{i}.java",
+               f"package com.example.{pkg};\npublic class Type{i} {{}}\n")
+    static = "src/main/resources/static/js"
+    _write(root, f"{static}/jquery.js", "module.exports = {};\n")
+    _write(root, f"{static}/app/index.js", "require('../widgets/index');\n")
+    _write(root, f"{static}/app/main.js", "require('./index');\n")
+    _write(root, f"{static}/widgets/index.js", "require('./grid');\n")
+    _write(root, f"{static}/widgets/grid.js", "require('../jquery');\n")
+    return root
+
+
+def test_vendored_javascript_never_stands_in_for_java(tmp_path: Path) -> None:
+    from lib.counts_only.content_free import counts_only, reason_code
+
+    vendored_java_repo(tmp_path)
+    assert dominant_language(tmp_path, builders=BUILDERS) == "java"
+    result = analyze_structure(tmp_path)
+    assert result.available is False and result.language is None
+    assert result.reason.startswith("no_builder:java: ")
+    assert "jdeps" in result.reason
+    marker = structure(result.as_dict())
+    assert marker == {"available": False, "reason": result.reason}
+    assert reason_code(marker["reason"]) == "no_builder:java"
+    assert counts_only({"structure": marker})["structure"] == {
+        "available": False, "reason": "no_builder:java"}
+
+
+def test_no_builder_reads_without_a_tool_when_none_is_known(tmp_path: Path) -> None:
+    for rel in ("src/a.rs", "src/b.rs", "web/index.ts"):
+        _write(tmp_path, rel)
+    selection = select_graph(tmp_path, BUILDERS)
+    assert selection.graph is None
+    assert selection.reason.startswith("no_builder:rust: ")
+    assert "would provide" not in selection.reason
+
+
+def test_an_uncovered_majority_wins_over_a_covered_graph(tmp_path: Path) -> None:
+    """#825: a Rust-majority repository with a small Python package reads
+    no_builder:rust; the Python graph does not stand in."""
+    for rel in ("src/a.rs", "src/b.rs", "src/c.rs", "src/d.rs"):
+        _write(tmp_path, rel)
+    _write(tmp_path, "tools/pkg/__init__.py", "")
+    _write(tmp_path, "tools/pkg/a.py", "from tools.pkg import b\n")
+    _write(tmp_path, "tools/pkg/b.py", "")
+    assert dominant_language(tmp_path, builders=BUILDERS) == "rust"
+    selection = select_graph(tmp_path, BUILDERS)
+    assert selection.graph is None and selection.reason.startswith("no_builder:rust: ")
+
+
+def test_shell_glue_never_outnumbers_a_python_package(tmp_path: Path) -> None:
+    """#825: shell carries no import graph, so many scripts beside a Python
+    package leave Python dominant and its graph measured."""
+    _write(tmp_path, "app/__init__.py", "")
+    _write(tmp_path, "app/views.py", "from app import models\n")
+    _write(tmp_path, "app/models.py", "")
+    for i in range(10):
+        _write(tmp_path, f"scripts/s{i}.sh", "echo hi\n")
+    assert language_counts(tmp_path, builders=BUILDERS)["shell"] == 10
+    assert dominant_language(tmp_path, builders=BUILDERS) == "python"
+    block = analyze_structure(tmp_path).as_dict()
+    assert block["available"] is True and block["language"] == "python"
+
+
+def test_vendored_c_under_third_party_never_outnumbers_a_go_module(tmp_path: Path) -> None:
+    """#825: third_party/ and test or minified file names are skipped for every
+    language, so vendored C leaves the Go module dominant and its graph measured."""
+    _write(tmp_path, "go.mod", "module example.com/m\n")
+    _write(tmp_path, "svc/svc.go", 'package svc\nimport "example.com/m/util"\n')
+    _write(tmp_path, "util/util.go", "package util\n")
+    for i in range(6):
+        _write(tmp_path, f"third_party/zlib/z{i}.c", "int x;\n")
+    _write(tmp_path, "native/a_test.c", "int y;\n")
+    _write(tmp_path, "native/b.spec.c", "int z;\n")
+    assert language_counts(tmp_path, builders=BUILDERS)["c"] == 0
+    assert dominant_language(tmp_path, builders=BUILDERS) == "go"
+    block = analyze_structure(tmp_path).as_dict()
+    assert block["available"] is True and block["language"] == "go"
+
+
+@pytest.mark.parametrize(("name", "counted"), [
+    ("a.rs", True), ("a_test.rs", False), ("a.spec.rb", False), ("a_spec.rb", False),
+    ("test_a.py", False), ("a.test.ts", False), ("a.min.js", False), ("contest.py", True),
+])
+def test_counts_toward_dominance_skips_test_and_minified_names(name: str, counted: bool) -> None:
+    from lib.graph.import_graph import counts_toward_dominance
+    assert counts_toward_dominance(name) is counted

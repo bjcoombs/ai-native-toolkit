@@ -232,7 +232,7 @@ Compares the root instruction files of every agent system present: Claude Code, 
 - Collector: `core.agent_consistency`, reading `repo_root`, `excludes`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_consistency.canonical` path, `agent_consistency.divergences.kind` token, `agent_consistency.divergences.missing_from` token, `agent_consistency.divergences.named_in` token, `agent_consistency.divergences.stated.system` token, `agent_consistency.divergences.value` drop, `agent_consistency.files.link` token, `agent_consistency.files.path` path, `agent_consistency.files.system` token, `agent_consistency.next_steps.path` path, `agent_consistency.next_steps.pointer` drop, `agent_consistency.next_steps.symlink` drop, `agent_consistency.next_steps.system` token, `agent_consistency.not_read` drop, `agent_consistency.systems` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_consistency.canonical` path, `agent_consistency.conflicts_reason` token, `agent_consistency.divergences.kind` token, `agent_consistency.divergences.missing_from` token, `agent_consistency.divergences.named_in` token, `agent_consistency.divergences.stated.system` token, `agent_consistency.divergences.value` drop, `agent_consistency.files.link` token, `agent_consistency.files.path` path, `agent_consistency.files.system` token, `agent_consistency.next_steps.path` path, `agent_consistency.next_steps.pointer` drop, `agent_consistency.next_steps.symlink` drop, `agent_consistency.next_steps.system` token, `agent_consistency.not_read` drop, `agent_consistency.systems` token, `agent_consistency.unlinked_reason` token.
 - Used by: row `agent-consistency`.
 - Evidence: `agent_consistency.conflicts` head_structure (measured), `agent_consistency.unlinked` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.
@@ -384,7 +384,8 @@ It reads which files change together in history, so coupling the import graph do
   - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
   - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
   - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `no_builder:<language>`: No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages. Nothing to change: structure reads as not measured for this language.
+  - `no_import_graph_<language>`: A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go. Nothing to change if that code is loose scripts; a package the builder recognises is measured.
   - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
@@ -554,7 +555,8 @@ Run plumbing: no row or finding reads this scan.
   - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
   - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
   - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `no_builder:<language>`: No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages. Nothing to change: structure reads as not measured for this language.
+  - `no_import_graph_<language>`: A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go. Nothing to change if that code is loose scripts; a package the builder recognises is measured.
   - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
@@ -604,7 +606,7 @@ Each doc's last content change against its code subject's churn, following renam
 - Collector: `core.doc_staleness`, reading `repo_root`, `doc_graph`, `excludes`, `scope`.
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `doc_staleness.bulk_commits_skipped.date` token, `doc_staleness.bulk_commits_skipped.sha` drop, `doc_staleness.churn_window` drop, `doc_staleness.declared_cross_repo.path` path, `doc_staleness.declared_cross_repo.reason` token, `doc_staleness.declared_cross_repo.repo` id, `doc_staleness.declared_cross_repo.scope` path, `doc_staleness.declared_cross_repo.status` token, `doc_staleness.docs.base_doc_dir` path, `doc_staleness.docs.confidence` token, `doc_staleness.docs.last_change_basis` token, `doc_staleness.docs.last_commit_days_bound` token, `doc_staleness.docs.provenance.generated_by` drop, `doc_staleness.docs.provenance.method` token, `doc_staleness.docs.provenance.sources` path, `doc_staleness.docs.subject_match` token, `doc_staleness.docs.subject_method` token, `doc_staleness.docs.subject_paths` path, `doc_staleness.docs.subject_roots` path, `doc_staleness.history_boundary_date` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `doc_staleness.bulk_commits_skipped.date` token, `doc_staleness.bulk_commits_skipped.sha` drop, `doc_staleness.churn_window` drop, `doc_staleness.declared_cross_repo.path` path, `doc_staleness.declared_cross_repo.reason` token, `doc_staleness.declared_cross_repo.repo` id, `doc_staleness.declared_cross_repo.scope` path, `doc_staleness.declared_cross_repo.status` token, `doc_staleness.docs.base_doc_dir` path, `doc_staleness.docs.confidence` token, `doc_staleness.docs.last_change_basis` token, `doc_staleness.docs.last_commit_days_bound` token, `doc_staleness.docs.provenance.generated_by` drop, `doc_staleness.docs.provenance.method` token, `doc_staleness.docs.provenance.sources` path, `doc_staleness.docs.subject_match` token, `doc_staleness.docs.subject_method` token, `doc_staleness.docs.subject_paths` path, `doc_staleness.docs.subject_roots` path, `doc_staleness.history_boundary_date` token, `doc_staleness.normalisation.base_doc_subject` token, `doc_staleness.normalisation.rename_scope` token, `doc_staleness.summary.stale_pct_reason` token.
 - Used by: row `doc-freshness`.
 - Evidence: `doc_staleness.summary.stale_pct` git_history (measured).
 - Not measured when: it cannot read its input; the block says why.
@@ -630,7 +632,8 @@ It joins doc freshness with code complexity, so the places where an agent most n
   - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
   - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
   - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `no_builder:<language>`: No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages. Nothing to change: structure reads as not measured for this language.
+  - `no_import_graph_<language>`: A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go. Nothing to change if that code is loose scripts; a package the builder recognises is measured.
   - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
@@ -685,7 +688,7 @@ Lists the gates the repository configures: a ruff or flake8 complexity limit, th
 - Collector: `core.guardrails`, reading `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `guardrails.gates.kind` token, `guardrails.gates.rule` token, `guardrails.gates.snippet` drop, `guardrails.gates.stated_in` path, `guardrails.gates.tool` token, `guardrails.not_read` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `guardrails.gates.kind` token, `guardrails.gates.rule` token, `guardrails.gates.snippet` drop, `guardrails.gates.stated_in` path, `guardrails.gates.tool` token, `guardrails.not_read` drop, `guardrails.stated_pct_reason` token.
 - Used by: row `guardrails-stated`.
 - Evidence: `guardrails.stated_pct` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.
@@ -890,7 +893,8 @@ Run plumbing: no row or finding reads this scan.
   - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
   - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
   - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `no_builder:<language>`: No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages. Nothing to change: structure reads as not measured for this language.
+  - `no_import_graph_<language>`: A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go. Nothing to change if that code is loose scripts; a package the builder recognises is measured.
   - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
@@ -997,7 +1001,8 @@ It measures module structure and how packages import one another, which decides 
   - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
   - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
   - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `no_builder:<language>`: No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages. Nothing to change: structure reads as not measured for this language.
+  - `no_import_graph_<language>`: A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go. Nothing to change if that code is loose scripts; a package the builder recognises is measured.
   - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
@@ -1070,7 +1075,8 @@ For each complex module it reads whether a person authored it and whether a doc 
   - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
   - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
   - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `no_builder:<language>`: No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages. Nothing to change: structure reads as not measured for this language.
+  - `no_import_graph_<language>`: A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go. Nothing to change if that code is loose scripts; a package the builder recognises is measured.
   - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 

@@ -18,11 +18,11 @@
     },
     "core.agent_consistency": {
       "repos": {
-        "grpa/sub/deep/svc2": "6cca8133100a75c4a7d7e0684a616bb1fa44222cb967eec403be1c52e06781be",
-        "grpa/svc1": "61a231fcd68497d428000340b78f82009268ae0ee42c588e54b2e0a52292b299",
-        "grpb/lib1": "c12a608b5d6fae451ade52760378a8df331e6091f60fa8508c90a5725ce2d92f"
+        "grpa/sub/deep/svc2": "e7f1fc02a8413d9edce1f093f17b018b8a104a3316014e0da95d08baf767fe32",
+        "grpa/svc1": "e8b88ed932b732d734a7ba484b3abe79e7d97730789eaaeb15908ad5ea9c5a5b",
+        "grpb/lib1": "11c055bae951d7cc08b5afb4868cc5914bf0a045f83ac21381e896be6b280199"
       },
-      "revision": 1
+      "revision": 2
     },
     "core.agent_environment": {
       "repos": {
@@ -162,11 +162,11 @@
     },
     "core.doc_staleness": {
       "repos": {
-        "grpa/sub/deep/svc2": "4e8ed42e0e18c9d26ca6f25f3815ddf0b2628eff21ef56b78f72470952716620",
-        "grpa/svc1": "5f152a32a33f327e9cdb9eb1ed0efa1b187a1f886303e2a59e25289ace9e70c2",
-        "grpb/lib1": "e117562f2eeec270a985abb8e4e626086cf5f673514b9c0d7dd60bbd0aa177ba"
+        "grpa/sub/deep/svc2": "00f688acc88bab9674b04b146cc5d91971266e56344df732a65993cc2a3c271e",
+        "grpa/svc1": "c05c032f26a2baf10ebf6c327909ddd72234e2480de356c8380eab2d7b842362",
+        "grpb/lib1": "0cfe046839ca6ca79636661ec0bf5402d4c73d507b695d12f8d1cef29ba7b1c4"
       },
-      "revision": 1
+      "revision": 2
     },
     "core.gap_actions": {
       "repos": {
@@ -194,11 +194,11 @@
     },
     "core.guardrails": {
       "repos": {
-        "grpa/sub/deep/svc2": "f95fa40b5ea87163e00c690f987a07bd1370aca476695c2f4782afd89217a551",
-        "grpa/svc1": "f95fa40b5ea87163e00c690f987a07bd1370aca476695c2f4782afd89217a551",
-        "grpb/lib1": "306ae07bbc8ad8c5329e5f3726d84e752e9a7f127894e7542a783ddd79efc8e8"
+        "grpa/sub/deep/svc2": "6e69d68f8edc944119589bf54355bdaa3401eb8c79b26ee4dbb3587a1847e260",
+        "grpa/svc1": "6e69d68f8edc944119589bf54355bdaa3401eb8c79b26ee4dbb3587a1847e260",
+        "grpb/lib1": "6b796400a491c769e364e44655049637f3b689020b122cf88897ddb6ce712f40"
       },
-      "revision": 2
+      "revision": 3
     },
     "core.instruction_claims": {
       "repos": {

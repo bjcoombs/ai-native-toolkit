@@ -18,7 +18,7 @@
     },
     {
       "id": "core.agent_consistency",
-      "revision": 1
+      "revision": 2
     },
     {
       "id": "core.agent_environment",
@@ -130,7 +130,7 @@
     },
     {
       "id": "core.doc_staleness",
-      "revision": 1
+      "revision": 2
     },
     {
       "id": "core.excluded_as_generated",
@@ -190,7 +190,7 @@
     },
     {
       "id": "core.guardrails",
-      "revision": 2
+      "revision": 3
     },
     {
       "id": "core.headline",

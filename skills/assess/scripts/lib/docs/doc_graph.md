@@ -21,7 +21,9 @@ positive. Every doc-to-doc edge carries a `kind`: `link` for markdown links, wik
 vault query edges, `reference` for a backticked token outside a fence that resolves to an
 existing doc (path tokens via `ownership_parser._extract_path_refs`; exact paths before
 guesses: doc-relative, then a path via `ownership_parser._resolve_ref` or a bare basename
-that names exactly one walked doc). Fences are recognised behind blockquote and list-item
+that names exactly one walked doc; a resolved path is keyed as POSIX on every platform, so
+a Windows run resolves `docs/sub/README.md` instead of raising on `docs\sub\README.md`,
+#1286). Fences are recognised behind blockquote and list-item
 markers too. References settle in a first pass, before the link
 pass: a `.claude/` doc a reference names joins the graph and is read in turn, so links
 reach it from any doc; an uncited one stays excluded. The headline `orphan_rate` and

@@ -169,6 +169,10 @@ def _signed_freshness(doc: JsonDict) -> float:
     comparison was indeterminate (no usable timestamps), so we fall back to the
     churn ratio below.
 
+    A base doc that still names a direct child renamed after its last change
+    (``renamed_children_named`` above 0, #822) reads -1.0: the path it gives
+    no longer exists.
+
     Otherwise (the ordinary hand-written doc), ``ratio`` (the window churn ratio
     capped by the distinct subject commits since the doc's last content change; see
     ``lib.docs.doc_staleness``) is the decaying-map signal: 0 when the doc is not
@@ -186,6 +190,8 @@ def _signed_freshness(doc: JsonDict) -> float:
             return -1.0
         if source_newer is False:
             return 1.0
+    if int(doc.get("renamed_children_named") or 0) > 0:
+        return -1.0
     ratio = float(doc.get("ratio", 0.0) or 0.0)
     return round(_clamp((STALENESS_RATIO_THRESHOLD - ratio) / STALENESS_RATIO_THRESHOLD,
                         -1.0, 1.0), 3)
@@ -195,8 +201,8 @@ def is_stale(doc: JsonDict) -> bool:
     """True when the doc's signed freshness is below zero: its subject has outrun it.
 
     A hand-written doc is stale once its ``ratio`` exceeds
-    ``STALENESS_RATIO_THRESHOLD``; a generated doc once its declared source is
-    newer. ``doc_staleness.summary`` (#699) counts the docs this holds for.
+    ``STALENESS_RATIO_THRESHOLD`` or it names a renamed direct child (#822); a
+    generated doc once its declared source is newer. ``doc_staleness.summary`` (#699) counts the docs this holds for.
     """
     return _signed_freshness(doc) < 0
 

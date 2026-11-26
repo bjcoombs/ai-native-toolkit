@@ -22,9 +22,14 @@ from test_unit_readings import MONOREPO, _write
 @pytest.fixture(scope="module")
 def run(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     from assess_core import build_run_context
-    repo = _write(tmp_path_factory.mktemp("mono") / "repo", MONOREPO)
-    ctx: dict[str, Any] = build_run_context(repo_root=repo, run_date="2026-11-22",
-                                            non_interactive=True)
+    # A base doc beside billing's code, and the 20-doc floor lowered, so billing's doc
+    # freshness is measured (#822).
+    repo = _write(tmp_path_factory.mktemp("mono") / "repo",
+                  {**MONOREPO, "services/billing/billing/README.md": "# Billing package\n"})
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("lib.docs.doc_staleness.MIN_MEASURED_DOCS", 1)
+        ctx: dict[str, Any] = build_run_context(repo_root=repo, run_date="2026-11-22",
+                                                non_interactive=True)
     return ctx
 
 

@@ -341,281 +341,6 @@ def test_ordinary_doc_has_no_provenance_block(tmp_path: Path) -> None:
     assert "provenance" not in readme
 
 
-# --- Bulk mechanical commits (issue #333) -----------------------------------
-
-_BULK_DOCS = [
-    "CLAUDE.md", "docs/architecture.md", "docs/billing.md", "docs/caching.md",
-    "docs/deploy.md", "docs/events.md", "docs/glossary.md", "docs/logging.md",
-    "docs/metrics.md", "docs/onboarding.md", "docs/releases.md",
-    "docs/security.md",
-]
-
-
-def _bulk_fixture(repo: Path, commit) -> None:
-    """Twelve docs written 300..190 days ago, one licence-header commit 8 days
-    ago touching all twelve, then a genuine one-doc edit 3 days ago."""
-    days = 300
-    for rel in _BULK_DOCS:
-        _write(repo, rel, f"Original text of {rel}.\n")
-        commit(f"docs: write {rel}", days_ago=days)
-        days -= 10
-    for rel in _BULK_DOCS:
-        p = repo / rel
-        p.write_text("<!-- SPDX-License-Identifier: MIT -->\n" + p.read_text(encoding="utf-8"), encoding="utf-8")
-    commit("chore: licence headers", days_ago=8)
-    p = repo / "docs/caching.md"
-    p.write_text(p.read_text(encoding="utf-8") + "A genuine closing section.\n", encoding="utf-8")
-    commit("docs: caching invalidation", days_ago=3)
-
-
-def _head_sha(repo: Path, rev: str) -> str:
-    import subprocess
-    return subprocess.run(["git", "-C", str(repo), "rev-parse", rev],
-                          capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", check=True).stdout.strip()
-
-
-def test_bulk_commit_does_not_reset_doc_staleness(git_repo) -> None:
-    repo, commit = git_repo
-    _bulk_fixture(repo, commit)
-    r = analyze_doc_staleness(repo)
-    days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
-    # Ages count to HEAD (3 days ago), not to today (issue #773).
-    expected = {rel: 300 - 10 * i - 3 for i, rel in enumerate(_BULK_DOCS)}
-    expected["docs/caching.md"] = 0
-    # One day of slack: naive local stamps, so a DST change can move one by an hour.
-    assert set(days) == set(expected)
-    assert all(abs(days[k] - v) <= 1 for k, v in expected.items()), days
-    assert days["docs/caching.md"] == 0
-
-
-def test_bulk_commit_is_recorded_with_full_sha(git_repo) -> None:
-    repo, commit = git_repo
-    _bulk_fixture(repo, commit)
-    r = analyze_doc_staleness(repo)
-    bulk_sha = _head_sha(repo, "HEAD~1")
-    skipped = r["bulk_commits_skipped"]
-    assert [s["sha"] for s in skipped] == [bulk_sha]
-    assert len(skipped[0]["sha"]) == 40
-    assert skipped[0]["docs_touched"] == 12
-    assert skipped[0]["doc_count"] == 12
-    assert r["bulk_commits_skipped_total"] == 1
-    assert r["bulk_commit_scan_complete"] is True
-
-
-def test_single_doc_commit_is_not_bulk(git_repo) -> None:
-    repo, commit = git_repo
-    _bulk_fixture(repo, commit)
-    r = analyze_doc_staleness(repo)
-    caching_edit = _head_sha(repo, "HEAD")
-    assert caching_edit not in {s["sha"] for s in r["bulk_commits_skipped"]}
-
-
-def test_doc_created_in_bulk_commit_keeps_its_creation_date(git_repo) -> None:
-    """A bulk import that adds every doc is the docs' content creation: a later
-    bulk sweep falls back to it, not to the sweep and not to None."""
-    repo, commit = git_repo
-    for rel in _BULK_DOCS:
-        _write(repo, rel, f"Imported {rel}.\n")
-    commit("import docs", days_ago=100)
-    for rel in _BULK_DOCS:
-        p = repo / rel
-        p.write_text("<!-- header -->\n" + p.read_text(encoding="utf-8"), encoding="utf-8")
-    commit("chore: headers", days_ago=5)
-    r = analyze_doc_staleness(repo)
-    assert {d["last_commit_days"] for d in r["docs"]} == {95}  # to HEAD, 5 days ago
-    assert [s["sha"] for s in r["bulk_commits_skipped"]] == [_head_sha(repo, "HEAD")]
-
-
-def test_small_repo_all_docs_commit_is_not_bulk(git_repo) -> None:
-    """Below the minimum-docs floor, editing every doc at once is ordinary work."""
-    repo, commit = git_repo
-    for rel in ("README.md", "docs/a.md", "docs/b.md"):
-        _write(repo, rel, "v1\n")
-    commit("docs", days_ago=50)
-    for rel in ("README.md", "docs/a.md", "docs/b.md"):
-        _write(repo, rel, "v2\n")
-    commit("docs: rewrite", days_ago=4)
-    r = analyze_doc_staleness(repo)
-    assert {d["last_commit_days"] for d in r["docs"]} == {0}  # the rewrite is HEAD
-    assert r["bulk_commits_skipped"] == []
-
-
-def test_no_git_reports_no_bulk_commits(tmp_path: Path) -> None:
-    _write(tmp_path, "README.md", "doc")
-    r = analyze_doc_staleness(tmp_path)
-    assert r["bulk_commits_skipped"] == []
-    assert r["bulk_commits_skipped_total"] == 0
-
-
-def test_instruction_freshness_skips_bulk_commit(git_repo) -> None:
-    """The instruction grader's clock shares the bulk-commit skip."""
-    from lib.instructions.instruction_files import grade_instruction_files
-
-    repo, commit = git_repo
-    _bulk_fixture(repo, commit)
-    files = grade_instruction_files(repo)[0]
-    assert files["CLAUDE.md"]["freshness_days"] in (296, 297)  # to HEAD 3 days ago; DST slack
-
-
-def _sweep(repo: Path, commit, tag: str, days_ago: int, extra=()) -> None:
-    for rel in list(_BULK_DOCS) + list(extra):
-        p = repo / rel
-        p.write_text(f"<!-- {tag} -->\n" + p.read_text(encoding="utf-8"), encoding="utf-8")
-    commit(f"chore: {tag}", days_ago=days_ago)
-
-
-def test_doc_regenerated_only_in_bulk_is_flagged_as_creation_date(git_repo) -> None:
-    """Docs regenerated in bulk every release have no content commit: the
-    creation-date fallback is disclosed and discounted, not passed off as age."""
-    repo, commit = git_repo
-    for rel in _BULK_DOCS:
-        _write(repo, rel, f"Generated {rel}.\n")
-    commit("docs: generate", days_ago=400)
-    for n, days in enumerate((200, 30, 2)):
-        _sweep(repo, commit, f"regen {n}", days)
-    r = analyze_doc_staleness(repo)
-    assert r["creation_date_fallback_count"] == 12
-    for d in r["docs"]:
-        assert d["last_change_basis"] == "creation"
-        assert d["confidence"] == "low"
-
-
-def test_content_dated_doc_has_no_basis_key(git_repo) -> None:
-    repo, commit = git_repo
-    _bulk_fixture(repo, commit)
-    r = analyze_doc_staleness(repo)
-    assert r["creation_date_fallback_count"] == 0
-    assert all("last_change_basis" not in d for d in r["docs"])
-
-
-def test_skipped_list_is_capped_and_total_is_kept(git_repo) -> None:
-    from lib.history.git_churn import BULK_COMMITS_SKIPPED_CAP
-
-    repo, commit = git_repo
-    _bulk_fixture(repo, commit)
-    sweeps = BULK_COMMITS_SKIPPED_CAP + 1
-    for n in range(sweeps):
-        _sweep(repo, commit, f"sweep {n}", days_ago=2)
-    r = analyze_doc_staleness(repo)
-    assert len(r["bulk_commits_skipped"]) == BULK_COMMITS_SKIPPED_CAP
-    assert r["bulk_commits_skipped_total"] == sweeps + 1
-    assert r["bulk_commits_skipped"][0]["sha"] == _head_sha(repo, "HEAD")
-
-
-def test_mass_rename_keeps_pre_rename_content_dates(git_repo) -> None:
-    import subprocess
-
-    repo, commit = git_repo
-    _bulk_fixture(repo, commit)
-    subprocess.run(["git", "-C", str(repo), "mv", "docs", "guide"], check=True)
-    commit("chore: move docs to guide", days_ago=1)
-    r = analyze_doc_staleness(repo)
-    days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
-    assert days["guide/caching.md"] == 2  # to HEAD, 1 day ago
-    assert days["guide/security.md"] in (188, 189)  # DST slack
-
-
-def test_scan_incomplete_when_git_log_times_out(git_repo, monkeypatch) -> None:
-    """A timed-out history read degrades to the plain newest-commit clock and
-    says so, rather than reading as "no bulk commits"."""
-    import subprocess
-
-    import lib.history.git_churn as gc
-
-    repo, commit = git_repo
-    _bulk_fixture(repo, commit)
-    real_run = subprocess.run
-
-    def fake_run(cmd, *a, **k):
-        if "--no-renames" in cmd:
-            raise subprocess.TimeoutExpired(cmd, 1)
-        return real_run(cmd, *a, **k)
-
-    gc.content_commit_clock.cache_clear()
-    monkeypatch.setattr(gc.subprocess, "run", fake_run)
-    r = analyze_doc_staleness(repo)
-    gc.content_commit_clock.cache_clear()
-    assert r["bulk_commit_scan_complete"] is False
-    assert r["bulk_commits_skipped"] == []
-    days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
-    assert days["CLAUDE.md"] == 5  # plain newest-commit read: 8 days ago, HEAD 3
-
-
-def test_shallow_clone_marks_scan_incomplete(git_repo, tmp_path: Path) -> None:
-    import subprocess
-
-    repo, commit = git_repo
-    _bulk_fixture(repo, commit)
-    clone = tmp_path / "shallow"
-    subprocess.run(["git", "clone", "-q", "--depth", "2", f"file://{repo}", str(clone)],
-                   check=True)
-    r = analyze_doc_staleness(clone)
-    assert r["bulk_commit_scan_complete"] is False
-
-
-def test_non_doc_instruction_file_skips_bulk_commit(git_repo) -> None:
-    """`.cursorrules` is outside the docs' pathspec; the per-file route applies
-    the same bulk skip."""
-    from lib.instructions.instruction_files import grade_instruction_files
-
-    repo, commit = git_repo
-    _write(repo, ".cursorrules", "Prefer small functions.\n")
-    commit("add cursor rules", days_ago=400)
-    _bulk_fixture(repo, commit)
-    rules = repo / ".cursorrules"
-    rules.write_text("# header\n" + rules.read_text(encoding="utf-8"), encoding="utf-8")
-    for rel in _BULK_DOCS:
-        p = repo / rel
-        p.write_text("<!-- again -->\n" + p.read_text(encoding="utf-8"), encoding="utf-8")
-    commit("chore: headers everywhere", days_ago=5)
-    files = grade_instruction_files(repo)[0]
-    assert files[".cursorrules"]["freshness_days"] in (394, 395)  # to HEAD; DST slack
-
-
-def test_shallow_probe_timeout_marks_scan_incomplete(git_repo, monkeypatch) -> None:
-    """A timed-out shallow probe must not escape the clock or vouch for it."""
-    import subprocess
-
-    import lib.history.git_churn as gc
-
-    repo, commit = git_repo
-    _bulk_fixture(repo, commit)
-    real_run = subprocess.run
-
-    def fake_run(cmd, *a, **k):
-        if "--is-shallow-repository" in cmd:
-            raise subprocess.TimeoutExpired(cmd, 1)
-        return real_run(cmd, *a, **k)
-
-    gc.content_commit_clock.cache_clear()
-    monkeypatch.setattr(gc.subprocess, "run", fake_run)
-    r = analyze_doc_staleness(repo)
-    gc.content_commit_clock.cache_clear()
-    assert r["bulk_commit_scan_complete"] is False
-    days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
-    assert days["docs/caching.md"] == 0  # the caching edit is HEAD
-
-
-def test_rename_scan_failure_marks_scan_incomplete(git_repo, monkeypatch) -> None:
-    """A rename map that could not be read leaves renames unfollowed, so the
-    completeness flag must not vouch for the scan."""
-    import lib.history.change_coupling as cc
-    import lib.docs.doc_staleness as ds
-    import lib.history.git_churn as gc
-
-    repo, commit = git_repo
-    _bulk_fixture(repo, commit)
-    monkeypatch.setattr(cc, "build_rename_map",
-                        lambda *a, **k: cc.RenameMap({}, complete=False))
-    ds._clock_at.cache_clear()
-    gc.content_commit_clock.cache_clear()
-    r = analyze_doc_staleness(repo)
-    ds._clock_at.cache_clear()
-    assert r["bulk_commit_scan_complete"] is False
-    days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
-    assert days["docs/caching.md"] == 0  # the caching edit is HEAD
-
-
 # --- Behind-the-subject cap: a lying map must be behind its subject now -----
 
 def _lying_map_paths(staleness: dict, repo: Path) -> list[str]:
@@ -812,3 +537,203 @@ def test_doc_frozen_before_window_keeps_file_commit_ratio(git_repo) -> None:
     readme = next(d for d in r["docs"] if d["path"] == "README.md")
     assert readme["code_churn_since_doc_change"] == 3
     assert readme["ratio"] == readme["window_ratio"] == 30.0
+
+
+# --- Direct-children normalisation for base docs (issue #822) ---------------
+
+def _root_doc_fixture(repo: Path, commit) -> None:
+    """A root README naming its direct child `helper.py` and a deep file, with
+    deep code under it and no base doc in between, edited 60 days ago."""
+    _write(repo, "README.md", "Start at `helper.py`; the engine is `pkg/sub/deep.py`.\n")
+    _write(repo, "helper.py", "h = 0\n")
+    _write(repo, "app.py", "a = 0\n")
+    _write(repo, "pkg/sub/deep.py", "d = 0\n")
+    _write(repo, "pkg/sub/other.py", "o = 0\n")
+    commit("initial", days_ago=90)
+    _write(repo, "README.md", "Start at `helper.py`; the engine is `pkg/sub/deep.py`. Edited.\n")
+    commit("docs: edit the readme", days_ago=60)
+
+
+def _readme(repo: Path) -> dict:
+    r = analyze_doc_staleness(repo)
+    return next(d for d in r["docs"] if d["path"] == "README.md")
+
+
+def test_root_doc_not_stale_from_unrelated_deep_commits(git_repo) -> None:
+    """Fifty commits to deep files the root doc owns but does not sit beside
+    leave it fresh: a base doc is measured against its direct children."""
+    from lib.docs.doc_complexity_join import is_stale
+
+    repo, commit = git_repo
+    _root_doc_fixture(repo, commit)
+    for i in range(50):
+        _write(repo, f"pkg/sub/deep{i % 5}.py", f"d = {i}\n")
+        commit(f"deep change {i}", days_ago=50 - i // 2)
+
+    readme = _readme(repo)
+    assert readme["subject_code_count"] == 9  # ownership still covers the whole tree
+    assert readme["measured_code_count"] == 2  # helper.py, app.py
+    assert readme["code_churn_since_doc_change"] == 0
+    assert not is_stale(readme)
+
+
+def test_root_doc_stale_once_direct_children_outrun_it(git_repo) -> None:
+    from lib.docs.doc_complexity_join import is_stale
+
+    repo, commit = git_repo
+    _root_doc_fixture(repo, commit)
+    for i in range(3):
+        _write(repo, "app.py", f"a = {i + 1}\n")
+        commit(f"app change {i}", days_ago=30 - i)
+
+    readme = _readme(repo)
+    assert readme["code_churn_since_doc_change"] == 3
+    assert is_stale(readme)
+
+
+def test_renaming_a_named_direct_child_makes_the_doc_stale(git_repo) -> None:
+    from lib.docs.doc_complexity_join import is_stale
+
+    repo, commit = git_repo
+    _root_doc_fixture(repo, commit)
+    (repo / "helper.py").rename(repo / "tools.py")
+    commit("refactor: rename helper", days_ago=10)
+
+    readme = _readme(repo)
+    assert readme["renamed_children_named"] == 1
+    assert is_stale(readme)
+
+
+def test_renaming_a_named_deeper_path_does_not(git_repo) -> None:
+    from lib.docs.doc_complexity_join import is_stale
+
+    repo, commit = git_repo
+    _root_doc_fixture(repo, commit)
+    (repo / "pkg/sub/deep.py").rename(repo / "pkg/sub/core.py")
+    commit("refactor: rename deep", days_ago=10)
+
+    readme = _readme(repo)
+    assert readme["renamed_children_named"] == 0
+    assert not is_stale(readme)
+
+
+def test_rename_before_the_doc_edit_does_not_count(git_repo) -> None:
+    repo, commit = git_repo
+    _root_doc_fixture(repo, commit)
+    (repo / "helper.py").rename(repo / "tools.py")
+    commit("refactor: rename helper", days_ago=10)
+    _write(repo, "README.md", "Start at `tools.py`.\n")
+    commit("docs: follow the rename", days_ago=5)
+
+    assert _readme(repo)["renamed_children_named"] == 0
+
+
+def test_base_doc_with_no_direct_child_code_is_not_measured(git_repo) -> None:
+    """A root doc that owns only deep code has nothing beside it to measure,
+    so it leaves `measured_docs` rather than reading fresh."""
+    repo, commit = git_repo
+    _write(repo, "README.md", "map\n")
+    _write(repo, "pkg/sub/deep.py", "d = 0\n")
+    commit("initial", days_ago=30)
+
+    r = analyze_doc_staleness(repo)
+    readme = next(d for d in r["docs"] if d["path"] == "README.md")
+    assert readme["subject_method"] == "nearest-ancestor"
+    assert readme["measured_code_count"] == 0
+    assert r["summary"]["measured_docs"] == 0
+
+
+def _row(path: str, ratio: float, method: str = "nearest-ancestor") -> dict:
+    return {"path": path, "subject_method": method, "ratio": ratio,
+            "measured_code_count": 1}
+
+
+def test_fewer_than_twenty_measured_docs_reads_not_measured() -> None:
+    from lib.docs.doc_staleness import MIN_MEASURED_DOCS, staleness_summary
+
+    assert MIN_MEASURED_DOCS == 20
+    rows = [_row(f"d{i}/README.md", 5.0 if i < 3 else 0.0) for i in range(19)]
+    summary = staleness_summary(rows, reliable=True)
+    assert summary["measured_docs"] == 19
+    assert summary["stale_docs"] == 3
+    assert summary["stale_pct"] is None
+    assert summary["stale_pct_reason"] == "too_few_measured_docs"
+
+    rows.append(_row("d19/README.md", 0.0))
+    summary = staleness_summary(rows, reliable=True)
+    assert summary["stale_pct"] == 15
+    assert "stale_pct_reason" not in summary
+
+
+def test_too_few_measured_docs_reads_not_measured_in_the_tally() -> None:
+    """The reason code reaches the level tally as the condition's reason."""
+    from lib.scoring.level_tally import _block_reason
+
+    data = {"doc_staleness": {"summary": {
+        "measured_docs": 4, "stale_docs": 1, "stale_pct": None,
+        "stale_pct_reason": "too_few_measured_docs"}}}
+    assert _block_reason(data, "doc_staleness.summary.stale_pct") == "too_few_measured_docs"
+
+
+def test_block_records_the_normalisation_rule(tmp_path: Path) -> None:
+    _write(tmp_path, "README.md", "doc")
+    _write(tmp_path, "app.py", "x")
+    r = analyze_doc_staleness(tmp_path)
+    assert r["normalisation"] == {
+        "base_doc_subject": "direct_children",
+        "rename_scope": "direct_children",
+        "min_measured_docs": 20,
+    }
+
+
+def test_counts_only_keeps_the_822_fields(git_repo) -> None:
+    """Counts-only output keeps the rule, the per-row counts and the reason code."""
+    from lib.counts_only.content_free import counts_only_scans
+
+    repo, commit = git_repo
+    _root_doc_fixture(repo, commit)
+    kept = counts_only_scans({"doc_staleness": analyze_doc_staleness(repo)})["doc_staleness"]
+    assert kept["normalisation"] == {"base_doc_subject": "direct_children",
+                                     "rename_scope": "direct_children", "min_measured_docs": 20}
+    row = kept["docs"][0]
+    assert (row["measured_code_count"], row["renamed_children_named"]) == (2, 0)
+    assert kept["summary"]["stale_pct_reason"] == "too_few_measured_docs"
+
+
+def test_renaming_the_doc_itself_does_not_make_it_stale(git_repo) -> None:
+    """A doc that mentions its former name stays fresh after its own rename: a
+    rename is not a content change, so it would otherwise read stale for good."""
+    from lib.docs.doc_complexity_join import is_stale
+
+    repo, commit = git_repo
+    _write(repo, "CLAUDE.md", "Copy or symlink as `CLAUDE.md`. Start at `app.py`.\n")
+    _write(repo, "app.py", "a = 0\n")
+    commit("initial", days_ago=30)
+    (repo / "CLAUDE.md").rename(repo / "AGENTS.md")
+    commit("docs: rename the guide", days_ago=10)
+
+    r = analyze_doc_staleness(repo)
+    agents = next(d for d in r["docs"] if d["path"] == "AGENTS.md")
+    assert agents["renamed_children_named"] == 0
+    assert not is_stale(agents)
+
+
+def test_a_renamed_path_that_exists_again_does_not_count(git_repo) -> None:
+    repo, commit = git_repo
+    _root_doc_fixture(repo, commit)
+    (repo / "helper.py").rename(repo / "tools.py")
+    commit("refactor: rename helper", days_ago=10)
+    _write(repo, "helper.py", "h = 1\n")
+    commit("feat: a new helper", days_ago=8)
+
+    assert _readme(repo)["renamed_children_named"] == 0
+
+
+def test_a_base_doc_with_a_source_verdict_stays_measured() -> None:
+    """No code beside it, but a provenance verdict that does not rest on churn."""
+    from lib.docs.doc_staleness import staleness_summary
+
+    row = {**_row("README.md", 0.0), "measured_code_count": 0,
+           "provenance": {"method": "frontmatter", "sources": ["a.py"],
+                          "generated_by": None, "source_newer": True}}
+    assert staleness_summary([row], reliable=True)["measured_docs"] == 1

@@ -19,7 +19,7 @@ headless_variants = [
 shapes = [
   { path = "doc_staleness", type = "lib.docs.doc_staleness:DocStalenessBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "doc_staleness.churn_window" = "drop"
   "doc_staleness.docs.subject_method" = "token"
@@ -41,6 +41,9 @@ revision = 1
   "doc_staleness.declared_cross_repo.scope" = "path"
   "doc_staleness.declared_cross_repo.status" = "token"
   "doc_staleness.declared_cross_repo.reason" = "token"
+  "doc_staleness.summary.stale_pct_reason" = "token"
+  "doc_staleness.normalisation.base_doc_subject" = "token"
+  "doc_staleness.normalisation.rename_scope" = "token"
 
 [[entries]]
 id = "core:doc_staleness.summary.stale_pct"
@@ -50,7 +53,7 @@ collector = "core.doc_staleness"
 path = "doc_staleness.summary.stale_pct"
 type = "number"
 evidence = "git_history"
-null_means = "a shallow or degenerate history, no git work tree or no mapped doc"
+null_means = "a shallow or degenerate history, no git work tree, no mapped doc, or fewer than 20 measured docs (stale_pct_reason too_few_measured_docs)"
 
 [[entries]]
 id = "core.cond.doc-freshness.1.stale_pct"

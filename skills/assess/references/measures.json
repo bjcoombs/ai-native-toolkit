@@ -1867,6 +1867,7 @@
         "written": true,
         "strings_kept": {
           "agent_consistency.canonical": "path",
+          "agent_consistency.conflicts_reason": "token",
           "agent_consistency.divergences.kind": "token",
           "agent_consistency.divergences.missing_from": "token",
           "agent_consistency.divergences.named_in": "token",
@@ -1880,7 +1881,8 @@
           "agent_consistency.next_steps.symlink": "drop",
           "agent_consistency.next_steps.system": "token",
           "agent_consistency.not_read": "drop",
-          "agent_consistency.systems": "token"
+          "agent_consistency.systems": "token",
+          "agent_consistency.unlinked_reason": "token"
         }
       },
       "used_by": {
@@ -2412,9 +2414,14 @@
           "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
         },
         {
-          "code": "no_import_graph_<language>",
-          "means": "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.",
+          "code": "no_builder:<language>",
+          "means": "No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages.",
           "next_step": "Nothing to change: structure reads as not measured for this language."
+        },
+        {
+          "code": "no_import_graph_<language>",
+          "means": "A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go.",
+          "next_step": "Nothing to change if that code is loose scripts; a package the builder recognises is measured."
         },
         {
           "code": "invalid_import_graph",
@@ -3028,9 +3035,14 @@
           "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
         },
         {
-          "code": "no_import_graph_<language>",
-          "means": "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.",
+          "code": "no_builder:<language>",
+          "means": "No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages.",
           "next_step": "Nothing to change: structure reads as not measured for this language."
+        },
+        {
+          "code": "no_import_graph_<language>",
+          "means": "A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go.",
+          "next_step": "Nothing to change if that code is loose scripts; a package the builder recognises is measured."
         },
         {
           "code": "invalid_import_graph",
@@ -3213,7 +3225,10 @@
           "doc_staleness.docs.subject_method": "token",
           "doc_staleness.docs.subject_paths": "path",
           "doc_staleness.docs.subject_roots": "path",
-          "doc_staleness.history_boundary_date": "token"
+          "doc_staleness.history_boundary_date": "token",
+          "doc_staleness.normalisation.base_doc_subject": "token",
+          "doc_staleness.normalisation.rename_scope": "token",
+          "doc_staleness.summary.stale_pct_reason": "token"
         }
       },
       "used_by": {
@@ -3302,9 +3317,14 @@
           "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
         },
         {
-          "code": "no_import_graph_<language>",
-          "means": "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.",
+          "code": "no_builder:<language>",
+          "means": "No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages.",
           "next_step": "Nothing to change: structure reads as not measured for this language."
+        },
+        {
+          "code": "no_import_graph_<language>",
+          "means": "A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go.",
+          "next_step": "Nothing to change if that code is loose scripts; a package the builder recognises is measured."
         },
         {
           "code": "invalid_import_graph",
@@ -3474,7 +3494,8 @@
           "guardrails.gates.snippet": "drop",
           "guardrails.gates.stated_in": "path",
           "guardrails.gates.tool": "token",
-          "guardrails.not_read": "drop"
+          "guardrails.not_read": "drop",
+          "guardrails.stated_pct_reason": "token"
         }
       },
       "used_by": {
@@ -4074,9 +4095,14 @@
           "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
         },
         {
-          "code": "no_import_graph_<language>",
-          "means": "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.",
+          "code": "no_builder:<language>",
+          "means": "No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages.",
           "next_step": "Nothing to change: structure reads as not measured for this language."
+        },
+        {
+          "code": "no_import_graph_<language>",
+          "means": "A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go.",
+          "next_step": "Nothing to change if that code is loose scripts; a package the builder recognises is measured."
         },
         {
           "code": "invalid_import_graph",
@@ -4475,9 +4501,14 @@
           "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
         },
         {
-          "code": "no_import_graph_<language>",
-          "means": "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.",
+          "code": "no_builder:<language>",
+          "means": "No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages.",
           "next_step": "Nothing to change: structure reads as not measured for this language."
+        },
+        {
+          "code": "no_import_graph_<language>",
+          "means": "A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go.",
+          "next_step": "Nothing to change if that code is loose scripts; a package the builder recognises is measured."
         },
         {
           "code": "invalid_import_graph",
@@ -4732,9 +4763,14 @@
           "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
         },
         {
-          "code": "no_import_graph_<language>",
-          "means": "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.",
+          "code": "no_builder:<language>",
+          "means": "No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages.",
           "next_step": "Nothing to change: structure reads as not measured for this language."
+        },
+        {
+          "code": "no_import_graph_<language>",
+          "means": "A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go.",
+          "next_step": "Nothing to change if that code is loose scripts; a package the builder recognises is measured."
         },
         {
           "code": "invalid_import_graph",
@@ -6305,7 +6341,7 @@
       "collector": "core.agent_consistency",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": "fewer than two agent systems: nothing to agree with"
+      "null_means": "fewer than two agent systems: nothing to agree with; conflicts_reason fewer_than_two_systems reads the condition not applicable"
     },
     {
       "path": "agent_consistency.unlinked",
@@ -6314,7 +6350,7 @@
       "collector": "core.agent_consistency",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": "fewer than two agent systems: nothing to link"
+      "null_means": "fewer than two agent systems: nothing to link; unlinked_reason fewer_than_two_systems reads the condition not applicable"
     },
     {
       "path": "agent_environment.check.named_total",
@@ -6458,7 +6494,7 @@
       "collector": "core.doc_staleness",
       "input_class": "git_history",
       "grade": "measured",
-      "null_means": "a shallow or degenerate history, no git work tree or no mapped doc"
+      "null_means": "a shallow or degenerate history, no git work tree, no mapped doc, or fewer than 20 measured docs (stale_pct_reason too_few_measured_docs)"
     },
     {
       "path": "guardrails.stated_pct",
@@ -6467,7 +6503,7 @@
       "collector": "core.guardrails",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": "no gate found in the run (the scope, on a scoped run): nothing to state"
+      "null_means": "no gate found in the run (the scope, on a scoped run): nothing to state; stated_pct_reason no_configured_gates reads the condition not applicable"
     },
     {
       "path": "instruction_claims.failed",
@@ -6476,7 +6512,7 @@
       "collector": "core.instruction_claims",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": ""
+      "null_means": "no_instruction_claims: the instruction files make no claim this check reads (instruction_claims.total 0), so there is nothing to hold"
     },
     {
       "path": "layer_grades.instruction_file_present",
@@ -6494,7 +6530,7 @@
       "collector": "core.nested_instructions",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": ""
+      "null_means": "no_loaded_instructions: Claude Code loads no instruction line at launch (budget.claude_code.files is empty), so there is no budget to keep"
     },
     {
       "path": "observability.rung",

@@ -6,7 +6,7 @@ name and one plain sentence of what an agent can do there (``STEP_MEANING``, the
 table of those sentences; a Step it does not know reads its model name only). Between
 two rungs sits the gate that lifts you to the upper one: the gates the upper Step adds
 over the one below, worded by ``headline.GATE_CHANGE`` ("CI turns red on a broken check"), each marked
-"in place", "not yet", "not measured" or "excluded by owner" from the level result's
+"in place", "not yet", "not measured", "not applicable" or "excluded by owner" from the level result's
 conditions (``gate_state``; a gate holds when its row's conditions 1..level are met, and
 missing evidence never reads "not yet"). The run's Step (``level["step"]``) carries the "You are
 here" marker; the gate below ``level["next_step"]`` is drawn in the warn colour as the
@@ -26,12 +26,14 @@ Tests: ``tests/test_assess_diagrams_ladder.py``.
 """
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 import lib.fleet.fleet_svg as svg
 from lib.svg_scope import SCOPES
 from lib.scoring.headline import GATE_CHANGE, gate_change, one_change_ceiling
 from lib.scoring.level_result_types import LevelResult
+from lib.scoring.level_tally import scan_not_applicable
 from lib.scoring.levels import StepDef, StepGate
 from lib.vocabulary import IN_PLACE
 
@@ -73,14 +75,17 @@ def gate_state(level: LevelResult, gate: StepGate) -> str:
     """What the run read for a gate: ``in place`` when its row's conditions 1..level are all
     met, else read from the first one not met, as the level engine picks the gate's blocker
     (``level_tally._gate_blocker``): ``not measured``, ``excluded by owner`` (not
-    applicable), or ``not yet`` (unmet, declined, or absent from the result). Missing
+    applicable), ``not applicable`` (a scan's ``NOT_APPLICABLE_REASONS`` code, #1407), or
+    ``not yet`` (unmet, declined, or absent from the result). Missing
     evidence never reads as "not yet"."""
-    by_id = {c["id"]: c["state"] for c in level["conditions"]}
-    states = [by_id.get(f"{gate['row']}.{n}", "unmet") for n in range(1, gate["level"] + 1)]
-    first = next((state for state in states if state != "met"), None)
+    by_id: dict[str, Mapping[str, Any]] = {c["id"]: c for c in level["conditions"]}
+    reads = [by_id.get(f"{gate['row']}.{n}", {"state": "unmet"}) for n in range(1, gate["level"] + 1)]
+    first = next((read for read in reads if read["state"] != "met"), None)
     if first is None:
         return "in place"
-    return {"not_measured": "not measured", "not_applicable": "excluded by owner"}.get(first, "not yet")
+    if scan_not_applicable(first, by_id) is not None:
+        return "not applicable"  # a scan's reason, not the owner's (#1407)
+    return {"not_measured": "not measured", "not_applicable": "excluded by owner"}.get(first["state"], "not yet")
 
 
 def _held_state(level: LevelResult, gate: StepGate) -> str:

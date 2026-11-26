@@ -10,7 +10,8 @@ import pytest
 from lib.run.run_scope import Scope
 from lib.counts_only.content_free import counts_only
 from lib.testing.coverage_gate import detect_coverage_gate
-from lib.instructions.guardrails import scan_guardrails
+from lib.instructions.guardrails import NO_GATES_REASON, scan_guardrails
+from lib.scoring.level_tally import default_model, level_result
 from lib.scoring.level_signals import load_default_levels
 from lib.scoring.levels import evaluate
 
@@ -86,6 +87,26 @@ def test_no_gate_reads_a_null_share(tmp_path: Path) -> None:
     block = scan_guardrails(root, [], detect_coverage_gate(root))
     assert block["gates"] == [] and block["enforced"] == 0
     assert block["stated_pct"] is None
+
+
+def test_no_gate_reads_guardrails_stated_not_applicable(tmp_path: Path) -> None:
+    """#1407: with no configured gate there is nothing to state, so both conditions read not
+    applicable with the reason naming why, never not measured, and neither is counted."""
+    root = _write(tmp_path, {"README.md": "# x\n", "src/a.py": "x = 1\n"})
+    block = scan_guardrails(root, [], detect_coverage_gate(root))
+    assert block.get("stated_pct_reason") == NO_GATES_REASON
+    result = level_result(default_model(), {"guardrails": dict(block)})
+    conds = {c["id"]: c for c in result["conditions"] if c["row"] == "guardrails-stated"}
+    for cid in ("guardrails-stated.1", "guardrails-stated.2"):
+        assert (conds[cid]["state"], conds[cid].get("reason")) == ("not_applicable", "no_configured_gates")
+        assert conds[cid]["counted"] is False
+    kept = counts_only({"guardrails": dict(block)})["guardrails"]
+    assert kept["stated_pct_reason"] == NO_GATES_REASON
+
+
+def test_a_configured_gate_carries_no_not_applicable_reason(tmp_path: Path) -> None:
+    block = _scan(_repo_g(tmp_path))
+    assert block["enforced"] and "stated_pct_reason" not in block
 
 
 @pytest.mark.parametrize(("line", "stated"), [

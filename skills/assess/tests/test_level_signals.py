@@ -69,7 +69,11 @@ def instructed_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     """golden-doc-repo plus a CLAUDE.md naming a check that resolves, and agent ops."""
     repo = tmp_path_factory.mktemp("instructed") / "repo"
     shutil.copytree(FIXTURES / "golden-doc-repo", repo)
-    (repo / "CLAUDE.md").write_text("# Guide\n\nRun `make check` before pushing.\n", encoding="utf-8")
+    # The pin is a claim instruction_claims checks: no claim reads not measured (#827).
+    (repo / "CLAUDE.md").write_text(
+        "# Guide\n\nRun `make check` before pushing.\n\nPython 3.12 is pinned in `.python-version`.\n",
+        encoding="utf-8")
+    (repo / ".python-version").write_text("3.12\n", encoding="utf-8")
     # A second agent system, so agent_consistency compares two root files.
     (repo / ".windsurfrules").write_text("Follow [CLAUDE.md](CLAUDE.md).\n", encoding="utf-8")
     (repo / "Makefile").write_text("check:\n\tpython -m pytest\n", encoding="utf-8")
@@ -105,6 +109,21 @@ def owned_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     (repo / "src").mkdir()
     (repo / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
     return _scans(_commit(repo))
+
+
+@pytest.fixture(scope="module")
+def measured_docs_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
+    """Twenty modules, each a README beside its code: enough measured docs for a stale share (#822)."""
+    repo = tmp_path_factory.mktemp("measured_docs") / "repo"
+    for i in range(20):
+        (repo / f"m{i}").mkdir(parents=True)
+        (repo / f"m{i}" / "README.md").write_text(f"# m{i}\n", encoding="utf-8")
+        (repo / f"m{i}" / "a.py").write_text(f"x = {i}\n", encoding="utf-8")
+    _commit(repo)
+    for i in range(20):  # a second commit per file, so the history is not degenerate
+        (repo / f"m{i}" / "a.py").write_text(f"x = {i + 1}\n", encoding="utf-8")
+    _git(repo, "-c", "user.email=a@example.com", "-c", "user.name=A", "commit", "-qam", "two")
+    return _scans(repo)
 
 
 @pytest.fixture(scope="module")
@@ -266,11 +285,12 @@ def test_default_levels_loads_against_the_schema() -> None:
 def test_every_default_signal_is_emitted_by_some_real_output(
     golden_repos: dict[str, dict[str, Any]], instructed_repo: dict[str, Any],
     suppressed_repo: dict[str, Any], two_package_repo: dict[str, Any], owned_repo: dict[str, Any],
+    measured_docs_repo: dict[str, Any],
 ) -> None:
     """Catches a typo in an open block, which the validator cannot."""
     run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
     documents = [*golden_repos.values(), instructed_repo, suppressed_repo, two_package_repo,
-                 owned_repo, run_context]
+                 owned_repo, measured_docs_repo, run_context]
     # review_reality needs GitHub; its fields are named in its module doc. review_evidence
     # is unavailable without it unless an AI review step is committed (test_review_automation).
     # contributor_files.policy.present needs a SECURITY file in the tree or the GitHub read of
@@ -314,7 +334,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "layer-6-coverage": 0,
             "layer-7-review": None,      # needs GitHub
             "layer-8-agent-ops": 0,
-            "doc-freshness": 2,          # docs and code committed together: none stale
+            "doc-freshness": None,       # under 20 measured docs: too_few_measured_docs (#822)
             "guardrails-stated": None,   # no configured gate: nothing to state
             "agent-consistency": None,   # no instruction file: nothing to agree with
             "skill-disclosure": None, "skill-personal-data": None,  # no SKILL.md or agent file: no_skill_files

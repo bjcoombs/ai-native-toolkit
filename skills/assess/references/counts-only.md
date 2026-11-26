@@ -38,7 +38,7 @@ keys come from the file tree, so a key like `docs/My Notes.md` is kept
 `file_a`, `file_b`, `test_file` or `source_file` is a path in every block,
 and a field named `reason` is dropped in every block without its own rule.
 A field kept as a reason code keeps only the code of a `code: sentence`
-reason when it is a known structure code (`no_import_graph_rust`) or `no_ownership_map`,
+reason when it is a known structure code (`no_builder:rust`, `no_import_graph_go`) or `no_ownership_map`,
 or the code a known sentence maps to (`no_grimp`), else `unavailable`,
 so a path or name before the colon is never kept; an empty reason is dropped.
 
@@ -114,6 +114,8 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | Field | Kept as |
 |---|---|
 | `agent_consistency.systems` | token |
+| `agent_consistency.conflicts_reason` | token |
+| `agent_consistency.unlinked_reason` | token |
 | `agent_consistency.canonical` | path (hashed when hashing is on) |
 | `agent_consistency.files.path` | path (hashed when hashing is on) |
 | `agent_consistency.files.system` | token |
@@ -404,6 +406,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `doc_staleness.declared_cross_repo.scope` | path (hashed when hashing is on) |
 | `doc_staleness.declared_cross_repo.status` | token |
 | `doc_staleness.declared_cross_repo.reason` | token |
+| `doc_staleness.summary.stale_pct_reason` | token |
+| `doc_staleness.normalisation.base_doc_subject` | token |
+| `doc_staleness.normalisation.rename_scope` | token |
 
 ## excluded_generated
 
@@ -452,6 +457,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | Field | Kept as |
 |---|---|
 | `guardrails.gates.kind` | token |
+| `guardrails.stated_pct_reason` | token |
 | `guardrails.gates.tool` | token |
 | `guardrails.gates.rule` | token |
 | `guardrails.gates.stated_in` | path (hashed when hashing is on) |

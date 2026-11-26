@@ -466,7 +466,7 @@ def _resolve_references(
 
     `doc_by_rel` / `doc_rels` hold the walked docs only and never grow, so a
     doc's references depend on its own text and the walk, not on read order.
-    """
+    Resolved paths are keyed as POSIX, as the doc keys are (#1286)."""
     from lib.docs.ownership_parser import _resolve_ref
     found: list[Path] = []
     for ref, local in _reference_paths(text, source_rel):
@@ -476,7 +476,7 @@ def _resolve_references(
             # per-call sweep of every doc; a path (or a root-level exact name,
             # which the resolver prefers over a basename match) goes through it.
             hits = (set(by_basename.get(ref, [])) if "/" not in ref and ref not in doc_rels
-                    else {str(x) for x in _resolve_ref(ref, repo_root, doc_rels)})
+                    else {x.as_posix() for x in _resolve_ref(ref, repo_root, doc_rels)})
             hit = doc_by_rel[next(iter(hits))] if len(hits) == 1 else cite(ref.lstrip("/"))
         if hit is not None:
             found.append(hit)

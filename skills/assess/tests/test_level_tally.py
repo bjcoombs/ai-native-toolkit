@@ -233,6 +233,20 @@ def test_a_tangled_graph_does_not_count_front_door_imports():
     assert _default_state(modular, "layer-2-design.2") == ("met", None)
 
 
+def test_vendored_javascript_earns_no_design_credit_in_a_java_repo(tmp_path):
+    """#825: 50 .java files beside vendored web assets read not measured, never a stand-in."""
+    from lib.graph.structure_graph import analyze_structure
+    from lib.run.headless_layers import structure
+    from test_import_graph import vendored_java_repo
+
+    block = structure(analyze_structure(vendored_java_repo(tmp_path)).as_dict())
+    result = lt.level_result(lt.default_model(), {"structure": block})
+    design = [c for c in result["conditions"] if c["id"].startswith("layer-2-design.")]
+    assert design, "the default model has layer-2-design conditions"
+    assert not [c["id"] for c in design if c["state"] == "met"]
+    assert {(c["state"], c.get("reason")) for c in design} == {("not_measured", "no_builder:java")}
+
+
 def test_wide_review_waits_on_review_evidence():
     """#934: layer-7-review.2 cannot count while layer-7-review.1 is unmet."""
     wide = {"review_reality": {"reviewed_share": 0.9, "approved_share": 0.6}}
@@ -264,6 +278,51 @@ def test_no_counted_manifest_reads_not_measured(pinning, state):
     """#927 A: nothing to lock is not a lockfile check passed."""
     signals = {"agent_environment": {"available": True, "pinning": pinning}}
     assert _default_state(signals, "layer-5-ci.2") == state
+
+
+def _instructions(claims: int, failed: int, lines: int) -> dict[str, Any]:
+    return {"agent_environment": {"available": True, "check": {"named_total": 1}},
+            "instruction_claims": {"total": claims, "verified": claims - failed, "failed": failed},
+            "nested_instructions": {"available": True, "budget": {"claude_code": {"files": [], "lines": lines}}}}
+
+
+def _instruction_criteria(signals: dict[str, Any]) -> dict[str, str | None]:
+    row = next(r for r in lt.default_model()["rows"] if r["id"] == "layer-0-instructions")
+    unmet = evaluate_row(row, signals)["levels"][1]["unmet"]
+    return {u["signal"]: u["reason"] for u in unmet}
+
+
+def test_no_instruction_content_reads_not_measured():
+    """#827: no claim to check and no always-loaded line is not an instruction set that passed."""
+    empty = _instructions(claims=0, failed=0, lines=0)
+    assert _instruction_criteria(empty) == {
+        "instruction_claims.failed": "no_instruction_claims",
+        "nested_instructions.budget.claude_code.lines": "no_loaded_instructions",
+    }
+    assert _default_state(empty, "layer-0-instructions.2") == ("not_measured", "no_instruction_claims")
+
+
+def test_checked_claims_with_no_failure_read_met():
+    """#827: three claims checked and none failed is a measurement, so the condition counts."""
+    signals = _instructions(claims=3, failed=0, lines=40)
+    signals["nested_instructions"]["budget"]["claude_code"]["files"] = ["CLAUDE.md"]
+    assert _default_state(signals, "layer-0-instructions.2") == ("met", None)
+
+
+@pytest.mark.parametrize("claude_code, reason", [
+    pytest.param({"files": [], "lines": 0}, "no_loaded_instructions", id="no-file-loaded"),
+    pytest.param({"files": ["CLAUDE.md"], "lines": 0}, None, id="empty-file-loaded"),
+    pytest.param({"lines": 0}, None, id="no-file-list"),
+])
+def test_the_budget_set_is_its_loaded_files(claude_code, reason):
+    """#827: the budget's denominator is the loaded file list, counted by its length; a block
+    without the list (an older or hand-built one) keeps the plain comparison."""
+    model = _model(_row("instr", [{"signal": "nested_instructions.budget.claude_code.lines", "op": "lte", "value": 200}]))
+    evaluation = evaluate_row(model["rows"][0], {"nested_instructions": {"budget": {"claude_code": claude_code}}})
+    if reason is None:
+        assert evaluation["status"] == "level" and evaluation["level"] == 1
+    else:
+        assert evaluation["levels"][0]["unmet"][0]["reason"] == reason
 
 
 def test_a_real_unmet_sibling_outweighs_an_empty_set():
@@ -696,3 +755,8 @@ def test_each_condition_carries_the_whys_of_its_criteria():
     assert len(by_id["layer-0-instructions.2"]["why"].split(". ")) > 3  # three criteria
     custom = {**model, "steps": [], "rows": [{**model["rows"][0], "id": "own-row"}]}
     assert all("why" not in c for c in lt.level_result(custom, {})["conditions"])
+
+
+def test_a_no_builder_reason_reads_in_words():
+    from lib.scoring.headline import reason_word
+    assert reason_word("no_builder:java") == "no import graph builder for java yet"

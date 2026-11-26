@@ -37,7 +37,8 @@ first rename and moves on only through a rename in a commit that descends from t
 before, checked with `git merge-base --is-ancestor`, so a freed-and-refilled name is not
 chained through in sequence or across sibling branches; then any source name that exists
 again in the working tree is left out), and `complete`, False when git could not be read so an empty map is
-never mistaken for "no renames". `fold_renames` rewrites the commit sets through `paths`,
+never mistaken for "no renames"; `events` keeps each rename with its author time, which doc
+staleness reads for renamed direct children (#822). `fold_renames` rewrites the commit sets through `paths`,
 so history made before a rename counts under the current path. `repo_top` is the shared
 `git rev-parse --show-toplevel` helper; the git-log readers take an optional `top` so a
 caller that already resolved it skips the extra subprocess. Both readers pin `-M` and
@@ -51,7 +52,7 @@ from __future__ import annotations
 
 import re
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import combinations
 from pathlib import Path
 from typing import TypedDict
@@ -155,10 +156,13 @@ class RenameMap:
     failed or timed out). Outside a git repo there is no history to rename, so
     the empty map is complete. An empty ``paths`` then means "unknown", not "no
     renames", so a caller must not treat an unmapped old path as deleted.
+    ``events`` lists every rename the walk saw as ``(author epoch, old, new)``,
+    paths relative to the git top level, one entry per rename (#822).
     """
 
     paths: dict[str, str]
     complete: bool
+    events: tuple[tuple[int, str, str], ...] = field(default=(), compare=False)
 
 
 def build_rename_map(repo_root: Path, *, top: str | None = None) -> RenameMap:
@@ -182,7 +186,7 @@ def build_rename_map(repo_root: Path, *, top: str | None = None) -> RenameMap:
     # commit before its ancestors, so reversed, an ancestor always has the
     # smaller index.
     cmd = ["git", "-c", "core.quotepath=false", "-C", top, "log", "--topo-order",
-           "--name-status", "-M", "--diff-filter=R", "--pretty=format:\x1e%H"]
+           "--name-status", "-M", "--diff-filter=R", "--pretty=format:\x1e%H %at"]
     try:
         raw = subprocess.run(
             cmd, capture_output=True, text=True,
@@ -193,13 +197,16 @@ def build_rename_map(repo_root: Path, *, top: str | None = None) -> RenameMap:
 
     # edges[src] lists (index, commit, dst) with the oldest rename first.
     edges: dict[str, list[tuple[int, str, str]]] = {}
+    events: list[tuple[int, str, str]] = []
     chunks = [c for c in raw.split("\x1e") if c.strip()]
     for index, chunk in enumerate(reversed(chunks)):
         lines = chunk.splitlines()
+        sha, _, at = lines[0].strip().partition(" ")
         for line in lines[1:]:
             parts = line.split("\t")
             if len(parts) == 3 and parts[0].startswith("R"):
-                edges.setdefault(parts[1], []).append((index, lines[0].strip(), parts[2]))
+                edges.setdefault(parts[1], []).append((index, sha, parts[2]))
+                events.append((int(at) if at.isdigit() else 0, parts[1], parts[2]))
 
     ancestry: dict[tuple[str, str], bool] = {}
 
@@ -244,7 +251,7 @@ def build_rename_map(repo_root: Path, *, top: str | None = None) -> RenameMap:
     top_path = Path(top)
     return RenameMap(
         {old: new for old, new in resolved.items() if not (top_path / old).exists()},
-        complete=True,
+        complete=True, events=tuple(events),
     )
 
 

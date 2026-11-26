@@ -13,9 +13,11 @@ modules, so the boundary from #557/#558 stays as it is:
 - ``structure`` reads the core's private ``structure_scan`` (the import graph:
   networkx, plus each language builder's tool, grimp for Python). A repository
   with no import graph reports unavailable with a reason naming its dominant
-  language, as the full run does: ``no_import_graph_<language>`` (a Go or
-  Rust repository with no builder for its language reads unknown on
-  layer 2 rather than 0), ``no_python_packages`` for a Python repository with
+  language, as the full run does: ``no_builder:<language>`` (a Rust or Java
+  repository with no builder for its language reads unknown on layer 2
+  rather than 0, and no minor language stands in, #825),
+  ``no_import_graph_<language>`` when the builder found nothing,
+  ``no_python_packages`` for a Python repository with
   no importable package, ``no_source_files`` for a repository with no source.
 - ``promissory_markers`` reads the core's private ``promissory`` scan (needs
   ``rg``).
@@ -32,7 +34,8 @@ modules, so the boundary from #557/#558 stays as it is:
 Every unavailable block is the bare ``{"available": false, "reason": ...}``
 marker with a ``code: sentence`` reason, so the counts-only filter keeps a
 named code (``no_lizard``, ``no_grimp``, ``no_networkx``, ``grimp_failed``, ``no_rg``,
-``no_python_packages``, ``no_import_graph_<language>``, ``no_source_files``,
+``no_python_packages``, ``no_builder:<language>``, ``no_import_graph_<language>``,
+``no_source_files``,
 ``no_ownership_map``) and a maturity-model row reads
 unknown, never a level. The full run's blocks are unchanged.
 
@@ -44,7 +47,7 @@ rows read (#667), outside `CORE_MODULES`: `structure` (the core's private
 `not_probed`) and `stats_summary` (tracked source files scored by lizard in process:
 `files_scored`, `loc` and file-aggregate `ccn`, percentiles by numpy's linear rule; no
 scc languages, no hotspot lists). Every unavailable block is the bare marker with a
-`code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_import_graph_<language>`, `no_source_files`, `no_rg`,
+`code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_builder:<language>`, `no_import_graph_<language>`, `no_source_files`, `no_rg`,
 `not_git_root`, `no_ownership_map`, `no_lizard`), so counts-only output keeps the code
 and a maturity model row reads `unknown`. No ownership map reads `no_ownership_map`,
 the same marker the full run writes (`context_blocks.no_ownership_map`, #908). It

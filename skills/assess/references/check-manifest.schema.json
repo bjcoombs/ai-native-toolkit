@@ -95,7 +95,7 @@
       "properties": {
         "code": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_]{0,39}(<[a-z]+>)?$",
+          "pattern": "^[a-z][a-z0-9_]{0,39}(:?<[a-z]+>)?$",
           "description": "A trailing <name> stands for a family of codes, for example no_import_graph_<language>."
         },
         "carried_in": {
