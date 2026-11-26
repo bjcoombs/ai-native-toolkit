@@ -27,6 +27,10 @@ neither is overloaded:
 
 The written SVG is scoped (``lib.svg_scope``): a root class, every style selector
 under it and every id prefixed, so it can be inlined beside other diagrams (#1358).
+Each doc circle and broken-link ghost carries its tooltip values as data attributes
+(``_NodePainter.data``; a ghost has ``data-path``, ``data-status="broken"``,
+``data-sources`` and ``data-source-count``), so a host page can show them without
+parsing the ``<title>`` (#1360).
 
 Reuses ``lib.docs.doc_graph`` (structure), ``lib.docs.doc_graph_layout`` (radial shells,
 node classes, ghost grouping) and ``lib.docs.doc_staleness`` (the staleness
@@ -62,6 +66,7 @@ from lib.docs.doc_staleness import analyze_doc_staleness
 from lib.run_context_types import BrokenLink
 from lib.complexity.treemap_render import adaptive_cap, blend_to_grey, plural, rgba_to_hex
 from lib.svg_scope import SCOPES, scope_svg
+from lib.fleet.fleet_svg import data_attrs
 
 # Colour-blind-safe by default. The status palette uses the Okabe-Ito set
 # (distinguishable under all common colour-vision deficiencies); the staleness
@@ -214,9 +219,10 @@ def _render_ghosts(broken_links: list[BrokenLink], pos: Positions, radius: Calla
             f"BROKEN LINK ({n} source{'s' if n != 1 else ''})\n"
             f"{srcs} -> {key}\nmissing file: create it or fix the links",
             quote=False)
+        data = data_attrs({"path": key, "status": "broken", "sources": srcs, "source-count": n})
         out.append(
             f'<circle cx="{gx:.1f}" cy="{gy:.1f}" r="7" fill="#ffffff" '
-            f'stroke="{GHOST_COLOR}" stroke-width="1.6" stroke-dasharray="3,2">'
+            f'stroke="{GHOST_COLOR}" stroke-width="1.6" stroke-dasharray="3,2"{data}>'
             f'<title>{tip}</title></circle>'
         )
         if show_labels:
@@ -267,10 +273,11 @@ def _staleness_channels(
     """Per-node days stale, subject churn, and the hatch fill for unmeasured docs.
 
     A node the staleness scan never measured (a `.claude/` doc a reference
-    brought in) is hatched, not painted as if a 0d / zero-churn value were known."""
+    brought in, or every doc when the scan returned none) is hatched, not painted
+    as if a 0d / zero-churn value were known (#1360)."""
     days = {x: float(staleness.get(x, {}).get("last_commit_days") or 0) for x in nodes}
     churn = {x: float(staleness.get(x, {}).get("code_churn_in_window") or 0) for x in nodes}
-    unmeasured = {x: UNMEASURED_FILL for x in nodes if staleness and x not in staleness}
+    unmeasured = {x: UNMEASURED_FILL for x in nodes if x not in staleness}
     return days, churn, unmeasured
 
 
@@ -300,7 +307,9 @@ class _NodePainter:
         self.size_max = max(self.sizes.values(), default=1.0) or 1.0
         self.cmap = plt.get_cmap(STALENESS_CMAP)
         self.days, self.churn, self.unmeasured = _staleness_channels(nodes, staleness or {})
-        measured = [x for x in nodes if x not in self.unmeasured]
+        # Docs the staleness scan measured: the fill, tooltip and data attributes agree (#1360).
+        self.stale_measured = {x for x in nodes if x not in self.unmeasured}
+        measured = [x for x in nodes if x in self.stale_measured]
         self.day_cap, _ = adaptive_cap([self.days[x] for x in measured])
         self.churn_cap, _ = adaptive_cap([self.churn[x] for x in measured])
 
@@ -337,9 +346,25 @@ class _NodePainter:
             return ORPHAN_RING, 1.8, ' stroke-dasharray="3,2"'
         return "#b8b8b8", 1.0, ""
 
+    def data(self, node: str, status: str) -> str:
+        """The tooltip's values as data attributes (#1360): ``data-path``, ``data-lines`` or
+        ``data-centrality``, ``data-in``, ``data-out``, ``data-status`` and, coloured by
+        staleness with the doc in the staleness scan, ``data-stale-days`` and
+        ``data-subject-churn``; a doc the scan did not measure has neither, never 0."""
+        size = self.sizes.get(node, 0)
+        measured = self.colour == "staleness" and node in self.stale_measured
+        values: dict[str, str | int | None] = {
+            "path": node,
+            "lines": round(size) if self.size_mode == "lines" else None,
+            "centrality": None if self.size_mode == "lines" else f"{size:.3f}",
+            "in": self.in_deg.get(node, 0), "out": self.out_deg.get(node, 0), "status": status,
+            "stale-days": f"{self.days[node]:.0f}" if measured else None,
+            "subject-churn": f"{self.churn[node]:.0f}" if measured else None}
+        return data_attrs(values)
+
     def tooltip(self, node: str, status: str) -> str:
         days_txt = "" if self.colour != "staleness" else (
-            "staleness not measured" if node in self.unmeasured
+            "staleness not measured" if node not in self.stale_measured
             else f"{self.days[node]:.0f}d stale, subject churn {self.churn[node]:.0f}")
         return html.escape(
             f"{node}\n{self.size_text(node)} · in {self.in_deg.get(node, 0)} · "
@@ -450,7 +475,7 @@ def _node_circles(nodes: list[str], pos: Positions, painter: _NodePainter,
         stroke, sw, dash = painter.stroke(status)
         out.append(
             f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}" fill="{painter.fill(node)}" '
-            f'stroke="{stroke}" stroke-width="{sw}"{dash}>'
+            f'stroke="{stroke}" stroke-width="{sw}"{dash}{painter.data(node, status)}>'
             f'<title>{painter.tooltip(node, status)}</title></circle>'
         )
         if show_labels and (status == "entry" or painter.degree(node) > 0):

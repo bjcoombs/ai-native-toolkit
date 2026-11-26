@@ -27,7 +27,8 @@ entry with its count, labelled with the gate, the row title and the Step reached
 condition id, which carries a layer number); a multi-Step bar says so in its label and
 carries ``data-multi-step``. Repositories whose next Step waits on a gate that was not
 measured, or that the owner set aside, are counted on a hatched line under the bars, never
-as a lift and never as 0. ``render`` is the stable entry point the fleet page (#946) calls.
+as a lift and never as 0. Each bar's group carries its ``<title>`` values as ``data-gate``,
+``data-practice`` and ``data-step`` (#1360). ``render`` is the stable entry point the fleet page (#946) calls.
 
 `step_lifts(model, results)` -> `list[StepLift]` (`condition`, `row`, `title`, `gate`,
 `step`, `multi_step`, `repo_count`); `lift_condition(model, result)` is one repository's
@@ -164,7 +165,9 @@ def render(data: Mapping[str, Any]) -> str:
         name = label(lift)
         width = scale(lift["repo_count"])
         multi = ' data-multi-step="true"' if lift.get("multi_step") else ""
-        body.append(f'<g data-condition="{svg.esc(lift["condition"])}"{multi}><title>{svg.esc(name)}</title>'
+        values: dict[str, str | int | None] = {"gate": lift["gate"], "practice": lift["title"], "step": lift["step"]}
+        body.append(f'<g data-condition="{svg.esc(lift["condition"])}"{multi}{svg.data_attrs(values)}>'
+                    f'<title>{svg.esc(name)}</title>'
                     + svg.text(PAD, y, svg.truncate(name, limit), size=12, cls="fg")
                     + f'<rect x="{PAD:.1f}" y="{y + 6:.1f}" width="{width:.1f}" height="{BAR_H:.1f}" '
                     'class="f-accent"/>'

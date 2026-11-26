@@ -20,6 +20,9 @@ When an unknown row carries a confirmed floor (#697) on either side, the group
 also gets ``floor_then`` and ``floor_now``: ``fleet_maturity.floor_mean`` over
 the rows with a level or a floor in both runs, a lower bound printed in the
 line's tooltip as "at least". The line itself stays on the known-only mean.
+Each line carries its tooltip values as data attributes (#1360): ``data-group``,
+``data-then``, ``data-now``, ``data-change``, ``data-paired-practices``,
+``data-practices`` and, with floors, ``data-floor-then`` and ``data-floor-now``.
 
 The label names the row with the largest change in share (ties to the lower
 row id) as ``title then→now``; when its move was not a pure level change
@@ -198,6 +201,12 @@ def _floor_span(group: GroupSlope) -> str:
     return "" if then is None or now is None else f"{then:.2f} → {now:.2f}"
 
 
+def _floor_values(group: GroupSlope) -> dict[str, str]:
+    """The tooltip's floor bounds as data attributes: both or neither, as ``_floor_span``."""
+    then, now = group.get("floor_then"), group.get("floor_now")
+    return {} if then is None or now is None else {"floor-then": f"{then:.2f}", "floor-now": f"{now:.2f}"}
+
+
 def _floor_tip(group: GroupSlope) -> str:
     span = _floor_span(group)
     return f"; with floors at least {span}" if span else ""
@@ -228,7 +237,8 @@ def render_slope(view: SlopeView) -> str:
     for tick in Y.ticks(4):
         ty = Y(tick)
         body.append(f'<line x1="{LX:.1f}" y1="{ty:.1f}" x2="{RX:.1f}" y2="{ty:.1f}" '
-                    f'class="s-rule" stroke-width="0.6"><title>{svg.tick_label(tick)}</title></line>')
+                    f'class="s-rule" stroke-width="0.6"{svg.data_attrs({"tick": svg.tick_label(tick)})}>'
+                    f'<title>{svg.tick_label(tick)}</title></line>')
     for x, date in ((LX, view["earlier"]), (RX, view["later"])):
         body.append(f'<line x1="{x:.1f}" y1="{PLOT_T - 8:.1f}" x2="{x:.1f}" y2="{bottom:.1f}" '
                     f'class="s-muted" stroke-width="1"/>')
@@ -242,8 +252,12 @@ def render_slope(view: SlopeView) -> str:
         tip = (f"{group['group']}: {then:.2f} → {now:.2f} ({change:+.2f}; "
                f"{group['paired_rows']} of {group['rows']} practices known in both runs"
                + _floor_tip(group) + ")")
+        values: dict[str, str | int | None] = {
+            "group": group["group"], "then": f"{then:.2f}", "now": f"{now:.2f}", "change": f"{change:+.2f}",
+            "paired-practices": group["paired_rows"], "practices": group["rows"], **_floor_values(group)}
         body.append(f'<line x1="{LX:.1f}" y1="{y0:.1f}" x2="{RX:.1f}" y2="{y1:.1f}" '
-                    f'class="s-{colour}" stroke-width="2.4"><title>{svg.esc(tip)}</title></line>')
+                    f'class="s-{colour}" stroke-width="2.4"{svg.data_attrs(values)}>'
+                    f'<title>{svg.esc(tip)}</title></line>')
         for x, y in ((LX, y0), (RX, y1)):
             body.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4" class="f-{colour}"/>')
         body.append(svg.text(LX - 12, left[group["group"]],

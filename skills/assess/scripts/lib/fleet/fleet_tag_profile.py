@@ -20,7 +20,7 @@ row label is the tag title, its condition count and the repositories measured on
 (``Behaviour · 3 conditions · 12 of 14 repositories``). A row no repository measured is a dashed, hollow track
 with its reason and no dot (``row_state``): no condition has the tag yet, its conditions are
 listed and never counted, or no repository measured a counted condition. Each row's hover
-text is the tag ``why`` (#939). Point marks and lines only, never a filled area; no
+text is the tag ``why`` (#939), repeated as the row's ``data-why`` (#1360). Point marks and lines only, never a filled area; no
 repository name, so counts-only and ``--hash-salt`` runs draw the same picture.
 Deterministic: two renders are byte-identical. Golden renders:
 ``tests/fixtures/fleet_diagrams/`` (``tests/fleet_tag_profile_fixture.py``). Tests:
@@ -162,7 +162,8 @@ def render(rows: Sequence[FleetTagRow], whys: Mapping[str, str]) -> str:
     for row, label, note in zip(rows, labels, side):
         state = row_state(row)
         mid = y + ROW_H / 2
-        parts = [f'<g data-tag="{row["tag"]}" data-state="{state}"><title>{svg.esc(whys[row["tag"]])}</title>',
+        parts = [f'<g data-tag="{row["tag"]}" data-state="{state}"{svg.data_attrs({"why": whys[row["tag"]]})}>'
+                 f'<title>{svg.esc(whys[row["tag"]])}</title>',
                  svg.text(x0 - 12, mid + 4, label, anchor="end", cls="fg")]
         dash = "" if state == "share" else ' stroke-dasharray="4 4" data-mark="dashed"'
         parts.append(f'<line x1="{x0:.1f}" y1="{mid:.1f}" x2="{x1:.1f}" y2="{mid:.1f}" class="s-muted" '

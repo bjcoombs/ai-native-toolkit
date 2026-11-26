@@ -80,6 +80,18 @@ same run draws the same bytes. Logic: `lib/fleet/fleet_diagrams.py`,
 `lib/fleet/fleet_tooling_map.py`, `lib/fleet/fleet_trends.py`, `lib/fleet/fleet_slope.py`,
 on the shared helpers in `lib/fleet/fleet_svg.py`.
 
+**Embedding and tooltips.** Each part with a hover `<title>` (a heat map cell, a radar point,
+a trend point, a slope line, a shared-tooling link, a one-change-away bar, a tag row or cell)
+carries the same values as `data-*` attributes, plain and with a value not measured left out,
+never 0 (#1360). An SVG embedded with `<img>` shows no tooltip at all, on hover or on touch.
+To show the details in a page, embed the SVG inline or with `<object>` and include the
+dependency-free tooltip helper `skills/assess/templates/diagram-tooltip.js` (relative to the
+repository root): it reads the data attributes, falls back to the `<title>`, and shows on
+hover or tap. Each diagram is scoped, so several sit on one page without restyling each other.
+The embed rules, the helper's behaviour and every diagram's attributes are in
+`skills/assess/references/embedding-diagrams.md`. The fleet page (`fleet-view.html`) still
+embeds its pictures as images; showing their tooltips there is #1313.
+
 ## The fleet page: `fleet-view.html`
 
 With `--levels`, the run also writes `fleet-view.html` beside `report.md` (#946,

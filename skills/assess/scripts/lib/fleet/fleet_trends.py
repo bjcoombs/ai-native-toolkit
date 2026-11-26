@@ -18,7 +18,7 @@ gap is named on a hatched note, never drawn at zero.
 **Lower bound (#697).** A run whose groups have an unknown team row with a confirmed
 ``floor`` also carries ``floor_means``: ``fleet_maturity.floor_mean`` per group, a
 lower bound over the rows with a level or a floor. It is printed as "at least" in a
-point's tooltip, never drawn: an entry written before #697 has no floors, so a line
+point's tooltip and its ``data-floor-mean``, never drawn: an entry written before #697 has no floors, so a line
 on that figure would jump where the floors first appear.
 
 **Comparable runs.** ``history_runs`` reads the ``<date>[.<n>]`` entries under
@@ -35,7 +35,9 @@ history, so a failed history write still shows it) is the last point. At most
 **Maturity-model version.** A change of version between two runs, or of the rules hash
 (``rules_sha256``, #952) when both runs recorded one, breaks every
 line there (``--compare`` refuses to compare across versions) and a dashed rule
-marks it. Each run's point is still drawn, so a one-run segment is a dot.
+marks it. Each run's point is still drawn, so a one-run segment is a dot. Each point
+carries its tooltip values as ``data-group``, ``data-mean``, ``data-run`` and, with
+floors, ``data-floor-mean`` (#1360).
 
 ``layout`` is shared by the renderer and its tests: end labels are spread by
 ``fleet_svg.spread_vertical`` so they never overlap. Deterministic: groups and
@@ -407,7 +409,10 @@ def render_trend(runs: Sequence[TrendRun]) -> str:
             for (px, py), i in zip(points, segment):
                 tip = f"{group}: {runs[i]['means'][group]:.2f} on {runs[i]['label']}"
                 tip += _bound_tip(runs[i], group)
-                body.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="3.5" class="f-{role}">'
+                bound = runs[i].get("floor_means", {}).get(group)
+                values = {"group": group, "mean": f"{runs[i]['means'][group]:.2f}", "run": runs[i]["label"],
+                          "floor-mean": None if bound is None else f"{bound:.2f}"}
+                body.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="3.5" class="f-{role}"{svg.data_attrs(values)}>'
                             f'<title>{svg.esc(tip)}</title></circle>')
     for label in plan.labels:
         role, _ = _series_class(plan.groups.index(label.group))

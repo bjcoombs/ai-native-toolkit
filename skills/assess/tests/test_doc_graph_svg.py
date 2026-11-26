@@ -393,3 +393,41 @@ def test_size_text_agrees_with_the_displayed_line_count(svg, size, text):
 
     painter = SimpleNamespace(sizes={"a.md": size}, size_mode="lines")
     assert svg._NodePainter.size_text(painter, "a.md") == text
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"staleness": {"CLAUDE.md": {"last_commit_days": 10, "code_churn_in_window": 2}}},
+    {"colour": "status", "size_mode": "centrality"},
+])
+def test_every_circle_carries_its_tooltip_values_as_data_attributes(svg, tmp_path, monkeypatch, kwargs):
+    """#1360: each doc circle and broken-link ghost repeats its ``<title>`` values as data
+    attributes (static markup, no DOM); an unmeasured staleness is left out, never 0."""
+    from svg_data_attrs import title_data_problems, titled_parts
+
+    monkeypatch.setattr(_FakeResult, "broken_links", [{"from": "CLAUDE.md", "target": "docs/gone.md"}])
+    circles, _, markup = _render_nodes(svg, tmp_path, monkeypatch, **kwargs)
+    assert title_data_problems(markup) == []
+    data = {d.get("path"): d for tag, d, _title in titled_parts(markup) if tag == "circle"}
+    assert data["docs/gone.md"] == {"path": "docs/gone.md", "status": "broken", "sources": "CLAUDE.md",
+                                    "source-count": "1"}
+    if "staleness" in kwargs:
+        assert data["CLAUDE.md"]["stale-days"] == "10" and data["CLAUDE.md"]["subject-churn"] == "2"
+        assert "stale-days" not in data["docs/lone.md"]
+        assert data["docs/a.md"]["lines"] == "1"
+    else:
+        assert "stale-days" not in data["CLAUDE.md"] and "lines" not in data["docs/a.md"]
+        assert data["docs/a.md"]["centrality"] == "0.333"
+
+
+@pytest.mark.parametrize("staleness", [None, {}])
+def test_an_empty_staleness_scan_draws_every_doc_not_measured(svg, tmp_path, monkeypatch, staleness):
+    """#1360: coloured by staleness with no scan result, every doc is hatched as not measured,
+    the key shows the not-measured entry, and no tooltip or attribute claims 0d stale."""
+    from svg_data_attrs import titled_parts
+
+    circles, texts, markup = _render_nodes(svg, tmp_path, monkeypatch, staleness=staleness)
+    hatch = svg.UNMEASURED_FILL.replace("#", "#assess-doc-graph-")
+    assert circles and all(el.get("fill") == hatch for el, _tip in circles.values())
+    assert "not measured" in texts and 'id="assess-doc-graph-unmeasured"' in markup
+    assert all("staleness not measured" in tip for _el, tip in circles.values())
+    assert not [d for _t, d, _title in titled_parts(markup) if "stale-days" in d or "subject-churn" in d]

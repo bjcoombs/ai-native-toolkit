@@ -35,7 +35,9 @@ Diagrams, in report order:
   (the warn colour), unmet as ``hazard_absent`` (a warn outline); the key lists the two
   only when a square uses them. A "Level N" header heads each column, and the square at
   each Step gate's level (``assess_diagrams_ladder.gate_conditions``) is outlined, with a
-  "Outlined: a Step gate" key entry when any is drawn.
+  "Outlined: a Step gate" key entry when any is drawn. Each square carries what its
+  ``<title>`` shows as data attributes (#1360): ``data-practice``, ``data-level``,
+  ``data-category-label`` and, when not measured, ``data-reason``.
 
 A new diagram adds its ``FILE`` and heading to ``HEADINGS``, a builder returning an
 ``AssessDiagram``, and an entry in ``build_diagrams``; it draws its cells, legend and
@@ -125,9 +127,10 @@ def style() -> str:
 
 
 def cell(x: float, y: float, category: str, *, size: float = SQ, tooltip: str | None = None,
-         tagged: bool = True) -> str:
+         tagged: bool = True, values: Mapping[str, str | int | None] | None = None) -> str:
     """One square in a category's look; ``tagged`` adds ``data-category`` (a drawn condition,
-    not a legend swatch), ``tooltip`` a hover ``<title>``."""
+    not a legend swatch), ``tooltip`` a hover ``<title>`` and ``values`` the data attributes
+    holding what the title shows (``svg.data_attrs``)."""
     if category == "not_applicable":
         paint = 'class="f-bg s-muted" stroke-width="1.5"'
     elif category == "hazard":
@@ -140,7 +143,7 @@ def cell(x: float, y: float, category: str, *, size: float = SQ, tooltip: str | 
         paint = f'class="f-ev-{category} s-rule" stroke-width="1"'
     else:
         raise ValueError(f"unknown category {category!r}")
-    data = f' data-category="{category}"' if tagged else ""
+    data = (f' data-category="{category}"' if tagged else "") + svg.data_attrs(values or {})
     hover = "" if tooltip is None else f"<title>{svg.esc(tooltip)}</title>"
     return (f'<rect x="{x:.1f}" y="{y:.1f}" width="{size:.1f}" height="{size:.1f}" rx="2" '
             f'{paint}{data}>{hover}</rect>')
@@ -254,10 +257,14 @@ def render_waffle(level: LevelResult, titles: Mapping[str, str], gates: Sequence
         body.append(svg.text(grid_x - 12, y + SQ - 3, labels[row], anchor="end", cls="fg",
                              tooltip=titles.get(row, row) if cut else None))
         for index, square in enumerate(members):
+            reason = None if square["reason"] is None else _reason_text(square["reason"], titles)
             tip = f"{titles.get(row, row)} level {square['level']}: {LABELS[square['category']]}"
-            if square["reason"] is not None:
-                tip += f" ({_reason_text(square['reason'], titles)})"
-            body.append(cell(grid_x + index * COL_W, y, square["category"], tooltip=tip))
+            if reason is not None:
+                tip += f" ({reason})"
+            values: dict[str, str | int | None] = {
+                "practice": titles.get(row, row), "level": square["level"],
+                "category-label": LABELS[square["category"]], "reason": reason}
+            body.append(cell(grid_x + index * COL_W, y, square["category"], tooltip=tip, values=values))
             if square["id"] in outlined:
                 body.append(_gate_outline(grid_x + index * COL_W, y, square["id"]))
                 drawn_gates += 1

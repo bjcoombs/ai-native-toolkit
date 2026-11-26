@@ -114,7 +114,8 @@ def test_a_dropped_ref_is_pin_unknown_never_in_step():
     assert not any(ftm.drifted(link, common) for link in view["links"])  # unpinned is not drift
     text = ftm.render_tooling_map(view)
     assert "1 pins unknown (dotted)" in text
-    assert 'stroke-dasharray="1 3"><title>g/r2 → gitlab_project:x @ (pin unknown)' in text
+    assert ('stroke-dasharray="1 3" data-repo="g/r2" data-item="gitlab_project:x" data-refs="(pin unknown)">'
+            '<title>g/r2 → gitlab_project:x @ (pin unknown)') in text
     assert "pinned v1 · 1 unpinned" in text
 
 
@@ -126,7 +127,8 @@ def test_a_variable_ref_is_pin_unknown_never_unpinned_or_drift():
     assert flags == [(["v1"], False, False), ([], False, True)]
     assert not any(ftm.drifted(link, ftm.common_refs(view["links"])) for link in view["links"])
     text = ftm.render_tooling_map(view)
-    assert 'stroke-dasharray="1 3"><title>g/r1 → gitlab_project:x @ (pin unknown)' in text
+    assert ('stroke-dasharray="1 3" data-repo="g/r1" data-item="gitlab_project:x" data-refs="(pin unknown)">'
+            '<title>g/r1 → gitlab_project:x @ (pin unknown)') in text
     assert "1 unpinned" not in text  # a variable pin is not counted as unpinned
 
 
@@ -291,8 +293,8 @@ def test_spread_vertical_keeps_order_and_minimum_gap():
 
 def test_text_escapes_and_classes():
     element = svg.text(1, 2, "a<b&c", cls="muted", tooltip="t<")
-    assert element == ('<text x="1.0" y="2.0" font-size="12" text-anchor="start" class="t-muted">'
-                       'a&lt;b&amp;c<title>t&lt;</title></text>')
+    assert element == ('<text x="1.0" y="2.0" font-size="12" text-anchor="start" class="t-muted" '
+                       'data-label="t&lt;">a&lt;b&amp;c<title>t&lt;</title></text>')
     box = svg.text_box(10, 20, "abc", 12, "middle")
     assert all(math.isclose(a, b) for a, b in zip((box.x, box.y, box.w, box.h), (-0.5, 8, 21, 14.4)))
 
