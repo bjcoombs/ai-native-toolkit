@@ -153,6 +153,8 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
     assert svc1["nested_instructions"]["budget"]["claude_code"]["files"] == ["CLAUDE.md"]
 
 
+# The instruction row tests presence on words: the line count has an empty-set rule (#827,
+# signal_grades.EMPTY_DENOMINATORS), so `lines gt 0` reads not measured with no file loaded.
 TEAM_LEVELS = """\
 version = "diagrams-e2e-1"
 
@@ -164,7 +166,7 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
-  criteria = [{ signal = "nested_instructions.budget.claude_code.lines", op = "gt", value = 0 }]
+  criteria = [{ signal = "nested_instructions.budget.claude_code.words", op = "gt", value = 0 }]
 """
 
 
