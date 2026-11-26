@@ -23,8 +23,10 @@ graded with ``grade_instructions`` and recorded with its scope; the block also
 carries the always-loaded budget per tool (``instruction_budget``) and four
 integrity findings: a scope glob that matches no tracked file, a plain ``.md``
 under ``.cursor/rules``, a ``CLAUDE.md`` that shadows a different ``AGENTS.md``
-in its directory without importing it or being a bare pointer either way (with
-the count of differing lines), and
+in its directory without importing it (with the count of differing lines;
+an ``AGENTS.md`` that is a bare pointer to its sibling ``CLAUDE.md`` shadows
+nothing, and a sibling ``CLAUDE.md`` that is a bare pointer to ``AGENTS.md``
+is left out of the comparison, unless the two point at each other), and
 a nested file that mostly repeats its parent. A ``CLAUDE.md`` identical to its
 ``AGENTS.md`` below the header (H1 and leading HTML comments) is reported as an
 informational ``mirrored_instruction_files`` instead (issue #589). Deterministic and read-only: no network, no model.
@@ -41,8 +43,10 @@ Findings: `dead_glob` (a rule, not always loaded, none of whose scope patterns
 matches a tracked file or names a directory on disk; a nested rule's patterns are
 also tried relative to its own directory), `ignored_cursor_md`, `claude_shadows_agents`
 (a directory's `CLAUDE.md` differs from its `AGENTS.md` once the header comments
-they account for are set aside, and does not import it, and neither file is a bare
-one-line pointer to the other, `delegation_target`, #1505; `diff_lines` counts the differing lines, body plus any header
+they account for are set aside, and does not import it; a bare one-line pointer,
+`delegation_target`, #1505, exempts only itself: an `AGENTS.md` pointing at its sibling
+`CLAUDE.md` shadows nothing, a sibling `CLAUDE.md` pointing at `AGENTS.md` drops out while
+`.claude/CLAUDE.md` is still compared, and a pair pointing at each other exempts neither; `diff_lines` counts the differing lines, body plus any header
 comment only one file carries, one changed line counting once) and `repeats_parent` (at least half of a nested file's distinct
 lines, over five or more, copy the nearest ancestor's). The two files are compared
 below their headers (`mirror_lines`: leading blank lines, one H1 and leading HTML
@@ -460,57 +464,52 @@ def mirror_pair(a: str, b: str) -> tuple[list[str], list[str], bool]:
             paired > 0)
 
 
-# Inline code in a pointer line may name only the target file: any other span
-# (`make test`) is an instruction, so the file is no bare pointer (#1505).
-_INLINE_CODE = re.compile(r"`([^`\n]*)`")
-# A second clause is content: a sentence or clause break with more text after
-# it, a dash aside, or a word that joins or adds an instruction.
-_SECOND_CLAUSE = re.compile(
-    r"[.!?;,]\s+\S|\s[-\u2013\u2014]\s|\u2014"
-    r"|\b(?:and|then|but|also|never|always|must|before|after|not|no|don't)\b", re.IGNORECASE)
-_WORD = re.compile(r"\w+")
-# Words a pointer sentence holds besides the file name ("The instructions for
-# this repository live in" is 7); more reads as an instruction of its own.
-POINTER_MAX_WORDS = 12
+# The only sentences that read as a bare pointer (#1505), an allow-list so any
+# other wording, a negation or an extra instruction is never one.
+POINTER_FORMS = (
+    "see",
+    "read",
+    "follow",
+    "the instructions for this repository live in",
+    "instructions live in",
+    "follow the project instructions in",  # the line agent_consistency.pointer_line writes
+)
 
 
-def _name_pattern(name: str) -> re.Pattern[str]:
-    """The name at the file's own level: bare, ``./`` or ``@``; never ``docs/NAME``."""
-    return re.compile(rf"(?<![\w/.-])(?:\./|@)?{re.escape(name)}(?![\w/-])")
+def _pointer_form(name: str) -> re.Pattern[str]:
+    """One whole pointer line naming ``name``: a form, then the bare name or
+    ``[name](name)``, each optionally backticked, then an optional full stop."""
+    n = re.escape(name)
+    target = rf"(?:`?{n}`?|\[`?{n}`?\]\({n}\))"
+    forms = "|".join(re.escape(f).replace(r"\ ", " ") for f in POINTER_FORMS)
+    return re.compile(rf"(?:{forms}) {target}\.?", re.IGNORECASE)
 
 
 def delegation_target(body: str, names: list[str]) -> str | None:
     """The instruction file a bare one-line pointer file delegates to, else None.
 
     A file delegates when, blank lines and one leading H1 set aside, it holds a
-    single one-clause line that names one of ``names`` at the same level (a
-    markdown link, ``@CLAUDE.md``, ``./CLAUDE.md`` or the bare name; never
-    ``docs/CLAUDE.md``), with no inline code beyond that name and at most
-    ``POINTER_MAX_WORDS`` other words. Any other line (an HTML comment
-    included), a second sentence or clause (``,``, ``;``, a dash, ``and``,
-    ``then``, ``never``, ``must``, ``not`` and the like) or other inline code is
-    instruction content, so the file is no pointer (issue #1505). Known limit:
-    a short one-clause instruction with none of those words still reads as a
-    pointer.
+    single line that fully matches one of ``POINTER_FORMS`` followed by one of
+    ``names``: the sibling file name or ``[name](name)``, optionally
+    backticked, with an optional full stop (``See CLAUDE.md.``, ``The
+    instructions for this repository live in [CLAUDE.md](CLAUDE.md).``),
+    case-insensitive, whitespace collapsed. Anything else is no pointer: a
+    second line, an HTML comment, a path (``docs/CLAUDE.md``), a negation or
+    any other wording (issue #1505).
     """
-    lines = [line.strip() for line in body.splitlines() if line.strip()]
+    lines = [" ".join(line.split()) for line in body.splitlines() if line.strip()]
     if lines and lines[0].startswith("# "):
         lines = lines[1:]
     if len(lines) != 1:
         return None
-    line = lines[0]
-    for name in names:
-        pattern = _name_pattern(name)
-        if not pattern.search(line):
-            continue
-        rest = pattern.sub("", line)
-        spans = [span.strip().removeprefix("./").removeprefix("@")
-                 for span in _INLINE_CODE.findall(line)]
-        if (any(span != name for span in spans) or _SECOND_CLAUSE.search(rest)
-                or len(_WORD.findall(rest)) > POINTER_MAX_WORDS):
-            return None
-        return name
-    return None
+    return next((name for name in names if _pointer_form(name).fullmatch(lines[0])), None)
+
+
+def delegates_to(body: str, own_name: str, target_name: str, target_body: str) -> bool:
+    """``body`` is a bare pointer to ``target_name``, and the target does not
+    point straight back: a cycle holds no instructions, so it is no delegation."""
+    return (delegation_target(body, [target_name]) is not None
+            and delegation_target(target_body, [own_name]) is None)
 
 
 def diff_line_count(a: list[str], b: list[str]) -> int:
@@ -519,14 +518,21 @@ def diff_line_count(a: list[str], b: list[str]) -> int:
     return sum(max(i2 - i1, j2 - j1) for tag, i1, i2, j1, j2 in ops if tag != "equal")
 
 
+def _sibling(rel: str, name: str) -> str:
+    """``name`` in the same directory as ``rel``."""
+    return (PurePosixPath(rel).parent / name).as_posix()
+
+
 def _shadowing(
     repo_root: Path, by_dir: dict[str, list[_Candidate]], tracked: frozenset[Path] | None,
 ) -> tuple[list[InstructionFinding], list[InstructionFinding]]:
     """Per directory, a CLAUDE.md that hides a different, unimported AGENTS.md
     (``claude_shadows_agents``), or one that is a hand-kept copy of it below the
     header (``mirrored_instruction_files``, informational). A symlink or an
-    import is neither, nor is a pair where one file is a bare pointer to the
-    other (``delegation_target``). Returns ``(shadows, mirrors)``.
+    import is neither. A bare pointer (``delegates_to``) exempts only itself:
+    ``AGENTS.md`` pointing at the sibling ``CLAUDE.md`` skips the directory, a
+    sibling ``CLAUDE.md`` pointing at ``AGENTS.md`` leaves the comparison, and
+    any other ``CLAUDE.md`` is still compared. Returns ``(shadows, mirrors)``.
     """
     shadows: list[InstructionFinding] = []
     mirrors: list[InstructionFinding] = []
@@ -547,8 +553,16 @@ def _shadowing(
         if agent.rel in loaded:
             continue
         # A bare pointer either way is delegation, not a second file (#1505).
-        if delegation_target(agent.body, ["CLAUDE.md"]) or any(
-                delegation_target(c.body, ["AGENTS.md"]) for c in claude):
+        # AGENTS.md pointing at its sibling CLAUDE.md shadows nothing; a sibling
+        # CLAUDE.md pointing at AGENTS.md drops out, and any other CLAUDE.md
+        # (.claude/CLAUDE.md) is still compared. A cycle delegates neither way.
+        sibling = next((c for c in claude if c.rel == _sibling(agent.rel, "CLAUDE.md")), None)
+        if sibling is not None and delegates_to(
+                agent.body, "AGENTS.md", "CLAUDE.md", sibling.body):
+            continue
+        claude = [c for c in claude if c is not sibling or not delegates_to(
+            c.body, "CLAUDE.md", "AGENTS.md", agent.body)]
+        if not claude:
             continue
         pairs = [(c, *mirror_pair(c.body, agent.body)) for c in claude]
         if not any(c_lines or a_lines for _c, c_lines, a_lines, _n in pairs):

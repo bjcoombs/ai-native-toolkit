@@ -394,27 +394,60 @@ def test_a_pointer_with_other_instructions_stays_a_second_file(tmp_path: Path) -
 
 
 @pytest.mark.parametrize(("body", "names", "target"), [
+    # PR #1503's line, and each allowed form.
     ("The instructions for this repository live in [CLAUDE.md](CLAUDE.md).\n",
      ["CLAUDE.md"], "CLAUDE.md"),
     ("# Agents\n\nSee `CLAUDE.md`.\n", ["CLAUDE.md"], "CLAUDE.md"),
-    ("\n@AGENTS.md\n", ["CLAUDE.md", "AGENTS.md"], "AGENTS.md"),
-    ("Read ./CLAUDE.md first\n", ["CLAUDE.md"], "CLAUDE.md"),
+    ("read CLAUDE.md\n", ["CLAUDE.md"], "CLAUDE.md"),
+    ("Follow [`AGENTS.md`](AGENTS.md).\n", ["CLAUDE.md", "AGENTS.md"], "AGENTS.md"),
+    ("Instructions  live in CLAUDE.md.\n", ["CLAUDE.md"], "CLAUDE.md"),
+    ("Follow the project instructions in [AGENTS.md](AGENTS.md).\n", ["AGENTS.md"],
+     "AGENTS.md"),
+    # Anything else is no pointer.
+    ("\n@AGENTS.md\n", ["AGENTS.md"], None),  # an import, read by follow_imports
+    ("Read ./CLAUDE.md first\n", ["CLAUDE.md"], None),
     ("Read CLAUDE.md. Never push to main.\n", ["CLAUDE.md"], None),
     ("Read CLAUDE.md and run `make test`.\n", ["CLAUDE.md"], None),
     ("See CLAUDE.md\nRun the tests.\n", ["CLAUDE.md"], None),
     ("<!-- run npm test -->\nSee CLAUDE.md\n", ["CLAUDE.md"], None),
+    ("See CLAUDE.md <!-- run npm test -->\n", ["CLAUDE.md"], None),
     ("See CLAUDE.md\n", [], None),
     ("Nothing to see here.\n", ["CLAUDE.md"], None),
     ("Instructions: [here](docs/CLAUDE.md).\n", ["CLAUDE.md"], None),
+    ("See [CLAUDE.md](docs/CLAUDE.md).\n", ["CLAUDE.md"], None),
     ("See ../CLAUDE.md\n", ["CLAUDE.md"], None),
-    ("Read CLAUDE.md first, then run make test before pushing\n", ["CLAUDE.md"], None),
-    ("See CLAUDE.md - never push to main\n", ["CLAUDE.md"], None),
-    ("Read CLAUDE.md then run the tests\n", ["CLAUDE.md"], None),
     ("Do not edit CLAUDE.md by hand.\n", ["CLAUDE.md"], None),
-    ("Read CLAUDE.md for the rules on deploys releases reviews merges tickets "
-     "labels branches tags\n", ["CLAUDE.md"], None),
-    ("Instructions: [CLAUDE.md](./CLAUDE.md)\n", ["CLAUDE.md"], "CLAUDE.md"),
+    ("Don\u2019t follow CLAUDE.md\n", ["CLAUDE.md"], None),
+    ("CLAUDE.md isn't maintained\n", ["CLAUDE.md"], None),
+    ("Won't use CLAUDE.md\n", ["CLAUDE.md"], None),
+    ("Ignore CLAUDE.md\n", ["CLAUDE.md"], None),
+    ("CLAUDE.md is outdated\n", ["CLAUDE.md"], None),
+    ("Use Python 3.12 (see CLAUDE.md)\n", ["CLAUDE.md"], None),
 ])
 def test_delegation_target_reads_only_a_bare_pointer(
         body: str, names: list[str], target: str | None) -> None:
     assert delegation_target(body, names) == target
+
+
+def test_a_pointer_cycle_is_no_delegation(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": "See CLAUDE.md.\n", "CLAUDE.md": "See AGENTS.md.\n"})
+    block = scan_agent_consistency(root)
+    assert block["canonical"] == "AGENTS.md"
+    assert {f["path"]: f["link"] for f in block["files"]}["CLAUDE.md"] == "independent"
+    assert (block["unlinked"], block["consistent"]) == (1, False)
+    assert _shadows(root) == ["claude_shadows_agents"]
+
+
+def test_a_pointer_claude_md_leaves_another_claude_md_compared(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": AGENTS, "CLAUDE.md": "See AGENTS.md\n",
+                            ".claude/CLAUDE.md": "Run `npm test` before pushing.\n"})
+    findings = [f for f in nested_instruction_surface(root)["findings"]
+                if f["kind"] == "claude_shadows_agents"]
+    assert [(f["path"], f["parent"]) for f in findings] == [(".claude/CLAUDE.md", "AGENTS.md")]
+
+
+def test_a_pointer_whose_target_imports_it_back_stays_canonical(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": "See CLAUDE.md.\n", "CLAUDE.md": "@AGENTS.md\n"})
+    block = scan_agent_consistency(root)
+    assert block["canonical"] == "AGENTS.md"
+    assert {f["path"]: f["link"] for f in block["files"]}["CLAUDE.md"] == "import"

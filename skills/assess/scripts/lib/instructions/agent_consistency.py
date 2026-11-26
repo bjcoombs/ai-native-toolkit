@@ -11,8 +11,10 @@ Claude Code to run ``make test`` while ``.windsurfrules`` still says ``npm test`
    dropped. Aider counts when ``.aider.conf.yml`` reads a file: its
    ``CONVENTIONS.md``, or the canonical file itself (link ``config_read``).
 2. **Canonical source.** The root ``AGENTS.md`` when there is one, or the root
-   file it delegates to when it is a bare one-line pointer
-   (``instruction_discovery.delegation_target``, #1505); otherwise the first
+   file it delegates to when it is a bare one-line pointer (one of the fixed
+   ``instruction_discovery.POINTER_FORMS`` naming a sibling file,
+   ``delegation_target``, #1505) and that file neither points nor imports
+   back; otherwise the first
    root-context file in ``SYSTEMS`` order, then path order.
 3. **Link.** Each file is ``canonical``, a ``symlink`` resolving to it, an
    ``import`` of it (``@AGENTS.md``, followed by
@@ -20,7 +22,8 @@ Claude Code to run ``make test`` while ``.windsurfrules`` still says ``npm test`
    the canonical file's name, as ``#[[file:AGENTS.md]]`` or a markdown link
    does; never for Claude Code or Gemini CLI, which load only imports, so a
    prose mention there links nothing and their own text is compared, unless
-   the file is a bare pointer, which delegates for every system), a ``mirror`` (identical below its header, ``mirror_pair``: a
+   the file is a bare pointer to the canonical file that does not point back,
+   which delegates for every system), a ``mirror`` (identical below its header, ``mirror_pair``: a
    hand-kept copy, so not linked) or ``independent``. A system is linked when
    one of its files links; its other files are supplementary rules, compared
    for divergence like the rest.
@@ -54,13 +57,14 @@ consistent, next_steps, not_read}`. It reads each system's root-context files (s
 `always_loaded` at directory `.`, empty files dropped; Aider when `.aider.conf.yml`
 reads a file, as `config_read` when it reads the canonical file directly). The canonical
 file is the root `AGENTS.md` (or the root file a bare one-line `AGENTS.md` pointer names,
-`delegation_target`, #1505), else the first root file in `SYSTEMS` order, then path
+`delegation_target`, #1505, unless that file points or imports back), else the first root file in `SYSTEMS` order, then path
 order. Each file (`ConsistencyFile`) carries `link`: `canonical`, `symlink` (resolves to
 it), `import` (`@AGENTS.md`, through `instruction_budget.follow_imports`), `pointer` (a
 line naming the canonical file's name, as a markdown link or Kiro's
 `#[[file:AGENTS.md]]` does; never for Claude Code or Gemini CLI, which load only
 imports, so a prose mention there links nothing, matching `claude_shadows_agents`, unless the
-file is a bare one-line pointer, which delegates for any system), `mirror` (identical below the header, through
+file is a bare one-line pointer and the canonical file does not point back, which delegates
+for any system), `mirror` (identical below the header, through
 `instruction_discovery.mirror_pair`; a hand-kept copy, so not linked) or `independent`.
 A system is linked when one of its files links (its other always-loaded files are
 supplementary rules, still compared for divergence). Each
@@ -110,6 +114,7 @@ from lib.instructions.instruction_budget import follow_imports
 from lib.instructions.instruction_discovery import (
     InstructionCandidate,
     collect_instruction_files,
+    delegates_to,
     delegation_target,
     mirror_pair,
 )
@@ -262,15 +267,20 @@ def _root_context(cands: list[InstructionCandidate]) -> list[InstructionCandidat
     return [c for c in cands if c.directory == "." and c.always_loaded and c.body.strip()]
 
 
-def _canonical(files: list[InstructionCandidate]) -> InstructionCandidate | None:
+def _canonical(files: list[InstructionCandidate], repo_root: Path,
+               tracked: frozenset[Path] | None) -> InstructionCandidate | None:
     for cand in files:
         if cand.rel == CANONICAL_NAME:
             # A bare pointer delegates: the file it names holds the instructions,
-            # unless that file points straight back (#1505).
+            # unless that file points or imports straight back, a cycle (#1505).
             others = {c.rel: c for c in files if c.rel != cand.rel}
             target = delegation_target(cand.body, sorted(others))
-            if target is not None and delegation_target(others[target].body, [cand.rel]) is None:
-                return others[target]
+            if target is not None and delegates_to(
+                    cand.body, cand.rel, target, others[target].body):
+                loaded, _skipped = follow_imports(
+                    [target], repo_root, lambda p: is_repo_file(p, repo_root, tracked))
+                if cand.rel not in loaded:
+                    return others[target]
             return cand
     ranked = sorted(files, key=lambda c: (SYSTEM_ORDER.get(c.tool, len(SYSTEM_ORDER)), c.rel))
     return ranked[0] if ranked else None
@@ -291,7 +301,8 @@ def _link(cand: InstructionCandidate, canon: InstructionCandidate, repo_root: Pa
     # rule), so their own text is compared as it stands.
     # A file that is nothing but a pointer delegates for any system: it gives the
     # agent no other instruction to follow (#1505).
-    if delegation_target(cand.body, [PurePosixPath(canon.rel).name]) is not None:
+    if delegates_to(cand.body, PurePosixPath(cand.rel).name,
+                    PurePosixPath(canon.rel).name, canon.body):
         return "pointer"
     follows_text = SYSTEM_BY_ID[cand.tool].pointer != "import" if cand.tool in SYSTEM_BY_ID else True
     name = re.escape(PurePosixPath(canon.rel).name)
@@ -341,7 +352,7 @@ def check_consistency(repo_root: Path, cands: list[InstructionCandidate],
                       tracked: frozenset[Path] | None) -> AgentConsistencyBlock:
     """The ``agent_consistency`` block over discovered instruction files."""
     files = _root_context(cands)
-    canon = _canonical(files)
+    canon = _canonical(files, repo_root, tracked)
     by_system: dict[str, list[InstructionCandidate]] = {}
     for cand in files:
         by_system.setdefault(cand.tool, []).append(cand)
