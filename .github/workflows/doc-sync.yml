@@ -83,6 +83,13 @@ jobs:
       - name: Scope the clusters to the change (no model)
         id: scope
         run: |
+          # The pull request that adds this workflow has no scripts at its base.
+          if [ ! -f "$SCRIPTS/doc_clusters.py" ]; then
+            echo "::notice::The base commit has no doc-sync scripts yet, so nothing runs."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "bootstrap=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           mkdir -p .doc-sync
           python3 "$SCRIPTS/doc_clusters.py" --repo pr-head --changed-from "$BASE_SHA" \
             --exclude '.assess/**' --out .doc-sync/clusters.json
@@ -171,7 +178,7 @@ jobs:
 
       - name: Check the citations (no model)
         id: plan
-        if: always() && steps.scope.outcome == 'success'
+        if: always() && steps.scope.outcome == 'success' && steps.scope.outputs.bootstrap != 'true'
         env:
           RAW: ${{ steps.model.outputs.structured_output }}
           RUN: ${{ steps.scope.outputs.run == 'true' && steps.gate.outputs.run || 'false' }}
