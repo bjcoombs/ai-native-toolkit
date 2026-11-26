@@ -69,7 +69,7 @@ was measured): modules that never import each other have no community structure,
 `no_import_edges`) and an unavailable block (`available` false; the cause is in
 `structure.reason`). A headless run reduces that block to the bare marker, whose reason
 opens with a named code (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`,
-`no_import_graph_<language>`, `no_source_files`; `lib/headless_layers.py`), so
+`no_import_graph_<language>`, `no_source_files`; `lib/run/headless_layers.py`), so
 `modularity_q` is absent there rather than null. A full counts-only run keeps the same
 code as `structure.reason` (`REASON_SENTENCE_CODES`, #764). `STRUCTURE_REASON_CODES` is
 that run's allow-list, derived from `NO_SOURCE_FILES`, `INVALID_IMPORT_GRAPH`,

@@ -7,14 +7,14 @@ kind = "collector"
 title = "Contributor files"
 summary = "A contributing guide and a security policy at the root, in .github/ or in docs/. The policy is a SECURITY file or a link to GitHub private vulnerability reporting. Issue and pull or merge request templates count as evidence."
 issues = [1045]
-callable = "lib.core_scans:contributor_files"
+callable = "lib.run.core_scans:contributor_files"
 publishes = ["contributor_files"]
 reads = ["repo_root", "archetype", "org_security_policy"]
 stage = "post_offers"
 headless = { contributor_files = "headless_variant" }
 # Headless, archetype is itself a variant's block, so this scan runs as a variant too, after it.
 headless_variants = [
-  { block = "contributor_files", callable = "lib.headless_static:contributor_files", reads = ["repo_root", "archetype", "org_security_policy"], stage = "post_offers" },
+  { block = "contributor_files", callable = "lib.run.headless_static:contributor_files", reads = ["repo_root", "archetype", "org_security_policy"], stage = "post_offers" },
 ]
 whys.contributor_files = "A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue."
 shapes = [

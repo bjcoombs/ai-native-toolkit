@@ -83,7 +83,7 @@ import lib.manifest.manifest_whys as mw
 from lib.scoring.level_signals import INPUT_GRADES, counts_toward_level, load_default_levels
 from lib.scoring.levels import Criterion, MaturityModel, Scalar, condition_id
 from lib.scoring.levels_fields import DEFAULT_POLARITY, TRUTH_TAGS
-from lib.signals import NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS, UNIT_SCANS, known_scans
+from lib.run.signals import NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS, UNIT_SCANS, known_scans
 
 CATALOG_VERSION = 1
 GRADE_ORDER = ("config_only", "declared", "measured", "verified")
@@ -92,8 +92,8 @@ UNCLASSIFIED = "unclassified"
 # (the check manifest's fragments, #994).
 SOURCES = ("skills/assess/checks/core.toml", "skills/assess/checks/core/*.toml",
            "skills/assess/levels/default.toml",
-           "skills/assess/scripts/lib/scoring/level_signals.py", "skills/assess/scripts/lib/signals.py",
-           "skills/assess/scripts/lib/scan_registry.py")
+           "skills/assess/scripts/lib/scoring/level_signals.py", "skills/assess/scripts/lib/run/signals.py",
+           "skills/assess/scripts/lib/run/scan_registry.py")
 
 Headless = Literal["registered", "headless_variant", "unregistered", "platform_only", "units_only"]
 

@@ -5,7 +5,7 @@
 id = "core.stale_hubs"
 kind = "collector"
 title = "Stale doc hubs"
-callable = "lib.core_scans:stale_hubs"
+callable = "lib.run.core_scans:stale_hubs"
 publishes = ["stale_hubs"]
 reads = ["doc_graph", "doc_staleness"]
 stage = "read_side"

@@ -123,7 +123,7 @@ def test_a_model_file_cannot_carry_demotions() -> None:
 ])
 def test_a_repository_config_cannot_introduce_a_demotion(tmp_path: Path, config: str) -> None:
     from lib.owner_exclusions import owner_exclusions_block
-    from lib.run_setup import fleet_config
+    from lib.run.run_setup import fleet_config
 
     def level(root: Path) -> Any:
         return lt.run_context_level({"fleet_config": fleet_config(root), "owner_exclusions": owner_exclusions_block(root),

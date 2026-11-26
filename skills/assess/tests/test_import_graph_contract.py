@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.headless_layers import structure
+from lib.run.headless_layers import structure
 from lib.graph.import_graph import (
     INVALID_IMPORT_GRAPH,
     LANGUAGE_BY_EXTENSION,

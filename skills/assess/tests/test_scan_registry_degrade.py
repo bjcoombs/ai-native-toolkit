@@ -12,7 +12,7 @@ from dataclasses import replace
 
 import pytest
 
-from lib import scan_registry as reg
+from lib.run import scan_registry as reg
 
 # The entries #623 moved behind the degrade wrapper.
 NEWLY_DEGRADING = (
@@ -116,7 +116,7 @@ def test_a_failed_generated_exclusion_scan_is_disclosed_not_silent():
 
 @pytest.mark.parametrize("content", ["[1, 2]", "{not json", None])
 def test_plugin_version_never_raises(content, tmp_path):
-    from lib.run_setup import read_plugin_version
+    from lib.run.run_setup import read_plugin_version
 
     manifest = tmp_path / "plugin.json"
     if content is None:

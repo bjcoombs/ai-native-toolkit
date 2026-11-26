@@ -5,7 +5,7 @@
 id = "core.fleet_config"
 kind = "collector"
 title = "Fleet settings sections"
-callable = "lib.run_setup:fleet_config"
+callable = "lib.run.run_setup:fleet_config"
 publishes = []
 reads = ["repo_root"]
 stage = "setup"

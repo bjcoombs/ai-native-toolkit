@@ -13,15 +13,15 @@ from typing import Any
 import pytest
 
 import lib.manifest.check_manifest as cm
-from lib import core_scans as cs
-from lib import run_setup as rs
+from lib.run import core_scans as cs
+from lib.run import run_setup as rs
 from lib import unit_readings as ur
 from lib.counts_only.content_free import counts_only
 from lib.instructions.instruction_files import nested_instruction_surface
 from lib.scoring.layer_grades import scan_layer_grades
 from lib.scoring.levels import resolve_signal
-from lib.scan_registry import SCANS, STAGE_READ_SIDE, ScanSpec
-from lib.signals import HEADLESS_SCANS
+from lib.run.scan_registry import SCANS, STAGE_READ_SIDE, ScanSpec
+from lib.run.signals import HEADLESS_SCANS
 from lib.unit_discovery import scan_units
 
 NO_EXCLUDES: tuple[set[str], list[str]] = (set(), [])

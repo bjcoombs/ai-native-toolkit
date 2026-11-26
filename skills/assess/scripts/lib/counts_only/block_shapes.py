@@ -17,7 +17,7 @@ names it. Every block may also degrade to ``{"available": false, "reason"}``, wh
 - ``instruction_claims`` (``lib.instructions.instruction_claims.scan_instruction_claims``)
 - ``promissory_markers`` (``lib.keyhole.promissory_markers.MarkerScan.summary``)
 - ``review_reality`` (``lib.hosting.review_reality.summarize`` and its GitLab twin)
-- ``structure_drift`` (``lib.context_blocks._structure_drift_block``; the headless
+- ``structure_drift`` (``lib.run.context_blocks._structure_drift_block``; the headless
   runner marks tier 1 ``{"available": false, "reason"}``)
 
 TypedDicts for the run-context blocks a default maturity-model criterion reads that are

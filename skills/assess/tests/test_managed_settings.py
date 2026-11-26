@@ -118,7 +118,7 @@ def test_the_config_opt_in_needs_a_literal_true(tmp_path, text, expected) -> Non
 def test_the_signals_run_reads_managed_settings_only_when_asked(tmp_path, monkeypatch) -> None:
     """assess_signals --managed-settings: the stamp says so and agent_ops reads the machine;
     the target's own config never turns it on (#1153)."""
-    from lib import signals
+    from lib.run import signals
     directory = _point(monkeypatch, tmp_path / "managed")
     directory.mkdir()
     (directory / "managed-settings.json").write_text(json.dumps(DENY), encoding="utf-8")

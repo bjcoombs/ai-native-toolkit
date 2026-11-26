@@ -5,7 +5,7 @@
 id = "core.uninstall_instructions_path"
 kind = "collector"
 title = "Uninstall instructions path"
-callable = "lib.core_scans:uninstall_instructions_path"
+callable = "lib.run.core_scans:uninstall_instructions_path"
 publishes = ["uninstall_instructions_path"]
 reads = []
 stage = "read_side"

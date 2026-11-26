@@ -53,7 +53,7 @@ from lib.exec_summary import GATE_TASK
 from lib.scoring.level_tally import default_model, level_result
 from lib.scoring.levels import MaturityModel, condition_id
 from lib.run_context_types_fix import CiSystem, Delivery, FileOutcome, FixReport, GateProof
-from lib.signals import collect
+from lib.run.signals import collect
 from lib.starter_delivery import Runner, deliver, ignored, is_git_repo, run, stage, tree_clean
 from lib.starter_files import GUARDRAIL, detect_facts, plan_files, write_files
 

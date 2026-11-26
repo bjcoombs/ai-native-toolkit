@@ -10,7 +10,7 @@
 # collector entry plus the signals, conditions and findings it owns (a signal names its
 # collector, a condition reads one signal, a finding belongs to the collector of its first
 # input). The loader merges the fragments in the order below, which is the scan-table
-# order (lib/scan_registry.py SCANS), and an id declared in two fragments fails to load.
+# order (lib/run/scan_registry.py SCANS), and an id declared in two fragments fails to load.
 # A new collector adds its fragment and one line here.
 
 manifest_version = 2

@@ -5,7 +5,7 @@
 id = "core.accretion_ratchet"
 kind = "collector"
 title = "Accretion ratchet"
-callable = "lib.core_scans:accretion_ratchet"
+callable = "lib.run.core_scans:accretion_ratchet"
 publishes = ["accretion_ratchet"]
 reads = ["accretion_scan", "current"]
 stage = "read_side"

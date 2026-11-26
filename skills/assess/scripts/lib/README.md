@@ -37,13 +37,13 @@ Two modules are the identified co-change hotspots in the git history:
   the six named derived findings. Because it touches every upstream signal, it
   co-changes with the core on almost every schema or signal-set change.
 
-The seam is narrowing. Every run-context block is declared once in `scan_registry.py`
+The seam is narrowing. Every run-context block is declared once in `run/scan_registry.py`
 (`SCANS`) and run by one loop, so adding a scan edits its own module, its test, that
 table and this file - not `assess_core.py`. The setup steps (scope, artifact directory,
 run id, stats and diff, instruction grading, first-flagged map) are entries too; their
-adapters live in `run_setup.py`, the read-side adapters in `core_scans.py`. The
+adapters live in `run/run_setup.py`, the read-side adapters in `run/core_scans.py`. The
 doc-staleness keys and the doc x complexity join joined the table last (#558), so the
-core assigns no key by hand. The table only reads: `run_publish.py` writes the wiki,
+core assigns no key by hand. The table only reads: `run/run_publish.py` writes the wiki,
 badge and `run-context.json` after the scans (#557), so `build_run_context` has no
 file-system side effects and `build_and_publish_run` adds the publish step (#660).
 
@@ -56,9 +56,9 @@ writing nothing), `build_and_publish_run` (the same, then the publish call, whic
 Its helpers live in seven modules, one per seam: `instruction_files.py`
 (instruction-file grading), `diff_reliability.py` (cross-run diff trust),
 `wiki_state.py` (first-flagged dates and run supersession), `run_wiki.py` (the wiki
-pages, index and log for one run), `context_blocks.py` (scan results serialised into
+pages, index and log for one run), `run/context_blocks.py` (scan results serialised into
 run-context blocks), `mutation_cap.py` (the `test_pressure` shape and the Layer 6 cap)
-and `run_scope.py` (`--scope` and the artifact directory), plus the
+and `run/run_scope.py` (`--scope` and the artifact directory), plus the
 `artifact_schema.py` and `assess_method.py` constants. A change to one of these concerns edits its module and
 its test; `assess_core.py` moves only when the order of the pipeline or the
 run-context key order changes.
@@ -251,6 +251,17 @@ New code imports the new path.
   truth-tag views. `wiki_writer` and `ci_workflow` locate `templates/` from their own path
   (`parents[3]`). `evidence_check` also runs as a script: run the moved file,
   `python scripts/lib/report/evidence_check.py`. Files: `__init__.py`, `anomaly_detector.py`, `badge.py`, `catalog.py`, `catalog_configure.py`, `catalog_html.py`, `catalog_md.py`, `catalog_tags.py`, `ci_workflow.py`, `evidence_check.py`, `findings_snapshot.py`, `gap_actions.py`, `gate_cost.py`, `measured_appendix.py`, `reviewed_findings.py`, `run_wiki.py`, `wiki_state.py`, `wiki_writer.py`.
+- **`run/`**: the scan table and the run around it, the `run` group (#1398): the declared
+  scan registry, the scan plan a `--profile` or `--levels` run executes, the bounded scan
+  pool and the per-scan timings, the setup and read-side adapters and the publish step, the
+  run scope, the blocks serialised into the run context, the degrade helper, the consent
+  offers and decline markers, and the headless signals runner with its layer and static
+  entries, its published schema and the described scan blocks. `scan_plan`, `scan_pool` and
+  `scan_timings` postdate the #917 module map and moved with `scan_registry`, which they
+  serve. `run_setup` and `signals` locate the repository root from their own path
+  (`parents[5]`). `signals_schema` also runs as a script: run the moved file,
+  `python scripts/lib/run/signals_schema.py`. The `run_context_types*` modules are shared
+  core and stay at the root. Files: `__init__.py`, `context_blocks.py`, `core_scans.py`, `decline_markers.py`, `degrade.py`, `headless_layers.py`, `headless_static.py`, `interactivity.py`, `run_publish.py`, `run_scope.py`, `run_setup.py`, `scan_block_schemas.py`, `scan_plan.py`, `scan_pool.py`, `scan_registry.py`, `scan_timings.py`, `signals.py`, `signals_schema.py`.
 - **`scoring/`**: maturity models and how a run is scored against them, the `scoring` group
   (#1395): the model loader with its condition fields, unknown-path hints and starter copy,
   the input class and grade of each signal a condition reads, the verified tally with its

@@ -28,7 +28,7 @@ from lib.agents.agent_environment import (
 )
 from lib.counts_only.content_free import counts_only_scans
 from lib.named_check import is_named_check
-from lib.scan_registry import SCANS
+from lib.run.scan_registry import SCANS
 
 CI = "name: Tests\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: make test\n"
 COPILOT_OK = """name: Copilot Setup Steps

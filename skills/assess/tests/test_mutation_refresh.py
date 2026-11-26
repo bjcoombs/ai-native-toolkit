@@ -21,10 +21,10 @@ from typing import Any
 import pytest
 
 import assess_core
-from lib import core_scans
+from lib.run import core_scans
 from lib.keyhole.keyhole_signals import FINDING_ORDER
 from lib.testing.mutation_refresh import recorded_excludes, refresh_mutation_findings
-from lib.run_scope import resolve_scope
+from lib.run.run_scope import resolve_scope
 
 _PRODUCTS = (
     "derived_findings", "attention", "attention_low_signal", "findings_markdown",

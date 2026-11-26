@@ -3,7 +3,7 @@
 The offline scan never reaches the network. `--platform` adds a second, separate
 pass after it: for each repository whose row is `ok`, one more
 `assess_signals.py --platform` child reads the platform for the scans in
-`lib/signals.py` `PLATFORM_SCANS` (`review_reality`, `delivery`, `review_evidence`,
+`lib/run/signals.py` `PLATFORM_SCANS` (`review_reality`, `delivery`, `review_evidence`,
 which the pass rebuilds from the measured `review_reality`, and `review_automation` and
 `ci_checks`, which read GitLab's merged CI configuration), narrowed by
 `--scans` when given. Each needs `gh` (github.com remotes) or `glab` (GitLab

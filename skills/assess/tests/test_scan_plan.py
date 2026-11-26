@@ -1,4 +1,4 @@
-"""The scan plan a --profile or --levels run executes (lib/scan_plan.py, #1268).
+"""The scan plan a --profile or --levels run executes (lib/run/scan_plan.py, #1268).
 
 Pins that a citizen run executes exactly the planned scans (by spy and by the ``scan_plan``
 stamp) and gives the level a full run under the same profile gives; that a section whose
@@ -14,15 +14,15 @@ from typing import Any
 
 import pytest
 
-import lib.scan_registry as sr
+import lib.run.scan_registry as sr
 from lib.scoring.level_signals import signal_path_validator
 from lib.scoring.level_tally import default_model, model_blocks
 from lib.scoring.levels import load_levels
 from lib.profiles import ModelChoice, profile_path, resolve, single_repo_choice
-from lib.scan_plan import (NOT_RUN_CODE, ScanPlan, ScanPlanError, fleet_scans, frame_keys, model_plan,
+from lib.run.scan_plan import (NOT_RUN_CODE, ScanPlan, ScanPlanError, fleet_scans, frame_keys, model_plan,
                            not_run_text, plan_scans, run_plan)
-from lib.scan_registry import SCANS
-from lib.signals import known_scans
+from lib.run.scan_registry import SCANS
+from lib.run.signals import known_scans
 from test_headline import ci2  # noqa: F401 - ci2 is a fixture
 
 DAY = "2026-11-24"

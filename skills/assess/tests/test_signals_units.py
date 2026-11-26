@@ -14,11 +14,11 @@ import jsonschema
 import pytest
 
 import assess_signals
-from lib import signals
+from lib.run import signals
 from lib.report.catalog import build_catalog
 from lib.counts_only.content_free import HASH_PREFIX, counts_only_scans, hash_value
 from lib.counts_only.counts_only_rules import HASHED_PATH, classify
-from lib.signals_schema import SCHEMA_PATH
+from lib.run.signals_schema import SCHEMA_PATH
 from test_unit_readings import MONOREPO, _write
 
 UNIT_PATHS = ["services/billing", "services/search", "web"]

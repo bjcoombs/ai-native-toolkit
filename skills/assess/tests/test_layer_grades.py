@@ -8,8 +8,8 @@ import pytest
 
 from lib.counts_only.content_free import counts_only_scans
 from lib.scoring.layer_grades import scan_layer_grades
-from lib.scan_registry import SCANS
-from lib.signals import known_scans
+from lib.run.scan_registry import SCANS
+from lib.run.signals import known_scans
 
 NO_NESTED: dict[str, Any] = {"available": True, "files": []}
 

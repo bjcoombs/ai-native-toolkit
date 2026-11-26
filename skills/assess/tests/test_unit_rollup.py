@@ -12,11 +12,11 @@ from typing import Any
 import pytest
 
 from assess_report import render_report
-from lib import core_scans as cs
+from lib.run import core_scans as cs
 from lib import unit_rollup as ur
 from lib.counts_only.content_free import counts_only
 from lib.scoring.level_tally import default_model
-from lib.scan_registry import SCANS
+from lib.run.scan_registry import SCANS
 from test_unit_readings import MONOREPO, _write
 
 INSTR = "layer-0-instructions.1"

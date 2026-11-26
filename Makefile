@@ -53,8 +53,8 @@ test-contract:
 	uv run --with pytest --with pyyaml --with jsonschema --with "pytest-xdist>=3.6,<4" pytest -v $(XDIST) tests/
 
 # The measures catalog (docs/what-we-measure.md, docs/checks.html, measures.json), generated from skills/assess/checks/core.toml (and its fragments), the default
-# maturity model, lib/scoring/level_signals.py, lib/signals.py (the headless scan list) and
-# lib/scan_registry.py (the registry). test-assess fails (tests/test_catalog.py)
+# maturity model, lib/scoring/level_signals.py, lib/run/signals.py (the headless scan list) and
+# lib/run/scan_registry.py (the registry). test-assess fails (tests/test_catalog.py)
 # when a committed copy is stale, so run this after changing any of them.
 catalog:
 	cd skills/assess && uv run --locked python scripts/gen_catalog.py
@@ -71,7 +71,7 @@ catalog:
 # tests/fixtures/golden/assess-report-baseline.md, tests/fixtures/fleet_legacy/,
 # tests/canaries/).
 regen:
-	cd skills/assess && uv run --locked python scripts/lib/signals_schema.py
+	cd skills/assess && uv run --locked python scripts/lib/run/signals_schema.py
 	cd skills/assess && uv run --locked python scripts/lib/fleet/fleet_schema.py
 	cd skills/assess && uv run --locked python scripts/lib/fleet/fleet_level_schema.py
 	cd skills/assess && uv run --locked python scripts/lib/fleet/fleet_group_schema.py

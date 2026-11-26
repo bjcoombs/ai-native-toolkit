@@ -5,7 +5,7 @@
 id = "core.unfinalized"
 kind = "collector"
 title = "Unfinalized exclusions"
-callable = "lib.run_setup:unfinalized_exclusions"
+callable = "lib.run.run_setup:unfinalized_exclusions"
 publishes = []
 reads = ["assess_dir", "superseded", "first_flagged", "current", "diff", "excludes"]
 stage = "setup"

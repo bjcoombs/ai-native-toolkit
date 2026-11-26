@@ -5,7 +5,7 @@
 id = "core.run_header"
 kind = "collector"
 title = "Run header"
-callable = "lib.run_setup:run_header"
+callable = "lib.run.run_setup:run_header"
 publishes = ["run_id", "artifact_schema_version", "assess_method_version", "run_date", "scope", "scope_slug", "measured_commit", "prior_stats_exists", "stats_summary", "instruction_files", "instructions_grade", "diff", "diff_reliable", "diff_version_note", "diff_trend_reset", "prior_plugin_version", "schema_version", "prior_schema_version", "tool_versions", "prior_tool_versions", "diff_detail", "pruned_hotspots", "retired_excluded_hotspots", "dropped_first_flagged", "provisional_first_flagged", "log_integrity", "prior_findings_snapshot", "prior_level"]
 reads = ["run_id", "run_date", "run_scope", "measured_commit", "current", "prior", "instruction_grading", "diff", "unfinalized"]
 stage = "setup"
@@ -17,7 +17,7 @@ headless = { stats_summary = "headless_variant", diff = "unregistered" }
 whys.stats_summary = "It summarises file size and complexity across the repository; the 95th-percentile file size is what decides whether an agent can read a file whole."
 whys.diff = "exempt: plumbing"
 headless_variants = [
-  { block = "stats_summary", callable = "lib.headless_layers:stats_summary", reads = ["repo_root", "excludes", "scope"], stage = "read_side" },
+  { block = "stats_summary", callable = "lib.run.headless_layers:stats_summary", reads = ["repo_root", "excludes", "scope"], stage = "read_side" },
 ]
 shapes = [
   { path = "stats_summary.fn_ccn", type = "lib.run_context_types:FnCcnBlock" },

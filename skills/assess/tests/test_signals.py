@@ -12,10 +12,10 @@ import pytest
 
 import assess_signals
 import lib.hosting.merged_sample as merged_sample
-from lib import scan_registry as reg
-from lib import signals
-from lib.scan_registry import ScanSpec
-from lib.signals_schema import SCHEMA_PATH, build_schema, render, type_schema
+from lib.run import scan_registry as reg
+from lib.run import signals
+from lib.run.scan_registry import ScanSpec
+from lib.run.signals_schema import SCHEMA_PATH, build_schema, render, type_schema
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 PLUGIN_JSON = SCRIPTS.parents[2] / ".claude-plugin" / "plugin.json"
@@ -281,8 +281,8 @@ def test_unregistered_names_are_run_context_keys_the_core_assigns():
     """Guards the names-only list against typos: each is a key assess_core writes."""
     sources = "".join(
         path.read_text(encoding="utf-8")
-        for path in (SCRIPTS / "assess_core.py", SCRIPTS / "lib" / "context_blocks.py",
-                     SCRIPTS / "lib" / "run_setup.py", SCRIPTS / "lib" / "scan_registry.py")
+        for path in (SCRIPTS / "assess_core.py", SCRIPTS / "lib" / "run" / "context_blocks.py",
+                     SCRIPTS / "lib" / "run" / "run_setup.py", SCRIPTS / "lib" / "run" / "scan_registry.py")
     )
     for name in signals.UNREGISTERED_SCANS:
         assert f'"{name}"' in sources, name
@@ -354,7 +354,7 @@ def test_reaches_gh_counts_both_platform_clients():
     assert _lib_module("lib.hosting.gh_cli._run_gh") == "hosting.gh_cli"
     assert _lib_module("lib.test_pressure.mutation") == "test_pressure.mutation"
     assert _lib_module("lib.test_pressure.scan_test_pressure") == "test_pressure"
-    assert "test_pressure" in _lib_imports("core_scans")
+    assert "test_pressure" in _lib_imports("run.core_scans")
     # A relative import is an edge too: ``from .aggregate import ...`` in
     # lib/test_pressure/__init__.py reaches lib.test_pressure.aggregate.
     assert "test_pressure.aggregate" in _lib_imports("test_pressure")
@@ -444,7 +444,7 @@ def test_stamp_degrades_outside_git(tmp_path):
 def test_checked_in_schema_matches_the_typed_dicts():
     assert SCHEMA_PATH.read_text(encoding="utf-8") == render(), (
         "references/signals.schema.json is stale: regenerate with "
-        "`uv run --locked python scripts/lib/signals_schema.py` from skills/assess"
+        "`uv run --locked python scripts/lib/run/signals_schema.py` from skills/assess"
     )
 
 

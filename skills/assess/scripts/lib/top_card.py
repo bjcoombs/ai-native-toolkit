@@ -77,7 +77,7 @@ __all__ = ["FACT_IDS", "GATE_GAP", "GATE_TASK", "PROFILES_URL", "STEP_GATES_URL"
            "card_markdown", "first_action", "since_line", "read_first_action", "start_lines"]
 
 # The catalog's Step gates entry: what each gate covers. measured_appendix.CATALOG_URL names the
-# same page; importing it here would close a cycle through lib.signals.
+# same page; importing it here would close a cycle through lib.run.signals.
 STEP_GATES_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates"
 
 # Each Step gate as a task a person can do. A gate id the table does not know reads

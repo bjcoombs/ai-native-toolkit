@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.context_blocks import structure_drift_tier_0
+from lib.run.context_blocks import structure_drift_tier_0
 from lib.docs.ownership_parser import architecture_boundaries, is_boundary_pattern
 from lib.keyhole.structure_drift import detect_path_existence_drift
 

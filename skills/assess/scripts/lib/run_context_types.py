@@ -777,7 +777,7 @@ class NestedInstructionsBlock(TypedDict):
 
 
 # --- signals: the headless signals document (assess_signals.py, #545) -------
-# lib/signals_schema.py generates the published JSON schema from these.
+# lib/run/signals_schema.py generates the published JSON schema from these.
 
 
 class SignalsStamp(TypedDict):

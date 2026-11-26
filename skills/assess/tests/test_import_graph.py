@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 import lib.keyhole.structure_drift as sd
-from lib.headless_layers import structure
+from lib.run.headless_layers import structure
 from lib.graph.import_graph import (
     NO_PYTHON_PACKAGES,
     NO_SOURCE_FILES,

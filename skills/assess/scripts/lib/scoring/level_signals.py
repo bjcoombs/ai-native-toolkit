@@ -170,7 +170,7 @@ from lib.counts_only.counts_only_schema import ROOTS
 from lib.scoring.levels import Criterion, PathValidator, MaturityModel, Scope, load_levels
 from lib.scoring.levels_hints import register_names
 from lib.packs import SIGNAL_PREFIX, Pack
-from lib.signals_schema import SCHEMA_PATH
+from lib.run.signals_schema import SCHEMA_PATH
 from lib.scoring.signal_grades import DEFAULT_LEVELS as DEFAULT_LEVELS
 from lib.scoring.signal_grades import EMPTY_DENOMINATORS as EMPTY_DENOMINATORS
 from lib.scoring.signal_grades import INPUT_GRADES as INPUT_GRADES

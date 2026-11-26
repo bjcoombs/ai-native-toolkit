@@ -5,7 +5,7 @@
 id = "core.structure_drift_block"
 kind = "collector"
 title = "Structure drift"
-callable = "lib.core_scans:structure_drift"
+callable = "lib.run.core_scans:structure_drift"
 publishes = ["structure_drift"]
 reads = ["repo_root", "keyhole"]
 stage = "read_side"
@@ -15,7 +15,7 @@ gate_reason = "self_degrading"
 headless = { structure_drift = "headless_variant" }
 whys.structure_drift = "Ownership and boundary maps are read as authoritative, and nothing forces them to follow the code; this checks each map's patterns against where the code now lives."
 headless_variants = [
-  { block = "structure_drift", callable = "lib.headless_layers:structure_drift", reads = ["repo_root"], stage = "read_side" },
+  { block = "structure_drift", callable = "lib.run.headless_layers:structure_drift", reads = ["repo_root"], stage = "read_side" },
 ]
 shapes = [
   { path = "structure_drift", type = "lib.counts_only.block_shapes:StructureDriftBlock" },

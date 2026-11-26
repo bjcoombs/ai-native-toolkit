@@ -31,7 +31,7 @@ snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
   line beside "no baseline yet", as a lost gate read from it is. A profile run compares with its
   own committed record (#1184) and fails or passes on its own gates; with no record yet it reads
   "no baseline yet", as a default first run does. Without the opt-in each is a warn line. A
-  ``--profile`` run whose scan plan left the findings out (``lib/scan_plan.py``, #1268) prints
+  ``--profile`` run whose scan plan left the findings out (``lib/run/scan_plan.py``, #1268) prints
   "warn findings not checked: not run under profile <name>", never "clean snapshot"; with a
   findings-based threshold set (``fail_on`` or ``containment_min``) whose own scans the plan left
   out (``THRESHOLD_BLOCKS``, #1281) it fails instead, "FAIL scans not run", naming the fix: re-run
@@ -85,7 +85,7 @@ from lib.gate_loss import (held_at_baseline, model_change_reason, no_baseline, n
                            step_change)
 from lib.report.reviewed_findings import open_findings
 from lib.run_context_types import DerivedFinding, JsonDict, MethodChange
-from lib.scan_plan import not_run_text
+from lib.run.scan_plan import not_run_text
 
 
 class FindingHit(TypedDict):

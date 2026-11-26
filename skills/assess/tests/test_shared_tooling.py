@@ -5,7 +5,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from lib.scan_registry import SCANS
+from lib.run.scan_registry import SCANS
 from lib.ci.shared_tooling import (
     distinct_ids,
     github_reusable_workflows,

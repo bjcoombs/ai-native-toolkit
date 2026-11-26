@@ -15,11 +15,11 @@ from typing import Any
 import pytest
 
 import lib.scoring.level_tally as lt
-from lib import core_scans
+from lib.run import core_scans
 from lib.scoring import headline as hl
 from lib.counts_only.content_free import counts_only
 from lib.owner_exclusions import KINDS, PROBLEMS, owner_exclusions_block, parse_exclusions
-from lib.scan_registry import SCANS
+from lib.run.scan_registry import SCANS
 from test_level_tally import (  # noqa: F401 - estate is a fixture
     CI, DOC, INSTR, SCRIPTS, STEPS, _eq, _fleet, _fresh, _model, _row, _state, _stepped, estate,
 )

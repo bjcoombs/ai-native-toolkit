@@ -19,7 +19,7 @@ path(s): team:coverage.gate (row 'coverage-80')``, and adds two things to each p
 The names come from ``register_names``: ``lib.scoring.level_signals`` registers ``published_paths`` when
 it is imported, which every run that loads a model with the real validator does. This module never
 imports ``lib.scoring.level_signals`` itself: that module imports ``lib.scoring.levels``, and through
-``lib.signals`` the platform clients, so an import here, even inside a function, would make every
+``lib.run.signals`` the platform clients, so an import here, even inside a function, would make every
 importer of ``lib.scoring.levels`` reach the network (``tests/test_signals.py``). With nothing registered,
 an error points at the catalog.
 

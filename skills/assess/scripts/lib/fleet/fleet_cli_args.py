@@ -28,8 +28,8 @@ from lib.fleet.fleet_stamp import RUN_FILE
 from lib.fleet.runner import DEFAULT_TIMEOUT, REPOS_FILE
 from lib.scoring.levels import add_renamed_flag
 from lib.profiles import ProfileError, add_model_arguments, profile_path
-from lib.scan_pool import jobs_value, share_of_cpus
-from lib.signals import platform_only_error
+from lib.run.scan_pool import jobs_value, share_of_cpus
+from lib.run.signals import platform_only_error
 
 
 LATEST = "latest"  # bare --compare: the newest matching history entry
@@ -116,7 +116,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
                         help="History window passed to assess_signals, e.g. 6mo, 90d (default: its own).")
     parser.add_argument("--scans", default=None,
                         help="Comma-separated scan names (default: all; under --levels or --profile, "
-                             "the scans the model reads, lib/scan_plan.py).")
+                             "the scans the model reads, lib/run/scan_plan.py).")
     parser.add_argument("--all-scans", action="store_true",
                         help="Under --levels or --profile, run every scan, not only those the model "
                              "reads. --scans, when given, still chooses the scans.")
@@ -187,7 +187,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--platform", action="store_true",
         help="After the offline scan, run a separate platform pass (gh or glab) for the scans in "
-             "lib/signals.py PLATFORM_SCANS and join its blocks into each ok row. Needs gh or glab "
+             "lib/run/signals.py PLATFORM_SCANS and join its blocks into each ok row. Needs gh or glab "
              "logged in; never changes a row's status. Without it no network call is made.",
     )
     parser.add_argument(

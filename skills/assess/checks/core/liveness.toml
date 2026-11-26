@@ -5,7 +5,7 @@
 id = "core.liveness"
 kind = "collector"
 title = "Liveness scan"
-callable = "lib.core_scans:liveness_scan"
+callable = "lib.run.core_scans:liveness_scan"
 publishes = []
 reads = ["repo_root", "excludes", "scope"]
 stage = "read_side"

@@ -5,7 +5,7 @@
 id = "core.instruction_file_size"
 kind = "collector"
 title = "Instruction file size"
-callable = "lib.core_scans:instruction_sizes"
+callable = "lib.run.core_scans:instruction_sizes"
 publishes = ["instruction_file_size"]
 reads = ["instruction_files"]
 stage = "read_side"

@@ -9,8 +9,8 @@ exactly what it stamped before, then the version file, then gives ``unknown``.
 Never raises: a missing, unreadable, malformed or non-object file reads as absent. The version
 file is never committed in this repository (``.gitignore``); only the ZIP build writes it.
 
-Readers: ``lib.run_setup.read_plugin_version`` (run context, wiki, report),
-``lib.signals.read_plugin_version`` (the signals and fleet stamp), ``complexity-treemap.py``
+Readers: ``lib.run.run_setup.read_plugin_version`` (run context, wiki, report),
+``lib.run.signals.read_plugin_version`` (the signals and fleet stamp), ``complexity-treemap.py``
 (the stats sidecar) and ``assess_emit_workflow.py`` (the pinned action version). Tests:
 ``tests/test_plugin_version.py``. Stdlib only, so the lightweight scripts can import it.
 """

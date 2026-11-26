@@ -20,7 +20,7 @@
 #   signal is level 0 or unknown, never credit; a practice /assess looks for
 #   can still be absent at level 2 (see each row below). A headless run
 #   builds the structure, structure_drift, stats_summary and
-#   promissory_markers blocks itself (lib/headless_layers.py) when grimp,
+#   promissory_markers blocks itself (lib/run/headless_layers.py) when grimp,
 #   networkx, lizard and rg are installed; a missing tool makes its block
 #   unavailable with a named reason, so the row is unknown there. Headless
 #   stats_summary scores the files lizard reads only, so its source p95 can
@@ -134,7 +134,7 @@
 #   count (#922).
 # - Layer 1 reads the observability rung from committed files (telemetry
 #   dependencies, a runbook or OBSERVABILITY.md, a logs or metrics MCP server
-#   or skill). A headless run builds it too (lib/headless_static.py, #699), so
+#   or skill). A headless run builds it too (lib/run/headless_static.py, #699), so
 #   an uninstrumented repository reads level 0 there, not unknown.
 # - Documentation freshness reads doc_staleness.summary.stale_pct: the share
 #   of docs with a code subject of their own whose subject outran them (a

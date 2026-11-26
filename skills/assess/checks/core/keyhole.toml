@@ -5,7 +5,7 @@
 id = "core.keyhole"
 kind = "collector"
 title = "Keyhole integration"
-callable = "lib.core_scans:keyhole"
+callable = "lib.run.core_scans:keyhole"
 publishes = []
 reads = ["repo_root", "current", "doc_staleness", "liveness_blocks", "structure_scan", "test_pressure", "promissory", "accretion_ratchet", "archetype", "excludes", "scope", "rename_map", "doc_join"]
 stage = "read_side"

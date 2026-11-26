@@ -101,7 +101,7 @@ class LevelResult(TypedDict):
 class OwnerExclusion(TypedDict):
     """One ``[checks] exclude`` entry in force (``lib/owner_exclusions.py``, #910).
 
-    The provenance fields mirror a decline marker's (``lib/decline_markers.py``).
+    The provenance fields mirror a decline marker's (``lib/run/decline_markers.py``).
     """
 
     id: str

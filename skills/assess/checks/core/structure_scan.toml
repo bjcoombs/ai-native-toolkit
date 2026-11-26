@@ -5,7 +5,7 @@
 id = "core.structure_scan"
 kind = "collector"
 title = "Import graph scan"
-callable = "lib.core_scans:structure_scan"
+callable = "lib.run.core_scans:structure_scan"
 publishes = []
 reads = ["repo_root", "excludes", "scope"]
 stage = "read_side"

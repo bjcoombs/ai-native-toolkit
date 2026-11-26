@@ -32,11 +32,11 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
 
 # (path under scripts/, enclosing function) -> why the clock read is allowed.
 ALLOWED: dict[tuple[str, str], str] = {
-    ("lib/signals.py", "build_inputs"):
+    ("lib/run/signals.py", "build_inputs"):
         "run_date is run identity; its one signal consumer is the network merged sample",
-    ("lib/signals.py", "build_stamp"): "scan_date is a stamp field, not a signal",
+    ("lib/run/signals.py", "build_stamp"): "scan_date is a stamp field, not a signal",
     ("assess_core.py", "main"): "run_date is run identity: wiki dates and supersede detection",
-    ("lib/run_setup.py", "new_run_id"): "run id minting",
+    ("lib/run/run_setup.py", "new_run_id"): "run id minting",
     ("complexity-treemap.py", "_new_run_id"): "run id minting",
     ("lib/report/wiki_writer.py", "_build_log_heading"): "wiki log heading time",
     ("lib/hosting/review_reality.py", "summarize"):

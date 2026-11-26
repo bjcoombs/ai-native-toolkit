@@ -5,7 +5,7 @@
 id = "core.broken_instruction_refs"
 kind = "collector"
 title = "Broken instruction references"
-callable = "lib.core_scans:instruction_refs"
+callable = "lib.run.core_scans:instruction_refs"
 publishes = ["broken_instruction_refs"]
 reads = ["doc_graph", "instruction_grading"]
 stage = "read_side"

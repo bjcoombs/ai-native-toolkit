@@ -5,7 +5,7 @@
 id = "core.doc_join"
 kind = "collector"
 title = "Doc and complexity join"
-callable = "lib.core_scans:doc_join"
+callable = "lib.run.core_scans:doc_join"
 publishes = []
 reads = ["current", "doc_staleness", "repo_root"]
 stage = "read_side"

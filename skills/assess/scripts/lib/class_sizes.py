@@ -13,7 +13,7 @@ generated files to the scans' own excludes, so those two classes usually read
 0 files.
 
 Both producers call it: the full run's sidecar (``complexity-treemap.py``
-``write_stats``) and the headless block (``lib.headless_layers.stats_summary``).
+``write_stats``) and the headless block (``lib.run.headless_layers.stats_summary``).
 ``percentile`` is numpy's default (linear) rule, so the two agree. Tests:
 ``tests/test_class_sizes.py``.
 """

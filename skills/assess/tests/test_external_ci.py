@@ -19,7 +19,7 @@ from lib.external_ci_rules import NOT_READ, ExternalCi, as_external, known_app, 
 from lib.hosting.gh_cli import GhUnavailable, GithubRepo
 from lib.hosting.merged_sample import MergedSample
 from lib.hosting.platform_cli import CACHE_ENV
-from lib.signals import collect
+from lib.run.signals import collect
 from lib.unread_ci import UNREAD_CI_FILES, is_unread_ci_path, unread_ci_paths
 
 AZP = "trigger:\n  - main\nsteps:\n  - script: make test\n"

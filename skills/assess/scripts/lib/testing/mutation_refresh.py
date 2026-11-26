@@ -64,7 +64,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from lib.assess_config import load_excludes
-from lib.context_blocks import point_at_artifact_dir
+from lib.run.context_blocks import point_at_artifact_dir
 from lib.keyhole.keyhole_signals import apply_config_excludes, assemble_findings, finding_products
 from lib.run_context_types import DerivedFinding, FindingPaths, FindingProducts
 from lib.testing.untrusted_hotspot import untrusted_hotspot_paths

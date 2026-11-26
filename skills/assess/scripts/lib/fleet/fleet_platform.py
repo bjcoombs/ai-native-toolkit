@@ -3,7 +3,7 @@
 The offline scan (``lib/fleet/runner.py`` ``run_fleet``) never reaches the network.
 With ``--platform`` a second, separate pass runs after it: for each repository
 whose offline row is ``ok``, one more ``assess_signals.py`` child with
-``--platform --scans <PLATFORM_SCANS>`` (``lib/signals.py``), the same output
+``--platform --scans <PLATFORM_SCANS>`` (``lib/run/signals.py``), the same output
 mode and salt, its own worker pool (``--platform-jobs``) and its own per-repo
 timeout (``--platform-timeout``). Its blocks are joined into the row's
 ``scans`` by repository, replacing the offline ``network`` placeholders and adding
@@ -69,7 +69,7 @@ from lib.fleet.runner import (
     run_signals,
 )
 from lib.run_context_types import JsonDict
-from lib.signals import PLATFORM_SCANS, with_companions
+from lib.run.signals import PLATFORM_SCANS, with_companions
 
 DEFAULT_PLATFORM_JOBS = 4
 DEFAULT_PLATFORM_TIMEOUT = 300

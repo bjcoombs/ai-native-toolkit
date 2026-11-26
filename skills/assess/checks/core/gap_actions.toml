@@ -5,7 +5,7 @@
 id = "core.gap_actions"
 kind = "collector"
 title = "Gap actions"
-callable = "lib.core_scans:gap_actions"
+callable = "lib.run.core_scans:gap_actions"
 publishes = ["gap_actions"]
 reads = ["coverage_report", "doc_graph", "current", "archetype", "layer_grades", "nested_instructions", "instruction_placement"]
 stage = "post_offers"

@@ -66,7 +66,7 @@ from collections.abc import Mapping
 from functools import cache
 from typing import Any
 
-from lib.scan_timings import DIAGNOSTIC_KEYS
+from lib.run.scan_timings import DIAGNOSTIC_KEYS
 from lib.counts_only.counts_only_rules import (
     DROP,
     EXTRA_FIELD_NAMES,

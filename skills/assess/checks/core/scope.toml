@@ -5,7 +5,7 @@
 id = "core.scope"
 kind = "collector"
 title = "Scope root"
-callable = "lib.run_setup:scope_root"
+callable = "lib.run.run_setup:scope_root"
 publishes = []
 reads = ["run_scope"]
 stage = "setup"
