@@ -10,7 +10,11 @@ over the one below, worded by ``headline.GATE_CHANGE`` ("CI turns red on a broke
 conditions (``gate_state``; a gate holds when its row's conditions 1..level are met, and
 missing evidence never reads "not yet"). The run's Step (``level["step"]``) carries the "You are
 here" marker; the gate below ``level["next_step"]`` is drawn in the warn colour as the
-next one. Nothing is hard-coded about the number of Steps or their gates.
+next one. When one change would take the run past its next Step (``headline.one_change_ceiling``
+over the level result's ``ceiling_step``, #1333), the Step it reaches carries the "One change
+away" marker and ``data-one-change``, and each gate the result lists in ``held_above`` reads
+"already in place" rather than "in place". Nothing is hard-coded about the number of Steps or
+their gates.
 
 ``ladder_in_place`` and ``ladder_caption`` are the report section's opening line and
 caption; the caption reads ``next_step.blockers`` the way the headline's Next line does, so
@@ -26,13 +30,16 @@ from collections.abc import Sequence
 
 import lib.fleet.fleet_svg as svg
 from lib.svg_scope import SCOPES
-from lib.scoring.headline import GATE_CHANGE, gate_change
+from lib.scoring.headline import GATE_CHANGE, gate_change, one_change_ceiling
 from lib.scoring.level_result_types import LevelResult
 from lib.scoring.levels import StepDef, StepGate
 from lib.vocabulary import IN_PLACE
 
 LADDER_FILE = "step-ladder.svg"
 LADDER_TITLE = "Where you are on the Steps"
+# The mark on a gate held above the run's Step, and the label on the Step one change reaches (#1333).
+ALREADY = "already in place"
+ONE_CHANGE = "One change away"
 
 # What an agent can do at each Step, in one plain sentence: the one table of them.
 STEP_MEANING: dict[int, str] = {
@@ -76,16 +83,24 @@ def gate_state(level: LevelResult, gate: StepGate) -> str:
     return {"not_measured": "not measured", "not_applicable": "excluded by owner"}.get(first, "not yet")
 
 
+def _held_state(level: LevelResult, gate: StepGate) -> str:
+    """``gate_state``, but ``already in place`` for a gate the level result lists in
+    ``held_above`` (#1333): held above the run's Step before the Step below it is reached."""
+    state = gate_state(level, gate)
+    return ALREADY if state == "in place" and gate["id"] in level.get("held_above", []) else state
+
+
 def _gate_words(gate: StepGate) -> str:
     return GATE_CHANGE.get(gate["id"], f"the {gate['id']} gate holds")
 
 
-def _rung(x: float, y: float, step: StepDef, state: str) -> list[str]:
+def _rung(x: float, y: float, step: StepDef, state: str, one_change: bool = False) -> list[str]:
     paint = {"here": 'class="f-accent s-accent"', "reached": 'class="f-bg s-accent"',
-             "ahead": 'class="f-bg s-rule"'}[state]
+             "ahead": 'class="f-bg s-warn"' if one_change else 'class="f-bg s-rule"'}[state]
     head_cls, body_cls = {"here": ("bg", "bg"), "reached": ("fg", "fg"), "ahead": ("muted", "muted")}[state]
+    mark = ' data-one-change="true"' if one_change else ""
     parts = [f'<rect x="{x:.1f}" y="{y:.1f}" width="{RUNG_W:.1f}" height="{RUNG_H:.1f}" rx="6" '
-             f'{paint} stroke-width="2" data-step="{step["step"]}" data-state="{state}"/>',
+             f'{paint} stroke-width="2" data-step="{step["step"]}" data-state="{state}"{mark}/>',
              svg.text(x + 14, y + 21, f"Step {step['step']} · {step['name']}", size=14,
                       weight="600", cls=head_cls)]
     sentence = meaning(step["step"])
@@ -102,7 +117,7 @@ def _gate_band(x: float, y: float, gates: Sequence[StepGate], to: int, level: Le
     parts = [f'<path d="M{mid:.1f} {y + GATE_H - 4:.1f} L{mid:.1f} {y + 8:.1f} M{mid - 6:.1f} {y + 14:.1f} '
              f'L{mid:.1f} {y + 8:.1f} L{mid + 6:.1f} {y + 14:.1f}" fill="none" class="s-{cls}" '
              f'stroke-width="{2.5 if is_next else 1.5}" data-gate-to="{to}"{extra}/>']
-    words = "; ".join(f"{_gate_words(g)} ({gate_state(level, g)})"
+    words = "; ".join(f"{_gate_words(g)} ({_held_state(level, g)})"
                       for g in gates) or "no new gate"
     label = f"{'Next gate' if is_next else 'Gate'}: {words}"
     parts.append(svg.text(mid + 18, y + GATE_H / 2 + 4, label, size=12,
@@ -115,6 +130,7 @@ def render_ladder(level: LevelResult, steps: Sequence[StepDef]) -> str:
     ordered = sorted(steps, key=lambda s: s["step"])
     here = level["step"]
     nxt = level["next_step"]["step"] if level["next_step"] is not None else None
+    ceiling = one_change_ceiling(level, ordered)
     body = [svg.text(PAD, 28, LADDER_TITLE, size=15, weight="600", cls="fg"),
             svg.text(PAD, 48, "Each rung is a Step of agent autonomy; the gate between two rungs "
                      "lifts you to the next", size=12, cls="muted")]
@@ -122,7 +138,10 @@ def render_ladder(level: LevelResult, steps: Sequence[StepDef]) -> str:
     for index, step in enumerate(reversed(ordered)):
         n = step["step"]
         state = "here" if n == here else ("reached" if here is not None and n < here else "ahead")
-        body += _rung(RUNG_X, y, step, state)
+        body += _rung(RUNG_X, y, step, state, n == ceiling)
+        if n == ceiling:
+            body.append(svg.text(RUNG_X + RUNG_W + 10, y + RUNG_H / 2 + 5, ONE_CHANGE, size=13,
+                                 weight="600", cls="warn"))
         if state == "here":
             arrow_x = RUNG_X + RUNG_W + 10
             body.append(f'<path d="M{arrow_x:.1f} {y + RUNG_H / 2:.1f} l10 -7 l0 14 z" class="f-accent"/>')
@@ -173,6 +192,6 @@ def gate_conditions(steps: Sequence[StepDef]) -> list[str]:
     return list(dict.fromkeys(ids))
 
 
-__all__ = ["LADDER_FILE", "LADDER_TITLE", "STEP_MEANING", "gate_conditions", "gate_state",
+__all__ = ["ALREADY", "LADDER_FILE", "ONE_CHANGE", "LADDER_TITLE", "STEP_MEANING", "gate_conditions", "gate_state",
            "ladder_caption", "ladder_in_place", "meaning", "new_gates", "render_ladder"]
 

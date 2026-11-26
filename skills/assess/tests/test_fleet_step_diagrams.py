@@ -31,6 +31,7 @@ from svg_cascade import overridden_text_attributes
 from test_fleet_cli import fleet_cli, froot  # noqa: F401 - froot is a fixture
 
 FILES = (funnel.FILE, lifts.FILE, movement.FILE)
+SVG_NS = "{http://www.w3.org/2000/svg}"
 _SVG_TEXT = re.compile(r"<(text|title|desc)\b[^>]*>(.*?)</\1>", re.S)
 
 
@@ -97,9 +98,9 @@ def test_an_owner_set_aside_gate_is_its_own_hatched_segment() -> None:
 # --- one change away ------------------------------------------------------------
 
 
-def _brute_force(model: MaturityModel, results: list[LevelResult]) -> dict[tuple[str, int], int]:
+def _brute_force(model: MaturityModel, results: list[LevelResult]) -> dict[tuple[str, int, bool], int]:
     """Flip each unmet condition to met alone, recompute the Step from the gates, and count the
-    repositories exactly one flip lifts to their next Step."""
+    repositories exactly one flip lifts to their next Step, by the Step the flip reaches (#1333)."""
     steps = sorted(model["steps"], key=lambda s: s["step"])
 
     def step_of(states: dict[str, str]) -> int:
@@ -110,7 +111,7 @@ def _brute_force(model: MaturityModel, results: list[LevelResult]) -> dict[tuple
             held = s["step"]
         return held
 
-    out: dict[tuple[str, int], int] = {}
+    out: dict[tuple[str, int, bool], int] = {}
     for result in results:
         if result["step"] is None or result["next_step"] is None:
             continue
@@ -119,7 +120,8 @@ def _brute_force(model: MaturityModel, results: list[LevelResult]) -> dict[tuple
         lifting = [cid for cid, state in states.items() if state == "unmet"
                    and step_of({**states, cid: "met"}) >= result["next_step"]["step"]]
         if len(lifting) == 1:
-            key = (lifting[0], result["next_step"]["step"])
+            reached = step_of({**states, lifting[0]: "met"})
+            key = (lifting[0], reached, reached > result["next_step"]["step"])
             out[key] = out.get(key, 0) + 1
     return out
 
@@ -128,16 +130,35 @@ def test_step_lifts_equal_a_brute_force_over_every_scan_combination() -> None:
     rows = tuple(fx.row(f"grp/r{i}", fx.scans(lines, agent, ci)) for i, (lines, agent, ci)
                  in enumerate(itertools.product((0, 10), (0, 3, None), (True, False))))
     results = [r for r in level_results(fx.MODEL, rows).values() if r is not None]
-    found = {(lift["condition"], lift["step"]): lift["repo_count"] for lift in lifts.step_lifts(fx.MODEL, results)}
+    found = {(lift["condition"], lift["step"], lift["multi_step"]): lift["repo_count"]
+             for lift in lifts.step_lifts(fx.MODEL, results)}
     assert found == _brute_force(fx.MODEL, results) and found
 
 
 def test_step_lifts_rank_by_count_and_never_count_an_unknown_gate() -> None:
     found = fx.data()["opportunities"]["step_lifts"]
-    assert [(f["gate"], f["step"], f["repo_count"]) for f in found] == [("instructions", 2, 2), ("ci_runs_tests", 3, 1)]
+    assert [(f["gate"], f["step"], f["repo_count"]) for f in found] == [
+        ("instructions", 2, 1), ("instructions", 3, 1), ("ci_runs_tests", 3, 1)]
     svg = lifts.render(fx.data())
     assert "1 repository waits on a gate that was not measured" in svg
     assert "1 repository had no measured Step" in svg
+
+
+def test_a_lift_past_the_next_step_counts_to_the_step_it_reaches() -> None:
+    """#1333: charlie (Step 1, the instruction file missing, the Step 3 gates held) counts
+    "to Step 3" and is flagged a multi-Step jump in fleet-data.json and one-change-away.svg."""
+    data = fx.data()
+    jumps = [f for f in data["opportunities"]["step_lifts"] if f["multi_step"]]
+    assert [(f["gate"], f["step"], f["repo_count"]) for f in jumps] == [("instructions", 3, 1)]
+    single = [f for f in data["opportunities"]["step_lifts"] if not f["multi_step"]]
+    assert [(f["gate"], f["step"]) for f in single] == [("instructions", 2), ("ci_runs_tests", 3)]
+    svg = lifts.render(data)
+    root = ET.fromstring(svg.encode("utf-8"))
+    flagged = [g.attrib["data-condition"] for g in root.iter(f"{SVG_NS}g") if g.attrib.get("data-multi-step")]
+    assert flagged == [jumps[0]["condition"]]
+    assert "to Step 3, a multi-Step jump" in svg
+    assert ("instructions gate (Agent instructions), to Step 3, a multi-Step jump", 1) in lifts.bars(
+        data["opportunities"]["step_lifts"])
 
 
 def test_build_opportunities_writes_step_lifts_without_repository_keys() -> None:

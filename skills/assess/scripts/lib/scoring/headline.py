@@ -26,7 +26,12 @@ Step ladder's caption words gates as the headline did. The lines, in order:
 ``summary`` is the one-line form the badge and the ``log.md`` entry carry, with no count
 in it: ``Step 3 · next: coverage gate`` (``GATE_NOUN`` names the first gate
 ``card_facts.blocking_gates`` returns, the function the top card reads),
-``Step 4 · all gates held`` at the top Step, ``no Step yet · next: <gate>`` below the first
+``Step 1 · one change from Step 3: instruction file`` when one gate blocks the next Step and
+the gates above it already hold (``one_change_ceiling``, reading the level result's
+``ceiling_step``, #1333). ``lone_condition`` is the one test of "one change": exactly one
+condition of the next Step's gates open and unmet on its own criteria. The top card, the Step
+ladder and the fleet's one-change-away count (``lib/fleet/fleet_step_lifts.py``) read it too.
+The summary reads ``Step 4 · all gates held`` at the top Step, ``no Step yet · next: <gate>`` below the first
 Step of a model whose Step 1 has a gate (#889), and ``no Steps defined`` for a model without
 ``[[steps]]``. ``markdown`` is the lines, pasted verbatim by the report and
 ``assess_report.py``. ``verified`` and ``tags`` (``TagCell`` per cell, from ``tag_cells``, which lives in
@@ -49,13 +54,14 @@ dropped and the numbers and tag tokens kept. Tests: ``tests/test_headline.py``.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from lib.card_facts import blocking_gates
 from lib.scoring.level_result_types import Blocker, ConditionResult, Headline, LevelResult, TagCell
 from lib.scoring.level_tags import tag_cells
 from lib.scoring.level_tally import default_model
-from lib.scoring.levels import MaturityModel
+from lib.scoring.levels import MaturityModel, StepDef, condition_id
 
 # Bumped when the headline block's shape changes. It has no changes/ counter, so a
 # release PR moves it by hand during a version freeze.
@@ -67,8 +73,8 @@ from lib.scoring.levels import MaturityModel
 #   `summary_markdown`, the report's three-line summary and its one call to action (#1102).
 HEADLINE_VERSION = 4
 
-__all__ = ["GATE_CHANGE", "GATE_NOUN", "GLOSSARY_URL", "Headline", "as_headline", "gate_change", "gate_note", "headline", "reason_word",
-           "run_context_headline", "tag_cells", "verified_count"]
+__all__ = ["GATE_CHANGE", "GATE_NOUN", "GLOSSARY_URL", "Headline", "as_headline", "gate_change", "gate_note", "headline",
+           "lone_condition", "one_change_ceiling", "reason_word", "run_context_headline", "tag_cells", "verified_count"]
 
 # The plain-English glossary (#1102). The report's markdown links a term's first use to its
 # heading anchor; exec_summary.py and assess_report.py read it from here.
@@ -140,7 +146,7 @@ def gate_change(blocker: Blocker) -> str:
     return GATE_CHANGE.get(gate, f"the {gate} gate holds") + gate_note(blocker)
 
 
-def _summary(level: LevelResult) -> str:
+def _summary(level: LevelResult, model: MaturityModel) -> str:
     """The badge message and the log.md readiness line: the Step and its next blocker, no count.
     It reads ``card_facts.blocking_gates``, the function the report's top card reads (#1252)."""
     step, nxt = level["step"], level["next_step"]
@@ -152,7 +158,50 @@ def _summary(level: LevelResult) -> str:
         return f"no Step yet · next: {GATE_NOUN.get(gate, gate)}" if gate else "no Step yet"
     if gate is None:
         return f"Step {step} · all gates held"
+    ceiling = one_change_ceiling(level, model.get("steps", []))
+    if ceiling is not None:
+        return f"Step {step} · one change from Step {ceiling}: {GATE_NOUN.get(gate, gate)}"
     return f"Step {step} · next: {GATE_NOUN.get(gate, gate)}"
+
+
+def lone_condition(level: Mapping[str, Any], steps: Sequence[StepDef]) -> tuple[str, str] | None:
+    """``(condition, gate)`` when meeting that one condition holds every gate of the next Step
+    (#941, #1333): exactly one condition its gates read (each gate's row from level 1 up to the
+    gate's level; a condition two gates share is one change) is not met, and it is ``unmet`` on
+    its own criteria, never ``not_measured``, ``not_applicable`` or unmet only through a
+    ``requires`` (reason ``requires:<id>``), since meeting that alone changes nothing. ``gate`` is
+    the first gate of the next Step that reads it. None otherwise."""
+    nxt, conditions = level.get("next_step"), level.get("conditions")
+    if level.get("step") is None or not isinstance(nxt, Mapping) or not isinstance(conditions, list):
+        return None
+    definition = next((s for s in steps if s["step"] == nxt.get("step")), None)
+    if definition is None:
+        return None
+    by_id = {c["id"]: c for c in conditions if isinstance(c, Mapping)}
+    missing: dict[str, str] = {}
+    for gate in definition["gates"]:
+        for n in range(1, gate["level"] + 1):
+            cid = condition_id(gate["row"], n)
+            if cid in by_id and by_id[cid]["state"] != "met":
+                missing.setdefault(cid, gate["id"])
+    if len(missing) != 1:
+        return None
+    ((cid, gate_id),) = missing.items()
+    cond = by_id[cid]
+    if cond["state"] != "unmet" or str(cond.get("reason", "")).startswith("requires:"):
+        return None
+    return cid, gate_id
+
+
+def one_change_ceiling(level: Mapping[str, Any], steps: Sequence[StepDef]) -> int | None:
+    """The Step one change takes the repository to when that is past its next Step (#1333):
+    ``ceiling_step`` when ``lone_condition`` finds the one change and ``ceiling_step`` is above
+    the next Step; None otherwise, and for a result stored before #1374 without ``ceiling_step``.
+    The fleet's one-change-away count (``lib/fleet/fleet_step_lifts.py``) reads the same test."""
+    nxt, ceiling = level.get("next_step"), level.get("ceiling_step")
+    if not isinstance(nxt, Mapping) or not isinstance(ceiling, int) or ceiling <= nxt.get("step", ceiling):
+        return None
+    return ceiling if lone_condition(level, steps) is not None else None
 
 
 def next_why(level: LevelResult, model: MaturityModel) -> str:
@@ -223,7 +272,7 @@ def headline(value: Any, model: MaturityModel) -> Headline:
     if cells:
         lines.append(_strip_line(cells))
     nxt = level["next_step"]
-    summary = _summary(level)
+    summary = _summary(level, model)
     markdown = "\n\n".join(lines)
     return {"headline_version": HEADLINE_VERSION, "available": True,
             "levels_version": level["levels_version"], "step": step,
