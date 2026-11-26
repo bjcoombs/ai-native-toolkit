@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import lib.keyhole.liveness_scan as liveness
+from lib.run.run_scope import Scope
 from lib.keyhole.liveness_scan import (
     _parse_deadcode,
     _parse_staticcheck,
@@ -500,7 +501,7 @@ def test_dominant_language_follows_scope_not_sibling_subtree(
             cmd, 0, stdout="packages/web/m1.ts:1 - v1\n", stderr="")
 
     monkeypatch.setattr(liveness.subprocess, "run", fake_run)
-    r = scan_dead_code(tmp_path, scope=tmp_path / "packages" / "web").as_dict()
+    r = scan_dead_code(tmp_path, scope=Scope.of(tmp_path, Path("packages/web"))).as_dict()
     assert [(t["language"], t["tool"], t["status"]) for t in r["tools"]] == [
         ("typescript", "ts-prune", "ran"),
     ]

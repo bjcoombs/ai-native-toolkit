@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 import lib.keyhole.structure_drift as sd
+from lib.run.run_scope import Scope
 from lib.run.headless_layers import structure
 from lib.graph.import_graph import (
     NO_PYTHON_PACKAGES,
@@ -59,7 +60,7 @@ def test_python_output_is_byte_identical_to_the_pre_builder_golden() -> None:
         "structure_budget_20": _without_language(
             analyze_structure(REPO, keyhole_budget=20).as_dict()),
         "structure_scoped_alpha": _without_language(
-            analyze_structure(REPO, scope=(REPO / "alpha").resolve()).as_dict()),
+            analyze_structure(REPO, scope=Scope.of(REPO, REPO / "alpha")).as_dict()),
         "headless_structure": _without_language(structure(analyze_structure(REPO).as_dict())),
         "drift_communities": sorted(sorted(c) for c in sd._compute_communities(REPO)),
         "drift_module_paths": {
@@ -148,7 +149,7 @@ def test_language_count_skips_excluded_and_out_of_scope_dirs(tmp_path: Path) -> 
     _write(tmp_path, "web/d.ts")
     assert language_counts(tmp_path, {"vendored"}) == {"go": 1, "rust": 1, "typescript": 1}
     assert dominant_language(tmp_path, {"vendored"}) == "go"  # a tie goes by name
-    assert dominant_language(tmp_path, scope=tmp_path / "web") == "typescript"
+    assert dominant_language(tmp_path, scope=Scope.of(tmp_path, Path("web"))) == "typescript"
     assert dominant_language(tmp_path / "web" / "missing") is None
 
 
@@ -393,7 +394,7 @@ def test_an_empty_graph_counts_as_no_graph(tmp_path: Path) -> None:
 
 def test_builders_receive_the_excludes_and_scope(tmp_path: Path) -> None:
     stub = _StubBuilder("go", None)
-    scope = tmp_path / "svc"
+    scope = Scope.of(tmp_path, Path("svc"))
     analyze_structure(tmp_path, extra_exclude_dirs={"gen"}, scope=scope, builders=(stub,))
     assert stub.calls == [({"gen"}, scope)]
 

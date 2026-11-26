@@ -100,6 +100,7 @@ from lib.plugin_version import read_version
 from lib.complexity.dart_complexity import BACKEND_NAME as DART_BACKEND, dart_function_scores
 from lib.complexity.generated_files import GENERATED_NAME_PATTERNS, generated_reason
 from lib.history.git_churn import churn_is_degenerate, git_churn_scores, pick_churn_window, rename_paths
+from lib.run.run_scope import Scope, resolve_scope
 from lib.run_context_types import (
     Distribution, FnCcnBlock, GeneratedExclusion, KeyholeBudget,
     ScoredHotspotRow, SizeBlock, SubtreeTokens,
@@ -389,7 +390,7 @@ def collect(root: Path, by: str = "complexity",
             include_artifacts: bool = False,
             extra_exclude_dirs: set[str] | None = None,
             extra_exclude_patterns: list[str] | None = None,
-            scope: Path | None = None,
+            scope: Scope | None = None,
             excluded_generated: list[GeneratedExclusion] | None = None,
             scc_languages: dict[Path, str] | None = None,
             fn_names: dict[Path, str] | None = None,
@@ -409,7 +410,7 @@ def collect(root: Path, by: str = "complexity",
       function breakdown, so its other paths are absent here). Threaded to `write_stats` so the report can
       separate per-function violations from file-level aggregates (issue #58).
 
-    `scope` (an absolute path under `root`) restricts scoring to a subtree for
+    `scope` (a `Scope` of folders under `root`, #1110) restricts scoring to them for
     `/assess <path>` monorepo scoping. The scan still roots at `root` so the
     config/exclude resolution and churn windowing are unchanged; the scored file
     list, dominance check, and churn axis then see only the subtree - so a scoped
@@ -454,12 +455,8 @@ def collect(root: Path, by: str = "complexity",
             files.append((path, loc, cx, "scc"))
     files = [f for f in files if f[1] > 0]
     if scope is not None:
-        scope_abs = scope.resolve()
-        files = [f for f in files if f[0].resolve().is_relative_to(scope_abs)]
-        fn_ccn_by_path = {
-            p: v for p, v in fn_ccn_by_path.items()
-            if p.resolve().is_relative_to(scope_abs)
-        }
+        files = [f for f in files if scope.contains(f[0])]
+        fn_ccn_by_path = {p: v for p, v in fn_ccn_by_path.items() if scope.contains(p)}
     if not include_artifacts:
         kept: list[tuple[Path, int, float, str]] = []
         for f in files:
@@ -1350,9 +1347,9 @@ def _build_parser() -> argparse.ArgumentParser:
               "`exclude_patterns`)."),
     )
     ap.add_argument(
-        "--scope", type=Path, metavar="SUBDIR",
+        "--scope", type=Path, metavar="SUBDIR", action="append",
         help=("Restrict scoring to a subtree of the repo (for `/assess <path>` "
-              "monorepo scoping). A path under the analysed root; the scan still "
+              "monorepo scoping). A path or glob under the analysed root, repeatable; the scan still "
               "roots at the repo (so excludes and churn windowing are unchanged) "
               "but only files under this subtree are scored, so the treemap "
               "carries no signal from a sibling directory. Omit for a whole-repo "
@@ -1361,23 +1358,18 @@ def _build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def _resolve_scope(root: Path, scope_arg: Path | None) -> tuple[Path | None, str | None]:
-    """The resolved ``--scope`` subtree, or an error message when it does not
-    exist or sits outside ``root``. (None, None) for a whole-repo run."""
-    if scope_arg is None:
-        return None, None
-    scope = scope_arg if scope_arg.is_absolute() else (root / scope_arg)
-    scope = scope.resolve()
-    if not scope.exists():
-        return None, f"error: scope path {scope} does not exist"
-    if not scope.is_relative_to(root):
-        return None, f"error: scope path {scope} is not under {root}"
-    return scope, None
+def _resolve_scope(root: Path, scope_args: list[Path] | None) -> tuple[Scope | None, str | None]:
+    """The resolved ``--scope`` folders, or an error message when one does not exist,
+    sits outside ``root`` or matches nothing. (None, None) for a whole-repo run."""
+    try:
+        return resolve_scope(root, scope_args or [])[0], None
+    except ValueError as e:
+        return None, f"error: {e}"
 
 
-def _no_files_message(scope: Path | None, excluded_generated: list[GeneratedExclusion]) -> str:
+def _no_files_message(scope: Scope | None, excluded_generated: list[GeneratedExclusion]) -> str:
     """The dead-end error when nothing is left to score."""
-    where = f" under {scope}" if scope is not None else ""
+    where = f" under {', '.join(str(r) for r in scope.roots)}" if scope is not None else ""
     # Content excludes can drop every file (an all-generated SDK subtree
     # under --scope); name them so the dead end explains itself.
     why = (
@@ -1388,18 +1380,12 @@ def _no_files_message(scope: Path | None, excluded_generated: list[GeneratedExcl
     return f"error: no scoreable files found{where}{why}"
 
 
-def _out_path_and_title(root: Path, scope: Path | None,
+def _out_path_and_title(root: Path, scope: Scope | None,
                         out_arg: Path | None) -> tuple[Path, str]:
     """The SVG path (``-o`` or a name derived from the root and scope) and the
     treemap title."""
-    scope_label = (
-        scope.relative_to(root).as_posix() if scope is not None and scope != root
-        else None
-    )
-    default_name = (
-        f"hotspot-{root.name}-{scope_label.replace('/', '-')}.svg"
-        if scope_label else f"hotspot-{root.name}.svg"
-    )
+    scope_label = scope.label if scope is not None and scope.roots != (root,) else None
+    default_name = f"hotspot-{root.name}-{scope.slug}.svg" if scope and scope_label else f"hotspot-{root.name}.svg"
     out = out_arg or Path(default_name)
     title = (
         f"Hotspot: {root.name}/{scope_label}" if scope_label

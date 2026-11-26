@@ -52,6 +52,7 @@ from lib.run.context_blocks import (
     excluded_generated,
 )
 from lib.testing.coverage_report import detect_coverage_report, load_coverage_data
+from lib.run.run_scope import ResolvedScope, Scope
 from lib.run.decline_markers import build_decline_block
 from lib.docs.doc_complexity_join import analyze_doc_complexity_join
 from lib.docs.doc_graph import build_doc_graph
@@ -89,7 +90,7 @@ Excludes = tuple[set[str], list[str]]
 
 # -- setup-stage scans (feed the wiki written after the run) -----------------
 
-def promissory_scan(repo_root: Path, excludes: Excludes, scope: Path | None) -> dict[str, Any]:
+def promissory_scan(repo_root: Path, excludes: Excludes, scope: Scope | None) -> dict[str, Any]:
     """Promissory markers (stale TODO/FIXME, suppressions, disabled tests), summarised."""
     dirs, patterns = excludes
     return scan_promissory_markers(
@@ -113,7 +114,7 @@ def working_notes(repo_root: Path) -> WorkingNotesConfig:
 
 
 def doc_graph(
-    repo_root: Path, excludes: Excludes, scope: Path | None, notes: WorkingNotesConfig,
+    repo_root: Path, excludes: Excludes, scope: Scope | None, notes: WorkingNotesConfig,
 ) -> DocGraphBlock:
     """The Layer 0 doc graph."""
     dirs, patterns = excludes
@@ -126,7 +127,7 @@ def doc_graph(
 # -- doc staleness and the doc x complexity join -----------------------------
 
 def doc_staleness(
-    repo_root: Path, doc_graph_block: dict[str, Any], excludes: Excludes, scope: Path | None,
+    repo_root: Path, doc_graph_block: dict[str, Any], excludes: Excludes, scope: Scope | None,
 ) -> Any:
     """Doc staleness over the doc graph's doc->code edges (``lib.docs.doc_staleness``)."""
     dirs, patterns = excludes
@@ -205,7 +206,7 @@ def instruction_sizes(instruction_files: dict[str, Any]) -> Any:
 
 # -- liveness, structure, coverage, tests ------------------------------------
 
-def liveness_scan(repo_root: Path, excludes: Excludes, scope: Path | None) -> Any:
+def liveness_scan(repo_root: Path, excludes: Excludes, scope: Scope | None) -> Any:
     """Layer 1 liveness: dead-code candidates, observability, capability blocks."""
     dirs, patterns = excludes
     return scan_liveness(
@@ -220,7 +221,7 @@ def liveness_blocks(liveness: Any) -> dict[str, Any]:
     return blocks
 
 
-def structure_scan(repo_root: Path, excludes: Excludes, scope: Path | None) -> StructureBlock:
+def structure_scan(repo_root: Path, excludes: Excludes, scope: Scope | None) -> StructureBlock:
     """Static import structure, read with the configured keyhole budget."""
     return analyze_structure(
         repo_root, keyhole_budget=load_structure_config(repo_root)["keyhole_budget"],
@@ -285,7 +286,7 @@ def accretion_by_file(scan: AccretionScan) -> dict[str, dict[str, Any]]:
 def keyhole(
     repo_root: Path, current: dict[str, Any], doc_staleness: Any, liveness: dict[str, Any],
     structure: Any, test_pressure: Any, promissory: Any, accretion: Any, archetype: Any,
-    excludes: Excludes, scope: Path | None, rename_map: RenameMap, join: Any,
+    excludes: Excludes, scope: Scope | None, rename_map: RenameMap, join: Any,
 ) -> KeyholeIntegration:
     """The five keyhole blocks, derived findings, attention and report products."""
     return integrate(
@@ -301,7 +302,7 @@ def keyhole(
 
 
 def keyhole_blocks(integration: KeyholeIntegration,
-                   run_scope: tuple[Path | None, str | None, str] | None = None) -> dict[str, Any]:
+                   run_scope: ResolvedScope | None = None) -> dict[str, Any]:
     """The eleven keyhole keys copied into the run context, the findings markdown's pointers
     naming this run's artifact directory (``context_blocks.point_at_artifact_dir``, #1256)."""
     blocks: dict[str, Any] = {}

@@ -8,7 +8,7 @@ in worker processes (``scan_pool.fan_out(..., processes=True)``), and a worker c
 function it can import by name: :func:`run_unit_pass`.
 
 ``run_unit_pass(values, scope)`` runs the bound unit table (``unit_readings.bound_table``)
-through ``scan_registry.run_scans`` with the repository-wide ``values`` and the unit's ``scope``,
+through ``scan_registry.run_scans`` with the repository-wide ``values`` and the unit's ``scope`` (a one-folder ``Scope``),
 and returns the context it filled plus the private values the table's entries left in the
 inputs (a unit block may be a private entry's value). The registry is imported inside the call,
 not at the top: the registry imports this module to bind it, and a spawned worker that unpickles
@@ -19,13 +19,15 @@ Tests: ``tests/test_unit_readings.py``.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from lib.run.run_scope import Scope
 
 UnitPass = tuple[dict[str, Any], dict[str, Any]]
 
 
-def run_unit_pass(values: Mapping[str, Any], scope: Path | None) -> UnitPass:
+def run_unit_pass(values: Mapping[str, Any], scope: Scope | None) -> UnitPass:
     """The unit's run context and its table's private values (module docstring)."""
     from lib.run.scan_registry import ScanSpec, run_scans
     from lib.unit_readings import bound_table

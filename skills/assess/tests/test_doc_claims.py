@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from lib.run.run_scope import Scope
 from lib.docs.doc_claims import doc_claim_files, find_contradictions, scan_doc_claims
 from lib.instructions.instruction_claims import extract_claims, scan_instruction_claims
 
@@ -57,10 +58,10 @@ def test_scope_globs_from_the_scope_directory(tmp_path: Path) -> None:
     _write(tmp_path, "docs/root.md", "text\n")
     _write(tmp_path, "svc/docs/guide.md", "text\n")
     _write(tmp_path, "svc/docs/design/old.md", "text\n")
-    assert doc_claim_files(tmp_path, None, tmp_path / "svc") == ["svc/docs/guide.md"]
+    assert doc_claim_files(tmp_path, None, Scope.of(tmp_path, Path("svc"))) == ["svc/docs/guide.md"]
     _write(tmp_path, "svc/docs/a.md", PIN_311)
     _write(tmp_path, "svc/docs/b.md", PIN_312)
-    block = scan_doc_claims(tmp_path, [], tmp_path / "svc")
+    block = scan_doc_claims(tmp_path, [], Scope.of(tmp_path, Path("svc")))
     assert [s["file"] for s in block["contradictions"][0]["sites"]] == [
         "svc/docs/a.md", "svc/docs/b.md"]
 

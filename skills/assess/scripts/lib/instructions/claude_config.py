@@ -9,7 +9,7 @@ file Claude Code would load from the repository and reports each field the
 runtime would drop, checked against the documented sets pinned in
 ``lib.instructions.claude_config_fields`` (never fetched at run time).
 
-Files read, relative to the run root (the ``--scope`` directory, else the repo
+Files read, relative to each run root (the ``--scope`` folders, #1110, else the repo
 root):
 
 - ``.claude/skills/*/SKILL.md``, ``.claude/commands/**/*.md`` and
@@ -79,6 +79,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, TypedDict
 
+from lib.run.run_scope import Scope, scope_roots
 from lib.assess_config import is_user_excluded
 from lib.instructions.claude_config_fields import (
     AGENT_EXPERIMENTAL_FIELDS,
@@ -538,28 +539,33 @@ def _unavailable(reason: str) -> ClaudeConfigBlock:
 
 def scan_claude_config(
     repo_root: Path,
-    scope: Path | None = None,
+    scope: Scope | None = None,
     excludes: tuple[set[str], list[str]] | None = None,
 ) -> ClaudeConfigBlock:
-    """Scan the Claude Code configuration under ``scope`` (default the repo root).
+    """Scan the Claude Code configuration under each ``scope`` root (default the repo root).
 
     ``excludes`` is the ``(dirs, patterns)`` pair from ``.assess/config.toml``,
     matched against repo-relative paths as every other scan does. Paths in the
     findings are repo-relative.
     """
     repo = repo_root.resolve()
-    root = (scope or repo).resolve()
-    manifest_path = root / ".claude-plugin" / "plugin.json"
-    plugin_repo = manifest_path.is_file()
-    if not plugin_repo and not (root / ".claude").is_dir():
+    roots = scope_roots(scope, repo)
+    plugins = [r for r in roots if (r / ".claude-plugin" / "plugin.json").is_file()]
+    plugin_repo = bool(plugins)
+    if not plugin_repo and not any((r / ".claude").is_dir() for r in roots):
         return _unavailable(
             "no Claude Code configuration: no .claude/ directory and no "
             ".claude-plugin/plugin.json")
-    manifest, manifest_error = _load_manifest(manifest_path) if plugin_repo else ({}, None)
     # Plugin files first: a file reachable both ways is reported once, with the
     # plugin rules (plugin agents ignore more fields).
-    found = _plugin_files(root, manifest) if plugin_repo else []
-    found.extend(_project_files(root))
+    found: list[tuple[Path, FileKind, Origin]] = []
+    manifest_error = None
+    for root in plugins:
+        manifest, error = _load_manifest(root / ".claude-plugin" / "plugin.json")
+        manifest_error = manifest_error or error
+        found += _plugin_files(root, manifest)
+    for root in roots:
+        found.extend(_project_files(root))
     dirs, pats = excludes or (set(), [])
     findings: list[ClaudeConfigFinding] = []
     by_kind = {"skill": 0, "command": 0, "agent": 0}

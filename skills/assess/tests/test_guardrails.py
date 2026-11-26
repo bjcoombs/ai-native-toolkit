@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from lib.run.run_scope import Scope
 from lib.counts_only.content_free import counts_only
 from lib.testing.coverage_gate import detect_coverage_gate
 from lib.instructions.guardrails import scan_guardrails
@@ -274,19 +275,19 @@ def test_a_scoped_run_counts_only_the_gates_inside_the_scope(tmp_path: Path) -> 
                               "[tool.coverage.report]\nfail_under = 85\n",
         "pkg/a.py": "x = 1\n",
     })
-    scoped = scan_guardrails(root, [], detect_coverage_gate(root, Path("pkg")), None,
-                             Path("pkg"))
+    scoped = scan_guardrails(root, [], detect_coverage_gate(root, Scope.of(root, Path("pkg"))), None,
+                             Scope.of(root, Path("pkg")))
     # pkg has its own ruff config; flake8 and mypy find the root ones by walking up.
     assert [(g["kind"], g["file"]) for g in scoped["gates"]] == [
         ("complexity_limit", "pkg/pyproject.toml"), ("complexity_limit", "setup.cfg"),
         ("coverage_floor", "pkg/pyproject.toml"), ("pre_commit", ".pre-commit-config.yaml"),
         ("type_strictness", "pyproject.toml")]
     assert len(scoped["not_read"]) == len(scan_guardrails(root, [], None)["not_read"]) + 1
-    absolute = scan_guardrails(root, [], None, None, root / "pkg")
+    absolute = scan_guardrails(root, [], None, None, Scope.of(root, root / "pkg"))
     assert [(g["kind"], g["file"]) for g in absolute["gates"]] == [
         ("complexity_limit", "pkg/pyproject.toml"), ("complexity_limit", "setup.cfg"),
         ("pre_commit", ".pre-commit-config.yaml"), ("type_strictness", "pyproject.toml")]
-    whole = scan_guardrails(root, [], detect_coverage_gate(root), None, root)
+    whole = scan_guardrails(root, [], detect_coverage_gate(root), None, Scope.of(root, root))
     assert len(whole["gates"]) == 7
 
 
@@ -330,7 +331,7 @@ ROOT_RUFF = "[tool.ruff.lint]\nselect = ['C901']\n\n[tool.ruff.lint.mccabe]\nmax
 def test_a_scope_without_a_ruff_config_is_gated_by_the_nearest_one_above(
         tmp_path: Path, files: dict[str, str], scope: str, expected: tuple[str, float]) -> None:
     root = _write(tmp_path, files)
-    block = scan_guardrails(root, [], None, None, Path(scope))
+    block = scan_guardrails(root, [], None, None, Scope.of(root, Path(scope)))
     assert [(g["file"], g["threshold"]) for g in block["gates"]
             if g["kind"] == "complexity_limit"] == [expected]
     assert not any("ruff" in line for line in block["not_read"])
@@ -339,7 +340,7 @@ def test_a_scope_without_a_ruff_config_is_gated_by_the_nearest_one_above(
 def test_a_scope_with_its_own_ruff_config_does_not_add_the_root_one(tmp_path: Path) -> None:
     root = _write(tmp_path, {"pyproject.toml": ROOT_RUFF,
                              "svc/.ruff.toml": "[lint]\nselect = ['C901']\n"})
-    block = scan_guardrails(root, [], None, None, Path("svc"))
+    block = scan_guardrails(root, [], None, None, Scope.of(root, Path("svc")))
     assert [g["file"] for g in block["gates"]] == ["svc/.ruff.toml"]
 
 
@@ -348,11 +349,11 @@ def test_a_scope_without_mypy_or_flake8_config_is_gated_by_the_root_ones(tmp_pat
                              "tox.ini": "[flake8]\nmax-complexity = 9\n",
                              "svc/setup.cfg": "[metadata]\nname = svc\n",
                              "other/mypy.ini": "[mypy]\nstrict = true\n"})
-    block = scan_guardrails(root, [], None, None, Path("svc"))
+    block = scan_guardrails(root, [], None, None, Scope.of(root, Path("svc")))
     assert [(g["kind"], g["file"]) for g in block["gates"]] == [
         ("complexity_limit", "tox.ini"), ("type_strictness", "mypy.ini")]
     own = _write(tmp_path, {"svc/.mypy.ini": "[mypy]\nstrict = false\n"})
-    assert [g["kind"] for g in scan_guardrails(own, [], None, None, Path("svc"))["gates"]] == [
+    assert [g["kind"] for g in scan_guardrails(own, [], None, None, Scope.of(own, Path("svc")))["gates"]] == [
         "complexity_limit"]
 
 
@@ -367,7 +368,7 @@ def test_the_registry_passes_the_scope_in_parameter_order(tmp_path: Path) -> Non
     assert spec.reads == tuple(inspect.signature(scan_guardrails).parameters)
     root = _write(tmp_path, {"pyproject.toml": ROOT_RUFF, "svc/m.py": "x = 1\n"})
     values: dict[str, Any] = {"repo_root": root, "instruction_files": {}, "coverage_gate": None,
-                              "excludes": (set(), []), "scope": root / "svc"}
+                              "excludes": (set(), []), "scope": Scope.of(root, Path("svc"))}
     block = spec.fn(*[values[name] for name in spec.reads])
     assert [(g["file"], g["threshold"]) for g in block["gates"]] == [("pyproject.toml", 5.0)]
     assert block["not_read"][-1].startswith("pre-commit hook")

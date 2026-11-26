@@ -106,6 +106,7 @@ from lib.pack_checks import PACK_BLOCK
 from lib.packs import Pack
 from lib.plugin_version import read_version
 from lib.run_context_types import JsonDict, SignalsDocument, SignalsStamp
+from lib.run.run_scope import Scope
 from lib.run.scan_registry import SCANS, STAGES, ScanSpec, run_scans
 
 # Bumped when the document's envelope (stamp fields, top-level keys) changes,
@@ -246,7 +247,7 @@ def platform_only_error(requested: Iterable[str] | None, platform: bool) -> str 
     return f"--scans {', '.join(named)} needs --platform: the block exists only on the platform"
 
 
-def scope_units_error(requested: Iterable[str] | None, scope: Path | None) -> str | None:
+def scope_units_error(requested: Iterable[str] | None, scope: Scope | None) -> str | None:
     """The error for a ``--scans`` selection naming a ``UNIT_SCANS`` block on a scoped run:
     unit discovery reads the whole checkout, so the blocks would not describe the stamped
     scope (#866). None when fine."""
@@ -339,13 +340,13 @@ def parse_window(window: str) -> str:
 
 def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
                  fleet_config: FleetConfig | None = None,
-                 ghsync_root: Path | None = None, scope: Path | None = None,
+                 ghsync_root: Path | None = None, scope: Scope | None = None,
                  managed_settings: bool = False, packs: Sequence[Pack] = ()) -> dict[str, Any]:
     """The registry's ``PROVIDED_INPUTS``, built the way ``assess_core`` builds them.
 
-    ``scope`` is ``--scope`` resolved to an absolute folder under ``repo_root``
-    (``run_scope.resolve_scope``), or None for the whole checkout (#866). The scans that
-    read ``scope`` measure that folder; every other scan reads the whole repository, as
+    ``scope`` is ``--scope`` resolved to a ``Scope`` of folders under ``repo_root``
+    (``run_scope.resolve_scope``, #1110), or None for the whole checkout (#866). The scans
+    that read ``scope`` measure those folders; every other scan reads the whole repository, as
     ``assess_core --scope`` does.
     ``history_window`` carries ``--window`` for history-reading scans
     (``ai_usage``, #547). ``fleet_config`` is the ``--fleet-config`` file merged
@@ -405,7 +406,7 @@ def _unavailable(reason: str) -> JsonDict:
 def collect(
     repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     window: str = DEFAULT_WINDOW, fleet_config: FleetConfig | None = None, platform: bool = False,
-    ghsync_root: Path | None = None, scope: Path | None = None, managed_settings: bool = False,
+    ghsync_root: Path | None = None, scope: Scope | None = None, managed_settings: bool = False,
     packs: Sequence[Pack] = (), jobs: int = 1,
 ) -> dict[str, JsonDict]:
     """Run the selected scans (and what they read); one block per name.
@@ -477,7 +478,7 @@ def toolkit_commit(toolkit_root: Path = TOOLKIT_ROOT) -> str | None:
 
 
 def build_stamp(repo_root: Path, window: str, toolkit_root: Path = TOOLKIT_ROOT,
-                scope: Path | None = None, managed_settings: bool = False) -> SignalsStamp:
+                scope: Scope | None = None, managed_settings: bool = False) -> SignalsStamp:
     """Toolkit commit, plugin version, scan date, window, the target's HEAD, the scope
     (repository-relative, posix; None for the whole checkout) and whether this machine's
     managed settings were read (``--managed-settings``, #1153)."""
@@ -490,7 +491,7 @@ def build_stamp(repo_root: Path, window: str, toolkit_root: Path = TOOLKIT_ROOT,
         "window": window,
         "target_head": head.get("head_sha") if available else None,
         "target_dirty": bool(head.get("dirty")) if available else None,
-        "scope": scope.relative_to(repo_root).as_posix() if scope is not None else None,
+        "scope": scope.label if scope is not None else None,
         "managed_settings": managed_settings,
     }
 
@@ -519,7 +520,7 @@ def build_document(
     repo_root: Path, requested: Sequence[str] | None = None, window: str = DEFAULT_WINDOW,
     toolkit_root: Path = TOOLKIT_ROOT, specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     fleet_config: FleetConfig | None = None, platform: bool = False,
-    ghsync_root: Path | None = None, scope: Path | None = None, units: bool = False,
+    ghsync_root: Path | None = None, scope: Scope | None = None, units: bool = False,
     managed_settings: bool = False, packs: Sequence[Pack] = (), jobs: int = 1,
 ) -> SignalsDocument:
     """The whole signals document. Raises ``UnknownScanError`` or ``ValueError`` on bad arguments.

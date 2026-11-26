@@ -49,7 +49,7 @@ the largest other graph stands in (most modules, then most internal edges, then 
 language token); with none the reason is the first builder failure in registration order, else
 `no_graph_reason`, which counts source files per language
 (`LANGUAGE_BY_EXTENSION`, skipping `EXCLUDE_DIRS` and the configured excludes, within
-`scope`) and names the dominant one. A built graph that breaks the contract (a module
+each `scope` root; `scope` is a `lib.run.run_scope.Scope`, #1110) and names the dominant one. A built graph that breaks the contract (a module
 missing from `package_of`, which A3 and A4 index) is treated as a builder failure
 (`graph_defect`, reason `invalid_import_graph: ...`), so another language can still be
 reported and the measure never raises `KeyError`. `is_graph_source(rel_path, language)`
@@ -66,15 +66,15 @@ door is the directory's `index` file.
 from pathlib import Path
 
 from lib.graph.import_graph import GraphUnavailable, ModuleGraph
+from lib.run.run_scope import Scope, scope_roots
 
 
 class IndexDirBuilder:
     language = "typescript"
 
     def build(self, repo_root: Path, extra_exclude_dirs: set[str],
-              scope: Path | None) -> ModuleGraph | None:
-        root = scope or repo_root
-        files = sorted(p for p in root.rglob("*.ts")
+              scope: Scope | None) -> ModuleGraph | None:
+        files = sorted(p for root in scope_roots(scope, repo_root) for p in root.rglob("*.ts")
                        if not set(p.relative_to(repo_root).parts) & extra_exclude_dirs)
         if not files:
             return None                        # nothing to graph: the dominant-language reason applies
@@ -112,6 +112,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, TypedDict
 
+from lib.run.run_scope import Scope, scope_roots
 from lib.counts_only.counts_only_rules import REASON_SENTENCE_CODES
 
 # Directories never worth walking for source. Mirrors doc_graph's EXCLUDE_DIRS
@@ -222,7 +223,7 @@ class ImportGraphBuilder(Protocol):
     def language(self) -> str: ...
 
     def build(
-        self, repo_root: Path, extra_exclude_dirs: set[str], scope: Path | None,
+        self, repo_root: Path, extra_exclude_dirs: set[str], scope: Scope | None,
     ) -> ModuleGraph | None: ...
 
 
@@ -244,7 +245,7 @@ def select_graph(
     repo_root: Path,
     builders: Sequence[ImportGraphBuilder],
     extra_exclude_dirs: set[str] | None = None,
-    scope: Path | None = None,
+    scope: Scope | None = None,
 ) -> GraphSelection:
     """Build one graph per language; the dominant language's graph wins.
 
@@ -314,10 +315,10 @@ def graph_defect(graph: ModuleGraph) -> str | None:
 
 
 def language_counts(
-    repo_root: Path, extra_exclude_dirs: set[str] | None = None, scope: Path | None = None,
+    repo_root: Path, extra_exclude_dirs: set[str] | None = None, scope: Scope | None = None,
     builders: Sequence[ImportGraphBuilder] = (),
 ) -> Counter[str]:
-    """Source files per language under ``scope`` (default ``repo_root``).
+    """Source files per language under each ``scope`` root (default ``repo_root``).
 
     A builder in ``builders`` covering a language may define
     ``is_graph_source(rel: Path) -> bool`` (``rel`` relative to the walk's
@@ -326,7 +327,6 @@ def language_counts(
     not make their language dominant.
     """
     extra = extra_exclude_dirs or set()
-    start = scope.resolve() if scope is not None else Path(repo_root).resolve()
     filters: dict[str, Callable[[Path], bool]] = {}
     for builder in builders:
         check = getattr(builder, "is_graph_source", None)
@@ -334,7 +334,8 @@ def language_counts(
             for token in builder_languages(builder):
                 filters.setdefault(token, check)
     counts: Counter[str] = Counter()
-    for dirpath, dirnames, filenames in os.walk(start):
+    for start, (dirpath, dirnames, filenames) in ((s, w) for s in scope_roots(scope, repo_root)
+                                                  for w in os.walk(s)):
         dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDE_DIRS and d not in extra)
         for name in filenames:
             language = LANGUAGE_BY_EXTENSION.get(os.path.splitext(name)[1].lower())
@@ -348,7 +349,7 @@ def language_counts(
 
 
 def dominant_language(
-    repo_root: Path, extra_exclude_dirs: set[str] | None = None, scope: Path | None = None,
+    repo_root: Path, extra_exclude_dirs: set[str] | None = None, scope: Scope | None = None,
     builders: Sequence[ImportGraphBuilder] = (),
 ) -> str | None:
     """The language with the most source files (ties by name), or None.
@@ -363,7 +364,7 @@ def dominant_language(
 
 
 def no_graph_reason(
-    repo_root: Path, extra_exclude_dirs: set[str] | None = None, scope: Path | None = None,
+    repo_root: Path, extra_exclude_dirs: set[str] | None = None, scope: Scope | None = None,
     builders: Sequence[ImportGraphBuilder] = (),
 ) -> str:
     """Why no import graph was built, naming the dominant source language."""

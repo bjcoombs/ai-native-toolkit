@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import assess_signals
+from lib.run.run_scope import Scope
 from lib.run.headless_layers import structure
 from lib.import_graph_builders import BUILDERS
 from lib.graph.import_graph_typescript import (
@@ -37,7 +38,7 @@ def _write(root: Path, rel: str, text: str = "") -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def _build(root: Path, scope: Path | None = None,
+def _build(root: Path, scope: Scope | None = None,
            exclude: set[str] | None = None) -> ModuleGraph:
     graph = TYPESCRIPT_BUILDER.build(root.resolve(), exclude or set(), scope)
     assert graph is not None
@@ -116,7 +117,7 @@ def test_a_headless_counts_only_run_keeps_the_score(tmp_path: Path) -> None:
 
 
 def test_a_scope_keeps_its_modules_but_resolves_across_the_repo() -> None:
-    g = _build(FIXTURE, scope=(FIXTURE / "packages" / "app").resolve())
+    g = _build(FIXTURE, scope=Scope.of(FIXTURE, FIXTURE / "packages" / "app"))
     assert all(m.startswith("packages/app/") for m in g.modules)
     # A module outside the scope is not graphed, so an import of it is external.
     assert g.edges[f"{APP}/index.ts"] == {f"{APP}/config.ts"}

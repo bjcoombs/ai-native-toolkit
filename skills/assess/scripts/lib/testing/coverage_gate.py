@@ -69,6 +69,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Literal, TypedDict
 
+from lib.run.run_scope import Scope
 from lib.assess_config import is_user_excluded
 from lib.testing.coverage_activation import read_activation
 from lib.testing.coverage_ci import NO_RUNS, CiRuns, EnforcedBasis, enforced_meets_minimum, read_ci_runs
@@ -78,6 +79,7 @@ from lib.docs.doc_graph import is_excluded_path
 
 # The user's ``--exclude`` / config.toml excludes: (directory names, basename globs).
 Excludes = tuple[set[str], list[str]]
+Bases = tuple[Path, ...] | None  # a scoped run's folders; None for the whole repository
 
 # How deep below the repo root config files are looked for: deep enough for a
 # monorepo package (``packages/web/jest.config.js``, ``skills/x/pyproject.toml``),
@@ -620,35 +622,34 @@ def walk_named(root: Path, excludes: Excludes, names: set[str],
     return _walk(root, base or root, excludes, lambda name, _parts: name in names)
 
 
-def _candidate_files(root: Path, scope: Path | None,
+def _candidate_files(root: Path, bases: Bases,
                      excludes: Excludes) -> Iterator[tuple[Path, str]]:
-    """Files with a scanner: the whole repo, or for a scoped run the scope plus
+    """Files with a scanner: the whole repo, or for a scoped run the scope folders plus
     the root CI and task-runner files, which run the gates for every package.
     A package-level config outside the scope is not read."""
-    if scope is None or scope == root:
+    if bases is None:
         rels = list(_walk(root, root, excludes))
     else:
-        rels = list(_walk(root, scope, excludes))
+        rels = list(dict.fromkeys(rel for base in bases for rel in _walk(root, base, excludes)))
         rels += [rel for rel in _walk(root, root, excludes)
                  if _is_root_ci(rel) and rel not in rels]
     for rel in rels:
         yield root / rel, rel.as_posix()
 
 
-def _go_rust_manifests(root: Path, scope: Path | None, excludes: Excludes) -> set[str]:
+def _go_rust_manifests(root: Path, bases: Bases, excludes: Excludes) -> set[str]:
     """The ``go.mod`` / ``Cargo.toml`` names in the walk; on a scoped run, in the scope
     or in a directory above it up to the repo root (the module or workspace the
     scope belongs to, as Go and Cargo resolve it). A manifest under a ``testdata``
     directory is a fixture (the Go tool ignores it too), so it does not count."""
     def wanted(name: str, parts: tuple[str, ...]) -> bool:
         return name in _GO_RUST_MANIFESTS and "testdata" not in parts
-    base = root if scope is None else scope
     found: set[str] = set()
-    for rel in _walk(root, base, excludes, wanted):
+    for rel in (r for base in bases or (root,) for r in _walk(root, base, excludes, wanted)):
         found.add(rel.name)
         if found == _GO_RUST_MANIFESTS:
             break
-    ancestors = [d for d in base.parents if d == root or root in d.parents]
+    ancestors = {d for base in bases or () for d in base.parents if d == root or root in d.parents}
     return found | {name for d in ancestors for name in _GO_RUST_MANIFESTS
                     if (d / name).is_file()
                     and not is_user_excluded((d / name).relative_to(root), *excludes)}
@@ -714,11 +715,11 @@ def threshold_meets_minimum(gates: list[CoverageGate]) -> bool | None:
     return False
 
 
-def _root_floor(root: Path, scope: Path | None, excludes: Excludes
+def _root_floor(root: Path, bases: Bases, excludes: Excludes
                 ) -> tuple[list[CoverageGate], list[str], bool | None, CiRuns | None]:
     """#1032: the root coverage.py config's gates for a scoped run, its lines, whether
     it governs the scope (``lib.testing.coverage_root_config``) and the CI runs read for that."""
-    config = root_config(root, scope, excludes) if scope not in (None, root) else None
+    config = next((c for base in bases or () if (c := root_config(root, base, excludes))), None)
     lines = _read_lines(root / config) if config else None
     if config is None or lines is None:
         return [], [], False, None
@@ -730,7 +731,7 @@ def _root_floor(root: Path, scope: Path | None, excludes: Excludes
     return gates, lines, root_config_applies(root, config, ci), ci
 
 
-def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
+def detect_coverage_gate(repo_root: Path | str, scope: Scope | None = None,
                          excludes: Excludes | None = None) -> CoverageGateBlock:
     """Return the ``coverage_gate`` run-context block for ``repo_root``.
 
@@ -744,31 +745,30 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
     reported but count as gating nothing. A templated threshold
     (``--cov-fail-under=${{ env.COV_MIN }}``) is a gate with ``threshold: null``.
 
-    ``scope`` (absolute, or relative to ``repo_root``) limits the walk to that
-    subtree plus the root CI files; ``excludes`` is the user's ``(dirs,
+    ``scope`` (a ``Scope``, #1110) limits the walk to its folders plus the root CI
+    files; ``excludes`` is the user's ``(dirs,
     patterns)`` pair, matched as ``is_user_excluded`` matches it everywhere.
     """
     root = Path(repo_root).resolve()
-    scope_abs = (root / scope).resolve() if scope else None
+    bases = None if scope is None or scope.roots == (root,) else scope.roots
     excl = excludes or (set(), [])
     gates: list[CoverageGate] = [_gate(s.file, s.line, "codecov", s.form, s.target, "percent", s.kind)
                                  for s in codecov_statuses(root, excl)]
     read: list[tuple[str, list[str]]] = []
-    for path, rel in _candidate_files(root, scope_abs, excl):
+    for path, rel in _candidate_files(root, bases, excl):
         lines = _read_lines(path)
         if lines is None:
             continue
         for scan in _scanners_for(path.name, Path(rel).parts):
             gates.extend(scan(rel, lines))
         read.append((rel, lines))
-    root_gates, root_lines, applies, ci = _root_floor(root, scope_abs, excl)
+    root_gates, root_lines, applies, ci = _root_floor(root, bases, excl)
     own = threshold_meets_minimum(gates)
     if applies is not False:
         gates += root_gates
     if applies:
         read.append((root_gates[0]["file"], root_lines))
-    manifests = _go_rust_manifests(root, scope_abs if scope_abs != root else None,
-                                   excludes or (set(), []))
+    manifests = _go_rust_manifests(root, bases, excludes or (set(), []))
     meets = threshold_meets_minimum(gates)
     # #937: no gate read for a Go or Rust module present makes a false reading unknown;
     # one language's low gate never reads unmet for another's (a null keeps its reason).
@@ -795,5 +795,5 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
         "enforced_meets_minimum": enforced,
         "enforced_basis": basis,
         "not_detected": list(NOT_DETECTED) + (
-            list(NOT_DETECTED_SCOPED) if scope_abs not in (None, root) else []),
+            list(NOT_DETECTED_SCOPED) if bases else []),
     }

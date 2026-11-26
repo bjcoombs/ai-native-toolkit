@@ -59,7 +59,7 @@ Block (``skill_disclosure`` in run-context.json)::
                 "breaks": [rule, ...]}],
      "files_considered": int, "files_breaking": int}
 
-With ``scope`` (a ``--scope`` folder, or a skill unit's folder in the unit pass), the files are
+With ``scope`` (the ``--scope`` folders, #1110, or a skill unit's folder in the unit pass), the files are
 the repository's, kept when they sit under it: discovery starts at the repository root, since a
 skill folder holds no plugin manifest or ``.claude/`` of its own. ``files`` is sorted by path. A file that cannot be read is left out, so ``files_considered``
 counts the files listed. With no skill or agent file the list is empty and
@@ -82,6 +82,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import TypedDict
 
+from lib.run.run_scope import Scope
 from lib.instructions.claude_config import parse_frontmatter
 from lib.instructions.instruction_placement import LOADED_IN_FULL_MIN_TOKENS, est_tokens, fence_mask, skill_and_agent_files
 
@@ -313,16 +314,15 @@ def measure(path: Path, rel: str, kind: str, text: str) -> SkillFile:
 
 
 def scan_skill_disclosure(
-    repo_root: Path, scope: Path | None = None, excludes: tuple[set[str], list[str]] | None = None,
+    repo_root: Path, scope: Scope | None = None, excludes: tuple[set[str], list[str]] | None = None,
 ) -> SkillDisclosureBlock:
     """Build the ``skill_disclosure`` block (see the module doc)."""
     repo = repo_root.resolve()
-    folder = scope.resolve() if scope is not None else repo
     files: list[SkillFile] = []
     # The repository's files, then those under the scope: a skill folder holds no plugin
     # manifest or .claude/ of its own, so discovery from the scope would find nothing there.
     for path, kind in skill_and_agent_files(repo, None, excludes):  # excludes already applied
-        if not path.resolve().is_relative_to(folder):
+        if scope is not None and not scope.contains(path):
             continue
         rel = path.relative_to(repo)
         try:

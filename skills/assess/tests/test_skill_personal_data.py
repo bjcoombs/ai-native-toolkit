@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from lib.run.run_scope import Scope
 import lib.scoring.level_tally as lt
 import lib.manifest.check_manifest as cm
 import lib.unit_readings as ur
@@ -184,7 +185,7 @@ def test_a_reference_outside_the_scope_or_excluded_is_not_read(tmp_path: Path) -
                               "skills/c/SKILL.md": SKILL.format("c", "Clean text."),
                               "skills/c/references/contacts.md": f"Escalate to {EMAIL}.\n"})
     (repo / "skills/a/references").symlink_to(repo / "skills/b/references", target_is_directory=True)
-    assert scan_skill_personal_data(repo, scope=repo / "skills/a")["files"] == []
+    assert scan_skill_personal_data(repo, scope=Scope.of(repo, Path("skills/a")))["files"] == []
     excluded = scan_skill_personal_data(repo, excludes=(set(), ["contacts.md"]))  # a basename glob
     assert excluded["files"] == []
 

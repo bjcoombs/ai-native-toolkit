@@ -65,6 +65,7 @@ from lib.counts_only.counts_only_rules import REASON_SENTENCE_CODES
 from lib.docs.doc_graph import is_excluded_path
 from lib.complexity.generated_files import generated_reason, matches_generated_name
 from lib.history.git_churn import tracked_files
+from lib.run.run_scope import Scope
 from lib.run_context_types import Distribution, JsonDict, SizeBlock
 from lib.run.scan_registry import STAGE_READ_SIDE, ScanSpec
 
@@ -199,17 +200,17 @@ def lizard_analyzer() -> Analyzer | None:
     return analyze
 
 
-def source_files(repo_root: Path, excludes: Excludes, scope: Path | None) -> list[Path]:
-    """Tracked files under ``scope`` (or the root), minus excluded and generated ones."""
+def source_files(repo_root: Path, excludes: Excludes, scope: Scope | None) -> list[Path]:
+    """Tracked files under the ``scope`` folders (or the root), minus excluded and generated ones."""
     dirs, patterns = excludes
     root = repo_root.resolve()
-    base = (scope or root).resolve()
     picked: list[Path] = []
     for path in sorted(tracked_files(root) or ()):
         try:
             rel = path.relative_to(root)
-            path.relative_to(base)
         except ValueError:
+            continue
+        if scope is not None and not scope.contains(path):
             continue
         if is_excluded_path(rel) or is_user_excluded(rel, dirs, patterns):
             continue
@@ -220,7 +221,7 @@ def source_files(repo_root: Path, excludes: Excludes, scope: Path | None) -> lis
 
 
 def stats_summary(
-    repo_root: Path, excludes: Excludes, scope: Path | None,
+    repo_root: Path, excludes: Excludes, scope: Scope | None,
     analyzer: Callable[[], Analyzer | None] | None = None,
 ) -> JsonDict:
     """The size and complexity distribution of the tracked source files, or ``no_lizard``."""

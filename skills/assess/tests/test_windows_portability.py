@@ -256,9 +256,9 @@ def test_the_scan_child_runs_in_python_utf8_mode():
 
 def test_scope_label_and_slug_use_forward_slashes(tmp_path):
     (tmp_path / "a" / "b").mkdir(parents=True)
-    scope_abs, label, slug = resolve_scope(tmp_path, Path("a") / "b")
+    scope, label, slug = resolve_scope(tmp_path, Path("a") / "b")
     assert (label, slug) == ("a/b", "a-b")
-    assert scope_abs == (tmp_path / "a" / "b").resolve()
+    assert scope is not None and scope.roots == ((tmp_path / "a" / "b").resolve(),)
 
 
 # --- read-only files under Windows deletion semantics ---------------------------

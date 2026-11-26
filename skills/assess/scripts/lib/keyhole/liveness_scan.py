@@ -46,6 +46,7 @@ from typing import NotRequired, TypedDict
 from lib.docs.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_excluded_path
 from lib.keyhole.instrumentation_scan import InstrumentationKind, detect_instrumented
 from lib.path_classes import path_class
+from lib.run.run_scope import Scope, scope_roots
 from lib.run_context_types import (
     DeadCodeBlock,
     DeadCodeCandidate,
@@ -68,7 +69,7 @@ STATIC_REACHABILITY_CAVEAT = (
 def _has_ext(repo_root: Path, exts: set[str],
              extra_exclude_dirs: set[str] | None = None,
              extra_exclude_patterns: list[str] | None = None,
-             scope: Path | None = None) -> bool:
+             scope: Scope | None = None) -> bool:
     return any(_iter_ext(repo_root, exts, extra_exclude_dirs,
                          extra_exclude_patterns, scope))
 
@@ -76,7 +77,7 @@ def _has_ext(repo_root: Path, exts: set[str],
 def _count_ext(repo_root: Path, exts: set[str],
                extra_exclude_dirs: set[str] | None = None,
                extra_exclude_patterns: list[str] | None = None,
-               scope: Path | None = None) -> int:
+               scope: Scope | None = None) -> int:
     return sum(1 for _ in _iter_ext(
         repo_root, exts, extra_exclude_dirs, extra_exclude_patterns, scope))
 
@@ -84,14 +85,14 @@ def _count_ext(repo_root: Path, exts: set[str],
 def _iter_ext(repo_root: Path, exts: set[str],
               extra_exclude_dirs: set[str] | None,
               extra_exclude_patterns: list[str] | None,
-              scope: Path | None = None) -> Iterator[Path]:
-    """Yield in-scope files under `scope` (default `repo_root`) whose suffix is
-    in `exts`. Excludes match paths relative to `repo_root` either way."""
+              scope: Scope | None = None) -> Iterator[Path]:
+    """Yield in-scope files under each `scope` root (default `repo_root`) whose suffix
+    is in `exts`. Excludes match paths relative to `repo_root` either way."""
     from lib.assess_config import is_user_excluded
     extra_dirs = extra_exclude_dirs or set()
     extra_pats = extra_exclude_patterns or []
     root = repo_root.resolve()
-    for path in (scope or root).resolve().rglob("*"):
+    for path in (p for base in scope_roots(scope, root) for p in base.rglob("*")):
         if not path.is_file() or path.suffix.lower() not in exts:
             continue
         rel = path.relative_to(root)
@@ -281,7 +282,7 @@ class DeadCodeResult:
 
 def _js_ts_dominant(repo_root: Path, extra_dirs: set[str],
                     extra_pats: list[str],
-                    scope: Path | None = None) -> tuple[str, int, int]:
+                    scope: Scope | None = None) -> tuple[str, int, int]:
     """(dominant language, TypeScript count, JavaScript count) over the files
     under `scope` (default `repo_root`). A tie goes to TypeScript; either way the
     losing language's files are not analysed, and the scan records that as a
@@ -303,7 +304,7 @@ def _posix_rel(path_str: str) -> str:
     return posix
 
 
-def _candidate_in_scope(repo_root: Path, rel_path: str, scope: Path | None) -> bool:
+def _candidate_in_scope(repo_root: Path, rel_path: str, scope: Scope | None) -> bool:
     """True if a tool-reported candidate path lies within `scope`.
 
     Tools report paths relative to `repo_root` (their cwd); resolve against it
@@ -312,7 +313,7 @@ def _candidate_in_scope(repo_root: Path, rel_path: str, scope: Path | None) -> b
     if scope is None:
         return True
     try:
-        return (repo_root / rel_path).resolve().is_relative_to(scope.resolve())
+        return scope.contains(repo_root / rel_path)
     except (ValueError, OSError):
         return False
 
@@ -321,7 +322,7 @@ def scan_dead_code(repo_root: Path, run: bool = True,
                    run_build_tools: bool = False,
                    extra_exclude_dirs: set[str] | None = None,
                    extra_exclude_patterns: list[str] | None = None,
-                   scope: Path | None = None,
+                   scope: Scope | None = None,
                    ) -> DeadCodeResult:
     """Best-effort intra-repo dead-code scan. Never raises.
 
@@ -338,8 +339,8 @@ def scan_dead_code(repo_root: Path, run: bool = True,
     in `regulatory-raw/` reports `tool_absent: no Python in scope`), the
     vulture `--exclude` argument, and the post-scan filter on candidates.
 
-    `scope` (an absolute path under `repo_root`) restricts the candidates to a
-    subtree for `/assess <path>` monorepo scoping, so a scoped run carries no
+    `scope` (a `Scope` of folders under `repo_root`, #1110) restricts the candidates
+    to them for `/assess <path>` monorepo scoping, so a scoped run carries no
     dead-code signal from a sibling directory. The language-presence probe and
     the dominant-language choice count only the in-scope files. The tool still
     runs over the repo (it needs the whole import graph to judge liveness) and
@@ -737,7 +738,7 @@ def scan_liveness(repo_root: Path, run_dead_code: bool = True,
                   run_build_tools: bool = False,
                   extra_exclude_dirs: set[str] | None = None,
                   extra_exclude_patterns: list[str] | None = None,
-                  scope: Path | None = None,
+                  scope: Scope | None = None,
                   ) -> LivenessBlock:
     """Top-level Layer 1 scan: dead-code candidates + observability rungs, plus
     the capability-driven JVM offer block when a Maven/Gradle project is found

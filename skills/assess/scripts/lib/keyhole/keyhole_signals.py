@@ -50,6 +50,7 @@ from lib.keyhole.structure_drift import detect_grouping_disagreement
 from lib.testing.sibling_tests import find_colocated_test, is_test_path
 from lib.keyhole.understanding_analysis import analyze_understanding
 from lib.testing.untrusted_hotspot import DEFAULT_SURVIVOR_DENSITY_THRESHOLD as DEFAULT_SURVIVOR_DENSITY_THRESHOLD
+from lib.run.run_scope import Scope
 from lib.testing.untrusted_hotspot import find_untrusted_hotspots as find_untrusted_hotspots
 from lib.testing.untrusted_hotspot import untrusted_hotspot_paths
 
@@ -1166,9 +1167,9 @@ def _paths_from_stats(complexity_stats: JsonDict, cap: int = MAX_AUTHORSHIP_PATH
 
 
 def _scope_commit_sets(
-    commit_sets: list[set[Path]], repo_root: Path, scope: Path | None,
+    commit_sets: list[set[Path]], repo_root: Path, scope: Scope | None,
 ) -> list[set[Path]]:
-    """Confine the change-history file-sets to the ``/assess <path>`` subtree.
+    """Confine the change-history file-sets to the ``/assess <path>`` scope's folders.
 
     Monorepo scoping: the behaviour block (coupling, containment, hidden-seam)
     must carry no co-change signal from a sibling directory. A commit that
@@ -1178,11 +1179,10 @@ def _scope_commit_sets(
     """
     if scope is None:
         return commit_sets
-    scope_abs = Path(scope).resolve()
 
     def _in_scope(f: Path) -> bool:
         try:
-            return (repo_root / f).resolve().is_relative_to(scope_abs)
+            return scope.contains(repo_root / f)
         except (ValueError, OSError):
             return False
 
@@ -1197,7 +1197,7 @@ def _prepare_commit_sets(
     top: str | None,
     commit_sets: list[set[Path]] | None,
     rename_map: RenameMap | None,
-    scope: Path | None,
+    scope: Scope | None,
 ) -> tuple[list[set[Path]], RenameMap]:
     """Parse (when not passed in), rename-fold and scope the commit file-sets."""
     if commit_sets is None:
@@ -1445,7 +1445,7 @@ def integrate(
     archetype: JsonDict | None = None,
     exclude_dirs: set[str] | None = None,
     exclude_patterns: list[str] | None = None,
-    scope: Path | None = None,
+    scope: Scope | None = None,
     rename_map: RenameMap | None = None,
     doc_join: JsonDict | None = None,
 ) -> KeyholeIntegration:

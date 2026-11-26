@@ -13,6 +13,8 @@ section, then ``pyproject.toml`` with ``[tool.coverage...]``, coverage.py's own 
 or None when it does not concern the scope: the scope holds no ``.py`` file within the
 walk's depth (coverage.py measures Python only), or the scope directory holds a
 coverage.py config of its own (``coverage_gate`` reads that one, as before).
+``coverage_gate`` asks once per scope folder and takes the first root config that
+concerns one of them (#1110: a ``Scope`` can hold several folders).
 
 ``root_config_applies(root, config, ci)`` reads where each enforced CI command
 that runs coverage.py (``pytest`` with ``--cov``, ``coverage report|xml|json|html|lcov``)

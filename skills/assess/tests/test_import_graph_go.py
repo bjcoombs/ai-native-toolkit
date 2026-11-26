@@ -10,6 +10,7 @@ import pytest
 
 import assess_signals
 from assess_report import format_structure_drift_findings
+from lib.run.run_scope import Scope
 from lib.run.context_blocks import _structure_drift_block
 from lib.graph.import_graph import is_graph_source
 from lib.keyhole.coupling_analysis import detect_hidden_coupling
@@ -224,11 +225,11 @@ def test_a_nested_module_owns_its_own_tree(tmp_path: Path) -> None:
 
 def test_scope_keeps_only_packages_inside_it(tmp_path: Path) -> None:
     _two_communities(tmp_path)
-    graph = GO_BUILDER.build(tmp_path, set(), tmp_path / "store")
+    graph = GO_BUILDER.build(tmp_path, set(), Scope.of(tmp_path, Path("store")))
     assert graph is not None
     assert graph.modules == ["store", "store/cache", "store/db"]
     assert graph.edges["store"] == {"store/cache", "store/db"}
-    assert GO_BUILDER.build(tmp_path, set(), tmp_path / "nowhere") is None
+    assert GO_BUILDER.build(tmp_path, set(), Scope(tmp_path.resolve(), ("nowhere",), (tmp_path.resolve() / "nowhere",))) is None
 
 
 def test_an_unreadable_file_is_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

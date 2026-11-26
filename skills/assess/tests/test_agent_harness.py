@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from assess_core import build_and_publish_run
+from lib.run.run_scope import Scope
 from lib.agents.agent_harness import _on_block, _safe_url, scan_agent_harness
 
 ZWSP, RLO, BOM = chr(0x200B), chr(0x202E), chr(0xFEFF)
@@ -487,10 +488,10 @@ def test_excludes_and_scope(git_repo) -> None:
     _write(repo, "other/.env", "X=1\n")
     _write(repo, "vendor/AGENTS.md", f"x{ZWSP}\n")
     commit("init")
-    scoped = scan_agent_harness(repo, repo / "svc")
+    scoped = scan_agent_harness(repo, Scope.of(repo, Path("svc")))
     assert sorted(_kinds(scoped)) == [("hidden_unicode", "svc/CLAUDE.md"),
                                       ("tracked_env_file", "svc/.env")]
-    excluded = scan_agent_harness(repo, repo / "svc", ({"svc"}, []))
+    excluded = scan_agent_harness(repo, Scope.of(repo, Path("svc")), ({"svc"}, []))
     assert excluded["findings"] == []
     assert sorted(_kinds(scan_agent_harness(repo, None, (set(), [".env"])))) == []
 

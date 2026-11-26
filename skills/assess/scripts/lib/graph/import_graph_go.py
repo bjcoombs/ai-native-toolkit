@@ -76,6 +76,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from lib.run.run_scope import Scope
 from lib.graph.import_graph import ModuleGraph
 
 # Directories the Go builder never walks. Not EXCLUDE_DIRS: ``build``, ``out``,
@@ -271,7 +272,7 @@ class GoBuilder:
                 and not any(_skipped(part, set()) for part in rel.parts[:-1]))
 
     def build(
-        self, repo_root: Path, extra_exclude_dirs: set[str], scope: Path | None,
+        self, repo_root: Path, extra_exclude_dirs: set[str], scope: Scope | None,
     ) -> ModuleGraph | None:
         repo_root = Path(repo_root).resolve()
         modules, packages = _walk(repo_root, extra_exclude_dirs)
@@ -287,9 +288,7 @@ class GoBuilder:
             by_import[path] = module
             sources[module] = package.files
         if scope is not None:
-            scope_abs = scope.resolve()
-            sources = {m: files for m, files in sources.items()
-                       if (repo_root / m).resolve().is_relative_to(scope_abs)}
+            sources = {m: files for m, files in sources.items() if scope.contains(repo_root / m)}
         if not sources:
             return None
         edges: dict[str, set[str]] = {}

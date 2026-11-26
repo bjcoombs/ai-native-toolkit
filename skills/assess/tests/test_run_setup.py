@@ -127,7 +127,7 @@ def test_setup_stage_only_reads(tmp_path: Path) -> None:
     assert state["assess_dir"] == repo / ".assess" / "sub"
     assert not state["assess_dir"].exists()
     assert ctx["scope"] == "sub" and ctx["scope_slug"] == "sub"
-    assert state["scope"] == repo / "sub"
+    assert state["scope"].roots == ((repo / "sub").resolve(),)
 
 
 def test_an_invalid_scope_stops_the_run(tmp_path: Path) -> None:

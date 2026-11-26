@@ -44,6 +44,7 @@ from lib.docs.doc_links import (
     INLINE_CODE_RE, LinkHarvest, harvest_links, missing_xrefs, strip_fenced_lines,
 )
 from lib.history.git_churn import tracked_files
+from lib.run.run_scope import Scope
 from lib.run_context_types import (
     BrokenLink, DeclaredMoc, DirectoryBreakdownRow, DocGraphBlock, DocHub, DocSignal,
     DocToCodeEdge, ExcludedTree, LinkParent, MissingXref, SourceTree,
@@ -284,20 +285,19 @@ def _discover_files(
     extensions: set[str],
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
-    scope: Path | None = None,
+    scope: Scope | None = None,
 ) -> list[Path]:
     """Return all in-repo files of the given extensions, skipping excluded dirs.
 
     The single walk shared by the markdown-doc and `.base`-hub discovery so both
     honour the identical exclude resolution (built-in defaults + user excludes).
 
-    `scope` (an absolute path under `repo_root`) restricts discovery to a
-    subtree for `/assess <path>` monorepo scoping; omit it (the default) for a
+    `scope` (a `Scope` of folders under `repo_root`, #1110) restricts discovery to
+    them for `/assess <path>` monorepo scoping; omit it (the default) for a
     whole-repo run, in which case the result is unchanged.
     """
     from lib.assess_config import is_user_excluded
     repo_root = repo_root.resolve()
-    scope_abs = scope.resolve() if scope is not None else None
     tracked = tracked_files(repo_root)
     extra_dirs = extra_exclude_dirs or set()
     extra_pats = extra_exclude_patterns or []
@@ -305,7 +305,7 @@ def _discover_files(
     for path in repo_root.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in extensions:
             continue
-        if scope_abs is not None and not path.resolve().is_relative_to(scope_abs):
+        if scope is not None and not scope.contains(path):
             continue
         try:
             rel = path.relative_to(repo_root)
@@ -325,7 +325,7 @@ def discover_doc_files(
     repo_root: Path,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
-    scope: Path | None = None,
+    scope: Scope | None = None,
 ) -> list[Path]:
     """Return all in-repo markdown docs under repo_root, skipping excluded dirs."""
     return _discover_files(
@@ -338,7 +338,7 @@ def discover_base_files(
     repo_root: Path,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
-    scope: Path | None = None,
+    scope: Scope | None = None,
 ) -> list[Path]:
     """Return all in-repo Obsidian Bases (`.base`) files, skipping excluded dirs."""
     return _discover_files(
@@ -386,7 +386,7 @@ def _obsidiantools_available() -> bool:
 
 
 def _cited_excluded_doc(
-    rel_path: str, repo_root: Path, tracked: frozenset[Path] | None, scope: Path | None,
+    rel_path: str, repo_root: Path, tracked: frozenset[Path] | None, scope: Scope | None,
     extra_dirs: set[str], extra_pats: list[str],
 ) -> Path | None:
     """The `.claude/` doc at `rel_path`, if a reference may bring it in.
@@ -409,7 +409,7 @@ def _cited_excluded_doc(
     path = repo_root / rel_path
     if not path.is_file() or not is_repo_file(path, repo_root, tracked):
         return None
-    if scope is not None and not path.resolve().is_relative_to(scope.resolve()):
+    if scope is not None and not scope.contains(path):
         return None
     return path.resolve()
 
@@ -511,7 +511,7 @@ def _settle_references(
 
 def _settle_reference_pairs(
     docs: list[Path], texts: dict[Path, str], rel: RelFn, repo_root: Path,
-    scope: Path | None, extra_exclude_dirs: set[str] | None,
+    scope: Scope | None, extra_exclude_dirs: set[str] | None,
     extra_exclude_patterns: list[str] | None,
 ) -> list[tuple[Path, Path]]:
     """Reference edges (issue #353) settle first: a backticked token naming an
@@ -601,13 +601,13 @@ def build_doc_graph(
     repo_root: Path, doc_files: list[Path] | None = None,
     extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
-    scope: Path | None = None,
+    scope: Scope | None = None,
     working_notes_dirs: list[str] | None = None,
     working_notes_ignore: list[str] | None = None,
 ) -> DocGraphResult:
     """Parse docs, build the link graph, and derive navigability signals.
 
-    `scope` (an absolute path under `repo_root`) restricts the graph to docs
+    `scope` (a `Scope` of folders under `repo_root`) restricts the graph to docs
     within a subtree for `/assess <path>` monorepo scoping; omit it for a
     whole-repo run. `.base` hub discovery honours the same scope so a scoped
     graph carries no navigation signal from a sibling directory.
@@ -857,7 +857,7 @@ def _apply_vault_edges(
     graph: nx.DiGraph, repo_root: Path, docs: list[Path], texts: dict[Path, str], rel: RelFn,
     *, extra_exclude_dirs: set[str] | None = None,
     extra_exclude_patterns: list[str] | None = None,
-    scope: Path | None = None,
+    scope: Scope | None = None,
 ) -> list[str]:
     """Add Obsidian Bases (`.base`) and Dataview query edges to `graph`.
 

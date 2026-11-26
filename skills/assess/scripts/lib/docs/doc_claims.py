@@ -91,6 +91,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, NamedTuple, TypedDict
 
+from lib.run.run_scope import Scope, scope_roots
 from lib.assess_config import is_user_excluded
 from lib.docs.doc_graph import is_excluded_path, is_repo_file
 from lib.history.git_churn import tracked_files
@@ -199,20 +200,19 @@ def _historical(rel: Path) -> bool:
 
 def doc_claim_files(
     repo_root: Path, excludes: tuple[set[str], list[str]] | None = None,
-    scope: Path | None = None,
+    scope: Scope | None = None,
 ) -> list[str]:
     """Repo-relative paths of the documents in scope, sorted.
 
-    The globs and the historical trees are matched from ``scope`` (the run's
-    ``--scope`` directory, default the repo root); paths are reported, and the
+    The globs and the historical trees are matched from each ``scope`` root (the run's
+    ``--scope`` folders, #1110, default the repo root); paths are reported, and the
     excludes matched, relative to the repo root.
     """
     root = repo_root.resolve()
-    base = (scope or root).resolve()
     tracked = tracked_files(root)
     dirs, patterns = excludes or (set(), [])
     found: set[str] = set()
-    for pattern in DOC_CLAIM_GLOBS:
+    for base, pattern in ((b, p) for b in scope_roots(scope, root) for p in DOC_CLAIM_GLOBS):
         for path in base.glob(pattern):
             rel = path.relative_to(root)
             if (not path.is_file() or _historical(path.relative_to(base))
@@ -369,7 +369,7 @@ def _holds_version(text: str, version: str) -> bool:
 def scan_doc_claims(
     repo_root: Path | str,
     instruction_files: Iterable[str],
-    scope: Path | None = None,
+    scope: Scope | None = None,
     excludes: tuple[set[str], list[str]] | None = None,
 ) -> DocClaimsBlock:
     """Verify the doc set's claims and find claims two files disagree on.

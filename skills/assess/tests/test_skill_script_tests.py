@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from lib.run.run_scope import Scope
 import lib.scoring.level_tally as lt
 import lib.manifest.check_manifest as cm
 import lib.skill_script_tests as sst
@@ -135,7 +136,7 @@ def test_a_scoped_read_lists_only_that_skill_and_still_searches_the_repository(t
         "skills/b/SKILL.md": SKILL.format("b"), "skills/b/scripts/b.py": "x\n",
         "tests/test_a.py": '"skills/a/scripts/a.py"\n',
     })
-    scoped = scan_skill_script_tests(repo, scope=repo / "skills" / "a")
+    scoped = scan_skill_script_tests(repo, scope=Scope.of(repo, Path("skills/a")))
     assert [s["path"] for s in scoped["skills"]] == ["skills/a"]
     assert scoped["skills"][0]["tested_elsewhere"] == ["tests/test_a.py"]
 

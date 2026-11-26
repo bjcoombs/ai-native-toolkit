@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from lib.run.run_scope import Scope
 from lib.testing.coverage_gate import GO_RUST_UNMEASURED, detect_coverage_gate
 
 
@@ -282,7 +283,7 @@ def test_scoped_run_keeps_root_ci_and_drops_other_packages(tmp_path: Path) -> No
     _write(tmp_path, "Makefile", "cov:\n\tcoverage report --fail-under=75\n")
     _write(tmp_path, "packages/web/legacy/.nycrc", '{ "check-coverage": true }\n')
 
-    block = detect_coverage_gate(tmp_path, scope=tmp_path / "packages/web",
+    block = detect_coverage_gate(tmp_path, scope=Scope.of(tmp_path, tmp_path / "packages/web"),
                                  excludes=({"legacy"}, []))
     files = sorted(g["file"] for g in block["gates"])
     assert files == [".github/workflows/ci.yml", "Makefile",
@@ -559,10 +560,10 @@ def test_scoped_low_gate_reads_the_scopes_go_module(tmp_path: Path) -> None:
     repository does not make a Python package's low gate unknown."""
     _write(tmp_path, "services/api/go.mod", _GO_MOD)
     _write(tmp_path, "services/web/pyproject.toml", _fail_under("10"))
-    web = detect_coverage_gate(tmp_path, scope=Path("services/web"))
+    web = detect_coverage_gate(tmp_path, scope=Scope.of(tmp_path, Path("services/web")))
     assert (web["threshold_meets_minimum"], web["unmeasured_reason"]) == (False, None)
     _write(tmp_path, "services/web/go.mod", _GO_MOD)
-    web = detect_coverage_gate(tmp_path, scope=Path("services/web"))
+    web = detect_coverage_gate(tmp_path, scope=Scope.of(tmp_path, Path("services/web")))
     assert (web["threshold_meets_minimum"], web["unmeasured_reason"]) == (
         None, GO_RUST_UNMEASURED)
 
@@ -642,18 +643,18 @@ def test_scoped_run_reads_the_root_go_mod(tmp_path: Path) -> None:
     """A Go package directory has no go.mod of its own: the root module counts."""
     _write(tmp_path, "go.mod", _GO_MOD)
     _write(tmp_path, "pkg/a/a.go", "package a\n")
-    block = detect_coverage_gate(tmp_path, scope=Path("pkg/a"))
+    block = detect_coverage_gate(tmp_path, scope=Scope.of(tmp_path, Path("pkg/a")))
     assert block["unmeasured_reason"] == "go_rust_gate_form_not_read"
     _write(tmp_path, "pkg/b/b.py", "x = 1\n")
     (tmp_path / "go.mod").unlink()
-    assert detect_coverage_gate(tmp_path, scope=Path("pkg/a"))["unmeasured_reason"] is None
+    assert detect_coverage_gate(tmp_path, scope=Scope.of(tmp_path, Path("pkg/a")))["unmeasured_reason"] is None
 
 
 def test_scoped_run_reads_the_root_testcoverage_config(tmp_path: Path) -> None:
     _write(tmp_path, "go.mod", _GO_MOD)
     _write(tmp_path, ".testcoverage.yml", _testcoverage("  total: 80\n"))
     _write(tmp_path, "pkg/a/a.go", "package a\n")
-    block = detect_coverage_gate(tmp_path, scope=Path("pkg/a"))
+    block = detect_coverage_gate(tmp_path, scope=Scope.of(tmp_path, Path("pkg/a")))
     assert [g["file"] for g in block["gates"]] == [".testcoverage.yml"]
     assert block["threshold_meets_minimum"] is True
 
@@ -664,6 +665,6 @@ def test_scoped_run_reads_an_intermediate_go_mod(tmp_path: Path) -> None:
     _write(tmp_path, "services/api/cmd/main.go", "package main\n")
     _write(tmp_path, "services/web/x.py", "x = 1\n")
     assert detect_coverage_gate(
-        tmp_path, scope=Path("services/api/cmd"))["unmeasured_reason"] == GO_RUST_UNMEASURED
+        tmp_path, scope=Scope.of(tmp_path, Path("services/api/cmd")))["unmeasured_reason"] == GO_RUST_UNMEASURED
     assert detect_coverage_gate(
-        tmp_path, scope=Path("services/web"))["unmeasured_reason"] is None
+        tmp_path, scope=Scope.of(tmp_path, Path("services/web")))["unmeasured_reason"] is None

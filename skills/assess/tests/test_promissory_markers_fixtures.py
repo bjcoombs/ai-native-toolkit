@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+from lib.run.run_scope import Scope
 from lib.counts_only.content_free import counts_only
 from lib.keyhole.promissory_markers import (
     MarkerScan,
@@ -152,7 +153,7 @@ def test_excluded_count_follows_the_scope(tmp_path: Path) -> None:
         "a/src.py": NOQA,
         "b/testdata/three.py": NOQA,
     })
-    summary = _scan(repo, scope=repo / "a").summary()
+    summary = _scan(repo, scope=Scope.of(repo, Path("a"))).summary()
     assert summary["fixture_files_excluded"] == 2
     assert summary["families"]["suppression"]["total"] == 1
 
@@ -163,7 +164,7 @@ def test_a_scoped_unit_named_fixtures_counts_its_own_markers(tmp_path: Path) -> 
         "packages/fixtures/src/index.ts": "const x = 1; // eslint-disable-line\n// TODO: real\n",
         "packages/fixtures/tests/fixtures/sample.ts": "// eslint-disable-line\n",
     })
-    summary = _scan(repo, scope=repo / "packages" / "fixtures").summary()
+    summary = _scan(repo, scope=Scope.of(repo, Path("packages/fixtures"))).summary()
     assert summary["total_markers"] == 2
     assert summary["fixture_files_excluded"] == 1
 

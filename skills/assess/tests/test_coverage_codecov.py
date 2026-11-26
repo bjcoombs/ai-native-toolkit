@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from lib.run.run_scope import Scope
 from lib.testing.coverage_codecov import (CODECOV_UNMEASURED, PATCH_ONLY, STATUS_UNCONFIRMED,
                                   codecov_statuses, config_path, target_percent)
 from lib import unit_readings as ur
@@ -165,7 +166,7 @@ def test_no_codecov_config_leaves_the_reading_unchanged(tmp_path: Path) -> None:
 
 def test_a_scoped_run_reads_the_repository_codecov_config(tmp_path: Path) -> None:
     root = _write(tmp_path, {".github/codecov.yml": _project("auto"), "pkg/a.py": "x = 1\n"})
-    block = detect_coverage_gate(root, Path("pkg"))
+    block = detect_coverage_gate(root, Scope.of(root, Path("pkg")))
     assert [g["file"] for g in block["gates"]] == [".github/codecov.yml"]
     assert block["unmeasured_reason"] == CODECOV_UNMEASURED
 
@@ -288,7 +289,7 @@ def test_monorepo_units_inherit_the_repository_codecov_reading(tmp_path: Path) -
                              "svc/b/y.py": "y = 1\n"})
     repo = detect_coverage_gate(root)
     members = ["svc/a", "svc/b"]
-    scoped = detect_coverage_gate(root, Path("svc/b"))
+    scoped = detect_coverage_gate(root, Scope.of(root, Path("svc/b")))
     # the config is the repository's: no member owns it, so units inherit the unknown
     assert ur._root_owns("coverage_gate", repo, members) is True
     assert ur._coverage_own("svc/b", scoped, {"coverage_gate": repo, "members": members}) is None

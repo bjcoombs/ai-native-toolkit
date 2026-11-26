@@ -777,7 +777,7 @@ def test_cited_excluded_doc_guards(tmp_path: Path) -> None:
     assert cite(".claude/skills/x/SKILL.md", dirs={"x"}) is None
     assert cite(".claude/skills/x/SKILL.md", pats=["SKILL.md"]) is None
     assert cite(".claude/skills/x/SKILL.md", tracked=frozenset()) is None
-    assert cite(".claude/skills/x/SKILL.md", scope=tmp_path / "docs") is None
+    assert cite(".claude/skills/x/SKILL.md", scope=doc_graph.Scope.of(tmp_path, Path("docs"))) is None
     assert cite("docs/a.md") is None  # not under .claude: the walk owns it
 
 
