@@ -353,8 +353,13 @@ UnitTable = tuple[tuple[ScanSpec, ...], tuple[str, ...]]
 _BOUND: dict[str, Any] = {}
 
 
+# One unit's pass run in a worker process: (repository-wide values, the unit's scope) -> its
+# context and the private values its scans left (``lib.run.unit_pass.run_unit_pass``).
+UnitPassFn = Callable[[Mapping[str, Any], "Path | None"], tuple[dict[str, Any], dict[str, Any]]]
+
+
 def bind(table: Callable[[], UnitTable], run: Callable[..., None],
-         unit_pass: Callable[..., Any] | None = None) -> None:
+         unit_pass: UnitPassFn | None = None) -> None:
     """Set the unit pass ``read_units`` runs by default: a loader of ``unit_table``'s result,
     the registry's ``run_scans`` and, when given, ``unit_pass``, the picklable function that runs
     one unit's pass over that table (``lib.run.unit_pass.run_unit_pass``, #1382), used in its place."""
