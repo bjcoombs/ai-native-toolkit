@@ -9,7 +9,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from lib.change_coupling import (
+from lib.history.change_coupling import (
     RenameMap,
     authorship_analysis,
     build_rename_map,
@@ -386,7 +386,7 @@ def test_rename_map_skips_path_reused_at_head(tmp_path: Path) -> None:
 def test_rename_map_incomplete_when_git_log_times_out(tmp_path: Path, monkeypatch) -> None:
     """A git timeout yields an empty, incomplete map rather than an empty map
     that reads as "nothing was renamed"."""
-    import lib.change_coupling as cc
+    import lib.history.change_coupling as cc
 
     repo = _init_repo(tmp_path)
     _commit(repo, {"a.py": "v = 1\n"})

@@ -99,7 +99,7 @@ from lib.class_sizes import loc_by_class
 from lib.plugin_version import read_version
 from lib.complexity.dart_complexity import BACKEND_NAME as DART_BACKEND, dart_function_scores
 from lib.complexity.generated_files import GENERATED_NAME_PATTERNS, generated_reason
-from lib.git_churn import churn_is_degenerate, git_churn_scores, pick_churn_window, rename_paths
+from lib.history.git_churn import churn_is_degenerate, git_churn_scores, pick_churn_window, rename_paths
 from lib.run_context_types import (
     Distribution, FnCcnBlock, GeneratedExclusion, KeyholeBudget,
     ScoredHotspotRow, SizeBlock, SubtreeTokens,
@@ -1212,7 +1212,7 @@ def write_stats(files: list[tuple[Path, int, float, str]],
         "excluded_generated": list(excluded_generated or []),
         "scoring_coverage": _scoring_coverage(files),
         "churn_window": aux_label,
-        # Churn-measurement reliability (lib.git_churn.churn_is_degenerate). True
+        # Churn-measurement reliability (lib.history.git_churn.churn_is_degenerate). True
         # when the history is degenerate - every file ~1 commit - so the
         # saturation axis carries no signal and the hotspot composite's churn
         # term (sqrt(1 + commits)) is near-constant. A reader (and the report)
@@ -1458,7 +1458,7 @@ def main() -> int:
     # Is the churn axis trustworthy? A degenerate history (shallow clone, fresh
     # import, squashed/extracted tree) shows ~1 commit per file, so the
     # saturation axis is a flat non-signal. Detected via the single source of
-    # truth in lib.git_churn and threaded to render (drop the axis) and
+    # truth in lib.history.git_churn and threaded to render (drop the axis) and
     # write_stats (record the flag). Computed only in hotspot mode (aux_data set).
     churn_degenerate = aux_data is not None and churn_is_degenerate(
         aux_data.values()

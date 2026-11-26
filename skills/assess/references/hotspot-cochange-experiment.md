@@ -17,7 +17,7 @@ The result did not survive a change of window. With a 24-month window, vite's to
 ## Method
 
 - **Baseline score.** The production code at commit `5c9befd` of this repository: `collect` (lizard 1.23.0, with scc where installed), `est_tokens_by_path` and `_enrich_row` from `complexity-treemap.py`, run over every scored file rather than only the ten the stats sidecar keeps.
-- **Breadth.** For each file, the median number of *other* files changed in the commits that touched it inside the churn window. Commits come from `parse_commit_file_sets` in `skills/assess/scripts/lib/change_coupling.py`, the same parse the `hidden_coupling` finding uses. Commits of more than 50 files (`MAX_COMMIT_FILES_FOR_COUPLING`, the coupling analysis's bulk cut) are left out of the median. A file with no qualifying commit has breadth 0.
+- **Breadth.** For each file, the median number of *other* files changed in the commits that touched it inside the churn window. Commits come from `parse_commit_file_sets` in `skills/assess/scripts/lib/history/change_coupling.py`, the same parse the `hidden_coupling` finding uses. Commits of more than 50 files (`MAX_COMMIT_FILES_FOR_COUPLING`, the coupling analysis's bulk cut) are left out of the median. A file with no qualifying commit has breadth 0.
 - **New score.** The baseline score times `sqrt(1 + breadth)`. Nothing else differs between the two rankings.
 - **Rank agreement.** Spearman's rho and Kendall's tau-b between the two scores, over all scored files and over the baseline top 50.
 - **Window sensitivity.** The 12-month run is the one `/assess` would make. The same comparison was rerun with the churn count and the breadth both taken over 6 and 24 months.

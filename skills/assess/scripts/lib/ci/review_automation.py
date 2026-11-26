@@ -113,7 +113,7 @@ from lib.ci.ci_includes import resolve_includes
 from lib.ci.ci_triggers import unclosed_on
 from lib.ci.merged_ci import MergedCi, as_merged
 from lib.fleet_config import FleetConfig
-from lib.git_churn import is_tracked, tracked_files
+from lib.history.git_churn import is_tracked, tracked_files
 from lib.ci.shared_tooling import (
     action_repo,
     component_source,

@@ -1,7 +1,7 @@
 """``content_paths``: a pure rename is not a content change (contract I425-2)."""
 from __future__ import annotations
 
-from lib.content_paths import content_paths
+from lib.history.content_paths import content_paths
 
 A, B = "a" * 40, "b" * 40
 Z = "0" * 40

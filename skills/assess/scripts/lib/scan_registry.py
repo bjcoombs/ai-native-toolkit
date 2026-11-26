@@ -100,7 +100,7 @@ from lib.agents.agent_environment import scan_agent_environment
 from lib.agents.agent_harness import scan_agent_harness
 from lib.agents.agent_ops import scan_agent_ops
 from lib.agent_outcome import scan_agent_outcome
-from lib.ai_usage import scan_ai_usage
+from lib.history.ai_usage import scan_ai_usage
 from lib.ci.ci_checks import scan_ci_checks
 from lib.instructions.claude_config import scan_claude_config
 from lib.hosting.config_drift import scan_config_drift

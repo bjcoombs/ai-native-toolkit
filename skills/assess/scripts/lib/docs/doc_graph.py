@@ -43,7 +43,7 @@ from pathlib import Path
 from lib.docs.doc_links import (
     INLINE_CODE_RE, LinkHarvest, harvest_links, missing_xrefs, strip_fenced_lines,
 )
-from lib.git_churn import tracked_files
+from lib.history.git_churn import tracked_files
 from lib.run_context_types import (
     BrokenLink, DeclaredMoc, DirectoryBreakdownRow, DocGraphBlock, DocHub, DocSignal,
     DocToCodeEdge, ExcludedTree, LinkParent, MissingXref, SourceTree,

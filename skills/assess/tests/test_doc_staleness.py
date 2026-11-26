@@ -489,7 +489,7 @@ def test_content_dated_doc_has_no_basis_key(git_repo) -> None:
 
 
 def test_skipped_list_is_capped_and_total_is_kept(git_repo) -> None:
-    from lib.git_churn import BULK_COMMITS_SKIPPED_CAP
+    from lib.history.git_churn import BULK_COMMITS_SKIPPED_CAP
 
     repo, commit = git_repo
     _bulk_fixture(repo, commit)
@@ -520,7 +520,7 @@ def test_scan_incomplete_when_git_log_times_out(git_repo, monkeypatch) -> None:
     says so, rather than reading as "no bulk commits"."""
     import subprocess
 
-    import lib.git_churn as gc
+    import lib.history.git_churn as gc
 
     repo, commit = git_repo
     _bulk_fixture(repo, commit)
@@ -576,7 +576,7 @@ def test_shallow_probe_timeout_marks_scan_incomplete(git_repo, monkeypatch) -> N
     """A timed-out shallow probe must not escape the clock or vouch for it."""
     import subprocess
 
-    import lib.git_churn as gc
+    import lib.history.git_churn as gc
 
     repo, commit = git_repo
     _bulk_fixture(repo, commit)
@@ -599,9 +599,9 @@ def test_shallow_probe_timeout_marks_scan_incomplete(git_repo, monkeypatch) -> N
 def test_rename_scan_failure_marks_scan_incomplete(git_repo, monkeypatch) -> None:
     """A rename map that could not be read leaves renames unfollowed, so the
     completeness flag must not vouch for the scan."""
-    import lib.change_coupling as cc
+    import lib.history.change_coupling as cc
     import lib.docs.doc_staleness as ds
-    import lib.git_churn as gc
+    import lib.history.git_churn as gc
 
     repo, commit = git_repo
     _bulk_fixture(repo, commit)
@@ -745,7 +745,7 @@ def test_window_since_maps_every_churn_window_label() -> None:
     """The cap reads the same window `pick_churn_window` chose; an unmatched
     label would silently widen it to full history."""
     from lib.docs.doc_staleness import _window_since
-    from lib.git_churn import CHURN_WINDOWS
+    from lib.history.git_churn import CHURN_WINDOWS
 
     for label, since in CHURN_WINDOWS:
         assert _window_since(f"commits ({label})") == since

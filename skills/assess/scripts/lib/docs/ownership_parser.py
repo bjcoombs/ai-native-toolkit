@@ -60,7 +60,7 @@ from pathlib import Path
 from typing import TypedDict
 
 from lib.docs.doc_graph import CODE_EXTENSIONS, is_excluded_path, is_repo_file
-from lib.git_churn import tracked_files
+from lib.history.git_churn import tracked_files
 
 # Where an ownership map can legitimately live. CODEOWNERS is recognised by
 # GitHub at the repo root, in ``.github/``, or in ``docs/`` - we honour the same

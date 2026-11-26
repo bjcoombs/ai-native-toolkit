@@ -42,7 +42,7 @@ from lib.instructions.agent_instructions_grader import (
 from lib.docs.doc_graph import is_repo_file
 from lib.instructions.instruction_content import build_repo_context
 from lib.docs.doc_staleness import content_clock
-from lib.git_churn import ContentClock, tracked_files
+from lib.history.git_churn import ContentClock, tracked_files
 from lib.instructions.instruction_discovery import discover_nested_instructions
 from lib.instructions.instruction_placement import detect_skills_dir, skill_texts
 from lib.run_context_types import NestedInstructionsBlock

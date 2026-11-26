@@ -6,7 +6,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-_LIB = Path(__file__).resolve().parents[1] / "scripts" / "lib" / "git_churn.py"
+_LIB = Path(__file__).resolve().parents[1] / "scripts" / "lib" / "history" / "git_churn.py"
 _spec = importlib.util.spec_from_file_location("git_churn", _LIB)
 git_churn = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(git_churn)

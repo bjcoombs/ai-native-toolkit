@@ -15,11 +15,11 @@ from pathlib import Path
 
 import pytest
 
-from lib.ai_usage import scan_ai_usage
+from lib.history.ai_usage import scan_ai_usage
 from lib.docs.doc_staleness import analyze_doc_staleness, content_clock
-from lib.commit_anchor import head_commit_epoch
-from lib.git_churn import commit_epochs_by_file, git_churn_scores
-from lib.history_window import anchored_since
+from lib.history.commit_anchor import head_commit_epoch
+from lib.history.git_churn import commit_epochs_by_file, git_churn_scores
+from lib.history.history_window import anchored_since
 from lib.instructions.instruction_files import _file_freshness_days
 from lib.keyhole.understanding_analysis import _days_since_last_human_commit
 

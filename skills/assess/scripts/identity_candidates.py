@@ -3,7 +3,7 @@
 The first-run discovery behind /assess and /fleet. It reads the git history of
 one or more repositories (the window ``ai_usage`` reads) and prints every
 account that looks automated but is not yet classified in ``[identities]``,
-with its evidence (``lib/account_discovery.py``). It never prompts: the skill
+with its evidence (``lib/history/account_discovery.py``). It never prompts: the skill
 asks the human, then records each answer with ``--confirm``.
 
 The listing holds identities, so it goes to the terminal only. It is never
@@ -46,9 +46,9 @@ from typing import TypedDict
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.ai_usage import ALL_TIME, matcher_from_config, resolve_window, window_commits
+from lib.history.ai_usage import ALL_TIME, matcher_from_config, resolve_window, window_commits
 from lib.fleet_config import FleetConfig, FleetConfigError, load_fleet_config, repo_fleet_config
-from lib.account_discovery import EVIDENCE, Candidate, discover
+from lib.history.account_discovery import EVIDENCE, Candidate, discover
 from lib.signals import DEFAULT_WINDOW
 
 CLASSES = {"agent": "agents", "bot": "bots", "person": "people"}

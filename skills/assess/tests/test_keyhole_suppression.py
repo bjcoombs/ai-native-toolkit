@@ -195,7 +195,7 @@ def test_pruned_finding_paths_stand_down_when_rename_map_incomplete(tmp_path: Pa
     an unfolded old name rather than a deletion, so nothing is pruned."""
     import subprocess
 
-    from lib.change_coupling import RenameMap
+    from lib.history.change_coupling import RenameMap
 
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
 
@@ -229,7 +229,7 @@ def test_rename_map_incomplete_when_ancestry_check_fails(tmp_path: Path, monkeyp
     finding is never reported as deleted."""
     import subprocess
 
-    import lib.change_coupling as cc
+    import lib.history.change_coupling as cc
 
     def git(*args: str) -> None:
         subprocess.run(["git", "-C", str(tmp_path), "-c", "user.email=t@example.com",

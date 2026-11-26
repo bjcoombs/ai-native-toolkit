@@ -147,7 +147,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
-from lib.fleet_activity import window_start
+from lib.history.fleet_activity import window_start
 from lib.hosting.gh_cli import (
     NETWORK_REASON, GhUnavailable, GithubRepo, gh_api, gh_json, git_remote_url, open_github,
     parse_github_remote, unavailable,

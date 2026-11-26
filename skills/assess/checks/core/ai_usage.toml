@@ -6,14 +6,14 @@ id = "core.ai_usage"
 kind = "collector"
 title = "AI-assisted change share"
 issues = [547, 765]
-callable = "lib.ai_usage:scan_ai_usage"
+callable = "lib.history.ai_usage:scan_ai_usage"
 publishes = ["ai_usage"]
 reads = ["repo_root", "scope", "history_window", "fleet_config"]
 stage = "post_offers"
 headless = { ai_usage = "registered" }
 whys.ai_usage = "exempt: plumbing"
 shapes = [
-  { path = "ai_usage", type = "lib.ai_usage:AiUsageBlock" },
+  { path = "ai_usage", type = "lib.history.ai_usage:AiUsageBlock" },
 ]
 revision = 2
   [entries.privacy]

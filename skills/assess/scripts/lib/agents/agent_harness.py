@@ -95,7 +95,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from lib.assess_config import is_user_excluded
 from lib.instructions.claude_config import parse_frontmatter
-from lib.git_churn import tracked_files
+from lib.history.git_churn import tracked_files
 from lib.ci.shared_tooling import ON_KEY
 from lib.instructions.instruction_files import INSTRUCTION_FILE_PATHS
 

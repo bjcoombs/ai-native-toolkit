@@ -30,7 +30,7 @@ from lib.agent_identity import (
     is_gitlab_token_user,
     username_from_email,
 )
-from lib.ai_usage import AiUsageBlock, scan_ai_usage
+from lib.history.ai_usage import AiUsageBlock, scan_ai_usage
 from lib.counts_only.content_free import counts_only_scans
 from lib.fleet_config import (
     FleetConfig,

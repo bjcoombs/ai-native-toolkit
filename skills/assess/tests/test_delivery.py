@@ -230,7 +230,7 @@ def test_a_loose_config_rule_tries_the_bot_form_only_for_bots():
 
 
 def scan_matcher(toml: str = ""):
-    from lib.ai_usage import matcher_from_config
+    from lib.history.ai_usage import matcher_from_config
     return matcher_from_config(parse_fleet_config(toml))
 
 

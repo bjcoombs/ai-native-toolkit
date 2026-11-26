@@ -97,7 +97,7 @@ from lib.ci.check_command import ALWAYS_CHECK, LINT_PROGRAMS, is_lint_command
 from lib.named_check import is_named_check
 from lib.instructions.command_resolver import command_words, extract_commands
 from lib.docs.doc_graph import is_repo_file
-from lib.git_churn import tracked_files
+from lib.history.git_churn import tracked_files
 from lib.instructions.instruction_budget import follow_imports
 from lib.instructions.instruction_discovery import InstructionCandidate, collect_instruction_files, mirror_pair
 

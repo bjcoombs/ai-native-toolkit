@@ -57,11 +57,11 @@ from typing import Any, TypedDict
 # libel a human author), and the velocity clock's "human-authored commit" test
 # has to agree with what `authorship_analysis` already called a human.
 from lib.agent_identity import identity_is_agent as _identity_is_agent
-from lib.change_coupling import (
+from lib.history.change_coupling import (
     GIT_TIMEOUT_SECONDS,
     repo_top,
 )
-from lib.commit_anchor import head_commit_epoch
+from lib.history.commit_anchor import head_commit_epoch
 from lib.run_context_types import JsonDict
 
 

@@ -46,7 +46,7 @@ quiet is never classified as a ``lying_map``.
 
 This module is **standalone**: it reads frontmatter and last-change timestamps,
 and never imports an orchestrator (the inward-only contract). Timestamps come
-from ``lib.git_churn`` (git commit time when tracked) and fall back to the
+from ``lib.history.git_churn`` (git commit time when tracked) and fall back to the
 filesystem mtime, so both the doc and its source are compared on the same axis
 (epoch seconds).
 
@@ -62,7 +62,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lib.git_churn import file_last_commit_epoch
+from lib.history.git_churn import file_last_commit_epoch
 
 # A YAML frontmatter block is fenced by `---` lines at the very top of the file.
 _FENCE = "---"

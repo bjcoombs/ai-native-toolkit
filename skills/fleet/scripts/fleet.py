@@ -158,7 +158,7 @@ from lib.fleet.runner import (
     targets_from_list,
     write_rows,
 )
-from lib.fleet_activity import window_start
+from lib.history.fleet_activity import window_start
 from lib.fleet.fleet_agent_building import AgentClusters, clusters, write_clusters
 from lib.fleet.fleet_doc_freshness import FreshnessResult, freshness_rows, summary_line, write_freshness
 from lib.fleet.fleet_cleanup import CloneDeleter

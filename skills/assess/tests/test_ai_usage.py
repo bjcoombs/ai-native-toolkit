@@ -1,4 +1,4 @@
-"""Tests for lib/ai_usage.py and the shared matcher in lib/agent_identity.py.
+"""Tests for lib/history/ai_usage.py and the shared matcher in lib/agent_identity.py.
 
 A real git fixture with dates relative to today and known trailers: the counts
 are exact, merges are excluded, the window filters by commit date, and no
@@ -17,9 +17,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib import agent_identity, ai_usage, change_coupling
-from lib.ai_usage import LIMITS, resolve_window, scan_ai_usage
-from lib.git_churn import CHURN_WINDOWS, window_from_churn_label
+from lib import agent_identity
+from lib.history import ai_usage, change_coupling
+from lib.history.ai_usage import LIMITS, resolve_window, scan_ai_usage
+from lib.history.git_churn import CHURN_WINDOWS, window_from_churn_label
 from lib.scan_registry import SCANS
 
 HUMAN = "Ada Person <ada.person@example.org>"

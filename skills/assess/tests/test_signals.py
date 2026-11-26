@@ -483,7 +483,7 @@ def test_type_schema_rejects_an_unmapped_annotation():
 
 
 def test_churn_labels_normalise_to_the_window_grammar():
-    from lib.git_churn import CHURN_WINDOWS, window_from_churn_label
+    from lib.history.git_churn import CHURN_WINDOWS, window_from_churn_label
 
     assert window_from_churn_label("commits (last 12mo)") == "12mo"
     assert window_from_churn_label("commits (last 5y)") == "5y"

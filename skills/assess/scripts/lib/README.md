@@ -111,7 +111,7 @@ agent) trusts the boundary deliberately rather than being surprised by the seam:
   change to how `build_fleet_data` computes a cell or a unit roll-up moves both.
   `tests/test_fleet_rescore.py::test_rescore_recomputes_the_unit_roll_ups`
   fails when a re-scored run differs from a fresh `build_fleet_data` over the same rows.
-- **`account_discovery.py` <-> `agent_identity.py`.** The `dependency_bot_hint` evidence
+- **`history/account_discovery.py` <-> `agent_identity.py`.** The `dependency_bot_hint` evidence
   token reads `agent_identity.is_dependency_bot`, the same test `AuthorMatcher` buckets a
   `dependency_bot` with, so widening `DEPENDENCY_BOT_RULES` moves both the `ai_usage`
   counts and the identities awaiting confirmation. `account_discovery` imports only
@@ -211,11 +211,17 @@ New code imports the new path.
   name; until 5.0.0 the package `__init__.py` forwards each runner name (`lib.fleet.FleetRow`)
   to `lib.fleet.runner` on first use, without importing it eagerly. `fleet_config` and
   `fleet_activity` keep their prefix but are not fleet modules: `fleet_config` is shared core,
-  and `fleet_activity` waits for the `history` group. Files: `__init__.py`, `condition_demotion.py`, `condition_effect.py`, `fleet_achievements.py`, `fleet_achievements_runs.py`, `fleet_achievements_schema.py`, `fleet_agent_building.py`, `fleet_cleanup.py`, `fleet_cli_args.py`, `fleet_compare.py`, `fleet_coverage.py`, `fleet_credit.py`, `fleet_data.py`, `fleet_data_schema.py`, `fleet_data_steps.py`, `fleet_data_tags.py`, `fleet_data_units.py`, `fleet_diagrams.py`, `fleet_doc_freshness.py`, `fleet_front.py`, `fleet_group_schema.py`, `fleet_groups.py`, `fleet_hashed.py`, `fleet_heatmap.py`, `fleet_history.py`, `fleet_include_list.py`, `fleet_includes.py`, `fleet_labels.py`, `fleet_learn_from.py`, `fleet_legacy.py`, `fleet_level.py`, `fleet_level_schema.py`, `fleet_maturity.py`, `fleet_method.py`, `fleet_next_steps.py`, `fleet_opportunities.py`, `fleet_opportunities_section.py`, `fleet_packs.py`, `fleet_page.py`, `fleet_page_assets.py`, `fleet_page_data.py`, `fleet_page_live.py`, `fleet_platform.py`, `fleet_publish.py`, `fleet_publish_session.py`, `fleet_repo_facts.py`, `fleet_rescore.py`, `fleet_scanner_diff.py`, `fleet_schema.py`, `fleet_slope.py`, `fleet_stamp.py`, `fleet_step_funnel.py`, `fleet_step_lifts.py`, `fleet_step_movement.py`, `fleet_step_targets.py`, `fleet_svg.py`, `fleet_tag_heatmap.py`, `fleet_tag_profile.py`, `fleet_targets.py`, `fleet_targets_import.py`, `fleet_tooling_map.py`, `fleet_trends.py`, `fleet_units.py`, `fleet_view.py`, `fleet_why.py`, `runner.py`.
+  and `fleet_activity` moved with the `history` group. Files: `__init__.py`, `condition_demotion.py`, `condition_effect.py`, `fleet_achievements.py`, `fleet_achievements_runs.py`, `fleet_achievements_schema.py`, `fleet_agent_building.py`, `fleet_cleanup.py`, `fleet_cli_args.py`, `fleet_compare.py`, `fleet_coverage.py`, `fleet_credit.py`, `fleet_data.py`, `fleet_data_schema.py`, `fleet_data_steps.py`, `fleet_data_tags.py`, `fleet_data_units.py`, `fleet_diagrams.py`, `fleet_doc_freshness.py`, `fleet_front.py`, `fleet_group_schema.py`, `fleet_groups.py`, `fleet_hashed.py`, `fleet_heatmap.py`, `fleet_history.py`, `fleet_include_list.py`, `fleet_includes.py`, `fleet_labels.py`, `fleet_learn_from.py`, `fleet_legacy.py`, `fleet_level.py`, `fleet_level_schema.py`, `fleet_maturity.py`, `fleet_method.py`, `fleet_next_steps.py`, `fleet_opportunities.py`, `fleet_opportunities_section.py`, `fleet_packs.py`, `fleet_page.py`, `fleet_page_assets.py`, `fleet_page_data.py`, `fleet_page_live.py`, `fleet_platform.py`, `fleet_publish.py`, `fleet_publish_session.py`, `fleet_repo_facts.py`, `fleet_rescore.py`, `fleet_scanner_diff.py`, `fleet_schema.py`, `fleet_slope.py`, `fleet_stamp.py`, `fleet_step_funnel.py`, `fleet_step_lifts.py`, `fleet_step_movement.py`, `fleet_step_targets.py`, `fleet_svg.py`, `fleet_tag_heatmap.py`, `fleet_tag_profile.py`, `fleet_targets.py`, `fleet_targets_import.py`, `fleet_tooling_map.py`, `fleet_trends.py`, `fleet_units.py`, `fleet_view.py`, `fleet_why.py`, `runner.py`.
 - **`graph/`**: language import graphs and the static dependency structure built from
   them. The builder registry, `import_graph_builders`, stays at the root: `import_graph`
   imports it inside a function, because each builder imports `import_graph`.
   Files: `__init__.py`, `import_graph.py`, `import_graph_go.py`, `import_graph_python.py`, `import_graph_typescript.py`, `structure_graph.py`.
+- **`history/`**: git history primitives and the windows over them, the `history` group
+  (#1397): file churn and its rename following, change coupling, the one history-window
+  grammar and the anchored window start, the commit anchor, the content paths a commit
+  touched, the fleet activity window, AI usage and the bot and agent account discovery.
+  `fleet_activity` keeps its prefix but is not a fleet module (decision 7 on #917).
+  Files: `__init__.py`, `account_discovery.py`, `ai_usage.py`, `change_coupling.py`, `commit_anchor.py`, `content_paths.py`, `fleet_activity.py`, `git_churn.py`, `history_window.py`.
 - **`hosting/`** ([README](hosting/README.md)): the `gh` and `glab` reads and the platform blocks built from them: the
   shared merged sample, delivery, review reality, GitLab notes and CI lint, and config drift.
   Named `hosting`, not `platform`, because a `lib/platform/` package would shadow the standard

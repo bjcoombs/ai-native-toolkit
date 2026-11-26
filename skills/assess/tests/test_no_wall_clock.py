@@ -160,7 +160,7 @@ def test_no_signal_producer_reads_the_wall_clock() -> None:
                  if (path, func) not in ALLOWED for line in lines]
     assert not offenders, (
         "wall-clock reads outside the run-metadata allowlist; count from the "
-        "assessed commit (lib/history_window.anchored_since) instead:\n" + "\n".join(offenders))
+        "assessed commit (lib/history/history_window.anchored_since) instead:\n" + "\n".join(offenders))
 
 
 def test_allowlist_entries_still_exist() -> None:

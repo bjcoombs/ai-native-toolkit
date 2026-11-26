@@ -36,7 +36,7 @@ from lib.keyhole.archetype import analyze_archetype
 from lib.since_last_run import SinceLastRun
 from lib.since_last_run import since_last_run as since_last_run_block
 from lib.assess_config import WorkingNotesConfig, load_structure_config, load_working_notes_config
-from lib.change_coupling import RenameMap
+from lib.history.change_coupling import RenameMap
 from lib.context_blocks import (
     accretion_block,
     accretion_lookup,
@@ -145,7 +145,7 @@ def churn_degenerate(staleness: Any) -> bool:
     """True when every file shows ~1 commit (shallow clone, fresh import,
     squashed tree): churn-derived findings are discounted and the treemap
     saturation axis is inactive. Single source of truth: the doc-staleness
-    block (``lib.git_churn.churn_is_degenerate``); False when that degraded.
+    block (``lib.history.git_churn.churn_is_degenerate``); False when that degraded.
     """
     return bool(dict_or(staleness, {}).get("churn_degenerate", False))
 

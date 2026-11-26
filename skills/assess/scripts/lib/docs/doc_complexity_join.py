@@ -264,7 +264,7 @@ def analyze_doc_complexity_join(
         if doc_staleness.get("available", False)
         else []
     )
-    # Churn-measurement reliability (set once in lib.git_churn, carried on the
+    # Churn-measurement reliability (set once in lib.history.git_churn, carried on the
     # doc-staleness block). When the history is degenerate - every file ~1 commit
     # (shallow clone, fresh import, squashed/extracted tree) - the `ratio` that
     # drives `freshness` is built on a churn count that means nothing, even

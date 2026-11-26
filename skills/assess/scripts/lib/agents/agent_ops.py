@@ -77,7 +77,7 @@ from lib.ci.ci_triggers import workflow_events
 from lib.instructions.command_index import NOOP_COMMANDS, ci_config_files, read_config, repo_files
 from lib.counts_only.block_shapes import AgentWorkflow
 from lib.agents.managed_settings import managed_permissions, not_read, read_managed_settings
-from lib.git_churn import is_tracked, tracked_files
+from lib.history.git_churn import is_tracked, tracked_files
 
 # Candidate settings files, repo-root-relative. Order is the report order.
 _SETTINGS_PATHS = (

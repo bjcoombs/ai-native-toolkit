@@ -11,7 +11,7 @@ Repository counts:
 - ``scanned_ok``: rows with ``status`` ``ok``;
 - ``failed``: rows with ``status`` ``failed``;
 - ``qualifying``: ok rows with ``active`` true: the ``HEAD`` committer date
-  is inside the window (lib/fleet_activity.py). The window runs back from
+  is inside the window (lib/history/fleet_activity.py). The window runs back from
   ``scan_date`` (UTC, whole days, months by calendar), so the count is fixed
   for a day.
 

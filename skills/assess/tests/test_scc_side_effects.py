@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 from test_complexity_treemap import stubbed_treemap
 
-from lib.change_coupling import parse_commit_file_sets
+from lib.history.change_coupling import parse_commit_file_sets
 from lib.complexity.scc_coverage import backend_by_language, file_level_by_language
 from lib.complexity.stats_rows import code_band, code_band_paths
 from lib.keyhole.keyhole_signals import _self_referential_test_paths
