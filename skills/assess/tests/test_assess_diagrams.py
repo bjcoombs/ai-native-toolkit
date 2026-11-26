@@ -293,3 +293,43 @@ def test_the_shipped_model_gates_are_outlined_in_the_report_waffle() -> None:
     assert gate_conditions(steps) == ["layer-0-instructions.1", "layer-5-ci.1", "layer-6-coverage.1"]
     waffle = _by_file(ad.build_diagrams({"level": LEVEL}, MODEL_ROWS))[ad.WAFFLE_FILE]["svg"] or ""
     assert waffle.count("data-gate=") == 2
+
+
+# --- practice pack rows (#1315) -----------------------------------------------------
+
+
+GLOSSARY_PACK = '''[pack]
+name = "company"
+version = "2026.11"
+
+[[checks]]
+id = "glossary"
+title = "glossary"
+why = "A practice of the company."
+exists = "docs/glossary.md"
+
+[[rows]]
+id = "glossary"
+title = "Domain glossary"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["docs"]
+  criteria = [{ signal = "pack.company.glossary", op = "eq", value = true }]
+'''
+
+
+def test_waffle_titles_pack_rows(tmp_path: Path) -> None:
+    """A ``--pack`` run labels each pack practice by its title from the layered model, as every
+    default practice is, never by its row id (#1315)."""
+    import assess_core
+    repo = _build_parity_fixture(tmp_path / "repo")
+    pack = tmp_path / "company.pack.toml"
+    pack.write_text(GLOSSARY_PACK, encoding="utf-8")
+    assert assess_core.main([str(repo), "--non-interactive", "--jobs", "1", "--pack", str(pack)]) == 0
+    waffle = (repo / ".assess" / ad.WAFFLE_FILE).read_text(encoding="utf-8")
+    labels = [text for tag, text in _TEXT.findall(waffle) if tag == "text"]
+    assert "Domain glossary" in labels
+    assert "glossary" not in labels
