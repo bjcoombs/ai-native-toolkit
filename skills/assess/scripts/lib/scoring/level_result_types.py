@@ -68,9 +68,9 @@ class NextStep(TypedDict):
 class InPlace(TypedDict):
     """One practice of a level result's ``in_place`` list (``lib/scoring/level_tally.py``, #1334).
 
-    A row is listed when it is at its top level (every condition met; a hazard condition
-    reads held when it is unmet) or reads a gate of a Step already held. A row with any
-    condition not measured, excluded or unmet below the gate's level is never listed.
+    A row is listed when it is at its top level (every condition counted and met; a hazard
+    holds when it reads unmet) or reads a gate of a Step already held. A row with a condition
+    not measured, excluded, unmet or only listed (config-only, declared, demoted) is never top.
     """
 
     row: str  # a row id of the model

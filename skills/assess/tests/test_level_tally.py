@@ -445,16 +445,19 @@ def test_in_place_leaves_out_a_row_below_its_top_level():
 
 
 def test_in_place_lists_the_rows_a_held_step_reads_with_their_gates():
-    """A row a held Step's gate reads is in place at the gate's level, top or not."""
+    """A row a held Step's gate reads is in place at the gate's level; its declared or listed
+    conditions hold the gate but never make the row top."""
     signals = {**_fresh(40), "layer_grades": {"instruction_file_present": True},
                "ci_checks": {"test_or_lint_configured": True}}
     result = lt.level_result(_laddered(), signals)
     assert result["step"] == 3
     assert [(e["row"], e["level"], e["top"], e["gates"]) for e in result["in_place"]] == [
-        ("instr", 1, True, ["instructions"]), ("ci", 1, True, ["ci_runs_tests"])]
+        ("instr", 1, False, ["instructions"]), ("ci", 1, False, ["ci_runs_tests"])]
     below = lt.level_result(_laddered(), {**signals, "layer_grades": {"instruction_file_present": False}})
-    # Step 1 holds no gate: the ci row is in place at its top level, with no gate listed
-    assert [(e["row"], e["gates"]) for e in below["in_place"]] == [("ci", [])]
+    # Step 1 holds no gate, and the ci row's one condition is listed, not counted: nothing in place
+    assert below["in_place"] == []
+    fresh = lt.level_result(_laddered(), {**_fresh(10), "layer_grades": {"instruction_file_present": False}})
+    assert [(e["row"], e["top"]) for e in fresh["in_place"]] == [("fresh", True)]  # counted conditions
 
 
 def test_in_place_never_lists_an_excluded_row_and_counts_only_keeps_the_tokens():

@@ -21,7 +21,8 @@ milestone reached, not a grade.
 
 Shields.io endpoint badge for the wiki (`.assess/badge.json`). The message is the
 run's deterministic headline summary (`headline.summary` from `headline.py`, #747:
-"Step 3 · next: coverage gate", or "Step 4 · all gates held"; no count, #1083), the colour a pure function of the Step (`step_color`:
+"Step 3 · 2 practices fully in place · next: coverage gate", or "Step 4 · all gates held";
+no tally count, #1083; the practices fully in place lead it, left out at 0, #1334), the colour a pure function of the Step (`step_color`:
 blue, blue, green, brightgreen for Steps 1-4, never red; grey with the message
 "Step not measured" when the level result is unavailable). `assess_core` writes
 it through `write_headline_badge` on every run, stamping a `link` to

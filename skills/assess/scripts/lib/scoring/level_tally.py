@@ -141,8 +141,10 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   `{row, level, top, gates, why?}`. A row is listed when every condition of it holds (`top`, at
   its top `level`; a hazard condition holds when it reads unmet) or when a gate of a Step already
   held reads it (`gates`, the gate ids once each in Step order; `level` the highest such gate's).
-  `why` is the condition at `level`'s why. Only met conditions count: a row with a condition not
-  measured, excluded or unmet is never `top`, so a blind run lists nothing it did not read. The
+  `why` is the condition at `level`'s why. Only counted, met conditions make a row `top`: a row
+  with a condition not measured, excluded, unmet or only listed (config-only, declared, demoted)
+  is never `top`, so a blind run lists nothing it did not read and the badge's "fully in place"
+  count is measured evidence only. A hazard holds when it reads unmet at a counted grade. The
   strengths-first blocks of the deterministic report, the badge summary and the fleet pages read it.
 
 Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a set whose count
@@ -399,16 +401,20 @@ def _ceiling(steps: Sequence[StepDef], step: int | None, next_step: NextStep | N
 
 
 def _holds(cond: ConditionResult) -> bool:
-    """A condition that counts toward a practice in place: met, or a hazard measured absent."""
-    return cond["state"] == ("unmet" if cond.get("polarity") == "hazard" else "met")
+    """A condition that counts toward a practice fully in place: counted and met, or a hazard read
+    absent at a counted grade. A listed condition (config-only, declared, demoted) never does."""
+    if cond.get("polarity") == "hazard":
+        return cond["state"] == "unmet" and cond["grade"] in COUNTED_GRADES
+    return cond["counted"] and cond["state"] == "met"
 
 
 def in_place(model: MaturityModel, step: int | None, conditions: Sequence[ConditionResult]) -> list[InPlace]:
     """The practices in place (#1334), in model order: each row at its top level (every condition
     holds, ``_holds``) and each row a gate of a Step already held (``step`` and below) reads, with
-    those gate ids and the why of the condition at the listed level. Only met conditions count: a
-    row with a condition not measured, excluded or unmet is listed only for a held gate, whose
-    conditions are met by definition."""
+    those gate ids and the why of the condition at the listed level. Only counted, met conditions
+    make a row ``top``: a row with a condition not measured, excluded, unmet or only listed
+    (config-only, declared, demoted by the exit rule) is listed only for a held gate, whose
+    conditions are met by definition, whatever their grade."""
     by_row: dict[str, list[ConditionResult]] = {}
     for cond in conditions:
         by_row.setdefault(cond["row"], []).append(cond)

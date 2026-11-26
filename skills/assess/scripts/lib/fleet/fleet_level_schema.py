@@ -63,8 +63,8 @@ def level_result_schema() -> JsonDict:
         "the ids of the gates above the current Step that already hold, once each, in Step order (#1374)")
     props["in_place"]["description"] = (
         "the practices in place, in model order: each row at its top level (every condition met) and each "
-        "row a gate of a Step already held reads, with those gate ids and the why at the listed level; a "
-        "row with a condition not measured, excluded or unmet is never top (#1334, lib/scoring/level_tally.py)")
+        "row a gate of a Step already held reads, with those gate ids and the why at the listed level; only "
+        "counted, met conditions make a row top (#1334, lib/scoring/level_tally.py)")
     blocker = next(b for b in props["next_step"]["anyOf"] if b.get("type") == "object")
     blocker_fields = blocker["properties"]["blockers"]["items"]["properties"]
     blocker_fields["kind"] = {"enum": ["gate"]}

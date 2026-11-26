@@ -36,8 +36,9 @@ the maturity model as one condition, `<row id>.<level>`, and reports:
 - `in_place` (#1334): the practices already in place, in model order, each `{row, level, top,
   gates, why?}`. A row is listed when every condition of it holds (`top`, at its top level) or
   when a gate of a Step already held reads it (`gates`). `why` is the condition at `level`'s
-  why. A row with a condition not measured, excluded or unmet is never `top`, so a blind run
-  lists nothing it did not read.
+  why. Only counted, met conditions make a row `top`: a row with a condition not measured,
+  excluded, unmet or only listed (config-only, declared, demoted by the exit rule) is never
+  `top`, so a blind run lists nothing it did not read.
 
 With `--pack` (#1276), each pack's `[[rows]]` are layered onto the model and every condition
 names its `source` (the base model or the pack). The envelope then gains `packs`: for each

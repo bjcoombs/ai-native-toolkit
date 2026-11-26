@@ -83,9 +83,8 @@ def test_the_summary_names_the_step_one_change_away():
                "ci_checks": {"test_or_lint_configured": True}}
     level = lt.level_result(model, signals)
     assert (level["step"], level["ceiling_step"]) == (1, 3)
-    # the ci row is at its top level, so the summary leads with it (#1334)
-    assert headline(level, model)["summary"] == ("Step 1 · 1 practice fully in place · one change from Step 3: "
-                                                 "instruction file")
+    # the ci row's one condition is listed, not counted, so no practice is fully in place (#1334)
+    assert headline(level, model)["summary"] == "Step 1 · one change from Step 3: instruction file"
     assert one_change_ceiling(level, model["steps"]) == 3
     blocks = next(f["text"] for f in card_facts(level, model, None) if f["fact_id"] == "blocks")
     assert blocks.endswith("; that one change reaches Step 3.")
