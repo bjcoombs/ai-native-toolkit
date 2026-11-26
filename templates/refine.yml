@@ -172,6 +172,8 @@ refine-plan:
       for f in .refine-toolkit/skills/refine/commands/*.md; do
         [ -e ".claude/commands/$(basename "$f")" ] || cp "$f" .claude/commands/
       done
+      # Claude Code's --json-schema validator does not load the draft 2020-12
+      # meta-schema the schema files name, so the $schema key is dropped.
       run_model() {  # <command> <issue> <schema file> <max turns>
         log=".refine/model/$1-$2.json"
         env -u REFINE_WRITE_TOKEN -u CI_JOB_TOKEN -u CI_REGISTRY_PASSWORD -u CI_DEPENDENCY_PROXY_PASSWORD \
@@ -180,7 +182,7 @@ refine-plan:
             --model "$REFINE_MODEL" --max-turns "$4" --output-format json \
             --allowedTools "Bash(./.refine-toolkit/skills/refine/scripts/gh.sh:*),Read(./.refine/**)" \
             --disallowedTools "WebFetch,WebSearch,Write,Edit,MultiEdit,NotebookEdit" \
-            --json-schema "$(jq -c . "$3")" > "$log"
+            --json-schema "$(jq -c 'del(.["$schema"])' "$3")" > "$log"
         code=$?
         outcome=failure; [ "$code" = 0 ] && outcome=success
         OUTCOME=$outcome CONCLUSION=$outcome EXEC_FILE=$log bash "$SCRIPTS/check-model-run.sh" || return 1
