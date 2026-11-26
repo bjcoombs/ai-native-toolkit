@@ -198,6 +198,8 @@ def _sanitise(svg: str) -> tuple[str, bool]:
             if name not in DROPPED and m.group("name") != CAMEL.get(name, name):
                 raise _Refused  # the checks read tag names in their SVG case
         if skipping or name in DROPPED:
+            if close and not skipping:
+                raise _Refused  # an end tag for a dropped element that never opened
             if not empty:
                 skipping += -1 if close else 1
             continue

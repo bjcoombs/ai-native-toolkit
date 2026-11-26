@@ -213,3 +213,7 @@ def test_a_link_to_http_a_fragment_or_a_relative_path_is_kept(href: str) -> None
     out = inline_svg(_svg(f'<a href="{href}">' + PART + "</a>"), "s")
     assert out is not None
     assert f'href="{href}"' in out if not href.startswith("#") else 'href="#s-part"' in out
+
+
+def test_a_stray_end_tag_for_a_dropped_element_is_refused() -> None:
+    assert inline_svg(_svg("<g>" + PART + "</script><rect/><script></g>"), "s") is None
