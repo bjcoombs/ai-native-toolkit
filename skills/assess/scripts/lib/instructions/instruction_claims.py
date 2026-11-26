@@ -156,7 +156,7 @@ _BACKTICK_SPAN = re.compile(r"`([^`]+)`")
 # so "ci" in a path or "CIRCLE" never counts.
 _CI_ACTS = (
     r"\bCI(?:\s+(?i:jobs?|pipelines?|workflows?|checks?))?\s+(?i:will\s+)?"
-    r"(?i:runs?|ran|executes|calls|invokes|enforces|verifies|validates|fails|blocks|rejects|gates)\b"
+    r"(?i:ran|(?:run|execute|call|invoke|enforce|verif(?:y|ie)|validate|fail|block|reject|gate)s?)\b"
 )
 _ACTS_IN_CI = (
     r"(?i:\b(?:runs?|ran|execute[sd]?|invoked|called|checked|verified|validated|gated|required)"

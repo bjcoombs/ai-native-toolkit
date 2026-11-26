@@ -199,6 +199,8 @@ def test_a_sentence_that_only_mentions_ci_makes_no_claim(sentence: str) -> None:
     "CI runs `scripts/check.sh` on every push.",
     "The CI job calls `scripts/check.sh`.",
     "CI fails if `scripts/check.sh` exits non-zero.",
+    "CI will fail if `scripts/check.sh` exits non-zero.",
+    "CI jobs fail if `scripts/check.sh` exits non-zero.",
     "`scripts/check.sh` blocks CI on a failure.",
 ])
 def test_an_enforcement_verb_tied_to_ci_makes_a_claim(sentence: str) -> None:
