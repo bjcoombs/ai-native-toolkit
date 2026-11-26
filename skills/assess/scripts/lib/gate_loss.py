@@ -28,7 +28,9 @@ reads the run context; nothing writes a file or recomputes ``since_last_run``:
 - **Not compared.** ``not_compared`` gives the reason no gate was compared across maturity
   models (#1150): the ``since_last_run`` model-changed line. The gate prints it as a warn line
   instead of "clean snapshot", or fails under ``fail_on_gate_loss`` with a committed baseline,
-  so a check that compared nothing never reads clean.
+  so a check that compared nothing never reads clean. ``pack_change_reason`` does the same for
+  the ``since_last_run`` pack-changed and pack-not-recorded lines (#1316): a practice pack edited
+  since the committed record, which its gates are not compared against.
 
 Tests: ``tests/test_gate_loss.py`` and ``tests/test_assess_gate.py``.
 """
@@ -39,12 +41,12 @@ from typing import Any
 
 from lib.scoring.level_tally import default_model, gate_blockers
 from lib.scoring.levels import StepDef
-from lib.model_change import changed_models
+from lib.model_change import PACK_CHANGED, PACK_NOT_RECORDED, changed_models
 from lib.prior_level import model_key
 from lib.profiles import model_for_level, profile_names
 
 __all__ = ["baseline_step", "held_at_baseline", "lost_gates", "model_change_reason", "no_baseline",
-           "not_compared", "split_lost", "step_change"]
+           "not_compared", "pack_change_reason", "split_lost", "step_change"]
 
 
 def _model_label(name: str) -> str:
@@ -61,12 +63,30 @@ def model_change_reason(ctx: Mapping[str, Any]) -> str | None:
     return None if models is None else f"model changed ({' -> '.join(_model_label(m) for m in models)})"
 
 
+def pack_change_reason(ctx: Mapping[str, Any]) -> str | None:
+    """``pack changed (company)`` or ``pack not recorded (company)`` when this run compared no
+    gate because a practice pack differs from the committed record's (#1316); None otherwise."""
+    since = ctx.get("since_last_run")
+    lines = since.get("lines") if isinstance(since, Mapping) else None
+    for line in lines if isinstance(lines, list) else []:
+        for template, label in ((PACK_CHANGED, "pack changed"), (PACK_NOT_RECORDED, "pack not recorded")):
+            head, _, tail = template.partition("{}")
+            if isinstance(line, str) and line.startswith(head) and line.endswith(tail):
+                return f"{label} ({line[len(head):len(line) - len(tail)]})"
+    return None
+
+
 def not_compared(ctx: Mapping[str, Any]) -> str | None:
-    """Why this run compared no gate across maturity models, with what to do, or None. Each model
-    keeps its own committed record (#1184), so a change means the previous state came from a
-    ``run-context.json`` of another model; it compares again once a run of this model is committed."""
+    """Why this run compared no gate across maturity models, or across a practice pack's content
+    (#1316), with what to do, or None. Each model keeps its own committed record (#1184), so a
+    change means the previous state came from a ``run-context.json`` of another model; it compares
+    again once a run of this model is committed. A pack record is replaced by this run's, so the
+    next run with the same pack compares again."""
     changed = model_change_reason(ctx)
-    return None if changed is None else f"{changed}; commit a run of one maturity model so the next run compares gates"
+    if changed is not None:
+        return f"{changed}; commit a run of one maturity model so the next run compares gates"
+    pack = pack_change_reason(ctx)
+    return None if pack is None else f"{pack}; commit this run's record so the next run compares gates"
 
 
 def _steps(level: Any = None) -> list[StepDef]:

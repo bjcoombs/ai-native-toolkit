@@ -6045,7 +6045,8 @@
         "assess_dir",
         "repo_root",
         "superseded",
-        "instruction_placement"
+        "instruction_placement",
+        "packs"
       ],
       "network": false,
       "private": false

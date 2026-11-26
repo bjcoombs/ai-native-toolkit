@@ -53,7 +53,8 @@ With no pack row the lines are as before.
 
 ``model_for_level(level)`` is the model a ``level`` block names, the default or a shipped profile
 (None for a custom model); ``since_last_run``, the committed baseline and the gate read a run's
-own Steps through it (#1184).
+own Steps through it (#1184). ``model_rows(choice)`` is the run's own rows, pack rows layered in,
+which the evidence waffle titles its rows from (#1315).
 
 ``run_level(ctx, choice)`` is the ``level`` block under the choice and ``chosen_model`` its
 model; the ``level`` scan and the ``--opt-in-mutation`` recount both call them, as
@@ -74,7 +75,7 @@ from lib.scoring.headline import reason_word
 from lib.scoring.level_result_types import ConditionResult, LevelResult
 from lib.scoring.level_tally import DEFAULT_BLOCKS, default_model, level_result, model_blocks, run_context_level
 from lib.scoring.level_tally import run_exclusions
-from lib.scoring.levels import LevelsError, MaturityModel, PathValidator, load_levels
+from lib.scoring.levels import LevelsError, MaturityModel, PathValidator, Row, load_levels
 from lib.pack_layering import layer_packs, pack_sources, row_source
 from lib.packs import SIGNAL_PREFIX as PACK_BLOCK
 from lib.packs import Pack, PackError
@@ -82,7 +83,7 @@ from lib.prior_level import base_model_key
 from lib.scoring.signal_grades import DEFAULT_LEVELS
 
 __all__ = ["CUSTOM_MODEL_SUFFIX", "PROFILES_DIR", "RESERVED_PREFIXES", "READY_WORDS", "ModelChoice", "ProfileError", "add_model_arguments",
-           "chosen_model", "model_for_level", "model_facts", "model_lines", "non_default_ids", "profile_names", "profile_path", "resolve",
+           "chosen_model", "model_for_level", "model_rows", "model_facts", "model_lines", "non_default_ids", "profile_names", "profile_path", "resolve",
            "run_level", "single_repo_choice"]
 
 PROFILES_DIR = DEFAULT_LEVELS.parent / "profiles"
@@ -131,6 +132,13 @@ def run_level(ctx: Mapping[str, Any], choice: ModelChoice | None) -> LevelResult
     if choice is None:
         return run_context_level(ctx)
     return level_result(choice.model, ctx, run_exclusions(ctx))
+
+
+def model_rows(choice: ModelChoice | None) -> list[Row] | None:
+    """The rows of the run's model, any ``--pack`` rows layered in (#1315), for the evidence
+    waffle's row titles; None for the default run (``choice`` None), whose diagrams read the
+    model the ``level`` block names (``model_for_level``)."""
+    return None if choice is None else list(choice.model["rows"])
 
 
 def model_for_level(level: Any) -> MaturityModel | None:

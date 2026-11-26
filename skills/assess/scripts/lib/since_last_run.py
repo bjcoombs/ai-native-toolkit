@@ -41,7 +41,10 @@ this run's publish step overwrites any of them:
   ``level_tally.gate_blockers`` names no blocker for it, in this run's ``level`` block and
   in the previous run's. ``gates_gained`` and ``gates_lost`` list the ids in Step order;
   ``None`` when the previous run has no level result or one that lacks a gate's
-  condition (an older model), so the rest of the block still reads.
+  condition (an older model), so the rest of the block still reads. The scan wrapper
+  (``core_scans.since_last_run``) then drops the gate comparison across maturity models
+  (``model_change.across_models``) and across a practice pack edited since the committed
+  record (``model_change.across_packs``, #1316).
 
 The **pruning ledger** (``lib/pruning_ledger.py``, #1084) runs here too, on a default-model run
 only (a profile run keeps it as stored and credits nothing, since only a default run writes it, #1184): each done removal

@@ -31,8 +31,9 @@ not measured never plots at 0. A real 0 of N measured does.
 the default model's, or a shipped profile's, #1184), each tag the earlier run measured gets a hollow outline dot at its
 earlier share, so the strip shows what moved; on a row this run did not measure, the outline
 stays and a key line says it is the earlier share. Otherwise no outline dot is drawn and one
-line says why: no earlier run is recorded, its record could not be read, or it used another
-model version.
+line says why: no earlier run is recorded, its record could not be read, it used another
+model version, or a practice pack of the run changed content since it was counted
+(``prior_level.pack_change`` against the run context's ``packs`` block, #1316).
 
 The strip names no path, repository or person (tag titles, counts, reason words and model
 versions only), so it needs no counts-only variant. Deterministic: fixed tag order, fixed
@@ -54,7 +55,7 @@ from lib.scoring.headline import reason_word
 from lib.scoring.level_result_types import TagRow
 from lib.scoring.level_tags import conditions_label
 from lib.scoring.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
-from lib.prior_level import PriorLevel, as_prior_level, model_key, record_for, same_model
+from lib.prior_level import PriorLevel, as_prior_level, model_key, pack_change, record_for, same_model
 from lib.run_context_types_diagrams import AssessDiagram
 from lib.vocabulary import IN_PLACE
 
@@ -154,16 +155,22 @@ def _record(raw: Any, level: Mapping[str, Any]) -> PriorLevel | None:
     return prior if prior is not None and "levels_version" in prior else None
 
 
-def earlier_shares(raw: Any, level: Mapping[str, Any]) -> dict[str, tuple[int, int]]:
-    """``(met, measured)`` per tag the earlier run measured, when it used this run's model.
-    ``raw`` is the run context's ``prior_level`` as stored."""
+def _stale_packs(prior: PriorLevel | None, level: Mapping[str, Any], packs: Any) -> list[str]:
+    """The run's packs the earlier record was not counted with: changed or not recorded (#1316)."""
+    changed, unrecorded = pack_change(prior, level, packs)
+    return [*changed, *unrecorded]
+
+
+def earlier_shares(raw: Any, level: Mapping[str, Any], packs: Any = None) -> dict[str, tuple[int, int]]:
+    """``(met, measured)`` per tag the earlier run measured, when it used this run's model and
+    packs. ``raw`` is the run context's ``prior_level`` as stored, ``packs`` its ``packs`` block."""
     prior = _record(raw, level)
-    if prior is None or not same_model(prior, level):
+    if prior is None or not same_model(prior, level) or _stale_packs(prior, level, packs):
         return {}
     return {r["tag"]: (r["met"], r["measured"]) for r in prior.get("tags", []) if r["measured"] > 0}
 
 
-def prior_note(raw: Any, level: Mapping[str, Any]) -> str:
+def prior_note(raw: Any, level: Mapping[str, Any], packs: Any = None) -> str:
     """The one line about the earlier run's outline dots. ``raw`` is the run context's
     ``prior_level``: None when no earlier file exists; anything not a readable ``PriorLevel``
     (``prior_level.UNREADABLE``, or a hand-edited value) is an earlier record not read."""
@@ -177,7 +184,11 @@ def prior_note(raw: Any, level: Mapping[str, Any]) -> str:
     if not same_model(prior, level):
         return (f"Earlier dots not drawn: the earlier run used maturity model {prior.get('levels_version')} "
                 f"and this run {level.get('levels_version')}, so the two do not compare.")
-    if not earlier_shares(raw, level):
+    stale = _stale_packs(prior, level, packs)
+    if stale:
+        return (f"Earlier dots not drawn: pack {', '.join(stale)} changed since the earlier run "
+                "or was not recorded with it, so the two do not compare.")
+    if not earlier_shares(raw, level, packs):
         return "No earlier dots: the earlier run, under the same maturity model, measured no tag."
     return f"Hollow dots: the earlier run, under the same maturity model {level.get('levels_version')}."
 
@@ -187,9 +198,9 @@ def _share(met: int, measured: int) -> float:
 
 
 def render_strip(level: Mapping[str, Any], rows: Sequence[TagRow], prior: Any,
-                 whys: Mapping[str, str]) -> str:
-    """The tag profile strip SVG for one level block's tag rows."""
-    earlier = earlier_shares(prior, level)
+                 whys: Mapping[str, str], packs: Any = None) -> str:
+    """The tag profile strip SVG for one level block's tag rows; ``packs`` is the run's packs block."""
+    earlier = earlier_shares(prior, level, packs)
     labels = [row_label(r) for r in rows]
     label_w = max(svg.text_width(label) for label in labels) + 16
     x0 = PAD + label_w
@@ -250,13 +261,13 @@ def render_strip(level: Mapping[str, Any], rows: Sequence[TagRow], prior: Any,
         body.append(svg.text(PAD + 22, y + 13, text, size=12, cls="fg"))
         y += LINE_H
     limit = int((width - 2 * PAD) / svg.CHAR_W)
-    for line in wrap(prior_note(prior, level), limit):
+    for line in wrap(prior_note(prior, level, packs), limit):
         y += LINE_H - 2
         body.append(svg.text(PAD, y, line, size=12, cls="muted"))
     for line in wrap(strip_caption(), limit):
         y += LINE_H - 2
         body.append(svg.text(PAD, y, line, size=12, cls="fg"))
-    desc = f"{strip_in_place(rows)} {prior_note(prior, level)} {strip_caption()}"
+    desc = f"{strip_in_place(rows)} {prior_note(prior, level, packs)} {strip_caption()}"
     return svg.document(width, y + PAD, HEADINGS[TAG_FILE], desc, body, scope=SCOPES["assess-tag-profile"], style=svg.theme_style())
 
 
@@ -286,8 +297,9 @@ def _strip(ctx: Mapping[str, Any]) -> AssessDiagram:
         return entry
     prior = ctx.get("prior_level")
     entry["in_place"] = strip_in_place(rows)
-    entry["caption"] = f"{strip_caption()} {prior_note(prior, level)}"
-    entry["svg"] = render_strip(level, rows, prior, tag_whys())
+    packs = ctx.get("packs")
+    entry["caption"] = f"{strip_caption()} {prior_note(prior, level, packs)}"
+    entry["svg"] = render_strip(level, rows, prior, tag_whys(), packs)
     return entry
 
 

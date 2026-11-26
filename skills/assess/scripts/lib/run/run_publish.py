@@ -16,7 +16,8 @@ keys the run header reserved in place (the `log.md` entry opens with the `since_
 block's bullets, #1083), writes `badge.json` from the `headline` block
 (`badge.write_headline_badge`, #747; the `log.md` entry's readiness line is its `summary`), reads the previous
 `prior-level.json` into `prior_level` (`lib/prior_level.py`, #940) before drawing the diagrams and then
-rewrites it from the `level` block, reads the previous
+rewrites it from the `level` block (the evidence waffle titles its rows from the run's
+model, `profiles.model_rows`, so a practice pack's rows read their titles, #1315), reads the previous
 `findings.json` into `prior_findings_snapshot` and rewrites it
 (`findings_snapshot`; kept as it is when a `--profile` scan plan left the findings out, #1268; the
 hotspot pages then say the promissory-marker scan did not run), and then writes `run-context.json`. Tests: `tests/test_run_setup.py`.
@@ -33,6 +34,7 @@ from lib.report.badge import write_headline_badge
 from lib.scoring.headline import as_headline
 from lib.report.findings_snapshot import build_snapshot, load_snapshot, write_snapshot
 from lib.prior_level import load_prior_level, write_prior_level
+from lib.profiles import model_rows
 from lib.since_last_run import baseline_record, pruning_record
 from lib.run.run_setup import read_plugin_version
 from lib.report.run_wiki import write_run_wiki
@@ -93,8 +95,9 @@ def publish_run(ctx: dict[str, Any], state: Mapping[str, Any]) -> None:
     # profile strip draws the earlier run from the context and a later redraw reads the same.
     ctx["prior_level"] = load_prior_level(assess_dir)
     # The /assess diagrams (#942, #943), drawn from the finished context; the report links them.
-    write_all(assess_dir, build_all(ctx))
-    write_prior_level(assess_dir, ctx.get("level"), baseline_record(ctx), pruning_record(ctx))
+    # The waffle titles its rows from the run's own model, so a --pack row reads its title (#1315).
+    write_all(assess_dir, build_all(ctx, model_rows(state.get("maturity_model"))))
+    write_prior_level(assess_dir, ctx.get("level"), baseline_record(ctx), pruning_record(ctx), ctx.get("packs"))
     # The committed findings snapshot (#554): read the previous one back before
     # overwriting it, so the gate can explain a method-version change by the
     # findings that appeared and cleared since.

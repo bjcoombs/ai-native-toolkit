@@ -101,6 +101,9 @@ revision = 1
   "prior_level.models.*.baseline.run_id" = "token"
   "prior_level.models.*.baseline.head_sha" = "token"
   "prior_level.models.*.baseline.held_gates" = "token"
+  "prior_level.models.*.packs.name" = "token"
+  "prior_level.models.*.packs.version" = "token"
+  "prior_level.models.*.packs.sha256" = "id"
 
 [[entries]]
 id = "core:stats_summary.loc_by_class.source.p95"

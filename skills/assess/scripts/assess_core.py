@@ -55,7 +55,7 @@ from lib.scoring.level_signals import signal_path_validator
 from lib.pack_layering import pack_sources
 from lib.packs import Pack, PackError, load_packs, pack_identity
 from lib.model_change import model_name
-from lib.profiles import ModelChoice, ProfileError, add_model_arguments, chosen_model, run_level
+from lib.profiles import ModelChoice, ProfileError, add_model_arguments, chosen_model, model_rows, run_level
 from lib.profiles import profile_names, single_repo_choice
 from lib.testing.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.testing.mutation_refresh import recorded_excludes, refresh_mutation_findings
@@ -293,8 +293,8 @@ def run_opt_in_mutation(repo_root: Path, scope: RequestedScope = None,
         # The Step ladder and the evidence waffle draw the level (#942, #1102): redraw them with it.
         # The tag profile strip reads the earlier run from ctx["prior_level"]; the recounted tags
         # are this run's, so they replace prior-level.json (#940).
-        write_all(assess_dir, build_all(ctx))
-        write_prior_level(assess_dir, ctx["level"], baseline_record(ctx), pruning_record(ctx))
+        write_all(assess_dir, build_all(ctx, model_rows(model)))
+        write_prior_level(assess_dir, ctx["level"], baseline_record(ctx), pruning_record(ctx), ctx.get("packs"))
     # E1 crosses the refreshed survivor density with this run's hotspots; the
     # findings, attention and report products are rebuilt from it.
     refresh_mutation_findings(

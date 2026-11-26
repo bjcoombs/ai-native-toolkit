@@ -822,6 +822,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `prior_level.models.*.baseline.run_id` | token |
 | `prior_level.models.*.baseline.head_sha` | token |
 | `prior_level.models.*.baseline.held_gates` | token |
+| `prior_level.models.*.packs.name` | token |
+| `prior_level.models.*.packs.version` | token |
+| `prior_level.models.*.packs.sha256` | external id (hashed when hashing is on) |
 
 ## scan_plan_stamp
 

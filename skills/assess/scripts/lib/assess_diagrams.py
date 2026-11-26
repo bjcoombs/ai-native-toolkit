@@ -359,8 +359,9 @@ def build_diagrams(ctx: Mapping[str, Any],
                    steps: Sequence[StepDef] | None = None) -> list[AssessDiagram]:
     """Every /assess diagram for one run context, in report order; never raises.
 
-    ``model_rows`` are the maturity model's rows (for row titles) and ``steps`` its Steps
-    (the ladder and the outlined gate squares); None reads the model the run context's
+    ``model_rows`` are the maturity model's rows (for row titles; the publish step passes the
+    run's own, ``--pack`` rows layered in, so a pack practice reads its title, #1315) and
+    ``steps`` its Steps (the ladder and the outlined gate squares); None reads the model the run context's
     ``level`` block was computed with (``model_change.model_for_level``: the default model
     or a shipped profile, #1150), else the default model. A run under a custom ``--levels``
     model (``model_change.custom_run``) draws neither picture, each saying why, so the report
