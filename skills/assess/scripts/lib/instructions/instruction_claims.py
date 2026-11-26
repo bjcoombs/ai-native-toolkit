@@ -9,7 +9,10 @@ repository, no model: a failed claim is a lying signal with a file and a line.
 Claim kinds:
 
 - ``enforcement``: a backticked script path in a sentence holding "enforced",
-  "runs in", "checked by" or the word "CI". A script path is a shell script
+  "runs in", "checked by", or "CI" beside a verb that says CI acts on the
+  script ("CI runs", "CI fails if", "run in CI", "executed by CI", "gates CI").
+  "CI" alone is a topic, not an enforcer: "CI failures" or "CI reproduction
+  guidance" makes no claim (#819). A script path is a shell script
   (``.sh``, ``.bash``, ``.zsh``, ``.ps1``) anywhere, or any script extension
   (``.py``, ``.js``, ``.ts`` ...) under a ``scripts/``, ``bin/``, ``tools/``,
   ``ci/`` or ``hack/`` directory; ordinary source files such as ``src/index.ts``
@@ -74,7 +77,8 @@ file (the keys of `instruction_files`; two keys resolving to one file are read
 once), splits prose into sentences per paragraph (fenced code skipped, a wrapped
 sentence reported at the line it starts on, a heading its own block) and extracts three kinds: `enforcement`
 (a backticked shell script, or any script under `scripts/`, `bin/`, `tools/`,
-`ci/` or `hack/`, in a sentence with "enforced", "runs in", "checked by" or "CI";
+`ci/` or `hack/`, in a sentence with "enforced", "runs in", "checked by" or "CI"
+beside an enforcement verb ("CI runs", "run in CI"; the bare noun is a topic);
 verified when the path occurs in any CI configuration or in a task runner CI
 calls through such as `Makefile` or `package.json`; skipped when the repo has no
 CI configuration, since nothing can confirm or refute it) and `pin` ("pinned in"
@@ -145,7 +149,22 @@ _SCRIPT_IN_SPAN = re.compile(
     rf"(?![\w/-])"
 )
 _BACKTICK_SPAN = re.compile(r"`([^`]+)`")
-_ENFORCEMENT_TRIGGER = re.compile(r"(?i:\benforced\b|\bruns in\b|\bchecked by\b)|\bCI\b")
+# "CI" alone names a topic ("CI failures", "CI reproduction guidance"), not an
+# enforcer (#819): it triggers only beside a verb that says CI acts on the
+# script, as subject ("CI runs", "the CI job calls", "CI fails if") or object
+# ("run in CI", "executed by CI", "gates CI"). The acronym stays case-sensitive
+# so "ci" in a path or "CIRCLE" never counts.
+_CI_ACTS = (
+    r"\bCI(?:\s+(?i:jobs?|pipelines?|workflows?|checks?))?\s+(?i:will\s+)?"
+    r"(?i:runs?|ran|executes|calls|invokes|enforces|verifies|validates|fails|blocks|rejects|gates)\b"
+)
+_ACTS_IN_CI = (
+    r"(?i:\b(?:run|ran|executed|invoked|called|verified|validated|gated|required)\s+(?:in|by|on)"
+    r"|\b(?:gates|blocks|fails))\s+(?i:the\s+)?CI\b"
+)
+_ENFORCEMENT_TRIGGER = re.compile(
+    rf"(?i:\benforced\b|\bruns in\b|\bchecked by\b)|{_CI_ACTS}|{_ACTS_IN_CI}"
+)
 
 _PINNED_IN = re.compile(r"pinned in\s+`([^`\s]+)`", re.IGNORECASE)
 # Words that sit before a version without naming a tool ("is 3.11", "at 20.1").
