@@ -28,8 +28,10 @@ in it: ``Step 3 · next: coverage gate`` (``GATE_NOUN`` names the first gate
 ``card_facts.blocking_gates`` returns, the function the top card reads),
 ``Step 1 · one change from Step 3: instruction file`` when one gate blocks the next Step and
 the gates above it already hold (``one_change_ceiling``, reading the level result's
-``ceiling_step``, #1333),
-``Step 4 · all gates held`` at the top Step, ``no Step yet · next: <gate>`` below the first
+``ceiling_step``, #1333). ``lone_condition`` is the one test of "one change": exactly one
+condition of the next Step's gates open and unmet on its own criteria. The top card, the Step
+ladder and the fleet's one-change-away count (``lib/fleet/fleet_step_lifts.py``) read it too.
+The summary reads ``Step 4 · all gates held`` at the top Step, ``no Step yet · next: <gate>`` below the first
 Step of a model whose Step 1 has a gate (#889), and ``no Steps defined`` for a model without
 ``[[steps]]``. ``markdown`` is the lines, pasted verbatim by the report and
 ``assess_report.py``. ``verified`` and ``tags`` (``TagCell`` per cell, from ``tag_cells``, which lives in

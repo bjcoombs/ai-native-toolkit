@@ -20,7 +20,7 @@ import pytest
 
 from lib.scoring.headline import GATE_CHANGE, GATE_NOUN, as_headline, gate_change, headline, run_context_headline
 import lib.scoring.level_tally as lt
-from lib.scoring.headline import one_change_ceiling
+from lib.scoring.headline import lone_condition, one_change_ceiling
 from lib.scoring.level_tally import default_model
 from lib.top_card import card_facts
 from test_level_tally import _fresh, _laddered
@@ -468,3 +468,15 @@ def test_ci2_strip_and_verified_total_match_the_conditions(ci2: Path):
     assert head["lines"][1].startswith("By tag: ") and head["tags"]
     for cell in head["tags"]:
         assert f"{cell['tag']} {cell['met']} of {cell['measured']}" in head["lines"][1]
+
+
+def test_a_condition_two_gates_share_is_one_change():
+    """Two gates of the next Step that read the same open condition are one change."""
+    steps = [{"step": 1, "name": "One", "gates": []},
+             {"step": 2, "name": "Two", "gates": [{"id": "a", "row": "g", "level": 1},
+                                                  {"id": "b", "row": "g", "level": 1}]}]
+    level = _level(step=1, ceiling_step=2, held_above=[], conditions=[
+        {"id": "g.1", "row": "g", "level": 1, "grade": "measured", "counted": True, "state": "unmet"}],
+        next_step={"step": 2, "blockers": [{"kind": "gate", "gate": "a", "condition": "g.1", "state": "unmet"},
+                                           {"kind": "gate", "gate": "b", "condition": "g.1", "state": "unmet"}]})
+    assert lone_condition(level, steps) == ("g.1", "a")
