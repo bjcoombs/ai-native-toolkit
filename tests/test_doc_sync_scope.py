@@ -134,6 +134,24 @@ def test_changed_from_limits_clusters_to_the_touched_ones(tmp_path: Path) -> Non
     assert result["clusters_total"] == 3
 
 
+def test_a_doc_linking_to_a_changed_doc_elsewhere_is_not_selected(tmp_path: Path) -> None:
+    # Nine docs on one subject split 8 + 1 under the size cap; d0 links to d8.
+    repo = tmp_path / "repo"
+    (repo / "docs").mkdir(parents=True)
+    (repo / "src").mkdir()
+    (repo / "src" / "x.py").write_text("X = 1\n", encoding="utf-8")
+    for i in range(9):
+        extra = " [next](d8.md)" if i == 0 else ""
+        (repo / "docs" / ("d%d.md" % i)).write_text("See `src/x.py`.%s\n" % extra, encoding="utf-8")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "base")
+    git(repo, "checkout", "-q", "-b", "pr")
+    assert [len(c["docs"]) for c in scope(repo)["clusters"]] == [8, 1]
+    commit(repo, "docs/d8.md", "See `src/x.py`. Edited.\n")
+    assert [c["docs"] for c in scope(repo, "--changed-from", "main")["clusters"]] == [["docs/d8.md"]]
+
+
 def test_deleted_subject_code_still_selects_the_doc_that_names_it(fixture_repo: Path) -> None:
     git(fixture_repo, "rm", "-q", "src/cache.py")
     git(fixture_repo, "commit", "-q", "-m", "drop the cache")

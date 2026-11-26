@@ -248,10 +248,12 @@ def build(repo: Path, excludes: Sequence[str], changed: Optional[Set[str]] = Non
         "changed": [],
     }
     if changed is not None:
+        gone = {p for p in changed if not (repo / p).exists()}
+
         def touched(part: Tuple[str, List[str], List[str]]) -> bool:
-            names = set(part[2])
+            names = set(part[1]) | set(part[2])
             for d in part[1]:
-                names |= {d} | refs[d]
+                names |= refs[d] & gone
             return bool(names & changed)
         parts = [p for p in parts if touched(p)]
         result["cross_cluster"] = bool(result["cross_cluster"]) and bool(set(hubs) & changed)

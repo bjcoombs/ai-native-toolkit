@@ -122,7 +122,7 @@ def summary_body(plan: Plan, posted: List[Dict[str, Any]], kept: int) -> str:
     rows.append("Checked %d doc cluster%s touched by this pull request%s." % (
         plan.get("clusters", 0), "" if plan.get("clusters", 0) == 1 else "s",
         ", plus the cross-cluster pass over the hub docs" if plan.get("cross_cluster") else ""))
-    rows.append("Review threads: %d new, %d already open from an earlier push." % (len(posted), kept))
+    rows.append("Review threads: %d new, %d already posted on an earlier push." % (len(posted), kept))
     if plan.get("summary"):
         rows += ["", "### Other findings (not blocking)", ""]
         for f in plan.get("summary", []):

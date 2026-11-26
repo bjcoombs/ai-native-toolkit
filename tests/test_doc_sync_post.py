@@ -87,7 +87,7 @@ def test_existing_thread_is_not_posted_twice_and_summary_is_edited() -> None:
     assert run(checked([finding("2" * 16)]), gh) == []
     (args, body), = gh.writes
     assert args[:3] == ["--method", "PATCH", "repos/acme/widgets/issues/comments/55"]
-    assert "1 already open" in body["body"]
+    assert "1 already posted" in body["body"]
 
 
 def test_markers_in_comments_by_others_are_ignored() -> None:
