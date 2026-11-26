@@ -217,3 +217,14 @@ def test_a_link_to_http_a_fragment_or_a_relative_path_is_kept(href: str) -> None
 
 def test_a_stray_end_tag_for_a_dropped_element_is_refused() -> None:
     assert inline_svg(_svg("<g>" + PART + "</script><rect/><script></g>"), "s") is None
+
+
+@pytest.mark.parametrize("svg", [
+    _svg('<rect width="1" cursor="u&#92;72l(https://example.invalid/p.cur), auto"/>' + PART),
+    _svg("<style>@media all; body{display:none}</style>" + PART),
+    _svg("<style>@media all; body{display:none}</style>" + PART,
+         head='<svg class="ok" xmlns="http://www.w3.org/2000/svg"><title>r</title>'),
+    _svg('<style>rect{background:src("http://x")}</style>' + PART),
+])
+def test_an_encoded_escape_a_semicolon_prelude_or_src_is_refused(svg: str) -> None:
+    assert inline_svg(svg, "s") is None

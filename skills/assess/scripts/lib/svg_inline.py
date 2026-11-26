@@ -26,7 +26,7 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
   - Attributes: a value that is not double-quoted or holds a literal ``<`` or ``>``; a name that
     is not plain ASCII (``data-x\x0b``); an ``id``, ``class``, ``href`` or ``style`` name not in
     lowercase (``ID=``); an ``&`` in an ``href`` that is not a script URL (an entity hides the reference); a ``\`` in any
-    attribute but a ``data-*`` one; an ``<a>`` ``href`` that is not http(s), a fragment or a
+    attribute but a ``data-*`` one, written or entity-encoded; an ``<a>`` ``href`` that is not http(s), a fragment or a
     relative path.
   - Whitespace: only HTML's own (tab, line feed, form feed, carriage return, space) separates a
     tag's parts; a tag split on any other (``\x0b``, ``\xa0``) is unreadable, so refused. Each
@@ -34,7 +34,8 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
   - CSS, in a ``<style>``'s text or a ``style`` attribute: an ``&`` or ``\`` (an entity or CSS
     escape could spell ``url(`` or ``@import``); a comment; a string that holds a brace,
     semicolon or line break, or is not closed on its line; an unbalanced brace; a rule nested in
-    a style rule; an at-rule but ``@media`` (``@layer a;`` would hide the next selector); a
+    a style rule; an at-rule but ``@media`` (``@layer a;`` would hide the next selector) or a ``;`` in a
+    rule's prelude (``@media all; body``); a ``src(`` function; a
     selector leaving the diagram through a sibling combinator (``svg.<scope> ~ *``); a
     ``position`` or ``z-index`` (a first guard only: the page that inlines the diagram
     clips it to its own box, as the fleet page's ``contain: paint`` does); and in a ``style``
@@ -70,7 +71,7 @@ CAMEL = {"lineargradient": "linearGradient", "radialgradient": "radialGradient",
          "textpath": "textPath"}  # the SVG spelling of a mixed-case element name
 CHECKED_ATTRS = frozenset({"id", "class", "href", "xlink:href", "style"})  # read by the checks in lowercase
 TEXT_ONLY = frozenset({"title", "desc", "style"})  # no child element: see the module docstring
-UNSAFE = ("<script", "foreignobject", "javascript:", "vbscript:", "@import", "image-set")
+UNSAFE = ("<script", "foreignobject", "javascript:", "vbscript:", "@import", "image-set", "src(")
 
 # HTML's own whitespace: Python's \s also matches \x0b, \xa0 and others, which HTML reads as
 # part of a name or value, so a tag split on them would be read differently by the browser.
@@ -127,9 +128,12 @@ def _safe_attrs(element: str, attrs: str) -> str | None:
                 or not quoted.startswith('"') or "<" in raw or ">" in raw or element == "style"
                 or ("\\" in raw and not name.startswith("data-"))):
             return None
-        value = re.sub(r"[\x00-\x20]", "", html.unescape(raw)).lower()
+        decoded = html.unescape(raw)
+        value = re.sub(r"[\x00-\x20]", "", decoded).lower()
         if name.startswith("on") or _URL_SCHEME.search(value):
             continue  # dropped, the rest of the diagram kept
+        if "\\" in decoded and not name.startswith("data-"):
+            return None  # an entity can spell a CSS escape (u&#92;72l)
         if name in ("href", "xlink:href") and "&" in raw:
             return None  # an entity would hide the reference from the scope check
         if name == "style" and (re.search(r"[&'\"]", raw) or _css_misread(raw)):
@@ -250,8 +254,10 @@ def css_selectors(css: str) -> list[str]:
 
 
 def _nested_rule(css: str) -> bool:
-    """A rule nested inside a style rule (CSS nesting), whose selector ``css_selectors`` never reads."""
-    return any(_nested_rule(body) if prelude.startswith("@") else "{" in body for prelude, body in _blocks(css))
+    """A rule nested inside a style rule (CSS nesting), or a prelude holding a ``;`` (``@media all;
+    body`` ends the at-rule early for a browser), whose selector ``css_selectors`` never reads."""
+    return any(";" in prelude or (_nested_rule(body) if prelude.startswith("@") else "{" in body)
+               for prelude, body in _blocks(css))
 
 
 def root_class(markup: str) -> str | None:
