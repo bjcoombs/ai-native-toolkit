@@ -18,6 +18,8 @@ from typing import Any, Dict, List
 import pytest
 import yaml  # required: the plugin contract job installs pyyaml
 
+from gitbash import BASH
+
 REPO = Path(__file__).resolve().parent.parent
 WORKFLOW = REPO / ".github" / "workflows" / "doc-sync.yml"
 RECORDED = REPO / "tests" / "fixtures" / "doc_sync" / "execution-no-structured-output.json"
@@ -40,9 +42,9 @@ def _retries(log: Any, tmp_path: Path) -> bool:
     out = tmp_path / "github_output"
     out.write_text("", encoding="utf-8")
     step = _step("missing")
-    env = {**os.environ, "EXEC_FILE": str(exec_file), "NO_OUTPUT": step["env"]["NO_OUTPUT"],
-           "GITHUB_OUTPUT": str(out)}
-    subprocess.run(["bash", "-e", "-c", step["run"]], env=env, check=True,
+    env = {**os.environ, "EXEC_FILE": exec_file.as_posix(), "NO_OUTPUT": step["env"]["NO_OUTPUT"],
+           "GITHUB_OUTPUT": out.as_posix()}
+    subprocess.run([BASH, "-e", "-c", step["run"]], env=env, check=True,
                    capture_output=True, encoding="utf-8", errors="replace")
     return "retry=true" in out.read_text(encoding="utf-8")
 
@@ -78,9 +80,9 @@ def test_missing_log_does_not_retry(tmp_path: Path) -> None:
     out = tmp_path / "github_output"
     out.write_text("", encoding="utf-8")
     step = _step("missing")
-    env = {**os.environ, "EXEC_FILE": str(tmp_path / "absent.json"),
-           "NO_OUTPUT": step["env"]["NO_OUTPUT"], "GITHUB_OUTPUT": str(out)}
-    subprocess.run(["bash", "-e", "-c", step["run"]], env=env, check=True,
+    env = {**os.environ, "EXEC_FILE": (tmp_path / "absent.json").as_posix(),
+           "NO_OUTPUT": step["env"]["NO_OUTPUT"], "GITHUB_OUTPUT": out.as_posix()}
+    subprocess.run([BASH, "-e", "-c", step["run"]], env=env, check=True,
                    capture_output=True, encoding="utf-8", errors="replace")
     assert out.read_text(encoding="utf-8") == ""
 
