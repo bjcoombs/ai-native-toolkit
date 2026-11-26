@@ -159,7 +159,8 @@ _CI_ACTS = (
     r"(?i:runs?|ran|executes|calls|invokes|enforces|verifies|validates|fails|blocks|rejects|gates)\b"
 )
 _ACTS_IN_CI = (
-    r"(?i:\b(?:run|ran|executed|invoked|called|verified|validated|gated|required)\s+(?:in|by|on)"
+    r"(?i:\b(?:runs?|ran|execute[sd]?|invoked|called|checked|verified|validated|gated|required)"
+    r"\s+(?:in|by|on)"
     r"|\b(?:gates|blocks|fails))\s+(?i:the\s+)?CI\b"
 )
 _ENFORCEMENT_TRIGGER = re.compile(
