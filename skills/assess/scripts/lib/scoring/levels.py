@@ -61,7 +61,9 @@ Semantics:
 - A statistic over an empty set is unknown, never met or unmet (#906): a signal
   listed in ``signal_grades.EMPTY_DENOMINATORS`` whose set's count reads exactly
   0 (``stats_summary.loc_by_class.source.p95`` with its ``files_scored`` 0) gives
-  an ``unknown`` criterion whose ``reason`` is the table's code (``no_source_files``). A count
+  an ``unknown`` criterion whose ``reason`` is the table's code (``no_source_files``). A
+  denominator that is a list counts by its length (``nested_instructions.budget.claude_code.files``,
+  ``no_loaded_instructions``, #827). A count
   that is unavailable or absent leaves the usual rules in place: that branch is
   kept for the unmeasured count, such as a headless ``stats_summary`` without
   lizard (``no_lizard``) or a full run whose treemap step wrote no
@@ -626,6 +628,8 @@ def _empty_set(data: JsonDict | None, signal: str) -> str | None:
     if rule is None:
         return None
     count = resolve_signal(data, rule[0])
+    if isinstance(count, list):  # a set given as its members (#827)
+        count = len(count)
     if isinstance(count, (int, float)) and not isinstance(count, bool) and count == 0:
         return rule[1]
     return None

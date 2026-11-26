@@ -69,7 +69,11 @@ def instructed_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     """golden-doc-repo plus a CLAUDE.md naming a check that resolves, and agent ops."""
     repo = tmp_path_factory.mktemp("instructed") / "repo"
     shutil.copytree(FIXTURES / "golden-doc-repo", repo)
-    (repo / "CLAUDE.md").write_text("# Guide\n\nRun `make check` before pushing.\n", encoding="utf-8")
+    # The pin is a claim instruction_claims checks: no claim reads not measured (#827).
+    (repo / "CLAUDE.md").write_text(
+        "# Guide\n\nRun `make check` before pushing.\n\nPython 3.12 is pinned in `.python-version`.\n",
+        encoding="utf-8")
+    (repo / ".python-version").write_text("3.12\n", encoding="utf-8")
     # A second agent system, so agent_consistency compares two root files.
     (repo / ".windsurfrules").write_text("Follow [CLAUDE.md](CLAUDE.md).\n", encoding="utf-8")
     (repo / "Makefile").write_text("check:\n\tpython -m pytest\n", encoding="utf-8")

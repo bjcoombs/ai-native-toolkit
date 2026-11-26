@@ -266,6 +266,51 @@ def test_no_counted_manifest_reads_not_measured(pinning, state):
     assert _default_state(signals, "layer-5-ci.2") == state
 
 
+def _instructions(claims: int, failed: int, lines: int) -> dict[str, Any]:
+    return {"agent_environment": {"available": True, "check": {"named_total": 1}},
+            "instruction_claims": {"total": claims, "verified": claims - failed, "failed": failed},
+            "nested_instructions": {"available": True, "budget": {"claude_code": {"files": [], "lines": lines}}}}
+
+
+def _instruction_criteria(signals: dict[str, Any]) -> dict[str, str | None]:
+    row = next(r for r in lt.default_model()["rows"] if r["id"] == "layer-0-instructions")
+    unmet = evaluate_row(row, signals)["levels"][1]["unmet"]
+    return {u["signal"]: u["reason"] for u in unmet}
+
+
+def test_no_instruction_content_reads_not_measured():
+    """#827: no claim to check and no always-loaded line is not an instruction set that passed."""
+    empty = _instructions(claims=0, failed=0, lines=0)
+    assert _instruction_criteria(empty) == {
+        "instruction_claims.failed": "no_instruction_claims",
+        "nested_instructions.budget.claude_code.lines": "no_loaded_instructions",
+    }
+    assert _default_state(empty, "layer-0-instructions.2") == ("not_measured", "no_instruction_claims")
+
+
+def test_checked_claims_with_no_failure_read_met():
+    """#827: three claims checked and none failed is a measurement, so the condition counts."""
+    signals = _instructions(claims=3, failed=0, lines=40)
+    signals["nested_instructions"]["budget"]["claude_code"]["files"] = ["CLAUDE.md"]
+    assert _default_state(signals, "layer-0-instructions.2") == ("met", None)
+
+
+@pytest.mark.parametrize("claude_code, reason", [
+    pytest.param({"files": [], "lines": 0}, "no_loaded_instructions", id="no-file-loaded"),
+    pytest.param({"files": ["CLAUDE.md"], "lines": 0}, None, id="empty-file-loaded"),
+    pytest.param({"lines": 0}, None, id="no-file-list"),
+])
+def test_the_budget_set_is_its_loaded_files(claude_code, reason):
+    """#827: the budget's denominator is the loaded file list, counted by its length; a block
+    without the list (an older or hand-built one) keeps the plain comparison."""
+    model = _model(_row("instr", [{"signal": "nested_instructions.budget.claude_code.lines", "op": "lte", "value": 200}]))
+    evaluation = evaluate_row(model["rows"][0], {"nested_instructions": {"budget": {"claude_code": claude_code}}})
+    if reason is None:
+        assert evaluation["status"] == "level" and evaluation["level"] == 1
+    else:
+        assert evaluation["levels"][0]["unmet"][0]["reason"] == reason
+
+
 def test_a_real_unmet_sibling_outweighs_an_empty_set():
     model = _model(_row("size", [_eq(INSTR), {"signal": P95, "op": "lte", "value": 500}]))
     signals = {"layer_grades": {"instruction_file_present": False},

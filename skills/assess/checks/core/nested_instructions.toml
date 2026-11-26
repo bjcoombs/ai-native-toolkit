@@ -46,6 +46,7 @@ collector = "core.nested_instructions"
 path = "nested_instructions.budget.claude_code.lines"
 type = "number"
 evidence = "head_structure"
+null_means = "no_loaded_instructions: Claude Code loads no instruction line at launch (budget.claude_code.files is empty), so there is no budget to keep"
 
 [[entries]]
 id = "core.cond.layer-0-instructions.2.lines"

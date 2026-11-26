@@ -89,7 +89,11 @@ requires reliable history").
 the count of that set and the reason code the tally gives when the count is 0:
 ``stats_summary.loc_by_class.source.p95`` over that class's ``files_scored``
 (``no_source_files``, #906, #820). A p95 of no files would pass an "at most
-500 lines" test, so the condition reads not measured instead.
+500 lines" test, so the condition reads not measured instead. A count over a set
+is the same: ``instruction_claims.failed`` over its ``total``
+(``no_instruction_claims``) and ``nested_instructions.budget.claude_code.lines``
+over its loaded ``files`` list (``no_loaded_instructions``, #827), since no failure
+among no claims and no file loaded are not an instruction set that holds or fits.
 
 Maintainer rulings (#783 and #789 triage decisions, 2026-11-21):
 
