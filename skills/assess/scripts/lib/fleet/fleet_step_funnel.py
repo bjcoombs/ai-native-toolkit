@@ -180,7 +180,9 @@ def render(model: MaturityModel, data: Mapping[str, Any]) -> str:
     scale = svg.LinearScale(0, svg.nice_ceiling(top), 0, BAR_W)
     x0 = PAD + LABEL_W
     side_w = max((svg.text_width(_side(b), 11.5) for b in view["bars"]), default=0.0)
-    width = max(WIDTH, x0 + BAR_W + 8 + side_w + PAD)
+    line_w = max((svg.text_width(segment_text(s, titles), 11.5) for b in view["bars"] for s in b["segments"]),
+                 default=0.0)
+    width = max(WIDTH, x0 + BAR_W + 8 + side_w + PAD, x0 + 18 + line_w + PAD)
     body = [svg.text(PAD, 28, TITLE, size=15, weight="600", cls="fg"),
             svg.text(PAD, 48, "Each repository counts once, under the first gate of its next Step that does "
                      "not hold", size=12, cls="muted")]

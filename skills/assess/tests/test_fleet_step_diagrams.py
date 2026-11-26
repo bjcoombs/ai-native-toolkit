@@ -15,6 +15,7 @@ import pytest
 
 import fleet_step_diagrams_fixture as fx
 import lib.fleet.fleet_step_funnel as funnel
+import lib.fleet.fleet_svg as fsvg
 import lib.fleet.fleet_step_lifts as lifts
 import lib.fleet.fleet_step_movement as movement
 from lib.fleet.fleet_compare import load_run, stored_steps
@@ -24,7 +25,7 @@ from lib.fleet.fleet_history import OPTIONAL_HISTORY_FILES
 from lib.fleet.fleet_level import LEVEL_FILE
 from lib.fleet.fleet_opportunities import build_opportunities
 from lib.scoring.level_result_types import LevelResult
-from lib.scoring.level_signals import DEFAULT_LEVELS
+from lib.scoring.level_signals import DEFAULT_LEVELS, load_default_levels
 from lib.scoring.levels import MaturityModel, condition_id
 from lib.vocabulary import banned_hits
 from svg_cascade import overridden_text_attributes
@@ -116,6 +117,23 @@ def test_funnel_names_gates_by_row_title() -> None:
     assert "3 held by Agent instructions" in held and "1 where Agent use was not measured (needs_platform)" in held
     gate_ids = {g["id"] for s in fx.MODEL["steps"] for g in s["gates"]} - {"instructions"}
     assert not [t for t in labels for gid in gate_ids if gid in t]
+
+
+def test_funnel_canvas_holds_every_segment_line_under_the_shipped_model() -> None:
+    # the shipped row titles are longer than gate ids: every segment line, not measured with a
+    # reason code included, stays inside the viewBox
+    model = load_default_levels()
+    steps = sorted(model["steps"], key=lambda s: s["step"])
+    repos = [{"step": below["step"], "next_step": {"blockers": [
+        {"gate": g["id"], "state": state, "reason": "needs_platform" if state == "not_measured" else None}]}}
+        for below, above in zip(steps, steps[1:]) for g in above["gates"]
+        for state in ("unmet", "not_measured", "not_applicable")]
+    out = funnel.render(model, {"repos": repos})
+    root = ET.fromstring(out)
+    width = float(root.attrib["viewBox"].split()[2])
+    overflow = [t.text for t in root.iter(f"{SVG_NS}text") if t.attrib.get("text-anchor", "start") == "start"
+                and float(t.attrib["x"]) + fsvg.text_width(t.text or "", float(t.attrib.get("font-size", 12))) > width]
+    assert overflow == []
 
 
 # --- one change away ------------------------------------------------------------
