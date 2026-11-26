@@ -12,7 +12,9 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
 - **Sanitised.** The XML prolog, doctype and comments go. ``<script>`` and ``<foreignObject>`` go
   with everything inside them. Every ``on*`` attribute goes, and so does any attribute whose value,
   with character references decoded and whitespace removed, holds a ``javascript:`` or
-  ``vbscript:`` URL (an ``href``, or an ``<animate>``'s ``to``).
+  ``vbscript:`` URL (an ``href``, or an ``<animate>``'s ``to``). So does any ``url(...)`` that is
+  not ``#``-local, and any ``href`` that is not, apart from an ``<a>``'s: a link fetches nothing
+  until followed, but a ``<use>`` or a ``url()`` would, and the page makes no network request.
 - **Allow-list.** Any other element outside ``ELEMENTS`` (the SVG drawing elements), a CDATA
   section, markup the tokenizer cannot read, or a root that is not one balanced ``<svg>``: None.
   An element such as ``<img>`` or ``<p>`` would break out of the SVG in an HTML parser.
@@ -20,8 +22,10 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
   is complete (every id, reference and style selector under it), None otherwise. A root without a
   class is scoped here under ``scope``.
 - **Checked.** The result must sanitise to itself and hold none of ``<script``,
-  ``foreignObject``, ``javascript:``, ``vbscript:`` or ``@import``, in any case, or it is None. An
-  image embed never runs script, so refusing is always safe.
+  ``foreignObject``, ``javascript:``, ``vbscript:``, ``@import`` or ``image-set``, in any case, no
+  ``url(`` that is not ``#``-local (in a ``<style>`` too) and no backslash in a ``<style>`` (a CSS
+  escape could spell one), or it is None. An image embed never runs script or fetches, so
+  refusing is always safe.
 
 ``root_class(markup)`` reads an inlined SVG's scope back, so a page can keep scopes unique, and
 ``css_selectors(css)`` lists a stylesheet's selectors, ``@media`` blocks included. Stdlib only and
@@ -40,7 +44,7 @@ ELEMENTS = frozenset({
     "polygon", "path", "text", "tspan", "textpath", "pattern", "lineargradient", "radialgradient",
     "stop", "clippath", "mask", "marker", "use", "symbol", "a", "metadata"})
 DROPPED = frozenset({"script", "foreignobject"})  # removed with their contents
-UNSAFE = ("<script", "foreignobject", "javascript:", "vbscript:", "@import")
+UNSAFE = ("<script", "foreignobject", "javascript:", "vbscript:", "@import", "image-set")
 
 _ATTR = r"""\s+[^\s=/>"']+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+))?"""
 _TOKEN = re.compile(
@@ -49,18 +53,21 @@ _TOKEN = re.compile(
     r"|(?P<text>[^<]+)", re.S | re.I)
 _ATTR_PARTS = re.compile(r"""(\s+)([^\s=/>"']+)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+))?""")
 _URL_SCHEME = re.compile(r"(?:java|vb)script:")
+_FETCH = re.compile(r"""url\(\s*['"]?(?!#)""", re.I)  # a url() that is not #-local
 _ROOT_CLASS = re.compile(r'<svg\b[^>]*?\sclass="([^"]*)"')
 _ID = re.compile(r'\sid="([^"]*)"')
 _REF = re.compile(r'url\(#([^)]+)\)|\s(?:xlink:)?href="#([^"]*)"')
 
 
-def _safe_attrs(attrs: str) -> str:
-    """``attrs`` without event handlers and script URLs, the rest as written."""
+def _safe_attrs(element: str, attrs: str) -> str:
+    """``attrs`` without event handlers, script URLs or fetches, the rest as written."""
     kept = []
     for m in _ATTR_PARTS.finditer(attrs):
         value = html.unescape((m.group(3) or "").strip("\"'"))
         value = re.sub(r"[\x00-\x20]", "", value).lower()
-        if m.group(2).lower().startswith("on") or _URL_SCHEME.search(value):
+        name = m.group(2).lower()
+        fetches = _FETCH.search(value) or (name.endswith("href") and element != "a" and not value.startswith("#"))
+        if name.startswith("on") or _URL_SCHEME.search(value) or fetches:
             continue
         kept.append(m.group(0))
     return "".join(kept)
@@ -100,7 +107,7 @@ def sanitise(svg: str) -> tuple[str, bool]:
             out.append(m.group(0))
             continue
         details = details or (name == "title" and len(open_names) > 1)
-        out.append(f"<{m.group('name')}{_safe_attrs(m.group('attrs'))}{'/' if empty else ''}>")
+        out.append(f"<{m.group('name')}{_safe_attrs(name, m.group('attrs'))}{'/' if empty else ''}>")
         if not empty:
             open_names.append(name)
         elif not open_names:
@@ -155,6 +162,8 @@ def inline_svg(svg: str, scope: str) -> str | None:
             return None
     elif not re.fullmatch(r"[a-z][a-z0-9-]*", own) or not _scope_complete(clean, own):
         return None
-    if sanitise(clean)[0] != clean or any(word in clean.lower() for word in UNSAFE):
+    styles = "".join(re.findall(r"<style>(.*?)</style>", clean, re.S))
+    if (sanitise(clean)[0] != clean or any(word in clean.lower() for word in UNSAFE)
+            or _FETCH.search(clean) or "\\" in styles):
         return None
     return clean

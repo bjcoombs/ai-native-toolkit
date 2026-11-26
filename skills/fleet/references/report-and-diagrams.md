@@ -136,8 +136,9 @@ sections, in order:
 7. **Fleet pictures**: the drawn tag and Step SVGs. A picture with per-part details is inlined,
    so hovering a part shows its `<title>`; one with only a root title (the Step movement grid)
    stays an image. Before inlining, the page drops `<script>`, `<foreignObject>`, every `on*`
-   attribute and every `javascript:` or `vbscript:` URL, and refuses (keeping the image) any
-   element outside the SVG drawing set. Each inlined SVG keeps its generator's style scope and
+   attribute, every `javascript:` or `vbscript:` URL and every reference that would fetch
+   (a `url(...)` or `href` that is not `#`-local, a link's `href` apart), and refuses (keeping the
+   image) any element outside the SVG drawing set, so the page still makes no network request. Each inlined SVG keeps its generator's style scope and
    id prefix, or gets `fleet-page-<file>` when it has none, so no two diagrams share a style or
    an id. Each picture has a "Save full size" link to the SVG as drawn (`lib/svg_inline.py`).
 

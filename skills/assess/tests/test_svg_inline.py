@@ -47,12 +47,15 @@ def test_an_unscoped_svg_is_scoped_here() -> None:
     "<rect onmouseover='alert(1)' ONCLICK=alert(1) width=\"1\"/>",
     '<set attributeName="href" to="vbscript:x"/>'.replace("set", "rect"),
     "<!-- --!><img src=x onerror=alert(1)> -->",
+    '<use href="https://example.com/x.svg#p"/><use xlink:href="//example.com/x.svg"/>',
+    '<rect style="fill:url(http://example.com/p)" fill="URL( \'https://example.com/q\')" width="1"/>',
 ])
 def test_unsafe_markup_is_dropped(body: str) -> None:
     out = inline_svg(_svg(body + PART), "s")
     assert out is not None
     lowered = out.lower()
-    for word in ("<script", "foreignobject", "javascript", "vbscript", "alert", "onclick", "onmouseover", "<img"):
+    for word in ("<script", "foreignobject", "javascript", "vbscript", "alert", "onclick", "onmouseover", "<img",
+                 "example.com"):
         assert word not in lowered
 
 
@@ -75,6 +78,9 @@ def test_unsafe_markup_is_dropped(body: str) -> None:
     _svg('<g id="loose">' + PART + "</g>", head='<svg class="ok" xmlns="http://www.w3.org/2000/svg"><title>r</title>'),
     _svg("<style>rect {fill:red}</style>" + PART, head='<svg class="ok"><title>r</title>'),
     _svg("<text>javascript: in a label</text>" + PART),
+    _svg("<style>rect {fill:url(https://example.com/p)}</style>" + PART),
+    _svg("<style>rect {fill:u\\72l(x)}</style>" + PART),
+    _svg('<style>rect {background:image-set("x.png" 1x)}</style>' + PART),
 ])
 def test_markup_it_cannot_trust_or_scope_stays_an_image(svg: str) -> None:
     assert inline_svg(svg, "s") is None
@@ -85,6 +91,11 @@ def test_a_complete_generator_scope_is_kept() -> None:
     body = ('<style>svg.ok rect {fill:url(#ok-p)} @media (x){svg.ok text {fill:red}} svg.ok {color:red}</style>'
             '<pattern id="ok-p"/><use href="#ok-p"/>' + PART)
     assert inline_svg(_svg(body, head), "s") == _svg(body, head)
+
+
+def test_a_link_keeps_its_external_href() -> None:
+    out = inline_svg(_svg('<a href="https://example.com/doc">' + PART + "</a>"), "s")
+    assert out is not None and 'href="https://example.com/doc"' in out
 
 
 def test_a_self_closed_root_has_no_details() -> None:
