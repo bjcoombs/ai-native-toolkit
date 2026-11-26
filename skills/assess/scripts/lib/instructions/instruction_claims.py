@@ -159,7 +159,7 @@ _CI_ACTS = (
     r"(?i:ran|(?:run|execute|call|invoke|enforce|verif(?:y|ie)|validate|fail|block|reject|gate)s?)\b"
 )
 _ACTS_IN_CI = (
-    r"(?i:\b(?:runs?|ran|execute[sd]?|invoked|called|checked|verified|validated|gated|required)"
+    r"(?i:\b(?:runs?|ran|execute[sd]?|invoked|called|checked|verified|validated|gated|required|pass(?:es|ed)?)"
     r"\s+(?:in|by|on)"
     r"|\b(?:gates|blocks|fails))\s+(?i:the\s+)?CI\b"
 )

@@ -196,6 +196,7 @@ def test_a_sentence_that_only_mentions_ci_makes_no_claim(sentence: str) -> None:
     "`scripts/check.sh` runs on CI.",
     "`scripts/check.sh` is checked in CI.",
     "`scripts/check.sh` executes in CI.",
+    "`scripts/check.sh` must pass in CI.",
     "CI runs `scripts/check.sh` on every push.",
     "The CI job calls `scripts/check.sh`.",
     "CI fails if `scripts/check.sh` exits non-zero.",
