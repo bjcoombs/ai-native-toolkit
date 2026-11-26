@@ -549,3 +549,22 @@ def test_the_unit_passes_give_the_same_block_with_1_worker_and_with_4(tmp_path: 
         wide = _read(repo)
     assert len(serial["units"]) >= 3
     assert json.dumps(wide, indent=2, default=str) == json.dumps(serial, indent=2, default=str)
+
+
+def test_a_failed_process_pool_reruns_the_unit_passes_in_process(tmp_path: Path,
+                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+    """#1382: a dead worker or a value that will not pickle fails the pool, not the units: the
+    passes run again in this process and the block is the serial one."""
+    from concurrent.futures.process import BrokenProcessPool
+
+    repo = _write(tmp_path / "mono", MONOREPO)
+    serial = _read(repo)
+
+    def broken(fn: Any, items: Any, processes: bool = False) -> Any:
+        raise BrokenProcessPool("a worker died")
+        yield  # pragma: no cover - makes this a generator, as fan_out is
+
+    monkeypatch.setattr(ur, "fan_out", broken)
+    with widened(4):
+        rerun = _read(repo)
+    assert json.dumps(rerun, indent=2, default=str) == json.dumps(serial, indent=2, default=str)

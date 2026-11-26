@@ -526,15 +526,23 @@ def _passes(named: Sequence[tuple[Any, str]], values: Mapping[str, Any], specs: 
 
     The root unit with ``repo_blocks`` runs none. The units' passes are independent, so they fan
     out (``scan_pool.fan_out``, #1382): the bound pass in worker processes (``lib/run/unit_pass.py``),
-    an injected ``run`` on threads; at width 1 both run here, one unit after another.
+    an injected ``run`` on threads; at width 1 both run here, one unit after another. When the
+    process pool fails (a worker dies, or a value will not pickle) the passes run again here, so
+    the per-unit readings are the serial loop's; a pass that raises raises again in its rerun.
     """
     root = Path(values["repo_root"])
     rels = [rel for _, rel in named if not (rel in ("", ".") and repo_blocks is not None)]
     if not specs:
         found: Iterator[tuple[dict[str, Any], dict[str, Any]]] = iter([({}, {})] * len(rels))
     elif run is None:
-        found = fan_out(partial(_BOUND["pass"], dict(values)), [_scope(root, r) for r in rels],
-                        processes=True)
+        one_pass = partial(_BOUND["pass"], dict(values))
+        scopes = [_scope(root, r) for r in rels]
+        try:
+            done = list(fan_out(one_pass, scopes, processes=True))
+        except Exception:  # noqa: BLE001 - a pool failure (a dead worker, a value that will not
+            # pickle) reruns the passes here; an error of a pass itself is raised again by its rerun
+            done = [one_pass(scope) for scope in scopes]
+        found = iter(done)
     else:
         def one(rel: str) -> tuple[dict[str, Any], dict[str, Any]]:
             inputs: dict[str, Any] = {**values, "scope": _scope(root, rel)}
