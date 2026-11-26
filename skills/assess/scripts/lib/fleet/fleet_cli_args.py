@@ -22,6 +22,7 @@ from pathlib import Path
 
 from lib.fleet.fleet_achievements import ACHIEVEMENTS_FILE
 from lib.fleet.fleet_diagrams import REPORT_FILE
+from lib.fleet.fleet_page_data import RADAR_MIN_SHARE
 from lib.fleet.fleet_platform import DEFAULT_PLATFORM_JOBS, DEFAULT_PLATFORM_TIMEOUT
 from lib.fleet.fleet_stamp import RUN_FILE
 from lib.fleet.runner import DEFAULT_TIMEOUT, REPOS_FILE
@@ -171,9 +172,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
              "are removed.",
     )
     parser.add_argument(
-        "--radar-min-measured", type=int, default=20, metavar="PERCENT",
+        "--radar-min-measured", type=int, default=RADAR_MIN_SHARE, metavar="PERCENT",
         help="The practice radar (radar.svg) draws an axis for a practice measured in at least this "
-             "percent of the run's repositories (default 20; 0 keeps every practice). Not part of the "
+             "percent of the run's repositories (default %(default)s; 0 keeps every practice). Not part of the "
              "run stamp.",
     )
     parser.add_argument(
