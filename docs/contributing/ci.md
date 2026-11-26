@@ -15,7 +15,7 @@ The CI reference for `ai-native-toolkit`, moved out of the root `CLAUDE.md` so i
 - `.github/workflows/build-standalone-skills.yml` publishes the standalone skill ZIPs on a version bump (see [Standalone skill pipeline](./standalone-skills.md)).
 - `.github/release.yml` configures categorised release notes for `gh release create --generate-notes`. See the file for the label-to-category mapping.
 
-**CI triggers on `main`**: `pull_request` and `push` to `main`, and `merge_group`; `floor.yml`, `pr-lint.yml` and `claude-review.yml` run on a pull request to any base, and `codeql.yml` and `mutation.yml` also run on a weekly `schedule`. A PR targeting `main` gets `tests.yml` + `pr-lint.yml` on every synchronize; pushes to other branches with no open PR run neither.
+**CI triggers on `main`**: `pull_request` and `push` to `main`, and `merge_group`; `floor.yml`, `pr-lint.yml` and `claude-review.yml` run on a pull request to any base, `codeql.yml` also runs on a weekly `schedule`, and `mutation.yml` runs only on its weekly `schedule` or by hand (`workflow_dispatch`). A PR targeting `main` gets `tests.yml` + `pr-lint.yml` on every synchronize; pushes to other branches with no open PR run neither.
 
 ## Lockfiles
 
