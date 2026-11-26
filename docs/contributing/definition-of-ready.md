@@ -28,7 +28,7 @@ empty_markers:
   - _No response_
 # Fibonacci story points. A larger issue is ready only as a parent whose
 # sub-issues carry the work.
-max_points: 3
+max_points: 8
 size_pattern: 'Size: (\d+) points?'
 # The sizing marker: a comment whose first line matches this records a
 # sizing judgement (see `sized` below). The newer of it and a body
@@ -71,7 +71,7 @@ Every item under Success Criteria is checkable by a command or a test, and names
 
 ### `sized`
 
-The issue is sized at 3 points or fewer, or it is decomposed: it has sub-issues that carry the work, each meeting this checklist on its own.
+The issue is sized at 8 points or fewer, or it is decomposed: it has sub-issues that carry the work, each meeting this checklist on its own.
 
 The size comes from one of two producers, and the newer one wins:
 
