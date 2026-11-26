@@ -401,9 +401,11 @@ def build_view(tree: Tree, team_rows: Sequence[Row], cells: Mapping[str, list[Ce
                privacy: Privacy, steps: Sequence[StepDef] = (),
                repo_step: Mapping[str, RepoSteps] | None = None,
                tags: Mapping[str, list[TagCell] | None] | None = None,
-               at_top: Mapping[str, frozenset[str]] | None = None) -> View:
+               *, at_top: Mapping[str, frozenset[str]]) -> View:
+    """One view's units. ``at_top`` is required: per repository, the rows its level result holds
+    at top (``rows_at_top``), so a caller cannot leave it out and read every ``met`` as 0."""
     below = _below(tree)
-    held = {r: roll_up_members(cells[r], (at_top or {}).get(r, frozenset())) for r in cells}
+    held = {r: roll_up_members(cells[r], at_top[r]) for r in cells}
     view = tree["view"]
     units: list[DataUnit] = []
     for unit in tree["units"]:
@@ -560,7 +562,8 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
         "run": run_details(stamp),
         "model": model_rows(maturity_model),
         "views": [build_view(tree, team_rows, cells, privacy, steps, repo_step, repo_tag,
-                             {repo: rows_at_top(result) for repo, result in results.items()}) for tree in trees],
+                             at_top={repo: rows_at_top(result) for repo, result in results.items()})
+                  for tree in trees],
         "repos": sorted(repos, key=lambda r: r["key"]),
         "opportunities": build_opportunities(maturity_model, rows, privacy.key, results),
         "tag_profile": tag_profile(maturity_model, repo_tag.values()),
