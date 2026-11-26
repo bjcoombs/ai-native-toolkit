@@ -23,7 +23,8 @@ words what it finds. Its parts:
   Since last run, Where this unit stands, Your target, Drill-down, Practice shape (#1368: one
   radar per unit in the shown unit's subtree, by label and never overlaid, each spoke a practice
   in ``radar.axes`` at met/measured, an unmeasured spoke a break in the outline with no point,
-  then the same counts as a table), Fleet pictures (the #705 design order).
+  then the same counts as a table; above 8 spokes each spoke is labelled by its number, the title
+  in the spoke's ``<title>`` and the table's practice column under the same number), Fleet pictures (the #705 design order).
 - **Pinned unit.** A per-viewer ``localStorage`` key, read and written inside try/catch; the
   page opens on the ownership root without it.
 - **Order.** Units and repositories are listed by label, never by rank.
@@ -272,6 +273,10 @@ SCRIPT = r"""
     return [(cx + r * Math.cos(a)).toFixed(1), (cy + r * Math.sin(a)).toFixed(1)];
   }
   function share(p) { return p && p.measured ? p.met / p.measured : null; }
+  // Above this many spokes a full title no longer fits beside its spoke (18 overlap in 12 adjacent
+  // pairs), so each spoke is labelled by its number, its title in the spoke's <title> and the table.
+  var RADAR_TITLED_SPOKES = 8;
+  function indexed(n) { return n > RADAR_TITLED_SPOKES; }
   function wrap(text, width) {
     // Words packed into lines of at most `width` characters (a longer word keeps its own line).
     var lines = [], cur = "";
@@ -302,9 +307,11 @@ SCRIPT = r"""
     var pts = axes.map(function (row, i) {
       var p = by[row], end = pt(c, 150, R, i, n), lab = pt(c, 150, R + 12, i, n), f = share(p);
       var anchor = Math.abs(Number(lab[0]) - c) < 1 ? "middle" : Number(lab[0]) > c ? "start" : "end";
-      var lines = wrap(bundle.rows[row].title, 16).concat(f === null ? ["(not measured)"] : []);
+      var title = bundle.rows[row].title, num = indexed(n);
+      var lines = num ? [String(i + 1)] : wrap(title, 16).concat(f === null ? ["(not measured)"] : []);
       out += "<line class=\"spoke" + (f === null ? " gap" : "") + "\" x1=\"" + c + "\" y1=\"150\" x2=\"" + end[0]
-        + "\" y2=\"" + end[1] + "\"></line>" + label(lab[0], Number(lab[1]) + 3, anchor, Number(lab[1]) < 150, lines, f === null);
+        + "\" y2=\"" + end[1] + "\">" + (num ? "<title>" + esc((i + 1) + ". " + title + (f === null ? " (not measured)" : ""))
+          + "</title>" : "") + "</line>" + label(lab[0], Number(lab[1]) + 3, anchor, Number(lab[1]) < 150, lines, f === null);
       return f === null ? null : {xy: pt(c, 150, R * f, i, n), p: p, row: row};
     });
     var runs = [], cur = [], start = pts.indexOf(null);
@@ -336,7 +343,9 @@ SCRIPT = r"""
     var out = "<h2>Practice shape</h2><p class=\"muted\">One chart for each unit, by name. A spoke is a practice "
       + "measured in at least " + esc(bundle.radar.min_share) + "% of the fleet's repositories; its point is the unit's "
       + "repositories at the top level out of those measured, with rings at 25, 50, 75 and 100%. A practice with "
-      + "nothing measured in the unit breaks the outline and has no point, never 0.</p>";
+      + "nothing measured in the unit breaks the outline and has no point, never 0."
+      + (indexed(axes.length) ? " Each spoke is labelled by its number in the table below; hovering it names the practice." : "")
+      + "</p>";
     if (!axes.length) {
       return out + "<p>No practice is measured in enough of the fleet's repositories to draw.</p>";
     }
@@ -347,8 +356,8 @@ SCRIPT = r"""
     return out + "<div class=\"grid\"><table class=\"radar-table\"><caption>The same counts as a table: met/measured"
       + "</caption><thead><tr><th class=\"repo\">Practice</th>" + mine.map(function (u) {
         return "<th>" + esc(u.key) + "</th>";
-      }).join("") + "</tr></thead><tbody>" + axes.map(function (row) {
-        return "<tr><th class=\"repo\">" + esc(bundle.rows[row].title) + "</th>" + mine.map(function (u) {
+      }).join("") + "</tr></thead><tbody>" + axes.map(function (row, i) {
+        return "<tr><th class=\"repo\">" + esc((indexed(axes.length) ? (i + 1) + ". " : "") + bundle.rows[row].title) + "</th>" + mine.map(function (u) {
           var p = (u.practice || []).filter(function (x) { return x.row === row; })[0];
           return share(p) === null ? "<td class=\"unknown\">not measured</td>" : "<td>" + esc(p.met + "/" + p.measured) + "</td>";
         }).join("") + "</tr>";

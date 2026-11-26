@@ -567,3 +567,45 @@ def test_long_practice_titles_wrap_inside_the_chart() -> None:
         width = 6 * max(len(t) for t in re.findall(r">([^<]+)</tspan>", first))
         left = float(x) - (width if anchor == "end" else width / 2 if anchor == "middle" else 0)
         assert 0 <= left and left + width <= 400, (x, anchor)
+
+
+def test_eighteen_spokes_are_numbered_titled_and_keyed_to_the_table() -> None:
+    """The 18 team rows of ``default.toml``: each spoke is labelled by its number, the full title is
+    in the spoke's ``<title>``, the table lists the practices under the same numbers, and no two
+    labels' boxes (6 units a character, 11 a line) overlap."""
+    _, bundle = _parts(fx.goldens()["expected-counts-only.html"])
+    bundle["rows"] = [{"title": f"Cross-agent practice number {i}", "top_level": 1} for i in range(18)]
+    bundle["radar"]["axes"] = list(range(18))
+    root = next(u for u in bundle["views"][0]["units"] if u["parent"] is None)
+    root["practice"] = [{"row": i, "met": 1, "measured": 0 if i == 4 else 2} for i in range(18)]
+    shape = _shape(_root_page(bundle))
+    svg = re.search(r'data-unit="org 1">(.*?)</svg>', shape, re.S)
+    assert svg is not None
+    numbers = [str(i) for i in range(1, 19)]
+    labels = re.findall(r'<text x="([^"]+)" y="([^"]+)" text-anchor="(\w+)"[^>]*><tspan[^>]*>([^<]+)</tspan></text>',
+                        svg.group(1))
+    assert [t for *_, t in labels] == numbers
+    assert re.findall(r'<line class="spoke[^"]*"[^>]*><title>([^<]+)</title></line>', svg.group(1)) == [
+        f"{i + 1}. Cross-agent practice number {i}" + (" (not measured)" if i == 4 else "") for i in range(18)]
+    boxes = []
+    for x, y, anchor, text in labels:
+        width = 6 * len(text)
+        left = float(x) - (width if anchor == "end" else width / 2 if anchor == "middle" else 0)
+        boxes.append((left, float(y) - 10, left + width, float(y) + 1))
+    for i, a in enumerate(boxes):
+        for b in boxes[i + 1:]:
+            assert a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1], (a, b)
+    table = re.search(r'<table class="radar-table">(.*?)</table>', shape, re.S)
+    assert table is not None
+    assert re.findall(r'<tr><th class="repo">([^<]+)</th>', table.group(1).split("<tbody>")[1]) == [
+        f"{i + 1}. Cross-agent practice number {i}" for i in range(18)]
+    assert "labelled by its number" in shape
+
+
+def test_eight_spokes_keep_their_titles_beside_the_spoke() -> None:
+    _, bundle = _parts(fx.goldens()["expected-counts-only.html"])
+    bundle["rows"] = [{"title": f"Practice {i}", "top_level": 1} for i in range(8)]
+    bundle["radar"]["axes"] = list(range(8))
+    shape = _shape(_root_page(bundle))
+    assert "<tspan" in shape and ">Practice 7</tspan>" in shape and "</title></line>" not in shape
+    assert '<th class="repo">Practice 0</th>' in shape and "labelled by its number" not in shape

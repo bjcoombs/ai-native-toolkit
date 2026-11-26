@@ -110,7 +110,8 @@ sections, in order:
    measured (met/measured, a count and never a mean), with rings at 25, 50, 75 and 100%.
    Hovering a point names the unit, the practice and met/measured. A practice with nothing
    measured in the unit breaks the outline and has no point, never 0. A table under the charts
-   gives the same counts, practice by unit.
+   gives the same counts, practice by unit. Above 8 spokes each spoke is labelled by its number,
+   which the table's practice column repeats; hovering the spoke names the practice.
 7. **Fleet pictures**: the drawn tag and Step SVGs.
 
 Names follow the run's output mode. `--full` names repositories and units by their keys and

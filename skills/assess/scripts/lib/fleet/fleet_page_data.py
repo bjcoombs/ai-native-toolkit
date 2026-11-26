@@ -37,8 +37,8 @@ counts; no condition id. Absent without a pack.
 ``practice``, one ``{row, met, measured}`` per team row (``row`` an index into ``rows``): the
 repositories at the row's top level out of those with a known level, never a mean. ``radar``
 names the rows the page draws a spoke for: those measured (a known level) in at least
-``min_share`` percent (``RADAR_MIN_SHARE``, 20) of the fleet's repositories, the axis rule of
-``radar.svg`` (#1367). ``radar_axes`` picks them, the one count the bundle works out itself.
+``min_share`` percent (``RADAR_MIN_SHARE``, 20) of the fleet's repositories, the axis rule #1367
+sets for ``radar.svg``. ``radar_axes`` picks them, the one count the bundle works out itself.
 
 **Front screen** (#1255, ``lib/fleet/fleet_front.py``): copied as computed, counts and gate ids
 only; its team links are replaced by the ownership view's team units under the labels above, so
