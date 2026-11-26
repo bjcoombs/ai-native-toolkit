@@ -7,7 +7,7 @@ same inputs. This module holds what they share, so no diagram copies it:
 
 - **Escaping.** ``esc`` escapes element text; ``text`` builds a ``<text>``
   element with fixed one-decimal coordinates and an optional ``<title>``
-  tooltip. The heat map passes explicit ``fill`` colours; the themed diagrams
+  tooltip, repeated as ``data-label`` so a host page can read it without the title. The heat map passes explicit ``fill`` colours; the themed diagrams
   pass a ``cls`` from ``THEME`` instead, so dark mode can recolour them.
 - **Sizing without font metrics.** ``text_width`` estimates a label's width
   from its character count (``CHAR_W`` per character at 12px, scaled by font
@@ -30,6 +30,10 @@ same inputs. This module holds what they share, so no diagram copies it:
   canvas ``bg`` rect. The only ``text`` rule sets ``font-family``, which no
   element carries as an attribute, so the stylesheet never overrides a text's
   own presentation attributes (``tests/svg_cascade.py``).
+- **Data attributes.** ``data_attrs`` writes a part's values as ``data-*`` attributes beside
+  its ``<title>`` (#1360): plain values, quoted, and a value of None (not measured) left out,
+  never written as 0. A diagram inlined into a host page or opened with ``<object>`` shows
+  its details through them; ``templates/diagram-tooltip.js`` reads them.
 - **Document.** ``document`` wraps a body in the XML prolog, the root
   ``<svg>`` with its ``viewBox``, ``<title>``, ``<desc>``, style and defs, then
   scopes it with ``lib.svg_scope.scope_svg``: a root class, every selector under
@@ -44,7 +48,8 @@ shared-tooling map, and the slope and trend charts of #675/#676). The API:
 | Helper | Use |
 |---|---|
 | `esc(s)` | Escape element text (`&`, `<`, `>`). |
-| `text(x, y, s, *, size, fill, anchor, weight, extra, tooltip, cls)` | One `<text>`; one-decimal coordinates. Pass `fill` (a colour, the heat map) or `cls` (a `THEME` role, themed diagrams), and `tooltip` for a `<title>`. |
+| `text(x, y, s, *, size, fill, anchor, weight, extra, tooltip, cls)` | One `<text>`; one-decimal coordinates. Pass `fill` (a colour, the heat map) or `cls` (a `THEME` role, themed diagrams), and `tooltip` for a `<title>` (also written as `data-label`). |
+| `data_attrs(values)` | ` data-<key>="<value>"` per entry, escaped; a None value (not measured) is left out. |
 | `text_width(s, size)`, `text_box(x, y, s, size, anchor)`, `truncate(s, limit, keep_tail)` | Sizing by character count (`CHAR_W` at 12px), no font metrics. |
 | `LinearScale(lo, hi, start, end)`, `.ticks(n)`, `nice_ceiling(v)`, `tick_label(v)` | Axes: a linear map (y runs `end` < `start`), even ticks, a 1/2/5 x 10^k axis top. |
 | `hatch_pattern(id, background, stroke, width, classes)`, `THEMED_HATCH`, `HATCH_FILL` | The diagonal hatch for unknown, never zero; themed diagrams put `THEMED_HATCH` in the defs and fill with `HATCH_FILL`. |
@@ -114,8 +119,16 @@ def text(x: float, y: float, content: str, *, size: float = 12, fill: str | None
     klass = f' class="t-{cls}"' if cls is not None else ""
     bold = f' font-weight="{weight}"' if weight else ""
     hover = "" if tooltip is None else f"<title>{esc(tooltip)}</title>"
+    label = "" if tooltip is None else data_attrs({"label": tooltip})
     return (f'<text x="{x:.1f}" y="{y:.1f}" font-size="{size}"{paint} '
-            f'text-anchor="{anchor}"{klass}{bold}{extra}>{esc(content)}{hover}</text>')
+            f'text-anchor="{anchor}"{klass}{bold}{extra}{label}>{esc(content)}{hover}</text>')
+
+
+def data_attrs(values: Mapping[str, str | int | None]) -> str:
+    """`` data-<key>="<value>"`` per entry, in the given order, the value escaped for an
+    attribute. A None value is one the run did not measure: it is left out, never written as 0."""
+    return "".join(f' data-{key}="{html.escape(str(value))}"'
+                   for key, value in values.items() if value is not None)
 
 
 def text_width(content: str, size: float = 12) -> float:

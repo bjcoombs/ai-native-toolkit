@@ -30,7 +30,8 @@ counts-only) or whose ref is a CI variable (`ref_variable`, #684) is "pin unknow
 dotted, never unpinned or drift. A run whose blocks carry neither `ref` nor `ref_variable`
 (before #674) says "drift not shown" instead. `render_tooling_map` draws
 repositories left, items right with their dependent counts, and the unknown repositories on
-a hatched strip.
+a hatched strip. Each curve carries its ``<title>`` values as ``data-repo``, ``data-item``
+and, when it names any, ``data-refs`` (#1360).
 """
 from __future__ import annotations
 
@@ -199,8 +200,10 @@ def render_tooling_map(view: ToolingView) -> str:
                 *([UNKNOWN] if link["pin_unknown"] else [])]
         refs = f" @ {', '.join(pins)}" if pins else ""
         tip = f"{link['repo']} → {link['item']}{refs}"
+        values = {"repo": link["repo"], "item": link["item"], "refs": ", ".join(pins) or None}
         body.append(f'<path d="M{lx:.1f} {y0:.1f} C {lx + 140:.1f} {y0:.1f}, {rx - 140:.1f} {y1:.1f}, '
-                    f'{rx:.1f} {y1:.1f}" fill="none" {style}><title>{svg.esc(tip)}</title></path>')
+                    f'{rx:.1f} {y1:.1f}" fill="none" {style}{svg.data_attrs(values)}>'
+                    f'<title>{svg.esc(tip)}</title></path>')
     for repo, label in zip(repos, repo_labels):
         body.append(svg.text(lx - 12, ry[repo] + 4, label, anchor="end", cls="fg",
                              tooltip=repo if label != repo else None))

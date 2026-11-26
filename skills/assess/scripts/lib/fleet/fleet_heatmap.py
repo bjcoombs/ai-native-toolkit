@@ -29,6 +29,10 @@ Encoding:
 - Change against an earlier run (``fleet_view.compare_levels``) is text under
   the level: ``+1``, ``-1``, ``=``, ``new``, ``was 2`` or ``was ?``. Across
   maturity-model versions no change is drawn and a note says why.
+- Each cell carries its tooltip values as data attributes (#1360): ``data-group``,
+  ``data-practice``, ``data-level`` (known) or ``data-floor``, ``data-top`` (with a
+  maturity model file), ``data-missing`` and ``data-unknown-repos`` (not known) and
+  ``data-change`` (with a comparison). A value not measured is left out, never 0.
 
 The canvas has its own white background, so it reads the same on light and
 dark pages. Text is escaped with ``html.escape``; labels are sized and
@@ -214,6 +218,11 @@ def _cell_parts(x: float, y: float, group: GroupRow, column: Column, keys: dict[
     cx = x + CELL_W / 2
     known = entry["status"] == STATUS_LEVEL and entry["level"] is not None
     floor = None if known else floor_of(entry)
+    values: dict[str, str | int | None] = {"group": group["group"], "practice": column["title"],
+                                           "level": entry["level"] if known else None,
+                                           "floor": floor,
+                                           "top": column["top"] if known or floor is not None else None,
+                                           "missing": None if known else _missing_text(entry)}
     if floor is not None:
         missing = _missing_text(entry)
         step = ramp_step(floor, column["top"])
@@ -235,11 +244,14 @@ def _cell_parts(x: float, y: float, group: GroupRow, column: Column, keys: dict[
     if not known and entry["unknown_repos"]:
         count = len(entry["unknown_repos"])
         tip += f"; {count} {'repository' if count == 1 else 'repositories'} without a level"
+        values["unknown-repos"] = count
     if change is not None:
         tip += f"; change: {change_text(change)}"
+        values["change"] = change_text(change)
     title = html.escape(f"{group['group']} · {column['title']}: {tip}", quote=False)
     parts = [f'<rect x="{x:.1f}" y="{y:.1f}" width="{CELL_W:.1f}" height="{CELL_H:.1f}" '
-             f'fill="{fill}" stroke="{GRID_STROKE}" stroke-width="1"><title>{title}</title></rect>']
+             f'fill="{fill}" stroke="{GRID_STROKE}" stroke-width="1"{fleet_svg.data_attrs(values)}>'
+             f'<title>{title}</title></rect>']
     if floor is not None:
         parts.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{CELL_W:.1f}" height="{CELL_H:.1f}" '
                      f'fill="{FLOOR_HATCH}" pointer-events="none"/>')

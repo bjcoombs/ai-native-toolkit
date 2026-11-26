@@ -22,43 +22,43 @@
 <text x="288.0" y="382.0" font-size="11" text-anchor="middle" class="t-muted">2026-10-20</text>
 <text x="520.0" y="382.0" font-size="11" text-anchor="middle" class="t-muted">2026-11-20</text>
 <polyline points="56.0,234.0 288.0,190.7 520.0,190.7" fill="none" class="s-series0" stroke-width="2"/>
-<circle cx="56.0" cy="234.0" r="3.5" class="f-series0"><title>data: 0.50 on 2026-09-20</title></circle>
-<circle cx="288.0" cy="190.7" r="3.5" class="f-series0"><title>data: 0.67 on 2026-10-20</title></circle>
-<circle cx="520.0" cy="190.7" r="3.5" class="f-series0"><title>data: 0.67 on 2026-11-20</title></circle>
-<circle cx="56.0" cy="320.7" r="3.5" class="f-series1"><title>mobile: 0.17 on 2026-09-20</title></circle>
-<circle cx="520.0" cy="320.7" r="3.5" class="f-series1"><title>mobile: 0.17 on 2026-11-20</title></circle>
+<circle cx="56.0" cy="234.0" r="3.5" class="f-series0" data-group="data" data-mean="0.50" data-run="2026-09-20"><title>data: 0.50 on 2026-09-20</title></circle>
+<circle cx="288.0" cy="190.7" r="3.5" class="f-series0" data-group="data" data-mean="0.67" data-run="2026-10-20"><title>data: 0.67 on 2026-10-20</title></circle>
+<circle cx="520.0" cy="190.7" r="3.5" class="f-series0" data-group="data" data-mean="0.67" data-run="2026-11-20"><title>data: 0.67 on 2026-11-20</title></circle>
+<circle cx="56.0" cy="320.7" r="3.5" class="f-series1" data-group="mobile" data-mean="0.17" data-run="2026-09-20"><title>mobile: 0.17 on 2026-09-20</title></circle>
+<circle cx="520.0" cy="320.7" r="3.5" class="f-series1" data-group="mobile" data-mean="0.17" data-run="2026-11-20"><title>mobile: 0.17 on 2026-11-20</title></circle>
 <polyline points="56.0,234.0 288.0,234.0 520.0,190.7" fill="none" class="s-series2" stroke-width="2"/>
-<circle cx="56.0" cy="234.0" r="3.5" class="f-series2"><title>payments: 0.50 on 2026-09-20</title></circle>
-<circle cx="288.0" cy="234.0" r="3.5" class="f-series2"><title>payments: 0.50 on 2026-10-20</title></circle>
-<circle cx="520.0" cy="190.7" r="3.5" class="f-series2"><title>payments: 0.67 on 2026-11-20</title></circle>
+<circle cx="56.0" cy="234.0" r="3.5" class="f-series2" data-group="payments" data-mean="0.50" data-run="2026-09-20"><title>payments: 0.50 on 2026-09-20</title></circle>
+<circle cx="288.0" cy="234.0" r="3.5" class="f-series2" data-group="payments" data-mean="0.50" data-run="2026-10-20"><title>payments: 0.50 on 2026-10-20</title></circle>
+<circle cx="520.0" cy="190.7" r="3.5" class="f-series2" data-group="payments" data-mean="0.67" data-run="2026-11-20"><title>payments: 0.67 on 2026-11-20</title></circle>
 <polyline points="56.0,147.3 288.0,147.3 520.0,147.3" fill="none" class="s-series3" stroke-width="2"/>
-<circle cx="56.0" cy="147.3" r="3.5" class="f-series3"><title>platform: 0.83 on 2026-09-20</title></circle>
-<circle cx="288.0" cy="147.3" r="3.5" class="f-series3"><title>platform: 0.83 on 2026-10-20</title></circle>
-<circle cx="520.0" cy="147.3" r="3.5" class="f-series3"><title>platform: 0.83 on 2026-11-20</title></circle>
+<circle cx="56.0" cy="147.3" r="3.5" class="f-series3" data-group="platform" data-mean="0.83" data-run="2026-09-20"><title>platform: 0.83 on 2026-09-20</title></circle>
+<circle cx="288.0" cy="147.3" r="3.5" class="f-series3" data-group="platform" data-mean="0.83" data-run="2026-10-20"><title>platform: 0.83 on 2026-10-20</title></circle>
+<circle cx="520.0" cy="147.3" r="3.5" class="f-series3" data-group="platform" data-mean="0.83" data-run="2026-11-20"><title>platform: 0.83 on 2026-11-20</title></circle>
 <polyline points="56.0,234.0 288.0,190.7 520.0,147.3" fill="none" class="s-series4" stroke-width="2"/>
-<circle cx="56.0" cy="234.0" r="3.5" class="f-series4"><title>platform/infrastructure-and-shared-services: 0.50 on 2026-09-20</title></circle>
-<circle cx="288.0" cy="190.7" r="3.5" class="f-series4"><title>platform/infrastructure-and-shared-services: 0.67 on 2026-10-20</title></circle>
-<circle cx="520.0" cy="147.3" r="3.5" class="f-series4"><title>platform/infrastructure-and-shared-services: 0.83 on 2026-11-20</title></circle>
+<circle cx="56.0" cy="234.0" r="3.5" class="f-series4" data-group="platform/infrastructure-and-shared-services" data-mean="0.50" data-run="2026-09-20"><title>platform/infrastructure-and-shared-services: 0.50 on 2026-09-20</title></circle>
+<circle cx="288.0" cy="190.7" r="3.5" class="f-series4" data-group="platform/infrastructure-and-shared-services" data-mean="0.67" data-run="2026-10-20"><title>platform/infrastructure-and-shared-services: 0.67 on 2026-10-20</title></circle>
+<circle cx="520.0" cy="147.3" r="3.5" class="f-series4" data-group="platform/infrastructure-and-shared-services" data-mean="0.83" data-run="2026-11-20"><title>platform/infrastructure-and-shared-services: 0.83 on 2026-11-20</title></circle>
 <polyline points="56.0,190.7 288.0,190.7 520.0,147.3" fill="none" class="s-series5" stroke-width="2"/>
-<circle cx="56.0" cy="190.7" r="3.5" class="f-series5"><title>web: 0.67 on 2026-09-20</title></circle>
-<circle cx="288.0" cy="190.7" r="3.5" class="f-series5"><title>web: 0.67 on 2026-10-20</title></circle>
-<circle cx="520.0" cy="147.3" r="3.5" class="f-series5"><title>web: 0.83 on 2026-11-20</title></circle>
+<circle cx="56.0" cy="190.7" r="3.5" class="f-series5" data-group="web" data-mean="0.67" data-run="2026-09-20"><title>web: 0.67 on 2026-09-20</title></circle>
+<circle cx="288.0" cy="190.7" r="3.5" class="f-series5" data-group="web" data-mean="0.67" data-run="2026-10-20"><title>web: 0.67 on 2026-10-20</title></circle>
+<circle cx="520.0" cy="147.3" r="3.5" class="f-series5" data-group="web" data-mean="0.83" data-run="2026-11-20"><title>web: 0.83 on 2026-11-20</title></circle>
 <line x1="525.0" y1="190.7" x2="534.0" y2="195.3" class="s-rule" stroke-width="1"/>
-<text x="538.0" y="199.3" font-size="12.0" text-anchor="start" class="t-series0" font-weight="600">data 0.67<title>data</title></text>
+<text x="538.0" y="199.3" font-size="12.0" text-anchor="start" class="t-series0" font-weight="600" data-label="data">data 0.67<title>data</title></text>
 <text x="607.0" y="199.3" font-size="11" text-anchor="start" class="t-accent">+0.17</text>
 <line x1="525.0" y1="320.7" x2="534.0" y2="320.7" class="s-rule" stroke-width="1"/>
-<text x="538.0" y="324.7" font-size="12.0" text-anchor="start" class="t-series1" font-weight="600">mobile 0.17<title>mobile</title></text>
+<text x="538.0" y="324.7" font-size="12.0" text-anchor="start" class="t-series1" font-weight="600" data-label="mobile">mobile 0.17<title>mobile</title></text>
 <line x1="525.0" y1="190.7" x2="534.0" y2="211.3" class="s-rule" stroke-width="1"/>
-<text x="538.0" y="215.3" font-size="12.0" text-anchor="start" class="t-series2" font-weight="600">payments 0.67<title>payments</title></text>
+<text x="538.0" y="215.3" font-size="12.0" text-anchor="start" class="t-series2" font-weight="600" data-label="payments">payments 0.67<title>payments</title></text>
 <text x="635.0" y="215.3" font-size="11" text-anchor="start" class="t-accent">+0.17</text>
 <line x1="525.0" y1="147.3" x2="534.0" y2="147.3" class="s-rule" stroke-width="1"/>
-<text x="538.0" y="151.3" font-size="12.0" text-anchor="start" class="t-series3" font-weight="600">platform 0.83<title>platform</title></text>
+<text x="538.0" y="151.3" font-size="12.0" text-anchor="start" class="t-series3" font-weight="600" data-label="platform">platform 0.83<title>platform</title></text>
 <text x="635.0" y="151.3" font-size="11" text-anchor="start" class="t-muted">0.00</text>
 <line x1="525.0" y1="147.3" x2="534.0" y2="163.3" class="s-rule" stroke-width="1"/>
-<text x="538.0" y="167.3" font-size="12.0" text-anchor="start" class="t-series4" font-weight="600">platform/infrastructu… 0.83<title>platform/infrastructure-and-shared-services</title></text>
+<text x="538.0" y="167.3" font-size="12.0" text-anchor="start" class="t-series4" font-weight="600" data-label="platform/infrastructure-and-shared-services">platform/infrastructu… 0.83<title>platform/infrastructure-and-shared-services</title></text>
 <text x="733.0" y="167.3" font-size="11" text-anchor="start" class="t-accent">+0.33</text>
 <line x1="525.0" y1="147.3" x2="534.0" y2="179.3" class="s-rule" stroke-width="1"/>
-<text x="538.0" y="183.3" font-size="12.0" text-anchor="start" class="t-series5" font-weight="600">web 0.83<title>web</title></text>
+<text x="538.0" y="183.3" font-size="12.0" text-anchor="start" class="t-series5" font-weight="600" data-label="web">web 0.83<title>web</title></text>
 <text x="600.0" y="183.3" font-size="11" text-anchor="start" class="t-accent">+0.17</text>
 <text x="288.0" y="402.0" font-size="12" text-anchor="middle" class="t-muted">Fleet run (scan date)</text>
 <text x="22.0" y="234.0" font-size="12.0" text-anchor="middle" class="t-muted" transform="rotate(-90 22 234.0)">Mean share of top level</text>

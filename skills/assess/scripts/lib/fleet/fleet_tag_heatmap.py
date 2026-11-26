@@ -18,6 +18,9 @@ the key is already the hash). A counts-only run without hashing labels rows by t
 the sort (``repository 3``), so the picture names no repository; names appear only with
 ``--full``.
 
+Each cell carries its tooltip values as ``data-tag-title`` and, when measured,
+``data-percent-met`` (a whole percent), beside ``data-tag`` and ``data-cell`` (#1360).
+
 Deterministic: fixed order, fixed formatting, no date; two renders are byte-identical. Golden
 renders: ``tests/fixtures/fleet_diagrams/`` (``tests/fleet_tag_heatmap_fixture.py``). Tests:
 ``tests/test_fleet_tag_heatmap.py``.
@@ -124,13 +127,15 @@ def render(rows: Sequence[HeatmapRow], none_yet: set[str]) -> str:
             if share is None:
                 parts.append(f'<rect x="{x + 1:.1f}" y="{y + 1:.1f}" width="{CELL_W - 2:.1f}" '
                              f'height="{CELL_H - 2:.1f}" fill="{svg.HATCH_FILL}" class="s-rule" stroke-width="1" '
-                             f'data-tag="{tag}" data-cell="not_measured"><title>{TRUTH_TAG_TITLES[tag]}: '
+                             f'data-tag="{tag}" data-cell="not_measured"'
+                             f'{svg.data_attrs({"tag-title": TRUTH_TAG_TITLES[tag]})}><title>{TRUTH_TAG_TITLES[tag]}: '
                              'not measured</title></rect>')
                 continue
             step = round(share * svg.TOP_STEP)
             pct = f"{round(share * 100)}%"
             parts.append(f'<rect x="{x + 1:.1f}" y="{y + 1:.1f}" width="{CELL_W - 2:.1f}" height="{CELL_H - 2:.1f}" '
-                         f'fill="{svg.LEVEL_RAMP[step]}" data-tag="{tag}" data-cell="share">'
+                         f'fill="{svg.LEVEL_RAMP[step]}" data-tag="{tag}" data-cell="share"'
+                         f'{svg.data_attrs({"tag-title": TRUTH_TAG_TITLES[tag], "percent-met": round(share * 100)})}>'
                          f'<title>{TRUTH_TAG_TITLES[tag]}: {pct} met</title></rect>')
             parts.append(svg.text(x + CELL_W / 2, y + 14, pct, size=11, anchor="middle",
                                   fill=svg.STEP_TEXT[step]))

@@ -16,7 +16,9 @@ cell whose imports include a front-door bypass (``notch``). The ramp fills are f
 so the notch is drawn in the themed foreground with a themed background edge and reads on
 every step in both colour schemes. Hatch means unknown here as in every diagram, so the
 bypass mark is never a hatch. Each row
-carries a bar of its package's lines of code. A cell between two drawn packages with no
+carries a bar of its package's lines of code. Every part with a ``<title>`` carries what it
+shows as data attributes (#1360): a bar ``data-package`` and ``data-loc``, a cell
+``data-from`` and ``data-to`` (plus ``data-imports`` and ``data-bypass`` when recorded). A cell between two drawn packages with no
 recorded pair is empty (no imports), unless ``structure.package_edges`` was capped
 (``package_edge_count`` above the list's length): the pair may then be one the block did not
 keep, so the cell is hatched as unknown, never read as zero.
@@ -152,19 +154,20 @@ def package_in_place(view: PackageView) -> str:
 
 def _cell(x: float, y: float, row: str, col: str, view: PackageView, tip: str) -> list[str]:
     recorded = view["cells"].get(row, {}).get(col)
+    pair = svg.data_attrs({"from": row, "to": col})
     hover = f"<title>{svg.esc(tip)}</title>"
     box = f'x="{x:.1f}" y="{y:.1f}" width="{CELL:.1f}" height="{CELL:.1f}"'
     if row == col:
-        return [f'<rect {box} class="f-rule" data-cell="self">{hover}</rect>']
+        return [f'<rect {box} class="f-rule" data-cell="self"{pair}>{hover}</rect>']
     if recorded is None:
         if view["edge_cap_applied"]:
             return [f'<rect {box} fill="{svg.HATCH_FILL}" class="s-rule" stroke-width="1" '
-                    f'data-cell="unknown">{hover}</rect>']
-        return [f'<rect {box} class="f-bg s-rule" stroke-width="1" data-cell="none">{hover}</rect>']
+                    f'data-cell="unknown"{pair}>{hover}</rect>']
+        return [f'<rect {box} class="f-bg s-rule" stroke-width="1" data-cell="none"{pair}>{hover}</rect>']
     imports, bypass = recorded
     step = shade_step(imports)
     parts = [f'<rect {box} fill="{svg.LEVEL_RAMP[step]}" class="s-rule" stroke-width="1" '
-             f'data-cell="imports" data-imports="{imports}" data-bypass="{bypass}">{hover}</rect>']
+             f'data-cell="imports" data-imports="{imports}" data-bypass="{bypass}"{pair}>{hover}</rect>']
     if bypass:
         parts.append(notch(x + CELL, y, mark=True))
     return parts
@@ -241,7 +244,7 @@ def render_package_map(block: Mapping[str, Any]) -> str:
                              tooltip=row if cut else None))
         bar = max(1.0, BAR_W * view["loc"][i] / top_loc)
         body.append(f'<rect x="{bar_x:.1f}" y="{y + 4:.1f}" width="{bar:.1f}" height="{CELL - 8:.1f}" '
-                    f'class="f-accent" data-loc="{view["loc"][i]}"><title>{svg.esc(row)}: '
+                    f'class="f-accent"{svg.data_attrs({"package": row})} data-loc="{view["loc"][i]}"><title>{svg.esc(row)}: '
                     f'{view["loc"][i]} lines of code</title></rect>')
         for j, col in enumerate(ids):
             body += _cell(grid_x + j * step, y, row, col, view, _tip(row, col, view))

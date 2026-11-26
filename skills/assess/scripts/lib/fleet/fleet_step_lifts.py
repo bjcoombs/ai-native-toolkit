@@ -22,7 +22,8 @@ repository, so the list reads the same in ``--full``, counts-only and hashed out
 entry with its count, labelled with the gate and the row title (never the condition id,
 which carries a layer number). Repositories whose next Step waits on a gate that was not
 measured, or that the owner set aside, are counted on a hatched line under the bars, never
-as a lift and never as 0. ``render`` is the stable entry point the fleet page (#946) calls.
+as a lift and never as 0. Each bar's group carries its ``<title>`` values as ``data-gate``,
+``data-practice`` and ``data-step`` (#1360). ``render`` is the stable entry point the fleet page (#946) calls.
 
 `step_lifts(model, results)` -> `list[StepLift]` (`condition`, `row`, `title`, `gate`,
 `step`, `repo_count`); `lift_condition(model, result)` is one repository's
@@ -166,7 +167,9 @@ def render(data: Mapping[str, Any]) -> str:
     for lift in lifts:
         name = label(lift)
         width = scale(lift["repo_count"])
-        body.append(f'<g data-condition="{svg.esc(lift["condition"])}"><title>{svg.esc(name)}</title>'
+        values: dict[str, str | int | None] = {"gate": lift["gate"], "practice": lift["title"], "step": lift["step"]}
+        body.append(f'<g data-condition="{svg.esc(lift["condition"])}"{svg.data_attrs(values)}>'
+                    f'<title>{svg.esc(name)}</title>'
                     + svg.text(PAD, y, svg.truncate(name, limit), size=12, cls="fg")
                     + f'<rect x="{PAD:.1f}" y="{y + 6:.1f}" width="{width:.1f}" height="{BAR_H:.1f}" '
                     'class="f-accent"/>'

@@ -8,29 +8,29 @@
 <text x="16.0" y="34.0" font-size="18" fill="#1a1a1a" text-anchor="start" font-weight="bold">Fleet maturity model levels</text>
 <text x="16.0" y="56.0" font-size="12" fill="#5f6368" text-anchor="start">maturity model fixture-1 · 4 groups · 2 practices · darker = higher level reached</text>
 <text x="340.0" y="316.0" font-size="12" fill="#1a1a1a" text-anchor="start" transform="rotate(-45 340.0 316.0)">Two-factor</text>
-<text x="404.0" y="316.0" font-size="12" fill="#1a1a1a" text-anchor="start" transform="rotate(-45 404.0 316.0)">Team instructions and shared tooling across rep…<title>Team instructions and shared tooling across repositories</title></text>
+<text x="404.0" y="316.0" font-size="12" fill="#1a1a1a" text-anchor="start" transform="rotate(-45 404.0 316.0)" data-label="Team instructions and shared tooling across repositories">Team instructions and shared tooling across rep…<title>Team instructions and shared tooling across repositories</title></text>
 <text x="300.0" y="348.0" font-size="12" fill="#1a1a1a" text-anchor="end">grpa</text>
-<rect x="308.0" y="324.0" width="64.0" height="40.0" fill="#004529" stroke="#ffffff" stroke-width="1"><title>grpa · Two-factor: level 1 of 1</title></rect>
+<rect x="308.0" y="324.0" width="64.0" height="40.0" fill="#004529" stroke="#ffffff" stroke-width="1" data-group="grpa" data-practice="Two-factor" data-level="1" data-top="1"><title>grpa · Two-factor: level 1 of 1</title></rect>
 <text x="340.0" y="349.0" font-size="14" fill="#ffffff" text-anchor="middle" font-weight="bold">1</text>
-<rect x="372.0" y="324.0" width="64.0" height="40.0" fill="#004529" stroke="#ffffff" stroke-width="1"><title>grpa · Team instructions and shared tooling across repositories: level 2 of 2</title></rect>
+<rect x="372.0" y="324.0" width="64.0" height="40.0" fill="#004529" stroke="#ffffff" stroke-width="1" data-group="grpa" data-practice="Team instructions and shared tooling across repositories" data-level="2" data-top="2"><title>grpa · Team instructions and shared tooling across repositories: level 2 of 2</title></rect>
 <text x="404.0" y="349.0" font-size="14" fill="#ffffff" text-anchor="middle" font-weight="bold">2</text>
 <text x="300.0" y="388.0" font-size="12" fill="#1a1a1a" text-anchor="end">grpb</text>
-<rect x="308.0" y="364.0" width="64.0" height="40.0" fill="#ffffe5" stroke="#ffffff" stroke-width="1"><title>grpb · Two-factor: level 0 of 1</title></rect>
+<rect x="308.0" y="364.0" width="64.0" height="40.0" fill="#ffffe5" stroke="#ffffff" stroke-width="1" data-group="grpb" data-practice="Two-factor" data-level="0" data-top="1"><title>grpb · Two-factor: level 0 of 1</title></rect>
 <text x="340.0" y="389.0" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="bold">0</text>
-<rect x="372.0" y="364.0" width="64.0" height="40.0" fill="#ffffe5" stroke="#ffffff" stroke-width="1"><title>grpb · Team instructions and shared tooling across repositories: level 0 of 2</title></rect>
+<rect x="372.0" y="364.0" width="64.0" height="40.0" fill="#ffffe5" stroke="#ffffff" stroke-width="1" data-group="grpb" data-practice="Team instructions and shared tooling across repositories" data-level="0" data-top="2"><title>grpb · Team instructions and shared tooling across repositories: level 0 of 2</title></rect>
 <text x="404.0" y="389.0" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="bold">0</text>
 <text x="300.0" y="428.0" font-size="12" fill="#1a1a1a" text-anchor="end">grpc</text>
-<rect x="308.0" y="404.0" width="64.0" height="40.0" fill="url(#fleet-heatmap-fleet-unknown)" stroke="#ffffff" stroke-width="1"><title>grpc · Two-factor: unknown (not measured yet: two_factor.value)</title></rect>
+<rect x="308.0" y="404.0" width="64.0" height="40.0" fill="url(#fleet-heatmap-fleet-unknown)" stroke="#ffffff" stroke-width="1" data-group="grpc" data-practice="Two-factor" data-missing="not measured yet: two_factor.value"><title>grpc · Two-factor: unknown (not measured yet: two_factor.value)</title></rect>
 <rect x="322.0" y="417.0" width="36.0" height="16.0" fill="#ffffff"/>
 <text x="340.0" y="429.0" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="bold">? a</text>
-<rect x="372.0" y="404.0" width="64.0" height="40.0" fill="url(#fleet-heatmap-fleet-unknown)" stroke="#ffffff" stroke-width="1"><title>grpc · Team instructions and shared tooling across repositories: unknown (not measured yet: nested_instructions.budget.claude_code.lines, shared_tooling.available); 1 repository without a level</title></rect>
+<rect x="372.0" y="404.0" width="64.0" height="40.0" fill="url(#fleet-heatmap-fleet-unknown)" stroke="#ffffff" stroke-width="1" data-group="grpc" data-practice="Team instructions and shared tooling across repositories" data-missing="not measured yet: nested_instructions.budget.claude_code.lines, shared_tooling.available" data-unknown-repos="1"><title>grpc · Team instructions and shared tooling across repositories: unknown (not measured yet: nested_instructions.budget.claude_code.lines, shared_tooling.available); 1 repository without a level</title></rect>
 <rect x="386.0" y="417.0" width="36.0" height="16.0" fill="#ffffff"/>
 <text x="404.0" y="429.0" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="bold">? b</text>
-<text x="300.0" y="468.0" font-size="12" fill="#1a1a1a" text-anchor="end">…ement-and-reconciliation/batch-services<title>platform/payments/settlement-and-reconciliation/batch-services</title></text>
-<rect x="308.0" y="444.0" width="64.0" height="40.0" fill="url(#fleet-heatmap-fleet-unknown)" stroke="#ffffff" stroke-width="1"><title>platform/payments/settlement-and-reconciliation/batch-services · Two-factor: unknown (not measured yet: two_factor.value)</title></rect>
+<text x="300.0" y="468.0" font-size="12" fill="#1a1a1a" text-anchor="end" data-label="platform/payments/settlement-and-reconciliation/batch-services">…ement-and-reconciliation/batch-services<title>platform/payments/settlement-and-reconciliation/batch-services</title></text>
+<rect x="308.0" y="444.0" width="64.0" height="40.0" fill="url(#fleet-heatmap-fleet-unknown)" stroke="#ffffff" stroke-width="1" data-group="platform/payments/settlement-and-reconciliation/batch-services" data-practice="Two-factor" data-missing="not measured yet: two_factor.value"><title>platform/payments/settlement-and-reconciliation/batch-services · Two-factor: unknown (not measured yet: two_factor.value)</title></rect>
 <rect x="322.0" y="457.0" width="36.0" height="16.0" fill="#ffffff"/>
 <text x="340.0" y="469.0" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="bold">? a</text>
-<rect x="372.0" y="444.0" width="64.0" height="40.0" fill="#78c679" stroke="#ffffff" stroke-width="1"><title>platform/payments/settlement-and-reconciliation/batch-services · Team instructions and shared tooling across repositories: at least level 1 of 2, higher levels unknown (not measured yet: shared_tooling.available); 1 repository without a level</title></rect>
+<rect x="372.0" y="444.0" width="64.0" height="40.0" fill="#78c679" stroke="#ffffff" stroke-width="1" data-group="platform/payments/settlement-and-reconciliation/batch-services" data-practice="Team instructions and shared tooling across repositories" data-floor="1" data-top="2" data-missing="not measured yet: shared_tooling.available" data-unknown-repos="1"><title>platform/payments/settlement-and-reconciliation/batch-services · Team instructions and shared tooling across repositories: at least level 1 of 2, higher levels unknown (not measured yet: shared_tooling.available); 1 repository without a level</title></rect>
 <rect x="372.0" y="444.0" width="64.0" height="40.0" fill="url(#fleet-heatmap-fleet-floor)" pointer-events="none"/>
 <rect x="386.0" y="457.0" width="36.0" height="16.0" fill="#ffffff"/>
 <text x="404.0" y="469.0" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="bold">1+ c</text>

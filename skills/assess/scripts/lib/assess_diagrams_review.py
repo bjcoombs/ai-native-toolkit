@@ -27,7 +27,8 @@ Diagrams:
   ``doc_complexity_join.is_stale`` holds, the same test as ``summary.stale_docs``. A dashed
   line marks ``STALENESS_RATIO_THRESHOLD``. Docs past the top are stated ("and K more");
   ``repo-baseline`` docs are counted in the caption, never drawn. A truncated or degenerate
-  history draws nothing and says why, as the summary's counts read null there.
+  history draws nothing and says why, as the summary's counts read null there. Each bar
+  carries ``data-path``, ``data-ratio`` and ``data-behind`` beside its ``<title>`` (#1360).
 - **Review strip** (``review-strip.svg``): one tick per sampled merged change from
   ``review_reality.sequence`` (``lib/hosting/review_reality.py``), oldest merge first, in three
   states: approved, reviewed and merged without review; an ``unknown`` change (GitLab notes
@@ -37,7 +38,9 @@ Diagrams:
   so an unknown mark never reads as no bot; the key then counts both. The approved ticks over ``merged_count`` equal ``approved_share`` and
   approved plus reviewed ticks equal ``reviewed_share``; a token outside the four reads
   unknown (``strip_tokens``). An unavailable block draws nothing
-  and names its reason; nothing names a change, title, author or reviewer.
+  and names its reason; nothing names a change, title, author or reviewer. Each tick
+  carries ``data-state``, ``data-state-label`` and ``data-review-bot`` (``true`` or
+  ``false``; left out where review-bot output is not known) beside its ``<title>`` (#1360).
 
 Deterministic: input order, fixed formatting, no date; two renders are byte-identical. No
 caption or label names a layer number. Golden renders: ``tests/fixtures/assess_diagrams/``
@@ -228,7 +231,8 @@ def render_drift(block: Mapping[str, Any]) -> str:
         role = "dr-behind" if bar["behind"] else "dr-current"
         tip = f"{bar['path']}: {svg.tick_label(bar['ratio'])}"
         body.append(f'<rect x="{bar_x:.1f}" y="{y + 10:.1f}" width="{length:.1f}" height="{BAR_H:.1f}" '
-                    f'class="f-{role}" data-ratio="{bar["ratio"]:g}" data-behind="{str(bar["behind"]).lower()}">'
+                    f'class="f-{role}"{svg.data_attrs({"path": bar["path"]})} data-ratio="{bar["ratio"]:g}" '
+                    f'data-behind="{str(bar["behind"]).lower()}">'
                     f"<title>{svg.esc(tip)}</title></rect>")
         body.append(svg.text(bar_x + length + 6, y + 20, svg.tick_label(bar["ratio"]), size=11, cls="fg"))
         y += ROW_H
@@ -345,8 +349,11 @@ def render_strip(block: Mapping[str, Any]) -> str:
         x = PAD + index * (TICK_W + TICK_GAP)
         tip = LABELS.get(state, state) + {BOT: ", with review-bot output",
                                           UNKNOWN: ", review-bot output not known"}.get(bot, "")
+        values = {"state-label": LABELS.get(state, state),
+                  "review-bot": {BOT: "true", UNKNOWN: None}.get(bot, "false")}
         body.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{TICK_W:.1f}" height="{TICK_H:.1f}" rx="2" '
-                    f'{_tick_paint(state)} data-state="{svg.esc(state)}"><title>{svg.esc(tip)}</title></rect>')
+                    f'{_tick_paint(state)} data-state="{svg.esc(state)}"{svg.data_attrs(values)}>'
+                    f'<title>{svg.esc(tip)}</title></rect>')
         if bot == BOT:
             body.append(f'<circle cx="{x + TICK_W / 2:.1f}" cy="{y - 7:.1f}" r="3.5" class="f-fg" '
                         'data-bot="true"/>')

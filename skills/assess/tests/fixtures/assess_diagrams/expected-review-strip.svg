@@ -7,20 +7,20 @@
 <rect x="0" y="0" width="680" height="304" class="f-bg"/>
 <text x="16.0" y="28.0" font-size="15" text-anchor="start" class="t-fg" font-weight="600">Review on recent merges</text>
 <text x="16.0" y="48.0" font-size="12" text-anchor="start" class="t-muted">10 sampled merged changes, one tick each, in merge order</text>
-<rect x="16.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-approved s-muted" stroke-width="1" data-state="approved"><title>Approved by someone other than the author</title></rect>
-<rect x="36.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-reviewed s-muted" stroke-width="1" data-state="reviewed"><title>Reviewed, not approved, with review-bot output</title></rect>
+<rect x="16.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-approved s-muted" stroke-width="1" data-state="approved" data-state-label="Approved by someone other than the author" data-review-bot="false"><title>Approved by someone other than the author</title></rect>
+<rect x="36.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-reviewed s-muted" stroke-width="1" data-state="reviewed" data-state-label="Reviewed, not approved" data-review-bot="true"><title>Reviewed, not approved, with review-bot output</title></rect>
 <circle cx="44.0" cy="63.0" r="3.5" class="f-fg" data-bot="true"/>
-<rect x="56.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed s-muted" stroke-width="1" data-state="unreviewed"><title>Merged without review, with review-bot output</title></rect>
+<rect x="56.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed s-muted" stroke-width="1" data-state="unreviewed" data-state-label="Merged without review" data-review-bot="true"><title>Merged without review, with review-bot output</title></rect>
 <circle cx="64.0" cy="63.0" r="3.5" class="f-fg" data-bot="true"/>
-<rect x="76.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed s-muted" stroke-width="1" data-state="unreviewed"><title>Merged without review</title></rect>
-<rect x="96.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed s-muted" stroke-width="1" data-state="unreviewed"><title>Merged without review</title></rect>
-<rect x="116.0" y="70.0" width="16.0" height="32.0" rx="2" fill="url(#assess-review-strip-fleet-hatch)" class="s-muted" stroke-width="1" data-state="unknown"><title>Not known: the platform left it undecided, review-bot output not known</title></rect>
+<rect x="76.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed s-muted" stroke-width="1" data-state="unreviewed" data-state-label="Merged without review" data-review-bot="false"><title>Merged without review</title></rect>
+<rect x="96.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed s-muted" stroke-width="1" data-state="unreviewed" data-state-label="Merged without review" data-review-bot="false"><title>Merged without review</title></rect>
+<rect x="116.0" y="70.0" width="16.0" height="32.0" rx="2" fill="url(#assess-review-strip-fleet-hatch)" class="s-muted" stroke-width="1" data-state="unknown" data-state-label="Not known: the platform left it undecided"><title>Not known: the platform left it undecided, review-bot output not known</title></rect>
 <circle cx="124.0" cy="63.0" r="3.5" class="f-bg s-fg" stroke-width="1.2" data-bot="unknown"/>
-<rect x="136.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-reviewed s-muted" stroke-width="1" data-state="reviewed"><title>Reviewed, not approved</title></rect>
-<rect x="156.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-approved s-muted" stroke-width="1" data-state="approved"><title>Approved by someone other than the author, with review-bot output</title></rect>
+<rect x="136.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-reviewed s-muted" stroke-width="1" data-state="reviewed" data-state-label="Reviewed, not approved" data-review-bot="false"><title>Reviewed, not approved</title></rect>
+<rect x="156.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-approved s-muted" stroke-width="1" data-state="approved" data-state-label="Approved by someone other than the author" data-review-bot="true"><title>Approved by someone other than the author, with review-bot output</title></rect>
 <circle cx="164.0" cy="63.0" r="3.5" class="f-fg" data-bot="true"/>
-<rect x="176.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed s-muted" stroke-width="1" data-state="unreviewed"><title>Merged without review</title></rect>
-<rect x="196.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-approved s-muted" stroke-width="1" data-state="approved"><title>Approved by someone other than the author</title></rect>
+<rect x="176.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed s-muted" stroke-width="1" data-state="unreviewed" data-state-label="Merged without review" data-review-bot="false"><title>Merged without review</title></rect>
+<rect x="196.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-approved s-muted" stroke-width="1" data-state="approved" data-state-label="Approved by someone other than the author" data-review-bot="false"><title>Approved by someone other than the author</title></rect>
 <text x="16.0" y="118.0" font-size="11" text-anchor="start" class="t-muted">oldest</text>
 <text x="212.0" y="118.0" font-size="11" text-anchor="end" class="t-muted">newest</text>
 <rect x="16.0" y="134.0" width="14.0" height="14.0" rx="2" class="f-rv-approved s-muted" stroke-width="1"/>

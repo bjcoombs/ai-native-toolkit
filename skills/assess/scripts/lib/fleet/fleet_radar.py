@@ -31,7 +31,9 @@ drawn only between two neighbouring measured axes). The outline is filled only w
 is measured. A real 0 (measured, none at the top level) is a point at the centre.
 
 **Rings** at 25, 50, 75 and 100%. Each point's ``<title>`` holds the unit, the practice and
-``met/measured``.
+``met/measured``, and its data attributes the same values (``point_values``, #1360):
+``data-unit``, ``data-practice`` and, when measured, ``data-met``, ``data-measured`` and
+``data-repos``.
 
 **Labels.** A unit is labelled by its ``name`` (else its key) only when the run kept names
 (``--full``) or hashed them (``--hash-salt``: the key is the hash, the name is null). A plain
@@ -210,6 +212,14 @@ def point_title(unit: RadarUnit, axis: RadarAxis, point: RadarPoint | None) -> s
             f"at the top level ({_plural(point['repos'], 'repository')})")
 
 
+def point_values(unit: RadarUnit, axis: RadarAxis, point: RadarPoint | None) -> dict[str, str | int | None]:
+    """A point's tooltip values as data attributes; the counts are left out when not measured."""
+    return {"unit": unit["label"], "practice": axis["title"],
+            "met": None if point is None else point["met"],
+            "measured": None if point is None else point["measured"],
+            "repos": None if point is None else point["repos"]}
+
+
 def _xy(cx: float, cy: float, index: int, count: int, share: float) -> tuple[float, float]:
     angle = -math.pi / 2 + 2 * math.pi * index / count
     return cx + RADIUS * share * math.cos(angle), cy + RADIUS * share * math.sin(angle)
@@ -265,14 +275,15 @@ def _radar(unit: RadarUnit, axes: Sequence[RadarAxis], index: int, x0: float, y0
         parts.append(f'<path d="{path}" {fill} stroke-width="2" data-outline="{"closed" if closed else "broken"}"/>')
     for i, (axis, point, xy) in enumerate(zip(axes, unit["points"], coords)):
         title = svg.esc(point_title(unit, axis, point))
+        data = svg.data_attrs(point_values(unit, axis, point))
         if xy is None:
             mx, my = _xy(cx, cy, i, n, 1.0)
             parts.append(f'<rect x="{mx - MARK / 2:.1f}" y="{my - MARK / 2:.1f}" width="{MARK:.1f}" '
                          f'height="{MARK:.1f}" fill="{svg.HATCH_FILL}" class="s-muted" stroke-width="1" '
-                         f'data-row="{svg.esc(axis["row"])}" data-cell="not_measured"><title>{title}</title></rect>')
+                         f'data-row="{svg.esc(axis["row"])}" data-cell="not_measured"{data}><title>{title}</title></rect>')
         else:
             parts.append(f'<circle cx="{xy[0]:.1f}" cy="{xy[1]:.1f}" r="3.5" class="f-accent" '
-                         f'data-row="{svg.esc(axis["row"])}" data-cell="share"><title>{title}</title></circle>')
+                         f'data-row="{svg.esc(axis["row"])}" data-cell="share"{data}><title>{title}</title></circle>')
     parts.append("</g>")
     return "".join(parts)
 
