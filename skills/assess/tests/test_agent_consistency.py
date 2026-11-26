@@ -451,3 +451,9 @@ def test_a_pointer_whose_target_imports_it_back_stays_canonical(tmp_path: Path) 
     block = scan_agent_consistency(root)
     assert block["canonical"] == "AGENTS.md"
     assert {f["path"]: f["link"] for f in block["files"]}["CLAUDE.md"] == "import"
+
+
+def test_a_pointer_to_a_nested_path_is_no_delegation(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": "See .claude/CLAUDE.md.\n",
+                            ".claude/CLAUDE.md": CLAUDE_RULES})
+    assert scan_agent_consistency(root)["canonical"] == "AGENTS.md"

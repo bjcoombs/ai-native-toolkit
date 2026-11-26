@@ -273,7 +273,8 @@ def _canonical(files: list[InstructionCandidate], repo_root: Path,
         if cand.rel == CANONICAL_NAME:
             # A bare pointer delegates: the file it names holds the instructions,
             # unless that file points or imports straight back, a cycle (#1505).
-            others = {c.rel: c for c in files if c.rel != cand.rel}
+            # Only a sibling at the root: `See .claude/CLAUDE.md` names a path, no sibling.
+            others = {c.rel: c for c in files if c.rel != cand.rel and "/" not in c.rel}
             target = delegation_target(cand.body, sorted(others))
             if target is not None and delegates_to(
                     cand.body, cand.rel, target, others[target].body):
