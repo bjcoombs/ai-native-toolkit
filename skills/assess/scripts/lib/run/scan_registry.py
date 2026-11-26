@@ -323,8 +323,9 @@ def run_scans(
     # ``plan`` is optional for callers that predate it (#1268): absent means every scan runs
     plan = inputs.setdefault("plan", None) if plan is None else plan
     if stage is None:
-        for each in STAGES:
-            run_scans(ctx, inputs, each, table, plan, jobs)
+        with scan_pool.widened(jobs):  # a scan's own fan-out (scan_pool.fan_out, #1382)
+            for each in STAGES:
+                run_scans(ctx, inputs, each, table, plan, jobs)
         return
     spread = frozenset(name for each in table for name in each.spread)
     staged = [spec for spec in table if spec.stage == stage]

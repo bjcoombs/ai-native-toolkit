@@ -64,6 +64,9 @@ coverage reading with no gate. Where member
 units sit below a root unit, the root's scoped readings therefore cover the members' files
 too (a known limit: no scan can leave out the folders of other units yet). Each unit's pass goes through ``scan_registry.run_scans``,
 so a failing scan degrades to its unavailable marker for that unit alone.
+The units' passes are independent, so they run through ``scan_pool.fan_out`` (#1382): under
+``--jobs`` above 1 at most that many units at a time, each pass serial inside, and the readings
+assembled in unit order, the same block as ``--jobs`` 1, which runs them one by one.
 
 **The block** (``unit_readings``, after ``headline``; the headless runner reports it under ``--units``, #866): ``unit_count`` and
 ``unit_count_reason`` copied from ``units`` (a null count stays null, #1030), ``unit_blocks``
@@ -93,6 +96,7 @@ from lib.testing.coverage_gate import GO_RUST_UNMEASURED, go_rust_manifests
 from lib.scoring.level_tally import DEFAULT_BLOCKS, default_model
 from lib.scoring.levels import MaturityModel, condition_id
 from lib.run_context_types import JsonDict
+from lib.run.scan_pool import fan_out
 from lib.scoring.signal_grades import EMPTY_DENOMINATORS
 from lib.unit_components import KINDS, Kind
 
@@ -535,17 +539,22 @@ def read_units(units: Any, nested_instructions: Any, *external: Any,
     members = [str(u.get("path")) for u in listed if u.get("path") not in (None, "", ".")]
     repo = {**(repo_blocks or {}), **values, "nested_instructions": nested_instructions,
             "members": members}
-    for unit in units.get("units") or []:
-        rel = str(unit.get("path", "")) if isinstance(unit, Mapping) else ""
-        if not rel:
-            continue
+    named = [(unit, rel) for unit in units.get("units") or []
+             if (rel := str(unit.get("path", "")) if isinstance(unit, Mapping) else "")]
+
+    def unit_pass(rel: str) -> tuple[dict[str, Any], dict[str, Any]]:
         inputs: dict[str, Any] = {**values, "scope": _scope(Path(values["repo_root"]), rel)}
         ctx: dict[str, Any] = {}
-        root = rel in ("", ".") and repo_blocks is not None
-        if root:
-            ctx.update(repo_blocks or {})  # the root unit's tree is the repository's
+        if rel in ("", ".") and repo_blocks is not None:
+            ctx.update(repo_blocks)  # the root unit's tree is the repository's
         elif specs:
             run(ctx, inputs, None, specs)
+        return ctx, inputs
+
+    # Each unit's pass is independent: fanned out (#1382), results in unit order.
+    passes = fan_out(unit_pass, [rel for _, rel in named])
+    for (unit, rel), (ctx, inputs) in zip(named, passes):
+        root = rel in ("", ".") and repo_blocks is not None
         own: dict[str, JsonDict] = {}
         kind = _kind(unit)
         for block in _kind_blocks(own_blocks, kinds, kind):

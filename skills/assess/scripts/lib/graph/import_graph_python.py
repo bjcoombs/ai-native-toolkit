@@ -46,7 +46,10 @@ colliding name is a build of its own; all other roots share one. Any import
 between builds is unresolved, not only an import of the colliding name, since
 which copy wins depends on a runtime `sys.path`. The finder implements both shapes of
 grimp's package-finder port (`determine_package_directory` before 3.14,
-`determine_package_directories` from 3.14), so the `grimp>=3.0` floor holds.
+`determine_package_directories` from 3.14), so the `grimp>=3.0` floor holds. The finder is
+grimp's process-wide setting, so one lock (`_FINDER_LOCK`) holds each swap and its build: two
+structure scans at once (the unit pass fans out over units, #1382) never graph through the
+other's finder.
 Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py`.
 """
 from __future__ import annotations
@@ -58,6 +61,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+import threading
 
 try:  # grimp is the Python builder's tool; degrade rather than crash if absent.
     import grimp
@@ -72,6 +76,8 @@ except ImportError:  # pragma: no cover - exercised only on a broken env
 from lib.graph.import_graph import EXCLUDE_DIRS, GraphUnavailable, ModuleGraph, NameCollision
 
 GRIMP_MISSING = "grimp not installed; static structure not assessed"
+# Holds grimp's process-wide package finder for one build at a time (module docstring).
+_FINDER_LOCK = threading.Lock()
 
 
 def _is_excluded(path: Path, repo_root: Path, extra: set[str]) -> bool:
@@ -149,16 +155,17 @@ class _PathPackageFinder:
 
 @contextmanager
 def _path_package_finder(dirs: dict[str, Path]) -> Iterator[None]:
-    """Point grimp's package finder at ``dirs`` for one build, then restore it.
+    """Point grimp's package finder at ``dirs`` for one build, then restore it, one build at a time.
 
     Callers reach this only after the builder's grimp-available check.
     """
-    original = _grimp_settings.PACKAGE_FINDER
-    _grimp_settings.configure(PACKAGE_FINDER=_PathPackageFinder(dirs))
-    try:
-        yield
-    finally:
-        _grimp_settings.configure(PACKAGE_FINDER=original)
+    with _FINDER_LOCK:
+        original = _grimp_settings.PACKAGE_FINDER
+        _grimp_settings.configure(PACKAGE_FINDER=_PathPackageFinder(dirs))
+        try:
+            yield
+        finally:
+            _grimp_settings.configure(PACKAGE_FINDER=original)
 
 
 def _module_file(module: str, roots: dict[str, Path]) -> Path | None:

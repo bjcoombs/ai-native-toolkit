@@ -551,3 +551,42 @@ def test_partition_isolates_colliding_roots_and_shares_the_rest(tmp_path):
         [tmp_path / "a" / "lib"],
         [tmp_path / "b" / "lib"],
     ]
+
+
+def test_concurrent_builds_each_graph_through_their_own_finder(tmp_path, monkeypatch):
+    """#1382: the unit pass runs structure scans at once; grimp's finder is process-wide, so a
+    build swapping it in while another is graphing would graph the wrong tree. The lock holds
+    each swap and its build: a build that starts while another holds it waits, and each tree's
+    map is its own."""
+    import threading
+
+    trees = []
+    for name in ("one", "two"):
+        root = tmp_path / name
+        trees.append((_pkg(root, "pkg", {f"only_{name}": ""}), root))
+    real = igp.grimp.build_graph
+    inside = threading.Event()
+    overlap: list[bool] = []
+
+    def slow(*args, **kwargs):
+        overlap.append(inside.is_set())
+        inside.set()
+        try:
+            threading.Event().wait(0.05)
+            return real(*args, **kwargs)
+        finally:
+            inside.clear()
+
+    monkeypatch.setattr(igp.grimp, "build_graph", slow)
+    results: dict[str, set[str]] = {}
+
+    def build(pkg, root):
+        results[root.name] = set(igp.build_import_map([pkg], root).imports)
+
+    threads = [threading.Thread(target=build, args=tree) for tree in trees]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert overlap == [False, False]
+    assert results == {"one": {"pkg", "pkg.only_one"}, "two": {"pkg", "pkg.only_two"}}

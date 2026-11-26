@@ -26,19 +26,64 @@ timing so far shows a pure-Python scan worth it. ``default_jobs`` is the CPU cou
 ``JOBS_CAP``; ``add_jobs_argument`` gives ``assess_core.py`` and ``assess_signals.py`` the same
 ``--jobs`` flag, and ``share_of_cpus`` is the per-repository default ``/fleet`` passes its children
 (``fleet.py --scan-jobs``), so N repositories at a time do not each start a full pool. Tests: ``tests/test_scan_pool.py``, ``tests/test_scan_registry.py``.
+
+Fan-out inside a scan (#1382, part 3 of #798). A few scans work through many independent
+inputs one at a time; ``fan_out(fn, items)`` maps ``fn`` over them on at most the run's
+fan-out width of threads and yields the results in input order, so a scan that folds them
+in order returns what the serial loop returns. ``run_scans`` raises the width to ``--jobs`` for
+the run with ``widened``; a width of 1 (``--jobs 1``, or a caller outside a run) is a plain lazy
+``map`` in the calling thread, the serial path as before, and a loop that stops early makes no
+further calls. A nested ``run_scans`` at ``jobs`` 1 (the unit pass) leaves the width as it is.
+An item's exception is raised when its result is reached, as in the serial loop.
 """
 from __future__ import annotations
 
 import argparse
 import heapq
 import os
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from contextlib import contextmanager
 from typing import Any, TypeVar
 
 R = TypeVar("R")
+T = TypeVar("T")
 
 JOBS_CAP = 8
+# The fan-out width of the run in progress (``widened``); 1 outside a run.
+_WIDTH = [1]
+
+
+@contextmanager
+def widened(jobs: int) -> Iterator[None]:
+    """Run the ``with`` body at fan-out width ``jobs``; ``jobs`` 1 leaves the width unchanged."""
+    before = _WIDTH[0]
+    if jobs > 1:
+        _WIDTH[0] = jobs
+    try:
+        yield
+    finally:
+        _WIDTH[0] = before
+
+
+def fan_out_width() -> int:
+    """The current fan-out width (``widened``)."""
+    return _WIDTH[0]
+
+
+def fan_out(fn: Callable[[T], R], items: Iterable[T]) -> Iterator[R]:
+    """``fn`` over ``items``, results in input order, at most ``fan_out_width()`` at a time."""
+    width = _WIDTH[0]
+    if width <= 1:
+        yield from map(fn, items)
+        return
+    pool = ThreadPoolExecutor(max_workers=width, thread_name_prefix="fanout")
+    try:
+        futures = [pool.submit(fn, item) for item in items]
+        for future in futures:
+            yield future.result()
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
 
 
 def default_jobs() -> int:
