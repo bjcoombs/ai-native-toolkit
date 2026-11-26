@@ -405,6 +405,14 @@ def test_a_pointer_with_other_instructions_stays_a_second_file(tmp_path: Path) -
     ("<!-- run npm test -->\nSee CLAUDE.md\n", ["CLAUDE.md"], None),
     ("See CLAUDE.md\n", [], None),
     ("Nothing to see here.\n", ["CLAUDE.md"], None),
+    ("Instructions: [here](docs/CLAUDE.md).\n", ["CLAUDE.md"], None),
+    ("See ../CLAUDE.md\n", ["CLAUDE.md"], None),
+    ("Read CLAUDE.md first, then run make test before pushing\n", ["CLAUDE.md"], None),
+    ("See CLAUDE.md - never push to main\n", ["CLAUDE.md"], None),
+    ("Read CLAUDE.md then run the tests\n", ["CLAUDE.md"], None),
+    ("Read CLAUDE.md for the rules on deploys releases reviews merges tickets "
+     "labels branches tags\n", ["CLAUDE.md"], None),
+    ("Instructions: [CLAUDE.md](./CLAUDE.md)\n", ["CLAUDE.md"], "CLAUDE.md"),
 ])
 def test_delegation_target_reads_only_a_bare_pointer(
         body: str, names: list[str], target: str | None) -> None:

@@ -463,19 +463,35 @@ def mirror_pair(a: str, b: str) -> tuple[list[str], list[str], bool]:
 # Inline code in a pointer line may name only the target file: any other span
 # (`make test`) is an instruction, so the file is no bare pointer (#1505).
 _INLINE_CODE = re.compile(r"`([^`\n]*)`")
-# A sentence break with more text after it: a second sentence is content.
-_SECOND_SENTENCE = re.compile(r"[.!?;]\s+\S")
+# A second clause is content: a sentence or clause break with more text after
+# it, a dash aside, or a word that joins or adds an instruction.
+_SECOND_CLAUSE = re.compile(
+    r"[.!?;,]\s+\S|\s[-\u2013\u2014]\s|\u2014"
+    r"|\b(?:and|then|but|also|never|always|must|before|after)\b", re.IGNORECASE)
+_WORD = re.compile(r"\w+")
+# Words a pointer sentence holds besides the file name ("The instructions for
+# this repository live in" is 7); more reads as an instruction of its own.
+POINTER_MAX_WORDS = 12
+
+
+def _name_pattern(name: str) -> re.Pattern[str]:
+    """The name at the file's own level: bare, ``./`` or ``@``; never ``docs/NAME``."""
+    return re.compile(rf"(?<![\w/.-])(?:\./|@)?{re.escape(name)}(?![\w/-])")
 
 
 def delegation_target(body: str, names: list[str]) -> str | None:
     """The instruction file a bare one-line pointer file delegates to, else None.
 
     A file delegates when, blank lines and one leading H1 set aside, it holds a
-    single line of one sentence that names one of ``names`` (a markdown link,
-    ``@CLAUDE.md``, ``./CLAUDE.md`` or the bare name) and no inline code beyond
-    that name. Any other line, an HTML comment included, or a second sentence
-    or command on the line is instruction content, so the file is no pointer
-    (issue #1505).
+    single one-clause line that names one of ``names`` at the same level (a
+    markdown link, ``@CLAUDE.md``, ``./CLAUDE.md`` or the bare name; never
+    ``docs/CLAUDE.md``), with no inline code beyond that name and at most
+    ``POINTER_MAX_WORDS`` other words. Any other line (an HTML comment
+    included), a second sentence or clause (``,``, ``;``, a dash, ``and``,
+    ``then``, ``never``, ``must`` and the like) or other inline code is
+    instruction content, so the file is no pointer (issue #1505). Known limit:
+    a short one-clause instruction with none of those words still reads as a
+    pointer.
     """
     lines = [line.strip() for line in body.splitlines() if line.strip()]
     if lines and lines[0].startswith("# "):
@@ -484,12 +500,14 @@ def delegation_target(body: str, names: list[str]) -> str | None:
         return None
     line = lines[0]
     for name in names:
-        pattern = re.compile(rf"(?<![\w-]){re.escape(name)}(?![\w-])")
+        pattern = _name_pattern(name)
         if not pattern.search(line):
             continue
-        rest = pattern.sub("X", line)
-        spans = [span.strip().lstrip("./@") for span in _INLINE_CODE.findall(line)]
-        if any(span != name for span in spans) or _SECOND_SENTENCE.search(rest):
+        rest = pattern.sub("", line)
+        spans = [span.strip().removeprefix("./").removeprefix("@")
+                 for span in _INLINE_CODE.findall(line)]
+        if (any(span != name for span in spans) or _SECOND_CLAUSE.search(rest)
+                or len(_WORD.findall(rest)) > POINTER_MAX_WORDS):
             return None
         return name
     return None
