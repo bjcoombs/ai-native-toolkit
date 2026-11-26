@@ -7,10 +7,13 @@ import tomllib
 from fleet_data_fixture import STAMP
 from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
 from lib.fleet.fleet_achievements import HistoryRun, build_achievements
+from lib.card_facts import fully_in_place
 from lib.fleet.fleet_data import FleetData, Privacy, build_fleet_data, dumps_fleet_data
 from lib.fleet.fleet_diagrams import report_markdown
+from lib.fleet.fleet_level import repo_level
 from lib.fleet.fleet_opportunities import MIN_INCLUDERS, Opportunities, build_opportunities
 from lib.fleet.fleet_opportunities_section import opportunities_section
+from lib.scoring.headline import practices_held
 from lib.fleet.fleet_units import build_trees, empty_map
 from lib.scoring.levels import MaturityModel, parse_levels
 from lib.run_context_types import JsonDict
@@ -95,8 +98,34 @@ def test_shared_template_names_the_source_and_the_repositories_it_would_lift() -
 
 
 def test_in_place_counts_repositories_at_each_rows_top_level() -> None:
-    assert _opps(fleet())["in_place"] == [{"row": "instr", "at_top": 2, "measured": 6},
+    # #1470: instr reads a declared signal, so d and e are not at its top level; ci is counted
+    assert _opps(fleet())["in_place"] == [{"row": "instr", "at_top": 0, "measured": 6},
                                           {"row": "ci", "at_top": 1, "measured": 6}]
+
+
+def test_a_declared_practice_reads_the_same_in_the_badge_and_the_fleet() -> None:
+    """#1470: a repository whose instruction file is only declared is not fully in place on
+    Instructions in its own badge, and the fleet's What's working count leaves it out too."""
+    m = model()
+    repo = _row("grp/d", instr=True, ci=True)
+    result = repo_level(m, repo)
+    held = [e["row"] for e in fully_in_place(result)]
+    assert held == ["ci"]
+    assert practices_held(result) == " · 1 practice fully in place"  # the badge summary's count
+    opps = _opps([repo], m)
+    assert [(p["row"], p["at_top"]) for p in opps["in_place"]] == [("instr", 0), ("ci", 1)]
+    assert [p["row"] for p in opps["in_place"] if p["at_top"]] == held
+    section = opportunities_section(_data([repo]), None)
+    assert section is not None
+    assert "- CI: 1 of 1 measured repository at the top level." in section
+    assert "- Instructions:" not in section
+
+
+def test_in_place_reads_the_level_results_passed_in() -> None:
+    rows = fleet()
+    results = {r["repo"]: repo_level(model(), r) for r in rows}
+    assert build_opportunities(model(), rows, str, results) == build_opportunities(model(), rows, str) | {
+        "step_lifts": []}
 
 
 def test_an_unknown_level_never_counts_as_a_lift() -> None:
@@ -200,12 +229,24 @@ def test_the_section_opens_with_what_is_in_place_and_ranks_no_one() -> None:
     working = section[:section.index("## Opportunities")]
     assert working.splitlines()[:5] == [
         "## What's working across the fleet", "",
-        "In place: 0 of 2 practices at the top level in every measured repository; 2 held most widely.",
-        "", "- Instructions: 2 of 6 measured repositories at the top level."]
+        "In place: 0 of 2 practices at the top level in every measured repository; 1 held most widely.",
+        "", "- CI: 1 of 6 measured repositories at the top level."]
     assert "Applies to `grp/a`, `grp/b`, `grp/c`, `grp/ci-templates`, `grp/e`." in section
     assert f"- `{SOURCE}` (CI: GitLab project include):" in section
     assert not any(line.lstrip()[:2] in {"1.", "2.", "3."} for line in lines)
     assert "Not shown: this run's achievements were not written." in section
+
+
+def test_with_nothing_in_place_the_opportunities_do_not_point_at_an_empty_list() -> None:
+    """#1470: when What's working lists no practice, the In place: line says so in its own words."""
+    section = opportunities_section(_data([_row("grp/a"), _row("grp/b")]), None)
+    assert section is not None
+    working, opps = section.split("## Opportunities")
+    assert "In place: 0 of 2 practices at the top level in any measured repository yet" in working
+    line = opps.splitlines()[2]
+    assert line == ("In place: no measured repository holds any of the 2 practices at the top level yet; "
+                    "the changes below lift the most repositories first.")
+    assert "What's working" not in line
 
 
 def test_the_report_puts_opportunities_after_credit_and_before_diagrams() -> None:

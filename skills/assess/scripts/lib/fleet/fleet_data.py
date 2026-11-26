@@ -16,7 +16,8 @@ unit and each ``team`` row, over every repository below the unit: how many were
 measured of how many (``measured``, ``repos``: "8 of 12 measured") and the lowest
 level a measured repository holds on the row (``lowest_level``; None when none was
 measured). ``met`` (#1366, part 1 of #1314) counts the measured repositories at the row's
-top level, the practice held, as ``opportunities.in_place`` counts them fleet-wide: so each
+top level by ``evaluate_row``, any grade (``opportunities.in_place`` instead counts the level
+result's ``top`` rows, counted and met, #1470): so each
 unit carries ``row -> {met, measured, repos}``, the counts a per-unit practice chart plots as
 met of measured, never a mean across repositories. An unknown or failed repository counts in
 ``repos`` only, never as 0. ``org`` rows read a group's ghreport settings, not a repository, so
@@ -28,8 +29,8 @@ they have no per-repository cell or unit roll-up; their levels stay in
 the owner's ``exclusions`` and ``gate_blockers``, every Step gate that does not hold (#945,
 which a Step target above the next Step reads), and ``in_place`` (#1334), the level result's
 practices in place with their why, for readers of the JSON (the team pages read ``groups.jsonl``
-and ``report.md`` reads ``opportunities.in_place``, whose top level is ``evaluate_row``'s, any
-grade); each unit carries a ``step`` roll-up: the lowest Step over
+and ``report.md`` reads ``opportunities.in_place``, which counts these same entries with ``top``,
+#1470); each unit carries a ``step`` roll-up: the lowest Step over
 its measured repositories, "N of M measured", and for the next Step how many repositories
 each gate holds back (a Step reads its gates only, #1083).
 

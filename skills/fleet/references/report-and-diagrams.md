@@ -32,11 +32,15 @@ skipped, each with its reason (only a full `/assess` run builds it, it needs the
 
 **What's working across the fleet** (#1334) names the practices every measured repository holds
 at the top level, then up to three more held most widely, each with how many measured
-repositories hold its top level, from `opportunities.in_place`.
+repositories hold its top level, from `opportunities.in_place`. A practice is in place by one
+rule everywhere (#1470): a repository counts only when its own level result lists the practice
+at its top level, every condition counted and met, the same rule its badge and top card use. A
+declared or config-only condition, such as an instruction file read from the tree, never counts.
 
 **Opportunities.** Rendered from `fleet-data.json`'s [`opportunities`](fleet-data.md#opportunities), so
 the two always agree. Its `In place:` line points at "What's working across the fleet", which
-states the counts once; then the biggest lift with its change and "done when",
+states the counts once (when no measured repository holds any practice at the top level, it says
+so instead of pointing at an empty list); then the biggest lift with its change and "done when",
 each shared template's lift, and **Recent progress**: the units that reached a new level
 since the previous comparable run, read from this run's `level_up` achievements. Recent
 progress is display only: it comes from the run history and never feeds a level or
