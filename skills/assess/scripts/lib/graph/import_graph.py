@@ -136,7 +136,7 @@ EXCLUDE_DIRS = frozenset({
 
 # Source extension -> language token. The token is the reason-code suffix, so it
 # stays lower-case ASCII with no separator. Shell counts: a shell-heavy repository
-# reads no_import_graph_shell, which tells a fleet reader what the code is rather
+# reads no_builder:shell, which tells a fleet reader what the code is rather
 # than that there is none. ``.h`` does not: C, C++ and Objective-C share it, so a
 # header-heavy C++ repository would read as C.
 LANGUAGE_BY_EXTENSION: dict[str, str] = {
