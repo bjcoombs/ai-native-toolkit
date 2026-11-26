@@ -495,3 +495,16 @@ def test_no_builder_reads_without_a_tool_when_none_is_known(tmp_path: Path) -> N
     assert selection.graph is None
     assert selection.reason.startswith("no_builder:rust: ")
     assert "would provide" not in selection.reason
+
+
+def test_an_uncovered_plurality_wins_over_a_covered_graph(tmp_path: Path) -> None:
+    """#825 review: dominance is the plurality of files, so more shell scripts than
+    TypeScript modules read no_builder:shell; the TypeScript graph no longer stands in.
+    Pinned so a change to how uncovered languages count is a visible decision."""
+    _write(tmp_path, "web/index.ts", "import './util';\n")
+    _write(tmp_path, "web/util.ts", "export const x = 1;\n")
+    for i in range(3):
+        _write(tmp_path, f"scripts/s{i}.sh", "echo hi\n")
+    assert dominant_language(tmp_path, builders=BUILDERS) == "shell"
+    selection = select_graph(tmp_path, BUILDERS)
+    assert selection.graph is None and selection.reason.startswith("no_builder:shell: ")
