@@ -106,6 +106,10 @@ def test_unsafe_markup_is_dropped(body: str) -> None:
     _svg("<STYLE>body{display:none}</STYLE>" + PART),
     _svg('<g ID="main">' + PART + "</g>", head='<svg class="fleet-x" xmlns="http://www.w3.org/2000/svg"><title>r</title>'),
     _svg('<lineargradient id="g"/>' + PART),
+    _svg("<style>svg.fleet-x /*{*/ , body{display:none}</style>" + PART,
+         head='<svg class="fleet-x" xmlns="http://www.w3.org/2000/svg"><title>r</title>'),
+    _svg('<style>rect{content:"}"} body{display:none}</style>' + PART),
+    _svg("<style>rect{content:'a;b'}</style>" + PART),
 ])
 def test_markup_it_cannot_trust_or_scope_stays_an_image(svg: str) -> None:
     assert inline_svg(svg, "s") is None

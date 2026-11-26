@@ -26,7 +26,9 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
   one. So does an attribute that is not double-quoted, which the id and scope checks would not
   read, and any ``<style>`` at-rule but ``@media``: a statement such as ``@layer a;`` would hide
   the next rule's selector from the scope check, and a selector that leaves the diagram through a
-  sibling combinator (``svg.<scope> ~ *``). So does a tag name not in its SVG case (``<STYLE>``),
+  sibling combinator (``svg.<scope> ~ *``), a CSS comment, or a brace, semicolon or line break in
+  a quoted string (each would let the selector check read the sheet differently from a browser).
+  Every selector is checked against the scope after scoping, on both paths. So does a tag name not in its SVG case (``<STYLE>``),
   or an ``id``, ``class``, ``href`` or ``style`` attribute name not in lowercase (``ID=``): the
   browser folds the case, the checks here do not. An end tag is written without attributes. The
   generators write none of these.
@@ -69,6 +71,9 @@ _TOKEN = re.compile(
     r"|(?P<text>[^<]+)", re.S | re.I)
 _ATTR_PARTS = re.compile(r"""(\s+)([^\s=/>"']+)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+))?""")
 _URL_SCHEME = re.compile(r"(?:java|vb)script:")
+# A CSS comment, or a brace, semicolon or line break inside a quoted string: either would make
+# the brace count in css_selectors disagree with the browser's reading of the sheet.
+_HIDES_BRACES = re.compile(r"""/\*|"[^"]*[{};\n][^"]*"|'[^']*[{};\n][^']*'""")
 _FETCH = re.compile(r"""url\(\s*['"]?(?!#)""", re.I)  # a url() that is not #-local
 _ROOT_CLASS = re.compile(r'<svg\b[^>]*?\sclass="([^"]*)"')
 _ID = re.compile(r'\sid="([^"]*)"')
@@ -216,10 +221,11 @@ def inline_svg(svg: str, scope: str) -> str | None:
             clean = scope_svg(clean, scope)
         except ValueError:
             return None
-    elif not re.fullmatch(r"[a-z][a-z0-9-]*", own) or not _scope_complete(clean, own):
+    elif not re.fullmatch(r"[a-z][a-z0-9-]*", own):
         return None
     styles = "".join(re.findall(r"<style>(.*?)</style>", clean, re.S))
-    if (sanitise(clean)[0] != clean or any(word in clean.lower() for word in UNSAFE)
+    if (_HIDES_BRACES.search(styles) or not _scope_complete(clean, root_class(clean) or "")
+            or sanitise(clean)[0] != clean or any(word in clean.lower() for word in UNSAFE)
             or _FETCH.search(clean) or "\\" in styles or re.search(r"@(?!media\b)", styles)
             or any(re.match(r"svg\.[a-z0-9-]+\s*[~+]", sel) for sel in css_selectors(styles))):
         return None
