@@ -154,13 +154,13 @@ class DocStalenessSummary(TypedDict):
     method but ``repo-baseline``: a baseline doc is measured against all of the
     repository's churn, so it reads stale on any active repository and says
     nothing about the doc), plus any generated doc whose declared source gave a
-    ``source_newer`` verdict. ``stale_docs`` counts those that
-    ``doc_complexity_join.is_stale`` marks (a ratio above
-    ``STALENESS_RATIO_THRESHOLD``, or a newer declared source) and
-    ``stale_pct`` is their share of ``measured_docs`` as a whole percent,
-    rounded up so a share is never understated. Both are null when the history
-    cannot carry the measure (a truncated or degenerate history) or no doc is
-    measured, so a reader sees unknown rather than a false fresh.
+    ``source_newer`` verdict, less a base doc with nothing beside it (#822).
+    ``stale_docs`` counts those that ``doc_complexity_join.is_stale`` marks (a
+    ratio above ``STALENESS_RATIO_THRESHOLD``, a newer declared source, or a
+    renamed direct child the doc names) and ``stale_pct`` is their share as a
+    whole percent, rounded up. Both are null on a truncated or degenerate
+    history or with no measured doc; below ``MIN_MEASURED_DOCS`` only
+    ``stale_pct`` is null, with ``stale_pct_reason``.
     ``generator_directive_docs`` counts the directive-only pages left out (#816).
     """
 
