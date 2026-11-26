@@ -182,6 +182,7 @@ def _one_file_from_step_3() -> LevelResult:
     next(c for c in level["conditions"] if c["id"] == "layer-5-ci.1")["state"] = "met"
     assert level["next_step"] is not None
     level["next_step"]["blockers"][0].update({"condition": "layer-0-instructions.1", "state": "unmet"})
+    level["conditions"] = [{**c, "row": c["id"].rpartition(".")[0]} for c in level["conditions"]]
     level.update({"ceiling_step": 3, "held_above": ["ci_runs_tests"]})
     return level
 

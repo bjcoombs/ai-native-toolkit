@@ -43,6 +43,7 @@ from typing import Any, TypedDict
 import lib.fleet.fleet_svg as svg
 from lib.svg_scope import SCOPES
 from lib.assess_diagrams import wrap
+from lib.scoring.headline import lone_condition
 from lib.scoring.level_result_types import LevelResult
 from lib.scoring.levels import MaturityModel, condition_id
 from lib.vocabulary import IN_PLACE
@@ -76,24 +77,10 @@ def lift_condition(model: MaturityModel, result: LevelResult) -> tuple[str, str,
     """``(condition, gate, step, multi_step)`` when meeting that one condition takes the repository
     to its next Step, ``step`` the Step it reaches; None otherwise (see the module docstring)."""
     nxt = result["next_step"]
-    if result["step"] is None or nxt is None:
+    lone = lone_condition(result, model.get("steps", []))  # the test the headline reads too
+    if nxt is None or lone is None:
         return None
-    definition = next((s for s in model.get("steps", []) if s["step"] == nxt["step"]), None)
-    if definition is None:
-        return None
-    by_id = {c["id"]: c for c in result["conditions"]}
-    missing: dict[str, str] = {}
-    for gate in definition["gates"]:
-        for level in range(1, gate["level"] + 1):
-            cid = condition_id(gate["row"], level)
-            if cid in by_id and by_id[cid]["state"] != "met":
-                missing.setdefault(cid, gate["id"])
-    if len(missing) != 1:
-        return None
-    ((cid, gate_id),) = missing.items()
-    cond = by_id[cid]
-    if cond["state"] != "unmet" or cond.get("reason", "").startswith("requires:"):
-        return None
+    cid, gate_id = lone
     ceiling = result.get("ceiling_step")
     reached = ceiling if isinstance(ceiling, int) and ceiling > nxt["step"] else nxt["step"]
     return cid, gate_id, reached, reached > nxt["step"]

@@ -130,7 +130,7 @@ def render_ladder(level: LevelResult, steps: Sequence[StepDef]) -> str:
     ordered = sorted(steps, key=lambda s: s["step"])
     here = level["step"]
     nxt = level["next_step"]["step"] if level["next_step"] is not None else None
-    ceiling = one_change_ceiling(level)
+    ceiling = one_change_ceiling(level, ordered)
     body = [svg.text(PAD, 28, LADDER_TITLE, size=15, weight="600", cls="fg"),
             svg.text(PAD, 48, "Each rung is a Step of agent autonomy; the gate between two rungs "
                      "lifts you to the next", size=12, cls="muted")]

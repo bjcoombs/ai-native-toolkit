@@ -208,13 +208,13 @@ def _sibling(gate: str, rollup: Any) -> str | None:
     return None
 
 
-def _blocks(level: Mapping[str, Any], rollup: Any) -> str | None:
+def _blocks(level: Mapping[str, Any], model: MaturityModel, rollup: Any) -> str | None:
     gates = blocking_gates(level)
     nxt = level.get("next_step")
     if not gates or not isinstance(nxt, Mapping):
         return None
     line = f"Blocks Step {nxt.get('step')}: {'; '.join(_gap(b) for b in gates)}."
-    ceiling = one_change_ceiling(level)
+    ceiling = one_change_ceiling(level, model.get("steps", []))
     if ceiling is not None:
         line = f"{line[:-1]}; that one change reaches Step {ceiling}."
     sibling = _sibling(str(gates[0].get("gate", "")), rollup)
@@ -281,7 +281,7 @@ def card_facts(level: Any, model: MaturityModel, since: Any, rollup: Any = None,
         return []
     start, done = start_lines(level, action)
     texts = (_lead(level, model), _holding(level, model, head_sha) if top_step(model) is not None else None,
-             _blocks(level, rollup), since_line(since), start, done)
+             _blocks(level, model, rollup), since_line(since), start, done)
     return [{"fact_id": fid, "text": text} for fid, text in zip(FACT_IDS, texts) if text]
 
 

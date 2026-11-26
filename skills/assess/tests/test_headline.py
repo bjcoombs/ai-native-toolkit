@@ -84,7 +84,7 @@ def test_the_summary_names_the_step_one_change_away():
     level = lt.level_result(model, signals)
     assert (level["step"], level["ceiling_step"]) == (1, 3)
     assert headline(level, model)["summary"] == "Step 1 · one change from Step 3: instruction file"
-    assert one_change_ceiling(level) == 3
+    assert one_change_ceiling(level, model["steps"]) == 3
     blocks = next(f["text"] for f in card_facts(level, model, None) if f["fact_id"] == "blocks")
     assert blocks.endswith("; that one change reaches Step 3.")
 
@@ -92,16 +92,46 @@ def test_the_summary_names_the_step_one_change_away():
 def test_no_one_change_step_without_a_jump_or_with_an_unread_gate():
     model = _laddered()
     plain = lt.level_result(model, {**_fresh(90), "layer_grades": {"instruction_file_present": False}})
-    assert one_change_ceiling(plain) is None  # ceiling is the next Step
+    assert one_change_ceiling(plain, model["steps"]) is None  # ceiling is the next Step
     assert headline(plain, model)["summary"] == "Step 1 · next: instruction file"
     unread = _level(step=1, ceiling_step=3, held_above=["ci_runs_tests"], next_step={"step": 2, "blockers": [
         {"kind": "gate", "gate": "instructions", "condition": "layer-0-instructions.1", "state": "not_measured",
          "reason": "needs_full_run"}]})
-    assert one_change_ceiling(unread) is None
-    assert one_change_ceiling({**unread, "ceiling_step": None}) is None
+    steps = default_model()["steps"]
+    assert one_change_ceiling(unread, steps) is None
+    assert one_change_ceiling({**unread, "ceiling_step": None}, steps) is None
     stored = _level(step=1, next_step={"step": 2, "blockers": [
         {"kind": "gate", "gate": "instructions", "condition": "layer-0-instructions.1", "state": "unmet"}]})
-    assert one_change_ceiling(stored) is None  # a result stored before #1374
+    assert one_change_ceiling(stored, steps) is None  # a result stored before #1374
+
+
+def _two_level_gate(second: str, reason: str | None = None) -> tuple[dict[str, Any], list[Any]]:
+    """Step 1 of a model whose Step 2 gate reads ``g`` to level 2 and Step 3 adds a held gate."""
+    steps = [{"step": 1, "name": "One", "gates": []},
+             {"step": 2, "name": "Two", "gates": [{"id": "deep", "row": "g", "level": 2}]},
+             {"step": 3, "name": "Three", "gates": [{"id": "deep", "row": "g", "level": 2},
+                                                    {"id": "held", "row": "h", "level": 1}]}]
+    g2: dict[str, Any] = {"id": "g.2", "row": "g", "level": 2, "grade": "measured", "counted": True, "state": second}
+    if reason:
+        g2["reason"] = reason
+    conditions = [{"id": "g.1", "row": "g", "level": 1, "grade": "measured", "counted": True, "state": "met"}, g2,
+                  {"id": "h.1", "row": "h", "level": 1, "grade": "measured", "counted": True, "state": "met"}]
+    level = _level(step=1, ceiling_step=3, held_above=["held"], conditions=conditions, next_step={"step": 2, "blockers": [
+        {"kind": "gate", "gate": "deep", "condition": "g.2", "state": second}]})
+    return level, steps
+
+
+def test_one_change_reads_conditions_not_gates():
+    """A level-2 gate with both conditions open is two changes; an unmet ``requires`` is none."""
+    level, steps = _two_level_gate("unmet")
+    assert one_change_ceiling(level, steps) == 3
+    level["conditions"][0]["state"] = "unmet"
+    level["next_step"]["blockers"][0]["condition"] = "g.1"
+    assert one_change_ceiling(level, steps) is None
+    level, steps = _two_level_gate("unmet", reason="requires:x.1")
+    assert one_change_ceiling(level, steps) is None
+    level, steps = _two_level_gate("not_measured", reason="needs_full_run")
+    assert one_change_ceiling(level, steps) is None
 
 
 def test_the_summary_names_the_first_blocking_gate_and_an_unknown_gate_by_id():
