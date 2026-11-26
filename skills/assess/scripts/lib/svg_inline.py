@@ -1,4 +1,4 @@
-"""A diagram SVG made safe to inline in a generated HTML page, or None to keep it an ``<img>`` (#1362).
+r"""A diagram SVG made safe to inline in a generated HTML page, or None to keep it an ``<img>`` (#1362).
 
 A page that inlines a diagram, rather than showing it as an ``<img>``, lets the reader hover or tap
 each part for its details (``references/embedding-diagrams.md``). An inlined SVG runs in the page,
@@ -18,6 +18,12 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
 - **Allow-list.** Any other element outside ``ELEMENTS`` (the SVG drawing elements), a CDATA
   section, markup the tokenizer cannot read, or a root that is not one balanced ``<svg>``: None.
   An element such as ``<img>`` or ``<p>`` would break out of the SVG in an HTML parser.
+- **Where the HTML parser differs.** ``<title>`` and ``<desc>`` are HTML integration points and a
+  ``<style>``'s text has its character references decoded, so these hold text only (no child
+  element). A literal ``<`` or ``>`` in an attribute value, a ``<style>`` with attributes, and an
+  ``&`` or ``\`` in a ``<style>``'s text or a ``style`` attribute (an entity or a CSS escape could
+  spell ``url(`` or ``@import``) all refuse; a ``\`` refuses in any attribute but a ``data-*``
+  one. The generators write none of these.
 - **Scoped.** A root that already carries a class is the generator's scope (#1449): kept when it
   is complete (every id, reference and style selector under it), None otherwise. A root without a
   class is scoped here under ``scope``.
@@ -44,6 +50,7 @@ ELEMENTS = frozenset({
     "polygon", "path", "text", "tspan", "textpath", "pattern", "lineargradient", "radialgradient",
     "stop", "clippath", "mask", "marker", "use", "symbol", "a", "metadata"})
 DROPPED = frozenset({"script", "foreignobject"})  # removed with their contents
+TEXT_ONLY = frozenset({"title", "desc", "style"})  # no child element: see the module docstring
 UNSAFE = ("<script", "foreignobject", "javascript:", "vbscript:", "@import", "image-set")
 
 _ATTR = r"""\s+[^\s=/>"']+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+))?"""
@@ -59,13 +66,17 @@ _ID = re.compile(r'\sid="([^"]*)"')
 _REF = re.compile(r'url\(#([^)]+)\)|\s(?:xlink:)?href="#([^"]*)"')
 
 
-def _safe_attrs(element: str, attrs: str) -> str:
-    """``attrs`` without event handlers, script URLs or fetches, the rest as written."""
+def _safe_attrs(element: str, attrs: str) -> str | None:
+    """``attrs`` without event handlers, script URLs or fetches, the rest as written; None to refuse."""
     kept = []
     for m in _ATTR_PARTS.finditer(attrs):
-        value = html.unescape((m.group(3) or "").strip("\"'"))
-        value = re.sub(r"[\x00-\x20]", "", value).lower()
+        raw = (m.group(3) or "").strip("\"'")
         name = m.group(2).lower()
+        if "<" in raw or ">" in raw or element == "style" or ("\\" in raw and not name.startswith("data-")) \
+                or (name == "style" and "&" in raw):
+            return None
+        value = html.unescape(raw)
+        value = re.sub(r"[\x00-\x20]", "", value).lower()
         fetches = _FETCH.search(value) or (name.endswith("href") and element != "a" and not value.startswith("#"))
         if name.startswith("on") or _URL_SCHEME.search(value) or fetches:
             continue
@@ -73,8 +84,40 @@ def _safe_attrs(element: str, attrs: str) -> str:
     return "".join(kept)
 
 
+class _Refused(Exception):
+    """The markup cannot be inlined safely."""
+
+
+def _text(text: str, open_names: list[str]) -> str:
+    """A text token as kept: outside the root only whitespace (dropped), in a ``<style>`` no ``&`` or ``\\``."""
+    if not open_names:
+        if text.strip():
+            raise _Refused
+        return ""
+    if open_names[-1] == "style" and re.search(r"[&\\]", text):
+        raise _Refused
+    return text
+
+
+def _check_tag(name: str, close: bool, open_names: list[str], closed: bool) -> None:
+    """Refuse a tag inside a text-only element, outside ``ELEMENTS``, or outside one ``<svg>`` root."""
+    if open_names and open_names[-1] in TEXT_ONLY and not (close and name == open_names[-1]):
+        raise _Refused
+    if name in DROPPED:
+        return
+    if name not in ELEMENTS or closed or (not open_names and (name != "svg" or close)):
+        raise _Refused
+
+
 def sanitise(svg: str) -> tuple[str, bool]:
     """``svg`` sanitised, and whether it has per-part details; ``("", False)`` when refused."""
+    try:
+        return _sanitise(svg)
+    except _Refused:
+        return "", False
+
+
+def _sanitise(svg: str) -> tuple[str, bool]:
     out: list[str] = []
     open_names: list[str] = []
     skipping = 0  # depth inside a dropped element
@@ -83,31 +126,31 @@ def sanitise(svg: str) -> tuple[str, bool]:
     while pos < len(svg):
         m = _TOKEN.match(svg, pos)
         if m is None:
-            return "", False
+            raise _Refused
         pos = m.end()
         if m.group("comment") or m.group("prolog"):
             continue
         if m.group("text") is not None:
-            if not skipping and (open_names or not m.group("text").strip()):
-                out.append(m.group("text") if open_names else "")
-            elif not skipping:
-                return "", False
+            out.append("" if skipping else _text(m.group("text"), open_names))
             continue
-        name, close, empty = m.group("name").lower(), m.group("close"), m.group("empty")
+        name, close, empty = m.group("name").lower(), bool(m.group("close")), m.group("empty")
+        if not skipping:
+            _check_tag(name, close, open_names, closed)
         if skipping or name in DROPPED:
             if not empty:
                 skipping += -1 if close else 1
             continue
-        if name not in ELEMENTS or closed or (not open_names and (name != "svg" or close)):
-            return "", False
         if close:
             if open_names.pop() != name:
-                return "", False
+                raise _Refused
             closed = not open_names
             out.append(m.group(0))
             continue
         details = details or (name == "title" and len(open_names) > 1)
-        out.append(f"<{m.group('name')}{_safe_attrs(name, m.group('attrs'))}{'/' if empty else ''}>")
+        attrs = _safe_attrs(name, m.group("attrs"))
+        if attrs is None:
+            raise _Refused
+        out.append(f"<{m.group('name')}{attrs}{'/' if empty else ''}>")
         if not empty:
             open_names.append(name)
         elif not open_names:

@@ -105,9 +105,10 @@ each picture with per-part details (#1362); its default tooltip helper is #1364.
 
 With `--levels`, the run also writes `fleet-view.html` beside `report.md` (#946,
 `lib/fleet/fleet_page.py`). It is one file that works offline. Its CSS and JavaScript are
-inline, the run's data is embedded as JSON, and the tag and Step pictures are embedded in it. It makes no network request and works out no level, Step or achievement: every number
-comes from `fleet-data.json` and `achievements.json`. Two runs over the same inputs write the
-same bytes. `--no-diagrams` removes it.
+inline, the run's data is embedded as JSON, and the tag and Step pictures are embedded in it.
+It makes no network request and works out no level, Step or achievement: every number comes
+from `fleet-data.json` and `achievements.json`. Two runs over the same inputs write the same
+bytes. `--no-diagrams` removes it.
 
 The page opens on the ownership root, or on the unit a viewer pinned in this browser. Its
 sections, in order:
@@ -136,11 +137,12 @@ sections, in order:
 7. **Fleet pictures**: the drawn tag and Step SVGs. A picture with per-part details is inlined,
    so hovering a part shows its `<title>`; one with only a root title (the Step movement grid)
    stays an image. Before inlining, the page drops `<script>`, `<foreignObject>`, every `on*`
-   attribute, every `javascript:` or `vbscript:` URL and every reference that would fetch
-   (a `url(...)` or `href` that is not `#`-local, a link's `href` apart), and refuses (keeping the
-   image) any element outside the SVG drawing set, so the page still makes no network request. Each inlined SVG keeps its generator's style scope and
-   id prefix, or gets `fleet-page-<file>` when it has none, so no two diagrams share a style or
-   an id. Each picture has a "Save full size" link to the SVG as drawn (`lib/svg_inline.py`).
+   attribute, every `javascript:` or `vbscript:` URL and every reference that would fetch (a
+   `url(...)` or `href` that is not `#`-local, a link's `href` apart). It keeps the image for any
+   element outside the SVG drawing set and for markup an HTML parser would read differently
+   (`lib/svg_inline.py` lists the cases), so the page still makes no network request. Each
+   inlined SVG keeps its generator's style scope and id prefix, or gets `fleet-page-<file>` when
+   it has none, so no two diagrams share a style or an id. Each picture has a "Save full size" link to the SVG as drawn (`lib/svg_inline.py`).
 
 Names follow the run's output mode. `--full` names repositories and units by their keys and
 paths and shows an exclusion's reason. A hashed run shows hashed ids. Plain counts-only shows

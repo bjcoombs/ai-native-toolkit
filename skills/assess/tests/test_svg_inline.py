@@ -81,6 +81,17 @@ def test_unsafe_markup_is_dropped(body: str) -> None:
     _svg("<style>rect {fill:url(https://example.com/p)}</style>" + PART),
     _svg("<style>rect {fill:u\\72l(x)}</style>" + PART),
     _svg('<style>rect {background:image-set("x.png" 1x)}</style>' + PART),
+    _svg('<desc><style><a title="</style><img src=x onerror=alert(1)>"></a></style></desc>' + PART),
+    _svg('<title><style><a title="</style><img src=x onerror=alert(1)>"></a></style></title>' + PART),
+    _svg("<desc><script>x</script></desc>" + PART),
+    _svg('<g data-x="a>b">' + PART + "</g>"),
+    _svg('<style type="text/css">body{display:none}</style>' + PART),
+    _svg('<style type="text/css">@\\69mport "https://evil.example/x.css";</style>' + PART),
+    _svg("<style>rect{fill:u&#114;l(https://evil.example/a)}</style>" + PART),
+    _svg('<style>&#64;import "https://evil.example/b";</style>' + PART),
+    _svg('<rect style="fill:u\\72l(https://evil.example/c)"/>' + PART),
+    _svg('<rect style="fill:image&#45;set(\'https://evil.example/d\' 1x)"/>' + PART),
+    _svg('<rect fill="u\\72l(https://evil.example/e)"/>' + PART),
 ])
 def test_markup_it_cannot_trust_or_scope_stays_an_image(svg: str) -> None:
     assert inline_svg(svg, "s") is None
@@ -91,6 +102,11 @@ def test_a_complete_generator_scope_is_kept() -> None:
     body = ('<style>svg.ok rect {fill:url(#ok-p)} @media (x){svg.ok text {fill:red}} svg.ok {color:red}</style>'
             '<pattern id="ok-p"/><use href="#ok-p"/>' + PART)
     assert inline_svg(_svg(body, head), "s") == _svg(body, head)
+
+
+def test_a_data_attribute_may_hold_a_backslash_and_an_ampersand() -> None:
+    out = inline_svg(_svg('<rect data-path="a\\b &amp; c" width="1"><title>part</title></rect>'), "s")
+    assert out is not None and 'data-path="a\\b &amp; c"' in out
 
 
 def test_a_link_keeps_its_external_href() -> None:
