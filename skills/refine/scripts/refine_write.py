@@ -18,8 +18,8 @@ rules below are enforced here, in code, whatever the plan says:
   overlap and no exact duplicate, and every judgement item is resolved by
   the plan with no open question. The size is read again just before the
   label goes on (`current_size`): it must still be present when the verdict
-  had one, at most `max_points` (the definition's, read as `refine.py` reads
-  it, unless `REFINE_MAX_POINTS` is above 0: `refine_definition.size_limit`),
+  had one, at most `max_points` (the one the verdict records, unless
+  `REFINE_MAX_POINTS` is above 0: `refine_definition.size_limit`),
   and equal to the plan's size when the plan sized the issue. An issue the
   verdict found `unsized` must read a size by then, or have been sized by this
   run: a marker this run posted (live) or recorded (dry-run) stands in when the
@@ -66,7 +66,6 @@ import subprocess
 import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
-from functools import cached_property
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
@@ -185,9 +184,8 @@ class Settings:
         self.state_dir = Path(base)
         self.actions_log = Path(e.get("REFINE_ACTIONS_LOG") or str(self.state_dir / "actions.jsonl"))
 
-    @cached_property
-    def max_points(self) -> int:  # read once on use, so a job that never sizes needs no definition
-        return size_limit(self.max_points_override, DEFAULT_MAX_POINTS)
+    def max_points(self, verdict: Optional[Json]) -> int:  # the limit the verdict's refine.py run used
+        return size_limit(self.max_points_override, DEFAULT_MAX_POINTS, (verdict or {}).get("definition"))
 
 
 class Writer:
@@ -355,8 +353,9 @@ class Writer:
             if entry.get("size_points") is not None or entry.get("unsized") is True:
                 return "the issue reads no size"
             return ""
-        if current > self.s.max_points:
-            return f"the size now reads {current}, above {self.s.max_points}"
+        limit = self.s.max_points(verdict)
+        if current > limit:
+            return f"the size now reads {current}, above {limit}"
         if isinstance(planned, int) and current != planned:
             return f"the size now reads {current}, not the plan's {planned}"
         return ""
@@ -386,7 +385,7 @@ class Writer:
         if self.s.ready_label in _label_names(info):
             to_add.remove(self.s.ready_label)
             return None
-        reason = ready_blocker(number, verdict, plan, self.s.max_points) or self.size_drift(number, info, verdict, plan)
+        reason = ready_blocker(number, verdict, plan, self.s.max_points(verdict)) or self.size_drift(number, info, verdict, plan)
         if reason:
             to_add.remove(self.s.ready_label)
             return f"{self.s.ready_label}: {reason}"

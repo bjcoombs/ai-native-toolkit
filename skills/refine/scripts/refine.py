@@ -145,7 +145,7 @@ def build_plan(backlog: Backlog, definition: Definition, definition_path: str, n
         repository=backlog.repo,
         platform=backlog.platform,
         dry_run=dry_run,
-        definition=DefinitionRef(path=definition_path, version=definition["version"],
+        definition=DefinitionRef(path=definition_path, version=definition["version"], max_points=definition["max_points"],
                                  size_pattern=definition["size_pattern"], size_marker=definition["size_marker"]),
         issue=only,
         summary=summary,

@@ -12,9 +12,11 @@ from typing import Dict
 
 import pytest
 import yaml  # required: the plugin contract job installs pyyaml
+from refine_env import FIXTURE_REPO, NOW, recorded_backlog
 from refine_gitlab_env import PROJECT, FakeGlab
 from refine_write_env import REPO, writer
 
+import refine  # noqa: E402
 import refine_definition  # noqa: E402  (the env modules put the scripts on sys.path)
 import refine_write  # noqa: E402
 import refine_write_gitlab  # noqa: E402
@@ -56,7 +58,7 @@ def test_a_definition_of_3_refuses_5_when_the_input_is_unset(tmp_path: Path, mon
     monkeypatch.chdir(tmp_path)
     kw = {} if override is None else {"REFINE_MAX_POINTS": override}
     w, gh = writer(tmp_path, {**OPEN_101, "issues/101/comments": _sized(5)}, **kw)
-    assert w.s.max_points == 3
+    assert w.s.max_points(None) == 3
     result = w.edit_labels(101, ["agent-ready"], [], _verdict(), _plan(5))
     assert any("not between 1 and 3" in r for r in result["refused"])
     assert gh.writes == []
@@ -66,7 +68,7 @@ def test_an_explicit_input_overrides_the_definition(tmp_path: Path, monkeypatch:
     _definition_saying(tmp_path, 3)
     monkeypatch.chdir(tmp_path)
     w, gh = writer(tmp_path, {**OPEN_101, "issues/101/comments": _sized(5)}, REFINE_MAX_POINTS="5")
-    assert w.s.max_points == 5
+    assert w.s.max_points(None) == 5
     w.edit_labels(101, ["agent-ready"], [], _verdict(), _plan(5))
     assert gh.writes[0][-4:] == ["--add-label", "agent-ready", "--remove-label", "needs-triage"]
 
@@ -86,8 +88,8 @@ def test_gitlab_reads_the_same_limit(tmp_path: Path, monkeypatch: pytest.MonkeyP
     fake = FakeGlab(GITLAB_ISSUE_1)
     w = refine_write.make_writer(refine_write.Settings(env), fake)
     assert isinstance(w, refine_write_gitlab.GitLabWriter)
-    assert w.s.max_points == expected
-    assert refine_write.Settings({**env, "REFINE_PLATFORM": "github", "GH_REPO": "a/b"}).max_points == expected
+    assert w.s.max_points(None) == expected
+    assert refine_write.Settings({**env, "REFINE_PLATFORM": "github", "GH_REPO": "a/b"}).max_points(None) == expected
     if expected == 1:  # the issue's notes size it at 2, above the definition's 1
         issue = {"number": 1, "verdict": "ready", "settled": True, "checklist": [], "overlaps": [],
                  "duplicates": [], "unsized": False, "size_points": 1, "labels": ["needs-triage"]}
@@ -117,16 +119,30 @@ def test_parse_override(raw: str, value: int) -> None:
     assert refine_definition.parse_override(raw) == value
 
 
-def test_the_limit_is_read_once_per_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_verdict_records_the_limit_refine_py_used(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # refine.py --definition <other file> allowed 5; the default path says 3.
+    # The writer follows the verdict, not a second read of a different file.
     _definition_saying(tmp_path, 3)
     monkeypatch.chdir(tmp_path)
-    s = refine_write.Settings({"GH_REPO": "a/b"})
-    assert s.max_points == 3
-    _definition_saying(tmp_path / "moved", 5)
-    (tmp_path / "moved" / "docs").replace(tmp_path / "docs-new")
-    (tmp_path / "docs").rename(tmp_path / "docs-old")
-    (tmp_path / "docs-new").rename(tmp_path / "docs")
-    assert s.max_points == 3
+    v = _verdict()
+    v["definition"] = {**v["definition"], "max_points": 5}  # type: ignore[dict-item]
+    w, gh = writer(tmp_path, {**OPEN_101, "issues/101/comments": _sized(5)})
+    assert w.s.max_points(v) == 5 and w.s.max_points(None) == 3
+    w.edit_labels(101, ["agent-ready"], [], v, _plan(5))
+    assert gh.writes[0][-4:] == ["--add-label", "agent-ready", "--remove-label", "needs-triage"]
+    w, gh = writer(tmp_path, {**OPEN_101, "issues/101/comments": _sized(5)}, REFINE_MAX_POINTS="3")
+    result = w.edit_labels(101, ["agent-ready"], [], v, _plan(5))
+    assert any("not between 1 and 3" in r for r in result["refused"]) and gh.writes == []
+
+
+def test_refine_py_writes_max_points_into_the_verdict(tmp_path: Path) -> None:
+    other = tmp_path / "other"
+    _definition_saying(other, 5)
+    out = tmp_path / "verdict.json"
+    assert refine.main(["--repo", FIXTURE_REPO, "--now", NOW, "--out", str(out),
+                        "--definition", str(other / "docs" / "contributing" / "definition-of-ready.md")],
+                       backlog=recorded_backlog()) == 0
+    assert json.loads(out.read_text(encoding="utf-8"))["definition"]["max_points"] == 5
 
 
 def test_the_four_defaults_agree() -> None:

@@ -57,6 +57,10 @@
           "type": "integer",
           "minimum": 0
         },
+        "max_points": {
+          "type": "integer",
+          "minimum": 1
+        },
         "size_pattern": {
           "type": "string"
         },

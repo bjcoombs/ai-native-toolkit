@@ -20,7 +20,7 @@ right type, so a renamed key fails loudly instead of disabling a check.
 
 `resolve_path` finds the document the way `refine.py --definition` defaults:
 under the current directory, then under this toolkit checkout. `size_limit`
-(after `parse_override`) gives the write scripts the same `max_points` (#1439 follow-up): an explicit
+(after `parse_override`) gives the write scripts the `max_points` the verdict records (#1439 follow-up): an explicit
 `REFINE_MAX_POINTS` above 0 overrides it, otherwise the definition decides.
 
 Python 3.8 compatible and stdlib only.
@@ -234,18 +234,22 @@ def parse_override(raw: str) -> int:
     return int(text)
 
 
-def size_limit(override: int, fallback: int) -> int:
-    """The largest size that can be ready: what `refine.py`'s `sized` check uses.
+def size_limit(override: int, fallback: int, ref: Any = None) -> int:
+    """The largest size that can be ready: the `max_points` `refine.py`'s `sized` check used.
 
     `override` (`parse_override` of `REFINE_MAX_POINTS`) wins when above 0;
-    0 means unset. Otherwise `max_points` comes from the definition at
-    `resolve_path()`. When neither place has the document, as in a write job
-    that checks out only the scripts for a repository with no definition of
-    its own, `refine.py` read this toolkit's copy, so `fallback` is returned;
-    a test keeps it equal to that copy's `max_points`.
+    0 means unset. Otherwise `ref`, the verdict's `definition` block, names the
+    `max_points` `refine.py` read, whichever definition file it read (the
+    verdict is digest-checked between the plan and apply jobs). A verdict
+    without one falls back to the definition at `resolve_path()`, and when
+    neither place has that document to `fallback`, which a test keeps equal to
+    this toolkit's copy.
     """
     if override:
         return override
+    recorded = ref.get("max_points") if isinstance(ref, dict) else None
+    if isinstance(recorded, int) and not isinstance(recorded, bool) and recorded >= 1:
+        return recorded
     path = resolve_path()
     if not path.is_file():
         return fallback
