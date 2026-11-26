@@ -17,6 +17,10 @@ A repository with no measured Step (a failed scan) is never drawn at Step 1: it 
 on its own hatched line, by its reason code. No repository is named, so the SVG reads the
 same in ``--full``, counts-only and hashed output.
 
+The SVG reads in the Step ladder's order (``lib/assess_diagrams_ladder.py``): the top Step
+first and Step 1 last, with no option (#1330). A segment names its gate by the maturity
+model row the gate reads (``row_label`` of its title), never by the gate id.
+
 `funnel_view(model, data)` -> `FunnelView` (`bars`: `step`, `name`, `count`, `held_by_more`,
 `segments` of `gate`, `kind`, `reason`, `count`; `not_measured`: `(reason, count)` pairs).
 `render(model, data)` -> `step-funnel.svg`, the stable entry point the fleet page (#946)
@@ -30,7 +34,7 @@ from typing import Any, TypedDict
 
 import lib.fleet.fleet_svg as svg
 from lib.svg_scope import SCOPES
-from lib.assess_diagrams import wrap
+from lib.assess_diagrams import row_label, wrap
 from lib.scoring.levels import MaturityModel
 from lib.vocabulary import IN_PLACE
 
@@ -136,15 +140,22 @@ def _side(bar: FunnelBar) -> str:
     return side
 
 
-def segment_text(segment: Segment) -> str:
+def gate_titles(model: MaturityModel) -> dict[str, str]:
+    """Each Step gate's id to the title of the model row it reads, as the report names rows."""
+    titles = {r["id"]: row_label(r["title"]) for r in model.get("rows", [])}
+    return {g["id"]: titles.get(g["row"], g["id"]) for s in model.get("steps", []) for g in s["gates"]}
+
+
+def segment_text(segment: Segment, titles: Mapping[str, str]) -> str:
     n = segment["count"]
     if segment["kind"] == "top":
         return f"{n} at the top Step"
+    gate = titles.get(segment["gate"] or "", segment["gate"])
     if segment["kind"] == "not_measured":
-        return f"{n} where {segment['gate']} was not measured ({segment['reason'] or 'no_value'})"
+        return f"{n} where {gate} was not measured ({segment['reason'] or 'no_value'})"
     if segment["kind"] == "set_aside":
-        return f"{n} where the owner set {segment['gate']} aside"
-    return f"{n} held by {segment['gate']}"
+        return f"{n} where the owner set {gate} aside"
+    return f"{n} held by {gate}"
 
 
 def _role(segment: Segment, gates: dict[str, int]) -> str:
@@ -164,16 +175,19 @@ def render(model: MaturityModel, data: Mapping[str, Any]) -> str:
     """``step-funnel.svg`` from the model's Steps and a ``fleet-data.json`` mapping."""
     view = funnel_view(model, data)
     steps = sorted(model.get("steps", []), key=lambda s: s["step"])
+    titles = gate_titles(model)
     top = max((b["count"] for b in view["bars"]), default=0)
     scale = svg.LinearScale(0, svg.nice_ceiling(top), 0, BAR_W)
     x0 = PAD + LABEL_W
     side_w = max((svg.text_width(_side(b), 11.5) for b in view["bars"]), default=0.0)
-    width = max(WIDTH, x0 + BAR_W + 8 + side_w + PAD)
+    line_w = max((svg.text_width(segment_text(s, titles), 11.5) for b in view["bars"] for s in b["segments"]),
+                 default=0.0)
+    width = max(WIDTH, x0 + BAR_W + 8 + side_w + PAD, x0 + 18 + line_w + PAD)
     body = [svg.text(PAD, 28, TITLE, size=15, weight="600", cls="fg"),
             svg.text(PAD, 48, "Each repository counts once, under the first gate of its next Step that does "
                      "not hold", size=12, cls="muted")]
     y = 76.0
-    for bar in view["bars"]:
+    for bar in reversed(view["bars"]):  # the Step ladder's order: the top Step first (#1330)
         nxt = next((s for s in steps if s["step"] == bar["step"] + 1), None)
         gates = {g["id"]: i for i, g in enumerate(nxt["gates"])} if nxt else {}
         side = _side(bar)
@@ -189,7 +203,7 @@ def render(model: MaturityModel, data: Mapping[str, Any]) -> str:
         y += BAR_H + 6
         for segment in bar["segments"]:
             parts.append(_swatch(x0, y + 3, segment, _role(segment, gates), 11.0, 11.0))
-            parts.append(svg.text(x0 + 18, y + 13, segment_text(segment), size=11.5, cls="fg"))
+            parts.append(svg.text(x0 + 18, y + 13, segment_text(segment, titles), size=11.5, cls="fg"))
             y += LINE_H
         parts.append("</g>")
         body.append("".join(parts))
