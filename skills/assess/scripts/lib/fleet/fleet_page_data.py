@@ -39,6 +39,8 @@ repositories at the row's top level out of those with a known level, never a mea
 names the rows the page draws a spoke for: those measured (a known level) in at least
 ``min_share`` percent (``RADAR_MIN_SHARE``, 20) of the fleet's repositories, the axis rule #1367
 sets for ``radar.svg``. ``radar_axes`` picks them, the one count the bundle works out itself.
+``measured_counts``, ``keeps_axis`` and ``RADAR_MIN_SHARE`` are the one home of that rule:
+``fleet_radar`` and the ``--radar-min-measured`` default import them from here.
 
 **Front screen** (#1255, ``lib/fleet/fleet_front.py``): copied as computed, counts and gate ids
 only; its team links are replaced by the ownership view's team units under the labels above, so
@@ -98,16 +100,28 @@ class PageBundle(_PackKeys):
     radar: Radar  # the Practice shape spokes (#1368)
 
 
+def measured_counts(data: Mapping[str, Any]) -> dict[str, int]:
+    """The fleet's repositories with a known level (a cell with status ``level``) on each row, by row id."""
+    known: dict[str, int] = {}
+    for repo in data.get("repos") or []:
+        for cell in repo.get("rows") or []:
+            if cell.get("status") == "level":
+                known[cell["row"]] = known.get(cell["row"], 0) + 1
+    return known
+
+
+def keeps_axis(measured: int, repos: int, min_share: int) -> bool:
+    """The axis rule: a row measured in at least ``min_share`` percent of ``repos`` repositories,
+    compared in integers. A fleet with no repository keeps none."""
+    return repos > 0 and measured * 100 >= min_share * repos
+
+
 def radar_axes(data: Mapping[str, Any], rows: Mapping[str, int], min_share: int = RADAR_MIN_SHARE) -> list[int]:
     """The team rows measured (a known level) in at least ``min_share`` percent of the fleet's
     repositories, as indexes into the page's ``rows``. A fleet with no repository has none."""
-    repos = data.get("repos") or []
-    known = {i: 0 for i in rows.values()}
-    for repo in repos:
-        for cell in repo.get("rows") or []:
-            if cell["row"] in rows and cell["status"] == "level":
-                known[rows[cell["row"]]] += 1
-    return [i for i in sorted(known) if repos and known[i] * 100 >= min_share * len(repos)]
+    repos = len(data.get("repos") or [])
+    known = measured_counts(data)
+    return sorted(i for row, i in rows.items() if keeps_axis(known.get(row, 0), repos, min_share))
 
 
 def _front(front: Mapping[str, Any] | None, data: Mapping[str, Any], label: Mapping[str, str]) -> dict[str, Any] | None:

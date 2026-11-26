@@ -179,7 +179,7 @@ from lib.fleet.fleet_compare import (
 from lib.fleet.fleet_diagrams import REPORT_FILE, build_diagrams, clear_diagrams, step_moves_for, write_diagrams
 from lib.fleet.fleet_front import front_section, guarded_front
 from lib.fleet.fleet_step_movement import StepMoves
-from lib.fleet.fleet_page_data import mode_of
+from lib.fleet.fleet_page_data import RADAR_MIN_SHARE, mode_of
 from lib.fleet.fleet_page import write_page
 from lib.fleet.fleet_achievements import (
     ACHIEVEMENTS_FILE,
@@ -419,7 +419,7 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
               comparison: Comparison | None = None, credit: str | None = None,
               coverage: str | None = None, opportunities: Callable[[], str | None] | None = None,
               data: FleetData | None = None, earlier: FleetRun | str | None = None, achieved: Achievements | None = None,
-              groups: Sequence[str] = (), includes: str | None = None, radar_min: int = 20) -> None:
+              groups: Sequence[str] = (), includes: str | None = None, radar_min: int = RADAR_MIN_SHARE) -> None:
     """Draw the diagrams, their report and fleet-view.html (#946), or clear them; a failure never changes the exit code."""
     try:
         if no_diagrams:

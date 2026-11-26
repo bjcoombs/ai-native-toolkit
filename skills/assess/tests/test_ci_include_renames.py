@@ -89,6 +89,18 @@ def test_a_host_wide_failure_stops_the_asking(tmp_path, api):
         assert len(api.calls) == 1
 
 
+def test_a_timeout_after_one_rename_keeps_the_rename_already_found(tmp_path, api):
+    ci = OLD + "  - project: grp/second\n    file: /t.yml\n"
+    root, app = _root(tmp_path, ci)
+    api.answers.update({"projects/grp%2Fold-templates": "grp/ci-templates",
+                        "projects/grp%2Fsecond": "glab_timeout: no answer"})
+    got = renames_mod.read_include_renames(app, root)
+    assert got == IncludeRenames(frozenset({"grp/old-templates"}),
+                                 (("grp/old-templates", "grp/ci-templates"),))
+    assert [c[1] for c in api.calls] == ["projects/grp%2Fold-templates", "projects/grp%2Fsecond"]
+    assert [r["rename"] for r in resolve_includes(app, root, got).includes] == ["followed", "not_checked"]
+
+
 def test_an_answer_of_another_shape_is_not_checked(tmp_path, api, monkeypatch):
     root, app = _root(tmp_path)
     monkeypatch.setattr(renames_mod, "glab_api", lambda *_a, **_k: [])
