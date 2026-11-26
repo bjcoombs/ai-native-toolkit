@@ -778,3 +778,22 @@ def test_report_code_data_maxima_absent_on_older_snapshot() -> None:
                 if "**Complexity profile:**" in ln)
     assert line == ("- **Complexity profile:** p95 LOC 483.6 (max 761), "
                     "p95 CCN 107.3 (max 169)")
+
+
+def test_the_report_lists_the_practices_in_place_with_their_why_before_the_blocking_gate() -> None:
+    """#1334: two rows at their top level, each with its why, come before the blocking gate."""
+    import lib.scoring.level_tally as lt
+    from lib.exec_summary import summarised
+    from lib.scoring.headline import headline
+    from test_level_tally import _in_place_model
+    model = _in_place_model()
+    model["steps"] = [{"step": 1, "name": "Assisted", "gates": []}, {"step": 2, "name": "Supervised", "gates": [
+        {"id": "liveness", "row": "layer-1-liveness", "level": 1}]}]
+    level = lt.level_result(model, {"doc_staleness": {"available": True, "summary": {"stale_pct": 10}},
+                                    "guardrails": {"available": True, "stated_pct": 100}})
+    ctx = {**_minimal_ctx(), "level": level, "headline": summarised(headline(level, model), level, None, model)}
+    report = render_report(ctx, "demo")
+    blocks = report.index("Blocks Step 2:")
+    for entry in level["in_place"]:
+        assert entry["top"] and 0 < report.index(entry["why"]) < blocks
+    assert report.index("In place: 2 practices at their top level.") < blocks

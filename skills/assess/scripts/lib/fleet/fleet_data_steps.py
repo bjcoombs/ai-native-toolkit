@@ -13,6 +13,10 @@ Steps that does not hold (``level_tally.gate_blockers``: once per gate id, in St
 each as tokens only: its ``gate`` id, the blocking condition's ``state`` and its
 ``disposition`` (``excluded_by_owner``, else null), so a Step target above the repository's next Step
 reads which of its gates are missing (#945); empty when every gate holds or not measured.
+``in_place`` (#1334) copies the level result's practices in place (``level_tally.in_place``): each
+row at its top level and each row a held Step's gate reads, with its level, ``top``, the gate ids
+and the check manifest's why; empty when not measured. Row ids, gate ids and the why are the
+model's and the toolkit's own text, so counts-only keeps them (``FLEET_DATA_KEPT``).
 
 **Per unit** (``step_roll_up``), over every repository below the unit (#772 option A: no
 average and no repository named):
@@ -46,7 +50,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, TypedDict
 
-from lib.scoring.level_result_types import LevelResult, NextStep, Tally
+from lib.scoring.level_result_types import InPlace, LevelResult, NextStep, Tally
 from lib.scoring.level_tally import EXCLUDED_BY_OWNER, gate_blockers
 from lib.scoring.levels import StepDef, StepGate
 
@@ -72,6 +76,7 @@ class RepoSteps(TypedDict):
     tally: Tally | None
     exclusions: list[RepoExclusion]
     gate_blockers: list[GateBlocker]  # every Step gate that does not hold, in model order (#945)
+    in_place: list[InPlace]  # #1334: the level result's practices in place, as level.json gives them
 
 
 class GateHold(TypedDict):
@@ -96,7 +101,8 @@ class StepRollUp(TypedDict):
     next_step: StepHold | None  # None at the top Step or when none was measured
 
 
-NO_STEPS: RepoSteps = {"step": None, "next_step": None, "tally": None, "exclusions": [], "gate_blockers": []}
+NO_STEPS: RepoSteps = {"step": None, "next_step": None, "tally": None, "exclusions": [], "gate_blockers": [],
+                       "in_place": []}
 
 
 def _reasons(scans: Mapping[str, Any] | None) -> dict[str, str]:
@@ -115,7 +121,7 @@ def repo_steps(result: LevelResult | None, scans: Mapping[str, Any] | None,
     """One repository's Step fields from its level result (None: not measured) under ``steps``,
     the model's ``[[steps]]``."""
     if result is None:
-        return {**NO_STEPS, "exclusions": [], "gate_blockers": []}
+        return {**NO_STEPS, "exclusions": [], "gate_blockers": [], "in_place": []}
     reasons = _reasons(scans)
     return {
         "step": result["step"],
@@ -125,6 +131,7 @@ def repo_steps(result: LevelResult | None, scans: Mapping[str, Any] | None,
                        for e in result.get("excluded", [])],
         "gate_blockers": [{"gate": b.get("gate", ""), "state": b.get("state", ""),
                            "disposition": b.get("disposition")} for b in gate_blockers(steps, result["conditions"])],
+        "in_place": [{**e, "gates": list(e["gates"])} for e in result.get("in_place", [])],
     }
 
 

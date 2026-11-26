@@ -23,7 +23,7 @@ import lib.scoring.level_tally as lt
 from lib.scoring.headline import lone_condition, one_change_ceiling
 from lib.scoring.level_tally import default_model
 from lib.top_card import card_facts
-from test_level_tally import _fresh, _laddered
+from test_level_tally import _fresh, _laddered, _plus_met_row
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 ROOT = Path(__file__).resolve().parents[3]
@@ -83,17 +83,29 @@ def test_the_summary_names_the_step_one_change_away():
                "ci_checks": {"test_or_lint_configured": True}}
     level = lt.level_result(model, signals)
     assert (level["step"], level["ceiling_step"]) == (1, 3)
-    assert headline(level, model)["summary"] == "Step 1 · one change from Step 3: instruction file"
+    # the ci row is at its top level, so the summary leads with it (#1334)
+    assert headline(level, model)["summary"] == ("Step 1 · 1 practice fully in place · one change from Step 3: "
+                                                 "instruction file")
     assert one_change_ceiling(level, model["steps"]) == 3
     blocks = next(f["text"] for f in card_facts(level, model, None) if f["fact_id"] == "blocks")
     assert blocks.endswith("; that one change reaches Step 3.")
+
+
+def test_the_summary_leads_with_the_practices_fully_in_place_before_the_next_gate():
+    """#1334: two rows at their top level read "2 practices fully in place" before the next gate."""
+    model = _plus_met_row(_laddered(), 1)
+    level = lt.level_result(model, {**_fresh(10), "layer_grades": {"instruction_file_present": False}})
+    assert [e["row"] for e in level["in_place"] if e["top"]] == ["fresh", "new-0"]
+    summary = headline(level, model)["summary"]
+    assert summary == "Step 1 · 2 practices fully in place · next: instruction file"
+    assert summary.index("2 practices fully in place") < summary.index("next:")
 
 
 def test_no_one_change_step_without_a_jump_or_with_an_unread_gate():
     model = _laddered()
     plain = lt.level_result(model, {**_fresh(90), "layer_grades": {"instruction_file_present": False}})
     assert one_change_ceiling(plain, model["steps"]) is None  # ceiling is the next Step
-    assert headline(plain, model)["summary"] == "Step 1 · next: instruction file"
+    assert headline(plain, model)["summary"] == "Step 1 · next: instruction file"  # nothing at its top level
     unread = _level(step=1, ceiling_step=3, held_above=["ci_runs_tests"], next_step={"step": 2, "blockers": [
         {"kind": "gate", "gate": "instructions", "condition": "layer-0-instructions.1", "state": "not_measured",
          "reason": "needs_full_run"}]})
@@ -287,7 +299,9 @@ def test_ci2_headline_badge_report_and_log_agree(ci2: Path):
     assert badge2["message"] == head["summary"]
     assert badge2["message"].startswith(f"Step {level['step']} · ") and " of " not in badge2["message"]
     assert head["summary_lines"][0].startswith(f"Step {level['step']} of 4: ")
-    assert head["summary_lines"][2].startswith(f"Blocks Step {level['next_step']['step']}: ")
+    # strengths first (#1334): the In place block names the practices before the blocking gate
+    assert head["summary_lines"][1].startswith("In place: ")
+    assert head["summary_lines"][3].startswith(f"Blocks Step {level['next_step']['step']}: ")
     assert f"{level['tally']['not_measured']} not measured" in head["lines"][0]
     assert f"model {level['levels_version']}" in head["lines"][0]
     report = subprocess.run([sys.executable, str(SCRIPTS / "assess_report.py"), str(ci2), "--stdout"],
@@ -464,7 +478,8 @@ def test_ci2_strip_and_verified_total_match_the_conditions(ci2: Path):
     verified = [c for c in level["conditions"]
                 if c["counted"] and c["state"] == "met" and c["grade"] == "verified"]
     assert head["verified"] == len(verified)
-    assert f"measured catalogue conditions met, {len(verified)} verified." in head["summary_lines"][1]
+    holding = next(line for line in head["summary_lines"] if line.startswith("Holding: "))
+    assert f"measured catalogue conditions met, {len(verified)} verified." in holding
     assert head["lines"][1].startswith("By tag: ") and head["tags"]
     for cell in head["tags"]:
         assert f"{cell['tag']} {cell['met']} of {cell['measured']}" in head["lines"][1]

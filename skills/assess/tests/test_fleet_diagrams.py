@@ -315,3 +315,18 @@ def test_hatch_pattern_keeps_the_heat_map_bytes():
 def test_written_files_land_beside_groups_jsonl(tmp_path: Path):
     paths = fd.write_diagrams(tmp_path, _drawn())
     assert all(p.parent == tmp_path for p in paths)
+
+
+def test_the_report_has_what_is_working_ahead_of_the_opportunities():
+    """#1334: report.md names what is working across the fleet before the opportunities."""
+    from lib.fleet.fleet_diagrams import report_markdown
+    from lib.fleet.fleet_opportunities_section import opportunities_section
+    from test_fleet_opportunities import _data, _row
+
+    data = _data([_row("grp/a", instr=True, ci=True), _row("grp/b", instr=True, ci=False)])
+    report = report_markdown([], opportunities=opportunities_section(data, None))
+    working = report.index("## What's working across the fleet")
+    assert working < report.index("## Opportunities")
+    section = report[working:report.index("## Opportunities")]
+    assert "- Instructions: 2 of 2 measured repositories at the top level." in section
+    assert "- CI: 1 of 2 measured repositories at the top level." in section

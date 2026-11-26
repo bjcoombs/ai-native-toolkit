@@ -76,7 +76,8 @@ def member_steps(repo: Mapping[str, Any]) -> RepoSteps:
     step, tally, blockers = repo.get("step"), repo.get("tally"), repo.get("gate_blockers")
     return {"step": step if type(step) is int else None, "next_step": None,
             "tally": cast(Tally, tally) if isinstance(tally, dict) else None,
-            "exclusions": [], "gate_blockers": cast(list[GateBlocker], blockers) if isinstance(blockers, list) else []}
+            "exclusions": [], "gate_blockers": cast(list[GateBlocker], blockers) if isinstance(blockers, list) else [],
+            "in_place": []}
 
 
 def step_state(members: Sequence[str], steps: Mapping[str, RepoSteps]) -> StepState:

@@ -43,7 +43,7 @@ from lib.keyhole.keyhole_signals import render_findings_markdown
 from lib.scoring.level_tally import default_model
 from lib.top_card import FACT_IDS, PROFILES_URL
 from test_headline import ci2  # noqa: F401 - ci2 is a fixture
-from test_top_card import FIRST, KNOWN, ROLLUP, SHA, _below, _top
+from test_top_card import FIRST, KNOWN, ROLLUP, SHA, _below, _in_place, _top
 
 MODEL = default_model()
 GOLDEN = Path(__file__).parent / "fixtures" / "golden"
@@ -58,6 +58,8 @@ STATES: dict[str, tuple[Any, Any, Any, Any, bool]] = {
     "top-step": (_top(), {**KNOWN, "closed_count": 1, "closed": [{"completed_sha": SHA}]}, None, ACTION, True),
     "below-top-step": (_below(), KNOWN, ROLLUP, None, False),
     "first-run": (_below(), FIRST, None, ACTION, False),
+    # #1334: five practices fully in place, two with their why and the rest named
+    "in-place": (_in_place(5), KNOWN, ROLLUP, None, False),
 }
 # Further states the facts and lint tests read: every since line and fallback the card can say.
 EXTRA: dict[str, tuple[Any, Any, Any, Any, bool]] = {

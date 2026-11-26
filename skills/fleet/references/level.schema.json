@@ -359,6 +359,40 @@
           },
           "description": "the ids of the gates above the current Step that already hold, once each, in Step order (#1374)"
         },
+        "in_place": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "row": {
+                "type": "string"
+              },
+              "level": {
+                "type": "integer"
+              },
+              "top": {
+                "type": "boolean"
+              },
+              "gates": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "why": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "gates",
+              "level",
+              "row",
+              "top"
+            ],
+            "additionalProperties": false
+          },
+          "description": "the practices in place, in model order: each row at its top level (every condition met) and each row a gate of a Step already held reads, with those gate ids and the why at the listed level; a row with a condition not measured, excluded or unmet is never top (#1334, lib/scoring/level_tally.py)"
+        },
         "excluded": {
           "type": "array",
           "items": {
@@ -481,6 +515,7 @@
         "conditions",
         "counted",
         "held_above",
+        "in_place",
         "level_result_version",
         "levels_version",
         "listed",

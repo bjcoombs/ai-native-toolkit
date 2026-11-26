@@ -479,3 +479,27 @@ def test_a_level_0_row_opens_with_nothing_confirmed_in_team_and_org_branches(tmp
     team = pages["teams/grpb.md"].split("## Shared tooling\n", 1)[1].split("\n## ", 1)[0]
     assert team.startswith("\nIn place: nothing confirmed for this practice yet (level 0 of ")
     assert not any(re.search(r"^In place: level 0 ", page, flags=re.M) for page in pages.values())
+
+
+def test_each_group_opens_with_its_strengths_before_the_numbered_steps(tmp_path: Path) -> None:
+    """#1334: each group page opens with its strengths, named, in place of the counts line."""
+    pages = _pages(tmp_path)
+    groups = {path: page for path, page in pages.items() if path != ns.INDEX_FILE}
+    for page in groups.values():
+        opening = page.split("\n\n")[1]
+        assert opening.startswith("In place: ") and "practices at the top level in every repository" in opening
+        assert "at level 1 or above" not in page  # the old counts line is gone
+        first_step = re.search(r"^1\. ", page, flags=re.M)
+        assert first_step is None or page.index(opening) < first_step.start()
+    full = groups["teams/grpc/sub.md"].split("## Levels")[0]
+    assert "- Agent instructions: level 2 of 2 in 1 of 1 repository." in full
+    lead = groups["teams/grpa.md"].split("## Levels")[0]
+    assert "- Group settings: level 1 of 2, the highest level any group holds this run." in lead
+
+
+def test_fleet_best_leaves_out_a_row_every_group_holds_alike() -> None:
+    def group(name: str, *levels: tuple[str, int | None]) -> Any:
+        return {"group": name, "levels": [{"id": i, "status": "level" if lv is not None else "unknown", "level": lv}
+                                          for i, lv in levels]}
+    groups = [group("a", ("x", 1), ("y", 2), ("z", None)), group("b", ("x", 1), ("y", 1), ("z", 2))]
+    assert ns.fleet_best(groups) == {"y": 2}

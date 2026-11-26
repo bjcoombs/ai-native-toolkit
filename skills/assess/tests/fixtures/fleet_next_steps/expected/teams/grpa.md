@@ -1,6 +1,8 @@
 # Next steps: `grpa`
 
-In place: 0 of 7 practices at the top level and 2 at level 1 or above, across 3 repositories.
+In place: 0 of 7 practices at the top level in every repository of this group; 1 at the highest level any group holds.
+
+- Group settings: level 1 of 2, the highest level any group holds this run.
 
 Maturity model `next-steps-fixture-1`. 3 repositories: 2 scanned, 1 could not be scanned.
 

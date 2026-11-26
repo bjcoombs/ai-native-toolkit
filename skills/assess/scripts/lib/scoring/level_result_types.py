@@ -5,7 +5,7 @@ import cycle (the engine reads ``lib.scoring.level_signals``, which reads the co
 shapes). String fields hold condition ids, states, grades and reason codes only.
 
 The `LevelResult` TypedDicts (`ConditionResult`, `Tally`, `NotMeasured`, `Blocker`,
-`NextStep`) and the run context's `Headline` (#747) with its per-tag `TagCell` (#844) and the level's per-tag `TagRow` (#940), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
+`NextStep`, `InPlace`) and the run context's `Headline` (#747) with its per-tag `TagCell` (#844) and the level's per-tag `TagRow` (#940), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
 import cycle. Tests: `tests/test_level_tally.py`.
 """
 from __future__ import annotations
@@ -65,6 +65,21 @@ class NextStep(TypedDict):
     blockers: list[Blocker]
 
 
+class InPlace(TypedDict):
+    """One practice of a level result's ``in_place`` list (``lib/scoring/level_tally.py``, #1334).
+
+    A row is listed when it is at its top level (every condition met; a hazard condition
+    reads held when it is unmet) or reads a gate of a Step already held. A row with any
+    condition not measured, excluded or unmet below the gate's level is never listed.
+    """
+
+    row: str  # a row id of the model
+    level: int  # the row's top level when ``top``, else the highest level a held gate reads
+    top: bool  # every condition of the row is met: the practice is fully in place
+    gates: list[str]  # gate ids of the Steps already held that read this row, once each, in Step order
+    why: NotRequired[str]  # the condition at ``level``'s why (#939); absent when it has none
+
+
 class TagRow(TypedDict):
     """One truth tag of a level result's ``tags`` (``lib/scoring/level_tags.py``, #940).
 
@@ -94,6 +109,7 @@ class LevelResult(TypedDict):
     next_step: NextStep | None  # None: no Steps, or the top Step is held
     ceiling_step: int | None  # #1374: the Step reached once next_step's blockers hold; None with no next_step
     held_above: list[str]  # #1374: gate ids already held above the current Step, once each, in Step order
+    in_place: list[InPlace]  # #1334: rows at their top level and rows a held Step's gates read, in model order
     excluded: NotRequired[list[ExcludedCondition]]  # present only when the owner excluded a condition
     tags: NotRequired[list[TagRow]]  # #940: every truth tag, in TRUTH_TAGS order; absent before #940
 

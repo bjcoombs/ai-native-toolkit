@@ -39,6 +39,13 @@ Every heading on a page opens with a line starting ``In place:``
 (``lib/vocabulary.IN_PLACE``, #743) that says what the group already has before any
 next step; at level 0 or unknown it says so plainly and never implies credit.
 
+A group page opens with its strengths (``strengths``, #1334) in place of a counts line: the
+practices at the top level in every repository of the group (an org row: in the group's
+settings), each named with its level and how many repositories hold it, then the practices
+where the group holds the highest level any group holds this run (``fleet_best``, read from
+``groups.jsonl``; a row every group holds at one level is nobody's lead). Only measured levels
+count: a repository the run could not measure keeps a row out of "every repository".
+
 Output is deterministic: rows in maturity model order, repositories sorted, no date.
 ``write_pages`` writes ``<out>/teams.md`` (the index) and
 ``<out>/teams/<group>.md`` (a group id's segments as directories; a hashed id, #909,
@@ -386,19 +393,54 @@ def _row_section(row: Row, result: RowResult, group: GroupRow, failed: Mapping[s
 # --- pages -------------------------------------------------------------------
 
 
+def _every_repo_top(row: Row, result: RowResult, repos: int) -> str | None:
+    """The strength line of a row at its top level in every repository of the group (a team row,
+    every one measured) or for the group's settings (an org row); None otherwise."""
+    top = len(row["levels"])
+    if result["status"] != "level" or result["level"] != top:
+        return None
+    if result["scope"] == "org":
+        return f"- {text(row['title'])}: level {top} of {top}, from the group's settings."
+    levels = [ev["level"] for ev in result.get("repos", {}).values()]
+    if repos == 0 or len(levels) != repos or any(lv != top for lv in levels):
+        return None
+    return f"- {text(row['title'])}: level {top} of {top} in {repos} of {_repos(repos)}."
+
+
+def strengths(maturity_model: MaturityModel, group: GroupRow, results: Sequence[RowResult],
+              fleet_best: Mapping[str, int] | None = None) -> list[str]:
+    """The group's strengths (#1334), the lines that open its page: the practices at the top level
+    in every repository (an org row: in the group's settings), then the practices where the group
+    holds the highest level any group holds this run, below the top (``fleet_best``: row id to that
+    level, only for rows where another group is lower). Only measured levels count."""
+    rows_n = len(maturity_model["rows"])
+    top_lines = [line for row, result in zip(maturity_model["rows"], results)
+                 if (line := _every_repo_top(row, result, group["repos"])) is not None]
+    best_lines = [f"- {text(row['title'])}: level {result['level']} of {len(row['levels'])}, the highest "
+                  "level any group holds this run."
+                  for row, result in zip(maturity_model["rows"], results)
+                  if fleet_best and result["status"] == "level" and result["level"] is not None
+                  and 0 < result["level"] < len(row["levels"]) and fleet_best.get(row["id"]) == result["level"]]
+    if not top_lines and not best_lines:
+        return [f"{IN_PLACE} 0 of {rows_n} practices at the top level in every repository of this group yet; "
+                "each section below gives the level each practice holds.", ""]
+    head = f"{IN_PLACE} {len(top_lines)} of {rows_n} practices at the top level in every repository of this group"
+    if best_lines:
+        head += (f", and {len(best_lines)} more at the highest level any group holds" if top_lines
+                 else f"; {len(best_lines)} at the highest level any group holds")
+    return [f"{head}.", "", *top_lines, *best_lines, ""]
+
+
 def group_page(maturity_model: MaturityModel, group: GroupRow, rows: Sequence[FleetRow],
-               results: Sequence[RowResult]) -> str:
-    """One group's page."""
+               results: Sequence[RowResult], fleet_best: Mapping[str, int] | None = None) -> str:
+    """One group's page: its strengths first (``strengths``), then its levels and next steps."""
     failed = {row["repo"]: row["reason"] or "failed" for row in rows if row["status"] != STATUS_OK}
     signals = {row["repo"]: repo_signals(row) for row in rows}
     tops = [len(row["levels"]) for row in maturity_model["rows"]]
     known = [(r["level"], top) for r, top in zip(results, tops) if r["status"] == "level" and r["level"] is not None]
-    at_top = sum(1 for level, top in known if level == top)
-    started = sum(1 for level, _ in known if level >= 1)
     rows_n = len(maturity_model["rows"])
     lines = [f"# Next steps: {code(group['group'])}", "",
-             f"{IN_PLACE} {at_top} of {rows_n} practices at the top level and {started} at level 1 or above, "
-             f"across {_repos(group['repos'])}.", "",
+             *strengths(maturity_model, group, results, fleet_best),
              f"Maturity model {code(maturity_model['version'])}. {_repos(group['repos'])}: "
              f"{group['scanned']} scanned, {group['failed']} could not be scanned.", "",
              "Each numbered step is one change: take or leave it on its own. \"Done when\" is "
@@ -413,6 +455,18 @@ def group_page(maturity_model: MaturityModel, group: GroupRow, rows: Sequence[Fl
     for row, result in zip(maturity_model["rows"], results):
         lines += _row_section(row, result, group, failed, signals)
     return "\n".join(lines) + "\n"
+
+
+def fleet_best(groups: Sequence[GroupRow]) -> dict[str, int]:
+    """Per row id, the highest level any group holds, for the rows where another group is lower
+    and that level is at least 1 (unknown levels are left out): a group at it leads the fleet."""
+    levels: dict[str, list[int]] = {}
+    for group in groups:
+        for entry in group["levels"]:
+            if entry["status"] == "level" and entry["level"] is not None:
+                levels.setdefault(entry["id"], []).append(entry["level"])
+    return {row: max(found) for row, found in levels.items()
+            if len(found) > 1 and max(found) >= 1 and min(found) < max(found)}
 
 
 def page_path(group: str) -> Path:
@@ -469,6 +523,7 @@ def build_pages(maturity_model: MaturityModel, repos: Iterable[FleetRow], groups
     if sorted(members) != sorted(g["group"] for g in groups):
         raise NextStepsError("repos.jsonl and groups.jsonl name different groups; they are not one run")
     pages: dict[str, str] = {INDEX_FILE: index_page(maturity_model, groups)}
+    best = fleet_best(groups)
     for group in groups:
         if group["levels_version"] is None:
             raise NextStepsError("the fleet run had no --levels, so groups.jsonl holds no levels; "
@@ -480,7 +535,7 @@ def build_pages(maturity_model: MaturityModel, repos: Iterable[FleetRow], groups
         rows = sorted(members[group["group"]], key=lambda r: r["repo"])
         results = evaluate_group(maturity_model, group["group"], rows, group_scopes(group, by_scope, salt))
         _check_agrees(group, results)
-        pages[page_path(group["group"]).as_posix()] = group_page(maturity_model, group, rows, results)
+        pages[page_path(group["group"]).as_posix()] = group_page(maturity_model, group, rows, results, best)
     return pages
 
 

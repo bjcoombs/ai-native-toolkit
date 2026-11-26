@@ -1,6 +1,12 @@
 # Next steps: `grpc/sub`
 
-In place: 5 of 7 practices at the top level and 5 at level 1 or above, across 1 repository.
+In place: 5 of 7 practices at the top level in every repository of this group.
+
+- Agent instructions: level 2 of 2 in 1 of 1 repository.
+- Coverage \| mutation: level 2 of 2 in 1 of 1 repository.
+- Agent permissions: level 1 of 1 in 1 of 1 repository.
+- Shared tooling: level 1 of 1 in 1 of 1 repository.
+- Agent environment: level 1 of 1 in 1 of 1 repository.
 
 Maturity model `next-steps-fixture-1`. 1 repository: 1 scanned, 0 could not be scanned.
 

@@ -23,8 +23,11 @@ Step ladder's caption words gates as the headline did. The lines, in order:
    with that tag. NOT MEASURED, HAZARD (a hazard condition met) and DECLINED are badges
    with their counts, shown only when non-zero. No line when no condition is tagged.
 
-``summary`` is the one-line form the badge and the ``log.md`` entry carry, with no count
-in it: ``Step 3 · next: coverage gate`` (``GATE_NOUN`` names the first gate
+``summary`` is the one-line form the badge and the ``log.md`` entry carry. It leads with what
+holds (#1334): the Step, then the practices fully in place (``practices_held``, the level
+result's ``in_place`` rows at their top level, left out at 0), then the next gate:
+``Step 1 · 2 practices fully in place · next: instruction file``. No tally count is in it.
+Without a practice at its top level it reads ``Step 3 · next: coverage gate`` (``GATE_NOUN`` names the first gate
 ``card_facts.blocking_gates`` returns, the function the top card reads),
 ``Step 1 · one change from Step 3: instruction file`` when one gate blocks the next Step and
 the gates above it already hold (``one_change_ceiling``, reading the level result's
@@ -57,7 +60,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from lib.card_facts import blocking_gates
+from lib.card_facts import blocking_gates, fully_in_place
 from lib.scoring.level_result_types import Blocker, ConditionResult, Headline, LevelResult, TagCell
 from lib.scoring.level_tags import tag_cells
 from lib.scoring.level_tally import default_model
@@ -74,7 +77,7 @@ from lib.scoring.levels import MaturityModel, StepDef, condition_id
 HEADLINE_VERSION = 4
 
 __all__ = ["GATE_CHANGE", "GATE_NOUN", "GLOSSARY_URL", "Headline", "as_headline", "gate_change", "gate_note", "headline",
-           "lone_condition", "one_change_ceiling", "reason_word", "run_context_headline", "tag_cells", "verified_count"]
+           "lone_condition", "one_change_ceiling", "practices_held", "reason_word", "run_context_headline", "tag_cells", "verified_count"]
 
 # The plain-English glossary (#1102). The report's markdown links a term's first use to its
 # heading anchor; exec_summary.py and assess_report.py read it from here.
@@ -154,14 +157,22 @@ def _summary(level: LevelResult, model: MaturityModel) -> str:
         return "no Steps defined"
     gates = blocking_gates(level)
     gate = gates[0].get("gate", "") if gates else None
+    held = practices_held(level)
     if step is None:  # below Step 1 of a model whose Step 1 has a gate (#889)
-        return f"no Step yet · next: {GATE_NOUN.get(gate, gate)}" if gate else "no Step yet"
+        return f"no Step yet{held} · next: {GATE_NOUN.get(gate, gate)}" if gate else f"no Step yet{held}"
     if gate is None:
-        return f"Step {step} · all gates held"
+        return f"Step {step}{held} · all gates held"
     ceiling = one_change_ceiling(level, model.get("steps", []))
     if ceiling is not None:
-        return f"Step {step} · one change from Step {ceiling}: {GATE_NOUN.get(gate, gate)}"
-    return f"Step {step} · next: {GATE_NOUN.get(gate, gate)}"
+        return f"Step {step}{held} · one change from Step {ceiling}: {GATE_NOUN.get(gate, gate)}"
+    return f"Step {step}{held} · next: {GATE_NOUN.get(gate, gate)}"
+
+
+def practices_held(level: Mapping[str, Any]) -> str:
+    """`` · N practices fully in place`` for the summary (#1334): the practices at their top
+    level (``card_facts.fully_in_place``); ``""`` when none is, so a summary never leads with 0."""
+    n = len(fully_in_place(level))
+    return "" if n == 0 else f" · {n} {'practice' if n == 1 else 'practices'} fully in place"
 
 
 def lone_condition(level: Mapping[str, Any], steps: Sequence[StepDef]) -> tuple[str, str] | None:

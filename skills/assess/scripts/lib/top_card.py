@@ -4,9 +4,10 @@ The card replaces the three summaries that used to open the report (the executiv
 the Since Last Run list and the headline's Step and Next lines). Each fact on it comes from
 one fact function in ``lib/card_facts.py``; this module only words them.
 ``card_facts(level, model, since, rollup=None, head_sha=None, action=None)`` returns the lines
-as ``card_facts.CardFact`` entries, each with its ``fact_id`` (``lead``, ``holding``, ``blocks``,
-``since``, ``start_here``, ``done_when``: ``FACT_IDS``), and ``card_lines`` the same lines as
-plain text, in order:
+as ``card_facts.CardFact`` entries, each with its ``fact_id`` (``lead``, ``in_place``, ``holding``,
+``blocks``, ``since``, ``start_here``, ``done_when``: ``FACT_IDS``), and ``card_lines`` the same
+lines as plain text, in order. Strengths come first: the In place block follows the lead and
+precedes every gate line.
 
 1. the lead line, bold in the markdown:
 
@@ -18,6 +19,13 @@ plain text, in order:
    - below the first Step of a model whose Step 1 has a gate (#889): ``Not yet at Step 1 of 3.``;
    - a model without Steps: ``This maturity model defines no Steps.``;
 
+1a. the In place block (#1334), when a practice is fully in place: ``In place: 2 practices at
+   their top level.``, then one list line per practice, ``- Documentation freshness, level 2 of 2: <why>``,
+   from ``card_facts.fully_in_place`` (the level result's ``in_place`` rows at their top level)
+   with the condition's why. The first ``IN_PLACE_WHYS`` carry their why; the rest share one line,
+   ``- 2 more: <titles>.``, so the card keeps its word budget. A gate held is the Holding line's
+   fact, so a row in place only for a gate is not listed here. No practice at its top level: no
+   block;
 2. ``Holding: 3 of 3 gates held at `600cca4` · 9 of 15 measured catalogue conditions met, 3 verified.``
    At the top Step the gates are the top Step's; below it, the next Step's
    (``2 of 3 Step 4 gates held``). The commit is left out when the run recorded none;
@@ -68,11 +76,12 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, TypedDict
 
-from lib.card_facts import CardFact, advisories, blocking_gates, step_gate_ids, step_name, top_step
+from lib.card_facts import CardFact, advisories, blocking_gates, fully_in_place, step_gate_ids, step_name, top_step
 from lib.scoring.headline import GATE_CHANGE, GLOSSARY_URL, gate_note, one_change_ceiling, verified_count
 from lib.scoring.levels import MaturityModel
 from lib.model_change import model_changed_line
 from lib.since_last_run import FIRST_RUN, UNKNOWN_CLOSED
+from lib.vocabulary import IN_PLACE
 
 __all__ = ["FACT_IDS", "GATE_GAP", "GATE_TASK", "PROFILES_URL", "STEP_GATES_URL", "CardAction", "card_facts",
            "card_lines",
@@ -104,7 +113,12 @@ PROFILES_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/skills/a
 DEFAULT_MODEL_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/skills/assess/levels/default.toml"
 
 # The card's facts, each stated by one line at most (tests/test_card_construction.py).
-FACT_IDS = ("lead", "holding", "blocks", "since", "start_here", "done_when")
+FACT_IDS = ("lead", "in_place", "holding", "blocks", "since", "start_here", "done_when")
+
+# The practices in place the card names with their why (#1334); the rest are named without one,
+# so the first screen keeps its word budget (tests/test_card_construction.py): a why runs to 25
+# words at the median, and two of them fit below the top Step with the Blocks line's sibling.
+IN_PLACE_WHYS = 2
 
 # "Step" or "Steps" as a word (the no-Steps lead links "Steps")
 _STEP_WORD = re.compile(r"\bSteps?\b")
@@ -182,6 +196,25 @@ def _lead(level: Mapping[str, Any], model: MaturityModel) -> str:
         return f"Holding Step {step} of {top}{tail}."
     name = step_name(model, step)
     return f"Step {step} of {top}: {_lower_first(name)}." if name else f"Step {step} of {top}."
+
+
+def _in_place(level: Mapping[str, Any], model: MaturityModel) -> str | None:
+    """The In place block (#1334): the practices fully in place, each with its level and why."""
+    entries = fully_in_place(level)
+    if not entries:
+        return None
+    rows = {r["id"]: r for r in model["rows"]}
+    n = len(entries)
+    lines = [f"{IN_PLACE} {n} {'practice at its' if n == 1 else 'practices at their'} top level."]
+    for entry in entries[:IN_PLACE_WHYS]:
+        title = rows[entry["row"]]["title"] if entry["row"] in rows else entry["row"]
+        why = entry.get("why", "")
+        lines.append(f"- {title}, level {entry['level']} of {entry['level']}" + (f": {why}" if why else "."))
+    rest = entries[IN_PLACE_WHYS:]
+    if rest:
+        names = ", ".join(rows[e["row"]]["title"] if e["row"] in rows else e["row"] for e in rest)
+        lines.append(f"- {len(rest)} more: {names}.")
+    return "\n".join(lines)
 
 
 def _holding(level: Mapping[str, Any], model: MaturityModel, head_sha: str | None) -> str:
@@ -280,7 +313,8 @@ def card_facts(level: Any, model: MaturityModel, since: Any, rollup: Any = None,
     if not isinstance(level, Mapping) or "tally" not in level:
         return []
     start, done = start_lines(level, action)
-    texts = (_lead(level, model), _holding(level, model, head_sha) if top_step(model) is not None else None,
+    texts = (_lead(level, model), _in_place(level, model),
+             _holding(level, model, head_sha) if top_step(model) is not None else None,
              _blocks(level, model, rollup), since_line(since), start, done)
     return [{"fact_id": fid, "text": text} for fid, text in zip(FACT_IDS, texts) if text]
 

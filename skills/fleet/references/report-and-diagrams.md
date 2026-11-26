@@ -7,8 +7,8 @@ report says why in one line; stderr names it too. A diagram failure never change
 code, and the run history still keeps only its three files. `--no-diagrams` turns this off.
 The report opens with the front screen, "Fleet at a glance", then the
 [coverage line](../SKILL.md#coverage---discovered), then "What changed and who
-earned it" (see [`achievements.json`](achievements.md#output-achievementsjson)), then "Opportunities",
-before the diagrams.
+earned it" (see [`achievements.json`](achievements.md#output-achievementsjson)), then "What's
+working across the fleet", then "Opportunities", before the diagrams.
 
 **Fleet at a glance** (#1255, `lib/fleet/fleet_front.py`) answers three questions on one
 screen: how many repositories sit at each Step (the Step funnel's counts, with repositories
@@ -30,9 +30,13 @@ many repositories could not measure each, and the reason codes) and the scans th
 skipped, each with its reason (only a full `/assess` run builds it, it needs the network or
 `--platform`, or `--scans` left it out).
 
+**What's working across the fleet** (#1334) names the practices every measured repository holds
+at the top level, then up to three more held most widely, each with how many measured
+repositories hold its top level, from `opportunities.in_place`.
+
 **Opportunities.** Rendered from `fleet-data.json`'s [`opportunities`](fleet-data.md#opportunities), so
-the two always agree. It opens with what is already in place (per row, how many measured
-repositories hold its top level), then the biggest lift with its change and "done when",
+the two always agree. Its `In place:` line points at "What's working across the fleet", which
+states the counts once; then the biggest lift with its change and "done when",
 each shared template's lift, and **Recent progress**: the units that reached a new level
 since the previous comparable run, read from this run's `level_up` achievements. Recent
 progress is display only: it comes from the run history and never feeds a level or
