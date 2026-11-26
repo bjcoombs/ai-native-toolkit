@@ -6,8 +6,9 @@ a :class:`ModuleGraph`; :func:`select_graph` runs the builder for the dominant
 source language and returns its graph (or its failure), and reports
 ``no_builder:<language>`` (``no_builder:java``) when no builder covers that
 language, running none and naming a candidate tool where one is known (``jdeps``),
-so no other language stands in (#825). Other builders run only to fall back to the
-largest other graph when the dominant language's builder found nothing to graph. A covered language with nothing to
+so no other language stands in (#825). Builders run in registration order up to the
+covering one; another language's graph is used only as a fallback, the largest,
+when the dominant language's builder found nothing to graph. A covered language with nothing to
 graph reads ``no_import_graph_<language>``, so a fleet reader can tell a tooling gap
 from a repository with no code (``no_source_files``).
 
