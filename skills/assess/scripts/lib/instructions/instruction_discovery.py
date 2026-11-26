@@ -23,7 +23,8 @@ graded with ``grade_instructions`` and recorded with its scope; the block also
 carries the always-loaded budget per tool (``instruction_budget``) and four
 integrity findings: a scope glob that matches no tracked file, a plain ``.md``
 under ``.cursor/rules``, a ``CLAUDE.md`` that shadows a different ``AGENTS.md``
-in its directory without importing it (with the count of differing lines), and
+in its directory without importing it or being a bare pointer either way (with
+the count of differing lines), and
 a nested file that mostly repeats its parent. A ``CLAUDE.md`` identical to its
 ``AGENTS.md`` below the header (H1 and leading HTML comments) is reported as an
 informational ``mirrored_instruction_files`` instead (issue #589). Deterministic and read-only: no network, no model.
@@ -40,7 +41,8 @@ Findings: `dead_glob` (a rule, not always loaded, none of whose scope patterns
 matches a tracked file or names a directory on disk; a nested rule's patterns are
 also tried relative to its own directory), `ignored_cursor_md`, `claude_shadows_agents`
 (a directory's `CLAUDE.md` differs from its `AGENTS.md` once the header comments
-they account for are set aside, and does not import it; `diff_lines` counts the differing lines, body plus any header
+they account for are set aside, and does not import it, and neither file is a bare
+one-line pointer to the other, `delegation_target`, #1505; `diff_lines` counts the differing lines, body plus any header
 comment only one file carries, one changed line counting once) and `repeats_parent` (at least half of a nested file's distinct
 lines, over five or more, copy the nearest ancestor's). The two files are compared
 below their headers (`mirror_lines`: leading blank lines, one H1 and leading HTML
@@ -66,6 +68,7 @@ directory, globs, always_loaded, body) and the paths `.aider.conf.yml` reads, fo
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -457,6 +460,41 @@ def mirror_pair(a: str, b: str) -> tuple[list[str], list[str], bool]:
             paired > 0)
 
 
+# Inline code in a pointer line may name only the target file: any other span
+# (`make test`) is an instruction, so the file is no bare pointer (#1505).
+_INLINE_CODE = re.compile(r"`([^`\n]*)`")
+# A sentence break with more text after it: a second sentence is content.
+_SECOND_SENTENCE = re.compile(r"[.!?;]\s+\S")
+
+
+def delegation_target(body: str, names: list[str]) -> str | None:
+    """The instruction file a bare one-line pointer file delegates to, else None.
+
+    A file delegates when, blank lines and one leading H1 set aside, it holds a
+    single line of one sentence that names one of ``names`` (a markdown link,
+    ``@CLAUDE.md``, ``./CLAUDE.md`` or the bare name) and no inline code beyond
+    that name. Any other line, an HTML comment included, or a second sentence
+    or command on the line is instruction content, so the file is no pointer
+    (issue #1505).
+    """
+    lines = [line.strip() for line in body.splitlines() if line.strip()]
+    if lines and lines[0].startswith("# "):
+        lines = lines[1:]
+    if len(lines) != 1:
+        return None
+    line = lines[0]
+    for name in names:
+        pattern = re.compile(rf"(?<![\w-]){re.escape(name)}(?![\w-])")
+        if not pattern.search(line):
+            continue
+        rest = pattern.sub("X", line)
+        spans = [span.strip().lstrip("./@") for span in _INLINE_CODE.findall(line)]
+        if any(span != name for span in spans) or _SECOND_SENTENCE.search(rest):
+            return None
+        return name
+    return None
+
+
 def diff_line_count(a: list[str], b: list[str]) -> int:
     """Lines that differ between two bodies; one changed line counts once."""
     ops = SequenceMatcher(None, a, b, autojunk=False).get_opcodes()
@@ -469,7 +507,8 @@ def _shadowing(
     """Per directory, a CLAUDE.md that hides a different, unimported AGENTS.md
     (``claude_shadows_agents``), or one that is a hand-kept copy of it below the
     header (``mirrored_instruction_files``, informational). A symlink or an
-    import is neither. Returns ``(shadows, mirrors)``.
+    import is neither, nor is a pair where one file is a bare pointer to the
+    other (``delegation_target``). Returns ``(shadows, mirrors)``.
     """
     shadows: list[InstructionFinding] = []
     mirrors: list[InstructionFinding] = []
@@ -488,6 +527,10 @@ def _shadowing(
             continue
         loaded, _skipped = follow_imports([c.rel for c in claude], repo_root, is_tracked)
         if agent.rel in loaded:
+            continue
+        # A bare pointer either way is delegation, not a second file (#1505).
+        if delegation_target(agent.body, ["CLAUDE.md"]) or any(
+                delegation_target(c.body, ["AGENTS.md"]) for c in claude):
             continue
         pairs = [(c, *mirror_pair(c.body, agent.body)) for c in claude]
         if not any(c_lines or a_lines for _c, c_lines, a_lines, _n in pairs):

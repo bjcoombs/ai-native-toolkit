@@ -20,6 +20,7 @@ from lib.instructions.agent_consistency import (
 )
 from lib.instructions.agent_systems import SYSTEMS, aider_read_files, match_system_file, might_match
 from lib.counts_only.content_free import counts_only_scans
+from lib.instructions.instruction_discovery import delegation_target
 from lib.instructions.instruction_files import nested_instruction_surface
 from lib.scoring.level_tally import default_model, level_result
 from lib.scoring.levels import evaluate_row
@@ -346,3 +347,65 @@ def test_heading_and_list_ordinals_are_stripped_before_numbers() -> None:
     # `### 3.1 Coverage` is the common form, so a heading that opens with a
     # decimal threshold (`## 85.5 coverage`) states none, by choice.
     assert thresholds("## 85.5 coverage\n") == {}
+
+
+CLAUDE_RULES = "# Rules\n\nRun `make check` before pushing.\nRun `make lint` after an edit.\n"
+
+
+def _shadows(root: Path) -> list[str]:
+    return [f["kind"] for f in nested_instruction_surface(root)["findings"]
+            if f["kind"] == "claude_shadows_agents"]
+
+
+def test_a_one_line_agents_md_delegates_to_claude_md(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {
+        "AGENTS.md": "The instructions for this repository live in [CLAUDE.md](CLAUDE.md).\n",
+        "CLAUDE.md": CLAUDE_RULES})
+    block = scan_agent_consistency(root)
+    assert block["canonical"] == "CLAUDE.md"
+    assert {f["path"]: f["link"] for f in block["files"]} == {
+        "AGENTS.md": "pointer", "CLAUDE.md": "canonical"}
+    assert (block["conflicts"], block["unlinked"], block["consistent"]) == (0, 0, True)
+    assert block["next_steps"] == []
+    assert _shadows(root) == []
+
+
+def test_a_one_line_claude_md_delegates_to_agents_md(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {
+        "AGENTS.md": AGENTS,
+        "CLAUDE.md": "# Claude\n\nFollow the project instructions in [AGENTS.md](AGENTS.md).\n"})
+    block = scan_agent_consistency(root)
+    assert block["canonical"] == "AGENTS.md"
+    assert {f["path"]: f["link"] for f in block["files"]}["CLAUDE.md"] == "pointer"
+    assert (block["conflicts"], block["unlinked"], block["consistent"]) == (0, 0, True)
+    assert _shadows(root) == []
+
+
+def test_a_pointer_with_other_instructions_stays_a_second_file(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {
+        "AGENTS.md": "The instructions live in [CLAUDE.md](CLAUDE.md).\n"
+                     "Run `npm test` before pushing.\n",
+        "CLAUDE.md": CLAUDE_RULES})
+    block = scan_agent_consistency(root)
+    assert block["canonical"] == "AGENTS.md"
+    assert {f["path"]: f["link"] for f in block["files"]}["CLAUDE.md"] == "independent"
+    assert block["conflicts"] == 3
+    assert _shadows(root) == ["claude_shadows_agents"]
+
+
+@pytest.mark.parametrize(("body", "names", "target"), [
+    ("The instructions for this repository live in [CLAUDE.md](CLAUDE.md).\n",
+     ["CLAUDE.md"], "CLAUDE.md"),
+    ("# Agents\n\nSee `CLAUDE.md`.\n", ["CLAUDE.md"], "CLAUDE.md"),
+    ("\n@AGENTS.md\n", ["CLAUDE.md", "AGENTS.md"], "AGENTS.md"),
+    ("Read ./CLAUDE.md first\n", ["CLAUDE.md"], "CLAUDE.md"),
+    ("Read CLAUDE.md. Never push to main.\n", ["CLAUDE.md"], None),
+    ("Read CLAUDE.md and run `make test`.\n", ["CLAUDE.md"], None),
+    ("See CLAUDE.md\nRun the tests.\n", ["CLAUDE.md"], None),
+    ("<!-- run npm test -->\nSee CLAUDE.md\n", ["CLAUDE.md"], None),
+    ("See CLAUDE.md\n", [], None),
+    ("Nothing to see here.\n", ["CLAUDE.md"], None),
+])
+def test_delegation_target_reads_only_a_bare_pointer(
+        body: str, names: list[str], target: str | None) -> None:
+    assert delegation_target(body, names) == target
