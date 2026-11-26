@@ -20,11 +20,13 @@ import pytest
 import fleet_data_fixture as fdf
 import fleet_page_fixture as fx
 from lib.fleet.fleet_page import PAGE_FILE, build_page, clear_page, embed, write_page
-from lib.fleet.fleet_page_data import COUNTS_ONLY, FULL, HASHED, mode_of
+from lib.fleet.fleet_page_data import COUNTS_ONLY, FULL, HASHED, mode_of, picture, unique_scopes
+from lib.svg_inline import css_selectors, root_class
 from lib.vocabulary import banned_hits
 from test_fleet_cli import fleet_cli, froot  # noqa: F401 - froot is a fixture
 
 NODE = shutil.which("node")
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 RUNNER = r"""
 const vm = require("node:vm");
 const fs = require("node:fs");
@@ -614,3 +616,107 @@ def test_eight_spokes_keep_their_titles_beside_the_spoke() -> None:
     shape = _shape(_root_page(bundle))
     assert "<tspan" in shape and ">Practice 7</tspan>" in shape and "</title></line>" not in shape
     assert '<th class="repo">Practice 0</th>' in shape and "labelled by its number" not in shape
+
+
+# --- inlined diagrams (#1362, parts 1 and 2 of #1313) ------------------------------------
+
+# Each embedded picture -> its generator's golden (tests/fixtures), as fleet.py draws it.
+DRAWN = {"tag-profile.svg": "fleet_diagrams/expected-tag-profile.svg",
+         "tag-heatmap.svg": "fleet_diagrams/expected-tag-heatmap.svg",
+         "step-funnel.svg": "fleet_step_diagrams/expected-step-funnel.svg",
+         "one-change-away.svg": "fleet_step_diagrams/expected-one-change-away.svg",
+         "step-movement.svg": "fleet_step_diagrams/expected-step-movement.svg"}
+HATCHED = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><title>T</title>'
+           '<style>.f-bg {fill:#fff} rect.cell {stroke:#000}</style>'
+           '<defs><pattern id="fleet-hatch" width="4" height="4"><path d="M0 0L4 4"/></pattern></defs>'
+           '<rect class="cell" fill="url(#fleet-hatch)" width="5" height="5"><title>{part}</title></rect></svg>')
+HOSTILE = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" onload="alert(1)"><title>T</title>'
+           '<script>alert(2)</script><foreignObject><div>x</div></foreignObject>'
+           '<a href="javascript:alert(3)"><rect onclick="alert(4)" width="5" height="5"><title>part</title></rect></a></svg>')
+
+
+def _page_pictures(tmp_path: Path, drawn: list[dict[str, Any]]) -> tuple[str, list[dict[str, Any]]]:
+    data = fx.run(fx.DATES[-1], fx.VARIANTS["counts-only"])
+    path = write_page(tmp_path, dict(data), None, fdf.model(), drawn)
+    assert path is not None
+    html = path.read_text(encoding="utf-8")
+    pictures: list[dict[str, Any]] = _parts(html)[1]["pictures"]
+    return html, pictures
+
+
+def _ids(svg: str) -> list[str]:
+    return re.findall(r'\sid="([^"]+)"', svg)
+
+
+def test_the_page_inlines_every_diagram_with_details_and_keeps_the_detail_free_one_an_image(tmp_path: Path) -> None:
+    drawn = [{"file": f, "title": f, "question": "Q", "svg": (FIXTURES_DIR / g).read_text(encoding="utf-8")}
+             for f, g in DRAWN.items()]
+    _, pictures = _page_pictures(tmp_path, drawn)
+    inlined = {p["file"]: p["svg"] for p in pictures}
+    assert [f for f, svg in inlined.items() if svg is None] == ["step-movement.svg"]
+    for file, svg in inlined.items():
+        assert next(p for p in pictures if p["file"] == file)["src"].startswith("data:image/svg+xml;base64,")
+        if svg is not None:
+            assert svg.startswith("<svg ") and "<?xml" not in svg
+    if NODE is not None:
+        page = _root_page({**fx.bundle("counts-only"), "pictures": pictures})
+        shown = page[page.index("<h2>Fleet pictures</h2>"):]
+        assert shown.count('<div class="diagram"><svg ') == 4 and shown.count("<img ") == 1
+        assert shown.count('download="') == 5
+
+
+def test_a_hostile_svg_is_inlined_without_script_handlers_or_javascript_links(tmp_path: Path) -> None:
+    _, pictures = _page_pictures(tmp_path, [{"file": "tag-profile.svg", "title": "T", "question": "Q", "svg": HOSTILE}])
+    svg = pictures[0]["svg"]
+    assert svg is not None and "<rect " in svg and "<a>" in svg
+    lowered = svg.lower()
+    assert "<script" not in lowered and "alert" not in lowered and "foreignobject" not in lowered
+    assert re.search(r"\son\w+=", lowered) is None and "javascript:" not in lowered
+
+
+def test_two_diagrams_defining_fleet_hatch_get_unique_ids_and_their_own_pattern(tmp_path: Path) -> None:
+    drawn = [{"file": f, "title": f, "question": "Q", "svg": HATCHED.replace("{part}", f)}
+             for f in ("tag-profile.svg", "tag-heatmap.svg")]
+    _, pictures = _page_pictures(tmp_path, drawn)
+    svgs = [p["svg"] for p in pictures]
+    assert all(svgs)
+    ids = [i for svg in svgs for i in _ids(svg)]
+    assert len(ids) == len(set(ids)) == 2
+    for svg in svgs:
+        refs = re.findall(r"url\(#([^)]+)\)", svg)
+        assert refs and all(r in _ids(svg) for r in refs)
+        scope = root_class(svg)
+        assert scope is not None and scope.startswith("fleet-page-")
+        found = css_selectors(svg.split("<style>")[1].split("</style>")[0], scope)
+        assert found and all(s.startswith(f"svg.{scope} ") for s in found)
+
+
+def test_every_style_selector_in_an_inlined_svg_starts_with_its_scope(tmp_path: Path) -> None:
+    drawn = [{"file": f, "title": f, "question": "Q", "svg": (FIXTURES_DIR / g).read_text(encoding="utf-8")}
+             for f, g in DRAWN.items()]
+    _, pictures = _page_pictures(tmp_path, drawn)
+    scopes = []
+    for svg in (p["svg"] for p in pictures if p["svg"]):
+        scope = root_class(svg)
+        assert scope is not None
+        scopes.append(scope)
+        selectors = [s for css in re.findall(r"<style>(.*?)</style>", svg, re.S) for s in css_selectors(css, scope) or []]
+        assert selectors and all(s.startswith(f"svg.{scope} ") for s in selectors)
+    assert len(scopes) == len(set(scopes)) == 4
+
+
+def test_a_second_svg_under_a_scope_already_on_the_page_stays_an_image() -> None:
+    drawn = (FIXTURES_DIR / DRAWN["step-funnel.svg"]).read_text(encoding="utf-8")
+    first, second = unique_scopes([picture("a.svg", "A", "Q", drawn), picture("b.svg", "B", "Q", drawn)])
+    assert first["svg"] is not None and second["svg"] is None and second["src"] == first["src"]
+
+
+def test_the_page_clips_each_inlined_diagram_to_its_own_box() -> None:
+    assert ".pictures .diagram{overflow:hidden;contain:paint}" in build_page(fx.bundle("full"))
+
+
+def test_an_svg_scoped_outside_fleet_stays_an_image() -> None:
+    radar = ('<svg class="radar" xmlns="http://www.w3.org/2000/svg"><title>r</title>'
+             '<style>svg.radar .ring{fill:red}</style><rect width="1"><title>part</title></rect></svg>')
+    (only,) = unique_scopes([picture("a.svg", "A", "Q", radar)])
+    assert only["svg"] is None and only["src"].startswith("data:image/svg+xml;base64,")

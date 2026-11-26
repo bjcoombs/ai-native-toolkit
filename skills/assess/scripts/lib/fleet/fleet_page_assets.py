@@ -24,7 +24,10 @@ words what it finds. Its parts:
   radar per unit in the shown unit's subtree, by label and never overlaid, each spoke a practice
   in ``radar.axes`` at met/measured, an unmeasured spoke a break in the outline with no point,
   then the same counts as a table; above 8 spokes each spoke is labelled by its number, the title
-  in the spoke's ``<title>`` and the table's practice column under the same number), Fleet pictures (the #705 design order).
+  in the spoke's ``<title>`` and the table's practice column under the same number), Fleet pictures (the #705 design order:
+  each picture inlined from its sanitised, scoped ``svg`` when it has per-part details, an ``<img>`` otherwise, with a
+  link that saves the full-size SVG, #1362; ``contain: paint`` on its box clips whatever an inlined SVG
+  draws to its own figure).
 - **Pinned unit.** A per-viewer ``localStorage`` key, read and written inside try/catch; the
   page opens on the ownership root without it.
 - **Order.** Units and repositories are listed by label, never by rank.
@@ -59,7 +62,9 @@ svg.radar{width:100%;height:auto;display:block;font-size:10px;fill:var(--fg);ove
 svg.radar .ring{fill:none;stroke:var(--rule)}svg.radar .spoke{stroke:var(--rule)}svg.radar .gap{stroke-dasharray:3 3;fill:var(--muted)}
 svg.radar .outline{fill:none;stroke:var(--accent);stroke-width:2}svg.radar .point{fill:var(--accent)}
 table.radar-table caption{text-align:left;color:var(--muted);padding:4px 0}
-.pictures figure{margin:12px 0}.pictures img{max-width:100%;height:auto;display:block}
+.pictures figure{margin:12px 0}.pictures img,.pictures .diagram svg{max-width:100%;height:auto;display:block}
+.pictures a.full{font-size:13px;color:var(--accent)}
+.pictures .diagram{overflow:hidden;contain:paint}
 @media (max-width:600px){main{padding:12px}h1{font-size:19px}}
 """
 
@@ -367,7 +372,8 @@ SCRIPT = r"""
     if (!bundle.pictures.length) { return ""; }
     return "<h2>Fleet pictures</h2><div class=\"pictures\">" + bundle.pictures.map(function (p) {
       return "<figure><figcaption><strong>" + esc(p.title) + "</strong>: " + esc(p.question) + "</figcaption>"
-        + "<img alt=\"" + esc(p.title) + "\" src=\"" + p.src + "\"></figure>";
+        + (p.svg ? "<div class=\"diagram\">" + p.svg + "</div>" : "<img alt=\"" + esc(p.title) + "\" src=\"" + p.src + "\">")
+        + "<a class=\"full\" href=\"" + p.src + "\" download=\"" + esc(p.file) + "\">Save full size</a></figure>";
     }).join("") + "</div>";
   }
   function movedLine(m) {
