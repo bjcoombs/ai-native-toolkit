@@ -17,7 +17,12 @@ The rule (maintainer decision on #822, recorded in the block as ``normalisation`
   - **Renames.** A rename, authored after the doc's last content change, of a
     path directly in the doc's directory whose old name the doc's text still
     names, makes the doc stale (``renamed_children_named``, the count of such
-    old paths). A rename deeper in the tree does not.
+    old paths). A rename deeper in the tree does not, nor does a rename of the
+    doc itself or of a path that exists again at HEAD. The name match is by file
+    name, so a generic name (``__init__.py``) mentioned for another directory
+    also matches. The renames come from the rename map's walk
+    (``RenameMap.events``); when that history cannot be read there are none,
+    and every row already carries confidence ``low``.
   - **Measured-count floor.** Below ``MIN_MEASURED_DOCS`` measured docs the share
     is a percentage over a handful of docs, so ``summary.stale_pct`` is null with
     ``stale_pct_reason`` ``too_few_measured_docs`` and the doc-freshness condition
@@ -28,13 +33,10 @@ Tests: ``tests/test_doc_staleness.py`` (the #822 section).
 from __future__ import annotations
 
 import re
-import subprocess
-from functools import lru_cache
 from pathlib import Path, PurePosixPath
 from typing import TypedDict
 
 from lib.history.change_coupling import repo_top
-from lib.history.git_churn import GIT_TIMEOUT_SECONDS
 
 DIRECT_CHILDREN = "direct_children"
 MIN_MEASURED_DOCS = 20
@@ -69,43 +71,25 @@ def direct_children(subject_rels: list[str], base_dir: str) -> list[str]:
 RenameEvent = tuple[int, str, str]
 
 
-@lru_cache(maxsize=4)
-def rename_events(repo_root: Path, head: str | None) -> tuple[RenameEvent, ...]:
-    """Every rename git detects in the history, keyed per (repo, HEAD).
-
-    Paths are relative to ``repo_root``; a rename outside it is dropped. Empty
-    outside a git repository or when the log cannot be read, so a failure never
-    makes a doc stale.
-    """
-    top = repo_top(repo_root)
+def rename_events(
+    repo_root: Path, events: tuple[RenameEvent, ...],
+) -> tuple[RenameEvent, ...]:
+    """The rename map's events (``RenameMap.events``, git-top relative) as paths
+    relative to ``repo_root``, dropping a rename outside it. The walk is the one
+    the content clock already ran, so no second history read. An unreadable
+    history gives no events, and the rows then carry confidence ``low``."""
+    top = repo_top(repo_root) if events else None
     if top is None:
         return ()
-    cmd = ["git", "-c", "core.quotepath=false", "-C", top, "log", "-M",
-           "--diff-filter=R", "--name-status", "--pretty=format:\x1e%at"]
-    try:
-        raw = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
-                             errors="replace", check=True,
-                             timeout=GIT_TIMEOUT_SECONDS).stdout
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
-        return ()
     top_path, root = Path(top).resolve(), repo_root.resolve()
-    events: list[RenameEvent] = []
-    for chunk in raw.split("\x1e"):
-        lines = chunk.splitlines()
-        if not lines or not lines[0].strip().isdigit():
+    out: list[RenameEvent] = []
+    for epoch, old, new in events:
+        try:
+            out.append((epoch, (top_path / old).relative_to(root).as_posix(),
+                        (top_path / new).relative_to(root).as_posix()))
+        except ValueError:
             continue
-        epoch = int(lines[0].strip())
-        for line in lines[1:]:
-            parts = line.split("\t")
-            if len(parts) != 3 or not parts[0].startswith("R"):
-                continue
-            try:
-                old = (top_path / parts[1]).relative_to(root).as_posix()
-                new = (top_path / parts[2]).relative_to(root).as_posix()
-            except ValueError:
-                continue
-            events.append((epoch, old, new))
-    return tuple(events)
+    return tuple(out)
 
 
 def _names(text: str, rel: str) -> bool:
@@ -115,15 +99,31 @@ def _names(text: str, rel: str) -> bool:
     return re.search(rf"(?<![\w.-]){re.escape(name)}(?![\w-])", text) is not None
 
 
+def _former_names(doc_rel: str, events: tuple[RenameEvent, ...]) -> set[str]:
+    """Every path the doc itself had, following its renames back from ``doc_rel``."""
+    names = {doc_rel}
+    while True:
+        more = {old for _, old, new in events if new in names} - names
+        if not more:
+            return names
+        names |= more
+
+
 def renamed_children_named(
-    doc: Path, base_dir: str, events: tuple[RenameEvent, ...], after: int | None,
+    doc: Path, doc_rel: str, base_dir: str, events: tuple[RenameEvent, ...],
+    after: int | None, repo_root: Path,
 ) -> int:
     """Distinct old paths directly in ``base_dir`` renamed after ``after`` (the
-    doc's last content change) whose name the doc still carries. 0 when the
-    doc's change time is unknown or its text cannot be read."""
+    doc's last content change) whose name the doc still carries. The doc's own
+    former names do not count (a rename is not a content change, so a doc that
+    mentions its old name would read stale for good), nor does an old path that
+    exists again at HEAD (the doc names a real file). 0 when the doc's change
+    time is unknown or its text cannot be read."""
     if after is None:
         return 0
-    olds = {old for epoch, old, _ in events if epoch > after and _parent(old) == base_dir}
+    own = _former_names(doc_rel, events)
+    olds = {old for epoch, old, _ in events if epoch > after and _parent(old) == base_dir
+            and old not in own and not (repo_root / old).exists()}
     if not olds:
         return 0
     try:

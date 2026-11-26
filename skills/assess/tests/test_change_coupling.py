@@ -412,7 +412,11 @@ def test_rename_map_resolves_chain_through_reused_intermediate(tmp_path: Path) -
     _commit(repo, {}, "b -> c")
     _commit(repo, {"b.py": "fresh = 1\n"}, "fresh b")
 
-    assert build_rename_map(repo) == RenameMap({"a.py": "c.py"}, complete=True)
+    rename_map = build_rename_map(repo)
+    assert rename_map == RenameMap({"a.py": "c.py"}, complete=True)
+    # Each rename keeps its author time for doc staleness (#822), oldest first.
+    assert [(old, new) for _, old, new in rename_map.events] == [("a.py", "b.py"), ("b.py", "c.py")]
+    assert all(epoch > 0 for epoch, _, _ in rename_map.events)
 
 
 def test_rename_map_keeps_non_ascii_paths_literal(tmp_path: Path) -> None:

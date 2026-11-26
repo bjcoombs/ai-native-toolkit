@@ -488,10 +488,11 @@ def staleness_summary(rows: list[DocStalenessRow], reliable: bool) -> DocStalene
 
 
 def _nothing_beside(row: DocStalenessRow) -> bool:
-    """A base doc with no code directly beside it and no renamed child it names:
-    nothing to measure it against (#822). A row written before #822 is measured."""
+    """A base doc with no code beside it, no renamed child it names and no source
+    verdict: nothing to measure it against (#822). A row from before #822 is measured."""
     return (row["subject_method"] == NEAREST_ANCESTOR and row.get("measured_code_count") == 0
-            and not row.get("renamed_children_named"))
+            and not row.get("renamed_children_named")
+            and row.get("provenance", {}).get("source_newer") is None)
 
 
 def _resolve_docs(
@@ -596,7 +597,8 @@ def _doc_row(
         directive_only=directive_only,
         measured_code_count=len(measured_rels),
         renamed_children_named=0 if own_dir is None
-        else renamed_children_named(d, own_dir, ctx.renames, ctx.clock.epoch(d)),
+        else renamed_children_named(d, doc_rel, own_dir, ctx.renames, ctx.clock.epoch(d),
+                                    ctx.repo_root),
     )
 
 
@@ -708,7 +710,7 @@ def analyze_doc_staleness(
         clock=clock,
         generated_sources=generated_sources,
         renames_complete=rename_map.complete,
-        renames=rename_events(repo_root, head),
+        renames=rename_events(repo_root, rename_map.events),
     )
 
     base_doc_dirs = build_base_doc_dirs(docs)

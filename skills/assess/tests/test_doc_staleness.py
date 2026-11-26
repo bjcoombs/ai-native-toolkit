@@ -698,3 +698,42 @@ def test_counts_only_keeps_the_822_fields(git_repo) -> None:
     row = kept["docs"][0]
     assert (row["measured_code_count"], row["renamed_children_named"]) == (2, 0)
     assert kept["summary"]["stale_pct_reason"] == "too_few_measured_docs"
+
+
+def test_renaming_the_doc_itself_does_not_make_it_stale(git_repo) -> None:
+    """A doc that mentions its former name stays fresh after its own rename: a
+    rename is not a content change, so it would otherwise read stale for good."""
+    from lib.docs.doc_complexity_join import is_stale
+
+    repo, commit = git_repo
+    _write(repo, "CLAUDE.md", "Copy or symlink as `CLAUDE.md`. Start at `app.py`.\n")
+    _write(repo, "app.py", "a = 0\n")
+    commit("initial", days_ago=30)
+    (repo / "CLAUDE.md").rename(repo / "AGENTS.md")
+    commit("docs: rename the guide", days_ago=10)
+
+    r = analyze_doc_staleness(repo)
+    agents = next(d for d in r["docs"] if d["path"] == "AGENTS.md")
+    assert agents["renamed_children_named"] == 0
+    assert not is_stale(agents)
+
+
+def test_a_renamed_path_that_exists_again_does_not_count(git_repo) -> None:
+    repo, commit = git_repo
+    _root_doc_fixture(repo, commit)
+    (repo / "helper.py").rename(repo / "tools.py")
+    commit("refactor: rename helper", days_ago=10)
+    _write(repo, "helper.py", "h = 1\n")
+    commit("feat: a new helper", days_ago=8)
+
+    assert _readme(repo)["renamed_children_named"] == 0
+
+
+def test_a_base_doc_with_a_source_verdict_stays_measured() -> None:
+    """No code beside it, but a provenance verdict that does not rest on churn."""
+    from lib.docs.doc_staleness import staleness_summary
+
+    row = {**_row("README.md", 0.0), "measured_code_count": 0,
+           "provenance": {"method": "frontmatter", "sources": ["a.py"],
+                          "generated_by": None, "source_newer": True}}
+    assert staleness_summary([row], reliable=True)["measured_docs"] == 1
