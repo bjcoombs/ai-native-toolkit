@@ -7,7 +7,8 @@ the run, sorted by Step (highest first, a repository with no Step last) and then
 Under ``--full`` (``run.counts_only`` false) the rows group by unit first (#1331): the first view of
 ``fleet_units.VIEWS`` any repository is placed in, each repository under its placed unit
 (``repos[].units``), labelled by the unit's name from ``views[].units[]`` (its key without the view
-when the name is absent), groups in label order and a group of unplaced repositories last. A
+when the name is absent), groups in label order and a group of unplaced repositories last. Rows
+group on the unit key, not the label, so two units sharing a name stay two groups. A
 counts-only or hashed run keeps the plain Step order and draws no unit name or ``data-unit``.
 One column per truth tag, every tag of
 ``TRUTH_TAGS`` in that fixed order. A cell is the repository's share of the tag's measured
@@ -67,6 +68,7 @@ class HeatmapRow(TypedDict):
     shares: list[float | None]  # per tag of TRUTH_TAGS; None: not measured on this repository
     cells: list[TagCell | None]  # per tag of TRUTH_TAGS; None: the repository carries no tally for it
     unit: str | None  # the unit group label, under --full only; None: ungrouped or unplaced
+    unit_key: str | None  # the unit the row groups on: names need not be unique
 
 
 def _step_key(repo: Mapping[str, Any]) -> tuple[int, int, str]:
@@ -94,11 +96,12 @@ def unit_labels(data: Mapping[str, Any]) -> tuple[str | None, dict[str, str]]:
     return view, labels
 
 
-def _unit_of(repo: Mapping[str, Any], view: str | None, labels: Mapping[str, str]) -> str | None:
+def _unit_of(repo: Mapping[str, Any], view: str | None, labels: Mapping[str, str]) -> tuple[str, str] | None:
+    """The repository's ``(label, key)`` in ``view``; None when it is not placed there."""
     for placed in repo.get("units") or []:
         if placed.get("view") == view:
             key = str(placed["unit"])
-            return labels.get(key, key.removeprefix(f"{view}/"))
+            return labels.get(key, key.removeprefix(f"{view}/")), key
     return None
 
 
@@ -111,8 +114,8 @@ def heatmap_rows(data: Mapping[str, Any]) -> list[HeatmapRow]:
     view, labels = unit_labels(data) if grouped else (None, {})
     repos = sorted(data.get("repos") or [], key=_step_key)
     units = {str(r["key"]): _unit_of(r, view, labels) if view else None for r in repos}
-    if view:
-        repos.sort(key=lambda r: (units[str(r["key"])] is None, units[str(r["key"])] or ""))
+    if view:  # group on the key, so two units sharing a name stay apart; order by label, then key
+        repos.sort(key=lambda r: (units[str(r["key"])] is None, units[str(r["key"])] or ("", "")))
     rows: list[HeatmapRow] = []
     for index, repo in enumerate(repos, start=1):
         by_tag = {c["tag"]: c for c in repo.get("tags") or []}
@@ -120,7 +123,8 @@ def heatmap_rows(data: Mapping[str, Any]) -> list[HeatmapRow]:
         shares = [c["met"] / c["measured"] if c and c["measured"] > 0 else None for c in cells]
         rows.append({"label": str(repo["key"]) if show else f"repository {index}",
                      "step": repo.get("step"), "shares": shares, "cells": cells,
-                     "unit": units[str(repo["key"])]})
+                     "unit": (units[str(repo["key"])] or (None, None))[0],
+                     "unit_key": (units[str(repo["key"])] or (None, None))[1]})
     return rows
 
 
@@ -184,12 +188,13 @@ def render(rows: Sequence[HeatmapRow], none_yet: set[str]) -> str:
     y = head + 48
     group: str | None = None
     for row, label in zip(rows, labels):
-        if row["unit"] is not None and row["unit"] != group:
-            group = row["unit"]
-            body.append(svg.text(PAD, y + 14, svg.truncate(group, MAX_LABEL * 2), size=11.5, weight="600",
-                                 cls="fg", tooltip=group if len(group) > MAX_LABEL * 2 else None))
+        name = row["unit"]
+        if name is not None and row["unit_key"] != group:
+            group = row["unit_key"]
+            body.append(svg.text(PAD, y + 14, svg.truncate(name, MAX_LABEL * 2), size=11.5, weight="600",
+                                 cls="fg", tooltip=name if len(name) > MAX_LABEL * 2 else None))
             y += CELL_H
-        elif row["unit"] is None and group is not None:
+        elif name is None and group is not None:
             group = None
             body.append(svg.text(PAD, y + 14, NO_UNIT, size=11.5, weight="600", cls="muted"))
             y += CELL_H

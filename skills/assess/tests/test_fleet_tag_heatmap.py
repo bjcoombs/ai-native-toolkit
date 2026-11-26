@@ -77,6 +77,18 @@ def test_full_run_groups_by_unit_key_when_the_view_names_no_unit() -> None:
     assert th.unit_labels({"repos": [{"key": "a", "units": []}]}) == (None, {})
 
 
+def test_two_units_sharing_a_name_stay_two_groups() -> None:
+    repos = [{"key": f"acme/r{i}", "step": step, "units": [{"view": "ownership", "unit": unit}], "tags": None}
+             for i, (step, unit) in enumerate([(1, "ownership/a"), (3, "ownership/b"), (2, "ownership/a")])]
+    views = [{"view": "ownership", "units": [{"key": "ownership/a", "name": "Backend"},
+                                             {"key": "ownership/b", "name": "Backend"}]}]
+    data = {**FULL, "repos": repos, "views": views}
+    rows = th.heatmap_rows(data)
+    assert [(r["unit_key"], r["label"]) for r in rows] == [
+        ("ownership/a", "acme/r2"), ("ownership/a", "acme/r0"), ("ownership/b", "acme/r1")]
+    assert _svg(data).count(">Backend</text>") == 2
+
+
 def test_cell_title_breaks_down_the_score() -> None:
     svg = _svg(FULL)
     web = _row(svg, "acme/web-frontend")
