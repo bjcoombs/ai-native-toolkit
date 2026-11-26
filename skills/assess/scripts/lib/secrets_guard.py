@@ -136,6 +136,7 @@ from pathlib import Path
 from collections.abc import Mapping
 from typing import TypedDict
 
+from lib.run.run_scope import Scope
 from lib.ci.ci_action_inputs import ReadLocal
 from lib.ci.ci_expressions import follow_workflow
 from lib.ci.ci_includes import SETTLED, merged_config, resolve_includes
@@ -610,7 +611,7 @@ def _enforcement(root: Path, ci: CiGuard, platform: tuple[bool, bool] | None) ->
     return {"available": True, "present": False, "source": None}
 
 
-def scan_secrets_guard(repo_root: Path, scope: Path | None = None, ghsync_root: Path | None = None,
+def scan_secrets_guard(repo_root: Path, scope: Scope | None = None, ghsync_root: Path | None = None,
                        github_secret_scanning: Mapping[str, object] | None = None) -> SecretsGuardBlock:
     """Build the ``secrets_guard`` block (see the module doc). The pre-commit config and CI are the
     repository's, so a ``scope`` reads the root's, as ``guardrails`` reads the root pre-commit config."""

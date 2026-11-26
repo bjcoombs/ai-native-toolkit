@@ -116,6 +116,7 @@ from lib.graph.import_graph import (
     NameCollision,
     select_graph,
 )
+from lib.run.run_scope import Scope
 from lib.import_graph_builders import BUILDERS
 
 __all__ = ["EXCLUDE_DIRS", "NameCollision"]
@@ -530,7 +531,7 @@ def analyze_structure(
     repo_root: Path,
     keyhole_budget: int | None = None,
     extra_exclude_dirs: set[str] | None = None,
-    scope: Path | None = None,
+    scope: Scope | None = None,
     builders: Sequence[ImportGraphBuilder] = BUILDERS,
 ) -> StructureGraphResult:
     """Run the A1-A4 static structure analysis over the repo's import graph.
@@ -543,8 +544,8 @@ def analyze_structure(
     graphed (the reason names the dominant language). The result is
     JSON-serialisable via ``as_dict()`` and deterministic for a given source tree.
 
-    ``scope`` (an absolute path under ``repo_root``) confines the analysis to
-    modules within a subtree for ``/assess <path>`` monorepo scoping, so a
+    ``scope`` (a ``Scope`` of folders under ``repo_root``, #1110) confines the analysis
+    to modules within them for ``/assess <path>`` monorepo scoping, so a
     scoped run carries no structure signal from a sibling directory. Omit it for
     a whole-repo run.
     """

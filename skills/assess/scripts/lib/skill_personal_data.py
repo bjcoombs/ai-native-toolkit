@@ -48,7 +48,7 @@ Block (``skill_personal_data`` in run-context.json)::
      "credential_candidates": int,                     # information only (#1196)
      "kinds_detected": [kind, ...]}                    # FINDING_KINDS, so a reader sees what "met" covers
 
-With ``scope`` (a skill unit's folder in the unit pass) only the files under it are read. With no
+With ``scope`` (a skill unit's folder in the unit pass, or the ``--scope`` folders) only the files under it are read. With no
 skill or agent file, ``files_considered`` is 0 and the condition reads not measured
 (``no_skill_files``), never met. A file that cannot be read counts in ``files_unread``; when none
 of the files read holds a kind, the block reads ``available: false`` with ``reason``
@@ -68,6 +68,7 @@ import re
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
+from lib.run.run_scope import Scope
 from lib.assess_config import is_user_excluded
 from lib.instructions.agent_instructions_grader import CREDENTIAL_PLACEHOLDERS, scan_sensitive_content
 from lib.instructions.instruction_placement import skill_and_agent_files
@@ -244,13 +245,14 @@ def kinds_in(text: str) -> list[str]:
     return [k for k in KINDS if k in found]
 
 
-def _files(repo: Path, scope: Path | None, excludes: tuple[set[str], list[str]] | None) -> list[Path]:
-    folder = scope.resolve() if scope is not None else repo
+def _files(repo: Path, scope: Scope | None, excludes: tuple[set[str], list[str]] | None) -> list[Path]:
+    def inside(p: Path) -> bool:
+        return scope is None or scope.contains(p)
     out: set[Path] = set()
     dirs, pats = excludes or (set(), [])
     for path, kind in skill_and_agent_files(repo, None, excludes):
         path = path.resolve()
-        if not path.is_relative_to(folder):
+        if not inside(path):
             continue
         out.add(path)
         refs = path.parent / "references"
@@ -260,13 +262,13 @@ def _files(repo: Path, scope: Path | None, excludes: tuple[set[str], list[str]] 
             # A target outside the scope (another skill's references/) or a user exclusion is left out.
             out.update(r for r in (p.resolve() for p in refs.rglob("*")
                                    if p.is_file() and not p.is_symlink() and p.suffix.lower() in REFERENCE_SUFFIXES)
-                       if r.is_relative_to(repo) and r.is_relative_to(folder)
+                       if r.is_relative_to(repo) and inside(r)
                        and not is_user_excluded(r.relative_to(repo), dirs, pats))
     return sorted(out)
 
 
 def scan_skill_personal_data(
-    repo_root: Path, scope: Path | None = None, excludes: tuple[set[str], list[str]] | None = None,
+    repo_root: Path, scope: Scope | None = None, excludes: tuple[set[str], list[str]] | None = None,
 ) -> SkillPersonalDataBlock:
     """Build the ``skill_personal_data`` block (see the module doc)."""
     repo = repo_root.resolve()

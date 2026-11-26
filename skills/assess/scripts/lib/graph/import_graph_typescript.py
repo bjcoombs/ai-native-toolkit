@@ -73,6 +73,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from lib.run.run_scope import Scope
 from lib.graph.import_graph import EXCLUDE_DIRS, ModuleGraph
 
 TS_EXTENSIONS = (".ts", ".tsx", ".mts", ".cts")
@@ -425,13 +426,12 @@ class TypeScriptBuilder:
         return _is_source(rel.name) and not SKIP_DIRS & set(rel.parts[:-1])
 
     def build(
-        self, repo_root: Path, extra_exclude_dirs: set[str], scope: Path | None,
+        self, repo_root: Path, extra_exclude_dirs: set[str], scope: Scope | None,
     ) -> ModuleGraph | None:
         repo_root = Path(repo_root).resolve()
         all_sources, manifests = _walk(repo_root, extra_exclude_dirs)
         # Workspaces and configs come from the whole repo; modules from the scope.
-        start = scope.resolve() if scope is not None else repo_root
-        sources = [p for p in all_sources if p.is_relative_to(start)]
+        sources = [p for p in all_sources if scope is None or scope.contains(p)]
         if not sources:
             return None
         ids = {p: p.relative_to(repo_root).as_posix() for p in sources}

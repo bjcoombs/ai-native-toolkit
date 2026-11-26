@@ -99,6 +99,7 @@ from lib.testing.coverage_gate import GO_RUST_UNMEASURED, go_rust_manifests
 from lib.scoring.level_tally import DEFAULT_BLOCKS, default_model
 from lib.scoring.levels import MaturityModel, condition_id
 from lib.run_context_types import JsonDict
+from lib.run.run_scope import Scope
 from lib.run.scan_pool import fan_out
 from lib.scoring.signal_grades import EMPTY_DENOMINATORS
 from lib.unit_components import KINDS, Kind
@@ -355,7 +356,7 @@ _BOUND: dict[str, Any] = {}
 
 # One unit's pass run in a worker process: (repository-wide values, the unit's scope) -> its
 # context and the private values its scans left (``lib.run.unit_pass.run_unit_pass``).
-UnitPassFn = Callable[[Mapping[str, Any], "Path | None"], tuple[dict[str, Any], dict[str, Any]]]
+UnitPassFn = Callable[[Mapping[str, Any], "Scope | None"], tuple[dict[str, Any], dict[str, Any]]]
 
 
 def bind(table: Callable[[], UnitTable], run: Callable[..., None],
@@ -515,8 +516,8 @@ def split_reads(values: Sequence[Any]) -> tuple[dict[str, Any], tuple[Any, ...]]
     return dict(zip(REPO_BLOCKS, values)), tuple(values[len(REPO_BLOCKS):])
 
 
-def _scope(repo_root: Path, unit: str) -> Path | None:
-    return None if unit in ("", ".") else (repo_root / unit).resolve()
+def _scope(repo_root: Path, unit: str) -> Scope | None:
+    return None if unit in ("", ".") else Scope.of(repo_root, Path(unit))
 
 
 def _passes(named: Sequence[tuple[Any, str]], values: Mapping[str, Any], specs: Sequence[ScanSpec],

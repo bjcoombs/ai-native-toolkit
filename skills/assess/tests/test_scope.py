@@ -16,6 +16,7 @@ import pytest
 
 import assess_core
 from assess_core import build_and_publish_run
+from lib.run.run_scope import Scope
 from lib.report.badge import headline_badge
 from lib.scoring.headline import as_headline
 from lib.docs.doc_graph import build_doc_graph, discover_doc_files
@@ -67,8 +68,8 @@ def test_resolve_scope_none_is_whole_repo(tmp_path: Path) -> None:
 def test_resolve_scope_computes_slug(tmp_path: Path) -> None:
     sub = tmp_path / "services" / "api"
     sub.mkdir(parents=True)
-    scope_abs, scope_rel, slug = resolve_scope(tmp_path, Path("services/api"))
-    assert scope_abs == sub.resolve()
+    scope, scope_rel, slug = resolve_scope(tmp_path, Path("services/api"))
+    assert scope is not None and scope.roots == (sub.resolve(),)
     assert scope_rel == "services/api"
     assert slug == "services-api"  # separators hyphenated for a flat dir name
 
@@ -90,7 +91,7 @@ def test_resolve_scope_rejects_outside_repo(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------
 def test_git_churn_scope_isolates_subtree(git_repo) -> None:
     repo, _ = _two_service_repo(git_repo)
-    scoped = git_churn_scores(repo, scope=repo / "service-a")
+    scoped = git_churn_scores(repo, scope=Scope.of(repo, Path("service-a")))
     assert scoped, "expected churn for the scoped subtree"
     assert all("service-a" in str(p) for p in scoped)
     assert not any("service-b" in str(p) for p in scoped)
@@ -108,7 +109,7 @@ def test_git_churn_no_scope_sees_whole_repo(git_repo) -> None:
 # --------------------------------------------------------------------------
 def test_doc_graph_scope_excludes_sibling_docs(git_repo) -> None:
     repo, _ = _two_service_repo(git_repo)
-    scoped = discover_doc_files(repo, scope=repo / "service-a")
+    scoped = discover_doc_files(repo, scope=Scope.of(repo, Path("service-a")))
     names = {p.relative_to(repo).as_posix() for p in scoped}
     assert "service-a/README.md" in names
     assert "service-b/README.md" not in names
@@ -117,7 +118,7 @@ def test_doc_graph_scope_excludes_sibling_docs(git_repo) -> None:
 def test_build_doc_graph_scope_confines_docs(git_repo) -> None:
     repo, _ = _two_service_repo(git_repo)
     full = build_doc_graph(repo)
-    scoped = build_doc_graph(repo, scope=repo / "service-a")
+    scoped = build_doc_graph(repo, scope=Scope.of(repo, Path("service-a")))
     assert full.doc_count > scoped.doc_count
     scoped_paths = set(scoped.graph.nodes) if scoped.graph is not None else set()
     assert not any("service-b" in n for n in scoped_paths)
@@ -150,7 +151,7 @@ def test_treemap_collect_filters_to_scope(tmp_path: Path, treemap: ModuleType) -
     mod.lizard_scores = fake_lizard
     mod.scc_scores = fake_scc
 
-    files, *_ = mod.collect(tmp_path, by="complexity", scope=tmp_path / "service-a")
+    files, *_ = mod.collect(tmp_path, by="complexity", scope=Scope.of(tmp_path, Path("service-a")))
     paths = {f[0] for f in files}
     assert a.resolve() in paths
     assert b.resolve() not in paths

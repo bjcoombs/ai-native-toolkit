@@ -17,14 +17,14 @@ Blocks ``assess_core.py`` assembles through its own table entries are listed as
 Exit codes:
     0  document written
     2  usage error: unknown scan name, bad --window, --out inside the target,
-       a target or --ghsync-root that is not a directory, a --scope that is missing or
-       outside the target, --scope with --units or a --scans unit scan, an unreadable or invalid
+       a target or --ghsync-root that is not a directory, a --scope that is missing,
+       outside the target or a pattern that matches nothing, --scope with --units or a --scans unit scan, an unreadable or invalid
        --fleet-config (the message names the key), or a --pack that does not load
 
 Run:
     uv run assess_signals.py <repo> --out FILE.json [--scans a,b,c] [--window 6mo]
         [--counts-only [--hash-paths | --hash-salt VALUE]] [--fleet-config FILE] [--platform]
-        [--ghsync-root DIR] [--scope PATH | --units] [--pack FILE ...] [--jobs N]
+        [--ghsync-root DIR] [--scope PATH ... | --units] [--pack FILE ...] [--jobs N]
 
 ``--jobs N`` (#1381) runs at most N scans at a time (``lib/run/scan_pool.py``; default the CPU
 count capped at 8); the document is the same for every N, and 1 runs them one by one.
@@ -34,10 +34,11 @@ count capped at 8); the document is the same for every N, and 1 runs them one by
 under it (``lib/ci/ci_includes.py``, #766). ``fleet.py`` passes its ROOT.
 
 ``--scope PATH`` (#866) measures one folder of the target, as ``assess_core --scope``
-does: the scans that read the scope (suppressions, the doc graph and staleness, structure,
+does; repeat it, or pass a glob such as ``skills/*-review``, to measure several folders
+together (#1110, ``lib/run/run_scope.py`` ``Scope``): the scans that read the scope (suppressions, the doc graph and staleness, structure,
 size, the coverage gate) read that folder, and the repository-wide ones (CI, review,
 agent settings, the root instruction file) read the whole checkout. The stamp records
-the folder as ``scope``; counts-only output writes ``set`` in its place, or its salted hash
+the folder (several patterns joined by ``,``) as ``scope``; counts-only output writes ``set`` in its place, or its salted hash
 under ``--hash-paths``, so ``null`` still means the whole checkout.
 
 ``--units`` (#866) adds the monorepo unit scans (``lib/run/signals.py`` ``UNIT_SCANS``): the
@@ -89,7 +90,7 @@ from lib.counts_only.content_free import (
 from lib.fleet_config import FleetConfig, FleetConfigError, load_fleet_config
 from lib.packs import PackError, load_packs
 from lib.run_context_types import SignalsDocument
-from lib.run.run_scope import resolve_scope
+from lib.run.run_scope import Scope, resolve_scope
 from lib.run.scan_pool import add_jobs_argument
 from lib.run.signals import (
     DEFAULT_WINDOW,
@@ -152,9 +153,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     unit = parser.add_mutually_exclusive_group()
     unit.add_argument(
-        "--scope", metavar="PATH",
+        "--scope", metavar="PATH", action="append",
         help="Measure one folder of the target (relative to it, or absolute under it), as "
-             "assess_core --scope does; repository-wide scans still read the whole checkout.",
+             "assess_core --scope does; repeat it or pass a glob (skills/*-review) for several. "
+             "Repository-wide scans still read the whole checkout.",
     )
     unit.add_argument(
         "--units", action="store_true",
@@ -204,7 +206,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         scope = _scope(repo_root, args.scope)
     except ValueError as e:
-        print(f"error: --scope {args.scope}: {e}", file=sys.stderr)
+        print(f"error: --scope {' '.join(args.scope)}: {e}", file=sys.stderr)
         return 2
     requested = None
     if args.scans is not None:
@@ -232,13 +234,11 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _scope(repo_root: Path, raw: str | None) -> Path | None:
-    """``--scope`` as an absolute folder under the target; None for none or the target itself,
+def _scope(repo_root: Path, raw: list[str] | None) -> Scope | None:
+    """``--scope`` as a ``Scope`` under the target; None for none or the target itself,
     so the stamp's null is the only way to say "whole checkout". Raises ``ValueError``."""
-    if raw is None:
-        return None
-    scope = resolve_scope(repo_root, Path(raw))[0]
-    return None if scope == repo_root else scope
+    scope = resolve_scope(repo_root, [Path(r) for r in raw or []])[0]
+    return None if scope is None or scope.roots == (repo_root.resolve(),) else scope
 
 
 def _counts_only(document: SignalsDocument, args: argparse.Namespace) -> None:

@@ -121,7 +121,8 @@ from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
-from lib.testing.coverage_gate import CoverageGate, Excludes, gates_something, walk_named
+from lib.run.run_scope import Scope
+from lib.testing.coverage_gate import Bases, CoverageGate, Excludes, gates_something, walk_named
 
 GateKind = Literal["complexity_limit", "coverage_floor", "pre_commit", "type_strictness"]
 
@@ -390,22 +391,21 @@ def _applied(root: Path, files: list[str], order: tuple[str, ...],
 
 
 def config_files(root: Path, excludes: Excludes | None = None,
-                 scope: Path | None = None) -> list[str]:
+                 bases: Bases = None) -> list[str]:
     """Repo-relative POSIX paths of the ruff, flake8 and mypy config files anywhere
-    under ``root``, or under ``scope`` on a scoped run (a package's own ``pyproject.toml``
+    under ``root``, or under each of ``bases`` on a scoped run (a package's own ``pyproject.toml``
     included), the walk ``coverage_gate`` uses: bounded depth, built-in and user excludes."""
     wanted = set(_RUFF_FILES) | set(_FLAKE8_FILES) | set(_MYPY_FILES)
-    return [rel.as_posix()
-            for rel in walk_named(root, excludes or (set(), []), wanted, scope)]
+    return list(dict.fromkeys(rel.as_posix() for base in bases or (None,)
+                              for rel in walk_named(root, excludes or (set(), []), wanted, base)))
 
 
-def _scope_base(root: Path, scope: Path | str | None) -> Path | None:
-    """The absolute scope directory under the resolved ``root``, or None for a
+def _scope_bases(root: Path, scope: Scope | None) -> Bases:
+    """The scope's folders under the resolved ``root``, or None for a
     whole-repository run."""
-    if scope is None:
+    if scope is None or scope.roots == (root,):
         return None
-    base = (root / scope).resolve()
-    return None if base == root else base
+    return scope.roots
 
 
 def _nearest_above(root: Path, base: Path | None, applied: list[str], order: tuple[str, ...],
@@ -425,20 +425,22 @@ def _nearest_above(root: Path, base: Path | None, applied: list[str], order: tup
         for name in order:
             rel = (directory / name).relative_to(root).as_posix()
             if (directory / name).is_file() and configures(root, rel):
-                return [rel, *applied]
+                return applied if rel in applied else [rel, *applied]
     return applied
 
 
 def find_gates(root: Path, coverage_gate: Mapping[str, Any] | None,
                excludes: Excludes | None = None,
-               scope: Path | None = None) -> list[Guardrail]:
-    """Every gate this module reads under ``root`` (or ``scope``, an absolute directory
-    under it), in kind order then file order."""
-    files = config_files(root, excludes, scope)
+               bases: Bases = None) -> list[Guardrail]:
+    """Every gate this module reads under ``root`` (or ``bases``, the scope's absolute
+    folders under it), in kind order then file order."""
+    files = config_files(root, excludes, bases)
 
     def applied(order: tuple[str, ...], configures: Callable[[Path, str], bool]) -> list[str]:
-        return _nearest_above(root, scope, _applied(root, files, order, configures), order,
-                              configures)
+        found = _applied(root, files, order, configures)
+        for base in bases or (None,):
+            found = _nearest_above(root, base, found, order, configures)
+        return found
 
     gates: list[Guardrail | None] = [
         _ruff_gate(root, rel) for rel in applied(_RUFF_FILES, _configures_ruff)]
@@ -534,17 +536,17 @@ def _instruction_lines(root: Path, files: Iterable[str]) -> tuple[list[tuple[str
 def scan_guardrails(repo_root: Path | str, instruction_files: Iterable[str],
                     coverage_gate: Mapping[str, Any] | None,
                     excludes: Excludes | None = None,
-                    scope: Path | str | None = None) -> GuardrailsBlock:
+                    scope: Scope | None = None) -> GuardrailsBlock:
     """Return the ``guardrails`` run-context block for ``repo_root``.
 
     ``instruction_files`` are paths relative to ``repo_root`` (the keys of the
     core's ``instruction_files``); ``coverage_gate`` is that scan's block;
-    ``excludes`` is the user's ``(dirs, patterns)`` pair; ``scope`` (absolute, or
-    relative to ``repo_root``) limits the config walk to that subtree.
+    ``excludes`` is the user's ``(dirs, patterns)`` pair; ``scope`` (a ``Scope``,
+    #1110) limits the config walk to its folders.
     """
     root = Path(repo_root).resolve()
-    base = _scope_base(root, scope)
-    gates = find_gates(root, coverage_gate, excludes, base)
+    bases = _scope_bases(root, scope)
+    gates = find_gates(root, coverage_gate, excludes, bases)
     lines, read = _instruction_lines(root, instruction_files)
     for gate in gates:
         where = next((rel for rel, line in lines if states(gate, line)), None)
@@ -560,5 +562,5 @@ def scan_guardrails(repo_root: Path | str, instruction_files: Iterable[str],
         "unstated": len(gates) - stated,
         "stated_pct": round(100.0 * stated / len(gates), 1) if gates else None,
         "instruction_files_read": read,
-        "not_read": [*NOT_READ, *(NOT_READ_SCOPED if base is not None else ())],
+        "not_read": [*NOT_READ, *(NOT_READ_SCOPED if bases is not None else ())],
     }

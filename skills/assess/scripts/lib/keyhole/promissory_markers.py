@@ -34,7 +34,10 @@ from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from lib.run.run_scope import Scope
 
 try:
     from lib.agent_identity import coauthors_have_agent as _coauthors_have_agent
@@ -388,11 +391,11 @@ def is_marker_fixture(rel: str) -> bool:
 
 def _detect(
     repo_root: Path, extra_globs: list[str], rg: str = "rg",
-    fixtures: set[str] | None = None, scope_rel: str = "",
+    fixtures: set[str] | None = None, scope_rels: tuple[str, ...] = ("",),
 ) -> list[Marker]:
     """Stage 1: one rg pass per family, comment-context filtered.
 
-    A hit in a fixture file (read relative to ``scope_rel``, so a unit's own
+    A hit in a fixture file (read relative to its ``scope_rels`` root, so a unit's own
     name never makes it one) is set aside before any filter reads it; its path
     goes into ``fixtures`` when one is passed.
     """
@@ -409,7 +412,8 @@ def _detect(
                 continue
             path, line_s, text = parts
             path = path.removeprefix("./")
-            if is_marker_fixture(path.removeprefix(scope_rel)):
+            own = next((path[len(p):] for p in scope_rels if path.startswith(p)), path)
+            if is_marker_fixture(own):
                 if fixtures is not None:
                     fixtures.add(path)
                 continue
@@ -678,12 +682,12 @@ def scan_promissory_markers(
     stale_touches: int = STALE_TOUCHES_DEFAULT,
     extra_exclude_dirs: Iterable[str] | None = None,
     extra_exclude_patterns: Iterable[str] | None = None,
-    scope: Path | None = None,
+    scope: Scope | None = None,
 ) -> MarkerScan:
     """Full pipeline: detect -> blame-age -> authorship -> severity.
 
-    `scope` (an absolute path under `repo_root`) confines the markers to a
-    subtree for `/assess <path>` monorepo scoping, so a scoped run carries no
+    `scope` (a `Scope` of folders under `repo_root`, #1110) confines the markers to
+    them for `/assess <path>` monorepo scoping, so a scoped run carries no
     unactioned-intent signal from a sibling directory. Omit it for a whole-repo
     run.
     """
@@ -698,21 +702,14 @@ def scan_promissory_markers(
 
     try:
         fixtures: set[str] = set()
-        rel = scope.resolve().relative_to(repo_root.resolve()).as_posix() if scope else "."
+        rels = [r.relative_to(repo_root.resolve()).as_posix() for r in scope.roots] if scope else ["."]
         markers = _detect(
             repo_root, _extra_globs(extra_exclude_dirs, extra_exclude_patterns), rg,
-            fixtures, "" if rel == "." else rel + "/",
+            fixtures, tuple("" if rel == "." else rel + "/" for rel in rels),
         )
         if scope is not None:
-            scope_abs = scope.resolve()
-            markers = [
-                m for m in markers
-                if (repo_root / m.path).resolve().is_relative_to(scope_abs)
-            ]
-            fixtures = {
-                f for f in fixtures
-                if (repo_root / f).resolve().is_relative_to(scope_abs)
-            }
+            markers = [m for m in markers if scope.contains(repo_root / m.path)]
+            fixtures = {f for f in fixtures if scope.contains(repo_root / f)}
         _blame_ages(repo_root, markers)
         _classify_authorship(repo_root, markers)
         commit_times = _file_commit_times(repo_root)

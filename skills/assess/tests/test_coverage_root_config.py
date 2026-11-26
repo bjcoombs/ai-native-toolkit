@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from lib.run.run_scope import Scope
 from lib.testing.coverage_ci import read_ci_runs
 from lib.testing.coverage_gate import detect_coverage_gate
 from lib.testing.coverage_root_config import ROOT_UNRESOLVED, root_config, root_config_applies
@@ -43,7 +44,7 @@ def _applies(root: Path) -> bool | None:
 
 def test_a_ci_run_from_the_root_counts_the_root_floor(tmp_path: Path) -> None:
     root = _repo(tmp_path, "      - run: pytest --cov pkg\n")
-    block = detect_coverage_gate(root, Path("pkg"))
+    block = detect_coverage_gate(root, Scope.of(root, Path("pkg")))
     assert [(g["file"], g["threshold"]) for g in block["gates"]] == [("pyproject.toml", 85.0)]
     assert block["configured"] is True
     assert block["threshold_meets_minimum"] is True
@@ -53,7 +54,7 @@ def test_a_ci_run_from_the_root_counts_the_root_floor(tmp_path: Path) -> None:
 
 def test_no_ci_step_reads_the_root_floor_as_unknown_not_absent(tmp_path: Path) -> None:
     root = _repo(tmp_path, None)
-    block = detect_coverage_gate(root, Path("pkg"))
+    block = detect_coverage_gate(root, Scope.of(root, Path("pkg")))
     assert [g["file"] for g in block["gates"]] == ["pyproject.toml"]
     assert block["threshold_meets_minimum"] is None
     assert block["unmeasured_reason"] == ROOT_UNRESOLVED
@@ -64,13 +65,13 @@ def test_an_unresolved_root_floor_is_reported_but_not_configured(tmp_path: Path)
     """The root gates stay in ``gates`` as evidence; ``configured`` and the maximum read
     only the gates known to govern the scope."""
     low = _repo(tmp_path / "low", None, **{"pyproject.toml": "[tool.coverage.report]\nfail_under = 30\n"})
-    block = detect_coverage_gate(low, Path("pkg"))
+    block = detect_coverage_gate(low, Scope.of(low, Path("pkg")))
     assert [g["file"] for g in block["gates"]] == ["pyproject.toml"]
     assert (block["configured"], block["max_threshold_percent"]) == (False, None)
     own = _repo(tmp_path / "own", None, **{
         "pyproject.toml": "[tool.coverage.report]\nfail_under = 95\n",
         "pkg/jest.config.js": "module.exports = { coverageThreshold: { global: { lines: 60 } } };\n"})
-    block = detect_coverage_gate(own, Path("pkg"))
+    block = detect_coverage_gate(own, Scope.of(own, Path("pkg")))
     assert (block["configured"], block["max_threshold_percent"]) == (True, 60.0)
     assert block["threshold_meets_minimum"] is True
 
@@ -80,20 +81,20 @@ def test_an_unresolved_root_floor_is_never_credited_as_run(tmp_path: Path) -> No
     root = _repo(tmp_path, "      - run: cd $PKG && coverage report\n", **{
         "pyproject.toml": "[tool.coverage.report]\nfail_under = 90\n",
         "pkg/Makefile": "cov:\n\tpytest --cov --cov-fail-under=80\n"})
-    block = detect_coverage_gate(root, Path("pkg"))
+    block = detect_coverage_gate(root, Scope.of(root, Path("pkg")))
     assert block["threshold_meets_minimum"] is True
     assert block["enforced_meets_minimum"] is not True
 
 
 def test_a_templated_root_floor_names_the_reason(tmp_path: Path) -> None:
     root = _repo(tmp_path, None, **{"pyproject.toml": "[tool.coverage.report]\nfail_under = ${COV_MIN}\n"})
-    block = detect_coverage_gate(root, Path("pkg"))
+    block = detect_coverage_gate(root, Scope.of(root, Path("pkg")))
     assert (block["threshold_meets_minimum"], block["unmeasured_reason"]) == (None, ROOT_UNRESOLVED)
 
 
 def test_a_ci_run_only_inside_the_scope_drops_the_root_floor(tmp_path: Path) -> None:
     root = _repo(tmp_path, "      - run: pytest --cov\n        working-directory: pkg\n")
-    block = detect_coverage_gate(root, Path("pkg"))
+    block = detect_coverage_gate(root, Scope.of(root, Path("pkg")))
     assert block["gates"] == []
     assert (block["configured"], block["threshold_meets_minimum"]) == (False, False)
     assert block["unmeasured_reason"] is None
@@ -102,7 +103,7 @@ def test_a_ci_run_only_inside_the_scope_drops_the_root_floor(tmp_path: Path) -> 
 def test_a_low_root_floor_reads_false_either_way(tmp_path: Path) -> None:
     """Whether a 30 percent floor applies or not, the scope has no floor of 50 percent."""
     root = _repo(tmp_path, None, **{"pyproject.toml": "[tool.coverage.report]\nfail_under = 30\n"})
-    block = detect_coverage_gate(root, Path("pkg"))
+    block = detect_coverage_gate(root, Scope.of(root, Path("pkg")))
     assert (block["threshold_meets_minimum"], block["unmeasured_reason"]) == (False, None)
 
 
@@ -110,7 +111,7 @@ def test_the_scopes_own_config_wins(tmp_path: Path) -> None:
     root = _repo(tmp_path, "      - run: pytest --cov\n",
                  **{"pkg/.coveragerc": "[report]\nshow_missing = true\n"})
     assert root_config(root, root / "pkg", (set(), [])) is None
-    assert detect_coverage_gate(root, Path("pkg"))["gates"] == []
+    assert detect_coverage_gate(root, Scope.of(root, Path("pkg")))["gates"] == []
 
 
 def test_a_scope_with_no_python_is_not_governed(tmp_path: Path) -> None:
@@ -158,7 +159,7 @@ def test_a_bare_pytest_reads_the_root_addopts(tmp_path: Path) -> None:
         "[tool.pytest.ini_options]\naddopts = \"--cov=pkg\"\n\n"
         "[tool.coverage.report]\nfail_under = 85\n")})
     assert _applies(root) is True
-    block = detect_coverage_gate(root, Path("pkg"))
+    block = detect_coverage_gate(root, Scope.of(root, Path("pkg")))
     assert (block["threshold_meets_minimum"], block["enforced_meets_minimum"]) == (True, True)
 
 
@@ -212,7 +213,7 @@ def test_every_coverage_py_config_name_is_read(tmp_path: Path, name: str, text: 
                              CI: "on: [pull_request]\njobs:\n  t:\n    steps:\n"
                                  "      - run: pytest --cov\n"})
     assert root_config(root, root / "pkg", (set(), [])) == name
-    assert [g["file"] for g in detect_coverage_gate(root, Path("pkg"))["gates"]] == [name]
+    assert [g["file"] for g in detect_coverage_gate(root, Scope.of(root, Path("pkg")))["gates"]] == [name]
 
 
 def test_a_setup_cfg_without_coverage_sections_falls_through(tmp_path: Path) -> None:

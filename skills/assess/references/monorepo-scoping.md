@@ -6,6 +6,11 @@ all computed for - and labelled with - the scope, and every artifact lands under
 `.assess/<scope-slug>/` instead of `.assess/`. A root-level run (no path) is
 unchanged.
 
+A scope can also be several folders, or a glob such as `skills/*-review` (#1110): repeat
+`--scope` on every script below, once per path or glob, and the run measures their union.
+A glob is matched from the repo root; one that matches nothing, like a missing path, exits
+2 and names it.
+
 This exists because a monorepo holds several services in one git repo. A
 whole-repo score averages them into a number that describes none of them; a
 scoped run answers "how ready is *this* service" with no signal bleeding in from
@@ -23,6 +28,24 @@ SCOPE_SLUG=$(printf '%s' "$SCOPE" | tr '/\\' '-')   # services/api -> services-a
 ASSESS_DIR="$REPO_ROOT/.assess/$SCOPE_SLUG"
 mkdir -p "$ASSESS_DIR"
 ```
+
+For several folders or a glob, hold them in an array and pass the same `SCOPE_ARGS` to
+every script below in place of `--scope "$SCOPE"`. Quote each glob: the shell would
+otherwise expand `skills/*-review` into paths, and a script given the expanded paths
+writes to a different slug than one given the glob. The slug is `scope-` and a
+12-character hash of the sorted patterns, so let the core compute it rather than `tr`:
+
+<!-- chat-skip:start -->
+```bash
+SCOPES=(services/api 'skills/*-review')   # quoted: the script matches the glob, not the shell
+SCOPE_ARGS=(); for s in "${SCOPES[@]}"; do SCOPE_ARGS+=(--scope "$s"); done
+SCOPE_SLUG=$(cd "<assess-skill-dir>/scripts" && uv run --locked python -c \
+  'import sys; from pathlib import Path; from lib.run.run_scope import resolve_scope; print(resolve_scope(Path(sys.argv[1]), [Path(a) for a in sys.argv[2:]])[2])' \
+  "$REPO_ROOT" "${SCOPES[@]}")
+ASSESS_DIR="$REPO_ROOT/.assess/$SCOPE_SLUG"   # replaces the one-folder ASSESS_DIR above
+mkdir -p "$ASSESS_DIR"
+```
+<!-- chat-skip:end -->
 
 Every `.assess/...` path in the orchestrator's Step 1-7.5 becomes
 `$ASSESS_DIR/...` for a scoped run (the run-context, the SVGs, the stats
@@ -97,7 +120,8 @@ for any consumer; both are `null` on a whole-repo run.
 
 `assess_signals.py --scope <path>` runs the headless signals against one folder, as
 `/assess <path>` does: the scans that read the scope read that folder, and repository-wide
-scans read the whole checkout. The document's stamp records the folder as `scope`;
+scans read the whole checkout. Repeat `--scope`, or pass a glob, for several folders. The
+document's stamp records the folder (several patterns joined by `,`) as `scope`;
 counts-only output writes `set` in its place, or its salted hash under `--hash-paths`, so a
 scoped run never reads as a whole-repo run (`null`).
 

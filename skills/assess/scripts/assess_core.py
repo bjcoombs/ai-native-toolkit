@@ -62,7 +62,7 @@ from lib.testing.mutation_refresh import recorded_excludes, refresh_mutation_fin
 from lib.run.run_publish import publish_run
 from lib.assess_config import load_managed_settings_opt_in
 from lib.report.run_wiki import refresh_log_readiness
-from lib.run.run_scope import assess_dir_for, load_current_stats, resolve_scope
+from lib.run.run_scope import RequestedScope, assess_dir_for, load_current_stats, resolve_scope
 from lib.run.scan_plan import ScanPlan, run_plan
 from lib.run.scan_pool import add_jobs_argument
 from lib.run.scan_registry import run_scans
@@ -74,7 +74,7 @@ from lib.test_pressure import scan_test_pressure
 
 def build_run_context(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
-    scope: Path | None = None, model: ModelChoice | None = None, managed_settings: bool = False,
+    scope: RequestedScope = None, model: ModelChoice | None = None, managed_settings: bool = False,
     plan: ScanPlan | None = None,
     packs: tuple[Pack, ...] = (), jobs: int = 1,
 ) -> dict[str, Any]:
@@ -87,9 +87,10 @@ def build_run_context(
     controlling terminal, so an interactive /assess would misread as headless.
 
     ``scope`` restricts the assessment to a subtree (``/assess <path>`` monorepo
-    scoping): artifacts land under ``.assess/<slug>/`` and the file-enumerating
+    scoping), or to several folders or a glob (``lib.run.run_scope.Scope``, #1110):
+    artifacts land under ``.assess/<slug>/`` and the file-enumerating
     scans (complexity stats read from the scoped sidecar, doc graph, doc
-    staleness) see only the subtree, so the score/badge/wiki carry no signal
+    staleness) see only those folders, so the score/badge/wiki carry no signal
     from a sibling directory. None (the default) is a whole-repo run, unchanged.
 
     ``model`` is the maturity model the ``level`` and ``headline`` blocks evaluate
@@ -126,7 +127,7 @@ def build_run_context(
 
 def build_and_publish_run(
     *, repo_root: Path, run_date: str, non_interactive: bool = False,
-    scope: Path | None = None, model: ModelChoice | None = None, managed_settings: bool = False,
+    scope: RequestedScope = None, model: ModelChoice | None = None, managed_settings: bool = False,
     plan: ScanPlan | None = None,
     packs: tuple[Pack, ...] = (), jobs: int = 1,
 ) -> dict[str, Any]:
@@ -143,7 +144,7 @@ def build_and_publish_run(
 
 
 def _scan(
-    repo_root: Path, run_date: str, non_interactive: bool, scope: Path | None,
+    repo_root: Path, run_date: str, non_interactive: bool, scope: RequestedScope,
     model: ModelChoice | None = None, managed_settings: bool = False, plan: ScanPlan | None = None,
     packs: tuple[Pack, ...] = (), jobs: int = 1,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -190,7 +191,7 @@ def _model_hint(level_block: dict[str, Any]) -> str:
     return f"the run used the custom model {name}: pass --levels with that file"
 
 
-def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
+def run_opt_in_mutation(repo_root: Path, scope: RequestedScope = None,
                         model: ModelChoice | None = None, packs: tuple[Pack, ...] = ()) -> int:
     """Re-run the Layer-1 test-pressure scan with the bounded mutation pass ON.
 
@@ -338,10 +339,11 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
-        "--scope", type=Path, metavar="SUBDIR",
+        "--scope", type=Path, metavar="SUBDIR", action="append",
         help=(
             "Scope the assessment to a subtree (`/assess <path>` monorepo "
-            "scoping). A path under the repo root; the metrics, headline, badge, "
+            "scoping). A path under the repo root, or a glob such as "
+            "`skills/*-review`; repeat it to measure several folders together; the metrics, headline, badge, "
             "wiki, and artifacts are all computed for and labelled with the "
             "scope, and land under `.assess/<scope-slug>/`. The scoped scans "
             "carry no signal from a sibling directory. Omit for a whole-repo "
@@ -404,7 +406,7 @@ def main(argv: list[str] | None = None) -> int:
             packs=packs, jobs=parsed.jobs,
         )
     except ValueError as e:
-        # Invalid --scope (missing path or outside the repo). Report cleanly
+        # Invalid --scope (missing path, outside the repo, or a pattern matching nothing). Report cleanly
         # with a non-zero exit rather than a traceback.
         print(f"error: {e}", file=sys.stderr)
         return 2

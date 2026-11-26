@@ -14,6 +14,7 @@ import pytest
 
 import lib.run.scan_registry as reg
 from assess_core import build_and_publish_run
+from lib.run.run_scope import Scope
 from lib.instructions.claude_config import FileKind, check_file, parse_frontmatter, scan_claude_config
 from lib.instructions.claude_config_fields import (
     AGENT_FIELDS,
@@ -395,9 +396,9 @@ def test_scope_reads_the_subtree_config_with_repo_relative_paths(tmp_path: Path)
     _write(tmp_path, ".claude/agents/root.md", _fm("color: indigo"))
     _write(tmp_path, "svc/.claude/agents/svc.md", _fm("color: indigo"))
     _write(tmp_path, "other/.claude/agents/other.md", _fm("color: indigo"))
-    block = scan_claude_config(tmp_path, scope=tmp_path / "svc")
+    block = scan_claude_config(tmp_path, scope=Scope.of(tmp_path, Path("svc")))
     assert [f["file"] for f in block["findings"]] == ["svc/.claude/agents/svc.md"]
-    assert scan_claude_config(tmp_path, scope=tmp_path / "other" / ".claude" / "agents")[
+    assert scan_claude_config(tmp_path, scope=Scope.of(tmp_path, Path("other/.claude/agents")))[
         "available"] is False
 
 

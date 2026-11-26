@@ -53,6 +53,7 @@ from lib.history.content_paths import RAW_LOG_ARGS, content_paths
 from lib.history.commit_anchor import GIT_TIMEOUT_SECONDS as GIT_TIMEOUT_SECONDS
 from lib.history.commit_anchor import head_commit_epoch, since_args
 from lib.history.history_window import WINDOW_PATTERN
+from lib.run.run_scope import Scope
 from lib.run_context_types import BulkCommit, JsonDict
 
 # Git pathspec dropping that directory from a status call. Exclude-only
@@ -84,15 +85,15 @@ def rename_paths(root: Path) -> dict[str, str]:
     return rename_map.paths
 
 
-def _under(top: Path, base: Path) -> Callable[[str], bool]:
-    """A top-relative path inside ``base``: the walk's pathspec as a predicate,
+def _under(top: Path, bases: Iterable[Path]) -> Callable[[str], bool]:
+    """A top-relative path inside one of ``bases``: the walk's pathspecs as a predicate,
     since ``--full-diff`` lists every path a matching commit touched."""
-    prefix = base.resolve().relative_to(top).as_posix() if base.resolve() != top else ""
-    return lambda rel: not prefix or rel == prefix or rel.startswith(prefix + "/")
+    prefixes = [b.resolve().relative_to(top).as_posix() if b.resolve() != top else "" for b in bases]
+    return lambda rel: any(not p or rel == p or rel.startswith(p + "/") for p in prefixes)
 
 
 def git_churn_scores(
-    root: Path, window: str | None = None, scope: Path | None = None,
+    root: Path, window: str | None = None, scope: Scope | None = None,
     renames: Mapping[str, str] | None = None, anchor_epoch: int | None = None,
 ) -> dict[Path, int]:
     """Return {abs_path: commit_count} for files under root tracked in git.
@@ -113,9 +114,9 @@ def git_churn_scores(
     not followed. Git's own rename detection is off (``--no-renames``) either
     way, so the count does not depend on the reader's ``diff.renames`` setting.
 
-    `scope` (an absolute path under `root`) restricts the churn to a subtree:
-    git only walks that pathspec and the results are filtered to files under
-    it. Omit it (the default) for a whole-repo run. Used by `/assess <path>`
+    `scope` (a `Scope` of folders under `root`, #1110) restricts the churn to them:
+    git only walks those pathspecs and the results are filtered to files under
+    them. Omit it (the default) for a whole-repo run. Used by `/assess <path>`
     monorepo scoping so a scoped assessment carries no churn signal from a
     sibling directory. The pathspec does not reach a scoped file's history
     under an old name outside the subtree.
@@ -129,15 +130,14 @@ def git_churn_scores(
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return {}
     repo = Path(repo_top).resolve()
-    scope_abs = scope.resolve() if scope is not None else None
 
     bound = since_args(root, window, anchor_epoch)
     if bound is None:
         return {}
     cmd = ["git", "-C", repo_top, "-c", "core.quotepath=off", "log",
            "--pretty=format:%x00", *RAW_LOG_ARGS, *bound]
-    if scope_abs is not None:
-        cmd += ["--", str(scope_abs)]
+    if scope is not None:
+        cmd += ["--", *(str(r) for r in scope.roots)]
     try:
         raw = subprocess.run(
             cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True,
@@ -146,7 +146,7 @@ def git_churn_scores(
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return {}
 
-    in_scope = _under(repo, scope_abs) if scope_abs is not None else None
+    in_scope = _under(repo, scope.roots) if scope is not None else None
     counts: dict[Path, int] = {}
     for commit in raw.split("\x00"):
         touched: set[Path] = set()
@@ -157,7 +157,7 @@ def git_churn_scores(
             # A pathspec narrows which commits git walks, but a commit that
             # touches a scoped file can also touch a sibling one; drop those so
             # the count is strictly the subtree's.
-            if scope_abs is not None and not path.is_relative_to(scope_abs):
+            if scope is not None and not scope.contains(path):
                 continue
             touched.add(path)
         for path in touched:
@@ -207,7 +207,7 @@ def commit_epochs_by_file(
     epochs: dict[Path, list[tuple[int, int]]] = {}
     for index, chunk in enumerate(raw.split("\x00")[1:]):
         at, _, rest = chunk.partition("\n")
-        for rel in content_paths(rest.splitlines(), renames, _under(top_path, root)):
+        for rel in content_paths(rest.splitlines(), renames, _under(top_path, (root,))):
             path = (top_path / rel).resolve()
             if path.is_relative_to(root):
                 epochs.setdefault(path, []).append((int(at.strip() or 0), index))

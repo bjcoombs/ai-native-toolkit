@@ -59,8 +59,8 @@ recorded as ``"all-time"``. The window counts back from HEAD's committer time,
 not from today (issue #773), so the same commit gives the same counts on any
 date; ``since`` records the absolute ``@<epoch>`` bound.
 
-Scope: commits touching the ``--scope`` subtree when the core passes one
-(``git log -- <scope>``), otherwise every commit under ``repo_root``.
+Scope: commits touching the ``--scope`` folders when the core passes a ``Scope``
+(``git log -- <root> ...``, #1110), otherwise every commit under ``repo_root``.
 
 Automation bots. A GitHub squash merge writes a ``Co-authored-by`` trailer for
 every other commit author on the pull request, so a ``pre-commit-ci[bot]`` or
@@ -127,6 +127,7 @@ from pathlib import Path
 from collections.abc import Mapping
 from typing import Literal, NamedTuple, TypedDict, cast
 
+from lib.run.run_scope import Scope
 from lib.agent_identity import (
     AGENT,
     COVERED_AGENTS,
@@ -230,7 +231,7 @@ def _git(repo_root: Path, *args: str) -> str:
         raise _GitUnavailable(REASON_NOT_A_REPO) from e
 
 
-def _commits(repo_root: Path, scope: Path | None, bound: list[str]) -> list[HistoryCommit]:
+def _commits(repo_root: Path, scope: Scope | None, bound: list[str]) -> list[HistoryCommit]:
     """Author and co-author fields of each non-merge commit in the window.
 
     Raises ``_GitUnavailable`` when git cannot answer, or when the clone is
@@ -240,7 +241,7 @@ def _commits(repo_root: Path, scope: Path | None, bound: list[str]) -> list[Hist
     args = ["log", "--no-merges",
             "--format=%x1e%H%x1f%ct%x1f%ae%x1f%an%x1f%s%x1f"
             "%(trailers:key=Co-authored-by,valueonly,separator=%x1d)"]
-    args += [*bound, "--", str(scope) if scope is not None else "."]
+    args += [*bound, "--", *([str(r) for r in scope.roots] if scope is not None else ["."])]
     out = _git(repo_root, *args)
     try:
         shallow = _git(repo_root, "rev-parse", "--is-shallow-repository").strip()
@@ -280,7 +281,7 @@ class WindowCommits(NamedTuple):
     since: str | None  # the absolute ``@<epoch>`` bound; None for full history
 
 
-def window_commits(repo_root: Path, scope: Path | None,
+def window_commits(repo_root: Path, scope: Scope | None,
                    history_window: str | None) -> WindowCommits | str:
     """The window's non-merge commits, or the fixed ``REASON_*`` git could not answer
     with. Shared with the identity listing (``scripts/identity_candidates.py``)."""
@@ -307,7 +308,7 @@ def matcher_from_config(config: FleetConfig | None) -> AuthorMatcher:
 
 
 def scan_ai_usage(
-    repo_root: Path, scope: Path | None, history_window: str | None,
+    repo_root: Path, scope: Scope | None, history_window: str | None,
     fleet_config: FleetConfig | None = None,
 ) -> AiUsageBlock | AiUsageUnavailable:
     """Count the window's commits, those with an AI-assistant co-author trailer and

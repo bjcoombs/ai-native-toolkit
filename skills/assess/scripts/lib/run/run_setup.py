@@ -37,7 +37,9 @@ from lib.complexity.diff_reliability import compute_diff_reliability, prior_stam
 from lib.history.git_churn import git_commit_info, window_from_churn_label
 from lib.instructions.instruction_files import grade_instruction_files
 from lib.plugin_version import read_version
-from lib.run.run_scope import assess_dir_for, load_current_stats, resolve_scope
+from lib.run.run_scope import (
+    RequestedScope, ResolvedScope, Scope, assess_dir_for, load_current_stats, resolve_scope,
+)
 from lib.complexity.stats_diff import StatsDiff, diff_stats, load_stats
 from lib.report.wiki_state import (
     excluded_after_unfinalized_run,
@@ -103,17 +105,17 @@ def read_plugin_version(plugin_json: Path = PLUGIN_JSON) -> str:
     return read_version(plugin_json)
 
 
-def run_scope(repo_root: Path, requested_scope: Path | None) -> tuple[Path | None, str | None, str]:
-    """``(scope_abs, scope_rel, scope_slug)``; raises ValueError for a bad scope."""
+def run_scope(repo_root: Path, requested_scope: RequestedScope) -> ResolvedScope:
+    """``(Scope, scope_label, scope_slug)``; raises ValueError for a bad scope."""
     return resolve_scope(repo_root, requested_scope)
 
 
-def scope_root(scope: tuple[Path | None, str | None, str]) -> Path | None:
-    """The absolute subtree the file-enumerating scans see (None: whole repo)."""
+def scope_root(scope: ResolvedScope) -> Scope | None:
+    """The folders the file-enumerating scans see (None: whole repo, #1110)."""
     return scope[0]
 
 
-def run_assess_dir(repo_root: Path, scope: tuple[Path | None, str | None, str]) -> Path:
+def run_assess_dir(repo_root: Path, scope: ResolvedScope) -> Path:
     """``.assess/`` or ``.assess/<slug>/``. Created by the publish step, not here."""
     return assess_dir_for(repo_root, scope[2])
 
@@ -211,7 +213,7 @@ def unfinalized_exclusions(
 
 
 def run_header(
-    run_id: str, run_date: str, scope: tuple[Path | None, str | None, str],
+    run_id: str, run_date: str, scope: ResolvedScope,
     measured_commit: dict[str, Any], current: dict[str, Any], prior: dict[str, Any] | None,
     grading: tuple[Any, ...], diff: StatsDiff, unfinalized: tuple[set[str], list[str]],
 ) -> dict[str, Any]:

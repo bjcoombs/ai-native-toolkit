@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from lib.run.run_scope import Scope
 from lib.docs.doc_complexity_join import analyze_doc_complexity_join, doc_subjects
 from lib.docs.doc_ownership import (
     SUBJECT_PATHS_CAP,
@@ -160,7 +161,7 @@ def test_scoped_run_keys_match_stats_keys(git_repo) -> None:
     (repo / "svc" / "core" / "x.py").write_text("x = 1", encoding="utf-8")
     (repo / "other.py").write_text("y = 1", encoding="utf-8")
     commit("initial", days_ago=10)
-    staleness = analyze_doc_staleness(repo, generated_sources=[], scope=repo / "svc")
+    staleness = analyze_doc_staleness(repo, generated_sources=[], scope=Scope.of(repo, Path("svc")))
     row = next(d for d in staleness["docs"] if d["path"] == "svc/README.md")
     assert row["subject_paths"] == ["svc/core/x.py"]
     stats = {"ccn": {"p95": 10.0}, "top_complex": [{"path": "svc/core/x.py", "ccn": 20.0}]}

@@ -73,6 +73,7 @@ except ImportError:  # pragma: no cover - exercised only on a broken env
     _grimp_settings = None  # type: ignore[assignment]  # as above: absent module
     _GRIMP_AVAILABLE = False
 
+from lib.run.run_scope import Scope
 from lib.graph.import_graph import EXCLUDE_DIRS, GraphUnavailable, ModuleGraph, NameCollision
 
 GRIMP_MISSING = "grimp not installed; static structure not assessed"
@@ -349,14 +350,11 @@ class PythonBuilder:
     language = "python"
 
     def build(
-        self, repo_root: Path, extra_exclude_dirs: set[str], scope: Path | None,
+        self, repo_root: Path, extra_exclude_dirs: set[str], scope: Scope | None,
     ) -> ModuleGraph | None:
         package_dirs = discover_packages(repo_root, extra_exclude_dirs)
         if scope is not None:
-            scope_abs = scope.resolve()
-            package_dirs = [
-                p for p in package_dirs if p.resolve().is_relative_to(scope_abs)
-            ]
+            package_dirs = [p for p in package_dirs if scope.contains(p)]
         if not package_dirs:
             return None
         if not _GRIMP_AVAILABLE:

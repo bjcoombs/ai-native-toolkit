@@ -47,7 +47,7 @@ Block (``skill_script_tests`` in run-context.json)::
                  "tested_elsewhere": [str, ...]}], # repository-relative, information only
      "skills_with_scripts": int, "skills_untested": int}
 
-``skills`` is sorted by path. With ``scope`` (a skill unit's folder in the unit pass) only the
+``skills`` is sorted by path. With ``scope`` (a skill unit's folder in the unit pass, or the ``--scope`` folders) only the
 skills under it are listed, while ``tested_elsewhere`` still searches the whole repository. With no
 skill holding a script, ``skills_with_scripts`` is 0 and the condition reads not measured
 (``no_skill_scripts``), never met. Counts-only output drops the paths, or hashes them under
@@ -75,6 +75,7 @@ from functools import lru_cache
 from pathlib import Path, PurePosixPath
 from typing import TypedDict
 
+from lib.run.run_scope import Scope
 from lib.assess_config import is_user_excluded
 from lib.history.git_churn import GIT_TIMEOUT_SECONDS
 from lib.instructions.instruction_placement import skill_and_agent_files
@@ -238,14 +239,13 @@ def script_tested_elsewhere(repo_root: Path, rel_path: str) -> bool:
         return False
 
 
-def _skill_folders(repo: Path, scope: Path | None, excludes: tuple[set[str], list[str]] | None) -> list[Path]:
-    folder = scope.resolve() if scope is not None else repo
+def _skill_folders(repo: Path, scope: Scope | None, excludes: tuple[set[str], list[str]] | None) -> list[Path]:
     return sorted({p.parent.resolve() for p, kind in skill_and_agent_files(repo, None, excludes)
-                   if kind == "skill" and p.resolve().is_relative_to(folder)})
+                   if kind == "skill" and (scope is None or scope.contains(p))})
 
 
 def scan_skill_script_tests(
-    repo_root: Path, scope: Path | None = None, excludes: tuple[set[str], list[str]] | None = None,
+    repo_root: Path, scope: Scope | None = None, excludes: tuple[set[str], list[str]] | None = None,
 ) -> SkillScriptTestsBlock:
     """Build the ``skill_script_tests`` block (see the module doc)."""
     repo = repo_root.resolve()

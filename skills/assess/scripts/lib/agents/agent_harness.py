@@ -93,6 +93,7 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict
 from urllib.parse import urlsplit, urlunsplit
 
+from lib.run.run_scope import Scope, scope_roots
 from lib.assess_config import is_user_excluded
 from lib.instructions.claude_config import parse_frontmatter
 from lib.history.git_churn import tracked_files
@@ -573,12 +574,25 @@ def _counts(rows: list[HarnessItem] | list[HarnessFinding]) -> dict[str, int]:
 
 def scan_agent_harness(
     repo_root: Path,
-    scope: Path | None = None,
+    scope: Scope | None = None,
     excludes: tuple[set[str], list[str]] | None = None,
 ) -> AgentHarnessBlock:
-    """Inventory and check the committed agent harness under ``scope`` (default the repo root)."""
+    """Inventory and check the committed agent harness under each ``scope`` root (default the
+    repo root, #1110)."""
     repo = repo_root.resolve()
-    root = (repo / scope).resolve() if scope else repo
+    scans = [_scan_root(repo, root, excludes) for root in scope_roots(scope, repo)]
+    items = sorted((r for s in scans for r in s.items), key=lambda r: (r["file"], r["line"] or 0, r["kind"], r["name"]))
+    findings = sorted((f for s in scans for f in s.findings), key=lambda f: (f["file"], f["line"] or 0, f["kind"]))
+    return {
+        "available": True, "tracked_known": all(s.tracked_known for s in scans),
+        "executes": items, "executes_by_kind": _counts(items),
+        "finding_count": len(findings), "counts_by_kind": _counts(findings),
+        "findings": findings,
+    }
+
+
+def _scan_root(repo: Path, root: Path, excludes: tuple[set[str], list[str]] | None) -> _Scan:
+    """Every check over one scope root."""
     scan = _Scan(repo, root, excludes)
     settings = scan.settings()
     scan.mcp()
@@ -595,11 +609,4 @@ def scan_agent_harness(
     scan.credential_mounts()
     scan.hidden_unicode(agent_files)
     scan.workflows()
-    items = sorted(scan.items, key=lambda r: (r["file"], r["line"] or 0, r["kind"], r["name"]))
-    findings = sorted(scan.findings, key=lambda f: (f["file"], f["line"] or 0, f["kind"]))
-    return {
-        "available": True, "tracked_known": scan.tracked_known,
-        "executes": items, "executes_by_kind": _counts(items),
-        "finding_count": len(findings), "counts_by_kind": _counts(findings),
-        "findings": findings,
-    }
+    return scan

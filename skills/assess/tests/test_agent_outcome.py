@@ -19,6 +19,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib import agent_outcome
+from lib.run.run_scope import Scope
 from lib.agent_outcome import (
     LIMITS,
     REWORK_DAYS,
@@ -213,7 +214,7 @@ def test_rework_reads_only_lines_inside_the_scope(tmp_path: Path) -> None:
     _commit(r, "out.txt", "one\nTWO\n", T0 + 2 * DAY)       # rework outside the scope
     _commit(r, "pad.txt", "pad\n", T0 + (REWORK_DAYS + 5) * DAY)
     assert _ok(scan_agent_outcome(r, None, None))["reworked_commits"] == 1
-    scoped = _ok(scan_agent_outcome(r, r / "pkg", None))
+    scoped = _ok(scan_agent_outcome(r, Scope.of(r, Path("pkg")), None))
     assert scoped["agent_commits"] == 1 and scoped["reworked_commits"] == 0
 
 
@@ -228,7 +229,7 @@ def test_a_rename_into_the_scope_is_not_rework(tmp_path: Path) -> None:
     _git(r, "commit", "-q", "-m", f"move\n\nCo-authored-by: {CLAUDE}", at=T0 + 2 * DAY)
     _commit(r, "b/f.txt", "touched\n" + body + "agent\n", T0 + 3 * DAY)
     _commit(r, "pad.txt", "pad\n", T0 + (REWORK_DAYS + 5) * DAY)
-    for scope in (None, r / "b", Path("b")):
+    for scope in (None, Scope.of(r, r / "b"), Scope.of(r, Path("b"))):
         block = _ok(scan_agent_outcome(r, scope, None))
         assert block["rework_sampled_commits"] == 1
         assert block["reworked_commits"] == 0, scope

@@ -18,6 +18,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib import agent_identity
+from lib.run.run_scope import Scope
 from lib.history import ai_usage, change_coupling
 from lib.history.ai_usage import LIMITS, resolve_window, scan_ai_usage
 from lib.history.git_churn import CHURN_WINDOWS, window_from_churn_label
@@ -100,7 +101,7 @@ def test_window_filters_by_commit_date(repo: Path) -> None:
 
 
 def test_scope_counts_only_the_subtree(repo: Path) -> None:
-    block = scan_ai_usage(repo, repo / "pkg", None)
+    block = scan_ai_usage(repo, Scope.of(repo, Path("pkg")), None)
     assert block["available"] is True
     assert block["total_commits"] == 1 and block["agent_trailer_commits"] == 1
 
@@ -121,7 +122,7 @@ def test_no_identity_string_reaches_the_block(repo: Path) -> None:
 def test_empty_window_has_null_share(repo: Path) -> None:
     sub = repo / "empty"
     sub.mkdir()
-    block = scan_ai_usage(repo, sub, None)
+    block = scan_ai_usage(repo, Scope.of(repo, sub), None)
     assert block["available"] is True
     assert block["total_commits"] == 0 and block["agent_trailer_share"] is None
 

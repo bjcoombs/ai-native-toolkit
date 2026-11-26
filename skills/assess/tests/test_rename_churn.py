@@ -17,6 +17,7 @@ import pytest
 import lib.history.change_coupling as cc
 import lib.docs.doc_staleness as ds
 import lib.history.git_churn as gc
+from lib.run.run_scope import Scope
 from lib.docs.doc_complexity_join import analyze_doc_complexity_join
 from lib.docs.doc_staleness import analyze_doc_staleness
 from lib.history.git_churn import commit_epochs_by_file, git_churn_scores, pick_churn_window
@@ -275,7 +276,7 @@ def test_a_rename_into_a_scope_is_not_churn_under_a_pathspec(tmp_path: Path) -> 
     z = (pkg / "z.py").resolve()
     # The move is the only commit the pathspec reaches for a.py, and it is not
     # churn; its history under other/ stays outside the scope, as before.
-    assert git_churn_scores(repo, scope=pkg, renames=renames) == {z: 1}
+    assert git_churn_scores(repo, scope=Scope.of(repo, pkg), renames=renames) == {z: 1}
     # A sub-directory root without a scope walks the whole history: two edits.
     assert git_churn_scores(pkg, renames=renames) == {moved: 2, z: 1}
     # commit_epochs_by_file walks with the root as its pathspec, like a scope.

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from lib.run.run_scope import Scope
 from lib.instructions.instruction_placement import (
     ALWAYS_ON_FLAG_LINES,
     LOADED_IN_FULL_MIN_LINES,
@@ -388,7 +389,7 @@ def test_root_agents_without_a_manifest_follow_the_scope(tmp_path: Path) -> None
     head = "---\nname: big\n---\n"
     _write(tmp_path, "pkg/agents/big.md", head + _agent_body(240))
     _write(tmp_path, "agents/other.md", head + _agent_body(240))
-    block = scan_instruction_placement(tmp_path, {}, None, tmp_path / "pkg")
+    block = scan_instruction_placement(tmp_path, {}, None, Scope.of(tmp_path, Path("pkg")))
     assert [f["path"] for f in block["loaded_in_full"]] == ["pkg/agents/big.md"]
 
 

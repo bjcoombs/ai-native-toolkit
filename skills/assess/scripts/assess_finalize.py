@@ -744,8 +744,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("repo_root", type=Path)
     parser.add_argument(
-        "--scope", type=Path, metavar="SUBDIR",
-        help="The --scope the core run took: finalize then reads and writes .assess/<slug>/.",
+        "--scope", type=Path, metavar="SUBDIR", action="append",
+        help="The --scope values the core run took: finalize then reads and writes .assess/<slug>/.",
     )
     parser.add_argument("--drop-entry", metavar="RUN_ID")
     args = parser.parse_args(argv)

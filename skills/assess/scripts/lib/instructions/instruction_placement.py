@@ -93,6 +93,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, TypedDict
 
+from lib.run.run_scope import Scope, scope_folders
 from lib.assess_config import is_user_excluded
 from lib.instructions.claude_config import DOC_STEMS, loaded_config_files, parse_frontmatter
 from lib.instructions.instruction_budget import CHARS_PER_TOKEN
@@ -596,14 +597,16 @@ def _manifestless_agents(root: Path) -> list[tuple[Path, str]]:
 
 
 def _config_files(
-    repo: Path, scope: Path | None, excludes: tuple[set[str], list[str]] | None,
+    repo: Path, scope: Scope | None, excludes: tuple[set[str], list[str]] | None,
 ) -> list[tuple[Path, str]]:
     dirs, pats = excludes or (set(), [])
-    root = (scope or repo).resolve()
-    found: list[tuple[Path, str]] = list(loaded_config_files(root))
-    seen = {p.resolve() for p, _ in found}
-    found.extend(item for item in _manifestless_agents(root) if item[0].resolve() not in seen)
-    return [(p, k) for p, k in found
+    found: dict[Path, tuple[Path, str]] = {}
+    for root in scope_folders(scope, repo):  # each --scope folder's own discovery, nested kept (#1110)
+        own = list(loaded_config_files(root))
+        seen = {p.resolve() for p, _ in own}
+        for item in own + [i for i in _manifestless_agents(root) if i[0].resolve() not in seen]:
+            found.setdefault(item[0].resolve(), item)
+    return [(p, k) for p, k in found.values()
             if k in ("skill", "agent") and p.is_relative_to(repo)
             and not is_user_excluded(p.relative_to(repo), dirs, pats)]
 
@@ -614,7 +617,7 @@ def est_tokens(text: str) -> int:
 
 
 def skill_and_agent_files(
-    repo: Path, scope: Path | None = None, excludes: tuple[set[str], list[str]] | None = None,
+    repo: Path, scope: Scope | None = None, excludes: tuple[set[str], list[str]] | None = None,
 ) -> list[tuple[Path, str]]:
     """The skill and agent files the scan reads (``loaded_config_files`` plus manifest-less
     agents), under ``scope`` and outside the excludes; shared with ``lib.skill_disclosure``."""
@@ -652,7 +655,7 @@ def scan_instruction_placement(
     repo_root: Path,
     instruction_files: Mapping[str, Any],
     nested_instructions: Any,
-    scope: Path | None = None,
+    scope: Scope | None = None,
     excludes: tuple[set[str], list[str]] | None = None,
 ) -> InstructionPlacementBlock:
     """Build the ``instruction_placement`` block (see the module doc)."""
