@@ -125,6 +125,8 @@ def reason_word(code: str) -> str:
     """A not-measured reason code in supportive words (the headline and the /assess diagrams)."""
     if code.startswith("requires:"):
         return f"waits on {code.split(':', 1)[1]}"
+    if code.startswith("no_builder:"):
+        return f"no import graph builder for {code.split(':', 1)[1]} yet"
     if code in REASON_WORDS:
         return REASON_WORDS[code]
     words = f" {code.replace('_', ' ')} "

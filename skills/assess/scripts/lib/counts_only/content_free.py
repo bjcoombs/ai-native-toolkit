@@ -48,7 +48,7 @@ its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `reason_tok
 reduces a `REASON` field (`structure.reason`) to its code: the leading code when the fixed
 allow-list `import_graph.STRUCTURE_REASON_CODES` or `reason_codes.BLOCK_REASON_CODES` (`no_ownership_map`, the `structure_drift.reason` marker, #908) names it (so a path or a name never leaks), the code of
 a known sentence (`REASON_SENTENCE_CODES`), or `unavailable`, and drops an empty reason,
-so a full run keeps `no_import_graph_rust` or `no_grimp` as a signals run does (#764).
+so a full run keeps `no_builder:rust` or `no_grimp` as a signals run does (#764).
 Tests: `tests/test_counts_only_reason.py`. `render_doc`
 generates `references/counts-only.md`, the per-block field list (plus the
 `fleet-data.json` table). `hash_value` hashes one key the way a kept path is hashed, for
@@ -364,7 +364,7 @@ def render_doc() -> str:
         "`file_a`, `file_b`, `test_file` or `source_file` is a path in every block,",
         "and a field named `reason` is dropped in every block without its own rule.",
         "A field kept as a reason code keeps only the code of a `code: sentence`",
-        "reason when it is a known structure code (`no_import_graph_rust`) or `no_ownership_map`,",
+        "reason when it is a known structure code (`no_builder:rust`, `no_import_graph_go`) or `no_ownership_map`,",
         "or the code a known sentence maps to (`no_grimp`), else `unavailable`,",
         "so a path or name before the colon is never kept; an empty reason is dropped.",
         "",

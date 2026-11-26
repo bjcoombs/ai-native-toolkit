@@ -538,8 +538,10 @@ _MEASURE_HINTS = {
                          "reason `fewer_than_two_systems`).",
     "structure": _NEEDS.format("structure", "grimp or networkx is not installed (`no_grimp`, "
                                "`no_networkx`)") + " With no import graph the reason names "
-                 "the dominant source language: `no_import_graph_<language>` when no "
-                 "builder graphs that language, `no_python_packages` for a Python "
+                 "the dominant source language: `no_builder:<language>` when no "
+                 "builder covers that language (the reason names a tool that would, "
+                 "such as `jdeps`), `no_import_graph_<language>` when its builder "
+                 "found nothing to graph, `no_python_packages` for a Python "
                  "repository with no importable package, `no_source_files` with no "
                  "source at all. An import graph with no edges leaves "
                  "`modularity_q` null (`modularity_reason: no_import_edges`): modules "

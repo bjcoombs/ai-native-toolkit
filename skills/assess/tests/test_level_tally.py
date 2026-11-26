@@ -233,6 +233,20 @@ def test_a_tangled_graph_does_not_count_front_door_imports():
     assert _default_state(modular, "layer-2-design.2") == ("met", None)
 
 
+def test_vendored_javascript_earns_no_design_credit_in_a_java_repo(tmp_path):
+    """#825: 50 .java files beside vendored web assets read not measured, never a stand-in."""
+    from lib.graph.structure_graph import analyze_structure
+    from lib.run.headless_layers import structure
+    from test_import_graph import vendored_java_repo
+
+    block = structure(analyze_structure(vendored_java_repo(tmp_path)).as_dict())
+    result = lt.level_result(lt.default_model(), {"structure": block})
+    design = [c for c in result["conditions"] if c["id"].startswith("layer-2-design.")]
+    assert design, "the default model has layer-2-design conditions"
+    assert not [c["id"] for c in design if c["state"] == "met"]
+    assert {(c["state"], c.get("reason")) for c in design} == {("not_measured", "no_builder:java")}
+
+
 def test_wide_review_waits_on_review_evidence():
     """#934: layer-7-review.2 cannot count while layer-7-review.1 is unmet."""
     wide = {"review_reality": {"reviewed_share": 0.9, "approved_share": 0.6}}
@@ -741,3 +755,8 @@ def test_each_condition_carries_the_whys_of_its_criteria():
     assert len(by_id["layer-0-instructions.2"]["why"].split(". ")) > 3  # three criteria
     custom = {**model, "steps": [], "rows": [{**model["rows"][0], "id": "own-row"}]}
     assert all("why" not in c for c in lt.level_result(custom, {})["conditions"])
+
+
+def test_a_no_builder_reason_reads_in_words():
+    from lib.scoring.headline import reason_word
+    assert reason_word("no_builder:java") == "no import graph builder for java yet"

@@ -384,7 +384,8 @@ It reads which files change together in history, so coupling the import graph do
   - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
   - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
   - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `no_builder:<language>`: No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages. Nothing to change: structure reads as not measured for this language.
+  - `no_import_graph_<language>`: A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go. Nothing to change if that code is loose scripts; a package the builder recognises is measured.
   - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
@@ -554,7 +555,8 @@ Run plumbing: no row or finding reads this scan.
   - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
   - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
   - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `no_builder:<language>`: No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages. Nothing to change: structure reads as not measured for this language.
+  - `no_import_graph_<language>`: A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go. Nothing to change if that code is loose scripts; a package the builder recognises is measured.
   - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
@@ -630,7 +632,8 @@ It joins doc freshness with code complexity, so the places where an agent most n
   - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
   - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
   - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `no_builder:<language>`: No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages. Nothing to change: structure reads as not measured for this language.
+  - `no_import_graph_<language>`: A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go. Nothing to change if that code is loose scripts; a package the builder recognises is measured.
   - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
@@ -890,7 +893,8 @@ Run plumbing: no row or finding reads this scan.
   - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
   - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
   - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `no_builder:<language>`: No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages. Nothing to change: structure reads as not measured for this language.
+  - `no_import_graph_<language>`: A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go. Nothing to change if that code is loose scripts; a package the builder recognises is measured.
   - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
@@ -997,7 +1001,8 @@ It measures module structure and how packages import one another, which decides 
   - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
   - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
   - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `no_builder:<language>`: No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages. Nothing to change: structure reads as not measured for this language.
+  - `no_import_graph_<language>`: A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go. Nothing to change if that code is loose scripts; a package the builder recognises is measured.
   - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
@@ -1070,7 +1075,8 @@ For each complex module it reads whether a person authored it and whether a doc 
   - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
   - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
   - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
-  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `no_builder:<language>`: No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages. Nothing to change: structure reads as not measured for this language.
+  - `no_import_graph_<language>`: A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go. Nothing to change if that code is loose scripts; a package the builder recognises is measured.
   - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
   - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
