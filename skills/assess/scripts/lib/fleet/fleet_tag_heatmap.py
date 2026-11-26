@@ -24,7 +24,9 @@ the sort (``repository 3``), so the picture names no repository; names appear on
 ``--full``.
 
 Each cell carries its tooltip values as ``data-tag-title`` and, when measured,
-``data-percent-met`` (a whole percent), beside ``data-tag`` and ``data-cell`` (#1360). Its
+``data-percent-met`` (a whole percent), beside ``data-tag`` and ``data-cell`` (#1360), and the
+tally its title prints as ``data-met``, ``data-measured``, ``data-verified``, ``data-not-measured``,
+``data-hazards`` and ``data-declined``. Its
 ``<title>`` breaks the score down (#1331): met of measured, then verified, not measured, hazards
 and declined from the repository's tally; a repository with no tally reads only "not measured".
 
@@ -122,6 +124,14 @@ def heatmap_rows(data: Mapping[str, Any]) -> list[HeatmapRow]:
     return rows
 
 
+def tally_attrs(cell: TagCell | None) -> dict[str, int | None]:
+    """The tally behind a cell's tooltip as data attributes; none for a repository with no tally."""
+    if cell is None:
+        return {}
+    return {"met": cell["met"], "measured": cell["measured"], "verified": cell["verified"],
+            "not-measured": cell["not_measured"], "hazards": cell["hazards"], "declined": cell["declined"]}
+
+
 def cell_title(tag: str, cell: TagCell | None) -> str:
     """A cell's tooltip: the score, then its breakdown from the repository's tally."""
     title = TRUTH_TAG_TITLES[tag]
@@ -196,14 +206,15 @@ def render(rows: Sequence[HeatmapRow], none_yet: set[str]) -> str:
                 parts.append(f'<rect x="{x + 1:.1f}" y="{y + 1:.1f}" width="{CELL_W - 2:.1f}" '
                              f'height="{CELL_H - 2:.1f}" fill="{svg.HATCH_FILL}" class="s-rule" stroke-width="1" '
                              f'data-tag="{tag}" data-cell="not_measured"'
-                             f'{svg.data_attrs({"tag-title": TRUTH_TAG_TITLES[tag]})}>'
+                             f'{svg.data_attrs({"tag-title": TRUTH_TAG_TITLES[tag], **tally_attrs(row["cells"][i])})}>'
                              f'<title>{svg.esc(cell_title(tag, row["cells"][i]))}</title></rect>')
                 continue
             step = round(share * svg.TOP_STEP)
             pct = f"{round(share * 100)}%"
+            attrs = svg.data_attrs({"tag-title": TRUTH_TAG_TITLES[tag], "percent-met": round(share * 100),
+                                    **tally_attrs(row["cells"][i])})
             parts.append(f'<rect x="{x + 1:.1f}" y="{y + 1:.1f}" width="{CELL_W - 2:.1f}" height="{CELL_H - 2:.1f}" '
-                         f'fill="{svg.LEVEL_RAMP[step]}" data-tag="{tag}" data-cell="share"'
-                         f'{svg.data_attrs({"tag-title": TRUTH_TAG_TITLES[tag], "percent-met": round(share * 100)})}>'
+                         f'fill="{svg.LEVEL_RAMP[step]}" data-tag="{tag}" data-cell="share"{attrs}>'
                          f'<title>{svg.esc(cell_title(tag, row["cells"][i]))}</title></rect>')
             parts.append(svg.text(x + CELL_W / 2, y + 14, pct, size=11, anchor="middle",
                                   fill=svg.STEP_TEXT[step]))
