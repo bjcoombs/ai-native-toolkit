@@ -19,7 +19,11 @@ from typing import Any
 import pytest
 
 from lib.scoring.headline import GATE_CHANGE, GATE_NOUN, as_headline, gate_change, headline, run_context_headline
+import lib.scoring.level_tally as lt
+from lib.scoring.headline import one_change_ceiling
 from lib.scoring.level_tally import default_model
+from lib.top_card import card_facts
+from test_level_tally import _fresh, _laddered
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 ROOT = Path(__file__).resolve().parents[3]
@@ -69,6 +73,35 @@ def test_the_summary_carries_no_count():
     assert headline(_level(step=1, next_step={"step": 2, "blockers": [
         {"kind": "gate", "gate": "instructions", "condition": "layer-0-instructions.1", "state": "unmet"}]}),
         default_model())["summary"] == "Step 1 · next: instruction file"
+
+
+def test_the_summary_names_the_step_one_change_away():
+    """#1333: the #1374 fixture (Step 1, the instruction file missing, the Step 3 gate held)
+    reads one change from Step 3; the top card's Blocks line says the same once."""
+    model = _laddered()
+    signals = {**_fresh(40), "layer_grades": {"instruction_file_present": False},
+               "ci_checks": {"test_or_lint_configured": True}}
+    level = lt.level_result(model, signals)
+    assert (level["step"], level["ceiling_step"]) == (1, 3)
+    assert headline(level, model)["summary"] == "Step 1 · one change from Step 3: instruction file"
+    assert one_change_ceiling(level) == 3
+    blocks = next(f["text"] for f in card_facts(level, model, None) if f["fact_id"] == "blocks")
+    assert blocks.endswith("; that one change reaches Step 3.")
+
+
+def test_no_one_change_step_without_a_jump_or_with_an_unread_gate():
+    model = _laddered()
+    plain = lt.level_result(model, {**_fresh(90), "layer_grades": {"instruction_file_present": False}})
+    assert one_change_ceiling(plain) is None  # ceiling is the next Step
+    assert headline(plain, model)["summary"] == "Step 1 · next: instruction file"
+    unread = _level(step=1, ceiling_step=3, held_above=["ci_runs_tests"], next_step={"step": 2, "blockers": [
+        {"kind": "gate", "gate": "instructions", "condition": "layer-0-instructions.1", "state": "not_measured",
+         "reason": "needs_full_run"}]})
+    assert one_change_ceiling(unread) is None
+    assert one_change_ceiling({**unread, "ceiling_step": None}) is None
+    stored = _level(step=1, next_step={"step": 2, "blockers": [
+        {"kind": "gate", "gate": "instructions", "condition": "layer-0-instructions.1", "state": "unmet"}]})
+    assert one_change_ceiling(stored) is None  # a result stored before #1374
 
 
 def test_the_summary_names_the_first_blocking_gate_and_an_unknown_gate_by_id():

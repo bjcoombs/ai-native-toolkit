@@ -1119,6 +1119,9 @@
                   "step": {
                     "type": "integer"
                   },
+                  "multi_step": {
+                    "type": "boolean"
+                  },
                   "repo_count": {
                     "type": "integer"
                   }
@@ -1126,6 +1129,7 @@
                 "required": [
                   "condition",
                   "gate",
+                  "multi_step",
                   "repo_count",
                   "row",
                   "step",

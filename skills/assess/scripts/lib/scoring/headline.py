@@ -26,6 +26,9 @@ Step ladder's caption words gates as the headline did. The lines, in order:
 ``summary`` is the one-line form the badge and the ``log.md`` entry carry, with no count
 in it: ``Step 3 · next: coverage gate`` (``GATE_NOUN`` names the first gate
 ``card_facts.blocking_gates`` returns, the function the top card reads),
+``Step 1 · one change from Step 3: instruction file`` when one gate blocks the next Step and
+the gates above it already hold (``one_change_ceiling``, reading the level result's
+``ceiling_step``, #1333),
 ``Step 4 · all gates held`` at the top Step, ``no Step yet · next: <gate>`` below the first
 Step of a model whose Step 1 has a gate (#889), and ``no Steps defined`` for a model without
 ``[[steps]]``. ``markdown`` is the lines, pasted verbatim by the report and
@@ -49,6 +52,7 @@ dropped and the numbers and tag tokens kept. Tests: ``tests/test_headline.py``.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from typing import Any
 
 from lib.card_facts import blocking_gates
@@ -67,8 +71,8 @@ from lib.scoring.levels import MaturityModel
 #   `summary_markdown`, the report's three-line summary and its one call to action (#1102).
 HEADLINE_VERSION = 4
 
-__all__ = ["GATE_CHANGE", "GATE_NOUN", "GLOSSARY_URL", "Headline", "as_headline", "gate_change", "gate_note", "headline", "reason_word",
-           "run_context_headline", "tag_cells", "verified_count"]
+__all__ = ["GATE_CHANGE", "GATE_NOUN", "GLOSSARY_URL", "Headline", "as_headline", "gate_change", "gate_note", "headline",
+           "one_change_ceiling", "reason_word", "run_context_headline", "tag_cells", "verified_count"]
 
 # The plain-English glossary (#1102). The report's markdown links a term's first use to its
 # heading anchor; exec_summary.py and assess_report.py read it from here.
@@ -152,7 +156,23 @@ def _summary(level: LevelResult) -> str:
         return f"no Step yet · next: {GATE_NOUN.get(gate, gate)}" if gate else "no Step yet"
     if gate is None:
         return f"Step {step} · all gates held"
+    ceiling = one_change_ceiling(level)
+    if ceiling is not None:
+        return f"Step {step} · one change from Step {ceiling}: {GATE_NOUN.get(gate, gate)}"
     return f"Step {step} · next: {GATE_NOUN.get(gate, gate)}"
+
+
+def one_change_ceiling(level: Mapping[str, Any]) -> int | None:
+    """The Step one change takes the repository to when that is past its next Step (#1333):
+    ``ceiling_step`` when exactly one gate blocks the next Step and the Steps above it up to
+    ``ceiling_step`` hold every other gate, and that gate reads unmet (one not measured or
+    excluded by the owner is not a change the run can promise); None otherwise, and for a
+    result stored before #1374 without ``ceiling_step``."""
+    nxt, ceiling = level.get("next_step"), level.get("ceiling_step")
+    if not isinstance(nxt, Mapping) or not isinstance(ceiling, int) or ceiling <= nxt.get("step", ceiling):
+        return None
+    gates = blocking_gates(level)
+    return ceiling if len(gates) == 1 and gates[0].get("state") == "unmet" else None
 
 
 def next_why(level: LevelResult, model: MaturityModel) -> str:
