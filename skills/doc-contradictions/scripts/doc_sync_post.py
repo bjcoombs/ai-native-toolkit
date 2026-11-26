@@ -25,7 +25,9 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, cast
+
+from doc_sync_types import Finding, Plan, Side
 
 SUMMARY_MARKER = "<!-- doc-sync:summary -->"
 FINDING_MARKER = "<!-- doc-sync:finding:%s -->"
@@ -74,12 +76,12 @@ def diff_lines(patch: str) -> Set[int]:
     return lines
 
 
-def cite(side: Dict[str, Any]) -> str:
+def cite(side: Side) -> str:
     quote = str(side["quote"]).replace("`", "'")
     return "`%s:%s`: \"%s\"" % (side["path"], side["line"], quote)
 
 
-def thread_body(f: Dict[str, Any]) -> str:
+def thread_body(f: Finding) -> str:
     return "\n".join([
         "**Doc contradiction** (%s, %s confidence): %s" % (f["kind"], f["confidence"], f["subject"]),
         "",
@@ -92,11 +94,11 @@ def thread_body(f: Dict[str, Any]) -> str:
     ])
 
 
-def thread_request(f: Dict[str, Any], files: Dict[str, Set[int]], head_sha: str) -> Optional[Dict[str, Any]]:
+def thread_request(f: Finding, files: Dict[str, Set[int]], head_sha: str) -> Optional[Dict[str, Any]]:
     """The review-comment payload, anchored on a side the pull request changed."""
     for side in (f["a"], f["b"]):
-        if side["path"] in files and int(side["line"]) in files[side["path"]]:
-            return {"commit_id": head_sha, "path": side["path"], "line": int(side["line"]),
+        if side["path"] in files and side["line"] in files[side["path"]]:
+            return {"commit_id": head_sha, "path": side["path"], "line": side["line"],
                     "side": "RIGHT", "body": thread_body(f)}
     for side in (f["a"], f["b"]):
         if side["path"] in files:
@@ -105,7 +107,7 @@ def thread_request(f: Dict[str, Any], files: Dict[str, Set[int]], head_sha: str)
     return None
 
 
-def summary_body(plan: Dict[str, Any], posted: List[Dict[str, Any]], kept: int) -> str:
+def summary_body(plan: Plan, posted: List[Dict[str, Any]], kept: int) -> str:
     rows = [SUMMARY_MARKER, "## Doc sync", ""]
     status = plan.get("status")
     if status == "skipped":
@@ -115,24 +117,37 @@ def summary_body(plan: Dict[str, Any], posted: List[Dict[str, Any]], kept: int) 
         rows.append("The check did not complete: %s. It is not a required check." % plan.get("reason"))
         return "\n".join(rows) + "\n"
     rows.append("Checked %d doc cluster%s touched by this pull request%s." % (
-        plan["clusters"], "" if plan["clusters"] == 1 else "s",
+        plan.get("clusters", 0), "" if plan.get("clusters", 0) == 1 else "s",
         ", plus the cross-cluster pass over the hub docs" if plan.get("cross_cluster") else ""))
     rows.append("Review threads: %d new, %d already open from an earlier push." % (len(posted), kept))
-    if plan["summary"]:
+    if plan.get("summary"):
         rows += ["", "### Other findings (not blocking)", ""]
-        for f in plan["summary"]:
+        for f in plan.get("summary", []):
             rows.append("- **%s** (%s, %s): %s; %s. %s" % (
                 f["subject"], f["kind"], f["confidence"], cite(f["a"]), cite(f["b"]), f["why"]))
-    if not plan["threads"] and not plan["summary"]:
+    if not plan.get("threads") and not plan.get("summary"):
         rows += ["", "No contradictions found."]
     if plan.get("dropped"):
-        rows += ["", "<details><summary>Dropped by the citation check (%d)</summary>" % len(plan["dropped"]), ""]
-        rows += ["- " + str(d).replace("`", "'") for d in plan["dropped"]]
+        dropped = plan.get("dropped", [])
+        rows += ["", "<details><summary>Dropped by the citation check (%d)</summary>" % len(dropped), ""]
+        rows += ["- " + d.replace("`", "'") for d in dropped]
         rows += ["", "</details>"]
     return "\n".join(rows) + "\n"
 
 
-def post(plan: Dict[str, Any], repo: str, pr: int, head_sha: str, run: Runner = gh) -> List[Dict[str, Any]]:
+def is_quiet(plan: Plan) -> bool:
+    """True when the run has nothing a reader needs: no new comment is created.
+
+    A clean check, and a skip the workflow marks quiet (no cluster touched,
+    an author without write access). An error or any other skip always
+    writes the summary, so a run that could not check is never silent.
+    """
+    if plan.get("status") == "checked":
+        return not plan.get("threads") and not plan.get("summary")
+    return plan.get("status") == "skipped" and bool(plan.get("quiet"))
+
+
+def post(plan: Plan, repo: str, pr: int, head_sha: str, run: Runner = gh) -> List[Dict[str, Any]]:
     """Apply the plan; returns the review comments it created."""
     pulls = "repos/%s/pulls/%d" % (repo, pr)
     issue = "repos/%s/issues/%d" % (repo, pr)
@@ -158,8 +173,7 @@ def post(plan: Dict[str, Any], repo: str, pr: int, head_sha: str, run: Runner = 
     for item in _pages(run(["--paginate", issue + "/comments"], None)):
         if SUMMARY_MARKER in str(item.get("body") or ""):
             existing = item["id"]
-    quiet = plan.get("status") == "skipped" or (not plan.get("threads") and not plan.get("summary"))
-    if existing is None and quiet:
+    if existing is None and is_quiet(plan):
         return posted
     body = json.dumps({"body": summary_body(plan, posted, kept)})
     if existing is None:
@@ -178,7 +192,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = ap.parse_args(argv)
     if not re.fullmatch(r"[0-9a-f]{40}", args.head_sha):
         raise SystemExit("doc_sync_post: --head-sha must be a full commit sha")
-    plan = json.loads(Path(args.plan).read_text(encoding="utf-8"))
+    plan = cast(Plan, json.loads(Path(args.plan).read_text(encoding="utf-8")))
     posted = post(plan, args.repo, args.pr, args.head_sha)
     print("doc-sync: %d new review thread(s), %d summary finding(s)" % (len(posted), len(plan.get("summary", []))))
     return 0

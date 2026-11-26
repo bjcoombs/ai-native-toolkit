@@ -15,7 +15,9 @@ name: Doc sync
 #
 # The skill and its scripts come from the pull request's base commit, never
 # its head: the head is checked out under pr-head/ as data the comparers
-# read, and nothing in it runs. The orchestrator runs in the base checkout,
+# read, and no script or skill from it runs. This file itself comes from the
+# merge ref, as for any pull_request workflow; the trusted-author gate is the
+# control on who can change it. The orchestrator runs in the base checkout,
 # so a .claude/ directory in the pull request is never loaded.
 #
 # The model runs only for a pull request from a branch of this repository by
@@ -99,6 +101,7 @@ jobs:
           if [ "$clusters" -eq 0 ] && [ "$cross" = "false" ]; then
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "reason=no document and no subject-code file changed" >> "$GITHUB_OUTPUT"
+            echo "quiet=true" >> "$GITHUB_OUTPUT"
           elif [ "$clusters" -gt "$MAX_CLUSTERS" ]; then
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "reason=the change touches $clusters doc clusters, over the limit of $MAX_CLUSTERS; run /doc-contradictions by hand" >> "$GITHUB_OUTPUT"
@@ -119,6 +122,7 @@ jobs:
             echo "::notice::The pull request author has no write access, so no model runs."
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "reason=the author has no write access to this repository" >> "$GITHUB_OUTPUT"
+            echo "quiet=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [ "$HAS_KEY" = "true" ]; then
@@ -183,10 +187,11 @@ jobs:
           RAW: ${{ steps.model.outputs.structured_output }}
           RUN: ${{ steps.scope.outputs.run == 'true' && steps.gate.outputs.run || 'false' }}
           REASON: ${{ steps.scope.outputs.reason || steps.gate.outputs.reason || 'no model credential is set' }}
+          QUIET: ${{ (steps.scope.outputs.quiet == 'true' || steps.gate.outputs.quiet == 'true') && 'true' || '' }}
         run: |
           if [ "$RUN" != "true" ]; then
             python3 "$SCRIPTS/doc_sync_findings.py" --clusters .doc-sync/clusters.json \
-              --skipped "$REASON" --out .doc-sync/findings.json
+              --skipped "$REASON" ${QUIET:+--quiet} --out .doc-sync/findings.json
           else
             if [ -n "$RAW" ]; then printf '%s' "$RAW" > .doc-sync/raw.json; fi
             python3 "$SCRIPTS/doc_sync_findings.py" --repo pr-head --clusters .doc-sync/clusters.json \

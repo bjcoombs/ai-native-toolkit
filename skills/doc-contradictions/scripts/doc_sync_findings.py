@@ -33,17 +33,21 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from doc_clusters import excluded, glob_regex
+from doc_sync_types import Finding, Plan, Side
 
 MAX_THREADS = 10
 MAX_TEXT = 400
 MAX_QUOTE = 200
 CONFIDENCE_ORDER = {"high": 0, "medium": 1, "low": 2}
-Side = Dict[str, Any]
-Finding = Dict[str, Any]
 
 
 def _text(value: object, limit: int) -> str:
-    text = " ".join(str(value if value is not None else "").split())
+    text = " ".join(str(value if value is not None else "").split()).replace("@", "@\u200b")
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def _cut(text: str, limit: int) -> str:
+    """A quote kept verbatim apart from its length; it is posted inside backticks."""
     return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
@@ -74,19 +78,19 @@ def check_side(repo: Path, side: Any) -> Tuple[Optional[Side], str]:
     needle = quote.strip()
     hits = [i + 1 for i, text in enumerate(lines) if needle in text]
     if line in hits:
-        return {"path": path, "line": line, "quote": _text(needle, MAX_QUOTE)}, ""
+        return Side(path=path, line=line, quote=_cut(needle, MAX_QUOTE)), ""
     near = [h for h in hits if abs(h - line) <= 2]
     if len(near) == 1:
-        return {"path": path, "line": near[0], "quote": _text(needle, MAX_QUOTE)}, ""
+        return Side(path=path, line=near[0], quote=_cut(needle, MAX_QUOTE)), ""
     return None, "%s:%d quote not found at that line (%d hits)" % (path, line, len(hits))
 
 
 def finding_id(a: Side, b: Side) -> str:
-    pair = sorted([(str(a["path"]), str(a["quote"])), (str(b["path"]), str(b["quote"]))])
+    pair = sorted([(a["path"], a["quote"]), (b["path"], b["quote"])])
     return hashlib.sha256(json.dumps(pair).encode("utf-8")).hexdigest()[:16]
 
 
-def sort_findings(repo: Path, scope: Dict[str, Any], raw: Any) -> Dict[str, Any]:
+def sort_findings(repo: Path, scope: Dict[str, Any], raw: Any) -> Plan:
     patterns = [glob_regex(str(g)) for g in scope.get("excludes") or []]
     changed = {str(p) for p in scope.get("changed") or []}
     items = raw.get("findings", []) if isinstance(raw, dict) else raw
@@ -103,38 +107,35 @@ def sort_findings(repo: Path, scope: Dict[str, Any], raw: Any) -> Dict[str, Any]
         if a is None or b is None:
             dropped.append("%s: %s" % (subject, why_a or why_b))
             continue
-        if excluded(str(a["path"]), patterns) or excluded(str(b["path"]), patterns):
+        if excluded(a["path"], patterns) or excluded(b["path"], patterns):
             excluded_count += 1
             continue
         confidence = str(item.get("confidence", "low")).lower()
-        finding: Finding = {
-            "id": finding_id(a, b),
-            "kind": "doc-vs-code" if item.get("kind") == "doc-vs-code" else "doc-vs-doc",
-            "subject": subject,
-            "a": a,
-            "b": b,
-            "why": _text(item.get("explanation"), MAX_TEXT),
-            "confidence": confidence if confidence in CONFIDENCE_ORDER else "low",
-            "cluster": _text(item.get("cluster"), 20),
-        }
-        key = tuple(sorted([(str(a["path"]), int(a["line"])), (str(b["path"]), int(b["line"]))]))
+        finding = Finding(
+            id=finding_id(a, b),
+            kind="doc-vs-code" if item.get("kind") == "doc-vs-code" else "doc-vs-doc",
+            subject=subject, a=a, b=b,
+            why=_text(item.get("explanation"), MAX_TEXT),
+            confidence=confidence if confidence in CONFIDENCE_ORDER else "low",
+            cluster=_text(item.get("cluster"), 20),
+        )
+        key = tuple(sorted([(a["path"], a["line"]), (b["path"], b["line"])]))
         prior = kept.get(key)
-        if prior is None or CONFIDENCE_ORDER[str(finding["confidence"])] < CONFIDENCE_ORDER[str(prior["confidence"])]:
+        if prior is None or CONFIDENCE_ORDER[finding["confidence"]] < CONFIDENCE_ORDER[prior["confidence"]]:
             kept[key] = finding
-    ordered = sorted(kept.values(), key=lambda f: (CONFIDENCE_ORDER[str(f["confidence"])],
-                                                   f["kind"] != "doc-vs-code", str(f["id"])))
+    ordered = sorted(kept.values(), key=lambda f: (CONFIDENCE_ORDER[f["confidence"]],
+                                                   f["kind"] != "doc-vs-code", f["id"]))
     threads: List[Finding] = []
     summary: List[Finding] = []
     for f in ordered:
-        sides = (f["a"], f["b"])
-        touches = any(str(s["path"]) in changed for s in sides)
+        touches = f["a"]["path"] in changed or f["b"]["path"] in changed
         if f["confidence"] == "high" and touches and len(threads) < MAX_THREADS:
             threads.append(f)
         else:
             summary.append(f)
-    return {"status": "checked", "clusters": len(scope.get("clusters") or []),
-            "cross_cluster": bool(scope.get("cross_cluster")), "threads": threads,
-            "summary": summary, "dropped": dropped, "dropped_excluded": excluded_count}
+    return Plan(status="checked", clusters=len(scope.get("clusters") or []),
+                cross_cluster=bool(scope.get("cross_cluster")), threads=threads,
+                summary=summary, dropped=dropped, dropped_excluded=excluded_count)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -143,18 +144,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--clusters", required=True, help="doc_clusters.py output")
     ap.add_argument("--raw", help="the orchestrator's structured output")
     ap.add_argument("--skipped", metavar="REASON", help="write a plan with no findings and this reason")
+    ap.add_argument("--quiet", action="store_true",
+                    help="with --skipped: a skip that needs no new summary comment")
     ap.add_argument("--out", required=True)
     args = ap.parse_args(argv)
     scope = json.loads(Path(args.clusters).read_text(encoding="utf-8"))
     if args.skipped:
-        plan: Dict[str, Any] = {"status": "skipped", "reason": _text(args.skipped, MAX_TEXT),
-                                   "clusters": 0, "threads": [], "summary": [], "dropped": []}
+        plan = Plan(status="skipped", reason=_text(args.skipped, MAX_TEXT), quiet=args.quiet,
+                    clusters=0, threads=[], summary=[], dropped=[])
     else:
         raw_path = Path(args.raw) if args.raw else None
         raw = json.loads(raw_path.read_text(encoding="utf-8")) if raw_path and raw_path.is_file() else None
         if raw is None:
-            plan = {"status": "error", "reason": "the model step returned no findings document",
-                    "clusters": len(scope.get("clusters", [])), "threads": [], "summary": [], "dropped": []}
+            plan = Plan(status="error", reason="the model step returned no findings document",
+                        clusters=len(scope.get("clusters") or []), threads=[], summary=[], dropped=[])
         else:
             plan = sort_findings(Path(args.repo), scope, raw)
     Path(args.out).write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")

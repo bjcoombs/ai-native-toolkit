@@ -243,6 +243,14 @@ def test_duplicates_merge_and_text_is_cut(fixture_repo: Path) -> None:
     assert len(lone["why"]) <= doc_sync_findings.MAX_TEXT
 
 
+def test_model_text_cannot_mention_users(fixture_repo: Path) -> None:
+    commit(fixture_repo, "src/cache.py",
+           (fixture_repo / "src/cache.py").read_text(encoding="utf-8") + "# touched\n")
+    noisy = dict(PLANTED, subject="ping @someone", explanation="see @octocat")
+    thread = plan(fixture_repo, [noisy])["threads"][0]
+    assert "@someone" not in thread["subject"] and "@octocat" not in thread["why"]
+
+
 def test_finding_citing_an_excluded_path_is_dropped(fixture_repo: Path) -> None:
     (fixture_repo / ".assess").mkdir()
     (fixture_repo / ".assess" / "run.md").write_text("TTL is 600\n", encoding="utf-8")
@@ -261,5 +269,6 @@ def test_missing_model_output_is_an_error_plan(fixture_repo: Path, tmp_path: Pat
                                    "--raw", str(tmp_path / "absent.json"), "--out", str(out)]) == 0
     assert json.loads(out.read_text(encoding="utf-8"))["status"] == "error"
     assert doc_sync_findings.main(["--clusters", str(clusters), "--skipped", "no change",
-                                   "--out", str(out)]) == 0
-    assert json.loads(out.read_text(encoding="utf-8"))["status"] == "skipped"
+                                   "--quiet", "--out", str(out)]) == 0
+    skipped = json.loads(out.read_text(encoding="utf-8"))
+    assert skipped["status"] == "skipped" and skipped["quiet"] is True

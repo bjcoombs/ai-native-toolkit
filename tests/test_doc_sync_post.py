@@ -90,12 +90,29 @@ def test_existing_thread_is_not_posted_twice_and_summary_is_edited() -> None:
 
 
 def test_quiet_run_creates_no_comment_but_updates_a_stale_one() -> None:
+    quiet = {"status": "skipped", "reason": "no document changed", "quiet": True, "threads": [], "summary": []}
     gh = FakeGh([], [], [])
-    run({"status": "skipped", "reason": "no document changed", "threads": [], "summary": []}, gh)
+    run(dict(quiet), gh)
     assert gh.writes == []
     gh = FakeGh([], [], [{"id": 9, "body": doc_sync_post.SUMMARY_MARKER}])
-    run({"status": "skipped", "reason": "no document changed", "threads": [], "summary": []}, gh)
+    run(dict(quiet), gh)
     assert "Not run: no document changed." in gh.writes[0][1]["body"]
+    gh = FakeGh([], [], [])
+    run(checked([]), gh)
+    assert gh.writes == []
+
+
+@pytest.mark.parametrize("plan,text", [
+    ({"status": "skipped", "reason": "over the limit of 40; run /doc-contradictions by hand",
+      "threads": [], "summary": []}, "Not run: over the limit of 40"),
+    ({"status": "error", "reason": "the model step returned no findings document", "clusters": 2,
+      "threads": [], "summary": []}, "The check did not complete"),
+])
+def test_a_run_that_could_not_check_always_writes_the_summary(plan: Dict[str, Any], text: str) -> None:
+    gh = FakeGh([], [], [])
+    run(plan, gh)
+    (args, body), = gh.writes
+    assert args[2] == "repos/acme/widgets/issues/7/comments" and text in body["body"]
 
 
 def test_summary_lists_non_blocking_findings() -> None:

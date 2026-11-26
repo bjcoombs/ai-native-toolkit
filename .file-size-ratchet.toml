@@ -1,5 +1,6 @@
 # File-size ratchet for the Python under skills/assess/, scripts/, skills/fleet/,
-# skills/marathon/ (those two since #1214) and skills/refine/ (since #1320).
+# skills/marathon/ (those two since #1214), skills/refine/ (since #1320) and
+# skills/doc-contradictions/ (since #1453).
 #
 # Every Python file there may be at most `default_limit` lines. A file already
 # over the limit when the ratchet started is listed under [ceilings] with its
@@ -28,7 +29,7 @@
 default_limit = 800
 shrink_slack_lines = 20
 shrink_slack_percent = 2
-roots = ["skills/assess", "scripts", "skills/fleet", "skills/marathon", "skills/refine"]
+roots = ["skills/assess", "scripts", "skills/fleet", "skills/marathon", "skills/refine", "skills/doc-contradictions"]
 
 [ceilings."scripts/canaries/run_canaries.py"]
 lines = 876
