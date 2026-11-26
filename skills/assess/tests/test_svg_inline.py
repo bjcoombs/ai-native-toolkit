@@ -153,3 +153,63 @@ def test_a_self_closed_root_has_no_details() -> None:
 def test_css_selectors_reads_media_blocks_and_selector_lists() -> None:
     assert css_selectors("a, b {x:1} @media (y) { c {z:2} }") == ["a", "b", "c"]
     assert root_class("<g/>") is None
+
+
+# --- a cold security review at e646b70 (#1362): each case was confirmed in a browser or is a
+# lower-risk gap it named. Every one keeps the image.
+
+@pytest.mark.parametrize("tag", [
+    '<rect\x0bdata-x=" onmouseover=document.title=1337 x"/>',
+    '<rect\xa0data-x=" onmouseover=document.title=1337 x"/>',
+    '<rect data-x\x0b=" onmouseover=document.title=1337 x"/>',
+    '<rect data-x="1"\x0bonmouseover="document.title=1337"/>',
+    '<rect　onmouseover="document.title=1337"/>',
+])
+def test_a_tag_split_on_whitespace_html_does_not_read_is_refused(tag: str) -> None:
+    assert inline_svg(_svg(tag + PART), "s") is None
+
+
+def test_each_kept_attribute_is_written_again_with_one_space_and_double_quotes() -> None:
+    out = inline_svg(_svg('<rect\n\twidth="1"\r\n  height="2"/>' + PART), "s")
+    assert out is not None and '<rect width="1" height="2"/>' in out
+
+
+@pytest.mark.parametrize("css", [
+    'text { content: "}\n} body { background-color: rgb(1,2,3) }',
+    "text { content: '}\n} body { background-color: rgb(1,2,3) }",
+    'text { content: "a }',
+    "text { fill: red } } body { fill: red }",
+    "text { fill: red",
+])
+def test_an_unclosed_css_string_or_stray_brace_is_refused(css: str) -> None:
+    assert inline_svg(_svg(f"<style>{css}</style>" + PART), "s") is None
+    head = '<svg class="fleet-x" xmlns="http://www.w3.org/2000/svg"><title>r</title>'
+    assert inline_svg(_svg(f"<style>{css.replace('text', 'svg.fleet-x text')}</style>" + PART, head), "s") is None
+
+
+@pytest.mark.parametrize("style", ["fill:red;content:'a'", 'fill:red;content:&quot;a&quot;'])
+def test_a_quote_in_a_style_attribute_is_refused(style: str) -> None:
+    assert inline_svg(_svg(f'<rect style="{style}"/>' + PART), "s") is None
+
+
+@pytest.mark.parametrize("ref", ['<use href="&#35;x"/>', '<use xlink:href="&#x23;x"/>', '<a href="&#35;x">' + PART + "</a>"])
+def test_an_entity_encoded_reference_is_refused(ref: str) -> None:
+    assert inline_svg(_svg('<g id="x"/>' + ref + PART), "s") is None
+
+
+@pytest.mark.parametrize("css", ["rect { position: fixed }", "rect { z-index: 9 }", "@media (x) { rect { POSITION: fixed } }"])
+def test_a_position_or_z_index_is_refused(css: str) -> None:
+    assert inline_svg(_svg(f"<style>{css}</style>" + PART), "s") is None
+    assert inline_svg(_svg(f'<rect style="{css.split("{")[-1].split("}")[0].strip()}"/>' + PART), "s") is None
+
+
+@pytest.mark.parametrize("href", ["data:text/html,x", "mailto:a@b.c", "ftp://e.example/x", "javascript-ish:x"])
+def test_a_link_to_another_scheme_is_refused(href: str) -> None:
+    assert inline_svg(_svg(f'<a href="{href}">' + PART + "</a>"), "s") is None
+
+
+@pytest.mark.parametrize("href", ["https://e.example/doc", "http://e.example/doc", "#part", "docs/a.md", "../b.md?x=1"])
+def test_a_link_to_http_a_fragment_or_a_relative_path_is_kept(href: str) -> None:
+    out = inline_svg(_svg(f'<a href="{href}">' + PART + "</a>"), "s")
+    assert out is not None
+    assert f'href="{href}"' in out if not href.startswith("#") else 'href="#s-part"' in out

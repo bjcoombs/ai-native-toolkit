@@ -18,23 +18,30 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
 - **Allow-list.** Any other element outside ``ELEMENTS`` (the SVG drawing elements), a CDATA
   section, markup the tokenizer cannot read, or a root that is not one balanced ``<svg>``: None.
   An element such as ``<img>`` or ``<p>`` would break out of the SVG in an HTML parser.
-- **Where the HTML parser differs.** ``<title>`` and ``<desc>`` are HTML integration points and a
-  ``<style>``'s text has its character references decoded, so these hold text only (no child
-  element). A literal ``<`` or ``>`` in an attribute value, a ``<style>`` with attributes, and an
-  ``&`` or ``\`` in a ``<style>``'s text or a ``style`` attribute (an entity or a CSS escape could
-  spell ``url(`` or ``@import``) all refuse; a ``\`` refuses in any attribute but a ``data-*``
-  one. So does an attribute that is not double-quoted, which the id and scope checks would not
-  read, and any ``<style>`` at-rule but ``@media``: a statement such as ``@layer a;`` would hide
-  the next rule's selector from the scope check, and a selector that leaves the diagram through a
-  sibling combinator (``svg.<scope> ~ *``), a CSS comment, or a brace, semicolon or line break in
-  a quoted string, or a rule nested in a style rule (each would let the selector check read the sheet differently from a browser).
-  Every selector is checked against the scope after scoping, on both paths. So does a tag name not in its SVG case (``<STYLE>``),
-  or an ``id``, ``class``, ``href`` or ``style`` attribute name not in lowercase (``ID=``): the
-  browser folds the case, the checks here do not. An end tag is written without attributes. The
-  generators write none of these.
+- **Where the HTML parser differs.** Each of these refuses, because a browser would read the
+  markup differently from the checks here. The generators write none of them.
+
+  - Markup: a child element inside ``<title>`` or ``<desc>`` (HTML integration points) or
+    ``<style>``; a ``<style>`` with attributes; a tag name not in its SVG case (``<STYLE>``).
+  - Attributes: a value that is not double-quoted or holds a literal ``<`` or ``>``; a name that
+    is not plain ASCII (``data-x\x0b``); an ``id``, ``class``, ``href`` or ``style`` name not in
+    lowercase (``ID=``); an ``&`` in an ``href`` that is not a script URL (an entity hides the reference); a ``\`` in any
+    attribute but a ``data-*`` one; an ``<a>`` ``href`` that is not http(s), a fragment or a
+    relative path.
+  - Whitespace: only HTML's own (tab, line feed, form feed, carriage return, space) separates a
+    tag's parts; a tag split on any other (``\x0b``, ``\xa0``) is unreadable, so refused. Each
+    kept attribute is written again as `` name="value"``, and an end tag without attributes.
+  - CSS, in a ``<style>``'s text or a ``style`` attribute: an ``&`` or ``\`` (an entity or CSS
+    escape could spell ``url(`` or ``@import``); a comment; a string that holds a brace,
+    semicolon or line break, or is not closed on its line; an unbalanced brace; a rule nested in
+    a style rule; an at-rule but ``@media`` (``@layer a;`` would hide the next selector); a
+    selector leaving the diagram through a sibling combinator (``svg.<scope> ~ *``); a
+    ``position`` or ``z-index``, so a diagram cannot cover the page; and in a ``style``
+    attribute any quote at all.
 - **Scoped.** A root that already carries a class is the generator's scope (#1449): kept when it
   is complete (every id, reference and style selector under it), None otherwise. A root without a
-  class is scoped here under ``scope``.
+  class is scoped here under ``scope``. Every selector is checked against the scope after
+  scoping, on both paths.
 - **Checked.** The result must sanitise to itself and hold none of ``<script``,
   ``foreignObject``, ``javascript:``, ``vbscript:``, ``@import`` or ``image-set``, in any case, no
   ``url(`` that is not ``#``-local (in a ``<style>`` too) and no backslash in a ``<style>`` (a CSS
@@ -64,16 +71,44 @@ CHECKED_ATTRS = frozenset({"id", "class", "href", "xlink:href", "style"})  # rea
 TEXT_ONLY = frozenset({"title", "desc", "style"})  # no child element: see the module docstring
 UNSAFE = ("<script", "foreignobject", "javascript:", "vbscript:", "@import", "image-set")
 
-_ATTR = r"""\s+[^\s=/>"']+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+))?"""
+# HTML's own whitespace: Python's \s also matches \x0b, \xa0 and others, which HTML reads as
+# part of a name or value, so a tag split on them would be read differently by the browser.
+_WS = r"[\t\n\f\r ]"
+_ATTR = rf"""{_WS}+[^\t\n\f\r =/>"']+(?:{_WS}*={_WS}*(?:"[^"]*"|'[^']*'|[^\t\n\f\r "'>]+))?"""
 _TOKEN = re.compile(
     r"(?P<comment><!--.*?-->)|(?P<prolog><\?xml[^>]*\?>|<!DOCTYPE[^>]*>)"
-    rf"|<(?P<close>/?)(?P<name>[A-Za-z][\w:.-]*)(?P<attrs>(?:{_ATTR})*)\s*(?P<empty>/?)>"
-    r"|(?P<text>[^<]+)", re.S | re.I)
-_ATTR_PARTS = re.compile(r"""(\s+)([^\s=/>"']+)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+))?""")
+    rf"|<(?P<close>/?)(?P<name>[A-Za-z][\w:.-]*)(?P<attrs>(?:{_ATTR})*){_WS}*(?P<empty>/?)>"
+    r"|(?P<text>[^<]+)", re.S | re.I | re.A)
+_ATTR_PARTS = re.compile(rf"""{_WS}+([^\t\n\f\r =/>"']+)(?:{_WS}*={_WS}*("[^"]*"|'[^']*'|[^\t\n\f\r "'>]+))?""")
+_ATTR_NAME = re.compile(r"[A-Za-z_][\w:.-]*", re.A)
+_LINK = re.compile(r"(?:https?://|#|[^:/?#]*(?:[/?#]|$))", re.A)  # http(s), a fragment or a relative path
+_STYLE_RISK = re.compile(r"position|z-index", re.I)  # a diagram must not cover the page
 _URL_SCHEME = re.compile(r"(?:java|vb)script:")
 # A CSS comment, or a brace, semicolon or line break inside a quoted string: either would make
 # the brace count in css_selectors disagree with the browser's reading of the sheet.
 _HIDES_BRACES = re.compile(r"""/\*|"[^"]*[{};\n][^"]*"|'[^']*[{};\n][^']*'""")
+
+
+def _css_misread(css: str) -> bool:
+    """CSS whose braces a browser could count differently from ``_blocks``: a comment, a string
+    that holds a brace, semicolon or line break or is never closed on its line, a ``}`` with no
+    ``{`` or a ``{`` never closed, or a position or z-index."""
+    if _HIDES_BRACES.search(css) or _STYLE_RISK.search(css):
+        return True
+    depth, pos = 0, 0
+    while pos < len(css):
+        char = css[pos]
+        if char in "\"'":
+            close = css.find(char, pos + 1)
+            if close < 0 or re.search(r"[\n\r\f{};]", css[pos + 1:close]):
+                return True
+            pos = close
+        elif char in "{}":
+            depth += 1 if char == "{" else -1
+            if depth < 0:
+                return True
+        pos += 1
+    return depth != 0
 _FETCH = re.compile(r"""url\(\s*['"]?(?!#)""", re.I)  # a url() that is not #-local
 _ROOT_CLASS = re.compile(r'<svg\b[^>]*?\sclass="([^"]*)"')
 _ID = re.compile(r'\sid="([^"]*)"')
@@ -81,22 +116,29 @@ _REF = re.compile(r'url\(#([^)]+)\)|\s(?:xlink:)?href="#([^"]*)"')
 
 
 def _safe_attrs(element: str, attrs: str) -> str | None:
-    """``attrs`` without event handlers, script URLs or fetches, the rest as written; None to refuse."""
+    """``attrs`` without event handlers, script URLs or fetches, each written again as
+    `` name="value"``; None to refuse (see the module docstring)."""
     kept = []
     for m in _ATTR_PARTS.finditer(attrs):
-        raw = (m.group(3) or "").strip("\"'")
-        name = m.group(2).lower()
-        if name in CHECKED_ATTRS and m.group(2) != name:
+        quoted, name = m.group(2) or "", m.group(1).lower()
+        raw = quoted[1:-1]
+        if (not _ATTR_NAME.fullmatch(m.group(1)) or (name in CHECKED_ATTRS and m.group(1) != name)
+                or not quoted.startswith('"') or "<" in raw or ">" in raw or element == "style"
+                or ("\\" in raw and not name.startswith("data-"))):
             return None
-        if not (m.group(3) or "").startswith('"') or "<" in raw or ">" in raw or element == "style" or ("\\" in raw and not name.startswith("data-")) \
-                or (name == "style" and "&" in raw):
+        value = re.sub(r"[\x00-\x20]", "", html.unescape(raw)).lower()
+        if name.startswith("on") or _URL_SCHEME.search(value):
+            continue  # dropped, the rest of the diagram kept
+        if name in ("href", "xlink:href") and "&" in raw:
+            return None  # an entity would hide the reference from the scope check
+        if name == "style" and (re.search(r"[&'\"]", raw) or _css_misread(raw)):
             return None
-        value = html.unescape(raw)
-        value = re.sub(r"[\x00-\x20]", "", value).lower()
+        if element == "a" and name.endswith("href") and not _LINK.match(value):
+            return None  # a link goes to http(s), a fragment or a relative path only
         fetches = _FETCH.search(value) or (name.endswith("href") and element != "a" and not value.startswith("#"))
-        if name.startswith("on") or _URL_SCHEME.search(value) or fetches:
+        if fetches:
             continue
-        kept.append(m.group(0))
+        kept.append(f' {m.group(1)}="{raw}"')
     return "".join(kept)
 
 
@@ -237,7 +279,7 @@ def inline_svg(svg: str, scope: str) -> str | None:
     elif not re.fullmatch(r"[a-z][a-z0-9-]*", own):
         return None
     styles = "".join(re.findall(r"<style>(.*?)</style>", clean, re.S))
-    if (_HIDES_BRACES.search(styles) or _nested_rule(styles) or not _scope_complete(clean, root_class(clean) or "")
+    if (_css_misread(styles) or _nested_rule(styles) or not _scope_complete(clean, root_class(clean) or "")
             or sanitise(clean)[0] != clean or any(word in clean.lower() for word in UNSAFE)
             or _FETCH.search(clean) or "\\" in styles or re.search(r"@(?!media\b)", styles)
             or any(re.match(r"svg\.[a-z0-9-]+\s*[~+]", sel) for sel in css_selectors(styles))):
