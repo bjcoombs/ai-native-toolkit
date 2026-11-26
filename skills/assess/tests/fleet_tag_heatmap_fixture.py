@@ -3,7 +3,9 @@
 ``DATA`` is a hand-built ``fleet-data.json`` slice: five repositories under the shipped
 maturity model with different Steps (one with none, one failed with no tally), per-tag
 tallies with real shares, a real 0, cells measured on no condition, and ``tag_profile``
-saying ``contracts`` has no condition yet. ``FULL`` keeps names (``--full``), ``HASHED`` is a
+saying ``contracts`` has no condition yet. Four repositories sit in two ownership units
+(``views`` names them) and one in none, so a ``--full`` render groups its rows by unit (#1331).
+``FULL`` keeps names (``--full``), ``HASHED`` is a
 ``--hash-salt`` run whose keys are hashes, and ``COUNTS_ONLY`` neither, so its rows are
 numbered. ``test_fleet_tag_heatmap.py`` fails when a committed golden differs from a fresh
 render. Regenerate with ``uv run --locked python tests/fleet_tag_heatmap_fixture.py`` from
@@ -26,8 +28,8 @@ NAMES = ("acme/payments-api", "acme/web-frontend", "acme/infra-terraform", "acme
 
 
 def _cell(tag: str, met: int, measured: int) -> TagCell:
-    return {"tag": tag, "met": met, "measured": measured, "verified": 0, "not_measured": 0,
-            "hazards": 0, "declined": 0}
+    return {"tag": tag, "met": met, "measured": measured, "verified": met // 2, "not_measured": 1 if measured else 0,
+            "hazards": 1 if tag == "governance" and measured else 0, "declined": 0}
 
 
 def _tags(behaviour: tuple[int, int], docs: tuple[int, int], structure: tuple[int, int],
@@ -37,20 +39,33 @@ def _tags(behaviour: tuple[int, int], docs: tuple[int, int], structure: tuple[in
             _cell("supply_chain", 0, 0)]
 
 
+PLATFORM, PRODUCT = "ownership/platform", "ownership/product"
+UNIT_NAMES = ("Platform team", "Product team")
+
+
+def _in(unit: str) -> list[dict[str, str]]:
+    return [{"view": "ownership", "unit": unit}]
+
+
 REPOS: list[dict[str, Any]] = [
-    {"key": NAMES[0], "step": 2, "tags": _tags((2, 3), (1, 2), (3, 5), (4, 4), (0, 0))},
-    {"key": NAMES[1], "step": 3, "tags": _tags((3, 3), (2, 2), (5, 5), (4, 4), (1, 1))},
-    {"key": NAMES[2], "step": None, "tags": _tags((0, 0), (0, 2), (0, 0), (1, 4), (0, 0))},
-    {"key": NAMES[3], "step": 2, "tags": _tags((1, 3), (0, 0), (0, 5), (2, 4), (0, 1))},
-    {"key": NAMES[4], "step": None, "tags": None},
+    {"key": NAMES[0], "step": 2, "units": _in(PRODUCT), "tags": _tags((2, 3), (1, 2), (3, 5), (4, 4), (0, 0))},
+    {"key": NAMES[1], "step": 3, "units": _in(PRODUCT), "tags": _tags((3, 3), (2, 2), (5, 5), (4, 4), (1, 1))},
+    {"key": NAMES[2], "step": None, "units": _in(PLATFORM), "tags": _tags((0, 0), (0, 2), (0, 0), (1, 4), (0, 0))},
+    {"key": NAMES[3], "step": 2, "units": _in(PLATFORM), "tags": _tags((1, 3), (0, 0), (0, 5), (2, 4), (0, 1))},
+    {"key": NAMES[4], "step": None, "units": [], "tags": None},
 ]
+VIEWS = [{"view": "ownership", "units": [{"key": PLATFORM, "name": UNIT_NAMES[0]},
+                                         {"key": PRODUCT, "name": UNIT_NAMES[1]}]}]
 PROFILE = [{"tag": t, "conditions": 0 if t == "contracts" else 3} for t in
            ("behaviour", "contracts", "docs", "structure", "agent_context", "agent_runtime", "governance",
             "supply_chain")]
 
 
 def _data(counts_only: bool, hashed: bool, repos: list[dict[str, Any]] = REPOS) -> dict[str, Any]:
-    return {"run": {"counts_only": counts_only, "paths_hashed": hashed}, "repos": repos, "tag_profile": PROFILE}
+    views = VIEWS if not counts_only else [{"view": "ownership",
+                                             "units": [{"key": u["key"], "name": None} for u in VIEWS[0]["units"]]}]
+    return {"run": {"counts_only": counts_only, "paths_hashed": hashed}, "views": views, "repos": repos,
+            "tag_profile": PROFILE}
 
 
 FULL = _data(False, False)
