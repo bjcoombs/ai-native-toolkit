@@ -58,7 +58,12 @@ status descriptions are free text); only the two counts leave the module. `exter
 in `ci_checks` means an external check context on merged changes under `--platform`: more
 than half of the sampled merges carry a known external CI system. A GitLab sample, an
 empty or unread sample and any refused call (`GhUnavailable`) read `NOT_READ`, so the
-offline result stands; a `not_found` head counts that change as not external instead. Tests: `tests/test_external_ci.py`.
+offline result stands; a `not_found` head counts that change as not external instead.
+
+The sampled heads are read through `scan_pool.fan_out` (#1382): under `--jobs` above 1 at most
+that many heads at a time, results folded in sample order, so the reading is the serial one;
+at `--jobs` 1 the heads are read one by one and the first refused read stops the loop.
+Tests: `tests/test_external_ci.py`.
 """
 from __future__ import annotations
 
@@ -67,6 +72,7 @@ from typing import Any
 from lib.external_ci_rules import NOT_READ, ExternalCi, known_app, known_context
 from lib.hosting.gh_cli import GhUnavailable, gh_json
 from lib.hosting.merged_sample import MergedSample
+from lib.run.scan_pool import fan_out
 
 # Reads per sampled pull request: check runs, then commit statuses.
 CALLS_PER_CHANGE = 2
@@ -94,14 +100,22 @@ def read_external_ci(merged_sample: object) -> ExternalCi:
     shas = [str(c["headRefOid"]) for c in merged_sample.changes
             if isinstance(c.get("headRefOid"), str) and c["headRefOid"]]
     external = 0
-    for sha in shas:
-        try:
-            external += _carries_external(slug, sha)
-        except GhUnavailable as e:
-            if e.reason.startswith("not_found"):
-                continue  # a head the remote no longer holds: that change is not external
-            return NOT_READ  # a refused or rate-limited read leaves the offline result
+    try:
+        for carried in fan_out(lambda sha: _head_reading(slug, sha), shas):
+            external += carried
+    except GhUnavailable:
+        return NOT_READ  # a refused or rate-limited read leaves the offline result
     return ExternalCi(len(merged_sample.changes), external)
+
+
+def _head_reading(slug: str, sha: str) -> bool:
+    """Whether the head carries a known system; a head the remote no longer holds does not."""
+    try:
+        return _carries_external(slug, sha)
+    except GhUnavailable as e:
+        if e.reason.startswith("not_found"):
+            return False
+        raise
 
 
 def no_external_ci(_merged_sample: object = None) -> ExternalCi:

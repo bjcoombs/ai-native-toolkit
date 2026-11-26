@@ -142,3 +142,94 @@ def test_fleet_passes_scan_jobs_to_each_repository_scan(tmp_path, monkeypatch):
     assert parse_args([str(tmp_path), "--out", out, "--jobs", "1"]).scan_jobs == pool.JOBS_CAP
     with pytest.raises(SystemExit):
         parse_args([str(tmp_path), "--out", out, "--scan-jobs", "0"])
+
+
+# --- fan-out inside a scan (#1382) -------------------------------------------------------
+
+
+def test_fan_out_yields_in_input_order_when_items_finish_out_of_order():
+    """The first item finishes last; its result still comes first. No completion order is
+    asserted: only the order of the yielded results, which is the input order."""
+    release = threading.Event()
+
+    def work(i):
+        if i == 0:
+            release.wait(timeout=10)
+        elif i == 3:
+            release.set()
+        return i * 10
+
+    with pool.widened(4):
+        assert list(pool.fan_out(work, range(4))) == [0, 10, 20, 30]
+
+
+def test_fan_out_matches_the_serial_map_at_widths_1_and_4():
+    items = list(range(25))
+    serial = list(pool.fan_out(lambda i: (i, i * i), items))
+    with pool.widened(4):
+        wide = list(pool.fan_out(lambda i: (i, i * i), items))
+    assert wide == serial == [(i, i * i) for i in items]
+
+
+def test_width_1_is_a_lazy_map_in_the_calling_thread():
+    """--jobs 1 keeps the serial path: no pool thread, and a loop that stops early calls no more."""
+    calls: list[tuple[int, str]] = []
+
+    def work(i):
+        calls.append((i, threading.current_thread().name))
+        return i
+
+    for got in pool.fan_out(work, range(5)):
+        if got == 1:
+            break
+    assert calls == [(0, threading.current_thread().name), (1, threading.current_thread().name)]
+
+
+def test_widened_sets_the_width_for_its_body_and_jobs_1_leaves_it():
+    assert pool.fan_out_width() == 1
+    with pool.widened(4):
+        assert pool.fan_out_width() == 4
+        with pool.widened(1):  # a nested jobs-1 run_scans (the unit pass) inherits the width
+            assert pool.fan_out_width() == 4
+        with pool.widened(2):
+            assert pool.fan_out_width() == 2
+        assert pool.fan_out_width() == 4
+    assert pool.fan_out_width() == 1
+
+
+def test_an_item_failure_is_raised_at_its_place_in_the_order():
+    def work(i):
+        if i == 2:
+            raise RuntimeError("item 2")
+        return i
+
+    for width in (1, 4):
+        got: list[int] = []
+        with pool.widened(width), pytest.raises(RuntimeError, match="item 2"):
+            for value in pool.fan_out(work, range(5)):
+                got.append(value)
+        assert got == [0, 1], width
+    assert pool.fan_out_width() == 1
+
+
+def test_run_scans_widens_fan_out_to_jobs_for_the_run():
+    """run_scans raises the fan-out width to --jobs for every stage, and restores it after."""
+    from lib.run.scan_registry import STAGE_READ_SIDE, ScanSpec, run_scans
+
+    seen: list[int] = []
+    spec = ScanSpec("probe", lambda: seen.append(pool.fan_out_width()), (), STAGE_READ_SIDE)
+    for jobs in (1, 3):
+        run_scans({}, {}, None, [spec], jobs=jobs)
+    assert seen == [1, 3]
+    assert pool.fan_out_width() == 1
+
+
+def test_process_fan_out_yields_in_input_order():
+    """processes=True spawns workers for pure-Python work; results still come in input order."""
+    import math
+
+    items = [12, 3, 9, 0, 7]
+    with pool.widened(3):
+        assert list(pool.fan_out(math.factorial, items, processes=True)) == [math.factorial(i) for i in items]
+        assert list(pool.fan_out(math.factorial, [], processes=True)) == []
+    assert list(pool.fan_out(math.factorial, items, processes=True)) == [math.factorial(i) for i in items]

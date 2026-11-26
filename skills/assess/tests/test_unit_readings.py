@@ -21,6 +21,7 @@ from lib.instructions.instruction_files import nested_instruction_surface
 from lib.scoring.layer_grades import scan_layer_grades
 from lib.scoring.levels import resolve_signal
 from lib.run.scan_registry import SCANS, STAGE_READ_SIDE, ScanSpec
+from lib.run.scan_pool import widened
 from lib.run.signals import HEADLESS_SCANS
 from lib.unit_discovery import scan_units
 
@@ -538,3 +539,32 @@ def test_each_reading_carries_its_unit_kind(tmp_path: Path) -> None:
         ("agents", "agents"), ("commands", "commands"), ("skills/plain", "skill"), ("skills/tooled", "skill")]
     bare = ur.read_units({"units": [{"path": "agents"}]}, None, NO_EXCLUDES, repo, None)
     assert bare["units"][0]["kind"] == "package"  # a units entry without a kind
+
+
+def test_the_unit_passes_give_the_same_block_with_1_worker_and_with_4(tmp_path: Path) -> None:
+    """#1382: the units' passes fan out; the block is byte-identical to the serial one."""
+    repo = _write(tmp_path / "mono", MONOREPO)
+    serial = _read(repo)
+    with widened(4):
+        wide = _read(repo)
+    assert len(serial["units"]) >= 3
+    assert json.dumps(wide, indent=2, default=str) == json.dumps(serial, indent=2, default=str)
+
+
+def test_a_failed_process_pool_reruns_the_unit_passes_in_process(tmp_path: Path,
+                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+    """#1382: a dead worker or a value that will not pickle fails the pool, not the units: the
+    passes run again in this process and the block is the serial one."""
+    from concurrent.futures.process import BrokenProcessPool
+
+    repo = _write(tmp_path / "mono", MONOREPO)
+    serial = _read(repo)
+
+    def broken(fn: Any, items: Any, processes: bool = False) -> Any:
+        raise BrokenProcessPool("a worker died")
+        yield  # pragma: no cover - makes this a generator, as fan_out is
+
+    monkeypatch.setattr(ur, "fan_out", broken)
+    with widened(4):
+        rerun = _read(repo)
+    assert json.dumps(rerun, indent=2, default=str) == json.dumps(serial, indent=2, default=str)

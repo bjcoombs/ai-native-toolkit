@@ -19,6 +19,7 @@ from lib.external_ci_rules import NOT_READ, ExternalCi, as_external, known_app, 
 from lib.hosting.gh_cli import GhUnavailable, GithubRepo
 from lib.hosting.merged_sample import MergedSample
 from lib.hosting.platform_cli import CACHE_ENV
+from lib.run.scan_pool import widened
 from lib.run.signals import collect
 from lib.unread_ci import UNREAD_CI_FILES, is_unread_ci_path, unread_ci_paths
 
@@ -228,6 +229,24 @@ def test_a_refused_read_or_no_github_sample_reads_nothing(monkeypatch: pytest.Mo
     assert ext.read_external_ci({"available": False, "reason": "network"}) is NOT_READ
     assert ext.no_external_ci(_sample(["H1"])) is NOT_READ
     assert len(calls) == 1
+
+
+def test_the_reading_is_the_same_with_1_worker_and_with_4(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#1382: the sampled heads fan out; the reading folds them in sample order, so it is the
+    serial one, a missing head counted as not external and a refused read reading nothing."""
+    heads = [f"H{i}" for i in range(12)]
+    answers: dict[str, Any] = {f"H{i}/check-runs": BK_RUNS if i % 3 == 0 else GHA_RUNS
+                               for i in range(12)}
+    answers.update({"H4/status": BK_STATUS, "H5/check-runs": GhUnavailable("not_found: gone")})
+    _fake(monkeypatch, answers)
+    serial = ext.read_external_ci(_sample(heads))
+    with widened(4):
+        wide = ext.read_external_ci(_sample(heads))
+    assert wide == serial == ExternalCi(12, 5)
+    answers["H7/check-runs"] = GhUnavailable("no_access: refused")
+    with widened(4):
+        assert ext.read_external_ci(_sample(heads)) is NOT_READ
+    assert ext.read_external_ci(_sample(heads)) is NOT_READ
 
 
 # ---------- end to end: the headless runner with a stub gh ----------

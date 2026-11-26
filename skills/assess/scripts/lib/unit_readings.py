@@ -64,6 +64,11 @@ coverage reading with no gate. Where member
 units sit below a root unit, the root's scoped readings therefore cover the members' files
 too (a known limit: no scan can leave out the folders of other units yet). Each unit's pass goes through ``scan_registry.run_scans``,
 so a failing scan degrades to its unavailable marker for that unit alone.
+The units' passes are independent, so they run through ``scan_pool.fan_out`` (#1382): under
+``--jobs`` above 1 at most that many units at a time in worker processes (``lib/run/unit_pass.py``;
+the scans are mostly pure Python, and threads made the pass slower), each pass serial inside,
+and the readings assembled in unit order, the same block as ``--jobs`` 1, which runs them one by
+one in this process.
 
 **The block** (``unit_readings``, after ``headline``; the headless runner reports it under ``--units``, #866): ``unit_count`` and
 ``unit_count_reason`` copied from ``units`` (a null count stays null, #1030), ``unit_blocks``
@@ -84,7 +89,8 @@ numbers, the origin tokens and the condition ids. Tests: ``tests/test_unit_readi
 """
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from functools import partial
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Protocol, TypedDict
 
@@ -93,6 +99,7 @@ from lib.testing.coverage_gate import GO_RUST_UNMEASURED, go_rust_manifests
 from lib.scoring.level_tally import DEFAULT_BLOCKS, default_model
 from lib.scoring.levels import MaturityModel, condition_id
 from lib.run_context_types import JsonDict
+from lib.run.scan_pool import fan_out
 from lib.scoring.signal_grades import EMPTY_DENOMINATORS
 from lib.unit_components import KINDS, Kind
 
@@ -346,11 +353,20 @@ UnitTable = tuple[tuple[ScanSpec, ...], tuple[str, ...]]
 _BOUND: dict[str, Any] = {}
 
 
-def bind(table: Callable[[], UnitTable], run: Callable[..., None]) -> None:
-    """Set the unit pass ``read_units`` runs by default: a loader of ``unit_table``'s result
-    and the registry's ``run_scans``."""
+# One unit's pass run in a worker process: (repository-wide values, the unit's scope) -> its
+# context and the private values its scans left (``lib.run.unit_pass.run_unit_pass``).
+UnitPassFn = Callable[[Mapping[str, Any], "Path | None"], tuple[dict[str, Any], dict[str, Any]]]
+
+
+def bind(table: Callable[[], UnitTable], run: Callable[..., None],
+         unit_pass: UnitPassFn | None = None) -> None:
+    """Set the unit pass ``read_units`` runs by default: a loader of ``unit_table``'s result,
+    the registry's ``run_scans`` and, when given, ``unit_pass``, the picklable function that runs
+    one unit's pass over that table (``lib.run.unit_pass.run_unit_pass``, #1382), used in its place."""
     _BOUND.clear()
     _BOUND["loader"], _BOUND["run"] = table, run
+    if unit_pass is not None:
+        _BOUND["pass"] = unit_pass
 
 
 def bound_table() -> UnitTable:
@@ -503,6 +519,41 @@ def _scope(repo_root: Path, unit: str) -> Path | None:
     return None if unit in ("", ".") else (repo_root / unit).resolve()
 
 
+def _passes(named: Sequence[tuple[Any, str]], values: Mapping[str, Any], specs: Sequence[ScanSpec],
+            run: Callable[..., None] | None,
+            repo_blocks: Mapping[str, Any] | None) -> Iterator[tuple[dict[str, Any], dict[str, Any]]]:
+    """Each named unit's pass, in unit order: its context and the private values its scans left.
+
+    The root unit with ``repo_blocks`` runs none. The units' passes are independent, so they fan
+    out (``scan_pool.fan_out``, #1382): the bound pass in worker processes (``lib/run/unit_pass.py``),
+    an injected ``run`` on threads; at width 1 both run here, one unit after another. When the
+    process pool fails (a worker dies, or a value will not pickle) the passes run again here, so
+    the per-unit readings are the serial loop's; a pass that raises raises again in its rerun.
+    """
+    root = Path(values["repo_root"])
+    rels = [rel for _, rel in named if not (rel in ("", ".") and repo_blocks is not None)]
+    if not specs:
+        found: Iterator[tuple[dict[str, Any], dict[str, Any]]] = iter([({}, {})] * len(rels))
+    elif run is None:
+        one_pass = partial(_BOUND["pass"], dict(values))
+        scopes = [_scope(root, r) for r in rels]
+        try:
+            done = list(fan_out(one_pass, scopes, processes=True))
+        except Exception:  # noqa: BLE001 - a pool failure (a dead worker, a value that will not
+            # pickle) reruns the passes here; an error of a pass itself is raised again by its rerun
+            done = [one_pass(scope) for scope in scopes]
+        found = iter(done)
+    else:
+        def one(rel: str) -> tuple[dict[str, Any], dict[str, Any]]:
+            inputs: dict[str, Any] = {**values, "scope": _scope(root, rel)}
+            ctx: dict[str, Any] = {}
+            run(ctx, inputs, None, specs)
+            return ctx, {s.key: inputs[s.key] for s in specs if s.key in inputs}
+        found = fan_out(one, rels)
+    for _, rel in named:
+        yield (dict(repo_blocks or {}), {}) if rel in ("", ".") and repo_blocks is not None else next(found)
+
+
 def read_units(units: Any, nested_instructions: Any, *external: Any,
                table: UnitTable | None = None,
                run: Callable[..., None] | None = None,
@@ -515,8 +566,8 @@ def read_units(units: Any, nested_instructions: Any, *external: Any,
     repository-wide ``REPO_BLOCKS``, which the root unit reads without a second pass.
     """
     specs, names = table if table is not None else bound_table()
-    if run is None:
-        run = _BOUND["run"]
+    if run is None and not (table is None and "pass" in _BOUND):
+        run = _BOUND["run"]  # an injected table runs through the registry's run_scans here
     manifest = manifest if manifest is not None else cm.core_manifest()
     model = model if model is not None else default_model()
     own_blocks = unit_blocks(manifest, tuple(sorted(_paths(model))))
@@ -535,17 +586,11 @@ def read_units(units: Any, nested_instructions: Any, *external: Any,
     members = [str(u.get("path")) for u in listed if u.get("path") not in (None, "", ".")]
     repo = {**(repo_blocks or {}), **values, "nested_instructions": nested_instructions,
             "members": members}
-    for unit in units.get("units") or []:
-        rel = str(unit.get("path", "")) if isinstance(unit, Mapping) else ""
-        if not rel:
-            continue
-        inputs: dict[str, Any] = {**values, "scope": _scope(Path(values["repo_root"]), rel)}
-        ctx: dict[str, Any] = {}
+    named = [(unit, rel) for unit in units.get("units") or []
+             if (rel := str(unit.get("path", "")) if isinstance(unit, Mapping) else "")]
+    for (unit, rel), (ctx, private) in zip(named, _passes(named, values, specs, run, repo_blocks)):
+        inputs = {**values, **private}
         root = rel in ("", ".") and repo_blocks is not None
-        if root:
-            ctx.update(repo_blocks or {})  # the root unit's tree is the repository's
-        elif specs:
-            run(ctx, inputs, None, specs)
         own: dict[str, JsonDict] = {}
         kind = _kind(unit)
         for block in _kind_blocks(own_blocks, kinds, kind):
