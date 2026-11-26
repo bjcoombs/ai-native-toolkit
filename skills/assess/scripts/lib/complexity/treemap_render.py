@@ -15,15 +15,25 @@ heatmap. Pulls `matplotlib`, `squarify`, and `numpy`. Must not be imported by th
 deterministic core (which runs with `networkx` alone) - only by the treemap scripts.
 Also holds `plural(n, singular)`, the count-agreement helper both SVG renderers use
 for generated text ("1 island", "9 islands").
+
+Embedding (#1358): each block `<rect>` carries `data-path`, `data-loc`, `data-ccn`,
+`data-tokens` and `data-commits` as plain values (`block_data`; an unmeasured value is
+left out), and the root carries `data-churn-window` (`churn_window_of`), so a host page
+reads a block's details without parsing its `<title>`. The written SVG is scoped with
+`lib.svg_scope` (root class, selectors under it, prefixed ids), so inlining it leaves the
+host page's own `rect` and `text` styling alone.
 """
 from __future__ import annotations
 
 import html
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from lib.svg_scope import SCOPES, scope_svg
 
 # `squarify` is imported lazily inside layout() so light consumers of the colour
 # helpers (rgba_to_hex / blend_to_grey / adaptive_cap) - e.g. the doc-graph
@@ -243,6 +253,8 @@ def plural(n: int, singular: str, plural_form: str | None = None) -> str:
     return plural_form if plural_form is not None else singular + "s"
 
 
+_WINDOW_LABEL = re.compile(r"commits \((.+)\)")
+
 # Default accessible name/description for the code heatmap. Passed as the root
 # <svg>'s <title>/<desc> (a11y metadata) so a screen reader announces what the
 # image is and how its channels encode; kept as defaults on write_svg so a
@@ -281,13 +293,52 @@ def _label_size_text(node: Node) -> str:
     return f"{node.loc} loc"
 
 
+def churn_window_of(by: str, aux_label: str | None) -> str | None:
+    """The window the treemap's commit counts cover: the one inside the churn axis's label
+    (``"commits (last 12mo)"`` -> ``"last 12mo"``), ``"all-time"`` when blocks are coloured
+    by churn (full history), else None (no churn axis drawn)."""
+    if by == "churn":
+        return "all-time"
+    match = _WINDOW_LABEL.fullmatch(aux_label or "")
+    return match.group(1) if match else None
+
+
+def block_data(node: Node, metric_label: str) -> dict[str, str]:
+    """A block's values as plain strings, keyed by data attribute: the same values its
+    ``<title>`` shows, with no thousands separators or units. A value the run did not
+    measure is left out, never written as 0: ``data-ccn`` when blocks are coloured by
+    churn, ``data-tokens`` without a token estimate, ``data-commits`` without git history."""
+    data = {"data-path": node.rel_path or node.name, "data-loc": str(node.loc)}
+    if metric_label == "ccn":
+        data["data-ccn"] = f"{node.metric:.0f}"
+    if node.est_tokens:
+        data["data-tokens"] = str(node.est_tokens)
+    if metric_label == "commits":
+        data["data-commits"] = f"{node.metric:.0f}"
+    elif node.aux_label.startswith("commits"):
+        data["data-commits"] = f"{node.aux_metric:.0f}"
+    return data
+
+
+def _data_attrs(node: Node, metric_label: str) -> str:
+    return "".join(f' {key}="{html.escape(value)}"'
+                   for key, value in block_data(node, metric_label).items())
+
+
 def write_svg(rects: list[Rect], root: Path, W: float, H: float,
               out_path: Path, show_labels: bool,
               metric_label: str,
               show_survivor_legend: bool = False,
               svg_title: str = DEFAULT_SVG_TITLE,
-              svg_desc: str = DEFAULT_SVG_DESC) -> None:
+              svg_desc: str = DEFAULT_SVG_DESC,
+              churn_window: str | None = None) -> None:
+    """Write the treemap SVG. Each block ``<rect>`` carries its values as data attributes
+    (``block_data``) beside its ``<title>``; the root carries ``data-churn-window`` when
+    ``churn_window`` is given. The file is scoped (``lib.svg_scope``) so it can be inlined
+    into a host page without restyling it."""
     label_threshold = (W * H) / 200
+    window_attr = ("" if churn_window is None
+                   else f' data-churn-window="{html.escape(churn_window)}"')
     has_hatch = any(node.hatch for _x, _y, _w, _h, node in rects)
     total_h = H + (SURVIVOR_LEGEND_H if show_survivor_legend else 0.0)
     parts: list[str] = [
@@ -295,7 +346,7 @@ def write_svg(rects: list[Rect], root: Path, W: float, H: float,
         f'<svg xmlns="http://www.w3.org/2000/svg" '
         f'viewBox="0 0 {W:.0f} {total_h:.0f}" '
         f'width="{W:.0f}" height="{total_h:.0f}" '
-        f'preserveAspectRatio="xMidYMid meet" role="img">',
+        f'preserveAspectRatio="xMidYMid meet" role="img"{window_attr}>',
         # A11y: <title>/<desc> as the first children of the root <svg> give the
         # image an accessible name and description (SVG accessibility contract).
         f'<title>{html.escape(svg_title)}</title>',
@@ -325,7 +376,7 @@ def write_svg(rects: list[Rect], root: Path, W: float, H: float,
             f'<rect x="{x:.2f}" y="{y:.2f}" '
             f'width="{w:.2f}" height="{h:.2f}" '
             f'fill="{rgba_to_hex(node.color)}" '
-            f'stroke="white" stroke-width="0.5">'
+            f'stroke="white" stroke-width="0.5"{_data_attrs(node, metric_label)}>'
             f'<title>{tooltip}</title></rect>'
         )
 
@@ -365,4 +416,5 @@ def write_svg(rects: list[Rect], root: Path, W: float, H: float,
         parts.extend(_survivor_legend_parts(W, H))
 
     parts.append('</svg>')
-    out_path.write_text("\n".join(parts), encoding="utf-8")
+    out_path.write_text(scope_svg("\n".join(parts), SCOPES["complexity-heatmap"]),
+                        encoding="utf-8")

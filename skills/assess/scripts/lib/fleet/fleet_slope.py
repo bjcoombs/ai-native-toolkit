@@ -48,6 +48,7 @@ import textwrap
 from typing import NotRequired, TypedDict
 
 import lib.fleet.fleet_svg as svg
+from lib.svg_scope import SCOPES
 from lib.fleet.fleet_compare import CAUSE_LEVEL, Comparison
 from lib.fleet.fleet_maturity import SCOPE, Cell, floor_mean, has_floor, mean_share
 from lib.fleet.fleet_svg import THEMED_HATCH, LinearScale
@@ -285,4 +286,4 @@ def render_slope(view: SlopeView) -> str:
     desc = ("Slope chart: one line per group from its mean maturity in the earlier run to this "
             "one, up in the accent colour, down in the alarm colour; groups with no practice known in "
             "both runs are listed on a hatched strip, not drawn at zero.")
-    return svg.document(WIDTH, float(int(cursor + PAD)), TITLE, desc, body, defs=THEMED_HATCH)
+    return svg.document(WIDTH, float(int(cursor + PAD)), TITLE, desc, body, scope=SCOPES["slope"], defs=THEMED_HATCH)

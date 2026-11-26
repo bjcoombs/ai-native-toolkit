@@ -113,7 +113,7 @@ def test_end_labels_keep_a_minimum_gap_on_each_side():
 def test_unplotted_groups_are_named_on_the_hatched_strip_and_the_star_is_explained():
     text = fs.render_slope(_fixture_view())
     assert "mobile (new since the earlier run)" in text
-    assert f'fill="{svg.HATCH_FILL}"' in text
+    assert 'fill="url(#fleet-slope-fleet-hatch)"' in text
     assert "web: Agent use 2→0 *" in text
     assert "* not a level change alone: the group's measured set of repositories moved too" in text
     assert '-0.58</text>' in text and '+0.42</text>' in text and '>=</text>' in text

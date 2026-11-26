@@ -61,7 +61,7 @@ def test_svg_is_self_contained_and_well_formed():
     content = ft.render_trend(runs(FIXTURES))
     assert ET.fromstring(content).tag == f"{SVG_NS}svg"
     assert "<script" not in content and "href" not in content and "@import" not in content
-    assert "prefers-color-scheme: dark" in content and ".s-series7{" in content
+    assert "prefers-color-scheme: dark" in content and ".s-series7 {" in content
     assert re.findall(r"https?://[^\s\"']+", content) == ["http://www.w3.org/2000/svg"]
     assert overridden_text_attributes(content) == []
 

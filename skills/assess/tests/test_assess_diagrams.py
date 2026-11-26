@@ -108,7 +108,7 @@ def test_declined_has_its_own_colour_and_not_applicable_is_an_outline() -> None:
 def test_not_measured_is_hatched_with_its_reason_in_the_tooltip_and_key() -> None:
     content = _waffle()
     hatched = [s for s in _squares(content) if s.attrib["data-category"] == "not_measured"]
-    assert hatched and all(s.attrib["fill"] == "url(#fleet-hatch)" for s in hatched)
+    assert hatched and all(s.attrib["fill"] == "url(#assess-evidence-waffle-fleet-hatch)" for s in hatched)
     tips = [s.find(f"{SVG_NS}title").text for s in hatched]  # type: ignore[union-attr]
     assert tips[0].endswith("(needs GitHub or GitLab access)")  # type: ignore[union-attr]
     assert "(waits on CI and the agent's local check level 3)" in tips[1]  # type: ignore[operator]

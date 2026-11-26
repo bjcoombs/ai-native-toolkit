@@ -247,7 +247,7 @@ def test_staleness_mode_marks_entry_and_orphan_by_stroke(svg, tmp_path, monkeypa
     assert orphan.get("stroke") == svg.ORPHAN_RING
     assert orphan.get("stroke-dasharray") == "3,2"
     # Measured staleness exists for some docs, so an unmeasured doc is hatched.
-    assert orphan.get("fill") == svg.UNMEASURED_FILL
+    assert orphan.get("fill") == svg.UNMEASURED_FILL.replace("#", "#assess-doc-graph-")
     assert "staleness not measured" in orphan_tip
     plain, plain_tip = circles["docs/a.md"]
     assert (plain.get("stroke"), plain.get("stroke-width")) == ("#b8b8b8", "1.0")

@@ -172,7 +172,7 @@ def test_heatmap_draws_a_floor_apart_from_known_and_unknown():
     row = group_row("g", [_row("g/a", _scans())], _model(), {})
     columns = fh.columns_for([row], _model())
     svg = fh.render_heatmap([row], columns)
-    assert ">1+ a<" in svg and "url(#fleet-floor)" in svg and 'id="fleet-floor"' in svg
+    assert ">1+ a<" in svg and "url(#fleet-heatmap-fleet-floor)" in svg and 'id="fleet-heatmap-fleet-floor"' in svg
     assert "at least level 1 of 2" in svg and "needs a full /assess: pressure.mutation_run" in svg
     plain = group_row("g", [_row("g/a", {})], _model(), {})
     assert "fleet-floor" not in fh.render_heatmap([plain], columns)

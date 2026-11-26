@@ -109,7 +109,7 @@ from lib.complexity.scc_coverage import (
 )
 from lib.complexity.stats_rows import code_band, file_ccn_rows, top_lists
 from lib.complexity.treemap_render import (
-    ColoredFile, Rect, Rgba, adaptive_cap, blend_to_grey, build_tree, layout, plural, write_svg,
+    ColoredFile, Rect, Rgba, adaptive_cap, blend_to_grey, build_tree, churn_window_of, layout, plural, write_svg,
 )
 
 
@@ -740,8 +740,8 @@ def render(files: list[tuple[Path, int, float, str]],
     rects: list[Rect] = []
     layout(tree, 0, 0, W, H, rects)
 
-    write_svg(rects, root, W, H, out_path, show_labels, metric_label,
-              show_survivor_legend=bool(overrides))
+    write_svg(rects, root, W, H, out_path, show_labels, metric_label, show_survivor_legend=bool(overrides),
+              churn_window=churn_window_of(by, aux_label if aux_data else None))
 
     print(f"wrote {out_path}  ({len(files)} {plural(len(files), 'file')}, "
           f"{sum(1 for f in files if f[3] == 'lizard')} lizard, "

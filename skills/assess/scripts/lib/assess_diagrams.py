@@ -60,6 +60,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import lib.fleet.fleet_svg as svg
+from lib.svg_scope import SCOPES
 from lib.assess_diagrams_ladder import (LADDER_FILE, LADDER_TITLE, gate_conditions, ladder_caption,
                                         ladder_in_place, render_ladder)
 from lib.scoring.headline import reason_word
@@ -279,7 +280,7 @@ def render_waffle(level: LevelResult, titles: Mapping[str, str], gates: Sequence
         y += LINE_H - 2
         body.append(svg.text(PAD, y, line, size=12, cls="fg"))
     desc = (f"{waffle_in_place(level)} {caption}")
-    return svg.document(width, y + PAD, HEADINGS[WAFFLE_FILE], desc, body, style=style(),
+    return svg.document(width, y + PAD, HEADINGS[WAFFLE_FILE], desc, body, scope=SCOPES["evidence-waffle"], style=style(),
                         defs=svg.THEMED_HATCH)
 
 

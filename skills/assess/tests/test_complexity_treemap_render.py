@@ -74,8 +74,8 @@ def test_write_svg_emits_hatch_overlay_and_legend(render_lib, tmp_path):
                          False, "ccn", show_survivor_legend=True)
     svg = out.read_text(encoding="utf-8")
     # pattern definition + overlay reference
-    assert 'id="survivor-diag"' in svg
-    assert 'fill="url(#survivor-diag)"' in svg
+    assert 'id="assess-complexity-heatmap-survivor-diag"' in svg
+    assert 'fill="url(#assess-complexity-heatmap-survivor-diag)"' in svg
     # legend explains the survivor meaning with both thresholds
     assert "survivor density" in svg.lower()
     assert "30%" in svg
@@ -202,3 +202,91 @@ def test_write_svg_tooltip_shows_est_tokens_and_loc(render_lib, tmp_path):
     svg = out.read_text(encoding="utf-8")
     assert "8,200 est. tokens" in svg
     assert "514 loc" in svg
+
+
+# ── embedding: data attributes and a scoped style (#1358) ─────────────────────
+
+
+def _block_rects(svg: str) -> list[tuple[dict[str, str], str]]:
+    """(attributes, title text) for each block rect: the rects that carry a <title>."""
+    import html
+    import re
+
+    out = []
+    for attrs, title in re.findall(r"<rect ([^>]*)><title>(.*?)</title></rect>", svg, re.S):
+        out.append((dict(re.findall(r'([\w-]+)="([^"]*)"', attrs)), html.unescape(title)))
+    return out
+
+
+def _two_blocks(render_lib) -> list:
+    a = render_lib.Node(name="a.py", rel_path="src/a & b.py", loc=1514, est_tokens=18200,
+                        metric=12.0, aux_metric=7.0, aux_label="commits (last 12mo)",
+                        color=(0.8, 0.2, 0.1, 1.0), is_file=True)
+    b = render_lib.Node(name="c.py", rel_path="src/c.py", loc=40, est_tokens=1,
+                        metric=1.0, aux_metric=0.0, aux_label="commits (last 12mo)",
+                        color=(0.9, 0.8, 0.7, 1.0), is_file=True)
+    return [(0.0, 0.0, 800.0, 1000.0, a), (800.0, 0.0, 800.0, 1000.0, b)]
+
+
+def test_every_block_rect_carries_its_title_values_as_data_attributes(render_lib, tmp_path):
+    """Each block rect has data-path, data-loc, data-ccn, data-tokens and data-commits as
+    plain values matching its <title>; the root carries data-churn-window."""
+    out = tmp_path / "data.svg"
+    render_lib.write_svg(_two_blocks(render_lib), Path("/repo"), 1600.0, 1000.0, out, True, "ccn",
+                         churn_window="last 12mo")
+    svg = out.read_text(encoding="utf-8")
+    blocks = _block_rects(svg)
+    assert len(blocks) == 2
+    for attrs, title in blocks:
+        path, line2 = title.split("\n")
+        assert attrs["data-path"].replace("&amp;", "&") == path
+        tokens = f"{int(attrs['data-tokens']):,} est. token"
+        assert line2.startswith(tokens)
+        assert f"{attrs['data-loc']} loc" in line2
+        assert f"ccn {attrs['data-ccn']}" in line2
+        assert line2.endswith(f"commits (last 12mo) {attrs['data-commits']}")
+        assert all("," not in attrs[k] for k in ("data-loc", "data-tokens", "data-ccn", "data-commits"))
+    assert blocks[0][0]["data-tokens"] == "18200" and blocks[0][0]["data-loc"] == "1514"
+    assert 'data-churn-window="last 12mo"' in svg.split("\n")[1]
+
+
+def test_unmeasured_values_are_left_out_never_written_as_0(render_lib):
+    """No token estimate, no churn axis: data-tokens and data-commits are absent; blocks
+    coloured by churn carry commits and no ccn."""
+    node = render_lib.Node(name="a.py", rel_path="a.py", loc=10, metric=4.0, is_file=True)
+    assert render_lib.block_data(node, "ccn") == {"data-path": "a.py", "data-loc": "10", "data-ccn": "4"}
+    assert render_lib.block_data(node, "commits") == {"data-path": "a.py", "data-loc": "10",
+                                                       "data-commits": "4"}
+
+
+@pytest.mark.parametrize("by, label, expected", [
+    ("complexity", "commits (last 24mo)", "last 24mo"),
+    ("complexity", "commits (all-time)", "all-time"),
+    ("complexity", None, None),
+    ("churn", None, "all-time"),
+])
+def test_churn_window_of(render_lib, by, label, expected):
+    assert render_lib.churn_window_of(by, label) == expected
+
+
+def test_no_churn_window_leaves_the_root_attribute_out(render_lib, tmp_path):
+    out = tmp_path / "plain.svg"
+    render_lib.write_svg(_two_blocks(render_lib), Path("/repo"), 1600.0, 1000.0, out, False, "ccn")
+    assert "data-churn-window" not in out.read_text(encoding="utf-8")
+
+
+def test_no_selector_in_the_embedded_style_is_unscoped(render_lib, tmp_path):
+    """Static check on the SVG text: every selector sits under the treemap's root class, so
+    inlining it leaves a host page's own rect and text styling unchanged."""
+    import re
+
+    out = tmp_path / "scoped.svg"
+    render_lib.write_svg(_two_blocks(render_lib), Path("/repo"), 1600.0, 1000.0, out, True, "ccn",
+                         show_survivor_legend=True)
+    svg = out.read_text(encoding="utf-8")
+    assert '<svg class="assess-complexity-heatmap" ' in svg
+    css = re.search(r"<style>(.*?)</style>", svg, re.S).group(1)
+    selectors = [s.strip() for rule in re.findall(r"([^{}]+)\{[^{}]*\}", css) for s in rule.split(",")]
+    assert selectors and all(s.startswith("svg.assess-complexity-heatmap ") for s in selectors)
+    assert re.findall(r'\sid="([^"]+)"', svg) == ["assess-complexity-heatmap-survivor-diag",
+                                                    "assess-complexity-heatmap-survivor-cross"]

@@ -50,6 +50,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, TypedDict
 
 import lib.fleet.fleet_svg as svg
+from lib.svg_scope import SCOPES
 from lib.assess_diagrams import wrap
 from lib.fleet.fleet_tag_heatmap import names_shown
 from lib.vocabulary import IN_PLACE
@@ -298,7 +299,7 @@ def render(view: RadarView) -> str:
         y += LINE_H
         body.append(svg.text(PAD, y, line, size=12, cls="fg"))
     desc = f"{in_place(view)} {caption(view)}"
-    return svg.document(width, y + PAD, TITLE, desc, body, defs=svg.THEMED_HATCH)
+    return svg.document(width, y + PAD, TITLE, desc, body, scope=SCOPES["radar"], defs=svg.THEMED_HATCH)
 
 
 def _cell(text: str) -> str:

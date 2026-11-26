@@ -108,7 +108,7 @@ def test_every_group_and_row_present_and_unknown_hatched_apart_from_zero(tmp_pat
     titles = ["Two-factor", "Team instructions and shared tooling across repositories"]
     assert sorted(cells) == sorted(f"{g} · {t}" for g in groups for t in titles)
     assert cells["grpb · Two-factor"] == fh.LEVEL_RAMP[0]  # level 0: a ramp colour
-    assert cells["grpc · Two-factor"] == fh.UNKNOWN_FILL  # unknown: the hatch
+    assert cells["grpc · Two-factor"] == "url(#fleet-heatmap-fleet-unknown)"  # unknown: the hatch
     assert cells["grpa · Two-factor"] == fh.LEVEL_RAMP[-1]  # top level of its row
     assert fh.UNKNOWN_FILL not in fh.LEVEL_RAMP
 

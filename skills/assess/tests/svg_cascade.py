@@ -12,7 +12,8 @@ lack the attribute.
 ``overridden_text_attributes`` parses the stylesheet and returns every
 (text, property) pair where a matching rule sets a property the element also
 carries as an attribute. Only ``text`` and ``text:not([attr])...`` selectors are
-understood; any other selector naming ``text``, and any selector using the
+understood, each optionally under a diagram scope (``svg.<scope> text``); any
+other selector naming ``text``, and any selector using the
 universal ``*`` (which reaches ``<text>`` as well), raises, so a new stylesheet
 shape fails loudly instead of slipping past the check.
 """
@@ -23,7 +24,8 @@ import xml.etree.ElementTree as ET
 
 _SVG_NS = "{http://www.w3.org/2000/svg}"
 _RULE = re.compile(r"([^{}]+)\{([^{}]*)\}")
-_TEXT_SELECTOR = re.compile(r"text((?::not\(\[[\w-]+\]\))*)")
+# A diagram's selectors sit under its scope (``svg.<scope> text``, lib/svg_scope.py).
+_TEXT_SELECTOR = re.compile(r"(?:svg\.[\w-]+ )?text((?::not\(\[[\w-]+\]\))*)")
 _NOT_ATTR = re.compile(r":not\(\[([\w-]+)\]\)")
 
 

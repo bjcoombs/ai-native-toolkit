@@ -28,6 +28,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, TypedDict
 
 import lib.fleet.fleet_svg as svg
+from lib.svg_scope import SCOPES
 from lib.assess_diagrams import wrap
 from lib.scoring.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
 from lib.vocabulary import IN_PLACE
@@ -151,4 +152,4 @@ def render(rows: Sequence[HeatmapRow], none_yet: set[str]) -> str:
         y += LINE_H - 2
         body.append(svg.text(PAD, y, line, size=12, cls="fg"))
     desc = f"{in_place(rows)} {caption()}"
-    return svg.document(width, y + PAD, TITLE, desc, body, style=svg.theme_style(), defs=svg.THEMED_HATCH)
+    return svg.document(width, y + PAD, TITLE, desc, body, scope=SCOPES["tag-heatmap"], style=svg.theme_style(), defs=svg.THEMED_HATCH)

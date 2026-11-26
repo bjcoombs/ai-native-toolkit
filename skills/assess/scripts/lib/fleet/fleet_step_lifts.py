@@ -36,6 +36,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, TypedDict
 
 import lib.fleet.fleet_svg as svg
+from lib.svg_scope import SCOPES
 from lib.assess_diagrams import wrap
 from lib.scoring.level_result_types import LevelResult
 from lib.scoring.levels import MaturityModel, condition_id
@@ -182,7 +183,7 @@ def render(data: Mapping[str, Any]) -> str:
         y += LINE_H
         body.append(svg.text(PAD, y, line, size=12, cls="fg"))
     desc = f"{in_place(data)} {CAPTION}"
-    return svg.document(WIDTH, y + PAD, TITLE, desc, body, defs=svg.THEMED_HATCH)
+    return svg.document(WIDTH, y + PAD, TITLE, desc, body, scope=SCOPES["one-change-away"], defs=svg.THEMED_HATCH)
 
 
 def bars(lifts: Sequence[StepLift]) -> list[tuple[str, int]]:

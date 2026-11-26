@@ -32,6 +32,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import TypedDict
 
 import lib.fleet.fleet_svg as svg
+from lib.svg_scope import SCOPES
 from lib.assess_diagrams import wrap
 from lib.class_sizes import percentile
 from lib.scoring.level_result_types import TagCell
@@ -200,5 +201,5 @@ def render(rows: Sequence[FleetTagRow], whys: Mapping[str, str]) -> str:
             y += LINE_H - 2
             body.append(svg.text(PAD, y, line, size=12, cls=cls))
     desc = f"{in_place(rows)} {caption()}"
-    return svg.document(width, y + PAD, TITLE, desc, body, style=svg.theme_style())
+    return svg.document(width, y + PAD, TITLE, desc, body, scope=SCOPES["fleet-tag-profile"], style=svg.theme_style())
 

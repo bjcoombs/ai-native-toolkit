@@ -40,6 +40,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, TypedDict
 
 import lib.fleet.fleet_svg as svg
+from lib.svg_scope import SCOPES
 from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_svg import THEMED_HATCH
 
@@ -240,4 +241,4 @@ def render_tooling_map(view: ToolingView) -> str:
             "reference (right), with each shared item's dependent count; a dashed line is a pin "
             "that differs from the fleet's most common ref; repositories without evidence are "
             "listed on a hatched strip.")
-    return svg.document(width, float(int(cursor + PAD)), TITLE, desc, body, defs=THEMED_HATCH)
+    return svg.document(width, float(int(cursor + PAD)), TITLE, desc, body, scope=SCOPES["shared-tooling"], defs=THEMED_HATCH)

@@ -28,6 +28,7 @@ from collections.abc import Mapping
 from typing import Any, TypedDict
 
 import lib.fleet.fleet_svg as svg
+from lib.svg_scope import SCOPES
 from lib.assess_diagrams import wrap
 from lib.scoring.levels import MaturityModel
 from lib.vocabulary import IN_PLACE
@@ -204,5 +205,5 @@ def render(model: MaturityModel, data: Mapping[str, Any]) -> str:
         y += LINE_H + 1
         body.append(svg.text(PAD, y, line, size=12, cls="fg"))
     desc = f"{in_place(view)} {CAPTION}"
-    return svg.document(width, y + PAD, TITLE, desc, body, style=svg.theme_style(GATE_ROLES),
+    return svg.document(width, y + PAD, TITLE, desc, body, scope=SCOPES["step-funnel"], style=svg.theme_style(GATE_ROLES),
                         defs=svg.THEMED_HATCH)
