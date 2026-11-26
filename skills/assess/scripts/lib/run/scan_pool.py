@@ -21,8 +21,8 @@ before it still run, and the earliest failure is raised once the pool is idle: t
 ``--jobs 1`` run raises. Only the gate entries that opt out of degrading can fail this way.
 
 Threads suit the scans: most of their time is spent in subprocesses (git, lizard, rg) or
-reading files. A process pool would need every value and callable to pickle, and no
-timing so far shows a pure-Python scan worth it. ``default_jobs`` is the CPU count capped at
+reading files. A process pool would need every value and callable to pickle; the one place
+the timings show it worth that is the unit pass inside ``unit_readings`` (below, #1382). ``default_jobs`` is the CPU count capped at
 ``JOBS_CAP``; ``add_jobs_argument`` gives ``assess_core.py`` and ``assess_signals.py`` the same
 ``--jobs`` flag, and ``share_of_cpus`` is the per-repository default ``/fleet`` passes its children
 (``fleet.py --scan-jobs``), so N repositories at a time do not each start a full pool. Tests: ``tests/test_scan_pool.py``, ``tests/test_scan_registry.py``.
@@ -34,15 +34,18 @@ in order returns what the serial loop returns. ``run_scans`` raises the width to
 the run with ``widened``; a width of 1 (``--jobs 1``, or a caller outside a run) is a plain lazy
 ``map`` in the calling thread, the serial path as before, and a loop that stops early makes no
 further calls. A nested ``run_scans`` at ``jobs`` 1 (the unit pass) leaves the width as it is.
-An item's exception is raised when its result is reached, as in the serial loop.
+An item's exception is raised when its result is reached, as in the serial loop. Threads by
+default; ``processes=True`` spawns worker processes for pure-Python work that threads would only
+serialise on the interpreter lock (the unit pass, ``lib/run/unit_pass.py``).
 """
 from __future__ import annotations
 
 import argparse
 import heapq
+import multiprocessing
 import os
 from collections.abc import Callable, Iterable, Iterator, Sequence
-from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from concurrent.futures import FIRST_COMPLETED, Executor, Future, ProcessPoolExecutor, ThreadPoolExecutor, wait
 from contextlib import contextmanager
 from typing import Any, TypeVar
 
@@ -71,15 +74,24 @@ def fan_out_width() -> int:
     return _WIDTH[0]
 
 
-def fan_out(fn: Callable[[T], R], items: Iterable[T]) -> Iterator[R]:
-    """``fn`` over ``items``, results in input order, at most ``fan_out_width()`` at a time."""
+def fan_out(fn: Callable[[T], R], items: Iterable[T], processes: bool = False) -> Iterator[R]:
+    """``fn`` over ``items``, results in input order, at most ``fan_out_width()`` at a time.
+
+    ``processes`` runs them in spawned worker processes rather than threads, for pure-Python work
+    the interpreter lock would serialise: ``fn``, each item and each result must pickle.
+    """
     width = _WIDTH[0]
     if width <= 1:
         yield from map(fn, items)
         return
-    pool = ThreadPoolExecutor(max_workers=width, thread_name_prefix="fanout")
+    work = list(items)
+    if not work:
+        return
+    pool: Executor = (ProcessPoolExecutor(max_workers=min(width, len(work)),
+                                          mp_context=multiprocessing.get_context("spawn"))
+                      if processes else ThreadPoolExecutor(max_workers=width, thread_name_prefix="fanout"))
     try:
-        futures = [pool.submit(fn, item) for item in items]
+        futures = [pool.submit(fn, item) for item in work]
         for future in futures:
             yield future.result()
     finally:

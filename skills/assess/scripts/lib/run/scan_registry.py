@@ -128,6 +128,7 @@ from lib.unit_levels import READS as UNIT_LEVEL_READS
 from lib.unit_readings import OWN_READS as UNIT_OWN_READS
 from lib.unit_readings import UNIT_EXTERNAL_READS, UnitTable, unit_table
 from lib.unit_readings import bind as bind_unit_pass
+from lib.run.unit_pass import run_unit_pass
 
 # Names the core passes to ``run_scans``: the arguments of
 # ``build_run_context``. A spec may read these, or the key of any spec declared
@@ -794,4 +795,4 @@ def _unit_table() -> UnitTable:
     return unit_table(core_manifest(), SCANS, (*layer_scans, *static_scans))
 
 
-bind_unit_pass(_unit_table, run_scans)
+bind_unit_pass(_unit_table, run_scans, run_unit_pass)

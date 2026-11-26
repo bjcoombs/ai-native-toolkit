@@ -222,3 +222,14 @@ def test_run_scans_widens_fan_out_to_jobs_for_the_run():
         run_scans({}, {}, None, [spec], jobs=jobs)
     assert seen == [1, 3]
     assert pool.fan_out_width() == 1
+
+
+def test_process_fan_out_yields_in_input_order():
+    """processes=True spawns workers for pure-Python work; results still come in input order."""
+    import math
+
+    items = [12, 3, 9, 0, 7]
+    with pool.widened(3):
+        assert list(pool.fan_out(math.factorial, items, processes=True)) == [math.factorial(i) for i in items]
+        assert list(pool.fan_out(math.factorial, [], processes=True)) == []
+    assert list(pool.fan_out(math.factorial, items, processes=True)) == [math.factorial(i) for i in items]
