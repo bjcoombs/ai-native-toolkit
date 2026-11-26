@@ -601,6 +601,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.conditions.exclusion_kind` | token |
 | `level.next_step.blockers.disposition` | token |
 | `level.next_step.blockers.exclusion_kind` | token |
+| `level.held_gates` | token |
 | `level.excluded.id` | token |
 | `level.excluded.kind` | token |
 | `level.excluded.source` | token |

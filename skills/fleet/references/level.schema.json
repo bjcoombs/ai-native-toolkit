@@ -345,6 +345,20 @@
             }
           ]
         },
+        "ceiling_step": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "the highest Step whose gates all hold once next_step's blocking gates are met, every Step between held too; null when next_step is null (#1374, lib/scoring/level_tally.py)"
+        },
+        "held_gates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "the ids of the gates above the current Step that already hold, once each, in Step order (#1374)"
+        },
         "excluded": {
           "type": "array",
           "items": {
@@ -463,8 +477,10 @@
         }
       },
       "required": [
+        "ceiling_step",
         "conditions",
         "counted",
+        "held_gates",
         "level_result_version",
         "levels_version",
         "listed",

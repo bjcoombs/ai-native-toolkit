@@ -358,6 +358,63 @@ def test_gates_with_no_counted_condition_met_reach_the_top_step():
     assert result["tally"]["met"] == 0 and (result["step"], result["next_step"]) == (3, None)
 
 
+def _laddered() -> MaturityModel:
+    """``_stepped`` with a Step 4 that adds a ``fresh`` gate at level 2."""
+    model = _stepped()
+    steps = model["steps"]
+    top = {"step": 4, "name": "Autonomous loops",
+           "gates": [*steps[2]["gates"], {"id": "fresh_docs", "row": "fresh", "level": 2}]}
+    return {**model, "steps": [*steps, top]}
+
+
+def test_ceiling_step_skips_held_gates():
+    """#1374: Step 1, blocked on the instruction file, already holds the Step 3 gate."""
+    signals = {**_fresh(40), "layer_grades": {"instruction_file_present": False},
+               "ci_checks": {"test_or_lint_configured": True}}
+    result = lt.level_result(_laddered(), signals)
+    assert result["step"] == 1 and result["next_step"] is not None and result["next_step"]["step"] == 2
+    assert result["ceiling_step"] == 3
+    assert result["held_gates"] == ["ci_runs_tests"]
+    kept = counts_only({"level": result})["level"]  # gate ids are model tokens: counts-only keeps both
+    assert (kept["ceiling_step"], kept["held_gates"]) == (3, ["ci_runs_tests"])
+
+
+def test_ceiling_step_is_the_next_step_when_nothing_above_is_held():
+    signals = {**_fresh(90), "layer_grades": {"instruction_file_present": False}}
+    result = lt.level_result(_laddered(), signals)
+    assert (result["step"], result["ceiling_step"], result["held_gates"]) == (1, 2, [])
+
+
+def test_ceiling_step_reaches_the_top_when_every_upper_gate_holds():
+    signals = {**_fresh(10), "layer_grades": {"instruction_file_present": False},
+               "ci_checks": {"test_or_lint_configured": True}}
+    result = lt.level_result(_laddered(), signals)
+    assert (result["step"], result["ceiling_step"]) == (1, 4)
+    assert result["held_gates"] == ["ci_runs_tests", "fresh_docs"]
+
+
+def test_a_held_gate_above_an_unheld_one_does_not_raise_the_ceiling():
+    """The ceiling climbs Step by Step: a gate held at Step 4 is listed, but Step 3 still waits."""
+    signals = {**_fresh(10), "layer_grades": {"instruction_file_present": False}}
+    result = lt.level_result(_laddered(), signals)
+    assert (result["step"], result["ceiling_step"], result["held_gates"]) == (1, 2, ["fresh_docs"])
+
+
+def test_a_held_gate_of_the_current_step_is_not_listed():
+    signals = {**_fresh(90), "layer_grades": {"instruction_file_present": True}}
+    result = lt.level_result(_laddered(), signals)
+    assert (result["step"], result["ceiling_step"], result["held_gates"]) == (2, 3, [])
+
+
+def test_ceiling_step_is_null_at_the_top_step_and_without_steps():
+    signals = {**_fresh(10), "layer_grades": {"instruction_file_present": True},
+               "ci_checks": {"test_or_lint_configured": True}}
+    top = lt.level_result(_laddered(), signals)
+    assert (top["step"], top["next_step"], top["ceiling_step"], top["held_gates"]) == (4, None, None, [])
+    flat = lt.level_result(_model(_row("instr", [_eq(INSTR)])), signals)
+    assert (flat["step"], flat["ceiling_step"], flat["held_gates"]) == (None, None, [])
+
+
 def _plus_met_row(model: MaturityModel, n: int) -> MaturityModel:
     """``model`` with ``n`` new rows of one counted condition each that ``_fresh()`` meets."""
     rows: list[Row] = [{"id": f"new-{i}", "title": "new", "scope": "team", "aggregation": {"rule": "min", "share": 1},

@@ -132,6 +132,11 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   `met`, whatever their grade), every lower Step held too. Gates only (#1083): the tally never
   moves a Step. A blocker is `{kind: "gate", gate, condition, state, reason?}` for the first
   condition of a gate that is not met.
+- `ceiling_step` and `held_gates` (#1374): `ceiling_step` is the highest Step whose gates all hold
+  once `next_step`'s blocking gates are met, every Step between held too (at least
+  `next_step.step`); `held_gates` lists the ids of the gates above the current Step that already
+  hold (not gates of a Step already held), once each, in Step order. Both read gates only, like
+  `step`. `ceiling_step` is null and `held_gates` empty when `next_step` is null.
 
 Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a set whose count
 is 0, such as `stats_summary.loc_by_class.source.p95` with its `files_scored` 0: `no_source_files`, #906 and #820, and
@@ -363,6 +368,29 @@ def _blockers(step: StepDef, by_id: Mapping[str, ConditionResult]) -> list[Block
     return [b for g in step["gates"] if (b := _gate_blocker(g["id"], g["row"], g["level"], by_id)) is not None]
 
 
+def _ceiling(steps: Sequence[StepDef], step: int | None, next_step: NextStep | None,
+             by_id: Mapping[str, ConditionResult]) -> tuple[int | None, list[str]]:
+    """``ceiling_step`` and ``held_gates`` (#1374): the highest Step whose gates all hold once the
+    next Step's blocking gates are met, every Step between held too, and the ids of the gates that
+    already hold above the current Step, once each in Step order. ``(None, [])`` at the top Step."""
+    if next_step is None:
+        return None, []
+    holds = {g["id"]: _gate_blocker(g["id"], g["row"], g["level"], by_id) is None
+             for s in steps for g in s["gates"]}
+    below = {g["id"] for s in steps if step is not None and s["step"] <= step for g in s["gates"]}
+    held = [gid for gid in dict.fromkeys(g["id"] for s in steps for g in s["gates"])
+            if gid not in below and holds[gid]]
+    fixed = {b["gate"] for b in next_step["blockers"] if "gate" in b}
+    ceiling = next_step["step"]
+    for s in steps:
+        if s["step"] <= ceiling:
+            continue
+        if not all(holds[g["id"]] or g["id"] in fixed for g in s["gates"]):
+            break
+        ceiling = s["step"]
+    return ceiling, held
+
+
 def gate_conditions(model: MaturityModel) -> frozenset[str]:
     """Every condition a Step gate reads: its row's levels 1 up to the gate's level."""
     return frozenset(condition_id(g["row"], n) for step in model.get("steps", []) for g in step["gates"]
@@ -408,6 +436,7 @@ def level_result(model: MaturityModel, data: Mapping[str, Any] | None,
             next_step = {"step": definition["step"], "blockers": blockers}
             break
         step = definition["step"]
+    ceiling_step, held_gates = _ceiling(model.get("steps", []), step, next_step, by_id)
     result: LevelResult = {
         "level_result_version": LEVEL_RESULT_VERSION,
         "levels_version": model["version"],
@@ -420,6 +449,8 @@ def level_result(model: MaturityModel, data: Mapping[str, Any] | None,
         "conditions": conditions,
         "step": step,
         "next_step": next_step,
+        "ceiling_step": ceiling_step,
+        "held_gates": held_gates,
     }
     if excluded:
         result["excluded"] = [excluded[c["id"]] for c in conditions if c["id"] in excluded]
