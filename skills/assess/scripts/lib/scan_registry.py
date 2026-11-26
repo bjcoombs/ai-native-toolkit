@@ -21,22 +21,6 @@ as many positional arguments as it declares reads, or a scan that opts out of
 degrading without a ``gate_reason`` raises ``ScanRegistryError`` before any run
 starts.
 
-A spec publishes in one of three ways. By default its value is
-``ctx[key]``. A ``private`` spec's value is an intermediate (the complexity
-stats, the stats diff, a raw scan result) that later specs read but
-``run-context.json`` never carries; it is kept in the inputs mapping. A
-``spread`` spec returns a mapping whose keys, all named in ``spread``, are
-copied into the run context in the order the callable returns them - one entry
-for a call that yields several blocks, such as the run header or the keyhole
-integration. Its value is also kept under ``key`` for later specs to read.
-
-``stage`` orders entries whose key must sit somewhere other than their table
-position in ``run-context.json``: ``build_run_context`` makes one
-``run_scans`` call, which runs the stages in ``STAGES`` order and each stage in
-table order. Every block is a table entry (#558); only ``anomalies`` uses a
-stage for placement, staying the last scan key however many entries follow
-it in the table.
-
 The declared table of run-context scans and the loop that runs it. A `ScanSpec` names
 the `key`, the callable, the names it `reads` (passed positionally: a core-provided
 input from `PROVIDED_INPUTS` or the key of an earlier spec), its `stage`, and whether it
@@ -81,11 +65,14 @@ the manifest marks `unit_scope` again for each monorepo unit; the module binds t
 imports the registry. A `--profile` or `--levels` run passes `run_scans` a `plan`
 (`lib/scan_plan.py`, #1268): only its scans run, and each skipped entry leaves the plan's
 "not run under <model>" marker where its value would go; the `scan_plan_stamp` entry
-publishes the plan as `scan_plan`, and nothing for a full run.
+publishes the plan as `scan_plan`, and nothing for a full run. `--jobs` above 1 runs each
+stage's scans through a bounded thread pool (`lib/scan_pool.py`, #1381), each after the
+scans it reads, and puts the keys back in table order: the context matches `--jobs 1`.
 """
 from __future__ import annotations
 
 import inspect
+import time
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from dataclasses import dataclass
 from functools import partial
@@ -135,7 +122,8 @@ from lib.hosting.review_reality import review_reality_from_sample
 from lib.ci.shared_tooling import scan_shared_tooling
 from lib.manifest.check_manifest import core_manifest
 from lib.scan_plan import ScanPlan
-from lib.scan_timings import timed
+from lib import scan_pool
+from lib.scan_timings import record, timed, timings_block
 from lib.unit_levels import READS as UNIT_LEVEL_READS
 from lib.unit_readings import OWN_READS as UNIT_OWN_READS
 from lib.unit_readings import UNIT_EXTERNAL_READS, UnitTable, unit_table
@@ -305,6 +293,7 @@ def run_scans(
     stage: str | None = None,
     specs: Iterable[ScanSpec] | None = None,
     plan: ScanPlan | None = None,
+    jobs: int = 1,
 ) -> None:
     """Run every spec of ``stage`` in table order, writing its result.
 
@@ -326,30 +315,66 @@ def run_scans(
     Each stage's and each called entry's wall time goes into ``inputs["timings"]``
     (``lib/scan_timings.py``, #1380), never into ``ctx``: a diagnostic that differs
     on every run.
+
+    ``jobs`` above 1 runs a stage's scans that many at a time (``lib/scan_pool.py``, #1381);
+    ``ctx`` comes out the same as with ``jobs`` 1, which runs them one by one.
     """
     table = tuple(SCANS if specs is None else specs)
     # ``plan`` is optional for callers that predate it (#1268): absent means every scan runs
     plan = inputs.setdefault("plan", None) if plan is None else plan
     if stage is None:
         for each in STAGES:
-            run_scans(ctx, inputs, each, table, plan)
+            run_scans(ctx, inputs, each, table, plan, jobs)
         return
     spread = frozenset(name for each in table for name in each.spread)
+    staged = [spec for spec in table if spec.stage == stage]
+    added: dict[int, list[str]] = {}
+
+    def finish(index: int, outcome: _Outcome) -> None:
+        before = len(ctx)
+        _publish(staged[index], ctx, inputs, outcome)
+        added[index] = list(ctx)[before:]
+
     with timed(inputs, "stages", stage):
-        for spec in table:
-            if spec.stage == stage:
-                _run_one(spec, ctx, inputs, plan, spread)
+        deps = scan_pool.dependencies([s.reads for s in staged], [(s.key, *s.spread) for s in staged])
+        scan_pool.run_ordered(len(staged), deps, lambda i: _prepare(staged[i], ctx, inputs, plan, spread),
+                              finish, jobs)
+        if jobs > 1:  # completion order back to table order: the context and the timings
+            times = timings_block(inputs)["scans"]
+            scan_pool.restore_order(ctx, [added[i] for i in sorted(added)])
+            scan_pool.restore_order(times, [[s.key] for s in staged if s.key in times])
 
 
-def _run_one(spec: ScanSpec, ctx: dict[str, Any], inputs: MutableMapping[str, Any],
-             plan: ScanPlan | None, spread: frozenset[str]) -> None:
-    """Run (or skip, under ``plan``) one entry and write its value; a run entry is timed."""
+# Value, degraded, wall time (None: skipped by the plan), and a gate scan's exception.
+_Outcome = tuple[Any, bool, float | None, Exception | None]
+
+
+def _prepare(spec: ScanSpec, ctx: dict[str, Any], inputs: MutableMapping[str, Any],
+             plan: ScanPlan | None, spread: frozenset[str]) -> Callable[[], _Outcome]:
+    """Resolve ``spec``'s reads now; the call returned runs (or, under ``plan``, skips) it."""
     if plan is not None and not plan.runs(spec.key):
-        value, degraded = plan.marker(), True
-    else:
-        args = tuple(_resolve(spec, name, inputs, ctx, spread) for name in spec.reads)
-        with timed(inputs, "scans", spec.key):
+        marker = plan.marker()
+        return lambda: (marker, True, None, None)
+    args = tuple(_resolve(spec, name, inputs, ctx, spread) for name in spec.reads)
+
+    def call() -> _Outcome:
+        start = time.perf_counter()
+        try:
             value, degraded = _call(spec, args)
+        except Exception as e:  # noqa: BLE001 - a gate scan's raise, re-raised by _publish
+            return None, False, time.perf_counter() - start, e
+        return value, degraded, time.perf_counter() - start, None
+    return call
+
+
+def _publish(spec: ScanSpec, ctx: dict[str, Any], inputs: MutableMapping[str, Any],
+             outcome: _Outcome) -> None:
+    """Record a called entry's time, then write its value or re-raise its exception."""
+    value, degraded, seconds, error = outcome
+    if seconds is not None:
+        record(inputs, "scans", spec.key, seconds)
+    if error is not None:
+        raise error
     if spec.spread:
         _spread(spec, ctx, value, degraded)
         inputs[spec.key] = value

@@ -106,7 +106,7 @@ Exit codes:
        --discovered listing (the message names the line)
 
 Run:
-    uv run fleet.py ROOT --out DIR [--levels FILE | --profile NAME] [--settings PATH] [--units FILE] [--jobs N] [--window 6mo]
+    uv run fleet.py ROOT --out DIR [--levels FILE | --profile NAME] [--settings PATH] [--units FILE] [--jobs N] [--scan-jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
         [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
         [--no-history] [--no-diagrams] [--fleet-config FILE] [--name-agent-clusters] [--discovered FILE]
@@ -715,7 +715,7 @@ def main(argv: list[str] | None = None) -> int:
         scans=args.scans if args.scans is not None or scans is None else ",".join(scans),
         log_dir=out_dir / LOGS_DIR, active_since=window_start(window, today),
         ghsync_root=include_root(args), units=args.monorepo_units,
-        managed_settings=args.managed_settings,
+        managed_settings=args.managed_settings, scan_jobs=args.scan_jobs,
     )
     unwritable = _writable_out(args, out_dir)
     if unwritable is not None:

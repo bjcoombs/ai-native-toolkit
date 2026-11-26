@@ -161,7 +161,8 @@ def test_the_core_runs_the_whole_table_in_one_call():
         and node.func.id == "run_scans"
     ]
     assert len(calls) == 1
-    assert len(calls[0].args) == 2 and not calls[0].keywords
+    # only the pool size may be passed besides the context and inputs (#1381)
+    assert len(calls[0].args) == 2 and [k.arg for k in calls[0].keywords] == ["jobs"]
 
 
 def test_a_stageless_run_runs_every_stage_in_stage_order():
@@ -423,3 +424,111 @@ def test_timings_block_is_written_and_left_out_of_counts_only(tmp_path, capsys):
     content_free = json.loads((repo / ".assess" / COUNTS_ONLY_FILE).read_text(encoding="utf-8"))
     assert TIMINGS_KEY not in content_free
     assert "total_seconds" not in json.dumps(content_free)
+
+
+def _fixture_repos(root: Path) -> list[Path]:
+    """The golden fixture repositories, each its own committed git repository with an empty
+    stats sidecar, plus the minimal repository the core tests use."""
+    import shutil
+    import subprocess
+
+    from assess_core_helpers import _minimal_repo, _seed_assess
+
+    fixtures = Path(__file__).resolve().parent / "fixtures"
+    repos = [_minimal_repo(root)]
+    for name in ("golden-doc-repo", "golden-svg-repo", "structure_golden/repo", "ts_workspace"):
+        repo = root / name.replace("/", "-")
+        shutil.copytree(fixtures / name, repo)
+        for args in (("init", "-q"), ("add", "-A"),
+                     ("-c", "user.email=a@example.com", "-c", "user.name=A", "commit", "-qm", "init")):
+            subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True,
+                           encoding="utf-8", errors="replace")
+        _seed_assess(repo)
+        repos.append(repo)
+    return repos
+
+
+def test_default_jobs_matches_jobs_1(tmp_path, monkeypatch):
+    """#1381: run-context bytes are the same under --jobs 1, --jobs 4 and the default on every
+    fixture repository, timings removed; the run id is pinned, as it is fresh on every run."""
+    import json
+    import uuid
+
+    import lib.run_setup as rs
+    from assess_core import build_run_context
+    from lib.scan_pool import default_jobs
+
+    class _Clock:
+        @staticmethod
+        def now():
+            import datetime
+            return datetime.datetime(2026, 11, 25, 12, 0, 0)
+
+    monkeypatch.setattr(rs, "datetime", _Clock)
+    monkeypatch.setattr(uuid, "uuid4", lambda: uuid.UUID(int=0))
+    for repo in _fixture_repos(tmp_path):
+        runs = {}
+        for jobs in (1, 4, default_jobs()):
+            ctx = build_run_context(repo_root=repo, run_date="2026-11-25", non_interactive=True, jobs=jobs)
+            assert set(ctx.pop(TIMINGS_KEY)["scans"]) >= {"run_header", "level"}
+            runs[jobs] = json.dumps(ctx, indent=2, default=str)
+        assert runs[4] == runs[1], repo.name
+        assert runs[default_jobs()] == runs[1], repo.name
+
+
+def test_signals_document_is_the_same_under_jobs_4(tmp_path):
+    """#1381: the headless runner's blocks do not depend on --jobs either."""
+    import json
+
+    from lib.signals import build_document
+
+    repo = _fixture_repos(tmp_path)[1]
+    one, four = (build_document(repo, jobs=jobs)["scans"] for jobs in (1, 4))
+    assert json.dumps(four, indent=2, default=str) == json.dumps(one, indent=2, default=str)
+
+
+def test_a_pooled_stage_writes_keys_and_timings_in_table_order():
+    """#1381: a slow first entry finishes last, yet the context and the timings list it first;
+    its reader waits for it, and a spread entry's keys keep their returned order."""
+    import time
+
+    def slow(_root):
+        time.sleep(0.2)
+        return "slow"
+
+    specs = (_spec("slow", slow), _spec("fast", lambda root: "fast"),
+             ScanSpec("pair", lambda root: {"p2": 2, "p1": 1}, ("repo_root",), reg.STAGE_READ_SIDE,
+                      spread=("p1", "p2")),
+             _spec("reader", lambda s: s + "!", reads=("slow",)))
+    ctx: dict = {"before": 0}
+    inputs: dict = {"repo_root": "r"}
+    reg.run_scans(ctx, inputs, reg.STAGE_READ_SIDE, specs, jobs=4)
+    assert list(ctx.items()) == [("before", 0), ("slow", "slow"), ("fast", "fast"),
+                                 ("p2", 2), ("p1", 1), ("reader", "slow!")]
+    assert list(inputs[TIMINGS_KEY]["scans"]) == ["slow", "fast", "pair", "reader"]
+
+
+def test_a_pooled_gate_failure_raises_after_the_earlier_entries_are_written():
+    """#1381: a non-degrading entry's raise stops the run as under --jobs 1, and is timed."""
+    def gate(_root):
+        raise ValueError("bad scope")
+
+    specs = (_spec("first", lambda root: 1),
+             _spec("gate", gate, degrade=False, gate_reason="test"),
+             _spec("after", lambda root: 3))
+    ctx: dict = {}
+    inputs: dict = {"repo_root": "r"}
+    with pytest.raises(ValueError, match="bad scope"):
+        reg.run_scans(ctx, inputs, reg.STAGE_READ_SIDE, specs, jobs=4)
+    assert ctx["first"] == 1 and "gate" in inputs[TIMINGS_KEY]["scans"]
+
+
+def test_assess_core_takes_jobs(tmp_path, capsys):
+    from assess_core import main
+    from assess_core_helpers import _minimal_repo
+
+    repo = _minimal_repo(tmp_path)
+    assert main([str(repo), "--non-interactive", "--jobs", "1"]) == 0
+    with pytest.raises(SystemExit):
+        main([str(repo), "--jobs", "0"])
+    assert "--jobs" in capsys.readouterr().err
