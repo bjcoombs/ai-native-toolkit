@@ -271,3 +271,10 @@ def test_the_cli_takes_a_percent_from_0_to_100(tmp_path: Any) -> None:
     assert parse_args([str(tmp_path), "--out", str(tmp_path / "o"), "--radar-min-measured", "0"]).radar_min_measured == 0
     with pytest.raises(SystemExit):
         parse_args([str(tmp_path), "--out", str(tmp_path / "o"), "--radar-min-measured", "101"])
+
+
+def test_the_radar_and_the_page_share_one_axis_rule_and_default() -> None:
+    import lib.fleet.fleet_page_data as fpd
+    assert fr.RADAR_MIN_SHARE is fpd.RADAR_MIN_SHARE
+    assert fr.keeps_axis is fpd.keeps_axis and fr.measured_counts is fpd.measured_counts
+    assert fpd.keeps_axis(1, 5, 20) and not fpd.keeps_axis(1, 5, 21) and not fpd.keeps_axis(0, 0, 0)

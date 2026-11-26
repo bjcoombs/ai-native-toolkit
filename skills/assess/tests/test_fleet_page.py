@@ -500,12 +500,16 @@ def test_a_practice_measured_in_under_a_fifth_of_the_fleet_is_not_a_spoke() -> N
     assert RADAR_MIN_SHARE == 20
     assert radar_axes(data, rows) == [0, 1]  # docs 2 of 4 measured, ci 3 of 4
     assert radar_axes(data, rows, 60) == [1] and radar_axes(data, rows, 80) == []
+    # a share exactly at the floor is kept: docs 2 of 4 at 50, ci 3 of 4 at 75
+    assert radar_axes(data, rows, 50) == [0, 1] and radar_axes(data, rows, 51) == [1]
+    assert radar_axes(data, rows, 75) == [1] and radar_axes(data, rows, 76) == []
     assert radar_axes({"repos": []}, rows) == []
     for repo in data["repos"]:  # leave docs measured in 1 of 4 repositories, then 0 of 4
         for cell in repo["rows"]:
             if cell["row"] == "docs" and repo["key"] != "grp/sub/proj1":
                 cell["status"], cell["level"] = "unknown", None
     assert radar_axes(data, rows) == [0, 1]  # 25% still reaches the 20% floor
+    assert radar_axes(data, rows, 25) == [0, 1] and radar_axes(data, rows, 26) == [1]  # 1 of 4 is 25%
     for cell in data["repos"][2]["rows"]:
         cell["status"] = "unknown"
     assert radar_axes(data, rows) == [1]

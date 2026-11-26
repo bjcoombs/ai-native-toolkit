@@ -12,7 +12,8 @@ share of its measured repositories at the practice's top level.
 compared in integers (``known * 100 >= min_share * repos``); a failed repository counts in the
 denominator, and a run with no repository keeps none. This is the rule of
 ``lib.fleet.fleet_page_data.radar_axes`` (#1368), so the report's radar and the page's spokes
-keep the same practices. The dropped practices are named in the caption.
+keep the same practices: the count, the rule and the default are imported from there
+(``measured_counts``, ``keeps_axis``, ``RADAR_MIN_SHARE``). The dropped practices are named in the caption.
 
 **Units nest.** ``views[].units[]`` is a tree, and each unit's counts cover every repository
 below it at any depth (``fleet_data.build_view``). Every unit with at least one repository
@@ -51,13 +52,13 @@ from typing import Any, TypedDict
 
 import lib.fleet.fleet_svg as svg
 from lib.assess_diagrams import wrap
+from lib.fleet.fleet_page_data import RADAR_MIN_SHARE as RADAR_MIN_SHARE, keeps_axis, measured_counts
 from lib.fleet.fleet_tag_heatmap import names_shown
 from lib.vocabulary import IN_PLACE
 
 FILE = "radar.svg"
 TITLE = "Practice shape by unit"
 QUESTION = "Where is each unit strong across the practices, and where is it not yet measured?"
-RADAR_MIN_SHARE = 20  # percent; the same rule and default as fleet_page_data.RADAR_MIN_SHARE (#1368)
 RINGS = (0.25, 0.5, 0.75, 1.0)
 
 PAD = 16.0
@@ -108,11 +109,7 @@ def _pct(share: float) -> str:
 
 def _axes(data: Mapping[str, Any], min_share: int) -> tuple[list[RadarAxis], list[RadarAxis]]:
     repos = data.get("repos") or []
-    known: dict[str, int] = {}
-    for repo in repos:
-        for cell in repo.get("rows") or []:
-            if cell.get("status") == "level":
-                known[cell["row"]] = known.get(cell["row"], 0) + 1
+    known = measured_counts(data)
     kept: list[RadarAxis] = []
     dropped: list[RadarAxis] = []
     for row in data.get("model") or []:
@@ -120,7 +117,7 @@ def _axes(data: Mapping[str, Any], min_share: int) -> tuple[list[RadarAxis], lis
             continue
         count = known.get(row["id"], 0)
         axis: RadarAxis = {"row": row["id"], "title": row["title"], "share": count / len(repos) if repos else 0.0}
-        (kept if repos and count * 100 >= min_share * len(repos) else dropped).append(axis)
+        (kept if keeps_axis(count, len(repos), min_share) else dropped).append(axis)
     return kept, dropped
 
 
