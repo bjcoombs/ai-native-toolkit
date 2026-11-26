@@ -182,7 +182,7 @@ jobs:
 
       - name: Check the citations (no model)
         id: plan
-        if: always() && steps.scope.outcome == 'success' && steps.scope.outputs.bootstrap != 'true'
+        if: ${{ !cancelled() && steps.scope.outcome == 'success' && steps.scope.outputs.bootstrap != 'true' }}
         env:
           RAW: ${{ steps.model.outputs.structured_output }}
           RUN: ${{ steps.scope.outputs.run == 'true' && steps.gate.outputs.run || 'false' }}
@@ -201,7 +201,7 @@ jobs:
           echo "written=true" >> "$GITHUB_OUTPUT"
 
       - name: Hand the plan to the post job
-        if: always() && steps.plan.outputs.written == 'true'
+        if: ${{ !cancelled() && steps.plan.outputs.written == 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: doc-sync-plan-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
@@ -211,7 +211,7 @@ jobs:
       # claude-code-action can exit 0 while its final result carries
       # is_error: true, so this reads the execution log as claude-review.yml does.
       - name: Report final status
-        if: always() && steps.gate.outputs.run == 'true'
+        if: ${{ !cancelled() && steps.gate.outputs.run == 'true' }}
         env:
           OUTCOME: ${{ steps.model.outcome }}
           CONCLUSION: ${{ steps.model.outputs.conclusion }}
@@ -233,7 +233,7 @@ jobs:
   # No model runs here, and nothing from the pull request is checked out.
   post:
     needs: check
-    if: always() && needs.check.outputs.plan == 'true'
+    if: ${{ !cancelled() && needs.check.outputs.plan == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

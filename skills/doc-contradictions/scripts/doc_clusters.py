@@ -14,7 +14,8 @@ per-PR `doc-sync` workflow runs the comparers over.
 
 Writes one JSON object (to `--out`, or stdout):
 
-- `documents`, `excluded`, `excludes`: what Step 1 scanned and left out.
+- `documents`, `excludes`: what Step 1 scanned and the globs it left out;
+  `excluded`: how many documents each glob removed, for the report header.
 - `clusters`: `[{id, docs, subject_code}]`, repo-relative paths.
 - `hubs`: the most-linked docs; `cross_cluster`: whether the hub pass runs.
 - `changed_from`, `changed`, `clusters_total`: the `--changed-from` scope,
@@ -238,6 +239,7 @@ def build(repo: Path, excludes: Sequence[str], changed: Optional[Set[str]] = Non
     result: Dict[str, object] = {
         "documents": len(docs),
         "excludes": list(excludes),
+        "excluded": {g: sum(1 for f in files if is_doc(f) and p.match(f)) for g, p in zip(excludes, patterns)},
         "clusters_total": len(parts),
         "hubs": hubs,
         "hub_subject_code": sorted(set().union(*(code[h] for h in hubs))) if hubs else [],

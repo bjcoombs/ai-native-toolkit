@@ -105,7 +105,7 @@ def sort_findings(repo: Path, scope: Dict[str, Any], raw: Any) -> Plan:
         a, why_a = check_side(repo, item.get("a"))
         b, why_b = check_side(repo, item.get("b"))
         if a is None or b is None:
-            dropped.append("%s: %s" % (subject, why_a or why_b))
+            dropped.append(_text("%s: %s" % (subject, why_a or why_b), MAX_TEXT))
             continue
         if excluded(a["path"], patterns) or excluded(b["path"], patterns):
             excluded_count += 1

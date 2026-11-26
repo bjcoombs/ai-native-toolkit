@@ -167,7 +167,9 @@ def test_assess_record_and_history_are_excluded(fixture_repo: Path) -> None:
         (fixture_repo / rel).write_text("See `src/cache.py`.\n", encoding="utf-8")
     git(fixture_repo, "add", "-A", "-f")
     git(fixture_repo, "commit", "-q", "-m", "record")
-    docs = {d for c in scope(fixture_repo, "--exclude", ".assess/**")["clusters"] for d in c["docs"]}
+    scoped = scope(fixture_repo, "--exclude", ".assess/**")
+    assert scoped["excluded"]["docs/design/**"] == 1 and scoped["excluded"][".assess/**"] == 1
+    docs = {d for c in scoped["clusters"] for d in c["docs"]}
     assert ".assess/report.md" not in docs and "docs/design/old.md" not in docs
     docs = {d for c in scope(fixture_repo, "--no-default-excludes")["clusters"] for d in c["docs"]}
     assert {".assess/report.md", "docs/design/old.md"} <= docs
@@ -247,8 +249,11 @@ def test_model_text_cannot_mention_users(fixture_repo: Path) -> None:
     commit(fixture_repo, "src/cache.py",
            (fixture_repo / "src/cache.py").read_text(encoding="utf-8") + "# touched\n")
     noisy = dict(PLANTED, subject="ping @someone", explanation="see @octocat")
-    thread = plan(fixture_repo, [noisy])["threads"][0]
+    ghost = dict(PLANTED, a={"path": "@types/node/README.md", "line": 1, "quote": "x"})
+    result = plan(fixture_repo, [noisy, ghost])
+    thread = result["threads"][0]
     assert "@someone" not in thread["subject"] and "@octocat" not in thread["why"]
+    assert len(result["dropped"]) == 1 and "@types" not in result["dropped"][0]
 
 
 def test_finding_citing_an_excluded_path_is_dropped(fixture_repo: Path) -> None:

@@ -24,6 +24,7 @@ if str(SCRIPTS) not in sys.path:
 import doc_sync_post  # noqa: E402
 
 HEAD = "a" * 40
+BOT = {"login": "github-actions[bot]"}
 PATCH = "@@ -1,3 +1,4 @@\n line one\n-old\n+new\n+added\n line four\n@@ -20,2 +21,2 @@\n ctx\n-x\n+y\n"
 
 
@@ -81,12 +82,28 @@ def test_thread_falls_back_to_a_file_comment() -> None:
 
 def test_existing_thread_is_not_posted_twice_and_summary_is_edited() -> None:
     marker = "<!-- doc-sync:finding:" + "2" * 16 + " -->"
-    gh = FakeGh([{"filename": "src/cache.py", "patch": PATCH}], [{"body": "x\n" + marker}],
-                [{"id": 55, "body": doc_sync_post.SUMMARY_MARKER + "\nold"}])
+    gh = FakeGh([{"filename": "src/cache.py", "patch": PATCH}], [{"body": "x\n" + marker, "user": BOT}],
+                [{"id": 55, "body": doc_sync_post.SUMMARY_MARKER + "\nold", "user": BOT}])
     assert run(checked([finding("2" * 16)]), gh) == []
     (args, body), = gh.writes
     assert args[:3] == ["--method", "PATCH", "repos/acme/widgets/issues/comments/55"]
     assert "1 already open" in body["body"]
+
+
+def test_markers_in_comments_by_others_are_ignored() -> None:
+    marker = "<!-- doc-sync:finding:" + "4" * 16 + " -->"
+    someone = {"login": "someone"}
+    gh = FakeGh([{"filename": "src/cache.py", "patch": PATCH}], [{"body": marker, "user": someone}],
+                [{"id": 77, "body": doc_sync_post.SUMMARY_MARKER, "user": someone}])
+    assert len(run(checked([finding("4" * 16)]), gh)) == 1
+    assert [w[0][1] for w in gh.writes] == ["POST", "POST"]
+
+
+def test_quotes_sit_in_code_spans() -> None:
+    f = finding("5" * 16)
+    f["a"]["quote"] = "Maintainer: @alice `x`"
+    body = doc_sync_post.thread_body(f)
+    assert "`docs/caching.md:9`: `Maintainer: @alice 'x'`" in body
 
 
 def test_quiet_run_creates_no_comment_but_updates_a_stale_one() -> None:
@@ -94,7 +111,7 @@ def test_quiet_run_creates_no_comment_but_updates_a_stale_one() -> None:
     gh = FakeGh([], [], [])
     run(dict(quiet), gh)
     assert gh.writes == []
-    gh = FakeGh([], [], [{"id": 9, "body": doc_sync_post.SUMMARY_MARKER}])
+    gh = FakeGh([], [], [{"id": 9, "body": doc_sync_post.SUMMARY_MARKER, "user": BOT}])
     run(dict(quiet), gh)
     assert "Not run: no document changed." in gh.writes[0][1]["body"]
     gh = FakeGh([], [], [])

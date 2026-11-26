@@ -32,6 +32,8 @@ from doc_sync_types import Finding, Plan, Side
 SUMMARY_MARKER = "<!-- doc-sync:summary -->"
 FINDING_MARKER = "<!-- doc-sync:finding:%s -->"
 FINDING_RE = re.compile(r"<!-- doc-sync:finding:([0-9a-f]{16}) -->")
+# The login `github.token` posts as; only its comments count as earlier runs.
+BOT = "github-actions[bot]"
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 Runner = Callable[[Sequence[str], Optional[str]], str]
 
@@ -77,8 +79,9 @@ def diff_lines(patch: str) -> Set[int]:
 
 
 def cite(side: Side) -> str:
-    quote = str(side["quote"]).replace("`", "'")
-    return "`%s:%s`: \"%s\"" % (side["path"], side["line"], quote)
+    # Both in code spans: GitHub renders no mention, link or reference there.
+    quote = side["quote"].replace("`", "'")
+    return "`%s:%s`: `%s`" % (side["path"].replace("`", "'"), side["line"], quote)
 
 
 def thread_body(f: Finding) -> str:
@@ -147,6 +150,11 @@ def is_quiet(plan: Plan) -> bool:
     return plan.get("status") == "skipped" and bool(plan.get("quiet"))
 
 
+def _ours(item: Any) -> bool:
+    user = item.get("user") if isinstance(item, dict) else None
+    return isinstance(user, dict) and user.get("login") == BOT
+
+
 def post(plan: Plan, repo: str, pr: int, head_sha: str, run: Runner = gh) -> List[Dict[str, Any]]:
     """Apply the plan; returns the review comments it created."""
     pulls = "repos/%s/pulls/%d" % (repo, pr)
@@ -156,7 +164,8 @@ def post(plan: Plan, repo: str, pr: int, head_sha: str, run: Runner = gh) -> Lis
         files[str(item["filename"])] = diff_lines(str(item.get("patch") or ""))
     seen: Set[str] = set()
     for item in _pages(run(["--paginate", pulls + "/comments"], None)):
-        seen |= set(FINDING_RE.findall(str(item.get("body") or "")))
+        if _ours(item):
+            seen |= set(FINDING_RE.findall(str(item.get("body") or "")))
     posted: List[Dict[str, Any]] = []
     kept = 0
     for f in plan.get("threads", []):
@@ -171,7 +180,7 @@ def post(plan: Plan, repo: str, pr: int, head_sha: str, run: Runner = gh) -> Lis
         posted.append(request)
     existing = None
     for item in _pages(run(["--paginate", issue + "/comments"], None)):
-        if SUMMARY_MARKER in str(item.get("body") or ""):
+        if _ours(item) and SUMMARY_MARKER in str(item.get("body") or ""):
             existing = item["id"]
     if existing is None and is_quiet(plan):
         return posted
