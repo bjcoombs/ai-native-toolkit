@@ -567,8 +567,9 @@ _MEASURE_HINTS = {
                      "from an older toolkit, which measured it in a full run only.",
     "doc_staleness": "Measured from git history: unavailable (`not_git_root`) outside a git work "
                      "tree, and the stale share is null on a shallow clone or a history where "
-                     "every file has about one commit (rescan a full-history clone), or when no "
-                     "doc describes a part of the code of its own.",
+                     "every file has about one commit (rescan a full-history clone), when no "
+                     "doc describes a part of the code of its own, or below 20 measured docs "
+                     "(`too_few_measured_docs`).",
     "review_reality": "Unavailable (`unsupported_host`) when the remote's host is not GitHub or a "
                       "GitLab host glab reaches (Bitbucket, Azure DevOps, GitHub Enterprise): "
                       "neither `--platform` nor `/assess` reads merged changes there; sign glab "

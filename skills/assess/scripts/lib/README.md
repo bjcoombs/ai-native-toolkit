@@ -205,7 +205,7 @@ New code imports the new path.
   vault queries. `doc_graph` imports `ownership_parser` inside a function, because
   `ownership_parser` imports `doc_graph`. The folder holds two kinds of file: the doc-scan
   modules (`.py`) and every group's long module references (`.md`, one per module, #981).
-  Files: `__init__.py`, `doc_claims.py`, `doc_complexity_join.py`, `doc_directives.py`, `doc_graph.py`, `doc_graph_layout.py`, `doc_links.py`, `doc_ownership.py`, `doc_provenance.py`, `doc_staleness.py`, `ownership_parser.py`, `parallel_docs.py`, `vault_queries.py`.
+  Files: `__init__.py`, `doc_claims.py`, `doc_complexity_join.py`, `doc_directives.py`, `doc_graph.py`, `doc_graph_layout.py`, `doc_links.py`, `doc_ownership.py`, `doc_provenance.py`, `doc_staleness.py`, `doc_staleness_scale.py`, `ownership_parser.py`, `parallel_docs.py`, `vault_queries.py`.
 - **`fleet/`** ([README](fleet/README.md)): the `/fleet` runner, roll-ups, run history, published fleet schemas and
   diagrams. `lib/fleet.py` became `fleet/runner.py`, because the package now holds that
   name; until 5.0.0 the package `__init__.py` forwards each runner name (`lib.fleet.FleetRow`)
@@ -293,6 +293,7 @@ on one that is not linked.
 | `lib.ci.ci_includes` | [ci_includes.md](docs/ci_includes.md) | GitLab CI `include:` items, `extends:` parents and the merged configuration view |
 | `lib.ci.ci_model_jobs` | [ci_model_jobs.md](docs/ci_model_jobs.md) | CI jobs that call a model, and the block they produce |
 | `lib.docs.doc_graph` | [doc_graph.md](docs/doc_graph.md) | The doc link graph: orphans, reachability, entry points and link parents |
+| `lib.docs.doc_staleness` | [doc_staleness.md](docs/doc_staleness.md) | Doc ownership and churn, provenance, bulk commits, shallow clones and the summary counts |
 | `lib.keyhole.keyhole_signals` | [keyhole_signals.md](docs/keyhole_signals.md) | How the signal modules become the five run-context blocks and the named findings |
 | `lib.keyhole.liveness_scan` | [liveness_scan.md](docs/liveness_scan.md) | The dead-code, test and runtime inputs to liveness |
 | `lib.keyhole.promissory_markers` | [promissory_markers.md](docs/promissory_markers.md) | TODO, deprecation, lint-suppression and disabled-test markers |
