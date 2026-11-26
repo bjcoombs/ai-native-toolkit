@@ -454,7 +454,6 @@ def test_the_practice_shape_panel_draws_one_radar_per_unit_and_the_table_fallbac
     charts = re.findall(r'<svg class="radar"[^>]*data-unit="([^"]+)">(.*?)</svg>', shape, re.S)
     assert [k for k, _ in charts] == keys
     for key, svg in charts:
-        assert len(re.findall(r"<polygon|<polyline", svg)) <= 1  # one unit's outline, never another's
         assert set(re.findall(r"<title>([^,<]+), ", svg)) == {key}
         assert [t for t in re.findall(r"<title>(\d+)%</title>", svg)] == ["25", "50", "75", "100"]
     table = re.search(r'<table class="radar-table">(.*?)</table>', shape, re.S)
@@ -477,11 +476,11 @@ def test_an_unmeasured_practice_breaks_the_outline_with_no_point_at_zero() -> No
     shape = _shape(_root_page(bundle))
     svg = re.search(r'data-unit="grp/other">(.*?)</svg>', shape, re.S)
     assert svg is not None
-    assert "Instruction docs (not measured)" in svg.group(1) and 'class="spoke gap"' in svg.group(1)
+    assert '<tspan x="200.0" dy="-11">Instruction docs</tspan><tspan x="200.0" dy="11">(not measured)</tspan>' in svg.group(1)
+    assert 'class="spoke gap"' in svg.group(1)
     assert "<polygon" not in svg.group(1)
     assert re.findall(r"<title>(grp/other, [^<]+)</title>", svg.group(1)) == [
         "grp/other, CI gate: 1/1 measured repositories at the top level"]
-    assert 'cx="150.0" cy="120.0"' not in shape  # no point is ever drawn at the centre
     assert '<td class="unknown">not measured</td>' in shape
     closed = re.search(r'data-unit="grp/sub">(.*?)</svg>', shape, re.S)
     assert closed is not None and closed.group(1).count("<polygon") == 1
@@ -522,3 +521,49 @@ def test_no_spoke_draws_no_chart_and_says_why() -> None:
     shape = _shape(_root_page(bundle))
     assert '<svg class="radar"' not in shape and "radar-table" not in shape
     assert "No practice is measured in enough of the fleet's repositories to draw." in shape
+
+
+def _six_spokes(measured: list[int], title: str = "Practice") -> dict[str, Any]:
+    """The counts-only bundle cut to six spokes and its root unit's counts set from ``measured``."""
+    _, bundle = _parts(fx.goldens()["expected-counts-only.html"])
+    bundle["rows"] = [{"title": f"{title} {i}", "top_level": 1} for i in range(6)]
+    bundle["radar"]["axes"] = list(range(6))
+    root = next(u for u in bundle["views"][0]["units"] if u["parent"] is None)
+    root["practice"] = [{"row": i, "met": 0, "measured": m} for i, m in enumerate(measured)]
+    return bundle
+
+
+def _points(svg: str) -> list[tuple[float, float]]:
+    return [(float(x), float(y)) for x, y in re.findall(r'class="point" cx="([^"]+)" cy="([^"]+)"', svg)]
+
+
+def test_unmeasured_spokes_split_the_outline_into_runs_that_never_cross_a_gap() -> None:
+    """Spokes 2 and 5 of six unmeasured: two runs, {0, 1} and {3, 4}, each joining adjacent measured
+    spokes only. A measured practice with nothing met is a real 0, drawn at the centre."""
+    bundle = _six_spokes([2, 2, 0, 2, 2, 0])
+    root = next(u for u in bundle["views"][0]["units"] if u["parent"] is None)
+    root["practice"] = [{"row": i, "met": [2, 1, 0, 0, 2, 0][i], "measured": m}
+                        for i, m in enumerate([2, 2, 0, 2, 2, 0])]
+    svg = re.search(r'data-unit="org 1">(.*?)</svg>', _shape(_root_page(bundle)), re.S)
+    assert svg is not None
+    runs = re.findall(r'<polyline class="outline" points="([^"]+)"></polyline>', svg.group(1))
+    assert "<polygon" not in svg.group(1) and len(runs) == 2
+    points = _points(svg.group(1))
+    assert len(points) == 4  # the two gap spokes have none
+    assert [tuple(float(v) for v in xy.split(",")) for run in runs for xy in run.split()] == [
+        points[2], points[3], points[0], points[1]]  # the run after the first gap, then the wrap to spoke 0
+    assert (200.0, 150.0) in points  # spoke 3: 0 of 2 met, a measured 0
+    assert svg.group(1).count('class="spoke gap"') == 2
+
+
+def test_long_practice_titles_wrap_inside_the_chart() -> None:
+    bundle = _six_spokes([1] * 6, "Cross-agent instruction consistency and coverage gates")
+    svg = re.search(r'data-unit="org 1">(.*?)</svg>', _shape(_root_page(bundle)), re.S)
+    assert svg is not None
+    lines = re.findall(r"<tspan[^>]*>([^<]+)</tspan>", svg.group(1))
+    assert lines and max(len(line) for line in lines) <= 16
+    assert " ".join(lines[:4]) == "Cross-agent instruction consistency and coverage gates 0"
+    for x, anchor, first in re.findall(r'<text x="([^"]+)" y="[^"]+" text-anchor="(\w+)">(.*?)</text>', svg.group(1)):
+        width = 6 * max(len(t) for t in re.findall(r">([^<]+)</tspan>", first))
+        left = float(x) - (width if anchor == "end" else width / 2 if anchor == "middle" else 0)
+        assert 0 <= left and left + width <= 400, (x, anchor)

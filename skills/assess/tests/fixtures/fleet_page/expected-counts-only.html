@@ -23,8 +23,8 @@ th,td{border:1px solid var(--rule);padding:4px 6px;text-align:center}th.repo{tex
 td.l0{background:var(--l0);color:var(--lt)}td.l1{background:var(--l1);color:var(--lt)}
 td.l2{background:var(--l2);color:var(--lt)}td.l3{background:var(--l3);color:var(--ltd)}
 td.unknown{background:repeating-linear-gradient(45deg,var(--bg) 0 4px,var(--unk) 4px 6px);color:var(--fg);font-style:italic}
-.radars{display:flex;flex-wrap:wrap;gap:12px}.radars figure{margin:8px 0;flex:0 1 300px;max-width:100%}
-svg.radar{width:100%;height:auto;display:block;font-size:10px;fill:var(--fg)}
+.radars{display:flex;flex-wrap:wrap;gap:12px}.radars figure{margin:8px 0;flex:0 1 400px;max-width:100%}
+svg.radar{width:100%;height:auto;display:block;font-size:10px;fill:var(--fg);overflow:visible}
 svg.radar .ring{fill:none;stroke:var(--rule)}svg.radar .spoke{stroke:var(--rule)}svg.radar .gap{stroke-dasharray:3 3;fill:var(--muted)}
 svg.radar .outline{fill:none;stroke:var(--accent);stroke-width:2}svg.radar .point{fill:var(--accent)}
 table.radar-table caption{text-align:left;color:var(--muted);padding:4px 0}
@@ -245,24 +245,40 @@ table.radar-table caption{text-align:left;color:var(--muted);padding:4px 0}
     return [(cx + r * Math.cos(a)).toFixed(1), (cy + r * Math.sin(a)).toFixed(1)];
   }
   function share(p) { return p && p.measured ? p.met / p.measured : null; }
+  function wrap(text, width) {
+    // Words packed into lines of at most `width` characters (a longer word keeps its own line).
+    var lines = [], cur = "";
+    String(text).split(" ").forEach(function (w) {
+      if (cur && (cur + " " + w).length > width) { lines.push(cur); cur = w; } else { cur = cur ? cur + " " + w : w; }
+    });
+    return cur ? lines.concat([cur]) : lines;
+  }
+  function label(x, y, anchor, up, lines, gap) {
+    // A spoke's label: one <tspan> per line, stacked away from the chart's centre.
+    var first = up ? -(lines.length - 1) * 11 : 0;
+    return "<text x=\"" + x + "\" y=\"" + y + "\" text-anchor=\"" + anchor + "\"" + (gap ? " class=\"gap\"" : "") + ">"
+      + lines.map(function (l, i) {
+        return "<tspan x=\"" + x + "\" dy=\"" + (i ? 11 : first) + "\">" + esc(l) + "</tspan>";
+      }).join("") + "</text>";
+  }
   function radarSvg(bundle, u) {
     // One unit's own chart, never overlaid with another's: a spoke per practice in bundle.radar.axes,
     // its point at met/measured; a spoke with nothing measured has no point and breaks the outline.
-    var axes = bundle.radar.axes, n = axes.length, c = 150, R = 80, by = {};
+    // 100 units beside the outer ring hold a label wrapped at 16 characters, about 6 units each at 10px.
+    var axes = bundle.radar.axes, n = axes.length, c = 200, R = 80, by = {};
     (u.practice || []).forEach(function (p) { by[p.row] = p; });
-    var out = "<svg class=\"radar\" viewBox=\"0 0 300 240\" role=\"img\" aria-label=\""
+    var out = "<svg class=\"radar\" viewBox=\"0 0 400 300\" role=\"img\" aria-label=\""
       + esc(u.key + ": practices met of measured") + "\" data-unit=\"" + esc(u.key) + "\">";
     [25, 50, 75, 100].forEach(function (q) {
-      out += "<circle class=\"ring\" cx=\"" + c + "\" cy=\"120\" r=\"" + (R * q / 100) + "\"><title>" + q + "%</title></circle>";
+      out += "<circle class=\"ring\" cx=\"" + c + "\" cy=\"150\" r=\"" + (R * q / 100) + "\"><title>" + q + "%</title></circle>";
     });
     var pts = axes.map(function (row, i) {
-      var p = by[row], end = pt(c, 120, R, i, n), lab = pt(c, 120, R + 14, i, n), f = share(p);
+      var p = by[row], end = pt(c, 150, R, i, n), lab = pt(c, 150, R + 12, i, n), f = share(p);
       var anchor = Math.abs(Number(lab[0]) - c) < 1 ? "middle" : Number(lab[0]) > c ? "start" : "end";
-      out += "<line class=\"spoke" + (f === null ? " gap" : "") + "\" x1=\"" + c + "\" y1=\"120\" x2=\"" + end[0]
-        + "\" y2=\"" + end[1] + "\"></line><text x=\"" + lab[0] + "\" y=\"" + lab[1] + "\" text-anchor=\"" + anchor
-        + "\"" + (f === null ? " class=\"gap\"" : "") + ">" + esc(bundle.rows[row].title) + (f === null ? " (not measured)" : "")
-        + "</text>";
-      return f === null ? null : {xy: pt(c, 120, R * f, i, n), p: p, row: row};
+      var lines = wrap(bundle.rows[row].title, 16).concat(f === null ? ["(not measured)"] : []);
+      out += "<line class=\"spoke" + (f === null ? " gap" : "") + "\" x1=\"" + c + "\" y1=\"150\" x2=\"" + end[0]
+        + "\" y2=\"" + end[1] + "\"></line>" + label(lab[0], Number(lab[1]) + 3, anchor, Number(lab[1]) < 150, lines, f === null);
+      return f === null ? null : {xy: pt(c, 150, R * f, i, n), p: p, row: row};
     });
     var runs = [], cur = [], start = pts.indexOf(null);
     if (start < 0) {
