@@ -167,7 +167,10 @@ jobs:
             fi
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi
-          echo "schema=$(jq -c . .refine-toolkit/skills/refine/scripts/dedupe-plan.schema.json)" >> "$GITHUB_OUTPUT"
+          # Claude Code's --json-schema validator does not load the draft
+          # 2020-12 meta-schema the file names, so the $schema key is dropped.
+          # The value goes inside single quotes below; a test keeps ' out of it.
+          echo "schema=$(jq -c 'del(.["$schema"])' .refine-toolkit/skills/refine/scripts/dedupe-plan.schema.json)" >> "$GITHUB_OUTPUT"
 
       # The prompts ship under skills/refine/commands/; a repository may keep
       # its own copy in .claude/commands/, which is left in place.

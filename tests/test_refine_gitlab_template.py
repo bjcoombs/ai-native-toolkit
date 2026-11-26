@@ -262,3 +262,24 @@ def test_a_branch_or_loose_ref_fails_the_job(tmp_path: Path, ref: str) -> None:
 @pytest.mark.parametrize("ref", [SHA, "v4.0.0"])
 def test_a_full_sha_or_release_tag_passes(tmp_path: Path, ref: str) -> None:
     assert _run_pin(tmp_path, ref) == 0
+
+
+@pytest.mark.skipif(shutil.which("jq") is None, reason="the plan job builds the schema with jq")
+@pytest.mark.parametrize("schema", ["triage-plan.schema.json", "dedupe-plan.schema.json"])
+def test_plan_schema_drops_the_meta_schema_key(schema: str) -> None:
+    """run_model passes --json-schema "$(jq -c <filter> "$3")" (issue #1478).
+
+    Claude Code rejects the draft 2020-12 meta-schema URI the schema files
+    name, so the filter must drop the $schema key.
+    """
+    lines = [ln.strip() for ln in _script("refine-plan").splitlines() if ln.strip().startswith("--json-schema")]
+    assert len(lines) == 1
+    line = lines[0]
+    assert line.startswith('--json-schema "$(jq -c ') and line.endswith(' "$3")" > "$log"')
+    jq_filter = line.split("jq -c ", 1)[1].split(" ", 1)[0].strip("'")
+    source = json.loads((SCRIPTS / schema).read_text(encoding="utf-8"))
+    assert "$schema" in source, "the test proves nothing once the source drops $schema"
+    out = subprocess.run(["jq", "-c", jq_filter, str(SCRIPTS / schema)], capture_output=True,
+                         encoding="utf-8", errors="replace", check=True).stdout
+    assert "'" not in out
+    assert json.loads(out) == {k: v for k, v in source.items() if k != "$schema"}

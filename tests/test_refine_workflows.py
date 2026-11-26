@@ -443,12 +443,13 @@ def test_oauth_token_reaches_only_the_read_only_model_step(name: str) -> None:
 
 
 def _run_gate(tmp_path: Path, name: str, key: bool, wif: bool, oauth: bool,
-              trusted: bool = True) -> "tuple[int, Dict[str, str], str]":
+              trusted: bool = True, real_schemas: bool = False) -> "tuple[int, Dict[str, str], str]":
     gate = next(s for s in _steps(_load(name)) if s.get("id") == "gate")
     schema = tmp_path / ".refine-toolkit" / "skills" / "refine" / "scripts"
     schema.mkdir(parents=True, exist_ok=True)
     for f in ("triage-plan.schema.json", "dedupe-plan.schema.json"):
-        (schema / f).write_text("{}", encoding="utf-8")
+        text = (SCRIPTS / f).read_text(encoding="utf-8") if real_schemas else "{}"
+        (schema / f).write_text(text, encoding="utf-8")
     out = tmp_path / "out"
     out.write_text("", encoding="utf-8")
     env = {"PATH": os.environ["PATH"], "GITHUB_OUTPUT": str(out), "HAS_KEY": str(key).lower(),
@@ -486,3 +487,25 @@ def test_gate_fails_fast_with_no_credential(tmp_path: Path, name: str) -> None:
 def test_gate_skips_an_untrusted_author_without_needing_a_credential(tmp_path: Path, name: str) -> None:
     code, outputs, _ = _run_gate(tmp_path, name, False, False, False, trusted=False)
     assert code == 0 and outputs["run"] == "false" and "auth" not in outputs
+
+
+@needs_bash
+@pytest.mark.skipif(shutil.which("jq") is None, reason="the gate step reads the plan schema with jq")
+@pytest.mark.parametrize("name", MODEL_WORKFLOWS)
+def test_plan_schema_is_safe_inside_single_quotes(tmp_path: Path, name: str) -> None:
+    """The gate's schema output goes to --json-schema '<schema>' (issue #1478).
+
+    It must hold no ' and no $schema key: Claude Code rejects the draft
+    2020-12 meta-schema URI the schema files name.
+    """
+    assert "--json-schema '${{ steps.gate.outputs.schema }}'" in _model_step(name)["with"]["claude_args"]
+    code, outputs, _ = _run_gate(tmp_path, name, True, False, False, real_schemas=True)
+    assert code == 0
+    plan_schema = {"reusable-refine-triage.yml": "triage-plan.schema.json",
+                   "reusable-refine-dedupe.yml": "dedupe-plan.schema.json"}[name]
+    source = json.loads((SCRIPTS / plan_schema).read_text(encoding="utf-8"))
+    assert "$schema" in source, "the test proves nothing once the source drops $schema"
+    assert "'" not in outputs["schema"]
+    passed = json.loads(outputs["schema"])
+    assert "$schema" not in passed
+    assert passed == {k: v for k, v in source.items() if k != "$schema"}
