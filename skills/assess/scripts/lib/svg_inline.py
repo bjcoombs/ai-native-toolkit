@@ -82,7 +82,7 @@ _TOKEN = re.compile(
     r"|(?P<text>[^<]+)", re.S | re.I | re.A)
 _ATTR_PARTS = re.compile(rf"""{_WS}+([^\t\n\f\r =/>"']+)(?:{_WS}*={_WS}*("[^"]*"|'[^']*'|[^\t\n\f\r "'>]+))?""")
 _ATTR_NAME = re.compile(r"[A-Za-z_][\w:.-]*", re.A)
-_LINK = re.compile(r"(?:https?://|#|[^:/?#]*(?:[/?#]|$))", re.A)  # http(s), a fragment or a relative path
+_LINK = re.compile(r"(?:https?://|#|(?!//)[^:/?#]*(?:[/?#]|$))", re.A)  # http(s), a fragment or a relative path
 _STYLE_RISK = re.compile(r"position|z-index", re.I)  # a diagram must not cover the page
 _URL_SCHEME = re.compile(r"(?:java|vb)script:")
 # A CSS comment, or a brace, semicolon or line break inside a quoted string: either would make

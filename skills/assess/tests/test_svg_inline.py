@@ -203,7 +203,7 @@ def test_a_position_or_z_index_is_refused(css: str) -> None:
     assert inline_svg(_svg(f'<rect style="{css.split("{")[-1].split("}")[0].strip()}"/>' + PART), "s") is None
 
 
-@pytest.mark.parametrize("href", ["data:text/html,x", "mailto:a@b.c", "ftp://e.example/x", "javascript-ish:x"])
+@pytest.mark.parametrize("href", ["data:text/html,x", "mailto:a@b.c", "ftp://e.example/x", "javascript-ish:x", "//e.example/x"])
 def test_a_link_to_another_scheme_is_refused(href: str) -> None:
     assert inline_svg(_svg(f'<a href="{href}">' + PART + "</a>"), "s") is None
 
