@@ -7,7 +7,7 @@
 # project's .gitlab-ci.yml:
 #
 #   include:
-#     - remote: https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v4.0.0/templates/refine.yml
+#     - remote: https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v4.1.0/templates/refine.yml
 #
 # GitLab has no CI trigger for a new issue, so a pipeline schedule on the
 # default branch does the work: the sweep over every open issue, plus triage
@@ -47,7 +47,7 @@ spec:
   inputs:
     toolkit_ref:
       description: The ai-native-toolkit release tag (vX.Y.Z) or full 40-character commit sha the jobs run. Keep a tag equal to the tag in the include line.
-      default: v4.0.0
+      default: v4.1.0
       regex: ^(v[0-9]+\.[0-9]+\.[0-9]+|[0-9a-f]{40})$
     toolkit_url:
       description: Where to fetch the toolkit from, for a mirror on a self-hosted GitLab.

@@ -4,7 +4,7 @@ How another repository adopts the refiner: three GitHub workflows that check iss
 
 **Live mode is not ready yet.** Four review points from the first release can cause a wrong `agent-ready` label or a wrong duplicate close: [#1341](https://github.com/bjcoombs/ai-native-toolkit/issues/1341). Run in dry-run until that issue is closed. Dry-run is the default and writes nothing.
 
-**Version.** The workflows first ship in the toolkit release after 4.0.0. The examples pin `v4.0.0`, the newest release at the time of writing; each release moves the pin to itself, so copy the examples from the release you adopt. On 4.0.0 or earlier the `uses:` lines have no workflow to call.
+**Version.** The workflows first ship in the toolkit release after 4.0.0. The examples pin `v4.1.0`, the newest release at the time of writing; each release moves the pin to itself, so copy the examples from the release you adopt. On 4.0.0 or earlier the `uses:` lines have no workflow to call.
 
 ## What runs
 
@@ -52,7 +52,7 @@ jobs:
       vars.REFINE_ENABLED == 'true' &&
       (github.event_name == 'issues' ||
        (!github.event.issue.pull_request && github.event.comment.user.type != 'Bot'))
-    uses: bjcoombs/ai-native-toolkit/.github/workflows/reusable-refine-triage.yml@v4.0.0
+    uses: bjcoombs/ai-native-toolkit/.github/workflows/reusable-refine-triage.yml@v4.1.0
     with:
       enabled: ${{ vars.REFINE_ENABLED == 'true' }}
       mode: ${{ vars.REFINE_MODE || 'dry-run' }}
@@ -78,7 +78,7 @@ permissions:
 jobs:
   dedupe:
     if: vars.REFINE_ENABLED == 'true'
-    uses: bjcoombs/ai-native-toolkit/.github/workflows/reusable-refine-dedupe.yml@v4.0.0
+    uses: bjcoombs/ai-native-toolkit/.github/workflows/reusable-refine-dedupe.yml@v4.1.0
     with:
       enabled: ${{ vars.REFINE_ENABLED == 'true' }}
       mode: ${{ vars.REFINE_MODE || 'dry-run' }}
@@ -103,7 +103,7 @@ permissions:
 jobs:
   sweep:
     if: vars.REFINE_ENABLED == 'true'
-    uses: bjcoombs/ai-native-toolkit/.github/workflows/reusable-refine-sweep.yml@v4.0.0
+    uses: bjcoombs/ai-native-toolkit/.github/workflows/reusable-refine-sweep.yml@v4.1.0
     with:
       enabled: ${{ vars.REFINE_ENABLED == 'true' }}
       mode: ${{ vars.REFINE_MODE || 'dry-run' }}
@@ -148,7 +148,7 @@ GitLab has no CI trigger for a new issue, so one template, `templates/refine.yml
 
 ```yaml
 include:
-  - remote: https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v4.0.0/templates/refine.yml
+  - remote: https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v4.1.0/templates/refine.yml
 ```
 
 | Job | Model | Token | What it does |
