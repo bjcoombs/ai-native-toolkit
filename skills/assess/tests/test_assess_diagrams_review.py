@@ -161,7 +161,7 @@ def test_strip_ticks_are_the_sequence_in_merge_order() -> None:
     assert "Review-bot output (3 known)" in content
     assert "Not known whether a review bot commented (1)" in content
     unknown = [r for r in _rects(content, "data-state") if r.attrib["data-state"] == "unknown"]
-    assert [r.attrib["fill"] for r in unknown] == ["url(#fleet-hatch)"]
+    assert [r.attrib["fill"] for r in unknown] == ["url(#assess-review-strip-fleet-hatch)"]
 
 
 def _pr(n: int, reviews: list[tuple[str, str]], bot: bool = False) -> dict[str, Any]:

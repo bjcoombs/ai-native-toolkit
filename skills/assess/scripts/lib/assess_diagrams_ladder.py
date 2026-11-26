@@ -25,6 +25,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import lib.fleet.fleet_svg as svg
+from lib.svg_scope import SCOPES
 from lib.scoring.headline import GATE_CHANGE, gate_change
 from lib.scoring.level_result_types import LevelResult
 from lib.scoring.levels import StepDef, StepGate
@@ -132,7 +133,7 @@ def render_ladder(level: LevelResult, steps: Sequence[StepDef]) -> str:
             body += _gate_band(RUNG_X, y, new_gates(ordered, n), n, level, n == nxt)
             y += GATE_H
     desc = f"{ladder_in_place(level, ordered)} {ladder_caption(level, ordered)}"
-    return svg.document(WIDTH, y + PAD, LADDER_TITLE, desc, body)
+    return svg.document(WIDTH, y + PAD, LADDER_TITLE, desc, body, scope=SCOPES["step-ladder"])
 
 
 def _name(steps: Sequence[StepDef], step: int) -> str:

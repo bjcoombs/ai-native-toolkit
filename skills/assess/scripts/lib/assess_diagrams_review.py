@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import Any
 
 import lib.fleet.fleet_svg as svg
+from lib.svg_scope import SCOPES
 from lib.assess_diagrams import DIAGRAM_FILES, build_diagrams, wrap, write_diagrams
 from lib.assess_diagrams_tags import TAG_FILES, tag_diagrams
 from lib.assess_diagrams_packages import PACKAGE_COUNTS_ONLY_FILE, PACKAGE_FILE, package_diagrams
@@ -246,7 +247,7 @@ def render_drift(block: Mapping[str, Any]) -> str:
     caption = drift_caption(baseline)
     y = _caption(body, caption, width, y + 8 + key_h)
     return svg.document(width, y + PAD, HEADINGS[DRIFT_FILE], f"{drift_in_place(block)} {caption}",
-                        body, style=_style())
+                        body, scope=SCOPES["doc-drift"], style=_style())
 
 
 def _drift(ctx: Mapping[str, Any]) -> AssessDiagram:
@@ -366,7 +367,7 @@ def render_strip(block: Mapping[str, Any]) -> str:
     caption = strip_caption()
     y = _caption(body, caption, width, y + 30 + key_h)
     return svg.document(width, y + PAD, HEADINGS[STRIP_FILE], f"{strip_in_place(sequence)} {caption}",
-                        body, style=_style(), defs=svg.THEMED_HATCH)
+                        body, scope=SCOPES["review-strip"], style=_style(), defs=svg.THEMED_HATCH)
 
 
 def _strip(ctx: Mapping[str, Any]) -> AssessDiagram:

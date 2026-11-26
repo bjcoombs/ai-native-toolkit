@@ -70,7 +70,7 @@ def test_not_measured_is_hatched_never_shaded_and_a_real_zero_is_shaded() -> Non
     structure = re.search(r'<rect[^>]*data-tag="structure"[^>]*>', pipeline).group(0)  # type: ignore[union-attr]
     assert 'data-cell="share"' in structure and "#ffffe5" in structure  # 0 of 5: the palest step, shaded
     docs = re.search(r'<rect[^>]*data-tag="docs"[^>]*>', pipeline).group(0)  # type: ignore[union-attr]
-    assert 'data-cell="not_measured"' in docs and "url(#fleet-hatch)" in docs
+    assert 'data-cell="not_measured"' in docs and "url(#fleet-tag-heatmap-fleet-hatch)" in docs
     failed = _row(svg, "acme/legacy-billing")
     assert failed.count('data-cell="not_measured"') == len(TRUTH_TAGS) and "%" not in failed.split("</text>", 2)[2]
 

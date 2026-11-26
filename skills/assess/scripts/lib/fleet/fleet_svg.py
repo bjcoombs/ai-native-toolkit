@@ -31,7 +31,10 @@ same inputs. This module holds what they share, so no diagram copies it:
   element carries as an attribute, so the stylesheet never overrides a text's
   own presentation attributes (``tests/svg_cascade.py``).
 - **Document.** ``document`` wraps a body in the XML prolog, the root
-  ``<svg>`` with its ``viewBox``, ``<title>``, ``<desc>``, style and defs.
+  ``<svg>`` with its ``viewBox``, ``<title>``, ``<desc>``, style and defs, then
+  scopes it with ``lib.svg_scope.scope_svg``: a root class, every selector under
+  it and every id prefixed, so diagrams inlined on one page never restyle each
+  other (#1358). The scope is a required argument, so no diagram ships unscoped.
 
 Stdlib only; numbers are formatted with fixed precision; nothing iterates a set.
 
@@ -50,7 +53,7 @@ shared-tooling map, and the slope and trend charts of #675/#676). The API:
 | `spread_vertical(ys, min_gap)` | End labels (trend, slope) pushed apart to `min_gap`, order kept. |
 | `overlaps(a, b)`, `Box` | The box test. |
 | `THEME`, `theme_style(extra)` | Role -> (light, dark) colours (plus a diagram's `extra` roles, such as the trend's series colours) as `t-`/`f-` (fill) and `s-` (stroke) classes, dark under `prefers-color-scheme`. The only `text` rule sets `font-family`, so it never overrides a text's attributes (`tests/svg_cascade.py`). |
-| `document(w, h, title, desc, body, *, style, defs, background)` | The whole file: prolog, `viewBox`, `<title>`, `<desc>`, style, defs and a full-canvas background (`f-bg` unless a colour is given). |
+| `document(w, h, title, desc, body, *, scope, style, defs, background)` | The whole file: prolog, `viewBox`, `<title>`, `<desc>`, style, defs and a full-canvas background (`f-bg` unless a colour is given), scoped under `scope` (`lib/svg_scope.py`). |
 
 No script, no external font or link; fixed number formatting. Tests: `tests/test_fleet_diagrams.py`.
 """
@@ -60,6 +63,8 @@ import html
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+
+from lib.svg_scope import scope_svg
 
 CHAR_W = 7.0  # average glyph advance at 12px, used in place of font metrics
 FONT_STACK = '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif'
@@ -238,9 +243,11 @@ def spread_vertical(ys: Sequence[float], min_gap: float) -> list[float]:
 
 
 def document(width: float, height: float, title: str, desc: str, body: Sequence[str], *,
-             style: str | None = None, defs: str = "", background: str | None = None) -> str:
-    """A whole SVG document. ``style`` defaults to ``theme_style()``; ``background`` is a fill
-    colour for the canvas rect, else the themed ``bg`` class."""
+             scope: str, style: str | None = None, defs: str = "",
+             background: str | None = None) -> str:
+    """A whole SVG document under the diagram's ``scope`` (a ``lib.svg_scope.SCOPES`` value).
+    ``style`` defaults to ``theme_style()``; ``background`` is a fill colour for the canvas
+    rect, else the themed ``bg`` class."""
     w, h = f"{width:.0f}", f"{height:.0f}"
     canvas = (f'fill="{background}"' if background is not None else 'class="f-bg"')
     head = [
@@ -253,4 +260,4 @@ def document(width: float, height: float, title: str, desc: str, body: Sequence[
         f"<defs>{defs}</defs>",
         f'<rect x="0" y="0" width="{w}" height="{h}" {canvas}/>',
     ]
-    return "\n".join([*head, *body, "</svg>", ""])
+    return scope_svg("\n".join([*head, *body, "</svg>", ""]), scope)

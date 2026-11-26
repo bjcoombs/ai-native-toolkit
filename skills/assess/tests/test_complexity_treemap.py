@@ -92,7 +92,7 @@ def _stub_render_io(treemap, monkeypatch):
     monkeypatch.setattr(treemap, "layout", lambda *a, **k: None)
 
     def fake_write_svg(rects, root, W, H, out_path, show_labels, metric_label,
-                       show_survivor_legend=False):
+                       show_survivor_legend=False, churn_window=None):
         captured.update(show_labels=show_labels, metric_label=metric_label,
                         show_survivor_legend=show_survivor_legend)
 

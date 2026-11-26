@@ -109,7 +109,7 @@ from lib.complexity.scc_coverage import (
 )
 from lib.complexity.stats_rows import code_band, file_ccn_rows, top_lists
 from lib.complexity.treemap_render import (
-    ColoredFile, Rect, Rgba, adaptive_cap, blend_to_grey, build_tree, layout, plural, write_svg,
+    ColoredFile, Rect, Rgba, adaptive_cap, blend_to_grey, build_tree, churn_window_of, layout, plural, write_svg,
 )
 
 
@@ -734,14 +734,14 @@ def render(files: list[tuple[Path, int, float, str]],
     tokens = (tokens_by_path if tokens_by_path is not None
               else est_tokens_by_path(files))
     overrides = _survivor_overrides(files, survivor_density)
-    tree = build_tree(files_colored, root, aux_data, aux_label or "",
+    tree = build_tree(files_colored, root, aux_data, (aux_label or "") if aux_data else "",
                       node_overrides=overrides or None, size_by=tokens)
     W, H = 1600.0, 1000.0
     rects: list[Rect] = []
     layout(tree, 0, 0, W, H, rects)
 
-    write_svg(rects, root, W, H, out_path, show_labels, metric_label,
-              show_survivor_legend=bool(overrides))
+    write_svg(rects, root, W, H, out_path, show_labels, metric_label, show_survivor_legend=bool(overrides),
+              churn_window=churn_window_of(by, aux_label if aux_data else None))
 
     print(f"wrote {out_path}  ({len(files)} {plural(len(files), 'file')}, "
           f"{sum(1 for f in files if f[3] == 'lizard')} lizard, "

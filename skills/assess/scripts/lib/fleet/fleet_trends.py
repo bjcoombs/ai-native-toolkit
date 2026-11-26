@@ -72,6 +72,7 @@ from pathlib import Path
 from typing import Any, NotRequired, TypedDict
 
 import lib.fleet.fleet_svg as svg
+from lib.svg_scope import SCOPES
 from lib.fleet.fleet_groups import GROUPS_FILE, GroupRow, RowLevel
 from lib.fleet.fleet_legacy import stamp_value, upgrade
 from lib.fleet.fleet_history import one_per_date
@@ -448,5 +449,5 @@ def render_trend(runs: Sequence[TrendRun]) -> str:
             "oldest on the left; a line breaks where the maturity-model version changes, older runs "
             "without top levels are named, not drawn, and runs where a group has no level are "
             "listed on a hatched note, not drawn at zero.")
-    return svg.document(WIDTH, float(int(cursor + PAD)), TITLE, desc, body,
+    return svg.document(WIDTH, float(int(cursor + PAD)), TITLE, desc, body, scope=SCOPES["trend"],
                         style=svg.theme_style(SERIES_ROLES), defs=THEMED_HATCH)

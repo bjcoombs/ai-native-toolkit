@@ -167,6 +167,21 @@ def test_treemap_per_rect_titles_carry_path_loc_ccn(treemap_svg):
     assert "ccn 21" in rects["complex_stable.py"][1]
 
 
+def test_treemap_real_render_carries_data_attributes_and_its_scope(treemap_svg):
+    """#1358: the real pipeline writes each block's values as data attributes, the churn
+    window on the root, and scopes the SVG for inlining."""
+    import re
+
+    from test_diagram_scoping import scope_problems
+
+    assert scope_problems(treemap_svg, "assess-complexity-heatmap") == []
+    assert re.search(r'<svg [^>]*data-churn-window="[^"]+"', treemap_svg)
+    hot = re.search(r'<rect [^>]*data-path="hot.py"[^>]*>', treemap_svg)
+    assert hot and 'data-ccn="21"' in hot.group(0)
+    for key in ("data-loc", "data-tokens", "data-commits"):
+        assert re.search(rf'{key}="\d+"', hot.group(0)), key
+
+
 def test_treemap_ccn_maps_to_red_hue(treemap_svg):
     """ccn -> hue: with churn held equal (both high-churn), the high-CCN file is
     dark red while the low-CCN file is pale - red = low green/blue channels."""
@@ -275,6 +290,14 @@ def test_doc_graph_stylesheet_never_overrides_text_attributes(doc_graph_svg):
     assert overridden_text_attributes(doc_graph_svg) == []
 
 
+def test_doc_graph_is_scoped(doc_graph_svg):
+    """#1358: the doc graph's style, ids and references sit under its own scope."""
+    from test_diagram_scoping import scope_problems
+
+    assert 'id="assess-doc-graph-arrow"' in doc_graph_svg
+    assert scope_problems(doc_graph_svg, "assess-doc-graph") == []
+
+
 def test_doc_graph_per_node_labels_carry_path_and_staleness(doc_graph_svg):
     """Task 17: every node's <title> is an accessible label with the doc path
     and its staleness."""
@@ -327,8 +350,8 @@ def test_doc_graph_unmeasured_node_is_hatched_not_a_measured_colour(tmp_path):
     _git(repo, "commit", "-q", "-m", "docs", env=env)
     svg = _run_script("doc-graph-svg.py", repo, tmp_path / "doc.svg", env)
     circles = _parse_circles(svg)
-    assert circles["notes.md"]["fill"] == "url(#unmeasured)"
-    assert '<pattern id="unmeasured"' in svg
+    assert circles["notes.md"]["fill"] == "url(#assess-doc-graph-unmeasured)"
+    assert '<pattern id="assess-doc-graph-unmeasured"' in svg
     assert ">not measured</text>" in svg
     assert "staleness not measured" in circles["notes.md"]["title"]
     assert "0d stale" not in circles["notes.md"]["title"]

@@ -101,7 +101,7 @@ def test_twenty_of_many_packages_are_drawn_and_the_rest_is_stated() -> None:
 def test_with_the_pair_cap_an_unrecorded_cell_is_unknown_never_empty() -> None:
     large = pm.render_package_map(LARGE)
     assert _cells(large, "unknown") and not _cells(large, "none")
-    assert all(c.attrib["fill"] == "url(#fleet-hatch)" for c in _cells(large, "unknown"))
+    assert all(c.attrib["fill"] == "url(#assess-package-map-fleet-hatch)" for c in _cells(large, "unknown"))
     assert "busiest-pairs limit applied" in large and "No imports" not in large
     small = pm.render_package_map(SMALL)
     assert _cells(small, "none") and not _cells(small, "unknown")

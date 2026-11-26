@@ -43,6 +43,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, TypedDict, cast
 
 import lib.fleet.fleet_svg as svg
+from lib.svg_scope import SCOPES
 from lib.assess_diagrams import wrap
 from lib.fleet.fleet_compare import FleetRun, comparability
 from lib.fleet.fleet_method import RULE_KEYS, rule_reasons, rules_sha256
@@ -219,7 +220,7 @@ def render(moves: StepMoves) -> str:
                 y += LINE_H + 1
                 body.append(svg.text(PAD + 8, y, line, size=12, cls="muted"))
         desc = in_place(moves)
-        return svg.document(width, y + PAD + 4, TITLE, desc, body)
+        return svg.document(width, y + PAD + 4, TITLE, desc, body, scope=SCOPES["step-movement"])
     body.append(svg.text(PAD, y - 4, "Rows: Step in the earlier run. Columns: Step in this run.", size=12,
                          cls="muted"))
     x0, y0 = PAD + HEAD_W, y + 34
@@ -246,5 +247,5 @@ def render(moves: StepMoves) -> str:
             y += LINE_H + 1
             body.append(svg.text(PAD, y, line, size=12, cls="fg"))
     desc = f"{in_place(moves)} {CAPTION}"
-    return svg.document(width, y + PAD, TITLE, desc, body, style=svg.theme_style(ROLES),
+    return svg.document(width, y + PAD, TITLE, desc, body, scope=SCOPES["step-movement"], style=svg.theme_style(ROLES),
                         defs=svg.THEMED_HATCH)

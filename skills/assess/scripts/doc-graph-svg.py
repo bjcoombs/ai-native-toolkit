@@ -25,6 +25,9 @@ neither is overloaded:
   - The entry point carries a blue ring so the navigation root is obvious even
     though colour now means staleness.
 
+The written SVG is scoped (``lib.svg_scope``): a root class, every style selector
+under it and every id prefixed, so it can be inlined beside other diagrams (#1358).
+
 Reuses ``lib.docs.doc_graph`` (structure), ``lib.docs.doc_graph_layout`` (radial shells,
 node classes, ghost grouping) and ``lib.docs.doc_staleness`` (the staleness
 metric) so the picture matches the Layer 0 score exactly, and folds the separate
@@ -58,6 +61,7 @@ from lib.assess_config import load_working_notes_config, resolve_excludes
 from lib.docs.doc_staleness import analyze_doc_staleness
 from lib.run_context_types import BrokenLink
 from lib.complexity.treemap_render import adaptive_cap, blend_to_grey, plural, rgba_to_hex
+from lib.svg_scope import SCOPES, scope_svg
 
 # Colour-blind-safe by default. The status palette uses the Okabe-Ito set
 # (distinguishable under all common colour-vision deficiencies); the staleness
@@ -488,7 +492,7 @@ def render(result: DocGraphResult, out_path: Path, repo_root: Path, *, layout: s
     parts.append(_title(result, n, cw))
     parts.append(_legend(painter.size_label, layout, colour, cw, ch, footer))
     parts.append('</svg>')
-    out_path.write_text("\n".join(parts), encoding="utf-8")
+    out_path.write_text(scope_svg("\n".join(parts), SCOPES["doc-graph"]), encoding="utf-8")
 
     print(f"wrote {out_path}  ({_graph_counts(result, n)})")
     print(f"orphan-rate {result.orphan_rate:.0%}  reachable-from-entry "

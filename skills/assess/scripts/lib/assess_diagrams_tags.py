@@ -47,6 +47,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
 import lib.fleet.fleet_svg as svg
+from lib.svg_scope import SCOPES
 from lib.assess_diagrams import wrap
 from lib.scoring.headline import reason_word
 from lib.scoring.level_result_types import TagRow
@@ -254,7 +255,7 @@ def render_strip(level: Mapping[str, Any], rows: Sequence[TagRow], prior: Any,
         y += LINE_H - 2
         body.append(svg.text(PAD, y, line, size=12, cls="fg"))
     desc = f"{strip_in_place(rows)} {prior_note(prior, level)} {strip_caption()}"
-    return svg.document(width, y + PAD, HEADINGS[TAG_FILE], desc, body, style=svg.theme_style())
+    return svg.document(width, y + PAD, HEADINGS[TAG_FILE], desc, body, scope=SCOPES["assess-tag-profile"], style=svg.theme_style())
 
 
 def strip_caption() -> str:

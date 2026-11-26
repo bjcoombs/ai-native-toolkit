@@ -80,7 +80,7 @@ def test_a_not_measured_gate_is_hatched_with_its_reason_and_a_failed_scan_is_nev
     assert view["not_measured"] == [("scan_timeout", 1)]
     assert sum(b["count"] for b in view["bars"]) == 6  # the failed scan is in no bar
     svg = funnel.render(fx.MODEL, fx.data())
-    assert 'fill="url(#fleet-hatch)"' in svg and "data-mark=\"hatched\"" in svg
+    assert 'fill="url(#fleet-step-funnel-fleet-hatch)"' in svg and "data-mark=\"hatched\"" in svg
     assert "agent_use was not measured (needs_platform)" in svg
     assert "never drawn at Step 1: 1 scan_timeout" in svg
 

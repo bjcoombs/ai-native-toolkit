@@ -40,6 +40,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 import lib.fleet.fleet_svg as svg
+from lib.svg_scope import SCOPES
 from lib.assess_diagrams import wrap
 from lib.scoring.headline import reason_word
 from lib.counts_only.reason_codes import reason_code
@@ -259,7 +260,7 @@ def render_package_map(block: Mapping[str, Any]) -> str:
     for line in wrap(caption, limit):
         y += LINE_H - 2
         body.append(svg.text(PAD, y, line, size=12, cls="fg"))
-    return svg.document(width, y + PAD, TITLE, f"{package_in_place(view)} {caption}", body,
+    return svg.document(width, y + PAD, TITLE, f"{package_in_place(view)} {caption}", body, scope=SCOPES["package-map"],
                         defs=svg.THEMED_HATCH)
 
 

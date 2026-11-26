@@ -59,6 +59,7 @@ from collections.abc import Sequence
 from typing import TypedDict
 
 import lib.fleet.fleet_svg as fleet_svg
+from lib.svg_scope import SCOPES
 from lib.fleet.fleet_svg import (  # the shared level ramp
     CHAR_W,
     LEVEL_RAMP,
@@ -345,5 +346,5 @@ def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
             "whole level reached, darker is higher; hatched cells are unknown, not level 0.")
     style = ('<style>text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", '
              'Helvetica, Arial, sans-serif; }</style>')
-    return fleet_svg.document(width, height, SVG_TITLE, desc, body, style=style,
+    return fleet_svg.document(width, height, SVG_TITLE, desc, body, scope=SCOPES["fleet-heatmap"], style=style,
                               defs=_UNKNOWN_PATTERN + (_FLOOR_PATTERN if floors else ""), background="#ffffff")
