@@ -25,7 +25,8 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
     ``<style>``; a ``<style>`` with attributes; a tag name not in its SVG case (``<STYLE>``).
   - Attributes: a value that is not double-quoted or holds a literal ``<`` or ``>``; a name that
     is not plain ASCII (``data-x\x0b``); an ``id``, ``class``, ``href`` or ``style`` name not in
-    lowercase (``ID=``); an ``&`` in an ``href`` that is not a script URL (an entity hides the reference); a ``\`` in any
+    lowercase (``ID=``); an ``&`` or a leading or trailing space in an ``href`` that is not a script URL (either
+    hides the reference from the scope check); a ``\`` in any
     attribute but a ``data-*`` one, written or entity-encoded; an ``<a>`` ``href`` that is not http(s), a fragment or a
     relative path.
   - Whitespace: only HTML's own (tab, line feed, form feed, carriage return, space) separates a
@@ -134,7 +135,7 @@ def _safe_attrs(element: str, attrs: str) -> str | None:
             continue  # dropped, the rest of the diagram kept
         if "\\" in decoded and not name.startswith("data-"):
             return None  # an entity can spell a CSS escape (u&#92;72l)
-        if name in ("href", "xlink:href") and "&" in raw:
+        if name in ("href", "xlink:href") and ("&" in raw or raw != raw.strip()):
             return None  # an entity would hide the reference from the scope check
         if name == "style" and (re.search(r"[&'\"]", raw) or _css_misread(raw)):
             return None

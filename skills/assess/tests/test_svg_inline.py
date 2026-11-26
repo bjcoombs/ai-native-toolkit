@@ -228,3 +228,9 @@ def test_a_stray_end_tag_for_a_dropped_element_is_refused() -> None:
 ])
 def test_an_encoded_escape_a_semicolon_prelude_or_src_is_refused(svg: str) -> None:
     assert inline_svg(svg, "s") is None
+
+
+@pytest.mark.parametrize("ref", ['<use href=" #app"/>', '<use xlink:href="#app "/>'])
+def test_an_href_with_surrounding_space_is_refused(ref: str) -> None:
+    head = '<svg class="fleet-x" xmlns="http://www.w3.org/2000/svg"><title>r</title>'
+    assert inline_svg(_svg(ref + PART, head), "s") is None

@@ -712,3 +712,10 @@ def test_a_second_svg_under_a_scope_already_on_the_page_stays_an_image() -> None
 
 def test_the_page_clips_each_inlined_diagram_to_its_own_box() -> None:
     assert ".pictures .diagram{overflow:hidden;contain:paint}" in build_page(fx.bundle("full"))
+
+
+def test_an_svg_scoped_outside_fleet_stays_an_image() -> None:
+    radar = ('<svg class="radar" xmlns="http://www.w3.org/2000/svg"><title>r</title>'
+             '<style>svg.radar .ring{fill:red}</style><rect width="1"><title>part</title></rect></svg>')
+    (only,) = unique_scopes([picture("a.svg", "A", "Q", radar)])
+    assert only["svg"] is None and only["src"].startswith("data:image/svg+xml;base64,")

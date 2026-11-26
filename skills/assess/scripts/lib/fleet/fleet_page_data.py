@@ -294,13 +294,14 @@ def picture(file: str, title: str, question: str, svg: str) -> Picture:
 
 
 def unique_scopes(pictures: Sequence[Picture]) -> list[Picture]:
-    """``pictures`` with any inlined SVG whose scope an earlier one took left an image."""
+    """``pictures`` with any inlined SVG whose scope an earlier one took, or that is not a ``fleet-``
+    scope (which could share a class with the page's own stylesheet, such as ``radar``), left an image."""
     taken: set[str] = set()
     out: list[Picture] = []
     for p in pictures:
         markup = p.get("svg")
         scope = root_class(markup) if markup else None
-        if scope in taken:
+        if scope in taken or (scope is not None and not scope.startswith("fleet-")):
             p = {**p, "svg": None}
         elif scope is not None:
             taken.add(scope)
