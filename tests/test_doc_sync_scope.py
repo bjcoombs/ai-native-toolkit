@@ -159,6 +159,21 @@ def test_deleted_subject_code_still_selects_the_doc_that_names_it(fixture_repo: 
     assert any("docs/caching.md" in c["docs"] for c in result["clusters"])
 
 
+def test_deleted_script_named_relative_to_its_doc_selects_the_doc(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    for rel, text in {"skills/x/README.md": "Run `scripts/foo.py`.\n", "skills/x/scripts/foo.py": "F = 1\n",
+                      "guide/y.md": "Loose doc.\n"}.items():
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text(text, encoding="utf-8")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "base")
+    git(repo, "checkout", "-q", "-b", "pr")
+    git(repo, "rm", "-q", "skills/x/scripts/foo.py")
+    git(repo, "commit", "-q", "-m", "drop the script")
+    assert [c["docs"] for c in scope(repo, "--changed-from", "main")["clusters"]] == [["skills/x/README.md"]]
+
+
 def test_cross_cluster_pass_runs_only_when_a_hub_changed(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     files = {"index.md": "[a](docs/a.md) [b](docs/b.md)\n", "docs/a.md": "[i](../index.md)\n",

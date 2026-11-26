@@ -132,9 +132,11 @@ def references(repo: Path, doc: str, text: str) -> Set[str]:
                 refs.add(candidate)
                 break
         else:
-            rel = _normalise(repo, "", target)
-            if rel:
-                refs.add(rel)
+            # Not on disk (perhaps deleted): keep both readings, so a deleted
+            # file a doc names relative to itself still selects that doc.
+            for candidate in (_normalise(repo, "", target), _normalise(repo, base, target)):
+                if candidate:
+                    refs.add(candidate)
     refs.discard(doc)
     return refs
 
