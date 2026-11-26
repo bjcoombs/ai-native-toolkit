@@ -25,7 +25,9 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
   spell ``url(`` or ``@import``) all refuse; a ``\`` refuses in any attribute but a ``data-*``
   one. So does an attribute that is not double-quoted, which the id and scope checks would not
   read, and any ``<style>`` at-rule but ``@media``: a statement such as ``@layer a;`` would hide
-  the next rule's selector from the scope check. The generators write none of these.
+  the next rule's selector from the scope check, and a selector that leaves the diagram through a
+  sibling combinator (``svg.<scope> ~ *``). An end tag is written without attributes. The
+  generators write none of these.
 - **Scoped.** A root that already carries a class is the generator's scope (#1449): kept when it
   is complete (every id, reference and style selector under it), None otherwise. A root without a
   class is scoped here under ``scope``.
@@ -146,7 +148,7 @@ def _sanitise(svg: str) -> tuple[str, bool]:
             if open_names.pop() != name:
                 raise _Refused
             closed = not open_names
-            out.append(m.group(0))
+            out.append(f"</{m.group('name')}>")  # an end tag's attributes are dropped
             continue
         details = details or (name == "title" and len(open_names) > 1)
         attrs = _safe_attrs(name, m.group("attrs"))
@@ -209,6 +211,7 @@ def inline_svg(svg: str, scope: str) -> str | None:
         return None
     styles = "".join(re.findall(r"<style>(.*?)</style>", clean, re.S))
     if (sanitise(clean)[0] != clean or any(word in clean.lower() for word in UNSAFE)
-            or _FETCH.search(clean) or "\\" in styles or re.search(r"@(?!media\b)", styles)):
+            or _FETCH.search(clean) or "\\" in styles or re.search(r"@(?!media\b)", styles)
+            or any(re.match(r"svg\.[a-z0-9-]+\s*[~+]", sel) for sel in css_selectors(styles))):
         return None
     return clean

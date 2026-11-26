@@ -98,6 +98,9 @@ def test_unsafe_markup_is_dropped(body: str) -> None:
     _svg("<g id='dup'>" + PART + "</g>", head='<svg class="fleet-x" xmlns="http://www.w3.org/2000/svg"><title>r</title>'),
     _svg(PART, head="""<svg data-x='a class="evil"' class="real"><title>r</title>"""),
     _svg("<g id=bare>" + PART + "</g>"),
+    _svg("<style>svg.fleet-x ~ *, svg.fleet-x + div{display:none}</style>" + PART,
+         head='<svg class="fleet-x" xmlns="http://www.w3.org/2000/svg"><title>r</title>'),
+    _svg("<style>~ div{display:none}</style>" + PART),
 ])
 def test_markup_it_cannot_trust_or_scope_stays_an_image(svg: str) -> None:
     assert inline_svg(svg, "s") is None
@@ -113,6 +116,11 @@ def test_a_complete_generator_scope_is_kept() -> None:
 def test_a_data_attribute_may_hold_a_backslash_and_an_ampersand() -> None:
     out = inline_svg(_svg('<rect data-path="a\\b &amp; c" width="1"><title>part</title></rect>'), "s")
     assert out is not None and 'data-path="a\\b &amp; c"' in out
+
+
+def test_an_end_tag_loses_its_attributes() -> None:
+    out = inline_svg(_svg('<g>' + PART + '</g onclick="alert(1)">'), "s")
+    assert out is not None and "onclick" not in out and "</g>" in out
 
 
 def test_a_link_keeps_its_external_href() -> None:
