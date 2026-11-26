@@ -467,7 +467,7 @@ _INLINE_CODE = re.compile(r"`([^`\n]*)`")
 # it, a dash aside, or a word that joins or adds an instruction.
 _SECOND_CLAUSE = re.compile(
     r"[.!?;,]\s+\S|\s[-\u2013\u2014]\s|\u2014"
-    r"|\b(?:and|then|but|also|never|always|must|before|after)\b", re.IGNORECASE)
+    r"|\b(?:and|then|but|also|never|always|must|before|after|not|no|don't)\b", re.IGNORECASE)
 _WORD = re.compile(r"\w+")
 # Words a pointer sentence holds besides the file name ("The instructions for
 # this repository live in" is 7); more reads as an instruction of its own.
@@ -488,7 +488,7 @@ def delegation_target(body: str, names: list[str]) -> str | None:
     ``docs/CLAUDE.md``), with no inline code beyond that name and at most
     ``POINTER_MAX_WORDS`` other words. Any other line (an HTML comment
     included), a second sentence or clause (``,``, ``;``, a dash, ``and``,
-    ``then``, ``never``, ``must`` and the like) or other inline code is
+    ``then``, ``never``, ``must``, ``not`` and the like) or other inline code is
     instruction content, so the file is no pointer (issue #1505). Known limit:
     a short one-clause instruction with none of those words still reads as a
     pointer.

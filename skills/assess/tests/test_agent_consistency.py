@@ -410,6 +410,7 @@ def test_a_pointer_with_other_instructions_stays_a_second_file(tmp_path: Path) -
     ("Read CLAUDE.md first, then run make test before pushing\n", ["CLAUDE.md"], None),
     ("See CLAUDE.md - never push to main\n", ["CLAUDE.md"], None),
     ("Read CLAUDE.md then run the tests\n", ["CLAUDE.md"], None),
+    ("Do not edit CLAUDE.md by hand.\n", ["CLAUDE.md"], None),
     ("Read CLAUDE.md for the rules on deploys releases reviews merges tickets "
      "labels branches tags\n", ["CLAUDE.md"], None),
     ("Instructions: [CLAUDE.md](./CLAUDE.md)\n", ["CLAUDE.md"], "CLAUDE.md"),
