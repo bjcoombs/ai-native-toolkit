@@ -101,12 +101,32 @@ def test_no_definition_anywhere_falls_back_to_the_toolkit_default(tmp_path: Path
     # adopter's repository neither place has the document.
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(refine_definition, "TOOLKIT_ROOT", tmp_path / "scripts-only")
-    assert refine_definition.size_limit("", 99) == 99
+    assert refine_definition.size_limit(0, 99) == 99
 
 
-def test_a_negative_override_is_an_error() -> None:
+@pytest.mark.parametrize("raw", ["-1", "eight", "3.5"])
+def test_a_malformed_override_fails_before_any_write(raw: str) -> None:
+    # Settings is built before the first write, so a bad value stops the job
+    # there rather than part-way through an issue (size marker written, no label).
     with pytest.raises(refine_definition.DefinitionError, match="REFINE_MAX_POINTS"):
-        refine_definition.size_limit("-1", 8)
+        refine_write.Settings({"GH_REPO": "a/b", "REFINE_MAX_POINTS": raw})
+
+
+@pytest.mark.parametrize("raw, value", [("", 0), (" 0 ", 0), ("13", 13)])
+def test_parse_override(raw: str, value: int) -> None:
+    assert refine_definition.parse_override(raw) == value
+
+
+def test_the_limit_is_read_once_per_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _definition_saying(tmp_path, 3)
+    monkeypatch.chdir(tmp_path)
+    s = refine_write.Settings({"GH_REPO": "a/b"})
+    assert s.max_points == 3
+    _definition_saying(tmp_path / "moved", 5)
+    (tmp_path / "moved" / "docs").replace(tmp_path / "docs-new")
+    (tmp_path / "docs").rename(tmp_path / "docs-old")
+    (tmp_path / "docs-new").rename(tmp_path / "docs")
+    assert s.max_points == 3
 
 
 def test_the_four_defaults_agree() -> None:
@@ -124,7 +144,7 @@ def test_the_four_defaults_agree() -> None:
     effective = {
         "refine_write.DEFAULT_MAX_POINTS": fallback,
         "definition-of-ready.md max_points": definition,
-        "reusable-refine-triage.yml max_points": refine_definition.size_limit(str(workflow_default), fallback),
-        "templates/refine.yml REFINE_MAX_POINTS": refine_definition.size_limit(str(template_default), fallback),
+        "reusable-refine-triage.yml max_points": refine_definition.size_limit(refine_definition.parse_override(str(workflow_default)), fallback),
+        "templates/refine.yml REFINE_MAX_POINTS": refine_definition.size_limit(refine_definition.parse_override(str(template_default)), fallback),
     }
     assert len(set(effective.values())) == 1, effective

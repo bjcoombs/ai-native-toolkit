@@ -20,7 +20,7 @@ right type, so a renamed key fails loudly instead of disabling a check.
 
 `resolve_path` finds the document the way `refine.py --definition` defaults:
 under the current directory, then under this toolkit checkout. `size_limit`
-gives the write scripts the same `max_points` (#1439 follow-up): an explicit
+(after `parse_override`) gives the write scripts the same `max_points` (#1439 follow-up): an explicit
 `REFINE_MAX_POINTS` above 0 overrides it, otherwise the definition decides.
 
 Python 3.8 compatible and stdlib only.
@@ -224,22 +224,28 @@ def resolve_path(arg: Optional[str] = None) -> Path:
     return DEFAULT_PATH if DEFAULT_PATH.is_file() else TOOLKIT_ROOT / DEFAULT_PATH
 
 
-def size_limit(override: str, fallback: int) -> int:
+def parse_override(raw: str) -> int:
+    """`REFINE_MAX_POINTS` as an integer: 0 when empty, `DefinitionError` unless a whole number >= 0."""
+    text = raw.strip()
+    if not text:
+        return 0
+    if not re.fullmatch(r"\d+", text):
+        raise DefinitionError(f"REFINE_MAX_POINTS must be 0 (unset) or a positive integer, not {raw!r}")
+    return int(text)
+
+
+def size_limit(override: int, fallback: int) -> int:
     """The largest size that can be ready: what `refine.py`'s `sized` check uses.
 
-    `override` (`REFINE_MAX_POINTS`) wins when it is an integer above 0; empty
-    or 0 means unset. Otherwise `max_points` comes from the definition at
+    `override` (`parse_override` of `REFINE_MAX_POINTS`) wins when above 0;
+    0 means unset. Otherwise `max_points` comes from the definition at
     `resolve_path()`. When neither place has the document, as in a write job
     that checks out only the scripts for a repository with no definition of
     its own, `refine.py` read this toolkit's copy, so `fallback` is returned;
     a test keeps it equal to that copy's `max_points`.
     """
-    raw = override.strip()
-    value = int(raw) if raw else 0
-    if value < 0:
-        raise DefinitionError(f"REFINE_MAX_POINTS must be 0 (unset) or a positive integer, not {raw!r}")
-    if value:
-        return value
+    if override:
+        return override
     path = resolve_path()
     if not path.is_file():
         return fallback
