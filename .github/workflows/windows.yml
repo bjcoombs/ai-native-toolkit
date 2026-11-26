@@ -351,7 +351,13 @@ jobs:
             mkdir -p "$co"
             git -C "$co" init -q -b main
             printf 'def greet(name):\n    """Say hello."""\n    return f"caf\xc3\xa9 \xc2\xb7 {name}"\n' > "$co/app.py"
-            printf '# %s\n\nSee [the app](app.py).\n' "$r" > "$co/README.md"
+            printf '# %s\n\nSee [the app](app.py) and [the guide](docs/guide.md).\n' "$r" > "$co/README.md"
+            # docs/guide.md cites the nested README by its repo-root path, the
+            # reference doc-graph-svg.py once failed on with a backslash
+            # KeyError on Windows (#1286).
+            mkdir -p "$co/docs/sub"
+            printf '# Guide\n\nRead `docs/sub/README.md` next.\n' > "$co/docs/guide.md"
+            printf '# Sub\n' > "$co/docs/sub/README.md"
             git -C "$co" add -A
             git -C "$co" commit -q -m "init $r "$'caf\xc3\xa9'
           done
