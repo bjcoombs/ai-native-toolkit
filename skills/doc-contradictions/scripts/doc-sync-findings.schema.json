@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "doc-sync raw comparer findings",
+  "description": "What the doc-sync orchestrator returns: every comparer finding unchanged, tagged with its cluster id. doc_sync_findings.py checks the citations; nothing here is trusted before that.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["findings"],
+  "properties": {
+    "findings": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cluster", "kind", "subject", "a", "b", "explanation", "confidence"],
+        "properties": {
+          "cluster": {"type": "string", "maxLength": 20},
+          "kind": {"enum": ["doc-vs-doc", "doc-vs-code"]},
+          "subject": {"type": "string", "maxLength": 200},
+          "a": {"$ref": "#/$defs/side"},
+          "b": {"$ref": "#/$defs/side"},
+          "explanation": {"type": "string", "maxLength": 600},
+          "confidence": {"enum": ["high", "medium", "low"]}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "side": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "line", "quote"],
+      "properties": {
+        "path": {"type": "string", "maxLength": 300},
+        "line": {"type": "integer", "minimum": 1},
+        "quote": {"type": "string", "maxLength": 300}
+      }
+    }
+  }
+}
