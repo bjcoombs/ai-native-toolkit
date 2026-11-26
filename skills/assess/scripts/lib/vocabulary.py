@@ -57,7 +57,9 @@ The last four are the retired maturity band labels (`RETIRED_LABELS`); the Step 
 next-steps page (`teams.md` and `teams/<group>.md`) opens with a line that starts
 `In place:` (`IN_PLACE`) and says what is already in place before any next step: counts of
 what is measured or reached, and at level 0 or unknown a plain "nothing confirmed for this
-practice yet", never implied credit. The guard checks it on every rendered page.
+practice yet", never implied credit. The guard checks it on every rendered page. A team page
+and the fleet report open with their strengths named (#1334): the practices held, each with
+its count, in place of a counts-only line.
 
 **Step and gate on fleet pages (#1254).** The fleet pages use the /assess words for a
 maturity-model entry: its practice, the Step it gates, or the gate. The phrases in

@@ -2,12 +2,16 @@
 
 Reads the ``opportunities`` object ``lib/fleet/fleet_opportunities.py`` computed (so the section and
 the JSON always agree and carry the same privacy) plus this run's achievements for the
-display-only recent progress. The first line starts ``In place:`` (``lib/vocabulary.IN_PLACE``, #743); then the
+display-only recent progress, after a "What's working across the fleet" section (``whats_working``, #1334)
+that names the practices every measured repository holds at the top level and those held most widely.
+The opportunities' first line starts ``In place:`` (``lib/vocabulary.IN_PLACE``, #743) and points at it; then the
 biggest lift, the shared-template leverage and the recent progress, each phrased as an
 opportunity. Repository and unit names are listed in key order, never numbered or ranked.
 Deterministic; no date.
 
-`opportunities_section` renders `report.md`'s "Opportunities" section from a built
+`opportunities_section` renders `report.md`'s "What's working across the fleet" section (#1334: each
+practice at the top level in every measured repository, then up to `MOST_HELD` held most widely, from
+`opportunities.in_place`, so the counts are stated once, there) and its "Opportunities" section from a built
 `FleetData` (so the report carries the JSON's privacy) and this run's `Achievements`:
 an `In place:` line first, then the biggest lift, the shared templates and the display-only
 recent progress (this run's `level_up` achievements, from the history; otherwise a
@@ -26,7 +30,7 @@ from collections.abc import Sequence
 from lib.fleet.fleet_achievements import BASELINE_NOTE, LEVEL_UP, Achievements
 from lib.fleet.fleet_data import FleetData
 from lib.fleet.fleet_next_steps import code, text
-from lib.fleet.fleet_opportunities import PER_LIST, TITLE, Opportunities
+from lib.fleet.fleet_opportunities import PER_LIST, TITLE, InPlace, Opportunities
 from lib.fleet.fleet_tooling_map import KINDS
 from lib.scoring.headline import GATE_CHANGE
 from lib.vocabulary import IN_PLACE
@@ -41,12 +45,39 @@ def _names(keys: Sequence[str]) -> str:
     return shown + (f" and {rest} more in `fleet-data.json`" if rest > 0 else "")
 
 
-def _in_place(opps: Opportunities, titles: dict[str, str]) -> str:
+WORKING_TITLE = "What's working across the fleet"
+WORKING_ANCHOR = "#whats-working-across-the-fleet"
+MOST_HELD = 3  # practices named as held most widely, after the ones every repository holds
+
+
+def _held(p: InPlace, titles: dict[str, str]) -> str:
+    return (f"- {text(titles.get(p['row'], p['row']))}: {p['at_top']} of {p['measured']} measured "
+            f"{'repository' if p['measured'] == 1 else 'repositories'} at the top level.")
+
+
+def whats_working(opps: Opportunities, titles: dict[str, str]) -> list[str]:
+    """The "What's working across the fleet" section (#1334), ahead of the opportunities: the
+    practices every measured repository holds at the top level, then up to ``MOST_HELD`` more
+    held most widely (share at the top level, then model order). Only measured levels count."""
+    rows = opps["in_place"]
+    every = [p for p in rows if p["measured"] > 0 and p["at_top"] == p["measured"]]
+    rest = sorted((p for p in rows if 0 < p["at_top"] < p["measured"]),
+                  key=lambda p: -p["at_top"] / p["measured"])[:MOST_HELD]
+    lines = [f"## {WORKING_TITLE}", ""]
+    if not every and not rest:
+        return lines + [f"{IN_PLACE} 0 of {len(rows)} practices at the top level in any measured repository "
+                        "yet; the opportunities below say where to start.", ""]
+    head = f"{IN_PLACE} {len(every)} of {len(rows)} practices at the top level in every measured repository"
+    if rest:
+        head += f", and {len(rest)} more held most widely" if every else f"; {len(rest)} held most widely"
+    return lines + [f"{head}.", "", *(_held(p, titles) for p in [*every, *rest]), ""]
+
+
+def _in_place(opps: Opportunities) -> str:
     if not opps["in_place"]:
         return f"{IN_PLACE} the maturity model has no team practices to hold."
-    parts = [f"{p['at_top']} of {p['measured']} measured on {text(titles.get(p['row'], p['row']))}"
-             for p in opps["in_place"]]
-    return f"{IN_PLACE} repositories at the top level, {'; '.join(parts)}."
+    return (f"{IN_PLACE} the practices under [{WORKING_TITLE}]({WORKING_ANCHOR}) above, out of "
+            f"{len(opps['in_place'])}; the changes below lift the most repositories next.")
 
 
 def _lift(opps: Opportunities) -> list[str]:
@@ -126,6 +157,7 @@ def opportunities_section(data: FleetData, doc: Achievements | None) -> str | No
     if opps is None:
         return None
     titles = {row["id"]: row["title"] for row in data["model"]}
-    lines = [f"## {TITLE}", "", _in_place(opps, titles), "", INTRO, "", *_lift(opps), "",
+    working = whats_working(opps, titles) if opps["in_place"] else []
+    lines = [*working, f"## {TITLE}", "", _in_place(opps), "", INTRO, "", *_lift(opps), "",
              *_templates(opps), "", *_progress(doc), "", *_learn(data), ""]
     return "\n".join(lines)

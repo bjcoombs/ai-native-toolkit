@@ -12,6 +12,9 @@ maturity model that produced it:
 - ``step_gate_ids(model, step)``: the gate ids a Step lists, in order (a Step lists every
   gate below it too, so the top Step lists them all);
 - ``step_name(model, step)``: the Step's name in the model, ``""`` for a Step it does not define;
+- ``fully_in_place(level)``: the level result's ``in_place`` entries whose row is at its top
+  level (#1334), in model order: the practices fully in place. The card's In place block and
+  the badge summary's count read it; ``[]`` for a result written before #1334;
 - ``advisories(level, model)``: the counted conditions measured and not met that no Step
   gate waits on, that is, outside rows 1..``level`` of every gate of every Step. They are
   advice: none of them moves the Step.
@@ -29,10 +32,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, TypedDict
 
-from lib.scoring.level_result_types import Blocker
+from lib.scoring.level_result_types import Blocker, InPlace
 from lib.scoring.levels import MaturityModel
 
-__all__ = ["CardFact", "advisories", "blocking_gates", "step_gate_ids", "step_name", "top_step"]
+__all__ = ["CardFact", "advisories", "blocking_gates", "fully_in_place", "step_gate_ids", "step_name", "top_step"]
 
 
 class CardFact(TypedDict):
@@ -49,6 +52,14 @@ def blocking_gates(level: Any) -> list[Blocker]:
     if not isinstance(blockers, list):
         return []
     return [b for b in blockers if isinstance(b, Mapping) and b.get("kind") == "gate"]  # type: ignore[misc]
+
+
+def fully_in_place(level: Any) -> list[InPlace]:
+    """The ``in_place`` entries of ``level`` whose row is at its top level, in model order."""
+    entries = level.get("in_place") if isinstance(level, Mapping) else None
+    if not isinstance(entries, list):
+        return []
+    return [e for e in entries if isinstance(e, Mapping) and e.get("top") is True]  # type: ignore[misc]
 
 
 def top_step(model: MaturityModel) -> int | None:

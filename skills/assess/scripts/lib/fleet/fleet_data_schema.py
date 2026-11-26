@@ -57,6 +57,9 @@ def build_schema() -> JsonDict:
     gate_fields = repo["gate_blockers"]["items"]["properties"]
     gate_fields["state"] = {"enum": list(STATES)}
     gate_fields["disposition"] = {"enum": [EXCLUDED_BY_OWNER, None]}
+    repo["in_place"]["description"] = (
+        "the level result's practices in place (#1334): each row at its top level and each row a gate of a "
+        "Step already held reads, with the gate ids and the check manifest's why; empty when not measured")
     exclusion = repo["exclusions"]["items"]["properties"]
     exclusion["kind"] = {"enum": list(EXCLUSION_KINDS)}
     exclusion["source"] = {"enum": [SOURCE_REPO]}

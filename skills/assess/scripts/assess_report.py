@@ -15,6 +15,9 @@ It renders:
   ``summary_markdown``, then the fixed glossary line (``GLOSSARY_LINE``) linking each term
   to ``docs/glossary.md``; ``report_facts(ctx)`` gives the lines the report adds there with
   their fact ids (``narrowed``, ``glossary``, #1253),
+- "In place" (``lib/top_card.in_place_section``, #1334), the first section: every practice
+  fully in place with its level and why, titled from the default model (a row it does not
+  define reads as its id); left out when none is,
 - "Catalogue Coverage" (``lib/scoring/headline.py``, #747, #844, #1083): the conditions not measured
   with their reasons, the model version and the per-tag strip, pasted from the run context's
   ``headline`` block, then the monorepo unit roll-up,
@@ -67,6 +70,8 @@ from lib.card_facts import CardFact
 from lib.fleet.runner import repository_name
 from lib.assess_diagrams_review import build_all
 from lib.scoring.headline import GLOSSARY_URL, as_headline
+from lib.scoring.level_tally import default_model
+from lib.top_card import in_place_section
 from lib.report.measured_appendix import measured_section
 from lib.run.scan_plan import not_run_text
 
@@ -123,7 +128,7 @@ REPORT_TEMPLATE = Template("""# Deterministic Assessment Snapshot: $repo_name
 
 _Generated $run_date by $made_by.${commit_note}_
 
-${summary_section}## Catalogue Coverage
+${summary_section}${in_place_section}## Catalogue Coverage
 
 $headline
 
@@ -689,6 +694,7 @@ def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None =
         made_by=made_by(ctx),
         commit_note=_render_commit_note(ctx),
         summary_section=render_summary_section(ctx),
+        in_place_section=in_place_section(ctx.get("level"), default_model()),
         headline=_headline_markdown(ctx),
         diagrams_section=diagrams_section(build_all(ctx), assess_dir),
         files_scored=_fmt(stats.get("files_scored", 0)),

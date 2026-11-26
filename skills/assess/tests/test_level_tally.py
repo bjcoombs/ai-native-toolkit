@@ -415,6 +415,66 @@ def test_ceiling_step_is_null_at_the_top_step_and_without_steps():
     assert (flat["step"], flat["ceiling_step"], flat["held_above"]) == (None, None, [])
 
 
+def _in_place_model() -> MaturityModel:
+    """Three rows of the default model by id, so their whys come from the core manifest."""
+    doc = "doc_staleness.summary.stale_pct"
+    stated = "guardrails.stated_pct"
+    return _model(_row("doc-freshness", [{"signal": doc, "op": "lte", "value": 50}],
+                       [{"signal": doc, "op": "lte", "value": 20}]),
+                  _row("guardrails-stated", [{"signal": stated, "op": "gte", "value": 50}],
+                       [{"signal": stated, "op": "gte", "value": 100}]),
+                  _row("layer-1-liveness", [{"signal": "observability.rung", "op": "gte", "value": 1}]))
+
+
+def test_in_place_lists_rows_at_their_top_level_with_their_why_and_never_a_not_measured_row():
+    """#1334: two rows at their top level are listed with their why; the not-measured row is not."""
+    signals = {**_fresh(10), "guardrails": {"available": True, "stated_pct": 100}}
+    result = lt.level_result(_in_place_model(), signals)
+    assert _state(result, "layer-1-liveness.1")[0] == "not_measured"
+    listed = result["in_place"]
+    assert [(e["row"], e["level"], e["top"], e["gates"]) for e in listed] == [
+        ("doc-freshness", 2, True, []), ("guardrails-stated", 2, True, [])]
+    whys = {c["id"]: c.get("why") for c in result["conditions"]}
+    assert [e.get("why") for e in listed] == [whys["doc-freshness.2"], whys["guardrails-stated.2"]]
+    assert all(e.get("why") for e in listed)
+
+
+def test_in_place_leaves_out_a_row_below_its_top_level():
+    signals = {**_fresh(40), "guardrails": {"available": True, "stated_pct": 100}}
+    assert [e["row"] for e in lt.level_result(_in_place_model(), signals)["in_place"]] == ["guardrails-stated"]
+
+
+def test_in_place_lists_the_rows_a_held_step_reads_with_their_gates():
+    """A row a held Step's gate reads is in place at the gate's level; its declared or listed
+    conditions hold the gate but never make the row top."""
+    signals = {**_fresh(40), "layer_grades": {"instruction_file_present": True},
+               "ci_checks": {"test_or_lint_configured": True}}
+    result = lt.level_result(_laddered(), signals)
+    assert result["step"] == 3
+    assert [(e["row"], e["level"], e["top"], e["gates"]) for e in result["in_place"]] == [
+        ("instr", 1, False, ["instructions"]), ("ci", 1, False, ["ci_runs_tests"])]
+    below = lt.level_result(_laddered(), {**signals, "layer_grades": {"instruction_file_present": False}})
+    # Step 1 holds no gate, and the ci row's one condition is listed, not counted: nothing in place
+    assert below["in_place"] == []
+    fresh = lt.level_result(_laddered(), {**_fresh(10), "layer_grades": {"instruction_file_present": False}})
+    assert [(e["row"], e["top"]) for e in fresh["in_place"]] == [("fresh", True)]  # counted conditions
+
+
+def test_in_place_never_lists_an_excluded_row_and_counts_only_keeps_the_tokens():
+    signals = {**_fresh(10), "guardrails": {"available": True, "stated_pct": 100}}
+    result = lt.level_result(_in_place_model(), signals, [{"id": "doc-freshness.1", "kind": "not_applicable"}])
+    assert [e["row"] for e in result["in_place"]] == ["guardrails-stated"]
+    kept = counts_only({"level": result})["level"]["in_place"]
+    assert [(e["row"], e["level"], e["top"], e["gates"]) for e in kept] == [("guardrails-stated", 2, True, [])]
+    assert "why" not in kept[0]  # manifest text, dropped like the conditions' why
+
+
+def test_a_met_hazard_keeps_its_row_out_of_in_place():
+    model = _model(_row("risk", [{"signal": DOC, "op": "lte", "value": 50}], l1={"polarity": "hazard"}))
+    assert lt.level_result(model, _fresh(10))["in_place"] == []
+    assert [e["row"] for e in lt.level_result(model, _fresh(90))["in_place"]] == ["risk"]
+
+
 def _plus_met_row(model: MaturityModel, n: int) -> MaturityModel:
     """``model`` with ``n`` new rows of one counted condition each that ``_fresh()`` meets."""
     rows: list[Row] = [{"id": f"new-{i}", "title": "new", "scope": "team", "aggregation": {"rule": "min", "share": 1},

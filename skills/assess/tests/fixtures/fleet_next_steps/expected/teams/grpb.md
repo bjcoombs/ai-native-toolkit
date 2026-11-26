@@ -1,6 +1,8 @@
 # Next steps: `grpb`
 
-In place: 1 of 7 practices at the top level and 2 at level 1 or above, across 1 repository.
+In place: 1 of 7 practices at the top level in every repository of this group.
+
+- Agent permissions: level 1 of 1 in 1 of 1 repository.
 
 Maturity model `next-steps-fixture-1`. 1 repository: 1 scanned, 0 could not be scanned.
 

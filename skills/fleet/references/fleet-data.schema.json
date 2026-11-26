@@ -719,6 +719,40 @@
               "additionalProperties": false
             }
           },
+          "in_place": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "row": {
+                  "type": "string"
+                },
+                "level": {
+                  "type": "integer"
+                },
+                "top": {
+                  "type": "boolean"
+                },
+                "gates": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "gates",
+                "level",
+                "row",
+                "top"
+              ],
+              "additionalProperties": false
+            },
+            "description": "the level result's practices in place (#1334): each row at its top level and each row a gate of a Step already held reads, with the gate ids and the check manifest's why; empty when not measured"
+          },
           "tags": {
             "anyOf": [
               {
@@ -923,6 +957,7 @@
           "active",
           "exclusions",
           "gate_blockers",
+          "in_place",
           "key",
           "learn_from",
           "next_step",

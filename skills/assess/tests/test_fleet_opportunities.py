@@ -192,10 +192,16 @@ def test_the_same_run_gives_the_same_bytes() -> None:
 def test_the_section_opens_with_what_is_in_place_and_ranks_no_one() -> None:
     section = opportunities_section(_data(fleet()), None)
     assert section is not None
-    lines = section.splitlines()
-    assert lines[0] == "## Opportunities"
-    assert lines[2] == ("In place: repositories at the top level, 2 of 6 measured on Instructions; "
-                        "1 of 6 measured on CI.")
+    lines = section[section.index("## Opportunities"):].splitlines()
+    # the counts are the What's working section's (#1334); the opportunities point at it
+    assert lines[2] == ("In place: the practices under [What's working across the fleet]"
+                        "(#whats-working-across-the-fleet) above, out of 2; the changes below lift the most "
+                        "repositories next.")
+    working = section[:section.index("## Opportunities")]
+    assert working.splitlines()[:5] == [
+        "## What's working across the fleet", "",
+        "In place: 0 of 2 practices at the top level in every measured repository; 2 held most widely.",
+        "", "- Instructions: 2 of 6 measured repositories at the top level."]
     assert "Applies to `grp/a`, `grp/b`, `grp/c`, `grp/ci-templates`, `grp/e`." in section
     assert f"- `{SOURCE}` (CI: GitLab project include):" in section
     assert not any(line.lstrip()[:2] in {"1.", "2.", "3."} for line in lines)

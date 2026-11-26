@@ -26,7 +26,10 @@ they have no per-repository cell or unit roll-up; their levels stay in
 **Steps** (#944, ``lib/fleet/fleet_data_steps.py``): each repository carries ``step``,
 ``next_step`` and ``tally`` exactly as ``level.json`` gives them (``lib.fleet.fleet_level.repo_level``)
 the owner's ``exclusions`` and ``gate_blockers``, every Step gate that does not hold (#945,
-which a Step target above the next Step reads); each unit carries a ``step`` roll-up: the lowest Step over
+which a Step target above the next Step reads), and ``in_place`` (#1334), the level result's
+practices in place with their why, for readers of the JSON (the team pages read ``groups.jsonl``
+and ``report.md`` reads ``opportunities.in_place``, whose top level is ``evaluate_row``'s, any
+grade); each unit carries a ``step`` roll-up: the lowest Step over
 its measured repositories, "N of M measured", and for the next Step how many repositories
 each gate holds back (a Step reads its gates only, #1083).
 
@@ -145,7 +148,7 @@ from lib.fleet.fleet_maturity import SCOPE
 from lib.fleet.fleet_opportunities import Opportunities, build_opportunities
 from lib.fleet.fleet_stamp import FleetStamp, RepositoryCounts
 from lib.fleet.fleet_units import Tree
-from lib.scoring.level_result_types import LevelResult, NextStep, Tally, TagCell
+from lib.scoring.level_result_types import InPlace, LevelResult, NextStep, Tally, TagCell
 from lib.scoring.levels import Evaluation, MaturityModel, Row, StepDef, evaluate_row, floor_of
 
 # Bump on any change to the shapes below; #704 and #705 read it.
@@ -226,6 +229,7 @@ class DataRepo(TypedDict):
     tally: Tally | None
     exclusions: list[RepoExclusion]  # the owner's, listed and never counted
     gate_blockers: list[GateBlocker]  # #945: every Step gate that does not hold, as tokens
+    in_place: list[InPlace]  # #1334: the level result's practices in place, with their why
     tags: list[TagCell] | None  # #1073: the headline's per-tag strip; None when not measured
     unit_rows: list[UnitRow] | None  # #866: one row per monorepo unit; None when not run by unit
     # #1155: the measured repositories holding next_step's first gate; None where names are not written

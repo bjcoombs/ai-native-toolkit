@@ -201,7 +201,7 @@ steps:
       config: .assess/config.toml   # optional; warn-only defaults without it
 ```
 
-Two badges come with it - GitHub's native status badge for the gate workflow, and a live AI-readiness badge served from the committed `.assess/badge.json` via shields.io (written by every assess run: the Step and the next gate, e.g. `Step 3 · next: coverage gate`, or `Step 4 · all gates held`):
+Two badges come with it - GitHub's native status badge for the gate workflow, and a live AI-readiness badge served from the committed `.assess/badge.json` via shields.io (written by every assess run: the Step, the practices fully in place and the next gate, e.g. `Step 3 · 2 practices fully in place · next: coverage gate`, or `Step 4 · 5 practices fully in place · all gates held`):
 
 ```markdown
 [![Assess Gate](https://github.com/<owner>/<repo>/actions/workflows/assess-gate.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/assess-gate.yml)

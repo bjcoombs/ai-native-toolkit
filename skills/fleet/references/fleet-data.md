@@ -96,7 +96,11 @@ gate of the model's `[[steps]]` that does not hold, once per gate id in Step ord
 tokens only: `gate` (the gate id), `state` (the blocking condition's state) and
 `disposition` (`excluded_by_owner`, else `null`); empty when every gate holds or the
 repository is not measured. A Step target above the repository's next Step reads
-its missing gates from it. `learn_from` (#1155) lists up to three measured repositories of the run that
+its missing gates from it. `in_place` (#1334) copies the level result's practices in place:
+each row at its top level and each row a gate of a held Step reads, with `level`, `top`, the
+gate ids and the check manifest's `why`; empty when not measured. It is carried for readers of
+the JSON: the team pages and `report.md` read the row levels, where `top` needs counted, met
+conditions here. `learn_from` (#1155) lists up to three measured repositories of the run that
 already hold the first gate of the repository's `next_step`, by key, so a team can learn
 from one that has solved the same problem: in clear under `--full`, hashed under
 `--hash-paths` or `--hash-salt`, `null` in plain counts-only output and for a repository not

@@ -137,6 +137,15 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   `next_step.step`); `held_above` lists the ids of the gates above the current Step that already
   hold (not gates of a Step already held), once each, in Step order. Both read gates only, like
   `step`. `ceiling_step` is null and `held_above` empty when `next_step` is null.
+- `in_place` (#1334, `in_place`): the practices already in place, in model order, each
+  `{row, level, top, gates, why?}`. A row is listed when every condition of it holds (`top`, at
+  its top `level`; a hazard condition holds when it reads unmet) or when a gate of a Step already
+  held reads it (`gates`, the gate ids once each in Step order; `level` the highest such gate's).
+  `why` is the condition at `level`'s why. Only counted, met conditions make a row `top`: a row
+  with a condition not measured, excluded, unmet or only listed (config-only, declared, demoted)
+  is never `top`, so a blind run lists nothing it did not read and the badge's "fully in place"
+  count is measured evidence only. A hazard holds when it reads unmet at a counted grade. The
+  strengths-first blocks of the deterministic report, the badge summary and the fleet pages read it.
 
 Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a set whose count
 is 0, such as `stats_summary.loc_by_class.source.p95` with its `files_scored` 0: `no_source_files`, #906 and #820, and
@@ -161,7 +170,7 @@ from typing import Any
 
 from lib.counts_only.reason_codes import reason_code, reason_token
 from lib.scoring.level_tags import tag_rows
-from lib.scoring.level_result_types import Blocker, ConditionResult, ExcludedCondition, LevelResult, NextStep
+from lib.scoring.level_result_types import Blocker, ConditionResult, ExcludedCondition, InPlace, LevelResult, NextStep
 from lib.scoring.levels import Criterion, CriterionOutcome, Evaluation, LevelOutcome, MaturityModel, Row, StepDef
 from lib.scoring.levels import condition_id, evaluate_row, unavailable_signal
 from lib.scoring.levels import load_levels
@@ -391,6 +400,47 @@ def _ceiling(steps: Sequence[StepDef], step: int | None, next_step: NextStep | N
     return ceiling, held
 
 
+def _holds(cond: ConditionResult) -> bool:
+    """A condition that counts toward a practice fully in place: counted and met, or a hazard read
+    absent at a counted grade. A listed condition (config-only, declared, demoted) never does."""
+    if cond.get("polarity") == "hazard":
+        return cond["state"] == "unmet" and cond["grade"] in COUNTED_GRADES
+    return cond["counted"] and cond["state"] == "met"
+
+
+def in_place(model: MaturityModel, step: int | None, conditions: Sequence[ConditionResult]) -> list[InPlace]:
+    """The practices in place (#1334), in model order: each row at its top level (every condition
+    holds, ``_holds``) and each row a gate of a Step already held (``step`` and below) reads, with
+    those gate ids and the why of the condition at the listed level. Only counted, met conditions
+    make a row ``top``: a row with a condition not measured, excluded, unmet or only listed
+    (config-only, declared, demoted by the exit rule) is listed only for a held gate, whose
+    conditions are met by definition, whatever their grade."""
+    by_row: dict[str, list[ConditionResult]] = {}
+    for cond in conditions:
+        by_row.setdefault(cond["row"], []).append(cond)
+    gates: dict[str, dict[str, int]] = {}
+    for definition in model.get("steps", []):
+        if step is None or definition["step"] > step:
+            continue
+        for gate in definition["gates"]:
+            gates.setdefault(gate["row"], {}).setdefault(gate["id"], gate["level"])
+    by_id = {c["id"]: c for c in conditions}
+    out: list[InPlace] = []
+    for row in model["rows"]:
+        conds = by_row.get(row["id"], [])
+        top = bool(conds) and all(_holds(c) for c in conds)
+        held = gates.get(row["id"], {})
+        if not top and not held:
+            continue
+        level = row["levels"][-1]["level"] if top else max(held.values())
+        entry: InPlace = {"row": row["id"], "level": level, "top": top, "gates": list(held)}
+        found = by_id.get(condition_id(row["id"], level))
+        if found is not None and (why := found.get("why")):
+            entry["why"] = why
+        out.append(entry)
+    return out
+
+
 def gate_conditions(model: MaturityModel) -> frozenset[str]:
     """Every condition a Step gate reads: its row's levels 1 up to the gate's level."""
     return frozenset(condition_id(g["row"], n) for step in model.get("steps", []) for g in step["gates"]
@@ -451,6 +501,7 @@ def level_result(model: MaturityModel, data: Mapping[str, Any] | None,
         "next_step": next_step,
         "ceiling_step": ceiling_step,
         "held_above": held_above,
+        "in_place": in_place(model, step, conditions),
     }
     if excluded:
         result["excluded"] = [excluded[c["id"]] for c in conditions if c["id"] in excluded]
