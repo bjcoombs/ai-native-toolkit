@@ -58,7 +58,7 @@ STATES: dict[str, tuple[Any, Any, Any, Any, bool]] = {
     "top-step": (_top(), {**KNOWN, "closed_count": 1, "closed": [{"completed_sha": SHA}]}, None, ACTION, True),
     "below-top-step": (_below(), KNOWN, ROLLUP, None, False),
     "first-run": (_below(), FIRST, None, ACTION, False),
-    # #1334: five practices fully in place, two with their why and the rest named
+    # #1334: five practices fully in place, three named and the rest counted
     "in-place": (_in_place(5), KNOWN, ROLLUP, None, False),
 }
 # Further states the facts and lint tests read: every since line and fallback the card can say.

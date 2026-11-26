@@ -21,7 +21,7 @@ from lib.scoring.level_tally import default_model
 from lib.plain_english import lint
 from lib.since_last_run import FIRST_RUN
 from lib.top_card import (GATE_GAP, GATE_TASK, STEP_GATES_URL, card_lines, card_markdown, first_action,
-                          read_first_action)
+                          in_place_section, read_first_action)
 
 MODEL = default_model()
 GATE_ROWS = {"layer-0-instructions.1", "layer-5-ci.1", "layer-6-coverage.1"}
@@ -63,16 +63,14 @@ def _below() -> dict[str, Any]:
                                                "condition": "layer-6-coverage.1", "state": "unmet"}]}, conds)
 
 
-# A why of the manifest's median length, 25 words (#1334)
-WHY = ("An agent reads the docs as true. A doc whose code has moved on misleads it about that code, "
-       "so fresh docs keep it right.")
-IN_PLACE_ROWS = ("doc-freshness", "guardrails-stated", "layer-1-liveness", "layer-2-design", "layer-3-linters")
+IN_PLACE_ROWS = ("layer-0-instructions", "layer-1-liveness", "layer-2-design", "layer-3-linters", "doc-freshness")
 
 
 def _in_place(n: int) -> dict[str, Any]:
-    """``_below`` with ``n`` practices fully in place, each with a why, and one in place for a gate only."""
-    entries = [{"row": row, "level": 2, "top": True, "gates": [], "why": WHY} for row in IN_PLACE_ROWS[:n]]
-    gate_only = {"row": "layer-0-instructions", "level": 1, "top": False, "gates": ["instructions"], "why": WHY}
+    """``_below`` with ``n`` practices fully in place, each with its own why, and one in place for a gate only."""
+    entries = [{"row": row, "level": 2, "top": True, "gates": [], "why": f"Why {row} matters, 1."}
+               for row in IN_PLACE_ROWS[:n]]
+    gate_only = {"row": "layer-5-ci", "level": 1, "top": False, "gates": ["ci_runs_tests"], "why": "CI why."}
     return {**_below(), "in_place": [gate_only, *entries]}
 
 
@@ -248,23 +246,30 @@ def test_the_rendered_report_opens_with_the_card_before_any_section() -> None:
     assert report.count("Step 3 of 4") == 1
 
 
-def test_the_in_place_block_follows_the_lead_and_precedes_every_gate_line() -> None:
-    """#1334: strengths first. Each practice fully in place with its level and why; a row in place
-    only for a gate is the Holding line's fact and is not listed."""
+def test_the_in_place_line_follows_the_lead_and_precedes_every_gate_line() -> None:
+    """#1334: strengths first. The practices fully in place by title; a row in place only for a gate
+    is the Holding line's fact and is not named."""
     lines = card_lines(_in_place(2), MODEL, KNOWN)  # type: ignore[arg-type]
-    assert lines[1] == ("In place: 2 practices at their top level.\n"
-                        f"- Documentation freshness, level 2 of 2: {WHY}\n- Guardrails stated, level 2 of 2: {WHY}")
+    assert lines[1] == "In place: 2 practices at their top level: Agent instructions; Runtime legibility."
     assert lines[2].startswith("Holding: ") and lines[3].startswith("Blocks Step 4: ")
-    assert "Agent instructions" not in lines[1]
+    assert "CI and the agent" not in lines[1]
 
 
-def test_the_in_place_block_names_the_rest_without_a_why_past_the_cap() -> None:
-    block = card_lines(_in_place(5), MODEL, KNOWN)[1].split("\n")  # type: ignore[arg-type]
-    assert block[0] == "In place: 5 practices at their top level."
-    assert [line.endswith(WHY) for line in block[1:3]] == [True, True]
-    assert block[3] == ("- 3 more: Runtime legibility, Code design (module structure), "
-                        "Linters run in CI, suppression cap.") and len(block) == 4
+def test_the_in_place_line_names_three_and_counts_the_rest() -> None:
+    line = card_lines(_in_place(5), MODEL, KNOWN)[1]  # type: ignore[arg-type]
+    assert line == ("In place: 5 practices at their top level: Agent instructions; Runtime legibility; "
+                    "Code design (module structure); and 2 more.")
+    assert "Why" not in line  # the whys are the report's In place section
 
 
-def test_no_in_place_block_without_a_practice_fully_in_place() -> None:
+def test_no_in_place_line_or_section_without_a_practice_fully_in_place() -> None:
     assert not any(line.startswith("In place:") for line in card_lines(_in_place(0), MODEL, KNOWN))  # type: ignore[arg-type]
+    assert in_place_section(_in_place(0), MODEL) == ""
+
+
+def test_the_in_place_section_gives_every_practice_its_why() -> None:
+    section = in_place_section(_in_place(5), MODEL)
+    assert section.startswith("## In place\n\nIn place: 5 practices at the top level, each with why it matters.")
+    for row in IN_PLACE_ROWS:
+        assert f"level 2 of 2: Why {row} matters, 1." in section
+    assert "CI why." not in section

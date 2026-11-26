@@ -780,8 +780,8 @@ def test_report_code_data_maxima_absent_on_older_snapshot() -> None:
                     "p95 CCN 107.3 (max 169)")
 
 
-def test_the_report_lists_the_practices_in_place_with_their_why_before_the_blocking_gate() -> None:
-    """#1334: two rows at their top level, each with its why, come before the blocking gate."""
+def test_the_report_names_the_practices_in_place_before_the_blocking_gate_and_gives_each_why() -> None:
+    """#1334: two rows at their top level are named before the blocking gate; each why follows."""
     import lib.scoring.level_tally as lt
     from lib.exec_summary import summarised
     from lib.scoring.headline import headline
@@ -793,7 +793,6 @@ def test_the_report_lists_the_practices_in_place_with_their_why_before_the_block
                                     "guardrails": {"available": True, "stated_pct": 100}})
     ctx = {**_minimal_ctx(), "level": level, "headline": summarised(headline(level, model), level, None, model)}
     report = render_report(ctx, "demo")
-    blocks = report.index("Blocks Step 2:")
-    for entry in level["in_place"]:
-        assert entry["top"] and 0 < report.index(entry["why"]) < blocks
-    assert report.index("In place: 2 practices at their top level.") < blocks
+    named = report.index("In place: 2 practices at their top level: doc-freshness; guardrails-stated.")  # fixture titles
+    assert named < report.index("Blocks Step 2:") < report.index("## In place") < report.index("## Catalogue")
+    assert all(entry["top"] and entry["why"] in report for entry in level["in_place"])

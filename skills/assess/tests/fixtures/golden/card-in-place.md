@@ -1,9 +1,6 @@
 **[Step](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#step) 3 of 4: unattended agent PRs.**
 
-In place: 5 practices at their top level.
-- Documentation freshness, level 2 of 2: An agent reads the docs as true. A doc whose code has moved on misleads it about that code, so fresh docs keep it right.
-- Guardrails stated, level 2 of 2: An agent reads the docs as true. A doc whose code has moved on misleads it about that code, so fresh docs keep it right.
-- 3 more: Runtime legibility, Code design (module structure), Linters run in CI, suppression cap.
+In place: 5 practices at their top level: Agent instructions; Runtime legibility; Code design (module structure); and 2 more.
 
 Holding: 2 of 3 Step 4 gates held at `600cca4` · 2 of 3 [measured catalogue conditions](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage) met, 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade).
 

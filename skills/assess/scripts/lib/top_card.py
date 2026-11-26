@@ -19,13 +19,13 @@ precedes every gate line.
    - below the first Step of a model whose Step 1 has a gate (#889): ``Not yet at Step 1 of 3.``;
    - a model without Steps: ``This maturity model defines no Steps.``;
 
-1a. the In place block (#1334), when a practice is fully in place: ``In place: 2 practices at
-   their top level.``, then one list line per practice, ``- Documentation freshness, level 2 of 2: <why>``,
-   from ``card_facts.fully_in_place`` (the level result's ``in_place`` rows at their top level)
-   with the condition's why. The first ``IN_PLACE_WHYS`` carry their why; the rest share one line,
-   ``- 2 more: <titles>.``, so the card keeps its word budget. A gate held is the Holding line's
-   fact, so a row in place only for a gate is not listed here. No practice at its top level: no
-   block;
+1a. the In place line (#1334), when a practice is fully in place: ``In place: 5 practices at their
+   top level: Agent instructions; Documentation freshness; Guardrails stated; and 2 more.``, from
+   ``card_facts.fully_in_place`` (the level result's ``in_place`` rows at their top level). It names
+   the first ``IN_PLACE_NAMES`` and counts the rest, so the card keeps its word budget; the
+   deterministic report's In place section (``in_place_section``) lists every one with its why. A
+   gate held is the Holding line's fact, so a row in place only for a gate is not named. No
+   practice at its top level: no line;
 2. ``Holding: 3 of 3 gates held at `600cca4` · 9 of 15 measured catalogue conditions met, 3 verified.``
    At the top Step the gates are the top Step's; below it, the next Step's
    (``2 of 3 Step 4 gates held``). The commit is left out when the run recorded none;
@@ -84,7 +84,7 @@ from lib.since_last_run import FIRST_RUN, UNKNOWN_CLOSED
 from lib.vocabulary import IN_PLACE
 
 __all__ = ["FACT_IDS", "GATE_GAP", "GATE_TASK", "PROFILES_URL", "STEP_GATES_URL", "CardAction", "card_facts",
-           "card_lines",
+           "card_lines", "in_place_section",
            "card_markdown", "first_action", "since_line", "read_first_action", "start_lines"]
 
 # The catalog's Step gates entry: what each gate covers. measured_appendix.CATALOG_URL names the
@@ -115,10 +115,10 @@ DEFAULT_MODEL_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/ski
 # The card's facts, each stated by one line at most (tests/test_card_construction.py).
 FACT_IDS = ("lead", "in_place", "holding", "blocks", "since", "start_here", "done_when")
 
-# The practices in place the card names with their why (#1334); the rest are named without one,
-# so the first screen keeps its word budget (tests/test_card_construction.py): a why runs to 25
-# words at the median, and two of them fit below the top Step with the Blocks line's sibling.
-IN_PLACE_WHYS = 2
+# The practices in place the card names by title (#1334); the rest are counted. Their whys are the
+# report's In place section: a condition's why runs to 84 words (layer-0-instructions.2), so no
+# why fits the first screen's word budget (tests/test_card_construction.py).
+IN_PLACE_NAMES = 3
 
 # "Step" or "Steps" as a word (the no-Steps lead links "Steps")
 _STEP_WORD = re.compile(r"\bSteps?\b")
@@ -198,23 +198,37 @@ def _lead(level: Mapping[str, Any], model: MaturityModel) -> str:
     return f"Step {step} of {top}: {_lower_first(name)}." if name else f"Step {step} of {top}."
 
 
+def _title(row_id: str, model: MaturityModel) -> str:
+    return next((r["title"] for r in model["rows"] if r["id"] == row_id), row_id)
+
+
 def _in_place(level: Mapping[str, Any], model: MaturityModel) -> str | None:
-    """The In place block (#1334): the practices fully in place, each with its level and why."""
+    """The In place line (#1334): how many practices are fully in place, the first
+    ``IN_PLACE_NAMES`` by title and how many more; None when none is."""
     entries = fully_in_place(level)
     if not entries:
         return None
-    rows = {r["id"]: r for r in model["rows"]}
     n = len(entries)
-    lines = [f"{IN_PLACE} {n} {'practice at its' if n == 1 else 'practices at their'} top level."]
-    for entry in entries[:IN_PLACE_WHYS]:
-        title = rows[entry["row"]]["title"] if entry["row"] in rows else entry["row"]
+    names = "; ".join(_title(e["row"], model) for e in entries[:IN_PLACE_NAMES])
+    rest = n - IN_PLACE_NAMES
+    tail = f"; and {rest} more" if rest > 0 else ""
+    return f"{IN_PLACE} {n} {'practice at its' if n == 1 else 'practices at their'} top level: {names}{tail}."
+
+
+def in_place_section(level: Any, model: MaturityModel) -> str:
+    """The report's "In place" section (#1334): every practice fully in place with its level and
+    its why, the one place the whys are stated; ``""`` when none is."""
+    entries = fully_in_place(level)
+    if not entries:
+        return ""
+    n = len(entries)
+    lines = ["## In place", "",
+             f"{IN_PLACE} {n} {'practice' if n == 1 else 'practices'} at the top level, each with why it matters.", ""]
+    for entry in entries:
         why = entry.get("why", "")
-        lines.append(f"- {title}, level {entry['level']} of {entry['level']}" + (f": {why}" if why else "."))
-    rest = entries[IN_PLACE_WHYS:]
-    if rest:
-        names = ", ".join(rows[e["row"]]["title"] if e["row"] in rows else e["row"] for e in rest)
-        lines.append(f"- {len(rest)} more: {names}.")
-    return "\n".join(lines)
+        lines.append(f"- **{_title(entry['row'], model)}**, level {entry['level']} of {entry['level']}"
+                     + (f": {why}" if why else "."))
+    return "\n".join(lines) + "\n\n"
 
 
 def _holding(level: Mapping[str, Any], model: MaturityModel, head_sha: str | None) -> str:
