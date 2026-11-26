@@ -15,7 +15,7 @@ import pytest
 import lib.fleet.fleet_data as fd
 import lib.fleet.fleet_tag_heatmap as th
 from fleet_data_fixture import ROWS, SALT, build, model
-from fleet_tag_heatmap_fixture import COUNTS_ONLY, FIXTURES, FULL, HASHED, NAMES, goldens
+from fleet_tag_heatmap_fixture import COUNTS_ONLY, FIXTURES, FULL, HASHED, NAMES, UNIT_NAMES, goldens
 from lib.fleet.fleet_diagrams import build_diagrams
 from lib.fleet.fleet_tag_profile import FILE as PROFILE_FILE
 from lib.scoring.levels_fields import TRUTH_TAGS
@@ -42,10 +42,65 @@ def test_two_renders_are_byte_identical_and_the_cascade_is_clean() -> None:
 
 
 def test_rows_are_sorted_by_step_highest_first_then_key_and_every_repository_is_there() -> None:
-    rows = th.heatmap_rows(FULL)
+    ungrouped = {**FULL, "run": {"counts_only": True, "paths_hashed": True}}
+    rows = th.heatmap_rows(ungrouped)
     assert [r["label"] for r in rows] == ["acme/web-frontend", "acme/data-pipeline", "acme/payments-api",
                                           "acme/infra-terraform", "acme/legacy-billing"]
     assert [r["step"] for r in rows] == [3, 2, 2, None, None]
+    assert [r["unit"] for r in rows] == [None] * 5
+
+
+def test_full_run_groups_rows_by_unit() -> None:
+    """Under --full rows group by unit (label order, unplaced last), then Step; a counts-only
+    run keeps Step order and names no unit (#1331)."""
+    rows = th.heatmap_rows(FULL)
+    assert [(r["unit"], r["label"]) for r in rows] == [
+        ("Platform team", "acme/data-pipeline"), ("Platform team", "acme/infra-terraform"),
+        ("Product team", "acme/web-frontend"), ("Product team", "acme/payments-api"),
+        (None, "acme/legacy-billing")]
+    full = _svg(FULL)
+    assert all(name in full for name in UNIT_NAMES) and th.NO_UNIT in full
+    assert full.index(UNIT_NAMES[0]) < full.index('data-row="acme/data-pipeline"') < full.index(UNIT_NAMES[1])
+    assert 'data-unit="Product team"' in _row(full, "acme/web-frontend")
+    assert "by unit and Step" in full and "Rows group by unit" in full
+    counts_only = th.heatmap_rows(COUNTS_ONLY)
+    assert [r["step"] for r in counts_only] == [3, 2, 2, None, None]
+    assert [r["unit"] for r in counts_only] == [None] * 5
+    for svg in (_svg(COUNTS_ONLY), _svg(HASHED)):
+        assert not any(name in svg for name in UNIT_NAMES)
+        assert "data-unit" not in svg and th.NO_UNIT not in svg and "platform" not in svg
+
+
+def test_full_run_groups_by_unit_key_when_the_view_names_no_unit() -> None:
+    nameless = {**FULL, "views": []}
+    assert [r["unit"] for r in th.heatmap_rows(nameless)][:2] == ["platform", "platform"]
+    assert th.unit_labels({"repos": [{"key": "a", "units": []}]}) == (None, {})
+
+
+def test_two_units_sharing_a_name_stay_two_groups() -> None:
+    repos = [{"key": f"acme/r{i}", "step": step, "units": [{"view": "ownership", "unit": unit}], "tags": None}
+             for i, (step, unit) in enumerate([(1, "ownership/a"), (3, "ownership/b"), (2, "ownership/a")])]
+    views = [{"view": "ownership", "units": [{"key": "ownership/a", "name": "Backend"},
+                                             {"key": "ownership/b", "name": "Backend"}]}]
+    data = {**FULL, "repos": repos, "views": views}
+    rows = th.heatmap_rows(data)
+    assert [(r["unit_key"], r["label"]) for r in rows] == [
+        ("ownership/a", "acme/r2"), ("ownership/a", "acme/r0"), ("ownership/b", "acme/r1")]
+    assert _svg(data).count(">Backend</text>") == 2
+
+
+def test_cell_title_breaks_down_the_score() -> None:
+    svg = _svg(FULL)
+    web = _row(svg, "acme/web-frontend")
+    titles = re.findall(r"<title>([^<]*)</title>", web)
+    assert ("Governance: 100% met. 1 of 1 measured conditions met, 0 verified, 1 not measured, 1 hazard, "
+            "0 declined") in titles
+    assert ("Structure: 100% met. 5 of 5 measured conditions met, 2 verified, 1 not measured, 0 hazards, "
+            "0 declined") in titles
+    pipeline = _row(svg, "acme/data-pipeline")
+    assert ("Agent runtime: not measured. 0 of 0 measured conditions met, 0 verified, 0 not measured, 0 hazards, "
+            "0 declined") in re.findall(r"<title>([^<]*)</title>", pipeline)
+    assert re.findall(r"<title>([^<]*)</title>", _row(svg, "acme/legacy-billing"))[0].endswith(": not measured")
 
 
 def test_columns_are_the_fixed_tag_order() -> None:
@@ -56,8 +111,9 @@ def test_columns_are_the_fixed_tag_order() -> None:
 
 def test_shares_come_from_each_repository_tally() -> None:
     """No second tally: a cell is the repository's cell ``met`` over ``measured``."""
-    for row, repo in zip(th.heatmap_rows(FULL), sorted(FULL["repos"], key=th._step_key)):
-        cells = {c["tag"]: c for c in repo["tags"] or []}
+    by_key = {r["key"]: r for r in FULL["repos"]}
+    for row in th.heatmap_rows(FULL):
+        cells = {c["tag"]: c for c in by_key[row["label"]]["tags"] or []}
         for tag, share in zip(TRUTH_TAGS, row["shares"]):
             cell = cells.get(tag)
             expected = cell["met"] / cell["measured"] if cell and cell["measured"] else None

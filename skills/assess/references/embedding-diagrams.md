@@ -71,7 +71,8 @@ measure is left out, never written as 0. Codes such as `data-category`, `data-st
 | `review-strip.svg` | tick | `data-state`, `data-state-label`, `data-review-bot` |
 | `tag-profile.svg` (both) | row | `data-tag`, `data-state`, `data-why` |
 | `heatmap.svg` (fleet) | cell | `data-group`, `data-practice`, `data-level` or `data-floor`, `data-top`, `data-missing`, `data-unknown-repos`, `data-change` |
-| `tag-heatmap.svg` | cell | `data-tag`, `data-tag-title`, `data-percent-met` |
+| `tag-heatmap.svg` | row | `data-row`, and `data-unit` under `--full` |
+| `tag-heatmap.svg` | cell | `data-tag`, `data-tag-title`, `data-percent-met`, `data-met`, `data-measured`, `data-verified`, `data-not-measured`, `data-hazards`, `data-declined` |
 | `one-change-away.svg` | bar | `data-condition`, `data-gate`, `data-practice`, `data-step` |
 | `shared-tooling.svg` | link | `data-repo`, `data-item`, `data-refs` |
 | `radar.svg` | point | `data-row`, `data-unit`, `data-practice`, `data-met`, `data-measured`, `data-repos` |
