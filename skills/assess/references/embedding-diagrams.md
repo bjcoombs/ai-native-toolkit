@@ -29,7 +29,8 @@ once:
 
 On load it attaches to the page and to every `<object>` holding an SVG. For a diagram added
 later, call `DiagramTooltip.attach(element)`. To word the tooltip yourself, pass
-`{format: function (part) { return "..."; }}`.
+`{format: function (part, title) { return "..."; }}`, where `title` is the part's `<title>`
+text (the helper empties the `<title>` itself while its tooltip shows).
 
 What it does:
 

@@ -9,7 +9,8 @@
  *
  * On load it attaches to the page and to every <object> holding an SVG; call
  * DiagramTooltip.attach(element) for diagrams added later, and pass
- * {format: function (part) { return "text"; }} to word the tooltip yourself.
+ * {format: function (part, title) { return "text"; }} to word the tooltip yourself; title
+ * is the part's <title> text, which stays readable there while the native <title> is muted.
  *
  * A part is the nearest element (below the root <svg>) with a <title> child. Its tooltip
  * lists the part's data-* attributes, one "name: value" line each. It leaves out a code that
@@ -153,7 +154,10 @@
     if (shown && shown !== part) {
       hide();
     }
-    tip.textContent = format(part);
+    // The title text, read from where muteTitle parks it once the tooltip shows: a custom
+    // format never sees the emptied <title>.
+    var title = titleOf(part);
+    tip.textContent = format(part, part.getAttribute(PARKED) || (title ? title.textContent : ""));
     tip.hidden = false;
     if (shown !== part) {
       muteTitle(part);

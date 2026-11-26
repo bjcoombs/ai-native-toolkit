@@ -93,3 +93,8 @@ def test_a_format_passed_to_an_attached_root_takes_effect() -> None:
     assert attach.index("__diagramTooltipFormat = options.format") < attach.index("if (!target.__diagramTooltip)")
     listen = CODE[CODE.index("function listen"):CODE.index("function attachObject")]
     assert listen.count("formatOf()") == 2
+
+
+def test_a_custom_format_gets_the_title_text_even_while_it_is_muted() -> None:
+    show = CODE[CODE.index("function show("):CODE.index("function hide(")]
+    assert "format(part, part.getAttribute(PARKED) || (title ? title.textContent" in show

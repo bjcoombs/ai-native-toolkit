@@ -273,10 +273,11 @@ def _staleness_channels(
     """Per-node days stale, subject churn, and the hatch fill for unmeasured docs.
 
     A node the staleness scan never measured (a `.claude/` doc a reference
-    brought in) is hatched, not painted as if a 0d / zero-churn value were known."""
+    brought in, or every doc when the scan returned none) is hatched, not painted
+    as if a 0d / zero-churn value were known (#1360)."""
     days = {x: float(staleness.get(x, {}).get("last_commit_days") or 0) for x in nodes}
     churn = {x: float(staleness.get(x, {}).get("code_churn_in_window") or 0) for x in nodes}
-    unmeasured = {x: UNMEASURED_FILL for x in nodes if staleness and x not in staleness}
+    unmeasured = {x: UNMEASURED_FILL for x in nodes if x not in staleness}
     return days, churn, unmeasured
 
 
@@ -306,10 +307,9 @@ class _NodePainter:
         self.size_max = max(self.sizes.values(), default=1.0) or 1.0
         self.cmap = plt.get_cmap(STALENESS_CMAP)
         self.days, self.churn, self.unmeasured = _staleness_channels(nodes, staleness or {})
-        # Docs the staleness scan measured. With no scan result at all nothing is hatched, but
-        # the tooltip and data attributes still say "not measured", never 0d (#1360).
-        self.stale_measured = {x for x in nodes if x in (staleness or {})}
-        measured = [x for x in nodes if x not in self.unmeasured]
+        # Docs the staleness scan measured: the fill, tooltip and data attributes agree (#1360).
+        self.stale_measured = {x for x in nodes if x not in self.unmeasured}
+        measured = [x for x in nodes if x in self.stale_measured]
         self.day_cap, _ = adaptive_cap([self.days[x] for x in measured])
         self.churn_cap, _ = adaptive_cap([self.churn[x] for x in measured])
 

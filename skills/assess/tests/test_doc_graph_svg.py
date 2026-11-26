@@ -419,10 +419,15 @@ def test_every_circle_carries_its_tooltip_values_as_data_attributes(svg, tmp_pat
         assert data["docs/a.md"]["centrality"] == "0.333"
 
 
-def test_no_staleness_scan_reads_not_measured_never_zero(svg, tmp_path, monkeypatch):
-    """#1360: coloured by staleness with no scan result, no doc claims 0d stale."""
+@pytest.mark.parametrize("staleness", [None, {}])
+def test_an_empty_staleness_scan_draws_every_doc_not_measured(svg, tmp_path, monkeypatch, staleness):
+    """#1360: coloured by staleness with no scan result, every doc is hatched as not measured,
+    the key shows the not-measured entry, and no tooltip or attribute claims 0d stale."""
     from svg_data_attrs import titled_parts
 
-    circles, _, markup = _render_nodes(svg, tmp_path, monkeypatch)
+    circles, texts, markup = _render_nodes(svg, tmp_path, monkeypatch, staleness=staleness)
+    hatch = svg.UNMEASURED_FILL.replace("#", "#assess-doc-graph-")
+    assert circles and all(el.get("fill") == hatch for el, _tip in circles.values())
+    assert "not measured" in texts and 'id="assess-doc-graph-unmeasured"' in markup
     assert all("staleness not measured" in tip for _el, tip in circles.values())
     assert not [d for _t, d, _title in titled_parts(markup) if "stale-days" in d or "subject-churn" in d]
