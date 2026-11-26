@@ -147,6 +147,21 @@ def test_scope_svg_rewrites_the_root_ids_and_references() -> None:
     assert scope_problems(out, "kind") == []
 
 
+def test_scope_svg_leaves_text_nodes_alone_and_rewrites_a_url_in_style() -> None:
+    svg = ('<svg><style>rect{fill:url(#p)}</style><pattern id="p"/>'
+           '<rect data-path="a/url(#x) id=&quot;y&quot;.py"><title>a/url(#x) id="y".py</title></rect>'
+           '<text>see url(#x)</text></svg>')
+    out = scope_svg(svg, "kind")
+    assert "<title>a/url(#x) id=\"y\".py</title>" in out and "<text>see url(#x)</text>" in out
+    assert 'data-path="a/url(#x) id=&quot;y&quot;.py"' in out
+    assert "svg.kind rect {fill:url(#kind-p)}" in out
+
+
+def test_scoping_an_already_scoped_document_raises() -> None:
+    with pytest.raises(ValueError, match="already carries a class"):
+        scope_svg(scope_svg("<svg><g/></svg>", "kind"), "kind")
+
+
 @pytest.mark.parametrize("svg, scope, message", [
     ("<svg></svg>", "Bad Scope", "lowercase"),
     ("<g></g>", "kind", "no <svg> root"),

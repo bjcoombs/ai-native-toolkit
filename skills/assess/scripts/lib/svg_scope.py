@@ -13,7 +13,9 @@ resolves to whichever pattern comes first (#1312, #1358).
   ``@media`` blocks too, so a rule reaches only elements of this SVG. Each rule gains the
   same specificity, so the order of rules within the sheet still decides between them.
 - **Ids.** Every ``id="X"`` becomes ``id="<scope>-X"``, and every ``url(#X)`` and
-  ``href="#X"`` reference follows it.
+  ``href="#X"`` reference follows it. Only tag markup and ``<style>`` are rewritten:
+  text nodes (``<title>`` tooltips and labels holding repository file paths) are left
+  as written, so a path containing ``url(#`` or ``id="`` stays intact.
 
 The scope is fixed per diagram kind (``SCOPES`` lists them), so output stays
 byte-identical for the same inputs. Two diagrams of the same kind on one page (two
@@ -52,8 +54,13 @@ SCOPES: dict[str, str] = {
 _SCOPE_NAME = re.compile(r"[a-z][a-z0-9-]*")
 _ROOT = re.compile(r"<svg\b([^>]*)>")
 _STYLE = re.compile(r"(<style>)(.*?)(</style>)", re.S)
+# One tag's markup. Attribute values are escaped (``>`` as ``&gt;``), so ``>`` ends the tag.
+_TAG = re.compile(r"<[^<>]+>")
 _ID = re.compile(r'(\sid=")([^"]+)(")')
-_URL = re.compile(r"url\(#([^)]+)\)")
+_URL = re.compile(r"(url\(#)([^)]+)(\))")
+# An attribute whose whole value is one reference (fill="url(#p)"); a data-path that merely
+# contains "url(#" is left alone.
+_URL_VALUE = re.compile(r'(="url\(#)([^)"]+)(\)")')
 _HREF = re.compile(r'(\s(?:xlink:)?href="#)([^"]+)(")')
 
 
@@ -115,7 +122,15 @@ def scope_svg(svg: str, scope: str) -> str:
     if re.search(r"\sclass=", root.group(1)):
         raise ValueError("the root <svg> already carries a class")
     svg = f'{svg[:root.start()]}<svg class="{scope}"{root.group(1)}>{svg[root.end():]}'
-    svg = _ID.sub(lambda m: f"{m.group(1)}{scope}-{m.group(2)}{m.group(3)}", svg)
-    svg = _URL.sub(lambda m: f"url(#{scope}-{m.group(1)})", svg)
-    svg = _HREF.sub(lambda m: f"{m.group(1)}{scope}-{m.group(2)}{m.group(3)}", svg)
-    return _STYLE.sub(lambda m: f"{m.group(1)}{scope_css(m.group(2), scope)}{m.group(3)}", svg)
+
+    def prefixed(m: re.Match[str]) -> str:
+        return f"{m.group(1)}{scope}-{m.group(2)}{m.group(3)}"
+
+    def tag(markup: str) -> str:
+        return _URL_VALUE.sub(prefixed, _HREF.sub(prefixed, _ID.sub(prefixed, markup)))
+
+    def style(m: re.Match[str]) -> str:
+        css = _URL.sub(prefixed, scope_css(m.group(2), scope))
+        return f"{m.group(1)}{css}{m.group(3)}"
+
+    return _STYLE.sub(style, _TAG.sub(lambda m: tag(m.group(0)), svg))
