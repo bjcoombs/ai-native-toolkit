@@ -59,7 +59,7 @@ def level_result_schema() -> JsonDict:
     props["ceiling_step"]["description"] = (
         "the highest Step whose gates all hold once next_step's blocking gates are met, every Step between "
         "held too; null when next_step is null (#1374, lib/scoring/level_tally.py)")
-    props["held_gates"]["description"] = (
+    props["held_above"]["description"] = (
         "the ids of the gates above the current Step that already hold, once each, in Step order (#1374)")
     blocker = next(b for b in props["next_step"]["anyOf"] if b.get("type") == "object")
     blocker_fields = blocker["properties"]["blockers"]["items"]["properties"]

@@ -38,7 +38,7 @@
         }
       ],
       "counted": [],
-      "held_gates": [],
+      "held_above": [],
       "level_result_version": 4,
       "levels_version": "fleet-golden-1",
       "listed": [
@@ -156,7 +156,7 @@
         }
       ],
       "counted": [],
-      "held_gates": [],
+      "held_above": [],
       "level_result_version": 4,
       "levels_version": "fleet-golden-1",
       "listed": [
@@ -274,7 +274,7 @@
         }
       ],
       "counted": [],
-      "held_gates": [],
+      "held_above": [],
       "level_result_version": 4,
       "levels_version": "fleet-golden-1",
       "listed": [],
