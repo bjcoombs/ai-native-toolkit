@@ -24,7 +24,7 @@ read-only and moves writes into a separate job that acts on the agent's output.
   (``write`` or ``undeclared``). A read-only follower writes nothing, so it is no split.
 - **Called workflows.** A job that calls a local reusable workflow takes the worst scope of the
   called workflow's agent jobs, each capped by the caller's: a called workflow can only lower
-  the token it is given (``capped``).
+  the token it is given (``capped``). It is split when every write-scoped called agent job is.
 - **Spend cap.** ``max-turns`` / ``max_turns`` or a budget limit in the job: recorded as
   supporting evidence only, never counted.
 
@@ -188,14 +188,17 @@ def workflow_jobs(rel: str, text: str, signs_of: SignsOf, read_local: ReadLocal 
         uses = _child(tree, job, "uses")
         local = _LOCAL_WORKFLOW.match(tree.lines[uses].value) if uses is not None else None
         called = read_local(local.group(1)) if local and read_local and local.group(1) not in seen else None
+        inner_split = False
         if called is not None and local is not None:
             inner = workflow_jobs(local.group(1), called, signs_of, read_local, (scope, writes),
                                   seen | {rel})
             if inner:
                 scope, writes = _worst([(j["scope"], j["write_scopes"]) for j in inner])
+                # split inside the callee: every write-scoped called agent job hands its writes on
+                inner_split = all(j["split"] for j in inner if j["scope"] == WRITE)
         # a split needs a job after this one that can write: a read-only follower writes nothing
-        split = any(name in needs[other] and scopes[other][0] in (WRITE, UNDECLARED)
-                    for other in jobs if other != job)
+        split = inner_split or any(name in needs[other] and scopes[other][0] in (WRITE, UNDECLARED)
+                                   for other in jobs if other != job)
         found.append(AgentJob(path=rel, job=name, scope=scope, write_scopes=writes, split=split,
                               spend_cap=_spend_cap(body)))
     if not found and not unsettled and signs_of(text):

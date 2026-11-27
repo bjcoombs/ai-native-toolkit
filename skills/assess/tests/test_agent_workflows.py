@@ -671,3 +671,22 @@ def test_a_remote_agent_job_beside_a_local_one_is_not_dropped(git_repo) -> None:
     repo = _repo(git_repo, {".github/workflows/x.yml": local + "  fix:\n" + remote})
     assert [(j["job"], j["scope"]) for j in _jobs(repo)] == [("agent", "read_only"), ("fix", "read_only")]
     assert _summary(repo)["agent_jobs_least_privilege"] is True
+
+
+def test_a_split_inside_a_called_workflow_reaches_its_caller(git_repo) -> None:
+    called = "on: workflow_call\n" + WRITE_AGENT.removeprefix(ON_ISSUES) + """  writer:
+    needs: agent
+    permissions:
+      issues: write
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo write
+"""
+    repo = _repo(git_repo, {".github/workflows/agent.yml": called,
+                            ".github/workflows/caller.yml": ON_ISSUES + """jobs:
+  call:
+    permissions: write-all
+    uses: ./.github/workflows/agent.yml
+"""})
+    assert [(j["job"], j["scope"], j["split"]) for j in _jobs(repo)] == [("call", "write", True)]
+    assert _summary(repo)["agent_job_write_access"] == 0
