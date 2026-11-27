@@ -5,7 +5,7 @@ Read on demand by the automated reviewer when a diff touches
 
 The `lib/` core does all data and math with **no AI**. The LLM only writes
 prose, through the `assess_finalize.py` write-back. The core reaches the
-network or writes outside the run only through three paths:
+network or writes outside the run only through four paths:
 
 1. `lib/hosting/gh_cli.py` - optional live GitHub reads via the `gh` CLI. They
    resolve the remote first and degrade to `available: false`.
@@ -17,10 +17,14 @@ network or writes outside the run only through three paths:
    or `glab` and a run from the default branch's tip, it pushes a branch and
    opens a pull (merge) request, degrading to a local branch with a named
    `reason`.
+4. `backlog_reconcile_apply.py` - the scheduled backlog reconcile's tracker
+   writes through `gh`, outside `lib/`. It runs only in the `apply` job of
+   `.github/workflows/reusable-backlog-reconcile.yml`, never in `/assess`, and
+   makes only the writes its `[backlog] mode` allows.
 
 ## Flag
 
-- AI calls, nondeterminism, or network access outside those three paths
+- AI calls, nondeterminism, or network access outside those four paths
   creeping into `skills/assess/scripts/lib/`.
 - A `gh_cli` caller that reports a clean result when a read failed.
 - A change to a deterministic module **without a matching test** in

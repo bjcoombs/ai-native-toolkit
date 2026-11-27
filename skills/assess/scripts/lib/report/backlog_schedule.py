@@ -21,8 +21,8 @@ by someone with write access (``authorAssociation`` ``OWNER``, ``MEMBER`` or
 ``COLLABORATOR``) or the workflow's own bot, so a marker pasted by anyone else is never
 rewritten. Its ``**Status:**`` line holds the status, the evidence and the last run in one
 line (``status_line``); a run replaces that line and nothing else in the comment
-(``with_status``), and adds no comment once one exists. A run that reads the same status
-writes nothing.
+(``with_status``), and adds no comment once one exists. A second run on the same day and
+commit writes nothing; each new day rewrites the line with the new run date.
 
 Only items with a condition marker (``backlog_items.marker_key``) that pass the label check
 (``label``, as ``plan_filing`` applies it) are read; an item without the marker is never
