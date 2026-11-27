@@ -22,6 +22,7 @@ import lib.manifest.check_manifest as cm
 from lib.report.catalog import (CATALOG_VERSION, GRADE_ORDER, UNCLASSIFIED, build_catalog, counts, criterion_text,
                          grade_of, render_json, stable_model)
 from lib.report.catalog_md import CONDITION_COLUMNS, render_markdown
+from lib.scoring.levels import MaturityModel
 from lib.scoring.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
 from lib.keyhole.keyhole_signals import FINDING_ORDER
 from lib.scoring.level_signals import SIGNAL_INPUTS, counts_toward_level, load_default_levels
@@ -270,7 +271,7 @@ def test_tags_list_each_condition_once_under_its_first_tag() -> None:
         assert tag["conditions"] == [lv["id"] for lv in conditions if tag["id"] in lv["truth"]]
         assert tag["shared"] == [lv["id"] for lv in conditions
                                  if tag["id"] in lv["truth"] and len(lv["truth"]) > 1]
-    assert next(t for t in catalog["tags"] if t["id"] == "contracts")["conditions"] == []
+    assert next(t for t in catalog["tags"] if t["id"] == "contracts")["conditions"] == ["docs-kept-true.1"]
 
 
 def test_tag_pairs_steps_and_links() -> None:
@@ -323,8 +324,17 @@ def test_markdown_has_one_section_per_tag_and_each_criterion_once() -> None:
     assert headers and all(line == headers[0] for line in headers)
 
 
+def _without_tag(tag: str) -> MaturityModel:
+    """The shipped model with ``tag`` taken off every condition: a tag no condition carries."""
+    model = load_default_levels()
+    for row in model["rows"]:
+        for lv in row["levels"]:
+            lv["truth"] = [t for t in lv["truth"] if t != tag]
+    return model
+
+
 def test_markdown_tag_section_opens_on_its_own_line_and_degrades_honestly() -> None:
-    text = render_markdown(build_catalog())
+    text = render_markdown(build_catalog(model=_without_tag("contracts")))
     contracts = _section(text, "### Contracts").strip().splitlines()
     assert contracts[0] == "### Contracts" and contracts[1] == ""
     assert contracts[2].startswith("That generated output and its source agree")  # the tag's why

@@ -430,6 +430,12 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `doc_staleness.summary.stale_pct_reason` | token |
 | `doc_staleness.normalisation.base_doc_subject` | token |
 | `doc_staleness.normalisation.rename_scope` | token |
+| `doc_staleness.docs.kept_true_by.kind` | token |
+| `doc_staleness.docs.kept_true_by.path` | path (hashed when hashing is on) |
+| `doc_staleness.kept_true.present_reason` | token |
+| `doc_staleness.kept_true.checks.path` | path (hashed when hashing is on) |
+| `doc_staleness.kept_true.checks.kind` | token |
+| `doc_staleness.kept_true.checks.covers` | path (hashed when hashing is on) |
 
 ## excluded_generated
 
@@ -991,6 +997,8 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `stale_hubs.provenance.method` | token |
 | `stale_hubs.provenance.sources` | path (hashed when hashing is on) |
 | `stale_hubs.provenance.generated_by` | dropped |
+| `stale_hubs.kept_true_by.kind` | token |
+| `stale_hubs.kept_true_by.path` | path (hashed when hashing is on) |
 
 ## structure_drift_block
 

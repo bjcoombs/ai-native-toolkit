@@ -170,11 +170,11 @@
     },
     "core.doc_staleness": {
       "repos": {
-        "grpa/sub/deep/svc2": "00f688acc88bab9674b04b146cc5d91971266e56344df732a65993cc2a3c271e",
-        "grpa/svc1": "c05c032f26a2baf10ebf6c327909ddd72234e2480de356c8380eab2d7b842362",
-        "grpb/lib1": "0cfe046839ca6ca79636661ec0bf5402d4c73d507b695d12f8d1cef29ba7b1c4"
+        "grpa/sub/deep/svc2": "4d1986b8902363fb5d4530db4aadb6cf230529694968f7961478b2c61d38bf0a",
+        "grpa/svc1": "7f92845d5d86203856fa03d097b83277727c0101dd3f92d88145453700bb42c8",
+        "grpb/lib1": "1f9f21c1ede492efa87653892815bc2ec7cf12559025873b0387fb7d36d6f31d"
       },
-      "revision": 2
+      "revision": 3
     },
     "core.gap_actions": {
       "repos": {

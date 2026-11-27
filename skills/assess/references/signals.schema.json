@@ -1560,6 +1560,30 @@
             ]
           }
         },
+        "doc_staleness": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: ci_not_read (no CI check that keeps docs or generated files true was found. The tree tracks a CI file of a system this reader does not parse, such as Jenkins, Prow or Buildkite. Or .gitlab-ci.yml has an include: this reader does not follow. Either may run one); scan_failed (the reader of CI checks that keep docs true raised an error. The doc staleness block is kept, and this one condition reads not measured). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
         "github_secret_scanning": {
           "type": "object",
           "if": {

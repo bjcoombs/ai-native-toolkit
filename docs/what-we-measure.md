@@ -63,7 +63,9 @@ Also carries this tag, listed under its first tag:
 
 That generated output and its source agree, so an agent editing one does not quietly break the other.
 
-Tag `contracts`. No condition carries this tag yet.
+Also carries this tag, listed under its first tag:
+
+- `docs-kept-true.1` (Docs)
 
 ### Docs
 
@@ -75,6 +77,7 @@ That what an agent reads about the code is still true of the code.
 | `contributor-files.1` A newcomer can report a vulnerability privately | `contributor_files` | A security policy is committed or shared by the owner: is true (`contributor_files.policy.present eq true`) | `measured` | yes | - | positive | - | - | A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue. | Commit a SECURITY.md that says how to report a vulnerability privately, at the root, in .github/ or in docs/, or link GitHub private vulnerability reporting. |
 | `doc-freshness.1` Most mapped docs keep pace with their code | `doc_staleness` | Share of mapped docs outrun by their code: is at most 50 (`doc_staleness.summary.stale_pct lte 50`) | `measured` | yes | - | positive | - | - | An agent reads the docs as true. A doc whose code has moved on misleads it about that code. | Refresh the docs the report lists under doc freshness. |
 | `doc-freshness.2` Four in five mapped docs keep pace | `doc_staleness` | Share of mapped docs outrun by their code: is at most 20 (`doc_staleness.summary.stale_pct lte 20`) | `measured` | yes | - | positive | - | - | With four in five mapped docs keeping pace with their code, an agent can take most of what it reads at its word. | Refresh the docs the report lists under doc freshness, oldest first. |
+| `docs-kept-true.1` Docs and generated files kept true by CI (shared with Contracts) | `doc_staleness` | A CI check keeps docs or generated files true: is true (`doc_staleness.kept_true.present eq true`) | `measured` | yes | - | positive | - | - | A doc or generated file that CI regenerates, verifies or runs as a test cannot drift from the code without a red check, so an agent can read it as true. | Add a CI step that regenerates the generated files and docs, then runs git diff --exit-code. Or pair each verify script with an update script and run it in CI. Or run the doc examples as tests (pytest --doctest-modules). |
 
 Also carries this tag, listed under its first tag:
 
@@ -162,6 +165,7 @@ Also carries this tag, listed under its first tag:
 Each pair of tags that share a condition, one line per condition both carry.
 
 - `behaviour` and `agent_runtime`: `agent-evals.1`
+- `contracts` and `docs`: `docs-kept-true.1`
 - `docs` and `agent_context`: `layer-0-instructions.2`
 - `agent_runtime` and `governance`: `agent-job-write-access.1`
 - `agent_runtime` and `governance`: `agent-least-privilege.1`
@@ -202,6 +206,7 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | `agent-least-privilege` | Agent jobs run with least privilege | team | `min` | `agent-least-privilege.1` |
 | `contributor-files` | Contributor files | team | `min` | `contributor-files.1` |
 | `doc-freshness` | Documentation freshness | team | `min` | `doc-freshness.1`, `doc-freshness.2` |
+| `docs-kept-true` | Docs and generated files kept true by CI | team | `min` | `docs-kept-true.1` |
 | `guardrails-stated` | Guardrails stated | team | `min` | `guardrails-stated.1`, `guardrails-stated.2` |
 | `layer-0-instructions` | Agent instructions | team | `min` | `layer-0-instructions.1`, `layer-0-instructions.2` |
 | `layer-1-liveness` | Runtime legibility | team | `min` | `layer-1-liveness.1`, `layer-1-liveness.2` |
@@ -641,21 +646,24 @@ An agent finds docs by following links from README, AGENTS.md or an index; a doc
 
 It compares each doc's last change with the churn in the code it describes, so a doc whose code moved on is found before an agent relies on it.
 
-Each doc's last content change against its code subject's churn, following renames.
+Each doc's last content change against its code subject's churn, following renames. Also each CI check that keeps docs or generated files true. That is a regenerate-then-diff step, a verify and update script pair, or doc examples run as tests. A doc in a subtree such a check names is not reported stale.
 
 - Collector: `core.doc_staleness`, reading `repo_root`, `doc_graph`, `excludes`, `scope`.
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
 - Headless variant reads: `repo_root`, `doc_graph`, `excludes`.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `doc_staleness.bulk_commits_skipped.date` token, `doc_staleness.bulk_commits_skipped.sha` drop, `doc_staleness.churn_window` drop, `doc_staleness.declared_cross_repo.path` path, `doc_staleness.declared_cross_repo.reason` token, `doc_staleness.declared_cross_repo.repo` id, `doc_staleness.declared_cross_repo.scope` path, `doc_staleness.declared_cross_repo.status` token, `doc_staleness.docs.base_doc_dir` path, `doc_staleness.docs.confidence` token, `doc_staleness.docs.last_change_basis` token, `doc_staleness.docs.last_commit_days_bound` token, `doc_staleness.docs.provenance.generated_by` drop, `doc_staleness.docs.provenance.method` token, `doc_staleness.docs.provenance.sources` path, `doc_staleness.docs.subject_match` token, `doc_staleness.docs.subject_method` token, `doc_staleness.docs.subject_paths` path, `doc_staleness.docs.subject_roots` path, `doc_staleness.history_boundary_date` token, `doc_staleness.normalisation.base_doc_subject` token, `doc_staleness.normalisation.rename_scope` token, `doc_staleness.summary.stale_pct_reason` token.
-- Used by: row `doc-freshness`.
-- Evidence: `doc_staleness.summary.stale_pct` git_history (measured).
-- Not measured when: it cannot read its input; the block says why.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `doc_staleness.bulk_commits_skipped.date` token, `doc_staleness.bulk_commits_skipped.sha` drop, `doc_staleness.churn_window` drop, `doc_staleness.declared_cross_repo.path` path, `doc_staleness.declared_cross_repo.reason` token, `doc_staleness.declared_cross_repo.repo` id, `doc_staleness.declared_cross_repo.scope` path, `doc_staleness.declared_cross_repo.status` token, `doc_staleness.docs.base_doc_dir` path, `doc_staleness.docs.confidence` token, `doc_staleness.docs.kept_true_by.kind` token, `doc_staleness.docs.kept_true_by.path` path, `doc_staleness.docs.last_change_basis` token, `doc_staleness.docs.last_commit_days_bound` token, `doc_staleness.docs.provenance.generated_by` drop, `doc_staleness.docs.provenance.method` token, `doc_staleness.docs.provenance.sources` path, `doc_staleness.docs.subject_match` token, `doc_staleness.docs.subject_method` token, `doc_staleness.docs.subject_paths` path, `doc_staleness.docs.subject_roots` path, `doc_staleness.history_boundary_date` token, `doc_staleness.kept_true.checks.covers` path, `doc_staleness.kept_true.checks.kind` token, `doc_staleness.kept_true.checks.path` path, `doc_staleness.kept_true.present_reason` token, `doc_staleness.normalisation.base_doc_subject` token, `doc_staleness.normalisation.rename_scope` token, `doc_staleness.summary.stale_pct_reason` token.
+- Used by: row `doc-freshness`, row `docs-kept-true`.
+- Evidence: `doc_staleness.kept_true.present` head_structure (measured), `doc_staleness.summary.stale_pct` git_history (measured).
+- Not measured when:
+  - `ci_not_read`: No CI check that keeps docs or generated files true was found. The tree tracks a CI file of a system this reader does not parse, such as Jenkins, Prow or Buildkite. Or .gitlab-ci.yml has an include: this reader does not follow. Either may run one. Nothing to change: this reads as not measured until that system's configuration can be read.
+  - `scan_failed`: The reader of CI checks that keep docs true raised an error. The doc staleness block is kept, and this one condition reads not measured. Nothing to change in the repository: report the error so the reader can be fixed.
 
 Why the signals named here matter:
 
 - `doc_staleness.summary.stale_pct` feeds `doc-freshness.1:doc_staleness.summary.stale_pct`: An agent reads the docs as true. A doc whose code has moved on misleads it about that code.
 - `doc_staleness.summary.stale_pct` feeds `doc-freshness.2:doc_staleness.summary.stale_pct`: With four in five mapped docs keeping pace with their code, an agent can take most of what it reads at its word.
+- `doc_staleness.kept_true.present` feeds `docs-kept-true.1:doc_staleness.kept_true.present`: A doc or generated file that CI regenerates, verifies or runs as a test cannot drift from the code without a red check, so an agent can read it as true.
 
 ### `documentation`: Keyhole blocks: documentation
 

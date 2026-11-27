@@ -318,6 +318,18 @@
 #   both run and baselined, unmet; with a baselined suite no CI file read names and a CI file
 #   or include not read, unknown (eval_ci_unread). It gates no Step. Graded measured
 #   (head_structure), read from the committed files.
+# - Docs kept true by CI reads doc_staleness.kept_true.present (lib/ci/docs_kept_true.py,
+#   #852): a committed CI file (GitHub Actions or .gitlab-ci.yml), directly or through a
+#   committed script or make recipe it runs, regenerates files and then fails on a diff
+#   (git diff --exit-code or --quiet after a regenerating command in the same job), runs a
+#   verify-<x> script whose update-<x> sibling is tracked, or runs doc examples as tests
+#   (--doctest-modules, --doctest-glob, python -m doctest, a Sphinx doctest builder,
+#   cargo test --doc, pytest --markdown-docs, mdtest; or pytest where the root pytest
+#   configuration adds a doctest flag). A diff whose failure cannot fail the job (|| echo
+#   changed, continue-on-error) is masked under the #775 rule and does not count. With
+#   none found and a CI file of a system this reader does not parse, unknown (ci_not_read),
+#   never unmet. A doc in a subtree such a check names is not reported stale. It gates no
+#   Step. Graded measured (head_structure), read from the committed files.
 # - Skill library reads skill_library.present (lib/skill_library.py, #848): at least one
 #   committed SKILL.md with clean frontmatter (a name and a description) in a known skill
 #   location, a skills/ folder at the root, in a harness folder (.claude, .agents, .gemini,
@@ -564,6 +576,17 @@ aggregation = "min"
   level = 2
   truth = ["docs"]
   criteria = [{ signal = "doc_staleness.summary.stale_pct", op = "lte", value = 20 }]
+
+[[rows]]
+id = "docs-kept-true"
+title = "Docs and generated files kept true by CI"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["docs", "contracts"]
+  criteria = [{ signal = "doc_staleness.kept_true.present", op = "eq", value = true }]
 
 [[rows]]
 id = "guardrails-stated"
