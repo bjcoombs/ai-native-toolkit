@@ -39,6 +39,7 @@ from lib.agents.agent_harness import AgentHarnessBlock
 from lib.instructions.agent_instructions_grader import SensitiveFinding
 from lib.ci.ci_checks import CiChecksBlock
 from lib.agent_outcome import AgentOutcomeBlock
+from lib.run_context_types_concurrency import ConcurrencyBlock
 from lib.history.ai_usage import AiUsageBlock
 from lib.counts_only.block_shapes import (
     AgentOpsBlock,
@@ -157,6 +158,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("instruction_placement", InstructionPlacementBlock),
     ("ai_usage", AiUsageBlock),
     ("agent_outcome", AgentOutcomeBlock),
+    ("concurrency", ConcurrencyBlock),
     ("skill_disclosure", SkillDisclosureBlock),
     ("secrets_guard", SecretsGuardBlock),
     ("skill_script_tests", SkillScriptTestsBlock),

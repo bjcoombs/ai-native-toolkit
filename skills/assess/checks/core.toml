@@ -113,6 +113,7 @@ fragments = [
   "agent_consistency",
   "ai_usage",
   "agent_outcome",
+  "concurrency",
   "doc_claims",
   "guardrails",
   "pack_checks",

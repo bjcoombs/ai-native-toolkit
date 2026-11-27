@@ -292,6 +292,17 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `claude_config.findings.value` | dropped |
 | `claude_config.findings.fix` | dropped |
 
+## concurrency
+
+| Field | Kept as |
+|---|---|
+| `concurrency.reason` | reason code |
+| `concurrency.window` | token |
+| `concurrency.since` | dropped |
+| `concurrency.fan_in_null_reason` | token |
+| `concurrency.hot_files` | dropped |
+| `concurrency.limits` | dropped |
+
 ## config_drift
 
 | Field | Kept as |
