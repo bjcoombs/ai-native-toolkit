@@ -204,10 +204,14 @@ _PROVIDER_KEY = re.compile(
     r"|xox[abposr]-((?:\d{8,13}-){2,3}[A-Za-z0-9]{24,})|[sr]k_live_([A-Za-z0-9]{24,99})"
     r"|AIza([\w-]{35})|glpat-([\w-]{20})|npm_([A-Za-z0-9]{36})|hf_([A-Za-z0-9]{34})"
     r"|SG\.([\w-]{22}\.[\w-]{43})|pypi-AgEIcHlwaS5vcmc([\w-]{50,}))(?![\w-])")
-# A value that is plainly made up: a placeholder word, a run of one character, or an ascending run
-# (``abcd``, ``1234``), which a random key holds by chance at about four positions in a million.
+# A value that is plainly made up: a placeholder word, the jwt.io sample token (its payload segment,
+# ``{"sub":"1234567890","name":"John Doe",...}``, common in auth docs), a run of one character, or an
+# ascending run (``abcd``, ``1234``). A random alphanumeric key holds such a run by chance at about
+# four positions in a million; a hex key has 16 symbols, so a 32-character hex value loses about 1%
+# to the run checks, inside the recall gate.
 _DUMMY_WORD = re.compile(r"example|sample|dummy|placeholder|your|fake|redacted|changeme|insert|replace|"
-                         r"secret|token|password|xxx", re.IGNORECASE)
+                         r"secret|token|password|xxx|eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIi",
+                         re.IGNORECASE)
 _REPEAT = re.compile(r"(.)\1{3}")
 # A value that names a place, not a secret: a URL, a path or a file name.
 _LOCATION = re.compile(r"://|^[~.]?/|\.(?:ya?ml|json|toml|txt|md|env|pem|key|cfg|ini)$", re.IGNORECASE)

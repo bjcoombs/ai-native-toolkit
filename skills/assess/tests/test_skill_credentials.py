@@ -5,6 +5,7 @@ repository is itself shaped like a live credential (secret scanners read this fi
 """
 from __future__ import annotations
 
+import base64
 import json
 import random
 import string
@@ -24,6 +25,16 @@ HEX = "0123456789abcdef"
 
 def _body(n: int, alphabet: str = ALNUM) -> str:
     return "".join(_RNG.choice(alphabet) for _ in range(n))
+
+
+def _b64(obj: dict[str, object]) -> str:
+    return base64.urlsafe_b64encode(json.dumps(obj, separators=(",", ":")).encode()).decode().rstrip("=")
+
+
+# The jwt.io sample token, common in auth skill docs: an example, not a secret.
+JWT_IO_SAMPLE = ".".join([_b64({"alg": "HS256", "typ": "JWT"}),
+                          _b64({"sub": "1234567890", "name": "John Doe", "iat": 1516239022}),
+                          "SflKxwRJSMeKKF2QT4" + "fwpMeJf36POk6yJV_adQssw5c"])
 
 
 def _uuid() -> str:
@@ -104,6 +115,7 @@ PLACEHOLDERS: list[str] = [
     "token: sk-ant-api03-EXAMPLE-KEY-ONLY",
     "Token: The value from step 2",
     "token: str",
+    f'token = "{JWT_IO_SAMPLE}"',
     'url = "https://x-access-token:' + 'gh' + 's_abc123@github.com/a/b",',  # a short value before the host
     "api_key: Optional[str] = None",
 ]
