@@ -248,44 +248,7 @@ gh issue edit <N> --add-label "needs-triage"                                # re
 An issue proposed for decomposition gets `needs-triage` (its proposal comment is the record) until the
 decomposition is approved and created.
 
-```
-## Issue Triage: <org>/<repo>
-
-Tagged agent-ready: #12, #15, #18
-Tagged needs-triage:
-- #20, #21: research posted (Needs your call: 1 each)
-- #22: overlaps open PR #40 (both edit skills/issues/SKILL.md); after it merges: <what remains>
-Promoted on confirmation: #19 (reading A folded into the issue body)
-
-Sizing:
-- #12: one PR - single module, reviewable in one sitting
-- #15: one PR - splitting the doc and test changes would only add ceremony
-- #30: decompose (pending approval) - migration must land before the two consumers
-  #30 parent: <deliverable acceptance criteria> (verification unit)
-  ├─ child A: schema migration          (one PR)
-  ├─ child B: consumer X, blocked by A  (one PR)
-  └─ child C: consumer Y, blocked by A  (one PR)
-
-Dependencies authored:
-- #18 blocked by #15 - #15 adds the config key #18 reads
-
-Execution order:
-  Wave 1: #12, #15, child A
-  Wave 2: #18, child B, child C
-  After children merge: #30 parent verification
-
-Overlaps:
-- #22 <-> PR #40: skills/issues/SKILL.md (held as needs-triage)
-- #12 <-> #15: README.md (additive, left parallel)
-
-Approve the decomposition of #30 and the execution order? Reply to proceed (this creates the
-sub-issues), or re-run /issues to begin on the agent-ready issues.
-```
-
-With no decomposition proposed, the report ends instead with:
-```
-OK to start on the agent-ready issues in this execution order? Re-run /issues to begin, or reply to proceed.
-```
+Render the report in the layout of `references/triage-report.md` (relative to this skill dir), which also gives the closing line for a pass that proposes no decomposition.
 
 Do NOT spawn teammates in triage mode.
 
@@ -388,33 +351,7 @@ Supply the marathon skill's adapter as:
 
 ### Dependency and Sub-issue API
 
-Paths are relative to `repos/{o}/{r}` (owner and repository). Every id these endpoints
-take is the **numeric REST id** from `gh api repos/{o}/{r}/issues/{n} --jq .id`, NOT the
-GraphQL node id that `gh issue view --json id` returns (that one 422s). Pass ids with typed
-`-F`, not `-f`, so they are sent as integers.
-
-Dependencies (ordering - what the marathon DAG consumes):
-
-```bash
-gh api repos/{o}/{r}/issues/{n}/dependencies/blocked_by                 # list blockers
-gh api repos/{o}/{r}/issues/{n}/dependencies/blocking                   # reverse direction
-BLOCKER_ID=$(gh api repos/{o}/{r}/issues/{m} --jq '.id')                # numeric REST id, NOT node id
-gh api repos/{o}/{r}/issues/{n}/dependencies/blocked_by \
-  --method POST -F issue_id="$BLOCKER_ID"                               # issue n is blocked by m
-gh api repos/{o}/{r}/issues/{n}/dependencies/blocked_by/{id} --method DELETE   # {id} = numeric REST id
-```
-
-Sub-issues (decomposition with rollup, distinct from ordering):
-
-```bash
-gh api repos/{o}/{r}/issues/{n}/sub_issues                              # list children
-gh api repos/{o}/{r}/issues/{n}/sub_issues --method POST -F sub_issue_id={id}
-gh api repos/{o}/{r}/issues/{n}/sub_issue --method DELETE -F sub_issue_id={id}   # singular path
-gh api repos/{o}/{r}/issues/{n}/sub_issues/priority --method PATCH -F sub_issue_id={id} -F after_id={id}
-```
-
-Constraints: one parent per issue, about 8 nesting levels, about 100 children per parent;
-the parent's `sub_issues_summary` field carries the rollup progress.
+The REST calls for dependency edges and sub-issues, with the numeric-id rule and the API limits, are in `references/github-issue-api.md` (relative to this skill dir); read it before you list, write or delete an edge or a sub-issue.
 
 sub-issues roll up progress; only `blocked_by` edges order the marathon DAG.
 
