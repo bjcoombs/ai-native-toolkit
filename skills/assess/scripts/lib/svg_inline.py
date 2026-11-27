@@ -24,14 +24,21 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
   - Markup: a child element inside ``<title>`` or ``<desc>`` (HTML integration points) or
     ``<style>``; a ``<style>`` with attributes; a tag name not in its SVG case (``<STYLE>``).
   - Attributes: a value that is not double-quoted or holds a literal ``<`` or ``>``; a name that
-    is not plain ASCII (``data-x\x0b``); an ``id``, ``class``, ``href`` or ``style`` name not in
-    lowercase (``ID=``); an ``&`` or a leading or trailing space in an ``href`` that is not a
-    script URL (either hides the reference from the scope check); a ``\`` in any attribute but a
-    ``data-*`` one, written or entity-encoded; an ``<a>`` ``href`` that is not http(s), a fragment
-    or a relative path.
+    is not plain ASCII (``data-x\x0b``); a name given twice (the browser keeps the first); an
+    ``&`` or a leading or trailing space in an ``href`` that is not a script URL (either hides the
+    reference from the scope check); a ``\`` in any attribute but a ``data-*`` one, written or
+    entity-encoded; an ``<a>`` ``href`` that is not http(s), a fragment or a relative path.
   - Whitespace: only HTML's own (tab, line feed, form feed, carriage return, space) separates a
     tag's parts; a tag split on any other (``\x0b``, ``\xa0``) is unreadable, so refused. Each
     kept attribute is written again as `` name="value"``, and an end tag without attributes.
+- **Attribute allow-list** (#1502). Apart from ``data-*``, an attribute is kept only if its name,
+  in its SVG spelling (``viewBox``, not ``viewbox`` or ``ID``), is in ``ATTRIBUTES``: what the
+  generators write, plus an ``href`` and a ``style``. The root takes only ``ROOT_ATTRIBUTES``, so
+  no ``transform``, ``overflow`` or ``style`` there. Every ``viewBox`` reads ``0 0 W H`` within
+  ``MAX_WIDE`` (10:1) and ``MAX_TALL`` (1:64), the generators' range, with at most six digits per
+  side (a 309-digit side would read as infinite and pass); the root has one, and its
+  ``width`` and ``height``, when given, are its ``W`` and ``H``, so the diagram cannot stretch the
+  page (``viewBox="0 0 40 40000"`` would be 868,000 px tall). Anything else refuses.
 - **CSS allow-list.** A ``<style>`` is kept only if the whole sheet parses as the shape the
   generators write (``css_selectors``): rules ``svg.<scope> part part, ... { declarations }``,
   optionally inside ``@media (prefers-color-scheme: dark)``, one level deep. A part is an element
@@ -46,6 +53,11 @@ so it is sanitised first, and it shares the page's stylesheet and id space, so i
 - **Scoped.** A root that already carries a class is the generator's scope (#1449): kept when it
   is complete (every id and reference under it, every sheet on the allow-list under it), None
   otherwise. A root without a class is scoped here under ``scope``, then checked the same way.
+  A scope is lowercase parts joined by single ``-`` (no ``fleet-`` or ``fleet--x``). References are
+  read per attribute from its decoded value (#1502), never by a pattern over the whole markup,
+  which one attribute could open and another close: an ``id``, a ``#`` ``href`` and each
+  ``url(#id)``, matched in any case (CSS reads ``URL(`` as ``url(``). A ``url(`` that is not
+  exactly ``url(#id)`` refuses. A ``data-*`` value is never read as a reference: it draws nothing.
 - **Checked.** The result must sanitise to itself and hold none of ``<script``,
   ``foreignObject``, ``javascript:``, ``vbscript:``, ``@import``, ``image-set`` or ``src(``, in
   any case, and no ``url(`` that is not ``#``-local, or it is None. An image embed never runs
@@ -59,6 +71,7 @@ from __future__ import annotations
 
 import html
 import re
+from typing import NamedTuple
 
 from lib.svg_scope import scope_svg
 
@@ -70,7 +83,21 @@ ELEMENTS = frozenset({
 DROPPED = frozenset({"script", "foreignobject"})  # removed with their contents
 CAMEL = {"lineargradient": "linearGradient", "radialgradient": "radialGradient", "clippath": "clipPath",
          "textpath": "textPath"}  # the SVG spelling of a mixed-case element name
-CHECKED_ATTRS = frozenset({"id", "class", "href", "xlink:href", "style"})  # read by the checks in lowercase
+# Every attribute a generator writes, in its SVG spelling (#1502), plus the ``href`` of a link or a
+# ``<use>`` and a ``style`` the CSS allow-list reads. A ``data-*`` attribute is kept as well: it
+# draws nothing and references nothing. Any other name refuses the diagram.
+ATTRIBUTES = frozenset({
+    "class", "id", "role", "xmlns", "href", "xlink:href", "style", "x", "y", "x1", "x2", "y1", "y2",
+    "cx", "cy", "r", "rx", "width", "height", "d", "points", "transform", "viewBox",
+    "preserveAspectRatio", "fill", "opacity", "stroke", "stroke-width", "stroke-opacity",
+    "stroke-dasharray", "stroke-linecap", "font-size", "font-weight", "text-anchor", "pointer-events",
+    "patternUnits", "patternTransform", "offset", "stop-color", "marker-end", "markerWidth",
+    "markerHeight", "refX", "refY", "orient"})
+# The root's own: no transform, overflow or position, and a size that only scales its viewBox.
+ROOT_ATTRIBUTES = frozenset({"class", "xmlns", "role", "viewBox", "width", "height", "preserveAspectRatio"})
+# The viewBox shapes the generators draw (#1502): the widest is 8:1 (a placeholder strip), the
+# tallest grows one 20 px row per repository at about 820 px wide, so 64:1 is some 2,600 rows.
+MAX_WIDE, MAX_TALL = 10.0, 64.0
 TEXT_ONLY = frozenset({"title", "desc", "style"})  # no child element: see the module docstring
 UNSAFE = ("<script", "foreignobject", "javascript:", "vbscript:", "@import", "image-set", "src(")
 
@@ -88,21 +115,73 @@ _LINK = re.compile(r"(?:https?://|#|(?!//)[^:/?#]*(?:[/?#]|$))", re.A)  # http(s
 _URL_SCHEME = re.compile(r"(?:java|vb)script:")
 _FETCH = re.compile(r"""url\(\s*['"]?(?!#)""", re.I)  # a url() that is not #-local
 _ROOT_CLASS = re.compile(r'<svg\b[^>]*?\sclass="([^"]*)"')
-_ID = re.compile(r'\sid="([^"]*)"')
-_REF = re.compile(r'url\(#([^)]+)\)|\s(?:xlink:)?href="#([^"]*)"')
+_URL_OPEN = re.compile(r"url\(", re.I)  # CSS reads URL( as url( (#1502)
+_URL_LOCAL = re.compile(r"url\(#([A-Za-z0-9_-]+)\)", re.I)
+_VIEWBOX = re.compile(r"0 0 (\d{1,6}(?:\.\d{1,3})?) (\d{1,6}(?:\.\d{1,3})?)", re.A)  # finite: no 1e400
+_SCOPE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", re.A)  # no empty, doubled or trailing part
+_ROOT_VIEWBOX = re.compile(r'<svg\b[^>]*?\sviewBox="')
 
 
-def _safe_attrs(element: str, attrs: str) -> str | None:
+class _Parsed(NamedTuple):
+    markup: str
+    details: bool
+    names: list[str]  # every id and # reference, each read from its own decoded attribute value
+    sheets: list[str]  # the text of every <style>
+
+
+def _box_ok(width: str, height: str) -> bool:
+    """A width and height the generators draw: both positive, within ``MAX_WIDE`` and ``MAX_TALL``."""
+    w, h = float(width), float(height)
+    return w > 0 and h > 0 and w <= MAX_WIDE * h and h <= MAX_TALL * w
+
+
+def _references(name: str, decoded: str) -> list[str] | None:
+    """The ids ``decoded`` (one attribute's value) names: its own id, its ``#`` href and every
+    ``url(#id)``; None when a ``url(`` in it is not exactly ``url(#id)``."""
+    if name == "id":
+        return [decoded]
+    refs = [decoded[1:]] if name.endswith("href") and decoded.startswith("#") else []
+    for m in _URL_OPEN.finditer(decoded):
+        local = _URL_LOCAL.match(decoded, m.start())
+        if local is None:
+            return None
+        refs.append(local.group(1))
+    return refs
+
+
+def _allowed(name: str, raw: str, decoded: str, names: list[str], box: dict[str, str], root: bool) -> bool:
+    """``name`` is on the allow-list in its SVG spelling, its references are readable (added to
+    ``names``) and a ``viewBox`` is in range (its size, and a root's ``width`` and ``height``, in ``box``)."""
+    if name not in (ROOT_ATTRIBUTES if root else ATTRIBUTES):
+        return False  # off the allow-list, or not in its SVG spelling (ID=, viewbox=)
+    refs = _references(name, decoded)
+    if refs is None:
+        return False
+    names.extend(refs)
+    if name == "viewBox":
+        vb = _VIEWBOX.fullmatch(raw)
+        if vb is None or not _box_ok(vb.group(1), vb.group(2)):
+            return False
+        box["vw"], box["vh"] = vb.group(1), vb.group(2)
+    elif root and name in ("width", "height"):
+        box[name] = raw
+    return True
+
+
+def _safe_attrs(element: str, attrs: str, names: list[str], root: bool = False) -> str | None:
     """``attrs`` without event handlers, script URLs or fetches, each written again as
-    `` name="value"``; None to refuse (see the module docstring)."""
+    `` name="value"``, every id and ``#`` reference added to ``names``; None to refuse (see the
+    module docstring)."""
     kept = []
+    box: dict[str, str] = {}
+    seen: set[str] = set()
     for m in _ATTR_PARTS.finditer(attrs):
         quoted, name = m.group(2) or "", m.group(1).lower()
         raw = quoted[1:-1]
-        if (not _ATTR_NAME.fullmatch(m.group(1)) or (name in CHECKED_ATTRS and m.group(1) != name)
-                or not quoted.startswith('"') or "<" in raw or ">" in raw or element == "style"
-                or ("\\" in raw and not name.startswith("data-"))):
-            return None
+        if (not _ATTR_NAME.fullmatch(m.group(1)) or not quoted.startswith('"') or "<" in raw or ">" in raw
+                or element == "style" or ("\\" in raw and not name.startswith("data-")) or name in seen):
+            return None  # a repeated name: the browser keeps the first, the checks would read both
+        seen.add(name)
         decoded = html.unescape(raw)
         value = re.sub(r"[\x00-\x20]", "", decoded).lower()
         if name.startswith("on") or _URL_SCHEME.search(value):
@@ -118,7 +197,11 @@ def _safe_attrs(element: str, attrs: str) -> str | None:
         fetches = _FETCH.search(value) or (name.endswith("href") and element != "a" and not value.startswith("#"))
         if fetches:
             continue
+        if not name.startswith("data-") and not _allowed(m.group(1), raw, decoded, names, box, root):
+            return None
         kept.append(f' {m.group(1)}="{raw}"')
+    if root and any(box.get(k, box.get(v)) != box.get(v) for k, v in (("width", "vw"), ("height", "vh"))):
+        return None  # a root size is its viewBox's, so it cannot change the shape the page lays out
     return "".join(kept)
 
 
@@ -149,14 +232,20 @@ def _check_tag(name: str, close: bool, open_names: list[str], closed: bool) -> N
 
 def sanitise(svg: str) -> tuple[str, bool]:
     """``svg`` sanitised, and whether it has per-part details; ``("", False)`` when refused."""
+    parsed = _parse(svg)
+    return ("", False) if parsed is None else (parsed.markup, parsed.details)
+
+
+def _parse(svg: str) -> _Parsed | None:
     try:
         return _sanitise(svg)
     except _Refused:
-        return "", False
+        return None
 
 
-def _sanitise(svg: str) -> tuple[str, bool]:
+def _sanitise(svg: str) -> _Parsed | None:
     out: list[str] = []
+    names: list[str] = []
     open_names: list[str] = []
     skipping = 0  # depth inside a dropped element
     details = closed = False
@@ -187,7 +276,7 @@ def _sanitise(svg: str) -> tuple[str, bool]:
             out.append(f"</{m.group('name')}>")  # an end tag's attributes are dropped
             continue
         details = details or (name == "title" and len(open_names) > 1)
-        attrs = _safe_attrs(name, m.group("attrs"))
+        attrs = _safe_attrs(name, m.group("attrs"), names, root=not open_names)
         if attrs is None:
             raise _Refused
         out.append(f"<{m.group('name')}{attrs}{'/' if empty else ''}>")
@@ -196,8 +285,9 @@ def _sanitise(svg: str) -> tuple[str, bool]:
         elif not open_names:
             closed = True
     if not closed or skipping:
-        return "", False
-    return "".join(out).strip(), details
+        return None
+    markup = "".join(out).strip()
+    return _Parsed(markup, details, names, re.findall(r"<style>(.*?)</style>", markup, re.S))
 
 
 # --- CSS: an allow-list. A sheet is read only if it parses whole as the shape the generators
@@ -272,12 +362,13 @@ def root_class(markup: str) -> str | None:
     return m.group(1) if m else None
 
 
-def _scope_complete(svg: str, scope: str) -> bool:
-    """Every id and ``#`` reference in ``svg`` is under ``scope``, and every ``<style>`` is on the
-    CSS allow-list under it."""
-    refs = [a or b for a, b in _REF.findall(svg)]
-    return (all(i.startswith(f"{scope}-") for i in _ID.findall(svg) + refs)
-            and all(css_selectors(css, scope) is not None for css in re.findall(r"<style>(.*?)</style>", svg, re.S)))
+def _scope_complete(parsed: _Parsed, scope: str) -> bool:
+    """Every id and ``#`` reference, each read from its own attribute (#1502), and every
+    ``url(#id)`` in a sheet is under ``scope``, and every ``<style>`` is on the CSS allow-list
+    under it."""
+    css_refs = [ref for css in parsed.sheets for ref in _URL_LOCAL.findall(css)]
+    return (all(name.startswith(f"{scope}-") for name in parsed.names + css_refs)
+            and all(css_selectors(css, scope) is not None for css in parsed.sheets))
 
 
 def inline_svg(svg: str, scope: str) -> str | None:
@@ -291,9 +382,10 @@ def inline_svg(svg: str, scope: str) -> str | None:
             clean = scope_svg(clean, scope)
         except ValueError:
             return None
-    elif not re.fullmatch(r"[a-z][a-z0-9-]*", own):
-        return None
-    if (not _scope_complete(clean, root_class(clean) or "") or sanitise(clean)[0] != clean
+    scope = root_class(clean) or ""
+    parsed = _parse(clean)
+    if (parsed is None or parsed.markup != clean or not _SCOPE.fullmatch(scope)
+            or not _ROOT_VIEWBOX.match(clean) or not _scope_complete(parsed, scope)
             or any(word in clean.lower() for word in UNSAFE) or _FETCH.search(clean)):
         return None
     return clean

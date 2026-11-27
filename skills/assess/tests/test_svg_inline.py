@@ -10,7 +10,8 @@ import re
 
 import pytest
 
-from lib.svg_inline import PROPERTIES, css_selectors, declarations_ok, inline_svg, root_class, sanitise
+from lib.svg_inline import (ATTRIBUTES, PROPERTIES, ROOT_ATTRIBUTES, _parse, css_selectors, declarations_ok,
+                             inline_svg, root_class, sanitise)
 from lib.svg_scope import scope_svg
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -48,7 +49,7 @@ def test_an_unscoped_svg_is_scoped_here() -> None:
     '<a href="java&#x09;script:alert(1)"><text>t</text></a>',
     '<a xlink:href=" JAVASCRIPT:alert(1)"><text>t</text></a>',
     "<rect onmouseover=\"alert(1)\" ONCLICK=\"alert(1)\" width=\"1\"/>",
-    '<set attributeName="href" to="vbscript:x"/>'.replace("set", "rect"),
+    '<rect fill="vbscript:x" width="1"/>',
     "<!-- --!><img src=x onerror=alert(1)> -->",
     '<use href="https://example.com/x.svg#p"/><use xlink:href="//example.com/x.svg"/>',
     '<rect fill="URL( \'https://example.com/q\')" width="1"/>',
@@ -122,7 +123,7 @@ def test_markup_it_cannot_trust_or_scope_stays_an_image(svg: str) -> None:
 
 
 def test_a_complete_generator_scope_is_kept() -> None:
-    head = '<svg class="ok" xmlns="http://www.w3.org/2000/svg"><title>r</title>'
+    head = '<svg class="ok" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4"><title>r</title>'
     body = ('<style>svg.ok rect {fill:url(#ok-p)} @media (prefers-color-scheme: dark){svg.ok text {fill:red}} '
             'svg.ok {stroke:red}</style>'
             '<pattern id="ok-p"/><use href="#ok-p"/>' + PART)
@@ -312,3 +313,92 @@ def test_the_treemap_radar_and_doc_graph_css_is_on_the_allow_list(tmp_path: Path
     for svg, scope in rendered:
         sheets = _sheets(svg)
         assert sheets and all(css_selectors(css, scope) for css in sheets), scope
+
+
+# --- the third security review (#1502): references per attribute, scope names, presentation
+# attributes and the viewBox. Every input below is refused.
+
+def _own(body: str, scope: str = "fleet-x", box: str = 'viewBox="0 0 40 40"') -> str:
+    return _svg(body + PART, f'<svg class="{scope}" xmlns="http://www.w3.org/2000/svg" {box}><title>r</title>')
+
+
+@pytest.mark.parametrize("body", [
+    '<use data-a="url(#fleet-x-" href="#otherdiag" data-b=")"/>',
+    '<rect data-a="url(#fleet-x-" fill="url(#pagegrad)" data-b=")" width="40" height="40"/>',
+    '<rect fill="url(&#35;pagegrad)" width="1"/>',
+    '<rect fill="url(#fleet-x-p) url(#pagegrad)" width="1"/>',
+    '<rect fill="url( #fleet-x-p)" width="1"/>',
+    '<rect id="fleet-x-a" fill="URL(#fleet-y-p)" width="1"/>',
+    '<rect fill="uRl(#pagegrad)" width="1"/>',
+    '<rect stroke="Url(&#x23;fleet-y-p)" width="1"/>',
+])
+def test_a_reference_is_read_from_its_own_decoded_attribute(body: str) -> None:
+    assert inline_svg(_own(body), "s") is None
+
+
+def test_a_reference_in_any_case_under_the_scope_is_kept() -> None:
+    svg = _own('<pattern id="fleet-x-p"/><rect fill="URL(#fleet-x-p)" width="1"/><use href="#fleet-x-p"/>')
+    assert inline_svg(svg, "s") == svg
+
+
+@pytest.mark.parametrize("scope", ["fleet-", "fleet--x", "fleet-x-"])
+def test_a_scope_with_an_empty_part_is_refused(scope: str) -> None:
+    assert inline_svg(_own("", scope=scope), "s") is None
+
+
+@pytest.mark.parametrize("svg", [
+    _own("", box='viewBox="0 0 40 40000"'),
+    _own("", box='viewBox="0 0 40000 40"'),
+    _own("", box='viewBox="0 0 0 40"'),
+    _own("", box=f'viewBox="0 0 {"9" * 400} {"9" * 400}"'),
+    _own("", box='viewBox="0 0 1234567 1234567"'),
+    _own("", box='viewBox="-20 0 40 40"'),
+    _own("", box='viewBox="0,0,40,40"'),
+    _own("", box='viewbox="0 0 40 40"'),
+    _own("", box='viewBox="0 0 40 40" width="40" height="40000"'),
+    _own("", box='width="40" height="40"'),
+    _own("", box='viewBox="0 0 40 40" transform="scale(50)" overflow="visible"'),
+    _own("", box='viewBox="0 0 40 40" style="fill:red"'),
+    _own('<rect width="1" cursor="pointer"/>'),
+    _own('<rect width="1" font-family="serif"/>'),
+    _own('<rect width="1" clip-path="url(#fleet-x-c)"/>'),
+    _own('<pattern id="fleet-x-p" viewBox="0 0 1 900"/>'),
+    _own('<rect WIDTH="1"/>'),
+    _own("", box='viewBox="0 0 40 40" width="40" height="40" width="40000"'),
+    _own('<rect fill="red" FILL="url(#pagegrad)" width="1"/>'),
+])
+def test_a_presentation_attribute_or_viewbox_off_the_allow_list_is_refused(svg: str) -> None:
+    assert inline_svg(svg, "s") is None
+
+
+@pytest.mark.parametrize("box", ['viewBox="0 0 400 40" width="400" height="40"', 'viewBox="0 0 10 640"'])
+def test_the_widest_and_tallest_viewbox_are_kept(box: str) -> None:
+    assert inline_svg(_own("", box=box), "s") is not None
+
+
+GOLDENS = sorted(str(p.relative_to(FIXTURES)) for p in FIXTURES.glob("*_diagrams/expected*.svg")) + sorted(
+    str(p.relative_to(FIXTURES)) for p in FIXTURES.glob("fleet_*/expected*.svg"))
+
+
+@pytest.mark.parametrize("golden", GOLDENS)
+def test_every_generator_golden_is_on_the_attribute_allow_list(golden: str) -> None:
+    svg = (FIXTURES / golden).read_text(encoding="utf-8")
+    parsed = _parse(svg)
+    assert parsed is not None, golden
+    has_parts = parsed.details
+    assert (inline_svg(svg, "s") is not None) == has_parts, golden
+
+
+def test_the_treemap_and_radar_are_on_the_attribute_allow_list(tmp_path: Path) -> None:
+    import lib.fleet.fleet_data as fd
+    import lib.fleet.fleet_radar as fr
+    from fleet_data_fixture import build
+    from test_diagram_scoping import _treemap_svg
+    for svg in (_treemap_svg(tmp_path), fr.render(fr.radar_view(dict(build(fd.Privacy(full=True)))))):
+        assert inline_svg(svg, "s") is not None
+
+
+def test_the_allow_lists_name_no_layout_or_fetch_attribute() -> None:
+    for name in ("overflow", "cursor", "clip-path", "mask", "filter", "src", "position"):
+        assert name not in ATTRIBUTES and name not in ROOT_ATTRIBUTES
+    assert "transform" not in ROOT_ATTRIBUTES and "style" not in ROOT_ATTRIBUTES
