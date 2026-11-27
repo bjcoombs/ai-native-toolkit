@@ -419,3 +419,21 @@ def test_code_span_across_a_line_break_stays_on_one_line(tmp_path: Path) -> None
     assert entry["commands"] == ["make  check lint"]
     text = draft.contract_path(tmp_path, RUN_ID).read_text(encoding="utf-8")
     assert draft.check(text, _kill_test(tmp_path)) == []
+
+
+def test_summary_compares_against_a_baseline_or_nothing(tmp_path: Path) -> None:
+    contracts = tmp_path / "c"
+    _write(contracts, _backlog_issues())
+    base = tmp_path / "base.json"
+    base.write_bytes(draft.kill_test_path(contracts, RUN_ID).read_bytes())
+    _write(contracts, _backlog_issues() + [_issue(15, ["`make new` exits 0"])])
+    out = tmp_path / "s.md"
+    args = ["summary", "--run-id", RUN_ID, "--contract-dir", str(contracts), "--out", str(out)]
+    assert draft.main(args + ["--baseline", str(base)]) == 0
+    assert "- Added #15 Issue 15: I15-1" in out.read_text(encoding="utf-8")
+    assert draft.main(args + ["--baseline", str(tmp_path / "missing.json")]) == 0
+    assert out.read_text(encoding="utf-8").startswith("New contract draft: 6 criteria from 4 issues.")
+    assert draft.main(["summary", "--run-id", "../x", "--contract-dir", str(contracts), "--out", str(out),
+                       "--baseline", str(base)]) == 2
+    assert draft.main(["summary", "--run-id", "nope", "--contract-dir", str(contracts), "--out", str(out),
+                       "--baseline", str(base)]) == 2

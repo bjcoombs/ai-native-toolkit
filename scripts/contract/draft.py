@@ -39,7 +39,11 @@ one space; inside a code span every space and tab is kept, and only a line
 break becomes a space, as in a rendered code span, so a command keeps its
 exact spacing (#1565).
 
-Exit codes: 0 written or check passed; 1 refused or check failed; 2 usage or
+`summary` writes the change summary of the current draft against a baseline
+kill test (the default branch's, when the sweep opens a new pull request), or
+against nothing when the baseline file is missing.
+
+Exit codes: 0 written, summarised or check passed; 1 refused or check failed; 2 usage or
 unreadable input; 3 nothing to draft (an empty queue, or no issue whose items
 all name a command).
 
@@ -402,19 +406,39 @@ def _cmd_check(args: argparse.Namespace, contract_dir: Path) -> int:
     return 0
 
 
+def _cmd_summary(args: argparse.Namespace, contract_dir: Path) -> int:
+    try:
+        _validate_run_id(args.run_id)
+    except DraftError as exc:
+        print("draft summary: %s" % exc, file=sys.stderr)
+        return 2
+    current = _read_json(kill_test_path(contract_dir, args.run_id))
+    if current is None:
+        print("draft summary: the kill test is missing or unreadable", file=sys.stderr)
+        return 2
+    baseline = Path(args.baseline)
+    Path(args.out).write_text(change_summary(_read_json(baseline) if baseline.exists() else None, current),
+                              encoding="utf-8")
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Draft a run contract from the ready queue.")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    for name in ("write", "check"):
+    for name in ("write", "check", "summary"):
         p = sub.add_parser(name)
         p.add_argument("--run-id", required=True, help="run identifier, e.g. issues-agent-ready")
         p.add_argument("--contract-dir", default=None, help="where the draft lives (%s)" % HELP_DEFAULT)
         if name == "write":
             p.add_argument("--queue", required=True, help="queue JSON from refine_queue.py")
             p.add_argument("--summary", default=None, help="also write the change summary here")
+        if name == "summary":
+            p.add_argument("--baseline", required=True, help="kill test to compare against; missing = new draft")
+            p.add_argument("--out", required=True, help="where to write the change summary")
     args = parser.parse_args(argv)
     contract_dir = resolve_contract_dir(args.contract_dir)
-    return _cmd_write(args, contract_dir) if args.cmd == "write" else _cmd_check(args, contract_dir)
+    commands = {"write": _cmd_write, "check": _cmd_check, "summary": _cmd_summary}
+    return commands[args.cmd](args, contract_dir)
 
 
 if __name__ == "__main__":

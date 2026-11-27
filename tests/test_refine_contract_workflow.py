@@ -9,7 +9,10 @@ run the job's own step scripts under bash against a local bare remote, with
   gets its pull request opened by the next run, with nothing pushed again;
 - an open pull request on an unchanged draft gets no comment;
 - a draft already on the default branch opens no pull request;
-- an empty queue closes the open draft pull request, with a comment.
+- an empty queue, or a queue whose draft is already on the default branch,
+  closes the open draft pull request, with a comment;
+- a pull request opened again describes the draft against the default branch,
+  not "No change" against the branch.
 
 The `if:` of each step is checked as text and applied here by hand.
 """
@@ -118,7 +121,7 @@ class Job:
         self._bash(_step(r"^Draft the contract"), work, env, {})
         outputs = dict(line.split("=", 1) for line in output.read_text(encoding="utf-8").splitlines() if "=" in line)
         for step, applies in ((_step(r"^Push the draft"), outputs.get("branch", "") != ""),
-                              (_step(r"^Close the draft"), outputs.get("empty", "") == "true")):
+                              (_step(r"^Close the draft"), outputs.get("close", "") == "true")):
             if applies:
                 self._bash(step, work, env, outputs, check=not create_fails)
         return outputs
@@ -138,7 +141,7 @@ class Job:
 def test_step_conditions_are_live_only() -> None:
     push, close = _step(r"^Push the draft"), _step(r"^Close the draft")
     assert push["if"] == "steps.draft.outputs.branch != '' && inputs.mode == 'live'"
-    assert close["if"] == "steps.draft.outputs.empty == 'true' && inputs.mode == 'live'"
+    assert close["if"] == "steps.draft.outputs.close == 'true' && inputs.mode == 'live'"
     assert "git" not in re.findall(r"\b\w+\b", close["run"]), "closing pushes nothing"
 
 
@@ -154,6 +157,8 @@ def test_pull_request_is_opened_again_after_a_failed_create(tmp_path: Path) -> N
     calls = job.gh_calls()
     assert any(c.startswith("pr create --base main --head %s" % BRANCH) for c in calls), calls
     assert not any(c.startswith("pr comment") for c in calls)
+    body = (tmp_path / "run2" / ".refine" / "pr-body.md").read_text(encoding="utf-8")
+    assert "No change" not in body and "New contract draft: 1 criteria from 1 issues." in body
 
 
 def test_open_pull_request_on_an_unchanged_draft_gets_no_comment(tmp_path: Path) -> None:
@@ -192,7 +197,7 @@ def test_empty_queue_closes_the_open_draft_pull_request(tmp_path: Path) -> None:
     job = Job(tmp_path)
     job.run(QUEUE)
     outputs = job.run(EMPTY, prs=[7])
-    assert outputs.get("empty") == "true" and outputs.get("branch", "") == ""
+    assert outputs.get("close") == "true" and outputs.get("branch", "") == ""
     closes = [c for c in job.gh_calls() if c.startswith("pr close")]
     assert len(closes) == 1 and closes[0].startswith("pr close 7 --comment")
     assert "nothing to draft" in closes[0]
@@ -202,3 +207,18 @@ def test_empty_queue_with_no_open_pull_request_closes_nothing(tmp_path: Path) ->
     job = Job(tmp_path)
     job.run(EMPTY)
     assert not any(c.startswith("pr close") for c in job.gh_calls())
+
+
+def test_queue_back_to_the_merged_draft_closes_the_open_pull_request(tmp_path: Path) -> None:
+    job = Job(tmp_path)
+    job.run(QUEUE)
+    merged = tmp_path / "merge"
+    subprocess.run(["git", "clone", "-q", job.url, str(merged)], check=True, capture_output=True)
+    _git(merged, "merge", "-q", "--ff-only", "origin/%s" % BRANCH)
+    _git(merged, "push", "-q", "origin", "main")
+    job.run(dict(QUEUE, issues=QUEUE["issues"] + [
+        {"number": 12, "title": "Issue 12", "url": "u", "criteria": ["`make test` exits 0"]}]))
+    outputs = job.run(QUEUE, prs=[7])  # the queue went back to the draft already on main
+    assert outputs.get("close") == "true" and outputs.get("branch", "") == ""
+    closes = [c for c in job.gh_calls() if c.startswith("pr close")]
+    assert len(closes) == 1 and closes[0].startswith("pr close 7 --comment") and "already on main" in closes[0]
