@@ -15,7 +15,9 @@ Per item, in this order (the first rule that applies wins; an item with the
    informational (``assess-informational`` label added, state kept). That holds for an item
    whose body names a finding keyed on commit origin (``**Finding:** `self_referential_tests```,
    ``reviewed_findings.REVIEWABLE_FINDINGS``: no code change clears it), and for a marked item
-   whose condition this run's maturity model no longer lists or reads ``not_applicable``.
+   whose condition reads ``not_applicable``. A condition this run's model does not list is
+   left as it is, with one note: a ``--profile`` run cuts rows to fewer levels and a pack's rows
+   exist only on a ``--pack`` run, so a missing condition need not have left the model.
 2. **Close** (open, marked): the condition now holds (``met``; ``unmet`` for a hazard, whose
    ``met`` means the harm is present). The proposal cites the evidence line (condition id,
    state, grade and its why) and the commit this run measured.
@@ -36,8 +38,8 @@ Per item, in this order (the first rule that applies wins; an item with the
    superseded by it. An item number in ``filed`` (the items this run filed or reused) is
    never superseded, so a run that splits the action again keeps its parts.
 
-Nothing is proposed for a condition ``not_measured`` or ``declined`` (unknown never counts),
-nor for an item the label check excludes (``label``, as ``plan_filing`` applies it).
+No close, reopen or demote is proposed for a condition ``not_measured`` or ``declined``
+(unknown never counts); a split part is still checked for supersession. Nothing is proposed for an item the label check excludes (``label``, as ``plan_filing`` applies it).
 Close and reopen are held, with one note, when the working tree is dirty or the measured
 commit is unknown: no commit carries the reading. A run whose ``interactive`` is false
 proposes nothing (v1 runs on interactive ``/assess`` only), and a run with no level result
@@ -183,6 +185,7 @@ class _Pass:
         self.proposals: list[Proposal] = []
         self.rules: list[RulesNote] = []
         self.held = 0
+        self.unlisted = 0
 
     def propose(self, kind: str, item: Mapping[str, object], reason: str, write: ReconcileWrite, *,
                 condition: str = "", finding: str = "", commit: str = "", superseded_by: int = 0) -> None:
@@ -246,12 +249,14 @@ class _Pass:
                   condition: Mapping[str, object] | None, fields: Mapping[str, str]) -> bool:
         """Propose for one marked item's condition; True when it got a proposal or a rules note."""
         is_open = _is_open(item)
-        if condition is None or condition.get("state") == "not_applicable":
+        if condition is None:
+            self.unlisted += 1
+            return True
+        if condition.get("state") == "not_applicable":
             if not is_open:
                 return False
-            why = (f"`{cid}` is no longer in the maturity model ({self.facts['model'] or 'unknown'})"
-                   if condition is None else f"`{cid}` reads not applicable")
-            self.demote(item, number, f"{why}, so no change to the repository can move it", condition=cid)
+            self.demote(item, number, f"`{cid}` reads not applicable, so no change to the repository can move it",
+                        condition=cid)
             return True
         done = _done(condition)
         if done is None or done is not is_open:
@@ -292,6 +297,9 @@ def reconcile(existing: Sequence[Mapping[str, object]], facts: RunFacts, *, labe
         run.item(item)
     if facts["conditions"] is None:
         notes.append("this run has no level result, so marked items were not read against their conditions")
+    if run.unlisted:
+        notes.append(f"{run.unlisted} item(s) left as they are: this run's model does not list their condition "
+                     "(a profile or pack run may not)")
     if run.held:
         notes.append(f"{run.held} close or reopen proposal(s) held: the working tree has uncommitted changes "
                      "or the measured commit is not known, so no commit carries the reading")

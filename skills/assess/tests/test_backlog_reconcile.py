@@ -141,14 +141,19 @@ def test_demote_proposal_for_self_referential_tests() -> None:
     assert 4 not in _by_number(_run(tracker.items, _context(*CONDITIONS)))  # demoted once
 
 
-def test_a_condition_that_cannot_move_is_demoted() -> None:
-    items = [_marked(1, "gone-row.1", "OPEN"), _marked(2, "layer-4-docs.2", "OPEN"), _marked(3, "gone-row.1", "CLOSED")]
-    result = _run(items, _context(_condition("layer-4-docs.2", "not_applicable")))
-    props = _by_number(result)
-    assert props[1]["kind"] == props[2]["kind"] == "demote"
-    assert "no longer in the maturity model" in props[1]["reason"]
-    assert "reads not applicable" in props[2]["reason"]
+def test_a_not_applicable_condition_is_demoted() -> None:
+    items = [_marked(2, "layer-4-docs.2", "OPEN"), _marked(3, "layer-4-docs.2", "CLOSED")]
+    props = _by_number(_run(items, _context(_condition("layer-4-docs.2", "not_applicable"))))
+    assert props[2]["kind"] == "demote" and "reads not applicable" in props[2]["reason"]
     assert 3 not in props  # a closed item is left as it is
+
+
+def test_a_condition_a_profile_run_does_not_list_is_left_alone() -> None:
+    # A profile cuts ci_gates to level 1, so ci_gates.3 is missing from the run, not from the model.
+    items = [_marked(1, "ci_gates.3", "OPEN"), _marked(2, "ci_gates.3", "CLOSED")]
+    result = _run(items, _context(_condition("ci_gates.1", "met"), model="profile-citizen-2026.11.24"))
+    assert result["proposals"] == []
+    assert "2 item(s) left as they are" in result["notes"][0]
 
 
 def test_hazard_polarity_reads_unmet_as_holding() -> None:

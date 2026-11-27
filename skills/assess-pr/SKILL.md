@@ -369,21 +369,25 @@ Use the same `--label ""` and GitLab mapping as 6c. The output holds `proposals`
 
 - **Close**: an open item's condition now holds. The proposal cites the evidence line and the commit this run measured.
 - **Reopen**: a closed item's condition lapsed. The proposal names the cause.
-- **Demote to informational**: the item can no longer move, because its finding keys on commit origin (`self_referential_tests`) or its condition left the maturity model or reads not applicable. The write adds the `assess-informational` label and keeps the item's state; a later run passes the item over.
+- **Demote to informational**: the item can no longer move, because its finding keys on commit origin (`self_referential_tests`) or its condition reads not applicable. An item whose condition this run's model does not list (a `--profile` or `--pack` difference) is left as it is, with a note. The write adds the `assess-informational` label and keeps the item's state; a later run passes the item over.
 - **Close as superseded**: a part of an action that is no longer split, beside the item that now carries the action.
 - **Rules changed**: a move that only the new maturity model caused (the model changed, the repository did not) reads `rules changed: your repo did not` under "No change proposed". It is never a proposal and never progress or regression.
 
-Show `summary` verbatim as one batched message, then ask once with a multi-select AskUserQuestion listing each proposal by item number, plus "none". Print the writes for the confirmed numbers only, and run each:
+Show `summary` verbatim as one batched message, then ask once with a multi-select AskUserQuestion listing each proposal by item number, plus "none". Print the writes for the confirmed numbers only, and run each. Every comment holds backticks, so it goes through a file, never a quoted argument:
 
 ```bash
-uv run "$RENDER" "$REPO_ROOT" reconcile --existing "$EXISTING" --filed "<same numbers>" --confirm "<confirmed numbers, or all>"
+WRITES=$(mktemp); COMMENT=$(mktemp)   # outside the repository
+uv run "$RENDER" "$REPO_ROOT" reconcile --existing "$EXISTING" --filed "<same numbers>" --confirm "<confirmed numbers, or all>" > "$WRITES"
+jq -c '.[]' "$WRITES" | while read -r w; do
+  n=$(jq -r '.number' <<<"$w"); jq -r '.comment' <<<"$w" > "$COMMENT"
+  case "$(jq -r '.op' <<<"$w")" in
+    close)  gh issue close "$n" ;;
+    reopen) gh issue reopen "$n" ;;
+    label)  l=$(jq -r '.add_label' <<<"$w"); gh label create "$l" --force; gh issue edit "$n" --add-label "$l" ;;
+  esac
+  gh issue comment "$n" --body-file "$COMMENT"
+done
 ```
-
-| `op` | GitHub write |
-|------|--------------|
-| `close` | `gh issue close <number> --comment "<comment>"` |
-| `reopen` | `gh issue reopen <number> --comment "<comment>"` |
-| `label` | `gh label create <add_label> --force`, then `gh issue edit <number> --add-label <add_label>` and `gh issue comment <number> --body "<comment>"` |
 
 On GitLab use `glab issue close`, `glab issue reopen` and `glab issue update --label`. A proposal the user leaves unconfirmed is not written and not recorded; the next run proposes it again. Other trackers: show the same summary and make the confirmed changes with their own tooling.
 
