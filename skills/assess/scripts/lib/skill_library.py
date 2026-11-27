@@ -3,7 +3,7 @@
 A skill library gives every agent session the team's procedures on demand: one ``SKILL.md`` a
 skill, loaded when it triggers. Kept in the repository, every clone and every harness that
 reads it gets the same skills; kept in one person's home folder, nobody else does. This module
-reads the committed files only (``git ls-files``), so an untracked skill or one in a home folder
+reads the committed files only at ``HEAD`` (``git ls-tree``), so an untracked or staged-only skill or one in a home folder
 does not count. No model is involved.
 
 The tendency it compensates for is unactioned intent: procedures that live in heads or in one
@@ -52,12 +52,12 @@ Block (``skill_library`` in run-context.json)::
      "lock_files": [str], "hashed_manifests": [str]}
 
 ``present`` is ``skills_counted > 0`` and feeds the ``skill-library.1`` condition. Lists are
-sorted by path. A root that is not a git repository, or a failed ``git ls-files``, gives
+sorted by path. A root that is not a git repository, has no commit, or a failed ``git ls-tree``, gives
 ``{"available": False, "reason": "not_a_git_repository: ..."}``: committed files cannot be told
 apart, so the condition reads not measured, never unmet.
 
 Skill library (#848), no model. `scan_skill_library(repo_root, scope, excludes)` lists tracked
-`SKILL.md` files (`git ls-files -s -z`, contents and link targets from `git cat-file --batch`) in a known location (`skills/` at the root, a harness
+`SKILL.md` files at `HEAD` (`git ls-tree -r -z HEAD`, contents and link targets from `git cat-file --batch`) in a known location (`skills/` at the root, a harness
 folder or `plugins/<name>/`, one or two folders deep), sets aside vendored, fixture, excluded and
 unknown-location files, checks frontmatter with `claude_config.parse_frontmatter` (clean, with
 `name` and `description`), and records tracked symlinks that share a skill tree inside the
@@ -132,8 +132,9 @@ def _git(repo: Path, args: list[str], stdin: bytes | None = None) -> bytes | Non
 
 
 def _tracked(repo: Path) -> Tracked | None:
-    """Tracked path -> (git mode, object id), or None when the root is not a git repository."""
-    raw = _git(repo, ["ls-files", "-s", "-z"])
+    """Committed path -> (git mode, object id) at ``HEAD`` (``git ls-tree -r -z``), or None when
+    the root is not a git repository or has no commit."""
+    raw = _git(repo, ["ls-tree", "-r", "-z", "HEAD"])
     if raw is None:
         return None
     entries: Tracked = {}
@@ -141,8 +142,9 @@ def _tracked(repo: Path) -> Tracked | None:
         if b"\t" not in record:
             continue
         meta, path = record.split(b"\t", 1)
-        mode, oid = meta.decode("ascii").split(" ")[:2]
-        entries[path.decode("utf-8", "surrogateescape")] = (mode, oid)
+        mode, kind, oid = meta.decode("ascii").split(" ")[:3]
+        if kind == "blob":
+            entries[path.decode("utf-8", "surrogateescape")] = (mode, oid)
     return entries
 
 
@@ -214,9 +216,10 @@ def valid_frontmatter(text: str) -> bool:
 def _inside(repo: Path, path: Path) -> str | None:
     """``path`` repository-relative (POSIX), or None when it is outside the repository."""
     try:
-        return path.resolve().relative_to(repo).as_posix()
+        rel = path.resolve().relative_to(repo).as_posix()
     except (OSError, ValueError):
         return None
+    return "" if rel == "." else rel
 
 
 def _set_aside(rel: str, extra: set[str]) -> str | None:
@@ -238,18 +241,29 @@ def _known(rel: str, scope_rels: list[str]) -> str | None:
     return found
 
 
-def _links(raw: dict[str, str], scope_rels: list[str]) -> tuple[dict[str, str], int]:
-    """Known-location symlinks resolving inside the repository (link -> target), and the
-    count of tracked symlinks that resolve outside it. Targets are the committed ones."""
+def _in_scope(rel: str, scope_rels: list[str] | None) -> bool:
+    """True with no scope, or when ``rel`` sits under a scope folder (a lexical check)."""
+    return scope_rels is None or any(not b or rel == b or rel.startswith(f"{b}/") for b in scope_rels)
+
+
+def _links(raw: dict[str, str], scope_rels: list[str] | None,
+           extra: set[str]) -> tuple[dict[str, str], int]:
+    """Skill links resolving inside the repository (link -> target), and the count that
+    resolve outside it. A skill link is a committed symlink in a known location, to a whole
+    ``skills/`` tree, one skill folder or one ``SKILL.md``, under the scope and not set aside;
+    any other link is not read. Targets are the committed ones."""
     inside: dict[str, str] = {}
     outside = 0
+    rels = scope_rels or []
     for rel in raw:
+        known = (_known(f"{rel}/x/{SKILL_FILE}", rels) or _known(f"{rel}/{SKILL_FILE}", rels)
+                 or _known(rel, rels))
+        if not known or not _in_scope(rel, scope_rels) or _set_aside(f"{rel}/x", extra):
+            continue
         target = _real(rel, raw)
         if target is None:
             outside += 1
-            continue
-        # a link to a whole skills/ tree, or to one skill folder, in a known location
-        if _known(f"{rel}/x/{SKILL_FILE}", scope_rels) or _known(f"{rel}/{SKILL_FILE}", scope_rels):
+        elif PurePosixPath(rel).name != SKILL_FILE:
             inside[rel] = target
     return inside, outside
 
@@ -269,36 +283,36 @@ def scan_skill_library(repo_root: Path, scope: Scope | None = None,
     tracked = _tracked(repo)
     if tracked is None:
         return SkillLibraryBlock(available=False,
-                                 reason="not_a_git_repository: committed files cannot be listed")
+                                 reason="not_a_git_repository: no commit whose files can be listed")
     extra = set(excludes[0]) if excludes else set()
-    scope_rels = [] if scope is None else [r for r in (_inside(repo, f) for f in scope.folders) if r]
+    scope_rels = None if scope is None else [r for r in (_inside(repo, f) for f in scope.folders) if r is not None]
     link_oids = {oid for mode, oid in tracked.values() if mode == _SYMLINK_MODE}
     names = {r for r in tracked if PurePosixPath(r).name == SKILL_FILE or r in MANIFEST_NAMES}
     blobs = _blobs(repo, link_oids | {tracked[r][1] for r in names})
     raw = {r: blobs.get(oid, b"").decode("utf-8", "surrogateescape").strip()
            for r, (mode, oid) in tracked.items() if mode == _SYMLINK_MODE}
-    links, outside = _links(raw, scope_rels)
+    links, outside = _links(raw, scope_rels, extra)
     counts = {"vendored": 0, "fixture": 0, "location": 0}
     skills: dict[str, LibrarySkill] = {}
     invalid: set[str] = set()
     for rel, (mode, _oid) in sorted(tracked.items()):
         if PurePosixPath(rel).name != SKILL_FILE:
             continue
-        if scope is not None and not scope.contains(repo / rel):
+        if not _in_scope(rel, scope_rels):
             continue
         reason = _set_aside(rel, extra)
         if reason is not None:
             counts[reason] += 1
             continue
-        real = rel if mode != _SYMLINK_MODE else _real(rel, raw)
-        if real is None:
-            continue  # counted in symlinks_outside
-        if real not in tracked or tracked[real][0] == _SYMLINK_MODE:
-            counts["location"] += 1  # a link to no committed file
-            continue
-        location = _location(rel, scope_rels, links)
+        location = _location(rel, scope_rels or [], links)
         if location is None:
             counts["location"] += 1
+            continue
+        real = rel if mode != _SYMLINK_MODE else _real(rel, raw)
+        if real is None:
+            continue  # a skill link out of the repository: counted in symlinks_outside
+        if real not in tracked or tracked[real][0] == _SYMLINK_MODE:
+            counts["location"] += 1  # a link to no committed file
             continue
         if real in skills:
             continue

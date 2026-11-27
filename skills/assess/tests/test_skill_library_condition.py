@@ -146,6 +146,33 @@ def test_the_committed_text_is_read_not_the_working_tree(tmp_path: Path) -> None
     assert scan_skill_library(root)["present"] is True
 
 
+def test_a_staged_but_uncommitted_skill_does_not_count(tmp_path: Path) -> None:
+    root = _git(tmp_path, {"README.md": "r\n"})
+    (root / "skills" / "a").mkdir(parents=True)
+    (root / "skills" / "a" / SKILL_NAME).write_text(_skill("a"), encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    assert scan_skill_library(root)["present"] is False
+
+
+def test_a_repository_with_no_commit_is_not_measured(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
+    assert scan_skill_library(tmp_path)["available"] is False
+
+
+def test_only_skill_links_count_as_outside(tmp_path: Path) -> None:
+    root = _git(tmp_path, {"skills/a/SKILL.md": _skill("a")},
+                links={"tools/hosts": "/etc/hosts", "node_modules/p/.claude/skills": "/x",
+                       ".agents/skills": "/home/someone/skills"})
+    assert scan_skill_library(root)["symlinks_outside"] == 1
+
+
+def test_scope_is_lexical_for_a_skill_link_leaving_it(tmp_path: Path) -> None:
+    root = _git(tmp_path, {"skills/a/SKILL.md": _skill("a")},
+                links={"packages/w/.claude/skills/a/SKILL.md": "../../../../../skills/a/SKILL.md"})
+    block = scan_skill_library(root, Scope.of(root, Path("packages/w")))
+    assert block["skills"] == [{"path": "skills/a/SKILL.md", "location": "packages/w/.claude/skills"}]
+
+
 def test_untracked_skills_do_not_count(tmp_path: Path) -> None:
     root = _git(tmp_path, {"README.md": "r\n"})
     (root / ".claude" / "skills" / "a").mkdir(parents=True)

@@ -35,7 +35,7 @@ collector = "core.skill_library"
 path = "skill_library.present"
 type = "bool"
 evidence = "head_structure"
-null_means = "not_a_git_repository: the committed files cannot be listed, so a skill library cannot be told apart from untracked files"
+null_means = "not_a_git_repository: the root is not a git repository or has no commit, so a committed skill library cannot be told apart from untracked files"
 
 [[entries]]
 id = "core.cond.skill-library.1.present"

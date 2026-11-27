@@ -307,9 +307,9 @@
 #   .codex, .github, .cursor, .opencode) or in plugins/<name>/. Files under node_modules,
 #   vendored or fixture folders, files outside a known location and symlinks that resolve
 #   outside the repository do not count. A symlink sharing one tree across harnesses, a
-#   skills-lock.json and a hashed marketplace manifest are evidence, not counted. Outside a git
-#   repository the committed files cannot be listed: unknown (not_a_git_repository), never
-#   unmet. It gates no Step. Graded measured (head_structure), read from the committed files.
+#   skills-lock.json and a hashed marketplace manifest are evidence, not counted. Files and
+#   link targets are read at HEAD. Outside a git repository, or with no commit, nothing is
+#   committed to list: unknown (not_a_git_repository), never unmet. It gates no Step. Graded measured (head_structure), read from the committed files.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures. A settings hook event
 #   counts toward hooks_present only when it holds a hook that does

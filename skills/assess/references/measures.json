@@ -6820,7 +6820,7 @@
       "collector": "core.skill_library",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": "not_a_git_repository: the committed files cannot be listed, so a skill library cannot be told apart from untracked files"
+      "null_means": "not_a_git_repository: the root is not a git repository or has no commit, so a committed skill library cannot be told apart from untracked files"
     },
     {
       "path": "skill_personal_data.files_with_personal_data",
