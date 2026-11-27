@@ -32,7 +32,8 @@ from typing import Any
 
 from lib.hosting.gitlab_cli import GitlabProject, glab_api
 from lib.hosting.gh_cli import GhUnavailable
-from lib.hosting.issue_outcomes import MAX_PAGES, UNTRIAGED_AFTER, Issue, IssueRead
+from lib.backlog_issue_read import UNTRIAGED_AFTER, Issue, IssueRead
+from lib.hosting.issue_outcomes import MAX_PAGES
 from lib.hosting.merged_sample import parse_time
 
 GITLAB_PAGE = 100
@@ -138,7 +139,8 @@ def _first_response(project: GitlabProject, issue: dict[str, Any], bots: GitlabB
 
 def gitlab_read(project: GitlabProject, start: datetime, now: datetime) -> IssueRead:
     """The issues of a GitLab project (see the module doc)."""
-    rows, cut = _pages(project, f"updated_after={_stamp(start)}&order_by=created_at&sort=desc")
+    rows, cut_window = _pages(project, f"updated_after={_stamp(start)}&order_by=created_at&sort=desc")
+    cut = cut_window
     bots = GitlabBots(project)
     recent: list[Issue] = []
     reads = 0
@@ -159,4 +161,5 @@ def gitlab_read(project: GitlabProject, start: datetime, now: datetime) -> Issue
     open_old = tuple(Issue(created, None, tuple(str(x).lower() for x in r.get("labels") or []
                                                 if isinstance(x, str)))
                      for r in open_rows if (created := parse_time(r.get("created_at"))) is not None)
-    return IssueRead("gitlab", start, now, tuple(recent), open_old, cut or cut_open or bots.capped)
+    return IssueRead("gitlab", start, now, tuple(recent), open_old, cut or cut_open or bots.capped,
+                     cut_window)

@@ -401,8 +401,10 @@ How new issues are taken in and answered. An issue form has a required field, or
   - `no_platform_auth`: The issue tracker could not be read: gh or glab is missing or signed out, or the token was refused the issues. Sign gh or glab in with a token that can read the repository's issues, then run again.
   - `unsupported_host`: The repository has no remote, or its host is not GitHub or a GitLab that glab reaches, so its issues were not read. Nothing to change if the tracker lives elsewhere; for a self-managed GitLab, sign glab in to the host.
   - `platform_error`: A read of the issue tracker failed for a reason other than access, such as a rate limit or a server error. Run again later.
-  - `empty_window`: The metric has nothing to measure: no issue opened in the window, none got a response yet, or no open issue is older than 7 days. Nothing to change; the metric reads once there are issues to measure.
-  - `no_response`: No issue opened in the window got a first response from a person other than its author, and each has waited longer than first_response_max_days, so the median is past the threshold whatever it turns out to be. Answer, label or close new issues within first_response_max_days.
+  - `empty_window`: The metric has nothing to measure yet: no issue in the window, none answered, or no open issue older than 7 days. Nothing to change; the metric reads once there are issues to measure.
+  - `response_unread`: A first response may exist that was not read: a long timeline, the note cap or an unclassified account. Run again with gh or glab signed in as an account that can read users; the caps are fixed.
+  - `window_truncated`: The window's issue list passed the read cap, so closed issues may be missing and the ratio is not taken. Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window.
+  - `no_response`: No issue opened in the window got a first response from a person, and each has waited longer than first_response_max_days. Answer, label or close new issues within first_response_max_days.
 
 ### `behaviour`: Keyhole blocks: behaviour
 

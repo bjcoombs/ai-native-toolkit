@@ -30,8 +30,10 @@ unknown_reasons = [
   { code = "no_platform_auth", block = "backlog_ready", means = "The issue tracker could not be read: gh or glab is missing or signed out, or the token was refused the issues.", next_step = "Sign gh or glab in with a token that can read the repository's issues, then run again." },
   { code = "unsupported_host", block = "backlog_ready", means = "The repository has no remote, or its host is not GitHub or a GitLab that glab reaches, so its issues were not read.", next_step = "Nothing to change if the tracker lives elsewhere; for a self-managed GitLab, sign glab in to the host." },
   { code = "platform_error", block = "backlog_ready", means = "A read of the issue tracker failed for a reason other than access, such as a rate limit or a server error.", next_step = "Run again later." },
-  { code = "empty_window", block = "backlog_ready", means = "The metric has nothing to measure: no issue opened in the window, none got a response yet, or no open issue is older than 7 days.", next_step = "Nothing to change; the metric reads once there are issues to measure." },
-  { code = "no_response", block = "backlog_ready", means = "No issue opened in the window got a first response from a person other than its author, and each has waited longer than first_response_max_days, so the median is past the threshold whatever it turns out to be.", next_step = "Answer, label or close new issues within first_response_max_days." },
+  { code = "empty_window", block = "backlog_ready", means = "The metric has nothing to measure yet: no issue in the window, none answered, or no open issue older than 7 days.", next_step = "Nothing to change; the metric reads once there are issues to measure." },
+  { code = "response_unread", block = "backlog_ready", means = "A first response may exist that was not read: a long timeline, the note cap or an unclassified account.", next_step = "Run again with gh or glab signed in as an account that can read users; the caps are fixed." },
+  { code = "window_truncated", block = "backlog_ready", means = "The window's issue list passed the read cap, so closed issues may be missing and the ratio is not taken.", next_step = "Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window." },
+  { code = "no_response", block = "backlog_ready", means = "No issue opened in the window got a first response from a person, and each has waited longer than first_response_max_days.", next_step = "Answer, label or close new issues within first_response_max_days." },
 ]
   [entries.privacy]
   "backlog_ready.required_form_field_reason" = "token"
@@ -89,7 +91,7 @@ collector = "core.backlog_ready"
 path = "backlog_ready.first_response_median_days"
 type = "number"
 evidence = "platform"
-null_means = "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window got a response; no_response: none did and each has waited past the threshold"
+null_means = "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window got a response; response_unread: a response could not be read; no_response: none did and each has waited past the threshold"
 
 [[entries]]
 id = "core:backlog_ready.untriaged_after_7d_share"
@@ -109,7 +111,7 @@ collector = "core.backlog_ready"
 path = "backlog_ready.close_open_ratio_90d"
 type = "number"
 evidence = "platform"
-null_means = "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window"
+null_means = "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window; window_truncated: the window list hit its page cap"
 
 [[entries]]
 id = "core:backlog_ready.first_response_met"

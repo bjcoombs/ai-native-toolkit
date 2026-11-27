@@ -2613,12 +2613,22 @@
         },
         {
           "code": "empty_window",
-          "means": "The metric has nothing to measure: no issue opened in the window, none got a response yet, or no open issue is older than 7 days.",
+          "means": "The metric has nothing to measure yet: no issue in the window, none answered, or no open issue older than 7 days.",
           "next_step": "Nothing to change; the metric reads once there are issues to measure."
         },
         {
+          "code": "response_unread",
+          "means": "A first response may exist that was not read: a long timeline, the note cap or an unclassified account.",
+          "next_step": "Run again with gh or glab signed in as an account that can read users; the caps are fixed."
+        },
+        {
+          "code": "window_truncated",
+          "means": "The window's issue list passed the read cap, so closed issues may be missing and the ratio is not taken.",
+          "next_step": "Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window."
+        },
+        {
           "code": "no_response",
-          "means": "No issue opened in the window got a first response from a person other than its author, and each has waited longer than first_response_max_days, so the median is past the threshold whatever it turns out to be.",
+          "means": "No issue opened in the window got a first response from a person, and each has waited longer than first_response_max_days.",
           "next_step": "Answer, label or close new issues within first_response_max_days."
         }
       ],
@@ -6817,7 +6827,7 @@
       "collector": "core.backlog_ready",
       "input_class": "platform",
       "grade": "verified",
-      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window"
+      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window; window_truncated: the window list hit its page cap"
     },
     {
       "path": "backlog_ready.first_response_median_days",
@@ -6826,7 +6836,7 @@
       "collector": "core.backlog_ready",
       "input_class": "platform",
       "grade": "verified",
-      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window got a response; no_response: none did and each has waited past the threshold"
+      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window got a response; response_unread: a response could not be read; no_response: none did and each has waited past the threshold"
     },
     {
       "path": "backlog_ready.first_response_met",

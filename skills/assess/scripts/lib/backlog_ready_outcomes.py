@@ -23,7 +23,11 @@ window of ``window_days`` (default 90) ending at the run time:
 
 Each metric is null with a ``<metric>_reason`` code when it is not measured: the read's code
 (``no_network``, ``no_platform_auth``, ``unsupported_host``, ``platform_error``), or
-``empty_window`` when its denominator is 0. One exception keeps an ignored tracker from reading
+``empty_window`` when its denominator is 0. The median reads ``response_unread`` instead when
+issues opened in the window got no response the read could settle and some response could not be
+read (a capped timeline, note read or bot probe). The ratio reads ``window_truncated`` when the
+window's issue list stopped at its page cap: that list is newest first, so the issues it drops are
+old ones closed in the window, and a ratio over the rest would be low. One exception keeps an ignored tracker from reading
 not measured: when issues opened in the window got no response at all and each of them has waited
 longer than ``first_response_max_days``, the median is null with ``no_response`` and
 ``first_response_met`` is false, since any later response is already past the threshold. Each
@@ -53,14 +57,16 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 from statistics import median
-from typing import Any, NotRequired, TypedDict
+from typing import Any, NotRequired, TypedDict, cast
 
 from lib.assess_config import BacklogThresholds, load_backlog_ready_labels, load_backlog_ready_thresholds
 from lib.backlog_ready import READY_LABELS, UNTRIAGED_LABELS, BacklogReadyBlock, scan_backlog_ready
-from lib.hosting.issue_outcomes import IssueRead, OutcomeRead, PLATFORM_ERROR
+from lib.backlog_issue_read import PLATFORM_ERROR, IssueRead, OutcomeRead
 
 EMPTY_WINDOW = "empty_window"
 NO_RESPONSE = "no_response"
+RESPONSE_UNREAD = "response_unread"
+WINDOW_TRUNCATED = "window_truncated"
 METRICS = ("first_response_median_days", "untriaged_after_7d_share", "close_open_ratio_90d")
 _DAY = 86400.0
 
@@ -134,8 +140,8 @@ def outcome_fields(read: OutcomeRead, thresholds: BacklogThresholds, from_config
         fields.update(first_response_median_days=None, first_response_median_days_reason=NO_RESPONSE,
                       first_response_met=False)
     else:
-        fields.update(first_response_median_days=None, first_response_median_days_reason=EMPTY_WINDOW,
-                      first_response_met=None)
+        fields.update(first_response_median_days=None, first_response_met=None,
+                      first_response_median_days_reason=RESPONSE_UNREAD if unread else EMPTY_WINDOW)
 
     if read.open_old:
         share = untriaged_n / len(read.open_old)
@@ -145,7 +151,10 @@ def outcome_fields(read: OutcomeRead, thresholds: BacklogThresholds, from_config
         fields.update(untriaged_after_7d_share=None, untriaged_after_7d_share_reason=EMPTY_WINDOW,
                       untriaged_met=None)
 
-    if opened:
+    if read.window_truncated:  # the dropped rows are the oldest: they could only add closes
+        fields.update(close_open_ratio_90d=None, close_open_ratio_90d_reason=WINDOW_TRUNCATED,
+                      close_open_met=None)
+    elif opened:
         ratio = closed / len(opened)
         fields["close_open_ratio_90d"] = round(ratio, 4)
         fields["close_open_met"] = ratio >= thresholds.close_open_min_ratio
@@ -168,5 +177,5 @@ def scan_backlog_ready_outcomes(repo_root: Path, backlog_outcomes: OutcomeRead) 
     block = scan_backlog_ready(repo_root)
     thresholds, from_config = load_backlog_ready_thresholds(repo_root)
     untriaged, _, _ = load_backlog_ready_labels(repo_root, UNTRIAGED_LABELS, READY_LABELS)
-    out: dict[str, Any] = {**block, **outcome_fields(backlog_outcomes, thresholds, from_config, untriaged)}
-    return out  # type: ignore[return-value]
+    return cast(BacklogReadyOutcomesBlock,
+                {**block, **outcome_fields(backlog_outcomes, thresholds, from_config, untriaged)})

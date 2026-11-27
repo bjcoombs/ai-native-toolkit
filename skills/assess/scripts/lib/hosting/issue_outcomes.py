@@ -38,7 +38,8 @@ The private network spec ``backlog_outcomes`` (``checks/core/backlog_outcomes.to
 `backlog_outcomes(repo_root)` reads the issues of the repository's GitHub or GitLab remote, as
 above, into an `IssueRead` (`provider`, `start`, `now`, `recent`, `open_old`, `truncated`; each
 `Issue` holds `created`, `closed`, `first_response`, `response_read` and lower-cased `labels`).
-`offline_backlog_outcomes(repo_root)` is the headless value without `--platform`: `unsupported_host`
+The shapes (`Issue`, `IssueRead`, `REASONS`) live in `lib/backlog_issue_read.py`, which imports
+no platform client. `offline_backlog_outcomes(repo_root)` is the headless value without `--platform`: `unsupported_host`
 for no remote or an unsupported host, else `no_network`. `reason_code(reason)` maps a
 `GhUnavailable` reason to one of `REASONS`. `NOW` is replaceable in tests. Reads go through
 `gh_cli.gh_json` and `gitlab_cli.glab_api`; GitLab notes are read with `cache=False`. Tests:
@@ -47,24 +48,16 @@ for no remote or an unsupported host, else `no_network`. `reason_code(reason)` m
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from lib.assess_config import load_backlog_ready_thresholds
+from lib.backlog_issue_read import (NO_NETWORK, NO_PLATFORM_AUTH, PLATFORM_ERROR, REASONS, UNSUPPORTED_HOST,
+                                    UNTRIAGED_AFTER, Issue, IssueRead, OutcomeRead)
 from lib.hosting.gh_cli import GhUnavailable, GithubRepo, gh_json, git_remote_url, open_github
 from lib.hosting.gitlab_cli import open_gitlab
 from lib.hosting.merged_sample import parse_time, remote_kind
-
-NO_NETWORK = "no_network"
-NO_PLATFORM_AUTH = "no_platform_auth"
-UNSUPPORTED_HOST = "unsupported_host"
-PLATFORM_ERROR = "platform_error"
-REASONS = (NO_NETWORK, NO_PLATFORM_AUTH, UNSUPPORTED_HOST, PLATFORM_ERROR)
-
-# The age past which an open issue should carry a triage decision.
-UNTRIAGED_AFTER = timedelta(days=7)
 
 # Issues per GitHub GraphQL page, timeline items read per issue, label names per issue.
 GITHUB_PAGE = 50
@@ -74,41 +67,16 @@ LABELS_PER_ISSUE = 20
 MAX_PAGES = 10
 
 
+__all__ = ["NO_NETWORK", "NO_PLATFORM_AUTH", "PLATFORM_ERROR", "REASONS", "UNSUPPORTED_HOST",
+           "UNTRIAGED_AFTER", "Issue", "IssueRead", "OutcomeRead", "backlog_outcomes",
+           "offline_backlog_outcomes", "reason_code", "gh_is_bot", "github_read", "unread"]
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
 NOW: Callable[[], datetime] = _utc_now
-
-Provider = Literal["github", "gitlab"]
-
-
-@dataclass(frozen=True)
-class Issue:
-    """One issue as times and lower-cased label names; nothing that names it."""
-
-    created: datetime
-    closed: datetime | None
-    labels: tuple[str, ...]
-    first_response: datetime | None = None
-    response_read: bool = True  # False: the events read could not settle the first response
-
-
-@dataclass(frozen=True)
-class IssueRead:
-    """The issues read (see the module doc). ``recent``: updated since ``start``; ``open_old``:
-    open and created before ``now - UNTRIAGED_AFTER``."""
-
-    provider: Provider
-    start: datetime
-    now: datetime
-    recent: tuple[Issue, ...]
-    open_old: tuple[Issue, ...]
-    truncated: bool
-
-
-OutcomeRead = IssueRead | dict[str, Any]
-
 
 def unread(code: str) -> dict[str, Any]:
     return {"available": False, "reason": code}
@@ -232,7 +200,7 @@ def github_read(repo: GithubRepo, start: datetime, now: datetime) -> IssueRead:
         created = parse_time(node.get("createdAt"))
         if created is not None and created < cutoff:
             open_old.append(Issue(created, None, _labels(node)))
-    return IssueRead("github", start, now, tuple(recent), tuple(open_old), cut_recent or cut_open)
+    return IssueRead("github", start, now, tuple(recent), tuple(open_old), cut_recent or cut_open, cut_recent)
 
 
 # --- the registry values -------------------------------------------------------------

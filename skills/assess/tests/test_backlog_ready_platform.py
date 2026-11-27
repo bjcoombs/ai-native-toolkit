@@ -218,6 +218,24 @@ def test_a_page_cap_is_truncated_and_still_measured(tmp_path: Path, gh: FakeGh,
     block = _block(_repo(tmp_path))
     assert block["outcomes"]["truncated"] is True
     assert block["first_response_met"] is True and len(gh.calls) == 2
+    # The dropped rows are the oldest, which could only add closes: the ratio is not taken.
+    assert (block["close_open_ratio_90d"], block["close_open_met"]) == (None, None)
+    assert block["close_open_ratio_90d_reason"] == "window_truncated"
+
+
+def test_a_capped_open_list_keeps_the_ratio(tmp_path: Path, gh: FakeGh, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(io, "MAX_PAGES", 1)
+    gh.open["data"]["repository"]["issues"]["pageInfo"] = {"hasNextPage": True, "endCursor": "Y3Vyc29yOjEx"}
+    block = _block(_repo(tmp_path))
+    assert block["outcomes"]["truncated"] is True and block["close_open_met"] is True
+
+
+def test_unread_responses_are_not_an_empty_window(tmp_path: Path, gh: FakeGh) -> None:
+    for node in gh.nodes():
+        node["timelineItems"] = {"pageInfo": {"hasNextPage": True}, "nodes": []}
+    block = _block(_repo(tmp_path))
+    assert block["first_response_median_days_reason"] == "response_unread"
+    assert block["first_response_met"] is None
 
 
 def test_an_ignored_tracker_reads_unmet_not_unmeasured(tmp_path: Path, gh: FakeGh) -> None:
