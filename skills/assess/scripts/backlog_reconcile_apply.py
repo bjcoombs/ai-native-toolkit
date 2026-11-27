@@ -15,7 +15,8 @@ over ``MAX_CLOSES`` closes or ``MAX_CREATES`` new items. ``--dry-run`` prints th
 makes none. A failed ``gh`` call ends the run with exit 1, gh's stderr and the writes made
 before it; a filed item is logged as soon as its number is known, so a status comment that
 fails after ``gh issue create`` still names the new item. Any failure once writing has begun,
-a ``gh`` error or a create with no issue URL, is a ``WriteError`` with that list. Stdlib only, so the writer job checks out this file and nothing else.
+a ``gh`` error or a create with no issue URL, is a ``WriteError`` with that list.
+Stdlib only, so the writer job checks out this file and nothing else.
 Tests: ``tests/test_backlog_reconcile_apply.py``.
 """
 from __future__ import annotations
@@ -100,7 +101,10 @@ def _text(w: Mapping[str, object], key: str) -> str:
 
 
 class WriteError(Exception):
-    """A ``gh`` call failed part way through the plan; ``done`` holds the writes already made."""
+    """Writing failed part way through the plan (a ``gh`` error or a create with no issue URL).
+
+    ``done`` holds the writes already made.
+    """
 
     def __init__(self, message: str, done: Sequence[str]) -> None:
         super().__init__(message)

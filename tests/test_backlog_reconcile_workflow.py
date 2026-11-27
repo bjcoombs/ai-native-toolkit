@@ -118,17 +118,22 @@ def test_the_plan_artifact_name_survives_a_rerun_of_the_failed_job() -> None:
     assert names == ["backlog-reconcile-plan", "backlog-reconcile-plan"]
 
 
+# The plan job's one script-mode script: it needs matplotlib, squarify and numpy, which the
+# skills/assess project environment lacks, so it runs on its PEP 723 inline pins.
+SCRIPT_MODE = {"complexity-treemap.py"}
+
+
 def test_the_plan_job_runs_project_scripts_against_the_lockfile() -> None:
-    """A project script runs as ``uv run --locked python <file>`` against ``skills/assess/uv.lock``.
+    """Every other script runs as ``uv run --locked python <file>`` against ``skills/assess/uv.lock``.
 
     ``uv run --locked <file>.py`` is script mode, which ignores ``uv.lock`` and fails without
-    a ``<file>.py.lock``. A script with a PEP 723 header runs unlocked on its inline pins.
+    a ``<file>.py.lock``, so that form never appears.
     """
     plan = _load(REUSABLE)["jobs"]["plan"]
     runs = "\n".join(str(s.get("run", "")) for s in _steps(plan))
     assert not re.search(r"uv run --locked scripts/", runs), "script mode under --locked needs a script lockfile"
     calls = re.findall(r"uv run (--locked python )?scripts/(\S+\.py)", runs)
-    assert len(calls) == 3, calls
+    assert sorted(script for _, script in calls) == ["assess_actions_render.py", "assess_core.py",
+                                                    "complexity-treemap.py"]
     for locked, script in calls:
-        inline = (REPO / "skills/assess/scripts" / script).read_text(encoding="utf-8").startswith("# /// script")
-        assert bool(locked) is not inline, script
+        assert bool(locked) is (script not in SCRIPT_MODE), script

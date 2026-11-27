@@ -124,8 +124,9 @@ jobs:
           ws="$GITHUB_WORKSPACE/repo"
           mkdir -p "$ws/.assess"
           # `uv run --locked <file>.py` is script mode and wants a <file>.py.lock, so the
-          # project scripts run as `python <file>` against uv.lock. complexity-treemap.py
-          # runs in script mode on its PEP 723 inline pins.
+          # scripts the project environment covers run as `python <file>` against uv.lock.
+          # complexity-treemap.py needs matplotlib, squarify and numpy, which the project
+          # lacks, so it runs unlocked in script mode on its inline pins.
           uv run scripts/complexity-treemap.py "$ws" -o "$RUNNER_TEMP/heatmap.svg" \
             --stats "$ws/.assess/complexity-stats.json"
           uv run --locked python scripts/assess_core.py "$ws"
