@@ -255,6 +255,8 @@ def test_gitlab_all_three_met(tmp_path: Path, glab: FakeGlab) -> None:
     assert _condition(block)["state"] == "met"
     notes = [(p, cache) for p, cache in glab.calls if "/notes?" in p]
     assert len(notes) == 3 and not any(cache for _, cache in notes)  # never cached: note bodies
+    lists = [cache for p, cache in glab.calls if "/issues?" in p]
+    assert len(lists) == 2 and not any(lists)  # never cached: issue titles and descriptions
     assert all(p.startswith(("projects/grp%2Fapp/", "users/")) for p, _ in glab.calls)
 
 

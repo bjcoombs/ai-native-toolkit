@@ -16,6 +16,9 @@
 - **Open issues older than 7 days**: ``projects/<id>/issues?state=opened&created_before=<cutoff>``,
   labels only.
 
+Both issue lists are read with ``cache=False`` too: GitLab returns every issue's title and
+description, so neither list reaches the ``--platform`` response cache (#778).
+
 An issue whose notes were not read (the cap), whose single page was full with no response on it,
 or whose responder could not be classified has ``response_read`` False, and the read is
 ``truncated`` when a cap was hit. A 403 on any of these reads raises ``no_access``, which the
@@ -94,7 +97,9 @@ def _user_key(user: Any) -> object:
 def _pages(project: GitlabProject, query: str) -> tuple[list[dict[str, Any]], bool]:
     got: list[dict[str, Any]] = []
     for page in range(1, MAX_PAGES + 1):
-        rows = glab_api(project, f"projects/{project.encoded}/issues?{query}&per_page={GITLAB_PAGE}&page={page}")
+        # cache=False: GitLab returns each issue's title and description, read in memory only (#778).
+        rows = glab_api(project, f"projects/{project.encoded}/issues?{query}&per_page={GITLAB_PAGE}&page={page}",
+                        cache=False)
         if not isinstance(rows, list):
             raise GhUnavailable("glab_bad_json: the issues list is not a list")
         got += [r for r in rows if isinstance(r, dict)]
