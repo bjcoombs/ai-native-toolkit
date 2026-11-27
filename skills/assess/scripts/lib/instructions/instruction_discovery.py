@@ -50,7 +50,8 @@ they account for are set aside, and does not import it; a bare one-line pointer,
 `CLAUDE.md` shadows nothing, a sibling `CLAUDE.md` pointing at `AGENTS.md` drops out while
 `.claude/CLAUDE.md` is still compared (that sibling is the informational `claude_prose_pointer`,
 #1507: it reads linked, but Claude Code loads only an `@AGENTS.md` import, so the finding
-recommends one; it moves no gate and no `agent_consistency` value), and a pair pointing at each other exempts neither; `diff_lines` counts the differing lines, body plus any header
+recommends one, unless that `AGENTS.md` is a bare pointer onward itself; it moves no gate
+and no `agent_consistency` value), and a pair pointing at each other exempts neither; `diff_lines` counts the differing lines, body plus any header
 comment only one file carries, one changed line counting once) and `repeats_parent` (at least half of a nested file's distinct
 lines, over five or more, copy the nearest ancestor's). The two files are compared
 below their headers (`mirror_lines`: leading blank lines, one H1 and leading HTML
@@ -538,7 +539,8 @@ def _shadowing(
     import is neither. A bare pointer (``delegates_to``) exempts only itself:
     ``AGENTS.md`` pointing at the sibling ``CLAUDE.md`` skips the directory, a
     sibling ``CLAUDE.md`` pointing at ``AGENTS.md`` leaves the comparison as the
-    informational ``claude_prose_pointer`` (#1507), and any other ``CLAUDE.md``
+    informational ``claude_prose_pointer`` (#1507, not when ``AGENTS.md`` is a
+    bare pointer onward itself), and any other ``CLAUDE.md``
     is still compared. Returns ``(shadows, informational)``.
     """
     shadows: list[InstructionFinding] = []
@@ -570,13 +572,17 @@ def _shadowing(
         if sibling is not None and delegates_to(
                 sibling.body, "CLAUDE.md", "AGENTS.md", agent.body):
             # Linked, but Claude Code loads only an `@` import: the prose line is
-            # read only if the model opens the file (#1507). Informational.
-            mirrors.append({
-                "kind": "claude_prose_pointer", "path": sibling.rel, "parent": agent.rel,
-                "detail": f"`{sibling.rel}` points at `{agent.rel}` in prose, which Claude "
-                          "Code does not load at start; write `@AGENTS.md` instead so it "
-                          "loads the file",
-            })
+            # read only if the model opens the file (#1507). Informational, and
+            # only when AGENTS.md holds the rules: one that points onward would
+            # make `@AGENTS.md` load another pointer.
+            onward = [PurePosixPath(c.rel).name for c in cands if c is not agent]
+            if delegation_target(agent.body, sorted(onward)) is None:
+                mirrors.append({
+                    "kind": "claude_prose_pointer", "path": sibling.rel, "parent": agent.rel,
+                    "detail": f"`{sibling.rel}` points at `{agent.rel}` in prose, which Claude "
+                              "Code does not load at start; write `@AGENTS.md` instead so it "
+                              "loads the file",
+                })
             claude = [c for c in claude if c is not sibling]
         if not claude:
             continue

@@ -604,3 +604,10 @@ def test_aider_reading_a_pointer_in_the_chain_reads_the_canonical_file(tmp_path:
     assert _links(dict(block))[".aider.conf.yml"] == "config_read"
     assert "aider" in block["systems"]
     assert block["unlinked"] == 0
+
+
+def test_no_prose_pointer_finding_when_agents_md_points_onward(tmp_path: Path) -> None:
+    # `@AGENTS.md` would load only another pointer, so recommending it helps nobody.
+    root = _repo(tmp_path, {"CLAUDE.md": "See AGENTS.md.\n", "AGENTS.md": "See GEMINI.md.\n",
+                            "GEMINI.md": CLAUDE_RULES})
+    assert _prose(root) == []
