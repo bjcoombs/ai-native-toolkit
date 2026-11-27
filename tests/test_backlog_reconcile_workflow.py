@@ -116,3 +116,10 @@ def test_the_plan_artifact_name_survives_a_rerun_of_the_failed_job() -> None:
     names = [s["with"]["name"] for job in _load(REUSABLE)["jobs"].values() for s in _steps(job)
              if str(s.get("uses", "")).startswith(("actions/upload-artifact@", "actions/download-artifact@"))]
     assert names == ["backlog-reconcile-plan", "backlog-reconcile-plan"]
+
+
+def test_the_plan_job_runs_uv_against_the_lockfile() -> None:
+    plan = _load(REUSABLE)["jobs"]["plan"]
+    runs = "\n".join(str(s.get("run", "")) for s in _steps(plan))
+    calls = re.findall(r"uv run\b[^\n]*", runs)
+    assert calls and all(c.startswith("uv run --locked ") for c in calls), calls

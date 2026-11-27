@@ -92,7 +92,7 @@ def test_dry_run_and_unreadable_plans(tmp_path: Path, capsys: pytest.CaptureFixt
 
 
 def test_a_create_without_an_issue_url_fails(tmp_path: Path) -> None:
-    with pytest.raises(ap.PlanError, match="no issue URL"):
+    with pytest.raises(ap.WriteError, match="no issue URL"):
         ap.apply([{"op": "create", "title": "t", "body": "b", "status": "s"}], "o/r", lambda args: "", tmp_path)
 
 
@@ -112,3 +112,30 @@ def test_a_failed_gh_call_prints_its_stderr_and_the_writes_already_made(
     assert "edited the status comment on #1" in out.out and "closed" not in out.out
     assert "gh issue close failed (exit 1): HTTP 403: Resource not accessible" in out.err
     assert "1 write(s) were made before it" in out.err
+
+
+def test_a_failed_status_comment_after_a_create_logs_the_new_item(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def run(args: Sequence[str]) -> str:
+        if args[:2] == ["issue", "create"]:
+            return "https://github.com/o/r/issues/31\n"
+        if args[:3] == ["issue", "comment", "31"]:
+            raise subprocess.CalledProcessError(1, ["gh", *args], stderr="HTTP 502\n")
+        return ""
+    writes: list[dict[str, object]] = [{"op": "create", "title": "Meet x.1", "body": "new", "status": "s"}]
+    assert ap.main(["--plan", str(_plan(tmp_path, "file", writes)), "--repo", "o/r"], run=run) == 1
+    out = capsys.readouterr()
+    assert "filed #31: Meet x.1" in out.out
+    assert "gh issue comment failed (exit 1): HTTP 502" in out.err and "1 write(s) were made before it" in out.err
+
+
+def test_a_create_without_a_url_after_earlier_writes_lists_them(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    writes: list[dict[str, object]] = [
+        {"op": "add_comment", "number": 2, "body": "added"},
+        {"op": "create", "title": "t", "body": "b", "status": "s"},
+    ]
+    assert ap.main(["--plan", str(_plan(tmp_path, "file", writes)), "--repo", "o/r"], run=lambda args: "") == 1
+    out = capsys.readouterr()
+    assert "added a status comment to #2" in out.out
+    assert "no issue URL" in out.err and "1 write(s) were made before it" in out.err
