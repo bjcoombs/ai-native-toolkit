@@ -222,3 +222,9 @@ def test_queue_back_to_the_merged_draft_closes_the_open_pull_request(tmp_path: P
     assert outputs.get("close") == "true" and outputs.get("branch", "") == ""
     closes = [c for c in job.gh_calls() if c.startswith("pr close")]
     assert len(closes) == 1 and closes[0].startswith("pr close 7 --comment") and "already on main" in closes[0]
+
+
+def test_dry_run_reports_the_close_it_would_make() -> None:
+    step = _step(r"^Report the dry-run close")
+    assert step["if"] == "steps.draft.outputs.close == 'true' && inputs.mode != 'live'"
+    assert "close-reason.txt" in step["run"] and "gh " not in step["run"] and "git " not in step["run"]

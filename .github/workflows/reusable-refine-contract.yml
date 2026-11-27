@@ -224,6 +224,11 @@ jobs:
         run: |
           echo "Dry-run: live mode would push ${BRANCH} and open or refresh its pull request." >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Report the dry-run close
+        if: steps.draft.outputs.close == 'true' && inputs.mode != 'live'
+        run: |
+          echo "Dry-run: live mode would close any open draft pull request: $(cat .refine/close-reason.txt)." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload the queue and the change summary
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
