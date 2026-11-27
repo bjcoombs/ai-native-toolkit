@@ -196,3 +196,11 @@ def test_a_job_that_runs_no_check_does_not_clear_the_label(tmp_path: Path) -> No
 
 def test_a_quoted_true_is_read() -> None:
     assert ignores_test_failures("sh 'mvn -Dmaven.test.failure.ignore=\"true\" install'")
+
+
+def test_a_setting_only_inside_a_pom_profile_is_not_read(tmp_path: Path) -> None:
+    profiled = MODULE.replace("<build>", "<profiles><profile><id>lenient</id><build>").replace(
+        "</build>", "</build></profile></profiles>")
+    block = scan_ci_hazards(_repo(tmp_path, {".github/workflows/ci.yml": PLAIN.replace("pytest", "mvn -B verify"),
+                                             "pom.xml": profiled}))
+    assert block["test_failures_ignored"] == 0

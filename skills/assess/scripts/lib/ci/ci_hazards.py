@@ -22,8 +22,8 @@ is followed into the repository only through the shared CI-step follower
 - **``test_failures_ignored``**: the number of committed files that tell Maven to ignore test
   failures: ``maven.test.failure.ignore`` set to true (``-Dmaven.test.failure.ignore=true``, a
   bare ``-Dmaven.test.failure.ignore``, or a ``<maven.test.failure.ignore>true`` property) or a
-  Surefire or Failsafe ``<testFailureIgnore>true``, outside an XML comment and a ``#`` or ``//``
-  line comment. The files read: the GitHub Actions workflows
+  Surefire or Failsafe ``<testFailureIgnore>true``, outside an XML comment, a pom's
+  ``<profiles>`` (a profile runs only when activated) and a ``#`` or ``//`` line comment. The files read: the GitHub Actions workflows
   and ``.gitlab-ci.yml``, each Jenkinsfile (a file named ``Jenkinsfile``, ``Jenkinsfile.<x>`` or
   ``<x>.jenkinsfile``), ``.mvn/maven.config``, the poms of the root reactor (``pom.xml`` and its
   ``<modules>`` closure; a pom no module names, such as a test fixture, is never read), and every
@@ -67,6 +67,8 @@ _NEEDS_ITEM = re.compile(r"[\w-]+")
 # A status function that runs a job after a skipped need (GitHub: always(), failure(), cancelled()).
 _STATUS = re.compile(r"\b(?:always|failure|cancelled)\s*\(")
 _XML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+# A pom's profiles run only when activated, which a CI command may never do, so they are not read.
+_PROFILES = re.compile(r"<profiles>.*?</profiles>", re.DOTALL)
 _LINE_COMMENT = re.compile(r"(?:^|\s)(?:#|//).*$", re.MULTILINE)
 
 
@@ -86,10 +88,10 @@ def jenkinsfiles(tracked: frozenset[str]) -> list[str]:
 
 
 def ignores_test_failures(text: str) -> bool:
-    """True when ``text`` sets Maven to ignore test failures (module docstring). An XML comment
-    and a ``#`` or ``//`` comment to the end of a line are dropped first, so a setting that is
-    commented out is not read."""
-    return _IGNORE.search(_LINE_COMMENT.sub("", _XML_COMMENT.sub("", text))) is not None
+    """True when ``text`` sets Maven to ignore test failures (module docstring). An XML comment,
+    a pom's ``<profiles>`` and a ``#`` or ``//`` comment to the end of a line are dropped first, so
+    a setting that is commented out, or set only in a profile CI may never activate, is not read."""
+    return _IGNORE.search(_LINE_COMMENT.sub("", _PROFILES.sub("", _XML_COMMENT.sub("", text)))) is not None
 
 
 def _if_value(tree: IndentTree, lines: list[str], key: int) -> str:
