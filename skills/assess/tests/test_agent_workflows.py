@@ -759,3 +759,11 @@ def test_a_dual_trigger_workflow_two_calls_down_is_counted_once(git_repo) -> Non
     assert [(j["path"], j["job"], j["scope"]) for j in _jobs(repo)] == [
         (".github/workflows/leaf.yml", "agent", "read_only")]
     assert _summary(repo)["agent_jobs_least_privilege"] is True
+
+
+def test_a_redirected_callers_spend_cap_reaches_the_called_job(git_repo) -> None:
+    leaf = "on:\n  workflow_call:\n  workflow_dispatch:\npermissions: read-all\n" + AGENT_STEPS
+    repo = _repo(git_repo, {".github/workflows/agent.yml": leaf,
+                            ".github/workflows/caller.yml": _caller("read-all")
+                            + "    with:\n      max-turns: 5\n"})
+    assert [(j["job"], j["spend_cap"]) for j in _jobs(repo)] == [("agent", True)]

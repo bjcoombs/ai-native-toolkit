@@ -13,6 +13,8 @@ read-only and moves writes into a separate job that acts on the agent's output.
   scope caps it. A workflow with a sign outside every job (a workflow-level ``env:`` naming a
   model) gives one entry with an empty ``job`` and scope ``unread``; inside a called workflow
   that entry reads the worst of the called jobs' scopes, each capped by the caller's (#1562).
+  A top-level workflow keeps ``unread``: with no caller's cap, the worst job scope there is
+  usually ``undeclared`` and would settle the reading on a guess about which job uses the model.
 - **Effective scope.** The job's ``permissions:``, else the workflow's, else ``undeclared``
   (the repository's default token, which this reader cannot see). ``read-all``, ``{}`` and a
   map with no ``write`` value read ``read_only``; ``write-all`` or any ``<name>: write`` reads
@@ -211,12 +213,14 @@ def workflow_jobs(rel: str, text: str, signs_of: SignsOf, read_local: ReadLocal 
                 # redirected further down the chain: those readings stand for this job
                 for reading in readings[before:]:
                     reading["split"] = reading["split"] or follower
+                    reading["spend_cap"] = reading["spend_cap"] or _spend_cap(body)
                 redirected = True
                 continue
             if inner and local.group(1) in alone and readings is not None:
                 for j in inner:  # read on its own too: count the called jobs, not this one
                     reading = j.copy()
                     reading["split"] = j["split"] or follower
+                    reading["spend_cap"] = j["spend_cap"] or _spend_cap(body)
                     readings.append(reading)
                 redirected = True
                 continue
@@ -247,6 +251,7 @@ def merge_readings(jobs: list[AgentJob], readings: list[AgentJob]) -> list[Agent
             merged.append(group[0])
             continue
         scope, writes = _worst([(j["scope"], j["write_scopes"]) for j in group])
+        # when the merged scope is not write, split has no effect on the count
         split = all(j["split"] for j in group if j["scope"] == WRITE or scope != WRITE)
         merged.append(AgentJob(path=group[0]["path"], job=group[0]["job"], scope=scope,
                                write_scopes=writes, split=split,
