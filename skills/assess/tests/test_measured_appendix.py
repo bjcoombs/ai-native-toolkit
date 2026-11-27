@@ -1,6 +1,10 @@
 """The "How this was measured" report section lists the scans that ran and were skipped (#794)."""
 from __future__ import annotations
 
+import inspect
+
+import pytest
+
 from lib.fleet.fleet_diagrams import report_markdown
 from lib.report.measured_appendix import CATALOG_URL, HEADING, measured_section
 from lib.vocabulary import banned_hits
@@ -74,3 +78,35 @@ def test_fleet_report_appends_the_section_last() -> None:
     text = report_markdown([], measured=measured_section([_doc()], ["ci_checks"]))
     assert text.rstrip().endswith("- `ci_checks`: not selected by --scans.")
     assert HEADING not in report_markdown([])
+
+
+def test_a_partial_skip_names_its_reasons() -> None:
+    """#918: a scan that ran in one repository and was skipped in another says why."""
+    ran = _doc(review_reality={"reviewed": 3})
+    skipped = _doc(review_reality={"available": False, "reason": "network: reads GitHub"})
+    text = measured_section([ran, skipped, _doc()], ["review_reality"], absent="not here")
+    assert "- `review_reality`: skipped in 2 of 3 (network, not here)" in text
+    assert "In place: over 3 repositories, 0 scans were measured everywhere, 1 ran" in text
+
+
+def test_the_skip_codes_are_the_full_run_only_reasons() -> None:
+    """#918: the appendix reads signals.FULL_RUN_ONLY_REASONS rather than listing its own."""
+    from lib.report import measured_appendix
+    from lib.run.scan_plan import NOT_RUN_CODE
+    from lib.run.signals import FULL_RUN_ONLY_REASONS
+    assert measured_appendix.SKIP_CODES == FULL_RUN_ONLY_REASONS | {NOT_RUN_CODE}
+    source = inspect.getsource(measured_appendix)
+    assert '"not_registered"' not in source and '"network"' not in source
+
+
+@pytest.mark.parametrize("text", [
+    '[guide](../missing.md "Guide")',
+    "[guide](<../missing file.md>)",
+    "[guide](../a(v1)/missing.md 'Guide')",
+    "see https://example.test/a(v1)/missing for more",
+    "<https://example.test/missing>",
+])
+def test_a_whole_link_destination_or_url_is_not_prose(text: str) -> None:
+    """#918: a complete Markdown destination, title included, and a URL with brackets are addresses."""
+    assert not banned_hits(text), text
+    assert banned_hits(f"{text} and a missing word")
