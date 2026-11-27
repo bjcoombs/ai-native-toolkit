@@ -14,7 +14,8 @@ confirm, so this module turns its result into tracker writes bounded by ``.asses
   ``label`` so the next run's listing finds it.
 - ``file-and-close``: as ``file``, plus closing an open marked item whose condition now holds
   (the reconcile's ``close`` proposal). A reopen, demote or supersede stays a proposal in
-  every mode.
+  every mode. A reopen the ``[backlog] wip`` limit holds back (``result["next_up"]``, #1542)
+  reads as next up in its status line, so the line never proposes a reopen over the limit.
 
 The **status comment** is one issue comment per item, found by ``STATUS_MARKER`` and written
 by someone with write access (``authorAssociation`` ``OWNER``, ``MEMBER`` or
@@ -202,7 +203,11 @@ def plan_scheduled(existing: Sequence[Mapping[str, object]], facts: RunFacts, re
     declined = declined or {}
     close = mode == "file-and-close"
     proposals: dict[int, Proposal] = {p["number"]: p for p in result["proposals"]}
-    rules = {r["number"]: r["line"] for r in result["rules_changed"]}
+    # The status of an item with no proposal: held as next up, else declined before, else a rules note.
+    standing = {r["number"]: f"No change: {r['line']}." for r in result["rules_changed"]}
+    standing |= {n: f"Declined before: {line}." for n, line in declined.items()}
+    standing |= {n["number"]: f"Lapsed: {n['reason']}. Next up: reopened on confirmation once the `[backlog] wip` "
+                 "limit leaves a slot." for n in result.get("next_up", [])}
     writes: list[ScheduledWrite] = []
     missing = closed = deferred = 0
     for item in existing:
@@ -216,10 +221,8 @@ def plan_scheduled(existing: Sequence[Mapping[str, object]], facts: RunFacts, re
             text = f"Condition holds: {p['reason']}. Closed on a later run: one run closes at most {MAX_CLOSES} items."
         elif p is not None:
             text = _text(p["kind"], p["reason"], close)
-        elif number in declined:
-            text = f"Declined before: {declined[number]}."
-        elif number in rules:
-            text = f"No change: {rules[number]}."
+        elif number in standing:
+            text = standing[number]
         else:
             text = _reading(f"{key[0]}.{key[1]}", facts)
         line = status_line(" ".join(text.split()), today, facts["head_sha"])

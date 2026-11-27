@@ -47,6 +47,14 @@ No close, reopen or demote is proposed for a condition ``not_measured`` or ``dec
 With an empty ``label`` (``--label ""``, filing upstream without triage access) the
 informational label cannot be written, so no demote is proposed; one note counts the skipped
 demotes, and nothing is written, so the next run reads the same (#1530).
+With ``wip`` (``[backlog] wip``, #1542) a reopen is proposed only while the limit leaves a
+slot: ``within_wip`` takes the free slots (``wip`` minus ``backlog_wip.open_backlog``, the
+count filing uses) next-unlock first, then by item number, and lists each other reopen under
+``next_up`` and the summary's "Next up" block. A close in the same batch frees its slot only
+once written. Without ``wip`` no reopen is held, so a caller that holds proposals back after
+this pass (``assess_actions_render.py`` holds declined ones) applies ``within_wip`` itself
+after that, and a declined reopen keeps no slot.
+
 Close and reopen are held, with one note, when the working tree is dirty or the measured
 commit is unknown: no commit carries the reading. A run whose ``interactive`` is false
 proposes nothing (v1 runs on interactive ``/assess`` only), and a run with no level result
@@ -65,6 +73,7 @@ from typing import NotRequired, TypedDict
 
 from lib.prior_level import record_for
 from lib.report.backlog_items import DEFAULT_LABEL, item_labels, marker_key, parse_marker
+from lib.report.backlog_wip import DEFAULT_WIP, next_unlock_conditions, open_backlog
 from lib.report.reviewed_findings import REVIEWABLE_FINDINGS
 
 INFORMATIONAL_LABEL = "assess-informational"
@@ -106,11 +115,21 @@ class RulesNote(TypedDict):
     line: str
 
 
+class NextUp(TypedDict):
+    """A lapsed item held back by the open-item limit: listed under "Next up", never proposed (#1542)."""
+
+    number: int
+    title: str
+    condition: str
+    reason: str
+
+
 class ReconcileResult(TypedDict):
     proposals: list[Proposal]
     rules_changed: list[RulesNote]
     notes: list[str]
     summary: str
+    next_up: NotRequired[list[NextUp]]  # set whenever ``reconcile`` ran; empty without a ``wip``
 
 
 class RunFacts(TypedDict):
@@ -123,6 +142,7 @@ class RunFacts(TypedDict):
     previous_commit: str | None  # since_last_run.previous_commit
     dirty: bool | None  # measured_commit.dirty
     conditions: dict[str, Mapping[str, object]] | None  # level.conditions by id; None without a level
+    next_unlock: NotRequired[list[str]]  # level.next_step.blockers[].condition: the reopens ranked first
 
 
 def _str(value: object) -> str | None:
@@ -151,6 +171,7 @@ def run_facts(ctx: Mapping[str, object]) -> RunFacts:
         previous_commit=_str(_block(ctx, "since_last_run").get("previous_commit")),
         dirty=dirty if isinstance(dirty, bool) else None,
         conditions=conditions,
+        next_unlock=sorted(next_unlock_conditions(level)),
     )
 
 
@@ -302,13 +323,40 @@ class _Pass:
         return True
 
 
+def within_wip(proposals: Sequence[Proposal], existing: Sequence[Mapping[str, object]], facts: RunFacts,
+               wip: int, *, label: str = DEFAULT_LABEL) -> tuple[list[Proposal], list[NextUp]]:
+    """``proposals`` with the reopens the open-item limit has no slot for taken out, and those as "Next up".
+
+    Free slots are ``wip`` minus the open backlog (``backlog_wip.open_backlog``, the count
+    filing uses), never below 0. Reopens take them next-unlock first (``facts["next_unlock"]``),
+    then by item number. A close proposed in the same batch frees its slot only once written,
+    so the reopen it would make room for comes on the next run.
+    """
+    free = max(0, wip - len(open_backlog(existing, label)))
+    unlocks = set(facts.get("next_unlock", ()))
+    reopens = sorted((p for p in proposals if p["kind"] == "reopen"),
+                     key=lambda p: (p.get("condition") not in unlocks, p["number"]))
+    held = reopens[free:]
+    numbers = {p["number"] for p in held}
+    kept = [p for p in proposals if p["number"] not in numbers]
+    return kept, [NextUp(number=p["number"], title=p["title"], condition=p.get("condition", ""), reason=p["reason"])
+                  for p in held]
+
+
 def reconcile(existing: Sequence[Mapping[str, object]], facts: RunFacts, *, label: str = DEFAULT_LABEL,
-              filed: Collection[int] = ()) -> ReconcileResult:
-    """The proposals for the tracker's ``existing`` items against this run; writes nothing."""
+              filed: Collection[int] = (), wip: int | None = None) -> ReconcileResult:
+    """The proposals for the tracker's ``existing`` items against this run; writes nothing.
+
+    With ``wip`` (``[backlog] wip``, #1542) a reopen the limit has no slot for is listed under
+    ``next_up`` instead of proposed (``within_wip``); without it no reopen is held. A caller
+    that holds proposals back after this pass (declines) passes no ``wip`` and applies
+    ``within_wip`` after that, so a held-back reopen does not keep a slot.
+    """
     notes: list[str] = []
     if not facts["interactive"]:
         notes.append("non-interactive run: reconcile proposes nothing")
-        return ReconcileResult(proposals=[], rules_changed=[], notes=notes, summary=summary([], [], notes))
+        return ReconcileResult(proposals=[], rules_changed=[], notes=notes, summary=summary([], [], notes),
+                               next_up=[])
     run = _Pass(existing, facts, label, filed)
     for item in existing:
         run.item(item)
@@ -324,21 +372,34 @@ def reconcile(existing: Sequence[Mapping[str, object]], facts: RunFacts, *, labe
         notes.append(f"{run.skipped_demotes} demote proposal(s) skipped: with no label (`--label \"\"`) "
                      "the informational label cannot be written")
     proposals = sorted(run.proposals, key=lambda p: (KINDS.index(p["kind"]), p["number"]))
+    next_up: list[NextUp] = []
+    if wip is not None:
+        proposals, next_up = within_wip(proposals, existing, facts, wip, label=label)
     return ReconcileResult(proposals=proposals, rules_changed=run.rules, notes=notes,
-                           summary=summary(proposals, run.rules, notes))
+                           summary=summary(proposals, run.rules, notes, next_up, wip or DEFAULT_WIP),
+                           next_up=next_up)
 
 
 _VERB = {"close": "Close", "reopen": "Reopen", "demote": "Demote to informational", "supersede": "Close as superseded"}
 
 
-def summary(proposals: Sequence[Proposal], rules: Sequence[RulesNote], notes: Sequence[str]) -> str:
-    """The batched confirm-before-write block: every proposal, then the rules notes and the notes."""
+def summary(proposals: Sequence[Proposal], rules: Sequence[RulesNote], notes: Sequence[str],
+            next_up: Sequence[NextUp] = (), limit: int = DEFAULT_WIP) -> str:
+    """The batched confirm-before-write block: every proposal, the reopens held as next up, then the notes.
+
+    ``limit`` is the ``[backlog] wip`` the "Next up" header names; it is read only with ``next_up``.
+    """
     head = (f"**Reconcile: {len(proposals)} proposal(s) for filed items.** Nothing is written until you confirm."
             if proposals else "**Reconcile: no proposals for filed items.**")
     lines = [head, ""]
     for p in proposals:
         extra = f" Commit: `{p['commit']}`." if "commit" in p else ""
         lines.append(f"- {_VERB[p['kind']]} #{p['number']} ({p['title']}): {p['reason']}.{extra}")
+    if next_up:
+        noun = "item" if limit == 1 else "items"
+        lines += ["", f"**Next up** (not reopened: the backlog holds at most {limit} open {noun}, "
+                      "the `[backlog] wip` limit):"]
+        lines += [f"- #{n['number']} ({n['title']}): {n['reason']}." for n in next_up]
     if rules:
         lines += ["", "No change proposed:"]
         lines += [f"- #{r['number']} `{r['condition']}`: {r['line']}" for r in rules]

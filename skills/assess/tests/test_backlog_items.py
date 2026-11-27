@@ -351,3 +351,66 @@ def test_a_negative_or_non_numeric_wip_fails_at_argparse(tmp_path: Path, bad: st
     with pytest.raises(SystemExit) as exc:
         render.main([str(tmp_path), "plan", "--existing", "x.json", "--wip", bad])
     assert exc.value.code == 2
+
+
+# ── split parts count against the limit in code (#1542) ────────────────────
+
+def test_split_parts_each_take_a_slot_in_the_items_tier() -> None:
+    items = _items(*NEW)
+    steps = bi.plan_filing(items, [])
+    got = bw.apply_wip(items, steps, [_marked(9, "old-9.1")], wip=3, parts={0: 3})
+    assert got[0]["parts"] == [bw.FILE, bw.FILE, bw.NEXT_UP] and got[0]["decision"] == bw.FILE
+    assert [w["decision"] for w in got[1:]] == [bw.NEXT_UP, bw.NEXT_UP]
+    block = bw.next_up_markdown(items, got)
+    assert [line for line in block.splitlines() if line.startswith("- ")] == [
+        "- Action 1 (1 split part)", "- Action 2", "- Action 3"]
+
+
+def test_a_split_action_whose_parts_reuse_open_items_takes_no_slot() -> None:
+    items = _items(*NEW)
+    got = bw.apply_wip(items, bi.plan_filing(items, []), [], wip=2, parts={1: 0})
+    assert got[1]["decision"] == bw.OPEN and got[1]["parts"] == []
+    assert [w["decision"] for w in got] == [bw.FILE, bw.OPEN, bw.FILE]
+
+
+def test_a_split_action_ignores_its_filing_step_and_ranks_by_its_condition() -> None:
+    existing = [_marked(1, "row-c.1"), _marked(2, "old-2.1")]
+    level = {"next_step": {"step": 2, "blockers": [{"condition": "row-c.1"}]}}
+    items = _items(*NEW)
+    got = bw.apply_wip(items, bi.plan_filing(items, existing), existing, level, wip=3, parts={2: 2})
+    assert got[2]["tier"] == "next_unlock" and got[2]["parts"] == [bw.FILE, bw.NEXT_UP]
+    assert [w["decision"] for w in got[:2]] == [bw.NEXT_UP, bw.NEXT_UP]
+
+
+def test_plan_and_next_up_take_split_parts_by_rank_or_label(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assess = tmp_path / ".assess"
+    assess.mkdir()
+    (assess / "actions.json").write_text(json.dumps({"schema": 2, "actions": NEW}), encoding="utf-8")
+    existing = tmp_path / "existing.json"
+    existing.write_text("[]", encoding="utf-8")
+    assert render.main([str(tmp_path), "plan", "--existing", str(existing), "--parts", "1=2"]) == 0
+    planned = json.loads(capsys.readouterr().out)
+    assert planned[0]["wip"]["parts"] == ["file", "file"]
+    assert [i["wip"]["decision"] for i in planned] == ["file", "file", "next_up"]
+    assert render.main([str(tmp_path), "next-up", "--existing", str(existing), "--parts", "3=3"]) == 0
+    assert "- Action 3 (2 split parts)\n" in capsys.readouterr().out
+    assert render.main([str(tmp_path), "plan", "--existing", str(existing), "--parts", "7=2"]) == 1
+    assert "no item 7" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("bad", ["1", "1=-1", "=2", "1=x"])
+def test_a_malformed_parts_value_fails_at_argparse(tmp_path: Path, bad: str) -> None:
+    with pytest.raises(SystemExit) as exc:
+        render.main([str(tmp_path), "plan", "--existing", "x.json", "--parts", bad])
+    assert exc.value.code == 2
+
+
+def test_parts_name_a_sub_item_by_its_label() -> None:
+    entry = {**ENTRY, "sub_items": [{"label": "1a", "action": "Pin ruff", "done_when": "`ruff --version`"}]}
+    items = _items(entry)
+    planned = render.plan_items(items, [], wip=1, parts=[("1a", 2)])
+    assert "parts" not in planned[0]["wip"] and planned[1]["wip"]["parts"] == [bw.NEXT_UP, bw.NEXT_UP]
+    assert planned[0]["wip"]["decision"] == bw.FILE
+    with pytest.raises(ValueError, match="part count"):
+        bw.apply_wip(items, bi.plan_filing(items, []), [], parts={5: 1})
