@@ -68,7 +68,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
-from lib.ci.agent_evals import AgentEvalsBlock, scan_agent_evals
+from lib.ci.agent_evals import AgentEvalsBlock, gitlab_eval_texts, scan_agent_evals
 from lib.ci.ci_action_inputs import ReadLocal, local_action_paths
 from lib.ci.ci_includes import GITLAB_CI, merged_config, resolve_includes
 from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
@@ -691,12 +691,16 @@ def _gitlab(rel: str, text: str, unsettled: frozenset[int] = frozenset()) -> lis
     return found
 
 
-def _gitlab_merged(repo: Path, ghsync_root: Path | None) -> tuple[list[ModelJob], int]:
+def _gitlab_merged(repo: Path, ghsync_root: Path | None) -> tuple[list[ModelJob], int, list[str], int]:
     """The GitLab model jobs as GitLab merges them (#1180, ``lib.ci.ci_merged_view``): each file with
     its merged jobs blanked, then each merged job rendered once with its effective keys, so a
     root override, an included job and an ``extends:`` template's ``script:`` read together.
     An included job is reported at the repository's own include line; a merged job at its
-    definition in the repository's own file, else at the include line that led to it."""
+    definition in the repository's own file, else at the include line that led to it. Also
+    returns the GitLab texts the eval-suite scan reads and the jobs it leaves out as not settled
+    (#1573, ``lib.ci.agent_evals.gitlab_eval_texts``): through the merged view, so a root
+    override and an ``extends:`` read as GitLab runs them, else the root file and each included
+    file as written."""
     text = read_config(repo, GITLAB_CI)
     resolution = resolve_includes(repo, ghsync_root)
     unread = int(not text.strip()) + resolution.unresolved
@@ -717,7 +721,8 @@ def _gitlab_merged(repo: Path, ghsync_root: Path | None) -> tuple[list[ModelJob]
             job["job"] = of.name
             job["line"] = own.start + 1 if own is not None else at[of.defs[-1].source]
             jobs.append(job)
-    return jobs, unread
+    texts, unsettled = gitlab_eval_texts(config, view) if view is not None and config is not None else (sources, 0)
+    return jobs, unread, texts, unsettled
 
 
 def _eval_ci_texts(repo: Path, tracked: frozenset[str], files: list[str]) -> dict[str, str]:
@@ -738,15 +743,20 @@ def scan_ci_model_jobs(repo_root: Path, ghsync_root: Path | None = None) -> CiMo
         return read_config(repo, rel)
 
     jobs, unread = _github(repo, files, read_local)
+    eval_unsettled = 0
+    eval_texts = _eval_ci_texts(repo, tracked, files)
     if GITLAB_CI in files:
-        gitlab_jobs, gitlab_unread = _gitlab_merged(repo, ghsync_root)
+        gitlab_jobs, gitlab_unread, gitlab_texts, eval_unsettled = _gitlab_merged(repo, ghsync_root)
         jobs += gitlab_jobs
         unread += gitlab_unread
+        del eval_texts[GITLAB_CI]  # read as GitLab merges it, below
+        eval_texts.update((f"{GITLAB_CI}#{n}", text) for n, text in enumerate(gitlab_texts))
     count = {state: sum(j["state"] == state for j in jobs) for state in ("gated", "ungated", "unknown")}
     block = CiModelJobsBlock(available=True, files_read=len(files), model_jobs=len(jobs),
                              gated=count["gated"], unknown=count["unknown"], unread=unread,
                              ungated=count["ungated"], jobs=jobs,
-                             agent_evals=scan_agent_evals(tracked, lambda rel: read_local(rel) or "", _eval_ci_texts(repo, tracked, files), unread))
+                             agent_evals=scan_agent_evals(tracked, lambda rel: read_local(rel) or "", eval_texts,
+                                                          unread + eval_unsettled))
     if not count["ungated"] and (count["unknown"] or unread):
         block["ungated"] = None
         block["ungated_reason"] = REASON_UNRESOLVED if count["unknown"] else REASON_UNREAD
