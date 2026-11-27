@@ -61,14 +61,30 @@ comes back once and a second decline records it again under the new evidence; a 
 cannot say (no level result, a condition its model does not list) keeps the record.
 `proposal_disclosure` is the one line that keeps a held-back proposal visible in the summary.
 Called by `assess_actions_render.py reconcile`.
+
+**Not-planned closes and declined 6b offers (#1543).** A marked item closed as not planned
+(GitHub `stateReason` `NOT_PLANNED`) counts as a declined reopen for its condition.
+`refresh_declines` reads it the first time a run sees that close (the item number and its
+`closedAt`): it records a reopen decline under this run's condition state and model, with no
+`declined_by`, the close date as `declined_at` and the reason `closed as not planned`, and
+remembers the close under `not_planned` in the same file. The record then lapses like any
+other, so a model or state change brings the reopen back once, and only a new not-planned
+close (another `closedAt`) is read as a decline again. A close this run cannot read (no
+model, a condition its model does not list) is not remembered, so a later run reads it.
+GitLab lists no `stateReason`, so nothing is inferred there. A 6b offer the user declines
+is recorded the same way: a reopen offer for a closed match as `kind` `reopen` with the
+item's number (the subject a reconcile reopen has, so either decline holds both back), and
+a file offer as `kind` `file`, `number` 0 and the item's `condition` plus `sub` for a
+sub-item. `held_by` is the record that covers one proposal or offer. Called by
+`assess_actions_render.py plan`.
 """
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypedDict, TypeVar
+from typing import Any, NotRequired, TypedDict, TypeVar
 
 MARKER_PREFIX = ".no-"
 
@@ -238,14 +254,15 @@ def _tool_label(tool: str) -> str:
 # next run does not propose it again until its evidence changes.
 
 PROPOSAL_DECLINES = "backlog-declines.json"
-_SUBJECT = ("kind", "number", "condition", "finding", "superseded_by")
+NOT_PLANNED_REASON = "closed as not planned"
+_SUBJECT = ("kind", "number", "condition", "finding", "superseded_by", "sub")
 
 
 class ProposalDecline(TypedDict):
     """One declined reconcile proposal, keyed by its subject, the condition state and the model."""
 
-    kind: str  # close, reopen, demote or supersede
-    number: int  # the tracker item
+    kind: str  # close, reopen, demote or supersede; file for a declined 6b file offer (#1543)
+    number: int  # the tracker item; 0 for a file offer, which has none yet
     condition: str | None  # the condition id the proposal read
     finding: str | None  # the finding id (a finding demote)
     superseded_by: int | None  # the item a supersede pointed at
@@ -255,6 +272,15 @@ class ProposalDecline(TypedDict):
     declined_by: str | None
     declined_at: str | None
     reason: str | None  # the user's own reason, when given
+    sub: NotRequired[str]  # a file offer for a sub-item: its letters
+
+
+class NotPlannedClose(TypedDict):
+    """A marked item closed as not planned: the close a reopen decline is read from (#1543)."""
+
+    number: int
+    condition: str  # the condition id the item's marker names
+    closed_at: str | None  # the tracker's closedAt: which close this is
 
 
 def _opt_str(value: object) -> str | None:
@@ -279,26 +305,45 @@ def decline_record(proposal: Mapping[str, object], conditions: Mapping[str, Mapp
     if kind is None or number is None:
         return None
     condition = _opt_str(proposal.get("condition"))
-    return ProposalDecline(
+    record = ProposalDecline(
         kind=kind, number=number, condition=condition, finding=_opt_str(proposal.get("finding")),
         superseded_by=_opt_int(proposal.get("superseded_by")), state=_state_of(condition, conditions),
         model=model, evidence=str(proposal.get("reason") or ""), declined_by=_opt_str(declined_by),
         declined_at=_opt_str(declined_at), reason=_opt_str(reason))
+    sub = _opt_str(proposal.get("sub"))
+    if sub is not None:
+        record["sub"] = sub
+    return record
 
 
 def _subject(entry: Mapping[str, object]) -> tuple[object, ...]:
     return tuple(entry.get(k) for k in _SUBJECT)
 
 
-def read_proposal_declines(assess_dir: Path) -> list[ProposalDecline]:
-    """The records in ``<assess_dir>/backlog-declines.json``; a missing or malformed file reads empty. Never raises."""
+def _rows(assess_dir: Path, key: str) -> list[object]:
     try:
         data = json.loads((assess_dir / PROPOSAL_DECLINES).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
-    rows = data.get("declines") if isinstance(data, dict) else None
+    rows = data.get(key) if isinstance(data, dict) else None
+    return rows if isinstance(rows, list) else []
+
+
+def read_not_planned(assess_dir: Path) -> list[NotPlannedClose]:
+    """The not-planned closes already read as declines (``not_planned`` in the file); never raises."""
+    out: list[NotPlannedClose] = []
+    for row in _rows(assess_dir, "not_planned"):
+        if isinstance(row, dict) and (n := _opt_int(row.get("number"))) is not None \
+                and (c := _opt_str(row.get("condition"))) is not None:
+            out.append(NotPlannedClose(number=n, condition=c, closed_at=_opt_str(row.get("closed_at"))))
+    return out
+
+
+def read_proposal_declines(assess_dir: Path) -> list[ProposalDecline]:
+    """The records in ``<assess_dir>/backlog-declines.json``; a missing or malformed file reads empty. Never raises."""
+    rows = _rows(assess_dir, "declines")
     out: list[ProposalDecline] = []
-    for row in rows if isinstance(rows, list) else []:
+    for row in rows:
         if not isinstance(row, dict):
             continue
         record = decline_record(row, None, _opt_str(row.get("model")), declined_by=row.get("declined_by"),
@@ -309,11 +354,20 @@ def read_proposal_declines(assess_dir: Path) -> list[ProposalDecline]:
     return out
 
 
-def write_proposal_declines(assess_dir: Path, records: Sequence[ProposalDecline]) -> None:
-    """Write ``records`` to ``<assess_dir>/backlog-declines.json``, sorted by item number and kind."""
+def write_proposal_declines(assess_dir: Path, records: Sequence[ProposalDecline],
+                            not_planned: Sequence[NotPlannedClose] | None = None) -> None:
+    """Write ``records`` to ``<assess_dir>/backlog-declines.json``, sorted by item number and kind.
+
+    ``not_planned`` replaces the remembered not-planned closes; None keeps the file's.
+    """
+    closes = read_not_planned(assess_dir) if not_planned is None else list(not_planned)
     assess_dir.mkdir(parents=True, exist_ok=True)
-    ordered = sorted(records, key=lambda r: (r["number"], r["kind"], str(r["condition"]), str(r["finding"])))
-    payload = json.dumps({"declines": ordered}, indent=2, ensure_ascii=False) + "\n"
+    ordered = sorted(records, key=lambda r: (r["number"], r["kind"], str(r["condition"]), str(r["finding"]),
+                                             r.get("sub", "")))
+    data: dict[str, object] = {"declines": ordered}
+    if closes:
+        data["not_planned"] = sorted(closes, key=lambda c: (c["number"], str(c["closed_at"])))
+    payload = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
     (assess_dir / PROPOSAL_DECLINES).write_text(payload, encoding="utf-8")
 
 
@@ -351,23 +405,64 @@ def split_declined(proposals: Sequence[P], records: Sequence[ProposalDecline],
                    conditions: Mapping[str, Mapping[str, object]] | None,
                    model: str | None) -> tuple[list[P], list[ProposalDecline]]:
     """``(kept, declined)``: the proposals no live record covers, and the records that held one back."""
-    live = {_subject(r): r for r in live_proposal_declines(records, conditions, model)}
+    live = live_proposal_declines(records, conditions, model)
     kept: list[P] = []
     held: list[ProposalDecline] = []
     for p in proposals:
-        record = live.get(_subject(p))
-        if record is not None and record["state"] == _state_of(_opt_str(p.get("condition")), conditions):
+        record = held_by(p, live, conditions)
+        if record is not None:
             held.append(record)
         else:
             kept.append(p)
     return kept, held
 
 
+def held_by(proposal: Mapping[str, object], live: Sequence[ProposalDecline],
+            conditions: Mapping[str, Mapping[str, object]] | None) -> ProposalDecline | None:
+    """The live record that holds ``proposal`` (or a 6b offer) back: same subject, same condition state."""
+    subject = _subject(proposal)
+    state = _state_of(_opt_str(proposal.get("condition")), conditions)
+    return next((r for r in live if _subject(r) == subject and r["state"] == state), None)
+
+
+def refresh_declines(assess_dir: Path, closes: Sequence[NotPlannedClose], listed: Collection[int],
+                     conditions: Mapping[str, Mapping[str, object]] | None,
+                     model: str | None) -> list[ProposalDecline]:
+    """The live records, with a reopen decline for each not-planned close not read before (#1543).
+
+    ``closes`` are the listing's marked items closed as not planned; ``listed`` every item
+    number in the listing. A remembered close is forgotten once its item is listed with
+    another close or none, so a later not-planned close reads as a new decline. The file is
+    written only when something changed.
+    """
+    records, seen = read_proposal_declines(assess_dir), read_not_planned(assess_dir)
+    current = {(c["number"], c["closed_at"]) for c in closes}
+    kept = [c for c in seen if c["number"] not in listed or (c["number"], c["closed_at"]) in current]
+    known = {(c["number"], c["closed_at"]) for c in kept}
+    live = live_proposal_declines(records, conditions, model)
+    inferred: list[ProposalDecline] = []
+    for c in closes:
+        if (c["number"], c["closed_at"]) in known or model is None or _state_of(c["condition"], conditions) is None:
+            continue
+        record = decline_record({"kind": "reopen", "number": c["number"], "condition": c["condition"]}, conditions,
+                                model, declined_by=None, declined_at=(c["closed_at"] or "")[:10] or None,
+                                reason=NOT_PLANNED_REASON)
+        if record is not None:
+            inferred.append(record)
+            kept.append(c)
+    live = merge_proposal_declines(live, inferred)
+    if live != records or kept != seen:
+        write_proposal_declines(assess_dir, live, kept)
+    return live
+
+
 def proposal_disclosure(r: ProposalDecline) -> str:
     """One line naming a held-back proposal, who declined it, when, under which model, and why."""
     who, when = r["declined_by"] or "an unknown user", r["declined_at"] or "an unknown date"
     subject = r["condition"] or r["finding"]
-    line = f"{r['kind']} #{r['number']}" + (f" (`{subject}`)" if subject else "")
+    line = r["kind"] + (f" #{r['number']}" if r["number"] else "") + (f" (`{subject}`)" if subject else "")
+    if r.get("sub"):
+        line += f" sub-item {r.get('sub')}"
     line += f" declined by {who} on {when}"
     if r["model"]:
         line += f" under model {r['model']}"

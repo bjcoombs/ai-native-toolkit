@@ -48,13 +48,21 @@ items (``{number, title, body, state, labels}``, as ``gh issue list --json`` giv
 
 Each existing item is claimed by the first rendered item that matches it, whatever the
 match, so two rendered items never take the same item in one run. Open items are preferred
-over closed ones, then the lowest number. Pure stdlib; never touches the tracker. Tests: ``tests/test_backlog_items.py``.
+over closed ones, then the lowest number.
+
+``filing_offer(item, step)`` is what Step 6b offers for one planned item, the subject a
+declined offer is recorded under (``lib/run/decline_markers.py``, #1543): ``file`` for a
+``create`` and ``reopen`` with the number for a closed match; None for an open match or an
+item without a condition marker. ``not_planned_closes(existing)`` lists the marked items
+closed as not planned (GitHub ``stateReason`` ``NOT_PLANNED``; GitLab lists none). Pure stdlib; never touches the tracker. Tests: ``tests/test_backlog_items.py``.
 """
 from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
 from typing import NotRequired, TypedDict
+
+from lib.run.decline_markers import NotPlannedClose
 
 DEFAULT_LABEL = "assess-finding"
 UNKNOWN_MODEL = "unknown"
@@ -75,6 +83,8 @@ class ExistingItem(TypedDict, total=False):
     body: str
     state: str
     labels: list[object]  # label names, or ``{"name": ...}`` objects
+    stateReason: str  # GitHub only: COMPLETED, NOT_PLANNED, REOPENED, ... (#1543)
+    closedAt: str  # GitHub only: when the item was last closed
 
 
 class FilingStep(TypedDict):
@@ -235,3 +245,38 @@ def plan_filing(items: Sequence[Mapping[str, object]], existing: Sequence[Mappin
     claimed: set[int] = set()
     return [match_item(str(i.get("title") or ""), str(i.get("body") or ""), existing,
                        label=label, claimed=claimed) for i in items]
+
+
+def _cid(key: MarkerKey) -> str:
+    return f"{key[0]}.{key[1]}"
+
+
+def filing_offer(item: Mapping[str, object], step: FilingStep) -> dict[str, object] | None:
+    """The 6b offer for one planned ``item``: ``file`` or ``reopen``, keyed as a decline record is; None for none."""
+    key = marker_key(str(item.get("marker") or item.get("body") or ""))
+    if key is None:
+        return None
+    offer: dict[str, object] = {"condition": _cid(key), "reason": str(item.get("title") or "")}
+    if step["action"] == "create":
+        offer.update(kind="file", number=0)
+        if key[2]:
+            offer["sub"] = key[2]
+        return offer
+    if "number" not in step or str(step.get("state", "")).lower() in ("open", "opened"):
+        return None
+    offer.update(kind="reopen", number=step["number"])
+    return offer
+
+
+def not_planned_closes(existing: Sequence[Mapping[str, object]]) -> list[NotPlannedClose]:
+    """The marked items closed as not planned (``stateReason`` ``NOT_PLANNED``), in listing order."""
+    out: list[NotPlannedClose] = []
+    for item in existing:
+        number, key = item.get("number"), marker_key(_body(item))
+        if (str(item.get("stateReason") or "").upper() != "NOT_PLANNED" or key is None
+                or not isinstance(number, int) or str(item.get("state", "")).lower() in ("open", "opened")):
+            continue
+        closed = item.get("closedAt")
+        out.append(NotPlannedClose(number=number, condition=_cid(key),
+                                   closed_at=closed if isinstance(closed, str) and closed else None))
+    return out

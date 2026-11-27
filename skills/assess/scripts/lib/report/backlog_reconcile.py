@@ -3,7 +3,7 @@
 ``assess-pr`` Step 6 files each Top 3 action as a tracker item, and an item whose action names
 a condition carries the condition marker (``lib/report/backlog_items.py``, #810). On an
 interactive run this pass reads the tracker's items again (``gh issue list --state all --json
-number,title,body,state,labels``) beside this run's ``run-context.json`` and proposes, per
+number,title,body,state,labels,stateReason,closedAt``) beside this run's ``run-context.json`` and proposes, per
 item, at most one change. It never writes: ``reconcile`` returns proposals, the skill shows
 them as one batched summary, and ``confirmed_writes`` gives back only the writes for the item
 numbers the user confirmed. A declined proposal is recorded and held back outside this pass
