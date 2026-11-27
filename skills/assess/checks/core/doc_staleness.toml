@@ -5,7 +5,7 @@
 id = "core.doc_staleness"
 kind = "collector"
 title = "Doc staleness"
-summary = "Each doc's last content change against its code subject's churn, following renames. Also each CI check that keeps docs or generated files true: a regenerate-then-diff step, a verify and update script pair, or doc examples run as tests. A doc in a subtree such a check names is not reported stale."
+summary = "Each doc's last content change against its code subject's churn, following renames. Also each CI check that keeps docs or generated files true. That is a regenerate-then-diff step, a verify and update script pair, or doc examples run as tests. A doc in a subtree such a check names is not reported stale."
 issues = [852]
 callable = "lib.run.core_scans:doc_staleness"
 publishes = ["doc_staleness"]
@@ -22,7 +22,7 @@ shapes = [
 ]
 revision = 3
 unknown_reasons = [
-  { code = "ci_not_read", block = "doc_staleness", means = "No CI check that keeps docs or generated files true was found, and the tree tracks a CI file of a system this reader does not parse (Jenkins, Prow, Buildkite and the like). That system may run one.", next_step = "Nothing to change: this reads as not measured until that system's configuration can be read." },
+  { code = "ci_not_read", block = "doc_staleness", means = "No CI check that keeps docs or generated files true was found. The tree tracks a CI file of a system this reader does not parse, such as Jenkins, Prow or Buildkite. That system may run one.", next_step = "Nothing to change: this reads as not measured until that system's configuration can be read." },
 ]
   [entries.privacy]
   "doc_staleness.churn_window" = "drop"
@@ -97,4 +97,4 @@ kind = "condition"
 title = "Docs and generated files kept true by CI"
 key = "docs-kept-true.1:doc_staleness.kept_true.present"
 why = "A doc or generated file that CI regenerates, verifies or runs as a test cannot drift from the code without a red check, so an agent can read it as true."
-fix = "Add a CI step that regenerates the generated files and docs and then runs git diff --exit-code, pair each verify script with an update script and run it in CI, or run the doc examples as tests (pytest --doctest-modules)."
+fix = "Add a CI step that regenerates the generated files and docs, then runs git diff --exit-code. Or pair each verify script with an update script and run it in CI. Or run the doc examples as tests (pytest --doctest-modules)."

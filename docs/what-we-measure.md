@@ -77,7 +77,7 @@ That what an agent reads about the code is still true of the code.
 | `contributor-files.1` A newcomer can report a vulnerability privately | `contributor_files` | A security policy is committed or shared by the owner: is true (`contributor_files.policy.present eq true`) | `measured` | yes | - | positive | - | - | A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue. | Commit a SECURITY.md that says how to report a vulnerability privately, at the root, in .github/ or in docs/, or link GitHub private vulnerability reporting. |
 | `doc-freshness.1` Most mapped docs keep pace with their code | `doc_staleness` | Share of mapped docs outrun by their code: is at most 50 (`doc_staleness.summary.stale_pct lte 50`) | `measured` | yes | - | positive | - | - | An agent reads the docs as true. A doc whose code has moved on misleads it about that code. | Refresh the docs the report lists under doc freshness. |
 | `doc-freshness.2` Four in five mapped docs keep pace | `doc_staleness` | Share of mapped docs outrun by their code: is at most 20 (`doc_staleness.summary.stale_pct lte 20`) | `measured` | yes | - | positive | - | - | With four in five mapped docs keeping pace with their code, an agent can take most of what it reads at its word. | Refresh the docs the report lists under doc freshness, oldest first. |
-| `docs-kept-true.1` Docs and generated files kept true by CI (shared with Contracts) | `doc_staleness` | A CI check keeps docs or generated files true: is true (`doc_staleness.kept_true.present eq true`) | `measured` | yes | - | positive | - | - | A doc or generated file that CI regenerates, verifies or runs as a test cannot drift from the code without a red check, so an agent can read it as true. | Add a CI step that regenerates the generated files and docs and then runs git diff --exit-code, pair each verify script with an update script and run it in CI, or run the doc examples as tests (pytest --doctest-modules). |
+| `docs-kept-true.1` Docs and generated files kept true by CI (shared with Contracts) | `doc_staleness` | A CI check keeps docs or generated files true: is true (`doc_staleness.kept_true.present eq true`) | `measured` | yes | - | positive | - | - | A doc or generated file that CI regenerates, verifies or runs as a test cannot drift from the code without a red check, so an agent can read it as true. | Add a CI step that regenerates the generated files and docs, then runs git diff --exit-code. Or pair each verify script with an update script and run it in CI. Or run the doc examples as tests (pytest --doctest-modules). |
 
 Also carries this tag, listed under its first tag:
 
@@ -646,7 +646,7 @@ An agent finds docs by following links from README, AGENTS.md or an index; a doc
 
 It compares each doc's last change with the churn in the code it describes, so a doc whose code moved on is found before an agent relies on it.
 
-Each doc's last content change against its code subject's churn, following renames. Also each CI check that keeps docs or generated files true: a regenerate-then-diff step, a verify and update script pair, or doc examples run as tests. A doc in a subtree such a check names is not reported stale.
+Each doc's last content change against its code subject's churn, following renames. Also each CI check that keeps docs or generated files true. That is a regenerate-then-diff step, a verify and update script pair, or doc examples run as tests. A doc in a subtree such a check names is not reported stale.
 
 - Collector: `core.doc_staleness`, reading `repo_root`, `doc_graph`, `excludes`, `scope`.
 - Network: no.
@@ -656,7 +656,7 @@ Each doc's last content change against its code subject's churn, following renam
 - Used by: row `doc-freshness`, row `docs-kept-true`.
 - Evidence: `doc_staleness.kept_true.present` head_structure (measured), `doc_staleness.summary.stale_pct` git_history (measured).
 - Not measured when:
-  - `ci_not_read`: No CI check that keeps docs or generated files true was found, and the tree tracks a CI file of a system this reader does not parse (Jenkins, Prow, Buildkite and the like). That system may run one. Nothing to change: this reads as not measured until that system's configuration can be read.
+  - `ci_not_read`: No CI check that keeps docs or generated files true was found. The tree tracks a CI file of a system this reader does not parse, such as Jenkins, Prow or Buildkite. That system may run one. Nothing to change: this reads as not measured until that system's configuration can be read.
 
 Why the signals named here matter:
 
