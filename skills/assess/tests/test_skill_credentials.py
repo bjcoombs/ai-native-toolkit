@@ -83,6 +83,11 @@ REAL: list[str] = [
     f"SECRET_KEY = '{_body(50, ALNUM + '!@#%^&*-_')}'",
     f"api_key: {_body(20, HEX)}",  # a short hex value, under the hex entropy threshold
     f'"env": {{"API_KEY": "{_body(32)}"}}',  # a quoted name: an MCP env block
+    # A signed JWT: dotted, but its segments are half capitals and digits, so it is no attribute path (#1522).
+    f"token = {_b64({'alg': 'HS256', 'typ': 'JWT'})}.{_b64({'sub': _body(16)})}.{_body(43, URLSAFE)}",
+    # A random value with a dot is no attribute path either (#1522).
+    f"token = {_body(20, string.ascii_letters)}.{_body(2, string.ascii_letters)}",
+    f"api_key = {_body(16)}.{_body(16)}",
 ]
 
 # Documentation placeholders and lookalikes: none may be a credential finding.
@@ -138,6 +143,24 @@ PLACEHOLDERS: list[str] = [
     "secret_key: " + STRIPE_DOCS_SAMPLE,
     'url = "https://x-access-token:' + 'gh' + 's_abc123@github.com/a/b",',  # a short value before the host
     "api_key: Optional[str] = None",
+    # Hand-typed values in an assignment (#1522): interleaved ascending and periodic, in the
+    # ``NAME=`` and ``name =`` forms as well as bare.
+    "GITHUB_TOKEN=gh" + "p_1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r",
+    "token = gh" + "p_1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r",
+    "api_key: 1a2b3c4d5e6f7g8h9i0j",
+    "export OPENAI_API_KEY=sk-" + "abc123" * 8,
+    "token = sk-" + "abc123" * 8,
+    'token = "' + "Kq7Wm2Xp9Rz4" * 3 + '"',
+    "Kq7Wm2Xp9Rz4" * 3,
+    # An attribute path in a code snippet is a reference, not a value (#1522).
+    "apiKey: this.configService.anthropicKey,",
+    "api_key = settings.openaiApiKey2",
+    'const client = new Anthropic({ apiKey: this.config.anthropic.apiKey });',
+    "token: self.settings.githubToken",
+    "apiKey: this.config2Service.anthropicKey,",  # a digit inside a segment name
+    # A repeated block behind a provider prefix, bare and assigned (#1522).
+    "gh" + "p_" + "Kq7Wm2Xp9Rz4" * 3,
+    "GITHUB_TOKEN=gh" + "p_" + "Kq7Wm2Xp9Rz4" * 3,
 ]
 
 
@@ -178,6 +201,19 @@ def test_recall_holds_over_many_random_bodies(n: int, alphabet: str) -> None:
     bodies = ["".join(rng.choice(alphabet) for _ in range(n)) for _ in range(2000)]
     found = sum("credential" in kinds_in(f"API_KEY={body}") for body in bodies)
     assert found / len(bodies) >= 0.97, found
+
+
+@pytest.mark.parametrize(("left", "right", "alphabet"), [(20, 2, string.ascii_letters), (16, 16, ALNUM),
+                                                      (24, 8, string.ascii_lowercase + string.digits)])
+def test_recall_holds_over_many_random_dotted_values(left: int, right: int, alphabet: str) -> None:
+    """The attribute-path rule (#1522) reads a camelCase name as a reference; a random dotted value
+    stays a credential at the same gate as an undotted one."""
+    rng = random.Random(left * right * len(alphabet))
+
+    def body(n: int) -> str:
+        return "".join(rng.choice(alphabet) for _ in range(n))
+    found = sum("credential" in kinds_in(f"token = {body(left)}.{body(right)}") for _ in range(2000))
+    assert found / 2000 >= 0.97, found
 
 
 @pytest.mark.parametrize("shape", ["slack", "openai-project"])
