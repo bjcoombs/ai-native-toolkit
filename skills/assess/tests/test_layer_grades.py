@@ -32,6 +32,31 @@ def test_block_republishes_the_best_grade(grading: tuple[Any, ...], expected: di
     assert scan_layer_grades(grading, NO_NESTED) == expected
 
 
+STUB = {"heading_only": True}
+
+
+def test_a_heading_only_root_file_is_a_stub_and_not_present() -> None:
+    """#922: CLAUDE.md = "# x" is committed but tells an agent nothing."""
+    assert scan_layer_grades(({"CLAUDE.md": STUB}, "F"), NO_NESTED) == {
+        "instructions_grade": "F", "instruction_file_present": False,
+        "instruction_presence": "stub"}
+
+
+def test_one_root_file_with_a_body_beside_a_stub_is_present() -> None:
+    grading = ({"CLAUDE.md": STUB, "AGENTS.md": {"heading_only": False}}, "C")
+    assert scan_layer_grades(grading, NO_NESTED)["instruction_presence"] == "root"
+
+
+def test_a_stub_root_file_reads_by_a_nested_file_beside_it() -> None:
+    nested = {"available": True, "files": [_file("pkg/AGENTS.md", "B")]}
+    assert scan_layer_grades(({"CLAUDE.md": STUB}, "F"), nested) == {
+        "instructions_grade": "B", "instruction_file_present": True,
+        "instruction_presence": "nested_only"}
+    assert scan_layer_grades(({"CLAUDE.md": STUB}, "F"), {"available": False}) == {
+        "instructions_grade": "F", "instruction_file_present": None,
+        "instruction_presence": None}
+
+
 def test_nested_only_is_present_with_the_best_nested_grade() -> None:
     """#821: only pkg/AGENTS.md - present, loaded on demand, graded, never null."""
     nested = {"available": True, "files": [_file("pkg/AGENTS.md", "D"), _file("svc/AGENTS.md", "B")]}

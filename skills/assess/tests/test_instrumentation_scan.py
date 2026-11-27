@@ -165,9 +165,97 @@ def test_rust_tracing_outside_runtime_dependencies_is_not_credited(tmp_path: Pat
 def test_the_ruff_shape_reads_rung_1(tmp_path: Path) -> None:
     _write(tmp_path, "Cargo.toml", '[workspace.dependencies]\ntracing = "0.1"\n')
     _write(tmp_path, "crates/a/Cargo.toml", "[dependencies]\ntracing = { workspace = true }\n")
+    _write(tmp_path, "crates/a/src/lib.rs", "use tracing::info;\n")
     r = scan_observability(tmp_path).as_dict()
     assert r["rung"] == 1
-    assert r["instrumented"]["kinds"] == ["dependency"]
+    assert r["instrumented"]["kinds"] == ["code", "dependency"]
+
+
+# ── declared dependencies, imports and launchers (#922) ──────────────────────
+
+_OTEL_API = "[project]\nname = 'x'\nversion = '0'\ndependencies = ['opentelemetry-api']\n"
+
+
+def test_a_dependency_alone_is_declared_not_counted(tmp_path: Path) -> None:
+    _write(tmp_path, "pyproject.toml", _OTEL_API)
+    r = scan_observability(tmp_path).as_dict()
+    assert r["rung"] == 0
+    assert r["instrumented"] == {"present": False, "signals": ["OpenTelemetry"],
+                                 "kinds": ["dependency"]}
+
+
+@pytest.mark.parametrize(("rel", "text", "label"), [
+    ("Dockerfile", 'FROM python:3.12\nCMD ["opentelemetry-instrument", "python", "app.py"]\n',
+     "telemetry launcher"),
+    ("Procfile", "web: opentelemetry-instrument gunicorn app:app\n", "telemetry launcher"),
+    ("Procfile", "web: ddtrace-run python app.py\n", "telemetry launcher"),
+    ("Procfile", "web: node -r newrelic app.js\n", "telemetry launcher"),
+    ("package.json", '{"scripts":{"start":"node --require '
+     '@opentelemetry/auto-instrumentations-node/register app.js"}}', "telemetry launcher"),
+    ("bin/start.sh", "#!/bin/sh\nexec java -javaagent:/otel/opentelemetry-javaagent.jar "
+     "-jar app.jar\n", "JVM telemetry agent"),
+    ("deploy/app.yaml", "env:\n  - name: JAVA_TOOL_OPTIONS\n"
+     "    value: -javaagent:/dd/dd-java-agent.jar\n", "JVM telemetry agent"),
+    ("Dockerfile.prod", "ENTRYPOINT java -javaagent:newrelic/newrelic.jar -jar a.jar\n",
+     "JVM telemetry agent"),
+])
+def test_a_launcher_counts_with_a_dependency_alongside(tmp_path: Path, rel: str, text: str,
+                                                       label: str) -> None:
+    _write(tmp_path, "pyproject.toml", _OTEL_API)
+    _write(tmp_path, rel, text)
+    labels, kinds = _detect(tmp_path)
+    assert label in labels and kinds == ["dependency", "launcher"]
+    assert scan_observability(tmp_path).as_dict()["rung"] == 1
+
+
+@pytest.mark.parametrize(("rel", "text"), [
+    ("bin/test.sh", "java -javaagent:jacoco/jacocoagent.jar -jar app.jar\n"),
+    ("Dockerfile", "RUN pip install -r newrelic-requirements.txt\n"),
+    ("bin/run.sh", "java -javaagent:/opt/hotelbooking/jacoco.jar -jar app.jar\n"),
+    ("bin/build.sh", "cp -r newrelic dist\ngrep -r newrelic src/\n"),
+    ("Dockerfile", "# CMD opentelemetry-instrument python app.py\nCMD python app.py\n"),
+    ("tests/run.sh", "opentelemetry-instrument python app.py\n"),
+    ("app/notes.txt", "opentelemetry-instrument python app.py\n"),
+])
+def test_a_launch_line_that_is_not_telemetry_or_not_read_does_not_count(
+        tmp_path: Path, rel: str, text: str) -> None:
+    _write(tmp_path, rel, text)
+    assert _detect(tmp_path) == ([], [])
+
+
+@pytest.mark.parametrize(("rel", "text", "language"), [
+    ("app/otel.py", "from opentelemetry import trace\n", "Python"),
+    ("app/m.py", "import prometheus_client\n", "Python"),
+    ("src/t.ts", "import { trace } from '@opentelemetry/api';\n", "JavaScript"),
+    ("src/l.js", "const pino = require('pino');\n", "JavaScript"),
+    ("cmd/z.go", 'package main\n\nimport (\n\t"go.uber.org/zap"\n)\n', "Go"),
+    ("cmd/o.go", 'package main\nimport otel "go.opentelemetry.io/otel"\n', "Go"),
+    ("src/main/java/a/M.java", "package a;\nimport io.micrometer.core.instrument.Counter;\n",
+     "JVM"),
+    ("src/App.cs", "using Serilog;\n", "C#"),
+    ("src/main.rs", "fn main() { tracing::info!(\"up\"); }\n", "Rust"),
+    ("src/L.php", "<?php\nuse Monolog\\Logger;\n", "PHP"),
+    ("config/otel.rb", "require 'opentelemetry/sdk'\n", "Ruby"),
+    ("Sources/A/L.swift", "import Logging\n", "Swift"),
+    ("lib/main.dart", "import 'package:sentry_flutter/sentry_flutter.dart';\n", "Dart"),
+])
+def test_a_telemetry_library_import_is_credited_as_code(tmp_path: Path, rel: str, text: str,
+                                                        language: str) -> None:
+    _write(tmp_path, rel, text)
+    assert _detect(tmp_path) == ([f"telemetry library import ({language})"], ["code"])
+
+
+@pytest.mark.parametrize(("rel", "text"), [
+    ("app/a.py", "# from opentelemetry import trace\n"),
+    ("app/b.py", "import opentelemetry_fake_free\n"),
+    ("src/a.ts", "// import x from 'pino';\n"),
+    ("src/b.ts", "import x from 'pinot-client';\n"),
+    ("src/main.rs", "use my_log::x;\n"),
+])
+def test_a_mention_of_a_telemetry_library_is_not_an_import(tmp_path: Path, rel: str,
+                                                           text: str) -> None:
+    _write(tmp_path, rel, text)
+    assert _detect(tmp_path) == ([], [])
 
 
 def test_elixir_telemetry_dependency_is_credited_only_in_mix(tmp_path: Path) -> None:
@@ -214,6 +302,8 @@ def test_a_rule_that_matched_stops_reading_its_files(tmp_path: Path,
         return real(path)
 
     monkeypatch.setattr(inst, "_read_head", counting)
+    # Only the logger rule: the telemetry-import rule for .py would keep reading.
+    monkeypatch.setattr(inst, "CODE_RULES", inst.CODE_RULES[:1])
     assert _detect(tmp_path) == (["Python logging"], ["code"])
     assert len(reads) == 1
 

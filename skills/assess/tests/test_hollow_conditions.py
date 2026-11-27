@@ -66,13 +66,14 @@ def _case(case_id: str, row: str, level: int, files: dict[str, str], fixed_by: s
 
 
 CASES = [
-    # Declared, not counted under #744; no issue changes the criterion.
-    _case("l0-1-stub-instructions", "layer-0-instructions", 1, {"CLAUDE.md": "# x\n"}, _NONE_FILED),
+    # #922: a heading-only instruction file is a stub, not an instruction file.
+    _case("l0-1-stub-instructions", "layer-0-instructions", 1, {"CLAUDE.md": "# x\n"}, None),
     # #922: a Make target whose recipe runs nothing is no check.
     _case("l0-2-noop-check", "layer-0-instructions", 2, _NOOP_CHECK, None),
+    # #922: a telemetry dependency alone is declared; rung 1 needs an import or a launcher.
     _case("l1-1-telemetry-dependency", "layer-1-liveness", 1, {
         "pyproject.toml": "[project]\nname = 'x'\nversion = '0'\ndependencies = ['opentelemetry-api']\n",
-    }, _NONE_FILED),
+    }, None),
     _case("l3-1-one-noqa", "layer-3-linters", 1, {"app.py": "import os  # noqa: F401\n"}, None),
     _case("l3-1-linter-version", "layer-3-linters", 1,
           {".github/workflows/ci.yml": _workflow("ruff --version")}, None),
@@ -109,10 +110,10 @@ CASES = [
     _case("l6-1-templated-threshold", "layer-6-coverage", 1,
           {".github/workflows/ci.yml": _workflow("pytest --cov-fail-under=${{ env.COV_MIN }}")}, None),
     _case("l6-1-jacoco-ratio", "layer-6-coverage", 1, {"pom.xml": _JACOCO_POM}, None),
-    _case("l7-1-review-config-file", "layer-7-review", 1, {".coderabbit.yaml": "reviews: {}\n"}, _NONE_FILED),
-    # Layer 8 level 1 has no fixing issue; #922 asks the maintainer.
-    _case("l8-1-one-allow-entry", "layer-8-agent-ops", 1,
-          {".claude/settings.json": json.dumps(_ALLOW)}, _NONE_FILED),
+    # #922: a review app's config file alone reads unknown until review_reality is read.
+    _case("l7-1-review-config-file", "layer-7-review", 1, {".coderabbit.yaml": "reviews: {}\n"}, None),
+    # One permissions.allow entry (Layer 8 level 1) is not listed: what that level means
+    # is settled with the Layer 8 redesign in #826 (maintainer decision on #922).
     _case("l8-2-one-hook-one-routine", "layer-8-agent-ops", 2, {
         ".claude/settings.json": json.dumps(
             {**_ALLOW, "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "true"}]}]}}),

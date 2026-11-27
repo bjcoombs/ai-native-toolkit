@@ -18,8 +18,12 @@ Layer 1 liveness inputs, three tiers:
   reachability rung decides the Layer 1 score. Rung 1 comes from
   `keyhole/instrumentation_scan.py` (#823): a telemetry dependency in a manifest, matched as a
   whole name; a standard-library logger or logging facade in use in production source;
-  or a committed collector config. `instrumented.kinds` records which of `dependency`,
-  `code` and `config` matched. Only production source counts (`path_classes.py`), and a
+  an import of a telemetry library; a launch line that instruments the process
+  (`opentelemetry-instrument`, `ddtrace-run`, a telemetry `-javaagent:` jar); or a
+  committed collector config. `instrumented.kinds` records which of `code`, `config`,
+  `dependency` and `launcher` matched. A `dependency` alone is declared, not counted
+  (#922): `instrumented.present` is false and the rung stays 0 until an import, a launcher
+  or a config backs it. Only production source counts (`path_classes.py`), and a
   doc under a test or fixture path is never a runbook. On-call in a doc or directory name
   needs a word or path-segment boundary, so `function-call-in-default-argument.md` and
   `non-callable-init-subclass.md` are not runbooks.

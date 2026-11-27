@@ -21,10 +21,16 @@ Fields:
   - ``nested_only``: no root file, but ``nested_instructions`` lists at least
     one file (a ``pkg/AGENTS.md``, a path-scoped rule). Present, loaded on
     demand when the agent works in that directory or on a matching path.
+  - ``stub`` (#922): every root file holds nothing beyond headings and blank
+    lines (``instruction_files.is_heading_only``; an alias inherits its target's
+    value), and no nested file exists. A file is committed, but it tells an
+    agent nothing. A stub root file with a nested file beside it reads by the
+    nested file (``root`` when always loaded, else ``nested_only``).
   - ``none``: no instruction file at any known location.
 
-  Null only when there is no root file and the ``nested_instructions`` block
-  is unavailable, so whether a nested file exists was not measured.
+  Null only when there is no root file with a body (none, or only stubs) and
+  the ``nested_instructions`` block is unavailable, so whether a nested file
+  exists was not measured. ``instructions_grade`` keeps a stub's grade then.
 - ``instructions_grade``: the best letter grade of the files ``instruction_presence``
   counts: the root grading (``instruction_files.grade_instruction_files``, the
   value of the run-context key of the same name) when a root location holds a
@@ -32,7 +38,7 @@ Fields:
   all nested files. Null only for ``none`` (or the unmeasured null above), the
   CLAUDE.md invariant: null means no instruction file at any known location.
 - ``instruction_file_present``: whether ``instruction_presence`` is ``root`` or
-  ``nested_only``; null with it. The default maturity model reads this for
+  ``nested_only``; false for ``stub`` and ``none``, null with it. The default maturity model reads this for
   Layer 0 level 1, so a nested-only repository meets that level (harnesses load
   nested ``AGENTS.md`` where the agent works; maintainer decision on #821), and
   its advice is the ``gap_actions`` entry whose ``signal`` is ``layer_grades``
@@ -61,7 +67,8 @@ unavailable, so a nested file was not looked for. `instructions_grade` is the be
 grade of the files that value counts (the root grading, the top-level
 `instructions_grade` value, which stays root-only; else the always-loaded or nested
 grades), null only for `none`. `instruction_file_present` is true for `root` and
-`nested_only` and false for `none` (null with the presence), so a maturity model scores
+`nested_only` and false for `stub` (every root file is headings only, #922) and `none`
+(null with the presence), so a maturity model scores
 "no instruction file" as level 0 rather than unknown and a nested-only repository meets
 Layer 0 level 1 (maintainer decision on #821); its advice is the `gap_actions`
 `layer_grades` entry. Only Layer 0 has a deterministic grade; Layers 2-4 have none (the
@@ -76,10 +83,11 @@ from typing import Any, Literal, TypedDict
 
 from lib.instructions.instruction_files import GRADE_RANK
 
-InstructionPresence = Literal["root", "nested_only", "none"]
+InstructionPresence = Literal["root", "nested_only", "stub", "none"]
 
 ROOT: InstructionPresence = "root"
 NESTED_ONLY: InstructionPresence = "nested_only"
+STUB: InstructionPresence = "stub"
 NONE: InstructionPresence = "none"
 
 
@@ -137,12 +145,25 @@ def instruction_presence(
     return NONE, None
 
 
+def _root_files(instruction_grading: tuple[Any, ...]) -> list[Mapping[str, Any]]:
+    files = instruction_grading[0] if instruction_grading else None
+    return [m for m in files.values() if isinstance(m, Mapping)] if isinstance(files, Mapping) else []
+
+
 def scan_layer_grades(instruction_grading: tuple[Any, ...], nested_instructions: Any) -> LayerGradesBlock:
     """The block from ``run_setup.instruction_grading``'s ``(files, best_grade, ...)``
     and the ``nested_instructions`` block."""
     grade = instruction_grading[1]
-    presence, best = instruction_presence(grade if isinstance(grade, str) else None,
-                                          nested_instructions)
-    present = None if presence is None else presence != NONE
+    root_grade = grade if isinstance(grade, str) else None
+    files = _root_files(instruction_grading)
+    stub_grade = None
+    if root_grade is not None and files and all(f.get("heading_only") is True for f in files):
+        stub_grade, root_grade = root_grade, None  # every root file is a stub (#922)
+    presence, best = instruction_presence(root_grade, nested_instructions)
+    if stub_grade is not None and presence == NONE:
+        presence, best = STUB, stub_grade
+    elif stub_grade is not None and presence is None:
+        best = stub_grade  # a file is committed: the grade stays non-null (CLAUDE.md invariant)
+    present = None if presence is None else presence not in (NONE, STUB)
     return {"instructions_grade": best, "instruction_file_present": present,
             "instruction_presence": presence}

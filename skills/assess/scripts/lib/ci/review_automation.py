@@ -57,7 +57,9 @@ review on a sampled merged change (``review_reality.reviewed_share > 0``, or, wh
 ``present`` is true when either source is true, false when the automation scan
 found none and ``reviewed_share`` is 0 (a review config file alone does not
 count against a measured 0: only a CI step, or a measured ``bot_review_share >
-0``, does), and otherwise the block is unavailable
+0``, does), and otherwise the block is unavailable. A review app's config file
+with no CI step reads unavailable too while ``reviewed_share`` is unread (#922):
+the app may not be installed, so the file waits for ``fleet --platform``
 with the reason of the block that could not say (``review_reality``'s first,
 so a headless run's ``network`` reason reaches the ``fleet --platform`` hint).
 It is listed in ``signals.PLATFORM_SCANS`` so the platform pass rebuilds it from
@@ -96,7 +98,8 @@ reviewed_changes}`; `present` is true when an AI review step is credited or
 `review_reality.reviewed_share > 0` (`approved_share > 0` where `reviewed_share` is
 null), false when neither block shows review (a review config file alone does not count
 against a measured `reviewed_share` of 0; a CI step, or a measured `bot_review_share > 0`,
-does), and otherwise the block is unavailable
+does; with no CI step it reads unavailable while `reviewed_share` is unread, #922), and
+otherwise the block is unavailable
 with the reason of the block that could not say, `review_reality`'s first (so the
 offline `network` code gives the `fleet --platform` hint). It is in
 `signals.PLATFORM_SCANS`, so the platform pass rebuilds it from the measured
@@ -386,13 +389,18 @@ def review_evidence(review_automation: Mapping[str, Any] | None,
         "reviewed_changes": reviewed,
     }
     credited = automation
+    kinds = review_automation.get("kinds") if isinstance(review_automation, Mapping) else None
+    ci_step = bool(set(kinds or ()) & {"ci_action", "ci_component"})
+    if automation and reviewed is None and not ci_step:
+        # A review app's config file alone (#922): the app may not be installed, so it
+        # proves nothing until review_reality is read (fleet --platform).
+        credited = None
     if automation and reviewed is False:
         # Review measured as absent: a config file alone (a stale .coderabbit.yaml)
         # contradicts it. A CI step still counts (claude-code-action posts comments,
         # which reviewed_share does not read), and so does a measured bot review.
-        kinds = review_automation.get("kinds") if isinstance(review_automation, Mapping) else None
         bot = review_reality.get("bot_review_share") if isinstance(review_reality, Mapping) else None
-        credited = bool(set(kinds or ()) & {"ci_action", "ci_component"}) or (_number(bot) and bot > 0)
+        credited = ci_step or (_number(bot) and bot > 0)
     if credited or reviewed:
         block["present"] = True
     elif automation is not None and reviewed is False:

@@ -616,21 +616,23 @@ LAYER_GRADES: JsonDict = {
         "output; no path is carried."),
     "properties": {
         "instruction_presence": _field(
-            {"enum": ["root", "nested_only", "none", None]},
+            {"enum": ["root", "nested_only", "stub", "none", None]},
             "root: a file at a root location (CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, "
             ".github/copilot-instructions.md and the others instruction_files grades) or one the "
             "tool loads at session start, always loaded. nested_only: no root file, but a nested or "
             "path-scoped file (pkg/AGENTS.md, a .claude/rules file with paths), loaded on demand "
-            "where the agent works. none: no instruction file at any known location. Null when "
-            "there is no root file and the nested_instructions scan did not run."),
+            "where the agent works. stub: every root file holds only headings and blank lines, and "
+            "no nested file exists (#922). none: no instruction file at any known location. Null when "
+            "there is no root file with a body (none, or only stubs) and the nested_instructions scan "
+            "did not run."),
         "instruction_file_present": _field(
             {"type": ["boolean", "null"]},
-            "True for root and nested_only, false for none, null with instruction_presence. "
+            "True for root and nested_only, false for stub and none, null with instruction_presence. "
             "Layer 0 level 1 of the default maturity model reads it."),
         "instructions_grade": _field(
             {"type": ["string", "null"]},
             "Best letter grade (A to F) of the files instruction_presence counts: the root files, "
-            "else the always-loaded or nested ones. Null only for none."),
+            "else the always-loaded or nested ones, or a stub's. Null only for none."),
     },
 }
 
