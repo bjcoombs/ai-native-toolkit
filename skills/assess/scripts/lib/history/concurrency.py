@@ -18,7 +18,8 @@ diff against the first parent), the scan records:
   and the count at or above the threshold; a committed generated file every change must
   regenerate is a conflict no one wrote;
 - **registry fan-in**: for each file at or above the threshold, the number of distinct
-  top-level folders (``.`` for the root) of the other files its merges changed; a high
+  top-level folders (``.`` for the root) of the other files its merges changed, counted
+  below the measured root (the ``--scope`` folder, or ``repo_root``); a high
   fan-in is a registry or index that every feature edits.
 
 Informational: no maturity-model row, Step, count or headline reads it. Full output lists
@@ -109,9 +110,27 @@ def _share(count: int, total: int) -> float | None:
     return round(count / total, 4) if total else None
 
 
-def _top_folder(path: str) -> str:
-    head, sep, _ = path.partition("/")
+def _top_folder(path: str, bases: tuple[str, ...] = ()) -> str:
+    """The first folder of ``path`` below the measured root: the deepest of ``bases`` (the
+    scope roots, or ``repo_root``, relative to the repository top) that holds it; ``.`` for
+    a file directly in that root."""
+    base = max((b for b in bases if path.startswith(b + "/")), key=len, default="")
+    head, sep, _ = path[len(base) + 1 if base else 0:].partition("/")
     return head if sep else "."
+
+
+def _bases(top: str, repo_root: Path, scope: Scope | None) -> tuple[str, ...]:
+    """The measured roots relative to ``top`` (POSIX), the whole repository read as ``()``."""
+    roots = scope.roots if scope is not None else (repo_root,)
+    out = []
+    for root in roots:
+        try:
+            rel = Path(root).resolve().relative_to(Path(top).resolve()).as_posix()
+        except ValueError:
+            continue
+        if rel != ".":
+            out.append(rel)
+    return tuple(sorted(out))
 
 
 def first_parent_merges(repo_root: Path, rev: str, since: str | None, scope: Scope | None,
@@ -143,13 +162,14 @@ def generated_paths(top: str, paths: list[str]) -> set[str]:
         matches_generated_name(p) or has_generated_header(Path(top) / p))}
 
 
-def _hot(merges: list[frozenset[str]], counts: Counter[str], generated: set[str]) -> list[HotFile]:
+def _hot(merges: list[frozenset[str]], counts: Counter[str], generated: set[str],
+         bases: tuple[str, ...] = ()) -> list[HotFile]:
     total = len(merges)
     hot = sorted((p for p, n in counts.items() if n / total >= TOUCH_SHARE_THRESHOLD),
                  key=lambda p: (-counts[p], p))
     rows: list[HotFile] = []
     for path in hot:
-        folders = {_top_folder(o) for m in merges if path in m for o in m if o != path}
+        folders = {_top_folder(o, bases) for m in merges if path in m for o in m if o != path}
         rows.append({"path": path, "merges": counts[path],
                      "touch_share": round(counts[path] / total, 4),
                      "generated": path in generated, "fan_in": len(folders)})
@@ -177,7 +197,7 @@ def concurrency_block(repo_root: Path, scope: Scope | None, history_window: str 
     except _GitFailed as e:
         return {"available": False, "reason": str(e)}
     total, touches = len(merges), sum(counts.values())
-    hot = _hot(merges, counts, generated)
+    hot = _hot(merges, counts, generated, _bases(top, repo_root, scope))
     return {
         "available": True,
         "window": label,

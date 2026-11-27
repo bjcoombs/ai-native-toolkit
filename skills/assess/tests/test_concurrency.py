@@ -261,3 +261,16 @@ def test_a_later_git_failure_reads_git_failed(registry_repo: Path,
     assert block["available"] is False and block["reason"].startswith("git_failed: ")
     reduced = counts_only_scans({"concurrency": block})["concurrency"]
     assert reduced == {"available": False, "reason": "git_failed"}
+
+
+def test_fan_in_counts_folders_below_the_measured_root(tmp_path: Path) -> None:
+    r = _init(tmp_path)
+    for i in range(12):
+        _commit(r, {f"pkg/feature{i}/main.py": f"x = {i}\n", "pkg/registry.py": f"N = {i}\n"},
+                T0 + i * DAY)
+    at_top = _ok(scan_concurrency(r, None, None))
+    below = _ok(scan_concurrency(r / "pkg", None, None))
+    scope, _, _ = resolve_scope(r, ["pkg"])
+    scoped = _ok(scan_concurrency(r, scope, None))
+    assert at_top["max_fan_in"] == 1  # every other file is under pkg/
+    assert below["max_fan_in"] == scoped["max_fan_in"] == 12
