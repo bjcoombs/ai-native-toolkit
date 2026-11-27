@@ -22,7 +22,7 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   An entry's optional ``sub_items`` (#1263: the report's lettered sub-actions, each
   ``{label, action, done_when}`` with an optional ``first_step`` and ``scope_fence``) each
   follow their parent as one more item: the same ``rank``, a ``label`` (``2a``: the entry's
-  rank, then the label with any leading number dropped), the title ``2a. <action>``, and a body that names the parent action and takes the parent's finding,
+  rank, then only the label's letters), the title ``2a. <action>``, and a body that names the parent action and takes the parent's finding,
   scope fence and Context unless the sub-item sets its own. The table keeps one row per
   entry; a filed sub-item's reference goes in its parent's Issue cell.
 - ``readiness`` prints the PR summary's Readiness value: ``headline.lines`` of
@@ -249,8 +249,8 @@ def sub_items(entry: Entry) -> list[Entry]:
 
 
 def _norm_label(sub: Entry) -> str:
-    """The letter part of a label: ``a`` from ``a``, ``2a``, ``2a.`` or ``a)``; ``""`` when none is left."""
-    return "".join(_text(sub, "label").split()).lstrip("0123456789.").rstrip(".)")
+    """The letters of a label, lower-cased: ``a`` from ``a``, ``2a``, ``a.``, ``a)`` or ``(a)``; ``""`` with none."""
+    return re.sub(r"[^a-z]", "", _text(sub, "label").lower())
 
 
 def _sub_label(entry: Entry, sub: Entry) -> str:

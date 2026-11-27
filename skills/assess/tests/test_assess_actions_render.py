@@ -310,3 +310,10 @@ def test_a_sub_item_title_is_the_label_then_the_action() -> None:
     child = render.render_items([entry])[1]
     assert child["title"] == "2a. Pin ruff"  # never "22a": the label already carries the rank
     assert child["body"].count("2a") == 1 and "**Sub-action 2a of action 2:** Run ruff" in child["body"]
+
+
+@pytest.mark.parametrize("label", ["(a)", "a)", "a.", "2a."])
+def test_only_the_letters_of_a_label_are_kept(label: str) -> None:
+    entry = {"rank": 2, "action": "p", "done_when": "d", "scope_fence": "s",
+             "sub_items": [{"label": label, "action": "x", "done_when": "d"}]}
+    assert render.render_items([entry])[1]["title"] == "2a. x"

@@ -61,7 +61,7 @@ The report's lettered sub-actions (`2a. <change> - Done when: <criterion>`, writ
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `label` | string | The letter, `a`, `b`, ..., unique within the entry. The rendered reference is the parent's `rank` plus the label (`2a`); a leading number and a trailing `.` or `)` are dropped and the parent's rank put in front, so `2a` under rank 3 renders `3a`. |
+| `label` | string | The letter, `a`, `b`, ..., unique within the entry. The rendered reference is the parent's `rank` plus the label (`2a`); only the label's letters are kept, lower-cased, and the parent's rank put in front, so `2a` under rank 3 renders `3a` and `(a)` renders `3a`. A label with no letters is skipped with a warning. |
 | `action` | string | The sub-action's directive. |
 | `done_when` | string | Its own exit criterion, in the same form as the entry's. |
 | `first_step` | string, optional | Its own first step. The parent's first step is not inherited: it belongs to the parent's change. |
