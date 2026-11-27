@@ -374,10 +374,16 @@ def _runs_agent(signs: _Signs, rel: str, body: str) -> bool:
     return bool(signs.workflow(rel, body, frozenset({rel}))[0])
 
 
+def _calls_remote_agent(signs: _Signs, rel: str, body: str) -> bool:
+    """Whether ``body`` (one job of ``rel``) calls an agent-named reusable workflow in another
+    repository, which is never read."""
+    return signs.workflow(rel, body, frozenset({rel}))[2]
+
+
 def scan_agent_jobs(repo_root: Path) -> tuple[list[AgentJob], int]:
     """Every committed job that runs an agent, with its effective token scope (#849,
-    ``lib.agents.agent_job_scope``), and the count of workflows with no agent job found that call
-    an agent-named reusable workflow in another repository (not read). Any trigger counts; a
+    ``lib.agents.agent_job_scope``), and the count of jobs that call an agent-named reusable
+    workflow in another repository (not read) under a scope that is not read-only. Any trigger counts; a
     workflow whose only event is ``workflow_call`` is read through its caller's job instead."""
     repo = repo_root.resolve()
     files = repo_files(repo)
@@ -397,9 +403,10 @@ def scan_agent_jobs(repo_root: Path) -> tuple[list[AgentJob], int]:
         text = read_config(repo, rel)
         if set(workflow_events(text) or []) == {"workflow_call"}:
             continue
-        found = workflow_jobs(rel, text, partial(_runs_agent, signs, rel), signs.read)
-        jobs += found
-        unread += not found and signs.workflow(rel, text, frozenset({rel}))[2]
+        unsettled: list[str] = []
+        jobs += workflow_jobs(rel, text, partial(_runs_agent, signs, rel), signs.read,
+                              remote_of=partial(_calls_remote_agent, signs, rel), unsettled=unsettled)
+        unread += len(unsettled)
     return sorted(jobs, key=lambda j: (j["path"], j["job"])), unread
 
 

@@ -657,3 +657,17 @@ jobs:
     summary = _summary(repo)
     assert summary["agent_jobs_least_privilege_reason"] == "agent_workflows_unread"
     assert summary["agent_job_write_access_reason"] == "agent_workflows_unread"
+
+
+def test_a_remote_agent_job_beside_a_local_one_is_not_dropped(git_repo) -> None:
+    remote = "    uses: someorg/agents/.github/workflows/claude-fix.yml@v1\n"
+    local = ON_ISSUES + "permissions:\n  contents: read\n" + AGENT_STEPS
+    repo = _repo(git_repo, {".github/workflows/x.yml": local + "  fix:\n    permissions:\n"
+                            "      contents: write\n" + remote})
+    summary = _summary(repo)
+    assert summary["agent_jobs_least_privilege"] is None
+    assert summary["agent_jobs_least_privilege_reason"] == "agent_workflows_unread"
+    # under a read-only caller scope the remote job is read-only too: the caller caps it
+    repo = _repo(git_repo, {".github/workflows/x.yml": local + "  fix:\n" + remote})
+    assert [(j["job"], j["scope"]) for j in _jobs(repo)] == [("agent", "read_only"), ("fix", "read_only")]
+    assert _summary(repo)["agent_jobs_least_privilege"] is True

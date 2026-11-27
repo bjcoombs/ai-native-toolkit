@@ -146,13 +146,17 @@ def _worst(scopes: list[Scope]) -> Scope:
 
 
 def workflow_jobs(rel: str, text: str, signs_of: SignsOf, read_local: ReadLocal | None = None,
-                  inherited: Scope | None = None, seen: frozenset[str] = frozenset()) -> list[AgentJob]:
+                  inherited: Scope | None = None, seen: frozenset[str] = frozenset(),
+                  remote_of: SignsOf | None = None, unsettled: list[str] | None = None) -> list[AgentJob]:
     """The agent jobs of one GitHub Actions workflow; ``signs_of`` says whether a job's text
     runs an agent (``lib.agents.agent_ops`` follows local actions and reusable workflows).
 
     A job that calls a local reusable workflow (``uses: ./.github/workflows/x.yml``, read through
     ``read_local``) takes the worst scope of that workflow's agent jobs, each capped by the
-    caller's (``capped``); ``inherited`` is the caller's scope while reading a called workflow."""
+    caller's (``capped``); ``inherited`` is the caller's scope while reading a called workflow.
+    A job that ``remote_of`` says calls an agent-named reusable workflow in another repository is
+    an agent job read ``read_only`` when its own scope is read-only (the caller caps the callee);
+    otherwise its name goes to ``unsettled``, since the called jobs cannot be read."""
     lines = text.splitlines()
     tree = _tree(text)
     top = _top(tree)
@@ -171,10 +175,16 @@ def workflow_jobs(rel: str, text: str, signs_of: SignsOf, read_local: ReadLocal 
     for job in jobs:
         span = tree.subtree(job)
         body = lines[span.start:span.stop]
-        if not signs_of("\n".join(body)):
-            continue
         name = tree.lines[job].key
         scope, writes = scopes[job]
+        if not signs_of("\n".join(body)):
+            if remote_of is not None and remote_of("\n".join(body)):
+                if scope == READ_ONLY:
+                    found.append(AgentJob(path=rel, job=name, scope=READ_ONLY, write_scopes=[],
+                                          split=False, spend_cap=_spend_cap(body)))
+                elif unsettled is not None:
+                    unsettled.append(name)
+            continue
         uses = _child(tree, job, "uses")
         local = _LOCAL_WORKFLOW.match(tree.lines[uses].value) if uses is not None else None
         called = read_local(local.group(1)) if local and read_local and local.group(1) not in seen else None
@@ -188,7 +198,7 @@ def workflow_jobs(rel: str, text: str, signs_of: SignsOf, read_local: ReadLocal 
                     for other in jobs if other != job)
         found.append(AgentJob(path=rel, job=name, scope=scope, write_scopes=writes, split=split,
                               spend_cap=_spend_cap(body)))
-    if not found and signs_of(text):
+    if not found and not unsettled and signs_of(text):
         found.append(AgentJob(path=rel, job="", scope=UNREAD, write_scopes=[], split=False,
                               spend_cap=_spend_cap(lines)))
     return found
