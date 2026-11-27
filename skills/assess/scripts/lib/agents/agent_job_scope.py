@@ -28,7 +28,8 @@ read-only and moves writes into a separate job that acts on the agent's output.
 ``agent_jobs_read_only``, ``agent_jobs_least_privilege`` (every agent job ``read_only``) and
 ``agent_job_write_access`` (agent jobs with a write scope and no split, the hazard). Both
 signals are null with a sibling ``_reason``: ``no_agent_jobs`` with no agent job (or
-``agent_workflows_unread`` when only another repository's workflow may run one), and
+``agent_workflows_unread`` when only another repository's workflow may run one, or when no
+local job settles the reading and such a workflow may hold the write), and
 ``agent_job_scope_unread`` when no job settles the reading but one scope could not be read.
 Pure stdlib; never raises on malformed YAML. Tests: ``tests/test_agent_workflows.py``.
 """
@@ -176,6 +177,8 @@ def summarize(jobs: list[AgentJob], unread_workflows: int) -> dict[str, Any]:
             nulls["agent_jobs_least_privilege"] = "agent_workflows_unread"
         if unread and not exposed:
             nulls["agent_job_write_access"] = SCOPE_UNREAD
+        elif unread_workflows and not exposed:
+            nulls["agent_job_write_access"] = "agent_workflows_unread"
     for key, reason in nulls.items():
         summary[key] = None
         summary[f"{key}_reason"] = reason

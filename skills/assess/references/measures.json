@@ -2240,7 +2240,7 @@
       "unknown_reasons": [
         {
           "code": "agent_workflows_unread",
-          "means": "No committed routine or agent workflow was found. But a scheduled or event-triggered workflow calls a reusable workflow from another repository, and its path names an agent.",
+          "means": "A scheduled or event-triggered workflow calls a reusable workflow from another repository, and its path names an agent. With no local routine or agent workflow, agent work is not measured. With no local agent job that settles it, the agent job scope is not measured either.",
           "next_step": "Nothing to change: this reads as not measured until that workflow can be read."
         },
         {
@@ -6605,7 +6605,7 @@
       "collector": "core.agent_ops",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": "no_agent_jobs or agent_workflows_unread as for agent_jobs_least_privilege; agent_job_scope_unread when none is found but an agent job's permissions could not be read"
+      "null_means": "no_agent_jobs when no committed job runs an agent; agent_workflows_unread or agent_job_scope_unread when none is found but another repository's agent workflow or an agent job's permissions could not be read"
     },
     {
       "path": "agent_ops.summary.agent_jobs_least_privilege",

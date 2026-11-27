@@ -592,3 +592,21 @@ def test_agent_jobs_survive_counts_only_without_the_job_id(git_repo) -> None:
     for key in ("agent_job_count", "agent_jobs_read_only", "agent_jobs_least_privilege",
                 "agent_job_write_access"):
         assert key in summary
+
+
+def test_an_unread_remote_agent_workflow_leaves_the_hazard_not_measured(git_repo) -> None:
+    repo = _repo(git_repo, {
+        ".github/workflows/a.yml": ON_ISSUES + "permissions:\n  contents: read\n" + AGENT_STEPS,
+        ".github/workflows/b.yml": """on:
+  schedule:
+    - cron: "0 0 * * *"
+permissions:
+  contents: write
+jobs:
+  triage:
+    uses: some-org/shared/.github/workflows/claude-triage.yml@v1
+"""})
+    summary = _summary(repo)
+    assert summary["agent_jobs_least_privilege"] is None
+    assert summary["agent_job_write_access"] is None
+    assert summary["agent_job_write_access_reason"] == "agent_workflows_unread"
