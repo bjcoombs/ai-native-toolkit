@@ -100,17 +100,32 @@ def test_three_ready_issues_map_one_to_one(tmp_path: Path) -> None:
     expected = [(i["number"], k, item) for i in queue["issues"] for k, item in enumerate(i["criteria"], 1)]
     assert [c.id for c in contract.criteria] == ["I%d-%d" % (n, k) for n, k, _ in expected]
     for crit, (number, _, item) in zip(contract.criteria, expected):
-        assert item in crit.action and "#%d" % number in crit.action
+        assert (item[4:] if item.startswith("[ ] ") else item) in crit.action and "#%d" % number in crit.action
         assert crit.tier == 1
     # The clarified-scope comment replaced issue 12's vague body criterion.
     assert "works well" not in text and "`make test-contract`" in text
     assert draft.is_draft(text) and contract.cls == "cli"
 
 
-def test_item_without_a_command_refuses_and_names_it() -> None:
-    queue = _queue([_issue(21, ["`make x` exits 0", "works well"])])
-    with pytest.raises(draft.DraftError, match=r"#21 item 2 names no command"):
-        draft.draft(queue, RUN_ID)
+def test_issue_with_an_unanchored_item_is_left_out_and_listed(tmp_path: Path) -> None:
+    issues = _backlog_issues() + [_issue(21, ["`make x` exits 0", "works well"])]
+    summary = _write(tmp_path, issues)
+    text = draft.contract_path(tmp_path, RUN_ID).read_text(encoding="utf-8")
+    ids = [c.id for c in freeze.parse_contract_text(text).criteria]
+    assert not any(i.startswith("I21-") for i in ids) and "I11-1" in ids
+    assert "- #21 Issue 21: item 2 names no command" in text
+    assert "- Not drafted #21 Issue 21: item 2 names no command" in summary
+    assert draft.check(text, _kill_test(tmp_path)) == []
+
+
+def test_task_list_boxes_are_dropped_so_ticking_one_changes_nothing(tmp_path: Path) -> None:
+    _write(tmp_path, _backlog_issues())
+    before = draft.contract_path(tmp_path, RUN_ID).read_bytes()
+    assert b"[ ]" not in before
+    ticked = _backlog_issues()
+    ticked[2]["body"] = ticked[2]["body"].replace("- [ ] `make lint`", "- [x] `make lint`")
+    assert _write(tmp_path, ticked).startswith("No change")
+    assert draft.contract_path(tmp_path, RUN_ID).read_bytes() == before
 
 
 def test_empty_queue_is_nothing_to_draft(tmp_path: Path) -> None:
@@ -298,6 +313,8 @@ def test_cli_write_refuses_bad_input(tmp_path: Path) -> None:
     base = ["write", "--queue", str(q), "--run-id", RUN_ID, "--contract-dir", str(tmp_path)]
     assert draft.main(base) == 2
     q.write_text(json.dumps({"issues": [{"number": 1, "criteria": ["vague"]}]}), encoding="utf-8")
+    assert draft.main(base) == 3, "no issue whose items all name a command: nothing to draft"
+    q.write_text(json.dumps({"issues": [{"number": "x", "criteria": []}]}), encoding="utf-8")
     assert draft.main(base) == 1
     assert draft.main(["check", "--run-id", "../x", "--contract-dir", str(tmp_path)]) == 2
 

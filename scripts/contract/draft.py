@@ -30,12 +30,15 @@ Output is deterministic: an unchanged queue rewrites both files byte for byte.
 by issue, the criteria added, removed and reworded; the sweep puts it in the
 draft pull request so the maintainer sees what a refresh changed.
 
-An item with no code span names no command, so `write` refuses the queue and
-names the item: the issue needs a checkable criterion before it can be
-drafted (definition of ready, `criteria-checkable`).
+An item with no code span names no command. Its issue is left out of the
+draft whole, never in part, and listed under "Not drafted" in the draft and
+the change summary, so one prose criterion never blocks the rest of the queue.
+A leading task-list box (`[ ]`, `[x]`) is dropped from each item, so ticking
+it on the issue changes nothing.
 
 Exit codes: 0 written or check passed; 1 refused or check failed; 2 usage or
-unreadable input; 3 the queue is empty, so there is nothing to draft.
+unreadable input; 3 nothing to draft (an empty queue, or no issue whose items
+all name a command).
 
 Stdlib only (`tests/test_plugin_contract.py`, `test_gate_code_is_stdlib_only`).
 """
@@ -56,6 +59,7 @@ from contract_location import HELP_DEFAULT, resolve_contract_dir  # noqa: E402
 DRAFT_MARKER = "<!-- contract-draft -->"
 DRAFT_VERSION = 1
 _CODE_SPAN = re.compile(r"`([^`]+)`")
+_TASK_BOX = re.compile(r"^\[[ xX]\]\s*")
 OBSERVATION = (
     "Each command or test the action names gives the result the criterion states "
     "(exit code, printed value or passing test). A missing command, a missing test "
@@ -65,6 +69,10 @@ OBSERVATION = (
 
 class DraftError(ValueError):
     """The queue cannot be drafted; the message names why."""
+
+
+class NothingToDraft(DraftError):
+    """The queue holds no issue the draft can include (exit 3, not a failure)."""
 
 
 def _validate_run_id(run_id: str) -> None:
@@ -104,35 +112,45 @@ def _queue_issues(queue: Dict[str, Any]) -> List[Dict[str, Any]]:
     return sorted(out, key=lambda i: int(i["number"]))
 
 
-def build_entries(queue: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """One kill-test entry per Success Criteria item, in issue then item order.
+def _issue_entries(issue: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """(entries, reason not drafted) for one queued issue: all of its items, or none."""
+    number = int(issue["number"])
+    if not issue["criteria"]:
+        return [], "no Success Criteria items"
+    entries: List[Dict[str, Any]] = []
+    for index, raw in enumerate(issue["criteria"], start=1):
+        text = _TASK_BOX.sub("", _one_line(raw), count=1)
+        commands = _CODE_SPAN.findall(text)
+        if not commands:
+            return [], "item %d names no command (no code span): %s" % (index, text)
+        entries.append({
+            "id": "I%d-%d" % (number, index),
+            "issue": number,
+            "item": index,
+            "criterion": text,
+            "commands": commands,
+            "passed_against_null": None,
+        })
+    return entries, None
 
-    Raises `DraftError` naming every item that has no command, and every
-    queued issue with no Success Criteria items.
+
+def build_entries(queue: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """(entries, not drafted): one kill-test entry per Success Criteria item.
+
+    An issue whose items are not all checkable by a named command is left out
+    whole, never in part, and listed with the reason; one such issue never
+    blocks the draft for the rest of the queue.
     """
     entries: List[Dict[str, Any]] = []
-    problems: List[str] = []
+    skipped: List[Dict[str, Any]] = []
     for issue in _queue_issues(queue):
-        number = int(issue["number"])
-        if not issue["criteria"]:
-            problems.append("#%d has no Success Criteria items" % number)
-        for index, raw in enumerate(issue["criteria"], start=1):
-            text = _one_line(raw)
-            commands = _CODE_SPAN.findall(text)
-            if not commands:
-                problems.append("#%d item %d names no command (no code span): %s" % (number, index, text))
-                continue
-            entries.append({
-                "id": "I%d-%d" % (number, index),
-                "issue": number,
-                "item": index,
-                "criterion": text,
-                "commands": commands,
-                "passed_against_null": None,
-            })
-    if problems:
-        raise DraftError("cannot draft: " + "; ".join(problems))
-    return entries
+        found, reason = _issue_entries(issue)
+        if reason is None:
+            entries += found
+        else:
+            skipped.append({"number": int(issue["number"]), "title": _one_line(issue.get("title", "")),
+                            "reason": reason})
+    return entries, skipped
 
 
 def _action(entry: Dict[str, Any]) -> str:
@@ -140,9 +158,11 @@ def _action(entry: Dict[str, Any]) -> str:
 
 
 def render_contract(run_id: str, repository: str, issues: List[Dict[str, Any]],
-                    entries: List[Dict[str, Any]]) -> str:
+                    entries: List[Dict[str, Any]], skipped: List[Dict[str, Any]]) -> str:
     """The draft contract text. Deterministic: no clock, no environment."""
-    titles = {int(i["number"]): _one_line(i.get("title", "")) for i in issues}
+    left_out = {int(i["number"]) for i in skipped}
+    titles = {int(i["number"]): _one_line(i.get("title", "")) for i in issues
+              if int(i["number"]) not in left_out}
     lines = [
         DRAFT_MARKER,
         "# Acceptance contract draft: %s" % run_id,
@@ -164,6 +184,10 @@ def render_contract(run_id: str, repository: str, issues: List[Dict[str, Any]],
     for number in sorted(titles):
         ids = ", ".join(e["id"] for e in entries if e["issue"] == number)
         lines.append("| #%d | %s | %s |" % (number, titles[number].replace("|", "/"), ids))
+    if skipped:
+        lines += ["", "Not drafted: each issue below has a Success Criteria item with no command, so none "
+                  "of its items is in this draft. Name the command in the issue to include it."]
+        lines += ["- #%d %s: %s" % (i["number"], i["title"], i["reason"]) for i in skipped]
     lines += ["", "```yaml", "class: cli", "criteria:"]
     for entry in entries:
         lines += [
@@ -177,7 +201,7 @@ def render_contract(run_id: str, repository: str, issues: List[Dict[str, Any]],
 
 
 def render_kill_test(run_id: str, repository: str, issues: List[Dict[str, Any]],
-                     entries: List[Dict[str, Any]], contract_text: str) -> str:
+                     entries: List[Dict[str, Any]], skipped: List[Dict[str, Any]], contract_text: str) -> str:
     doc = {
         "contract_sha256": hashlib.sha256(contract_text.encode("utf-8")).hexdigest(),
         "draft": {
@@ -185,6 +209,7 @@ def render_kill_test(run_id: str, repository: str, issues: List[Dict[str, Any]],
             "run_id": run_id,
             "repository": repository,
             "issues": [{"number": int(i["number"]), "title": _one_line(i.get("title", ""))} for i in issues],
+            "not_drafted": skipped,
         },
         "results": entries,
     }
@@ -196,12 +221,15 @@ def draft(queue: Dict[str, Any], run_id: str) -> Tuple[str, str]:
     _validate_run_id(run_id)
     issues = _queue_issues(queue)
     if not issues:
-        raise DraftError("the ready queue is empty: nothing to draft")
-    entries = build_entries(queue)
+        raise NothingToDraft("the ready queue is empty: nothing to draft")
+    entries, skipped = build_entries(queue)
+    if not entries:
+        raise NothingToDraft("no queued issue has Success Criteria items that each name a command: %s"
+                             % "; ".join("#%d %s" % (i["number"], i["reason"]) for i in skipped))
     repository = str(queue.get("repository") or "")
-    contract = render_contract(run_id, repository, issues, entries)
+    contract = render_contract(run_id, repository, issues, entries, skipped)
     freeze.parse_contract_text(contract)  # the draft must parse as a contract
-    return contract, render_kill_test(run_id, repository, issues, entries, contract)
+    return contract, render_kill_test(run_id, repository, issues, entries, skipped, contract)
 
 
 # --------------------------------------------------------------------------- #
@@ -267,11 +295,13 @@ def change_summary(old: Optional[Dict[str, Any]], new: Dict[str, Any]) -> str:
     """Markdown naming, by issue, the criteria a refresh added, removed or reworded."""
     before, after = _by_issue(old), _by_issue(new)
     titles = {**_titles(old), **_titles(new)}
+    not_drafted = ["- Not drafted #%d %s: %s" % (i["number"], i["title"], i["reason"])
+                   for i in (new.get("draft") or {}).get("not_drafted") or []]
     if old is None:
         head = "New contract draft: %d criteria from %d issues." % (
             sum(len(v) for v in after.values()), len(after))
     elif before == after:
-        return "No change: the draft already matches the ready queue.\n"
+        return "\n".join(["No change: the draft already matches the ready queue."] + not_drafted) + "\n"
     else:
         head = "The ready queue changed since the last draft."
     lines = [head, ""]
@@ -291,7 +321,7 @@ def change_summary(old: Optional[Dict[str, Any]], new: Dict[str, Any]) -> str:
                     parts.append("%s %s" % (verb, ", ".join(ids)))
             if parts:
                 lines.append("- Changed %s: %s" % (label, "; ".join(parts)))
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines + not_drafted) + "\n"
 
 
 # --------------------------------------------------------------------------- #
@@ -324,11 +354,11 @@ def _cmd_write(args: argparse.Namespace, contract_dir: Path) -> int:
     if queue is None:
         print("draft: the queue file is missing or not a JSON object: %s" % args.queue, file=sys.stderr)
         return 2
-    if not queue.get("issues"):
-        print("draft: the ready queue is empty: nothing to draft", file=sys.stderr)
-        return 3
     try:
         summary = write(queue, args.run_id, contract_dir)
+    except NothingToDraft as exc:
+        print("draft: %s" % exc, file=sys.stderr)
+        return 3
     except DraftError as exc:
         print("draft: REFUSED - %s" % exc, file=sys.stderr)
         return 1
