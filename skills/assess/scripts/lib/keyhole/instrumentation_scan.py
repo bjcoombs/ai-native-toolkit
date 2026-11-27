@@ -193,7 +193,8 @@ CODE_RULES: tuple[CodeRule, ...] = (
     # Launch lines that instrument a process with no import (#922).
     _rule("telemetry launcher", LAUNCHER_FILES, _LINE + r"(?:\bopentelemetry-instrument\b"
           r"|\bddtrace-run\b|\bnewrelic-admin[ \t]+run-program\b"
-          r"|(?:--require|--import|-r)[ \t=]+['\"]?(?:@opentelemetry/auto-instrumentations-node"
+          # A short -r only after node on the line: `cp -r newrelic dist` is no launcher.
+          r"|(?:--require|--import|\bnode\b[^\n]*?[ \t]-r)[ \t=]+['\"]?(?:@opentelemetry/auto-instrumentations-node"
           r"|dd-trace/init|newrelic(?=['\"\s]|$)|elastic-apm-node/start))", "launcher"),
     _rule("JVM telemetry agent", LAUNCHER_FILES, _LINE + r"-javaagent:(?:[^\s'\"]*[/\\])?"
           # The jar's own name, so a path such as /opt/hotelbooking/jacoco.jar is not read.
