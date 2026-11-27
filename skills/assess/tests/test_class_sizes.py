@@ -156,6 +156,7 @@ def test_elixir_doc_lines_counts_doc_heredocs_and_leaves_code() -> None:
     assert elixir_doc_lines(text) == 12
     assert elixir_doc_lines("def a, do: 1\n") == 0
     assert elixir_doc_lines('  @doc """\n  open to the end\n') == 2
+    assert elixir_doc_lines('  @shortdoc """\n  Runs it.\n  """\n') == 3
 
 
 @pytest.mark.parametrize("name, rel", [

@@ -18,10 +18,12 @@ A file whose header marks it generated (``has_generated_header``: Pigeon's
 ``generated`` whatever its name, so a run with ``--include-artifacts`` keeps
 it out of the source percentile and ``generated.files_scored`` counts it. An
 Elixir file (``.ex``, ``.exs``) loses the non-blank lines of its
-``@moduledoc``, ``@doc`` and ``@typedoc`` heredocs, opener and closer
-included (``elixir_doc_lines``), so inline documentation does not count as
-length; the code around them still counts. An unreadable file keeps its
-name class and its line count. Without ``root`` the rows are used as given.
+``@moduledoc``, ``@doc``, ``@typedoc`` and ``@shortdoc`` heredocs, opener
+and closer included (``elixir_doc_lines``), so inline documentation does not
+count as length; the code around them still counts. lizard has no Elixir
+reader, so in practice the subtraction moves the full run's sidecar (scc
+lines), not the headless block. An unreadable file keeps its name class and
+its line count. Without ``root`` the rows are used as given.
 
 Both producers call it: the full run's sidecar (``complexity-treemap.py``
 ``write_stats``) and the headless block (``lib.run.headless_layers.stats_summary``).
@@ -64,7 +66,7 @@ ELIXIR_SUFFIXES = frozenset({".ex", ".exs"})
 # heredoc and holds nothing else on the line. `@doc false` and a one-line
 # `@doc "..."` are left alone.
 _ELIXIR_DOC_OPEN = re.compile(
-    r"""^\s*@(?:moduledoc|doc|typedoc)\s*\(?\s*(?:~[sS])?("{3}|'{3})\s*$""")
+    r"""^\s*@(?:moduledoc|doc|typedoc|shortdoc)\s*\(?\s*(?:~[sS])?("{3}|'{3})\s*$""")
 
 
 def elixir_doc_lines(text: str) -> int:
