@@ -29,7 +29,7 @@ Two badge lines lead the block when they apply (#828), so neither is ever netted
   condition never holds a Step gate``, when the level result lists ``declined``. The owner and
   reason come from the decline records ``headline`` is given (``decline_markers.decline_badge``);
   with none the line keeps the count only.
-- ``HAZARD: <id> holds the <gate> gate. Fix: <fix>`` for each hazard the level result lists, or
+- ``HAZARD: <id> undermines the <gate> gate. Fix: <fix>`` for each hazard the level result lists, or
   ``HAZARD: <id>. Fix: <fix>`` for one that blocks no gate.
 
 ``summary`` is the one-line form the badge and the ``log.md`` entry carry. It leads with what
@@ -290,7 +290,7 @@ def badge_lines(level: LevelResult, declines: Sequence[DeclineRecord] = ()) -> l
                      " · a declined condition never holds a Step gate")
     for hazard in level.get("hazards", []):
         gate = hazard.get("gate")
-        held = f" holds the {GATE_NOUN.get(gate, gate)} gate" if gate else ""
+        held = f" undermines the {GATE_NOUN.get(gate, gate)} gate" if gate else ""
         lines.append(f"HAZARD: {hazard['id']}{held}. Fix: {hazard['fix'] or 'no fix recorded in the check manifest'}")
     return lines
 

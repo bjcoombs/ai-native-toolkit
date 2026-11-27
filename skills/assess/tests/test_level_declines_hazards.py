@@ -28,7 +28,7 @@ INSTRUCTIONS = "layer-0-instructions.1"
 
 
 def _record(**over: Any) -> DeclineRecord:
-    record: DeclineRecord = {"source": AGENTS_MARKER, "conditions": [], "declined_by": "maintainer-a",
+    record: DeclineRecord = {"source": AGENTS_MARKER, "conditions": None, "declined_by": "maintainer-a",
                              "declined_at": "2026-11-20", "version": "3.0.0", "reason": "No agent contributions."}
     record.update(over)  # type: ignore[typeddict-item]
     return record
@@ -67,7 +67,7 @@ def test_the_marker_records_who_when_version_reason_and_scope(tmp_path: Path) ->
 @pytest.mark.parametrize("payload", ["", "not json", "[1, 2]"])
 def test_a_present_marker_without_provenance_still_declines(tmp_path: Path, payload: str) -> None:
     assert read_agent_decline(_marker(tmp_path, payload)) == {
-        "source": AGENTS_MARKER, "conditions": [], "declined_by": None, "declined_at": None,
+        "source": AGENTS_MARKER, "conditions": None, "declined_by": None, "declined_at": None,
         "version": None, "reason": None}
 
 
@@ -84,6 +84,14 @@ def test_counts_only_keeps_the_scope_and_drops_the_owner_and_reason(tmp_path: Pa
     (kept,) = counts_only({"owner_exclusions": owner_exclusions_block(tmp_path)})["owner_exclusions"]["declines"]
     assert kept["conditions"] == [INSTRUCTIONS] and kept["declined_at"] == "2026-11-20"
     assert "maintainer-a" not in json.dumps(kept) and "Private words." not in json.dumps(kept)
+
+
+@pytest.mark.parametrize("written", [INSTRUCTIONS, [123], [], {"a": 1}])
+def test_a_malformed_scope_never_widens_to_every_agent_condition(tmp_path: Path, written: object) -> None:
+    record = read_agent_decline(_marker(tmp_path, {"conditions": written}))
+    assert record is not None and record["conditions"] == []
+    result = lt.level_result(lt.default_model(), HELD, declines=[record])
+    assert "declined" not in result and result["step"] == 3
 
 
 # --- declined in the level result ---------------------------------------------------------
@@ -136,6 +144,7 @@ def test_a_condition_that_requires_a_declined_one_reads_declined() -> None:
     result = lt.level_result(model, {"doc_staleness": {"summary": {"stale_pct": 0}}},
                              declines=[_record(conditions=["a.1"])])
     assert (_cond(result, "b.1")["state"], _cond(result, "b.1")["reason"]) == ("declined", "requires:a.1")
+    assert _cond(result, "b.1")["counted"] is False
     assert result["tally"]["met"] == 0 and result["declined"] == [{"id": "a.1", "source": AGENTS_MARKER}]
 
 
@@ -246,7 +255,50 @@ def test_the_headline_shows_declined_with_its_owner_and_reason_and_the_step_stay
 
 def test_the_headline_lists_each_hazard_with_its_gate_and_fix() -> None:
     level = lt.level_result(_hazard_model(), _signals(10))
-    assert badge_lines(level) == ["HAZARD: skip.1 holds the CI runs tests gate. Fix: no fix recorded in the check manifest"]
+    assert badge_lines(level) == ["HAZARD: skip.1 undermines the CI runs tests gate. Fix: no fix recorded in the check manifest"]
     assert gate_note(level["next_step"]["blockers"][0]) == " (held by the hazard skip.1; see HAZARD)"  # type: ignore[index]
     assert gate_note({"kind": "gate", "gate": "instructions", "state": "declined"}).startswith(" (declined")
     assert badge_lines(lt.level_result(_hazard_model(), _signals(90))) == []
+
+
+def test_a_declined_need_never_hides_a_met_hazard() -> None:
+    model = parse_levels({"version": "t-1", "rows": [
+        {"id": "a", "title": "a", "scope": "team", "aggregation": "min",
+         "levels": [{"level": 1, "truth": ["agent_context"], "criteria": [{"signal": DOC, "op": "lte", "value": 50}]}]},
+        {"id": "h", "title": "h", "scope": "team", "aggregation": "min",
+         "levels": [{"level": 1, "truth": ["agent_runtime"], "polarity": "hazard", "requires": ["a.1"],
+                     "criteria": [{"signal": DOC, "op": "lte", "value": 50}]}]}]})
+    result = lt.level_result(model, {"doc_staleness": {"summary": {"stale_pct": 0}}}, declines=[_record()])
+    assert _cond(result, "a.1")["state"] == "declined" and _cond(result, "h.1")["state"] == "met"
+    assert result["hazards"] == [{"id": "h.1", "fix": ""}]
+
+
+def test_a_pack_hazard_must_block_a_gate_of_the_base_model() -> None:
+    from lib.pack_layering import layer_packs
+    from lib.packs import PackError
+    base = _hazard_model(blocks=None)
+    pack_row = {"id": "p", "title": "p", "scope": "team", "aggregation": {"rule": "min", "share": 1},
+                "levels": [{"level": 1, "truth": ["behaviour"], "polarity": "hazard", "blocks": "no_such_gate",
+                            "criteria": [{"signal": DOC, "op": "lte", "value": 50}]}]}
+    with pytest.raises(PackError, match="'blocks' names no Step gate"):
+        layer_packs(base, "default", [{"name": "team", "rows": [pack_row]}])  # type: ignore[list-item]
+    pack_row["levels"][0]["blocks"] = "ci_runs_tests"  # type: ignore[index]
+    layered = layer_packs(base, "default", [{"name": "team", "rows": [pack_row]}])  # type: ignore[list-item]
+    assert lt.level_result(layered, _signals(10))["step"] == 2
+
+
+def test_the_top_card_words_a_hazard_and_a_decline_as_what_they_are() -> None:
+    from lib.top_card import _gap, start_lines
+    hazard = lt.level_result(_hazard_model(), _signals(10))
+    blocker = hazard["next_step"]["blockers"][0]  # type: ignore[index]
+    assert _gap(blocker) == "the hazard skip.1 undermines the CI runs tests gate"
+    assert start_lines(hazard, None) == ("Start here: Clear the hazard skip.1.",
+                                         "Done when: the next `/assess` run no longer reads the hazard skip.1.")
+    with_fix = {**hazard, "hazards": [{"id": "skip.1", "fix": "Remove the label rule.", "gate": "ci_runs_tests"}]}
+    assert start_lines(with_fix, None)[0] == "Start here: Clear the hazard skip.1: remove the label rule."
+    declined = lt.level_result(lt.default_model(), HELD, declines=[_record()])
+    gate = declined["next_step"]["blockers"][0]  # type: ignore[index]
+    assert _gap(gate) == f"the repository declined {INSTRUCTIONS}, so the instruction file gate cannot hold"
+    start, done = start_lines(declined, None)
+    assert "agents-declined.json" in start and "Commit an instruction file" not in start
+    assert done.startswith("Done when: the decline is lifted")

@@ -164,7 +164,7 @@ class DeclineRecord(TypedDict):
     """
 
     source: str  # "agents_marker": .assess/agents-declined.json
-    conditions: list[str]  # condition ids as declared; []: every positive agent_context or agent_runtime one
+    conditions: list[str] | None  # condition ids as declared; None: every positive agent_context or agent_runtime one
     declined_by: str | None  # dropped from counts-only output
     declined_at: str | None
     version: str | None  # the plugin version recorded with the record

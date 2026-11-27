@@ -54,7 +54,8 @@ decided not to enable agents: `{declined_by, declined_at, plugin_version, reason
 `read_agent_decline(assess_dir)` returns it as a `DeclineRecord` (`source: "agents_marker"`,
 `level_result_types.py`), or None when the file is absent, so absence never declines anything. An
 empty or non-JSON file still declines, with no provenance. `conditions` lists condition ids; left
-out or empty, the record covers every positive `agent_context` or `agent_runtime` condition
+out (None), the record covers every positive `agent_context` or `agent_runtime` condition; written,
+it covers only the string ids it holds, so a malformed value never widens the scope
 (`level_tally.declined_ids`). `lib/owner_exclusions.py` carries the record in the run context's
 `owner_exclusions` block as `declines`, and `level_tally` reads each covered condition as
 `declined`: never met, never counted, never holding a Step gate. A `.no-<tool>` marker never
@@ -275,8 +276,9 @@ def read_agent_decline(assess_dir: Path) -> DeclineRecord | None:
     """The agent-level decline record in ``<assess_dir>/agents-declined.json``; None when the
     file is absent, so absence never declines anything. A present file that is empty or not a
     JSON object still declines, with no provenance and the default scope, as a legacy tool
-    marker does. ``conditions`` keeps only the string ids written; none means the default scope
-    (every positive ``agent_context`` or ``agent_runtime`` condition, ``level_tally``)."""
+    marker does. ``conditions`` is None when the key is absent: the default scope (every positive
+    ``agent_context`` or ``agent_runtime`` condition, ``level_tally``). When written, it keeps only
+    the string ids, so a value that is not a list, or a list with no string id, covers nothing."""
     path = assess_dir / AGENT_DECLINE
     try:
         if not path.is_file():
@@ -290,8 +292,12 @@ def read_agent_decline(assess_dir: Path) -> DeclineRecord | None:
         data = None
     data = data if isinstance(data, dict) else {}
     listed = data.get("conditions")
-    conditions = [c for c in listed if isinstance(c, str) and c.strip()] if isinstance(listed, list) else []
-    return {"source": AGENTS_MARKER, "conditions": list(dict.fromkeys(conditions)),
+    # absent: the default scope (None); written: only its string ids, so a malformed list covers
+    # fewer conditions, never every agent condition
+    conditions = (None if "conditions" not in data else
+                  list(dict.fromkeys(c for c in listed if isinstance(c, str) and c.strip()))
+                  if isinstance(listed, list) else [])
+    return {"source": AGENTS_MARKER, "conditions": conditions,
             "declined_by": _opt_str(data.get("declined_by")), "declined_at": _opt_str(data.get("declined_at")),
             "version": _opt_str(data.get("plugin_version")), "reason": _opt_str(data.get("reason"))}
 

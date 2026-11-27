@@ -22,6 +22,7 @@ Load errors (``PackError``), raised before any scan:
 - a ``requires`` naming a condition of a later pack (a pack row may require the base model or
   an earlier pack, never a later one), or a condition no source defines;
 - a pack row signal path ``validator`` rejects (``lib.scoring.levels.validate_paths``).
+- a pack hazard whose ``blocks`` names no gate of the base model's Steps (#828).
 
 ``pack_sources(model)`` lists the pack names a layered model holds rows from, in order;
 ``row_source(model, row_id)`` is one row's source, or None for an unlayered model.
@@ -33,6 +34,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from lib.scoring.levels import LevelsError, MaturityModel, PathValidator, Row, condition_id, validate_paths
+from lib.scoring.levels_fields import check_hazard_gates
 from lib.packs import Pack, PackError
 
 __all__ = ["layer_packs", "pack_sources", "row_source"]
@@ -79,11 +81,12 @@ def layer_packs(base: MaturityModel, base_source: str, packs: Sequence[Pack],
         later = {cid: p["name"] for p in packs[index + 1:] for cid in _conditions(p["rows"])}
         defined |= _conditions(pack["rows"])
         _check_requires(pack, defined, later)
-        if validator is not None:
-            try:
+        try:
+            if validator is not None:
                 validate_paths(pack["rows"], validator)
-            except LevelsError as exc:
-                raise PackError(f"pack {pack['name']!r}: {exc}") from exc
+            check_hazard_gates(pack["rows"], base.get("steps"))  # a pack hazard's blocks names a base gate (#828)
+        except LevelsError as exc:
+            raise PackError(f"pack {pack['name']!r}: {exc}") from exc
         rows += [{**row, "source": pack["name"]} for row in pack["rows"]]
     layered: MaturityModel = {**base, "rows": rows}
     return layered
