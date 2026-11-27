@@ -395,3 +395,103 @@ def test_an_oversized_plan_writes_no_batch(tmp_path: Path, capsys: pytest.Captur
     assert _cli().main(["plan", str(out), "--exports", str(exports)]) == 2
     assert not list((out / "publish").glob("batch-*.json"))
     assert "nothing was planned" in capsys.readouterr().err
+
+
+# --- one length rule for target ids ----------------------------------------------------------
+
+
+def _system_id(length: int) -> str:
+    """A ``system`` target id of ``length`` characters (``system~system~2F`` is 16)."""
+    return target_doc_id("system", "system/" + "a" * (length - 16))
+
+
+@pytest.mark.parametrize("length", [17, 190, 198, 199, 200])
+def test_every_target_id_the_page_carries_is_one_the_page_and_planner_accept(length: int) -> None:
+    """The page, the planner and the read-back take one rule: at most 200 characters in all."""
+    target = _system_id(length)
+    assert len(target) == length and re.fullmatch(TARGET_ID_RE, target)
+    assert ps.strays({"targets": [{"doc_id": target, "version": 1, "data": {"step": 2}}]}) == \
+        {"count": 0, "collections": [], "targets": 1}
+
+
+def test_a_key_too_long_for_a_target_id_is_refused_by_both_rules() -> None:
+    with pytest.raises(PublishError):
+        _system_id(201)
+    assert not re.fullmatch(TARGET_ID_RE, "system~" + "a" * 194)
+    assert not re.fullmatch(TARGET_ID_RE, "system~") and not re.fullmatch(TARGET_ID_RE, "repo~a")
+
+
+def test_the_page_rule_agrees_with_the_python_rule_under_node() -> None:
+    if NODE is None:
+        pytest.skip("node is not on PATH")
+    ids = [_system_id(n) for n in (17, 199, 200)] + ["system~" + "a" * 194, "system~", "repo~a", "ownership~a.b"]
+    runner = ('const i = JSON.parse(require("node:fs").readFileSync(0, "utf8")); const r = new RegExp(i.re);'
+              'process.stdout.write(JSON.stringify(i.ids.map(function (x) { return r.test(x); })));')
+    done = subprocess.run([NODE, "-e", runner], input=json.dumps({"re": TARGET_ID_RE, "ids": ids}),
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", check=True, timeout=60)
+    assert json.loads(done.stdout) == [bool(re.fullmatch(TARGET_ID_RE, i)) for i in ids] == \
+        [True, True, True, False, False, False, False]
+
+
+# --- the recorded URL -----------------------------------------------------------------------
+
+
+def test_url_prints_the_recorded_artifact_url_and_exits_1_when_there_is_none(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    org = tmp_path / "history" / "grp"
+    assert _cli().main(["url", str(org)]) == 1
+    assert capsys.readouterr().out == ""
+    assert _cli().main(["record", str(org), "--url", "https://claude.ai/artifact/abc", "--run-id", "r1"]) == 0
+    capsys.readouterr()
+    assert _cli().main(["url", str(org)]) == 0
+    assert capsys.readouterr().out == "https://claude.ai/artifact/abc\n"
+
+
+def test_an_unreadable_registry_is_refused_by_name_and_left_as_it_was(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    org = tmp_path / "grp"
+    org.mkdir()
+    for text in ("{not json", '["a list"]', '{"url": 3}'):
+        (org / ps.REGISTRY_FILE).write_text(text, encoding="utf-8")
+        assert _cli().main(["record", str(org), "--url", "https://claude.ai/artifact/abc", "--run-id", "r"]) == 2
+        assert _cli().main(["url", str(org)]) == 2
+        assert "publish.json is not" in capsys.readouterr().err
+        assert (org / ps.REGISTRY_FILE).read_text(encoding="utf-8") == text
+    assert sorted(p.name for p in org.iterdir()) == [ps.REGISTRY_FILE]  # no temp file left behind
+
+
+# --- the skill's instructions match the step ------------------------------------------------
+
+SKILL_MD = SCRIPT.parents[1] / "SKILL.md"
+REFERENCES = SCRIPT.parents[1] / "references"
+
+
+def _publish_section() -> str:
+    text = SKILL_MD.read_text(encoding="utf-8")
+    found = re.search(r"^## Publish the fleet page \(opt-in\)\n(.*?)(?=^## )", text, re.S | re.M)
+    assert found is not None, "SKILL.md has no 'Publish the fleet page (opt-in)' section"
+    return found.group(1)
+
+
+def test_the_skill_names_every_planner_command_and_no_other() -> None:
+    named = set(re.findall(r"fleet_publish_plan\.py\" (\w+)", _publish_section()))
+    assert named == set(_cli().COMMANDS)
+
+
+def test_the_skill_pins_the_planned_contract_and_the_recorded_url_file() -> None:
+    section = _publish_section()
+    assert f"`contract` set to `{ps.CONTRACT}`" in section
+    assert f"`<history>/<org>/{ps.REGISTRY_FILE}`" in section
+    for step in ("Say who will see it", "A `--full` run is always refused", "Publish only when the user asks",
+                 "`ArtifactData`", "`batch`", "if_version", "artifact-capabilities", "fleet_targets_import.py",
+                 "fleet.py --targets"):
+        assert step in section, step
+    assert "<!-- chat-skip:start -->" in section and "<!-- chat-skip:end -->" in section
+
+
+def test_the_references_describe_the_recorded_url_file_and_the_contract() -> None:
+    history = (REFERENCES / "history.md").read_text(encoding="utf-8")
+    assert f"`<history>/<org>/{ps.REGISTRY_FILE}`" in history
+    publish = (REFERENCES / "publish.md").read_text(encoding="utf-8")
+    assert f"`{ps.CONTRACT}`" in publish and f"`{ps.REGISTRY_FILE}`" in publish
+    assert "up to 190" not in publish  # one length rule for target ids
