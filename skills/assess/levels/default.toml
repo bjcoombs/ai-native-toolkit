@@ -357,8 +357,9 @@
 #   agent_ops.summary.agent_instruction_rewrite: agent jobs that can write files (a contents
 #   or write-all scope, or gh-aw safe-outputs create-pull-request or
 #   push-to-pull-request-branch) while the root AGENTS.md or CLAUDE.md, a committed
-#   instruction file or the job's own workflow has no owner in the committed CODEOWNERS (the
-#   last matching line names one). Unknown under the same codes as agent-job-write-access,
+#   instruction file, the job's own workflow and its gh-aw .lock.yml, a local reusable
+#   workflow or local action that workflow runs, or the CODEOWNERS file itself has no owner
+#   in the committed CODEOWNERS (the last matching line names one). Unknown under the same codes as agent-job-write-access,
 #   never met. Graded measured (head_structure), read from the committed files.
 # - CI hazards (lib/ci/ci_hazards.py, #828): two hazards (polarity hazard, never counted) that
 #   name blocks = "ci_runs_tests", so while either is met the ci_runs_tests gate does not hold

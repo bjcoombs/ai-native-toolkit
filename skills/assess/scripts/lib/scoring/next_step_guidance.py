@@ -469,7 +469,8 @@ _WORDING: dict[str, Wording] = {
         "`safe-outputs:`, does the writing."),
     "agent_ops.summary.agent_instruction_rewrite": _flag_count(
         "Add a CODEOWNERS line with an owner for `AGENTS.md`, `CLAUDE.md`, the other instruction "
-        "files, each agent workflow and its gh-aw `.lock.yml`, and the CODEOWNERS file itself. "
+        "files, each agent workflow, its gh-aw `.lock.yml`, the local workflows and actions it "
+        "runs, and the CODEOWNERS file itself. "
         "Require code-owner review on the default branch.",
         "No agent job that can write files runs while an instruction file, its own workflow, its "
         "`.lock.yml` or the CODEOWNERS file has no CODEOWNERS owner."),

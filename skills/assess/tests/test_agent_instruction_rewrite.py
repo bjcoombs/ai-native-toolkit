@@ -166,3 +166,37 @@ def test_the_github_codeowners_file_wins_over_a_stale_root_one(git_repo) -> None
     repo = _repo(git_repo, {WORKFLOW: SCHEDULED_WRITER, "CODEOWNERS": OWNERS,
                             ".github/CODEOWNERS": "/src/ @example-org/maintainers\n"})
     assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 1
+
+
+CALLER = """on:
+  schedule:
+    - cron: "0 3 * * 1"
+jobs:
+  sync:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/agent.yml
+"""
+
+CALLED = """on: workflow_call
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/prompt
+      - run: claude -p "Update AGENTS.md" && git push
+"""
+
+
+def test_a_called_workflow_and_its_local_action_are_paths_at_risk(git_repo) -> None:
+    caller_only = f"/AGENTS.md @o\n/CLAUDE.md @o\n/{WORKFLOW} @o\n/.github/CODEOWNERS @o\n"
+    files = {WORKFLOW: CALLER, ".github/workflows/agent.yml": CALLED,
+             ".github/actions/prompt/action.yml": "runs:\n  using: composite\n  steps: []\n",
+             ".github/CODEOWNERS": caller_only}
+    repo = _repo(git_repo, files)
+    assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 1
+    owned = caller_only + "/.github/workflows/agent.yml @o\n"
+    repo = _repo(git_repo, {".github/CODEOWNERS": owned})
+    assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 1  # the action is still unowned
+    repo = _repo(git_repo, {".github/CODEOWNERS": owned + "/.github/actions/ @o\n"})
+    assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 0

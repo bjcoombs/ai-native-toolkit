@@ -37,8 +37,10 @@ This module scans the repo-observable subset of those guardrails:
   least-privilege condition) and ``agent_job_write_access`` (its hazard), the last two null
   with a sibling ``_reason`` when there is no agent job or a scope cannot be read.
 - ``agent_instruction_rewrite`` (#858): agent jobs that can write files (a ``contents`` write,
-  or gh-aw ``safe-outputs`` that land file changes) while an instruction file or the job's own
-  workflow has no CODEOWNERS owner, with their workflow files in
+  or gh-aw ``safe-outputs`` that land file changes) while the root ``AGENTS.md`` or
+  ``CLAUDE.md``, a committed instruction file, the job's own workflow and its gh-aw
+  ``.lock.yml``, a local reusable workflow or local action that workflow runs, or the
+  CODEOWNERS file itself has no CODEOWNERS owner, with their workflow files in
   ``agent_instruction_rewrite_files`` (``lib.agents.agent_instruction_rewrite``). A hazard that
   holds the ``ci_runs_tests`` Step gate; null with a sibling ``_reason`` as above.
 

@@ -14,10 +14,12 @@ next run follows text no reviewer approved (#826, hazard H2). The hazard reads t
   agent job is not counted even when a writer job that ``needs:`` it holds ``contents:
   write``: what that job writes is not read, so the fix is CODEOWNERS, never a split.
 - **Paths at risk.** The root ``AGENTS.md`` and ``CLAUDE.md`` (written or created), every
-  committed file at ``lib.instructions.instruction_files.INSTRUCTION_FILE_PATHS``, and the
-  job's own workflow file (with a gh-aw source's compiled ``.lock.yml`` when committed), and
-  the CODEOWNERS file in effect (``.github/CODEOWNERS`` when none is committed): a guard whose
-  own lines the agent can drop unreviewed guards nothing.
+  committed file at ``lib.instructions.instruction_files.INSTRUCTION_FILE_PATHS``, the job's
+  own workflow file (with a gh-aw source's compiled ``.lock.yml`` when committed), every local
+  reusable workflow and local action that workflow runs, followed to any depth
+  (``local_reach``: the agent's steps and prompt may sit there, not in the caller), and the
+  CODEOWNERS file in effect (``.github/CODEOWNERS`` when none is committed): a guard whose own
+  lines the agent can drop unreviewed guards nothing.
 - **Guard.** A committed CODEOWNERS (``.github/``, then the root, then ``docs/``: the first
   GitHub finds, ``CODEOWNERS_ORDER``)
   whose last matching line names an owner (``lib.docs.ownership_parser.codeowned``). The job
@@ -37,7 +39,8 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 
 from lib.agents.agent_job_scope import NO_AGENT_JOBS, SCOPE_UNREAD, UNREAD, WRITE
-from lib.ci.ci_masking import IndentTree, parse_lines
+from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
+from lib.ci.ci_step_paths import local_workflow, read_action
 from lib.counts_only.block_shapes import AgentJob
 from lib.docs.ownership_parser import codeowned
 from lib.instructions.instruction_files import INSTRUCTION_FILE_PATHS
@@ -71,10 +74,30 @@ def owners_file(files: frozenset[str]) -> str:
     return next((r for r in CODEOWNERS_ORDER if r in files), CODEOWNERS_ORDER[0])
 
 
-def at_risk(job: AgentJob, files: frozenset[str]) -> list[str]:
-    """The instruction, workflow and CODEOWNERS files the job could rewrite (module doc)."""
+def local_reach(rel: str, read: Read) -> set[str]:
+    """The local reusable workflows and local actions the file ``rel`` runs, to any depth."""
+    found: set[str] = set()
+    todo = [rel]
+    while todo:
+        text = read(todo.pop()) or ""
+        for raw in text.splitlines():
+            stripped = strip_comment(raw.strip().removeprefix("- ").strip())
+            if not stripped.startswith("uses:"):
+                continue
+            uses = stripped[len("uses:"):].strip().strip("'\"")
+            called = local_workflow(uses)
+            action = None if called else read_action(uses, read)
+            target = called if called and read(called) is not None else action[0] if action else None
+            if target is not None and target not in found and target != rel:
+                found.add(target)
+                todo.append(target)
+    return found
+
+
+def at_risk(job: AgentJob, files: frozenset[str], read: Read) -> list[str]:
+    """The instruction, workflow, local action and CODEOWNERS files the job could rewrite."""
     paths = {*ROOT_INSTRUCTIONS, *(p for p in INSTRUCTION_FILE_PATHS if p in files), job["path"],
-             owners_file(files)}
+             owners_file(files), *local_reach(job["path"], read)}
     lock = job["path"].removesuffix(".md") + ".lock.yml"
     if job["path"].endswith(".md") and lock in files:
         paths.add(lock)
@@ -93,7 +116,7 @@ def instruction_rewrite(jobs: list[AgentJob], fronts: Mapping[str, str | None],
     """(count, workflow files, not-measured reason) for the hazard (module doc)."""
     owners = codeowners_text(files, read)
     exposed = [j for j in jobs if writes_files(j, fronts.get(j["path"]))
-               and not all(codeowned(owners, p) for p in at_risk(j, files))]
+               and not all(codeowned(owners, p) for p in at_risk(j, files, read))]
     if exposed:
         return len(exposed), sorted({j["path"] for j in exposed}), None
     if not jobs:
