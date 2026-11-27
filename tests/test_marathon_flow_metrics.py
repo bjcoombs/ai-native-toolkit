@@ -169,3 +169,75 @@ def test_cli_json_is_stable(tmp_path):
     second = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout
     assert first == second
     assert json.loads(first)["run"] == "run-x"
+
+
+def waves_fixture():
+    # Wave 1: the DAG allowed 5 units; two combines over lib/shared.py left 3.
+    # plugin.json is touched by every PR and merges in order, never combines.
+    # Wave 2: no combine.
+    return [
+        {"wave": 1, "dag_width": 5, "units": 3,
+         "combines": [{"units": ["task-1", "task-2"], "hot_files": ["lib/shared.py"]},
+                      {"units": ["task-3", "task-4"], "hot_files": ["lib/shared.py", ".claude-plugin/plugin.json"]}],
+         "sequential_hot_files": [".claude-plugin/plugin.json"]},
+        {"wave": 2, "dag_width": 2, "units": 2, "combines": [],
+         "sequential_hot_files": [".claude-plugin/plugin.json"]},
+    ]
+
+
+def test_two_combines_over_one_file_lose_two_units(tmp_path):
+    track, gh = build(tmp_path)
+    tracking = json.loads(track.read_text())
+    tracking["flow"]["waves"] = waves_fixture()
+    result = fm.compute(tracking, gh)
+    assert result["per_run"]["units_lost_to_combining"] == 2
+    assert result["per_run"]["dag_width"] == 7
+    assert result["per_run"]["units_after_combining"] == 5
+    combine = result["combining"]
+    assert [w["units_lost"] for w in combine["per_wave"]] == [2, 0]
+    assert combine["hot_files"] == [{"file": "lib/shared.py", "count": 2}]
+
+
+def test_sequential_hot_file_is_reported_apart(tmp_path):
+    track, gh = build(tmp_path)
+    tracking = json.loads(track.read_text())
+    tracking["flow"]["waves"] = waves_fixture()
+    combine = fm.compute(tracking, gh)["combining"]
+    assert ".claude-plugin/plugin.json" not in [r["file"] for r in combine["hot_files"]]
+    assert combine["sequential_hot_files"] == [{"file": ".claude-plugin/plugin.json", "count": 2}]
+    out = fm.render_markdown(fm.compute(tracking, gh), None)
+    assert "Top combining hot files: `lib/shared.py` (2 combines, previous n/a)." in out
+    assert ("Sequential-merge hot files (merge order, not combining): "
+            "`.claude-plugin/plugin.json` (2 waves, previous n/a).") in out
+    assert "| 1 | 5 | 3 | 2 | 2 |" in out
+
+
+def test_tracking_without_waves_reads_combining_null(tmp_path):
+    track, gh = build(tmp_path)
+    result = fm.compute(json.loads(track.read_text()), gh)
+    assert result["combining"] is None
+    for key in ("dag_width", "units_after_combining", "units_lost_to_combining"):
+        assert result["per_run"][key] is None
+    assert "Hot-file combining: n/a" in fm.render_markdown(result, None)
+
+
+def test_wave_missing_a_count_reads_null_not_zero(tmp_path):
+    track, gh = build(tmp_path)
+    tracking = json.loads(track.read_text())
+    waves = waves_fixture()
+    del waves[1]["dag_width"]
+    tracking["flow"]["waves"] = waves
+    result = fm.compute(tracking, gh)
+    assert result["per_run"]["units_lost_to_combining"] is None
+    assert [w["units_lost"] for w in result["combining"]["per_wave"]] == [2, None]
+
+
+def test_combining_compares_with_previous_run(tmp_path):
+    track, gh = build(tmp_path)
+    tracking = json.loads(track.read_text())
+    tracking["flow"]["waves"] = waves_fixture()
+    previous = {"per_run": {"units_lost_to_combining": 5},
+                "combining": {"hot_files": [{"file": "lib/shared.py", "count": 4}], "sequential_hot_files": []}}
+    out = fm.render_markdown(fm.compute(tracking, gh), previous)
+    assert "| units_lost_to_combining | 2 | 5 | -3 |" in out
+    assert "`lib/shared.py` (2 combines, previous 4)" in out

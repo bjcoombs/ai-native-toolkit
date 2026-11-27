@@ -11,7 +11,9 @@ the network. The lead saves the GitHub responses first (the commands are in
 Inputs:
 - `--tracking`: the marathon's `pr-tracking.json`. Only its `flow` object is
   read: `started_at`, `ended_at`, `units` (`{"<unit>": {"pr": n, "spawned_at": t}}`),
-  `events` (typed rows, see `EVENT_TYPES`) and an optional `tokens.total`.
+  `events` (typed rows, see `EVENT_TYPES`), an optional `tokens.total` and
+  optional `waves` (one row per wave: `dag_width`, `units`, `combines`, each
+  `{"units": [...], "hot_files": [...]}`, and `sequential_hot_files`).
 - `--github`: a directory holding, per PR number n, `n.pull.json`
   (`pulls/n`), `n.commits.json` (`pulls/n/commits`), `n.reviews.json`
   (`pulls/n/reviews`) and `n.runs.json` (`actions/runs?branch=<head>`, every
@@ -30,6 +32,13 @@ Definitions (each metric is null, never 0, when its input is missing):
 - spawn to PR: the unit's `spawned_at` to the PR's `created_at`, in minutes.
 - mean WIP: the time-weighted mean of open PRs over the run window.
 - throughput: merged PRs per hour of the run window.
+- units lost to combining: a wave's DAG width (units with no unmet
+  dependency) minus its units after hot-file combining; the run total sums the
+  waves and is null when any wave lacks either count.
+- combining hot files: files ranked by the combines they caused. Files a wave
+  lists in `sequential_hot_files` (a version counter, a lockfile) cost merge
+  order, not combining, so they are ranked apart and never as combining files.
+  With no `waves` recorded, every combining metric is null (see `combining`).
 
 Python 3.8 compatible and stdlib only, so it runs under any `python3`.
 
@@ -173,6 +182,44 @@ def mean_of(prs: List[Json], key: str) -> Optional[float]:
     return round(sum(values) / len(values), 2) if values else None
 
 
+def wave_total(waves: List[Json], key: str) -> Optional[int]:
+    values = [w.get(key) for w in waves]
+    if not waves or any(not isinstance(v, int) for v in values):
+        return None
+    return sum(v for v in values if isinstance(v, int))
+
+
+def ranked(counts: Dict[str, int]) -> List[Json]:
+    return [{"file": f, "count": n} for f, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+
+
+def combining(flow: Json) -> Optional[Json]:
+    """Parallelism lost to hot-file combining, per wave and per hot file.
+
+    Null when the tracking file records no `waves`, so an older run reads
+    unknown rather than a false 0 lost.
+    """
+    waves = flow.get("waves")
+    if not isinstance(waves, list) or not waves:
+        return None
+    sequential: Dict[str, int] = {}
+    for w in waves:
+        for f in set(w.get("sequential_hot_files") or []):
+            sequential[f] = sequential.get(f, 0) + 1
+    combined: Dict[str, int] = {}
+    per_wave: List[Json] = []
+    for i, w in enumerate(waves, 1):
+        width, units = w.get("dag_width"), w.get("units")
+        lost = width - units if isinstance(width, int) and isinstance(units, int) else None
+        for c in w.get("combines") or []:
+            for f in set(c.get("hot_files") or []) - set(sequential):
+                combined[f] = combined.get(f, 0) + 1
+        per_wave.append({"wave": w.get("wave", i), "dag_width": width,
+                         "units_after_combining": units, "units_lost": lost,
+                         "combines": len(w.get("combines") or [])})
+    return {"per_wave": per_wave, "hot_files": ranked(combined), "sequential_hot_files": ranked(sequential)}
+
+
 def compute(tracking: Json, gh_dir: Path) -> Json:
     flow = tracking.get("flow", {})
     units = flow.get("units", {})
@@ -191,6 +238,12 @@ def compute(tracking: Json, gh_dir: Path) -> Json:
     tokens = (flow.get("tokens") or {}).get("total")
     waits = [p for p in prs if p["wait_green_to_merged_min"] is not None]
     largest = max(waits, key=lambda p: p["wait_green_to_merged_min"]) if waits else None
+
+    combine = combining(flow)
+    waves = flow.get("waves") if combine is not None else []
+    width_total = wave_total(waves, "dag_width")
+    units_total = wave_total(waves, "units")
+    lost_total = width_total - units_total if width_total is not None and units_total is not None else None
 
     def count(kind: str) -> int:
         return sum(1 for e in events if e.get("type") == kind)
@@ -218,7 +271,11 @@ def compute(tracking: Json, gh_dir: Path) -> Json:
             "load_peak": load_peak["load1"] if load_peak else None,
             "load_peak_at": load_peak.get("at") if load_peak else None,
             "tokens_per_merge": round(tokens / merged) if tokens is not None and merged else None,
+            "dag_width": width_total,
+            "units_after_combining": units_total,
+            "units_lost_to_combining": lost_total,
         },
+        "combining": combine,
         "largest_wait": {"pr": largest["pr"], "min": largest["wait_green_to_merged_min"]} if largest else None,
     }
 
@@ -242,6 +299,31 @@ def change(now: Any, before: Any) -> str:
     return "n/a"
 
 
+def ranking_line(label: str, rows: List[Json], before: List[Json], unit: str) -> str:
+    if not rows:
+        return f"{label}: none."
+    prior = {r["file"]: r["count"] for r in before}
+    return f"{label}: " + ", ".join(
+        f"`{r['file']}` ({r['count']} {unit}, previous {cell(prior.get(r['file']))})" for r in rows[:5]) + "."
+
+
+def render_combining(result: Json, previous: Optional[Json]) -> List[str]:
+    combine = result.get("combining")
+    if combine is None:
+        return ["", "Hot-file combining: n/a (the tracking file records no waves)."]
+    before = (previous or {}).get("combining") or {}
+    lines = ["", "| Wave | DAG width | Units after combining | Units lost | Combines |",
+             "|-----:|----------:|----------------------:|-----------:|---------:|"]
+    for w in combine["per_wave"]:
+        lines.append(f"| {w['wave']} | {cell(w['dag_width'])} | {cell(w['units_after_combining'])} "
+                     f"| {cell(w['units_lost'])} | {w['combines']} |")
+    lines += ["", ranking_line("Top combining hot files", combine["hot_files"],
+                               before.get("hot_files") or [], "combines"),
+              ranking_line("Sequential-merge hot files (merge order, not combining)",
+                           combine["sequential_hot_files"], before.get("sequential_hot_files") or [], "waves")]
+    return lines
+
+
 def render_markdown(result: Json, previous: Optional[Json]) -> str:
     lines = [f"### Flow metrics: {result['run']}", ""]
     lines.append("| PR | " + " | ".join(h for _, h in PER_PR_COLUMNS) + " |")
@@ -252,6 +334,7 @@ def render_markdown(result: Json, previous: Optional[Json]) -> str:
     before = (previous or {}).get("per_run", {})
     for key, value in result["per_run"].items():
         lines.append(f"| {key} | {cell(value)} | {cell(before.get(key))} | {change(value, before.get(key))} |")
+    lines += render_combining(result, previous)
     largest = result["largest_wait"]
     lines += ["", f"Largest wait: PR #{largest['pr']}, {largest['min']} min from first green to merged."
               if largest else "Largest wait: n/a (no merged PR with a green run)."]
