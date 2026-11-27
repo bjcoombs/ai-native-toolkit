@@ -245,3 +245,17 @@ def test_a_test_reporter_action_fails_the_run_unless_told_not_to(tmp_path: Path,
     text = PLAIN.replace("pytest", "mvn -Dmaven.test.failure.ignore=true verify") + (
         "      - uses: dorny/test-reporter@v1\n        with:\n          reporter: java-junit\n" + extra)
     assert scan_ci_hazards(_repo(tmp_path, {".github/workflows/ci.yml": text}))["test_failures_ignored"] == counted
+
+
+def test_a_scheduled_workflow_that_ignores_test_failures_is_not_counted(tmp_path: Path) -> None:
+    nightly = PLAIN.replace("on: [push, pull_request]", "on:\n  schedule:\n    - cron: '0 3 * * *'").replace(
+        "pytest", "mvn -Dmaven.test.failure.ignore=true verify")
+    block = scan_ci_hazards(_repo(tmp_path, {".github/workflows/nightly.yml": nightly, ".github/workflows/ci.yml": PLAIN}))
+    assert (block["test_failures_ignored"], block["ci_hazard_files"]) == (0, [])
+
+
+@pytest.mark.parametrize("step", ["junit allowEmptyResults: true, testResults: '**/reports/*.xml'",
+                                  "junit skipPublishingChecks: true, testResults: '**/reports/*.xml'"])
+def test_a_junit_step_with_named_arguments_fails_the_build(tmp_path: Path, step: str) -> None:
+    text = JENKINS.replace("        sh 'mvn", f"        {step}\n        sh 'mvn")
+    assert scan_ci_hazards(_repo(tmp_path, {"Jenkinsfile": text}))["test_failures_ignored"] == 0

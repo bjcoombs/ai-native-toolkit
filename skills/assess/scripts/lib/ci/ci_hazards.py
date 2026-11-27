@@ -24,10 +24,13 @@ is followed into the repository only through the shared CI-step follower
 - **``test_failures_ignored``**: the number of committed files that tell Maven to ignore test
   failures: ``maven.test.failure.ignore`` set to true (``-Dmaven.test.failure.ignore=true``, a
   bare ``-Dmaven.test.failure.ignore``, or a ``<maven.test.failure.ignore>true`` property) or a
-  Surefire or Failsafe ``<testFailureIgnore>true``, outside an XML comment, a pom's
+  Surefire or Failsafe ``<testFailureIgnore>true``. A GitHub workflow is read only when its
+  ``on:`` names ``pull_request``, ``pull_request_target``, ``push`` or ``merge_group``, so a
+  nightly or manual workflow is not counted. Each setting is read outside an XML comment, a pom's
   ``<profiles>`` (a profile runs only when activated) and a ``#`` or ``//`` line comment. A file that also fails the run from the
   test reports (a Jenkins ``junit`` step, which marks the build UNSTABLE, a report action with
-  ``fail_on_failure: true``, or ``dorny/test-reporter`` without ``fail-on-error: false``) is not
+  ``fail_on_failure: true``, or ``dorny/test-reporter`` without ``fail-on-error: false``; a
+  ``junit`` step with any named argument counts) is not
   counted, and while any CI file does so, no pom, ``.mvn/maven.config`` or followed file is
   either: the failures still turn the run red. The files read: the GitHub Actions workflows
   and ``.gitlab-ci.yml``, each Jenkinsfile (a file named ``Jenkinsfile``, ``Jenkinsfile.<x>`` or
@@ -62,6 +65,7 @@ from lib.instructions.command_index import CI_CONFIG_FILES, ci_config_files, rea
 NO_PR_CHECKS = "no_pr_checks"
 NO_CI_FILES = "no_ci_files"
 PR_EVENTS = frozenset({"pull_request", "pull_request_target"})
+CHANGE_EVENTS = PR_EVENTS | {"push", "merge_group"}
 MAVEN_CONFIG = ".mvn/maven.config"
 
 _SKIP = re.compile(r"""!\s*contains\(\s*github\.event\.pull_request\.labels\.\*\.name\s*,\s*['"]([^'"]+)['"]\s*\)""")
@@ -72,7 +76,7 @@ _IGNORE = re.compile(
 _NEEDS_ITEM = re.compile(r"[\w-]+")
 # A later step that reads the test reports and fails the run again: a Jenkins junit step (the
 # build goes UNSTABLE, a failing status) or a report action with fail_on_failure: true.
-_REFAIL = re.compile(r"\bjunit\s*[('\"\[]|\bjunit\s+testResults\b|\bfail_on_failure\s*:\s*['\"]?true\b"
+_REFAIL = re.compile(r"\bjunit\s*[('\"\[]|\bjunit\s+\w+\s*:|\bfail_on_failure\s*:\s*['\"]?true\b"
                      r"|\buses:\s*['\"]?dorny/test-reporter@", re.IGNORECASE)
 # dorny/test-reporter fails the job by default; fail-on-error: false turns that off.
 _NO_REFAIL = re.compile(r"\bfail-on-error\s*:\s*['\"]?false\b", re.IGNORECASE)
@@ -213,7 +217,10 @@ def scan_ci_hazards(repo_root: Path) -> CiHazardsBlock:
     files = ci_config_files(tracked)
     workflows = {rel: follow_workflow(read_config(root, rel), reader).text
                  for rel in files if rel not in CI_CONFIG_FILES}
-    texts = {**workflows, **{rel: read_config(root, rel) for rel in files if rel in CI_CONFIG_FILES}}
+    # a workflow counts only when it runs on changes (a PR, a push or a merge queue): a nightly
+    # or manual workflow that ignores test failures does not stand between a change and main
+    gating = {rel: text for rel, text in workflows.items() if CHANGE_EVENTS & set(workflow_events(text) or [])}
+    texts = {**gating, **{rel: read_config(root, rel) for rel in files if rel in CI_CONFIG_FILES}}
     texts |= {rel: read_config(root, rel) for rel in jenkinsfiles(tracked)}
     skip, skip_files = _skip_labels(workflows)
     sources = dict(texts)
@@ -231,7 +238,7 @@ def scan_ci_hazards(repo_root: Path) -> CiHazardsBlock:
     ignoring = sorted(rel for rel, text in sources.items()
                       if ignores_test_failures(text) and not refails_from_reports(text)
                       and not (reported and rel not in texts))
-    measured = bool(texts) or reactor is not None
+    measured = bool(texts) or bool(workflows) or reactor is not None
     return {
         "available": True,
         "skip_labels": skip, "skip_labels_reason": None if skip is not None else NO_PR_CHECKS,
