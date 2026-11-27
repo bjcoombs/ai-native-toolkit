@@ -302,3 +302,16 @@ def test_the_top_card_words_a_hazard_and_a_decline_as_what_they_are() -> None:
     start, done = start_lines(declined, None)
     assert "agents-declined.json" in start and "Commit an instruction file" not in start
     assert done.startswith("Done when: the decline is lifted")
+
+
+def test_a_gate_lost_to_a_decline_or_a_hazard_is_a_measured_loss() -> None:
+    """#828: gate_loss reads a declined gate and a hazard-held gate as lost, never as unread."""
+    from lib.gate_loss import split_lost
+    since = {"available": True, "gates_lost": ["instructions"]}
+    declined = lt.level_result(lt.default_model(), HELD, declines=[_record()])
+    assert split_lost({"level": declined, "since_last_run": since}) == (["instructions"], [])
+    hazard_level = lt.level_result(lt.default_model(), HELD)
+    hazard_level["conditions"].append({"id": "x.1", "row": "x", "level": 1, "grade": "measured", "counted": False,
+                                       "state": "met", "polarity": "hazard", "blocks": "ci_runs_tests"})
+    lost = {"available": True, "gates_lost": ["ci_runs_tests"]}
+    assert split_lost({"level": hazard_level, "since_last_run": lost}) == (["ci_runs_tests"], [])
