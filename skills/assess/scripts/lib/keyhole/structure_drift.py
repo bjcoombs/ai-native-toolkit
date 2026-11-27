@@ -172,7 +172,7 @@ def _empty_architecture_refs(repo_root: Path) -> list[EmptyOwnershipPattern]:
     want to flag is exactly the one it discards. Rather than re-implement that
     parse, we re-walk the same architecture docs (``_discover_arch_docs``) with
     the same building blocks (``_FENCE_RE`` strip, ``_HEADER_RE`` sectioning,
-    ``_extract_path_refs``, ``_resolve_ref``) and keep the references whose
+    ``_extract_path_refs``, ``_resolve_doc_ref``) and keep the references whose
     resolution is empty - a declared boundary the filesystem has left behind (a
     renamed or deleted directory, a typo'd path).
 
@@ -211,7 +211,7 @@ def _empty_refs_in_doc(
     is a sample listing, not a boundary), section the body by markdown header, and
     attribute each reference to its section's ``<doc_rel>::<header>`` boundary.
     References before the first header belong to the doc itself
-    (``<doc_rel>::<doc>``). A reference is flagged only when ``_resolve_ref``
+    (``<doc_rel>::<doc>``). A reference is flagged only when ``_resolve_doc_ref``
     returns an empty set against the tracked file universe.
     """
     body = _FENCE_RE.sub("\n", text)

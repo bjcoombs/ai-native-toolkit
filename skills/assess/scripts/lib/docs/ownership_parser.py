@@ -53,7 +53,8 @@ consume; it owns no drift logic itself. `parse_ownership` writes every path with
 (#1493, tests in `tests/test_ownership_parser.py`). An architecture-doc reference resolves
 through `_resolve_doc_ref`, which follows a `./` or `../` link from its doc's directory, as a
 reader does, and a token opening with `-` (an option such as `--path-separator /`) is not a
-path reference (#1231, tests in `tests/test_structure_drift.py`).
+path reference (#1231, tests in `tests/test_structure_drift.py` and
+`tests/test_ownership_parser.py`).
 """
 from __future__ import annotations
 
