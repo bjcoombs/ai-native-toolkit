@@ -194,7 +194,7 @@ CODE_RULES: tuple[CodeRule, ...] = (
     _rule("telemetry launcher", LAUNCHER_FILES, _LINE + r"(?:\bopentelemetry-instrument\b"
           r"|\bddtrace-run\b|\bnewrelic-admin[ \t]+run-program\b"
           r"|(?:--require|--import|-r)[ \t=]+['\"]?(?:@opentelemetry/auto-instrumentations-node"
-          r"|dd-trace/init|newrelic\b|elastic-apm-node/start))", "launcher"),
+          r"|dd-trace/init|newrelic(?=['\"\s]|$)|elastic-apm-node/start))", "launcher"),
     _rule("JVM telemetry agent", LAUNCHER_FILES, _LINE + r"-javaagent:[^\s'\"]*(?:opentelemetry"
           r"|otel|dd-java-agent|newrelic|elastic-apm|applicationinsights|jmx_prometheus"
           r"|pyroscope)", "launcher"),

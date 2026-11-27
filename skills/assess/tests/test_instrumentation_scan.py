@@ -189,6 +189,7 @@ def test_a_dependency_alone_is_declared_not_counted(tmp_path: Path) -> None:
      "telemetry launcher"),
     ("Procfile", "web: opentelemetry-instrument gunicorn app:app\n", "telemetry launcher"),
     ("Procfile", "web: ddtrace-run python app.py\n", "telemetry launcher"),
+    ("Procfile", "web: node -r newrelic app.js\n", "telemetry launcher"),
     ("package.json", '{"scripts":{"start":"node --require '
      '@opentelemetry/auto-instrumentations-node/register app.js"}}', "telemetry launcher"),
     ("bin/start.sh", "#!/bin/sh\nexec java -javaagent:/otel/opentelemetry-javaagent.jar "
@@ -209,6 +210,7 @@ def test_a_launcher_counts_with_a_dependency_alongside(tmp_path: Path, rel: str,
 
 @pytest.mark.parametrize(("rel", "text"), [
     ("bin/test.sh", "java -javaagent:jacoco/jacocoagent.jar -jar app.jar\n"),
+    ("Dockerfile", "RUN pip install -r newrelic-requirements.txt\n"),
     ("Dockerfile", "# CMD opentelemetry-instrument python app.py\nCMD python app.py\n"),
     ("tests/run.sh", "opentelemetry-instrument python app.py\n"),
     ("app/notes.txt", "opentelemetry-instrument python app.py\n"),

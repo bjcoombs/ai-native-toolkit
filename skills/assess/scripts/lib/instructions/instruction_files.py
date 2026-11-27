@@ -18,7 +18,8 @@ the best grade (`None` when no committed file exists, distinct from `F`).
 (#57); `instruction_file_size` feeds the size signal (line and word counts, always-on
 lines, `bloat_penalty`). Each graded entry carries `heading_only` (#922, `is_heading_only`):
 true when the file holds nothing beyond headings and blank lines, a stub `layer_grades`
-does not count; an alias inherits its target's value. Files are graded against `instruction_placement.skill_texts`, so
+does not count, and null when it could not be read as UTF-8; an alias inherits its
+target's value. Files are graded against `instruction_placement.skill_texts`, so
 a grade rests on the same always-on split as the file's `instruction_placement` record. Each graded entry carries the
 grader's `findings` (unresolved commands, stale paths and symbols), graded against an
 `instruction_content.RepoContext`; `grade_instruction_files` and `nested_instruction_surface`
@@ -139,10 +140,11 @@ def grade_instruction_files(
         # Scan every candidate on disk for content unsafe to publish - tracked
         # OR untracked. An untracked file is exactly the one the remediation
         # might tell the user to commit, so it must be scanned before that.
+        readable = True
         try:
             disk_text = candidate.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
-            disk_text = ""
+            disk_text, readable = "", False
         flags = scan_sensitive_content(disk_text) if disk_text else []
         if flags:
             sensitive[rel_path] = flags
@@ -166,7 +168,8 @@ def grade_instruction_files(
             "freshness_days": freshness,
             "line_count": len(text.splitlines()),
             "present": True,
-            "heading_only": is_heading_only(text),
+            # None when the file could not be read as UTF-8: unread is not empty.
+            "heading_only": is_heading_only(text) if readable else None,
         }
         # Alias detection (issue #57): a committed AGENTS.md/GEMINI.md that is a
         # symlink to - or a thin stub pointing at - a canonical instruction file
@@ -250,7 +253,7 @@ def _resolve_alias_grades(found: dict[str, dict[str, Any]]) -> None:
             # points at, and carries no maintenance burden of its own.
             meta["grade"] = target_meta["grade"]
             meta["score"] = target_meta["score"]
-            meta["heading_only"] = target_meta.get("heading_only", False)
+            meta["heading_only"] = target_meta.get("heading_only")
 
 
 def detect_ancestor_instructions(repo_root: Path) -> list[str]:

@@ -324,3 +324,13 @@ def test_graded_files_carry_the_stub_flag(git_repo) -> None:
     commit("stub CLAUDE.md")
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     assert ctx["instruction_files"]["CLAUDE.md"]["heading_only"] is True
+
+
+def test_an_unreadable_file_is_not_a_stub(git_repo) -> None:
+    """A UTF-16 CLAUDE.md cannot be read as UTF-8: unread is not empty, so not a stub."""
+    repo, commit = git_repo
+    _seed_assess(repo)
+    (repo / "CLAUDE.md").write_bytes("# Guide\n\nRun make test.\n".encode("utf-16"))
+    commit("utf-16 CLAUDE.md")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
+    assert ctx["instruction_files"]["CLAUDE.md"]["heading_only"] is None
