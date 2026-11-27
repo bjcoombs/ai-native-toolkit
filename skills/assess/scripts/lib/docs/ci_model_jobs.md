@@ -123,3 +123,16 @@ job `env:`, or in a step that only sets it, neither gates nor ungates a job. Eit
 - GitLab `only: changes:` is not read as a gate.
 - A job whose model call sits in a script file the job runs is not found, nor one whose key is
   written into a file by a command (`echo ANTHROPIC_API_KEY=... >> .env`).
+
+## Agent eval suites (`agent_evals`, #850)
+
+The block also carries `agent_evals`, built by `lib.ci.agent_evals` from the same CI files plus
+the repo-local `action.yml` files: each eval suite folder that calls a model, whether a CI file
+runs it and the committed baseline it holds. Its module docstring has the rules and the shape.
+Known limits:
+
+- A suite run only through a whole-tree command (`pytest` with no path, `pytest tests/` for
+  `tests/agent`) is not named, nor one run from a folder the job `cd`s into (`cd tests && pytest evals`).
+- One task-runner level is followed, at the repository root only: a `Makefile` or `justfile`
+  recipe or a `package.json` script. A recipe that calls another target is not followed.
+- A baseline outside the suite folder (`baselines/evals.json` beside `evals/`) is not read.

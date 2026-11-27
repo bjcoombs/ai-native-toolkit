@@ -50,7 +50,8 @@ Block (``ci_model_jobs`` in run-context.json)::
      "unread": int, "ungated": int | None, "ungated_reason": str (only when ungated is None),
      "jobs": [{"path", "line", "job", "platform" (github | gitlab), "signs": [...],
                "triggers": [...], "gates": [...], "state", "reason" (unknown only),
-               "cancel_superseded": bool}]}
+               "cancel_superseded": bool}],
+     "agent_evals": {...}}  # eval suites CI runs against a baseline: lib.ci.agent_evals (#850)
 
 ``ungated`` is the count of ungated jobs whenever one is ungated. With none ungated it is null
 when a job is unknown (``trigger_unresolved``) or a job or include could not be read
@@ -67,6 +68,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
+from lib.ci.agent_evals import AgentEvalsBlock, scan_agent_evals
 from lib.ci.ci_action_inputs import ReadLocal, local_action_paths
 from lib.ci.ci_includes import GITLAB_CI, merged_config, resolve_includes
 from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
@@ -172,6 +174,7 @@ class CiModelJobsBlock(TypedDict):
     ungated: int | None
     ungated_reason: NotRequired[str]
     jobs: list[ModelJob]
+    agent_evals: AgentEvalsBlock  # eval suites CI runs against a baseline (lib.ci.agent_evals, #850)
 
 
 class _Route(TypedDict):
@@ -717,6 +720,12 @@ def _gitlab_merged(repo: Path, ghsync_root: Path | None) -> tuple[list[ModelJob]
     return jobs, unread
 
 
+def _eval_ci_texts(repo: Path, tracked: frozenset[str], files: list[str]) -> dict[str, str]:
+    """The CI files and repo-local actions an eval suite may be named in (``lib.ci.agent_evals``)."""
+    actions = [r for r in tracked if r.startswith(".github/actions/") and r.endswith(("/action.yml", "/action.yaml"))]
+    return {rel: read_config(repo, rel) for rel in [*files, *sorted(actions)]}
+
+
 def scan_ci_model_jobs(repo_root: Path, ghsync_root: Path | None = None) -> CiModelJobsBlock:
     """Build the ``ci_model_jobs`` block (see the module doc)."""
     repo = repo_root.resolve()
@@ -736,7 +745,8 @@ def scan_ci_model_jobs(repo_root: Path, ghsync_root: Path | None = None) -> CiMo
     count = {state: sum(j["state"] == state for j in jobs) for state in ("gated", "ungated", "unknown")}
     block = CiModelJobsBlock(available=True, files_read=len(files), model_jobs=len(jobs),
                              gated=count["gated"], unknown=count["unknown"], unread=unread,
-                             ungated=count["ungated"], jobs=jobs)
+                             ungated=count["ungated"], jobs=jobs,
+                             agent_evals=scan_agent_evals(tracked, lambda rel: read_local(rel) or "", _eval_ci_texts(repo, tracked, files), unread))
     if not count["ungated"] and (count["unknown"] or unread):
         block["ungated"] = None
         block["ungated_reason"] = REASON_UNRESOLVED if count["unknown"] else REASON_UNREAD

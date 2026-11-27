@@ -5,8 +5,8 @@
 id = "core.ci_model_jobs"
 kind = "collector"
 title = "Model-backed CI jobs"
-summary = "Each GitHub Actions or GitLab CI job that calls a model API. Signs are an eval harness, an agent action, the Claude Code CLI, a model-provider secret, pytest -m eval or an evals/ path. For each job, whether a gate stops it running on every push or pull request update. Gates are a paths filter, a schedule or manual trigger only, a label, or GitLab rules:changes."
-issues = [1242]
+summary = "Each GitHub Actions or GitLab CI job that calls a model API. Signs are an eval harness, an agent action, the Claude Code CLI, a model-provider secret, pytest -m eval or an evals/ path. For each job, whether a gate stops it running on every push or pull request update. Gates are a paths filter, a schedule or manual trigger only, a label, or GitLab rules:changes. Also each agent eval suite folder, whether a CI file runs it and whether it holds a committed baseline."
+issues = [1242, 850]
 callable = "lib.ci.ci_model_jobs:scan_ci_model_jobs"
 publishes = ["ci_model_jobs"]
 reads = ["repo_root", "ghsync_root"]
@@ -16,10 +16,11 @@ whys.ci_model_jobs = "A CI job that calls a model costs money on every run. If i
 shapes = [
   { path = "ci_model_jobs", type = "lib.ci.ci_model_jobs:CiModelJobsBlock" },
 ]
-revision = 4
+revision = 5
 unknown_reasons = [
   { code = "no_model_jobs", block = "ci_model_jobs", means = "With model_jobs at 0, no model-calling CI job was detected, so there is nothing to gate. A model call inside a script file a job runs is not read.", next_step = "Nothing to change." },
   { code = "trigger_unresolved", block = "ci_model_jobs", means = "The ungated count is null and ungated_reason holds this code. No model-backed job is ungated, but one could not be settled. Examples are an unreadable on: key, a label if: joined with ||, or a job that only names a provider secret. A GitLab merge that is not settled reads the same way.", next_step = "Nothing to change if the job is gated; a plain paths:, schedule: or label condition lets the scan read it." },
+  { code = "eval_ci_unread", block = "ci_model_jobs", means = "An agent eval suite holds a committed baseline, but no CI file that was read runs it. A CI file or GitLab include was not read, and it may run the suite.", next_step = "Nothing to change: this reads as not measured until those files can be read." },
   { code = "ci_jobs_unread", block = "ci_model_jobs", means = "The ungated count is null and ungated_reason holds this code. Every model-backed job found is gated. But a job calls a reusable workflow from another repository on a route that is not gated, or a GitLab include was not read. An ungated job may sit there.", next_step = "Nothing to change: this reads as not measured until those files can be read." },
 ]
   [entries.privacy]
@@ -32,6 +33,9 @@ unknown_reasons = [
   "ci_model_jobs.jobs.gates" = "token"
   "ci_model_jobs.jobs.state" = "token"
   "ci_model_jobs.jobs.reason" = "token"
+  "ci_model_jobs.agent_evals.present_reason" = "token"
+  "ci_model_jobs.agent_evals.dirs.path" = "path"
+  "ci_model_jobs.agent_evals.dirs.baseline" = "token"
 
 [[entries]]
 id = "core:ci_model_jobs.ungated"
@@ -50,3 +54,21 @@ title = "Model-backed CI jobs are gated"
 key = "model-ci-gated.1:ci_model_jobs.ungated"
 why = "A CI job that calls a model costs money on every run. If it runs on every merge and every pull request update, the cost grows with the number of changes agents make, not with changes to the prompts it tests."
 fix = "Run each named job only when prompts, skills or instruction files change, or nightly, or on a label. Cancel superseded runs, sample the eval cases, and use the cheapest model that still tells good from bad. Move rule-checkable assertions into ordinary tests."
+
+[[entries]]
+id = "core:ci_model_jobs.agent_evals.present"
+kind = "signal"
+title = "An agent eval suite runs in CI against a committed baseline"
+collector = "core.ci_model_jobs"
+path = "ci_model_jobs.agent_evals.present"
+type = "bool"
+evidence = "head_structure"
+null_means = "eval_ci_unread: a baselined eval suite is not run by any CI file read, and a CI file or include was not read"
+
+[[entries]]
+id = "core.cond.agent-evals.1.present"
+kind = "condition"
+title = "Agent eval suites run in CI with a baseline"
+key = "agent-evals.1:ci_model_jobs.agent_evals.present"
+why = "A prompt or model change can make an agent worse while every unit test still passes. Eval cases run in CI against a committed baseline turn that drop into a red check, and the baseline in the tree says what passing means."
+fix = "Keep the agent's eval cases in an evals/ folder and commit a baseline beside them: a snapshot, recorded model responses or a tool-budget file. Run the folder from a CI job, gated to prompt and model changes if it costs money."

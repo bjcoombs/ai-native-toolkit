@@ -284,6 +284,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `ci_model_jobs.jobs.gates` | token |
 | `ci_model_jobs.jobs.state` | token |
 | `ci_model_jobs.jobs.reason` | token |
+| `ci_model_jobs.agent_evals.present_reason` | token |
+| `ci_model_jobs.agent_evals.dirs.path` | path (hashed when hashing is on) |
+| `ci_model_jobs.agent_evals.dirs.baseline` | token |
 
 ## claude_config
 

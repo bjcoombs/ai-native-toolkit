@@ -301,6 +301,18 @@
 #   is unknown (no_model_jobs); with none ungated but a trigger this reader cannot settle,
 #   or a job it cannot read, unknown (trigger_unresolved, ci_jobs_unread), never met. It
 #   gates no Step. Graded measured (head_structure), read from the committed CI files.
+# - Agent eval suites run in CI with a baseline reads ci_model_jobs.agent_evals.present
+#   (lib/ci/agent_evals.py, #850): a folder named as an eval suite (evals, eval,
+#   evaluations, llm_evals, agent-evals ..., or a test tier agent, agents or llm under a
+#   test root) that names a model provider, client or harness, or holds a recorded-response
+#   fixture, is named by a committed CI file (its path, its dotted module, a pytest -m marker
+#   of its tier, or one Makefile, justfile or package.json target a CI command runs), and
+#   holds a committed baseline: a snapshot, cached responses, a tool-budget file or a
+#   baseline or golden file. An eval folder with no model reference (an expression
+#   evaluator) is set aside. A paths filter is a trigger, not a run. With no suite, or none
+#   both run and baselined, unmet; with a baselined suite no CI file read names and a CI file
+#   or include not read, unknown (eval_ci_unread). It gates no Step. Graded measured
+#   (head_structure), read from the committed files.
 # - Skill library reads skill_library.present (lib/skill_library.py, #848): at least one
 #   committed SKILL.md with clean frontmatter (a name and a description) in a known skill
 #   location, a skills/ folder at the root, in a harness folder (.claude, .agents, .gemini,
@@ -641,6 +653,17 @@ aggregation = "min"
   level = 1
   truth = ["governance"]
   criteria = [{ signal = "ci_model_jobs.ungated", op = "eq", value = 0 }]
+
+[[rows]]
+id = "agent-evals"
+title = "Agent eval suites run in CI with a baseline"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["agent_runtime", "behaviour"]
+  criteria = [{ signal = "ci_model_jobs.agent_evals.present", op = "eq", value = true }]
 
 [[rows]]
 id = "agent-least-privilege"

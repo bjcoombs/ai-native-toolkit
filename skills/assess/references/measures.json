@@ -125,6 +125,51 @@
       ]
     },
     {
+      "id": "agent-evals",
+      "title": "Agent eval suites run in CI with a baseline",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "agent-evals.1",
+          "truth": [
+            "agent_runtime",
+            "behaviour"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "agent-evals.1:ci_model_jobs.agent_evals.present",
+              "signal": "ci_model_jobs.agent_evals.present",
+              "producer": {
+                "scan": "ci_model_jobs",
+                "collector": "core.ci_model_jobs"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "An agent eval suite runs in CI against a committed baseline: is true",
+              "title": "Agent eval suites run in CI with a baseline",
+              "fix": "Keep the agent's eval cases in an evals/ folder and commit a baseline beside them: a snapshot, recorded model responses or a tool-budget file. Run the folder from a CI job, gated to prompt and model changes if it costs money.",
+              "why": "A prompt or model change can make an agent worse while every unit test still passes. Eval cases run in CI against a committed baseline turn that drop into a red check, and the baseline in the tree says what passing means.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "agent-job-write-access",
       "title": "Agent job write access",
       "scope": "team",
@@ -1597,6 +1642,7 @@
       "id": "behaviour",
       "title": "Behaviour",
       "conditions": [
+        "agent-evals.1",
         "layer-5-ci.1",
         "layer-6-coverage.1",
         "layer-6-coverage.2",
@@ -1608,7 +1654,9 @@
         "layer-6-coverage.2",
         "skill-script-tests.1"
       ],
-      "shared": [],
+      "shared": [
+        "agent-evals.1"
+      ],
       "why": "That the code's behaviour is checked by something that runs on every change, not taken on trust.",
       "why_source": ""
     },
@@ -1697,6 +1745,7 @@
       "id": "agent_runtime",
       "title": "Agent runtime",
       "conditions": [
+        "agent-evals.1",
         "agent-job-write-access.1",
         "agent-least-privilege.1",
         "layer-1-liveness.1",
@@ -1705,6 +1754,7 @@
         "layer-8-agent-ops.2"
       ],
       "listed": [
+        "agent-evals.1",
         "agent-job-write-access.1",
         "agent-least-privilege.1",
         "layer-1-liveness.1",
@@ -1713,6 +1763,7 @@
         "layer-8-agent-ops.2"
       ],
       "shared": [
+        "agent-evals.1",
         "agent-job-write-access.1",
         "agent-least-privilege.1",
         "layer-5-ci.2"
@@ -1765,6 +1816,15 @@
     }
   ],
   "tag_pairs": [
+    {
+      "tags": [
+        "behaviour",
+        "agent_runtime"
+      ],
+      "conditions": [
+        "agent-evals.1"
+      ]
+    },
     {
       "tags": [
         "docs",
@@ -2735,7 +2795,7 @@
     {
       "name": "ci_model_jobs",
       "title": "Model-backed CI jobs",
-      "summary": "Each GitHub Actions or GitLab CI job that calls a model API. Signs are an eval harness, an agent action, the Claude Code CLI, a model-provider secret, pytest -m eval or an evals/ path. For each job, whether a gate stops it running on every push or pull request update. Gates are a paths filter, a schedule or manual trigger only, a label, or GitLab rules:changes.",
+      "summary": "Each GitHub Actions or GitLab CI job that calls a model API. Signs are an eval harness, an agent action, the Claude Code CLI, a model-provider secret, pytest -m eval or an evals/ path. For each job, whether a gate stops it running on every push or pull request update. Gates are a paths filter, a schedule or manual trigger only, a label, or GitLab rules:changes. Also each agent eval suite folder, whether a CI file runs it and whether it holds a committed baseline.",
       "collector": "core.ci_model_jobs",
       "reads": [
         "repo_root",
@@ -2748,6 +2808,9 @@
       "privacy": {
         "written": true,
         "strings_kept": {
+          "ci_model_jobs.agent_evals.dirs.baseline": "token",
+          "ci_model_jobs.agent_evals.dirs.path": "path",
+          "ci_model_jobs.agent_evals.present_reason": "token",
           "ci_model_jobs.jobs.gates": "token",
           "ci_model_jobs.jobs.job": "drop",
           "ci_model_jobs.jobs.path": "path",
@@ -2761,9 +2824,11 @@
       },
       "used_by": {
         "rows": [
+          "agent-evals",
           "model-ci-gated"
         ],
         "conditions": [
+          "agent-evals.1:ci_model_jobs.agent_evals.present",
           "model-ci-gated.1:ci_model_jobs.ungated"
         ],
         "findings": []
@@ -2780,12 +2845,22 @@
           "next_step": "Nothing to change if the job is gated; a plain paths:, schedule: or label condition lets the scan read it."
         },
         {
+          "code": "eval_ci_unread",
+          "means": "An agent eval suite holds a committed baseline, but no CI file that was read runs it. A CI file or GitLab include was not read, and it may run the suite.",
+          "next_step": "Nothing to change: this reads as not measured until those files can be read."
+        },
+        {
           "code": "ci_jobs_unread",
           "means": "The ungated count is null and ungated_reason holds this code. Every model-backed job found is gated. But a job calls a reusable workflow from another repository on a route that is not gated, or a GitLab include was not read. An ungated job may sit there.",
           "next_step": "Nothing to change: this reads as not measured until those files can be read."
         }
       ],
       "evidence": [
+        {
+          "signal": "ci_model_jobs.agent_evals.present",
+          "input_class": "head_structure",
+          "grade": "measured"
+        },
         {
           "signal": "ci_model_jobs.ungated",
           "input_class": "head_structure",
@@ -6696,6 +6771,15 @@
       "input_class": "ci_executed",
       "grade": "verified",
       "null_means": "included_jobs, merged_config_partial: an include may; unknown_trigger: unsettled; check_may_pass: may pass; script_not_found: not committed; check_target: a target may; unread_ci_system: unparsed CI; external_ci(_marker): CI elsewhere; analysers_in_build: .NET analysers; compiler_gate_only: -Werror"
+    },
+    {
+      "path": "ci_model_jobs.agent_evals.present",
+      "title": "An agent eval suite runs in CI against a committed baseline",
+      "type": "bool",
+      "collector": "core.ci_model_jobs",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "eval_ci_unread: a baselined eval suite is not run by any CI file read, and a CI file or include was not read"
     },
     {
       "path": "ci_model_jobs.ungated",

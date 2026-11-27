@@ -55,6 +55,10 @@ That the code's behaviour is checked by something that runs on every change, not
 | `layer-6-coverage.2` A mutation run has completed | `test_pressure` | A mutation run completed: is true (`test_pressure.mutation_run eq true`) | `measured` | yes | - | positive | requires `layer-5-ci.1` | - | Coverage shows tests run the code; a mutation run shows whether they notice it changing. A completed run names the surviving mutants, which are the tests an agent cannot yet rely on. | Run the opt-in mutation pass to see which tests pin behaviour. |
 | `skill-script-tests.1` Each skill's scripts have tests beside them (presence, not coverage) | `skill_script_tests` | Skills whose scripts have no tests beside them: is 0 (`skill_script_tests.skills_untested eq 0`) | `measured` | yes | - | positive | - | - | A skill's scripts run with an agent's permissions every time it triggers; tests beside them are the only check that a change still does what the SKILL.md promises. | Add tests for each named skill's scripts in that skill's own folder (tests/ or test_*.py beside them); where the report finds them elsewhere, move or copy them in, since tests outside the folder do not ship with the skill. |
 
+Also carries this tag, listed under its first tag:
+
+- `agent-evals.1` (Agent runtime)
+
 ### Contracts
 
 That generated output and its source agree, so an agent editing one does not quietly break the other.
@@ -114,6 +118,7 @@ That an agent can see the system it changes run, and confirm a change there, not
 
 | Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Exit review | Why it matters | Next step |
 |---|---|---|---|---|---|---|---|---|---|---|
+| `agent-evals.1` Agent eval suites run in CI with a baseline (shared with Behaviour) | `ci_model_jobs` | An agent eval suite runs in CI against a committed baseline: is true (`ci_model_jobs.agent_evals.present eq true`) | `measured` | yes | - | positive | - | - | A prompt or model change can make an agent worse while every unit test still passes. Eval cases run in CI against a committed baseline turn that drop into a red check, and the baseline in the tree says what passing means. | Keep the agent's eval cases in an evals/ folder and commit a baseline beside them: a snapshot, recorded model responses or a tool-budget file. Run the folder from a CI job, gated to prompt and model changes if it costs money. |
 | `agent-job-write-access.1` An agent job holds write access (shared with Governance) | `agent_ops` | Agent jobs with a write scope and no separate writer job: is above 0 (`agent_ops.summary.agent_job_write_access gt 0`) | `measured` | no, listed | - | hazard | - | - | An agent job with a write scope and no separate writer job can push, merge or edit issues on the strength of text an outsider wrote, with nothing between the prompt and the write. | Drop the write scopes from the agent job's `permissions:` and do the writes in a job that `needs:` it, or in gh-aw `safe-outputs:`. A turn or budget cap limits cost, not what the token can do. |
 | `agent-least-privilege.1` Agent jobs run with least privilege (shared with Governance) | `agent_ops` | Every agent job runs with a read-only token: is true (`agent_ops.summary.agent_jobs_least_privilege eq true`) | `measured` | yes | - | positive | - | - | An agent acts on whatever text reaches its prompt, an issue body or a pull request included. A read-only token keeps a misled agent from pushing, merging or editing issues itself; a separate job that acts on its output does the writing, where a reviewer can see each write. | Give each job that runs an agent `permissions:` with no write scope, such as `contents: read` or `read-all`. Move writes into a separate job that `needs:` the agent job, or into gh-aw `safe-outputs:`. A job-level `permissions:` replaces the workflow's, so check the agent job's own block. |
 | `layer-1-liveness.1` Some runtime telemetry is committed | `observability` | Observability rung: is at least 1 (`observability.rung gte 1`) | `declared` | no, listed | - | positive | - | - | Telemetry in the code is what any view of the running system is built on. Without it, there is nothing for an agent or a person to read when checking how a change behaves in use. | Add a telemetry dependency, a runbook or an OBSERVABILITY.md so an agent can see the system run. |
@@ -156,6 +161,7 @@ Also carries this tag, listed under its first tag:
 
 Each pair of tags that share a condition, one line per condition both carry.
 
+- `behaviour` and `agent_runtime`: `agent-evals.1`
 - `docs` and `agent_context`: `layer-0-instructions.2`
 - `agent_runtime` and `governance`: `agent-job-write-access.1`
 - `agent_runtime` and `governance`: `agent-least-privilege.1`
@@ -191,6 +197,7 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | Row | Title | Scope | Aggregated by | Levels |
 |---|---|---|---|---|
 | `agent-consistency` | Cross-agent instruction consistency | team | `min` | `agent-consistency.1`, `agent-consistency.2` |
+| `agent-evals` | Agent eval suites run in CI with a baseline | team | `min` | `agent-evals.1` |
 | `agent-job-write-access` | Agent job write access | team | `min` | `agent-job-write-access.1` |
 | `agent-least-privilege` | Agent jobs run with least privilege | team | `min` | `agent-least-privilege.1` |
 | `contributor-files` | Contributor files | team | `min` | `contributor-files.1` |
@@ -438,18 +445,23 @@ Why the signals named here matter:
 
 A CI job that calls a model costs money on every run. If it runs on every merge and every pull request update, the cost grows with the number of changes agents make, not with changes to the prompts it tests.
 
-Each GitHub Actions or GitLab CI job that calls a model API. Signs are an eval harness, an agent action, the Claude Code CLI, a model-provider secret, pytest -m eval or an evals/ path. For each job, whether a gate stops it running on every push or pull request update. Gates are a paths filter, a schedule or manual trigger only, a label, or GitLab rules:changes.
+Each GitHub Actions or GitLab CI job that calls a model API. Signs are an eval harness, an agent action, the Claude Code CLI, a model-provider secret, pytest -m eval or an evals/ path. For each job, whether a gate stops it running on every push or pull request update. Gates are a paths filter, a schedule or manual trigger only, a label, or GitLab rules:changes. Also each agent eval suite folder, whether a CI file runs it and whether it holds a committed baseline.
 
 - Collector: `core.ci_model_jobs`, reading `repo_root`, `ghsync_root`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `ci_model_jobs.jobs.gates` token, `ci_model_jobs.jobs.job` drop, `ci_model_jobs.jobs.path` path, `ci_model_jobs.jobs.platform` token, `ci_model_jobs.jobs.reason` token, `ci_model_jobs.jobs.signs` token, `ci_model_jobs.jobs.state` token, `ci_model_jobs.jobs.triggers` token, `ci_model_jobs.ungated_reason` token.
-- Used by: row `model-ci-gated`.
-- Evidence: `ci_model_jobs.ungated` head_structure (measured).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `ci_model_jobs.agent_evals.dirs.baseline` token, `ci_model_jobs.agent_evals.dirs.path` path, `ci_model_jobs.agent_evals.present_reason` token, `ci_model_jobs.jobs.gates` token, `ci_model_jobs.jobs.job` drop, `ci_model_jobs.jobs.path` path, `ci_model_jobs.jobs.platform` token, `ci_model_jobs.jobs.reason` token, `ci_model_jobs.jobs.signs` token, `ci_model_jobs.jobs.state` token, `ci_model_jobs.jobs.triggers` token, `ci_model_jobs.ungated_reason` token.
+- Used by: row `agent-evals`, row `model-ci-gated`.
+- Evidence: `ci_model_jobs.agent_evals.present` head_structure (measured), `ci_model_jobs.ungated` head_structure (measured).
 - Not measured when:
   - `no_model_jobs`: With model_jobs at 0, no model-calling CI job was detected, so there is nothing to gate. A model call inside a script file a job runs is not read. Nothing to change.
   - `trigger_unresolved`: The ungated count is null and ungated_reason holds this code. No model-backed job is ungated, but one could not be settled. Examples are an unreadable on: key, a label if: joined with ||, or a job that only names a provider secret. A GitLab merge that is not settled reads the same way. Nothing to change if the job is gated; a plain paths:, schedule: or label condition lets the scan read it.
+  - `eval_ci_unread`: An agent eval suite holds a committed baseline, but no CI file that was read runs it. A CI file or GitLab include was not read, and it may run the suite. Nothing to change: this reads as not measured until those files can be read.
   - `ci_jobs_unread`: The ungated count is null and ungated_reason holds this code. Every model-backed job found is gated. But a job calls a reusable workflow from another repository on a route that is not gated, or a GitLab include was not read. An ungated job may sit there. Nothing to change: this reads as not measured until those files can be read.
+
+Why the signals named here matter:
+
+- `ci_model_jobs.agent_evals.present` feeds `agent-evals.1:ci_model_jobs.agent_evals.present`: A prompt or model change can make an agent worse while every unit test still passes. Eval cases run in CI against a committed baseline turn that drop into a red check, and the baseline in the tree says what passing means.
 
 ### `claude_config`: Claude Code configuration
 

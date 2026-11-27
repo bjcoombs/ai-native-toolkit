@@ -442,6 +442,11 @@ _WORDING: dict[str, Wording] = {
         "No CI job that calls a model API runs on every push to the default branch or every pull "
         "request update without a `paths:` filter, a schedule or manual trigger, a label, or GitLab "
         "`rules:changes:`."),
+    "ci_model_jobs.agent_evals.present": _flag(
+        "Keep the agent's eval cases in an `evals/` folder, commit a baseline beside them (a "
+        "snapshot, recorded model responses or a tool-budget file), and run the folder in a CI job.",
+        "A CI command names an eval folder that calls a model, and that folder holds a committed "
+        "baseline the run compares against."),
     "agent_ops.summary.agent_jobs_least_privilege": _flag(
         "Give each workflow job that runs an agent `permissions:` with no write scope "
         "(`contents: read`, or `read-all`), and move writes into a separate job that `needs:` the "
@@ -611,7 +616,9 @@ _MEASURE_HINTS = {
                      "committed files cannot be listed.",
     "ci_model_jobs": "Not measured (`no_model_jobs`) when no model-calling CI job is detected. "
                      "Not measured (`trigger_unresolved`, `ci_jobs_unread`) when none is ungated but a "
-                     "trigger, a condition or a job this reader cannot read could still run one on every change.",
+                     "trigger, a condition or a job this reader cannot read could still run one on every change. "
+                     "Agent evals are not measured (`eval_ci_unread`) when an eval suite holds a baseline, no "
+                     "CI file read runs it, and a CI file or include was not read.",
     "instruction_claims": "Not measured (`no_instruction_claims`) when the instruction files make no "
                           "claim this check reads (a script run in CI, a pinned version, a file count): "
                           "no false claim among none is not a claim that holds.",

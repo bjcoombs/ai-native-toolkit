@@ -98,11 +98,11 @@
     },
     "core.ci_model_jobs": {
       "repos": {
-        "grpa/sub/deep/svc2": "721e25a2845388dc28bcd6d275b2baa9f2710c73102d570385e5185752dc88b8",
-        "grpa/svc1": "ffbe7850dcb718b992f28b87a16cfe17373eb0a6429d007e96fd12c58c73ff25",
-        "grpb/lib1": "721e25a2845388dc28bcd6d275b2baa9f2710c73102d570385e5185752dc88b8"
+        "grpa/sub/deep/svc2": "8e14a9e29a1389e51da069d4e07a6fe5b593a7232ca05bba768264cc8689ef05",
+        "grpa/svc1": "5f81b5027dfee0d8f7e4bf430c23c4d54a6105aa2f99385173aa21e4dc9ff3da",
+        "grpb/lib1": "8e14a9e29a1389e51da069d4e07a6fe5b593a7232ca05bba768264cc8689ef05"
       },
-      "revision": 4
+      "revision": 5
     },
     "core.claude_config": {
       "repos": {
