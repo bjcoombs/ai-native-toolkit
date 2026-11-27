@@ -67,7 +67,7 @@ def test_every_scan_spec_is_built_from_its_collector_entry() -> None:
 def test_changing_a_collector_reads_changes_its_spec() -> None:
     m = _raw()
     _entry(m, "collector", "id", "core.structure_scan")["reads"] = ["repo_root"]
-    spec = sr.spec_from_manifest(m, "structure_scan", lambda root: None)
+    spec = sr.spec_from_manifest(m, "structure_scan", lambda repo_root: None)
     assert spec.reads == ("repo_root",)
     assert (spec.stage, spec.private, spec.label) == ("read_side", True, "structure")
 
@@ -76,7 +76,7 @@ def test_gate_reason_and_network_come_from_the_entry() -> None:
     m = _raw()
     entry = _entry(m, "collector", "id", "core.agent_ops")
     entry.update(degrade=False, gate_reason="serialiser", network=True)
-    spec = sr.spec_from_manifest(m, "agent_ops", lambda root: None)
+    spec = sr.spec_from_manifest(m, "agent_ops", lambda repo_root: None)
     assert (spec.degrade, spec.gate_reason, spec.network) == (False, sr._SERIALISER, True)
 
 
