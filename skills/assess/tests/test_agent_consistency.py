@@ -403,6 +403,10 @@ def test_a_pointer_with_other_instructions_stays_a_second_file(tmp_path: Path) -
     ("Instructions  live in CLAUDE.md.\n", ["CLAUDE.md"], "CLAUDE.md"),
     ("Follow the project instructions in [AGENTS.md](AGENTS.md).\n", ["AGENTS.md"],
      "AGENTS.md"),
+    # The sibling link may name the file as ./name (#1507).
+    ("See [CLAUDE.md](./CLAUDE.md).\n", ["CLAUDE.md"], "CLAUDE.md"),
+    ("The instructions for this repository live in [`CLAUDE.md`](./CLAUDE.md).\n",
+     ["CLAUDE.md"], "CLAUDE.md"),
     # Anything else is no pointer.
     ("\n@AGENTS.md\n", ["AGENTS.md"], None),  # an import, read by follow_imports
     ("Read ./CLAUDE.md first\n", ["CLAUDE.md"], None),
@@ -416,6 +420,11 @@ def test_a_pointer_with_other_instructions_stays_a_second_file(tmp_path: Path) -
     ("Instructions: [here](docs/CLAUDE.md).\n", ["CLAUDE.md"], None),
     ("See [CLAUDE.md](docs/CLAUDE.md).\n", ["CLAUDE.md"], None),
     ("See ../CLAUDE.md\n", ["CLAUDE.md"], None),
+    ("See ./CLAUDE.md.\n", ["CLAUDE.md"], None),
+    ("See [./CLAUDE.md](./CLAUDE.md).\n", ["CLAUDE.md"], None),
+    ("See [CLAUDE.md](.//CLAUDE.md).\n", ["CLAUDE.md"], None),
+    ("See [CLAUDE.md](../CLAUDE.md).\n", ["CLAUDE.md"], None),
+    ("See [CLAUDE.md](./docs/CLAUDE.md).\n", ["CLAUDE.md"], None),
     ("Do not edit CLAUDE.md by hand.\n", ["CLAUDE.md"], None),
     ("Don\u2019t follow CLAUDE.md\n", ["CLAUDE.md"], None),
     ("CLAUDE.md isn't maintained\n", ["CLAUDE.md"], None),
@@ -476,3 +485,110 @@ def test_tools_linked_to_the_pointer_agents_md_stay_linked(tmp_path: Path) -> No
 def test_a_pointer_to_its_own_symlink_is_no_delegation(tmp_path: Path) -> None:
     root = _repo(tmp_path, {"AGENTS.md": "See CLAUDE.md.\n"}, {"CLAUDE.md": "AGENTS.md"})
     assert scan_agent_consistency(root)["canonical"] == "AGENTS.md"
+
+
+def _links(block: dict[str, object]) -> dict[str, str]:
+    files = block["files"]
+    assert isinstance(files, list)
+    return {f["path"]: f["link"] for f in files}
+
+
+def test_a_pointer_chain_makes_the_file_with_content_canonical(tmp_path: Path) -> None:
+    # AGENTS.md -> CLAUDE.md -> GEMINI.md: the rules live at the end of the chain (#1507).
+    root = _repo(tmp_path, {"AGENTS.md": "See CLAUDE.md.\n", "CLAUDE.md": "See GEMINI.md.\n",
+                            "GEMINI.md": CLAUDE_RULES})
+    block = scan_agent_consistency(root)
+    assert block["canonical"] == "GEMINI.md"
+    assert _links(dict(block)) == {
+        "AGENTS.md": "pointer", "CLAUDE.md": "pointer", "GEMINI.md": "canonical"}
+    assert (block["conflicts"], block["unlinked"], block["consistent"]) == (0, 0, True)
+    assert block["next_steps"] == []
+
+
+def test_a_third_tool_linked_to_any_file_in_the_chain_stays_linked(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": "See CLAUDE.md.\n", "CLAUDE.md": "See GEMINI.md.\n",
+                            "GEMINI.md": CLAUDE_RULES, ".windsurfrules": "Follow AGENTS.md\n",
+                            ".clinerules": "Follow CLAUDE.md\n"})
+    block = scan_agent_consistency(root)
+    assert block["canonical"] == "GEMINI.md"
+    assert _links(dict(block))[".windsurfrules"] == "pointer"
+    assert _links(dict(block))[".clinerules"] == "pointer"
+    assert block["unlinked"] == 0
+
+
+@pytest.mark.parametrize("gemini", [
+    "See CLAUDE.md.\n",   # points back into the chain
+    "See AGENTS.md.\n",   # points back to the start
+    "@AGENTS.md\n",       # imports the start back
+    "@CLAUDE.md\n",       # imports a link of the chain back
+])
+def test_a_chain_that_loops_back_is_no_delegation(tmp_path: Path, gemini: str) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": "See CLAUDE.md.\n", "CLAUDE.md": "See GEMINI.md.\n",
+                            "GEMINI.md": gemini})
+    assert scan_agent_consistency(root)["canonical"] == "AGENTS.md"
+
+
+def test_a_chain_through_a_symlink_back_is_no_delegation(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": "See CLAUDE.md.\n", "CLAUDE.md": "See GEMINI.md.\n"},
+                 {"GEMINI.md": "AGENTS.md"})
+    assert scan_agent_consistency(root)["canonical"] == "AGENTS.md"
+
+
+def test_a_dot_slash_link_delegates(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": "See [CLAUDE.md](./CLAUDE.md).\n",
+                            "CLAUDE.md": CLAUDE_RULES})
+    block = scan_agent_consistency(root)
+    assert block["canonical"] == "CLAUDE.md"
+    assert _links(dict(block))["AGENTS.md"] == "pointer"
+
+
+def _prose(root: Path) -> list[dict[str, object]]:
+    return [dict(f) for f in nested_instruction_surface(root)["findings"]
+            if f["kind"] == "claude_prose_pointer"]
+
+
+def test_a_prose_claude_md_pointer_reads_linked_and_recommends_the_import(
+        tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": AGENTS, "CLAUDE.md": "See AGENTS.md.\n"})
+    block = scan_agent_consistency(root)
+    assert _links(dict(block))["CLAUDE.md"] == "pointer"
+    # Informational only: the finding moves neither `consistent` nor the row (#1507).
+    assert (block["conflicts"], block["unlinked"], block["consistent"]) == (0, 0, True)
+    assert _row(dict(block))["level"] == 2
+    found = _prose(root)
+    assert [(f["path"], f["parent"]) for f in found] == [("CLAUDE.md", "AGENTS.md")]
+    assert "`@AGENTS.md`" in str(found[0]["detail"])
+    assert _shadows(root) == []
+
+
+def test_a_nested_prose_pointer_recommends_the_sibling_import(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": AGENTS, "pkg/AGENTS.md": AGENTS,
+                            "pkg/CLAUDE.md": "Follow [AGENTS.md](./AGENTS.md).\n"})
+    assert [(f["path"], f["parent"]) for f in _prose(root)] == [
+        ("pkg/CLAUDE.md", "pkg/AGENTS.md")]
+
+
+@pytest.mark.parametrize("claude", [
+    "@AGENTS.md\n",                       # the import Claude Code loads
+    "See AGENTS.md.\nRun the tests.\n",  # not a bare pointer
+])
+def test_no_prose_pointer_finding_without_a_bare_prose_pointer(
+        tmp_path: Path, claude: str) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": AGENTS, "CLAUDE.md": claude})
+    assert _prose(root) == []
+
+
+def test_no_prose_pointer_finding_for_a_cycle_or_a_symlink(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": "See CLAUDE.md.\n", "CLAUDE.md": "See AGENTS.md.\n"})
+    assert _prose(root) == []
+    linked = _repo(tmp_path / "s", {"AGENTS.md": AGENTS}, {"CLAUDE.md": "AGENTS.md"})
+    assert _prose(linked) == []
+
+
+def test_the_prose_pointer_finding_is_counts_only_safe(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": AGENTS, "CLAUDE.md": "See AGENTS.md.\n"})
+    scans = counts_only_scans({"nested_instructions": nested_instruction_surface(root)})
+    found = [f for f in scans["nested_instructions"]["findings"]
+             if f["kind"] == "claude_prose_pointer"]
+    assert len(found) == 1
+    assert "detail" not in found[0]
