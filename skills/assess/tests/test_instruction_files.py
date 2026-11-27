@@ -309,6 +309,11 @@ def test_a_heading_only_file_is_a_stub() -> None:
     # CommonMark ATX only: an indented code line and `#todo` are content, not headings.
     assert not is_heading_only("# Guide\n\n    # run make check\n")
     assert not is_heading_only("# Guide\n#todo\n")
+    # A list item, quote, fence or indented line above `---` is never setext heading text.
+    assert not is_heading_only("# Project\n- Run make check before pushing\n---\n## Notes\n")
+    assert not is_heading_only("# P\n1. Run make check\n---\n")
+    assert not is_heading_only("# P\n> Run make check\n---\n")
+    assert not is_heading_only("# P\n    make check\n---\n")
     assert is_heading_only("   ### Deep\n#\n")
 
 

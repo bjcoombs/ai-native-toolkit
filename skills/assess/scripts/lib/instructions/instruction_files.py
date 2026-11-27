@@ -191,6 +191,9 @@ _SETEXT_UNDERLINE = re.compile(r"^[ \t]*(?:=+|-+)[ \t]*$")
 # A CommonMark ATX heading: up to three spaces, one to six #, then a space or the end, so an
 # indented code line (`    # run make check`) or `#todo` is content, not a heading.
 _ATX_HEADING = re.compile(r"^ {0,3}#{1,6}(?:[ \t]|$)")
+# A line CommonMark never makes setext heading text: a list item, a blockquote, a fence
+# opener or an indented code line (`- Run make check` above `---` is content).
+_NOT_SETEXT_TEXT = re.compile(r"^(?: {0,3}(?:[-*+][ \t]|\d{1,9}[.)][ \t]|>|```|~~~)|(?: {4}|\t))")
 
 
 def is_heading_only(text: str) -> bool:
@@ -198,7 +201,8 @@ def is_heading_only(text: str) -> bool:
     lines = text.splitlines()
     nxt = lines[1:] + [""]
     return all(not line.strip() or _ATX_HEADING.match(line) or _SETEXT_UNDERLINE.match(line)
-               or (_SETEXT_UNDERLINE.match(after) and after.strip()) for line, after in zip(lines, nxt))
+               or (_SETEXT_UNDERLINE.match(after) and after.strip() and not _NOT_SETEXT_TEXT.match(line))
+               for line, after in zip(lines, nxt))
 
 
 # Basenames (lowercased) of the known instruction files, for cross-referencing
