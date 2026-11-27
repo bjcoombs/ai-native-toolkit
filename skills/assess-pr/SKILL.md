@@ -334,7 +334,7 @@ Re-running `/assess` on the same repo must not create duplicate tracking items. 
   uv run "$RENDER" "$REPO_ROOT" plan --existing "$EXISTING" --report-link "<full-report link>"
   ```
 
-  For a split item, look in the same list for an item whose marker carries the same `condition`, `sub` and `part` and whose title matches; only the unsplit items go through `plan`. Each item comes back with a `filing` step: `create` (file it), `reuse` (an item with the same marker exists: `filing.number`) or `reuse_and_mark` (an unmarked item with the label and the same title exists: write `filing.marked_body` back with `gh issue edit <number> --body-file`, which adds the marker and changes nothing else). Where no label can be applied (filing upstream from a read-only account), list the user's own issues instead, `gh issue list --repo "$GH_SLUG" --author @me --state all --limit 500 --json number,title,body,state,labels > "$EXISTING"`, and pass `--label ""`. On GitLab, `glab issue list --label assess-finding --all --output json` gives `iid` and `description`; map them to `number` and `body` before planning.
+  For an action you split (One concern per item), ignore its item's `filing` step: look in the same list for an item whose marker carries the same `condition`, `sub` and `part` and whose title matches. When the action was filed whole before (an item marked for the same `condition` and `sub` with no `part`), reuse that item as part 1 and add ` part=1` before `model=` in its marker, so the split does not leave a duplicate. The reverse needs no handling: an action a previous run split that this run files whole gets one of its earlier parts from `plan` as `reuse_and_mark`, with `part` dropped from the marker, and 6e proposes closing the other parts as superseded. Two actions that name the same condition each take their own item: `plan` matches each existing item once per run, preferring the one whose title agrees. Each item comes back with a `filing` step: `create` (file it), `reuse` (an item with the same marker exists: `filing.number`) or `reuse_and_mark` (an unmarked item with the label and the same title exists: write `filing.marked_body` back with `gh issue edit <number> --body-file`, which adds the marker and changes nothing else). Where no label can be applied (filing upstream from a read-only account), list the user's own issues instead, `gh issue list --repo "$GH_SLUG" --author @me --state all --limit 500 --json number,title,body,state,labels > "$EXISTING"`, and pass `--label ""`. On GitLab, `glab issue list --label assess-finding --all --output json` gives `iid` and `description`; map them to `number` and `body` before planning.
 - **Other tag/label-based** (Linear, Jira labels): apply a stable label like `assess-finding`, search for the marker's `condition=` text first where the tracker searches bodies, then by `label + title`. Open OR closed match → reuse, and add the marker to an unmarked match.
 - **Search-based** (Jira via JQL, Notion, Linear queries): search the tracker for items with the action title. Match → reuse.
 - **Hierarchical** (Task Master): list the current tag's tasks; compare titles. Match → reuse.
@@ -344,7 +344,7 @@ A sub-item's marker keys on its parent's condition and its letter (`sub=a`), nev
 
 In all cases, before creating: search first. If a match is found (open or closed in trackers that have state), reuse it. If a match was previously closed (the gap was once resolved but has re-emerged), flag this to the user in the chat output - don't silently re-open or duplicate.
 
-**Task rotation across runs:** when an action drops out of the Top 3 between runs (e.g., a hotspot graduated, or a higher-priority issue emerged), don't auto-close the existing tracker task. Leave it pending. Mention the demotion in the new report's "Additional Opportunities" section so the user can decide if it's still worth doing. The user owns the close decision.
+**Task rotation across runs:** when an action drops out of the Top 3 between runs (e.g., a hotspot graduated, or a higher-priority issue emerged), don't auto-close the existing tracker task. Leave it pending. Mention the demotion in the new report's "Additional Opportunities" section so the user can decide if it's still worth doing. The user owns the close decision: 6e proposes a close only when the item's condition now holds, and writes it only once the user confirms.
 
 ### 6d: Link the items back to the assessment
 
@@ -356,7 +356,38 @@ How the link is recorded depends on the tracker, but the goal is the same: someo
 - **No PR was opened**: update only `.assess/assess-report.md` locally with the item references. With the upstream-issues flow, upstream references read `<owner>/<repo>#N`; push the updated report to the fork branch so `$REPORT_URL` shows them.
 - **Other trackers**: do whatever makes the cross-link work; if the tracker doesn't support links back, include the assessment date + PR URL (if any) in each item's body so a human can trace it.
 
-### 6e: Report back to the user
+### 6e: Reconcile filed items (propose only)
+
+On an interactive run with a GitHub or GitLab tracker, after 6b to 6d, read the tracker again and reconcile every filed item against this run. Nothing is written until the user confirms, and only the confirmed proposals are written. Skip this step on a headless run (the non-interactive contract above); the command also proposes nothing when `run-context.json .interactive` is `false`.
+
+```bash
+gh issue list --label assess-finding --state all --limit 500 --json number,title,body,state,labels > "$EXISTING"
+uv run "$RENDER" "$REPO_ROOT" reconcile --existing "$EXISTING" --filed "<numbers 6b filed or reused, comma-separated>"
+```
+
+Use the same `--label ""` and GitLab mapping as 6c. The output holds `proposals`, `rules_changed`, `notes` and `summary`. Each item gets at most one proposal:
+
+- **Close**: an open item's condition now holds. The proposal cites the evidence line and the commit this run measured.
+- **Reopen**: a closed item's condition lapsed. The proposal names the cause.
+- **Demote to informational**: the item can no longer move, because its finding keys on commit origin (`self_referential_tests`) or its condition left the maturity model or reads not applicable. The write adds the `assess-informational` label and keeps the item's state; a later run passes the item over.
+- **Close as superseded**: a part of an action that is no longer split, beside the item that now carries the action.
+- **Rules changed**: a move that only the new maturity model caused (the model changed, the repository did not) reads `rules changed: your repo did not` under "No change proposed". It is never a proposal and never progress or regression.
+
+Show `summary` verbatim as one batched message, then ask once with a multi-select AskUserQuestion listing each proposal by item number, plus "none". Print the writes for the confirmed numbers only, and run each:
+
+```bash
+uv run "$RENDER" "$REPO_ROOT" reconcile --existing "$EXISTING" --filed "<same numbers>" --confirm "<confirmed numbers, or all>"
+```
+
+| `op` | GitHub write |
+|------|--------------|
+| `close` | `gh issue close <number> --comment "<comment>"` |
+| `reopen` | `gh issue reopen <number> --comment "<comment>"` |
+| `label` | `gh label create <add_label> --force`, then `gh issue edit <number> --add-label <add_label>` and `gh issue comment <number> --body "<comment>"` |
+
+On GitLab use `glab issue close`, `glab issue reopen` and `glab issue update --label`. A proposal the user leaves unconfirmed is not written and not recorded; the next run proposes it again. Other trackers: show the same summary and make the confirmed changes with their own tooling.
+
+### 6f: Report back to the user
 
 End with a short, tracker-specific summary. Examples:
 

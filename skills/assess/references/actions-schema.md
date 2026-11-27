@@ -95,7 +95,9 @@ The fields are written in that order, one space apart; a character outside `A-Z 
 2. `reuse_and_mark`: no marked item matches, and an unmarked item with the `assess-finding` label (no label check with `--label ""`) has the same title, compared without the sub-item prefix (`2a. `), with whitespace folded and case ignored. The step's `marked_body` is that item's body with the marker appended, to write back.
 3. `create`: nothing matches.
 
-Outside that case a marked item is never matched by title. An item taken by title, or by a positional key, is taken by one rendered item per run. The format and rules live in `scripts/lib/report/backlog_items.py`.
+Outside that case a marked item is never matched by title. Each existing item is taken by one rendered item per run, however it matched: two actions that name the same condition share a key, and each takes its own item, the one whose title agrees first (#811). An action a previous run split and this run files whole takes one of its earlier parts as `reuse_and_mark`, `part` dropped from the marker: the part whose title agrees, else an open part, else the lowest part number. The format and rules live in `scripts/lib/report/backlog_items.py`.
+
+`assess_actions_render.py reconcile --existing <file>` (#811) reads the same list beside `run-context.json` on an interactive run and proposes, per item, a close (its condition now holds, with the evidence line and the commit), a reopen (a closed item's condition lapsed, with the cause), a demote to informational (it can no longer move: a commit-origin finding, or a condition the model no longer lists or reads not applicable) or a close as superseded (a part of an action no longer split). A move only the new model caused reads `rules changed: your repo did not` and is never proposed. It writes nothing; `--confirm` prints the confirmed writes. Rules: `scripts/lib/report/backlog_reconcile.py`.
 
 ## `status` lifecycle
 
