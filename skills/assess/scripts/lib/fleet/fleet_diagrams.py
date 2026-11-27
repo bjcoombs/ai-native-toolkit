@@ -26,8 +26,10 @@ All three are skipped without a model with Steps or without ``fleet-data.json``.
 radar (#1367, ``lib/fleet/fleet_radar.py``) follows one change away: one radar per unit from
 ``views[].units[].levels[]`` (met/measured), with its Markdown table (``Diagram.table``) printed
 under the picture. The slope chart (#675) follows the trend; it reads
-the ``--compare`` result (``comparison``) and is skipped without one; the trend
-(#676, ``lib/fleet/fleet_trends.py``) reads the run history. A new diagram adds its file,
+the ``--compare`` result (``comparison``) and the run it compared against (``earlier=``) and is
+skipped without one; the trend (#676, ``lib/fleet/fleet_trends.py``) reads the run history.
+Both plot each group's lowest Step with "N of M measured", never a mean (#806), so both
+are skipped without a model with Steps. A new diagram adds its file,
 report heading and question to ``HEADINGS`` (the one source a drawn, skipped or failed diagram
 reads them from; ``DIAGRAM_FILES`` follows it) and its entry to ``build_diagrams``. Deterministic: entries
 in a fixed order, no date in the report.
@@ -35,8 +37,9 @@ in a fixed order, no date in the report.
 The diagram list and `report.md` that `fleet.py` writes beside `groups.jsonl` (#674).
 `build_diagrams(levels, repos, window, *, history, comparison)` returns a `Diagram` per picture
 (`file`, `title`, `question`, `in_place`: the section's opening `In place:` line (#743), and `svg` or the one-line `skipped` reason: no maturity model, no
-team rows, no repositories; for the trend no run history or fewer than 3 comparable runs; for
-the slope chart no `--compare`, runs not comparable, or no row known in both runs). `history`
+team rows, no repositories; for the trend no Steps, no run history or fewer than 3 stepped
+comparable runs; for the slope chart no `--compare`, runs not comparable, no Steps, an earlier
+run without stored Steps, or no group measured in both runs). `history`
 is the trend's runs (`fleet_trends`), `None` when the run is not kept in the history;
 `comparison` is the result `_keep_and_compare` wrote. `report_markdown` opens with the
 front screen when given (`lib/fleet/fleet_front.py`, #1255: Step counts, moves, one change away,
@@ -93,8 +96,8 @@ HEADINGS: dict[str, tuple[str, str]] = {
     fleet_radar.FILE: (fleet_radar.TITLE, fleet_radar.QUESTION),
     fleet_tooling_map.FILE: ("Shared tooling",
                              "What does a shared template change reach, and which pins differ from the fleet's?"),
-    fleet_trends.FILE: ("Group trends", "Is each team improving?"),
-    fleet_slope.FILE: ("Before and after", "What moved since the earlier run, and which practice moved it?"),
+    fleet_trends.FILE: ("Group trends", "Is each team's lowest Step rising over time?"),
+    fleet_slope.FILE: ("Before and after", "Which groups' lowest Step moved since the earlier run?"),
     fleet_step_movement.FILE: (fleet_step_movement.TITLE, fleet_step_movement.QUESTION),
 }
 
@@ -255,28 +258,40 @@ def _tooling(repos: Sequence[FleetRow]) -> Diagram:
     return entry
 
 
-def _slope(levels: MaturityModel | None, comparison: Comparison | None, repos: int) -> Diagram:
-    entry = _entry(fleet_slope.FILE, repos)
-    if comparison is None:
+def _model_steps(levels: MaturityModel) -> list[int]:
+    return sorted(step["step"] for step in levels.get("steps", []))
+
+
+NO_EARLIER = "skipped: no earlier run compared (no --compare, or no history entry matched this run)."
+EARLIER_UNREADABLE = "skipped: the earlier run could not be read."
+EARLIER_NO_STEPS = ("skipped: the earlier run was kept before Steps were stored (no level.json), "
+                    "so it has no Step to start a line from.")
+
+
+def _slope(levels: MaturityModel | None, comparison: Comparison | None, earlier: FleetRun | str | None,
+           rows: Sequence[FleetRow], data: Mapping[str, Any] | None) -> Diagram:
+    entry = _entry(fleet_slope.FILE, len(rows))
+    if comparison is None or earlier is None:
         entry["in_place"] = f"{IN_PLACE} this run, the baseline a later comparison starts from."
-        entry["skipped"] = ("skipped: no earlier run compared (no --compare, or no history entry "
-                            "matched this run).")
+        entry["skipped"] = NO_EARLIER
     elif not comparison["comparable"]:
         entry["skipped"] = ("skipped: the earlier run is not comparable ("
                             + "; ".join(comparison["reasons"]) + ").")
-    elif levels is None:
-        entry["skipped"] = NO_LEVELS
-    elif not _has_team_rows(levels):
-        entry["skipped"] = NO_TEAM_ROWS
+    elif not _step_ready(entry, levels, data) or levels is None or data is None:
+        pass
+    elif isinstance(earlier, str):
+        entry["skipped"] = EARLIER_UNREADABLE
+    elif earlier.steps is None:
+        entry["skipped"] = EARLIER_NO_STEPS
     else:
-        view = fleet_slope.slope_view(levels, comparison)
+        view = fleet_slope.slope_view(comparison, earlier, rows, fleet_maturity.data_steps(data) or {})
         paired = len(fleet_slope.plotted(view))
-        entry["in_place"] = (f"{IN_PLACE} {paired} {'group' if paired == 1 else 'groups'} with a known "
-                             "level in both runs.")
+        entry["in_place"] = (f"{IN_PLACE} {paired} {'group' if paired == 1 else 'groups'} with a measured "
+                             "repository in both runs.")
         if not paired:
-            entry["skipped"] = "skipped: no group has a practice with a known level in both runs."
+            entry["skipped"] = "skipped: no group has a measured repository in both runs."
         else:
-            entry["svg"] = fleet_slope.render_slope(view)
+            entry["svg"] = fleet_slope.render_slope(view, _model_steps(levels))
     return entry
 
 
@@ -285,13 +300,13 @@ def _trend(levels: MaturityModel | None, history: Sequence[TrendRun] | None, rep
     if levels is None:
         entry["skipped"] = NO_LEVELS
         return entry
-    if not _has_team_rows(levels):
-        entry["skipped"] = NO_TEAM_ROWS
+    if not levels.get("steps"):
+        entry["skipped"] = NO_STEPS
         return entry
     if history is None:
         entry["skipped"] = NO_HISTORY
         return entry
-    shown = fleet_trends.share_runs(history)
+    shown = fleet_trends.stepped_runs(history)
     entry["in_place"] = (f"{IN_PLACE} {len(shown)} comparable dated "
                          f"{'run' if len(shown) == 1 else 'runs'} in the history.")
     if len(shown) < fleet_trends.MIN_RUNS:
@@ -300,7 +315,7 @@ def _trend(levels: MaturityModel | None, history: Sequence[TrendRun] | None, rep
                             f"{fleet_trends.MIN_RUNS} (same window, scans and output mode, with a maturity model"
                             + (f"; {hidden}" if hidden else "") + ").")
     else:
-        entry["svg"] = fleet_trends.render_trend(history)
+        entry["svg"] = fleet_trends.render_trend(history, _model_steps(levels))
     return entry
 
 
@@ -349,7 +364,7 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
         _guarded(lambda: _radar(levels, data, count, radar_min_share), fleet_radar.FILE, count),
         _guarded(lambda: _tooling(repos), fleet_tooling_map.FILE, count),
         _guarded(lambda: _trend(levels, history, count), fleet_trends.FILE, count),
-        _guarded(lambda: _slope(levels, comparison, count), fleet_slope.FILE, count),
+        _guarded(lambda: _slope(levels, comparison, earlier, repos, data), fleet_slope.FILE, count),
         _guarded(lambda: _step_movement(levels, data, earlier, comparison, count, moves), fleet_step_movement.FILE,
                  count),
     ]

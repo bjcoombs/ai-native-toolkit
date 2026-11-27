@@ -93,7 +93,7 @@ the unit trees and the repository rows. `repo_cells` evaluates each `team` row p
 repository (`levels.evaluate_row`) with the criterion behind the level (`signal`, `value`,
 or `reason` when unknown; `not_scanned` for a failed row) and its manifest `why` (#1128). `row_roll_up` gives each unit,
 per team row, `met` (at the row's top level in the level result, `rows_at_top`, #1366, #1474) and `measured` of `repos` and `lowest_level`, the lowest known level below it. Version 2 (#772) holds no average and names no
-repository: no `mean_share`, `weakest` or `overall`. `org` rows stay in `groups.jsonl`.
+repository: no average, no weakest repository and no overall figure. `org` rows stay in `groups.jsonl`.
 `Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
 names and owners and writes a non-token value as `set`; with a salt every unit and
 repository key is `counts_only.hash_value`d and no name, owner or web URL is written;

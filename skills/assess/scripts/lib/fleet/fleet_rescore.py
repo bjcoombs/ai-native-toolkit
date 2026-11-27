@@ -12,8 +12,8 @@ scans (values written as counts-only output writes them, ``Privacy().value``), a
 unit's row roll-ups are recomputed over its members, and so are the Step fields of each
 repository and unit (#944, ``fleet_data.step_fields``, with counts-only privacy) and the per-tag tally
 of each repository and unit (#1073, ``fleet_data.tag_fields``): an entry written before that tally
-gains it from its stored scans (a version 1 entry's ``mean_share`` and
-``overall``, which #772 removed, are dropped), using the parents and placements the entry already stores. ``model``,
+gains it from its stored scans (a version 1 entry's repository average and unit
+``overall``, which #772 removed, are dropped: a repository keeps only ``DataRepo``'s keys), using the parents and placements the entry already stores. ``model``,
 ``run.levels_version`` and ``run.rules_sha256`` (#952) become this run's. ``rescore`` returns None when a stored repository
 key does not join to a scanned row under this run's key function (another salt), or a
 stored row holds no scans while ok: the caller then passes the entry over. A hashed run's
@@ -59,8 +59,8 @@ Deterministic: lines sorted by repository key then maturity-model row order.
 Re-scores a stored run under the current maturity model and builds the Recount (#771).
 `rescore` rebuilds a history entry's `FleetData` in memory from its stored scans:
 cells from `fleet_data.repo_cells` (values through `Privacy().value`) and each unit's row
-roll-ups (`row_roll_up`, `met` by `fleet_opportunities.rows_at_top`, #1474) over the stored placements (a version 1 entry's `mean_share` and
-`overall` are dropped, #772), with the Step fields and the per-tag tally (`tag_fields`,
+roll-ups (`row_roll_up`, `met` by `fleet_opportunities.rows_at_top`, #1474) over the stored placements (a version 1 entry's repository average and
+`overall` are dropped, #772: a repository keeps only `DataRepo`'s keys), with the Step fields and the per-tag tally (`tag_fields`,
 `fleet_data_tags.tag_roll_up`, #1073) and the fleet tag profile (`fleet_tag_profile.tag_profile`,
 #940) rebuilt too; None when a stored key does not join under the run's key
 function. `SIGNAL_ALIASES` (old path to new, pure renames only: #783's
@@ -154,6 +154,9 @@ def _members(view: View, repos: Sequence[DataRepo]) -> dict[str, list[str]]:
     return {unit: sorted(keys) for unit, keys in members.items()}
 
 
+_REPO_KEYS = DataRepo.__required_keys__ | DataRepo.__optional_keys__  # a retired key (#772) is dropped
+
+
 def rescore(data: FleetData, rows: Sequence[FleetRow], model: MaturityModel,
             key: Callable[[str], str], aliases: Mapping[str, str] = SIGNAL_ALIASES) -> FleetData | None:
     """``data`` rebuilt from ``rows`` (its ``repos.jsonl``) under ``model``; None when they do not join."""
@@ -174,7 +177,7 @@ def rescore(data: FleetData, rows: Sequence[FleetRow], model: MaturityModel,
         steps[repo["key"]] = public_steps(step_fields(model, [scanned], results)[scanned["repo"]], Privacy())
         tags[repo["key"]] = public_tags(tag_fields(model, results)[scanned["repo"]], Privacy())
         held[repo["key"]] = roll_up_members(cells[repo["key"]], rows_at_top(results[scanned["repo"]]))
-    repos: list[DataRepo] = [cast(DataRepo, {**{k: v for k, v in repo.items() if k != "mean_share"},
+    repos: list[DataRepo] = [cast(DataRepo, {**{k: v for k, v in repo.items() if k in _REPO_KEYS},
                                              "rows": cells[repo["key"]], **steps[repo["key"]],
                                              "tags": tags[repo["key"]]})
                              for repo in data["repos"]]

@@ -91,8 +91,8 @@ measure is left out, never written as 0. Codes such as `data-category`, `data-st
 | `one-change-away.svg` | bar | `data-condition`, `data-gate`, `data-practice`, `data-step` |
 | `shared-tooling.svg` | link | `data-repo`, `data-item`, `data-refs` |
 | `radar.svg` | point | `data-row`, `data-unit`, `data-practice`, `data-met`, `data-measured`, `data-repos` |
-| `trend.svg` | point | `data-group`, `data-mean`, `data-run`, `data-floor-mean` |
-| `slope.svg` | line | `data-group`, `data-then`, `data-now`, `data-change`, `data-paired-practices`, `data-practices`, `data-floor-then`, `data-floor-now` |
+| `trend.svg` | point | `data-group`, `data-step`, `data-measured`, `data-repos`, `data-run` |
+| `slope.svg` | line | `data-group`, `data-then`, `data-now`, `data-change`, `data-measured-then`, `data-repos-then`, `data-measured-now`, `data-repos-now` |
 | any | truncated label | `data-label`, the full text |
 
 The step ladder and the Step movement grid carry no per-part `<title>`, so there is nothing

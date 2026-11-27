@@ -15,7 +15,6 @@ import pytest
 
 import assess_signals
 import lib.fleet.fleet_heatmap as fh
-import lib.fleet.fleet_maturity as fm
 import lib.fleet.fleet_next_steps as ns
 from lib.run import signals
 from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
@@ -154,17 +153,6 @@ def test_fleet_view_reads_rows_with_and_without_floor_and_rejects_a_malformed_on
             _check_row({**base, "levels": [{**entry, **bad}]}, "bad")
 
 
-# --- the shared mean ---------------------------------------------------------------
-
-
-def test_floor_mean_counts_floored_rows_at_their_floor_beside_the_known_mean():
-    cells = [(2, None, 2), (None, 1, 4), (None, None, 3)]
-    assert fm.mean_share((level, top) for level, _, top in cells) == 1.0
-    assert fm.floor_mean(cells) == (1.0 + 0.25) / 2  # a bound over more rows; can sit lower
-    assert fm.has_floor(cells) and not fm.has_floor([(2, None, 2), (None, None, 3)])
-    assert fm.floor_mean([(None, None, 3)]) is None
-
-
 # --- views ---------------------------------------------------------------------------
 
 
@@ -219,7 +207,7 @@ def test_a_headless_coverage_gate_repository_gets_layer_6_floor_1(tmp_path, coun
     assert "test_pressure.mutation_run" in entry.get("full_run_only", [])
 
 
-# --- compare, slope and trend ---------------------------------------------------------
+# --- compare ---------------------------------------------------------
 
 
 def test_a_floor_appearing_is_not_a_move_but_is_carried():
@@ -233,48 +221,6 @@ def test_a_floor_appearing_is_not_a_move_but_is_carried():
     cov = next(r for r in change["rows"] if r["id"] == "cov")
     assert cov["moved"] is False and cov["now"] == {"status": "unknown", "level": None, "floor": 1}
     assert fc._show(cov["now"]) == "unknown, at least 1"
-
-
-def test_slope_and_trend_carry_the_bound_without_moving_the_line():
-    import lib.fleet.fleet_slope as fs
-    import lib.fleet.fleet_trends as ft
-    state: Any = {"status": "unknown", "level": None, "floor": 1}
-    known: Any = {"status": "level", "level": 2}
-    move: Any = {"id": "cov", "scope": "team", "then": state, "now": known, "moved": True, "cause": "level"}
-    comparison: Any = {"groups": [{"group": "g", "rows": [move]}], "earlier": None, "later": None}
-    group = fs.slope_view(_model(), comparison)["groups"][0]
-    assert (group["then"], group["now"]) == (None, None)  # the line pairs known rows only
-    assert (group["floor_then"], group["floor_now"]) == (0.5, 1.0)
-    run = ft.trend_run({"levels_version": "t-1", "scan_date": "2026-11-20"},
-                       [group_row("g", [_row("g/a", _scans())], _model(), {})])
-    assert run is not None and run["means"]["g"] is None and run["floor_means"] == {"g": 0.5}
-
-
-def test_charts_print_the_lower_bound_as_visible_text():
-    import lib.fleet.fleet_slope as fs
-    import lib.fleet.fleet_trends as ft
-    floored: Any = {"status": "unknown", "level": None, "floor": 1}
-    known: Any = {"status": "level", "level": 1}
-    rows: Any = [{"id": "cov", "scope": "team", "then": known, "now": floored, "moved": True,
-                  "cause": "level"}]
-    view = fs.slope_view(_model(), {"groups": [  # type: ignore[typeddict-item]
-        {"group": "g", "rows": rows},
-        {"group": "h", "rows": [{**rows[0], "now": known, "moved": False, "cause": None}]}],
-        "earlier": None, "later": None})
-    slope = fs.render_slope(view)
-    assert "at least: g 0.50 → 0.50" in slope and "with floors at least 0.50 → 0.50" not in slope
-    run = ft.trend_run({"levels_version": "t-1", "scan_date": "2026-11-20"},
-                       [group_row("g", [_row("g/a", _scans())], _model(), {}),
-                        group_row("h", [_row("h/a", _scans(gate=False))], _model(), {})])
-    assert run is not None
-    assert "at least, on 2026-11-20: g 0.50" in " ".join(ft._bound_lines(run, ["g", "h"]))
-
-
-def test_rows_without_floors_render_no_floor_text():
-    import lib.fleet.fleet_trends as ft
-    run = ft.trend_run({"levels_version": "t-1", "scan_date": "2026-11-20"},
-                       [group_row("g", [_row("g/a", _scans(gate=False))], _model(), {})])
-    assert run is not None and "floor_means" not in run and ft._bound_lines(run, ["g"]) == []
 
 
 def test_a_platform_scan_block_is_not_full_run_only_and_gets_the_platform_hint():

@@ -8,6 +8,7 @@ from ``skills/assess``, then review the diff.
 from __future__ import annotations
 
 import sys
+from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
@@ -16,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow, write_rows
 from lib.fleet.fleet_compare import Comparison, FleetRun, compare
 from lib.fleet.fleet_diagrams import build_diagrams, report_markdown
+from lib.fleet.fleet_slope import render_slope, slope_view
 from lib.fleet.fleet_data import level_results, tag_fields
 from lib.fleet.fleet_front import front_screen, front_section
 from lib.fleet.fleet_tag_profile import tag_profile
@@ -108,6 +110,34 @@ def _run(rows: tuple[FleetRow, ...], levels: MaturityModel, day: date) -> FleetR
     return FleetRun(stamp, list(rows), roll_up(rows, levels, {}))
 
 
+def stepped(levels: MaturityModel) -> MaturityModel:
+    """``levels`` with three Steps (#806: the slope chart plots each group's lowest Step): Step 2
+    gates on agent instructions at level 1, Step 3 on level 2 and agent use at level 1."""
+    return {**levels, "steps": [
+        {"step": 1, "name": "Assisted", "gates": []},
+        {"step": 2, "name": "Supervised", "gates": [{"id": "instructions", "row": "instructions", "level": 1}]},
+        {"step": 3, "name": "Unattended", "gates": [{"id": "instructions", "row": "instructions", "level": 2},
+                                                    {"id": "agent_use", "row": "agent-use", "level": 1}]}]}
+
+
+def steps_of(levels: MaturityModel, rows: Sequence[FleetRow]) -> dict[str, int | None]:
+    """Each repository's Step under ``levels``, as ``level.json`` and ``fleet-data.json`` store it."""
+    return {repo: (result or {}).get("step") for repo, result in level_results(levels, list(rows)).items()}
+
+
+def earlier_run(levels: MaturityModel) -> FleetRun:
+    """``EARLIER_ROWS`` (2026-10-20) as ``--compare`` loads it, with the Steps its ``level.json`` stored."""
+    run = _run(EARLIER_ROWS, levels, date(2026, 10, 20))
+    return FleetRun(run.stamp, run.repos, run.groups, steps=steps_of(levels, EARLIER_ROWS))
+
+
+def slope_svg(levels: MaturityModel, repos: list[FleetRow]) -> str:
+    """The slope chart golden: this fixture under ``stepped(levels)`` against ``earlier_run``."""
+    model = stepped(levels)
+    view = slope_view(comparison(levels, repos), earlier_run(model), repos, steps_of(model, repos))
+    return render_slope(view, [s["step"] for s in model.get("steps", [])])
+
+
 def comparison(levels: MaturityModel, repos: list[FleetRow]) -> Comparison:
     """The ``--compare`` result of ``EARLIER_ROWS`` (2026-10-20) against ``repos`` (2026-11-20)."""
     return compare(_run(EARLIER_ROWS, levels, date(2026, 10, 20)),
@@ -130,6 +160,7 @@ def goldens(out: Path) -> dict[str, str]:
                        "step": (results[r["repo"]] or {}).get("step")} for r in repos]}
     diagrams = build_diagrams(levels, repos, WINDOW, comparison=comparison(levels, repos), data=data)
     files = {f"expected-{d['file']}": d["svg"] for d in diagrams if d["svg"] is not None}
+    files["expected-slope.svg"] = slope_svg(levels, repos)  # this model has no Steps; the slope needs them
     front = front_section(front_screen(levels, data), len(repos))  # #1255: this model has no Steps
     return {**files, "expected-report.md": report_markdown(diagrams, front=front)}
 

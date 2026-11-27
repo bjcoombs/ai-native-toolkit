@@ -24,7 +24,7 @@ In place: 0 repositories in this run, scanned with no model call.
 
 Where does each repository stand, and which gate holds it there?
 
-Not drawn: skipped: the maturity model defines no Steps.
+Not drawn: skipped: the run wrote no fleet-data.json to read the Steps from.
 
 ## One change away from the next Step
 
@@ -32,7 +32,7 @@ In place: 0 repositories in this run, scanned with no model call.
 
 Which single change would take the most repositories to their next Step?
 
-Not drawn: skipped: the maturity model defines no Steps.
+Not drawn: skipped: the run wrote no fleet-data.json to read the Steps from.
 
 ## Practice shape by unit
 
@@ -52,9 +52,9 @@ Not drawn: skipped: no repositories in the run.
 
 ## Group trends
 
-In place: 3 comparable dated runs in the history.
+In place: 4 comparable dated runs in the history.
 
-Is each team improving?
+Is each team's lowest Step rising over time?
 
 [![Group trends](./trend.svg)](./trend.svg)
 
@@ -62,7 +62,7 @@ Is each team improving?
 
 In place: this run, the baseline a later comparison starts from.
 
-What moved since the earlier run, and which practice moved it?
+Which groups' lowest Step moved since the earlier run?
 
 Not drawn: skipped: no earlier run compared (no --compare, or no history entry matched this run).
 
