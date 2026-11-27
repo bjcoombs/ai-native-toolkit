@@ -199,9 +199,21 @@ def test_a_check_that_cannot_turn_the_run_red_does_not_count_unless_it_labels(tm
     assert scan_ai_governance(_repo(tmp_path, {".github/workflows/d.yml": labelled}))["enforced"] is True
 
 
-def test_a_log_message_naming_ai_is_not_a_check() -> None:
-    step = 'run: |\n  echo "AI disclosure scan"\n  gh pr view --json body > body.json\n  test -s body.json || exit 1\n'
+@pytest.mark.parametrize("step", [
+    'run: |\n  echo "AI disclosure scan"\n  gh pr view --json body > body.json\n  test -s body.json || exit 1\n',
+    'run: |\n  BODY="${{ github.event.pull_request.body }}"\n  echo "Running AI review in CI"\n'
+    '  if [ -z "$BODY" ]; then exit 1; fi\n',
+    'script: |\n  const body = context.payload.pull_request.body;\n'
+    '  if (!body.includes("## Summary")) core.setFailed("Summary needed (template v2 for AI agents too)");\n',
+])
+def test_a_log_or_failure_message_naming_ai_is_not_a_check(step: str) -> None:
     assert enforces_disclosure(step) is False
+
+
+@pytest.mark.parametrize("check", ["if (!/Assisted-by:/i.test(body)) core.setFailed('add the trailer');",
+                                   "if (!body.includes('AI assistance')) core.setFailed('add it');"])
+def test_a_script_check_on_the_body_counts(check: str) -> None:
+    assert enforces_disclosure(f"script: |\n  const body = context.payload.pull_request.body;\n  {check}\n") is True
 
 
 def test_a_script_is_read_from_the_directory_the_line_changes_to(tmp_path: Path) -> None:

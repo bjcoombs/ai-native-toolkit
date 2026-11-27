@@ -84,9 +84,14 @@ _AI_MARKERS = re.compile(r"\bAI\b|(?i:\b(?:llm|copilot|claude|chatgpt|gpt-?\d|ge
 _LABELS = re.compile(r"--add-label\b|\baddLabels\b|\badd-labels?\b", _I)
 _ACTS = re.compile(r"\bexit\s+1\b|\bexit\s*\(\s*1\s*\)|setFailed\s*\(|process\.exit\s*\(\s*1|sys\.exit\s*\("
                    r"|raise\s+SystemExit|::error\b|" + _LABELS.pattern, _I)
-# A line that tests text: the quoted marker on it is what a check looks for, not a log message.
-_CHECK_LINE = re.compile(r"\b(?:e?grep|rg|match|search|findall|fullmatch|includes|contains|startsWith|indexOf|test"
-                         r"|if|elif|case|when|in)\b|=~|\[\[", _I)
+# What a check reads a pattern with, just before the quoted marker: grep's pattern, a match call's
+# argument, =~ or ==; or just after it: `in` (Python's membership test) or `.test(` (a JS regex).
+_OPERAND_BEFORE = re.compile(r"(?:\b(?:e?grep|rg)(?:\s+-[\w-]+)*|\b(?:match|search|findall|fullmatch|includes|contains"
+                             r"|startsWith|indexOf)\s*\(\s*(?:[\w.$]+\s*,\s*)?|=~|==|-e)\s*$")
+_OPERAND_AFTER = re.compile(r"^(?:\s*(?:not\s+)?in\s+[\w$]|[gimsuy]*\s*\.test\s*\()")
+# Output calls: their words are a message, never a pattern, so they are dropped before the search.
+_OUTPUT = re.compile(r"\b(?:echo|printf)\b[^;|&\n]*|(?:\bprint|console\.\w+|core\.\w+)\s*\((?:[^()\n]|\([^()\n]*\))*\)"
+                     r"|::(?:error|warning|notice)[^\n]*")
 _SCRIPT_ARG = re.compile(r"\b(?:python3?|node|ruby|bash|sh)\s+(?:-\S+\s+)*\.?/?([\w./-]+\.(?:py|js|mjs|cjs|rb|sh))\b")
 _CD = re.compile(r"\bcd\s+([\w./-]+)\s*(?:&&|;)")
 _YAML_COMMENT = re.compile(r"^\s*#.*$", re.MULTILINE)
@@ -125,14 +130,17 @@ def enforces_disclosure(text: str, env: str = "") -> bool:
     """True when one step's ``text`` reads a pull request body or commit trailers, names an AI
     marker and turns the run red or labels (module docstring). The read may come from ``env``, the
     ``env:`` blocks around the step; the marker and the act must be in the step, and the marker
-    inside a quoted literal or a ``/regex/`` (``_QUOTED``) on a line that tests text
-    (``_CHECK_LINE``: grep, a match, ``includes``, ``if``, ``in``): what the check looks for, so a
-    log message naming AI does not count, and a step
+    inside a quoted literal or a ``/regex/`` (``_QUOTED``) that is the operand of a test: grep's
+    pattern, a match call's argument, ``=~`` or ``==``, or followed by ``in`` or ``.test(``
+    (``_OPERAND_BEFORE``, ``_OPERAND_AFTER``). The words of output calls (``echo``, ``printf``,
+    ``print(``, ``console.*(``, ``core.*(``, ``::error``) are dropped first (``_OUTPUT``), so a log
+    or failure message naming AI does not count, and a step
     that only runs an AI tool on the body (``claude --print ... || exit 1``) does not count. Whole-line YAML
     and shell comments are dropped first."""
     clean = _YAML_COMMENT.sub("", text)
-    named = any(_AI_MARKERS.search(q.group(0)) for line in clean.splitlines() if _CHECK_LINE.search(line)
-                for q in _QUOTED.finditer(line))
+    named = any(_AI_MARKERS.search(q.group(0)) and (_OPERAND_BEFORE.search(line[:q.start()])
+                                                    or _OPERAND_AFTER.search(line[q.end():]))
+                for line in _OUTPUT.sub("", clean).splitlines() for q in _QUOTED.finditer(line))
     return bool((_READS.search(clean) or _READS.search(_YAML_COMMENT.sub("", env)))
                 and named and _ACTS.search(clean))
 
