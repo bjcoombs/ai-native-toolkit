@@ -703,7 +703,8 @@ class InstructionFinding(TypedDict):
     """One integrity finding in ``nested_instructions.findings``.
 
     ``kind`` is ``dead_glob``, ``ignored_cursor_md``, ``claude_shadows_agents``,
-    ``repeats_parent`` or the informational ``mirrored_instruction_files``;
+    ``repeats_parent`` or the informational ``mirrored_instruction_files`` /
+    ``claude_prose_pointer``;
     ``detail`` is a one-line description and ``pattern`` (a dead rule's
     comma-joined patterns) / ``parent`` / ``overlap`` / ``diff_lines`` (lines a
     shadowing pair differs by below the header) carry the kind's evidence.

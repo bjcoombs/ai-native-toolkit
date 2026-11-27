@@ -13,8 +13,9 @@ Claude Code to run ``make test`` while ``.windsurfrules`` still says ``npm test`
 2. **Canonical source.** The root ``AGENTS.md`` when there is one, or the root
    file it delegates to when it is a bare one-line pointer (one of the fixed
    ``instruction_discovery.POINTER_FORMS`` naming a sibling file,
-   ``delegation_target``, #1505) and that file neither points nor imports
-   back; otherwise the first
+   ``delegation_target``, #1505), followed through further bare pointers to
+   the file with content (#1507), unless a file in the chain is reached again,
+   imported back or a symlink back; otherwise the first
    root-context file in ``SYSTEMS`` order, then path order.
 3. **Link.** Each file is ``canonical``, a ``symlink`` resolving to it, an
    ``import`` of it (``@AGENTS.md``, followed by
@@ -25,7 +26,7 @@ Claude Code to run ``make test`` while ``.windsurfrules`` still says ``npm test`
    the file is a bare pointer to the canonical file that does not point back,
    which delegates for every system; when the canonical file was reached
    through a pointer ``AGENTS.md``, a symlink, import or pointer to that
-   ``AGENTS.md`` links too), a ``mirror`` (identical below its header, ``mirror_pair``: a
+   ``AGENTS.md`` or any later pointer in the chain links too), a ``mirror`` (identical below its header, ``mirror_pair``: a
    hand-kept copy, so not linked) or ``independent``. A system is linked when
    one of its files links; its other files are supplementary rules, compared
    for divergence like the rest.
@@ -59,16 +60,19 @@ consistent, next_steps, not_read}`. It reads each system's root-context files (s
 `always_loaded` at directory `.`, empty files dropped; Aider when `.aider.conf.yml`
 reads a file, as `config_read` when it reads the canonical file directly). The canonical
 file is the root `AGENTS.md` (or the root file a bare one-line `AGENTS.md` pointer names,
-`delegation_target`, #1505, unless that file points or imports back), else the first root file in `SYSTEMS` order, then path
-order. Each file (`ConsistencyFile`) carries `link`: `canonical`, `symlink` (resolves to
+`delegation_target`, #1505, followed through further bare pointers to the file with content,
+#1507, unless the chain reaches, imports or symlinks back into itself), else the first root
+file in `SYSTEMS` order, then path order. Each file (`ConsistencyFile`) carries `link`: `canonical`, `symlink` (resolves to
 it), `import` (`@AGENTS.md`, through `instruction_budget.follow_imports`), `pointer` (a
 line naming the canonical file's name, as a markdown link or Kiro's
 `#[[file:AGENTS.md]]` does; never for Claude Code or Gemini CLI, which load only
 imports, so a prose mention there links nothing, matching `claude_shadows_agents`, unless the
 file is a bare one-line pointer and the canonical file does not point back, which delegates
-for any system; a link to a pointer `AGENTS.md` that made another file canonical is a link to
-that file), `mirror` (identical below the header, through
+for any system; a link to a pointer `AGENTS.md`, or to any later pointer in its chain, that
+made another file canonical is a link to that file), `mirror` (identical below the header, through
 `instruction_discovery.mirror_pair`; a hand-kept copy, so not linked) or `independent`.
+A prose `CLAUDE.md` pointer still reads `pointer`; `nested_instructions` adds the informational
+`claude_prose_pointer` recommending `@AGENTS.md`, which moves no value here (#1507).
 A system is linked when one of its files links (its other always-loaded files are
 supplementary rules, still compared for divergence). Each
 `Divergence` is `{kind, value, named_in, missing_from, stated}` over each system's
@@ -270,35 +274,57 @@ def _root_context(cands: list[InstructionCandidate]) -> list[InstructionCandidat
     return [c for c in cands if c.directory == "." and c.always_loaded and c.body.strip()]
 
 
+def _delegation_chain(start: InstructionCandidate, files: list[InstructionCandidate],
+                      repo_root: Path, tracked: frozenset[Path] | None,
+                      ) -> list[InstructionCandidate]:
+    """The root files ``start`` delegates through, ``start`` first and the file with
+    content last, or ``[start]`` when it is no bare pointer or the chain loops.
+
+    Each step is a bare one-line pointer (``delegation_target``) to a sibling at the
+    root: `See .claude/CLAUDE.md` names a path, no sibling. A chain whose next file
+    is already in it, or that imports or symlinks back into it, holds no
+    instructions, so it is no delegation (#1505, #1507).
+    """
+    siblings = {c.rel: c for c in files if "/" not in c.rel}
+    chain = [start]
+    while True:
+        cur = chain[-1]
+        target = delegation_target(cur.body, sorted(n for n in siblings if n != cur.rel))
+        if target is None:
+            return chain
+        rels = {c.rel for c in chain}
+        loaded, _skipped = follow_imports(
+            [target], repo_root, lambda p: is_repo_file(p, repo_root, tracked))
+        real = (repo_root / target).resolve()
+        if (target in rels or any(r in loaded for r in rels)
+                or any(real == (repo_root / r).resolve() for r in rels)):
+            return [start]
+        chain.append(siblings[target])
+
+
 def _canonical(files: list[InstructionCandidate], repo_root: Path,
-               tracked: frozenset[Path] | None) -> InstructionCandidate | None:
+               tracked: frozenset[Path] | None,
+               ) -> tuple[InstructionCandidate | None, list[InstructionCandidate]]:
+    """The canonical file, and the pointer files before it when a bare-pointer
+    ``AGENTS.md`` delegated to it (empty otherwise)."""
     for cand in files:
         if cand.rel == CANONICAL_NAME:
-            # A bare pointer delegates: the file it names holds the instructions,
-            # unless that file points, imports or symlinks straight back, a cycle (#1505).
-            # Only a sibling at the root: `See .claude/CLAUDE.md` names a path, no sibling.
-            others = {c.rel: c for c in files if c.rel != cand.rel and "/" not in c.rel}
-            target = delegation_target(cand.body, sorted(others))
-            if target is not None and delegates_to(
-                    cand.body, cand.rel, target, others[target].body):
-                loaded, _skipped = follow_imports(
-                    [target], repo_root, lambda p: is_repo_file(p, repo_root, tracked))
-                # A target that is a symlink back to AGENTS.md is a cycle as well.
-                same = (repo_root / target).resolve() == (repo_root / cand.rel).resolve()
-                if cand.rel not in loaded and not same:
-                    return others[target]
-            return cand
+            # A bare pointer delegates, through any further bare pointers, to the
+            # file that holds the instructions (#1505, #1507).
+            *via, canon = _delegation_chain(cand, files, repo_root, tracked)
+            return canon, via
     ranked = sorted(files, key=lambda c: (SYSTEM_ORDER.get(c.tool, len(SYSTEM_ORDER)), c.rel))
-    return ranked[0] if ranked else None
+    return (ranked[0] if ranked else None), []
 
 
 def _link(cand: InstructionCandidate, canon: InstructionCandidate, repo_root: Path,
-          tracked: frozenset[Path] | None, via: InstructionCandidate | None = None) -> Link:
-    """How ``cand`` links to ``canon``. ``via`` is the pointer ``AGENTS.md`` the
-    canonical file was reached through: a link to it is a link to ``canon`` (#1505)."""
+          tracked: frozenset[Path] | None, via: list[InstructionCandidate] | None = None) -> Link:
+    """How ``cand`` links to ``canon``. ``via`` holds the pointer files the
+    canonical file was reached through from ``AGENTS.md``: a link to any of
+    them is a link to ``canon`` (#1505, #1507)."""
     if cand.rel == canon.rel:
         return "canonical"
-    hubs = [canon, *([via] if via is not None and via.rel != cand.rel else [])]
+    hubs = [canon, *(v for v in via or [] if v.rel != cand.rel)]
     real = (repo_root / cand.rel).resolve()
     if any(real == (repo_root / h.rel).resolve() for h in hubs):
         return "symlink"
@@ -362,11 +388,8 @@ def check_consistency(repo_root: Path, cands: list[InstructionCandidate],
                       tracked: frozenset[Path] | None) -> AgentConsistencyBlock:
     """The ``agent_consistency`` block over discovered instruction files."""
     files = _root_context(cands)
-    canon = _canonical(files, repo_root, tracked)
-    # The pointer AGENTS.md the canonical file was reached through, if any (#1505).
-    via = next((c for c in files if c.rel == CANONICAL_NAME), None)
-    if canon is None or via is None or via.rel == canon.rel:
-        via = None
+    # The pointer files the canonical file was reached through, if any (#1505, #1507).
+    canon, via = _canonical(files, repo_root, tracked)
     by_system: dict[str, list[InstructionCandidate]] = {}
     for cand in files:
         by_system.setdefault(cand.tool, []).append(cand)
