@@ -213,7 +213,7 @@ def test_plan_files_written_are_the_ones_applied() -> None:
         assert f".refine/plans/$n-{command}.json" in apply
 
 
-CLOSE_CAP_SPLICE = "'\"$REFINE_CLOSE_CAP\"'"
+CLOSE_CAP_SPLICE = "'\"${REFINE_CLOSE_CAP:-10}\"'"
 
 
 def _caps(script: str, close_cap: int = 10) -> List[Dict[str, int]]:
@@ -239,6 +239,17 @@ def test_sweep_close_cap_follows_refine_close_cap() -> None:
     script = _script("refine-apply")
     assert script.count(CLOSE_CAP_SPLICE) == 1
     assert _caps(script, 20)[2]["close-duplicate.sh"] == 20
+
+
+@pytest.mark.skipif(sys.platform == "win32" or shutil.which("bash") is None, reason="the job runs bash")
+@pytest.mark.parametrize("value, expected", [("", 10), ("25", 25)])
+def test_sweep_caps_line_runs_with_an_empty_close_cap(value: str, expected: int) -> None:
+    """An empty REFINE_CLOSE_CAP variable falls back to 10, as Settings.close_cap does."""
+    line = next(ln.strip() for ln in _script("refine-apply").splitlines() if CLOSE_CAP_SPLICE in ln)
+    proc = subprocess.run(["bash", "-c", line + '; printf %s "$CLAUDE_CODE_SCRIPT_CAPS"'],
+                          env={"PATH": os.environ["PATH"], "REFINE_CLOSE_CAP": value},
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
+    assert json.loads(proc.stdout)["close-duplicate.sh"] == expected
 
 
 # ── the pin, run ─────────────────────────────────────────────────────────

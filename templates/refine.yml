@@ -257,7 +257,7 @@ refine-apply:
       if [ "$CI_PIPELINE_SOURCE" != "trigger" ]; then
         export REFINE_STATE_DIR=.refine/state/sweep
         # One sweep may close up to REFINE_CLOSE_CAP duplicates; the weekly cap still bounds the total.
-        export CLAUDE_CODE_SCRIPT_CAPS='{"edit-issue-labels.sh":30,"close-duplicate.sh":'"$REFINE_CLOSE_CAP"',"post-buffer-report.sh":1}'
+        export CLAUDE_CODE_SCRIPT_CAPS='{"edit-issue-labels.sh":30,"close-duplicate.sh":'"${REFINE_CLOSE_CAP:-10}"',"post-buffer-report.sh":1}'
         python3 "$APPLY" sweep --verdict "$V" || failed=1
       fi
       python3 "$APPLY" summary || true
