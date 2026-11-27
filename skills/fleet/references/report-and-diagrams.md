@@ -99,7 +99,7 @@ repository root): it reads the data attributes, falls back to the `<title>`, and
 hover or tap. Each diagram is scoped, so several sit on one page without restyling each other.
 The embed rules, the helper's behaviour and every diagram's attributes are in
 `skills/assess/references/embedding-diagrams.md`. The fleet page (`fleet-view.html`) inlines
-each picture with per-part details (#1362); its default tooltip helper is #1364.
+each picture with per-part details (#1362) and ships the helper once, inline (#1364).
 
 ## The fleet page: `fleet-view.html`
 
@@ -135,8 +135,9 @@ sections, in order:
    gives the same counts, practice by unit. Above 8 spokes each spoke is labelled by its number,
    which the table's practice column repeats; hovering the spoke names the practice.
 7. **Fleet pictures**: the drawn tag and Step SVGs. A picture with per-part details is inlined,
-   so hovering a part shows its `<title>`; one with only a root title (the Step movement grid)
-   stays an image. Before inlining, the page drops `<script>`, `<foreignObject>`, every `on*`
+   and the page ships the tooltip helper (`skills/assess/templates/diagram-tooltip.js`) once,
+   inline, so hovering or tapping a part shows its details; one with only a root title (the Step
+   movement grid) stays an image. Before inlining, the page drops `<script>`, `<foreignObject>`, every `on*`
    attribute, every `javascript:` or `vbscript:` URL and every reference that would fetch (a
    `url(...)` or `href` that is not `#`-local, a link's `href` apart). It keeps the image for any
    element outside the SVG drawing set, for markup an HTML parser would read differently and for

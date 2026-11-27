@@ -22,10 +22,18 @@ A page builder that inlines a diagram passes it through `inline_svg` in
 markup, keeps or adds the scope, and returns None for a diagram that should stay an image. The
 fleet page uses it (#1362).
 
+Only generated HTML pages inline diagrams. `assess-report.md` keeps a relative image link per
+SVG, because GitHub strips inline SVG and scripts from markdown. `/assess` itself writes no
+HTML page today; the fleet page (`fleet-view.html`) is the toolkit's one built page, and a
+future page builder takes the same two steps: `inline_svg` for each diagram, and the helper.
+
 ## The tooltip helper
 
 `skills/assess/templates/diagram-tooltip.js` (relative to the repository root) is a single
-script with no dependencies and no network requests. Copy it next to the page and include it
+script with no dependencies and no network requests. A page the toolkit builds ships it by
+default: `helper_script()` in `skills/assess/scripts/lib/diagram_tooltip.py` returns it as one
+inline `<script id="diagram-tooltip">` block, which the fleet page includes once (#1364), so no
+host-side code is needed. A host page of your own can copy it next to the page and include it
 once:
 
 ```html
@@ -48,8 +56,9 @@ What it does:
   with no data attributes shows its `<title>` text instead. The helper never parses the
   `<title>` wording.
 - **Pointer.** Mouse and pen show the tooltip on hover and hide it when the pointer leaves the
-  part.
-- **Touch.** The first tap shows it; a second tap, a tap elsewhere or Escape hides it. Taps
+  part. A click on a part pins it: hover no longer moves or hides it until a second click on
+  that part, a click elsewhere, a scroll or Escape.
+- **Touch.** The first tap shows it; a second tap, a tap elsewhere, a scroll or Escape hides it. Taps
   are read on `pointerup`, because iOS Safari fires no `click` from a plain SVG element.
 - **Links.** No diagram draws a link today. On a part inside an `<a>`, a mouse click follows
   the link; on touch the first tap shows the tooltip and the second follows the link.

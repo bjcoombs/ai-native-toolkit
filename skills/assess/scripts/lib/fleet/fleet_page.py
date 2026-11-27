@@ -3,8 +3,10 @@
 ``build_page`` wraps a ``fleet_page_data.page_bundle`` in one HTML file: the stylesheet and
 script of ``fleet_page_assets`` inline, the bundle embedded as JSON in a
 ``<script type="application/json">`` block (every ``<`` written as ``\\u003c``, so no string in
-it closes the block), and the drawn fleet SVGs as ``data:`` image URIs. The page makes no
-network request and loads nothing; it computes no level, Step or achievement.
+it closes the block), the drawn fleet SVGs (inlined when they carry per-part details, #1362)
+and, once, the diagram tooltip helper inline (``lib/diagram_tooltip.py``, #1364), so a hover or
+tap on an inlined diagram's part shows its details. The page makes no network request and loads
+nothing; it computes no level, Step or achievement.
 
 ``write_page`` builds it from this run's ``fleet-data.json`` document, ``achievements.json``
 document, the maturity model and the drawn diagrams (``fleet_diagrams.Diagram``: the tag
@@ -25,6 +27,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from lib.diagram_tooltip import helper_script
 from lib.fleet.fleet_page_assets import SCRIPT, STYLE
 from lib.fleet.fleet_page_data import PageBundle, page_bundle, picture
 from lib.scoring.levels import MaturityModel
@@ -54,6 +57,7 @@ def build_page(bundle: PageBundle) -> str:
         '<main id="app"><noscript>This page needs JavaScript to draw the fleet from its embedded data.</noscript></main>',
         f'<script type="application/json" id="fleet-bundle">{embed(bundle)}</script>',
         f"<script>{SCRIPT}</script>",
+        helper_script(),
         "</body>",
         "</html>",
         "",

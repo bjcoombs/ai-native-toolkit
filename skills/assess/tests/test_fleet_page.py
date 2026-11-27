@@ -19,6 +19,7 @@ import pytest
 
 import fleet_data_fixture as fdf
 import fleet_page_fixture as fx
+from lib.diagram_tooltip import HELPER, helper_code
 from lib.fleet.fleet_page import PAGE_FILE, build_page, clear_page, embed, write_page
 from lib.fleet.fleet_page_data import COUNTS_ONLY, FULL, HASHED, mode_of, picture, unique_scopes
 from lib.svg_inline import css_selectors, root_class
@@ -747,3 +748,34 @@ def test_no_two_generator_fleet_scopes_share_a_dash_prefix() -> None:
     from lib.svg_scope import SCOPES
     fleet = sorted(s for s in SCOPES.values() if s.startswith("fleet-"))
     assert fleet and not [(a, b) for a in fleet for b in fleet if b.startswith(f"{a}-")]
+
+
+# --- the default tooltip helper (#1364, part 3 of #1313) ---------------------------------
+
+LINKED = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><title>T</title>'
+          '<a href="https://example.com/doc"><rect width="5" height="5" data-path="docs/a.md">'
+          '<title>docs/a.md</title></rect></a></svg>')
+
+
+@pytest.mark.parametrize("name", sorted(fx.VARIANTS))
+def test_a_built_page_includes_the_tooltip_helper_once_inline_with_no_external_script(name: str) -> None:
+    html = fx.goldens()[f"expected-{name}.html"]
+    assert html.count('<script id="diagram-tooltip">') == 1 and "window.DiagramTooltip" in html
+    assert re.search(r"<script[^>]*\ssrc=", html, re.I) is None
+    helper = html.split('<script id="diagram-tooltip">', 1)[1].split("</script>", 1)[0]
+    assert helper == "\n" + helper_code(HELPER.read_text(encoding="utf-8"))
+    assert "</" not in helper and "<!--" not in helper and "src=" not in helper
+    assert html.index('<script id="diagram-tooltip">') > html.index('id="fleet-bundle"')
+
+
+def test_the_inline_helper_cannot_close_its_block_or_carry_a_comment_opener() -> None:
+    assert helper_code('/* <script src="x.js"></script> */\nvar s = "</script>";') == 'var s = "<\\/script>";'
+    with pytest.raises(ValueError):
+        helper_code("var s = '<!--';")
+
+
+def test_a_linked_part_keeps_its_href_after_inlining(tmp_path: Path) -> None:
+    _, pictures = _page_pictures(tmp_path, [{"file": "tag-profile.svg", "title": "T", "question": "Q", "svg": LINKED}])
+    svg = pictures[0]["svg"]
+    assert svg is not None
+    assert '<a href="https://example.com/doc"><rect ' in svg and "<title>docs/a.md</title>" in svg
