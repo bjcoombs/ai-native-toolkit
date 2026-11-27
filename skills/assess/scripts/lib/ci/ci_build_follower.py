@@ -551,9 +551,18 @@ class _MavenArgs(NamedTuple):
     asked: list[str]         # goals and phases
 
 
+def _split_long(args: list[str]) -> list[str]:
+    """``--projects=a`` as ``--projects a``, so the ``=`` form selects modules too."""
+    out: list[str] = []
+    for word in args:
+        flag, eq, value = word.partition("=")
+        out += [flag, value] if word.startswith("--") and eq and flag in _MAVEN_VALUED else [word]
+    return out
+
+
 def _maven_words(args: list[str]) -> _MavenArgs:
     pom, projects, unread, out, skip = None, [], [], [], ""
-    for word in args:
+    for word in _split_long(args):
         if skip:
             pom = word if skip in ("-f", "--file") else pom
             projects += [p for p in word.split(",") if p] if skip in ("-pl", "--projects") else []
