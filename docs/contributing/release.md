@@ -4,7 +4,7 @@ How a marathon ends in a release. Back to the [Map of Content](../index.md).
 
 ## Release after a marathon
 
-As the **final** step, once all of a marathon's PRs are merged and the retrospective is done, cut a GitHub release at the new plugin version, so users get the update via `/plugin update` and the standalone-skills publish and categorised release notes fire:
+As the **final** step, once all of a marathon's PRs are merged and the retrospective is done, cut a GitHub release at the new plugin version, so users get the update via `/plugin update` and the categorised release notes are generated. The release does not trigger the standalone-skills publish: `build-standalone-skills.yml` already ran on the version-bump push to `main`:
 
 ```bash
 VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
