@@ -18,6 +18,8 @@ Fixture tree on the host `gl.test`:
   `grp/sub/deep/gamma`, and the archived `grp/old`.
 - `other/ns/shared` lives outside `grp` and is shared into both `grp` and
   `grp/sub`; `grp/sub/beta` is also shared into `grp`. Each is listed once.
+- The user's direct project memberships and starred projects are empty by
+  default; a test fills them with `_serve`.
 
 The tests are split over several files so that `--dist loadfile` can run
 them on separate workers and Windows CI shards:
@@ -102,10 +104,15 @@ ENDPOINTS: dict[str, list[list[dict[str, object]]]] = {
     "groups/grp/sub/deep/projects/shared": [[]],
     "groups/grp/empty/projects": [[]],
     "groups/grp/empty/projects/shared": [[]],
+    # projects?membership=true and projects?starred=true (see the stub).
+    "projects/membership": [[]],
+    "projects/starred": [[]],
 }
 
 # `glab` stub. Endpoints are looked up by numeric id or by (URL-encoded)
-# path after the query string is dropped. `auth status` succeeds only for
+# path after the query string is dropped, except `projects?membership=true`
+# and `projects?starred=true`, served from `projects/membership` and
+# `projects/starred`. `auth status` succeeds only for
 # hosts in GLAB_OK_HOSTS and reports a DNS failure for GLAB_DOWN_HOSTS.
 GLAB_STUB = r"""#!/usr/bin/env bash
 echo "glab $*" >> "$GLAB_LOG"
@@ -141,7 +148,18 @@ case "$1" in
         *) endpoint=$1; shift ;;
       esac
     done
+    query=""
+    case "$endpoint" in *\?*) query=${endpoint#*\?} ;; esac
     endpoint=${endpoint%%\?*}
+    # The top-level project listing is one endpoint whose filter is in the
+    # query string: serve membership=true and starred=true from their own
+    # fixture keys.
+    if [ "$endpoint" = projects ]; then
+      case "&$query&" in
+        *"&starred=true&"*) endpoint=projects/starred ;;
+        *"&membership=true&"*) endpoint=projects/membership ;;
+      esac
+    fi
     endpoint=${endpoint//%2F//}
     endpoint=${endpoint//%2f//}
     # Numeric group id -> path.
@@ -408,3 +426,16 @@ def _path_without_glab(tmp_path: Path) -> str:
 def _member_of_sub_only(env: Env) -> None:
     groups = Path(env.env["GLAB_DATA"]) / "groups.1.json"
     groups.write_text(json.dumps([_group("grp/sub")]), newline="\n")
+
+
+# ---- direct memberships and starred projects ----------------------------------
+
+
+def _serve(env: Env, endpoint: str, *pages: list[dict[str, object]]) -> None:
+    """Replace the pages the glab stub serves for one fixture endpoint."""
+    data = Path(env.env["GLAB_DATA"])
+    key = endpoint.replace("/", "__")
+    for old in data.glob(f"{key}.*.json"):
+        old.unlink()
+    for n, page in enumerate(pages, start=1):
+        (data / f"{key}.{n}.json").write_text(json.dumps(page), newline="\n")

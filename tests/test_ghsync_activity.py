@@ -151,6 +151,8 @@ GITLAB_DATA = {
     "groups__1__projects__shared": [SHARED_FORK],
     "groups__2__projects": [SHARED_FORK, gl_project(5, "grp/sub/quiet", RECENT, mirror=True)],
     "groups__2__projects__shared": [],
+    # projects?membership=true (the stub drops the query string).
+    "projects": [],
     "projects__1__repository__branches__main": gl_branch("a1", RECENT_GL),
     "projects__2__repository__branches__main": gl_branch("b1", OLD),
     "projects__3__repository__branches__main": gl_branch("c1", OLD),

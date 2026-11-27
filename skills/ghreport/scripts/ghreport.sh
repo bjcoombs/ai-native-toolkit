@@ -18,11 +18,11 @@ set -euo pipefail
 # Org detection mirrors ghsync: defaults to the basename of --root / cwd.
 #
 # GitLab (--provider gitlab): discovery runs through ghsync's GitLab provider
-# (every group you belong to on --host, nested subgroups and shared projects,
-# or --group's subtree). Per project, through `glab api`: open merge requests,
-# the latest finished (success or failed) pipeline on the default branch, open
-# vulnerabilities (a paid-tier endpoint, so no-access is the common case) and
-# default-branch protection.
+# (every group you belong to on --host, nested subgroups, shared projects and
+# your direct project memberships, or --group's subtree). Per project, through
+# `glab api`: open merge requests, the latest finished (success or failed)
+# pipeline on the default branch, open vulnerabilities (a paid-tier endpoint,
+# so no-access is the common case) and default-branch protection.
 # Any failed call is no-access / unknown, never 0.
 #
 # Org / group settings: one section per GitHub org (`orgs/:org`,
