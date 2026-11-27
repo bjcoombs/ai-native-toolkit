@@ -92,7 +92,7 @@ _OPERAND_AFTER = re.compile(r"^(?:\s*(?:not\s+)?in\s+[\w$]|[gimsuy]*\s*\.test\s*
 # Output calls: their words are a message, never a pattern, so they are dropped before the search.
 _OUTPUT = re.compile(r"\b(?:echo|printf)\b[^;|&\n]*|(?:\bprint|console\.\w+|core\.\w+)\s*\((?:[^()\n]|\([^()\n]*\))*\)"
                      r"|::(?:error|warning|notice)[^\n]*")
-_SCRIPT_ARG = re.compile(r"\b(?:python3?|node|ruby|bash|sh)\s+(?:-\S+\s+)*\.?/?([\w./-]+\.(?:py|js|mjs|cjs|rb|sh))\b")
+_SCRIPT_ARG = re.compile(r"\b(?:python3?|node|ruby|bash|sh)\s+(?:-\S+\s+)*(?:\./)?([\w./-]+\.(?:py|js|mjs|cjs|rb|sh))\b")
 _CD = re.compile(r"\bcd\s+([\w./-]+)\s*(?:&&|;)")
 _YAML_COMMENT = re.compile(r"^\s*#.*$", re.MULTILINE)
 _CHECKBOX = re.compile(r"^\s*[-*]\s*\[[ xX]\]\s+(.*)$", re.MULTILINE)

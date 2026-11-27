@@ -108,8 +108,10 @@ def test_a_policy_a_checkbox_and_an_enforcing_workflow_meet_the_condition(tmp_pa
     assert (cond["state"], cond["grade"], cond["counted"]) == ("met", "measured", True)
 
 
-def test_a_trailer_check_in_a_script_the_workflow_runs_meets_it(tmp_path: Path) -> None:
-    root = _repo(tmp_path, {".github/workflows/trailers.yml": TRAILERS, "tools/check_trailers.py": TRAILER_SCRIPT})
+@pytest.mark.parametrize("script", ["tools/check_trailers.py", "./tools/check_trailers.py", ".github/scripts/check_trailers.py"])
+def test_a_trailer_check_in_a_script_the_workflow_runs_meets_it(tmp_path: Path, script: str) -> None:
+    root = _repo(tmp_path, {".github/workflows/trailers.yml": TRAILERS.replace("tools/check_trailers.py", script),
+                            script.removeprefix("./"): TRAILER_SCRIPT})
     assert scan_ai_governance(root)["enforced"] is True
 
 
