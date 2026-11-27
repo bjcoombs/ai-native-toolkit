@@ -24,7 +24,9 @@ met by either:
 
 Each job is read as GitLab merges it (``ci_includes.merged_config``, rendered by
 ``ci_merged_view.rendered_job``): ``include: local:`` files, ``extends:`` and ``default:``
-applied. Hidden jobs (``.name``) never run on their own and are not read as jobs. A job runs in
+applied. Hidden jobs (``.name``) never run on their own and are not read as jobs.
+A ``workflow: rules:`` guard and a job guard that each hold only in some scheduled pipelines
+(two schedule variables) are unsettled, not met. A job runs in
 a scheduled pipeline when its ``rules:`` name ``schedule`` and ``gitlab_rules.outcome`` in the
 ``schedule`` context reads yes or some (``when: never`` / ``manual`` rules are no run), or its
 ``only:`` names ``schedules`` and its ``except:`` does not, with no job-level ``when: never`` or
@@ -73,7 +75,7 @@ REFINE_REMOTE = re.compile(
     r"^https://raw\.githubusercontent\.com/bjcoombs/ai-native-toolkit/[^/\s]+/templates/refine\.yml$")
 
 _HEADING = re.compile(r"^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$")
-_FENCE = re.compile(r"^\s{0,3}(```|~~~)")
+_FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 _SCRIPT_KEYS = ("before_script", "script", "after_script")
 _SEGMENTS = re.compile(r"\|\|?|;|&&")
 _GLAB_ISSUE = re.compile(r"\bglab\s+issue\s+(?:update|create|new)\b")
@@ -88,7 +90,8 @@ _RUN_WHEN = frozenset({"on_success", "always", "delayed"})
 _STOP_WHEN = frozenset({"never", "manual", "on_failure"})
 
 JobState = Literal["met", "unsettled", "no"]
-Schedule = Literal["yes", "no", "unknown"]
+# ``some``: only in some scheduled pipelines (a branch, a schedule's own variable).
+Schedule = Literal["yes", "some", "no", "unknown"]
 
 
 def unbalanced(value: str) -> bool:
@@ -121,8 +124,12 @@ def template_has_sections(text: str) -> bool:
     fence = ""
     for line in text.splitlines():
         marker = _FENCE.match(line)
-        if marker is not None and (not fence or marker.group(1) == fence):
-            fence = "" if fence else marker.group(1)
+        if marker is not None and not fence:
+            fence = marker.group(1)
+            continue
+        if marker is not None and marker.group(1)[0] == fence[0] and len(marker.group(1)) >= len(fence) \
+                and not line.strip()[len(marker.group(1)):].strip():
+            fence = ""  # a closing fence: the same character, at least as long, nothing after it
             continue
         heading = None if fence else _HEADING.match(line)
         if heading is not None:
@@ -230,7 +237,7 @@ def _schedule(tree: IndentTree, keys: dict[str, int], text: list[str]) -> Schedu
             # schedule and does not plainly run on every push or merge request
             ordinary = {outcome(rules, c, when) for c in ("push", "merge_request")}
             return "unknown" if result != "no" and "yes" not in ordinary else "no"
-        return "unknown" if result == "unknown" else "no" if result == "no" else "yes"
+        return result
     if when in _STOP_WHEN:
         return "no"
     if when not in _RUN_WHEN:
@@ -261,12 +268,14 @@ def _workflow(config: MergedConfig) -> Schedule:
     rules = None if key is None or "!reference" in span else rule_items(tree, key)
     if flow.unresolved is not None or not settled or rules is None:
         return "unknown"
-    result = outcome(rules, "schedule", "always")
-    return "unknown" if result == "unknown" else "no" if result == "no" else "yes"
+    return outcome(rules, "schedule", "always")
 
 
-def _job_state(config: MergedConfig, job: MergedJob, labels: tuple[str, ...]) -> JobState:
-    """``met``, ``unsettled`` or ``no`` for one visible job (see the module doc)."""
+def _job_state(config: MergedConfig, job: MergedJob, labels: tuple[str, ...],
+               workflow: Schedule) -> JobState:
+    """``met``, ``unsettled`` or ``no`` for one visible job (see the module doc). Met needs a
+    scheduled pipeline that both the workflow and the job are sure of: two guards that each
+    hold only in some scheduled pipelines may never hold together."""
     text, settled = rendered_job(config, job)
     lines = text.splitlines()
     tree = IndentTree(parse_lines(lines))
@@ -281,8 +290,11 @@ def _job_state(config: MergedConfig, job: MergedJob, labels: tuple[str, ...]) ->
         return "no"
     schedule = _schedule(tree, keys, lines)
     if schedule == "no":
-        return "no"
-    if adds == "met" and schedule == "yes" and settled and job.unresolved is None:
+        # an anchor merge may bring the schedule selector this job does not show
+        hidden_selector = job.unresolved == "unreadable" and not {"rules", "only", "except", "when"} & set(keys)
+        return "unsettled" if hidden_selector else "no"
+    sure = "yes" in (schedule, workflow) and {schedule, workflow} <= {"yes", "some"}
+    if adds == "met" and sure and settled and job.unresolved is None:
         return "met"
     return "unsettled"
 
@@ -314,8 +326,8 @@ def gitlab_untriaged(root: Path, text: str, labels: tuple[str, ...]) -> tuple[bo
         for job in config.jobs.values():
             if job.hidden:
                 continue
-            state = _job_state(config, job, labels)
-            if state == "met" and workflow == "yes":
+            state = _job_state(config, job, labels, workflow)
+            if state == "met":
                 return True, None
             unsettled = unsettled or state != "no"
     return (None, REASON_UNSETTLED) if unsettled else (False, None)

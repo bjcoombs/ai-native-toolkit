@@ -263,6 +263,7 @@ def test_a_gitlab_template_with_the_six_sections(text: str) -> None:
 @pytest.mark.parametrize("text", [
     GL_SECTIONS.replace("## Impact\n", "Impact\n"),  # not a heading
     "```\n" + GL_SECTIONS + "```\n",  # in fenced code
+    "````\n```\n" + GL_SECTIONS + "````\n",  # a shorter fence inside a longer one closes nothing
     "## Summary\n",
 ])
 def test_a_gitlab_template_without_them(text: str) -> None:
@@ -351,6 +352,11 @@ def test_a_job_that_does_not_label_new_issues_on_a_schedule(tmp_path: Path, job:
     "r:\n  rules:\n    - if: $REFINE == \"true\"\n  script: glab issue update 1 -l needs-triage\n",  # a schedule's variable
     "r:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\" && $CI_PROJECT_PATH == \"a/b\"\n"
     "  script: glab issue update 1 -l needs-triage\n",  # a predefined variable not modelled
+    ".base: &base\n  only: [schedules]\n  script: glab issue update 1 -l needs-triage\nr:\n  <<: *base\n",
+    # two schedule variables that may never hold together
+    "workflow:\n  rules:\n    - if: $REFINE == \"triage\"\nr:\n  rules:\n"
+    "    - if: $CI_PIPELINE_SOURCE == \"schedule\" && $REFINE == \"maintenance\"\n"
+    "  script: glab issue update 1 -l needs-triage\n",
     "workflow:\n  rules:\n    - !reference [.flow, rules]\nr:\n" + _SCHED
     + "  script: glab issue update 1 -l needs-triage\n",  # an unread workflow
 ])
@@ -372,6 +378,21 @@ def test_valid_yaml_is_not_read_as_malformed(tmp_path: Path, ci: str, want: tupl
 def test_a_met_refinement_include_wins_over_an_unreadable_line(tmp_path: Path) -> None:
     ci = f"include:\n  - remote: {REMOTE}\nx:\n\tscript: y\n"
     assert _gl_untriaged(tmp_path, ci) == (True, None)
+
+
+def test_a_tag_scheduled_refiner_and_a_workflow_any_schedule_meets(tmp_path: Path) -> None:
+    ci = ("workflow:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\nr:\n  rules:\n"
+          "    - if: $CI_PIPELINE_SOURCE == \"schedule\" && $CI_COMMIT_TAG\n"
+          "  script: glab issue update 1 -l needs-triage\n")
+    assert _gl_untriaged(tmp_path, ci) == (True, None)
+
+
+def test_an_unreadable_gitlab_template_reads_not_measured(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import lib.backlog_ready as br
+    real = br.read_config
+    monkeypatch.setattr(br, "read_config", lambda root, rel: "" if rel == GL_TEMPLATE else real(root, rel))
+    block = scan_backlog_ready(_gitlab(tmp_path))
+    assert (block["required_form_field"], block["required_form_field_reason"]) == (None, "form_unreadable")
 
 
 def test_an_anchor_merge_in_a_file_that_adds_no_label_is_settled(tmp_path: Path) -> None:

@@ -211,7 +211,8 @@ def test_an_or_mix_with_an_unread_variable_is_null(tmp_path: Path) -> None:
     (_NIGHTLY, "varies"),  # which branch the schedule runs on
     ('$CI_PIPELINE_SOURCE == "push"', "false"),
     ("$CI_MERGE_REQUEST_IID", "false"),
-    ("$CI_COMMIT_TAG", "false"),
+    ("$CI_COMMIT_TAG", "varies"),  # a schedule may target a tag
+    ('$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_TAG', "varies"),
     ('$CI_PIPELINE_SOURCE == "schedule" && $REFINE == "true"', "varies"),  # a schedule's own variable
     ('$CI_PROJECT_PATH == "a/b"', "unknown"),  # predefined, not modelled
     ('$GITLAB_USER_LOGIN == "bot"', "unknown"),

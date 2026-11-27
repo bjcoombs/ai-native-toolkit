@@ -34,8 +34,8 @@ Imports nothing from ``lib``. Tests: ``tests/test_gitlab_rules.py``.
 
 **Scheduled pipelines** (#1406): ``evaluate`` and ``outcome`` also take the context
 ``schedule``, which ``CONTEXTS`` leaves out (an ordinary change never starts one). There
-``CI_PIPELINE_SOURCE`` is ``"schedule"``, ``CI_COMMIT_BRANCH`` is set, ``CI_MERGE_REQUEST_*``
-and ``CI_COMMIT_TAG`` are unset, and a variable not named ``CI_*`` or ``GITLAB_*`` varies
+``CI_PIPELINE_SOURCE`` is ``"schedule"``, ``CI_COMMIT_BRANCH`` and ``CI_COMMIT_TAG`` vary (a
+schedule targets a branch or a tag), ``CI_MERGE_REQUEST_*`` are unset, and a variable not named ``CI_*`` or ``GITLAB_*`` varies
 rather than reads unknown: a pipeline schedule sets its own variables in project settings, so
 ``$CI_PIPELINE_SOURCE == "schedule" && $REFINE`` runs in some scheduled pipelines. A predefined
 variable not modelled here (``$CI_PROJECT_PATH``) stays unknown.
@@ -122,6 +122,8 @@ class _Value(NamedTuple):
 def _variable(name: str, context: Context) -> _Value:
     if name == "CI_PIPELINE_SOURCE":
         return _Value("str", _SOURCE[context], name=name)
+    if context == "schedule" and name in ("CI_COMMIT_BRANCH", "CI_COMMIT_TAG", "CI_COMMIT_TAG_MESSAGE"):
+        return _Value("maybe", name=name)  # a schedule targets a branch or a tag
     if name in _NULL_BOTH:
         return _Value("null", name=name)
     if name in _PRESENT_BOTH:

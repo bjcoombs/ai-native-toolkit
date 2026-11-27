@@ -17,7 +17,7 @@ lives in the maintainers' heads, so each issue an agent picks up restates it in 
   ``config.yml``) has a ``body`` item whose ``validations`` sets ``required: true``, or a GitLab
   issue template (``.gitlab/issue_templates/*.md``) has a heading for each of the six
   definition-of-ready sections (#1406, ``lib.backlog_ready_gitlab``). Null ``form_unreadable``
-  when neither holds and a form could not be read (a tab indent, an unclosed flow collection, no
+  when neither holds and a form or template could not be read (a template over the size cap) (a tab indent, an unclosed flow collection, no
   top-level ``body`` list).
 - ``untriaged_on_open``: a workflow (directly under ``.github/workflows/``) triggered by
   ``issues`` with type ``opened`` (no ``types`` means every type) has a step that names an
@@ -410,6 +410,13 @@ def _docs(root: Path, files: Iterable[str], ready: tuple[str, ...]) -> bool:
     return False
 
 
+def _size(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
+
+
 def scan_backlog_ready(repo_root: Path) -> BacklogReadyBlock:
     """Build the ``backlog_ready`` block (see the module doc). Intake is configured for the whole
     repository, so the root's files are read whatever the scope."""
@@ -426,9 +433,12 @@ def scan_backlog_ready(repo_root: Path) -> BacklogReadyBlock:
         "forms": len(forms), "forms_unreadable": states.count("unreadable"),
         "issue_templates": len(templates), "workflows": len(workflows), "stale_jobs": 0, "labels_from_config": from_config,
     }
-    if "required" in states or any(template_has_sections(read_config(root, rel)) for rel in templates):
+    texts = {rel: read_config(root, rel) for rel in templates}
+    # an empty read of a non-empty file is a template over the size cap or not readable
+    unread = [rel for rel, text in texts.items() if not text and _size(root / rel) > 0]
+    if "required" in states or any(template_has_sections(text) for text in texts.values()):
         block["required_form_field"] = True
-    elif "unreadable" in states:
+    elif "unreadable" in states or unread:
         block["required_form_field_reason"] = REASON_FORM
     else:
         block["required_form_field"] = False
