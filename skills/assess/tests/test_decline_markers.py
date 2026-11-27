@@ -344,3 +344,24 @@ def test_a_bad_decline_reason_names_the_expected_form(capsys: pytest.CaptureFixt
     with pytest.raises(SystemExit):
         render.main(["repo", "reconcile", "--existing", "x.json", "--decline-reason", "no-number"])
     assert "expected N=TEXT" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("flags", [
+    ["--record-declines"],
+    ["--confirm", "none", "--declined-by", "ben"],
+    ["--confirm", "none", "--declined-at", "2026-11-27"],
+    ["--confirm", "none", "--decline-reason", "7=not yet"],
+    ["--record-declines", "--declined-by", "ben", "--declined-at", "2026-11-27"],
+    ["--decline-reason", "7=not yet"],
+])
+def test_decline_flags_without_record_declines_and_confirm_fail_at_parsing(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str], flags: list[str]) -> None:
+    existing = _tracker(tmp_path)
+    _run_context(tmp_path, "met")
+    with pytest.raises(SystemExit) as exc:
+        render.main([str(tmp_path), "reconcile", "--existing", str(existing), *flags])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "needs both --record-declines and --confirm" in err
+    assert "reconcile [-h]" in err  # the reconcile usage, not the root one
+    assert not (tmp_path / ".assess" / PROPOSAL_DECLINES).exists()

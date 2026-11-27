@@ -433,5 +433,10 @@ def test_an_unmarked_item_is_untouched_and_human_edits_are_kept(
 def test_an_unknown_mode_fails_the_scheduled_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     _, existing = _cli_dir(tmp_path, _context(*CONDITIONS))
     (tmp_path / ".assess" / "config.toml").write_text('[backlog]\nmode = "close-all"\n', encoding="utf-8")
-    assert render.main([str(tmp_path), "reconcile", "--existing", str(existing), "--scheduled"]) == 1
+    assert render.main([str(tmp_path), "reconcile", "--existing", str(existing), "--scheduled",
+                        "--today", "2026-11-27"]) == 1
     assert "propose, file, file-and-close" in capsys.readouterr().err
+    assert render.main([str(tmp_path), "reconcile", "--existing", str(existing), "--scheduled"]) == 1
+    assert "needs --today" in capsys.readouterr().err
+    assert render.main([str(tmp_path), "status-comment", "--today", "2026-11-27"]) == 0
+    assert bs.STATUS_MARKER in capsys.readouterr().out

@@ -44,10 +44,12 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   the same ``--label`` and ``--wip`` as ``plan``; the header names the configured
   ``[backlog] wip`` limit, not a ``--wip`` reduced for split parts. A negative ``--wip``
   fails at argument parsing.
-- ``reconcile --existing FILE [--label NAME] [--filed N,...] [--confirm all|N,...]`` (#811)
-  prints the propose-only reconcile of the tracker's items in ``FILE`` against
+- ``reconcile --existing FILE [--label NAME] [--filed N,...] [--confirm all|none|N,...]
+  [--record-declines [--declined-by NAME] [--declined-at DATE] [--decline-reason N=TEXT ...]]``
+  (#811) prints the propose-only reconcile of the tracker's items in ``FILE`` against
   ``run-context.json``: ``{proposals, rules_changed, notes, summary}``, the close, reopen,
-  demote and superseded proposals and the batched summary to confirm. It writes nothing.
+  demote and superseded proposals and the batched summary to confirm. It writes nothing to
+  the tracker.
   ``--filed`` names the items this run filed or reused, which are never proposed superseded.
   With ``--confirm`` it prints only the writes of the confirmed item numbers (``all`` for
   every proposal, ``none`` for none) as a JSON array. A proposal declined before is held
@@ -55,13 +57,16 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   named under ``declined`` and at the foot of ``summary`` (#813); ``--record-declines``
   with ``--confirm`` records each shown proposal not confirmed in
   ``.assess/backlog-declines.json``, with ``--declined-by``, ``--declined-at`` and one
-  ``--decline-reason N=TEXT`` per item the user gave a reason for. That
-  file is the only thing it writes, never the tracker. It needs no ``actions.json``; rules:
+  ``--decline-reason N=TEXT`` per item the user gave a reason for. ``--record-declines``,
+  ``--declined-by``, ``--declined-at`` or ``--decline-reason`` without both
+  ``--record-declines`` and ``--confirm`` fails at argument parsing (#1533). That file is
+  the only thing it writes, never the tracker; it also drops records whose evidence changed.
+  It needs no ``actions.json``; rules:
   ``lib/report/backlog_reconcile.py`` and ``lib/run/decline_markers.py``. ``--scheduled
-  [--today DATE]`` (#814) prints the daily workflow's writes instead, ``{mode, writes, notes,
+  --today DATE`` (#814) prints the daily workflow's writes instead, ``{mode, writes, notes,
   summary}``, under ``.assess/config.toml`` ``[backlog] mode`` (an unknown mode exits 1), from
   ``--existing`` items that carry their ``comments``; rules: ``lib/report/backlog_schedule.py``.
-- ``status-comment [--today DATE]`` prints a new item's status comment, the one comment the
+- ``status-comment --today DATE`` prints a new item's status comment, the one comment the
   scheduled reconcile edits in place (#814).
 - ``readiness`` prints the PR summary's Readiness value: ``headline.lines`` of
   ``run-context.json`` joined with `` / ``; the ``badge.json`` ``message`` when the run
@@ -89,7 +94,6 @@ import argparse
 import json
 import re
 import sys
-from datetime import date
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import NotRequired, TypedDict
@@ -443,6 +447,9 @@ def run_reconcile(assess_dir: Path, args: argparse.Namespace) -> int:
     facts = run_facts(context)
     mode = ""
     if args.scheduled:
+        if not args.today:
+            print("assess_actions_render: --scheduled needs --today YYYY-MM-DD", file=sys.stderr)
+            return 1
         mode = load_backlog_mode(args.repo)
         facts = scheduled_facts(facts)
     conditions, model = facts["conditions"], facts["model"]
@@ -526,7 +533,7 @@ def _parser() -> argparse.ArgumentParser:
     for sp in (pl, nu):
         sp.add_argument("--wip", type=non_negative, metavar="N",
                         help="open-item limit (default: .assess/config.toml [backlog] wip, else 3)")
-    rc = sub.add_parser("reconcile", help="propose closing, reopening or demoting filed items; writes nothing")
+    rc = sub.add_parser("reconcile", help="propose closing, reopening or demoting filed items; writes nothing to the tracker")
     rc.add_argument("--existing", type=Path, required=True,
                     help="JSON array of the tracker's items (gh issue list --json number,title,body,state,labels)")
     rc.add_argument("--label", default=DEFAULT_LABEL, help="label an item must carry; '' for none")
@@ -542,15 +549,34 @@ def _parser() -> argparse.ArgumentParser:
     rc.add_argument("--scheduled", action="store_true",
                     help="print the scheduled run's writes under .assess/config.toml [backlog] mode (#814); "
                          "--existing items carry their comments")
-    rc.add_argument("--today", default=str(date.today()), help="the run date for the status line (YYYY-MM-DD)")
+    rc.add_argument("--today", help="with --scheduled (required): the run date for the status line (YYYY-MM-DD)")
     sc = sub.add_parser("status-comment", help="a new status comment for a filed item, for the scheduled reconcile")
-    sc.add_argument("--today", default=str(date.today()), help="the filing date (YYYY-MM-DD)")
+    sc.add_argument("--today", required=True, help="the filing date (YYYY-MM-DD)")
+    rc.set_defaults(subparser=rc)
     sub.add_parser("readiness", help="the PR summary's Readiness value")
     return p
 
 
+def _check_decline_flags(args: argparse.Namespace) -> None:
+    """Reject the decline flags unless ``--record-declines`` and ``--confirm`` are both given (#1533).
+
+    Without both, ``reconcile`` records nothing, so a decline flag would be silently ignored.
+    The error prints the ``reconcile`` usage, not the root one.
+    """
+    if args.command != "reconcile":
+        return
+    given = [flag for flag, value in (("--record-declines", args.record_declines),
+                                      ("--declined-by", args.declined_by is not None),
+                                      ("--declined-at", args.declined_at is not None),
+                                      ("--decline-reason", bool(args.decline_reason))) if value]
+    if given and not (args.record_declines and args.confirm is not None):
+        parser: argparse.ArgumentParser = args.subparser
+        parser.error(f"{', '.join(given)} needs both --record-declines and --confirm")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    _check_decline_flags(args)
     assess_dir: Path = args.assess_dir or args.repo / ".assess"
     if args.command == "readiness":
         print(readiness(assess_dir))
