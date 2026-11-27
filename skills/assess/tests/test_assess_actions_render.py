@@ -302,3 +302,11 @@ def test_sub_item_labels_are_checked_after_normalizing(capsys: pytest.CaptureFix
     assert titles == ["2a. x0", "2b. x4"]  # "2" and 1 leave no letter; "2a" repeats "a."
     err = capsys.readouterr().err
     assert "missing ['label']" in err and "repeated sub-item label 'a'" in err
+
+
+def test_a_sub_item_title_is_the_label_then_the_action() -> None:
+    entry = {"rank": 2, "action": "Run ruff", "done_when": "d", "scope_fence": "s",
+             "sub_items": [{"label": "a", "action": "Pin ruff", "done_when": "d"}]}
+    child = render.render_items([entry])[1]
+    assert child["title"] == "2a. Pin ruff"  # never "22a": the label already carries the rank
+    assert child["body"].count("2a") == 1 and "**Sub-action 2a of action 2:** Run ruff" in child["body"]

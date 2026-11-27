@@ -297,7 +297,7 @@ The body the renderer writes:
 ```markdown
 **Finding:** `<finding>` in `<file>`, `<file>`   (without a finding: **Condition:** `<condition>`, else **Files:** alone)
 
-**Sub-action <rank><label> of action <rank>:** <parent action>   (a sub-item only)
+**Sub-action <label> of action <rank>:** <parent action>   (a sub-item only; <label> is the item's `label`, already rank plus letter, such as `2a`)
 
 ### First step
 <first_step>
@@ -328,7 +328,7 @@ Re-running `/assess` on the same repo must not create duplicate tracking items. 
 - **Hierarchical** (Task Master): list the current tag's tasks; compare titles. Match → reuse.
 - **Free-form** (Apple Notes, Google Docs, plain markdown files): no reliable structured dedup. In this case, list existing items the user can see, **show them, and ask before re-creating**: "I see 3 existing items that look like these. Re-create, skip, or update? "
 
-A sub-item's title starts with its rank and label (`2a. `), which move when its parent changes rank between runs: match a sub-item on the title text after that prefix, so `1a. Pin ruff` reuses the item filed as `2a. Pin ruff`. The match crosses parents on purpose: the same change under another action is the same work.
+A sub-item's title starts with its rank and label (`2a. `), which move when its parent changes rank between runs: match a sub-item on the title text after that prefix, so `1a. Pin ruff` reuses the item filed as `2a. Pin ruff`. The match crosses parents on purpose: the same change under another action is the same work. When a sub-item is promoted to its own ranked action, match it on the action text without the label, so `Pin ruff` reuses the item filed as `2a. Pin ruff`.
 
 In all cases, before creating: search first. If a match is found (open or closed in trackers that have state), reuse it. If a match was previously closed (the gap was once resolved but has re-emerged), flag this to the user in the chat output - don't silently re-open or duplicate.
 
