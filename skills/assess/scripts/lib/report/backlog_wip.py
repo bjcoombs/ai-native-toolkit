@@ -16,6 +16,14 @@ once. ``apply_wip(items, steps, existing, level, wip)`` takes the rendered items
   item: the condition was done once and reads unmet again), then ``gain`` (anything else,
   an item without a condition included). Within a tier the Top 3 order stands.
 
+An action filed split (``assess-pr`` "One concern per item") is passed as ``parts``: its index
+mapped to the number of its parts that need a slot (created or reopened; a part that reuses
+an open item is already in the open count). Its ``plan_filing`` step is ignored, each part
+takes a slot in the item's tier, and its ``WipStep`` carries ``parts``, one ``file`` or
+``next_up`` per such part; ``decision`` reads ``file`` when any part is filed, ``next_up``
+when none is, and ``open`` when no part needs a slot. "Next up" lists the held parts'
+count after the title (#1542).
+
 The open count is the open tracker items in the backlog: an item with a condition marker
 (``backlog_items.marker_key``), an unmarked one with ``label`` (``assess-finding``, the items
 ``plan_filing`` matches by title; no label is checked when ``label`` is empty), and any open
@@ -27,7 +35,7 @@ item. Pure stdlib; never touches the tracker. Tests: ``tests/test_backlog_items.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from lib.assess_config import DEFAULT_BACKLOG_WIP
 from lib.report.backlog_items import DEFAULT_LABEL, FilingStep, marker_key
@@ -42,6 +50,7 @@ class WipStep(TypedDict):
 
     decision: str
     tier: str  # one of TIERS
+    parts: NotRequired[list[str]]  # an item filed split: ``file`` or ``next_up`` per part that needs a slot
 
 
 def _is_open(item: Mapping[str, object]) -> bool:
@@ -91,47 +100,75 @@ def tier(item: Mapping[str, object], step: FilingStep, unlocks: set[str]) -> str
     return "gain"
 
 
+def _reuses_open(step: FilingStep) -> bool:
+    return step["action"] != "create" and _is_open(step)
+
+
 def apply_wip(items: Sequence[Mapping[str, object]], steps: Sequence[FilingStep],
               existing: Sequence[Mapping[str, object]], level: object = None, *,
-              wip: int = DEFAULT_WIP, label: str = DEFAULT_LABEL) -> list[WipStep]:
-    """One ``WipStep`` per rendered item, in the order given; ``steps`` from ``plan_filing``."""
+              wip: int = DEFAULT_WIP, label: str = DEFAULT_LABEL,
+              parts: Mapping[int, int] | None = None) -> list[WipStep]:
+    """One ``WipStep`` per rendered item, in the order given; ``steps`` from ``plan_filing``.
+
+    ``parts`` maps the index of an item filed split to the number of its parts that need a
+    slot (created or reopened); its ``steps`` entry is ignored, and its ``WipStep`` carries
+    one decision per such part in ``parts``.
+    """
+    parts = parts or {}
+    if any(not 0 <= i < len(items) or n < 0 for i, n in parts.items()):
+        raise ValueError("parts maps an item index in range to a part count of 0 or more")
     unlocks = next_unlock_conditions(level)
-    tiers = [tier(i, s, unlocks) for i, s in zip(items, steps, strict=True)]
+    plain = [FilingStep(action="create") if i in parts else s for i, s in enumerate(steps)]
+    tiers = [tier(i, s, unlocks) for i, s in zip(items, plain, strict=True)]
     counted = open_backlog(existing, label)
-    counted |= {s["number"] for s in steps if s["action"] != "create" and "number" in s and _is_open(s)}
+    counted |= {s["number"] for s in plain if _reuses_open(s) and "number" in s}
     free = max(0, wip - len(counted))
     out = [WipStep(decision=OPEN, tier=t) for t in tiers]
+    for i in parts:
+        out[i]["parts"] = []
     reopened: set[int] = set()
-    wanting = [i for i, s in enumerate(steps) if not (s["action"] != "create" and _is_open(s))]
-    for i in sorted(wanting, key=lambda i: TIERS.index(tiers[i])):
-        number = steps[i].get("number")
+    units = [(i, 0) for i, s in enumerate(plain) if i not in parts and not _reuses_open(s)]
+    units += [(i, p) for i, n in parts.items() for p in range(1, n + 1)]
+    for i, part in sorted(units, key=lambda u: (TIERS.index(tiers[u[0]]), u[0], u[1])):
+        number = plain[i].get("number")
         # Guards a caller that passes steps not from plan_filing, which takes each item once per run.
         if isinstance(number, int) and number in reopened:
             out[i]["decision"] = FILE
             continue
+        decision = NEXT_UP
         if free > 0:
             free -= 1
-            out[i]["decision"] = FILE
+            decision = FILE
             if isinstance(number, int):
                 reopened.add(number)
+        if part:
+            out[i]["parts"].append(decision)
         else:
-            out[i]["decision"] = NEXT_UP
+            out[i]["decision"] = decision
+    for i in parts:
+        held = out[i]["parts"]
+        out[i]["decision"] = OPEN if not held else FILE if FILE in held else NEXT_UP
     return out
+
+
+def _held_parts(step: WipStep) -> int:
+    return sum(1 for d in step.get("parts", []) if d == NEXT_UP)
 
 
 def next_up_markdown(items: Sequence[Mapping[str, object]], wip_steps: Sequence[WipStep],
                      limit: int = DEFAULT_WIP) -> str:
     """The report's "Next up" block for the items over the limit, in ranked order; ``""`` for none.
 
-    The header names ``limit``, the configured ``[backlog] wip``: on the split path the caller
-    plans with a smaller ``wip``, which is not the limit the reader set.
+    The header names ``limit``, the configured ``[backlog] wip``, even when ``plan`` ran with
+    another ``--wip`` given on the command line.
     """
-    held = [(TIERS.index(w["tier"]), n, item) for n, (item, w) in enumerate(zip(items, wip_steps, strict=True))
-            if w["decision"] == NEXT_UP]
+    held = [(TIERS.index(w["tier"]), n, item, _held_parts(w)) for n, (item, w)
+            in enumerate(zip(items, wip_steps, strict=True)) if w["decision"] == NEXT_UP or _held_parts(w)]
     if not held:
         return ""
     noun = "item" if limit == 1 else "items"
     lines = [f"**Next up** (not filed: the backlog holds at most {limit} open {noun}, the `[backlog] wip` limit):", ""]
-    for _, _, item in sorted(held, key=lambda x: (x[0], x[1])):
-        lines.append(f"- {item.get('title')}")
+    for _, _, item, count in sorted(held, key=lambda x: (x[0], x[1])):
+        suffix = f" ({count} split part{'' if count == 1 else 's'})" if count else ""
+        lines.append(f"- {item.get('title')}{suffix}")
     return "\n".join(lines) + "\n"

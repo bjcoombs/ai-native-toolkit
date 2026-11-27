@@ -288,7 +288,8 @@ def _cli_dir(tmp_path: Path, ctx: Mapping[str, object] | None) -> tuple[Path, Pa
 
 def test_reconcile_subcommand_proposes_then_prints_confirmed_writes(
         tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    _, existing = _cli_dir(tmp_path, _context(*CONDITIONS))
+    assess, existing = _cli_dir(tmp_path, _context(*CONDITIONS))
+    (assess / "config.toml").write_text("[backlog]\nwip = 4\n", encoding="utf-8")  # room for the reopen (#1542)
     before = existing.read_text(encoding="utf-8")
     assert render.main([str(tmp_path), "reconcile", "--existing", str(existing)]) == 0
     out = json.loads(capsys.readouterr().out)
@@ -440,3 +441,88 @@ def test_an_unknown_mode_fails_the_scheduled_run(tmp_path: Path, capsys: pytest.
     assert "needs --today" in capsys.readouterr().err
     assert render.main([str(tmp_path), "status-comment", "--today", "2026-11-27"]) == 0
     assert bs.STATUS_MARKER in capsys.readouterr().out
+
+
+# ── the open-item limit on reopens (#1542) ─────────────────────────────────
+
+# Three open items whose conditions still read unmet, and one closed item whose condition lapsed.
+FULL = [_marked(n, f"layer-{n}-open.1", "OPEN") for n in (1, 2, 3)] + [
+    _marked(9, "layer-3-lint.1", "CLOSED", title="Pin the linter")]
+FULL_CONDITIONS = (*(_condition(f"layer-{n}-open.1", "unmet") for n in (1, 2, 3)),
+                   _condition("layer-3-lint.1", "unmet", reason="requires_unmet"))
+
+
+def test_a_reopen_over_the_wip_limit_is_listed_next_up_not_proposed() -> None:
+    result = _run(FULL, _context(*FULL_CONDITIONS), wip=3)
+    assert result["proposals"] == []
+    assert [(n["number"], n["condition"]) for n in result["next_up"]] == [(9, "layer-3-lint.1")]
+    assert "requires_unmet" in result["next_up"][0]["reason"]
+    assert "**Next up** (not reopened: the backlog holds at most 3 open items" in result["summary"]
+    assert "- #9 (Pin the linter):" in result["summary"]
+    assert [p["number"] for p in _run(FULL, _context(*FULL_CONDITIONS), wip=4)["proposals"]] == [9]
+    assert _run(FULL, _context(*FULL_CONDITIONS))["next_up"] == []  # no limit given: the #811 behaviour
+    zero = _run(FULL[3:], _context(*FULL_CONDITIONS), wip=0)
+    assert zero["proposals"] == [] and "at most 0 open items" in zero["summary"]
+
+
+def test_free_slots_go_to_the_next_unlock_reopen_first() -> None:
+    items = [_marked(1, "layer-1-open.1", "OPEN"), _marked(5, "layer-3-lint.1", "CLOSED"),
+             _marked(6, "layer-6-gate.1", "CLOSED")]
+    ctx = _context(_condition("layer-1-open.1", "unmet"), _condition("layer-3-lint.1", "unmet"),
+                   _condition("layer-6-gate.1", "unmet"))
+    ctx["level"]["next_step"] = {"step": 4, "blockers": [{"condition": "layer-6-gate.1"}]}  # type: ignore[index]
+    result = _run(items, ctx, wip=2)
+    assert [p["number"] for p in result["proposals"]] == [6]
+    assert [n["number"] for n in result["next_up"]] == [5]
+    assert [n["number"] for n in _run(items, ctx, wip=1)["next_up"]] == [6, 5]
+
+
+def test_a_close_in_the_same_batch_does_not_free_a_slot_until_written() -> None:
+    items = [*FULL[:2], _marked(3, "layer-5-ci.1", "OPEN"), FULL[3]]
+    result = _run(items, _context(*FULL_CONDITIONS[:2], _condition("layer-5-ci.1", "met"), FULL_CONDITIONS[3]),
+                  wip=3)
+    assert [(p["kind"], p["number"]) for p in result["proposals"]] == [("close", 3)]
+    assert [n["number"] for n in result["next_up"]] == [9]
+
+
+def test_reconcile_subcommand_holds_a_reopen_at_the_configured_limit(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _, existing = _cli_dir(tmp_path, _context(*FULL_CONDITIONS))
+    existing.write_text(json.dumps(FULL), encoding="utf-8")
+    assert render.main([str(tmp_path), "reconcile", "--existing", str(existing)]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["proposals"] == [] and [n["number"] for n in out["next_up"]] == [9]
+    assert "**Next up**" in out["summary"]
+    (tmp_path / ".assess" / "config.toml").write_text("[backlog]\nwip = 4\n", encoding="utf-8")
+    assert render.main([str(tmp_path), "reconcile", "--existing", str(existing)]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert [p["number"] for p in out["proposals"]] == [9] and out["next_up"] == []
+
+
+def test_a_declined_reopen_does_not_keep_the_free_slot(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    items = [*FULL[:2], _marked(5, "layer-3-lint.1", "CLOSED"), _marked(6, "layer-6-gate.1", "CLOSED")]
+    ctx = _context(*FULL_CONDITIONS[:2], FULL_CONDITIONS[3], _condition("layer-6-gate.1", "unmet"))
+    _, existing = _cli_dir(tmp_path, ctx)
+    existing.write_text(json.dumps(items), encoding="utf-8")
+    assert render.main([str(tmp_path), "reconcile", "--existing", str(existing)]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert [p["number"] for p in out["proposals"]] == [5] and [n["number"] for n in out["next_up"]] == [6]
+    assert render.main([str(tmp_path), "reconcile", "--existing", str(existing), "--confirm", "none",
+                        "--record-declines", "--declined-by", "ben", "--declined-at", "2026-11-27"]) == 0
+    capsys.readouterr()
+    assert render.main([str(tmp_path), "reconcile", "--existing", str(existing)]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert [p["number"] for p in out["proposals"]] == [6] and out["next_up"] == []
+    assert len(out["declined"]) == 1
+
+
+def test_a_scheduled_status_line_names_a_reopen_held_as_next_up(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    items = copy.deepcopy(FULL)
+    for n, item in enumerate(items, start=1):
+        item["comments"] = [_status(200 + n)]
+    tracker = ScheduledTracker(items)
+    _scheduled(tmp_path, capsys, tracker, "2026-11-27", ctx=_context(*FULL_CONDITIONS, interactive=False))
+    held = next(i for i in tracker.items if i["number"] == 9)
+    assert held["state"] == "CLOSED"
+    assert "Next up: reopened on confirmation once the `[backlog] wip` limit" in held["comments"][0]["body"]  # type: ignore[index]
