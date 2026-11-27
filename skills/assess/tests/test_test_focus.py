@@ -466,13 +466,12 @@ def test_mutation_scope_excludes_hot_file_that_is_itself_a_test(tmp_path: Path) 
 
 
 def test_skill_md_mutation_scope_jq_mirrors_test_path_rule() -> None:
-    """Step 2d (references/mutation-pass.md, relative to the assess skill) re-derives the mutation scope in jq; its test-file regex
+    """SKILL.md Step 2d re-derives the mutation scope in jq; its test-file regex
     must stay the same pattern as ``sibling_tests.IS_TEST_RE`` so the offer and
     the core never disagree about which hot files are tests."""
     from lib.testing.sibling_tests import IS_TEST_RE
 
-    # Step 2d's body lives in references/mutation-pass.md (#1408).
-    skill = (Path(__file__).resolve().parents[1] / "references" / "mutation-pass.md").read_text(encoding="utf-8")
+    skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
     focus_line = next(line for line in skill.splitlines() if line.startswith("FOCUS_FILES="))
     assert IS_TEST_RE.pattern.replace("\\", "\\\\") in focus_line
     assert '"__tests__"' in focus_line
