@@ -75,6 +75,12 @@ REAL: list[str] = [
     f"  auth_token: {_body(32)}",
     f'access_key="{_body(20)}"',
     f"TOKEN={_uuid()}",
+    # A prefixed name with no provider prefix in the value: the commonest shape in skill docs.
+    f"MY_SERVICE_API_KEY={_body(32)}",
+    f"DB_PASSWORD='{_body(24)}'",
+    f"AWS_SECRET_ACCESS_KEY={_body(40, B64)}",
+    f"SECRET_KEY = '{_body(50, ALNUM + '!@#%^&*-_')}'",
+    f"api_key: {_body(20, HEX)}",  # a short hex value, under the hex entropy threshold
 ]
 
 # Documentation placeholders and lookalikes: none may be a credential finding.
@@ -156,6 +162,14 @@ def test_a_published_sample_is_set_aside_on_an_exact_match_only(sample: str) -> 
     assert "credential" not in kinds_in(f"Use {sample} as in the provider's docs.")
     near = sample[:-1] + ("Z" if sample[-1] != "Z" else "Y")  # one character off: a real-shaped key
     assert "credential" in kinds_in(f"Use {near} here.")
+
+
+@pytest.mark.parametrize(("n", "alphabet"), [(20, HEX), (32, HEX), (40, HEX), (20, ALNUM), (36, ALNUM), (40, B64)])
+def test_recall_holds_over_many_random_bodies(n: int, alphabet: str) -> None:
+    rng = random.Random(n * len(alphabet))
+    bodies = ["".join(rng.choice(alphabet) for _ in range(n)) for _ in range(2000)]
+    found = sum("credential" in kinds_in(f"API_KEY={body}") for body in bodies)
+    assert found / len(bodies) >= 0.97, found
 
 
 def test_credential_is_a_finding_kind() -> None:

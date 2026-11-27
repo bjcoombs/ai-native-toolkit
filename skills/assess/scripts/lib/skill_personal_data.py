@@ -18,8 +18,9 @@ example, and the noise would bury real findings.
   ``private_key`` (a PEM private key block), ``cloud_key`` (an AWS-style access key id),
   ``credential`` (read again here with a tighter rule for skill text, #1196: a known provider key
   at the provider's length anywhere in the text, such as ``ghp_`` plus 36 characters, or a
-  ``password=``/``token=``/``api_key=`` assignment whose value is at least 20 characters with a
-  letter, a digit and 3.5 bits of entropy per character. A placeholder such as ``xxx``,
+  ``password=``/``token=``/``api_key=`` assignment, the name prefixed or not (``DB_PASSWORD=``),
+  whose value is at least 20 characters with a letter, a digit or both cases, and 3.5 bits of
+  entropy per character (2.8 for an all-hex value). A placeholder such as ``xxx``,
   ``<...>``, ``your_...``, a short ``sk-`` stub, a run of one character, an ascending run such
   as ``1234``, a placeholder word, the jwt.io sample, GitHub's or Slack's published example token
   (an exact match), a URL or path, or a reference to a secret held elsewhere
@@ -126,8 +127,11 @@ _ROOT_LOGIN = re.compile(r"\broot@([A-Za-z0-9._-]+)")
 _VERSION_BEFORE = re.compile(r"(?:(?:\bv|\bversion|\brelease|\bbuild)\s*[:=]?|[=~!<>]=)\s*$", re.IGNORECASE)
 # A credential assignment, as the grader reads it, re-checked here: a value that only refers to a
 # secret held elsewhere (``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X``, ``os.environ[...]``) is
-# not a committed secret, and telling a team to rotate it would be wrong.
-_CREDENTIAL = re.compile(r"\b(?:password|passwd|secret|api[_-]?key|access[_-]?key|auth[_-]?token|token)\b"
+# not a committed secret, and telling a team to rotate it would be wrong. The name may carry a prefix
+# ending in ``_`` (``DB_PASSWORD``, ``MY_SERVICE_API_KEY``, ``AWS_SECRET_ACCESS_KEY``), the commonest
+# shape in skill docs, which the grader's ``\b`` misses.
+_CREDENTIAL = re.compile(r"(?:\b|(?<=_))(?:password|passwd|secret(?:[_-]?access)?(?:[_-]?key)?|api[_-]?key|"
+                         r"access[_-]?key|auth[_-]?token|token)\b"
                          r"\s*([:=])\s*(\"[^\"]*\"|'[^']*'|\S+)(?:\s*=\s*(\"[^\"]*\"|'[^']*'|\S+))?", re.IGNORECASE)
 _REFERENCE = re.compile(r"^(?:\$\{?\{?|\$\w|%\w+%|\{\{|<|process\.env\b|os\.environ\b|os\.getenv\b|getenv\b|"
                         r"env\.|env\[|ENV\[|secrets\.|vars\.|System\.getenv\b|Environment\.|import\.meta\.env\b)",
@@ -208,9 +212,9 @@ _PROVIDER_KEY = re.compile(
     r"|SG\.([\w-]{22}\.[\w-]{43})|pypi-AgEIcHlwaS5vcmc([\w-]{50,}))(?![\w-])")
 # A value that is plainly made up: a placeholder word, the jwt.io sample token (its payload segment,
 # ``{"sub":"1234567890","name":"John Doe",...}``, common in auth docs), a run of one character, or an
-# ascending run (``abcd``, ``1234``). A random alphanumeric key holds such a run by chance at about
-# four positions in a million; a hex key has 16 symbols, so a 32-character hex value loses about 1%
-# to the run checks, inside the recall gate.
+# ascending run (``abcd``, ``1234``, checked lowercased). Sampled over random bodies, these checks
+# set aside about 0.2% of 36-character alphanumeric keys and about 1.2% of 32-character hex values
+# (``test_recall_holds_over_many_random_bodies``), inside the recall gate.
 _DUMMY_WORD = re.compile(r"example|sample|dummy|placeholder|your|fake|redacted|changeme|insert|replace|"
                          r"secret|token|password|xxx|eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIi",
                          re.IGNORECASE)
@@ -223,6 +227,18 @@ _CODE = re.compile(r"[()\[\]{}]")
 _AT_HOST = re.compile(r"@[\w-]+\.[A-Za-z]")
 _MIN_SECRET_LEN = 20
 _MIN_ENTROPY = 3.5  # bits per character; a random 20-character alphanumeric value averages about 4
+# A hex value has 16 symbols, so its entropy tops out at 4 and a random 20-character one falls below
+# 3.5 about 78% of the time; at 2.8 about 0.4% does. A repeated hex word (``deadbeef...``) stays under it.
+_MIN_ENTROPY_HEX = 2.8
+_HEX = re.compile(r"[0-9a-f]+|[0-9A-F]+")
+
+
+# Providers' own published example tokens, set aside on an exact match only: GitHub's REST API
+# authentication docs and Slack's bot token docs. Split so no whole token sits in the source.
+_PUBLISHED_SAMPLES = frozenset({
+    "gh" + "p_16C7e42F292c6912E7710c838347Ae178B4a",
+    "xo" + "xb-17653672481-19874698323-pdFZKVeTuE8sk7oOcBrzbqgy",
+})
 
 
 def _ascending(value: str) -> bool:
@@ -240,13 +256,17 @@ def _entropy(value: str) -> float:
 
 def _high_entropy(value: str) -> bool:
     """A value shaped like a generated secret (#1196): at least ``_MIN_SECRET_LEN`` characters, a letter
-    and a digit, Shannon entropy of at least ``_MIN_ENTROPY`` bits per character, not a location and not
+    and either a digit or both cases (a random 20-character alphanumeric value lacks a digit about 3% of
+    the time), Shannon entropy of at least ``_MIN_ENTROPY`` bits per character, not a location and not
     plainly made up. ``hunter2`` and ``my-super-secret-password`` are example values, not findings."""
     value = value.rstrip(",;").strip("\"'")
     if (host := _AT_HOST.search(value)) is not None:
         value = value[:host.start()]
-    return (len(value) >= _MIN_SECRET_LEN and any(c.isalpha() for c in value) and any(c.isdigit() for c in value)
-            and _entropy(value) >= _MIN_ENTROPY and not _LOCATION.search(value) and not _CODE.search(value) and not _dummy(value))
+    mixed = any(c.isdigit() for c in value) or (any(c.islower() for c in value) and any(c.isupper() for c in value))
+    threshold = _MIN_ENTROPY_HEX if _HEX.fullmatch(value) else _MIN_ENTROPY
+    return (len(value) >= _MIN_SECRET_LEN and any(c.isalpha() for c in value) and mixed
+            and _entropy(value) >= threshold and value not in _PUBLISHED_SAMPLES and not _LOCATION.search(value)
+            and not _CODE.search(value) and not _dummy(value))
 
 
 def _concrete(value: str) -> bool:
@@ -260,14 +280,6 @@ def _concrete(value: str) -> bool:
 def _literal_secret(value: str) -> bool:
     """Whether a credential value is a literal secret: concrete and high in entropy (#1196)."""
     return _concrete(value) and _high_entropy(value)
-
-
-# Providers' own published example tokens, set aside on an exact match only: GitHub's REST API
-# authentication docs and Slack's bot token docs. Split so no whole token sits in the source.
-_PUBLISHED_SAMPLES = frozenset({
-    "gh" + "p_16C7e42F292c6912E7710c838347Ae178B4a",
-    "xo" + "xb-17653672481-19874698323-pdFZKVeTuE8sk7oOcBrzbqgy",
-})
 
 
 def _provider_key(text: str) -> bool:
@@ -308,7 +320,7 @@ def _scan(text: str) -> tuple[list[str], bool]:
     found = {f["category"] for f in scan_sensitive_content(text)}
     loose = "credential" in found
     found.discard("credential")
-    if _provider_key(text) or (loose and any(_assigned_secret(m) for m in _CREDENTIAL.finditer(text))):
+    if _provider_key(text) or any(_assigned_secret(m) for m in _CREDENTIAL.finditer(text)):
         found.add("credential")
     set_aside = ("credential" not in found and loose
                  and any(_assigned_secret(m, _concrete) for m in _CREDENTIAL.finditer(text)))
