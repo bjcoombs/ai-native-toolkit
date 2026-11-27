@@ -118,8 +118,17 @@ def test_the_plan_artifact_name_survives_a_rerun_of_the_failed_job() -> None:
     assert names == ["backlog-reconcile-plan", "backlog-reconcile-plan"]
 
 
-def test_the_plan_job_runs_uv_against_the_lockfile() -> None:
+def test_the_plan_job_runs_project_scripts_against_the_lockfile() -> None:
+    """A project script runs as ``uv run --locked python <file>`` against ``skills/assess/uv.lock``.
+
+    ``uv run --locked <file>.py`` is script mode, which ignores ``uv.lock`` and fails without
+    a ``<file>.py.lock``. A script with a PEP 723 header runs unlocked on its inline pins.
+    """
     plan = _load(REUSABLE)["jobs"]["plan"]
     runs = "\n".join(str(s.get("run", "")) for s in _steps(plan))
-    calls = re.findall(r"uv run\b[^\n]*", runs)
-    assert calls and all(c.startswith("uv run --locked ") for c in calls), calls
+    assert not re.search(r"uv run --locked scripts/", runs), "script mode under --locked needs a script lockfile"
+    calls = re.findall(r"uv run (--locked python )?scripts/(\S+\.py)", runs)
+    assert len(calls) == 3, calls
+    for locked, script in calls:
+        inline = (REPO / "skills/assess/scripts" / script).read_text(encoding="utf-8").startswith("# /// script")
+        assert bool(locked) is not inline, script
