@@ -403,6 +403,51 @@
       ]
     },
     {
+      "id": "docs-kept-true",
+      "title": "Docs and generated files kept true by CI",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "docs-kept-true.1",
+          "truth": [
+            "docs",
+            "contracts"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "docs-kept-true.1:doc_staleness.kept_true.present",
+              "signal": "doc_staleness.kept_true.present",
+              "producer": {
+                "scan": "doc_staleness",
+                "collector": "core.doc_staleness"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "A CI check keeps docs or generated files true: is true",
+              "title": "Docs and generated files kept true by CI",
+              "fix": "Add a CI step that regenerates the generated files and docs and then runs git diff --exit-code, pair each verify script with an update script and run it in CI, or run the doc examples as tests (pytest --doctest-modules).",
+              "why": "A doc or generated file that CI regenerates, verifies or runs as a test cannot drift from the code without a red check, so an agent can read it as true.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "guardrails-stated",
       "title": "Guardrails stated",
       "scope": "team",
@@ -1663,9 +1708,13 @@
     {
       "id": "contracts",
       "title": "Contracts",
-      "conditions": [],
+      "conditions": [
+        "docs-kept-true.1"
+      ],
       "listed": [],
-      "shared": [],
+      "shared": [
+        "docs-kept-true.1"
+      ],
       "why": "That generated output and its source agree, so an agent editing one does not quietly break the other.",
       "why_source": ""
     },
@@ -1676,14 +1725,17 @@
         "contributor-files.1",
         "doc-freshness.1",
         "doc-freshness.2",
+        "docs-kept-true.1",
         "layer-0-instructions.2"
       ],
       "listed": [
         "contributor-files.1",
         "doc-freshness.1",
-        "doc-freshness.2"
+        "doc-freshness.2",
+        "docs-kept-true.1"
       ],
       "shared": [
+        "docs-kept-true.1",
         "layer-0-instructions.2"
       ],
       "why": "That what an agent reads about the code is still true of the code.",
@@ -1823,6 +1875,15 @@
       ],
       "conditions": [
         "agent-evals.1"
+      ]
+    },
+    {
+      "tags": [
+        "contracts",
+        "docs"
+      ],
+      "conditions": [
+        "docs-kept-true.1"
       ]
     },
     {
@@ -3484,7 +3545,7 @@
     {
       "name": "doc_staleness",
       "title": "Doc staleness",
-      "summary": "Each doc's last content change against its code subject's churn, following renames.",
+      "summary": "Each doc's last content change against its code subject's churn, following renames. Also each CI check that keeps docs or generated files true: a regenerate-then-diff step, a verify and update script pair, or doc examples run as tests. A doc in a subtree such a check names is not reported stale.",
       "collector": "core.doc_staleness",
       "reads": [
         "repo_root",
@@ -3513,6 +3574,8 @@
           "doc_staleness.declared_cross_repo.status": "token",
           "doc_staleness.docs.base_doc_dir": "path",
           "doc_staleness.docs.confidence": "token",
+          "doc_staleness.docs.kept_true_by.kind": "token",
+          "doc_staleness.docs.kept_true_by.path": "path",
           "doc_staleness.docs.last_change_basis": "token",
           "doc_staleness.docs.last_commit_days_bound": "token",
           "doc_staleness.docs.provenance.generated_by": "drop",
@@ -3523,6 +3586,10 @@
           "doc_staleness.docs.subject_paths": "path",
           "doc_staleness.docs.subject_roots": "path",
           "doc_staleness.history_boundary_date": "token",
+          "doc_staleness.kept_true.checks.covers": "path",
+          "doc_staleness.kept_true.checks.kind": "token",
+          "doc_staleness.kept_true.checks.path": "path",
+          "doc_staleness.kept_true.present_reason": "token",
           "doc_staleness.normalisation.base_doc_subject": "token",
           "doc_staleness.normalisation.rename_scope": "token",
           "doc_staleness.summary.stale_pct_reason": "token"
@@ -3530,16 +3597,29 @@
       },
       "used_by": {
         "rows": [
-          "doc-freshness"
+          "doc-freshness",
+          "docs-kept-true"
         ],
         "conditions": [
           "doc-freshness.1:doc_staleness.summary.stale_pct",
-          "doc-freshness.2:doc_staleness.summary.stale_pct"
+          "doc-freshness.2:doc_staleness.summary.stale_pct",
+          "docs-kept-true.1:doc_staleness.kept_true.present"
         ],
         "findings": []
       },
-      "unknown_reasons": [],
+      "unknown_reasons": [
+        {
+          "code": "ci_not_read",
+          "means": "No CI check that keeps docs or generated files true was found, and the tree tracks a CI file of a system this reader does not parse (Jenkins, Prow, Buildkite and the like). That system may run one.",
+          "next_step": "Nothing to change: this reads as not measured until that system's configuration can be read."
+        }
+      ],
       "evidence": [
+        {
+          "signal": "doc_staleness.kept_true.present",
+          "input_class": "head_structure",
+          "grade": "measured"
+        },
         {
           "signal": "doc_staleness.summary.stale_pct",
           "input_class": "git_history",
@@ -6823,6 +6903,15 @@
       "input_class": "ci_executed",
       "grade": "verified",
       "null_means": "threshold_not_read: threshold unknown; unknown_trigger: triggers unsettled; check_may_pass: may not fail its job; indirect_run: make test or tox may run it; included_jobs: in an included file; unread_ci_system: unparsed CI may run it; status_check_unconfirmed: a Codecov status that may be optional"
+    },
+    {
+      "path": "doc_staleness.kept_true.present",
+      "title": "A CI check keeps docs or generated files true",
+      "type": "bool",
+      "collector": "core.doc_staleness",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "ci_not_read: no such check was found and a CI file of a system this reader does not parse is tracked"
     },
     {
       "path": "doc_staleness.summary.stale_pct",

@@ -1560,6 +1560,30 @@
             ]
           }
         },
+        "doc_staleness": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: ci_not_read (no CI check that keeps docs or generated files true was found, and the tree tracks a CI file of a system this reader does not parse (Jenkins, Prow, Buildkite and the like). That system may run one). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
         "github_secret_scanning": {
           "type": "object",
           "if": {

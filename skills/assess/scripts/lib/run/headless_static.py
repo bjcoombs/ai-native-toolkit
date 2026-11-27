@@ -49,6 +49,7 @@ from lib.keyhole.archetype import analyze_archetype
 from lib.assess_config import load_working_notes_config
 from lib.run.context_blocks import doc_to_code_edges
 from lib.docs.doc_graph import build_doc_graph
+from lib.ci.docs_kept_true import apply_kept_true, scan_docs_kept_true
 from lib.docs.doc_staleness import analyze_doc_staleness
 from lib.keyhole.liveness_scan import scan_observability
 from lib.owner_exclusions import owner_exclusions_block
@@ -121,9 +122,9 @@ def doc_staleness(repo_root: Path, graph: Any, excludes: Excludes) -> JsonDict:
         return _marker("not_git_root", "doc staleness reads git history; the target is not a git work tree")
     dirs, patterns = excludes
     edges = doc_to_code_edges(graph) if isinstance(graph, dict) else []
-    return _guarded("doc_staleness", lambda: dict(analyze_doc_staleness(
+    return _guarded("doc_staleness", lambda: dict(apply_kept_true(analyze_doc_staleness(
         repo_root, doc_to_code_edges=edges,
-        extra_exclude_dirs=dirs, extra_exclude_patterns=patterns)))
+        extra_exclude_dirs=dirs, extra_exclude_patterns=patterns), scan_docs_kept_true(repo_root))))
 
 
 def archetype(repo_root: Path) -> JsonDict:

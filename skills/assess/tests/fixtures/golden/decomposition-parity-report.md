@@ -4,7 +4,7 @@ _Generated <<normalized>>._
 
 **[Step](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#step) 2 of 4: supervised agent PRs.**
 
-Holding: 1 of 2 Step 3 gates held · 0 of 6 [measured catalogue conditions](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage) met, 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade).
+Holding: 1 of 2 Step 3 gates held · 0 of 7 [measured catalogue conditions](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage) met, 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade).
 
 Blocks Step 3: CI does not turn red when a check breaks.
 
@@ -20,7 +20,7 @@ _New to these words? The [glossary](https://github.com/bjcoombs/ai-native-toolki
 
 Catalogue coverage: 18 not measured (needs a full run: 1, no agent jobs: 2, no manifests read: 1, no model jobs: 1, no ownership map: 1, no remote: 2, no skill files: 2, no skill scripts: 1, no source files: 2, no value read: 2, not a git repository: 1, waits on layer-4-architecture.1: 1, unavailable: 1) · 4 not applicable here (fewer than two agent systems: 2, no configured gate: 2) · model <<normalized>>
 
-By tag: behaviour 0 of 3 (NOT MEASURED: 2) · docs 0 of 1 (NOT MEASURED: 2) · structure 0 of 1 (NOT MEASURED: 5) · agent_context 0 of 0 (NOT MEASURED: 2) · agent_runtime 0 of 1 (NOT MEASURED: 3) · governance 0 of 1 (NOT MEASURED: 6) · supply_chain 0 of 0 (NOT MEASURED: 1)
+By tag: behaviour 0 of 3 (NOT MEASURED: 2) · contracts 0 of 1 · docs 0 of 2 (NOT MEASURED: 2) · structure 0 of 1 (NOT MEASURED: 5) · agent_context 0 of 0 (NOT MEASURED: 2) · agent_runtime 0 of 1 (NOT MEASURED: 3) · governance 0 of 1 (NOT MEASURED: 6) · supply_chain 0 of 0 (NOT MEASURED: 1)
 
 ## Where you are on the Steps
 
@@ -40,7 +40,7 @@ Verified and measured squares count toward catalogue coverage, listed ones are s
 
 ## Practices in place by truth tag
 
-In place: 5 of the 8 truth tags have a measured condition, each shown with the share of its measured conditions met.
+In place: 6 of the 8 truth tags have a measured condition, each shown with the share of its measured conditions met.
 
 [![Practices in place by truth tag](./tag-profile.svg)](./tag-profile.svg)
 

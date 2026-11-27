@@ -107,8 +107,11 @@ def test_a_model_tag_with_no_condition_reads_not_yet_measured() -> None:
     contracts = _row(_svg(SAME), "contracts")
     assert 'data-state="none"' in contracts and "not yet measured" in contracts
     assert 'data-mark="dot"' not in contracts
-    shipped = level_result(default_model(), {})
-    assert "not yet measured" in _row(_svg({"level": shipped}), "contracts")
+    model = default_model()   # contracts first carried a condition in #852: take it off
+    for row in model["rows"]:
+        for lv in row["levels"]:
+            lv["truth"] = [t for t in lv["truth"] if t != "contracts"]
+    assert "not yet measured" in _row(_svg({"level": level_result(model, {})}), "contracts")
 
 
 def test_marks_are_dots_on_one_linear_scale_with_no_filled_area() -> None:
