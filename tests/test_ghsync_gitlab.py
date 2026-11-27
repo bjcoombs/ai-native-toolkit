@@ -437,3 +437,17 @@ def test_porcelain_json_carries_membership_projects(env: Env) -> None:
     assert [r["path"] for r in rows] == sorted([*SYNCED, "solo/ns/direct"])
     direct = next(r for r in rows if r["path"] == "solo/ns/direct")
     assert direct["default_branch"] == "main" and direct["archived"] is False
+
+
+def test_membership_dedupe_handles_a_large_estate(env: Env) -> None:
+    """The paths already listed reach jq through a file: a list over the
+    128 KiB per-argument limit must not abort the run."""
+    many = [_project(f"grp/{'x' * 150}-{n:04d}") for n in range(1000)]
+    _serve(env, "groups/grp/projects", many)
+    _serve(env, "projects/membership", [many[0], _project("solo/ns/direct")])
+    res = env.run("--host", HOST, "--porcelain")
+    assert res.returncode == 0, res.stderr[-2000:]
+    listed = res.stdout.splitlines()
+    assert len(listed) == len(set(listed))
+    assert "solo/ns/direct" in listed and many[0]["path_with_namespace"] in listed
+

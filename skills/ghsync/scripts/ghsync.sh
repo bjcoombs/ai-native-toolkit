@@ -619,16 +619,20 @@ gitlab_encode() {
 # returned, so a project a group already listed keeps that group in the
 # per-group counts.
 gitlab_append_projects() {
-    local json=$1 group=$2 prefix=${3:-} only=${4:-} seen='[]'
+    local json=$1 group=$2 prefix=${3:-} only=${4:-} seen_file
+    # The known paths go to jq through a file, not argv: a large estate's
+    # list exceeds the per-argument limit (128 KiB on Linux, less on Windows).
+    seen_file=$(mktemp)
     if [ "$only" = new ]; then
-        seen=$(cat "$all_repos_file" "$archived_repos_file" | jq -R . | jq -sc .)
+        cat "$all_repos_file" "$archived_repos_file" > "$seen_file"
     fi
     # One project per line: --paginate prints each page as its own array.
-    json=$(jq -c --arg p "$prefix" --argjson seen "$seen" '
-        (reduce $seen[] as $s ({}; .[$s] = true)) as $known
+    json=$(jq -c --arg p "$prefix" --rawfile seen "$seen_file" '
+        (reduce ($seen | split("\n") | .[] | select(. != "")) as $s ({}; .[$s] = true)) as $known
         | .[]
         | select($p == "" or (.path_with_namespace | startswith($p + "/")))
         | select($known[.path_with_namespace] != true)' <<< "$json")
+    rm -f "$seen_file"
     [ -n "$json" ] || return 0
     # Empty projects have no default branch and nothing to check out,
     # mirroring the GitHub rule; archived ones go to the archive cache.
