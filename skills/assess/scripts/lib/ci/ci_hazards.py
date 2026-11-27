@@ -7,7 +7,7 @@ the Step that trusts it. Nothing is executed; the committed files are read as te
 is followed into the repository only through the shared CI-step follower
 (``lib.ci.ci_step_follower``: repo-local, never outside the checkout).
 
-- **``skip_labels``**: the number of pull request labels that skip every job of every
+- **``skip_labels``**: the number of pull request labels that skip every check job of every
   GitHub Actions workflow that runs a check on pull requests. A workflow counts when its ``on:``
   names ``pull_request`` or ``pull_request_target`` and one of its lines runs a test or lint
   command (``lib.ci.ci_checks.check_commands``, after the follower inlines local actions). A job
@@ -30,14 +30,18 @@ is followed into the repository only through the shared CI-step follower
   ``<profiles>`` (a profile runs only when activated) and a ``#`` or ``//`` line comment. A file that also fails the run from the
   test reports (a Jenkins ``junit`` step, which marks the build UNSTABLE, a report action with
   ``fail_on_failure: true``, or ``dorny/test-reporter`` without ``fail-on-error: false``; a
-  ``junit`` step with any named argument counts) is not
+  ``junit`` step with any named argument counts, and is read in a Jenkinsfile only, so a GitHub
+  step named "Upload junit (XML) reports" is not one) is not
   counted, and while any CI file does so, no pom, ``.mvn/maven.config`` or followed file is
   either: the failures still turn the run red. The files read: the GitHub Actions workflows
   and ``.gitlab-ci.yml``, each Jenkinsfile (a file named ``Jenkinsfile``, ``Jenkinsfile.<x>`` or
   ``<x>.jenkinsfile``), ``.mvn/maven.config``, the poms of the root reactor (``pom.xml`` and its
   ``<modules>`` closure; a pom no module names, such as a test fixture, is never read), and every
   file a CI line leads to through the follower (a committed script, a make recipe, a local
-  action or reusable workflow, the poms a Maven command reads). Null with
+  action or reusable workflow, the poms a Maven command reads, including a Maven command inside
+  a followed script or recipe). Every step that runs a file adds its commands to that file's
+  reading, and a workflow is read from its own lines, so a setting inside a local composite
+  action counts once, as the action. Null with
   ``test_failures_ignored_reason`` ``no_ci_files`` when none of those CI files or a root pom is
   tracked.
 
@@ -53,7 +57,7 @@ import re
 from pathlib import Path
 from typing import TypedDict
 
-from lib.ci.ci_build_follower import follow_maven
+from lib.ci.ci_build_follower import Followed, follow_maven
 from lib.ci.ci_checks import check_commands
 from lib.ci.ci_masking import IndentTree, parse_lines
 from lib.ci.ci_matrix import jobs
@@ -76,8 +80,9 @@ _IGNORE = re.compile(
 _NEEDS_ITEM = re.compile(r"[\w-]+")
 # A later step that reads the test reports and fails the run again: a Jenkins junit step (the
 # build goes UNSTABLE, a failing status) or a report action with fail_on_failure: true.
-_REFAIL = re.compile(r"\bjunit\s*[('\"\[]|\bjunit\s+\w+\s*:|\bfail_on_failure\s*:\s*['\"]?true\b"
-                     r"|\buses:\s*['\"]?dorny/test-reporter@", re.IGNORECASE)
+_REFAIL = re.compile(r"\bfail_on_failure\s*:\s*['\"]?true\b|\buses:\s*['\"]?dorny/test-reporter@", re.IGNORECASE)
+# The Jenkins junit step, read in a Jenkinsfile only: elsewhere "junit (XML)" is a step name.
+_JUNIT = re.compile(r"\bjunit\s*[('\"\[]|\bjunit\s+\w+\s*:", re.IGNORECASE)
 # dorny/test-reporter fails the job by default; fail-on-error: false turns that off.
 _NO_REFAIL = re.compile(r"\bfail-on-error\s*:\s*['\"]?false\b", re.IGNORECASE)
 # A status check that runs a job after a skipped need: always() or !cancelled(). failure() and
@@ -111,11 +116,12 @@ def ignores_test_failures(text: str) -> bool:
     return _IGNORE.search(_LINE_COMMENT.sub("", _PROFILES.sub("", _XML_COMMENT.sub("", text)))) is not None
 
 
-def refails_from_reports(text: str) -> bool:
-    """True when ``text`` also fails the run from the test reports (``_REFAIL``), after comments
-    are dropped as in ``ignores_test_failures``."""
+def refails_from_reports(text: str, jenkinsfile: bool = False) -> bool:
+    """True when ``text`` also fails the run from the test reports (``_REFAIL``, and ``_JUNIT``
+    when it is a Jenkinsfile), after comments are dropped as in ``ignores_test_failures``."""
     clean = _LINE_COMMENT.sub("", _XML_COMMENT.sub("", text))
-    return _REFAIL.search(clean) is not None and _NO_REFAIL.search(clean) is None
+    found = _REFAIL.search(clean) is not None or (jenkinsfile and _JUNIT.search(clean) is not None)
+    return found and _NO_REFAIL.search(clean) is None
 
 
 def _if_value(tree: IndentTree, lines: list[str], key: int) -> str:
@@ -195,17 +201,32 @@ def _skip_labels(texts: dict[str, str]) -> tuple[int | None, list[str]]:
     return len(common), (read if common else [])
 
 
-def _followed_files(follower: StepFollower, text: str) -> dict[str, str]:
-    """Each repository file a CI file's lines lead to, with the text that matters in it."""
-    out: dict[str, str] = {}
+def _follow_into(follower: StepFollower, text: str, out: dict[str, list[str]]) -> None:
+    """Add each repository file a CI file's lines lead to, with the text that matters in it, to
+    ``out``. Two steps that run the same file (``make lint``, ``make verify``) each add their
+    commands, and a Maven command inside a followed script or make recipe adds the poms it reads."""
+    def add(rel: str, chunk: str) -> None:
+        chunks = out.setdefault(rel, [])
+        if chunk not in chunks:
+            chunks.append(chunk)
+
+    def poms(found: Followed) -> None:
+        for pom in found.paths:
+            add(pom, follower.read_local(pom) or "")
+
     for line in text.splitlines():
         for found in follower.step(line):
             if found.kind == "maven":
-                for pom in found.paths:
-                    out.setdefault(pom, follower.read_local(pom) or "")
+                poms(found)
             elif found.paths:
-                out.setdefault(found.paths[0], "\n".join(found.commands))
-    return out
+                add(found.paths[0], "\n".join(found.commands))
+            if found.kind in ("script", "make"):
+                # a recipe runs in its Makefile's directory; a script in the step's own
+                base = posixpath.dirname(found.paths[0]) if found.kind == "make" else ""
+                for command in found.commands:
+                    for inner in follower.step(f"cd {base} && {command}" if base else command):
+                        if inner.kind == "maven":
+                            poms(inner)
 
 
 def scan_ci_hazards(repo_root: Path) -> CiHazardsBlock:
@@ -221,7 +242,11 @@ def scan_ci_hazards(repo_root: Path) -> CiHazardsBlock:
     # or manual workflow that ignores test failures does not stand between a change and main
     gating = {rel: text for rel, text in workflows.items() if CHANGE_EVENTS & set(workflow_events(text) or [])}
     texts = {**gating, **{rel: read_config(root, rel) for rel in files if rel in CI_CONFIG_FILES}}
-    texts |= {rel: read_config(root, rel) for rel in jenkinsfiles(tracked)}
+    jenkins = frozenset(jenkinsfiles(tracked))
+    texts |= {rel: read_config(root, rel) for rel in jenkins}
+    # a workflow's setting is read from its own lines: a local action's lines inlined into it are
+    # the action's, which the follower reads as a file of its own
+    own = {rel: read_config(root, rel) for rel in gating}
     skip, skip_files = _skip_labels(workflows)
     sources = dict(texts)
     if MAVEN_CONFIG in tracked:
@@ -229,14 +254,16 @@ def scan_ci_hazards(repo_root: Path) -> CiHazardsBlock:
     reactor = follow_maven(["mvn"], reader) if "pom.xml" in tracked else None
     for pom in reactor.paths if reactor is not None else ():
         sources.setdefault(pom, reader(pom) or "")
+    followed: dict[str, list[str]] = {}
     for text in texts.values():
-        for rel, found in _followed_files(follower, text).items():
-            sources.setdefault(rel, found)
+        _follow_into(follower, text, followed)
+    for rel, chunks in followed.items():
+        sources.setdefault(rel, "\n".join(chunks))
     # a CI file that fails the run from the test reports covers the build settings it runs: a pom
     # or .mvn/maven.config is then not counted, though a CI file of its own may still be
-    reported = any(refails_from_reports(t) for t in texts.values())
+    reported = any(refails_from_reports(t, rel in jenkins) for rel, t in texts.items())
     ignoring = sorted(rel for rel, text in sources.items()
-                      if ignores_test_failures(text) and not refails_from_reports(text)
+                      if ignores_test_failures(own.get(rel, text)) and not refails_from_reports(text, rel in jenkins)
                       and not (reported and rel not in texts))
     measured = bool(texts) or bool(workflows) or reactor is not None
     return {
