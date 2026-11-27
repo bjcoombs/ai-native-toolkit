@@ -343,9 +343,8 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "skill-script-tests": None,  # no skill holds a script: no_skill_scripts
             "model-ci-gated": None,      # no model-calling CI job detected: no_model_jobs
             "contributor-files": 0,      # no CONTRIBUTING or SECURITY file
-            "secrets-guard": 0,          # no secrets hook or CI scan, and no remote
+            "secrets-guard": 0, "agent-evals": 0,  # no secrets hook, CI scan or remote; no eval suite
             "skill-library": 0, "agent-least-privilege": None, "agent-job-write-access": None,  # no SKILL.md; no_agent_jobs
-            "agent-evals": 0,            # no agent eval suite
         }
     for scans in golden_repos.values():   # measured headless, each unknown for a named reason
         assert scans["structure"]["reason"].startswith("no_python_packages:")
@@ -382,8 +381,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "skill-script-tests": None,  # the capture predates skill_script_tests
         "skill-personal-data": None, "contributor-files": None,  # the capture predates both blocks
         "secrets-guard": None, "model-ci-gated": None,  # the capture predates both blocks
-        "skill-library": None, "agent-least-privilege": None, "agent-job-write-access": None,  # the capture predates all three
-        "agent-evals": None,  # the capture predates agent_evals
+        "skill-library": None, "agent-least-privilege": None, "agent-job-write-access": None, "agent-evals": None,  # the capture predates all four
     }
     assert "layer_grades.instruction_file_present" in _row(
         result, "layer-0-instructions")["missing_signals"]
