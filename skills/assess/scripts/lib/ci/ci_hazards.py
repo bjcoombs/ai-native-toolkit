@@ -39,9 +39,10 @@ is followed into the repository only through the shared CI-step follower
   ``<modules>`` closure; a pom no module names, such as a test fixture, is never read), and every
   file a CI line leads to through the follower (a committed script, a make recipe, a local
   action or reusable workflow, the poms a Maven command reads, including a Maven command inside
-  a followed script, recipe or called reusable workflow). Every step that runs a file adds its commands to that file's
-  reading, and a workflow is read from its own lines, so a setting inside a local composite
-  action counts once, as the action. Null with
+  a followed script, recipe, local action or called reusable workflow). Every step that runs a file adds its commands to that file's
+  reading, and a workflow is read from its own lines while each local composite action it uses
+  is read whole (its ``env:`` and input defaults included), so a setting inside one counts
+  once, as the action. Null with
   ``test_failures_ignored_reason`` ``no_ci_files`` when none of those CI files or a root pom is
   tracked.
 
@@ -204,31 +205,32 @@ def _skip_labels(texts: dict[str, str]) -> tuple[int | None, list[str]]:
 def _follow_into(follower: StepFollower, text: str, out: dict[str, list[str]]) -> None:
     """Add each repository file a CI file's lines lead to, with the text that matters in it, to
     ``out``. Two steps that run the same file (``make lint``, ``make verify``) each add their
-    commands, and a Maven command inside a followed script, make recipe or called reusable
-    workflow adds the poms it reads."""
+    commands, and a Maven command inside a followed script, make recipe, local action or called
+    reusable workflow adds the poms it reads."""
     def add(rel: str, chunk: str) -> None:
         chunks = out.setdefault(rel, [])
         if chunk not in chunks:
             chunks.append(chunk)
 
-    def poms(found: Followed) -> None:
-        for pom in found.paths:
-            add(pom, follower.read_local(pom) or "")
+    def whole(found: Followed) -> None:
+        for rel in found.paths:
+            add(rel, follower.read_local(rel) or "")
 
     for line in text.splitlines():
         for found in follower.step(line):
-            if found.kind == "maven":
-                poms(found)
+            if found.kind in ("maven", "composite"):
+                # a pom, or a local action read whole: its env: and input defaults hold settings too
+                whole(found)
             elif found.paths:
                 add(found.paths[0], "\n".join(found.commands))
-            if found.kind in ("script", "make", "workflow"):
-                # a recipe runs in its Makefile's directory; a script in the step's own, and a
-                # called reusable workflow from the checkout root
+            if found.kind in ("script", "make", "workflow", "composite"):
+                # a recipe runs in its Makefile's directory; a script, a local action and a
+                # called reusable workflow are read from the checkout root
                 base = posixpath.dirname(found.paths[0]) if found.kind == "make" else ""
                 for command in found.commands:
                     for inner in follower.step(f"cd {base} && {command}" if base else command):
                         if inner.kind == "maven":
-                            poms(inner)
+                            whole(inner)
 
 
 def scan_ci_hazards(repo_root: Path) -> CiHazardsBlock:

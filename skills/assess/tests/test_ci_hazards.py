@@ -282,6 +282,8 @@ def test_a_github_step_named_for_junit_does_not_clear_the_setting(
     ("uses: ./.github/workflows/maven.yml", {".github/workflows/maven.yml": (
         "on: workflow_call\njobs:\n  maven:\n    runs-on: ubuntu-latest\n    steps:\n"
         "      - run: mvn -B -f service/pom.xml verify\n")}),
+    ("uses: ./.github/actions/maven", {".github/actions/maven/action.yml": (
+        "runs:\n  using: composite\n  steps:\n    - run: mvn -B -f service/pom.xml verify\n      shell: bash\n")}),
 ])
 def test_a_maven_command_inside_a_followed_file_is_followed(tmp_path: Path, step: str, extra: dict[str, str]) -> None:
     caller = PLAIN.replace("run: pytest", step) if step.startswith("uses:") else PLAIN.replace("pytest", step)
@@ -309,4 +311,12 @@ runs:
 def test_a_setting_inside_a_local_composite_action_counts_once_as_the_action(tmp_path: Path) -> None:
     text = PLAIN.replace("      - run: pytest\n", "      - uses: ./.github/actions/maven\n")
     block = scan_ci_hazards(_repo(tmp_path, {".github/workflows/ci.yml": text, ".github/actions/maven/action.yml": ACTION}))
+    assert (block["test_failures_ignored"], block["ci_hazard_files"]) == (1, [".github/actions/maven/action.yml"])
+
+
+def test_a_setting_in_a_composite_action_outside_its_run_lines_is_read(tmp_path: Path) -> None:
+    text = PLAIN.replace("      - run: pytest\n", "      - uses: ./.github/actions/maven\n")
+    action = ACTION.replace("mvn -Dmaven.test.failure.ignore=true verify", "mvn -B verify") + (
+        "      env:\n        MAVEN_OPTS: -Dmaven.test.failure.ignore=true\n")
+    block = scan_ci_hazards(_repo(tmp_path, {".github/workflows/ci.yml": text, ".github/actions/maven/action.yml": action}))
     assert (block["test_failures_ignored"], block["ci_hazard_files"]) == (1, [".github/actions/maven/action.yml"])
