@@ -231,3 +231,17 @@ def test_a_report_action_that_fails_on_failure_clears_its_workflow(tmp_path: Pat
     text = PLAIN.replace("pytest", "mvn -Dmaven.test.failure.ignore=true verify") + (
         "      - uses: example-org/report-action@v1\n        with:\n          fail_on_failure: true\n")
     assert scan_ci_hazards(_repo(tmp_path, {".github/workflows/ci.yml": text}))["test_failures_ignored"] == 0
+
+
+def test_a_report_step_in_ci_covers_a_pom_that_ignores_test_failures(tmp_path: Path) -> None:
+    jenkins = JENKINS.replace("-Dmaven.test.failure.ignore=true ", "").replace(
+        "        sh 'mvn", "        junit '**/surefire-reports/*.xml'\n        sh 'mvn")
+    block = scan_ci_hazards(_repo(tmp_path, {"Jenkinsfile": jenkins, "pom.xml": POM, "core/pom.xml": MODULE}))
+    assert block["test_failures_ignored"] == 0
+
+
+@pytest.mark.parametrize(("extra", "counted"), [("", 0), ("          fail-on-error: false\n", 1)])
+def test_a_test_reporter_action_fails_the_run_unless_told_not_to(tmp_path: Path, extra: str, counted: int) -> None:
+    text = PLAIN.replace("pytest", "mvn -Dmaven.test.failure.ignore=true verify") + (
+        "      - uses: dorny/test-reporter@v1\n        with:\n          reporter: java-junit\n" + extra)
+    assert scan_ci_hazards(_repo(tmp_path, {".github/workflows/ci.yml": text}))["test_failures_ignored"] == counted

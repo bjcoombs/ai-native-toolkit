@@ -26,8 +26,10 @@ is followed into the repository only through the shared CI-step follower
   bare ``-Dmaven.test.failure.ignore``, or a ``<maven.test.failure.ignore>true`` property) or a
   Surefire or Failsafe ``<testFailureIgnore>true``, outside an XML comment, a pom's
   ``<profiles>`` (a profile runs only when activated) and a ``#`` or ``//`` line comment. A file that also fails the run from the
-  test reports (a Jenkins ``junit`` step, which marks the build UNSTABLE, or a report action with
-  ``fail_on_failure: true``) is not counted: the failures still turn the run red. The files read: the GitHub Actions workflows
+  test reports (a Jenkins ``junit`` step, which marks the build UNSTABLE, a report action with
+  ``fail_on_failure: true``, or ``dorny/test-reporter`` without ``fail-on-error: false``) is not
+  counted, and while any CI file does so, no pom, ``.mvn/maven.config`` or followed file is
+  either: the failures still turn the run red. The files read: the GitHub Actions workflows
   and ``.gitlab-ci.yml``, each Jenkinsfile (a file named ``Jenkinsfile``, ``Jenkinsfile.<x>`` or
   ``<x>.jenkinsfile``), ``.mvn/maven.config``, the poms of the root reactor (``pom.xml`` and its
   ``<modules>`` closure; a pom no module names, such as a test fixture, is never read), and every
@@ -70,7 +72,10 @@ _IGNORE = re.compile(
 _NEEDS_ITEM = re.compile(r"[\w-]+")
 # A later step that reads the test reports and fails the run again: a Jenkins junit step (the
 # build goes UNSTABLE, a failing status) or a report action with fail_on_failure: true.
-_REFAIL = re.compile(r"\bjunit\s*[('\"\[]|\bjunit\s+testResults\b|\bfail_on_failure\s*:\s*['\"]?true\b", re.IGNORECASE)
+_REFAIL = re.compile(r"\bjunit\s*[('\"\[]|\bjunit\s+testResults\b|\bfail_on_failure\s*:\s*['\"]?true\b"
+                     r"|\buses:\s*['\"]?dorny/test-reporter@", re.IGNORECASE)
+# dorny/test-reporter fails the job by default; fail-on-error: false turns that off.
+_NO_REFAIL = re.compile(r"\bfail-on-error\s*:\s*['\"]?false\b", re.IGNORECASE)
 # A status check that runs a job after a skipped need: always() or !cancelled(). failure() and
 # cancelled() alone are false when a need was only skipped, so the job is skipped with it.
 _STATUS = re.compile(r"\balways\s*\(|!\s*cancelled\s*\(")
@@ -105,7 +110,8 @@ def ignores_test_failures(text: str) -> bool:
 def refails_from_reports(text: str) -> bool:
     """True when ``text`` also fails the run from the test reports (``_REFAIL``), after comments
     are dropped as in ``ignores_test_failures``."""
-    return _REFAIL.search(_LINE_COMMENT.sub("", _XML_COMMENT.sub("", text))) is not None
+    clean = _LINE_COMMENT.sub("", _XML_COMMENT.sub("", text))
+    return _REFAIL.search(clean) is not None and _NO_REFAIL.search(clean) is None
 
 
 def _if_value(tree: IndentTree, lines: list[str], key: int) -> str:
@@ -219,8 +225,12 @@ def scan_ci_hazards(repo_root: Path) -> CiHazardsBlock:
     for text in texts.values():
         for rel, found in _followed_files(follower, text).items():
             sources.setdefault(rel, found)
+    # a CI file that fails the run from the test reports covers the build settings it runs: a pom
+    # or .mvn/maven.config is then not counted, though a CI file of its own may still be
+    reported = any(refails_from_reports(t) for t in texts.values())
     ignoring = sorted(rel for rel, text in sources.items()
-                      if ignores_test_failures(text) and not refails_from_reports(text))
+                      if ignores_test_failures(text) and not refails_from_reports(text)
+                      and not (reported and rel not in texts))
     measured = bool(texts) or reactor is not None
     return {
         "available": True,
