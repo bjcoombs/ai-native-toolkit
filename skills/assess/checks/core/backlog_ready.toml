@@ -116,12 +116,12 @@ null_means = "no_network, no_platform_auth, unsupported_host or platform_error: 
 [[entries]]
 id = "core:backlog_ready.first_response_met"
 kind = "signal"
-title = "Issues get a first response within first_response_max_days (median)"
+title = "The median wait for a first response, unanswered issues included, is within first_response_max_days"
 collector = "core.backlog_ready"
 path = "backlog_ready.first_response_met"
 type = "bool"
 evidence = "platform"
-null_means = "first_response_median_days is not measured; its reason says why"
+null_means = "first_response_median_days is not measured (its reason says why), or issues whose wait is not known yet could tip the median"
 
 [[entries]]
 id = "core:backlog_ready.untriaged_met"

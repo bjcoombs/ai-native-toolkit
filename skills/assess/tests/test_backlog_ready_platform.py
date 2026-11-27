@@ -238,6 +238,31 @@ def test_unread_responses_are_not_an_empty_window(tmp_path: Path, gh: FakeGh) ->
     assert block["first_response_met"] is None
 
 
+def _silent(created: str) -> dict[str, Any]:
+    return {"createdAt": created, "closedAt": None, "author": {"__typename": "User", "login": "zed"},
+            "timelineItems": {"pageInfo": {"hasNextPage": False}, "nodes": []}}
+
+
+def test_a_few_fast_answers_among_ignored_issues_read_unmet(tmp_path: Path, gh: FakeGh) -> None:
+    gh.nodes().extend(_silent(f"2026-10-{d:02d}T00:00:00Z") for d in range(1, 21))
+    block = _block(_repo(tmp_path))
+    assert block["first_response_median_days"] == 1.0  # the CHAOSS median over answered issues
+    assert block["first_response_met"] is False  # 20 issues ignored for weeks decide the median
+
+
+def test_one_fresh_issue_does_not_hide_an_ignored_tracker(tmp_path: Path, gh: FakeGh) -> None:
+    gh.recent["data"]["repository"]["issues"]["nodes"] = [
+        *(_silent(f"2026-10-{d:02d}T00:00:00Z") for d in range(1, 11)), _silent("2026-11-25T09:00:00Z")]
+    block = _block(_repo(tmp_path))
+    assert (block["first_response_median_days_reason"], block["first_response_met"]) == ("no_response", False)
+
+
+def test_fresh_unanswered_issues_that_could_tip_the_median_read_null(tmp_path: Path, gh: FakeGh) -> None:
+    gh.nodes().extend(_silent(f"2026-11-25T0{h}:00:00Z") for h in range(4))
+    block = _block(_repo(tmp_path))
+    assert block["first_response_median_days"] == 1.0 and block["first_response_met"] is None
+
+
 def test_an_ignored_tracker_reads_unmet_not_unmeasured(tmp_path: Path, gh: FakeGh) -> None:
     for node in gh.nodes():
         node["timelineItems"]["nodes"] = []

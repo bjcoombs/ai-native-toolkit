@@ -13,8 +13,11 @@ window of ``window_days`` (default 90) ending at the run time:
   response, of the days from opening to the first comment, label event or close by an account
   that is neither the author nor a bot (``issue_outcomes`` says which events each host gives).
   Issues with no response are counted in ``outcomes.no_response_count``, never dropped; issues
-  whose response the read could not settle are ``outcomes.response_unread``. Met when at most
-  ``first_response_max_days`` (default 2).
+  whose response the read could not settle are ``outcomes.response_unread``. The reported number
+  is that CHAOSS median; ``first_response_met`` asks the stricter question, whether the median
+  wait of every issue opened in the window is within ``first_response_max_days`` (default 2): an
+  unanswered issue older than the threshold counts as a wait past it, and an issue whose wait is
+  not known yet can fall either side, so the bool is null when they could tip it.
 - ``untriaged_after_7d_share``: among open issues older than 7 days, the share with no label or
   an untriaged label (``[backlog_ready] untriaged_labels``, else ``backlog_ready.UNTRIAGED_LABELS``).
   Met when at most ``untriaged_max_share`` (default 0.10).
@@ -28,9 +31,9 @@ issues opened in the window got no response the read could settle and some respo
 read (a capped timeline, note read or bot probe). The ratio reads ``window_truncated`` when the
 window's issue list stopped at its page cap: that list is newest first, so the issues it drops are
 old ones closed in the window, and a ratio over the rest would be low. One exception keeps an ignored tracker from reading
-not measured: when issues opened in the window got no response at all and each of them has waited
-longer than ``first_response_max_days``, the median is null with ``no_response`` and
-``first_response_met`` is false, since any later response is already past the threshold. Each
+not measured: when no issue opened in the window got a response and the overdue ones decide the
+median, the median is null with ``no_response`` and ``first_response_met`` is false, since any
+later response is already past the threshold. Each
 ``<x>_met`` bool is null whenever its metric is not measured: not measured is never unmet.
 
 Block fields this module adds to ``backlog_ready``::
@@ -55,6 +58,7 @@ evidence, graded verified). Tests: `tests/test_backlog_ready_platform.py`.
 from __future__ import annotations
 
 from datetime import datetime
+from math import inf
 from pathlib import Path
 from statistics import median
 from typing import Any, NotRequired, TypedDict, cast
@@ -107,6 +111,25 @@ def _days(a: datetime, b: datetime) -> float:
     return (b - a).total_seconds() / _DAY
 
 
+def _response_met(waits: list[float], overdue: int, unknown: int, limit: float) -> bool | None:
+    """Whether the median wait of every issue opened in the window is within ``limit``.
+
+    An unanswered issue older than ``limit`` (``overdue``) has already waited past it, so it counts
+    as a wait above the limit; an issue whose wait is not known yet (``unknown``: unanswered and
+    younger than the limit, or its response unread) could fall either side. Met when the median is
+    within the limit with every unknown wait above it, unmet when it is past the limit with every
+    unknown wait at 0, else None. So a few fast answers among many ignored issues read unmet."""
+    if not waits and not overdue:
+        return None
+    worst = sorted([*waits, *[inf] * (overdue + unknown)])
+    best = sorted([*waits, *[inf] * overdue, *[0.0] * unknown])
+    if median(worst) <= limit:
+        return True
+    if median(best) > limit:
+        return False
+    return None
+
+
 def _unmeasured(code: str) -> dict[str, Any]:
     fields: dict[str, Any] = {}
     for metric in METRICS:
@@ -132,16 +155,16 @@ def outcome_fields(read: OutcomeRead, thresholds: BacklogThresholds, from_config
     untriaged_n = sum(1 for i in read.open_old if not i.labels or marks & set(i.labels))
     fields: dict[str, Any] = {}
 
+    limit = thresholds.first_response_max_days
+    overdue = sum(1 for i in silent if _days(i.created, read.now) > limit)
+    met = _response_met(waits, overdue, len(silent) - overdue + unread, limit)
+    fields["first_response_met"] = met
     if waits:
         fields["first_response_median_days"] = round(median(waits), 2)
-        fields["first_response_met"] = median(waits) <= thresholds.first_response_max_days
-    elif silent and not unread and all(_days(i.created, read.now) > thresholds.first_response_max_days
-                                       for i in silent):
-        fields.update(first_response_median_days=None, first_response_median_days_reason=NO_RESPONSE,
-                      first_response_met=False)
     else:
-        fields.update(first_response_median_days=None, first_response_met=None,
-                      first_response_median_days_reason=RESPONSE_UNREAD if unread else EMPTY_WINDOW)
+        fields["first_response_median_days"] = None
+        fields["first_response_median_days_reason"] = (
+            NO_RESPONSE if met is False else RESPONSE_UNREAD if unread else EMPTY_WINDOW)
 
     if read.open_old:
         share = untriaged_n / len(read.open_old)

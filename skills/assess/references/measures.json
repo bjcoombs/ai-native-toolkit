@@ -6840,12 +6840,12 @@
     },
     {
       "path": "backlog_ready.first_response_met",
-      "title": "Issues get a first response within first_response_max_days (median)",
+      "title": "The median wait for a first response, unanswered issues included, is within first_response_max_days",
       "type": "bool",
       "collector": "core.backlog_ready",
       "input_class": "platform",
       "grade": "verified",
-      "null_means": "first_response_median_days is not measured; its reason says why"
+      "null_means": "first_response_median_days is not measured (its reason says why), or issues whose wait is not known yet could tip the median"
     },
     {
       "path": "backlog_ready.ready_label_documented",
