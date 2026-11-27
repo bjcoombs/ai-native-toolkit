@@ -16,11 +16,16 @@ example, and the noise would bury real findings.
 
 - From ``agent_instructions_grader.scan_sensitive_content`` (the instruction-file scan):
   ``private_key`` (a PEM private key block), ``cloud_key`` (an AWS-style access key id),
-  ``credential`` (information only, counted in ``credential_candidates`` and never a finding
-  until a precision check passes, #1196: a ``password=``/``token=``/``api_key=`` assignment with
-  a concrete value, not a placeholder such as ``xxx``, ``<...>``, ``your_...`` or a short ``sk-`` stub;
-  checked again here so a value that only refers to a secret held elsewhere, such as
-  ``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X`` or ``os.environ[...]``, is not a finding),
+  ``credential`` (read again here with a tighter rule for skill text, #1196: a known provider key
+  at the provider's length anywhere in the text, such as ``ghp_`` plus 36 characters, or a
+  ``password=``/``token=``/``api_key=`` assignment whose value is at least 20 characters with a
+  letter, a digit and 3.5 bits of entropy per character. A placeholder such as ``xxx``,
+  ``<...>``, ``your_...``, a short ``sk-`` stub, a run of one character, an ascending run such
+  as ``1234``, a placeholder word, a URL or path, or a reference to a secret held elsewhere
+  (``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X``, ``os.environ[...]``) is not a finding. An
+  assignment the instruction-file scan matches and this rule sets aside, such as
+  ``password: hunter2``, is counted in ``credential_candidates`` for information only. The
+  labelled fixture set and its precision gate are in ``tests/test_skill_credentials.py``),
   ``ssh_or_host`` (``root@host`` or ``ssh user@host``), ``ip_address`` (a routable or private
   IPv4 literal, loopback left out, and none that follows a version word such as ``v`` or
   ``version``) and ``home_path`` (a personal ``/Users/<name>/``,
@@ -45,7 +50,7 @@ Block (``skill_personal_data`` in run-context.json)::
      "reason": str,                                    # only when available is false
      "files": [{"path": str, "kinds": [kind, ...]}],  # only the files with a finding
      "files_considered": int, "files_unread": int, "files_with_personal_data": int,
-     "credential_candidates": int,                     # information only (#1196)
+     "credential_candidates": int,                     # example values set aside, information only (#1196)
      "kinds_detected": [kind, ...]}                    # FINDING_KINDS, so a reader sees what "met" covers
 
 With ``scope`` (a skill unit's folder in the unit pass, or the ``--scope`` folders) only the files under it are read. With no
@@ -57,13 +62,15 @@ that limit.
 
 Skill personal data (#1045), no model. `scan_skill_personal_data(repo_root, scope, excludes)` reads
 each skill and agent file and its skill's `references/` files and records per file the
-`FINDING_KINDS` found: `scan_sensitive_content`'s kinds less `credential`, plus `email` (not
-reserved, no-reply or placeholder) and `phone` (`+` country code, or `(NNN) NNN-NNNN`); the file
-and kind only, never the text. A `credential` match is counted in `credential_candidates`, never a
-finding (#1196). Personal names are not detected. Tests: `tests/test_skill_personal_data.py`.
+`FINDING_KINDS` found: `scan_sensitive_content`'s kinds, `credential` read with the tighter
+skill-text rule (#1196), plus `email` (not reserved, no-reply or placeholder) and `phone` (`+`
+country code, or `(NNN) NNN-NNNN`); the file and kind only, never the text. A credential-shaped
+assignment the rule sets aside is counted in `credential_candidates`. Personal names are not
+detected. Tests: `tests/test_skill_personal_data.py`, `tests/test_skill_credentials.py`.
 """
 from __future__ import annotations
 
+import math
 import re
 from pathlib import Path
 from typing import NotRequired, TypedDict
@@ -75,11 +82,9 @@ from lib.instructions.instruction_placement import skill_and_agent_files
 
 GRADER_KINDS = ("private_key", "cloud_key", "credential", "ssh_or_host", "ip_address", "home_path")
 KINDS = (*GRADER_KINDS, "email", "phone")
-# ``credential`` is information only until a precision check passes (#1196): it matches example
-# values in skill docs, and a false "your skill leaks a credential" costs more trust than a miss.
-# It is counted in ``credential_candidates`` and never makes the condition unmet.
-CANDIDATE_KINDS = ("credential",)
-FINDING_KINDS = tuple(k for k in KINDS if k not in CANDIDATE_KINDS)
+# Every kind is a finding. ``credential`` is read with the tighter skill-text rule below (#1196), which
+# clears the fixture set's precision gate in ``tests/test_skill_credentials.py``.
+FINDING_KINDS = KINDS
 REFERENCE_SUFFIXES = frozenset({".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".csv", ""})
 _READ_MAX_BYTES = 1_000_000
 REASON_UNREAD = "skill_files_unread"
@@ -159,7 +164,7 @@ class SkillPersonalDataBlock(TypedDict):
     files_considered: int
     files_unread: int
     files_with_personal_data: int
-    credential_candidates: int  # files with a credential-shaped assignment: information only (#1196)
+    credential_candidates: int  # files with a credential-shaped assignment set aside as no finding (#1196)
     kinds_detected: list[str]
 
 
@@ -190,12 +195,65 @@ _PLACEHOLDER_SECRET = re.compile(
     re.IGNORECASE)
 
 
+# A known provider key at the provider's length (#1196), found anywhere in the text: GitHub, Anthropic,
+# OpenAI, Slack, Stripe live keys, Google, GitLab, npm, Hugging Face, SendGrid and PyPI. Each shape
+# captures the body after its prefix, checked by ``_dummy`` so ``ghp_`` plus 36 ``x`` stays a placeholder.
+_PROVIDER_KEY = re.compile(
+    r"(?<![\w-])(?:gh[pousr]_([A-Za-z0-9]{36})|github_pat_([A-Za-z0-9]{22}_[A-Za-z0-9]{59})"
+    r"|sk-ant-(?:api|admin)\d{2}-([\w-]{80,})|sk-(?:proj-|svcacct-|admin-)([\w-]{40,})|sk-([A-Za-z0-9]{48})"
+    r"|xox[abposr]-((?:\d{8,13}-){2,3}[A-Za-z0-9]{24,})|[sr]k_live_([A-Za-z0-9]{24,99})"
+    r"|AIza([\w-]{35})|glpat-([\w-]{20})|npm_([A-Za-z0-9]{36})|hf_([A-Za-z0-9]{34})"
+    r"|SG\.([\w-]{22}\.[\w-]{43})|pypi-AgEIcHlwaS5vcmc([\w-]{50,}))(?![\w-])")
+# A value that is plainly made up: a placeholder word, a run of one character, or an ascending run
+# (``abcd``, ``1234``), which a random key holds by chance at about four positions in a million.
+_DUMMY_WORD = re.compile(r"example|sample|dummy|placeholder|your|fake|redacted|changeme|insert|replace|"
+                         r"secret|token|password|xxx", re.IGNORECASE)
+_REPEAT = re.compile(r"(.)\1{3}")
+# A value that names a place, not a secret: a URL, a path or a file name.
+_LOCATION = re.compile(r"://|^[~.]?/|\.(?:ya?ml|json|toml|txt|md|env|pem|key|cfg|ini)$", re.IGNORECASE)
+# A value with a bracket is code (``_strip_anchor(m.group(1))``, ``cfg["key"]``), not a literal.
+_CODE = re.compile(r"[()\[\]{}]")
+# The host after a URL's user part: ``ghs_abc123@github.com/a`` holds the short value before ``@``.
+_AT_HOST = re.compile(r"@[\w-]+\.[A-Za-z]")
+_MIN_SECRET_LEN = 20
+_MIN_ENTROPY = 3.5  # bits per character; a random 20-character alphanumeric value averages about 4
+
+
+def _ascending(value: str) -> bool:
+    return any(all(ord(value[i + j + 1]) - ord(value[i + j]) == 1 for j in range(3)) for i in range(len(value) - 3))
+
+
+def _dummy(value: str) -> bool:
+    return bool(_DUMMY_WORD.search(value) or _REPEAT.search(value)) or _ascending(value.lower())
+
+
+def _entropy(value: str) -> float:
+    counts = [value.count(c) for c in set(value)]
+    return -sum(n / len(value) * math.log2(n / len(value)) for n in counts)
+
+
+def _high_entropy(value: str) -> bool:
+    """A value shaped like a generated secret (#1196): at least ``_MIN_SECRET_LEN`` characters, a letter
+    and a digit, Shannon entropy of at least ``_MIN_ENTROPY`` bits per character, not a location and not
+    plainly made up. ``hunter2`` and ``my-super-secret-password`` are example values, not findings."""
+    value = value.rstrip(",;").strip("\"'")
+    if (host := _AT_HOST.search(value)) is not None:
+        value = value[:host.start()]
+    return (len(value) >= _MIN_SECRET_LEN and any(c.isalpha() for c in value) and any(c.isdigit() for c in value)
+            and _entropy(value) >= _MIN_ENTROPY and not _LOCATION.search(value) and not _CODE.search(value) and not _dummy(value))
+
+
 def _literal_secret(value: str) -> bool:
     """Whether a credential value is a literal secret: not empty, not a placeholder the grader skips,
-    and not a reference to a secret held elsewhere. Decided per value, so a placeholder beside a
-    reference reads clean, as each does alone."""
+    not a reference to a secret held elsewhere, and high in entropy (#1196). Decided per value, so a
+    placeholder beside a reference reads clean, as each does alone."""
     return (bool(value) and not CREDENTIAL_PLACEHOLDERS.match(value) and not _REFERENCE.match(value)
-            and not _SCHEMA_VALUE.match(value) and not _PLACEHOLDER_SECRET.match(value))
+            and not _SCHEMA_VALUE.match(value) and not _PLACEHOLDER_SECRET.match(value)
+            and _high_entropy(value))
+
+
+def _provider_key(text: str) -> bool:
+    return any(not _dummy(next(g for g in m.groups() if g)) for m in _PROVIDER_KEY.finditer(text))
 
 
 # An unquoted value followed by another word is prose after a label; a real secret is one token
@@ -221,12 +279,19 @@ def _assigned_secret(m: re.Match[str]) -> bool:
 
 def kinds_in(text: str) -> list[str]:
     """The ``KINDS`` found in ``text``, in ``KINDS`` order; the data itself is never returned."""
+    return _scan(text)[0]
+
+
+def _scan(text: str) -> tuple[list[str], bool]:
+    """The kinds in ``text``, and whether a credential-shaped assignment was set aside as no finding."""
     found = {f["category"] for f in scan_sensitive_content(text)}
+    loose = "credential" in found
+    found.discard("credential")
+    if _provider_key(text) or (loose and any(_assigned_secret(m) for m in _CREDENTIAL.finditer(text))):
+        found.add("credential")
     if "home_path" in found and not any((m.group(1) or m.group(2)).lower() not in _PLACEHOLDER_HOME
                                          for m in _HOME.finditer(text)):
         found.discard("home_path")
-    if "credential" in found and not any(_assigned_secret(m) for m in _CREDENTIAL.finditer(text)):
-        found.discard("credential")
     found.discard("ip_address")
     if any(not _VERSION_BEFORE.search(text[max(0, m.start() - 12):m.start()])
            for m in _IPV4.finditer(text) if all(int(g) <= 255 for g in m.groups())
@@ -242,7 +307,7 @@ def kinds_in(text: str) -> list[str]:
         found.add("email")
     if _has_phone(text):
         found.add("phone")
-    return [k for k in KINDS if k in found]
+    return [k for k in KINDS if k in found], loose and "credential" not in found
 
 
 def _files(repo: Path, scope: Scope | None, excludes: tuple[set[str], list[str]] | None) -> list[Path]:
@@ -282,8 +347,8 @@ def scan_skill_personal_data(
             unread += 1
             continue
         considered += 1
-        found = kinds_in(text)
-        candidates += any(k in CANDIDATE_KINDS for k in found)
+        found, set_aside = _scan(text)
+        candidates += set_aside
         kinds = [k for k in found if k in FINDING_KINDS]
         if kinds:
             flagged.append(PersonalDataFile(path=path.relative_to(repo).as_posix(), kinds=kinds))
