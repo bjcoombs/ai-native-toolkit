@@ -83,8 +83,11 @@ REAL: list[str] = [
     f"SECRET_KEY = '{_body(50, ALNUM + '!@#%^&*-_')}'",
     f"api_key: {_body(20, HEX)}",  # a short hex value, under the hex entropy threshold
     f'"env": {{"API_KEY": "{_body(32)}"}}',  # a quoted name: an MCP env block
-    # A signed JWT: dotted, but its segments mix digits in, so it is no attribute path (#1522).
+    # A signed JWT: dotted, but its segments are half capitals and digits, so it is no attribute path (#1522).
     f"token = {_b64({'alg': 'HS256', 'typ': 'JWT'})}.{_b64({'sub': _body(16)})}.{_body(43, URLSAFE)}",
+    # A random value with a dot is no attribute path either (#1522).
+    f"token = {_body(20, string.ascii_letters)}.{_body(2, string.ascii_letters)}",
+    f"api_key = {_body(16)}.{_body(16)}",
 ]
 
 # Documentation placeholders and lookalikes: none may be a credential finding.
@@ -154,6 +157,10 @@ PLACEHOLDERS: list[str] = [
     "api_key = settings.openaiApiKey2",
     'const client = new Anthropic({ apiKey: this.config.anthropic.apiKey });',
     "token: self.settings.githubToken",
+    "apiKey: this.config2Service.anthropicKey,",  # a digit inside a segment name
+    # A repeated block behind a provider prefix, bare and assigned (#1522).
+    "gh" + "p_" + "Kq7Wm2Xp9Rz4" * 3,
+    "GITHUB_TOKEN=gh" + "p_" + "Kq7Wm2Xp9Rz4" * 3,
 ]
 
 

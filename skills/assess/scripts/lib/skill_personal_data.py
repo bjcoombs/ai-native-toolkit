@@ -226,11 +226,12 @@ _LONG_REPEAT = re.compile(r"(.)\1{7}")
 # A value that names a place, not a secret: a URL, a path or a file name.
 _LOCATION = re.compile(r"://|^[~.]?/|\.(?:ya?ml|json|toml|txt|md|env|pem|key|cfg|ini)$", re.IGNORECASE)
 # A value with a bracket is code (``_strip_anchor(m.group(1))``, ``cfg["key"]``), not a literal.
-# A dotted identifier path (``this.configService.anthropicKey``, ``settings.openaiApiKey2``) is code
-# too: a reference to a value held elsewhere (#1522). Each segment is letters with at most trailing
-# digits, so a JWT or a provider key, whose segments mix digits in, stays a value.
-_ATTRIBUTE_PATH = re.compile(r"^[A-Za-z_$][A-Za-z_$]*\d*(?:\.[A-Za-z_$][A-Za-z_$]*\d*)+[,;]?$")
 _CODE = re.compile(r"[()\[\]{}]")
+# A dotted identifier path (``this.configService.anthropicKey``, ``settings.openaiApiKey2``) is code
+# too: a reference to a value held elsewhere (#1522). ``_attribute_path`` reads each segment as a name.
+_DOTTED = re.compile(r"[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+")
+_MAX_NAME = 40
+_MAX_NAME_DIGITS = 2
 # The host after a URL's user part: ``ghs_abc123@github.com/a`` holds the short value before ``@``.
 _AT_HOST = re.compile(r"@[\w-]+\.[A-Za-z]")
 _MIN_SECRET_LEN = 20
@@ -264,12 +265,19 @@ def _dummy(value: str) -> bool:
 
 def _hand_typed(value: str) -> bool:
     """A value typed by hand (#1522): an ascending run of six in every other character (``1a2b3c...``)
-    or one block repeated (``Kq7Wm2Xp9Rz4`` twice). A random alphanumeric value is either about once in
-    a million and a random 40-character hex value about once in 30,000, so the check runs on assigned
-    values as well as provider key bodies."""
+    or one block repeated (``Kq7Wm2Xp9Rz4`` twice). A provider key's body is read without its prefix,
+    so ``ghp_`` before a repeated block does not hide it. A random alphanumeric value matches either
+    about once in a million and a random 40-character hex value about once in 30,000, so the check runs
+    on assigned values as well as provider key bodies."""
+    if (key := _PROVIDER_KEY.fullmatch(value)) is not None and _periodic(next(g for g in key.groups() if g)):
+        return True
     low = value.lower()
-    return (any(_ascending(part, 6) for part in (low[0::2], low[1::2]))
-            or any(value[p:] == value[:-p] for p in range(1, len(value) // 2 + 1)))
+    return any(_ascending(part, 6) for part in (low[0::2], low[1::2])) or _periodic(value)
+
+
+def _periodic(value: str) -> bool:
+    """Whether ``value`` is one block repeated, the last copy possibly cut short."""
+    return any(value[p:] == value[:-p] for p in range(1, len(value) // 2 + 1))
 
 
 def _entropy(value: str) -> float:
@@ -298,7 +306,23 @@ def _concrete(value: str) -> bool:
     beside a reference reads clean, as each does alone."""
     return (bool(value) and not CREDENTIAL_PLACEHOLDERS.match(value) and not _REFERENCE.match(value)
             and not _SCHEMA_VALUE.match(value) and not _PLACEHOLDER_SECRET.match(value)
-            and not _ATTRIBUTE_PATH.match(value))
+            and not _attribute_path(value))
+
+
+def _attribute_path(value: str) -> bool:
+    """Whether a value is a dotted identifier path (#1522): every segment a name of at most ``_MAX_NAME``
+    characters, with at most ``_MAX_NAME_DIGITS`` digits (``config2Service``, ``s3Bucket``) and capitals
+    for at most a third of its letters (camelCase). A JWT segment or a random value is about half
+    capitals or full of digits, so it stays a value."""
+    value = value.rstrip(",;")
+    if not _DOTTED.fullmatch(value):
+        return False
+    for name in value.split("."):
+        letters = [c for c in name if c.isalpha()]
+        if (len(name) > _MAX_NAME or sum(c.isdigit() for c in name) > _MAX_NAME_DIGITS
+                or 3 * sum(c.isupper() for c in letters) > len(letters)):
+            return False
+    return True
 
 
 def _literal_secret(value: str) -> bool:
@@ -309,13 +333,13 @@ def _literal_secret(value: str) -> bool:
 def _placeholder_body(body: str) -> bool:
     """A provider key body that is a placeholder: a placeholder word other than ``xxx``, a run of eight
     of one character, an ascending run of six (``123456``, ``abcdef``, or in every other character, as
-    in ``1a2b3c``), or entropy under ``_MIN_ENTROPY_PROVIDER``. The prefix at the provider's
+    in ``1a2b3c``), one block repeated (#1522), or entropy under ``_MIN_ENTROPY_PROVIDER``. The prefix at the provider's
     length carries the precision, so the stricter ``_dummy`` runs would drop real keys (Slack's numeric
     segments, the ``xxx`` that a 156-character body holds by chance about once in 200)."""
     low = body.lower()
     return (bool(_DUMMY_WORD.search(low.replace("xxx", ""))) or bool(_LONG_REPEAT.search(body))
             or any(_ascending(part, 6) for part in (low, low[0::2], low[1::2]))  # ``1a2b3c...`` too
-            or _entropy(body) < _MIN_ENTROPY_PROVIDER)
+            or _periodic(body) or _entropy(body) < _MIN_ENTROPY_PROVIDER)
 
 
 def _provider_key(text: str) -> bool:
