@@ -66,10 +66,11 @@ they match.
 
 **Signals whose meaning changed.** Each repository row records its `signals_schema_version`.
 When the two rows differ, the row at the lower version reads each signal whose meaning
-changed between them as absent (`lib/signal_meaning.py` lists them per version), so it shows
-in `repos` with only `now`, never as a repository move. A maturity model row that moved and
-reads such a signal gets cause `set` with `absent_signals`. A row at a version this toolkit
-does not know reads every earlier signal as absent.
+changed between them as absent (`lib/signal_meaning.py` lists them per version), so `repos`
+shows only the other side's value, never a repository move. A maturity model row that moved
+and reads such a signal gets cause `set` with `absent_signals`. When the versions differ and
+either is one this toolkit does not know, every signal of the earlier run's row reads as
+absent; two rows at one version compare as they are.
 
 **`compare.json`** (keys sorted, no absolute paths):
 

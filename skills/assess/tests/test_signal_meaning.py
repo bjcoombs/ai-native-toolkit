@@ -22,6 +22,8 @@ def test_a_version_this_toolkit_does_not_know_gives_none():
     assert sm.stale_paths(None, 1) is None
     assert sm.stale_paths(True, 1) is None
     assert sm.stale_paths(0, 1) is None
+    assert sm.stale_paths(99, 99) == frozenset()  # one version, even an unknown one
+    assert sm.stale_paths(99, 98) is None
 
 
 def test_without_drops_leaves_and_blocks_and_leaves_the_input_alone():

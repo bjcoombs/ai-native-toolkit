@@ -7,7 +7,7 @@ so the fleet comparison can enforce the convention instead of stating it: a repo
 scanned at an earlier version reads each such signal as absent, never as a value to compare.
 
 - ``stale_paths(then, now)``: the paths that changed meaning between two versions (either
-  order), an empty set at one version, or None when a version is not an integer from 1 to
+  order), an empty set at one version (known or not), or None when a version is not an integer from 1 to
   the newest in the table (another toolkit's version: every signal may have changed).
 - ``without(scans, paths)``: ``scans`` with each path (a block, or a dotted leaf or sub-block)
   removed; the input is never changed.
@@ -46,7 +46,10 @@ def _known(version: object) -> int | None:
 def stale_paths(then: object, now: object) -> frozenset[str] | None:
     """The signal paths whose meaning changed between versions ``then`` and ``now``.
 
-    Empty at one version; None when either is not a version this toolkit knows."""
+    Empty at one version, even one this toolkit does not know; otherwise None when either is
+    not a version this toolkit knows."""
+    if type(then) is int and type(now) is int and then == now:
+        return frozenset()
     a, b = _known(then), _known(now)
     if a is None or b is None:
         return None

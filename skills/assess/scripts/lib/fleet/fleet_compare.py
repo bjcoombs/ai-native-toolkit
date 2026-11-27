@@ -493,7 +493,8 @@ def aligned(then: FleetRow, now: FleetRow) -> tuple[Any, Any, list[str]]:
     Renames are read under the new path (``renamed``). The side at the lower
     ``signals_schema_version`` reads each signal whose meaning changed since as absent
     (``lib/signal_meaning.py``); at a version this toolkit does not know, the earlier side
-    reads every signal as absent. ``stale`` lists the paths dropped that the side held."""
+    reads every signal as absent (rows at one version, known or not, are compared as they
+    are). ``stale`` lists the paths dropped that the side held."""
     then_scans, now_scans = renamed(then["scans"]), renamed(now["scans"])
     old, new = then.get("signals_schema_version"), now.get("signals_schema_version")
     paths = stale_paths(old, new)
@@ -539,9 +540,9 @@ def _attribute(groups: list[GroupChange], earlier: FleetRun, later: FleetRun,
                     missing = [s for lv in stored["levels"] if lv["id"] == row["id"] for s in lv["missing_signals"]]
                     absent += absent_signals(missing, mine, other)
             absent += _stale_reads(row["id"], earlier, later, [stale.get(r, []) for r in both])
-            reads = _row_blocks(row["id"], earlier, later)
+            row_reads = _row_blocks(row["id"], earlier, later)
             result = attribute(row["cause"], absent=absent, diff=scanner, blocks_changed=blocks,
-                               row_blocks=reads, moved_blocks=moved_blocks)
+                               row_blocks=row_reads, moved_blocks=moved_blocks)
             row["cause"] = result["cause"]
             if "scanner" in result:
                 row["scanner"] = result["scanner"]

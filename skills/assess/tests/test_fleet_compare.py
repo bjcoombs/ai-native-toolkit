@@ -200,6 +200,18 @@ def test_a_schema_version_this_toolkit_does_not_know_reads_every_earlier_signal_
     now = [_versioned("g/a", {"observability": {"kept": 1}}, 99)]
     (repo,) = compare(_run(then), _run(now))["repos"]
     assert repo["signals"] == [{"path": "observability.kept", "now": 1}]
+    unknown = [_versioned("g/a", {"observability": {"kept": 1}}, 99)]
+    rerun = compare(_run(unknown), _run(unknown))
+    assert rerun["repos"] == [] and not rerun["movement"]  # one version, known or not: as they are
+
+
+def test_the_later_run_at_the_lower_schema_version_is_the_side_that_reads_as_absent():
+    then = _versioned("g/a", {"observability": {"rung": 3, "kept": 1}}, 4)
+    now = _versioned("g/a", {"observability": {"rung": 1, "kept": 1}}, 3)
+    assert fc.aligned(then, now) == ({"observability": {"rung": 3, "kept": 1}}, {"observability": {"kept": 1}},
+                                     ["observability.rung"])
+    (repo,) = compare(_run([then]), _run([now]))["repos"]
+    assert repo["signals"] == [{"path": "observability.rung", "then": 3}]
 
 
 def test_hashed_paths_on_both_sides_carry_a_note():
