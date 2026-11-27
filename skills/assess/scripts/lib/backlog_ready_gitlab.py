@@ -20,8 +20,10 @@ met by either:
   that creates only some scheduled pipelines or cannot be read;
 - a visible job that runs in a scheduled pipeline and whose ``script``, ``before_script`` or
   ``after_script`` adds an untriaged label: ``glab issue update|create --label`` / ``-l``, an
-  ``add_labels`` API field, or a ``/label ~name`` quick action in a ``glab`` or ``curl`` call. A label is compared whole,
-  ignoring case; a ``$VARIABLE`` argument is unsettled.
+  ``add_labels`` API field, or a ``/label ~name`` quick action in a ``glab`` or ``curl`` call
+  (a form-encoded ``body=/label ~name`` too). A label is compared whole, ignoring case, and an
+  unquoted one ends at the ``]`` of a flow list (``script: [glab ... -l needs-triage]``); a
+  ``$VARIABLE`` argument is unsettled.
 
 Each job is read as GitLab merges it (``ci_includes.merged_config``, rendered by
 ``ci_merged_view.rendered_job``): ``include: local:`` files, ``extends:`` and ``default:``
@@ -79,12 +81,14 @@ _FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 _SCRIPT_KEYS = ("before_script", "script", "after_script")
 _SEGMENTS = re.compile(r"\|\|?|;|&&")
 _GLAB_ISSUE = re.compile(r"\bglab\s+issue\s+(?:update|create|new)\b")
-_GLAB_LABEL = re.compile(r"""(?<![\w-])(?:--label|-l)(?:\s+|=)("[^"]*"|'[^']*'|[^\s;&|]+)""")
-_ADD_LABELS = re.compile(r"""\badd_labels["']?\s*[=:]\s*("[^"]*"|'[^']*'|[^\s;&|"']+)""")
-# A quick action counts only where it is posted: a glab or curl call, or a notes API path.
+_GLAB_LABEL = re.compile(r"""(?<![\w-])(?:--label|-l)(?:\s+|=)("[^"]*"|'[^']*'|[^\s;&|\]]+)""")
+_ADD_LABELS = re.compile(r"""\badd_labels["']?\s*[=:]\s*("[^"]*"|'[^']*'|[^\s;&|"'\]]+)""")
+# A quick action counts only where it is posted: a glab or curl call, or a notes API path. It may
+# open a form-encoded field (``body=/label ~x``). An unquoted argument stops at ``]``, which closes
+# a flow list (``script: [glab issue update 1 -l needs-triage]``).
 _POSTS = re.compile(r"\bglab\b|\bcurl\b|/notes\b")
-_QUICK_LABEL = re.compile(r"""(?:^|[\s"'])/label((?:\s+~(?:"[^"]*"|[^\s"'~]+))+)""")
-_QUICK_ARG = re.compile(r"""~("[^"]*"|[^\s"'~]+)""")
+_QUICK_LABEL = re.compile(r"""(?:^|[\s"'=])/label((?:\s+~(?:"[^"]*"|[^\s"'~\]]+))+)""")
+_QUICK_ARG = re.compile(r"""~("[^"]*"|[^\s"'~\]]+)""")
 _BLOCK_SCALAR = re.compile(r"^[|>][-+0-9]*$")
 _RUN_WHEN = frozenset({"on_success", "always", "delayed"})
 _STOP_WHEN = frozenset({"never", "manual", "on_failure"})

@@ -25,7 +25,9 @@ login ends ``[bot]`` is a bot. GitLab (``issue_outcomes_gitlab``): system notes 
 label added there is not read), ``bot: true`` on the user, a project or group access-token user,
 or a user whose ``users/<id>`` read says ``bot: true`` is a bot. An issue whose events ran past
 what was read, or whose responder could not be classified, has an unknown response
-(``response_read`` False) and counts in neither ``responded`` nor ``no_response_count``.
+(``response_read`` False) and counts in neither ``responded`` nor ``no_response_count``. An issue
+closed by its own author is ``self_closed`` (GitHub: a read ``ClosedEvent`` whose actor is the
+author; GitLab: ``closed_by`` is the author), so nobody owes it a response (#1587).
 
 **Not measured.** The value is an :class:`IssueRead`, or ``{"available": False, "reason": code}``
 with one of ``REASONS``: ``no_network`` (a headless run without ``--platform``, or an unreachable
@@ -135,24 +137,28 @@ def gh_is_bot(actor: Any) -> bool:
                 or (login and login.endswith("[bot]")))
 
 
-def _gh_response(node: dict[str, Any]) -> tuple[datetime | None, bool]:
-    """The first response to one issue node, and whether its timeline read settles it."""
+def _gh_response(node: dict[str, Any]) -> tuple[datetime | None, bool, bool]:
+    """The first response to one issue node, whether its timeline read settles it, and whether a
+    close read was by the issue's author."""
     author = _gh_login(node.get("author"))
     timeline = _dict(node.get("timelineItems"))
     events: list[datetime] = []
+    self_closed = False
     for item in timeline.get("nodes") or []:
         if not isinstance(item, dict):
             continue
         actor = item.get("author") if item.get("__typename") == "IssueComment" else item.get("actor")
         login = _gh_login(actor)
         when = parse_time(item.get("createdAt"))
+        self_closed = self_closed or (item.get("__typename") == "ClosedEvent" and login is not None
+                                      and login == author)
         if login is None or when is None or login == author or gh_is_bot(actor):
             continue
         events.append(when)
     if events:
-        return min(events), True
+        return min(events), True, self_closed
     more = _dict(timeline.get("pageInfo")).get("hasNextPage") is True
-    return None, not more
+    return None, not more, self_closed
 
 
 def _labels(node: dict[str, Any]) -> tuple[str, ...]:
@@ -191,8 +197,9 @@ def github_read(repo: GithubRepo, start: datetime, now: datetime) -> IssueRead:
         created = parse_time(node.get("createdAt"))
         if created is None:
             raise GhUnavailable("gh_bad_json: an issue has no createdAt")
-        first, settled = _gh_response(node)
-        recent.append(Issue(created, parse_time(node.get("closedAt")), (), first, settled))
+        first, settled, self_closed = _gh_response(node)
+        recent.append(Issue(created, parse_time(node.get("closedAt")), (), first, settled,
+                            self_closed=self_closed))
     open_nodes, cut_open = _gh_pages(repo, OPEN_QUERY, [])
     cutoff = now - UNTRIAGED_AFTER
     open_old = []

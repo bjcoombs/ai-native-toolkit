@@ -21,7 +21,8 @@ shapes = [
 ]
 revision = 3
 unknown_reasons = [
-  { code = "form_unreadable", block = "backlog_ready", means = "No issue form read has a required field, and a form or GitLab template could not be read. Causes are a tab indent, an unclosed flow collection, no top-level body list, or a file over the size limit.", next_step = "Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue." },
+  { code = "form_unreadable", block = "backlog_ready", means = "No issue form read has a required field, and a GitHub issue form could not be read. Causes are a tab indent, an unclosed flow collection, no top-level body list, or a file over the size limit.", next_step = "Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue." },
+  { code = "gitlab_template_unreadable", block = "backlog_ready", means = "No issue form or GitLab template read meets the bar, and a GitLab issue template could not be read: it is over the size limit or could not be opened.", next_step = "Nothing to change if the template has the six sections; a GitLab issue template under the size limit lets the scan read its headings." },
   { code = "gitlab_ci_unreadable", block = "backlog_ready", means = "No workflow adds an untriaged label, and .gitlab-ci.yml has a tab in its indentation or an unclosed flow collection, which GitLab rejects.", next_step = "Fix .gitlab-ci.yml so GitLab accepts it; the pipeline editor's validate tab names the line." },
   { code = "gitlab_ci_unsettled", block = "backlog_ready", means = "No workflow or GitLab job read adds an untriaged label on a schedule. But something this reader cannot follow may: an include not read offline, or an anchor merge, !reference, variable label or unread rule.", next_step = "Nothing to change if a scheduled job labels new issues; a literal label, plain rules: and a local include let the scan read it." },
   { code = "workflow_unreadable", block = "backlog_ready", means = "No workflow read adds an untriaged label when an issue opens, and a workflow's on: key could not be read.", next_step = "Nothing to change if that workflow labels new issues; a plain on: issues: types: [opened] lets the scan read it." },
@@ -53,7 +54,7 @@ collector = "core.backlog_ready"
 path = "backlog_ready.required_form_field"
 type = "bool"
 evidence = "config_text"
-null_means = "form_unreadable: a form or GitLab template could not be read, none read has a required field and no template read has the six sections"
+null_means = "form_unreadable: an issue form could not be read, none read has a required field and no template read has the six sections; gitlab_template_unreadable: the same, with a GitLab template unread instead"
 
 [[entries]]
 id = "core:backlog_ready.untriaged_on_open"

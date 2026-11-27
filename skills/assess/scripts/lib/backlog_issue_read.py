@@ -5,7 +5,7 @@ The shapes live here so the ``backlog_ready`` collector reads them without impor
 client: a scan whose module reaches ``gh_cli`` or ``gitlab_cli`` must be a network scan, and
 ``backlog_ready`` is not one (its network read is the private ``backlog_outcomes`` spec).
 
-`Issue` (`created`, `closed`, lower-cased `labels`, `first_response`, `response_read`), `IssueRead`
+`Issue` (`created`, `closed`, lower-cased `labels`, `first_response`, `response_read`, `self_closed`), `IssueRead`
 (`provider`, `start`, `now`, `recent`, `open_old`, `truncated`, `window_truncated`, `open_truncated`), `OutcomeRead` (an `IssueRead` or an
 unavailable dict), the reason codes `REASONS` and `UNTRIAGED_AFTER` (7 days). Tests:
 `tests/test_backlog_ready_platform.py`.
@@ -38,6 +38,7 @@ class Issue:
     first_response: datetime | None = None
     response_read: bool = True  # False: the events read could not settle the first response
     labels_complete: bool = True  # False: the issue has more labels than were read
+    self_closed: bool = False  # True: closed by its own author (#1587)
 
 
 @dataclass(frozen=True)
