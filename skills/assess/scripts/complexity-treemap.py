@@ -1219,7 +1219,7 @@ def write_stats(files: list[tuple[Path, int, float, str]],
         # JSON fixture cannot pass for the largest source file.
         "loc": _size_block(locs, is_data),
         # Lines per path class (lib.class_sizes): L4 level 2 reads the source p95 (#820).
-        "loc_by_class": loc_by_class((_rel_path(f[0], root), f[1]) for f in files),
+        "loc_by_class": loc_by_class(((_rel_path(f[0], root), f[1]) for f in files), root),
         # Estimated tokens (~chars/4) - the keyhole size unit. Sized the treemap
         # blocks and feeds the hotspot composite. `budget` rolls the per-file
         # totals into the "does the relevant slice fit one keyhole?" finding.

@@ -1,4 +1,4 @@
-"""The path classifier and the per-class file-size block behind L4 level 2 (#820)."""
+"""The path classifier and the per-class file-size block behind L4 level 2 (#820, #1419)."""
 from __future__ import annotations
 
 import subprocess
@@ -8,7 +8,7 @@ import pytest
 
 from lib.run import headless_layers as hl
 from lib.scoring import level_tally
-from lib.class_sizes import class_loc, loc_by_class, percentile
+from lib.class_sizes import class_loc, elixir_doc_lines, loc_by_class, percentile
 from lib.path_classes import PATH_CLASSES, is_production, path_class
 
 
@@ -135,3 +135,62 @@ def test_no_source_file_reads_not_measured_never_met() -> None:
     block = loc_by_class([("tests/test_a.py", 20)])
     stats = {"files_scored": 1, "loc": {"p95": 20.0}, "loc_by_class": block}
     assert _layer_4_2(stats) == ("not_measured", "no_source_files")
+
+
+FILE_LENGTH = Path(__file__).parent / "fixtures" / "file_length"
+
+
+def _copy_fixture(repo: Path, name: str, rel: str) -> int:
+    """Copy a file-length fixture to ``rel`` under ``repo``; return its non-blank lines."""
+    text = (FILE_LENGTH / name).read_text(encoding="utf-8")
+    dest = repo / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(text, encoding="utf-8")
+    return sum(1 for line in text.splitlines() if line.strip())
+
+
+def test_elixir_doc_lines_counts_doc_heredocs_and_leaves_code() -> None:
+    text = (FILE_LENGTH / "greeter.ex").read_text(encoding="utf-8")
+    # @moduledoc 6, @typedoc ~S 3, @doc 3 non-blank lines; `@doc false` and
+    # the one-line `@doc "..."` are code-shaped and stay.
+    assert elixir_doc_lines(text) == 12
+    assert elixir_doc_lines("def a, do: 1\n") == 0
+    assert elixir_doc_lines('  @doc """\n  open to the end\n') == 2
+    assert elixir_doc_lines('  @shortdoc """\n  Runs it.\n  """\n') == 3
+
+
+@pytest.mark.parametrize("name, rel", [
+    ("Messages.g.kt", "android/src/main/kotlin/Messages.g.kt"),
+    ("com_example_NativeBridge.h", "native/com_example_NativeBridge.h"),
+])
+def test_a_generated_header_is_classed_generated_with_root(tmp_path: Path, name: str, rel: str) -> None:
+    lines = _copy_fixture(tmp_path, name, rel)
+    block = loc_by_class([(rel, lines + 900), ("src/app.kt", 120)], tmp_path)
+    assert block["source"] == {"files_scored": 1, "p50": 120.0, "p95": 120.0, "max": 120.0}
+    assert block["generated"]["files_scored"] == 1
+    assert loc_by_class([(rel, lines)])["source"]["files_scored"] == 1  # no root: names only
+
+
+def test_elixir_docs_leave_the_count_and_code_stays(tmp_path: Path) -> None:
+    lines = _copy_fixture(tmp_path, "greeter.ex", "lib/app/greeter.ex")
+    block = loc_by_class([("lib/app/greeter.ex", lines)], tmp_path)
+    assert block["source"]["p95"] == 9.0  # 21 non-blank lines, 12 of them docs
+
+
+def test_an_unreadable_file_keeps_its_name_class_and_lines(tmp_path: Path) -> None:
+    block = loc_by_class([("lib/missing.ex", 40), ("web/api.gen.ts", 30)], tmp_path)
+    assert block["source"]["p95"] == 40.0
+    assert block["generated"]["files_scored"] == 1
+
+
+def test_the_headless_block_leaves_out_doc_lines(fixture_heavy: Path) -> None:
+    lines = _copy_fixture(fixture_heavy, "greeter.ex", "src/greeter.ex")
+    _git(fixture_heavy, "add", "-A")
+
+    def nonblank(path: str) -> hl.FileScore:
+        text = Path(path).read_text(encoding="utf-8")
+        return sum(1 for line in text.splitlines() if line.strip()), []
+
+    block = hl.stats_summary(fixture_heavy, (set(), []), None, analyzer=lambda: nonblank)
+    assert block["loc_by_class"]["source"]["files_scored"] == 2
+    assert block["loc_by_class"]["source"]["p50"] == (900.0 + lines - 12) / 2
