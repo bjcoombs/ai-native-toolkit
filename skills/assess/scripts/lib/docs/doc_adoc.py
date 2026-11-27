@@ -10,7 +10,8 @@ Links (:func:`harvest_adoc_links`), each a ``link`` edge:
 
 - ``xref:target.adoc[...]`` and ``<<target.adoc#id,text>>``: a target with no
   ``.adoc`` path is an anchor in the same document and is skipped. Outside an
-  Antora component the path is relative to the citing doc. Inside one it is an
+  Antora component's ``modules/<module>/`` tree (a README beside ``antora.yml``
+  included) the path is relative to the citing doc. Inside one it is an
   Antora page ID, ``[version@][component:][module:]path``: ``path`` is relative to
   the module's ``pages/`` directory, or to the citing page's directory when it
   starts with ``./``; the module defaults to the citing file's own. A component
@@ -166,8 +167,13 @@ class _Resolver:
         self._by_name: dict[str, _Component] | None = None
 
     def component(self, doc: Path) -> _Component | None:
+        """The component ``doc`` is an Antora file of: Antora reads only
+        ``<component>/modules/<module>/``, so a README beside ``antora.yml`` is plain."""
         root = component_root(doc, self.repo_root)
         if root is None:
+            return None
+        parts = doc.relative_to(root).parts
+        if len(parts) < 3 or parts[0] != "modules":
             return None
         if root not in self._components:
             self._components[root] = _Component(root)

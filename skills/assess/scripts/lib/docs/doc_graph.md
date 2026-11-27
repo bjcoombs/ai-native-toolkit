@@ -112,3 +112,8 @@ may point at the published site. The nav files an `antora.yml` lists, and any
 Listing, literal, passthrough and comment blocks and `//` lines are blanked before the
 `xref` parse; an `include::` is a preprocessor line, so only comments hide it. AsciiDoc
 docs skip the Markdown link pass, because `[[id]]` is an anchor there, not a wikilink.
+Only files under a component's `modules/<module>/` are read as Antora files; a
+`README.adoc` beside `antora.yml` resolves its links as plain AsciiDoc.
+
+Known limit: an AsciiDoc `include::` or `link:` of a code file adds no doc-to-code edge,
+so it gives the doc no `explicit-links` ownership in doc freshness.

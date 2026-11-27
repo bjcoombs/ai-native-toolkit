@@ -178,3 +178,20 @@ def test_plus_signs_in_prose_do_not_hide_links() -> None:
                  "Prefer C++ and xref:b.adoc[B], not C++"):
         assert "xref:" in blank_verbatim(line)[0][0]
     assert blank_verbatim("Write `+xref:p.adoc[]+` and ++xref:q.adoc[]++.")[0][0].count("xref") == 0
+
+
+def test_a_readme_beside_antora_yml_resolves_links_as_plain_asciidoc(tmp_path: Path) -> None:
+    """Antora reads only modules/<module>/, so a root README.adoc is not a page (#841)."""
+    _write(tmp_path, "antora.yml", "name: demo\next:\n  collector:\n  - run: gradle\n")
+    _write(tmp_path, "modules/ROOT/nav.adoc", "* xref:index.adoc[Home]\n")
+    _write(tmp_path, "modules/ROOT/pages/index.adoc", "= Home\n")
+    _write(tmp_path, "README.adoc", (
+        "= Demo\n\nSee <<CONTRIBUTING.adoc#,Contributing>> and xref:docs/dev.adoc[dev].\n"
+        "And xref:docs/gone.adoc[gone].\n"))
+    _write(tmp_path, "CONTRIBUTING.adoc", "= Contributing\n")
+    _write(tmp_path, "docs/dev.adoc", "= Dev\n")
+    r = build_doc_graph(tmp_path)
+    assert {("README.adoc", "CONTRIBUTING.adoc"), ("README.adoc", "docs/dev.adoc"),
+            ("modules/ROOT/nav.adoc", "modules/ROOT/pages/index.adoc")} <= set(r.graph.edges())
+    assert r.broken_links == [
+        {"from": "README.adoc", "target": "docs/gone.adoc", "kind": "asciidoc"}]
