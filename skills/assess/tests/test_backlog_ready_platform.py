@@ -648,3 +648,11 @@ def test_a_response_with_no_actor_counts_as_a_person(tmp_path: Path, gh: FakeGh,
     gh.nodes()[0]["timelineItems"]["nodes"] = [{"__typename": kind, "createdAt": "2026-11-01T06:00:00Z", field: None}]
     block = _block(_repo(tmp_path))
     assert (block["outcomes"]["responded"], block["outcomes"]["no_response_count"]) == (3, 0)
+
+
+def test_no_actor_on_an_issue_whose_author_is_gone_leaves_the_response_unread(tmp_path: Path, gh: FakeGh) -> None:
+    node = gh.nodes()[0]
+    node["author"] = None
+    node["timelineItems"]["nodes"] = [{"__typename": "IssueComment", "createdAt": "2026-11-01T06:00:00Z", "author": None}]
+    block = _block(_repo(tmp_path))
+    assert (block["outcomes"]["responded"], block["outcomes"]["response_unread"]) == (2, 1)

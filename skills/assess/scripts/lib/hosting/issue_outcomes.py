@@ -22,7 +22,8 @@ GitHub issue timeline longer than ``TIMELINE_ITEMS`` or a GitLab notes page that
 
 **First response.** The first comment, label event or close event by an account that is neither
 the issue's author nor a bot. GitHub: an actor whose GraphQL ``__typename`` is ``Bot`` or whose
-login ends ``[bot]`` is a bot; an event with no actor (a deleted account) is a person's (#1591). GitLab (``issue_outcomes_gitlab``): system notes are skipped (so a
+login ends ``[bot]`` is a bot; an event with no actor (a deleted account) is a person's, unless the
+issue's author is gone too, when it may be the author's own and leaves the response unknown (#1591). GitLab (``issue_outcomes_gitlab``): system notes are skipped (so a
 label added there is not read), ``bot: true`` on the user, a project or group access-token user,
 or a user whose ``users/<id>`` read says ``bot: true`` is a bot. An issue whose events ran past
 what was read, or whose responder could not be classified, has an unknown response
@@ -146,6 +147,7 @@ def _gh_response(node: dict[str, Any]) -> tuple[datetime | None, bool, bool, boo
     author = _gh_login(node.get("author"))
     timeline = _dict(node.get("timelineItems"))
     events: list[datetime] = []
+    unknown: list[datetime] = []  # no actor on an issue whose author is gone too: maybe the author's
     closes: list[tuple[datetime, bool]] = []
     for item in timeline.get("nodes") or []:
         if not isinstance(item, dict):
@@ -158,10 +160,12 @@ def _gh_response(node: dict[str, Any]) -> tuple[datetime | None, bool, bool, boo
         # no actor is a deleted account (GitHub's ghost), a person who is not a bot (#1591)
         if when is None or (login is not None and login == author) or gh_is_bot(actor):
             continue
-        events.append(when)
+        (unknown if login is None and author is None else events).append(when)
     more = _dict(timeline.get("pageInfo")).get("hasNextPage") is True
     # an unread page may hold a later close; a reopened issue (no closedAt) is not closed at all
     self_closed = bool(closes) and max(closes)[1] and not more and parse_time(node.get("closedAt")) is not None
+    if unknown and (not events or min(unknown) <= min(events)):
+        return None, False, self_closed, more  # the first event may be the author's own
     if events:
         return min(events), True, self_closed, more
     return None, not more, self_closed, more
