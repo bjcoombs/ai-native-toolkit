@@ -116,3 +116,11 @@ def test_a_mouse_click_pins_the_tooltip_until_a_second_click_a_click_elsewhere_s
 def test_a_scroll_dismisses_the_tooltip() -> None:
     scroll = CODE[CODE.index('addEventListener("scroll"'):]
     assert "hide()" in scroll[:scroll.index("});")] and "passive: true" in scroll and "capture: true" in scroll
+
+
+def test_a_pinned_tooltip_whose_part_was_redrawn_away_is_dropped_on_the_next_move() -> None:
+    """The fleet page redraws its pictures on live updates: a pinned part left detached must not
+    keep its tooltip on screen with every hover handler returning early."""
+    move = CODE[CODE.index('on(root, "pointermove"'):CODE.index('on(root, "pointerleave"')]
+    guard = move.index("!shown.isConnected")
+    assert guard < move.index("hide()") < move.index('pointerType === "touch" || pinned')

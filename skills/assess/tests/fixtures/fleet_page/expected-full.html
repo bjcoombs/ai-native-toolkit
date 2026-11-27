@@ -643,6 +643,9 @@ table.radar-table caption{text-align:left;color:var(--muted);padding:4px 0}
       touching = event.pointerType === "touch";
     });
     on(root, "pointermove", function (event) {
+      if (pinned && shown && !shown.isConnected) {
+        hide(); // the host redrew the pinned part away: drop the stale tooltip
+      }
       if (event.pointerType === "touch" || pinned) {
         return;
       }

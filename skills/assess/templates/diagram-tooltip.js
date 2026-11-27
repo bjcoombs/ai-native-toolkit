@@ -203,6 +203,9 @@
       touching = event.pointerType === "touch";
     });
     on(root, "pointermove", function (event) {
+      if (pinned && shown && !shown.isConnected) {
+        hide(); // the host redrew the pinned part away: drop the stale tooltip
+      }
       if (event.pointerType === "touch" || pinned) {
         return;
       }
