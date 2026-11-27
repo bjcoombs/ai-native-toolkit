@@ -311,6 +311,7 @@ def test_a_scheduled_job_that_adds_an_untriaged_label(tmp_path: Path, job: str) 
 
 @pytest.mark.parametrize("job", [
     "r:\n  script: glab issue update 1 -l needs-triage\n",  # not written for a schedule
+    "r:\n  rules:\n    - when: always\n  script: glab issue update 1 -l needs-triage\n",  # every pipeline
     ".r:\n" + _SCHED + "  script: glab issue update 1 -l needs-triage\n",  # hidden: never runs alone
     "r:\n" + _SCHED + "  when: manual\n  script: glab issue update 1 -l needs-triage\n",
     "r:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\n      when: never\n    - when: always\n"
@@ -347,6 +348,9 @@ def test_a_job_that_does_not_label_new_issues_on_a_schedule(tmp_path: Path, job:
     "r:\n  only: [schedules]\n  except:\n    variables: [$X]\n  script: glab issue update 1 -l needs-triage\n",
     "r:\n" + _SCHED + "  only: [schedules]\n  script: glab issue update 1 -l needs-triage\n",  # GitLab rejects it
     "r:\n  only: [schedules]\n  when: $WHEN\n  script: glab issue update 1 -l needs-triage\n",
+    "r:\n  rules:\n    - if: $REFINE == \"true\"\n  script: glab issue update 1 -l needs-triage\n",  # a schedule's variable
+    "r:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\" && $CI_PROJECT_PATH == \"a/b\"\n"
+    "  script: glab issue update 1 -l needs-triage\n",  # a predefined variable not modelled
     "workflow:\n  rules:\n    - !reference [.flow, rules]\nr:\n" + _SCHED
     + "  script: glab issue update 1 -l needs-triage\n",  # an unread workflow
 ])

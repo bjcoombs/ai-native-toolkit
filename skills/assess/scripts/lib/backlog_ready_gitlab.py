@@ -28,7 +28,9 @@ applied. Hidden jobs (``.name``) never run on their own and are not read as jobs
 a scheduled pipeline when its ``rules:`` name ``schedule`` and ``gitlab_rules.outcome`` in the
 ``schedule`` context reads yes or some (``when: never`` / ``manual`` rules are no run), or its
 ``only:`` names ``schedules`` and its ``except:`` does not, with no job-level ``when: never`` or
-``manual``. A job with neither is not a scheduled job, though it runs in scheduled pipelines.
+``manual``. A job with neither is not a scheduled job, though it runs in scheduled pipelines,
+except that ``rules:`` gated on something else (``$REFINE == "true"``, set by a schedule) that
+may run on a schedule and does not plainly run on every push or merge request is unsettled.
 A top-level ``workflow: rules:`` that creates no scheduled pipeline stops every job.
 
 **Unsettled** (``REASON_UNSETTLED``): when nothing meets, the signal is null rather than false
@@ -56,7 +58,7 @@ from lib.ci.ci_includes import (SETTLED, MergedConfig, MergedJob, include_items,
                                 resolve_includes)
 from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci.ci_merged_view import rendered_job
-from lib.ci.ci_triggers import _rules as rule_items
+from lib.ci.ci_triggers import rule_items
 from lib.gitlab_rules import outcome
 
 GITLAB_CI = ".gitlab-ci.yml"
@@ -222,9 +224,12 @@ def _schedule(tree: IndentTree, keys: dict[str, int], text: list[str]) -> Schedu
         rules = None if "!reference" in span else rule_items(tree, keys["rules"])
         if rules is None:
             return "unknown"
-        if "schedule" not in span:
-            return "no"
         result = outcome(rules, "schedule", when)
+        if "schedule" not in span:
+            # gated on something else (a schedule's own $REFINE): unsettled while it may run on a
+            # schedule and does not plainly run on every push or merge request
+            ordinary = {outcome(rules, c, when) for c in ("push", "merge_request")}
+            return "unknown" if result != "no" and "yes" not in ordinary else "no"
         return "unknown" if result == "unknown" else "no" if result == "no" else "yes"
     if when in _STOP_WHEN:
         return "no"

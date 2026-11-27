@@ -213,6 +213,8 @@ def test_an_or_mix_with_an_unread_variable_is_null(tmp_path: Path) -> None:
     ("$CI_MERGE_REQUEST_IID", "false"),
     ("$CI_COMMIT_TAG", "false"),
     ('$CI_PIPELINE_SOURCE == "schedule" && $REFINE == "true"', "varies"),  # a schedule's own variable
+    ('$CI_PROJECT_PATH == "a/b"', "unknown"),  # predefined, not modelled
+    ('$GITLAB_USER_LOGIN == "bot"', "unknown"),
 ])
 def test_the_schedule_context(expression: str, truth: Truth) -> None:
     # #1406: asked for by name; the ordinary contexts leave it out.

@@ -35,9 +35,10 @@ Imports nothing from ``lib``. Tests: ``tests/test_gitlab_rules.py``.
 **Scheduled pipelines** (#1406): ``evaluate`` and ``outcome`` also take the context
 ``schedule``, which ``CONTEXTS`` leaves out (an ordinary change never starts one). There
 ``CI_PIPELINE_SOURCE`` is ``"schedule"``, ``CI_COMMIT_BRANCH`` is set, ``CI_MERGE_REQUEST_*``
-and ``CI_COMMIT_TAG`` are unset, and any other variable varies rather than reads unknown: a
-pipeline schedule sets its own variables in project settings, so ``$CI_PIPELINE_SOURCE ==
-"schedule" && $REFINE`` runs in some scheduled pipelines.
+and ``CI_COMMIT_TAG`` are unset, and a variable not named ``CI_*`` or ``GITLAB_*`` varies
+rather than reads unknown: a pipeline schedule sets its own variables in project settings, so
+``$CI_PIPELINE_SOURCE == "schedule" && $REFINE`` runs in some scheduled pipelines. A predefined
+variable not modelled here (``$CI_PROJECT_PATH``) stays unknown.
 
 Variables: ``CI_PIPELINE_SOURCE``, ``CI_COMMIT_TAG`` (unset in both), ``CI_COMMIT_BRANCH``
 (unset in a merge request pipeline), ``CI_MERGE_REQUEST_*`` (unset in a push pipeline),
@@ -133,8 +134,10 @@ def _variable(name: str, context: Context) -> _Value:
         if context != "merge_request":
             return _Value("null", name=name)
         return _Value("present" if name in _MR_PRESENT else "maybe", name=name)
-    # A schedule's own variables are set in project settings: each varies across schedules.
-    return _Value("maybe" if context == "schedule" else "unknown", name=name)
+    # A schedule's own variables are set in project settings: each varies across schedules. A
+    # GitLab predefined variable this reader does not model stays unknown.
+    own = context == "schedule" and not name.startswith(("CI_", "GITLAB_"))
+    return _Value("maybe" if own else "unknown", name=name)
 
 
 class _ParseError(Exception):
