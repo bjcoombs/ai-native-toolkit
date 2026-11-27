@@ -41,7 +41,8 @@ safe-outputs:
 """
 
 OWNERS = "* @example-org/maintainers\n"
-FILES_OWNED = f"/AGENTS.md @example-org/maintainers\n/CLAUDE.md @example-org/maintainers\n/{WORKFLOW} @example-org/maintainers\n"
+FILES_OWNED = ("**/AGENTS.md @example-org/maintainers\n/CLAUDE.md @example-org/maintainers\n"
+               f"/{WORKFLOW} @example-org/maintainers\n/.github/CODEOWNERS @example-org/maintainers\n")
 
 
 def _repo(git_repo, files: dict[str, str]) -> Path:
@@ -141,6 +142,14 @@ def test_codeowned_reads_the_last_matching_line() -> None:
     assert not codeowned(text, "AGENTS.md")  # a later line with no owner clears it
     assert not codeowned("", "AGENTS.md")
     assert codeowned("CLAUDE.md @org/a  # trailing comment\n", "sub/CLAUDE.md")
+    assert codeowned("**/AGENTS.md @o\n", "AGENTS.md") and codeowned("**/*.md @o\n", "CLAUDE.md")
+    assert codeowned("**/AGENTS.md @o\n", "docs/AGENTS.md")
+
+
+def test_a_codeowners_that_does_not_own_itself_guards_nothing(git_repo) -> None:
+    owners = f"/AGENTS.md @example-org/maintainers\n/CLAUDE.md @example-org/maintainers\n/{WORKFLOW} @o\n"
+    repo = _repo(git_repo, {WORKFLOW: SCHEDULED_WRITER, ".github/CODEOWNERS": owners})
+    assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 1
 
 
 def test_the_github_codeowners_file_wins_over_a_stale_root_one(git_repo) -> None:

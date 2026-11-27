@@ -15,7 +15,9 @@ next run follows text no reviewer approved (#826, hazard H2). The hazard reads t
   write``: what that job writes is not read, so the fix is CODEOWNERS, never a split.
 - **Paths at risk.** The root ``AGENTS.md`` and ``CLAUDE.md`` (written or created), every
   committed file at ``lib.instructions.instruction_files.INSTRUCTION_FILE_PATHS``, and the
-  job's own workflow file (with a gh-aw source's compiled ``.lock.yml`` when committed).
+  job's own workflow file (with a gh-aw source's compiled ``.lock.yml`` when committed), and
+  the CODEOWNERS file in effect (``.github/CODEOWNERS`` when none is committed): a guard whose
+  own lines the agent can drop unreviewed guards nothing.
 - **Guard.** A committed CODEOWNERS (``.github/``, then the root, then ``docs/``: the first
   GitHub finds, ``CODEOWNERS_ORDER``)
   whose last matching line names an owner (``lib.docs.ownership_parser.codeowned``). The job
@@ -64,9 +66,15 @@ def writes_files(job: AgentJob, front: str | None) -> bool:
     return own or (front is not None and file_outputs(front))
 
 
+def owners_file(files: frozenset[str]) -> str:
+    """The committed CODEOWNERS in effect, or the first location when none is committed."""
+    return next((r for r in CODEOWNERS_ORDER if r in files), CODEOWNERS_ORDER[0])
+
+
 def at_risk(job: AgentJob, files: frozenset[str]) -> list[str]:
-    """The instruction files and workflow files the job could rewrite (module doc)."""
-    paths = {*ROOT_INSTRUCTIONS, *(p for p in INSTRUCTION_FILE_PATHS if p in files), job["path"]}
+    """The instruction, workflow and CODEOWNERS files the job could rewrite (module doc)."""
+    paths = {*ROOT_INSTRUCTIONS, *(p for p in INSTRUCTION_FILE_PATHS if p in files), job["path"],
+             owners_file(files)}
     lock = job["path"].removesuffix(".md") + ".lock.yml"
     if job["path"].endswith(".md") and lock in files:
         paths.add(lock)
@@ -75,8 +83,8 @@ def at_risk(job: AgentJob, files: frozenset[str]) -> list[str]:
 
 def codeowners_text(files: frozenset[str], read: Read) -> str:
     """The committed CODEOWNERS in effect (the first of ``CODEOWNERS_ORDER``), or empty."""
-    rel = next((r for r in CODEOWNERS_ORDER if r in files), None)
-    return (read(rel) or "") if rel is not None else ""
+    rel = owners_file(files)
+    return (read(rel) or "") if rel in files else ""
 
 
 def instruction_rewrite(jobs: list[AgentJob], fronts: Mapping[str, str | None],

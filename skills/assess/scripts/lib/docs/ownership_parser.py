@@ -155,7 +155,8 @@ def _glob_to_fnmatch(pattern: str) -> tuple[str, ...]:
       any depth. fnmatch has no anchor concept, so an unanchored pattern is
       tried both as-is (matching at root) *and* prefixed with ``*/`` (matching in
       any subdirectory) - so a bare ``Makefile`` claims both ``Makefile`` and
-      ``tools/Makefile``. An anchored or already-path-qualified pattern is tried
+      ``tools/Makefile``. A leading ``**/`` is tried with and without it, so
+      ``**/AGENTS.md`` claims the root ``AGENTS.md`` as GitHub does. An anchored or already-path-qualified pattern is tried
       root-relative only.
     - A trailing ``/`` (a directory) matches everything beneath it, so ``docs/``
       becomes ``docs/*``.
@@ -168,7 +169,11 @@ def _glob_to_fnmatch(pattern: str) -> tuple[str, ...]:
     pat = pat.lstrip("/")
     if pat.endswith("/"):
         pat = pat + "*"
+    deep = pat.startswith("**/")
     pat = pat.replace("**", "*")
+    # A leading ``**/`` matches at the root too, which ``*/`` alone never does (#858).
+    if deep:
+        return (pat, pat[2:])
     # An anchored or path-qualified pattern is root-relative; a bare, unanchored
     # pattern matches at any depth, so also try the subdirectory form.
     if anchored or "/" in pat.rstrip("*"):
