@@ -28,11 +28,17 @@ not part of it, so a model release does not file the condition again. An action 
 ``plan_filing(items, existing)`` decides, per rendered item, against the tracker's existing
 items (``{number, title, body, state, labels}``, as ``gh issue list --json`` gives them):
 
-1. ``reuse``: an existing item carries the same marker key, whatever its title now reads.
+1. ``reuse``: an existing item carries the same marker key, whatever its title now reads;
+   among several with the key, the one whose title agrees comes first (#811: two Top 3
+   actions that name one condition share a key, and each takes its own item).
    A key with ``sub`` or ``part`` is positional, because the model letters and numbers the
    parts afresh each run: it matches only when the title agrees too. A sub-item or part whose
    letter or number moved is matched by title among the items marked for the same
-   condition, as ``reuse_and_mark`` with its marker rewritten.
+   condition, as ``reuse_and_mark`` with its marker rewritten. An action a previous run
+   split and this run files whole (#811) takes one of its earlier parts, as
+   ``reuse_and_mark`` with ``part`` dropped from the marker: the part whose title agrees, else
+   an open part, else the lowest part number. The reconcile pass
+   (``lib/report/backlog_reconcile.py``) proposes closing the other parts as superseded.
 2. ``reuse_and_mark``: no marked item matches, and an unmarked item with the label
    (``assess-finding``; no label check when ``label`` is empty) has the same title, compared
    after the sub-item prefix (``2a. ``) and whitespace are dropped, case-folded. The plan
@@ -40,9 +46,9 @@ items (``{number, title, body, state, labels}``, as ``gh issue list --json`` giv
    sub-item or part, its old marker replaced).
 3. ``create``: nothing matches.
 
-Each existing item is claimed once per run by a title match, and by any match on a
-positional key, so two rendered items never take the same item that way. Open items are preferred over closed ones, then the lowest
-number. Pure stdlib; never touches the tracker. Tests: ``tests/test_backlog_items.py``.
+Each existing item is claimed by the first rendered item that matches it, whatever the
+match, so two rendered items never take the same item in one run. Open items are preferred
+over closed ones, then the lowest number. Pure stdlib; never touches the tracker. Tests: ``tests/test_backlog_items.py``.
 """
 from __future__ import annotations
 
@@ -125,7 +131,8 @@ def title_key(title: str) -> str:
     return " ".join(_SUB_PREFIX.sub("", title or "").split()).casefold()
 
 
-def _labels(item: Mapping[str, object]) -> set[str]:
+def item_labels(item: Mapping[str, object]) -> set[str]:
+    """An item's label names, from plain names or ``{"name": ...}`` objects."""
     raw = item.get("labels")
     if not isinstance(raw, list):
         return set()
@@ -181,7 +188,7 @@ def match_item(title: str, body: str, existing: Sequence[Mapping[str, object]], 
 
     def take(action: str, item: Mapping[str, object]) -> FilingStep:
         number = item.get("number")
-        if positional and isinstance(number, int):
+        if isinstance(number, int):
             claimed.add(number)
         step = _step(action, item)
         if action == "reuse_and_mark":
@@ -189,22 +196,37 @@ def match_item(title: str, body: str, existing: Sequence[Mapping[str, object]], 
         return step
 
     if key is not None:
-        for item in ordered:
-            if marker_key(_body(item)) == key and (not positional or same_title(item)):
-                return take("reuse", item)
+        same_key = [i for i in ordered if marker_key(_body(i)) == key]
+        hit = next((i for i in same_key if same_title(i)), None)
+        if hit is None and not positional and same_key:
+            hit = same_key[0]
+        if hit is not None:
+            return take("reuse", hit)
         if positional:
             for item in ordered:
                 other = marker_key(_body(item))
                 if other is not None and other[:2] == key[:2] and (other[2] or other[3]) and same_title(item):
                     return take("reuse_and_mark", item)
+        else:
+            parts = [i for i in ordered if _is_part_of(marker_key(_body(i)), key)]
+            if parts:
+                return take("reuse_and_mark", min(parts, key=lambda i: _part_order(i, same_title(i))))
     for item in ordered:
-        if marker_key(_body(item)) is not None or (label and label not in _labels(item)) or not same_title(item):
+        if marker_key(_body(item)) is not None or (label and label not in item_labels(item)) or not same_title(item):
             continue
-        number = item.get("number")
-        if isinstance(number, int):
-            claimed.add(number)
         return take("reuse" if key is None else "reuse_and_mark", item)
     return FilingStep(action="create")
+
+
+def _is_part_of(other: MarkerKey | None, key: MarkerKey) -> bool:
+    """True when ``other`` is a split part (``part`` > 0) of the unsplit ``key``'s action."""
+    return other is not None and other[:3] == key[:3] and other[3] > 0
+
+
+def _part_order(item: Mapping[str, object], titled: bool) -> tuple[int, int, int]:
+    """Which earlier part carries an action filed unsplit: a title match, then an open item, then the lowest part."""
+    key = marker_key(_body(item))
+    return (0 if titled else 1, _order(item)[0], key[3] if key else 0)
 
 
 def plan_filing(items: Sequence[Mapping[str, object]], existing: Sequence[Mapping[str, object]], *,

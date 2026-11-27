@@ -197,4 +197,27 @@ def test_items_split_from_one_action_keep_separate_items() -> None:
     tracker = FixtureTracker()
     assert tracker.file(parts) == [1, 2]
     assert tracker.file(parts) == [1, 2]
-    assert tracker.file(items) == [3]  # the unsplit action is a third key
+    assert tracker.file(items) == [1]  # filed whole again (#811): part 1 carries it, marker re-keyed
+    assert bi.marker_key(str(tracker.items[0]["body"])) == ("layer-5-ci", 1, "", 0)
+    assert len(tracker.items) == 2
+
+
+def test_an_action_filed_whole_prefers_the_part_whose_title_agrees() -> None:
+    base = _items(ENTRY)[0]
+    parts = [{"number": n, "title": f"Part {n}", "state": "OPEN",
+              "body": base["body"].replace(base["marker"], bi.condition_marker("layer-5-ci.1", MODEL, part=n))}
+             for n in (1, 2)]
+    parts[0]["state"] = "CLOSED"
+    assert bi.match_item("Part 2", base["body"], parts)["number"] == 2
+    assert bi.match_item("Other", base["body"], parts)["number"] == 2  # an open part before a closed one
+
+
+def test_two_actions_naming_one_condition_keep_their_own_items() -> None:
+    # #811: from the second run on, each action takes its own item, not both the first.
+    other = {**ENTRY, "rank": 2, "action": "Gate merges on CI"}
+    tracker = FixtureTracker()
+    assert tracker.file(_items(ENTRY, other)) == [1, 2]
+    assert tracker.file(_items(ENTRY, other)) == [1, 2]
+    assert tracker.file(_items(other, ENTRY)) == [2, 1]  # matched by title among the same key
+    reworded = {**other, "action": "Require CI before merge"}
+    assert tracker.file(_items(ENTRY, reworded)) == [1, 2]  # no title match: the next unclaimed item
