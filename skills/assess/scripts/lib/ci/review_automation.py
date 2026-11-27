@@ -53,7 +53,9 @@ source or a config entry.
 
 ``review_evidence`` is the derived Layer 7 level 1 signal: AI review in CI, or a
 review on a sampled merged change (``review_reality.reviewed_share > 0``, or, where
-``reviewed_share`` is null because only approvals are read, ``approved_share > 0``).
+``reviewed_share`` is null because only approvals are read, ``approved_share > 0``, or
+``bot_review_share > 0``: on GitLab an AI reviewer's note, not the author's, on a sampled
+merged change, #1568).
 ``present`` is true when either source is true, false when the automation scan
 found none and ``reviewed_share`` is 0 (a review config file alone does not
 count against a measured 0: only a CI step, or a measured ``bot_review_share >
@@ -95,8 +97,8 @@ rules and reviewer slugs, never a source or a config entry. `is_review_action` a
 `review_evidence(review_automation, review_reality)` is the derived block the default
 maturity model's Layer 7 level 1 reads: `{available, present, ai_review_in_ci,
 reviewed_changes}`; `present` is true when an AI review step is credited or
-`review_reality.reviewed_share > 0` (`approved_share > 0` where `reviewed_share` is
-null), false when neither block shows review (a review config file alone does not count
+`review_reality.reviewed_share > 0` (`approved_share > 0` or `bot_review_share > 0`
+where `reviewed_share` is null, #1568), false when neither block shows review (a review config file alone does not count
 against a measured `reviewed_share` of 0; a CI step, or a measured `bot_review_share > 0`,
 does; with no CI step it reads unavailable while `reviewed_share` is unread, #922), and
 otherwise the block is unavailable
@@ -377,11 +379,16 @@ def review_evidence(review_automation: Mapping[str, Any] | None,
     reviewed: bool | None = None
     share = review_reality.get("reviewed_share") if isinstance(review_reality, Mapping) else None
     approved = review_reality.get("approved_share") if isinstance(review_reality, Mapping) else None
+    bot = review_reality.get("bot_review_share") if isinstance(review_reality, Mapping) else None
     if isinstance(review_reality, Mapping) and review_reality.get("available") is True:
         if _number(share):
             reviewed = share > 0
         elif _number(approved) and approved > 0:
             reviewed = True  # GitLab reads approvals only: an approval by another account is review
+        elif _number(bot) and bot > 0:
+            # #1568: GitLab notes left reviewed_share undecided, but an AI reviewer's note
+            # (not the author's) on a sampled merged change is review of that change.
+            reviewed = True
     block: ReviewEvidenceBlock = {
         "available": True,
         "present": None,
@@ -399,7 +406,6 @@ def review_evidence(review_automation: Mapping[str, Any] | None,
         # Review measured as absent: a config file alone (a stale .coderabbit.yaml)
         # contradicts it. A CI step still counts (claude-code-action posts comments,
         # which reviewed_share does not read), and so does a measured bot review.
-        bot = review_reality.get("bot_review_share") if isinstance(review_reality, Mapping) else None
         credited = ci_step or (_number(bot) and bot > 0)
     if credited or reviewed:
         block["present"] = True
