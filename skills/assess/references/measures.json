@@ -1831,6 +1831,7 @@
         "accretion_scan",
         "current"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "unregistered",
@@ -1869,6 +1870,7 @@
       "reads": [
         "repo_root"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -1906,6 +1908,7 @@
         "repo_root",
         "excludes"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -1971,6 +1974,7 @@
         "agent_harness",
         "excludes"
       ],
+      "headless_reads": null,
       "network": true,
       "platform": false,
       "headless": "registered",
@@ -2043,6 +2047,7 @@
         "scope",
         "excludes"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -2080,6 +2085,7 @@
         "repo_root",
         "managed_settings"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -2152,6 +2158,7 @@
         "history_window",
         "fleet_config"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -2222,6 +2229,7 @@
         "history_window",
         "fleet_config"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -2258,6 +2266,7 @@
       "reads": [
         "repo_root"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "unregistered",
@@ -2292,6 +2301,9 @@
       "summary": "",
       "collector": "core.archetype",
       "reads": [
+        "repo_root"
+      ],
+      "headless_reads": [
         "repo_root"
       ],
       "network": false,
@@ -2329,6 +2341,7 @@
       "reads": [
         "repo_root"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -2395,7 +2408,7 @@
         }
       ],
       "grades": [
-        "config_only"
+        "unclassified"
       ],
       "why": "An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up.",
       "why_source": ""
@@ -2409,6 +2422,7 @@
         "keyhole",
         "run_scope"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "unregistered",
@@ -2438,46 +2452,6 @@
           "code": "not_registered",
           "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
           "next_step": "Run /assess on the repository to measure it."
-        },
-        {
-          "code": "no_grimp",
-          "means": "grimp, the Python import-graph builder, is not installed.",
-          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
-        },
-        {
-          "code": "no_networkx",
-          "means": "networkx, which the structure metrics need, is not installed.",
-          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
-        },
-        {
-          "code": "grimp_failed",
-          "means": "grimp could not build the Python import graph.",
-          "next_step": "Check that the packages import cleanly; the sentence after the code names grimp's error."
-        },
-        {
-          "code": "no_python_packages",
-          "means": "A Python repository with no importable package.",
-          "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
-        },
-        {
-          "code": "no_builder:<language>",
-          "means": "No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages.",
-          "next_step": "Nothing to change: structure reads as not measured for this language."
-        },
-        {
-          "code": "no_import_graph_<language>",
-          "means": "A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go.",
-          "next_step": "Nothing to change if that code is loose scripts; a package the builder recognises is measured."
-        },
-        {
-          "code": "invalid_import_graph",
-          "means": "A builder returned a graph that breaks the module-graph contract.",
-          "next_step": "Report it against the toolkit; structure reads as not measured meanwhile."
-        },
-        {
-          "code": "no_source_files",
-          "means": "The scope holds no source file in a language the assess skill recognises.",
-          "next_step": "Nothing to change if the scope has no code; check the scope and the excludes otherwise."
         }
       ],
       "evidence": [],
@@ -2499,6 +2473,7 @@
         "external_ci",
         "gitlab_include_renames"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": true,
       "headless": "registered",
@@ -2624,6 +2599,7 @@
         "repo_root",
         "ghsync_root"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -2690,6 +2666,7 @@
         "scope",
         "excludes"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -2729,6 +2706,7 @@
         "scope",
         "history_window"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -2800,6 +2778,7 @@
       "reads": [
         "repo_root"
       ],
+      "headless_reads": null,
       "network": true,
       "platform": false,
       "headless": "registered",
@@ -2840,6 +2819,11 @@
       "summary": "A contributing guide and a security policy at the root, in .github/ or in docs/. The policy is a SECURITY file or a link to GitHub private vulnerability reporting. Issue and pull or merge request templates count as evidence.",
       "collector": "core.contributor_files",
       "reads": [
+        "repo_root",
+        "archetype",
+        "org_security_policy"
+      ],
+      "headless_reads": [
         "repo_root",
         "archetype",
         "org_security_policy"
@@ -2908,6 +2892,7 @@
         "scope",
         "excludes"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -2986,6 +2971,7 @@
         "repo_root",
         "coverage_data"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "unregistered",
@@ -3023,6 +3009,7 @@
       "reads": [
         "liveness"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "unregistered",
@@ -3071,6 +3058,7 @@
         "fleet_config",
         "gitlab_note_facts"
       ],
+      "headless_reads": null,
       "network": true,
       "platform": true,
       "headless": "platform_only",
@@ -3108,6 +3096,7 @@
         "keyhole",
         "run_scope"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "unregistered",
@@ -3132,46 +3121,6 @@
           "code": "not_registered",
           "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
           "next_step": "Run /assess on the repository to measure it."
-        },
-        {
-          "code": "no_grimp",
-          "means": "grimp, the Python import-graph builder, is not installed.",
-          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
-        },
-        {
-          "code": "no_networkx",
-          "means": "networkx, which the structure metrics need, is not installed.",
-          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
-        },
-        {
-          "code": "grimp_failed",
-          "means": "grimp could not build the Python import graph.",
-          "next_step": "Check that the packages import cleanly; the sentence after the code names grimp's error."
-        },
-        {
-          "code": "no_python_packages",
-          "means": "A Python repository with no importable package.",
-          "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
-        },
-        {
-          "code": "no_builder:<language>",
-          "means": "No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages.",
-          "next_step": "Nothing to change: structure reads as not measured for this language."
-        },
-        {
-          "code": "no_import_graph_<language>",
-          "means": "A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go.",
-          "next_step": "Nothing to change if that code is loose scripts; a package the builder recognises is measured."
-        },
-        {
-          "code": "invalid_import_graph",
-          "means": "A builder returned a graph that breaks the module-graph contract.",
-          "next_step": "Report it against the toolkit; structure reads as not measured meanwhile."
-        },
-        {
-          "code": "no_source_files",
-          "means": "The scope holds no source file in a language the assess skill recognises.",
-          "next_step": "Nothing to change if the scope has no code; check the scope and the excludes otherwise."
         }
       ],
       "evidence": [],
@@ -3197,6 +3146,7 @@
         "diff",
         "unfinalized"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "unregistered",
@@ -3234,6 +3184,7 @@
         "scope",
         "excludes"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -3272,6 +3223,10 @@
         "excludes",
         "scope",
         "working_notes"
+      ],
+      "headless_reads": [
+        "repo_root",
+        "excludes"
       ],
       "network": false,
       "platform": false,
@@ -3319,6 +3274,11 @@
         "doc_graph",
         "excludes",
         "scope"
+      ],
+      "headless_reads": [
+        "repo_root",
+        "doc_graph",
+        "excludes"
       ],
       "network": false,
       "platform": false,
@@ -3384,6 +3344,7 @@
         "keyhole",
         "run_scope"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "unregistered",
@@ -3415,46 +3376,6 @@
           "code": "not_registered",
           "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
           "next_step": "Run /assess on the repository to measure it."
-        },
-        {
-          "code": "no_grimp",
-          "means": "grimp, the Python import-graph builder, is not installed.",
-          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
-        },
-        {
-          "code": "no_networkx",
-          "means": "networkx, which the structure metrics need, is not installed.",
-          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
-        },
-        {
-          "code": "grimp_failed",
-          "means": "grimp could not build the Python import graph.",
-          "next_step": "Check that the packages import cleanly; the sentence after the code names grimp's error."
-        },
-        {
-          "code": "no_python_packages",
-          "means": "A Python repository with no importable package.",
-          "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
-        },
-        {
-          "code": "no_builder:<language>",
-          "means": "No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages.",
-          "next_step": "Nothing to change: structure reads as not measured for this language."
-        },
-        {
-          "code": "no_import_graph_<language>",
-          "means": "A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go.",
-          "next_step": "Nothing to change if that code is loose scripts; a package the builder recognises is measured."
-        },
-        {
-          "code": "invalid_import_graph",
-          "means": "A builder returned a graph that breaks the module-graph contract.",
-          "next_step": "Report it against the toolkit; structure reads as not measured meanwhile."
-        },
-        {
-          "code": "no_source_files",
-          "means": "The scope holds no source file in a language the assess skill recognises.",
-          "next_step": "Nothing to change if the scope has no code; check the scope and the excludes otherwise."
         }
       ],
       "evidence": [],
@@ -3478,6 +3399,7 @@
         "nested_instructions",
         "instruction_placement"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "unregistered",
@@ -3521,6 +3443,7 @@
       "reads": [
         "repo_root"
       ],
+      "headless_reads": null,
       "network": true,
       "platform": false,
       "headless": "registered",
@@ -3558,6 +3481,7 @@
       "reads": [
         "repo_root"
       ],
+      "headless_reads": null,
       "network": true,
       "platform": true,
       "headless": "registered",
@@ -3603,6 +3527,7 @@
         "excludes",
         "scope"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -3651,6 +3576,7 @@
         "repo_root",
         "instruction_files"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -3697,6 +3623,7 @@
         "scope",
         "excludes"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -3738,6 +3665,7 @@
         "instruction_grading",
         "nested_instructions"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -3781,6 +3709,7 @@
         "repo_root",
         "excludes"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -3839,6 +3768,10 @@
       "reads": [
         "liveness"
       ],
+      "headless_reads": [
+        "repo_root",
+        "excludes"
+      ],
       "network": false,
       "platform": false,
       "headless": "headless_variant",
@@ -3884,6 +3817,7 @@
       "reads": [
         "repo_root"
       ],
+      "headless_reads": null,
       "network": true,
       "platform": true,
       "headless": "registered",
@@ -3926,6 +3860,9 @@
       "reads": [
         "repo_root"
       ],
+      "headless_reads": [
+        "repo_root"
+      ],
       "network": false,
       "platform": false,
       "headless": "headless_variant",
@@ -3963,6 +3900,9 @@
       "summary": "",
       "collector": "core.promissory_markers",
       "reads": [
+        "promissory"
+      ],
+      "headless_reads": [
         "promissory"
       ],
       "network": false,
@@ -4018,6 +3958,7 @@
         "ghsync_root",
         "gitlab_merged_ci"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": true,
       "headless": "registered",
@@ -4054,6 +3995,7 @@
         "review_automation",
         "review_reality"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": true,
       "headless": "registered",
@@ -4106,6 +4048,7 @@
         "merged_sample",
         "gitlab_note_facts"
       ],
+      "headless_reads": null,
       "network": true,
       "platform": true,
       "headless": "registered",
@@ -4166,6 +4109,7 @@
         "keyhole",
         "run_scope"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "unregistered",
@@ -4193,46 +4137,6 @@
           "code": "not_registered",
           "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
           "next_step": "Run /assess on the repository to measure it."
-        },
-        {
-          "code": "no_grimp",
-          "means": "grimp, the Python import-graph builder, is not installed.",
-          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
-        },
-        {
-          "code": "no_networkx",
-          "means": "networkx, which the structure metrics need, is not installed.",
-          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
-        },
-        {
-          "code": "grimp_failed",
-          "means": "grimp could not build the Python import graph.",
-          "next_step": "Check that the packages import cleanly; the sentence after the code names grimp's error."
-        },
-        {
-          "code": "no_python_packages",
-          "means": "A Python repository with no importable package.",
-          "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
-        },
-        {
-          "code": "no_builder:<language>",
-          "means": "No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages.",
-          "next_step": "Nothing to change: structure reads as not measured for this language."
-        },
-        {
-          "code": "no_import_graph_<language>",
-          "means": "A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go.",
-          "next_step": "Nothing to change if that code is loose scripts; a package the builder recognises is measured."
-        },
-        {
-          "code": "invalid_import_graph",
-          "means": "A builder returned a graph that breaks the module-graph contract.",
-          "next_step": "Report it against the toolkit; structure reads as not measured meanwhile."
-        },
-        {
-          "code": "no_source_files",
-          "means": "The scope holds no source file in a language the assess skill recognises.",
-          "next_step": "Nothing to change if the scope has no code; check the scope and the excludes otherwise."
         }
       ],
       "evidence": [],
@@ -4253,6 +4157,7 @@
         "ghsync_root",
         "github_secret_scanning"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": true,
       "headless": "registered",
@@ -4324,6 +4229,7 @@
       "reads": [
         "repo_root"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -4366,6 +4272,7 @@
         "scope",
         "excludes"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -4411,6 +4318,7 @@
         "scope",
         "excludes"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -4460,6 +4368,7 @@
         "scope",
         "excludes"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -4510,6 +4419,7 @@
         "scope",
         "excludes"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "registered",
@@ -4558,6 +4468,11 @@
         "instruction_grading",
         "diff",
         "unfinalized"
+      ],
+      "headless_reads": [
+        "repo_root",
+        "excludes",
+        "scope"
       ],
       "network": false,
       "platform": false,
@@ -4614,6 +4529,9 @@
       "reads": [
         "keyhole",
         "run_scope"
+      ],
+      "headless_reads": [
+        "structure_scan"
       ],
       "network": false,
       "platform": false,
@@ -4722,6 +4640,9 @@
         "repo_root",
         "keyhole"
       ],
+      "headless_reads": [
+        "repo_root"
+      ],
       "network": false,
       "platform": false,
       "headless": "headless_variant",
@@ -4778,6 +4699,7 @@
         "test_pressure",
         "hot_test_index"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "unregistered",
@@ -4817,6 +4739,7 @@
       "reads": [
         "test_pressure_scan"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "unregistered",
@@ -4884,6 +4807,7 @@
         "keyhole",
         "run_scope"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "unregistered",
@@ -4910,46 +4834,6 @@
           "code": "not_registered",
           "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
           "next_step": "Run /assess on the repository to measure it."
-        },
-        {
-          "code": "no_grimp",
-          "means": "grimp, the Python import-graph builder, is not installed.",
-          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
-        },
-        {
-          "code": "no_networkx",
-          "means": "networkx, which the structure metrics need, is not installed.",
-          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
-        },
-        {
-          "code": "grimp_failed",
-          "means": "grimp could not build the Python import graph.",
-          "next_step": "Check that the packages import cleanly; the sentence after the code names grimp's error."
-        },
-        {
-          "code": "no_python_packages",
-          "means": "A Python repository with no importable package.",
-          "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
-        },
-        {
-          "code": "no_builder:<language>",
-          "means": "No import graph builder covers the dominant source language, for example no_builder:java; no other language's graph stands in, and the sentence names a tool that would build one where one is known, jdeps for the JVM languages.",
-          "next_step": "Nothing to change: structure reads as not measured for this language."
-        },
-        {
-          "code": "no_import_graph_<language>",
-          "means": "A builder covers the dominant source language but found nothing to graph in it, for example no_import_graph_go.",
-          "next_step": "Nothing to change if that code is loose scripts; a package the builder recognises is measured."
-        },
-        {
-          "code": "invalid_import_graph",
-          "means": "A builder returned a graph that breaks the module-graph contract.",
-          "next_step": "Report it against the toolkit; structure reads as not measured meanwhile."
-        },
-        {
-          "code": "no_source_files",
-          "means": "The scope holds no source file in a language the assess skill recognises.",
-          "next_step": "Nothing to change if the scope has no code; check the scope and the excludes otherwise."
         }
       ],
       "evidence": [],
@@ -4980,6 +4864,7 @@
         "repo_root",
         "working_notes"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "units_only",
@@ -5016,6 +4901,7 @@
         "repo_root",
         "excludes"
       ],
+      "headless_reads": null,
       "network": false,
       "platform": false,
       "headless": "units_only",
@@ -6908,6 +6794,7 @@
       ],
       "suppressed_when": "",
       "prune_missing_paths": false,
+      "thresholds": {},
       "why": "A file that has only ever grown gets harder to read whole with each change, and each agent addition makes the next one harder.",
       "why_source": ""
     },
@@ -6923,6 +6810,7 @@
       ],
       "suppressed_when": "",
       "prune_missing_paths": false,
+      "thresholds": {},
       "why": "Code nothing in the repository calls costs an agent reading time and can be maintained by mistake; it needs a person to confirm no outside caller uses it.",
       "why_source": ""
     },
@@ -6939,6 +6827,11 @@
       ],
       "suppressed_when": "doc_staleness.churn_degenerate == true",
       "prune_missing_paths": true,
+      "thresholds": {
+        "high_front_door_ratio": 0.7,
+        "high_modularity_q": 0.3,
+        "low_containment": 0.3
+      },
       "why": "These files change together in history with no import between them, so an agent changing one has nothing in the code telling it to change the other.",
       "why_source": ""
     },
@@ -6954,6 +6847,7 @@
       ],
       "suppressed_when": "doc_staleness.churn_degenerate == true",
       "prune_missing_paths": false,
+      "thresholds": {},
       "why": "The doc has fallen behind complex code it describes, which is where an agent leans on a doc most.",
       "why_source": ""
     },
@@ -6969,6 +6863,7 @@
       ],
       "suppressed_when": "",
       "prune_missing_paths": false,
+      "thresholds": {},
       "why": "Complex code with no human author and no doc of its intent has nobody to ask and nothing to check an agent's reading against.",
       "why_source": ""
     },
@@ -6984,6 +6879,7 @@
       ],
       "suppressed_when": "",
       "prune_missing_paths": false,
+      "thresholds": {},
       "why": "The declared repository kind decides which checks apply; when the signals disagree, checks marked not applicable may hide gaps an agent would meet.",
       "why_source": ""
     },
@@ -6999,6 +6895,7 @@
       ],
       "suppressed_when": "",
       "prune_missing_paths": true,
+      "thresholds": {},
       "why": "A strength: edits here stay inside the directory, so an agent can change it without reading the rest of the repository.",
       "why_source": ""
     },
@@ -7014,6 +6911,7 @@
       ],
       "suppressed_when": "",
       "prune_missing_paths": false,
+      "thresholds": {},
       "why": "Tests kept and committed beside the code they cover can check internal consistency rather than truth, so an agent changing both together can make them agree on a wrong answer.",
       "why_source": ""
     },
@@ -7029,6 +6927,7 @@
       ],
       "suppressed_when": "",
       "prune_missing_paths": false,
+      "thresholds": {},
       "why": "A TODO or skip that survives many edits reads to an agent as a live plan or a settled exception, and it cannot tell which.",
       "why_source": ""
     },
@@ -7044,6 +6943,7 @@
       ],
       "suppressed_when": "",
       "prune_missing_paths": false,
+      "thresholds": {},
       "why": "Complex code with no doc of what it should do leaves an agent only the code to infer intent from, so it cannot tell a bug from a requirement.",
       "why_source": ""
     },
@@ -7060,6 +6960,7 @@
       ],
       "suppressed_when": "",
       "prune_missing_paths": false,
+      "thresholds": {},
       "why": "Complex, often-changed code whose tests let many mutants survive: an agent's change here is not held by the tests that look like they cover it.",
       "why_source": ""
     }

@@ -5,7 +5,9 @@
 headless runner accepts (``signals.known_scans()``):
 
 - **Ran**: the scan produced its block in at least one repository. Where a block reports
-  itself unavailable, the line says in how many repositories and gives the reason codes.
+  itself unavailable, the line says in how many repositories and gives the reason codes;
+  where it was skipped in some, it says in how many and why: the skip codes, or the
+  ``absent`` words (#918).
 - **Skipped**: the scan did not run in any repository, with the reason: only a full
   ``/assess`` run builds it (``not_registered``), it needs the network
   (``network``, with or without a ``--platform`` remedy), a ``--profile`` or ``--levels``
@@ -31,7 +33,8 @@ measured). Its first line starts `In place:`
 measured everywhere, or were skipped. It links `docs/what-we-measure.md` by absolute URL. The fleet `report.md` ends with it; the deterministic `/assess` report too.
 The `agent_ops` line adds "permissions set centrally (managed settings on this machine) in k
 of n" where a run read them under `--managed-settings` and they credited the practice (#1153).
-Tests: `tests/test_measured_appendix.py`.
+The skip codes are `signals.FULL_RUN_ONLY_REASONS` plus the scan plan's not-run code, imported,
+never listed (#918). Tests: `tests/test_measured_appendix.py`.
 """
 from __future__ import annotations
 
@@ -39,28 +42,39 @@ from collections.abc import Mapping, Sequence
 
 from lib.counts_only.content_free import reason_code
 from lib.run.scan_plan import NOT_RUN_CODE, not_run_text
-from lib.run.signals import PLATFORM_ONLY_SCANS, PLATFORM_SCANS, known_scans
+from lib.run.signals import (FULL_RUN_ONLY_REASONS, NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS,
+                             UNREGISTERED_REASON, known_scans)
 from lib.vocabulary import IN_PLACE
 
 HEADING = "## How this was measured"
 CATALOG_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md"
-# Reason codes meaning the scan did not run at all (signals.UNREGISTERED_REASON, NETWORK_REASON).
-# A --profile or --levels run's plan left the scan out (lib/run/scan_plan.py, #1268): skipped too.
-SKIP_CODES = frozenset({"not_registered", "network", NOT_RUN_CODE})
+# Reason codes meaning the scan did not run at all: the full-run-only ones (signals.FULL_RUN_ONLY_REASONS,
+# #918), and a --profile or --levels run's plan leaving the scan out (lib/run/scan_plan.py, #1268).
+NETWORK_CODE = reason_code(NETWORK_REASON)
+UNREGISTERED_CODE = reason_code(UNREGISTERED_REASON)
+SKIP_CODES = FULL_RUN_ONLY_REASONS | {NOT_RUN_CODE}
 
 
 def _skip_reason(name: str, codes: set[str], absent: str, not_run: str | None = None) -> str:
     if not_run is not None:
         return not_run
-    if "network" in codes:
+    if NETWORK_CODE in codes:
         if name in PLATFORM_SCANS:
             return "it reads GitHub or GitLab; run with --platform to measure it"
         return "it reads GitHub or GitLab, which only a full /assess run does"
-    if "not_registered" in codes:
+    if UNREGISTERED_CODE in codes:
         return "only a full /assess run builds it"
     if name in PLATFORM_ONLY_SCANS:
         return "it exists only on the platform; run with --platform to measure it"
     return absent
+
+
+def _skip_word(state: str | None, block: object, absent: str) -> str:
+    """Why one repository skipped a scan: the ``absent`` words, a scan plan's own words
+    ("not run under profile citizen", as a whole-skip line reads), or the reason code."""
+    if state == "absent":
+        return absent
+    return not_run_text(block) or str(state)
 
 
 def _scans(n: int) -> str:
@@ -120,7 +134,9 @@ def measured_section(documents: Sequence[Mapping[str, object]],
         if missing:
             line += f": not measured in {missing} of {total} ({', '.join(unmeasured)})"
         if len(run) < total:
-            line += f"{';' if missing else ':'} skipped in {total - len(run)} of {total}"
+            why = sorted({_skip_word(s, doc.get(name), absent) for doc, s in zip(documents, states)
+                          if s in SKIP_CODES or s == "absent"})
+            line += f"{';' if missing else ':'} skipped in {total - len(run)} of {total} ({', '.join(why)})"
         if missing or len(run) < total:
             unread += 1
         if central := _central(name, documents):

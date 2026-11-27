@@ -29,16 +29,26 @@ named key, so a later field (the #939 ``why``) is an added key, never a restruct
   gates in order, and the requires, guard and equality links.
 - ``scans``: one entry per scan name the headless runner accepts
   (``signals.known_scans()``, the ``assess_signals.py --scans`` list): the collector that
-  builds it, what it reads, whether it needs the network, how a headless or fleet run
+  builds it, what it reads, what its headless variant reads (``headless_reads``, the
+  manifest's ``headless_variants`` entry; null without one, #918), whether it needs the
+  network, how a headless or fleet run
   reports it (``units_only``: the ``signals.UNIT_SCANS``, #866), its counts-only privacy class, the rows, conditions and findings that use
-  it, its unknown reasons, and the input class and grade of each signal it feeds. A scan
-  no criterion reads has the grade ``unclassified``: classifying every collector is
-  #789 step 6.
+  it, its unknown reasons (a reason declared with a ``block`` only on that block, #918), and
+  the input class and grade of each signal it feeds. A scan's ``grades`` come only from the
+  signals a criterion of the model reads, so a scan no criterion reads is ``unclassified``
+  while its ``evidence`` keeps each signal's manifest class (#918); classifying every
+  collector is #789 step 6.
 - ``collectors``: every scan in the registry (``scan_registry.SCANS``), including the
   private inputs other scans read.
 - ``signals``: each signal a criterion reads, with its type, collector, input class and
   grade.
-- ``findings``: each derived finding, with its inputs, rules and report ``order``.
+- ``findings``: each derived finding, with its inputs, rules, declared ``thresholds`` (#918)
+  and report ``order``.
+
+**Registry check (#918).** ``build_catalog`` joins the manifest against the installed scan
+registry (``signals.known_scans()``). Before the join, ``registry_errors`` lists each scan no
+collector of the manifest publishes, and a supplied manifest that misses one raises
+``CheckManifestError`` with one ``UNPUBLISHED_SCAN`` error per scan, never a ``KeyError``.
 
 **Stable order (#1239).** Every list a new check adds to is sorted by a stable key: rows by
 id (``stable_model``, so tag lists and links follow condition ids), scans, collectors and
@@ -55,12 +65,12 @@ row's levels, each one condition with its `id`, `truth`, `polarity`, `requires`,
 `predicted`, `review` (#1086),
 `step_gates`, `grade` and `counts`, and its criteria with the condition `key`, `producer`, `eq_signal`, plain-words `text`, `title` and `fix` from
 the manifest, `input_class`, `grade`, `counts`), `scans` (one per `signals.known_scans()` name:
-`collector`, `reads`, `network`, `platform`, `headless` (`registered`, `headless_variant`,
+`collector`, `reads`, `headless_reads`, `network`, `platform`, `headless` (`registered`, `headless_variant`,
 `unregistered` or `platform_only`), `privacy` (`written`, `strings_kept`: the collector's
 counts-only patterns, split by block for a spread collector), `used_by` (`rows`, `conditions`,
 `findings`), `unknown_reasons` (the generic `not_registered`, `network` or `platform_only`
 reason plus the manifest's declared ones), `evidence` per signal and `grades`), `collectors`
-(every `scan_registry.SCANS` entry), `signals` (sorted by path) and `findings` (sorted by name). `sources` (`catalog.SOURCES`) lists the
+(every `scan_registry.SCANS` entry), `signals` (sorted by path) and `findings` (sorted by name, with `thresholds`). `sources` (`catalog.SOURCES`) lists the
 files it is generated from, repo-relative; `skills/assess/checks/core/*.toml` names the
 manifest fragments as a glob (#994). A scan no criterion reads is
 graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
@@ -80,6 +90,7 @@ from typing import Literal, NotRequired, TypedDict
 from lib.report import catalog_tags as ct
 import lib.manifest.check_manifest as cm
 import lib.manifest.manifest_whys as mw
+from lib.manifest.check_validation import ValidationError, finding
 from lib.scoring.level_signals import INPUT_GRADES, counts_toward_level, load_default_levels
 from lib.scoring.levels import Criterion, MaturityModel, Scalar, condition_id
 from lib.scoring.levels_fields import DEFAULT_POLARITY, TRUTH_TAGS
@@ -199,6 +210,7 @@ class CatalogScan(TypedDict):
     summary: str
     collector: str
     reads: list[str]
+    headless_reads: list[str] | None  # the headless variant's manifest reads; None without a variant
     network: bool
     platform: bool
     headless: Headless
@@ -240,6 +252,7 @@ class CatalogFinding(TypedDict):
     inputs: list[str]
     suppressed_when: str
     prune_missing_paths: bool
+    thresholds: dict[str, float]  # the manifest's declared thresholds, sorted by name; {} when none
     why: str
     why_source: str
 
@@ -368,6 +381,8 @@ def _reasons(name: str, collector: cm.CollectorEntry, headless: Headless) -> lis
     out = [CatalogReason(code=code, means=GENERIC_REASONS[key][0], next_step=GENERIC_REASONS[key][1])
            for key, code in codes]
     for declared in collector.get("unknown_reasons", []):
+        if declared.get("block", name) != name:  # a reason scoped to another block of the collector
+            continue
         reason = CatalogReason(code=declared["code"], means=declared["means"],
                                next_step=declared["next_step"])
         if "carried_in" in declared:
@@ -395,10 +410,30 @@ def _used_by(names: set[str], rows: Sequence[CatalogRow],
                   findings=[f["name"] for f in findings if any(_first(i) in names for i in f["inputs"])])
 
 
+def registry_errors(manifest: cm.CheckManifest) -> list[ValidationError]:
+    """One ``UNPUBLISHED_SCAN`` error per scan the headless runner accepts that no collector of
+    ``manifest`` publishes: an alternate manifest must cover the installed registry before the join."""
+    published = {block for c in cm.collectors(manifest) for block in c["publishes"]}
+    return [finding(f"scans.{name}", "UNPUBLISHED_SCAN",
+                    f"no collector publishes {name!r}, a scan the installed registry runs")
+            for name in known_scans() if name not in published]
+
+
+def _read_signals(rows: Sequence[CatalogRow]) -> set[str]:
+    """Every signal path a criterion of the model reads, ``eq_signal`` included."""
+    return {p for row in rows for lv in row["levels"] for c in lv["criteria"]
+            for p in (c["signal"], *([c["eq_signal"]] if c["eq_signal"] is not None else []))}
+
+
+def _headless_reads(name: str, collector: cm.CollectorEntry) -> list[str] | None:
+    return next((list(v["reads"]) for v in collector.get("headless_variants", []) if v["block"] == name), None)
+
+
 def _scans(manifest: cm.CheckManifest, rows: Sequence[CatalogRow],
            signals: Sequence[cm.SignalEntry]) -> list[CatalogScan]:
     by_block = {block: c for c in cm.collectors(manifest) for block in c["publishes"]}
     findings = cm.findings(manifest)
+    read = _read_signals(rows)
     out: list[CatalogScan] = []
     for name in known_scans():
         collector = by_block[name]
@@ -408,11 +443,14 @@ def _scans(manifest: cm.CheckManifest, rows: Sequence[CatalogRow],
         evidence = [Evidence(signal=s["path"], input_class=s["evidence"],
                              grade=grade_of(s["evidence"]))
                     for s in signals if _first(s["path"]) == name]
-        grades = [g for g in GRADE_ORDER if any(e["grade"] == g for e in evidence)] or [UNCLASSIFIED]
+        # Graded only by the signals a criterion reads; every signal stays as evidence detail.
+        grades = [g for g in GRADE_ORDER
+                  if any(e["grade"] == g and e["signal"] in read for e in evidence)] or [UNCLASSIFIED]
         out.append(CatalogScan(
             name=name, title=collector["title"] if not spread else f"{collector['title']}: {name}",
             summary=collector.get("summary", ""), collector=collector["id"],
-            reads=list(collector["reads"]), network=bool(collector.get("network")),
+            reads=list(collector["reads"]), headless_reads=_headless_reads(name, collector),
+            network=bool(collector.get("network")),
             platform=bool(collector.get("platform_pass")), headless=headless,
             privacy=_privacy(name, collector, spread), used_by=_used_by(names, rows, findings),
             unknown_reasons=_reasons(name, collector, headless), evidence=evidence, grades=grades,
@@ -435,6 +473,8 @@ def build_catalog(manifest: cm.CheckManifest | None = None,
                   model: MaturityModel | None = None) -> Catalog:
     """The catalog of the core manifest and the default maturity model (or the given ones)."""
     manifest = cm.load_manifest() if manifest is None else manifest
+    if errors := registry_errors(manifest):
+        raise cm.CheckManifestError("check manifest against the installed registry", errors)
     model = load_default_levels() if model is None else model
     model = stable_model(model)
     signals = sorted(cm.signals(manifest), key=lambda s: s["path"])
@@ -466,6 +506,7 @@ def build_catalog(manifest: cm.CheckManifest | None = None,
                                  mode=f["mode"], concern=f["concern"], inputs=list(f["inputs"]),
                                  suppressed_when=f.get("suppressed_when", ""),
                                  prune_missing_paths=bool(f.get("prune_missing_paths")),
+                                 thresholds=dict(sorted(f.get("thresholds", {}).items())),
                                  why=mw.why_of(f), why_source=mw.why_source_of(f))
                   for f in sorted(cm.findings(manifest), key=lambda f: f["name"])],
     )
