@@ -737,3 +737,22 @@ def test_a_base_doc_with_a_source_verdict_stays_measured() -> None:
            "provenance": {"method": "frontmatter", "sources": ["a.py"],
                           "generated_by": None, "source_newer": True}}
     assert staleness_summary([row], reliable=True)["measured_docs"] == 1
+
+
+def test_doc_freshness_measures_a_sphinx_doc_set(tmp_path: Path) -> None:
+    """reST pages and Sphinx `.txt` sources are docs here too (#840)."""
+    _write(tmp_path, "docs/conf.py", "source_suffix = ['.rst', '.txt']\n")
+    _write(tmp_path, "docs/index.rst", "Demo\n====\n\n.. toctree::\n\n   billing\n   ledger\n")
+    _write(tmp_path, "docs/billing.rst", "Billing\n=======\n")
+    _write(tmp_path, "docs/ledger.txt", "Ledger\n======\n")
+    _write(tmp_path, "docs/requirements.txt", "sphinx\n")
+    _write(tmp_path, "src/demo/billing.py", "x = 1\n")
+    _write(tmp_path, "src/demo/ledger.py", "y = 1\n")
+    r = analyze_doc_staleness(tmp_path, doc_to_code_edges=[
+        {"doc": "docs/index.rst", "code": "src/demo/billing.py"}])
+    by_path = {d["path"]: d for d in r["docs"]}
+    assert sorted(by_path) == ["docs/billing.rst", "docs/index.rst", "docs/ledger.txt"]
+    assert by_path["docs/billing.rst"]["subject_method"] == "parallel-docs-tree"
+    assert by_path["docs/ledger.txt"]["subject_method"] == "parallel-docs-tree"
+    assert by_path["docs/index.rst"]["subject_method"] == "explicit-links"
+    assert r["summary"]["measured_docs"] == 3

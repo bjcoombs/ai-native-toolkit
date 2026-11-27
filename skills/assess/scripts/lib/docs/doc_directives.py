@@ -25,9 +25,16 @@ fenced div with attributes (``::: {.class}``). A bare ``:::`` closer anywhere on
 the page marks div syntax (``::: notes`` ... ``:::``), which mkdocstrings never
 writes, so such a page is never directive-only. A hand-written page that embeds
 one directive among its prose still reads as hand-written, so it stays measured.
-Sphinx autodoc stubs (reST) are out of scope until reST docs are read. The read
-is bounded to ``MAX_BYTES``; a longer page is never directive-only. Tests:
-``tests/test_doc_directives.py``.
+
+A reST page (``.rst``, or a Sphinx ``.txt`` source, #840) counts the same way
+with Sphinx autodoc directives (:func:`rst_directive_counts`): a line
+``.. automodule:: x`` (or ``autoclass``, ``autofunction``, ``autosummary`` and
+the rest of ``AUTODOC_DIRECTIVES``) is a directive, and the lines indented under
+it (``:members:``) belong to it. Section titles and their adornment lines,
+blank lines, comments, ``.. _label:`` targets and ``.. module::`` /
+``.. currentmodule::`` are ignored; any other directive (``.. note::``) counts as
+one prose line, its body included. The read is bounded to ``MAX_BYTES``; a
+longer page is never directive-only. Tests: ``tests/test_doc_directives.py``.
 """
 from __future__ import annotations
 
@@ -41,6 +48,13 @@ MAX_BYTES = 65536
 
 _DIRECTIVE = re.compile(r"^:::\s*([A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*)\s*$")
 _FENCE = re.compile(r"^(```|~~~)")
+AUTODOC_DIRECTIVES = frozenset({
+    "automodule", "autoclass", "autofunction", "autoexception", "automethod",
+    "autoattribute", "autodata", "autodecorator", "autoproperty", "autosummary",
+})
+_RST_IGNORED_DIRECTIVES = frozenset({"module", "currentmodule"})
+_RST_DIRECTIVE = re.compile(r"^\.\.\s+(?:py:)?([\w-]+)::")
+_RST_ADORNMENT = re.compile(r"^([=\-`:'\"~^_*+#<>.])\1{2,}\s*$")
 ADMONITION_NAMES = frozenset({
     "note", "tip", "info", "important", "warning", "caution", "danger",
     "details", "success", "question", "failure", "bug", "example", "quote",
@@ -107,9 +121,39 @@ def directive_counts(text: str) -> tuple[int, int, int]:
     return directives, prose, closers
 
 
+def rst_directive_counts(text: str) -> tuple[int, int, int]:
+    """``(autodoc directives, prose lines, 0)`` in a reST page (module docstring)."""
+    lines = text.splitlines()
+    directives = prose = 0
+    in_block = False  # inside an indented directive or comment body
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped or _RST_ADORNMENT.match(stripped):
+            continue
+        if in_block and _indent(line) > 0:
+            continue
+        in_block = False
+        if i + 1 < len(lines) and _RST_ADORNMENT.match(lines[i + 1].strip()):
+            continue  # a section title
+        if stripped.startswith(".."):
+            in_block = True
+            match = _RST_DIRECTIVE.match(stripped)
+            if match is None:  # a comment or a `.. _label:` target
+                continue
+            name = match.group(1).lower()
+            if name in AUTODOC_DIRECTIVES:
+                directives += 1
+            elif name not in _RST_IGNORED_DIRECTIVES:
+                prose += 1
+            continue
+        prose += 1
+    return directives, prose, 0
+
+
 def is_directive_only(doc: Path) -> bool:
     """True when ``doc`` is a markdown page of generator directives (module docstring)."""
-    if doc.suffix.lower() not in (".md", ".markdown"):
+    suffix = doc.suffix.lower()
+    if suffix not in (".md", ".markdown", ".rst", ".txt"):
         return False
     try:
         raw = doc.read_bytes()
@@ -117,6 +161,7 @@ def is_directive_only(doc: Path) -> bool:
         return False
     if len(raw) > MAX_BYTES:
         return False
-    directives, prose, closers = directive_counts(raw.decode("utf-8", errors="replace"))
+    count = rst_directive_counts if suffix in (".rst", ".txt") else directive_counts
+    directives, prose, closers = count(raw.decode("utf-8", errors="replace"))
     return (directives > 0 and not closers
             and prose <= max(PROSE_LINE_ALLOWANCE, directives))

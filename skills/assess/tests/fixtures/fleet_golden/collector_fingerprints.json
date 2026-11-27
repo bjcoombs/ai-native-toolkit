@@ -154,11 +154,11 @@
     },
     "core.doc_graph": {
       "repos": {
-        "grpa/sub/deep/svc2": "8c69011e476d4bb10aaf94af0aa1d274970e658dd97ba89433a90120214c6215",
-        "grpa/svc1": "35d1a0ca661a7d1f0528d52c374585b6d38b5779cc48e9922cf5be31f4b59625",
-        "grpb/lib1": "9450cc3c2cc1a2d7a37344d2aa7645b6c2879be626642f55b6199c3ea4954a30"
+        "grpa/sub/deep/svc2": "feba28cdb714b3a2d4af872b126a7cda1a6e1309b0ef53b5c7d5dd04c86c00d3",
+        "grpa/svc1": "871716ba7733d71b856fe5625b424af393106757bb36bca2cf9462d2d83b58a3",
+        "grpb/lib1": "a1f8efbcf16093220be4b29880ada33343d210b489d20c0ea5b507803087f9a0"
       },
-      "revision": 1
+      "revision": 2
     },
     "core.doc_staleness": {
       "repos": {

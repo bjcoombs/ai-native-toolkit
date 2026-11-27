@@ -168,6 +168,7 @@ class DocGraphBlock(TypedDict):
     directory_breakdown: list[DirectoryBreakdownRow]
     directory_count: int
     link_parents: list[LinkParent]
+    unparsed_doc_formats: list[str]
 
 
 # --- git_churn / doc_staleness ---------------------------------------------
