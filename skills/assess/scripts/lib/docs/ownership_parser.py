@@ -34,7 +34,8 @@ body (read from inline code, wikilinks, and bare prose paths) to the module the 
 names, keyed `<doc>::<header>` so two docs declaring the same section don't collide, and
 keeping only references that resolve to real files. `find_empty_globs` flags the CODEOWNERS
 patterns that match zero tracked files - the cheapest drift, a boundary the filesystem has
-left behind - and `parse_ownership` runs both with the module-shape degradation contract
+left behind - `codeowned(text, rel)` says whether the last CODEOWNERS line matching a path
+names an owner (the agent instruction-rewrite hazard's guard, #858), and `parse_ownership` runs both with the module-shape degradation contract
 (`available: False`, reason `"no ownership map"` when neither map exists).
 `is_boundary_pattern(pattern, files)` says whether a CODEOWNERS line or an architecture-doc
 reference declares a module boundary: a literal path segment and at least one matched
@@ -274,6 +275,20 @@ def parse_codeowners(repo_root: Path) -> dict[str, set[Path]]:
             continue
         out.setdefault(pattern, set()).update(_match_glob(pattern, rel_paths))
     return out
+
+
+def codeowned(text: str, rel: str) -> bool:
+    """Whether the CODEOWNERS ``text`` names an owner for the repo-relative path ``rel``.
+
+    GitHub reads the last matching line, so a later line with no owner takes the path back
+    out of ownership. ``rel`` need not exist yet: it is matched as a string, through the same
+    glob forms ``parse_codeowners`` uses (#858)."""
+    owners: list[str] | None = None
+    for raw in text.splitlines():
+        parts = raw.split("#", 1)[0].split()
+        if parts and any(fnmatch.fnmatch(rel, form) for form in _glob_to_fnmatch(parts[0])):
+            owners = parts[1:]
+    return bool(owners)
 
 
 def _tracked_rel_paths(

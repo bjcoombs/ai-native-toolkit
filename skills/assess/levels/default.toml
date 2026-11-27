@@ -352,6 +352,14 @@
 #   scope, capped by its own. With no agent job both are unknown (no_agent_jobs); a scope that cannot be read and
 #   settles nothing is unknown (agent_job_scope_unread), never met. They gate no Step.
 #   Graded measured (head_structure), read from the committed workflow files.
+# - Agent rewrites instructions (lib/agents/agent_instruction_rewrite.py, #858): a hazard
+#   (polarity hazard, never counted) with blocks = "ci_runs_tests". It reads
+#   agent_ops.summary.agent_instruction_rewrite: agent jobs that can write files (a contents
+#   or write-all scope, or gh-aw safe-outputs create-pull-request or
+#   push-to-pull-request-branch) while the root AGENTS.md or CLAUDE.md, a committed
+#   instruction file or the job's own workflow has no owner in the committed CODEOWNERS (the
+#   last matching line names one). Unknown under the same codes as agent-job-write-access,
+#   never met. Graded measured (head_structure), read from the committed files.
 # - CI hazards (lib/ci/ci_hazards.py, #828): two hazards (polarity hazard, never counted) that
 #   name blocks = "ci_runs_tests", so while either is met the ci_runs_tests gate does not hold
 #   and Step 3 stays out of reach; the tally does not move. ci-skip-label reads
@@ -726,6 +734,19 @@ aggregation = "min"
   truth = ["agent_runtime", "governance"]
   polarity = "hazard"
   criteria = [{ signal = "agent_ops.summary.agent_job_write_access", op = "gt", value = 0 }]
+
+[[rows]]
+id = "agent-rewrites-instructions"
+title = "An agent job can rewrite its own instructions"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  truth = ["agent_context", "agent_runtime"]
+  polarity = "hazard"
+  blocks = "ci_runs_tests"
+  criteria = [{ signal = "agent_ops.summary.agent_instruction_rewrite", op = "gt", value = 0 }]
 
 [[rows]]
 id = "ci-skip-label"

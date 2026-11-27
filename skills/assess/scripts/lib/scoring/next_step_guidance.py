@@ -467,6 +467,12 @@ _WORDING: dict[str, Wording] = {
         "limits cost, not what the token can do.",
         "No job that runs an agent has a `write` scope unless another job that `needs:` it, or "
         "`safe-outputs:`, does the writing."),
+    "agent_ops.summary.agent_instruction_rewrite": _flag_count(
+        "Add a CODEOWNERS line with an owner for `AGENTS.md`, `CLAUDE.md`, the other instruction "
+        "files and each agent workflow, or drop `contents: write` from the agent job and open a "
+        "pull request from a separate job instead.",
+        "No agent job that can write files runs while an instruction file or its own workflow has "
+        "no CODEOWNERS owner."),
     "ci_hazards.skip_labels": _flag_count(
         "Drop the label condition from the jobs' `if:` lines, or keep it only on jobs that check "
         "nothing; scope a skip with a `paths` filter so the checks still run on code changes.",
