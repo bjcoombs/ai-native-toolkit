@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lib.assess_config import load_backlog_wip, load_working_notes_config
+import pytest
+
+from lib.assess_config import BacklogModeError, load_backlog_mode, load_backlog_wip, load_working_notes_config
 from lib.docs.doc_graph import build_doc_graph
 
 
@@ -159,3 +161,17 @@ def test_backlog_wip_defaults_to_three_and_reads_the_set_value(tmp_path: Path) -
     for bad in ("wip = 5", "[backlog]\nwip = true", "[backlog]\nwip = -1", "[backlog]\nwip = \"4\""):
         _config(tmp_path, bad + "\n")
         assert load_backlog_wip(tmp_path) == 3
+
+
+def test_backlog_mode_reads_propose_when_absent_and_rejects_anything_else(tmp_path: Path) -> None:
+    """``[backlog] mode`` (#814): ``propose`` when absent, ``file`` and ``file-and-close`` when set, else an error."""
+    assert load_backlog_mode(tmp_path) == "propose"
+    _config(tmp_path, "[backlog]\nwip = 2\n")
+    assert load_backlog_mode(tmp_path) == "propose"
+    for mode in ("propose", "file", "file-and-close"):
+        _config(tmp_path, f'[backlog]\nmode = "{mode}"\n')
+        assert load_backlog_mode(tmp_path) == mode
+    for bad in ('"close"', '"File"', '"file_and_close"', '""', "true", "1", '["file"]'):
+        _config(tmp_path, f"[backlog]\nmode = {bad}\n")
+        with pytest.raises(BacklogModeError, match="propose, file, file-and-close"):
+            load_backlog_mode(tmp_path)

@@ -250,7 +250,7 @@ New code imports the new path.
   Actions cost estimate, and the measures catalog with its Markdown, HTML, configure and
   truth-tag views. `wiki_writer` and `ci_workflow` locate `templates/` from their own path
   (`parents[3]`). `evidence_check` also runs as a script: run the moved file,
-  `python scripts/lib/report/evidence_check.py`. Files: `__init__.py`, `anomaly_detector.py`, `backlog_items.py`, `backlog_reconcile.py`, `backlog_wip.py`, `badge.py`, `catalog.py`, `catalog_configure.py`, `catalog_html.py`, `catalog_md.py`, `catalog_tags.py`, `ci_workflow.py`, `evidence_check.py`, `findings_snapshot.py`, `gap_actions.py`, `gate_cost.py`, `measured_appendix.py`, `reviewed_findings.py`, `run_wiki.py`, `wiki_state.py`, `wiki_writer.py`.
+  `python scripts/lib/report/evidence_check.py`. Files: `__init__.py`, `anomaly_detector.py`, `backlog_items.py`, `backlog_reconcile.py`, `backlog_schedule.py`, `backlog_wip.py`, `badge.py`, `catalog.py`, `catalog_configure.py`, `catalog_html.py`, `catalog_md.py`, `catalog_tags.py`, `ci_workflow.py`, `evidence_check.py`, `findings_snapshot.py`, `gap_actions.py`, `gate_cost.py`, `measured_appendix.py`, `reviewed_findings.py`, `run_wiki.py`, `wiki_state.py`, `wiki_writer.py`.
 - **`run/`**: the scan table and the run around it, the `run` group (#1398): the declared
   scan registry, the scan plan a `--profile` or `--levels` run executes, the bounded scan
   pool and the per-scan timings, the setup and read-side adapters and the publish step, the

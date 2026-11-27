@@ -1,0 +1,28 @@
+name: Backlog reconcile
+
+# This repository's caller for reusable-backlog-reconcile.yml (issue #814):
+# once a day, no model. What it may write is `[backlog] mode` in
+# .assess/config.toml (default `propose`: the status line of each filed
+# item's status comment only). The repository variable
+# BACKLOG_RECONCILE_ENABLED set to `false` turns it off.
+on:
+  schedule:
+    - cron: '41 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+# One run at a time, the whole run: a second run's plan must not read the
+# tracker while this run's apply is still writing to it.
+concurrency:
+  group: backlog-reconcile-run-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    if: vars.BACKLOG_RECONCILE_ENABLED != 'false'
+    uses: ./.github/workflows/reusable-backlog-reconcile.yml
+    with:
+      enabled: ${{ vars.BACKLOG_RECONCILE_ENABLED != 'false' }}

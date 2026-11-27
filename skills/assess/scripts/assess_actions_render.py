@@ -62,7 +62,12 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   ``--record-declines`` and ``--confirm`` fails at argument parsing (#1533). That file is
   the only thing it writes, never the tracker; it also drops records whose evidence changed.
   It needs no ``actions.json``; rules:
-  ``lib/report/backlog_reconcile.py`` and ``lib/run/decline_markers.py``.
+  ``lib/report/backlog_reconcile.py`` and ``lib/run/decline_markers.py``. ``--scheduled
+  --today DATE`` (#814) prints the daily workflow's writes instead, ``{mode, writes, notes,
+  summary}``, under ``.assess/config.toml`` ``[backlog] mode`` (an unknown mode exits 1), from
+  ``--existing`` items that carry their ``comments``; rules: ``lib/report/backlog_schedule.py``.
+- ``status-comment --today DATE`` prints a new item's status comment, the one comment the
+  scheduled reconcile edits in place (#814).
 - ``readiness`` prints the PR summary's Readiness value: ``headline.lines`` of
   ``run-context.json`` joined with `` / ``; the ``badge.json`` ``message`` when the run
   context has no headline lines; ``not known`` when neither file has one.
@@ -95,9 +100,10 @@ from typing import NotRequired, TypedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.assess_config import load_backlog_wip  # noqa: E402
+from lib.assess_config import BacklogModeError, load_backlog_mode, load_backlog_wip  # noqa: E402
 from lib.report.backlog_items import DEFAULT_LABEL, FilingStep, condition_marker, plan_filing  # noqa: E402
 from lib.report.backlog_reconcile import confirmed_writes, reconcile, run_facts, summary  # noqa: E402
+from lib.report.backlog_schedule import new_status_comment, plan_scheduled, scheduled_facts, status_line  # noqa: E402
 from lib.report.backlog_wip import WipStep, apply_wip, next_up_markdown  # noqa: E402
 from lib.run.decline_markers import (  # noqa: E402
     decline_record,
@@ -439,6 +445,13 @@ def run_reconcile(assess_dir: Path, args: argparse.Namespace) -> int:
         return 1
     items = [x for x in existing if isinstance(x, dict)]
     facts = run_facts(context)
+    mode = ""
+    if args.scheduled:
+        if not args.today:
+            print("assess_actions_render: --scheduled needs --today YYYY-MM-DD", file=sys.stderr)
+            return 1
+        mode = load_backlog_mode(args.repo)
+        facts = scheduled_facts(facts)
     conditions, model = facts["conditions"], facts["model"]
     result = reconcile(items, facts, label=args.label, filed=args.filed)
     records = read_proposal_declines(assess_dir)
@@ -446,6 +459,12 @@ def run_reconcile(assess_dir: Path, args: argparse.Namespace) -> int:
     if len(live) != len(records):
         write_proposal_declines(assess_dir, live)
     proposals, held = split_declined(result["proposals"], live, conditions, model)
+    if args.scheduled:
+        plan = plan_scheduled(items, facts, {**result, "proposals": proposals}, mode=mode, today=args.today,
+                              declined={r["number"]: proposal_disclosure(r) for r in held}, label=args.label,
+                              wip=load_backlog_wip(args.repo), level=context.get("level"))
+        print(json.dumps(plan, indent=2, ensure_ascii=False))
+        return 0
     if args.confirm is None:
         declined = [proposal_disclosure(r) for r in held]
         text = summary(proposals, result["rules_changed"], result["notes"])
@@ -527,6 +546,12 @@ def _parser() -> argparse.ArgumentParser:
     rc.add_argument("--declined-at", help="the date of the declines, for the record (date +%%Y-%%m-%%d)")
     rc.add_argument("--decline-reason", action="append", type=parse_reason, default=[], metavar="N=TEXT",
                     help="the user's reason for declining item N, for the record; repeat per item")
+    rc.add_argument("--scheduled", action="store_true",
+                    help="print the scheduled run's writes under .assess/config.toml [backlog] mode (#814); "
+                         "--existing items carry their comments")
+    rc.add_argument("--today", help="with --scheduled (required): the run date for the status line (YYYY-MM-DD)")
+    sc = sub.add_parser("status-comment", help="a new status comment for a filed item, for the scheduled reconcile")
+    sc.add_argument("--today", required=True, help="the filing date (YYYY-MM-DD)")
     rc.set_defaults(subparser=rc)
     sub.add_parser("readiness", help="the PR summary's Readiness value")
     return p
@@ -556,10 +581,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "readiness":
         print(readiness(assess_dir))
         return 0
+    if args.command == "status-comment":
+        sys.stdout.write(new_status_comment(status_line("Filed by /assess; the scheduled reconcile updates this line.",
+                                                        args.today, None)))
+        return 0
     if args.command == "reconcile":
         try:
             return run_reconcile(assess_dir, args)
-        except argparse.ArgumentTypeError as exc:
+        except (argparse.ArgumentTypeError, BacklogModeError) as exc:
             print(f"assess_actions_render: {exc}", file=sys.stderr)
             return 1
     try:

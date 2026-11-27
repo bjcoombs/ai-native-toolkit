@@ -1,6 +1,6 @@
-# Tracking the Top 3 Actions (Steps 6a to 6f)
+# Tracking the Top 3 Actions (Steps 6a to 6g)
 
-Steps 6a to 6f of the assess-pr skill, run when the user selects the issue-tracking or upstream-issues offer.
+Steps 6a to 6g of the assess-pr skill, run when the user selects the issue-tracking or upstream-issues offer.
 
 ## Contents
 
@@ -10,6 +10,7 @@ Steps 6a to 6f of the assess-pr skill, run when the user selects the issue-track
 - 6d: Link the items back to the assessment
 - 6e: Reconcile filed items (propose only)
 - 6f: Report back to the user
+- 6g: The scheduled reconcile (GitHub, opt-in)
 
 ### 6a: Identify the user's issue tracker
 
@@ -74,6 +75,7 @@ uv run "$RENDER" "$REPO_ROOT" items --report-link "<full-report link>"   # omit 
 - **Title**: the entry's `action`, as `title` gives it; a sub-item's title is its label and action (`2a. <action>`).
 - **Body**: `body` as given: the finding and its files first (the `condition` when the entry has no `finding`), then the First step, the **Done when** criterion, the Scope fence, a Context block (Layer, Effort, the full-report link) and last a one-line footer linking back to the plugin. Write each body to a file and pass it with `--body-file` (or the tracker's equivalent); do not reword it.
 - **Marker**: an item with a `condition` ends with its condition marker, `<!-- assess:condition=<row id>@<level>[ sub=<letters>] model=<version> -->`, already in `body`. Keep it on every create and edit: later runs match the item by it (6c). An item split from one action (One concern per item, below) adds ` part=<n>` before `model=`, numbering the parts 1, 2, ... in the order filed, so the parts keep separate keys. The format is documented in `skills/assess/references/actions-schema.md`.
+- **Status comment** (GitHub Issues): after creating an item that has a `condition`, post its status comment, `COMMENT=$(mktemp); uv run "$RENDER" "$REPO_ROOT" status-comment --today "$(date +%Y-%m-%d)" > "$COMMENT"` then `gh issue comment <number> --body-file "$COMMENT"`. It is the one comment the scheduled reconcile (6g) edits in place; post it once per item, never again on a reused one that already has it.
 - **Tag / Label / Category** that supports idempotency (see 6c)
 
 **One concern per item.** Each item carries one change a maintainer can accept or decline on its own. `actions.json` holds one entry per rank, and each lettered sub-action is already its own item. If an entry's `action` still bundles independent changes (an instruction-file stub *and* a lockfile *and* a CI step), file each change as its own item with its own one-line title. Start each split item from the entry's body and narrow its First step, Done when and Scope fence to that one change, so each item closes on its own change alone; keep the finding line and the Context block as rendered. The parts a maintainer would accept separately must be tracked separately, or the declined part takes the accepted ones down with it. List every reference for that rank, its sub-items' included, in its Issue cell (6d).
@@ -199,3 +201,24 @@ End with a short, tracker-specific summary. Examples:
 > Created 3 Task Master tasks under tag `assess-2026-05-22`: #1.1, #1.2, #1.3. Run `task-master next` to start.
 
 > Action 1 already tracked in PROJ-1024 (in progress) - linked. Created PROJ-1198 (Action 2) and PROJ-1199 (Action 3) in Jira.
+
+### 6g: The scheduled reconcile (GitHub, opt-in)
+
+The reconcile in 6e runs only when someone runs `/assess`. A repository can run it daily with no model through `.github/workflows/reusable-backlog-reconcile.yml` in this toolkit; `.github/workflows/backlog-reconcile.yml` is the reference caller. Copy that caller, point its `uses:` at `bjcoombs/ai-native-toolkit/.github/workflows/reusable-backlog-reconcile.yml@<release tag>`, grant `contents: read` and `issues: write` and nothing else, and keep its workflow-level `concurrency` group (one run at a time per repository, `cancel-in-progress: false`), so two runs never file the same gate. Set the repository variable `BACKLOG_RECONCILE_ENABLED` to `false` to stop it.
+
+It reads the filed items the way 6e does and writes only what `[backlog] mode` in the committed `.assess/config.toml` allows:
+
+| `mode` | What a scheduled run writes |
+|---|---|
+| `propose` (default) | The `**Status:**` line of each marked item's existing status comment (6b), and nothing else: the status, the evidence and the last run. A close, reopen, demote or supersede it would propose is written into that line, for the next interactive `/assess` to confirm. |
+| `file` | As `propose`, plus a status comment on a marked item that has none, plus one new item for each gate of the next Step that no item is marked for, while `[backlog] wip` leaves a slot. A new item carries the workflow's `label` input (default `assess-finding`), so the next run's listing finds it. |
+| `file-and-close` | As `file`, plus closing an open item whose condition now holds, with the evidence in its status line. |
+
+`file-and-close` closes items with no one confirming each close, so it is off unless the config names it:
+
+```toml
+[backlog]
+mode = "file-and-close"   # or "file"; leave it out for propose
+```
+
+A value other than these three fails the scheduled run, so a typo never runs in another mode. In every mode a reopen, demote or supersede stays a proposal, a proposal declined before (6e) is never written, an item without a condition marker is never touched, and no write edits an item's title, body, labels or assignees. A status comment counts only when someone with write access or the workflow's own bot wrote it. One run closes at most 10 items and files at most 10; the rest wait for the next run. A failed write ends the run with gh's error and the list of writes already made; re-running only the failed `apply` job writes the same plan again, so after a failure part way through new items, re-run all jobs. The rules: `skills/assess/scripts/lib/report/backlog_schedule.py`.

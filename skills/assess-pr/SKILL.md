@@ -71,7 +71,7 @@ If the user **did not select** it: skip. The Top 3 Actions table in the PR and t
 
 When selected, proceed agnostically - **don't assume GitHub** (or any specific tracker). Use your judgment based on what's actually in front of you.
 
-Then follow `references/offer-issue-tracking.md` (relative to this skill dir): 6a identify the tracker, 6b create the items from `actions.json`, 6c idempotency, 6d link the items back to the assessment, 6e reconcile filed items (propose only), 6f report back to the user.
+Then follow `references/offer-issue-tracking.md` (relative to this skill dir): 6a identify the tracker, 6b create the items from `actions.json`, 6c idempotency, 6d link the items back to the assessment, 6e reconcile filed items (propose only), 6f report back to the user, and 6g the scheduled reconcile a repository can opt into.
 
 ## Step 6.5: Offer to Freeze the Assessment into a CI Check
 
