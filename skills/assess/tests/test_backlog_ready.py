@@ -336,6 +336,9 @@ def test_a_scheduled_job_that_adds_an_untriaged_label(tmp_path: Path, job: str) 
     "r:\n" + _SCHED + "  script: glab issue update 1 -l needs-triage\n",  # no scheduled pipeline
     ".base:\n  script: glab issue update 1 -l needs-triage\nr:\n  extends: .base\n" + _SCHED
     + "  script: [echo]\n",  # the job's own script replaces the template's
+    # a ] inside a label is part of it, and a quick action in a title does not run (#1587)
+    "r:\n" + _SCHED + "  script: glab issue update 1 -l needs-triage]archived\n",
+    "r:\n" + _SCHED + "  script:\n    - curl -X POST --data-urlencode 'title=/label ~needs-triage' \"$API/issues\"\n",
 ])
 def test_a_job_that_does_not_label_new_issues_on_a_schedule(tmp_path: Path, job: str) -> None:
     assert _gl_untriaged(tmp_path, job) == (False, None)

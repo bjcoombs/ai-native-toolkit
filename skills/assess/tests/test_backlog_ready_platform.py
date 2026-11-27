@@ -585,3 +585,13 @@ def test_gitlab_an_unkeyed_closer_and_author_are_not_self_closed(tmp_path: Path,
                    closed_by={"name": "x"}, author=None, user_notes_count=0)
         glab.issues.append(row)
     assert _block(_repo(tmp_path))["first_response_met"] is False
+
+
+def test_an_issue_its_author_closed_after_the_limit_stays_overdue(tmp_path: Path, gh: FakeGh) -> None:
+    for d in range(1, 21):
+        node = _self_closed(f"2026-10-{d:02d}T00:00:00Z")
+        late = f"2026-10-{d + 5:02d}T00:00:00Z"  # past first_response_max_days (2): ignored first
+        node["closedAt"] = late
+        node["timelineItems"]["nodes"][0]["createdAt"] = late
+        gh.nodes().append(node)
+    assert _block(_repo(tmp_path))["first_response_met"] is False

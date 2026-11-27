@@ -18,8 +18,9 @@ window of ``window_days`` (default 90) ending at the run time:
   wait of every issue opened in the window is within ``first_response_max_days`` (default 2): an
   unanswered issue older than the threshold counts as a wait past it, and an issue whose wait is
   not known yet can fall either side, so the bool is null when they could tip it. An unanswered
-  issue its own author closed (``Issue.self_closed``) is owed no response, so it is in neither
-  set; it stays in ``no_response_count`` (#1587).
+  issue its own author closed (``Issue.self_closed``) within ``first_response_max_days`` is owed
+  no response, so it is in neither set; one closed later had already waited past the limit and
+  stays overdue. Either stays in ``no_response_count`` (#1587).
 - ``untriaged_after_7d_share``: among open issues older than 7 days, the share with no label or
   an untriaged label (``[backlog_ready] untriaged_labels``, else ``backlog_ready.UNTRIAGED_LABELS``).
   Met when at most ``untriaged_max_share`` (default 0.10).
@@ -158,7 +159,10 @@ def outcome_fields(read: OutcomeRead, thresholds: BacklogThresholds, from_config
     closed = sum(1 for i in read.recent if i.closed is not None and i.closed >= read.start)
     waits = [_days(i.created, i.first_response) for i in opened if i.response_read and i.first_response is not None]
     silent = [i for i in opened if i.response_read and i.first_response is None]
-    owed = [i for i in silent if not i.self_closed]  # an issue its author closed waits for no one
+    limit = thresholds.first_response_max_days
+    # an issue its author closed within the limit waits for no one; one closed later was ignored first
+    owed = [i for i in silent
+            if not (i.self_closed and i.closed is not None and _days(i.created, i.closed) <= limit)]
     unread = sum(1 for i in opened if not i.response_read)
     marks = {label.lower() for label in untriaged}
     # An issue with more labels than were read counts as untriaged: an unread label cannot make it met.
@@ -166,7 +170,6 @@ def outcome_fields(read: OutcomeRead, thresholds: BacklogThresholds, from_config
                       if not i.labels or marks & set(i.labels) or not i.labels_complete)
     fields: dict[str, Any] = {}
 
-    limit = thresholds.first_response_max_days
     overdue = sum(1 for i in owed if _days(i.created, read.now) > limit)
     met = _response_met(waits, overdue, len(owed) - overdue + unread, limit)
     if read.window_truncated and not any(i.created < read.start for i in read.recent):

@@ -21,9 +21,10 @@ met by either:
 - a visible job that runs in a scheduled pipeline and whose ``script``, ``before_script`` or
   ``after_script`` adds an untriaged label: ``glab issue update|create --label`` / ``-l``, an
   ``add_labels`` API field, or a ``/label ~name`` quick action in a ``glab`` or ``curl`` call
-  (a form-encoded ``body=/label ~name`` too). A label is compared whole, ignoring case, and an
-  unquoted one ends at the ``]`` of a flow list (``script: [glab ... -l needs-triage]``); a
-  ``$VARIABLE`` argument is unsettled.
+  (a form-encoded ``body=/label ~name`` too, never a title). A label is compared whole, ignoring
+  case; the ``]`` that closes a flow-list script (``script: [glab ... -l needs-triage]``) is not
+  part of it, and one inside an argument (``needs-triage]x``) is. A ``$VARIABLE`` argument is
+  unsettled.
 
 Each job is read as GitLab merges it (``ci_includes.merged_config``, rendered by
 ``ci_merged_view.rendered_job``): ``include: local:`` files, ``extends:`` and ``default:``
@@ -81,14 +82,16 @@ _FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 _SCRIPT_KEYS = ("before_script", "script", "after_script")
 _SEGMENTS = re.compile(r"\|\|?|;|&&")
 _GLAB_ISSUE = re.compile(r"\bglab\s+issue\s+(?:update|create|new)\b")
-_GLAB_LABEL = re.compile(r"""(?<![\w-])(?:--label|-l)(?:\s+|=)("[^"]*"|'[^']*'|[^\s;&|\]]+)""")
-_ADD_LABELS = re.compile(r"""\badd_labels["']?\s*[=:]\s*("[^"]*"|'[^']*'|[^\s;&|"'\]]+)""")
+_GLAB_LABEL = re.compile(r"""(?<![\w-])(?:--label|-l)(?:\s+|=)("[^"]*"|'[^']*'|[^\s;&|]+)""")
+_ADD_LABELS = re.compile(r"""\badd_labels["']?\s*[=:]\s*("[^"]*"|'[^']*'|[^\s;&|"']+)""")
 # A quick action counts only where it is posted: a glab or curl call, or a notes API path. It may
-# open a form-encoded field (``body=/label ~x``). An unquoted argument stops at ``]``, which closes
-# a flow list (``script: [glab issue update 1 -l needs-triage]``).
+# open a form-encoded ``body`` field (``body=/label ~x``), where GitLab runs it; a title does not.
 _POSTS = re.compile(r"\bglab\b|\bcurl\b|/notes\b")
-_QUICK_LABEL = re.compile(r"""(?:^|[\s"'=])/label((?:\s+~(?:"[^"]*"|[^\s"'~\]]+))+)""")
-_QUICK_ARG = re.compile(r"""~("[^"]*"|[^\s"'~\]]+)""")
+_QUICK_LABEL = re.compile(r"""(?:^|[\s"']|\bbody=)/label((?:\s+~(?:"[^"]*"|[^\s"'~]+))+)""")
+_QUICK_ARG = re.compile(r"""~("[^"]*"|[^\s"'~]+)""")
+# A script written as a flow list (``script: [glab issue update 1 -l needs-triage]``): the last
+# argument's ``]`` closes the list, not the label. A ``]`` inside an argument stays.
+_FLOW_SCRIPT = re.compile(r"^\s*(?:-\s+)?(?:[\w-]+\s*:\s*)?\[")
 _BLOCK_SCALAR = re.compile(r"^[|>][-+0-9]*$")
 _RUN_WHEN = frozenset({"on_success", "always", "delayed"})
 _STOP_WHEN = frozenset({"never", "manual", "on_failure"})
@@ -174,12 +177,15 @@ def malformed(text: str) -> bool:
 def _labels_added(line: str) -> list[str]:
     """The labels one script line adds (see the module doc), each as written, unquoted."""
     out: list[str] = []
+    flow = _FLOW_SCRIPT.match(line) is not None and line.rstrip().endswith("]")
     for segment in _SEGMENTS.split(line):
         if _GLAB_ISSUE.search(segment):
             out += _GLAB_LABEL.findall(segment)
         out += _ADD_LABELS.findall(segment)
         for quick in _QUICK_LABEL.findall(segment) if _POSTS.search(segment) else ():
             out += _QUICK_ARG.findall(quick)
+    if flow and out:
+        out[-1] = out[-1].removesuffix("]")
     return [name.strip(" '\"") for arg in out for name in arg.strip("'\"").split(",") if name.strip(" '\"")]
 
 
