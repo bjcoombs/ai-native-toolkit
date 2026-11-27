@@ -124,8 +124,11 @@ def _launcher() -> bytes:
     member = "t64-arm.exe" if platform.machine().upper() == "ARM64" else "t64.exe"
     for wheel in sorted((Path(ensurepip.__file__).parent / "_bundled").glob("pip-*.whl")):
         with zipfile.ZipFile(wheel) as archive:
-            return archive.read(f"pip/_vendor/distlib/{member}")
-    pytest.fail("no pip wheel in ensurepip/_bundled to take the distlib launcher from")
+            try:
+                return archive.read(f"pip/_vendor/distlib/{member}")
+            except KeyError:
+                continue
+    pytest.fail(f"no pip wheel in ensurepip/_bundled holds the distlib launcher {member}")
 
 
 def install_fake(bindir: Path, name: str) -> None:
@@ -214,7 +217,7 @@ def tracker_writes(calls: list[list[str]]) -> list[list[str]]:
 
 
 # Every read the platform pass makes: the run test fails on any logged call that matches
-# none of these. A new gh or glab read under lib/hosting/ goes here, in the same PR, and
+# none of these. Any new gh or glab read the platform pass makes goes here, in the same PR, and
 # only when it changes nothing on the host (no method other than GET, no field or --input).
 # Each pattern must match the whole call, its arguments joined by single spaces.
 KNOWN_READS: tuple[tuple[str, str], ...] = (
