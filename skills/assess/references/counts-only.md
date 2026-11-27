@@ -640,6 +640,13 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.tags.not_measured.reason` | token |
 | `level.tags.countable_not_measured.id` | token |
 | `level.tags.countable_not_measured.reason` | token |
+| `level.conditions.blocks` | token |
+| `level.next_step.blockers.polarity` | token |
+| `level.declined.id` | token |
+| `level.declined.source` | token |
+| `level.hazards.id` | token |
+| `level.hazards.gate` | token |
+| `level.hazards.fix` | dropped |
 
 ## liveness_blocks
 
@@ -722,6 +729,12 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `owner_exclusions.skipped.id` | dropped |
 | `owner_exclusions.skipped.problem` | token |
 | `owner_exclusions.disclosures` | dropped |
+| `owner_exclusions.declines.source` | token |
+| `owner_exclusions.declines.conditions` | token |
+| `owner_exclusions.declines.declined_by` | dropped |
+| `owner_exclusions.declines.declined_at` | token |
+| `owner_exclusions.declines.version` | token |
+| `owner_exclusions.declines.reason` | dropped |
 
 ## pack_checks
 
@@ -1048,6 +1061,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `unit_levels.units.next_step.blockers.reason` | token |
 | `unit_levels.units.next_step.blockers.disposition` | token |
 | `unit_levels.units.next_step.blockers.exclusion_kind` | token |
+| `unit_levels.units.next_step.blockers.polarity` | token |
 
 ## unit_readings
 

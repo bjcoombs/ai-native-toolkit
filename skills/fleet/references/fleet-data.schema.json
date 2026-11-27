@@ -577,6 +577,9 @@
                         "condition": {
                           "type": "string"
                         },
+                        "polarity": {
+                          "type": "string"
+                        },
                         "state": {
                           "enum": [
                             "met",

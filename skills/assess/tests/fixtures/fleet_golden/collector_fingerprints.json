@@ -270,7 +270,7 @@
         "grpa/svc1": "8f9c4ede431563c5cdfa00c7920746ec2c4153391782f4abf8f260d37dcf488b",
         "grpb/lib1": "8f9c4ede431563c5cdfa00c7920746ec2c4153391782f4abf8f260d37dcf488b"
       },
-      "revision": 1
+      "revision": 2
     },
     "core.promissory_markers": {
       "repos": {

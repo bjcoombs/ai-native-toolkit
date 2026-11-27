@@ -365,3 +365,15 @@ def test_decline_flags_without_record_declines_and_confirm_fail_at_parsing(
     assert "needs both --record-declines and --confirm" in err
     assert "reconcile [-h]" in err  # the reconcile usage, not the root one
     assert not (tmp_path / ".assess" / PROPOSAL_DECLINES).exists()
+
+
+def test_a_tool_marker_alone_produces_no_declined_condition(tmp_path: Path) -> None:
+    """#828: `.no-scc` is a tool decline; it never sets a condition `declined`."""
+    from lib.owner_exclusions import owner_exclusions_block
+    from lib.scoring.level_tally import default_model, level_result
+
+    _write_marker(_assess(tmp_path), "scc", {"declined_by": "maintainer-a", "declined_at": "2026-11-20"})
+    block = owner_exclusions_block(tmp_path)
+    assert "declines" not in block
+    result = level_result(default_model(), {"owner_exclusions": block, "layer_grades": {"instruction_file_present": True}})
+    assert "declined" not in result and all(c["state"] != "declined" for c in result["conditions"])

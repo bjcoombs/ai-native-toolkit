@@ -5,8 +5,8 @@
 id = "core.owner_exclusions"
 kind = "collector"
 title = "Owner exclusions"
-summary = "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why."
-issues = [910]
+summary = "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why. It also carries the agent-level opt-out in .assess/agents-declined.json, which reads the conditions it covers as declined."
+issues = [910, 828]
 callable = "lib.run.core_scans:owner_exclusions"
 publishes = ["owner_exclusions"]
 reads = ["repo_root"]
@@ -21,7 +21,7 @@ headless_variants = [
 shapes = [
   { path = "owner_exclusions", type = "lib.scoring.level_result_types:OwnerExclusionsBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "owner_exclusions.exclusions.id" = "token"
   "owner_exclusions.exclusions.kind" = "token"
@@ -33,3 +33,9 @@ revision = 1
   "owner_exclusions.skipped.id" = "drop"
   "owner_exclusions.skipped.problem" = "token"
   "owner_exclusions.disclosures" = "drop"
+  "owner_exclusions.declines.source" = "token"
+  "owner_exclusions.declines.conditions" = "token"
+  "owner_exclusions.declines.declined_by" = "drop"
+  "owner_exclusions.declines.declined_at" = "token"
+  "owner_exclusions.declines.version" = "token"
+  "owner_exclusions.declines.reason" = "drop"

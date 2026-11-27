@@ -280,7 +280,8 @@ def test_the_hazard_marker_survives_counts_only() -> None:
 
     model = parse_levels(_model({"criteria": _crit(), "truth": ["docs"], "polarity": "hazard"}))
     level = lt.level_result(model, {"doc_staleness": {"summary": {"stale_pct": 0}}})
-    assert counts_only({"level": level})["level"] == level
+    assert level["hazards"] == [{"id": "r.1", "fix": ""}]  # a caller's own row has no manifest fix
+    assert counts_only({"level": level})["level"] == {**level, "hazards": [{"id": "r.1"}]}  # the fix is manifest text
 
 
 @pytest.mark.parametrize(("data", "missing", "reason"), [

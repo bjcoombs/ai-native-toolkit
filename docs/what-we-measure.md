@@ -831,13 +831,13 @@ The SECURITY file in the owner's public .github repository, which GitHub shows o
 
 It reads the checks a repository's owners have committed as not applying to them, so the Step holds a team only to practices it has not deliberately set aside, and each exclusion stays visible and reviewable in the repository.
 
-The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why.
+The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why. It also carries the agent-level opt-out in .assess/agents-declined.json, which reads the conditions it covers as declined.
 
 - Collector: `core.owner_exclusions`, reading `repo_root`.
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
 - Headless variant reads: `repo_root`.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `owner_exclusions.disclosures` drop, `owner_exclusions.exclusions.excluded_at` token, `owner_exclusions.exclusions.excluded_by` drop, `owner_exclusions.exclusions.id` token, `owner_exclusions.exclusions.kind` token, `owner_exclusions.exclusions.reason` drop, `owner_exclusions.exclusions.source` token, `owner_exclusions.exclusions.version` token, `owner_exclusions.skipped.id` drop, `owner_exclusions.skipped.problem` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `owner_exclusions.declines.conditions` token, `owner_exclusions.declines.declined_at` token, `owner_exclusions.declines.declined_by` drop, `owner_exclusions.declines.reason` drop, `owner_exclusions.declines.source` token, `owner_exclusions.declines.version` token, `owner_exclusions.disclosures` drop, `owner_exclusions.exclusions.excluded_at` token, `owner_exclusions.exclusions.excluded_by` drop, `owner_exclusions.exclusions.id` token, `owner_exclusions.exclusions.kind` token, `owner_exclusions.exclusions.reason` drop, `owner_exclusions.exclusions.source` token, `owner_exclusions.exclusions.version` token, `owner_exclusions.skipped.id` drop, `owner_exclusions.skipped.problem` token.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
@@ -1218,7 +1218,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `gitlab_merged_ci` | GitLab merged CI configuration | `repo_root`, `ghsync_root` | private input | yes |
 | `gitlab_note_facts` | GitLab merge request notes | `merged_sample`, `fleet_config` | private input | yes |
 | `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope` | `guardrails` | no |
-| `headline` | Deterministic headline | `level`, `since_last_run`, `maturity_model`, `unit_rollup`, `measured_commit`, `assess_dir` | `headline` | no |
+| `headline` | Deterministic headline | `level`, `since_last_run`, `maturity_model`, `unit_rollup`, `measured_commit`, `assess_dir`, `owner_exclusions` | `headline` | no |
 | `history_window` | Git history window | `current` | private input | no |
 | `hot_test_index` | Repository test index | `repo_root`, `current` | private input | no |
 | `instruction_claims` | Instruction claims | `repo_root`, `instruction_files` | `instruction_claims` | no |

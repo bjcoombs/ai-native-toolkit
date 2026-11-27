@@ -290,6 +290,7 @@ FLEET_DATA_KEPT: Final = frozenset({
     "repos.next_step.blockers.kind", "repos.next_step.blockers.gate", "repos.next_step.blockers.condition",
     "repos.next_step.blockers.state", "repos.next_step.blockers.reason",
     "repos.next_step.blockers.disposition", "repos.next_step.blockers.exclusion_kind",
+    "repos.next_step.blockers.polarity",  # #828: a gate held by a met hazard
     "repos.exclusions.id", "views.units.step.next_step.gates.gate", "views.units.step.next_step.gates.row",
     # #1128: a criterion's why, the check manifest's own text (lib.fleet.fleet_why.criterion_why)
     "repos.rows.why", "opportunities.biggest_lift.why",

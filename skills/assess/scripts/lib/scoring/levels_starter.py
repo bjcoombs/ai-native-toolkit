@@ -58,7 +58,7 @@ FIELD_GUIDE = """\
 #     - op: eq, ne, lt, lte, gt, gte, in or not_in.
 #     - value: a number, true or false, a string, or a list for in and not_in.
 #   - requires (optional): ids such as "layer-5-ci.1" that must be met too.
-#   - polarity = "hazard" (optional): the level marks a harm, not a practice.
+#   - polarity = "hazard" (optional): the level marks a harm, not a practice; blocks names a gate it holds.
 # - [[steps]]: the autonomy Steps, numbered 1, 2, 3. Step 1 has no gates. Each
 #   later Step keeps the gates below it and adds one. A gate is
 #   { id, row, level }: it holds when that row reaches that level.

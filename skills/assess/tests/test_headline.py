@@ -501,3 +501,20 @@ def test_a_condition_two_gates_share_is_one_change():
         next_step={"step": 2, "blockers": [{"kind": "gate", "gate": "a", "condition": "g.1", "state": "unmet"},
                                            {"kind": "gate", "gate": "b", "condition": "g.1", "state": "unmet"}]})
     assert lone_condition(level, steps) == ("g.1", "a")
+
+
+def test_an_agent_decline_marker_shows_a_declined_badge_and_holds_the_step(tmp_path: Path) -> None:
+    """#828: the agent-level marker reads DECLINED with its owner and reason; the condition is
+    not met and Step 2 stays unpassed though an instruction file is present."""
+    from lib.owner_exclusions import owner_exclusions_block
+
+    (tmp_path / ".assess").mkdir()
+    (tmp_path / ".assess" / "agents-declined.json").write_text(json.dumps(
+        {"declined_by": "maintainer-a", "declined_at": "2026-11-20", "reason": "No agent contributions."}),
+        encoding="utf-8")
+    ctx = {"layer_grades": {"instruction_file_present": True}, "owner_exclusions": owner_exclusions_block(tmp_path)}
+    level = lt.run_context_level(ctx)
+    cond = next(c for c in level["conditions"] if c["id"] == "layer-0-instructions.1")
+    assert cond["state"] == "declined" and level["step"] == 1
+    h = headline(level, default_model(), ctx["owner_exclusions"]["declines"])
+    assert "DECLINED" in h["lines"][0] and "maintainer-a" in h["lines"][0] and "No agent contributions." in h["lines"][0]

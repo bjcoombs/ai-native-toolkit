@@ -39,8 +39,12 @@ Layer to truth, the documented mapping of the alias:
 - ``polarity`` on a level: ``"positive"`` (the default) or ``"hazard"``. A
   hazard is a harm, never a practice, so ``lib.scoring.level_tally`` never counts it
   toward the tally (it is listed when met) and marks its condition
-  ``polarity: "hazard"``. It changes no row level, and no rule lets a hazard
-  block a Step yet (#828).
+  ``polarity: "hazard"``. It changes no row level. A hazard may name ``blocks``,
+  the id of the Step gate it undermines (#828): while the hazard is met that gate
+  does not hold, whatever its own conditions read, and the tally does not move. A
+  ``blocks`` that names no gate of the model's Steps, or ``blocks`` on a positive
+  level, fails the load (``apply_hazard``, ``check_hazard_gates``). Its fix path
+  is the check manifest's ``fix`` for the condition, as its why is.
 - ``guarded_by`` on a level: one condition id (``<row id>.<level>``), the guard
   that tests this condition's own check. Absent (the default) means no guard.
   It is one hop: ``lib.scoring.level_tally`` caps the condition's grade at
@@ -90,8 +94,9 @@ calls them, and the module docstring is the reference.
   row id and the level of the first condition without it. There is no format-marker field.
 - **`polarity`** on a level: `"positive"` (default) or `"hazard"`. A hazard is parsed as
   `polarity: "hazard"`; `level_tally` never counts it (it is listed when met) and marks its
-  condition with `polarity: "hazard"`. No row level or Step reads it (Step-blocking hazards
-  are #828).
+  condition with `polarity: "hazard"`. No row level reads it. A hazard may name `blocks`, a Step gate
+  id: while the hazard is met that gate does not hold (#828). `blocks` naming no gate, or
+  `blocks` on a positive level, fails the load. Its fix path is the manifest condition's `fix`.
 - **`guarded_by`** on a level: one condition id; default absent (no guard). One hop:
   `level_tally` caps the condition's grade at `measured` while the guard is not `met`, which
   never changes what is counted. An unknown id, the condition itself or a hazard fails the
@@ -116,7 +121,7 @@ Tests: `tests/test_levels_fields.py`; `predicted` and `review` in `tests/test_le
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any, Mapping, TypedDict
+from typing import Any, Literal, Mapping, Sequence, TypedDict
 
 TRUTH_TAGS: tuple[str, ...] = ("behaviour", "contracts", "docs", "structure", "agent_context",
                                "agent_runtime", "governance", "supply_chain")
@@ -272,3 +277,37 @@ def apply_review(level: ReviewFields, entry: Mapping[str, Any], where: str) -> N
         raise LevelsError(f"{where}: 'review' must be a TOML local date, YYYY-MM-DD unquoted (got {review!r})")
     level["predicted"] = str(predicted)
     level["review"] = review.isoformat()
+
+
+class HazardFields(TypedDict, total=False):
+    """A hazard condition's fields (#843, #828); ``lib.scoring.levels.Level`` extends it."""
+
+    polarity: Literal["hazard"]  # absent: positive, the default
+    blocks: str  # the id of the Step gate the hazard undermines; absent: it blocks no gate
+
+
+def apply_hazard(level: HazardFields, entry: Mapping[str, Any], where: str) -> None:
+    """Copy ``polarity`` and ``blocks`` from a raw level onto ``level``, validated: ``blocks``
+    is one non-empty gate id and belongs to a hazard only."""
+    if "polarity" in entry and parse_polarity(entry["polarity"], where) == HAZARD:
+        level["polarity"] = "hazard"
+    if "blocks" not in entry:
+        return
+    gate = entry["blocks"]
+    if "polarity" not in level:
+        raise LevelsError(f"{where}: 'blocks' belongs to a hazard; set polarity = \"hazard\"")
+    if not isinstance(gate, str) or not gate.strip():
+        raise LevelsError(f"{where}: 'blocks' must be one Step gate id (got {gate!r})")
+    level["blocks"] = gate
+
+
+def check_hazard_gates(rows: Sequence[Mapping[str, Any]], steps: Sequence[Mapping[str, Any]] | None) -> None:
+    """Every hazard's ``blocks`` names a gate of the model's ``steps``; nothing to check without Steps."""
+    if steps is None:
+        return
+    gates = {g["id"] for step in steps for g in step["gates"]}
+    for row in rows:
+        for level in row["levels"]:
+            if "blocks" in level and level["blocks"] not in gates:
+                raise LevelsError(f"row {row['id']!r} level {level['level']}: 'blocks' names no Step gate "
+                                  f"({level['blocks']!r}; one of {', '.join(sorted(gates)) or 'none'})")
