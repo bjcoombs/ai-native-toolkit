@@ -477,3 +477,27 @@ aggregation = "min"
     assert again is not None
     assert any(c["row"] == "lint" and c["level"] for r in again["repos"] for c in r["rows"])
     assert not [ln for ln in fr.recount(stored, again, added, DATES[0], "fleet-data-1")["lines"] if ln["row"] == "lint"]
+
+
+def _legacy(version: str, text: str = LEVELS) -> MaturityModel:
+    """A model written before #843: no ``truth`` anywhere, with a ``layer-<n>-...`` row."""
+    stripped = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("truth = "))
+    return _model(stripped.replace('version = "fleet-data-1"', f'version = "{version}"')
+                  .replace('id = "docs"\n', 'id = "layer-0-docs"\n')
+                  .replace('row = "docs"', 'row = "layer-0-docs"'))
+
+
+def test_a_2x_entry_with_no_truth_is_recounted_through_the_legacy_alias(tmp_path: Path) -> None:
+    # #867: an entry kept by a 2.x toolkit replays in a later major; the plugin major no longer refuses it
+    old = _legacy("legacy-1")
+    new = _legacy("legacy-2", LEVELS.replace('value = ["A", "B"]', 'value = ["A"]'))
+    org = tmp_path / "org"
+    _entry(org, DATES[0], BASE, old, plugin_version="2.9.0")
+    runs = earlier_runs(org, _stamp(NOW, new, plugin_version="4.1.0"), frozenset(BASE), model=new, key=KEY)
+    assert [(r.run_id, r.rescored_from) for r in runs] == [(DATES[0], "legacy-1")]
+    (run,) = runs
+    assert run.stored is not None
+    tags = {cell["tag"] for repo in run.data["repos"] for cell in repo.get("tags") or []}
+    assert "agent_context" in tags  # layer 0 through the alias, though no condition carries truth
+    lines = fr.recount(run.stored, run.data, new, DATES[0], "legacy-1")["lines"]
+    assert [(ln["repo"], ln["row"], ln["direction"]) for ln in lines] == [("grp/sub/a", "layer-0-docs", fr.DOWN)]

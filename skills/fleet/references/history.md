@@ -55,13 +55,24 @@ malformed (a `run.json` missing a key the comparison reads).
 **Not comparable.** Runs that differ in maturity-model version, window, counts-only
 mode, scan selection, path hashing or `--fleet-config` (`fleet_config_sha256`; a run
 with no config and a run from before the key read alike) or `--platform` (`platform`; a run
-from before #714 reads as without it), in the plugin's major version (the
-`/assess` stats-diff rule), or in file versions (a run from before `run.json`)
+from before #714 reads as without it), or in file versions (a run from before `run.json`)
 give `comparable: false` with every reason in `reasons` and no deltas. So do runs under
 one maturity-model version whose rules differ (`rules_sha256`, #952), for example two
 `--levels` files with the same `version`. A run from before #952 recorded no rules hash: it
 compares by maturity-model version alone, and `notes` says so. A change in a collector's
-`revision` is a note, never a refusal.
+`revision` is a note, never a refusal. The plugin version is not a reason (#867): the
+stamped versions above decide, so two runs either side of a major release compare when
+they match.
+
+**Signals whose meaning changed.** Each repository row records its `signals_schema_version`.
+When the two rows differ, the row at the lower version reads each signal whose meaning
+changed between them as absent (`lib/signal_meaning.py` lists them per version), so `repos`
+shows only the other side's value, never a repository move. A maturity model row that moved
+and reads such a signal (the `signal` of its `fleet-data.json` cells in either run) gets cause
+`set` with `absent_signals`; without cell signals for the row, every such signal in its group
+counts, so the move is never read as a repository move. When the versions differ and
+either is one this toolkit does not know, every signal of the earlier run's row reads as
+absent; two rows at one version compare as they are.
 
 **`compare.json`** (keys sorted, no absolute paths):
 

@@ -99,8 +99,9 @@ def _other_major(version: str) -> str:
 
 @pytest.mark.parametrize("earlier_plugin", ["same", "other_major"])
 def test_fleet_compare_against_a_pre_rename_run(earlier_plugin, tmp_path, capsys):
-    """Same plugin major: comparable. Another major (every 1.x run seen from 2.x): refused
-    for the major version alone, never for a malformed stamp or a missing maturity-model key."""
+    """A pre-rename run compares at the same plugin major and at another one (#867: the
+    stamped versions decide, never the plugin major), never refused for a malformed stamp
+    or a missing maturity-model key."""
     root = tmp_path / "estate"
     make_repo(root, "acme/svc1", files={"CLAUDE.md": "a\n"})
     make_repo(root, "acme/svc2")
@@ -116,11 +117,8 @@ def test_fleet_compare_against_a_pre_rename_run(earlier_plugin, tmp_path, capsys
     assert code == 0, capsys.readouterr().err
     comparison = json.loads((out / "compare.json").read_text(encoding="utf-8"))
     assert comparison["earlier"]["levels_version"] == "fixture-1"
-    if earlier_plugin == "same":
-        assert comparison["comparable"] is True and comparison["reasons"] == []
-    else:
-        assert comparison["comparable"] is False
-        assert comparison["reasons"] == [f"major version changed {stamp['plugin_version']}->{PLUGIN_VERSION}"]
+    assert comparison["comparable"] is True and comparison["reasons"] == []
+    assert comparison["earlier"]["plugin_version"] == stamp["plugin_version"]
     assert entry_repos(earlier) == REPOS
 
 

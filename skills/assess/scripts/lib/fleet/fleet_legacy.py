@@ -8,9 +8,8 @@ left at 1, because the history readers reject any other version and a bump
 would drop every earlier dated entry. ``upgrade`` maps the old names to the
 new ones when a stamp or group line is read. A run written before the rename
 then loads, matches as a same-day or baseline history entry, and counts in the
-trend history. ``--compare`` judges it by the usual rules: a run from another
-plugin major (every 1.x run seen from 2.x) is refused for that reason alone,
-never as a malformed stamp.
+trend history. ``--compare`` judges it by the usual rules (the stamped
+versions, never the plugin major, #867), never as a malformed stamp.
 
 The old names below are the only place the fleet readers still accept them.
 
@@ -27,9 +26,8 @@ moves each pre-rename key in a `run.json` stamp or `groups.jsonl` line to its ne
 already under its new name wins, and the input is never mutated. `fleet_view._check_row`,
 `fleet_compare.load_run`, `fleet_history.entry_conflict` and `fleet_trends` (history
 entries) call it. A pre-rename run then loads, matches as a same-day or baseline history
-entry, and counts in the trend history; `--compare` judges it by the usual rules, so a run
-from another plugin major (every 1.x run seen from 2.x) is refused for that reason alone,
-never as a malformed stamp. `stamp_value(stamp, key)` reads a stamp key added later with a
+entry, and counts in the trend history; `--compare` judges it by the usual rules (the stamped
+versions, never the plugin major, #867), never as a malformed stamp. `stamp_value(stamp, key)` reads a stamp key added later with a
 non-null default (`STAMP_DEFAULTS`: `platform` is false before #714, `managed_settings` before #1153;
 `rules_sha256` and `collectors` are None, unrecorded, before #952); every comparability
 check (`fleet_compare.comparability`, `fleet_history.entry_conflict`, `fleet_trends`)

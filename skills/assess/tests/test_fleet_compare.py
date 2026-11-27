@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 import lib.fleet.fleet_compare as fc
+import lib.signal_meaning as sm
 from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow, write_rows
 from lib.fleet.fleet_compare import FleetRun, compare, load_run, signal_changes
 from lib.fleet.fleet_groups import roll_up, write_groups
@@ -148,8 +149,6 @@ def test_an_unchanged_rerun_shows_no_movement():
     ({"counts_only": False}, "counts-only mode changed"),
     ({"scans": ["agent_ops"]}, "scan selection changed"),
     ({"paths_hashed": True}, "path hashing changed"),
-    ({"plugin_version": "2.0.0"}, "major version changed"),
-    ({"plugin_version": "unknown"}, "unparseable plugin version"),
 ])
 def test_runs_that_differ_in_what_was_measured_are_not_comparable(override, reason):
     comparison = compare(_run(EARLIER), _run(LATER, **override))
@@ -157,6 +156,78 @@ def test_runs_that_differ_in_what_was_measured_are_not_comparable(override, reas
     assert any(reason in r for r in comparison["reasons"])
     assert comparison["groups"] == [] and comparison["repos"] == [] and not comparison["movement"]
     assert fc.comparison_lines(comparison)[0].startswith("not comparable: ")
+
+
+def test_runs_across_a_major_bump_under_the_same_model_are_comparable():
+    # #867: the stamped versions decide comparability, not the plugin's major version
+    comparison = compare(_run(EARLIER, plugin_version="2.9.0"), _run(LATER, plugin_version="3.1.0"))
+    assert comparison["comparable"] is True and comparison["reasons"] == []
+    assert _row_move(comparison, "grpa", "teamdocs")["cause"] == fc.CAUSE_LEVEL
+    assert fc.comparability(_stamp(EARLIER, plugin_version="2.9.0"), _stamp(LATER, plugin_version="4.0.0")) == ([], [])
+
+
+def _versioned(repo: str, scans: dict[str, Any], version: int) -> FleetRow:
+    return {**_row(repo, scans), "signals_schema_version": version}
+
+
+def test_a_signal_whose_meaning_changed_reads_as_absent_in_the_earlier_run():
+    # #867: observability.rung changed meaning at signals_schema_version 4 (#823)
+    then = [_versioned("g/a", {"observability": {"rung": 1, "kept": 1}}, 3)]
+    now = [_versioned("g/a", {"observability": {"rung": 3, "kept": 2}}, 4)]
+    (repo,) = compare(_run(then), _run(now))["repos"]
+    assert repo["signals"] == [{"path": "observability.kept", "then": 1, "now": 2},
+                               {"path": "observability.rung", "now": 3}]
+    same = [_versioned("g/a", {"observability": {"rung": 1, "kept": 1}}, 4)]
+    (repo,) = compare(_run(same), _run(now))["repos"]
+    assert {"path": "observability.rung", "then": 1, "now": 3} in repo["signals"]
+
+
+def test_a_level_move_on_a_changed_signal_is_measured_set_movement(monkeypatch):
+    # #867: a row that moved on a signal whose meaning changed did not move on the repository
+    monkeypatch.setattr(sm, "MEANING_CHANGES", {2: ("shared_tooling.available",)})
+    earlier = [_versioned("grpa/svc1", _scans(20, shared=False), 1)]
+    later = [_versioned("grpa/svc1", _scans(20), 2)]
+    comparison = compare(_run(earlier), _run(later))
+    move = _row_move(comparison, "grpa", "teamdocs")
+    assert move["moved"] and move["cause"] == fc.CAUSE_SET
+    assert move["absent_signals"] == ["shared_tooling.available"]
+    (repo,) = comparison["repos"]
+    assert repo["signals"] == [{"path": "shared_tooling.available", "now": True}]
+
+
+def test_a_changed_signal_the_row_does_not_read_leaves_its_level_move(monkeypatch):
+    # with cell signals, only a stale path the row reads makes the move measured-set movement
+    monkeypatch.setattr(sm, "MEANING_CHANGES", {2: ("observability.rung",)})
+    earlier = [_versioned("grpa/svc1", {**_scans(20, shared=False), "observability": {"rung": 1}}, 1)]
+    later = [_versioned("grpa/svc1", {**_scans(20), "observability": {"rung": 3}}, 2)]
+    cells = {"teamdocs": frozenset({"shared_tooling.available"})}
+    then = FleetRun(_stamp(earlier), earlier, roll_up(earlier, LEVELS, {}), cells)
+    now = FleetRun(_stamp(later), later, roll_up(later, LEVELS, {}), cells)
+    move = _row_move(compare(then, now), "grpa", "teamdocs")
+    assert move["moved"] and move["cause"] == fc.CAUSE_LEVEL and "absent_signals" not in move
+    reading = {"teamdocs": frozenset({"observability.rung"})}
+    move = _row_move(compare(FleetRun(then.stamp, earlier, then.groups, reading),
+                             FleetRun(now.stamp, later, now.groups, reading)), "grpa", "teamdocs")
+    assert move["cause"] == fc.CAUSE_SET and move["absent_signals"] == ["observability.rung"]
+
+
+def test_a_schema_version_this_toolkit_does_not_know_reads_every_earlier_signal_as_absent():
+    then = [_versioned("g/a", {"observability": {"kept": 1}}, 1)]
+    now = [_versioned("g/a", {"observability": {"kept": 1}}, 99)]
+    (repo,) = compare(_run(then), _run(now))["repos"]
+    assert repo["signals"] == [{"path": "observability.kept", "now": 1}]
+    unknown = [_versioned("g/a", {"observability": {"kept": 1}}, 99)]
+    rerun = compare(_run(unknown), _run(unknown))
+    assert rerun["repos"] == [] and not rerun["movement"]  # one version, known or not: as they are
+
+
+def test_the_later_run_at_the_lower_schema_version_is_the_side_that_reads_as_absent():
+    then = _versioned("g/a", {"observability": {"rung": 3, "kept": 1}}, 4)
+    now = _versioned("g/a", {"observability": {"rung": 1, "kept": 1}}, 3)
+    assert fc.aligned(then, now) == ({"observability": {"rung": 3, "kept": 1}}, {"observability": {"kept": 1}},
+                                     ["observability.rung"])
+    (repo,) = compare(_run([then]), _run([now]))["repos"]
+    assert repo["signals"] == [{"path": "observability.rung", "then": 3}]
 
 
 def test_hashed_paths_on_both_sides_carry_a_note():
