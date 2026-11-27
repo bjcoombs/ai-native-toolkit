@@ -20,6 +20,10 @@ job replaces. ``merged_view(config)`` takes ``ci_includes.merged_config`` and re
   could not be merged (a flow map beside a block map). ``ci_checks`` reads their triggers as
   unknown, so they read as not measured, never as met.
 
+``rendered_job(config, job)`` renders one job the same way, merged or not, as ``job:`` over its
+effective keys, and says whether every merge was read (#1406: ``lib.backlog_ready_gitlab`` reads
+each visible job whole).
+
 A job that is not merged keeps its own lines and its own reading. So does a job merged only
 by a ``default:`` script key whose own definition is ``unreadable`` (an anchor merge): it reads as
 before #1180, and the ``default:`` lines stay in place for it. ``MergedJob.open`` (an include
@@ -122,6 +126,13 @@ def _render(config: MergedConfig, keys: dict[str, tuple[KeyDef, ...]],
             settled, node = False, nodes[-1]
         out.extend(_emit(node, 2))
     return out, settled
+
+
+def rendered_job(config: MergedConfig, job: MergedJob) -> tuple[str, bool]:
+    """``job`` alone as a GitLab CI entry, ``job:`` over its effective keys at indent 2, and
+    whether every merge was read. ``extends:`` is applied, so it is not among the keys."""
+    body, settled = _render(config, job.keys, [text.splitlines() for text in config.sources])
+    return "\n".join(["job:", *body]), settled
 
 
 def _merged(job: MergedJob) -> bool:
