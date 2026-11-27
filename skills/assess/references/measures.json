@@ -203,7 +203,7 @@
               "eq_signal": null,
               "text": "Every agent job runs with a read-only token: is true",
               "title": "Agent jobs run with least privilege",
-              "fix": "Give each job that runs an agent `permissions:` with no write scope (`contents: read`, or `read-all`), and move writes into a separate job that `needs:` the agent job, or into gh-aw `safe-outputs:`. A job-level `permissions:` replaces the workflow's, so check the agent job's own block.",
+              "fix": "Give each job that runs an agent `permissions:` with no write scope, such as `contents: read` or `read-all`. Move writes into a separate job that `needs:` the agent job, or into gh-aw `safe-outputs:`. A job-level `permissions:` replaces the workflow's, so check the agent job's own block.",
               "why": "An agent acts on whatever text reaches its prompt, an issue body or a pull request included. A read-only token keeps a misled agent from pushing, merging or editing issues itself; a separate job that acts on its output does the writing, where a reviewer can see each write.",
               "why_source": "https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions",
               "input_class": "head_structure",
@@ -2198,7 +2198,7 @@
         },
         {
           "code": "agent_job_scope_unread",
-          "means": "An agent job's permissions could not be read: an expression, a value that is not read, write or none, or an agent sign outside every job. No other agent job settles the reading.",
+          "means": "An agent job's permissions could not be read. They may be an expression or an unknown value, or the agent sign sits outside every job. No other agent job settles the reading.",
           "next_step": "Write the agent job's permissions as a plain map, such as contents: read, so the scan can read it."
         }
       ],

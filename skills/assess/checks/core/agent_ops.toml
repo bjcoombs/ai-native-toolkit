@@ -20,7 +20,7 @@ revision = 4
 unknown_reasons = [
   { code = "agent_workflows_unread", block = "agent_ops", means = "No committed routine or agent workflow was found. But a scheduled or event-triggered workflow calls a reusable workflow from another repository, and its path names an agent.", next_step = "Nothing to change: this reads as not measured until that workflow can be read." },
   { code = "no_agent_jobs", block = "agent_ops", means = "With agent_job_count at 0, no committed workflow job runs an agent, so there is no agent job scope to read.", next_step = "Nothing to change." },
-  { code = "agent_job_scope_unread", block = "agent_ops", means = "An agent job's permissions could not be read: an expression, a value that is not read, write or none, or an agent sign outside every job. No other agent job settles the reading.", next_step = "Write the agent job's permissions as a plain map, such as contents: read, so the scan can read it."},
+  { code = "agent_job_scope_unread", block = "agent_ops", means = "An agent job's permissions could not be read. They may be an expression or an unknown value, or the agent sign sits outside every job. No other agent job settles the reading.", next_step = "Write the agent job's permissions as a plain map, such as contents: read, so the scan can read it." },
 ]
   [entries.privacy]
   "agent_ops.settings.default_mode" = "token"
@@ -121,7 +121,7 @@ title = "Agent jobs run with least privilege"
 key = "agent-least-privilege.1:agent_ops.summary.agent_jobs_least_privilege"
 why = "An agent acts on whatever text reaches its prompt, an issue body or a pull request included. A read-only token keeps a misled agent from pushing, merging or editing issues itself; a separate job that acts on its output does the writing, where a reviewer can see each write."
 why_source = "https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions"
-fix = "Give each job that runs an agent `permissions:` with no write scope (`contents: read`, or `read-all`), and move writes into a separate job that `needs:` the agent job, or into gh-aw `safe-outputs:`. A job-level `permissions:` replaces the workflow's, so check the agent job's own block."
+fix = "Give each job that runs an agent `permissions:` with no write scope, such as `contents: read` or `read-all`. Move writes into a separate job that `needs:` the agent job, or into gh-aw `safe-outputs:`. A job-level `permissions:` replaces the workflow's, so check the agent job's own block."
 
 [[entries]]
 id = "core.cond.agent-job-write-access.1.agent_job_write_access"

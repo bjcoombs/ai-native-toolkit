@@ -1478,7 +1478,7 @@
             "properties": {
               "reason": {
                 "type": "string",
-                "description": "'code: sentence'. The codes name the missing piece: agent_workflows_unread (no committed routine or agent workflow was found. But a scheduled or event-triggered workflow calls a reusable workflow from another repository, and its path names an agent); no_agent_jobs (with agent_job_count at 0, no committed workflow job runs an agent, so there is no agent job scope to read); agent_job_scope_unread (an agent job's permissions could not be read: an expression, a value that is not read, write or none, or an agent sign outside every job. No other agent job settles the reading). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                "description": "'code: sentence'. The codes name the missing piece: agent_workflows_unread (no committed routine or agent workflow was found. But a scheduled or event-triggered workflow calls a reusable workflow from another repository, and its path names an agent); no_agent_jobs (with agent_job_count at 0, no committed workflow job runs an agent, so there is no agent job scope to read); agent_job_scope_unread (an agent job's permissions could not be read. They may be an expression or an unknown value, or the agent sign sits outside every job. No other agent job settles the reading). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [
