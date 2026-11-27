@@ -502,3 +502,63 @@ def test_a_refused_github_read_is_no_platform_auth(tmp_path: Path, gh: FakeGh,
 def test_a_null_repository_is_no_platform_auth(tmp_path: Path, gh: FakeGh) -> None:
     gh.recent = {"data": {"repository": None}}
     assert io.backlog_outcomes(tmp_path) == {"available": False, "reason": "no_platform_auth"}
+
+
+# --- #1587: false unmets left by #1323 -------------------------------------------------
+
+def _own_notes(start: str, n: int) -> list[dict[str, Any]]:
+    """``n`` notes by issue 303's author, a minute apart from ``start`` (an hour, ``HH``)."""
+    author = {"id": 4, "username": "dave-fixture"}
+    return [{"id": 100 + i, "body": "x", "author": author, "system": False,
+             "created_at": f"2026-09-15T{start}:{i % 60:02d}:{i // 60:02d}Z"} for i in range(n)]
+
+
+@pytest.mark.parametrize(("other", "responded", "unread"), [
+    (None, 2, 1),  # a full page: an unread note on page 2 may come before the close
+    ("01", 3, 0),  # a response on the page, before any note page 2 could hold
+])
+def test_gitlab_a_full_notes_page_leaves_a_later_close_unread(
+        tmp_path: Path, glab: FakeGlab, monkeypatch: pytest.MonkeyPatch, other: str | None,
+        responded: int, unread: int) -> None:
+    monkeypatch.setattr(iog, "GITLAB_PAGE", 5)
+    notes = _own_notes("02", 5)
+    if other is not None:
+        notes[0] = {**notes[0], "author": {"id": 5, "username": "erin-fixture"}, "created_at": "2026-09-15T01:30:00Z"}
+    glab.notes["303"] = notes
+    glab.issues[2]["user_notes_count"] = 9
+    block = _block(_repo(tmp_path))
+    assert (block["outcomes"]["responded"], block["outcomes"]["response_unread"]) == (responded, unread)
+
+
+def _self_closed(created: str) -> dict[str, Any]:
+    zed = {"__typename": "User", "login": "zed"}
+    closed = created.replace("T00", "T05")
+    return {"createdAt": created, "closedAt": closed, "author": zed,
+            "timelineItems": {"pageInfo": {"hasNextPage": False},
+                              "nodes": [{"__typename": "ClosedEvent", "createdAt": closed, "actor": zed}]}}
+
+
+def test_issues_closed_by_their_author_are_not_overdue(tmp_path: Path, gh: FakeGh) -> None:
+    gh.nodes().extend(_self_closed(f"2026-10-{d:02d}T00:00:00Z") for d in range(1, 21))
+    block = _block(_repo(tmp_path))
+    assert block["outcomes"]["no_response_count"] == 20  # still counted as unanswered (CHAOSS)
+    assert block["first_response_met"] is True  # nobody owed a response to an issue its author closed
+
+
+def test_an_issue_closed_by_a_bot_with_no_response_stays_overdue(tmp_path: Path, gh: FakeGh) -> None:
+    for d in range(1, 21):
+        node = _self_closed(f"2026-10-{d:02d}T00:00:00Z")
+        node["timelineItems"]["nodes"][0]["actor"] = {"__typename": "Bot", "login": "stale"}
+        gh.nodes().append(node)
+    assert _block(_repo(tmp_path))["first_response_met"] is False
+
+
+def test_gitlab_issues_closed_by_their_author_are_not_overdue(tmp_path: Path, glab: FakeGlab) -> None:
+    for d in range(1, 21):
+        row = copy.deepcopy(glab.issues[3])
+        row.update(iid=400 + d, created_at=f"2026-10-{d:02d}T00:00:00Z", closed_at=f"2026-10-{d:02d}T05:00:00Z",
+                   closed_by=row["author"], user_notes_count=0)
+        glab.issues.append(row)
+    block = _block(_repo(tmp_path))
+    assert block["outcomes"]["no_response_count"] == 20
+    assert block["first_response_met"] is True

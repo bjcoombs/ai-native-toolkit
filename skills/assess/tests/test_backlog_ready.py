@@ -299,6 +299,10 @@ _SCHED = "  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\n"
     "r:\n" + _SCHED + "  script:\n    - curl --data '{\"add_labels\": \"Needs-Triage\"}' $URL\n",
     "r:\n" + _SCHED + "  script:\n    - glab issue note 1 -m '/label ~\"needs triage\"'\n",
     "r:\n" + _SCHED + "  script:\n    - glab issue update 1 \\\n      --label needs-triage\n",
+    # a form-encoded quick action in a curl notes call (#1587)
+    "r:\n" + _SCHED + "  script:\n    - curl -X POST --data 'body=/label ~needs-triage' \"$API/issues/2/notes\"\n",
+    "r:\n" + _SCHED + "  script: [glab issue update 1 -l needs-triage]\n",  # a flow list (#1587)
+    "r:\n" + _SCHED + "  script: [echo, glab issue update 1 -l needs-triage, echo]\n",
     "r:\n  only: [schedules]\n  script: glab issue update 1 -l needs-triage\n",
     "r:\n  only:\n    refs:\n      - schedules\n  script: glab issue update 1 -l needs-triage\n",
     "r:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\" && $REFINE == \"true\"\n"
@@ -399,7 +403,13 @@ def test_an_unreadable_gitlab_template_reads_not_measured(tmp_path: Path, monkey
     real = br.read_config
     monkeypatch.setattr(br, "read_config", lambda root, rel: "" if rel == GL_TEMPLATE else real(root, rel))
     block = scan_backlog_ready(_gitlab(tmp_path))
-    assert (block["required_form_field"], block["required_form_field_reason"]) == (None, "form_unreadable")
+    reason = "gitlab_template_unreadable"
+    assert (block["required_form_field"], block["required_form_field_reason"]) == (None, reason)
+    (step,) = [r["next_step"] for r in cm.reason_codes(cm.core_manifest(), "backlog_ready") if r["code"] == reason]
+    assert "GitLab" in step and "GitHub" not in step  # the advice names the GitLab case (#1587)
+    # an unreadable GitHub form beside it keeps the form code and its GitHub advice
+    block = scan_backlog_ready(_gitlab(tmp_path / "b", {FORM: "body: [\n"}))
+    assert block["required_form_field_reason"] == "form_unreadable"
 
 
 def test_an_anchor_merge_in_a_file_that_adds_no_label_is_settled(tmp_path: Path) -> None:
@@ -419,6 +429,9 @@ def test_a_github_workflow_and_a_gitlab_refiner_both_count(tmp_path: Path) -> No
     ("Label it ~\"refine::ready\" when:\n\n- it has criteria\n", True),
     ("Label it ~refine::ready when:\n\n- it has criteria\n", True),
     ("## ~ready\n\n- has criteria\n", True),
+    ("Label it ~\"ready\" when:\n\n- it has criteria\n", True),  # a quoted one-word reference (#1587)
+    ("Label it ~\"Ready\" when:\n\n- it has criteria\n", False),
+    ("Label it \"ready\" when:\n\n- it has criteria\n", False),  # a quoted word is not a reference
     ("## ~Ready\n\n- has criteria\n", False),  # a one-word label keeps its case
     ("## ~agent-ready-later\n\n- not the label\n", False),
 ])
