@@ -259,3 +259,64 @@ def test_a_scheduled_workflow_that_ignores_test_failures_is_not_counted(tmp_path
 def test_a_junit_step_with_named_arguments_fails_the_build(tmp_path: Path, step: str) -> None:
     text = JENKINS.replace("        sh 'mvn", f"        {step}\n        sh 'mvn")
     assert scan_ci_hazards(_repo(tmp_path, {"Jenkinsfile": text}))["test_failures_ignored"] == 0
+
+
+# --- #1590: what the detectors follow and where the report-step patterns apply ----------
+
+
+@pytest.mark.parametrize(("command", "expected"), [
+    ("mvn -B verify", ["core/pom.xml"]),
+    ("mvn -Dmaven.test.failure.ignore=true verify", [".github/workflows/ci.yml", "core/pom.xml"]),
+])
+def test_a_github_step_named_for_junit_does_not_clear_the_setting(
+        tmp_path: Path, command: str, expected: list[str]) -> None:
+    text = PLAIN.replace("pytest", command) + (
+        "      - name: Upload junit (XML) reports\n        uses: actions/upload-artifact@v4\n")
+    block = scan_ci_hazards(_repo(tmp_path, {".github/workflows/ci.yml": text, "pom.xml": POM, "core/pom.xml": MODULE}))
+    assert (block["test_failures_ignored"], block["ci_hazard_files"]) == (len(expected), expected)
+
+
+@pytest.mark.parametrize(("step", "extra"), [
+    ("./ci/build.sh", {"ci/build.sh": "#!/bin/sh\nset -e\ncd service && mvn -B verify\n"}),
+    ("make verify", {"Makefile": "verify:\n\tmvn -B -f service/pom.xml verify\n"}),
+    ("uses: ./.github/workflows/maven.yml", {".github/workflows/maven.yml": (
+        "on: workflow_call\njobs:\n  maven:\n    runs-on: ubuntu-latest\n    steps:\n"
+        "      - run: mvn -B -f service/pom.xml verify\n")}),
+    ("uses: ./.github/actions/maven", {".github/actions/maven/action.yml": (
+        "runs:\n  using: composite\n  steps:\n    - run: mvn -B -f service/pom.xml verify\n      shell: bash\n")}),
+])
+def test_a_maven_command_inside_a_followed_file_is_followed(tmp_path: Path, step: str, extra: dict[str, str]) -> None:
+    caller = PLAIN.replace("run: pytest", step) if step.startswith("uses:") else PLAIN.replace("pytest", step)
+    files = {".github/workflows/ci.yml": caller, "service/pom.xml": MODULE, **extra}
+    block = scan_ci_hazards(_repo(tmp_path, files))
+    assert (block["test_failures_ignored"], block["ci_hazard_files"]) == (1, ["service/pom.xml"])
+
+
+def test_every_step_that_runs_the_same_makefile_is_kept(tmp_path: Path) -> None:
+    text = PLAIN.replace("      - run: pytest\n", "      - run: make lint\n      - run: make verify\n")
+    makefile = "lint:\n\techo lint\n\nverify:\n\tmvn -Dmaven.test.failure.ignore=true verify\n"
+    block = scan_ci_hazards(_repo(tmp_path, {".github/workflows/ci.yml": text, "Makefile": makefile}))
+    assert (block["test_failures_ignored"], block["ci_hazard_files"]) == (1, ["Makefile"])
+
+
+ACTION = """name: build
+runs:
+  using: composite
+  steps:
+    - run: mvn -Dmaven.test.failure.ignore=true verify
+      shell: bash
+"""
+
+
+def test_a_setting_inside_a_local_composite_action_counts_once_as_the_action(tmp_path: Path) -> None:
+    text = PLAIN.replace("      - run: pytest\n", "      - uses: ./.github/actions/maven\n")
+    block = scan_ci_hazards(_repo(tmp_path, {".github/workflows/ci.yml": text, ".github/actions/maven/action.yml": ACTION}))
+    assert (block["test_failures_ignored"], block["ci_hazard_files"]) == (1, [".github/actions/maven/action.yml"])
+
+
+def test_a_setting_in_a_composite_action_outside_its_run_lines_is_read(tmp_path: Path) -> None:
+    text = PLAIN.replace("      - run: pytest\n", "      - uses: ./.github/actions/maven\n")
+    action = ACTION.replace("mvn -Dmaven.test.failure.ignore=true verify", "mvn -B verify") + (
+        "      env:\n        MAVEN_OPTS: -Dmaven.test.failure.ignore=true\n")
+    block = scan_ci_hazards(_repo(tmp_path, {".github/workflows/ci.yml": text, ".github/actions/maven/action.yml": action}))
+    assert (block["test_failures_ignored"], block["ci_hazard_files"]) == (1, [".github/actions/maven/action.yml"])

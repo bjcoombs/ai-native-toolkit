@@ -42,6 +42,8 @@ def test_no_claude_dir(git_repo) -> None:
         "agent_jobs_least_privilege_reason": "no_agent_jobs",
         "agent_job_write_access": None,
         "agent_job_write_access_reason": "no_agent_jobs",
+        "agent_instruction_rewrite": None,
+        "agent_instruction_rewrite_reason": "no_agent_jobs",
     }
 
 

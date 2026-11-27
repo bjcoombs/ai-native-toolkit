@@ -12,6 +12,9 @@ dry run or excluded task runs nothing (#1046, ``lib.runner_args``). Pure: no fil
 network access, so an offline scan stays offline (pdm script names come in through
 ``runner_args.reads_pdm_scripts``).
 
+A wrapper's valued options (``WRAPPER_FLAGS``) are shared with ``lib.ci.docs_kept_true``
+(#1589), so both read one wrapped step alike.
+
 Full reference: lib/docs/check_command.md.
 """
 from __future__ import annotations
@@ -450,7 +453,10 @@ SETUP_TARGETS = frozenset({
 })
 # Programs a wrapper may run that are known not to be a check (``docker run img echo hi``).
 _PLAIN_PROGRAMS = frozenset({"echo", "true", "printf", "cat", "ls", "env", "sleep", "exit"})
-_WRAPPER_FLAGS = _VALUED_FLAGS | {"--spec"}
+# The valued options of a Python or JS wrapper (``uv run --with x``, ``poetry -P sub``, ``npx -p
+# pkg``, ``hatch --env test``): read here and by ``lib.ci.docs_kept_true`` (#1589), so both read one step alike.
+WRAPPER_FLAGS = _VALUED_FLAGS | {"--spec", "--with-editable", "--with-requirements", "-P",
+                                 "--env-file", "--index", "--env"}
 _DOCKER_RUN_FLAGS = frozenset({
     "-e", "--env", "--env-file", "-v", "--volume", "--mount", "-w", "--workdir", "--name",
     "-u", "--user", "-p", "--publish", "--network", "--net", "--entrypoint", "-l", "--label",
@@ -539,9 +545,9 @@ def _wrapped(words: list[str]) -> list[str] | None:
     None for any other command or no program."""
     head = words[0]
     if head in ("uv", "poetry", "pipx") and _positionals(words[1:])[:1] == ["run"]:
-        return _drop_leading_flags(words[words.index("run", 1) + 1:], _WRAPPER_FLAGS) or None
+        return _drop_leading_flags(words[words.index("run", 1) + 1:], WRAPPER_FLAGS) or None
     if head == "uvx":
-        return _drop_leading_flags(words[1:], _WRAPPER_FLAGS) or None
+        return _drop_leading_flags(words[1:], WRAPPER_FLAGS) or None
     return _outer_wrapper(words) or _exec_program(words) or _plain_wrapper(words)
 
 

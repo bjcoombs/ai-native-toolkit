@@ -299,3 +299,38 @@ def test_a_gitlab_include_with_nothing_found_reads_not_measured(tmp_path: Path) 
 def test_an_install_then_a_diff_is_not_a_regeneration(tmp_path: Path, step: str) -> None:
     root = _repo(tmp_path, {**DOCS, ".github/workflows/ci.yml": _workflow(step, "git diff --exit-code")})
     assert _block(root)["present"] is False
+
+
+@pytest.mark.parametrize("step", [
+    "uv run --locked pytest", "uv run --with pytest-cov pytest", "uv run -- pytest",
+    "poetry -C . run pytest", "pdm run -p . pytest", "hatch -e test run pytest",
+    "hatch --env test run pytest",
+    "uv run --locked python -m pytest",
+])
+def test_doctest_in_config_with_a_pytest_step_behind_wrapper_options_meets(tmp_path: Path, step: str) -> None:
+    root = _repo(tmp_path, {"pyproject.toml": "[tool.pytest.ini_options]\naddopts = \"--doctest-modules\"\n",
+                            ".github/workflows/ci.yml": _workflow(step)})
+    assert _block(root)["doc_tests"] == 1
+    assert _state(root) == "met"
+
+
+def test_a_doc_example_runner_behind_npx_options_counts(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {".github/workflows/ci.yml": _workflow("npx --yes mdtest docs/")})
+    assert _block(root)["doc_tests"] == 1
+
+
+def test_a_wrapper_with_only_a_valued_option_runs_no_pytest(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"pyproject.toml": "[tool.pytest.ini_options]\naddopts = \"--doctest-modules\"\n",
+                            ".github/workflows/ci.yml": _workflow("uv run --with pytest")})
+    assert _block(root)["present"] is False
+
+
+@pytest.mark.parametrize("step", [
+    "uv run --locked pip install -e .", "uv run --locked python -m pip install -e .",
+    "poetry -C . run pip install .", "uv --directory . sync --locked",
+    "uv run --locked pytest", "uv run --with ruff ruff check .",
+])
+def test_an_install_or_check_behind_wrapper_options_then_a_diff_is_not_a_regeneration(
+        tmp_path: Path, step: str) -> None:
+    root = _repo(tmp_path, {**DOCS, ".github/workflows/ci.yml": _workflow(step, "git diff --exit-code")})
+    assert _block(root)["regen_diff"] == 0

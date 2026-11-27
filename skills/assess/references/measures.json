@@ -265,6 +265,52 @@
       ]
     },
     {
+      "id": "agent-rewrites-instructions",
+      "title": "An agent job can rewrite its own instructions",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "agent-rewrites-instructions.1",
+          "truth": [
+            "agent_context",
+            "agent_runtime"
+          ],
+          "polarity": "hazard",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "blocks": "ci_runs_tests",
+          "grade": "measured",
+          "counts": false,
+          "criteria": [
+            {
+              "key": "agent-rewrites-instructions.1:agent_ops.summary.agent_instruction_rewrite",
+              "signal": "agent_ops.summary.agent_instruction_rewrite",
+              "producer": {
+                "scan": "agent_ops",
+                "collector": "core.agent_ops"
+              },
+              "op": "gt",
+              "value": 0,
+              "eq_signal": null,
+              "text": "Agent jobs that can rewrite unowned instruction or workflow files: is above 0",
+              "title": "An agent job can rewrite its own instructions",
+              "fix": "Give AGENTS.md, CLAUDE.md, each agent workflow listed, its gh-aw .lock.yml and the local workflows and actions it runs an owner in CODEOWNERS. Give the CODEOWNERS file an owner too. Require code-owner review on the default branch.",
+              "why": "An agent job that can push files can change AGENTS.md, CLAUDE.md or its own workflow, so the next run follows instructions no reviewer approved. CI then checks changes against rules the agent wrote for itself.",
+              "why_source": "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": false
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "ci-instructions-unchecked",
       "title": "Pull request checks skip the instruction files",
       "scope": "team",
@@ -1946,6 +1992,7 @@
       "conditions": [
         "agent-consistency.1",
         "agent-consistency.2",
+        "agent-rewrites-instructions.1",
         "ci-instructions-unchecked.1",
         "guardrails-stated.1",
         "guardrails-stated.2",
@@ -1957,6 +2004,7 @@
       "listed": [
         "agent-consistency.1",
         "agent-consistency.2",
+        "agent-rewrites-instructions.1",
         "ci-instructions-unchecked.1",
         "guardrails-stated.1",
         "guardrails-stated.2",
@@ -1966,6 +2014,7 @@
         "skill-library.1"
       ],
       "shared": [
+        "agent-rewrites-instructions.1",
         "ci-instructions-unchecked.1",
         "layer-0-instructions.2"
       ],
@@ -1979,6 +2028,7 @@
         "agent-evals.1",
         "agent-job-write-access.1",
         "agent-least-privilege.1",
+        "agent-rewrites-instructions.1",
         "layer-1-liveness.1",
         "layer-1-liveness.2",
         "layer-5-ci.2",
@@ -1997,6 +2047,7 @@
         "agent-evals.1",
         "agent-job-write-access.1",
         "agent-least-privilege.1",
+        "agent-rewrites-instructions.1",
         "layer-5-ci.2"
       ],
       "why": "That an agent can see the system it changes run, and confirm a change there, not only in the code.",
@@ -2074,6 +2125,15 @@
       ],
       "conditions": [
         "layer-0-instructions.2"
+      ]
+    },
+    {
+      "tags": [
+        "agent_context",
+        "agent_runtime"
+      ],
+      "conditions": [
+        "agent-rewrites-instructions.1"
       ]
     },
     {
@@ -2501,7 +2561,7 @@
     {
       "name": "agent_ops",
       "title": "Agent-operations guardrails",
-      "summary": "Committed permission allowlists, hooks, sandbox rules and routines. A routine is a routine file, or a workflow that runs an agent on a schedule or an issue or pull request event. For each workflow job that runs an agent, its effective token scope and whether its writes go through a separate job.",
+      "summary": "Committed permission allowlists, hooks, sandbox rules and routines. A routine is a routine file, or a workflow that runs an agent on a schedule or an issue or pull request event. For each workflow job that runs an agent, its effective token scope and whether its writes go through a separate job. Whether an agent job that can write files can rewrite an instruction file or its own workflow with no CODEOWNERS owner on it.",
       "collector": "core.agent_ops",
       "reads": [
         "repo_root",
@@ -2514,6 +2574,7 @@
       "privacy": {
         "written": true,
         "strings_kept": {
+          "agent_ops.agent_instruction_rewrite_files": "path",
           "agent_ops.agent_jobs.job": "drop",
           "agent_ops.agent_jobs.path": "path",
           "agent_ops.agent_jobs.scope": "token",
@@ -2526,6 +2587,7 @@
           "agent_ops.managed.sources.kind": "token",
           "agent_ops.managed.state": "token",
           "agent_ops.settings.default_mode": "token",
+          "agent_ops.summary.agent_instruction_rewrite_reason": "token",
           "agent_ops.summary.agent_job_write_access_reason": "token",
           "agent_ops.summary.agent_jobs_least_privilege_reason": "token",
           "agent_ops.summary.agent_work_present_reason": "token",
@@ -2537,11 +2599,13 @@
         "rows": [
           "agent-job-write-access",
           "agent-least-privilege",
+          "agent-rewrites-instructions",
           "layer-8-agent-ops"
         ],
         "conditions": [
           "agent-job-write-access.1:agent_ops.summary.agent_job_write_access",
           "agent-least-privilege.1:agent_ops.summary.agent_jobs_least_privilege",
+          "agent-rewrites-instructions.1:agent_ops.summary.agent_instruction_rewrite",
           "layer-8-agent-ops.1:agent_ops.summary.permissions_encoded",
           "layer-8-agent-ops.2:agent_ops.summary.hooks_present",
           "layer-8-agent-ops.2:agent_ops.summary.agent_work_present"
@@ -2566,6 +2630,11 @@
         }
       ],
       "evidence": [
+        {
+          "signal": "agent_ops.summary.agent_instruction_rewrite",
+          "input_class": "head_structure",
+          "grade": "measured"
+        },
         {
           "signal": "agent_ops.summary.agent_job_write_access",
           "input_class": "head_structure",
@@ -2819,8 +2888,13 @@
       "unknown_reasons": [
         {
           "code": "form_unreadable",
-          "means": "No issue form read has a required field, and a form or GitLab template could not be read. Causes are a tab indent, an unclosed flow collection, no top-level body list, or a file over the size limit.",
+          "means": "No issue form read has a required field, and a GitHub issue form could not be read. Causes are a tab indent, an unclosed flow collection, no top-level body list, or a file over the size limit.",
           "next_step": "Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue."
+        },
+        {
+          "code": "gitlab_template_unreadable",
+          "means": "No form or template read meets the bar. A GitLab issue template could not be read: it is too large or could not be opened.",
+          "next_step": "Nothing to change if the template has the six sections; a GitLab issue template under the size limit lets the scan read its headings."
         },
         {
           "code": "gitlab_ci_unreadable",
@@ -7131,6 +7205,15 @@
       "null_means": "no_manifests: no dependency manifest is read (pinning.manifests_total 0), so there is nothing to lock"
     },
     {
+      "path": "agent_ops.summary.agent_instruction_rewrite",
+      "title": "Agent jobs that can rewrite unowned instruction or workflow files",
+      "type": "number",
+      "collector": "core.agent_ops",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "no_agent_jobs: no committed job runs an agent. agent_workflows_unread: none found, but a job calls an agent-named workflow in another repository. agent_job_scope_unread: none found, but an agent job's permissions could not be read"
+    },
+    {
       "path": "agent_ops.summary.agent_job_write_access",
       "title": "Agent jobs with a write scope and no separate writer job",
       "type": "number",
@@ -7227,7 +7310,7 @@
       "collector": "core.backlog_ready",
       "input_class": "config_text",
       "grade": "config_only",
-      "null_means": "form_unreadable: a form or GitLab template could not be read, none read has a required field and no template read has the six sections"
+      "null_means": "form_unreadable: an issue form could not be read, none read has a required field and no template read has the six sections; gitlab_template_unreadable: the same, with a GitLab template unread instead"
     },
     {
       "path": "backlog_ready.stale_job_safe",

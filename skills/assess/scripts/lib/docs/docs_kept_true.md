@@ -22,3 +22,11 @@ The module docstring has the rules and the block shape. Known limits:
 - A doc-file doctest run (`--doctest-glob`, `--markdown-docs`, Sphinx `doctest`) exempts the
   docs it runs from churn staleness. It proves their examples run, not that the prose around
   them still describes the code.
+- A wrapper (`uv run`, `poetry run`, `pdm run`, `hatch run`, `uvx`, `pipx run`, `npx`, `bunx`,
+  `python -m`) is read through to the program it runs, its own options skipped (#1589). The
+  valued options come from `lib.ci.check_command.WRAPPER_FLAGS`, one set for every wrapper,
+  so both readers read a step alike. A valued option missing from it leaves its value read as
+  the program (`python -W error -m pytest` is not credited). A listed option that is a plain
+  flag for another wrapper eats the next word: `-s` and `-P` are no-value flags for `python`
+  (`-P` from 3.11), so `python -s gen.py` reads no program. Neither gives a false met: a
+  regeneration is read from the first word, not the program.
