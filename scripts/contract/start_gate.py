@@ -25,6 +25,13 @@ The contract directory is resolved by `contract_location.resolve_contract_dir`,
 shared with every other contract script: `--contract-dir`, then the
 `ACCEPTANCE_CONTRACT_DIR` environment variable, then `.claude/contracts`
 relative to the run cwd - so the gate is testable against a tmp dir.
+
+A contract drafted from the ready queue (`draft.py`, issue #1328) is approved
+by merging its pull request. When the run's `<run-id>.contract.md` carries the
+draft marker, freeze evidence opens the door only once `draft_approval.py`
+finds the draft on the default branch (`origin/HEAD`, or `--approved-ref`),
+unchanged since the merge, and frozen at that committed hash. Otherwise the
+gate refuses and names the reason. A hand-written contract skips this check.
 """
 from __future__ import annotations
 
@@ -36,6 +43,7 @@ from typing import List, Optional
 
 # Flat sibling modules (no package): put this directory on the path first.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import draft_approval  # noqa: E402
 import validate_completion as vc  # noqa: E402
 from contract_location import HELP_DEFAULT, resolve_contract_dir  # noqa: E402
 
@@ -57,12 +65,22 @@ def _load_record(contract_dir: Path, run_id: str) -> Optional[dict]:
     return record if isinstance(record, dict) else None
 
 
-def start_gate(run_id: str, contract_dir: Path) -> int:
+def start_gate(run_id: str, contract_dir: Path, approved_ref: Optional[str] = None) -> int:
     """Return 0 if the run may start, non-zero otherwise. Warnings go to stderr."""
     record = _load_record(contract_dir, run_id)
 
     if record is not None:
         freeze_valid, freeze_reason = vc.freeze_evidence_valid(record)
+        unapproved = (
+            draft_approval.refusal(contract_dir, run_id, record, approved_ref) if freeze_valid else None
+        )
+        if unapproved:
+            print(
+                "start gate: REFUSED - run %r cannot start: its contract is an unapproved "
+                "draft: %s." % (run_id, unapproved),
+                file=sys.stderr,
+            )
+            return 1
         if freeze_valid:
             print("start gate: OK - freeze evidence present for run %r." % run_id)
             return 0
@@ -127,8 +145,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         default=None,
         help="directory holding <run-id>.completion.json (%s)" % HELP_DEFAULT,
     )
+    parser.add_argument(
+        "--approved-ref",
+        default=None,
+        help="git ref a drafted contract must be on to count as approved "
+        "(default: origin/HEAD, the default branch)",
+    )
     args = parser.parse_args(argv)
-    return start_gate(args.run_id, resolve_contract_dir(args.contract_dir))
+    return start_gate(args.run_id, resolve_contract_dir(args.contract_dir), args.approved_ref)
 
 
 if __name__ == "__main__":

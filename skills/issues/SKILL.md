@@ -284,6 +284,10 @@ including for a heterogeneous issue queue:
   queue's deliverable and freeze it (`${CLAUDE_PLUGIN_ROOT}/scripts/contract/freeze.py`), or record a
   signed skip first.
 
+When the refiner drafts the contract (`docs/refine.md`, "Contract draft"),
+merging its pull request approves it; the gate refuses a drafted contract that
+is not on the default branch, or that was frozen at a different hash.
+
 The exit-side gates are owned by the marathon skill, not this command. Marathon
 routes every verifier spawn through `${CLAUDE_PLUGIN_ROOT}/scripts/contract/spawn_verifier.py` (the
 custody chokepoint) and blocks run-complete on `${CLAUDE_PLUGIN_ROOT}/scripts/contract/complete_gate.py

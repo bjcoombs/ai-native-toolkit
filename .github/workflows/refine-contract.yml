@@ -1,0 +1,30 @@
+name: Refine contract draft
+
+# This repository's caller for reusable-refine-contract.yml (issue #1328):
+# after each refine sweep, draft the next run's acceptance contract from the
+# ready queue and open or refresh its pull request. Settings:
+#   REFINE_ENABLED           kill switch shared with the other refiner workflows
+#   REFINE_MODE              `live` pushes; anything else is a dry-run
+#   REFINE_CONTRACT_RUN_ID   the run id the draft is for; unset skips the job
+#   REFINE_CONTRACT_TOKEN    secret: a token whose pull requests start checks
+on:
+  workflow_run:
+    workflows: ["Refine sweep"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+  pull-requests: write
+
+jobs:
+  contract:
+    if: vars.REFINE_ENABLED == 'true' && vars.REFINE_CONTRACT_RUN_ID != ''
+    uses: ./.github/workflows/reusable-refine-contract.yml
+    with:
+      enabled: ${{ vars.REFINE_ENABLED == 'true' }}
+      mode: ${{ vars.REFINE_MODE || 'dry-run' }}
+      run_id: ${{ vars.REFINE_CONTRACT_RUN_ID }}
+    secrets:
+      contract_token: ${{ secrets.REFINE_CONTRACT_TOKEN }}

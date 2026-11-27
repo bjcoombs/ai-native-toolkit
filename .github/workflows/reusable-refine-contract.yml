@@ -1,0 +1,190 @@
+name: Refine contract draft (reusable)
+
+# Drafts the next marathon run's acceptance contract from the ready queue
+# (issue #1328). No model runs. Adopt it with one `uses:` line;
+# refine-contract.yml is the reference caller, run after each refine sweep.
+#
+#   1. skills/refine/scripts/refine_queue.py reads the ready queue: each ready
+#      issue's Success Criteria items.
+#   2. scripts/contract/draft.py writes <run_id>.contract.md and its kill test
+#      under .claude/contracts/ on the branch refine/contract-draft-<run_id>,
+#      then runs the kill test (`draft.py check`). A failed kill test stops the
+#      job before anything is pushed.
+#   3. In live mode, a changed draft is pushed and one pull request is opened,
+#      or the open one gets a comment naming the criteria added and removed.
+#
+# Merging that pull request approves the draft: scripts/contract/start_gate.py
+# refuses a drafted contract that is not on the default branch. Freezing stays
+# a person's step (freeze.py), never this job's.
+#
+# Permissions: grant `contents: write`, `pull-requests: write` and
+# `issues: read` in the caller. A pull request opened with GITHUB_TOKEN starts
+# no workflows, so required checks never report on it; pass `contract_token`
+# (contents and pull-requests write) to have checks run.
+on:
+  workflow_call:
+    inputs:
+      enabled:
+        description: Kill switch. Pass `vars.REFINE_ENABLED == 'true'`; false skips the job.
+        type: boolean
+        default: false
+      mode:
+        description: "`live` pushes and opens the pull request; any other value, including empty, is a dry-run."
+        type: string
+        default: dry-run
+      run_id:
+        description: The run the draft is for, as the marathon's start gate names it (for example issues-agent-ready). Empty skips the job.
+        type: string
+        default: ''
+    secrets:
+      contract_token:
+        description: A token that can push and open pull requests, so checks run on the draft pull request. GITHUB_TOKEN is used without it.
+        required: false
+
+jobs:
+  contract:
+    if: inputs.enabled && inputs.run_id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      issues: read
+      pull-requests: write
+    concurrency:
+      group: refine-contract-${{ github.repository }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.contract_token || github.token }}
+      GH_REPO: ${{ github.repository }}
+      REFINE_MODE: ${{ inputs.mode }}
+      RUN_ID: ${{ inputs.run_id }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      DRAFT: .refine-toolkit/scripts/contract/draft.py
+    steps:
+      - name: Check out the repository (default branch)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Pin the refinement scripts to this workflow's commit
+        id: toolkit
+        env:
+          TOOLKIT_REPO: ${{ job.workflow_repository }}
+          TOOLKIT_SHA: ${{ job.workflow_sha }}
+        run: |
+          if [ "$TOOLKIT_REPO" != "bjcoombs/ai-native-toolkit" ] && [ "$TOOLKIT_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::The refinement scripts come only from bjcoombs/ai-native-toolkit or this repository, not '${TOOLKIT_REPO}'."
+            exit 1
+          fi
+          if [[ ! "$TOOLKIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The refinement scripts are pinned only to a full commit sha, not '${TOOLKIT_SHA}'."
+            exit 1
+          fi
+
+      - name: Check out the refinement and contract scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .refine-toolkit
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            skills/refine/
+            scripts/contract/
+            docs/contributing/definition-of-ready.md
+
+      - name: Check the run id
+        run: |
+          if [[ ! "$RUN_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || [[ "$RUN_ID" == *..* ]]; then
+            echo "::error::run_id must be letters, digits, '.', '_' or '-', not '${RUN_ID}'."
+            exit 1
+          fi
+
+      - name: Write the ready queue
+        timeout-minutes: 5
+        run: |
+          mkdir -p .refine
+          python3 .refine-toolkit/skills/refine/scripts/refine_queue.py --repo "$GH_REPO" --out .refine/queue.json
+
+      - name: Draft the contract and run its kill test
+        id: draft
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          branch="refine/contract-draft-${RUN_ID}"
+          # Credentials reach git through this step's environment only, never .git/config.
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
+          # The open draft branch is the baseline the change summary compares against.
+          if git fetch -q --depth=1 origin "+refs/heads/${branch}:refs/remotes/origin/${branch}" 2>/dev/null; then
+            git checkout -q -B "$branch" "origin/${branch}"
+          else
+            git checkout -q -B "$branch"
+          fi
+          rc=0
+          python3 "$DRAFT" write --queue .refine/queue.json --run-id "$RUN_ID" \
+            --contract-dir .claude/contracts --summary .refine/contract-changes.md || rc=$?
+          if [ "$rc" -eq 3 ]; then
+            echo "The ready queue is empty: nothing to draft." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          [ "$rc" -eq 0 ] || exit "$rc"
+          python3 "$DRAFT" check --run-id "$RUN_ID" --contract-dir .claude/contracts
+          cat .refine/contract-changes.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$(git status --porcelain -- .claude/contracts)" ]; then
+            echo "The draft on ${branch} already matches the ready queue."
+            exit 0
+          fi
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+
+      - name: Push the draft and open or refresh its pull request
+        if: steps.draft.outputs.branch != '' && inputs.mode == 'live'
+        timeout-minutes: 5
+        env:
+          BRANCH: ${{ steps.draft.outputs.branch }}
+        run: |
+          set -euo pipefail
+          # Credentials reach git through this step's environment only, never .git/config.
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
+          git add .claude/contracts
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "chore: Draft the acceptance contract for ${RUN_ID}"
+          git push -q origin "HEAD:refs/heads/${BRANCH}"
+          pr=$(gh pr list --head "$BRANCH" --state open --json number | jq -r '.[0].number // empty')
+          {
+            echo "Drafted from the Success Criteria of the ready issues queued for run \`${RUN_ID}\`."
+            echo "Merging this pull request approves the draft; freezing it (\`scripts/contract/freeze.py\`) stays a separate step."
+            echo
+            cat .refine/contract-changes.md
+          } > .refine/pr-body.md
+          if [ -n "$pr" ]; then
+            gh pr comment "$pr" --body-file .refine/contract-changes.md
+          else
+            gh pr create --base "$DEFAULT_BRANCH" --head "$BRANCH" \
+              --title "chore: Draft the acceptance contract for ${RUN_ID}" --body-file .refine/pr-body.md
+          fi
+
+      - name: Report the dry-run
+        if: steps.draft.outputs.branch != '' && inputs.mode != 'live'
+        env:
+          BRANCH: ${{ steps.draft.outputs.branch }}
+        run: |
+          echo "Dry-run: live mode would push ${BRANCH} and open or refresh its pull request." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the queue and the change summary
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: refine-contract-${{ github.run_attempt }}
+          path: .refine/
+          include-hidden-files: true
+          if-no-files-found: ignore

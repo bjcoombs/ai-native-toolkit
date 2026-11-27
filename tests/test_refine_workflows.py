@@ -526,3 +526,55 @@ def test_dispatched_issue_number_is_passed_as_a_number() -> None:
     job starts (issue #1478)."""
     passed = _load("refine-dedupe.yml")["jobs"]["dedupe"]["with"]["issue_number"]
     assert passed == "${{ github.event.issue.number || fromJSON(inputs.issue_number) }}"
+
+
+# ── the contract draft (#1328): its own caller, so the sweep keeps read-only contents ──
+
+CONTRACT = "reusable-refine-contract.yml"
+SPARSE_CONTRACT = SPARSE_READS | {"scripts/contract/"}
+
+
+def test_contract_caller_runs_after_the_sweep_with_the_kill_switch() -> None:
+    doc = _load("refine-contract.yml")
+    assert doc["on"]["workflow_run"] == {"workflows": ["Refine sweep"], "types": ["completed"]}
+    assert doc["permissions"] == {"contents": "write", "issues": "read", "pull-requests": "write"}
+    (job,) = doc["jobs"].values()
+    assert job["uses"] == f"./.github/workflows/{CONTRACT}"
+    assert "vars.REFINE_ENABLED == 'true'" in job["if"] and "vars.REFINE_CONTRACT_RUN_ID" in job["if"]
+    assert job["with"]["mode"] == "${{ vars.REFINE_MODE || 'dry-run' }}"
+    call = _load(CONTRACT)["on"]["workflow_call"]
+    assert set(job["with"]) <= set(call["inputs"]) and set(job["secrets"]) <= set(call["secrets"])
+
+
+def test_contract_job_is_safe_by_default_and_pinned() -> None:
+    doc = _load(CONTRACT)
+    call = doc["on"]["workflow_call"]
+    assert call["inputs"]["enabled"]["default"] is False and call["inputs"]["mode"]["default"] == "dry-run"
+    assert call["inputs"]["run_id"]["default"] == ""
+    (job,) = doc["jobs"].values()
+    assert job["if"].startswith("inputs.enabled") and "inputs.run_id != ''" in job["if"]
+    assert job["permissions"] == {"contents": "write", "issues": "read", "pull-requests": "write"}
+    assert job["concurrency"]["cancel-in-progress"] is False
+    steps = job["steps"]
+    assert steps[0]["with"]["ref"] == "${{ github.event.repository.default_branch }}"
+    ext = next(s for s in steps if s.get("with", {}).get("path") == ".refine-toolkit")
+    assert ext["with"]["ref"] == "${{ job.workflow_sha }}"
+    assert set(ext["with"]["sparse-checkout"].split()) == SPARSE_CONTRACT
+    for step in steps:
+        if str(step.get("uses", "")).startswith("actions/checkout@"):
+            assert step["with"]["persist-credentials"] is False
+    runs = " ".join(str(s.get("run", "")) for s in steps)
+    assert "git config" not in runs, "the token never lands in .git/config"
+    assert not any("claude-code-action" in str(s.get("uses", "")) for s in steps)
+    assert set(re.findall(r"secrets\.(\w+)", (WORKFLOWS / CONTRACT).read_text(encoding="utf-8"))) == {"contract_token"}
+
+
+def test_contract_job_runs_the_kill_test_before_anything_is_pushed() -> None:
+    steps = _load(CONTRACT)["jobs"]["contract"]["steps"]
+    draft_step = next(s for s in steps if s.get("id") == "draft")
+    assert '"$DRAFT" write' in draft_step["run"] and '"$DRAFT" check' in draft_step["run"]
+    assert "git push" not in draft_step["run"]
+    push = next(s for s in steps if "git push" in str(s.get("run", "")))
+    assert steps.index(draft_step) < steps.index(push)
+    assert "inputs.mode == 'live'" in push["if"], "dry-run pushes nothing"
+    assert "gh pr create" in push["run"] and "gh pr comment" in push["run"]
