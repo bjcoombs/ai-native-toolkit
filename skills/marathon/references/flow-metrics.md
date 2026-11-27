@@ -35,7 +35,7 @@ A marathon counts merges and watches CPU load. Neither shows the costs that limi
 
 **Hot-file combining**
 
-Below the per-run table the script prints one row per wave (DAG width, units after combining, units lost, combines), the top five combining hot files ranked by the combines they caused, and the sequential-merge hot files apart from them. A sequential-merge file (`.claude-plugin/plugin.json` `.version`, a changelog, a lockfile) costs merge order, not combining, so it never ranks as a combining file even when a combine row names it. Each ranked file shows its count in the previous run. A tracking file without `waves` reads every combining metric as `n/a`, and a wave missing either count makes the run totals `n/a`.
+Below the per-run table the script prints one row per wave (DAG width, units after combining, units lost, combines), the top five combining hot files ranked by the combines they caused, and the sequential-merge hot files apart from them. A sequential-merge file (`.claude-plugin/plugin.json` `.version`, a changelog, a lockfile) costs merge order, not combining, so a file a wave lists as sequential never counts as a combining file in that wave, even when a combine row names it. Each ranked file shows its count in the previous run. A tracking file without `waves` reads every combining metric as `n/a`, and a wave missing either count makes the run totals `n/a`.
 
 The run window runs from `flow.started_at` (else the first spawn or PR) to `flow.ended_at` (else the last merge).
 

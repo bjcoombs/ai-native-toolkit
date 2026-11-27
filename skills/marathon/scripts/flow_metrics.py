@@ -193,6 +193,11 @@ def ranked(counts: Dict[str, int]) -> List[Json]:
     return [{"file": f, "count": n} for f, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
 
 
+def files(value: Any) -> Set[str]:
+    """A recorded file list as a set; anything but a list of strings reads empty."""
+    return {f for f in value if isinstance(f, str)} if isinstance(value, list) else set()
+
+
 def combining(flow: Json) -> Optional[Json]:
     """Parallelism lost to hot-file combining, per wave and per hot file.
 
@@ -203,16 +208,16 @@ def combining(flow: Json) -> Optional[Json]:
     if not isinstance(waves, list) or not waves:
         return None
     sequential: Dict[str, int] = {}
-    for w in waves:
-        for f in set(w.get("sequential_hot_files") or []):
-            sequential[f] = sequential.get(f, 0) + 1
     combined: Dict[str, int] = {}
     per_wave: List[Json] = []
     for i, w in enumerate(waves, 1):
         width, units = w.get("dag_width"), w.get("units")
         lost = width - units if isinstance(width, int) and isinstance(units, int) else None
+        in_order = files(w.get("sequential_hot_files"))
+        for f in in_order:
+            sequential[f] = sequential.get(f, 0) + 1
         for c in w.get("combines") or []:
-            for f in set(c.get("hot_files") or []) - set(sequential):
+            for f in files(c.get("hot_files")) - in_order:
                 combined[f] = combined.get(f, 0) + 1
         per_wave.append({"wave": w.get("wave", i), "dag_width": width,
                          "units_after_combining": units, "units_lost": lost,

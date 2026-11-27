@@ -241,3 +241,24 @@ def test_combining_compares_with_previous_run(tmp_path):
     out = fm.render_markdown(fm.compute(tracking, gh), previous)
     assert "| units_lost_to_combining | 2 | 5 | -3 |" in out
     assert "`lib/shared.py` (2 combines, previous 4)" in out
+
+
+def test_sequential_exclusion_is_per_wave(tmp_path):
+    # lib/gen.py caused a real combine in wave 1; wave 2 merges it in order.
+    track, gh = build(tmp_path)
+    tracking = json.loads(track.read_text())
+    tracking["flow"]["waves"] = [
+        {"dag_width": 3, "units": 2, "combines": [{"units": ["task-1", "task-2"], "hot_files": ["lib/gen.py"]}]},
+        {"dag_width": 2, "units": 2, "combines": [], "sequential_hot_files": ["lib/gen.py"]},
+    ]
+    combine = fm.compute(tracking, gh)["combining"]
+    assert combine["hot_files"] == [{"file": "lib/gen.py", "count": 1}]
+    assert combine["sequential_hot_files"] == [{"file": "lib/gen.py", "count": 1}]
+
+
+def test_hot_files_written_as_a_string_are_ignored(tmp_path):
+    track, gh = build(tmp_path)
+    tracking = json.loads(track.read_text())
+    tracking["flow"]["waves"] = [{"dag_width": 2, "units": 1,
+                                  "combines": [{"units": ["a", "b"], "hot_files": "lib/x.py"}]}]
+    assert fm.compute(tracking, gh)["combining"]["hot_files"] == []
