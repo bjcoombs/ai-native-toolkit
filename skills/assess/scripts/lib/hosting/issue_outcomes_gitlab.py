@@ -23,7 +23,8 @@ description, so neither list reaches the ``--platform`` response cache (#778).
 An issue whose notes were not read (the cap), whose single page was full with no response on it
 before its last note (a note on page 2 may come before a later close, #1587), or whose responder
 could not be classified has ``response_read`` False, and the read is
-``truncated`` when a cap was hit. A 403 on any of these reads raises ``no_access``, which the
+``truncated`` when a cap was hit: the note-read cap, the probe cap, a page cap, or a notes page
+that came back full, even when a response on it settled the issue (#1591). A 403 on any of these reads raises ``no_access``, which the
 caller reads as ``no_platform_auth``.
 
 `gitlab_read(project, start, now)` builds the `issue_outcomes.IssueRead` for a GitLab project as
@@ -111,8 +112,9 @@ def _pages(project: GitlabProject, query: str) -> tuple[list[dict[str, Any]], bo
 
 
 def _first_response(project: GitlabProject, issue: dict[str, Any], bots: GitlabBots,
-                    read_notes: bool) -> tuple[datetime | None, bool]:
-    """The first response to one issue and whether it is settled (see the module doc)."""
+                    read_notes: bool) -> tuple[datetime | None, bool, bool]:
+    """The first response to one issue, whether it is settled, and whether its notes page came
+    back full (a cap hit, #1591; see the module doc)."""
     author = _user_key(issue.get("author"))
     events: list[tuple[datetime, Any]] = []
     closed = parse_time(issue.get("closed_at"))
@@ -124,7 +126,7 @@ def _first_response(project: GitlabProject, issue: dict[str, Any], bots: GitlabB
     count = issue.get("user_notes_count")
     if not isinstance(count, int) or count > 0:
         if not read_notes:  # an unread note may come before the close
-            return None, False
+            return None, False, False
         iid = issue.get("iid")
         notes = glab_api(project, f"projects/{project.encoded}/issues/{iid}/notes?sort=asc"
                          f"&order_by=created_at&per_page={GITLAB_PAGE}", cache=False)
@@ -136,19 +138,20 @@ def _first_response(project: GitlabProject, issue: dict[str, Any], bots: GitlabB
         if len(notes) >= GITLAB_PAGE:
             read = [when for when in stamps if when is not None]
             if not read:
-                return None, False
+                return None, False, True
             horizon = max(read)
+    full = horizon is not None
     for when, user in sorted(events, key=lambda pair: pair[0]):
         if horizon is not None and when > horizon:
-            return None, False  # an unread note on page 2 may come first
+            return None, False, full  # an unread note on page 2 may come first
         if _user_key(user) == author:
             continue
         verdict = bots.is_bot(user)
         if verdict is None:
-            return None, False
+            return None, False, full
         if verdict is False:
-            return when, True
-    return None, horizon is None
+            return when, True, full
+    return None, not full, full
 
 
 def gitlab_read(project: GitlabProject, start: datetime, now: datetime) -> IssueRead:
@@ -167,9 +170,9 @@ def gitlab_read(project: GitlabProject, start: datetime, now: datetime) -> Issue
         if created >= start:
             count = row.get("user_notes_count")
             wants = not isinstance(count, int) or count > 0
-            first, settled = _first_response(project, row, bots, reads < MAX_NOTE_READS)
+            first, settled, full = _first_response(project, row, bots, reads < MAX_NOTE_READS)
             reads += 1 if wants else 0
-            cut = cut or (wants and reads > MAX_NOTE_READS)
+            cut = cut or full or (wants and reads > MAX_NOTE_READS)
         closed = parse_time(row.get("closed_at"))
         closer = row.get("closed_by")
         key = _user_key(closer)  # an unkeyed closer is no one: never the author
