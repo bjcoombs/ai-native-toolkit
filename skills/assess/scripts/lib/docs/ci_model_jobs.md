@@ -127,7 +127,7 @@ job `env:`, or in a step that only sets it, neither gates nor ungates a job. Eit
 ## Agent eval suites (`agent_evals`, #850)
 
 The block also carries `agent_evals`, built by `lib.ci.agent_evals` from the same CI files plus
-the repo-local `action.yml` files: each eval suite folder that calls a model, whether a CI file
+the repo-local `action.yml` files and the GitLab files `include:` resolves (#1573): each eval suite folder that calls a model, whether a CI file
 runs it and the committed baseline it holds. Its module docstring has the rules and the shape.
 Known limits:
 
@@ -141,3 +141,13 @@ Known limits:
 - One task-runner level is followed, at the repository root only: a `Makefile` or `justfile`
   recipe or a `package.json` script. A recipe that calls another target is not followed.
 - A baseline outside the suite folder (`baselines/evals.json` beside `evals/`) is not read.
+- GitLab files are read through the merged view (`ci_merged_view`), so a root `script:` that
+  replaces an included one and an `extends:` template read as GitLab runs them. A job the
+  merge does not settle (an unsettled render, a missing `extends:` parent, a job from an
+  include under `rules:`) is not a run and reads with `unread`, so a baselined suite reads not
+  measured. A hidden job (`.evals:`) runs nothing on its own: the subtree under any of its anchors runs when an alias in
+  the same file uses its anchor, and only the key a `!reference [.evals, key]` names otherwise.
+  A job whose own `when:` is `never` or `manual` is not a run; a `when:` inside `rules:` is not
+  read. When the merged view cannot be built, the root and included files are read as
+  written: a root override then still counts the included command, and a job that takes its
+  script from a hidden template through `extends:` is not named.

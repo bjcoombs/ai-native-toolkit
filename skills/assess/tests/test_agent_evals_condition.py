@@ -1,6 +1,7 @@
 """lib/ci/agent_evals.py and the agent-evals condition (#850): eval suites CI runs against a baseline."""
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -253,3 +254,103 @@ def test_counts_only_keeps_the_present_reason(tmp_path: Path) -> None:
                             ".github/workflows/empty.yml": ""})
     out = counts_only({"ci_model_jobs": scan_ci_model_jobs(root)})["ci_model_jobs"]["agent_evals"]
     assert (out["present"], out["present_reason"]) == (None, "eval_ci_unread")
+
+
+def _git(root: Path, files: dict[str, str]) -> Path:
+    """A committed repository: GitLab local includes are read only from tracked files."""
+    _repo(root, files)
+    for args in (["init", "-q", "-b", "main"], ["add", "-A"],
+                 ["-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "c"]):
+        subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, encoding="utf-8", errors="replace")
+    return root
+
+
+def test_a_suite_run_from_a_gitlab_local_include_meets(tmp_path: Path) -> None:
+    # #1573: the include text GitLab merges is read for the suite, not only the root file.
+    root = _git(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
+                           ".gitlab-ci.yml": "include:\n  - local: ci/evals.yml\n",
+                           "ci/evals.yml": "evals:\n  script:\n    - pytest evals/\n"})
+    block = _block(root)
+    assert (block["present"], block["dirs"][0]["ci"]) == (True, True)
+    assert _state(root) == ("met", None)
+
+
+def test_an_unreadable_gitlab_include_leaves_a_baselined_suite_not_measured(tmp_path: Path) -> None:
+    root = _git(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
+                           ".gitlab-ci.yml": "include:\n  - local: ci/missing.yml\ntest:\n  script:\n    - pytest tests/\n"})
+    block = _block(root)
+    assert (block["present"], block["present_reason"]) == (None, "eval_ci_unread")
+    assert _state(root) == ("not_measured", "eval_ci_unread")
+
+
+@pytest.mark.parametrize(("root", "included", "run"), [
+    # A root job that replaces the included script: CI runs only the root's command.
+    ("include:\n  - local: ci/evals.yml\nevals:\n  script:\n    - pytest tests/\n",
+     "evals:\n  script:\n    - pytest evals/\n", False),
+    # A hidden template no visible job extends runs nothing.
+    ("include:\n  - local: ci/evals.yml\n", ".evals:\n  script:\n    - pytest evals/\n", False),
+    # A visible job that extends the included template runs its script.
+    ("include:\n  - local: ci/evals.yml\nevals:\n  extends: .evals\n",
+     ".evals:\n  script:\n    - pytest evals/\n", True),
+])
+def test_a_gitlab_include_is_read_as_gitlab_merges_it(tmp_path: Path, root: str, included: str, run: bool) -> None:
+    root_dir = _git(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
+                               ".gitlab-ci.yml": root, "ci/evals.yml": included})
+    block = _block(root_dir)
+    assert (block["present"], block["dirs"][0]["ci"]) == (run, run)
+
+
+@pytest.mark.parametrize("ci", [
+    # A hidden template a job takes through a YAML anchor merge runs in that job.
+    ".evals: &evals\n  script:\n    - pytest evals/\nevals:\n  <<: *evals\n",
+    # So does one a job names through !reference.
+    ".evals:\n  script:\n    - pytest evals/\nevals:\n  script:\n    - !reference [.evals, script]\n",
+])
+def test_a_hidden_template_taken_by_anchor_or_reference_is_a_run(tmp_path: Path, ci: str) -> None:
+    root = _repo(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}", ".gitlab-ci.yml": ci})
+    assert _block(root)["dirs"][0]["ci"] is True
+
+
+INCLUDED_EVALS = "evals:\n  script:\n    - pytest evals/\n"
+INCLUDED_TEMPLATE = ".evals:\n  script:\n    - pytest evals/\n"
+
+
+@pytest.mark.parametrize(("root", "included", "present"), [
+    # The merged view cannot settle a flow map over a block map: not a run, and not measured.
+    ("include:\n  - local: ci/evals.yml\nevals: {script: [pytest tests/]}\n", INCLUDED_EVALS, None),
+    # extends: names a template that does not exist: GitLab rejects the job.
+    ("include:\n  - local: ci/evals.yml\nevals:\n  extends: [.evals, .nope]\n", INCLUDED_TEMPLATE, None),
+    # An include under rules: GitLab may leave it out.
+    ("include:\n  - local: ci/evals.yml\n    rules:\n      - if: $X\n        when: never\n", INCLUDED_EVALS, None),
+    # An anchor does not cross files: an anchored template with no alias in its own file runs nothing.
+    ("include:\n  - local: ci/evals.yml\n", ".evals: &evals\n  script:\n    - pytest evals/\n", False),
+    # A !reference to the template's rules: does not run its script.
+    ("include:\n  - local: ci/evals.yml\ntest:\n  rules:\n    - !reference [.evals, rules]\n  script:\n    - pytest tests/\n",
+     ".evals:\n  rules:\n    - when: always\n  script:\n    - pytest evals/\n", False),
+])
+def test_an_unsettled_or_unused_gitlab_job_is_not_a_run(tmp_path: Path, root: str, included: str,
+                                                          present: bool | None) -> None:
+    block = _block(_git(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
+                                   ".gitlab-ci.yml": root, "ci/evals.yml": included}))
+    assert (block["present"], block["dirs"][0]["ci"]) == (present, False)
+
+
+@pytest.mark.parametrize("when", ["never", "manual"])
+def test_a_gitlab_job_that_never_runs_on_its_own_is_not_a_run(tmp_path: Path, when: str) -> None:
+    root = _repo(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
+                            ".gitlab-ci.yml": f"evals:\n  when: {when}\n  script:\n    - pytest evals/\n"})
+    assert _block(root)["dirs"][0]["ci"] is False
+
+
+@pytest.mark.parametrize("ci", [
+    # An anchor on a nested key of a hidden job, used by an alias in the same file.
+    ".defaults:\n  script: &s\n    - pytest evals/\nevals:\n  script: *s\n",
+    # The same, under a hidden job whose own anchor nothing uses.
+    ".evals: &evals\n  script: &s\n    - pytest evals/\nevals:\n  script: *s\n",
+    # An anchor on a list item.
+    ".evals:\n  script:\n    - &run pytest evals/\nevals:\n  script:\n    - *run\n",
+])
+def test_a_nested_anchor_an_alias_uses_is_a_run(tmp_path: Path, ci: str) -> None:
+    root = _repo(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}", ".gitlab-ci.yml": ci})
+    block = _block(root)
+    assert (block["present"], block["dirs"][0]["ci"]) == (True, True)
