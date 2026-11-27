@@ -91,10 +91,30 @@ def test_sub_items_carry_their_own_marker_and_survive_a_rank_change() -> None:
     assert items[1]["marker"] == f"<!-- assess:condition=layer-5-ci@1 sub=a model={MODEL} -->"
     tracker = FixtureTracker()
     assert tracker.file(items) == [1, 2]
-    moved = _items({**entry, "rank": 3, "sub_items": [{"label": "3a", "action": "Pin ruff 0.9",
+    moved = _items({**entry, "rank": 3, "sub_items": [{"label": "3a", "action": "Pin ruff",
                                                        "done_when": "x"}]})
-    assert moved[1]["title"] == "3a. Pin ruff 0.9"
+    assert moved[1]["title"] == "3a. Pin ruff"
     assert tracker.file(moved) == [1, 2]
+
+
+def test_a_sub_item_marker_needs_its_title_too() -> None:
+    # Letters are positional: the model reassigns them, so sub=a alone is not the same work.
+    first = {**ENTRY, "sub_items": [{"label": "a", "action": "Pin ruff", "done_when": "d"}]}
+    tracker = FixtureTracker()
+    assert tracker.file(_items(first)) == [1, 2]
+    other = {**ENTRY, "sub_items": [{"label": "a", "action": "Add a lockfile", "done_when": "d"}]}
+    assert tracker.file(_items(other)) == [1, 3]
+
+
+def test_a_sub_item_whose_letter_moved_is_found_and_re_marked() -> None:
+    first = {**ENTRY, "sub_items": [{"label": "a", "action": "Pin ruff", "done_when": "d"}]}
+    tracker = FixtureTracker()
+    tracker.file(_items(first))
+    moved = {**ENTRY, "sub_items": [{"label": "a", "action": "Add a lockfile", "done_when": "d"},
+                                    {"label": "b", "action": "Pin ruff", "done_when": "d"}]}
+    assert tracker.file(_items(moved)) == [1, 3, 2]
+    assert bi.marker_key(str(tracker.items[1]["body"])) == ("layer-5-ci", 1, "b", 0)
+    assert str(tracker.items[1]["body"]).count("assess:condition=") == 1
 
 
 def test_an_unmarked_sub_item_is_matched_after_its_prefix() -> None:

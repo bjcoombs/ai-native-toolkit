@@ -29,14 +29,19 @@ not part of it, so a model release does not file the condition again. An action 
 items (``{number, title, body, state, labels}``, as ``gh issue list --json`` gives them):
 
 1. ``reuse``: an existing item carries the same marker key, whatever its title now reads.
+   A key with ``sub`` or ``part`` is positional, because the model letters and numbers the
+   parts afresh each run: it matches only when the title agrees too. A sub-item or part whose
+   letter or number moved is matched by title among the items marked for the same
+   condition, as ``reuse_and_mark`` with its marker rewritten.
 2. ``reuse_and_mark``: no marked item matches, and an unmarked item with the label
    (``assess-finding``; no label check when ``label`` is empty) has the same title, compared
    after the sub-item prefix (``2a. ``) and whitespace are dropped, case-folded. The plan
-   carries ``marked_body``: the existing body with the marker appended.
+   carries ``marked_body``: the existing body with the marker appended (or, for a moved
+   sub-item or part, its old marker replaced).
 3. ``create``: nothing matches.
 
-Each existing item is claimed once per run by a title match, so two rendered items never
-take the same unmarked item. Open items are preferred over closed ones, then the lowest
+Each existing item is claimed once per run by a title match, and by any match on a
+positional key, so two rendered items never take the same item that way. Open items are preferred over closed ones, then the lowest
 number. Pure stdlib; never touches the tracker. Tests: ``tests/test_backlog_items.py``.
 """
 from __future__ import annotations
@@ -144,33 +149,61 @@ def _step(action: str, item: Mapping[str, object]) -> FilingStep:
     return step
 
 
+def _body(item: Mapping[str, object]) -> str:
+    return str(item.get("body") or "")
+
+
+def _with_marker(item: Mapping[str, object], marker: str) -> str:
+    """``item``'s body with ``marker`` in place of its condition marker, or appended when it has none."""
+    old = _body(item)
+    for m in _MARKER.finditer(old):
+        if marker_key(m.group(0)) is not None:
+            return old[:m.start()] + marker + old[m.end():]
+    return f"{old.rstrip()}\n\n{marker}\n"
+
+
 def match_item(title: str, body: str, existing: Sequence[Mapping[str, object]], *,
                label: str = DEFAULT_LABEL, claimed: set[int] | None = None) -> FilingStep:
-    """The filing step for one rendered item against the tracker's ``existing`` items."""
+    """The filing step for one rendered item against the tracker's ``existing`` items.
+
+    A key with ``sub`` or ``part`` is positional (the model letters and numbers the parts
+    afresh each run), so it matches only an item whose title agrees as well; a sibling under
+    the same condition with the same title is reused and its marker rewritten.
+    """
     claimed = claimed if claimed is not None else set()
-    ordered = sorted(existing, key=_order)
-    key = marker_key(body)
+    ordered = [i for i in sorted(existing, key=_order) if i.get("number") not in claimed]
+    key, wanted = marker_key(body), title_key(title)
+    marker = next((line for line in body.splitlines() if marker_key(line) == key), "") if key else ""
+    positional = key is not None and bool(key[2] or key[3])
+
+    def same_title(item: Mapping[str, object]) -> bool:
+        return title_key(str(item.get("title") or "")) == wanted
+
+    def take(action: str, item: Mapping[str, object]) -> FilingStep:
+        number = item.get("number")
+        if positional and isinstance(number, int):
+            claimed.add(number)
+        step = _step(action, item)
+        if action == "reuse_and_mark":
+            step["marked_body"] = _with_marker(item, marker)
+        return step
+
     if key is not None:
         for item in ordered:
-            if marker_key(str(item.get("body") or "")) == key:
-                return _step("reuse", item)
-    wanted = title_key(title)
+            if marker_key(_body(item)) == key and (not positional or same_title(item)):
+                return take("reuse", item)
+        if positional:
+            for item in ordered:
+                other = marker_key(_body(item))
+                if other is not None and other[:2] == key[:2] and (other[2] or other[3]) and same_title(item):
+                    return take("reuse_and_mark", item)
     for item in ordered:
+        if marker_key(_body(item)) is not None or (label and label not in _labels(item)) or not same_title(item):
+            continue
         number = item.get("number")
-        if number in claimed or marker_key(str(item.get("body") or "")) is not None:
-            continue
-        if label and label not in _labels(item):
-            continue
-        if title_key(str(item.get("title") or "")) != wanted:
-            continue
         if isinstance(number, int):
             claimed.add(number)
-        if key is None:
-            return _step("reuse", item)
-        step = _step("reuse_and_mark", item)
-        marker = next(line for line in body.splitlines() if marker_key(line) == key)
-        step["marked_body"] = f"{str(item.get('body') or '').rstrip()}\n\n{marker}\n"
-        return step
+        return take("reuse" if key is None else "reuse_and_mark", item)
     return FilingStep(action="create")
 
 

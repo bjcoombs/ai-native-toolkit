@@ -91,11 +91,11 @@ The fields are written in that order, one space apart; a character outside `A-Z 
 
 `assess_actions_render.py plan --existing <file>` matches each rendered item against the tracker's items (`gh issue list --state all --json number,title,body,state,labels`), open items before closed ones:
 
-1. `reuse`: an item carries the same marker key, whatever its title now reads.
+1. `reuse`: an item carries the same marker key, whatever its title now reads. A key with `sub` or `part` is positional (the model letters and numbers the parts afresh each run), so it matches only when the title matches too; a sub-item or part whose letter or number moved is matched by title among the items marked for the same condition, as `reuse_and_mark` with its marker rewritten.
 2. `reuse_and_mark`: no marked item matches, and an unmarked item with the `assess-finding` label (no label check with `--label ""`) has the same title, compared without the sub-item prefix (`2a. `), with whitespace folded and case ignored. The step's `marked_body` is that item's body with the marker appended, to write back.
 3. `create`: nothing matches.
 
-A marked item is never matched by title, and an unmarked item is taken by one rendered item per run. The format and rules live in `scripts/lib/report/backlog_items.py`.
+Outside that case a marked item is never matched by title. An item taken by title, or by a positional key, is taken by one rendered item per run. The format and rules live in `scripts/lib/report/backlog_items.py`.
 
 ## `status` lifecycle
 
