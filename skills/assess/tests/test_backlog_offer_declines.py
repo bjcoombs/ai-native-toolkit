@@ -247,3 +247,23 @@ def test_plan_decline_flags_without_decline_fail_at_parsing(
         render.main([str(tmp_path), "plan", "--existing", str(existing), *flags])
     assert exc.value.code == 2
     assert "needs --decline" in capsys.readouterr().err
+
+
+def test_decline_refuses_an_offer_a_next_up_item_shares(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    (tmp_path / ".assess").mkdir()
+    (tmp_path / ".assess" / "config.toml").write_text("[backlog]\nwip = 2\n", encoding="utf-8")
+    twins = [*ACTIONS[:2], {**ACTIONS[2], "condition": CI, "action": "Action 2"}]  # item 3 waits for a slot
+    existing = _setup(tmp_path, [], *CONDITIONS, actions=twins)
+    assert _decisions(_plan(tmp_path, existing, capsys)) == ["file", "file", "next_up"]
+    assert render.main([str(tmp_path), "plan", "--existing", str(existing), "--decline", "2"]) == 1
+    assert "item 3 shares its decline record" in capsys.readouterr().err  # it would read declined once a slot frees
+    assert not (tmp_path / ".assess" / PROPOSAL_DECLINES).exists()
+
+
+def test_a_repeated_decline_ref_writes_one_record(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    existing = _setup(tmp_path, [], *CONDITIONS, actions=ACTIONS)
+    planned = _plan(tmp_path, existing, capsys, "--decline", "2", "--decline", "2", "--declined-by", "ben",
+                    "--declined-at", "2026-11-27")
+    assert _decisions(planned) == ["file", "declined", "file"]
+    [record] = read_proposal_declines(tmp_path / ".assess")
+    assert record["condition"] == CI

@@ -46,11 +46,11 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   ``.assess/backlog-declines.json``, and a marked item closed as not planned, read from
   ``stateReason``) is held back while its condition's state and the model are the ones it was
   declined under: its ``wip`` step reads ``declined``, it takes no slot, and ``declined``
-  names who declined it. ``--decline REF`` (repeatable) records the offer for ``REF`` as
-  declined, with ``--declined-by``, ``--declined-at`` and ``--decline-reason REF=TEXT``, and
+  names who declined it. ``--decline REF`` (repeatable; a repeated ``REF`` records once)
+  records the offer for ``REF`` as declined, with ``--declined-by``, ``--declined-at`` and ``--decline-reason REF=TEXT``, and
   prints the plan with it held back; a ``REF`` whose ``wip`` step is not ``file``, or that
-  ``--parts`` names, whose file offer another offered item shares (the same condition
-  and title), or a ``--decline-reason`` for a ``REF`` not in ``--decline``, exits 1, and
+  ``--parts`` names, whose file offer another item not declined shares (the same condition
+  and title, its ``wip`` step ``file`` or ``next_up``), or a ``--decline-reason`` for a ``REF`` not in ``--decline``, exits 1, and
   those three flags without ``--decline`` fail at argument parsing. ``plan`` and ``next-up``
   write ``.assess/backlog-declines.json`` when the listing holds a not-planned close not
   read before, or when a recorded decline has lapsed; the write is idempotent.
@@ -458,7 +458,7 @@ def run_plan(assess_dir: Path, args: argparse.Namespace, items: Sequence[Tracker
     live = refresh_declines(assess_dir, not_planned_closes(known), listed, conditions, model)
     level = context.get("level") if isinstance(context, dict) else None
     planned = plan_items(items, existing, args.label, level, wip, args.parts, live, conditions)
-    refs: list[str] = getattr(args, "decline", None) or []
+    refs = list(dict.fromkeys(getattr(args, "decline", None) or []))  # a repeated REF records once (#1553)
     if not refs:
         return planned
     reasons, split = dict(args.decline_reason), {ref for ref, _ in args.parts}
@@ -466,11 +466,13 @@ def run_plan(assess_dir: Path, args: argparse.Namespace, items: Sequence[Tracker
     if stray:
         raise RenderError(f"--decline-reason {', '.join(stray)} names no --decline item")
     new: list[ProposalDecline] = []
-    offers = {_ref(i): o for i in planned if i.get("wip", {}).get("decision") == FILE
-              and _ref(i) not in split and (o := filing_offer(i, i["filing"]) if "filing" in i else None) is not None}
+    # Every item with an offer, next_up too: a twin waiting for a slot would read declined once one frees (#1553).
+    offers = {_ref(i): o for i in planned if _ref(i) not in split
+              and (o := filing_offer(i, i["filing"]) if "filing" in i else None) is not None}
+    offered = {_ref(i) for i in planned if i.get("wip", {}).get("decision") == FILE}
     for ref in refs:
         _item_index(items, ref, "--decline")
-        offer = offers.get(ref)
+        offer = offers.get(ref) if ref in offered else None
         if offer is None:
             raise RenderError(f"--decline {ref}: item {ref} is not offered (its wip step is not file)")
         same = {k: v for k, v in offer.items() if k != "reason"}
