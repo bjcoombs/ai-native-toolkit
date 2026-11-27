@@ -29,6 +29,13 @@ A marathon counts merges and watches CPU load. Neither shows the costs that limi
 | `load_peak`, `load_peak_at` | Highest one-minute load average sampled, and when | tracking events |
 | `tokens_per_merge` | Total tokens over merged PRs, where the runtime reports usage | tracking `tokens.total` |
 | `mean_*` | The mean of each per-PR metric across the run's PRs | computed |
+| `dag_width` | Units with no unmet dependency, summed over the waves | tracking `waves` |
+| `units_after_combining` | Units spawned after hot-file combining, summed over the waves | tracking `waves` |
+| `units_lost_to_combining` | `dag_width` minus `units_after_combining`: the parallelism the repository's hot files cost | tracking `waves` |
+
+**Hot-file combining**
+
+Below the per-run table the script prints one row per wave (DAG width, units after combining, units lost, combines), the top five combining hot files ranked by the combines they caused, and the sequential-merge hot files apart from them. A sequential-merge file (`.claude-plugin/plugin.json` `.version`, a changelog, a lockfile) costs merge order, not combining, so a file a wave lists as sequential never counts as a combining file in that wave, even when a combine row names it. Each ranked file shows its count in the previous run. A tracking file without `waves` reads every combining metric as `n/a`, and a wave missing either count makes the run totals `n/a`. A count must be a JSON integer (`true` is not 1). A wave recording more units than its DAG width is bad input: its units lost and the run total read `n/a`, and the output names the wave.
 
 The run window runs from `flow.started_at` (else the first spawn or PR) to `flow.ended_at` (else the last merge).
 
@@ -48,6 +55,11 @@ Add a `flow` object to the tracking file at Step 2. The Step 2 CRUD removes a un
     {"type": "main_red", "start": "<ts>", "end": "<ts>"},
     {"type": "load", "at": "<ts>", "load1": 122.0}
   ],
+  "waves": [
+    {"wave": 1, "dag_width": 6, "units": 4,
+     "combines": [{"units": ["task-1", "task-2"], "hot_files": ["lib/shared.py"]}],
+     "sequential_hot_files": [".claude-plugin/plugin.json"]}
+  ],
   "tokens": {"total": 1234567}
 }
 ```
@@ -55,6 +67,7 @@ Add a `flow` object to the tracking file at Step 2. The Step 2 CRUD removes a un
 - At spawn, write `units.<unit>.spawned_at`; at PR_CREATED, write its `pr`.
 - Append an event when it happens, timed with `date -u +%Y-%m-%dT%H:%M:%SZ`.
 - Sample load (`uptime`) at each wave and whenever a full suite runs locally.
+- At each wave's spawn, append a `waves` row from the Step 1 plan: `dag_width` is the units with no unmet dependency before combining, `units` the teammates spawned after it, one `combines` entry per combined group naming the hot files that caused it, and `sequential_hot_files` the files merged in order instead.
 - Leave `tokens` out when the runtime does not report usage.
 - Set `ended_at` at Completion.
 
@@ -87,3 +100,4 @@ The markdown output is the retrospective's flow table: one row per PR, one row p
 - **The largest wait:** read why it waited (a freeze, a hold, a question, the review bot) and name the cause in "What didn't work".
 - **`semantic_conflicts` or `main_red_min` above 0:** look for a feature chain that was not re-checked ([Flow control](flow-control.md) rule 5).
 - **`contract_refreezes` above 0:** check whether a criterion pinned a count over a growing manifest (rule 2).
+- **`units_lost_to_combining` above 0:** the top combining hot file is the structural fix to weigh first (split it, or stop generating it into every PR). The next run's figure shows whether the fix widened the team.

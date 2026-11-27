@@ -38,18 +38,37 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   step (#812): ``open`` (reuses an open item), ``file`` or ``next_up``, under the open-item
   limit ``--wip N`` or ``.assess/config.toml`` ``[backlog] wip`` (default 3), the items that
   need a slot taken in the next-unlock order (``next_unlock``, ``recovery``, ``gain``) read
-  from ``run-context.json`` ``level``; rules: ``lib/report/backlog_wip.py``.
-- ``next-up --existing FILE [--label NAME] [--wip N]`` prints the report's "Next up" block,
-  the items ``plan`` holds back as ``next_up``, in ranked order; nothing when none are. Pass
-  the same ``--label`` and ``--wip`` as ``plan``; the header names the configured
-  ``[backlog] wip`` limit, not a ``--wip`` reduced for split parts. A negative ``--wip``
-  fails at argument parsing.
+  from ``run-context.json`` ``level``; rules: ``lib/report/backlog_wip.py``. ``--parts REF=N``
+  (repeatable, #1542) names an action filed split, by rank or sub-item label, and the number
+  of its parts that need a slot: each part is counted against the limit and its ``wip`` step
+  carries ``parts``, one decision per part. An unknown ``REF`` exits 1. An offer declined
+  before (#1543: a file offer, or a reopen offer for a closed match, recorded in
+  ``.assess/backlog-declines.json``, and a marked item closed as not planned, read from
+  ``stateReason``) is held back while its condition's state and the model are the ones it was
+  declined under: its ``wip`` step reads ``declined``, it takes no slot, and ``declined``
+  names who declined it. ``--decline REF`` (repeatable; a repeated ``REF`` records once)
+  records the offer for ``REF`` as declined, with ``--declined-by``, ``--declined-at`` and ``--decline-reason REF=TEXT``, and
+  prints the plan with it held back; a ``REF`` whose ``wip`` step is not ``file``, or that
+  ``--parts`` names, whose file offer another item not declined shares (the same condition
+  and title, its ``wip`` step ``file`` or ``next_up``), or a ``--decline-reason`` for a ``REF`` not in ``--decline``, exits 1, and
+  those three flags without ``--decline`` fail at argument parsing. ``plan`` and ``next-up``
+  write ``.assess/backlog-declines.json`` when the listing holds a not-planned close not
+  read before, or when a recorded decline has lapsed; the write is idempotent.
+- ``next-up --existing FILE [--label NAME] [--wip N] [--parts REF=N ...]`` prints the
+  report's "Next up" block, the items and split parts ``plan`` holds back as ``next_up``, in
+  ranked order; nothing when none are. Pass the same ``--label``, ``--wip`` and ``--parts``
+  as ``plan``; the header names the configured ``[backlog] wip`` limit, not a ``--wip`` given
+  on the command line. A negative ``--wip`` fails at argument parsing.
 - ``reconcile --existing FILE [--label NAME] [--filed N,...] [--confirm all|none|N,...]
   [--record-declines [--declined-by NAME] [--declined-at DATE] [--decline-reason N=TEXT ...]]``
   (#811) prints the propose-only reconcile of the tracker's items in ``FILE`` against
   ``run-context.json``: ``{proposals, rules_changed, notes, summary}``, the close, reopen,
   demote and superseded proposals and the batched summary to confirm. It writes nothing to
-  the tracker.
+  the tracker. A reopen is proposed only while ``.assess/config.toml`` ``[backlog] wip``
+  leaves a slot, counted after declined proposals are held back; the others are listed
+  under ``next_up`` and "Next up" in ``summary`` (#1542). A marked item closed as not planned
+  (``stateReason`` ``NOT_PLANNED``) is read as a declined reopen the first time it is listed
+  (#1543), so it is held back like any other decline and keeps no slot.
   ``--filed`` names the items this run filed or reused, which are never proposed superseded.
   With ``--confirm`` it prints only the writes of the confirmed item numbers (``all`` for
   every proposal, ``none`` for none) as a JSON array. A proposal declined before is held
@@ -101,16 +120,24 @@ from typing import NotRequired, TypedDict
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.assess_config import BacklogModeError, load_backlog_mode, load_backlog_wip  # noqa: E402
-from lib.report.backlog_items import DEFAULT_LABEL, FilingStep, condition_marker, plan_filing  # noqa: E402
-from lib.report.backlog_reconcile import confirmed_writes, reconcile, run_facts, summary  # noqa: E402
+from lib.report.backlog_items import (  # noqa: E402
+    DEFAULT_LABEL,
+    FilingStep,
+    condition_marker,
+    filing_offer,
+    not_planned_closes,
+    plan_filing,
+)
+from lib.report.backlog_reconcile import confirmed_writes, reconcile, run_facts, summary, within_wip  # noqa: E402
 from lib.report.backlog_schedule import new_status_comment, plan_scheduled, scheduled_facts, status_line  # noqa: E402
-from lib.report.backlog_wip import WipStep, apply_wip, next_up_markdown  # noqa: E402
+from lib.report.backlog_wip import FILE, WipStep, apply_wip, next_unlock_conditions, next_up_markdown, tier  # noqa: E402
 from lib.run.decline_markers import (  # noqa: E402
+    ProposalDecline,
     decline_record,
-    live_proposal_declines,
+    held_by,
     merge_proposal_declines,
     proposal_disclosure,
-    read_proposal_declines,
+    refresh_declines,
     split_declined,
     write_proposal_declines,
 )
@@ -142,6 +169,7 @@ class TrackerItem(TypedDict):
     marker: NotRequired[str]
     filing: NotRequired[FilingStep]
     wip: NotRequired[WipStep]
+    declined: NotRequired[str]  # a 6b offer declined before: who, when, under which model (#1543)
 
 
 class RenderError(Exception):
@@ -375,27 +403,104 @@ def model_version(assess_dir: Path) -> str | None:
 
 
 def plan_items(items: Sequence[TrackerItem], existing: object, label: str = DEFAULT_LABEL,
-               level: object = None, wip: int | None = None) -> list[TrackerItem]:
+               level: object = None, wip: int | None = None,
+               parts: Sequence[tuple[str, int]] = (), declines: Sequence[ProposalDecline] = (),
+               conditions: Mapping[str, Mapping[str, object]] | None = None) -> list[TrackerItem]:
     """``items`` with a ``filing`` step each, matched against the tracker's ``existing`` items (#810).
 
     With ``wip`` set, each item also carries a ``wip`` step (#812): ``open``, ``file`` or
     ``next_up`` under the limit, ranked by the run's ``level`` (``lib/report/backlog_wip.py``).
+    ``parts`` (``--parts REF=N``, #1542) names each action filed split, by rank (``2``) or
+    sub-item label (``2a``), with the number of its parts that need a slot; its ``wip`` step
+    then carries one decision per part. An item whose offer one of the live ``declines``
+    covers (``decline_markers.held_by`` under ``conditions``, #1543) carries ``declined``, a
+    ``wip`` step reading ``declined``, and takes no slot; a split action is never held.
     """
     if not isinstance(existing, list):
         raise RenderError("--existing must hold a JSON array of tracker items")
     known = [x for x in existing if isinstance(x, dict)]
     steps = plan_filing(items, known, label=label)
     planned = [TrackerItem(**item, filing=step) for item, step in zip(items, steps, strict=True)]
+    split = {_item_index(items, ref): n for ref, n in parts}
+    held: dict[int, ProposalDecline] = {}
+    for n, (item, step) in enumerate(zip(items, steps, strict=True)):
+        offer = None if n in split else filing_offer(item, step)
+        record = held_by(offer, declines, conditions) if offer is not None else None
+        if record is not None:
+            held[n] = record
+            planned[n]["declined"] = proposal_disclosure(record)
     if wip is not None:
-        for item, w in zip(planned, apply_wip(items, steps, known, level, wip=wip, label=label), strict=True):
-            item["wip"] = w
+        keep = [n for n in range(len(items)) if n not in held]
+        place = {old: new for new, old in enumerate(keep)}
+        wip_steps = apply_wip([items[n] for n in keep], [steps[n] for n in keep], known, level, wip=wip,
+                              label=label, parts={place[i]: c for i, c in split.items()})
+        for n, w in zip(keep, wip_steps, strict=True):
+            planned[n]["wip"] = w
+        unlocks = next_unlock_conditions(level)
+        for n in held:
+            planned[n]["wip"] = WipStep(decision=DECLINED, tier=tier(items[n], steps[n], unlocks))
     return planned
 
 
-def run_level(assess_dir: Path) -> object:
-    """``run-context.json`` ``level``: the next Step's blockers rank the items (#812); None without one."""
+DECLINED = "declined"
+
+
+def run_plan(assess_dir: Path, args: argparse.Namespace, items: Sequence[TrackerItem], wip: int) -> list[TrackerItem]:
+    """The ``plan`` / ``next-up`` items, holding back declined offers; ``--decline`` records more first (#1543)."""
+    existing = _read_json(args.existing)
+    if not isinstance(existing, list):
+        raise RenderError("--existing must hold a JSON array of tracker items")
+    known = [x for x in existing if isinstance(x, dict)]
     context = _read_json(assess_dir / "run-context.json")
-    return context.get("level") if isinstance(context, dict) else None
+    facts = run_facts(context if isinstance(context, dict) else {})
+    conditions, model = facts["conditions"], facts["model"]
+    listed = {n for x in known if isinstance(n := x.get("number"), int)}
+    live = refresh_declines(assess_dir, not_planned_closes(known), listed, conditions, model)
+    level = context.get("level") if isinstance(context, dict) else None
+    planned = plan_items(items, existing, args.label, level, wip, args.parts, live, conditions)
+    refs = list(dict.fromkeys(getattr(args, "decline", None) or []))  # a repeated REF records once (#1553)
+    if not refs:
+        return planned
+    reasons, split = dict(args.decline_reason), {ref for ref, _ in args.parts}
+    stray = sorted(set(reasons) - set(refs))
+    if stray:
+        raise RenderError(f"--decline-reason {', '.join(stray)} names no --decline item")
+    new: list[ProposalDecline] = []
+    # Every item with an offer, next_up too: a twin waiting for a slot would read declined once one frees (#1553).
+    offers = {_ref(i): o for i in planned if _ref(i) not in split
+              and (o := filing_offer(i, i["filing"]) if "filing" in i else None) is not None}
+    offered = {_ref(i) for i in planned if i.get("wip", {}).get("decision") == FILE}
+    for ref in refs:
+        _item_index(items, ref, "--decline")
+        offer = offers.get(ref) if ref in offered else None
+        if offer is None:
+            raise RenderError(f"--decline {ref}: item {ref} is not offered (its wip step is not file)")
+        same = {k: v for k, v in offer.items() if k != "reason"}
+        twin = next((r for r, o in offers.items() if r != ref and r not in refs
+                     and {k: v for k, v in o.items() if k != "reason"} == same), None)
+        if twin is not None:  # the same condition and title: one record would hold back both (#811)
+            raise RenderError(f"--decline {ref}: item {twin} shares its decline record (the same condition and title), "
+                              "so recording it would hold that item back too")
+        record = decline_record(offer, conditions, model, declined_by=args.declined_by,
+                                declined_at=args.declined_at, reason=reasons.get(ref))
+        if record is not None:
+            new.append(record)
+    live = merge_proposal_declines(live, new)
+    write_proposal_declines(assess_dir, live)
+    return plan_items(items, existing, args.label, level, wip, args.parts, live, conditions)
+
+
+def _ref(item: TrackerItem) -> str:
+    """The ``REF`` that names ``item``: a sub-item's label, else its rank."""
+    return item.get("label", str(item["rank"]))
+
+
+def _item_index(items: Sequence[TrackerItem], ref: str, flag: str = "--parts") -> int:
+    """The index of the item ``ref`` names: a sub-item by its label (``2a``), else an action by its rank."""
+    for n, item in enumerate(items):
+        if item.get("label", str(item["rank"])) == ref:
+            return n
+    raise RenderError(f"{flag} names no item {ref} in actions.json")
 
 
 def _read_json(path: Path) -> object:
@@ -454,23 +559,23 @@ def run_reconcile(assess_dir: Path, args: argparse.Namespace) -> int:
         facts = scheduled_facts(facts)
     conditions, model = facts["conditions"], facts["model"]
     result = reconcile(items, facts, label=args.label, filed=args.filed)
-    records = read_proposal_declines(assess_dir)
-    live = live_proposal_declines(records, conditions, model)
-    if len(live) != len(records):
-        write_proposal_declines(assess_dir, live)
+    listed = {n for x in items if isinstance(n := x.get("number"), int)}
+    live = refresh_declines(assess_dir, not_planned_closes(items), listed, conditions, model)  # #1543
     proposals, held = split_declined(result["proposals"], live, conditions, model)
+    wip = load_backlog_wip(args.repo)
+    proposals, next_up = within_wip(proposals, items, facts, wip, label=args.label)  # after declines (#1542)
     if args.scheduled:
-        plan = plan_scheduled(items, facts, {**result, "proposals": proposals}, mode=mode, today=args.today,
-                              declined={r["number"]: proposal_disclosure(r) for r in held}, label=args.label,
-                              wip=load_backlog_wip(args.repo), level=context.get("level"))
+        plan = plan_scheduled(items, facts, {**result, "proposals": proposals, "next_up": next_up}, mode=mode,
+                              today=args.today, declined={r["number"]: proposal_disclosure(r) for r in held},
+                              label=args.label, wip=wip, level=context.get("level"))
         print(json.dumps(plan, indent=2, ensure_ascii=False))
         return 0
     if args.confirm is None:
         declined = [proposal_disclosure(r) for r in held]
-        text = summary(proposals, result["rules_changed"], result["notes"])
+        text = summary(proposals, result["rules_changed"], result["notes"], next_up, wip)
         if declined:
             text += "\n" + DECLINED_HEAD + "\n" + "".join(f"- {line}.\n" for line in declined)
-        out = {**result, "proposals": proposals, "declined": declined, "summary": text}
+        out = {**result, "proposals": proposals, "next_up": next_up, "declined": declined, "summary": text}
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return 0
     confirmed = {p["number"] for p in proposals} if args.confirm == "all" else (
@@ -494,12 +599,28 @@ def parse_issue(value: str) -> tuple[int, str]:
     return int(rank), ref.strip()
 
 
+def parse_ref_reason(value: str) -> tuple[str, str]:
+    """``--decline-reason REF=TEXT`` (plan) to ``(ref, text)``; argparse reports a bad value."""
+    ref, sep, text = value.partition("=")
+    if not sep or not ref.strip() or not text.strip():
+        raise argparse.ArgumentTypeError(f"expected REF=TEXT, got {value!r}")
+    return ref.strip(), text.strip()
+
+
 def parse_reason(value: str) -> tuple[int, str]:
     """``--decline-reason N=TEXT`` to ``(number, text)``; argparse reports a bad value."""
     number, sep, text = value.partition("=")
     if not sep or not number.strip().lstrip("#").isdigit() or not text.strip():
         raise argparse.ArgumentTypeError(f"expected N=TEXT, got {value!r}")
     return int(number.strip().lstrip("#")), text.strip()
+
+
+def parse_parts(value: str) -> tuple[str, int]:
+    """``--parts REF=N`` to ``(ref, n)``: an action's rank or sub-item label and 0 or more parts (#1542)."""
+    ref, sep, count = value.partition("=")
+    if not sep or not ref.strip() or not count.strip().isdigit():
+        raise argparse.ArgumentTypeError(f"expected REF=N, such as 2=3 or 2a=2, got {value!r}")
+    return ref.strip(), int(count)
 
 
 def non_negative(value: str) -> int:
@@ -524,18 +645,30 @@ def _parser() -> argparse.ArgumentParser:
     i.add_argument("--report-link", help="full-report link for each item's Context block")
     pl = sub.add_parser("plan", help="the tracker items with a create / reuse step each")
     pl.add_argument("--existing", type=Path, required=True,
-                    help="JSON array of the tracker's items (gh issue list --json number,title,body,state,labels)")
+                    help="JSON array of the tracker's items "
+                         "(gh issue list --json number,title,body,state,labels,stateReason,closedAt)")
     pl.add_argument("--label", default=DEFAULT_LABEL, help="label an unmarked item must carry; '' for none")
     pl.add_argument("--report-link", help="full-report link for each item's Context block")
+    pl.add_argument("--decline", action="append", default=[], metavar="REF",
+                    help="record the 6b offer for item REF (rank, or sub-item label) as declined; repeat per item")
+    pl.add_argument("--declined-by", help="with --decline: who declined, for the record")
+    pl.add_argument("--declined-at", help="with --decline: the date of the declines, for the record")
+    pl.add_argument("--decline-reason", action="append", type=parse_ref_reason, default=[], metavar="REF=TEXT",
+                    help="with --decline: the user's reason for declining item REF; repeat per item")
+    pl.set_defaults(subparser=pl)
     nu = sub.add_parser("next-up", help="the report's Next up block: the items over the [backlog] wip limit")
     nu.add_argument("--existing", type=Path, required=True, help="the same file as plan --existing")
     nu.add_argument("--label", default=DEFAULT_LABEL, help="as for plan")
     for sp in (pl, nu):
         sp.add_argument("--wip", type=non_negative, metavar="N",
                         help="open-item limit (default: .assess/config.toml [backlog] wip, else 3)")
+        sp.add_argument("--parts", action="append", type=parse_parts, default=[], metavar="REF=N",
+                        help="action REF (rank, or sub-item label such as 2a) is filed split, and N of its parts "
+                             "need a slot (created or reopened); repeat per split action")
     rc = sub.add_parser("reconcile", help="propose closing, reopening or demoting filed items; writes nothing to the tracker")
     rc.add_argument("--existing", type=Path, required=True,
-                    help="JSON array of the tracker's items (gh issue list --json number,title,body,state,labels)")
+                    help="JSON array of the tracker's items "
+                         "(gh issue list --json number,title,body,state,labels,stateReason,closedAt)")
     rc.add_argument("--label", default=DEFAULT_LABEL, help="label an item must carry; '' for none")
     rc.add_argument("--filed", type=parse_numbers, default=frozenset(), metavar="N,...",
                     help="items this run filed or reused: never proposed superseded")
@@ -563,6 +696,13 @@ def _check_decline_flags(args: argparse.Namespace) -> None:
     Without both, ``reconcile`` records nothing, so a decline flag would be silently ignored.
     The error prints the ``reconcile`` usage, not the root one.
     """
+    if args.command == "plan":
+        given = [flag for flag, value in (("--declined-by", args.declined_by is not None),
+                                          ("--declined-at", args.declined_at is not None),
+                                          ("--decline-reason", bool(args.decline_reason))) if value]
+        if given and not args.decline:
+            args.subparser.error(f"{', '.join(given)} needs --decline")
+        return
     if args.command != "reconcile":
         return
     given = [flag for flag, value in (("--record-declines", args.record_declines),
@@ -604,7 +744,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         limit = load_backlog_wip(args.repo)
         wip = args.wip if args.wip is not None else limit
         try:
-            items = plan_items(items, _read_json(args.existing), args.label, run_level(assess_dir), wip)
+            items = run_plan(assess_dir, args, items, wip)
         except RenderError as exc:
             print(f"assess_actions_render: {exc}", file=sys.stderr)
             return 1

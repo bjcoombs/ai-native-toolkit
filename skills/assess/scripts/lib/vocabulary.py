@@ -8,8 +8,8 @@ the team next-steps pages, the heat map and the /assess
 deterministic report from source and fails, naming the word and where it was
 found, when one of them reappears.
 
-Only prose is checked: fenced code, backticked spans, URLs (bare or as a Markdown link
-target) and identifiers that contain an underscore are left out (``prose``), and the
+Only prose is checked: fenced code, backticked spans, URLs (bare, brackets in the path
+included, or a whole Markdown link destination with its title) and identifiers that contain an underscore are left out (``prose``), and the
 retired label "AI-Native" never matches as part of the product name ``ai-native-toolkit``, so machine field names, JSON keys, finding
 names and signal paths (``lying_map``, ``instruction_claims.failed``) stay as they
 are. Stdlib only.
@@ -22,7 +22,7 @@ source, a real fleet run with the shipped maturity model (`report.md`, every dia
 map and the team next-steps pages), the in-repo diagram, trend, heat map and next-steps
 fixtures, and the /assess deterministic report with every cross-practice finding. It fails,
 naming the word, the output and the line, when one of these words appears in the prose as a
-whole word, case-insensitive. Fenced code, backticked spans, URLs (bare, or a Markdown link
+whole word, case-insensitive. Fenced code, backticked spans, URLs (bare, or a whole Markdown link
 target) and identifiers containing an underscore are not prose (`prose`), so machine field
 names, JSON keys, finding names, signal paths (`lying_map`, `instruction_claims.failed`,
 `fail_under`) and links into the toolkit repository stay unchanged. The retired label
@@ -123,8 +123,13 @@ IN_PLACE = "In place:"
 _FENCE = re.compile(r"```.*?```", re.S)
 _TICKS = re.compile(r"`[^`\n]*`")
 _IDENT = re.compile(r"\S*_\S*")
-# A URL is an address, not prose: a bare one, or a Markdown link target ``](...)``.
-_URL = re.compile(r"\]\([^)\s]*\)|<?https?://[^\s)>]+>?")
+# A URL is an address, not prose: a bare one, or a whole Markdown link destination ``](...)``.
+# A destination may sit in angle brackets, hold balanced brackets and end in a quoted title;
+# a bare URL may hold balanced brackets, ``a(v1)/b`` (#918), so no path text is left as prose.
+_BALANCED = r"(?:[^\s()<>]|\([^\s()<>]*\))"
+_URL = re.compile(r"\]\(\s*(?:<[^>\n]*>|" + _BALANCED + r"*)"
+                  r"(?:\s+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^()\n]*\)))?\s*\)"
+                  r"|<?https?://" + _BALANCED + r"+>?")
 
 #: "AI-Native" is also the product's own name in ``ai-native-toolkit``, so the retired
 #: label matches as a whole word in any case, hyphen-joined forms included, except when

@@ -424,6 +424,11 @@ _WORDING: dict[str, Wording] = {
         "Commit a `CONTRIBUTING.md` that says how to build, test and shape a change, at the root, "
         "in `.github/` or in `docs/`.",
         "`git ls-files` lists a `CONTRIBUTING` file at the root, in `.github/` or in `docs/`."),
+    "skill_library.present": _flag(
+        "Commit a `skills/<name>/SKILL.md` (or `.claude/skills/<name>/SKILL.md`) for a procedure the "
+        "team repeats, with frontmatter giving a `name` and a `description` of when to use it.",
+        "`git ls-tree -r HEAD --name-only` lists a committed `SKILL.md` with a `name` and a `description` under `skills/`, a harness "
+        "folder's `skills/` or `plugins/<name>/skills/`, outside `node_modules`, vendored and fixture folders."),
     "contributor_files.policy.present": _flag(
         "Commit a `SECURITY.md` that says how to report a vulnerability privately (or link GitHub "
         "private vulnerability reporting), at the root, in `.github/` or in `docs/`.",
@@ -602,6 +607,8 @@ _MEASURE_HINTS = {
                  "measured (`no_agent_jobs`) when no committed workflow job runs an agent, and "
                  "(`agent_job_scope_unread`) when an agent job's `permissions:` is an expression "
                  "or another value the scan cannot read.",
+    "skill_library": "Not measured (`not_a_git_repository`) outside a git repository, where the "
+                     "committed files cannot be listed.",
     "ci_model_jobs": "Not measured (`no_model_jobs`) when no model-calling CI job is detected. "
                      "Not measured (`trigger_unresolved`, `ci_jobs_unread`) when none is ungated but a "
                      "trigger, a condition or a job this reader cannot read could still run one on every change.",

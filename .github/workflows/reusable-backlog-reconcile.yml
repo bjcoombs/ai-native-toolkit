@@ -111,7 +111,7 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -y -q ripgrep
 
       - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d  # v10.4.0
         with:
           enable-cache: false
 
@@ -123,9 +123,13 @@ jobs:
         run: |
           ws="$GITHUB_WORKSPACE/repo"
           mkdir -p "$ws/.assess"
+          # `uv run --locked <file>.py` is script mode and wants a <file>.py.lock, so the
+          # scripts the project environment covers run as `python <file>` against uv.lock.
+          # complexity-treemap.py needs matplotlib, squarify and numpy, which the project
+          # lacks, so it runs unlocked in script mode on its inline pins.
           uv run scripts/complexity-treemap.py "$ws" -o "$RUNNER_TEMP/heatmap.svg" \
             --stats "$ws/.assess/complexity-stats.json"
-          uv run scripts/assess_core.py "$ws"
+          uv run --locked python scripts/assess_core.py "$ws"
 
       - name: Plan the writes (no model)
         id: plan
@@ -136,10 +140,10 @@ jobs:
           mkdir -p "$out"
           if [ -n "$LABEL" ]; then
             gh issue list --repo "$GH_REPO" --label "$LABEL" --state all --limit 500 \
-              --json number,title,body,state,labels,comments > "$out/existing.json"
+              --json number,title,body,state,labels,comments,stateReason,closedAt > "$out/existing.json"
           else
             gh issue list --repo "$GH_REPO" --state all --limit 500 \
-              --json number,title,body,state,labels,comments > "$out/existing.json"
+              --json number,title,body,state,labels,comments,stateReason,closedAt > "$out/existing.json"
           fi
           # A listing that reaches the limit may leave items out, and a `file`
           # run would then file their conditions again.
@@ -147,7 +151,7 @@ jobs:
             echo "::error::The issue listing reached its 500-item limit, so the plan could miss filed items; nothing is written."
             exit 1
           fi
-          uv run scripts/assess_actions_render.py "$GITHUB_WORKSPACE/repo" reconcile \
+          uv run --locked python scripts/assess_actions_render.py "$GITHUB_WORKSPACE/repo" reconcile \
             --existing "$out/existing.json" --label "$LABEL" --scheduled --today "$(date -u +%Y-%m-%d)" \
             > "$out/plan.json"
           jq -r '.summary' "$out/plan.json" >> "$GITHUB_STEP_SUMMARY"

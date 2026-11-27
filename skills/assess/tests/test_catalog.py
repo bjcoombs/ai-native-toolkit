@@ -29,7 +29,8 @@ from lib.run.scan_registry import SCANS
 from lib.run.signals import known_scans
 
 SCAN_FIELDS = {"name", "title", "summary", "collector", "reads", "network", "platform", "headless",
-               "privacy", "used_by", "unknown_reasons", "evidence", "grades", "why", "why_source"}
+               "privacy", "used_by", "unknown_reasons", "evidence", "grades", "why", "why_source",
+               "headless_reads"}
 
 
 def _manifest_data() -> dict[str, Any]:
@@ -392,3 +393,78 @@ def test_a_version_1_manifest_renders_without_whys() -> None:
     text = render_markdown(build_catalog(manifest=cm.parse_manifest(data)))
     assert "Why the signals named here matter" not in text and "Run plumbing" not in text
     assert mw.PLUMBING not in text and "| - | Supportive" not in text
+
+
+# ---------- the PR #875 review follow-ups (#918) ----------
+
+def test_the_whole_condition_carries_its_grade_and_counts_flag() -> None:
+    # #918 item 2 shipped with #870: a condition's grade is its weakest signal, in both outputs.
+    catalog = build_catalog()
+    claims = next(lv for r in catalog["rows"] for lv in r["levels"] if lv["id"] == "layer-0-instructions.2")
+    assert (claims["grade"], claims["counts"]) == ("declared", False)
+    assert any(c["counts"] for c in claims["criteria"])
+    assert {"Grade", "Counts"} <= {h for h, _ in CONDITION_COLUMNS}
+
+
+def test_a_block_specific_reason_stays_on_its_block() -> None:
+    # no_grimp is declared for structure; the other keyhole blocks do not carry it.
+    scans = {s["name"]: s for s in build_catalog()["scans"]}
+    assert "no_grimp" in [r["code"] for r in scans["structure"]["unknown_reasons"]]
+    for name in ("behaviour", "documentation", "understanding", "runtime", "derived_findings"):
+        assert "no_grimp" not in [r["code"] for r in scans[name]["unknown_reasons"]], name
+    assert "no_grimp" not in _scan_section(render_markdown(build_catalog()), "behaviour")
+
+
+def test_an_alternate_manifest_is_checked_against_the_registry_before_the_join() -> None:
+    # A manifest that parses but publishes no block of the installed registry names each scan.
+    empty = cm.parse_manifest({"manifest_version": 1, "owner": "core", "entries": []})
+    with pytest.raises(cm.CheckManifestError) as raised:
+        build_catalog(empty)
+    assert {e["code"] for e in raised.value.errors} == {"UNPUBLISHED_SCAN"}
+    assert sorted(e["path"] for e in raised.value.errors) == sorted(f"scans.{n}" for n in known_scans())
+
+
+def test_a_scan_no_criterion_reads_is_unclassified() -> None:
+    model = load_default_levels()
+    for row in model["rows"]:
+        for lv in row["levels"]:
+            lv["criteria"] = [c for c in lv["criteria"] if not c["signal"].startswith("ci_checks.")]
+    ci = next(s for s in build_catalog(model=model)["scans"] if s["name"] == "ci_checks")
+    assert ci["grades"] == [UNCLASSIFIED]
+    assert ci["evidence"]  # the manifest's evidence per signal stays as detail
+    assert "- Evidence: `unclassified`, as no criterion reads its signals: `ci_checks." in \
+        _scan_section(render_markdown(build_catalog(model=model)), "ci_checks")
+    default = next(s for s in build_catalog()["scans"] if s["name"] == "ci_checks")
+    assert UNCLASSIFIED not in default["grades"]
+
+
+def test_a_headless_variant_publishes_what_it_reads() -> None:
+    catalog = build_catalog()
+    scans = {s["name"]: s for s in catalog["scans"]}
+    assert scans["structure"]["headless"] == "headless_variant"
+    assert scans["structure"]["headless_reads"] == ["structure_scan"]
+    assert scans["observability"]["headless_reads"] == ["repo_root", "excludes"]
+    assert all((s["headless_reads"] is None) is (s["headless"] != "headless_variant")
+               for s in catalog["scans"]), "a variant's reads exactly when it has a variant"
+    assert '"headless_reads": [\n        "structure_scan"\n      ]' in render_json(catalog)
+    assert "- Headless variant reads: `structure_scan`." in _scan_section(render_markdown(catalog), "structure")
+
+
+def test_a_finding_publishes_its_declared_thresholds() -> None:
+    catalog = build_catalog()
+    findings = {f["name"]: f for f in catalog["findings"]}
+    declared = cm.finding_thresholds(cm.load_manifest(), "hidden_coupling")
+    assert declared and findings["hidden_coupling"]["thresholds"] == dict(sorted(declared.items()))
+    assert all(f["thresholds"] == {} for n, f in findings.items()
+               if not cm.finding_thresholds(cm.load_manifest(), n))
+    row = next(line for line in render_markdown(catalog).splitlines()
+               if line.startswith("| `hidden_coupling` "))
+    assert "; thresholds `high_front_door_ratio` 0.7, " in row and "`low_containment` 0.3 |" in row
+
+
+def test_the_page_names_every_source() -> None:
+    catalog = build_catalog()
+    head = render_markdown(catalog).split("\n## ", 1)[0]
+    assert all(f"`{source}`" in head for source in catalog["sources"])
+    catalog["sources"] = [*catalog["sources"], "skills/assess/x.toml"]
+    assert "`skills/assess/x.toml`" in render_markdown(catalog).split("\n## ", 1)[0]

@@ -116,3 +116,24 @@ def test_the_plan_artifact_name_survives_a_rerun_of_the_failed_job() -> None:
     names = [s["with"]["name"] for job in _load(REUSABLE)["jobs"].values() for s in _steps(job)
              if str(s.get("uses", "")).startswith(("actions/upload-artifact@", "actions/download-artifact@"))]
     assert names == ["backlog-reconcile-plan", "backlog-reconcile-plan"]
+
+
+# The plan job's one script-mode script: it needs matplotlib, squarify and numpy, which the
+# skills/assess project environment lacks, so it runs on its PEP 723 inline pins.
+SCRIPT_MODE = {"complexity-treemap.py"}
+
+
+def test_the_plan_job_runs_project_scripts_against_the_lockfile() -> None:
+    """Every other script runs as ``uv run --locked python <file>`` against ``skills/assess/uv.lock``.
+
+    ``uv run --locked <file>.py`` is script mode, which ignores ``uv.lock`` and fails without
+    a ``<file>.py.lock``, so that form never appears.
+    """
+    plan = _load(REUSABLE)["jobs"]["plan"]
+    runs = "\n".join(str(s.get("run", "")) for s in _steps(plan))
+    assert not re.search(r"uv run --locked scripts/", runs), "script mode under --locked needs a script lockfile"
+    calls = re.findall(r"uv run (--locked python )?scripts/(\S+\.py)", runs)
+    assert sorted(script for _, script in calls) == ["assess_actions_render.py", "assess_core.py",
+                                                    "complexity-treemap.py"]
+    for locked, script in calls:
+        assert bool(locked) is (script not in SCRIPT_MODE), script

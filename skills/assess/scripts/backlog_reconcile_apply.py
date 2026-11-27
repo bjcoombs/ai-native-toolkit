@@ -13,7 +13,11 @@ A write the plan's mode does not allow, or one missing a field its op needs, (``
 ``backlog_schedule.WRITE_OPS``) fails the run before any write is made, and so does a plan
 over ``MAX_CLOSES`` closes or ``MAX_CREATES`` new items. ``--dry-run`` prints the writes and
 makes none. A failed ``gh`` call ends the run with exit 1, gh's stderr and the writes made
-before it. Stdlib only, so the writer job checks out this file and nothing else.
+before it; a filed item is logged as soon as its number is known, so a status comment that
+fails after ``gh issue create`` still names the new item. Any failure once writing has begun
+(a ``gh`` error, a create with no issue URL, an unreadable ``gh label list`` reply or a body
+file that cannot be written) is a ``WriteError`` with that list.
+Stdlib only, so the writer job checks out this file and nothing else.
 Tests: ``tests/test_backlog_reconcile_apply.py``.
 """
 from __future__ import annotations
@@ -98,7 +102,10 @@ def _text(w: Mapping[str, object], key: str) -> str:
 
 
 class WriteError(Exception):
-    """A ``gh`` call failed part way through the plan; ``done`` holds the writes already made."""
+    """Writing failed part way through the plan (``apply`` lists the causes).
+
+    ``done`` holds the writes already made.
+    """
 
     def __init__(self, message: str, done: Sequence[str]) -> None:
         super().__init__(message)
@@ -108,7 +115,9 @@ class WriteError(Exception):
 def apply(writes: Sequence[Mapping[str, object]], repo: str, run: Runner, workdir: Path) -> list[str]:
     """Run each write in order; returns one log line per write.
 
-    A failed ``gh`` call raises ``WriteError`` with gh's stderr and the writes made before it.
+    A failed ``gh`` call raises ``WriteError`` with gh's stderr and the writes made before it, as do
+    a create with no issue URL, a ``gh label list`` reply that is not JSON and a body file that
+    cannot be written (``load_plan`` has already checked every field).
     """
     log: list[str] = []
     try:
@@ -117,6 +126,8 @@ def apply(writes: Sequence[Mapping[str, object]], repo: str, run: Runner, workdi
         stderr = (exc.stderr or "").strip() if isinstance(exc.stderr, str) else ""
         raise WriteError(f"gh {' '.join(str(a) for a in exc.cmd[1:3])} failed (exit {exc.returncode})"
                          + (f": {stderr}" if stderr else ""), log) from exc
+    except (PlanError, ValueError, OSError) as exc:
+        raise WriteError(str(exc), log) from exc
     return log
 
 
@@ -138,10 +149,11 @@ def _apply(writes: Sequence[Mapping[str, object]], repo: str, run: Runner, workd
             run(["issue", "close", _number(w), "--repo", repo, "--reason", "completed"])
             log.append(f"closed #{_number(w)}")
         elif op == "create":
-            log.append(_create(w, repo, run, body_file, labels_done))
+            _create(w, repo, run, body_file, labels_done, log)
 
 
-def _create(w: Mapping[str, object], repo: str, run: Runner, body_file: Path, labels_done: set[str]) -> str:
+def _create(w: Mapping[str, object], repo: str, run: Runner, body_file: Path, labels_done: set[str],
+            log: list[str]) -> None:
     raw = w.get("labels")
     labels = [x for x in raw if isinstance(x, str) and x] if isinstance(raw, list) else []
     for label in labels:
@@ -159,9 +171,9 @@ def _create(w: Mapping[str, object], repo: str, run: Runner, body_file: Path, la
     number = url.rstrip("/").rpartition("/")[2]
     if not number.isdigit():
         raise PlanError(f"gh issue create gave no issue URL: {url!r}")
+    log.append(f"filed #{number}: {w.get('title')}")
     body_file.write_text(_text(w, "status"), encoding="utf-8")
     run(["issue", "comment", number, "--repo", repo, "--body-file", str(body_file)])
-    return f"filed #{number}: {w.get('title')}"
 
 
 def main(argv: Sequence[str] | None = None, run: Runner = gh) -> int:

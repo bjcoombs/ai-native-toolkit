@@ -278,7 +278,7 @@ def test_default_levels_loads_against_the_schema() -> None:
     assert maturity_model["version"].startswith("default-")
     assert all(row["scope"] == "team" for row in maturity_model["rows"])
     one = {"skill-disclosure", "skill-script-tests", "skill-personal-data", "model-ci-gated", "contributor-files",
-           "agent-least-privilege", "agent-job-write-access"}  # #1045, #849; else 2
+           "skill-library", "agent-least-privilege", "agent-job-write-access"}  # #1045, #848, #849; else 2
     assert all(len(row["levels"]) == (1 if row["id"] in one else 2) for row in maturity_model["rows"])
     assert "disagree" in DEFAULT_LEVELS.read_text(encoding="utf-8").lower()
 
@@ -344,7 +344,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "model-ci-gated": None,      # no model-calling CI job detected: no_model_jobs
             "contributor-files": 0,      # no CONTRIBUTING or SECURITY file
             "secrets-guard": 0,          # no secrets hook or CI scan, and no remote
-            "agent-least-privilege": None, "agent-job-write-access": None,  # no agent job: no_agent_jobs
+            "skill-library": 0, "agent-least-privilege": None, "agent-job-write-access": None,  # no SKILL.md; no_agent_jobs
         }
     for scans in golden_repos.values():   # measured headless, each unknown for a named reason
         assert scans["structure"]["reason"].startswith("no_python_packages:")
@@ -381,7 +381,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "skill-script-tests": None,  # the capture predates skill_script_tests
         "skill-personal-data": None, "contributor-files": None,  # the capture predates both blocks
         "secrets-guard": None, "model-ci-gated": None,  # the capture predates both blocks
-        "agent-least-privilege": None, "agent-job-write-access": None,  # the capture predates the agent job scope
+        "skill-library": None, "agent-least-privilege": None, "agent-job-write-access": None,  # the capture predates all three
     }
     assert "layer_grades.instruction_file_present" in _row(
         result, "layer-0-instructions")["missing_signals"]
