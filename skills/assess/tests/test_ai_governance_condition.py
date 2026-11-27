@@ -155,6 +155,63 @@ def test_a_wrapped_whole_refusal_still_reads_as_one() -> None:
     assert declines_review("Copilot should not review\npull requests in this repository.\n- Use type hints.\n") is True
 
 
+SAME_COLUMN = """name: disclosure
+on: pull_request
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Require disclosure
+      run: |
+        printf '%s' "${{ github.event.pull_request.body }}" | grep -qi "Assisted-by" || exit 1
+"""
+
+
+def test_steps_in_the_same_column_as_steps_are_read(tmp_path: Path) -> None:
+    assert scan_ai_governance(_repo(tmp_path, {".github/workflows/d.yml": SAME_COLUMN}))["enforced"] is True
+
+
+def test_a_body_read_in_another_jobs_env_does_not_reach_a_step(tmp_path: Path) -> None:
+    text = """name: two
+on: pull_request
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    env:
+      BODY: ${{ github.event.pull_request.body }}
+    steps:
+      - run: echo "$BODY"
+  b:
+    runs-on: ubuntu-latest
+    steps:
+      - run: grep -q "AI" trailers.txt || exit 1
+"""
+    assert scan_ai_governance(_repo(tmp_path, {".github/workflows/two.yml": text}))["enforced"] is False
+
+
+@pytest.mark.parametrize("where", ["step", "job"])
+def test_a_check_that_cannot_turn_the_run_red_does_not_count_unless_it_labels(tmp_path: Path, where: str) -> None:
+    flag = ("    steps:\n    - name: Require disclosure\n      continue-on-error: true\n" if where == "step"
+            else "    continue-on-error: true\n    steps:\n    - name: Require disclosure\n")
+    text = SAME_COLUMN.replace("    steps:\n    - name: Require disclosure\n", flag)
+    assert scan_ai_governance(_repo(tmp_path, {".github/workflows/d.yml": text}))["enforced"] is False
+    labelled = text.replace("|| exit 1", "|| gh pr edit --add-label needs-disclosure")
+    assert scan_ai_governance(_repo(tmp_path, {".github/workflows/d.yml": labelled}))["enforced"] is True
+
+
+def test_a_log_message_naming_ai_is_not_a_check() -> None:
+    step = 'run: |\n  echo "AI disclosure scan"\n  gh pr view --json body > body.json\n  test -s body.json || exit 1\n'
+    assert enforces_disclosure(step) is False
+
+
+def test_a_script_is_read_from_the_directory_the_line_changes_to(tmp_path: Path) -> None:
+    flow = TRAILERS.replace("python3 tools/check_trailers.py", "cd tools && python3 check.py")
+    root = _repo(tmp_path, {".github/workflows/t.yml": flow, "check.py": TRAILER_SCRIPT, "tools/check.py": "print(1)\n"})
+    assert scan_ai_governance(root)["enforced"] is False
+    (tmp_path / "tools/check.py").write_text(TRAILER_SCRIPT, encoding="utf-8")
+    assert scan_ai_governance(root)["enforced"] is True
+
+
 def test_a_pagination_cursor_is_not_an_ai_marker() -> None:
     assert enforces_disclosure("gh api graphql -f cursor=$cursor --jq .body pull_request.body\nexit 1\n") is False
 

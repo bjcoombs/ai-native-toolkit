@@ -10,7 +10,9 @@ reader (``lib.ci.ci_step_paths.local_reader``), so nothing outside the checkout 
   ``pull_request`` or ``pull_request_target`` has one step that does all three, in the step's
   own text (local actions inlined) or in a file one of its lines leads to (``step_texts``,
   ``enforcing_steps``), so a body read in one step and an exit in another never combine; only the
-  read may come from an ``env:`` block of the workflow or the job: it reads the pull request body or the commit
+  read may come from an ``env:`` block of the workflow or the step's own job, and a step under
+  ``continue-on-error: true`` (its own or its job's) counts only when it labels, as its exit cannot
+  turn the run red. A script a ``run:`` line names is read from the ``cd`` directory before it: it reads the pull request body or the commit
   messages and trailers (``_READS``: ``pull_request.body``, ``gh pr view --json body``,
   ``git log`` with a body or trailer format, ``git interpret-trailers``, the pull request commits
   API); it names an AI disclosure or attribution marker inside a quoted literal or a ``/regex/``
@@ -48,9 +50,11 @@ from __future__ import annotations
 import posixpath
 import re
 from pathlib import Path
-from typing import TypedDict
+from typing import NamedTuple, TypedDict
 
 from lib.ci.ci_action_inputs import ReadLocal
+from lib.ci.ci_masking import IndentTree, parse_lines
+from lib.ci.ci_matrix import jobs
 from lib.ci.ci_step_follower import StepFollower, follow_workflow
 from lib.ci.ci_step_paths import local_reader
 from lib.ci.ci_triggers import workflow_events
@@ -77,9 +81,14 @@ _READS = re.compile(r"pull_request\.body|gh\s+pr\s+view\b[^\n]*--json\s+[\w,]*bo
                     r"|pulls\.listCommits|pull_request\.commits_url|/pulls/[^\s/]+/commits", _I)
 _AI_MARKERS = re.compile(r"\bAI\b|(?i:\b(?:llm|copilot|claude|chatgpt|gpt-?\d|gemini|codex"
                          r"|assisted-by|generated-by|ai-assisted|ai-generated)\b)")
+_LABELS = re.compile(r"--add-label\b|\baddLabels\b|\badd-labels?\b", _I)
 _ACTS = re.compile(r"\bexit\s+1\b|\bexit\s*\(\s*1\s*\)|setFailed\s*\(|process\.exit\s*\(\s*1|sys\.exit\s*\("
-                   r"|raise\s+SystemExit|--add-label\b|\baddLabels\b|\badd-labels?\b|::error\b", _I)
+                   r"|raise\s+SystemExit|::error\b|" + _LABELS.pattern, _I)
+# A line that tests text: the quoted marker on it is what a check looks for, not a log message.
+_CHECK_LINE = re.compile(r"\b(?:e?grep|rg|match|search|findall|fullmatch|includes|contains|startsWith|indexOf|test"
+                         r"|if|elif|case|when|in)\b|=~|\[\[", _I)
 _SCRIPT_ARG = re.compile(r"\b(?:python3?|node|ruby|bash|sh)\s+(?:-\S+\s+)*\.?/?([\w./-]+\.(?:py|js|mjs|cjs|rb|sh))\b")
+_CD = re.compile(r"\bcd\s+([\w./-]+)\s*(?:&&|;)")
 _YAML_COMMENT = re.compile(r"^\s*#.*$", re.MULTILINE)
 _CHECKBOX = re.compile(r"^\s*[-*]\s*\[[ xX]\]\s+(.*)$", re.MULTILINE)
 _AI_WORD = re.compile(r"\bAI\b|(?i:\b(?:llm|copilot|chatgpt|claude|gemini|generative|language model)\b)")
@@ -116,11 +125,14 @@ def enforces_disclosure(text: str, env: str = "") -> bool:
     """True when one step's ``text`` reads a pull request body or commit trailers, names an AI
     marker and turns the run red or labels (module docstring). The read may come from ``env``, the
     ``env:`` blocks around the step; the marker and the act must be in the step, and the marker
-    inside a quoted literal or a ``/regex/`` (``_QUOTED``): what the check looks for, so a step
+    inside a quoted literal or a ``/regex/`` (``_QUOTED``) on a line that tests text
+    (``_CHECK_LINE``: grep, a match, ``includes``, ``if``, ``in``): what the check looks for, so a
+    log message naming AI does not count, and a step
     that only runs an AI tool on the body (``claude --print ... || exit 1``) does not count. Whole-line YAML
     and shell comments are dropped first."""
     clean = _YAML_COMMENT.sub("", text)
-    named = any(_AI_MARKERS.search(q.group(0)) for q in _QUOTED.finditer(clean))
+    named = any(_AI_MARKERS.search(q.group(0)) for line in clean.splitlines() if _CHECK_LINE.search(line)
+                for q in _QUOTED.finditer(line))
     return bool((_READS.search(clean) or _READS.search(_YAML_COMMENT.sub("", env)))
                 and named and _ACTS.search(clean))
 
@@ -185,45 +197,49 @@ def read_copilot_opt_out(repo_root: Path) -> DeclineRecord | None:
             "declined_at": None, "version": None, "reason": "Copilot review declined in " + ", ".join(files)}
 
 
-def _indent(line: str) -> int:
-    return len(line) - len(line.lstrip())
+class Step(NamedTuple):
+    text: str  # the step's own lines
+    env: str  # the env: blocks of the workflow and of the step's own job
+    masked: bool  # continue-on-error: true on the step or its job, so an exit cannot turn the run red
 
 
-def step_texts(text: str) -> tuple[list[str], str]:
-    """A GitHub workflow's steps, each as its own text, and its ``env:`` blocks outside the steps
-    (the workflow's and each job's), where a step's ``$BODY`` may be set."""
+def _env(tree: IndentTree, lines: list[str], keys: list[int]) -> str:
+    return "\n".join(lines[j] for k in keys if tree.lines[k].key == "env" for j in tree.subtree(k))
+
+
+def _masked(tree: IndentTree, keys: list[int]) -> bool:
+    return any(tree.lines[k].key == "continue-on-error" and tree.lines[k].value.strip().strip("'\"").lower() == "true"
+               for k in keys)
+
+
+def step_texts(text: str) -> list[Step]:
+    """A GitHub workflow's steps, each with the ``env:`` of the workflow and its own job, where a
+    step's ``$BODY`` may be set, read through the shared indentation tree (``lib.ci.ci_masking``),
+    so a ``- name:`` in the same column as ``steps:`` is read too."""
     lines = text.splitlines()
-    steps: list[str] = []
-    env: list[str] = []
-    i = 0
-    while i < len(lines):
-        head = re.match(r"^(\s*)(steps|env):\s*$", lines[i])
-        if head is None:
-            i += 1
-            continue
-        base, i, item = len(head.group(1)), i + 1, None
-        current: list[str] = []
-        while i < len(lines) and (not lines[i].strip() or _indent(lines[i]) > base):
-            line = lines[i]
-            if head.group(2) == "steps" and line.lstrip().startswith("-"):
-                item = _indent(line) if item is None else item
-                if _indent(line) == item and current:
-                    steps.append("\n".join(current))
-                    current = []
-            current.append(line)
-            i += 1
-        if head.group(2) == "env":
-            env.extend(current)
-        elif current:
-            steps.append("\n".join(current))
-    return steps, "\n".join(env)
+    tree = IndentTree(parse_lines(lines))
+    workflow_env = _env(tree, lines, [i for i, line in enumerate(tree.lines) if line.structural and line.level == 0])
+    out: list[Step] = []
+    for job in jobs(tree):
+        keys = tree.children(job)
+        env, job_masked = workflow_env + "\n" + _env(tree, lines, keys), _masked(tree, keys)
+        steps = next((k for k in keys if tree.lines[k].key == "steps"), None)
+        for item in tree.items(steps) if steps is not None else []:
+            span = range(item[0], max(tree.subtree(k).stop for k in item))
+            out.append(Step("\n".join(lines[j] for j in span), env, job_masked or _masked(tree, item)))
+    return out
 
 
 def enforcing_steps(follower: StepFollower, reader: ReadLocal, text: str) -> int:
     """The steps of a workflow that enforce AI disclosure on their own: the read, the marker and the
-    act all in one step and the files its lines lead to (the read may come from an ``env:`` block)."""
-    steps, env = step_texts(text)
-    return sum(1 for step in steps if enforces_disclosure(_followed_text(follower, reader, step), env))
+    act all in one step and the files its lines lead to (the read may come from the ``env:`` of the
+    workflow or the step's job). A step under ``continue-on-error: true`` counts only when it labels."""
+    count = 0
+    for step in step_texts(text):
+        body = _followed_text(follower, reader, step.text)
+        if enforces_disclosure(body, step.env) and (not step.masked or _LABELS.search(body)):
+            count += 1
+    return count
 
 
 def _followed_text(follower: StepFollower, reader: ReadLocal, text: str) -> str:
@@ -232,8 +248,9 @@ def _followed_text(follower: StepFollower, reader: ReadLocal, text: str) -> str:
     for line in text.splitlines():
         for found in follower.step(line):
             parts.extend(found.commands)
+        cwd = _CD.search(line)
         for script in _SCRIPT_ARG.findall(line):
-            body = reader(posixpath.normpath(script))
+            body = reader(posixpath.normpath(posixpath.join(cwd.group(1) if cwd else "", script)))
             if body:
                 parts.append(body)
     return "\n".join(parts)
