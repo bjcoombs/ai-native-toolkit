@@ -262,3 +262,32 @@ def test_hot_files_written_as_a_string_are_ignored(tmp_path):
     tracking["flow"]["waves"] = [{"dag_width": 2, "units": 1,
                                   "combines": [{"units": ["a", "b"], "hot_files": "lib/x.py"}]}]
     assert fm.compute(tracking, gh)["combining"]["hot_files"] == []
+
+
+def test_bool_counts_are_rejected(tmp_path):
+    # JSON `true` is a Python bool, which isinstance(..., int) accepts; it is not a count.
+    track, gh = build(tmp_path)
+    tracking = json.loads(track.read_text())
+    waves = waves_fixture()
+    waves[1]["units"] = True
+    tracking["flow"]["waves"] = waves
+    tracking["flow"]["tokens"] = {"total": True}
+    result = fm.compute(tracking, gh)
+    assert [w["units_lost"] for w in result["combining"]["per_wave"]] == [2, None]
+    for key in ("units_after_combining", "units_lost_to_combining", "tokens_per_merge"):
+        assert result["per_run"][key] is None
+
+
+def test_units_above_dag_width_reads_null_and_names_the_wave(tmp_path):
+    track, gh = build(tmp_path)
+    tracking = json.loads(track.read_text())
+    waves = waves_fixture()
+    waves[1]["units"] = 4  # more units than the DAG allowed (2): bad input, not -2 lost
+    tracking["flow"]["waves"] = waves
+    result = fm.compute(tracking, gh)
+    assert [w["units_lost"] for w in result["combining"]["per_wave"]] == [2, None]
+    assert result["per_run"]["units_lost_to_combining"] is None
+    out = fm.render_markdown(result, None)
+    assert "| 2 | 2 | 4 | n/a | 0 |" in out
+    assert ("Wave 2 records more units after combining (4) than its DAG width (2), "
+            "so its units lost reads n/a.") in out
