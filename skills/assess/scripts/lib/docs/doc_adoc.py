@@ -31,7 +31,7 @@ build generates pages a checkout does not hold, so a miss there is not counted.
 Listing, literal, passthrough and comment blocks (``----``, ``....``, ``++++``,
 ``////``), inline passthroughs (``+xref:x.adoc[]+``, ``pass:[...]``) and ``//``
 comment lines only show syntax, so they are blanked before the
-``xref`` and ``link`` parse; ``include::`` is a preprocessor line, so only comments
+``xref`` and ``link`` parse and before the missing-xref pass (:func:`adoc_link_texts`); ``include::`` is a preprocessor line, so only comments
 hide it. Escaped macros (``\\xref:``) are skipped.
 
 Stdlib only and imports no ``lib`` module at runtime, like ``lib.docs.doc_rst``;
@@ -289,3 +289,11 @@ def without_adoc(texts: dict[Path, str]) -> dict[Path, str]:
     """``texts`` minus AsciiDoc docs, for the Markdown link pass: ``[[id]]`` is an
     AsciiDoc anchor, not a wikilink."""
     return {d: t for d, t in texts.items() if d.suffix.lower() not in ADOC_EXTENSIONS}
+
+
+def adoc_link_texts(texts: dict[Path, str]) -> dict[Path, str]:
+    """``texts`` with each AsciiDoc doc reduced to its link lines from
+    :func:`blank_verbatim`, for the missing-xref pass: a doc name in a listing
+    block or on a ``//`` line is a sample, not prose (#1580)."""
+    return {d: "\n".join(blank_verbatim(t)[0]) if d.suffix.lower() in ADOC_EXTENSIONS else t
+            for d, t in texts.items()}

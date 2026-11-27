@@ -44,7 +44,9 @@ from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 
-from lib.docs.doc_adoc import ADOC_EXTENSIONS, harvest_adoc_links, is_antora_nav, without_adoc
+from lib.docs.doc_adoc import (
+    ADOC_EXTENSIONS, adoc_link_texts, harvest_adoc_links, is_antora_nav, without_adoc,
+)
 from lib.docs.doc_graph_rows import directory_breakdown as _directory_breakdown
 from lib.docs.doc_graph_rows import link_parents as _link_parents
 from lib.docs.doc_links import (
@@ -684,7 +686,7 @@ def build_doc_graph(
         if not graph.has_edge(rel(src), rel(tgt))
     ], kind="reference")
 
-    missing = missing_xrefs(discovered, texts, graph, rel)
+    missing = missing_xrefs(discovered, adoc_link_texts(texts), graph, rel)
 
     # Vault-native navigation: `.base` view hubs + ```dataview``` query blocks
     # surface notes dynamically, so a static-link-only graph scores a navigable
