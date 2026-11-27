@@ -35,7 +35,9 @@ Writes (when the input carries an ``actions`` array):
 Then re-renders the top card's Start here and Done when from that actions.json
 (lib/card_refresh.py, #1252) in run-context.json and assess-report.md, and warns on
 stderr, naming the action, for each Top 3 ``done_when`` with no backticked command or path,
-link or number (lib/card_lint.py, the card's own line rule, #1300).
+link or number (lib/card_lint.py, the card's own line rule, #1300), and for each such
+sub-item ``done_when`` (#1518). A sub-item whose ``action`` is empty once trimmed is dropped
+from actions.json with a warning naming its parent rank and label, and is not linted.
 
 Run:
     uv run assess_finalize.py <repo_root>
@@ -415,9 +417,24 @@ def _carry_status_fields(prior_entry: JsonDict) -> ActionLifecycle:
     }
 
 
+def _kept_sub_items(entry: JsonDict) -> JsonDict:
+    """``entry`` without any sub-item whose ``action`` is empty once trimmed, each dropped with a warning (#1518)."""
+    subs = entry.get("sub_items")
+    if not isinstance(subs, list):
+        return entry
+    kept = []
+    for sub in subs:
+        if isinstance(sub, dict) and not str(sub.get("action") or "").strip():
+            print(f"actions.json: rank {entry['rank']} dropping sub-item {sub.get('label', '?')!r} "
+                  "with an empty action", file=sys.stderr)
+            continue
+        kept.append(sub)
+    return {**entry, "sub_items": kept}
+
+
 def _write_actions_contract(
     assess_dir: Path, actions: list[JsonDict], *, run_id: str | None = None
-) -> None:
+) -> list[JsonDict]:
     """Write the durable machine-readable Top 3 contract to actions.json (v2).
 
     Unlike finalize-input.json (consumed and deleted - transient by design),
@@ -427,6 +444,7 @@ def _write_actions_contract(
     existing contract so a done action stays done across re-runs, matched on the
     action's deterministic identity (finding plus paths) and falling back to its
     directive text; ``mode`` is derived deterministically from ``finding``.
+    Returns the entries written, ``[]`` when none is well formed.
     """
     prior = _read_prior_action_status(assess_dir)
     valid = []
@@ -440,7 +458,7 @@ def _write_actions_contract(
             continue
         valid.append(a)
     if not valid:
-        return
+        return []
     entries: list[JsonDict] = []
     matched: list[JsonDict] = []
     for a in sorted(valid, key=lambda a: a["rank"]):
@@ -449,11 +467,12 @@ def _write_actions_contract(
         matched.append(_match_prior_action(prior, a))
         life = _carry_status_fields(matched[-1])
         life["status"] = reopened_status(matched[-1], life["status"])
-        entries.append({**a, **life, "mode": action_mode(a.get("finding"))})
+        entries.append({**_kept_sub_items(a), **life, "mode": action_mode(a.get("finding"))})
     completed = carried_completed(prior, matched)  # done entries that left the Top 3
     payload = {"schema": ACTIONS_SCHEMA_VERSION, "run_id": run_id, "actions": entries,
                **({"completed": completed} if completed else {})}
     (assess_dir / "actions.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return entries
 
 
 def _locate_input(assess_dir: Path) -> Path:
@@ -675,9 +694,8 @@ def finalize_run(*, assess_dir: Path, repo_root: Path | None = None) -> None:
     _finalize_hotspot_actions(assess_dir, hotspot_actions=data.get("hotspot_actions", {}))
     actions = data.get("actions")
     if isinstance(actions, list) and actions:
-        _write_actions_contract(assess_dir, actions, run_id=ctx.get("run_id"))
-        kept = [a for a in actions if isinstance(a, dict) and ACTION_REQUIRED_KEYS <= set(a)]
-        for w in done_when_warnings(kept):  # the card's Done when lint, on the entries written
+        written = _write_actions_contract(assess_dir, actions, run_id=ctx.get("run_id"))
+        for w in done_when_warnings(written):  # the card's Done when lint, on what was written
             print(f"finalize: warning: {w}", file=sys.stderr)
     # The core worded the card before this run's Top 3 existed: name its first open action now.
     card_warning = refresh_card(assess_dir)

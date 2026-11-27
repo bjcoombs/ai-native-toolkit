@@ -69,6 +69,8 @@ The report's lettered sub-actions (`2a. <change> - Done when: <criterion>`, writ
 
 `assess_actions_render.py items` files each sub-item as its own tracker item after its parent, titled `2a. <action>`, with the parent's finding line, a line naming the parent action, and the parent's Context block. The PR table keeps one row per entry. A sub-item missing `label`, `action` or `done_when`, or whose label is empty or repeats another in the same entry once normalized, is skipped with a warning; the entry still renders. Lifecycle fields (`status`, `claimed_by`, `completed_sha`) belong to the entry, not to a sub-item. An entry without `sub_items` reads as before, so the schema stays `2`.
 
+`assess_finalize.py` lints sub-items as it lints entries (#1518): a sub-item whose `action` is empty once trimmed is dropped from `actions.json` with a warning naming its parent's rank and its label, and each kept sub-item whose `done_when` holds no backticked command or path, link or number gets the entry's warning, named `action rank 2 sub-item 'a'`. The rest of `sub_items` is written as given.
+
 ## `status` lifecycle
 
 | Status | Meaning |
