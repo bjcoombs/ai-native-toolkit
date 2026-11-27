@@ -65,7 +65,7 @@ from lib.skill_script_tests import SkillScriptTestsBlock
 from lib.skill_personal_data import SkillPersonalDataBlock
 from lib.skill_library import SkillLibraryBlock
 from lib.ci.ci_model_jobs import CiModelJobsBlock
-from lib.backlog_ready import BacklogReadyBlock
+from lib.backlog_ready_outcomes import BacklogReadyOutcomesBlock
 from lib.contributor_files import ContributorFilesBlock
 from lib.hosting.org_security_policy import OrgSecurityPolicyBlock
 from lib.hosting.github_secret_scanning import GithubSecretScanningBlock
@@ -167,7 +167,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("skill_library", SkillLibraryBlock),
     ("ci_model_jobs", CiModelJobsBlock),
     ("contributor_files", ContributorFilesBlock),
-    ("backlog_ready", BacklogReadyBlock),
+    ("backlog_ready", BacklogReadyOutcomesBlock),
     ("org_security_policy", OrgSecurityPolicyBlock),
     ("github_secret_scanning", GithubSecretScanningBlock),
     ("delivery", DeliveryBlock),

@@ -1,0 +1,233 @@
+[
+ {
+  "id": 50400,
+  "iid": 400,
+  "project_id": 7,
+  "title": "Fixture open title 0",
+  "description": "Fixture body 400",
+  "state": "opened",
+  "created_at": "2026-01-02T00:00:00Z",
+  "closed_at": null,
+  "closed_by": null,
+  "author": {
+   "id": 1,
+   "username": "alice-fixture",
+   "name": "Alice-Fixture",
+   "state": "active",
+   "web_url": "https://gitlab.example.com/alice-fixture"
+  },
+  "labels": [
+   "bug"
+  ],
+  "user_notes_count": 0,
+  "web_url": "https://gitlab.example.com/grp/app/-/issues/400"
+ },
+ {
+  "id": 50401,
+  "iid": 401,
+  "project_id": 7,
+  "title": "Fixture open title 1",
+  "description": "Fixture body 401",
+  "state": "opened",
+  "created_at": "2026-02-02T00:00:00Z",
+  "closed_at": null,
+  "closed_by": null,
+  "author": {
+   "id": 1,
+   "username": "alice-fixture",
+   "name": "Alice-Fixture",
+   "state": "active",
+   "web_url": "https://gitlab.example.com/alice-fixture"
+  },
+  "labels": [
+   "agent-ready"
+  ],
+  "user_notes_count": 0,
+  "web_url": "https://gitlab.example.com/grp/app/-/issues/401"
+ },
+ {
+  "id": 50402,
+  "iid": 402,
+  "project_id": 7,
+  "title": "Fixture open title 2",
+  "description": "Fixture body 402",
+  "state": "opened",
+  "created_at": "2026-03-02T00:00:00Z",
+  "closed_at": null,
+  "closed_by": null,
+  "author": {
+   "id": 1,
+   "username": "alice-fixture",
+   "name": "Alice-Fixture",
+   "state": "active",
+   "web_url": "https://gitlab.example.com/alice-fixture"
+  },
+  "labels": [
+   "enhancement",
+   "agent-ready"
+  ],
+  "user_notes_count": 0,
+  "web_url": "https://gitlab.example.com/grp/app/-/issues/402"
+ },
+ {
+  "id": 50403,
+  "iid": 403,
+  "project_id": 7,
+  "title": "Fixture open title 3",
+  "description": "Fixture body 403",
+  "state": "opened",
+  "created_at": "2026-04-02T00:00:00Z",
+  "closed_at": null,
+  "closed_by": null,
+  "author": {
+   "id": 1,
+   "username": "alice-fixture",
+   "name": "Alice-Fixture",
+   "state": "active",
+   "web_url": "https://gitlab.example.com/alice-fixture"
+  },
+  "labels": [
+   "bug"
+  ],
+  "user_notes_count": 0,
+  "web_url": "https://gitlab.example.com/grp/app/-/issues/403"
+ },
+ {
+  "id": 50404,
+  "iid": 404,
+  "project_id": 7,
+  "title": "Fixture open title 4",
+  "description": "Fixture body 404",
+  "state": "opened",
+  "created_at": "2026-05-02T00:00:00Z",
+  "closed_at": null,
+  "closed_by": null,
+  "author": {
+   "id": 1,
+   "username": "alice-fixture",
+   "name": "Alice-Fixture",
+   "state": "active",
+   "web_url": "https://gitlab.example.com/alice-fixture"
+  },
+  "labels": [
+   "docs"
+  ],
+  "user_notes_count": 0,
+  "web_url": "https://gitlab.example.com/grp/app/-/issues/404"
+ },
+ {
+  "id": 50405,
+  "iid": 405,
+  "project_id": 7,
+  "title": "Fixture open title 5",
+  "description": "Fixture body 405",
+  "state": "opened",
+  "created_at": "2026-06-02T00:00:00Z",
+  "closed_at": null,
+  "closed_by": null,
+  "author": {
+   "id": 1,
+   "username": "alice-fixture",
+   "name": "Alice-Fixture",
+   "state": "active",
+   "web_url": "https://gitlab.example.com/alice-fixture"
+  },
+  "labels": [
+   "agent-ready"
+  ],
+  "user_notes_count": 0,
+  "web_url": "https://gitlab.example.com/grp/app/-/issues/405"
+ },
+ {
+  "id": 50406,
+  "iid": 406,
+  "project_id": 7,
+  "title": "Fixture open title 6",
+  "description": "Fixture body 406",
+  "state": "opened",
+  "created_at": "2026-07-02T00:00:00Z",
+  "closed_at": null,
+  "closed_by": null,
+  "author": {
+   "id": 1,
+   "username": "alice-fixture",
+   "name": "Alice-Fixture",
+   "state": "active",
+   "web_url": "https://gitlab.example.com/alice-fixture"
+  },
+  "labels": [
+   "bug"
+  ],
+  "user_notes_count": 0,
+  "web_url": "https://gitlab.example.com/grp/app/-/issues/406"
+ },
+ {
+  "id": 50407,
+  "iid": 407,
+  "project_id": 7,
+  "title": "Fixture open title 7",
+  "description": "Fixture body 407",
+  "state": "opened",
+  "created_at": "2026-08-02T00:00:00Z",
+  "closed_at": null,
+  "closed_by": null,
+  "author": {
+   "id": 1,
+   "username": "alice-fixture",
+   "name": "Alice-Fixture",
+   "state": "active",
+   "web_url": "https://gitlab.example.com/alice-fixture"
+  },
+  "labels": [
+   "question"
+  ],
+  "user_notes_count": 0,
+  "web_url": "https://gitlab.example.com/grp/app/-/issues/407"
+ },
+ {
+  "id": 50408,
+  "iid": 408,
+  "project_id": 7,
+  "title": "Fixture open title 8",
+  "description": "Fixture body 408",
+  "state": "opened",
+  "created_at": "2026-09-02T00:00:00Z",
+  "closed_at": null,
+  "closed_by": null,
+  "author": {
+   "id": 1,
+   "username": "alice-fixture",
+   "name": "Alice-Fixture",
+   "state": "active",
+   "web_url": "https://gitlab.example.com/alice-fixture"
+  },
+  "labels": [
+   "enhancement"
+  ],
+  "user_notes_count": 0,
+  "web_url": "https://gitlab.example.com/grp/app/-/issues/408"
+ },
+ {
+  "id": 50409,
+  "iid": 409,
+  "project_id": 7,
+  "title": "Fixture open title 9",
+  "description": "Fixture body 409",
+  "state": "opened",
+  "created_at": "2026-01-02T00:00:00Z",
+  "closed_at": null,
+  "closed_by": null,
+  "author": {
+   "id": 1,
+   "username": "alice-fixture",
+   "name": "Alice-Fixture",
+   "state": "active",
+   "web_url": "https://gitlab.example.com/alice-fixture"
+  },
+  "labels": [
+   "needs-triage"
+  ],
+  "user_notes_count": 0,
+  "web_url": "https://gitlab.example.com/grp/app/-/issues/409"
+ }
+]

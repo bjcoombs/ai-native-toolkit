@@ -1,0 +1,106 @@
+{
+ "301": [
+  {
+   "id": 1,
+   "body": "Fixture note body",
+   "author": {
+    "id": 9,
+    "username": "refiner-fixture",
+    "name": "Refiner-Fixture",
+    "state": "active",
+    "web_url": "https://gitlab.example.com/refiner-fixture"
+   },
+   "created_at": "2026-11-01T00:01:00Z",
+   "system": false,
+   "noteable_iid": 0
+  },
+  {
+   "id": 2,
+   "body": "Fixture note body",
+   "author": {
+    "id": 2,
+    "username": "bob-fixture",
+    "name": "Bob-Fixture",
+    "state": "active",
+    "web_url": "https://gitlab.example.com/bob-fixture"
+   },
+   "created_at": "2026-11-01T12:00:00Z",
+   "system": false,
+   "noteable_iid": 0
+  }
+ ],
+ "302": [
+  {
+   "id": 3,
+   "body": "added ~bug label",
+   "author": {
+    "id": 2,
+    "username": "bob-fixture",
+    "name": "Bob-Fixture",
+    "state": "active",
+    "web_url": "https://gitlab.example.com/bob-fixture"
+   },
+   "created_at": "2026-10-10T00:02:00Z",
+   "system": true,
+   "noteable_iid": 0
+  },
+  {
+   "id": 4,
+   "body": "Fixture note body",
+   "author": {
+    "id": 10,
+    "username": "project_7_bot_3f2a",
+    "name": "Project_7_Bot_3F2A",
+    "state": "active",
+    "web_url": "https://gitlab.example.com/project_7_bot_3f2a"
+   },
+   "created_at": "2026-10-10T00:05:00Z",
+   "system": false,
+   "noteable_iid": 0
+  },
+  {
+   "id": 5,
+   "body": "Fixture note body",
+   "author": {
+    "id": 3,
+    "username": "carol-fixture",
+    "name": "Carol-Fixture",
+    "state": "active",
+    "web_url": "https://gitlab.example.com/carol-fixture"
+   },
+   "created_at": "2026-10-10T06:00:00Z",
+   "system": false,
+   "noteable_iid": 0
+  },
+  {
+   "id": 6,
+   "body": "Fixture note body",
+   "author": {
+    "id": 1,
+    "username": "alice-fixture",
+    "name": "Alice-Fixture",
+    "state": "active",
+    "web_url": "https://gitlab.example.com/alice-fixture"
+   },
+   "created_at": "2026-10-11T00:00:00Z",
+   "system": false,
+   "noteable_iid": 0
+  }
+ ],
+ "303": [
+  {
+   "id": 7,
+   "body": "Fixture note body",
+   "author": {
+    "id": 4,
+    "username": "dave-fixture",
+    "name": "Dave-Fixture",
+    "state": "active",
+    "web_url": "https://gitlab.example.com/dave-fixture"
+   },
+   "created_at": "2026-09-15T01:00:00Z",
+   "system": false,
+   "noteable_iid": 0
+  }
+ ]
+}

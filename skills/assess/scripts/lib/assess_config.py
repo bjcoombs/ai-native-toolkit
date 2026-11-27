@@ -42,6 +42,11 @@ pattern = "^inhouse-agent"
 [backlog_ready]
 untriaged_labels = ["needs-triage"]
 ready_labels = ["agent-ready"]
+# Level 2 thresholds (issue #1323), read through `load_backlog_ready_thresholds`.
+first_response_max_days = 2
+untriaged_max_share = 0.10
+close_open_min_ratio = 0.9
+window_days = 90
 
 # Backlog work-in-progress limit (issue #812), read through `load_backlog_wip`:
 # how many filed backlog items stay open at once (default 3); `assess-pr` lists
@@ -220,6 +225,46 @@ def load_backlog_ready_labels(repo_root: Path, untriaged: tuple[str, ...],
     got = [tuple(x.strip() for x in _string_list(section, key) if x.strip())
            for key in ("untriaged_labels", "ready_labels")]
     return got[0] or untriaged, got[1] or ready, bool(got[0] or got[1])
+
+
+class BacklogThresholds(NamedTuple):
+    """``[backlog_ready]`` level 2 thresholds (#1323), each with its default."""
+
+    first_response_max_days: float = 2.0
+    untriaged_max_share: float = 0.10
+    close_open_min_ratio: float = 0.9
+    window_days: int = 90
+
+
+def _number(section: dict[str, Any], key: str, low: float, high: float | None) -> float | None:
+    value = section.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if value < low or (high is not None and value > high):
+        return None
+    return float(value)
+
+
+def load_backlog_ready_thresholds(repo_root: Path) -> tuple[BacklogThresholds, bool]:
+    """``[backlog_ready]`` level 2 thresholds (#1323): ``first_response_max_days`` (0 or more),
+    ``untriaged_max_share`` (0 to 1), ``close_open_min_ratio`` (0 or more) and ``window_days``
+    (a whole number, 1 or more). A key that is absent or out of range keeps its default; the flag
+    is true when any key came from the config."""
+    section = load_config(repo_root).get("backlog_ready")
+    base = BacklogThresholds()
+    if not isinstance(section, dict):
+        return base, False
+    first = _number(section, "first_response_max_days", 0.0, None)
+    share = _number(section, "untriaged_max_share", 0.0, 1.0)
+    ratio = _number(section, "close_open_min_ratio", 0.0, None)
+    raw_days = section.get("window_days")
+    days = raw_days if isinstance(raw_days, int) and not isinstance(raw_days, bool) and raw_days >= 1 else None
+    got = BacklogThresholds(
+        base.first_response_max_days if first is None else first,
+        base.untriaged_max_share if share is None else share,
+        base.close_open_min_ratio if ratio is None else ratio,
+        base.window_days if days is None else days)
+    return got, any(v is not None for v in (first, share, ratio, days))
 
 
 DEFAULT_BACKLOG_WIP = 3
