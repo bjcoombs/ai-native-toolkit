@@ -279,9 +279,13 @@ def test_a_github_step_named_for_junit_does_not_clear_the_setting(
 @pytest.mark.parametrize(("step", "extra"), [
     ("./ci/build.sh", {"ci/build.sh": "#!/bin/sh\nset -e\ncd service && mvn -B verify\n"}),
     ("make verify", {"Makefile": "verify:\n\tmvn -B -f service/pom.xml verify\n"}),
+    ("uses: ./.github/workflows/maven.yml", {".github/workflows/maven.yml": (
+        "on: workflow_call\njobs:\n  maven:\n    runs-on: ubuntu-latest\n    steps:\n"
+        "      - run: mvn -B -f service/pom.xml verify\n")}),
 ])
 def test_a_maven_command_inside_a_followed_file_is_followed(tmp_path: Path, step: str, extra: dict[str, str]) -> None:
-    files = {".github/workflows/ci.yml": PLAIN.replace("pytest", step), "service/pom.xml": MODULE, **extra}
+    caller = PLAIN.replace("run: pytest", step) if step.startswith("uses:") else PLAIN.replace("pytest", step)
+    files = {".github/workflows/ci.yml": caller, "service/pom.xml": MODULE, **extra}
     block = scan_ci_hazards(_repo(tmp_path, files))
     assert (block["test_failures_ignored"], block["ci_hazard_files"]) == (1, ["service/pom.xml"])
 

@@ -39,7 +39,7 @@ is followed into the repository only through the shared CI-step follower
   ``<modules>`` closure; a pom no module names, such as a test fixture, is never read), and every
   file a CI line leads to through the follower (a committed script, a make recipe, a local
   action or reusable workflow, the poms a Maven command reads, including a Maven command inside
-  a followed script or recipe). Every step that runs a file adds its commands to that file's
+  a followed script, recipe or called reusable workflow). Every step that runs a file adds its commands to that file's
   reading, and a workflow is read from its own lines, so a setting inside a local composite
   action counts once, as the action. Null with
   ``test_failures_ignored_reason`` ``no_ci_files`` when none of those CI files or a root pom is
@@ -204,7 +204,8 @@ def _skip_labels(texts: dict[str, str]) -> tuple[int | None, list[str]]:
 def _follow_into(follower: StepFollower, text: str, out: dict[str, list[str]]) -> None:
     """Add each repository file a CI file's lines lead to, with the text that matters in it, to
     ``out``. Two steps that run the same file (``make lint``, ``make verify``) each add their
-    commands, and a Maven command inside a followed script or make recipe adds the poms it reads."""
+    commands, and a Maven command inside a followed script, make recipe or called reusable
+    workflow adds the poms it reads."""
     def add(rel: str, chunk: str) -> None:
         chunks = out.setdefault(rel, [])
         if chunk not in chunks:
@@ -220,8 +221,9 @@ def _follow_into(follower: StepFollower, text: str, out: dict[str, list[str]]) -
                 poms(found)
             elif found.paths:
                 add(found.paths[0], "\n".join(found.commands))
-            if found.kind in ("script", "make"):
-                # a recipe runs in its Makefile's directory; a script in the step's own
+            if found.kind in ("script", "make", "workflow"):
+                # a recipe runs in its Makefile's directory; a script in the step's own, and a
+                # called reusable workflow from the checkout root
                 base = posixpath.dirname(found.paths[0]) if found.kind == "make" else ""
                 for command in found.commands:
                     for inner in follower.step(f"cd {base} && {command}" if base else command):
