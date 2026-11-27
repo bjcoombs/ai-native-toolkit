@@ -264,3 +264,8 @@ def test_a_covered_hub_that_still_reads_stale_stays_a_stale_hub() -> None:
     row = {**_staleness_row("docs/a.md", 0.0), "last_commit_days": 9, "code_churn_in_window": 9,
            "renamed_children_named": 1, "kept_true_by": {"kind": "regen_diff", "path": ".github/workflows/ci.yml"}}
     assert [h["path"] for h in build_stale_hubs(graph, {"available": True, "docs": [row]})] == ["docs/a.md"]
+
+
+def test_a_gitlab_after_script_diff_cannot_fail_the_job(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {".gitlab-ci.yml": "codegen:\n  script:\n    - make gen\n  after_script:\n    - git diff --exit-code\n"})
+    assert _block(root)["present"] is False

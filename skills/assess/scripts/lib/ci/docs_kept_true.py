@@ -75,7 +75,7 @@ _RERAISE = re.compile(r"\bexit\s+(?:[1-9]\d*|\"?\$)|(?:^|[\s;{(])false\b")
 _VERIFY = re.compile(r"^(?P<dir>(?:.*/)?)verify-(?P<name>[\w.-]+)$")
 _NOT_REGEN = frozenset({"git", "echo", "printf", "cd", "pushd", "popd", "ls", "cat", "pwd", "mkdir",
                         "set", "export", "true", ":", "test", "[", "exit", "apt-get", "apt", "brew"})
-_BODY_KEYS = frozenset({"run", "script", "before_script", "after_script"})
+_BODY_KEYS = frozenset({"run", "script", "before_script"})  # GitLab ignores after_script failures
 _DOCTEST_RUNNERS = frozenset({"mdtest", "phmdoctest", "byexample"})
 _WRAPPERS = frozenset({"uv", "poetry", "pdm", "hatch", "pipenv", "rye", "python", "python3", "run", "exec"})
 
@@ -243,7 +243,8 @@ def _config_doctest(text: str) -> bool:
 
 def _job_lines(text: str) -> list[list[str]]:
     """Each job's unmasked shell lines in order (GitHub ``jobs.<id>``, GitLab top-level keys):
-    the lines of a ``run:``, ``script:``, ``before_script:`` or ``after_script:`` body."""
+    the lines of a ``run:``, ``script:`` or ``before_script:`` body. GitLab ignores an
+    ``after_script:`` failure when it sets the job status, so that body is not read."""
     lines = text.splitlines()
     unmasked, _unsure = mask_lines(text)
     tree = IndentTree(parse_lines(lines))
