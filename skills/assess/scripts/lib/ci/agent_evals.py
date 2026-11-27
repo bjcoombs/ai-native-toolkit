@@ -26,8 +26,10 @@ value, names its path (``pytest evals/``, ``working-directory: tests/agent``), i
 as ``lib.ci.ci_shell_text.command_text`` reads them, so a quoted argument
 (``git ls-files 'evals/**'``, ``-m "not eval"``), an ``echo`` and a comment run nothing. A job id,
 a step ``name:``, a ``paths:`` or ``changes:`` trigger filter and a step or job whose ``if:`` is
-never true run nothing, and a path a runner is told to skip (``--ignore=evals``, ``-k ...``) is
-the opposite of a run. One level of task runner is
+never true run nothing, nor does a command whose first word only lints, formats, moves or
+installs (``NOT_RUNNERS``: ``ruff check evals``, ``rm -rf evals``, ``pip install evals``) or an
+input of a GitHub ``actions/`` utility (``upload-artifact`` with ``path: evals/results.json``). A
+path a runner is told to skip (``--ignore=evals``, ``-k ...``) is the opposite of a run. One level of task runner is
 followed: a CI command running ``make <t>``, ``just <t>`` or ``npm run <t>`` (``pnpm``, ``yarn``,
 ``bun``) names the suite when the root ``Makefile``, ``justfile`` or ``package.json`` recipe for
 ``<t>`` does.
@@ -95,6 +97,16 @@ _EXCLUDED = re.compile(r"--(?:ignore|ignore-glob|deselect|exclude)(?:=|\s+)\S+|\
 _MARKER = re.compile(r"(?:^|\s)-m\s*([\w-]+)")
 _NEVER = re.compile(r"""^(["']?)(?:false|\$\{\{\s*false\s*\}\})\1$""", re.IGNORECASE)
 _TIER_ALIASES = ({"eval", "evals"}, {"agent", "agents"})
+# A command whose first word only lints, formats, lists, moves or installs: naming the suite there
+# runs no eval (``ruff check evals``, ``rm -rf evals``, ``pip install evals``).
+NOT_RUNNERS = frozenset({
+    "ruff", "black", "isort", "flake8", "pylint", "mypy", "pyright", "eslint", "prettier", "biome",
+    "codespell", "yamllint", "markdownlint", "shellcheck", "actionlint", "pre-commit", "rm", "ls",
+    "cp", "mv", "mkdir", "touch", "cat", "find", "tar", "zip", "unzip", "chmod", "du", "wc", "git",
+    "pip", "pip3", "pipx", "test", "[",
+})
+_SEGMENT = re.compile(r"&&|\|\||[;|&\n]")
+_LEAD = re.compile(r"^(?:\s*(?:[A-Za-z_]\w*=\S*|sudo|time|exec|env)\s+)*")
 _RUNNER = re.compile(r"""(?:^|[\s;&|(])(?:(make|just)(?:\s+-\S+)*|(?:npm|pnpm|yarn|bun)\s+run|pnpm|yarn)\s+([\w:.-]+)""")
 _MAKE_RULE = re.compile(r"^([^\s:#=][^:#=]*?)\s*::?(?!=)")
 
@@ -168,12 +180,31 @@ def _value(tree: IndentTree, i: int) -> str:
     return value
 
 
+def runnable(command: str) -> str:
+    """``command`` without the segments whose first word is in ``NOT_RUNNERS``."""
+    keep = []
+    for segment in _SEGMENT.split(command):
+        words = _LEAD.sub("", segment.strip(" \t(")).split()
+        if words and words[0].rsplit("/", 1)[-1] not in NOT_RUNNERS:
+            keep.append(segment)
+    return "\n".join(keep)
+
+
+def _utility_with(tree: IndentTree, with_line: int) -> bool:
+    """Whether a ``with:`` block belongs to a step using a GitHub ``actions/`` utility (checkout,
+    cache, upload or download an artifact, set up a toolchain), whose inputs run no eval."""
+    keys = tree.siblings[tree.mapping_of[with_line]] if with_line in tree.mapping_of else []
+    uses = next((tree.lines[k].value.strip("'\"") for k in keys if tree.lines[k].key == "uses"), "")
+    return uses.lower().startswith("actions/")
+
+
 def run_texts(text: str) -> list[str]:
     """What a CI file runs: each shell value (``run:``, ``script:`` and its items) as
     ``command_text`` reads it, so a quoted argument, an ``echo`` and a comment name nothing, and
     each ``working-directory:``, ``with:`` or ``args:`` value as written. A job id, a step
-    ``name:``, a ``paths:`` filter and a step or job whose ``if:`` is never true run nothing; skip
-    flags (``--ignore=evals``, ``-k ...``) are blanked."""
+    ``name:``, a ``paths:`` filter, a step or job whose ``if:`` is never true, a command segment
+    in ``NOT_RUNNERS`` and the ``with:`` inputs of a GitHub ``actions/`` utility run nothing;
+    skip flags (``--ignore=evals``, ``-k ...``) are blanked."""
     tree = IndentTree(parse_lines(text.splitlines()))
     dead = _dead(tree)
     out: list[str] = []
@@ -184,7 +215,9 @@ def run_texts(text: str) -> list[str]:
         owner = tree.lines[parent[0]].key if parent else ""
         shell = line.key in _SHELL_KEYS or (line.dash and not line.key and owner in _SHELL_KEYS)
         if shell:
-            out.append(_EXCLUDED.sub(" ", command_text(_value(tree, i))))
+            out.append(_EXCLUDED.sub(" ", runnable(command_text(_value(tree, i)))))
+        elif owner == "with" and _utility_with(tree, parent[0]):
+            continue
         elif line.key in _PATH_KEYS or owner in _PATH_KEYS:
             out.append(_value(tree, i))
     return [t for t in out if t.strip()]
@@ -242,7 +275,7 @@ def scan_agent_evals(tracked: frozenset[str], read: Callable[[str], str], ci_tex
             members.setdefault(suite, []).append(rel)
     lines = [line for text in ci_texts.values() for line in run_texts(text)]
     targets = {m.group(2) for line in lines for m in _RUNNER.finditer(line)}
-    lines += [_EXCLUDED.sub(" ", command_text(r)) for r in _recipes(read, tracked, targets)] if targets else []
+    lines += [_EXCLUDED.sub(" ", runnable(command_text(r))) for r in _recipes(read, tracked, targets)] if targets else []
     dirs: list[EvalSuite] = []
     set_aside = 0
     for suite, files in members.items():

@@ -133,6 +133,9 @@ Known limits:
 
 - A path in a quoted argument (`pytest "evals/"`, `-m "eval and not slow"`) is not read, as
   `command_text` blanks every quoted argument.
+- Any command that names the suite's path counts as a run unless its first word is in
+  `NOT_RUNNERS` (lint, format, list, move and install tools); a custom script given the path
+  without running it still counts.
 - A suite run only through a whole-tree command (`pytest` with no path, `pytest tests/` for
   `tests/agent`) is not named, nor one run from a folder the job `cd`s into (`cd tests && pytest evals`).
 - One task-runner level is followed, at the repository root only: a `Makefile` or `justfile`
