@@ -19,8 +19,8 @@
  * data-practice and data-gate name; state codes with no twin (data-cell="not_measured",
  * data-status="orphan") stay, since the muted <title> no longer says them. A part with no
  * data attributes shows its <title> text instead. Mouse and pen show it on hover and hide it
- * on pointer leave; a click on a part pins it until a second click, a click elsewhere, a
- * scroll or Escape.
+ * on pointer leave; a click on a part pins it. A click elsewhere, a scroll or Escape hides it;
+ * a second click on the part unpins it, back to a hover tooltip that hides on leave.
  * Touch shows it on the first tap and hides it on a second tap, a tap elsewhere, a scroll or
  * Escape.
  * On a linked part (inside an <a>), a mouse click follows the link; on touch the first tap
@@ -250,7 +250,8 @@
     on(root, "click", function (event) {
       if (!touching) {
         // A mouse click follows a link, as it would without the helper; on any other part it
-        // pins the tooltip, and a second click there or a click elsewhere unpins and hides it.
+        // pins the tooltip. A click elsewhere hides it; a second click there unpins it, and the
+        // next pointermove shows it again as a hover tooltip until the pointer leaves.
         var part = partOf(event.target);
         if (part && linkOf(part)) {
           return;

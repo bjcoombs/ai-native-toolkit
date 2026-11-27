@@ -56,8 +56,9 @@ What it does:
   with no data attributes shows its `<title>` text instead. The helper never parses the
   `<title>` wording.
 - **Pointer.** Mouse and pen show the tooltip on hover and hide it when the pointer leaves the
-  part. A click on a part pins it: hover no longer moves or hides it until a second click on
-  that part, a click elsewhere, a scroll or Escape.
+  part. A click on a part pins it: hover no longer moves or hides it. A click elsewhere, a
+  scroll or Escape hides it. A second click on that part unpins it, so it is a hover tooltip
+  again and hides when the pointer leaves.
 - **Touch.** The first tap shows it; a second tap, a tap elsewhere, a scroll or Escape hides it. Taps
   are read on `pointerup`, because iOS Safari fires no `click` from a plain SVG element.
 - **Links.** No diagram draws a link today. On a part inside an `<a>`, a mouse click follows

@@ -690,7 +690,8 @@ table.radar-table caption{text-align:left;color:var(--muted);padding:4px 0}
     on(root, "click", function (event) {
       if (!touching) {
         // A mouse click follows a link, as it would without the helper; on any other part it
-        // pins the tooltip, and a second click there or a click elsewhere unpins and hides it.
+        // pins the tooltip. A click elsewhere hides it; a second click there unpins it, and the
+        // next pointermove shows it again as a hover tooltip until the pointer leaves.
         var part = partOf(event.target);
         if (part && linkOf(part)) {
           return;
