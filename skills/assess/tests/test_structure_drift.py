@@ -190,6 +190,15 @@ def test_dangling_relative_link_is_still_drift(tmp_path: Path) -> None:
     assert _skills_readme_drift(tmp_path, refs) == ["../GONE.md", "./ghost/SKILL.md"]
 
 
+def test_root_doc_relative_link_does_not_match_by_basename(tmp_path: Path) -> None:
+    """``./missing.py`` in a root doc names the root file only, not a nested namesake."""
+    repo = _init_repo(tmp_path)
+    _write(repo, "pkg/deep/missing.py")
+    _write(repo, "ARCHITECTURE.md", "## Core\nThe core module owns [m](./missing.py).\n")
+    _commit_all(repo)
+    assert _patterns(detect_path_existence_drift(repo)) == ["./missing.py"]
+
+
 # --- 3. Excluded-only patterns count as empty --------------------------------
 
 def test_pattern_matching_only_excluded_files_is_empty(tmp_path: Path) -> None:

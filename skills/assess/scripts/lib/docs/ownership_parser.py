@@ -416,35 +416,38 @@ def _resolve_ref(
     return set()
 
 
-def _doc_ref_key(ref: str, doc_rel: str) -> str:
-    """The repo-relative path a ``./`` or ``../`` link in ``doc_rel`` names; any other ref as is.
+def _resolve_doc_ref_keyed(
+    ref: str, doc_rel: str, repo_root: Path, rel_paths: set[str],
+) -> tuple[str, set[Path]]:
+    """Resolve a reference declared in the doc at ``doc_rel``: ``(key, files)``.
 
-    ``architecture_boundaries`` compares these keys, so one module linked from its doc
-    (``../src/core``) and named from the root (``src/core``) counts once (#1231).
+    A ``./`` or ``../`` reference is a markdown link, which a reader follows from the doc's
+    own directory, so it resolves there only, never by basename elsewhere in the tree; one
+    that climbs above the repo root names nothing. Any other reference resolves through
+    ``_resolve_ref`` as repo-relative first, then from the doc's directory, so a link written
+    as ``sub/file.md`` still lands (#1231). ``key`` is the repo-relative form that resolved
+    (the reference as written when none did): ``architecture_boundaries`` compares keys, so
+    one module named two ways counts once.
     """
-    if not ref.startswith(("./", "../")):
-        return ref
-    return posixpath.normpath(posixpath.join(posixpath.dirname(doc_rel), ref))
+    local = posixpath.normpath(posixpath.join(posixpath.dirname(doc_rel), ref))
+    escapes = local == ".." or local.startswith("../")
+    if ref.startswith(("./", "../")):
+        if escapes:
+            return ref, set()
+        exact = {Path(local)} if local in rel_paths else set()
+        return local, exact or {Path(rp) for rp in rel_paths if rp.startswith(local + "/")}
+    files = _resolve_ref(ref, repo_root, rel_paths)
+    if files or escapes or ref.startswith("/"):
+        return ref, files
+    found = _resolve_ref(local, repo_root, rel_paths)
+    return (local, found) if found else (ref, found)
 
 
 def _resolve_doc_ref(
     ref: str, doc_rel: str, repo_root: Path, rel_paths: set[str],
 ) -> set[Path]:
-    """Resolve a reference declared in the doc at ``doc_rel`` to the tracked files it names.
-
-    A ``./`` or ``../`` reference is a markdown link, which a reader follows from the doc's
-    own directory, so it resolves there only; one that climbs above the repo root names
-    nothing. Any other reference resolves through ``_resolve_ref`` as repo-relative first,
-    then from the doc's directory, so a link written as ``sub/file.md`` still lands (#1231).
-    """
-    local = posixpath.normpath(posixpath.join(posixpath.dirname(doc_rel), ref))
-    escapes = local == ".." or local.startswith("../")
-    if ref.startswith(("./", "../")):
-        return set() if escapes else _resolve_ref(local, repo_root, rel_paths)
-    files = _resolve_ref(ref, repo_root, rel_paths)
-    if files or escapes or ref.startswith("/"):
-        return files
-    return _resolve_ref(local, repo_root, rel_paths)
+    """The tracked files a reference in the doc at ``doc_rel`` names (``_resolve_doc_ref_keyed``)."""
+    return _resolve_doc_ref_keyed(ref, doc_rel, repo_root, rel_paths)[1]
 
 
 def parse_architecture_md(repo_root: Path) -> dict[str, set[Path]]:

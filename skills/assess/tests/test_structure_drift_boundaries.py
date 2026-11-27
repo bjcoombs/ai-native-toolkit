@@ -77,6 +77,8 @@ def _repo(root: Path, files: dict[str, str]) -> Path:
     # A doc-relative link and the repo-root path to one module are one path (#1231).
     pytest.param({"docs/ARCHITECTURE.md": "# A\n\n## Core\n\n`src/core/`\n\n## Again\n\n`../src/core`\n",
                   "src/core/m.py": "x = 1\n"}, 0, id="architecture-one-path-doc-relative-and-root"),
+    pytest.param({"pkg/ARCHITECTURE.md": "# A\n\n## Core\n\n`pkg/core/`\n\n## Again\n\n`core/`\n",
+                  "pkg/core/m.py": "x = 1\n"}, 0, id="architecture-one-path-root-and-doc-fallback"),
     pytest.param({"ARCHITECTURE.md": _ARCH, "DESIGN.md": "# Design\n\n`src/b.py` parses.\n",
                   "src/b.py": "x = 1\n"}, 2, id="two-docs-one-path-each"),
     pytest.param({".github/CODEOWNERS": "src/ @team\n", "ARCHITECTURE.md": _ARCH}, 1,
