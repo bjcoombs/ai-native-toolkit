@@ -306,6 +306,10 @@ def test_a_heading_only_file_is_a_stub() -> None:
     assert is_heading_only("")
     assert not is_heading_only("# Guide\n\nRun `make test` before pushing.\n")
     assert not is_heading_only("@AGENTS.md\n")
+    # CommonMark ATX only: an indented code line and `#todo` are content, not headings.
+    assert not is_heading_only("# Guide\n\n    # run make check\n")
+    assert not is_heading_only("# Guide\n#todo\n")
+    assert is_heading_only("   ### Deep\n#\n")
 
 
 def test_an_alias_inherits_its_targets_stub_flag() -> None:

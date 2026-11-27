@@ -188,13 +188,16 @@ def grade_instruction_files(
 
 
 _SETEXT_UNDERLINE = re.compile(r"^[ \t]*(?:=+|-+)[ \t]*$")
+# A CommonMark ATX heading: up to three spaces, one to six #, then a space or the end, so an
+# indented code line (`    # run make check`) or `#todo` is content, not a heading.
+_ATX_HEADING = re.compile(r"^ {0,3}#{1,6}(?:[ \t]|$)")
 
 
 def is_heading_only(text: str) -> bool:
     """A stub (#922): no line beyond ATX headings, setext underlines and blank lines."""
     lines = text.splitlines()
     nxt = lines[1:] + [""]
-    return all(not line.strip() or line.lstrip().startswith("#") or _SETEXT_UNDERLINE.match(line)
+    return all(not line.strip() or _ATX_HEADING.match(line) or _SETEXT_UNDERLINE.match(line)
                or (_SETEXT_UNDERLINE.match(after) and after.strip()) for line, after in zip(lines, nxt))
 
 

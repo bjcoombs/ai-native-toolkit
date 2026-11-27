@@ -10,6 +10,8 @@ signal before it is filled from judgement:
   (``layer_grades.instruction_presence`` is ``nested_only``), so an agent
   starting at the root reads none of them. Advises a root ``AGENTS.md`` or
   ``CLAUDE.md`` that names the check command, and names the nested files.
+  When it is ``stub`` (#922: every root file holds only headings), advises
+  filling in the committed file (``STUB_ACTION``) rather than adding one.
 
 - ``coverage_report``: no line-coverage report was found in a software repo,
   so test depth on the hotspots is unmeasured. Names the top non-archive
@@ -38,7 +40,8 @@ entry is `{signal, action, paths, why}`; `why` is the check manifest's why of th
 `signal` names (#939). A `layer_grades` entry (issue #821) fires when
 `layer_grades.instruction_presence` is `nested_only`: its action is to add a root
 instruction file (`AGENTS.md` or `CLAUDE.md`) that names the check command, and it names
-up to five nested files (`MAX_NESTED_PATHS`); it comes first. The registry runs the
+up to five nested files (`MAX_NESTED_PATHS`); it comes first. For `stub` (#922) the same
+entry advises filling in the committed root file (`STUB_ACTION`), with no paths. The registry runs the
 scan at the post-offers stage, after `layer_grades` and `nested_instructions`.
 A `coverage_report` entry fires when no coverage
 report was found in a repo whose archetype is `software` and names up to three
@@ -141,7 +144,17 @@ def _coverage_gap(
 MAX_NESTED_PATHS = 5
 
 
+# The action for a stub (#922): the file is committed, so the step is to write it, not add it.
+STUB_ACTION = (
+    "Fill in the committed root instruction file (`AGENTS.md` or `CLAUDE.md`): it holds only "
+    "headings, so it tells an agent nothing. Name the check command an agent runs before every "
+    "commit, how to build and test, and where the main code lives."
+)
+
+
 def _root_instructions_gap(layer_grades: JsonDict, nested: JsonDict) -> GapAction | None:
+    if layer_grades.get("instruction_presence") == "stub":
+        return {"signal": "layer_grades", "action": STUB_ACTION, "paths": [], "why": ""}
     if layer_grades.get("instruction_presence") != "nested_only":
         return None
     listed = nested.get("files")

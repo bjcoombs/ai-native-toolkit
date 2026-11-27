@@ -96,6 +96,27 @@ def test_gap_actions_nested_only_names_a_root_file_and_the_check_command() -> No
     assert gaps[0]["paths"] == ["pkg/AGENTS.md", "pkg/z/AGENTS.md"]
 
 
+def test_a_stub_is_told_to_fill_in_the_committed_file_not_to_commit_one() -> None:
+    """#922: a heading-only root file is committed; the action is to write it, first."""
+    from lib.report.gap_actions import STUB_ACTION
+    from lib.scoring.next_step_guidance import guidance
+    from lib.top_card import GATE_GAP, GATE_TASK
+
+    grades = {"instruction_presence": "stub", "instruction_file_present": False,
+              "instructions_grade": "F"}
+    gaps = build_gap_actions(NO_COVERAGE, _docs(0.1), HOTSPOTS, SOFTWARE, grades, _nested())
+    assert gaps[0] == {"signal": "layer_grades", "action": STUB_ACTION, "paths": [],
+                       "why": gaps[0]["why"]}
+    assert gaps[0]["action"].startswith("Fill in the committed") and "Add a root" not in STUB_ACTION
+    # The shared wording does not read as already done for a stub: a heading-only file
+    # does not meet "done when", and the card does not claim no file is committed.
+    words = guidance("layer_grades.instruction_file_present", "eq", True)
+    assert words is not None
+    assert "fill it in" in words["change"] and "more than headings" in words["done_when"]
+    assert "more than headings" in GATE_TASK["instructions"]
+    assert "is committed" not in GATE_GAP["instructions"]
+
+
 def test_gap_actions_root_and_none_presence_add_no_root_file_entry() -> None:
     for presence in ("root", "none", None):
         grades = {"instruction_presence": presence}

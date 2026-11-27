@@ -95,7 +95,8 @@ STEP_GATES_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/w
 # Each Step gate as a task a person can do. A gate id the table does not know reads
 # "make the <id> gate hold".
 GATE_TASK = {
-    "instructions": "commit an instruction file agents read, such as AGENTS.md or CLAUDE.md",
+    "instructions": "commit an instruction file agents read, such as AGENTS.md or CLAUDE.md, "
+                    "with more than headings in it",
     "ci_runs_tests": "make CI turn red when a check breaks",
     "coverage_gate": "enforce a coverage gate in CI",
 }
@@ -103,7 +104,7 @@ GATE_TASK = {
 # Each Step gate as the gap the card's Blocks line names. A gate id the table does not know
 # reads "the <id> gate does not hold yet".
 GATE_GAP = {
-    "instructions": "no instruction file an agent reads is committed",
+    "instructions": "no committed instruction file tells an agent how the repository works",
     "ci_runs_tests": "CI does not turn red when a check breaks",
     "coverage_gate": "no coverage gate is enforced",
 }
