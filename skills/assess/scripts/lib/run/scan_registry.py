@@ -14,12 +14,8 @@ Each entry names its key and callable (plus any spread keys and offline callable
 ``label``, ``private``, ``network`` - from the key's collector entry in
 ``checks/core/<key>.toml`` (#953), so a scan's inputs change with no Python edit.
 
-The table is validated when this module is imported. A duplicate key, an unknown
-stage, a read of a name that neither the core provides nor an earlier scan
-produces, a read of a key produced at a later stage, a callable that cannot take
-as many positional arguments as it declares reads, or a scan that opts out of
-degrading without a ``gate_reason`` raises ``ScanRegistryError`` before any run
-starts.
+Each manifest read binds by name to the callable's parameter at its position
+(``lib/run/scan_binding.py``, #1049): a reordered ``reads`` list fails the import.
 
 The declared table of run-context scans and the loop that runs it. A `ScanSpec` names
 the `key`, the callable, the names it `reads` (passed positionally: a core-provided
@@ -121,6 +117,7 @@ from lib.ci.review_automation import review_evidence, scan_review_automation
 from lib.hosting.review_reality import review_reality_from_sample
 from lib.ci.shared_tooling import scan_shared_tooling
 from lib.manifest.check_manifest import core_manifest
+from lib.run.scan_binding import binding_error
 from lib.run.scan_plan import ScanPlan
 from lib.run import scan_pool
 from lib.run.scan_timings import record, timed, timings_block
@@ -410,15 +407,17 @@ def spec_from_manifest(manifest: cm.CheckManifest, key: str, fn: Callable[..., A
     ``reads``, ``stage``, ``degrade``, ``gate_reason``, ``label``, ``private`` and
     ``network`` come from the manifest; the callables, the spread keys and the table order
     stay in code. A key with no collector entry, or a spread that disagrees with the
-    entry's ``spread`` flag, raises ``ScanRegistryError``.
+    entry's ``spread`` flag, or a read not bound by name (#1049), raises ``ScanRegistryError``.
     """
     entry = next((c for c in cm.collectors(manifest) if cm.scan_key(c) == key), None)
     if entry is None:
         raise ScanRegistryError(f"scan {key!r} has no collector entry in the check manifest")
     if bool(spread) != entry.get("spread", False):
         raise ScanRegistryError(f"scan {key!r}: spread keys disagree with the manifest's spread flag")
-    gate = entry.get("gate_reason")
-    return ScanSpec(key, fn, tuple(entry["reads"]), entry["stage"],
+    gate, reads = entry.get("gate_reason"), tuple(entry["reads"])
+    if (unbound := binding_error(key, reads, fn, offline_fn)) is not None:
+        raise ScanRegistryError(unbound)
+    return ScanSpec(key, fn, reads, entry["stage"],
                     degrade=entry.get("degrade", True),
                     gate_reason="" if gate is None else GATE_REASON_TEXT[gate],
                     label=entry.get("label", ""), private=entry.get("private", False),
