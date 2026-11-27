@@ -14,7 +14,8 @@ Per item, in this order (the first rule that applies wins; an item with the
 1. **Demote** (open items): the item cannot move any more, so it is proposed as
    informational (``assess-informational`` label added, state kept). That holds for an item
    whose body names a finding keyed on commit origin (``**Finding:** `self_referential_tests```,
-   ``reviewed_findings.REVIEWABLE_FINDINGS``: no code change clears it), and for a marked item
+   ``reviewed_findings.REVIEWABLE_FINDINGS``: no code change clears it; never an item number in
+   ``filed``, which this run's Top 3 just asked for), and for a marked item
    whose condition reads ``not_applicable``. A condition this run's model does not list is
    left as it is, with one note: a ``--profile`` run cuts rows to fewer levels and a pack's rows
    exist only on a ``--pack`` run, so a missing condition need not have left the model.
@@ -224,7 +225,7 @@ class _Pass:
         if number is None or INFORMATIONAL_LABEL in labels or (self.label and self.label not in labels):
             return
         found = _FINDING.search(_body(item))
-        if _is_open(item) and found and found.group("finding") in REVIEWABLE_FINDINGS:
+        if _is_open(item) and found and found.group("finding") in REVIEWABLE_FINDINGS and number not in self.filed:
             finding = found.group("finding")
             self.demote(item, number, f"`{finding}` keys on commit origin, so no code change clears it",
                         finding=finding)
@@ -277,7 +278,8 @@ class _Pass:
         reading = _reading(cid, condition, sha)
         if is_open:
             note = condition.get("why")
-            evidence = reading + (f": {note}" if isinstance(note, str) and note else "")
+            note = note.strip().rstrip(".") if isinstance(note, str) else ""
+            evidence = reading + (f": {note}" if note else "")
             write = ReconcileWrite(op="close", number=number,
                                    comment=f"Closed by /assess on confirmation: the condition holds. {evidence}. Commit: {sha}.")
             self.propose("close", item, evidence + self.model_moved(fields), write, condition=cid, commit=sha)

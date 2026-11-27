@@ -141,6 +141,18 @@ def test_demote_proposal_for_self_referential_tests() -> None:
     assert 4 not in _by_number(_run(tracker.items, _context(*CONDITIONS)))  # demoted once
 
 
+def test_a_finding_item_filed_this_run_is_not_demoted() -> None:
+    props = _by_number(_run(TRACKER, _context(*CONDITIONS), filed={4}))
+    assert 4 not in props and props[1]["kind"] == "close"
+
+
+def test_a_why_ending_in_a_full_stop_reads_one_stop() -> None:
+    cond = _condition("layer-5-ci.1", "met", why="pytest runs in CI.")
+    (close,) = _run([_marked(1, "layer-5-ci.1", "OPEN")], _context(cond))["proposals"]
+    assert close["reason"].endswith("pytest runs in CI") and "CI.." not in close["write"]["comment"]
+    assert "CI.." not in br.summary([close], [], [])
+
+
 def test_a_not_applicable_condition_is_demoted() -> None:
     items = [_marked(2, "layer-4-docs.2", "OPEN"), _marked(3, "layer-4-docs.2", "CLOSED")]
     props = _by_number(_run(items, _context(_condition("layer-4-docs.2", "not_applicable"))))

@@ -373,7 +373,7 @@ Use the same `--label ""` and GitLab mapping as 6c. The output holds `proposals`
 - **Close as superseded**: a part of an action that is no longer split, beside the item that now carries the action.
 - **Rules changed**: a move that only the new maturity model caused (the model changed, the repository did not) reads `rules changed: your repo did not` under "No change proposed". It is never a proposal and never progress or regression.
 
-Show `summary` verbatim as one batched message, then ask once with a multi-select AskUserQuestion listing each proposal by item number, plus "none". Print the writes for the confirmed numbers only, and run each. Every comment holds backticks, so it goes through a file, never a quoted argument:
+Show `summary` verbatim as one batched message, then ask with multi-select AskUserQuestion questions of three proposals each, one option per proposal (named by its item number and kind) and "none" as the fourth, all in one call (up to four questions, so twelve proposals; past twelve, a second call for the rest). Print the writes for the confirmed numbers only, and run each. Every comment holds backticks, so it goes through a file, never a quoted argument:
 
 ```bash
 WRITES=$(mktemp); COMMENT=$(mktemp)   # outside the repository
