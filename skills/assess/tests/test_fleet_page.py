@@ -720,3 +720,22 @@ def test_an_svg_scoped_outside_fleet_stays_an_image() -> None:
              '<style>svg.radar .ring{fill:red}</style><rect width="1"><title>part</title></rect></svg>')
     (only,) = unique_scopes([picture("a.svg", "A", "Q", radar)])
     assert only["svg"] is None and only["src"].startswith("data:image/svg+xml;base64,")
+
+
+def _scoped(scope: str, body: str = "") -> str:
+    return (f'<svg class="{scope}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><title>r</title>'
+            f'{body}<rect width="1"><title>part</title></rect></svg>')
+
+
+@pytest.mark.parametrize("first, second", [("fleet-a", "fleet-a-b"), ("fleet-a-b", "fleet-a")])
+def test_a_scope_that_is_a_dash_prefix_of_another_stays_an_image(first: str, second: str) -> None:
+    # #1502: fleet-a may define fleet-a-b-grad, which fleet-a-b would read as its own id.
+    shadow = _scoped("fleet-a", '<linearGradient id="fleet-a-b-grad"/>')
+    pics = [picture("a.svg", "A", "Q", shadow if s == "fleet-a" else _scoped(s)) for s in (first, second)]
+    kept, dropped = unique_scopes(pics)
+    assert kept["svg"] is not None and root_class(kept["svg"]) == first and dropped["svg"] is None
+
+
+def test_scopes_that_only_share_letters_are_both_inlined() -> None:
+    pics = [picture(f"{s}.svg", "A", "Q", _scoped(s)) for s in ("fleet-a", "fleet-ab", "fleet-b-a")]
+    assert all(p["svg"] is not None for p in unique_scopes(pics))

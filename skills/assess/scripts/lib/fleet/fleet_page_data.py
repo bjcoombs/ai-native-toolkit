@@ -48,7 +48,9 @@ a counts-only page shows ``team N``.
 
 **Pictures** (#1362): each drawn SVG as a base64 ``data:`` URI (the image fallback and the
 full-size link) and, when it has per-part details, as sanitised and scoped markup to inline
-(``lib/svg_inline.py``); ``unique_scopes`` keeps one inlined SVG per scope on the page.
+(``lib/svg_inline.py``); ``unique_scopes`` keeps one inlined SVG per scope on the page, and none
+whose scope is a ``-``-prefix of another's (#1502): ``fleet-a`` may define the id ``fleet-a-b-grad``,
+which a diagram scoped ``fleet-a-b`` would read as its own.
 
 Deterministic: lists in input order (the inputs are sorted), labels by sorted key. `page_bundle(data, achievements, model, pictures)` -> `PageBundle`.
 Tests: `tests/test_fleet_page.py`.
@@ -294,14 +296,16 @@ def picture(file: str, title: str, question: str, svg: str) -> Picture:
 
 
 def unique_scopes(pictures: Sequence[Picture]) -> list[Picture]:
-    """``pictures`` with any inlined SVG whose scope an earlier one took, or that is not a ``fleet-``
-    scope (which could share a class with the page's own stylesheet, such as ``radar``), left an image."""
+    """``pictures`` with any inlined SVG whose scope an earlier one took or shares a ``-``-prefix
+    with (``fleet-a`` and ``fleet-a-b``), or that is not a ``fleet-`` scope (which could share a class
+    with the page's own stylesheet, such as ``radar``), left an image."""
     taken: set[str] = set()
     out: list[Picture] = []
     for p in pictures:
         markup = p.get("svg")
         scope = root_class(markup) if markup else None
-        if scope in taken or (scope is not None and not scope.startswith("fleet-")):
+        if scope is not None and (not scope.startswith("fleet-") or any(
+                scope == t or scope.startswith(f"{t}-") or t.startswith(f"{scope}-") for t in taken)):
             p = {**p, "svg": None}
         elif scope is not None:
             taken.add(scope)
