@@ -275,7 +275,7 @@ def _canonical(files: list[InstructionCandidate], repo_root: Path,
     for cand in files:
         if cand.rel == CANONICAL_NAME:
             # A bare pointer delegates: the file it names holds the instructions,
-            # unless that file points or imports straight back, a cycle (#1505).
+            # unless that file points, imports or symlinks straight back, a cycle (#1505).
             # Only a sibling at the root: `See .claude/CLAUDE.md` names a path, no sibling.
             others = {c.rel: c for c in files if c.rel != cand.rel and "/" not in c.rel}
             target = delegation_target(cand.body, sorted(others))
@@ -283,7 +283,9 @@ def _canonical(files: list[InstructionCandidate], repo_root: Path,
                     cand.body, cand.rel, target, others[target].body):
                 loaded, _skipped = follow_imports(
                     [target], repo_root, lambda p: is_repo_file(p, repo_root, tracked))
-                if cand.rel not in loaded:
+                # A target that is a symlink back to AGENTS.md is a cycle as well.
+                same = (repo_root / target).resolve() == (repo_root / cand.rel).resolve()
+                if cand.rel not in loaded and not same:
                     return others[target]
             return cand
     ranked = sorted(files, key=lambda c: (SYSTEM_ORDER.get(c.tool, len(SYSTEM_ORDER)), c.rel))

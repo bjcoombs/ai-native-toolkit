@@ -471,3 +471,8 @@ def test_tools_linked_to_the_pointer_agents_md_stay_linked(tmp_path: Path) -> No
         ".cursorrules": "pointer"}
     assert (block["conflicts"], block["unlinked"], block["consistent"]) == (0, 0, True)
     assert block["next_steps"] == []
+
+
+def test_a_pointer_to_its_own_symlink_is_no_delegation(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": "See CLAUDE.md.\n"}, {"CLAUDE.md": "AGENTS.md"})
+    assert scan_agent_consistency(root)["canonical"] == "AGENTS.md"
