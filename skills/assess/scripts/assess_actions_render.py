@@ -470,6 +470,14 @@ def parse_issue(value: str) -> tuple[int, str]:
     return int(rank), ref.strip()
 
 
+def parse_reason(value: str) -> tuple[int, str]:
+    """``--decline-reason N=TEXT`` to ``(number, text)``; argparse reports a bad value."""
+    number, sep, text = value.partition("=")
+    if not sep or not number.strip().lstrip("#").isdigit() or not text.strip():
+        raise argparse.ArgumentTypeError(f"expected N=TEXT, got {value!r}")
+    return int(number.strip().lstrip("#")), text.strip()
+
+
 def non_negative(value: str) -> int:
     """``--wip``: a whole number of 0 or more; argparse reports anything else (#812)."""
     try:
@@ -512,7 +520,7 @@ def _parser() -> argparse.ArgumentParser:
                     help="with --confirm: record each shown proposal not confirmed in .assess/backlog-declines.json")
     rc.add_argument("--declined-by", help="who declined, for the record (git config user.name)")
     rc.add_argument("--declined-at", help="the date of the declines, for the record (date +%%Y-%%m-%%d)")
-    rc.add_argument("--decline-reason", action="append", type=parse_issue, default=[], metavar="N=TEXT",
+    rc.add_argument("--decline-reason", action="append", type=parse_reason, default=[], metavar="N=TEXT",
                     help="the user's reason for declining item N, for the record; repeat per item")
     sub.add_parser("readiness", help="the PR summary's Readiness value")
     return p

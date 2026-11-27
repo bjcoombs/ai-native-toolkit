@@ -338,3 +338,9 @@ def test_a_record_for_an_item_missing_from_the_listing_stays(
     existing.write_text("[]", encoding="utf-8")  # a truncated or author-filtered listing
     assert _proposed(tmp_path, existing, capsys)["proposals"] == []
     assert len(read_proposal_declines(tmp_path / ".assess")) == 1
+
+
+def test_a_bad_decline_reason_names_the_expected_form(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        render.main(["repo", "reconcile", "--existing", "x.json", "--decline-reason", "no-number"])
+    assert "expected N=TEXT" in capsys.readouterr().err
