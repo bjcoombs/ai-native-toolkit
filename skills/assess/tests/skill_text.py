@@ -21,6 +21,8 @@ def read_skill(skill_md: Path) -> str:
         out.append(line)
         for name in _POINTER.findall(line):
             ref = refs / name
-            if ref.is_file():
-                out.extend(["", ref.read_text(encoding="utf-8").rstrip("\n"), ""])
+            # A pointer to a missing file would let a test that asserts text is absent
+            # pass without reading anything, so a dangling pointer fails here.
+            assert ref.is_file(), f"{skill_md}: pointer to missing {ref}"
+            out.extend(["", ref.read_text(encoding="utf-8").rstrip("\n"), ""])
     return "\n".join(out) + "\n"
