@@ -13,14 +13,16 @@ is followed into the repository only through the shared CI-step follower
   command (``lib.ci.ci_checks.check_commands``, after the follower inlines local actions). A job
   is skipped by label ``L`` when its own ``if:`` holds
   ``!contains(github.event.pull_request.labels.*.name, 'L')`` and no ``||`` (which could let it
-  run anyway), or when a job it ``needs:`` is skipped by ``L``. A label counts when it skips
+  run anyway), or when a job it ``needs:`` is skipped by ``L`` and its own ``if:`` calls no status
+  function (``always()``, ``failure()`` or ``cancelled()`` run it after a skipped need). A label counts when it skips
   every job of every such workflow; one unskipped job or workflow clears it, so precision comes
   first. Null with ``skip_labels_reason`` ``no_pr_checks`` when no workflow runs a check on pull
   requests: there is nothing a label could skip that this reader can see.
 - **``test_failures_ignored``**: the number of committed files that tell Maven to ignore test
   failures: ``maven.test.failure.ignore`` set to true (``-Dmaven.test.failure.ignore=true``, a
   bare ``-Dmaven.test.failure.ignore``, or a ``<maven.test.failure.ignore>true`` property) or a
-  Surefire or Failsafe ``<testFailureIgnore>true``. The files read: the GitHub Actions workflows
+  Surefire or Failsafe ``<testFailureIgnore>true``, outside an XML comment and a ``#`` or ``//``
+  line comment. The files read: the GitHub Actions workflows
   and ``.gitlab-ci.yml``, each Jenkinsfile (a file named ``Jenkinsfile``, ``Jenkinsfile.<x>`` or
   ``<x>.jenkinsfile``), ``.mvn/maven.config``, the poms of the root reactor (``pom.xml`` and its
   ``<modules>`` closure; a pom no module names, such as a test fixture, is never read), and every
@@ -61,6 +63,10 @@ _IGNORE = re.compile(
     r"|-Dmaven\.test\.failure\.ignore(?![\w.=])"
     r"|<testFailureIgnore>\s*true\s*</testFailureIgnore>", re.IGNORECASE)
 _NEEDS_ITEM = re.compile(r"[\w-]+")
+# A status function that runs a job after a skipped need (GitHub: always(), failure(), cancelled()).
+_STATUS = re.compile(r"\b(?:always|failure|cancelled)\s*\(")
+_XML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+_LINE_COMMENT = re.compile(r"(?:^|\s)(?:#|//).*$", re.MULTILINE)
 
 
 class CiHazardsBlock(TypedDict):
@@ -79,8 +85,10 @@ def jenkinsfiles(tracked: frozenset[str]) -> list[str]:
 
 
 def ignores_test_failures(text: str) -> bool:
-    """True when ``text`` sets Maven to ignore test failures (module docstring)."""
-    return _IGNORE.search(text) is not None
+    """True when ``text`` sets Maven to ignore test failures (module docstring). An XML comment
+    and a ``#`` or ``//`` comment to the end of a line are dropped first, so a setting that is
+    commented out is not read."""
+    return _IGNORE.search(_LINE_COMMENT.sub("", _XML_COMMENT.sub("", text))) is not None
 
 
 def _if_value(tree: IndentTree, lines: list[str], key: int) -> str:
@@ -99,6 +107,7 @@ def job_skip_labels(text: str) -> dict[str, frozenset[str]]:
     tree = IndentTree(parse_lines(lines))
     own: dict[str, frozenset[str]] = {}
     needs: dict[str, list[str]] = {}
+    runs_anyway: set[str] = set()   # its if: uses a status function, so a skipped need does not skip it
     for job in jobs(tree):
         name = tree.lines[job].key
         labels: frozenset[str] = frozenset()
@@ -107,6 +116,8 @@ def job_skip_labels(text: str) -> dict[str, frozenset[str]]:
             if tree.lines[k].key == "if":
                 value = _if_value(tree, lines, k)
                 labels = frozenset() if "||" in value else frozenset(_SKIP.findall(value))
+                if _STATUS.search(value):
+                    runs_anyway.add(name)
             elif tree.lines[k].key == "needs":
                 needs[name] = _needs(tree, lines, k)
         own[name] = labels
@@ -114,7 +125,8 @@ def job_skip_labels(text: str) -> dict[str, frozenset[str]]:
 
     def skipped(name: str, path: frozenset[str]) -> frozenset[str]:
         if name not in done:
-            inherited = [skipped(n, path | {name}) for n in needs.get(name, []) if n in own and n not in path]
+            inherited = [] if name in runs_anyway else [
+                skipped(n, path | {name}) for n in needs.get(name, []) if n in own and n not in path]
             done[name] = own[name].union(*inherited)
         return done[name]
 

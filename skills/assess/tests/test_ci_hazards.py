@@ -64,6 +64,13 @@ def test_a_job_that_needs_a_skipped_job_is_skipped_with_it() -> None:
     assert job_skip_labels(GATED) == {"lint": frozenset({"skip-checks"}), "test": frozenset({"skip-checks"})}
 
 
+@pytest.mark.parametrize("status", ["always()", "!cancelled()", "failure()"])
+def test_a_job_with_a_status_function_runs_after_a_skipped_need(status: str) -> None:
+    text = GATED.replace("    needs: [lint]\n", f"    needs: [lint]\n    if: ${{{{ {status} }}}}\n")
+    assert job_skip_labels(text)["test"] == frozenset()
+    assert job_skip_labels(text)["lint"] == frozenset({"skip-checks"})
+
+
 @pytest.mark.parametrize("files", [
     {".github/workflows/checks.yml": GATED.replace("    needs: [lint]\n", "")},  # one job runs anyway
     {".github/workflows/checks.yml": GATED, ".github/workflows/ci.yml": PLAIN},  # another workflow runs checks
@@ -92,7 +99,10 @@ def test_each_way_to_ignore_test_failures_is_read(text: str) -> None:
 
 
 @pytest.mark.parametrize("text", ["mvn -Dmaven.test.failure.ignore=false verify", "mvn -DskipTests verify",
-                                  "<testFailureIgnore>false</testFailureIgnore>"])
+                                  "<testFailureIgnore>false</testFailureIgnore>",
+                                  "<!-- <testFailureIgnore>true</testFailureIgnore> -->",
+                                  "  # mvn -Dmaven.test.failure.ignore=true verify",
+                                  "// sh 'mvn -Dmaven.test.failure.ignore=true install'"])
 def test_a_setting_that_does_not_ignore_failures_is_not_read(text: str) -> None:
     assert not ignores_test_failures(text)
 
