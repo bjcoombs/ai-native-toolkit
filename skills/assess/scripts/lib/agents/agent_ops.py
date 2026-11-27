@@ -85,7 +85,7 @@ from lib.ci.ci_model_jobs import signs_in
 from lib.ci.ci_triggers import workflow_events
 from lib.instructions.command_index import NOOP_COMMANDS, ci_config_files, read_config, repo_files
 from lib.counts_only.block_shapes import AgentJob, AgentWorkflow
-from lib.agents.agent_job_scope import gh_aw_job, summarize, workflow_jobs
+from lib.agents.agent_job_scope import gh_aw_job, merge_readings, summarize, workflow_jobs
 from lib.agents.managed_settings import managed_permissions, not_read, read_managed_settings
 from lib.history.git_churn import is_tracked, tracked_files
 
@@ -384,7 +384,8 @@ def scan_agent_jobs(repo_root: Path) -> tuple[list[AgentJob], int]:
     """Every committed job that runs an agent, with its effective token scope (#849,
     ``lib.agents.agent_job_scope``), and the count of jobs that call an agent-named reusable
     workflow in another repository (not read) under a scope that is not read-only. Any trigger counts; a
-    workflow whose only event is ``workflow_call`` is read through its caller's job instead."""
+    workflow whose only event is ``workflow_call`` is read through its caller's job instead, and
+    one with its own trigger as well is counted once, at the worst of its readings (#1562)."""
     repo = repo_root.resolve()
     files = repo_files(repo)
     signs = _Signs(repo, files)
@@ -397,17 +398,18 @@ def scan_agent_jobs(repo_root: Path) -> tuple[list[AgentJob], int]:
         if front is not None and workflow_events(front):
             sources.add(rel)
             jobs.append(gh_aw_job(rel, front))
-    for rel in ci_config_files(files):
-        if not rel.startswith(_WORKFLOWS) or rel.removesuffix(".lock.yml") + ".md" in sources:
-            continue
-        text = read_config(repo, rel)
-        if set(workflow_events(text) or []) == {"workflow_call"}:
-            continue
+    texts = {rel: read_config(repo, rel) for rel in ci_config_files(files)
+             if rel.startswith(_WORKFLOWS) and rel.removesuffix(".lock.yml") + ".md" not in sources}
+    alone = frozenset(rel for rel, text in texts.items()
+                      if set(workflow_events(text) or []) != {"workflow_call"})
+    readings: list[AgentJob] = []
+    for rel in sorted(alone):
         unsettled: list[str] = []
-        jobs += workflow_jobs(rel, text, partial(_runs_agent, signs, rel), signs.read,
-                              remote_of=partial(_calls_remote_agent, signs, rel), unsettled=unsettled)
+        jobs += workflow_jobs(rel, texts[rel], partial(_runs_agent, signs, rel), signs.read,
+                              remote_of=partial(_calls_remote_agent, signs, rel), unsettled=unsettled,
+                              alone=alone, readings=readings)
         unread += len(unsettled)
-    return sorted(jobs, key=lambda j: (j["path"], j["job"])), unread
+    return sorted(merge_readings(jobs, readings), key=lambda j: (j["path"], j["job"])), unread
 
 
 def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str, Any]:

@@ -690,3 +690,106 @@ def test_a_split_inside_a_called_workflow_reaches_its_caller(git_repo) -> None:
 """})
     assert [(j["job"], j["scope"], j["split"]) for j in _jobs(repo)] == [("call", "write", True)]
     assert _summary(repo)["agent_job_write_access"] == 0
+
+
+# -- #1562 called-workflow precision ------------------------------------------------------
+
+ENV_CALLEE = """on: workflow_call
+env:
+  MODEL: claude-sonnet-4
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./scripts/review.sh
+"""
+
+
+def _caller(scope: str) -> str:
+    return ON_ISSUES + f"jobs:\n  call:\n    permissions: {scope}\n    uses: ./.github/workflows/agent.yml\n"
+
+
+def test_a_workflow_env_model_in_a_called_workflow_is_capped_by_its_caller(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/agent.yml": ENV_CALLEE,
+                            ".github/workflows/caller.yml": _caller("read-all")})
+    assert [(j["job"], j["scope"]) for j in _jobs(repo)] == [("call", "read_only")]
+    assert _summary(repo)["agent_jobs_least_privilege"] is True
+    # the called jobs' own scopes are read: an undeclared callee under a write caller writes
+    repo = _repo(git_repo, {".github/workflows/agent.yml": ENV_CALLEE,
+                            ".github/workflows/caller.yml": _caller("write-all")})
+    assert [(j["job"], j["scope"]) for j in _jobs(repo)] == [("call", "write")]
+    assert _summary(repo)["agent_job_write_access"] == 1
+
+
+def test_a_called_workflow_with_its_own_trigger_is_counted_once(git_repo) -> None:
+    callee = "on:\n  workflow_call:\n  workflow_dispatch:\n" + AGENT_STEPS
+    repo = _repo(git_repo, {".github/workflows/agent.yml": callee,
+                            ".github/workflows/caller.yml": _caller("read-all")})
+    assert [(j["path"], j["job"], j["scope"]) for j in _jobs(repo)] == [
+        (".github/workflows/agent.yml", "agent", "undeclared")]
+    assert _summary(repo)["agent_job_count"] == 1
+    # the worst reading wins: a write caller's token reaches the called job
+    repo = _repo(git_repo, {".github/workflows/agent.yml": callee,
+                            ".github/workflows/caller.yml": _caller("{contents: write}")})
+    assert [(j["job"], j["scope"], j["write_scopes"]) for j in _jobs(repo)] == [
+        ("agent", "write", ["contents"])]
+    assert _summary(repo)["agent_job_write_access"] == 1
+    # read-only under every trigger meets the condition
+    read_only = callee.replace("jobs:\n", "permissions: read-all\njobs:\n", 1)
+    repo = _repo(git_repo, {".github/workflows/agent.yml": read_only,
+                            ".github/workflows/caller.yml": _caller("write-all")})
+    assert [(j["job"], j["scope"]) for j in _jobs(repo)] == [("agent", "read_only")]
+    assert _summary(repo)["agent_jobs_least_privilege"] is True
+
+
+def test_a_read_only_called_workflow_is_no_split(git_repo) -> None:
+    called = "on: workflow_call\njobs:\n  agent:\n    permissions:\n      contents: read\n" + \
+        AGENT_STEPS.split("  agent:\n", 1)[1]
+    repo = _repo(git_repo, {".github/workflows/agent.yml": called,
+                            ".github/workflows/caller.yml": _caller("write-all")})
+    assert [(j["job"], j["scope"], j["split"]) for j in _jobs(repo)] == [("call", "read_only", False)]
+
+
+def test_a_dual_trigger_workflow_two_calls_down_is_counted_once(git_repo) -> None:
+    leaf = "on:\n  workflow_call:\n  workflow_dispatch:\npermissions: read-all\n" + AGENT_STEPS
+    mid = "on: workflow_call\njobs:\n  go:\n    uses: ./.github/workflows/leaf.yml\n"
+    repo = _repo(git_repo, {".github/workflows/leaf.yml": leaf, ".github/workflows/mid.yml": mid,
+                            ".github/workflows/caller.yml": ON_ISSUES + "jobs:\n  call:\n"
+                            "    permissions: write-all\n    uses: ./.github/workflows/mid.yml\n"})
+    assert [(j["path"], j["job"], j["scope"]) for j in _jobs(repo)] == [
+        (".github/workflows/leaf.yml", "agent", "read_only")]
+    assert _summary(repo)["agent_jobs_least_privilege"] is True
+
+
+def test_a_redirected_callers_spend_cap_reaches_the_called_job(git_repo) -> None:
+    leaf = "on:\n  workflow_call:\n  workflow_dispatch:\npermissions: read-all\n" + AGENT_STEPS
+    repo = _repo(git_repo, {".github/workflows/agent.yml": leaf,
+                            ".github/workflows/caller.yml": _caller("read-all")
+                            + "    with:\n      max-turns: 5\n"})
+    assert [(j["job"], j["spend_cap"]) for j in _jobs(repo)] == [("agent", True)]
+
+
+def test_a_callers_split_and_spend_cap_reach_a_redirect_beside_a_direct_agent_job(git_repo) -> None:
+    leaf = "on:\n  workflow_call:\n  workflow_dispatch:\n" + AGENT_STEPS
+    mid = "on: workflow_call\njobs:\n  direct:\n    permissions:\n      contents: read\n" + \
+        AGENT_STEPS.split("  agent:\n", 1)[1] + "  go:\n    uses: ./.github/workflows/leaf.yml\n"
+    caller = _caller("write-all").replace("agent.yml", "mid.yml") + \
+        "    with:\n      max-turns: 3\n  after:\n    needs: call\n    runs-on: ubuntu-latest\n" \
+        "    steps:\n      - run: gh pr merge\n"
+    repo = _repo(git_repo, {".github/workflows/leaf.yml": leaf, ".github/workflows/mid.yml": mid,
+                            ".github/workflows/caller.yml": caller})
+    leaf_job = next(j for j in _jobs(repo) if j["path"] == ".github/workflows/leaf.yml")
+    assert (leaf_job["scope"], leaf_job["split"], leaf_job["spend_cap"]) == ("write", True, True)
+    assert _summary(repo)["agent_job_write_access"] == 0
+
+
+def test_an_unread_reading_is_not_cleared_by_a_split_write_reading(git_repo) -> None:
+    callee = ENV_CALLEE.replace("on: workflow_call\n", "on:\n  workflow_call:\n  workflow_dispatch:\n")
+    caller = _caller("write-all") + "  after:\n    needs: call\n    runs-on: ubuntu-latest\n" \
+        "    steps:\n      - run: gh pr merge\n"
+    repo = _repo(git_repo, {".github/workflows/agent.yml": callee,
+                            ".github/workflows/caller.yml": caller})
+    assert [(j["job"], j["scope"]) for j in _jobs(repo)] == [("", "unread")]
+    summary = _summary(repo)
+    assert summary["agent_job_write_access"] is None
+    assert summary["agent_job_write_access_reason"] == "agent_job_scope_unread"

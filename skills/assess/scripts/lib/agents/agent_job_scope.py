@@ -11,7 +11,10 @@ read-only and moves writes into a separate job that acts on the agent's output.
   frontmatter) is one agent job, ``agent``, whose scope is its frontmatter ``permissions:``.
   A workflow whose only event is ``workflow_call`` is not read on its own: the caller's job
   scope caps it. A workflow with a sign outside every job (a workflow-level ``env:`` naming a
-  model) gives one entry with an empty ``job`` and scope ``unread``.
+  model) gives one entry with an empty ``job`` and scope ``unread``; inside a called workflow
+  that entry reads the worst of the called jobs' scopes, each capped by the caller's (#1562).
+  A top-level workflow keeps ``unread``: with no caller's cap, the worst job scope there is
+  usually ``undeclared`` and would settle the reading on a guess about which job uses the model.
 - **Effective scope.** The job's ``permissions:``, else the workflow's, else ``undeclared``
   (the repository's default token, which this reader cannot see). ``read-all``, ``{}`` and a
   map with no ``write`` value read ``read_only``; ``write-all`` or any ``<name>: write`` reads
@@ -24,7 +27,11 @@ read-only and moves writes into a separate job that acts on the agent's output.
   (``write`` or ``undeclared``). A read-only follower writes nothing, so it is no split.
 - **Called workflows.** A job that calls a local reusable workflow takes the worst scope of the
   called workflow's agent jobs, each capped by the caller's: a called workflow can only lower
-  the token it is given (``capped``). It is split when every write-scoped called agent job is.
+  the token it is given (``capped``). It is split when that scope is ``write`` and every
+  write-scoped called agent job is split. A called workflow with its own trigger as well is read
+  on its own and through each caller; ``merge_readings`` counts each of its jobs once, at the
+  worst reading, split only when every write-scoped reading is (#1562); a split ``write``
+  beside an ``unread`` reading reads ``unread``, since the split settles nothing about it.
 - **Spend cap.** ``max-turns`` / ``max_turns`` or a budget limit in the job: recorded as
   supporting evidence only, never counted.
 
@@ -147,7 +154,9 @@ def _worst(scopes: list[Scope]) -> Scope:
 
 def workflow_jobs(rel: str, text: str, signs_of: SignsOf, read_local: ReadLocal | None = None,
                   inherited: Scope | None = None, seen: frozenset[str] = frozenset(),
-                  remote_of: SignsOf | None = None, unsettled: list[str] | None = None) -> list[AgentJob]:
+                  remote_of: SignsOf | None = None, unsettled: list[str] | None = None,
+                  alone: frozenset[str] = frozenset(),
+                  readings: list[AgentJob] | None = None) -> list[AgentJob]:
     """The agent jobs of one GitHub Actions workflow; ``signs_of`` says whether a job's text
     runs an agent (``lib.agents.agent_ops`` follows local actions and reusable workflows).
 
@@ -156,7 +165,11 @@ def workflow_jobs(rel: str, text: str, signs_of: SignsOf, read_local: ReadLocal 
     caller's (``capped``); ``inherited`` is the caller's scope while reading a called workflow.
     A job that ``remote_of`` says calls an agent-named reusable workflow in another repository is
     an agent job read ``read_only`` when its own scope is read-only (the caller caps the callee);
-    otherwise its name goes to ``unsettled``, since the called jobs cannot be read."""
+    otherwise its name goes to ``unsettled``, since the called jobs cannot be read.
+
+    A called workflow in ``alone`` is also read on its own trigger: its capped jobs go to
+    ``readings`` in place of the caller's entry, for ``merge_readings`` to count once. A sign
+    outside every job of a called workflow reads the worst of its jobs' capped scopes."""
     lines = text.splitlines()
     tree = _tree(text)
     top = _top(tree)
@@ -172,6 +185,7 @@ def workflow_jobs(rel: str, text: str, signs_of: SignsOf, read_local: ReadLocal 
         own = scope_of(tree, key) if key is not None else None
         scopes[job] = default if own is None else capped(inherited, own) if inherited else own
     found: list[AgentJob] = []
+    redirected = False
     for job in jobs:
         span = tree.subtree(job)
         body = lines[span.start:span.stop]
@@ -188,23 +202,62 @@ def workflow_jobs(rel: str, text: str, signs_of: SignsOf, read_local: ReadLocal 
         uses = _child(tree, job, "uses")
         local = _LOCAL_WORKFLOW.match(tree.lines[uses].value) if uses is not None else None
         called = read_local(local.group(1)) if local and read_local and local.group(1) not in seen else None
+        # a split needs a job after this one that can write: a read-only follower writes nothing
+        follower = any(name in needs[other] and scopes[other][0] in (WRITE, UNDECLARED)
+                       for other in jobs if other != job)
         inner_split = False
         if called is not None and local is not None:
+            before = len(readings) if readings is not None else 0
             inner = workflow_jobs(local.group(1), called, signs_of, read_local, (scope, writes),
-                                  seen | {rel})
+                                  seen | {rel}, alone=alone, readings=readings)
+            if inner and local.group(1) in alone and readings is not None:
+                # read on its own too: count the called jobs, not this one
+                readings += [j.copy() for j in inner]
+                inner = []
+            if readings is not None and len(readings) > before:
+                # readings redirected at or below this call take this job's follower and cap
+                for reading in readings[before:]:
+                    reading["split"] = reading["split"] or follower
+                    reading["spend_cap"] = reading["spend_cap"] or _spend_cap(body)
+                if not inner:  # those readings stand for this job
+                    redirected = True
+                    continue
             if inner:
                 scope, writes = _worst([(j["scope"], j["write_scopes"]) for j in inner])
                 # split inside the callee: every write-scoped called agent job hands its writes on
-                inner_split = all(j["split"] for j in inner if j["scope"] == WRITE)
-        # a split needs a job after this one that can write: a read-only follower writes nothing
-        split = inner_split or any(name in needs[other] and scopes[other][0] in (WRITE, UNDECLARED)
-                                   for other in jobs if other != job)
+                inner_split = scope == WRITE and all(j["split"] for j in inner if j["scope"] == WRITE)
+        split = inner_split or follower
         found.append(AgentJob(path=rel, job=name, scope=scope, write_scopes=writes, split=split,
                               spend_cap=_spend_cap(body)))
-    if not found and not unsettled and signs_of(text):
-        found.append(AgentJob(path=rel, job="", scope=UNREAD, write_scopes=[], split=False,
+    if not found and not unsettled and not redirected and signs_of(text):
+        # inside a called workflow the sign reaches every job, each capped by the caller
+        scope, writes = _worst(list(scopes.values())) if inherited and jobs else (UNREAD, [])
+        found.append(AgentJob(path=rel, job="", scope=scope, write_scopes=writes, split=False,
                               spend_cap=_spend_cap(lines)))
     return found
+
+
+def merge_readings(jobs: list[AgentJob], readings: list[AgentJob]) -> list[AgentJob]:
+    """``jobs`` with each job read more than once (on its own trigger and through local callers)
+    folded into one entry: the worst scope, split only when every write-scoped reading is, and
+    ``unread`` when a split write reading sits beside an unread one."""
+    groups: dict[tuple[str, str], list[AgentJob]] = {}
+    for j in [*jobs, *readings]:
+        groups.setdefault((j["path"], j["job"]), []).append(j)
+    merged: list[AgentJob] = []
+    for group in groups.values():
+        if len(group) == 1:
+            merged.append(group[0])
+            continue
+        scope, writes = _worst([(j["scope"], j["write_scopes"]) for j in group])
+        # when the merged scope is not write, split has no effect on the count
+        split = all(j["split"] for j in group if j["scope"] == WRITE or scope != WRITE)
+        if scope == WRITE and split and any(j["scope"] == UNREAD for j in group):
+            scope, writes = UNREAD, []  # a split write settles nothing about an unread reading
+        merged.append(AgentJob(path=group[0]["path"], job=group[0]["job"], scope=scope,
+                               write_scopes=writes, split=split,
+                               spend_cap=any(j["spend_cap"] for j in group)))
+    return merged
 
 
 def gh_aw_job(rel: str, front: str) -> AgentJob:
