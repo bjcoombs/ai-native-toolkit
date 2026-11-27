@@ -305,8 +305,9 @@
 #   (lib/ci/agent_evals.py, #850): a folder named as an eval suite (evals, eval,
 #   evaluations, llm_evals, agent-evals ..., or a test tier agent, agents or llm under a
 #   test root) that names a model provider, client or harness, or holds a recorded-response
-#   fixture, is named by a committed CI file (its path, its dotted module, a pytest -m marker
-#   of its tier, or one Makefile, justfile or package.json target a CI command runs), and
+#   fixture, is run by a committed CI file (a run: or script: command, or a working-directory:,
+#   with: or args: value, names its path, its dotted module or its folder as a pytest -m
+#   marker, directly or through one Makefile, justfile or package.json target), and
 #   holds a committed baseline: a snapshot, cached responses, a tool-budget file or a
 #   baseline or golden file. An eval folder with no model reference (an expression
 #   evaluator) is set aside. A paths filter is a trigger, not a run. With no suite, or none

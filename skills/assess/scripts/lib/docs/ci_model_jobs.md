@@ -131,6 +131,8 @@ the repo-local `action.yml` files: each eval suite folder that calls a model, wh
 runs it and the committed baseline it holds. Its module docstring has the rules and the shape.
 Known limits:
 
+- A path in a quoted argument (`pytest "evals/"`, `-m "eval and not slow"`) is not read, as
+  `command_text` blanks every quoted argument.
 - A suite run only through a whole-tree command (`pytest` with no path, `pytest tests/` for
   `tests/agent`) is not named, nor one run from a folder the job `cd`s into (`cd tests && pytest evals`).
 - One task-runner level is followed, at the repository root only: a `Makefile` or `justfile`

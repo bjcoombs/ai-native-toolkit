@@ -18,11 +18,16 @@ promptfoo, deepeval ...) or it holds a recorded-response fixture (a cassette or 
 ``eval`` folder holding an expression evaluator names none, so it is set aside
 (``set_aside``), never counted.
 
-**CI reference.** A committed CI file (a GitHub workflow, a repo-local action, GitLab CI) names
-the suite: its path (``pytest evals/``, ``working-directory: tests/agent``), its dotted module
-(``python -m evals.run``) or its tier as a pytest marker (``pytest -m eval``, never ``-m "not eval"``).
-A ``paths:``, ``paths-ignore:`` or ``changes:`` entry is a trigger filter, not a run, and a path a
-runner is told to skip (``--ignore=evals``) is the opposite of a run. One level of task runner is
+**CI reference.** A committed CI file (a GitHub workflow, a repo-local action, GitLab CI) runs
+the suite: a ``run:`` or ``script:`` command, or a ``working-directory:``, ``with:`` or ``args:``
+value, names its path (``pytest evals/``, ``working-directory: tests/agent``), its dotted module
+(``python -m evals.run``) or its folder name as a pytest marker (``pytest -m eval``; ``eval`` and
+``evals``, ``agent`` and ``agents`` read as one; never ``-m evaluation_slow``). Commands are read
+as ``lib.ci.ci_shell_text.command_text`` reads them, so a quoted argument
+(``git ls-files 'evals/**'``, ``-m "not eval"``), an ``echo`` and a comment run nothing. A job id,
+a step ``name:``, a ``paths:`` or ``changes:`` trigger filter and a step or job whose ``if:`` is
+never true run nothing, and a path a runner is told to skip (``--ignore=evals``, ``-k ...``) is
+the opposite of a run. One level of task runner is
 followed: a CI command running ``make <t>``, ``just <t>`` or ``npm run <t>`` (``pnpm``, ``yarn``,
 ``bun``) names the suite when the root ``Makefile``, ``justfile`` or ``package.json`` recipe for
 ``<t>`` does.
@@ -54,6 +59,7 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import NotRequired, TypedDict
 
 from lib.ci.ci_masking import IndentTree, parse_lines
+from lib.ci.ci_shell_text import command_text
 
 REASON_CI_UNREAD = "eval_ci_unread"
 EVAL_DIRS = frozenset({
@@ -81,9 +87,14 @@ _CODE = (".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".go", ".rb", ".ja
 _RECORDED_DIRS = frozenset({"cassettes", "recordings", "cached_responses", "recorded"})
 _SNAPSHOT_DIRS = frozenset({"__snapshots__", "snapshots", "snapshot"})
 _BASELINE_DIRS = frozenset({"baseline", "baselines", "golden", "goldens"})
-_SKIP_KEYS = frozenset({"paths", "paths-ignore", "changes"})
-_EXCLUDED = re.compile(r"--(?:ignore|ignore-glob|deselect|exclude)(?:=|\s+)\S+")
-_MARKER = re.compile(r"""(?:^|\s)-m\s*["']?(not\s+)?([\w-]+)""")
+# The keys whose value runs a shell command, and those whose value names a path a step runs in or
+# hands to an action; any other key (a job id, a step name:, a paths: filter) names, never runs.
+_SHELL_KEYS = frozenset({"run", "script", "before_script", "after_script", "command", "entrypoint"})
+_PATH_KEYS = frozenset({"working-directory", "with", "args"})
+_EXCLUDED = re.compile(r"--(?:ignore|ignore-glob|deselect|exclude)(?:=|\s+)\S+|\s-k\s*\S+")
+_MARKER = re.compile(r"(?:^|\s)-m\s*([\w-]+)")
+_NEVER = re.compile(r"""^(["']?)(?:false|\$\{\{\s*false\s*\}\})\1$""", re.IGNORECASE)
+_TIER_ALIASES = ({"eval", "evals"}, {"agent", "agents"})
 _RUNNER = re.compile(r"""(?:^|[\s;&|(])(?:(make|just)(?:\s+-\S+)*|(?:npm|pnpm|yarn|bun)\s+run|pnpm|yarn)\s+([\w:.-]+)""")
 _MAKE_RULE = re.compile(r"^([^\s:#=][^:#=]*?)\s*::?(?!=)")
 
@@ -104,9 +115,11 @@ class AgentEvalsBlock(TypedDict):
     dirs: list[EvalSuite]
 
 
-def _stem(name: str) -> str:
-    name = name.lower()
-    return "eval" if "eval" in name else "agent" if name.startswith("agent") else "llm" if "llm" in name else name
+def _same_tier(marker: str, name: str) -> bool:
+    """A ``pytest -m`` marker names the suite folder ``name``: the same word, or ``eval`` / ``evals``
+    and ``agent`` / ``agents`` read as one; never a longer word holding it (``evaluation_slow``)."""
+    marker, name = marker.lower(), name.lower()
+    return marker == name or any(marker in tier and name in tier for tier in _TIER_ALIASES)
 
 
 def suite_of(rel: str) -> str | None:
@@ -137,30 +150,54 @@ def baseline_kinds(inner: str) -> set[str]:
     return kinds
 
 
-def _run_lines(text: str) -> list[str]:
-    """The lines of a CI file that may run something: comments, and ``paths:`` / ``changes:``
-    trigger filters, dropped; skip flags (``--ignore=evals``) blanked."""
-    raw = text.splitlines()
-    tree = IndentTree(parse_lines(raw))
+def _dead(tree: IndentTree) -> set[int]:
+    """The lines of every mapping (a step or a job) whose ``if:`` is never true."""
+    dead: set[int] = set()
+    for i, line in enumerate(tree.lines):
+        if line.structural and line.key == "if" and _NEVER.match(line.value) and i in tree.mapping_of:
+            keys = tree.siblings[tree.mapping_of[i]]
+            dead.update(range(keys[0], max(tree.subtree(k).stop for k in keys)))
+    return dead
+
+
+def _value(tree: IndentTree, i: int) -> str:
+    """A key's or list item's value, with a block scalar's lines (``run: |``) joined."""
+    value = tree.lines[i].value
+    if value[:1] in ("|", ">"):
+        return "\n".join(tree.lines[j].value for j in range(i + 1, len(tree.lines)) if tree.owner[j] == i)
+    return value
+
+
+def run_texts(text: str) -> list[str]:
+    """What a CI file runs: each shell value (``run:``, ``script:`` and its items) as
+    ``command_text`` reads it, so a quoted argument, an ``echo`` and a comment name nothing, and
+    each ``working-directory:``, ``with:`` or ``args:`` value as written. A job id, a step
+    ``name:``, a ``paths:`` filter and a step or job whose ``if:`` is never true run nothing; skip
+    flags (``--ignore=evals``, ``-k ...``) are blanked."""
+    tree = IndentTree(parse_lines(text.splitlines()))
+    dead = _dead(tree)
     out: list[str] = []
     for i, line in enumerate(tree.lines):
-        if line.key in _SKIP_KEYS or any(tree.lines[a].key in _SKIP_KEYS for a in tree.ancestors(i)):
+        if not line.structural or i in dead:
             continue
-        body = raw[i].strip()
-        if not body or body.startswith("#"):
-            continue
-        out.append(_EXCLUDED.sub(" ", re.sub(r"\s+#.*$", "", body)))
-    return out
+        parent = tree.ancestors(i)[:1]
+        owner = tree.lines[parent[0]].key if parent else ""
+        shell = line.key in _SHELL_KEYS or (line.dash and not line.key and owner in _SHELL_KEYS)
+        if shell:
+            out.append(_EXCLUDED.sub(" ", command_text(_value(tree, i))))
+        elif line.key in _PATH_KEYS or owner in _PATH_KEYS:
+            out.append(_value(tree, i))
+    return [t for t in out if t.strip()]
 
 
 def _names(lines: Iterable[str], suite: str) -> bool:
     path = re.compile(r"(?<![\w./-])(?:\./)?" + re.escape(suite) + r"(?![\w-])")
     module = re.compile(r"(?:^|\s)-m\s+" + re.escape(suite.replace("/", ".")) + r"(?![\w-])")
-    stem = _stem(suite.rsplit("/", 1)[-1])
+    name = suite.rsplit("/", 1)[-1]
     for line in lines:
         if path.search(line) or module.search(line):
             return True
-        if "pytest" in line and any(not neg and _stem(word) == stem for neg, word in _MARKER.findall(line)):
+        if "pytest" in line and any(_same_tier(word, name) for word in _MARKER.findall(line)):
             return True
     return False
 
@@ -203,9 +240,9 @@ def scan_agent_evals(tracked: frozenset[str], read: Callable[[str], str], ci_tex
         suite = suite_of(rel)
         if suite is not None:
             members.setdefault(suite, []).append(rel)
-    lines = [line for text in ci_texts.values() for line in _run_lines(text)]
+    lines = [line for text in ci_texts.values() for line in run_texts(text)]
     targets = {m.group(2) for line in lines for m in _RUNNER.finditer(line)}
-    lines += [_EXCLUDED.sub(" ", r) for r in _recipes(read, tracked, targets)] if targets else []
+    lines += [_EXCLUDED.sub(" ", command_text(r)) for r in _recipes(read, tracked, targets)] if targets else []
     dirs: list[EvalSuite] = []
     set_aside = 0
     for suite, files in members.items():

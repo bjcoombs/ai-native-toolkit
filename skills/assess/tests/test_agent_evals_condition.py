@@ -131,6 +131,34 @@ def test_ci_names_the_suite_by_marker_or_module(tmp_path: Path, command: str, na
     assert _block(root)["dirs"][0]["ci"] is named
 
 
+@pytest.mark.parametrize("jobs", [
+    "  evals:\n    steps:\n      - run: echo hi\n",
+    "  t:\n    steps:\n      - name: Skip evals\n        run: pytest tests\n",
+    "  t:\n    steps:\n      - run: pytest -k 'not evals' tests\n",
+    "  t:\n    steps:\n      - run: echo 'evals are run manually'\n",
+    "  t:\n    steps:\n      - run: |\n          echo running evals/ later\n          pytest tests\n",
+    "  evals:\n    if: false\n    steps:\n      - run: pytest evals/\n",
+    "  t:\n    steps:\n      - if: ${{ false }}\n        run: pytest evals/\n",
+    "  t:\n    steps:\n      - run: pytest -m evaluation_slow tests\n",
+    "  t:\n    steps:\n      - run: git ls-files -z 'evals/**/scaffold.sh'\n",
+])
+def test_a_name_that_runs_nothing_is_not_a_run(tmp_path: Path, jobs: str) -> None:
+    root = _repo(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
+                            ".github/workflows/t.yml": "on: push\njobs:\n" + jobs})
+    block = _block(root)
+    assert (block["dirs"][0]["ci"], block["present"]) == (False, False)
+
+
+@pytest.mark.parametrize("jobs", [
+    "  t:\n    steps:\n      - run: |\n          uv sync\n          uv run pytest evals/\n",
+    "  t:\n    defaults:\n      run:\n        working-directory: evals\n    steps:\n      - run: pytest\n",
+    "  t:\n    steps:\n      - uses: promptfoo/promptfoo-action@v1\n        with:\n          config: evals/promptfooconfig.yaml\n",
+])
+def test_a_run_bearing_value_is_a_run(tmp_path: Path, jobs: str) -> None:
+    root = _repo(tmp_path, {"evals/test_x.py": EVAL_CASE, ".github/workflows/t.yml": "on: push\njobs:\n" + jobs})
+    assert _block(root)["dirs"][0]["ci"] is True
+
+
 def test_a_paths_filter_or_comment_is_not_a_run(tmp_path: Path) -> None:
     flow = FILTER_ONLY + "      # - run: pytest evals/\n"
     root = _repo(tmp_path, {"evals/test_x.py": EVAL_CASE, ".github/workflows/ci.yml": flow})
