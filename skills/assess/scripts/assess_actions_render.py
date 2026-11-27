@@ -49,8 +49,8 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   names who declined it. ``--decline REF`` (repeatable) records the offer for ``REF`` as
   declined, with ``--declined-by``, ``--declined-at`` and ``--decline-reason REF=TEXT``, and
   prints the plan with it held back; a ``REF`` whose ``wip`` step is not ``file``, or that
-  ``--parts`` names, whose file offer another offered item shares (two actions naming one
-  condition), or a ``--decline-reason`` for a ``REF`` not in ``--decline``, exits 1, and
+  ``--parts`` names, whose file offer another offered item shares (the same condition
+  and title), or a ``--decline-reason`` for a ``REF`` not in ``--decline``, exits 1, and
   those three flags without ``--decline`` fail at argument parsing. ``plan`` and ``next-up``
   write ``.assess/backlog-declines.json`` when the listing holds a not-planned close not read
   before; the write is idempotent, and nothing else is written.
@@ -476,8 +476,8 @@ def run_plan(assess_dir: Path, args: argparse.Namespace, items: Sequence[Tracker
         same = {k: v for k, v in offer.items() if k != "reason"}
         twin = next((r for r, o in offers.items() if r != ref and r not in refs
                      and {k: v for k, v in o.items() if k != "reason"} == same), None)
-        if twin is not None:  # two actions naming one condition: one record would hold back both (#811)
-            raise RenderError(f"--decline {ref}: item {twin} shares its decline record (the same condition), "
+        if twin is not None:  # the same condition and title: one record would hold back both (#811)
+            raise RenderError(f"--decline {ref}: item {twin} shares its decline record (the same condition and title), "
                               "so recording it would hold that item back too")
         record = decline_record(offer, conditions, model, declined_by=args.declined_by,
                                 declined_at=args.declined_at, reason=reasons.get(ref))

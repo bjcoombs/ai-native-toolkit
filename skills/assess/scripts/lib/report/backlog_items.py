@@ -52,7 +52,8 @@ over closed ones, then the lowest number.
 
 ``filing_offer(item, step)`` is what Step 6b offers for one planned item, the subject a
 declined offer is recorded under (``lib/run/decline_markers.py``, #1543): ``file`` for a
-``create`` and ``reopen`` with the number for a closed match; None for an open match or an
+``create``, keyed on the condition, the sub-item letters and the ``title_key``, so only the
+same action is held back, and ``reopen`` with the number for a closed match; None for an open match or an
 item without a condition marker. ``not_planned_closes(existing)`` lists the marked items
 closed as not planned (GitHub ``stateReason`` ``NOT_PLANNED``; GitLab lists none). Pure stdlib; never touches the tracker. Tests: ``tests/test_backlog_items.py``;
 ``filing_offer`` and ``not_planned_closes`` in ``tests/test_backlog_offer_declines.py``.
@@ -259,7 +260,7 @@ def filing_offer(item: Mapping[str, object], step: FilingStep) -> dict[str, obje
         return None
     offer: dict[str, object] = {"condition": _cid(key), "reason": str(item.get("title") or "")}
     if step["action"] == "create":
-        offer.update(kind="file", number=0)
+        offer.update(kind="file", number=0, title_key=title_key(str(item.get("title") or "")))
         if key[2]:
             offer["sub"] = key[2]
         return offer

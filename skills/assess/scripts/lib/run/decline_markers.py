@@ -75,8 +75,9 @@ model, a condition its model does not list) is not remembered, so a later run re
 GitLab lists no `stateReason`, so nothing is inferred there. A 6b offer the user declines
 is recorded the same way: a reopen offer for a closed match as `kind` `reopen` with the
 item's number (the subject a reconcile reopen has, so either decline holds both back), and
-a file offer as `kind` `file`, `number` 0 and the item's `condition` plus `sub` for a
-sub-item. `held_by` is the record that covers one proposal or offer. Called by
+a file offer as `kind` `file`, `number` 0, the item's `condition`, `sub` for a sub-item and
+`title_key` (the title as dedup compares it): a different action naming the same condition,
+or another sub-item given the same letter, is still offered. `held_by` is the record that covers one proposal or offer. Called by
 `assess_actions_render.py plan`.
 """
 from __future__ import annotations
@@ -256,7 +257,7 @@ def _tool_label(tool: str) -> str:
 
 PROPOSAL_DECLINES = "backlog-declines.json"
 NOT_PLANNED_REASON = "closed as not planned"
-_SUBJECT = ("kind", "number", "condition", "finding", "superseded_by", "sub")
+_SUBJECT = ("kind", "number", "condition", "finding", "superseded_by", "sub", "title_key")
 
 
 class ProposalDecline(TypedDict):
@@ -274,6 +275,7 @@ class ProposalDecline(TypedDict):
     declined_at: str | None
     reason: str | None  # the user's own reason, when given
     sub: NotRequired[str]  # a file offer for a sub-item: its letters
+    title_key: NotRequired[str]  # a file offer: the action's title as dedup compares it
 
 
 class NotPlannedClose(TypedDict):
@@ -311,9 +313,11 @@ def decline_record(proposal: Mapping[str, object], conditions: Mapping[str, Mapp
         superseded_by=_opt_int(proposal.get("superseded_by")), state=_state_of(condition, conditions),
         model=model, evidence=str(proposal.get("reason") or ""), declined_by=_opt_str(declined_by),
         declined_at=_opt_str(declined_at), reason=_opt_str(reason))
-    sub = _opt_str(proposal.get("sub"))
+    sub, title = _opt_str(proposal.get("sub")), _opt_str(proposal.get("title_key"))
     if sub is not None:
         record["sub"] = sub
+    if title is not None:
+        record["title_key"] = title
     return record
 
 

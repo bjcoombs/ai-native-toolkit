@@ -182,6 +182,20 @@ def test_a_declined_file_offer_is_not_offered_again_while_the_evidence_holds(
     assert _decisions(_plan(tmp_path, existing, capsys)) == ["file", "file", "next_up"]
 
 
+def test_a_different_action_naming_the_declined_condition_is_still_offered(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    existing = _setup(tmp_path, [], *CONDITIONS, actions=ACTIONS)
+    planned = _plan(tmp_path, existing, capsys, "--decline", "1", "--declined-by", "ben", "--declined-at", "2026-11-27")
+    assert _decisions(planned) == ["declined", "file", "file"]
+    [record] = read_proposal_declines(tmp_path / ".assess")
+    assert record.get("title_key") == bi.title_key("Action 1")
+    # A later run: another action names the same condition, and the declined one is gone.
+    _setup(tmp_path, [], *CONDITIONS, actions=[{**ACTIONS[0], "action": "Lint in pre-commit"}, *ACTIONS[1:]])
+    assert _decisions(_plan(tmp_path, existing, capsys)) == ["file", "file", "file"]
+    _setup(tmp_path, [], *CONDITIONS, actions=[{**ACTIONS[0], "action": "  action 1 "}, *ACTIONS[1:]])
+    assert _decisions(_plan(tmp_path, existing, capsys)) == ["declined", "file", "file"]  # the same action
+
+
 def test_a_declined_reopen_offer_also_holds_the_reconcile_reopen(
         tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     existing = _setup(tmp_path, [_item(9, LINT, "CLOSED", "COMPLETED", CLOSED_AT, title="Action 1")], *CONDITIONS,
@@ -217,7 +231,7 @@ def test_decline_names_only_an_offered_item(tmp_path: Path, capsys: pytest.Captu
 
 def test_decline_refuses_an_offer_another_offered_item_shares(
         tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    twins = [*ACTIONS[:2], {**ACTIONS[2], "condition": CI}]  # actions 2 and 3 name one condition
+    twins = [*ACTIONS[:2], {**ACTIONS[2], "condition": CI, "action": "Action 2"}]  # one condition, one title
     existing = _setup(tmp_path, [], *CONDITIONS, actions=twins)
     assert render.main([str(tmp_path), "plan", "--existing", str(existing), "--decline", "2"]) == 1
     assert "item 3 shares its decline record" in capsys.readouterr().err
