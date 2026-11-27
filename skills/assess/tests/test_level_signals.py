@@ -278,8 +278,7 @@ def test_default_levels_loads_against_the_schema() -> None:
     assert maturity_model["version"].startswith("default-")
     assert all(row["scope"] == "team" for row in maturity_model["rows"])
     one = {"skill-disclosure", "skill-script-tests", "skill-personal-data", "model-ci-gated", "contributor-files",
-           "skill-library", "agent-least-privilege", "agent-job-write-access", "agent-evals", "docs-kept-true", "ci-skip-label", "ci-test-failures-ignored",
-           "ci-instructions-unchecked"}  # else 2
+           "skill-library", "agent-least-privilege", "agent-job-write-access", "agent-evals", "docs-kept-true", "ci-skip-label", "ci-test-failures-ignored", "ci-instructions-unchecked"}  # else 2
     assert all(len(row["levels"]) == (1 if row["id"] in one else 2) for row in maturity_model["rows"])
     assert "disagree" in DEFAULT_LEVELS.read_text(encoding="utf-8").lower()
 
