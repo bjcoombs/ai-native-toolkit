@@ -319,9 +319,34 @@ def test_cli_write_refuses_bad_input(tmp_path: Path) -> None:
     assert draft.main(["check", "--run-id", "../x", "--contract-dir", str(tmp_path)]) == 2
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+def test_unreadable_contract_refuses(tmp_path: Path) -> None:
+    path = draft.contract_path(tmp_path, RUN_ID)
+    path.mkdir(parents=True)  # exists, but reading it raises
+    reason = draft_approval.refusal(tmp_path, RUN_ID, {}, None)
+    assert reason is not None and "cannot be read" in reason
+
+
+def test_refine_queue_refuses_a_truncated_listing(tmp_path: Path) -> None:
+    class Truncated:
+        repo = "acme/widgets"
+        open_truncated = True
+
+        def open_issues(self) -> List[Dict[str, Any]]:
+            return _backlog_issues()
+
+        def open_pull_requests(self) -> List[Dict[str, Any]]:
+            return []
+
+    out = tmp_path / "queue.json"
+    rc = refine_queue.main(["--repo", "acme/widgets", "--out", str(out)], backlog=Truncated())  # type: ignore[arg-type]
+    assert rc == 3 and not out.exists()
+
+
 def test_refine_queue_cli_writes_the_queue(tmp_path: Path) -> None:
     class Backlog:
         repo = "acme/widgets"
+        open_truncated = False
 
         def open_issues(self) -> List[Dict[str, Any]]:
             return _backlog_issues()

@@ -68,13 +68,17 @@ def refusal(contract_dir: Path, run_id: str, record: Dict[str, Any],
     """The reason the run's drafted contract is not approved, or None.
 
     None also when the run's contract is not a draft, or there is no contract
-    file: those paths are the freeze evidence's concern alone.
+    file: those paths are the freeze evidence's concern alone. A contract file
+    that exists but cannot be read refuses.
     """
     path = draft.contract_path(contract_dir, run_id)
+    if not path.exists():
+        return None
     try:
         working = path.read_bytes()
-    except OSError:
-        return None
+    except OSError as exc:
+        # Fail closed: an unreadable contract may be an unapproved draft.
+        return "the contract %s cannot be read to check its approval: %s" % (path, exc)
     if not draft.is_draft(working.decode("utf-8", errors="replace")):
         return None
     folder = path.parent if path.parent.is_dir() else Path(".")

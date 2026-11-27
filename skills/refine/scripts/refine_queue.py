@@ -17,7 +17,8 @@ Deterministic and read-only, like `refine.py`:
     python3 refine_queue.py --repo <owner/name> [--out <path>] [--definition <path>]
 
 Exit codes: 0 queue written; 2 usage or definition error; 3 the host call
-failed or was refused.
+failed or was refused, or the open-issue listing reached its cap (a partial
+queue would draft a contract that silently misses ready issues).
 
 Python 3.8 compatible and stdlib only, plus `gh` on PATH.
 """
@@ -76,9 +77,14 @@ def main(argv: Optional[Sequence[str]] = None, backlog: Optional[Backlog] = None
         return 2
     source = backlog if backlog is not None else GitHubBacklog(args.repo)
     try:
-        queue = build_queue(source.repo, source.open_issues(), source.open_pull_requests(), definition)
+        issues = source.open_issues()
+        queue = build_queue(source.repo, issues, source.open_pull_requests(), definition)
     except (GhError, ReadOnlyViolation) as exc:
         print(f"refine_queue: {exc}", file=sys.stderr)
+        return 3
+    if source.open_truncated:
+        print("refine_queue: the open-issue listing reached its cap, so the queue may miss ready issues; "
+              "no queue written", file=sys.stderr)
         return 3
     text = json.dumps(queue, indent=2, sort_keys=True) + "\n"
     if args.out:
