@@ -151,6 +151,8 @@ GITLAB_DATA = {
     "groups__1__projects__shared": [SHARED_FORK],
     "groups__2__projects": [SHARED_FORK, gl_project(5, "grp/sub/quiet", RECENT, mirror=True)],
     "groups__2__projects__shared": [],
+    # projects?membership=true (the stub drops the query string).
+    "projects": [],
     "projects__1__repository__branches__main": gl_branch("a1", RECENT_GL),
     "projects__2__repository__branches__main": gl_branch("b1", OLD),
     "projects__3__repository__branches__main": gl_branch("c1", OLD),
@@ -323,6 +325,28 @@ def test_dry_run_counts_per_group(tmp_path: Path) -> None:
     assert "  grp/sub: 1 of 2 active" in res.stdout
     assert "2 of 5 repositories have a default-branch commit" in res.stdout
     assert {p.name for p in env.root.iterdir()} == set()
+
+
+def test_dry_run_counts_membership_projects_once(tmp_path: Path) -> None:
+    """A project a group listing already returned keeps that group in the
+    counts when the membership listing returns it too; a membership-only
+    project counts under its own namespace."""
+    env = Env(tmp_path, "gitlab")
+    lib = gl_project(7, "other/ns/lib", RECENT, namespace={"full_path": "other/ns"})
+    direct = gl_project(6, "solo/direct", RECENT, namespace={"full_path": "solo"})
+    data = env.tmp / "data"
+    shared = [SHARED_FORK, lib]
+    for key, body in (
+        ("groups__1__projects__shared", shared),
+        ("projects", [lib, SHARED_FORK, direct]),
+        ("projects__6__repository__branches__main", gl_branch("f1", RECENT)),
+        ("projects__7__repository__branches__main", gl_branch("g1", RECENT)),
+    ):
+        (data / f"{key}.json").write_text(json.dumps(body), newline="\n")
+    res = env.run("--dry-run", "--quiet", "--active-since", "6mo")
+    assert res.returncode == 0, res.stdout + res.stderr
+    counts = sorted(ln for ln in res.stdout.splitlines() if ln.endswith(" active"))
+    assert counts == ["  grp/sub: 1 of 2 active", "  grp: 3 of 5 active", "  solo: 1 of 1 active"]
 
 
 def test_dry_run_counts_one_line_for_github_org(tmp_path: Path) -> None:

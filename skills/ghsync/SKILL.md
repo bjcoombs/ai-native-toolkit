@@ -1,6 +1,6 @@
 ---
 name: ghsync
-description: "Bulk clone and keep in sync every repo you can access on GitHub or GitLab. GitHub: an org's repos via your teams plus the org repo list, or a personal account's repos. GitLab (--provider gitlab --host <host>): every project in every group you belong to, with nested subgroups and projects shared into those groups, laid out under its path_with_namespace; --group narrows to one subtree, and --porcelain / --from-list split discovery from cloning for hosts reachable only from another network. Deduplicates, then clones new repos and fast-forward syncs existing ones (and their worktrees) into a <path>/<repo>-main + <path>/worktree layout. TRIGGER when the user types /ghsync, wants to clone or sync all org repos, their personal repos or all GitLab group projects, asks to mirror everything they have access to on GitHub or a GitLab host, is onboarding into a new enterprise, org or GitLab group, or wants to refresh their local checkouts to latest."
+description: "Bulk clone and keep in sync every repo you can access on GitHub or GitLab. GitHub: an org's repos via your teams plus the org repo list, or a personal account's repos. GitLab (--provider gitlab --host <host>): every project in every group you belong to, with nested subgroups, projects shared into those groups and your direct project memberships, laid out under its path_with_namespace; --group narrows to one subtree, and --porcelain / --from-list split discovery from cloning for hosts reachable only from another network. Deduplicates, then clones new repos and fast-forward syncs existing ones (and their worktrees) into a <path>/<repo>-main + <path>/worktree layout. TRIGGER when the user types /ghsync, wants to clone or sync all org repos, their personal repos or all GitLab group projects, asks to mirror everything they have access to on GitHub or a GitLab host, is onboarding into a new enterprise, org or GitLab group, or wants to refresh their local checkouts to latest."
 ---
 
 # ghsync: mirror and sync every repo you can access on GitHub or GitLab
@@ -77,7 +77,8 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --org meridianhub --root ~/dev/gith
 | `--org NAME` | GitHub only. Org or personal account to sync (default: basename of `--root` / cwd) |
 | `--list-teams` | GitHub only. List your teams in the org (with repo counts) and exit; orgs only |
 | `--host HOST` | GitLab only. Host to sync (default: `gitlab.com`); `https://` and a trailing `/` are accepted, and so is a web port (`host:8443`) |
-| `--group PATH` | GitLab only. Sync one group and its subgroups instead of every group you belong to. Covers every project the group shows you, including when you belong only to a subgroup of it (projects directly in the group and in sibling subgroups count). If the group itself cannot be read, the run syncs your subgroups under it and prints one stderr warning naming them and what was skipped; it fails only when nothing under the group is reachable |
+| `--group PATH` | GitLab only. Sync one group and its subgroups instead of every group you belong to. Covers every project the group shows you, including when you belong only to a subgroup of it (projects directly in the group and in sibling subgroups count). If the group itself cannot be read, the run syncs your subgroups under it and prints one stderr warning naming them and what was skipped; with no subgroup of yours under it, the run syncs the projects under it you were added to directly, with one stderr warning; it fails only when nothing under the group is reachable. Direct memberships and starred projects outside the group are left out |
+| `--include-starred` | GitLab only. Also sync the projects you have starred (`projects?starred=true`), deduplicated with the rest; off by default. Cannot be combined with `--from-list` |
 | `--from-list FILE` | GitLab only. Sync the paths in FILE (the `--porcelain` format; blank lines and `#` comments ignored) with no discovery and no `glab` |
 
 A flag that belongs to the other provider is rejected with an error, not
@@ -95,10 +96,15 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --provider gitlab --host gitlab.exa
 ```
 
 - **Discovery** runs through `glab api --paginate`: the groups you belong to
-  (`groups?min_access_level=10`), each group's `descendant_groups`, and each
-  group's `projects` and `projects/shared`. Dedupe is on
-  `path_with_namespace`, so a project reachable directly and through sharing,
-  or shared into two groups, is cloned once.
+  (`groups?min_access_level=10`), each group's `descendant_groups`, each
+  group's `projects` and `projects/shared`, and the projects you are a
+  member of (`projects?membership=true`), which reaches a project you were
+  added to directly in a group you do not belong to or in another user's
+  namespace. `--include-starred` adds `projects?starred=true`. Dedupe is on
+  `path_with_namespace`, so a project reachable directly and through
+  sharing, shared into two groups, or listed by a group and by your
+  memberships, is cloned once. A failed membership or starred listing is
+  one stderr warning; the group listings still stand.
 - **Layout:** each project lands under its own `path_with_namespace`, so
   nested subgroups become nested directories and a shared project from
   another namespace sits under that namespace, not under the group it was
@@ -171,7 +177,9 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --org my-org --dry-run --active-sin
   counted back from now.
 - **`--dry-run --active-since`** prints the qualifying and total counts per
   GitLab group, where a project counts in each group whose listing
-  returned it (its own group and any group it is shared into). On GitHub,
+  returned it (its own group and any group it is shared into); a project
+  found only through your memberships or stars counts under its own
+  namespace. On GitHub,
   where teams overlap, it prints one count for the whole org or account.
   These lines print under `--quiet` too.
 - **`--porcelain-json` fields.** `last_activity_at` is GitHub's `pushed_at`

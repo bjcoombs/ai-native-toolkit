@@ -96,6 +96,8 @@ def _endpoints() -> Endpoints:
         "groups/grp/sub/deep/projects/shared": [[]],
         "groups/grp/empty/projects": [[]],
         "groups/grp/empty/projects/shared": [[]],
+        # projects?membership=true (the stub drops the query string).
+        "projects": [[]],
         # grp/alpha: the GL10 shape.
         alpha: [_project("grp/alpha")],
         f"{alpha}/merge_requests": [[_mr(1)], [_mr(2)]],

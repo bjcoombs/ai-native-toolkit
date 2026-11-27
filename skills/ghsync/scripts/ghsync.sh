@@ -21,9 +21,11 @@ set -euo pipefail
 #
 # GitLab (--provider gitlab): discovers every project in every group you
 # belong to on --host, with all nested subgroups, plus projects shared into
-# those groups. Each project is laid out under its own path_with_namespace,
-# which is also the dedupe key, so a project shared into two groups is
-# cloned once. --group narrows the run to one group subtree. The root
+# those groups and projects you were added to directly as a member
+# (projects?membership=true). Each project is laid out under its own
+# path_with_namespace, which is also the dedupe key, so a project reached
+# twice (shared into two groups, or listed by a group and by your
+# memberships) is cloned once. --group narrows the run to one group subtree. The root
 # defaults to ~/dev/<host>/, without any :port. Requires glab, authenticated
 # for the host.
 #
@@ -48,6 +50,7 @@ set -euo pipefail
 #                    [--active-since DURATION] [--porcelain-json]
 #                    GitHub: [--org NAME] [--list-teams]
 #                    GitLab: [--host HOST] [--group PATH] [--from-list FILE]
+#                            [--include-starred]
 #   --provider P     github (default) or gitlab
 #   --root DIR       Directory to clone into; must already exist (GitHub
 #                    default: current directory; GitLab default:
@@ -93,7 +96,12 @@ set -euo pipefail
 #   --host HOST      GitLab host (default: gitlab.com); a scheme and
 #                    trailing slash are accepted and stripped
 #   --group PATH     Sync only this GitLab group and its subgroups,
-#                    including a parent of the subgroups you belong to
+#                    including a parent of the subgroups you belong to;
+#                    direct memberships and starred projects outside it
+#                    are left out
+#   --include-starred
+#                    Also sync the GitLab projects you have starred
+#                    (projects?starred=true); off by default
 #   --from-list F    Sync the GitLab paths listed in F (the --porcelain
 #                    format; blank lines and # comments are ignored) instead
 #                    of discovering them. Clone URLs are built from --host:
@@ -142,6 +150,7 @@ META_MODE=false
 GITLAB_HOST=""
 GITLAB_GROUP=""
 FROM_LIST=""
+INCLUDE_STARRED=false
 # Extra git clone options for new clones (--partial / --filter,
 # --shallow-since). Scalars, not an array, so they survive the export into
 # the per-repository bash -c subshell; provider_clone builds the arguments.
@@ -200,6 +209,11 @@ while [[ $# -gt 0 ]]; do
     --group=*)
       GITLAB_GROUP=${1#*=}
       gitlab_only_flags+=(--group)
+      shift
+      ;;
+    --include-starred)
+      INCLUDE_STARRED=true
+      gitlab_only_flags+=(--include-starred)
       shift
       ;;
     --from-list)
@@ -303,7 +317,7 @@ while [[ $# -gt 0 ]]; do
       echo "Unknown option: $1"
       echo "Usage: $0 [--provider github|gitlab] [--root DIR] [--quiet] [--limit N] [--dry-run] [--list-repos] [--porcelain]"
       echo "       [--partial | --filter SPEC] [--shallow-since DATE] [--active-since DURATION] [--porcelain-json]"
-      echo "       GitHub: [--org NAME] [--list-teams]   GitLab: [--host HOST] [--group PATH] [--from-list FILE]"
+      echo "       GitHub: [--org NAME] [--list-teams]   GitLab: [--host HOST] [--group PATH] [--from-list FILE] [--include-starred]"
       exit 1
       ;;
   esac
@@ -334,6 +348,10 @@ case "$PROVIDER" in
         fi
         if [ -n "$GITLAB_GROUP" ] && [ -n "$FROM_LIST" ]; then
             echo "Error: --group and --from-list cannot be combined; filter the list file instead" >&2
+            exit 1
+        fi
+        if [ "$INCLUDE_STARRED" = true ] && [ -n "$FROM_LIST" ]; then
+            echo "Error: --include-starred and --from-list cannot be combined; --from-list runs no discovery" >&2
             exit 1
         fi
         # Accept a host written as a URL: drop the scheme and any trailing
@@ -594,6 +612,46 @@ gitlab_encode() {
     jq -rn --arg p "$1" '$p | @uri'
 }
 
+# Append the projects in one listing ($1, the JSON from glab api). $2 is
+# the group the listing came from, recorded in the metadata sidecar; empty
+# means each project's own namespace. $3, when set, keeps only projects
+# under that group path. $4 = new keeps only projects no earlier listing
+# returned, so a project a group already listed keeps that group in the
+# per-group counts.
+gitlab_append_projects() {
+    local json=$1 group=$2 prefix=${3:-} only=${4:-} seen_file
+    # The known paths go to jq through a file, not argv: a large estate's
+    # list exceeds the per-argument limit (128 KiB on Linux, less on Windows).
+    seen_file=$(mktemp)
+    if [ "$only" = new ]; then
+        cat "$all_repos_file" "$archived_repos_file" > "$seen_file"
+    fi
+    # One project per line: --paginate prints each page as its own array.
+    json=$(jq -c --arg p "$prefix" --rawfile seen "$seen_file" '
+        (reduce ($seen | split("\n") | .[] | select(. != "")) as $s ({}; .[$s] = true)) as $known
+        | .[]
+        | select($p == "" or (.path_with_namespace | startswith($p + "/")))
+        | select($known[.path_with_namespace] != true)' <<< "$json")
+    rm -f "$seen_file"
+    [ -n "$json" ] || return 0
+    # Empty projects have no default branch and nothing to check out,
+    # mirroring the GitHub rule; archived ones go to the archive cache.
+    jq -r 'select(.archived != true and (.default_branch // "") != "" and .empty_repo != true) | .path_with_namespace' <<< "$json" >> "$all_repos_file"
+    jq -r 'select(.archived == true) | .path_with_namespace' <<< "$json" >> "$archived_repos_file"
+    # mirror is shown only to some roles; unreadable is null, not false.
+    if [ "$META_MODE" = true ]; then
+        jq -c --arg g "$group" '
+            select(.archived != true and (.default_branch // "") != "" and .empty_repo != true)
+            | {path: .path_with_namespace, id: .id, default_branch: .default_branch,
+               last_activity_at: .last_activity_at, archived: false,
+               forked_from: (.forked_from_project.path_with_namespace // null),
+               mirror: (if has("mirror") then .mirror else null end),
+               group: (if $g != "" then $g
+                       else (.namespace.full_path // (.path_with_namespace | sub("/[^/]*$"; ""))) end)}' \
+            <<< "$json" >> "$meta_file"
+    fi
+}
+
 # Append one group's projects and the projects shared into it. $1 is the
 # group's API reference (numeric id or URL-encoded path), $2 its full path
 # for messages. A group whose listing fails is warned about and skipped,
@@ -605,28 +663,29 @@ gitlab_group_projects() {
             echo "Warning: could not list ${endpoint%%\?*} for $full_path; skipping it" >&2
             continue
         fi
-        # Empty projects have no default branch and nothing to check out,
-        # mirroring the GitHub rule; archived ones go to the archive cache.
-        jq -r '.[] | select(.archived != true and (.default_branch // "") != "" and .empty_repo != true) | .path_with_namespace' <<< "$json" >> "$all_repos_file"
-        jq -r '.[] | select(.archived == true) | .path_with_namespace' <<< "$json" >> "$archived_repos_file"
-        # mirror is shown only to some roles; unreadable is null, not false.
-        if [ "$META_MODE" = true ]; then
-            jq -c --arg g "$full_path" '.[]
-                | select(.archived != true and (.default_branch // "") != "" and .empty_repo != true)
-                | {path: .path_with_namespace, id: .id, default_branch: .default_branch,
-                   last_activity_at: .last_activity_at, archived: false,
-                   forked_from: (.forked_from_project.path_with_namespace // null),
-                   mirror: (if has("mirror") then .mirror else null end),
-                   group: $g}' <<< "$json" >> "$meta_file"
-        fi
+        gitlab_append_projects "$json" "$full_path"
     done
+}
+
+# Append the projects you were added to directly ($1 = membership) or have
+# starred ($1 = starred), from the top-level projects listing, which
+# reaches projects outside every group you belong to. Under --group only
+# projects under that group count. A failed listing is warned about and
+# skipped: the group listings still stand.
+gitlab_user_projects() {
+    local filter=$1 label=$2 json
+    if ! json=$(gitlab_api "projects?$filter=true&per_page=100" 2>/dev/null); then
+        echo "Warning: could not list your $label on $GITLAB_HOST; skipping them" >&2
+        return 0
+    fi
+    gitlab_append_projects "$json" "" "${GITLAB_GROUP%/}" new
 }
 
 # Discover every project in the groups you belong to (or in --group's
 # subtree), their nested subgroups, and the projects shared into them. Lines
 # of the groups file are "<api ref><TAB><full path>"; dedupe is on the path.
 discover_gitlab() {
-    local groups_file member_json g ref full_path desc_json covered
+    local groups_file member_json g ref full_path desc_json covered unreadable=false starred_note=""
     groups_file=$(mktemp)
 
     echo "Fetching your groups on $GITLAB_HOST..."
@@ -667,9 +726,9 @@ discover_gitlab() {
                     "subgroups under it ($covered) and skipping projects directly in $g" \
                     "or in its other subgroups" >&2
             else
-                rm -f "$groups_file" "$groups_file.sub"
-                echo "Error: group $g not found or not accessible on $GITLAB_HOST" >&2
-                exit 1
+                # Fatal below unless a direct membership (or a starred
+                # project) lies under the group.
+                unreadable=true
             fi
         fi
         mv "$groups_file.sub" "$groups_file"
@@ -683,6 +742,25 @@ discover_gitlab() {
         gitlab_group_projects "$ref" "$full_path"
     done < "$groups_file"
     rm -f "$groups_file"
+
+    # Projects you were added to directly, in a group you do not belong to
+    # or in another user's namespace, reach you through no group listing.
+    echo "Fetching your project memberships..."
+    gitlab_user_projects membership "project memberships"
+    if [ "$INCLUDE_STARRED" = true ]; then
+        echo "Fetching your starred projects..."
+        gitlab_user_projects starred "starred projects"
+    fi
+
+    if [ "$unreadable" = true ]; then
+        [ "$INCLUDE_STARRED" = true ] && starred_note=" and starred projects"
+        if ! awk -v g="$g" 'index($0, g "/") == 1 { found = 1 } END { exit !found }' "$all_repos_file"; then
+            echo "Error: group $g not found or not accessible on $GITLAB_HOST" >&2
+            exit 1
+        fi
+        echo "Warning: could not read group $g on $GITLAB_HOST; syncing only your direct" \
+            "project memberships${starred_note} under it" >&2
+    fi
 }
 
 # --from-list: the --porcelain format, one path per line. Surrounding
@@ -843,7 +921,7 @@ report_found_repos() {
             if [ -n "$FROM_LIST" ]; then
                 echo "Found $total_repos repositories in $FROM_LIST"
             else
-                echo "Found $total_repos unique projects across $gitlab_group_count group(s) on $GITLAB_HOST"
+                echo "Found $total_repos unique projects across $gitlab_group_count group(s) and your project memberships$([ "$INCLUDE_STARRED" = true ] && echo " and starred projects") on $GITLAB_HOST"
             fi
             ;;
     esac

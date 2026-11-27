@@ -3,6 +3,7 @@
 The fixture and stubs live in `ghsync_gitlab_env.py`.
 """
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -15,6 +16,8 @@ from ghsync_gitlab_env import (
     Env,
     _member_of_sub_only,
     _path_without_glab,
+    _project,
+    _serve,
 )
 from gitbash import BASH
 
@@ -184,6 +187,11 @@ def test_failed_membership_call_fails(env: Env) -> None:
         (["--provider", "github", "--group", "g"], "--group"),
         (["--provider", "github", "--host", "h"], "--host"),
         (["--provider", "gitlab", "--group", "g", "--from-list", "f"], "--group"),
+        (["--provider", "github", "--include-starred"], "--include-starred"),
+        (
+            ["--provider", "gitlab", "--include-starred", "--from-list", "f"],
+            "--include-starred",
+        ),
         (["--provider", "bitbucket"], "bitbucket"),
     ],
 )
@@ -222,6 +230,7 @@ def test_help_documents_gitlab_flags(env: Env) -> None:
         "--shallow-since",
         "--active-since",
         "--porcelain-json",
+        "--include-starred",
     ):
         assert flag in res.stdout, flag
     # The whole header block prints, ending at its closing rule.
@@ -325,3 +334,120 @@ def test_group_naming_a_sibling_of_membership(env: Env) -> None:
     res = env.run("--host", HOST, "--group", "grp/empty", "--list-repos")
     assert res.returncode == 0, res.stderr
     assert "No repositories found" in res.stdout
+
+
+# ---- direct project memberships and starred projects ---------------------------
+
+
+def test_direct_membership_outside_every_group_is_listed_once(env: Env) -> None:
+    """A project the user was added to directly, in a namespace they hold no
+    group membership in, is discovered through projects?membership=true."""
+    direct = _project("solo/ns/direct")
+    _serve(env, "projects/membership", [direct], [direct])
+    res = env.run("--host", HOST, "--porcelain")
+    assert res.returncode == 0, res.stderr
+    assert res.stdout.splitlines() == sorted([*SYNCED, "solo/ns/direct"])
+    calls = [c for c in env.api_calls() if "projects?membership=true" in c]
+    assert len(calls) == 1 and "--paginate" in calls[0], calls
+    assert "Warning" not in res.stderr
+
+
+def test_project_reachable_by_group_and_membership_is_listed_once(env: Env) -> None:
+    _serve(env, "projects/membership", [_project("grp/alpha"), _project("other/ns/shared")])
+    res = env.run("--host", HOST, "--porcelain")
+    assert res.returncode == 0, res.stderr
+    assert res.stdout.splitlines() == SYNCED
+
+
+def test_membership_skips_archived_and_empty_projects(env: Env) -> None:
+    empty = {**_project("solo/empty"), "empty_repo": True}
+    no_branch = {**_project("solo/nobranch"), "default_branch": None}
+    _serve(env, "projects/membership", [_project("solo/gone", True), empty, no_branch])
+    res = env.run("--host", HOST, "--porcelain")
+    assert res.returncode == 0, res.stderr
+    assert res.stdout.splitlines() == SYNCED
+    assert "Found 2 archived repositories" in res.stderr
+
+
+def test_group_leaves_out_membership_projects_outside_it(env: Env) -> None:
+    _serve(
+        env,
+        "projects/membership",
+        [
+            _project("grp/sub/direct"),
+            _project("grp/subway/direct"),
+            _project("grp/alpha"),
+            _project("solo/ns/direct"),
+        ],
+    )
+    res = env.run("--host", HOST, "--group", "grp/sub", "--porcelain")
+    assert res.returncode == 0, res.stderr
+    assert res.stdout.splitlines() == sorted([*SUB_TREE, "grp/sub/direct"])
+
+
+def test_unreadable_group_with_membership_under_it_syncs_those(env: Env) -> None:
+    """A group the user cannot read and holds no group membership under
+    still yields the projects they were added to directly inside it."""
+    _serve(env, "projects/membership", [_project("hidden/team/direct"), _project("grp/alpha")])
+    res = env.run("--host", HOST, "--group", "hidden", "--porcelain")
+    assert res.returncode == 0, res.stderr
+    assert res.stdout.splitlines() == ["hidden/team/direct"]
+    warnings = [ln for ln in res.stderr.splitlines() if ln.startswith("Warning")]
+    assert len(warnings) == 1, warnings
+    assert f"could not read group hidden on {HOST}" in warnings[0]
+
+
+def test_failed_membership_listing_warns_and_keeps_groups(env: Env) -> None:
+    (Path(env.env["GLAB_DATA"]) / "projects__membership.1.json").unlink()
+    res = env.run("--host", HOST, "--porcelain")
+    assert res.returncode == 0, res.stderr
+    assert res.stdout.splitlines() == SYNCED
+    warnings = [ln for ln in res.stderr.splitlines() if ln.startswith("Warning")]
+    assert len(warnings) == 1, warnings
+    assert "project memberships" in warnings[0]
+
+
+def test_starred_projects_only_with_include_starred(env: Env) -> None:
+    starred = _project("fan/ns/starred")
+    _serve(env, "projects/starred", [starred, _project("grp/alpha")], [starred])
+    res = env.run("--host", HOST, "--porcelain")
+    assert res.returncode == 0, res.stderr
+    assert res.stdout.splitlines() == SYNCED
+    assert not any("starred" in c for c in env.api_calls())
+
+    res = env.run("--host", HOST, "--porcelain", "--include-starred")
+    assert res.returncode == 0, res.stderr
+    assert res.stdout.splitlines() == sorted([*SYNCED, "fan/ns/starred"])
+    calls = [c for c in env.api_calls() if "projects?starred=true" in c]
+    assert len(calls) == 1 and "--paginate" in calls[0], calls
+
+
+def test_group_leaves_out_starred_projects_outside_it(env: Env) -> None:
+    _serve(env, "projects/starred", [_project("grp/sub/fav"), _project("fan/ns/starred")])
+    res = env.run("--host", HOST, "--group", "grp/sub", "--porcelain", "--include-starred")
+    assert res.returncode == 0, res.stderr
+    assert res.stdout.splitlines() == sorted([*SUB_TREE, "grp/sub/fav"])
+
+
+def test_porcelain_json_carries_membership_projects(env: Env) -> None:
+    _serve(env, "projects/membership", [_project("solo/ns/direct")])
+    res = env.run("--host", HOST, "--porcelain-json")
+    assert res.returncode == 0, res.stderr
+    rows = [json.loads(ln) for ln in res.stdout.splitlines()]
+    assert [r["path"] for r in rows] == sorted([*SYNCED, "solo/ns/direct"])
+    direct = next(r for r in rows if r["path"] == "solo/ns/direct")
+    assert direct["default_branch"] == "main" and direct["archived"] is False
+
+
+def test_membership_dedupe_handles_a_large_estate(env: Env) -> None:
+    """The paths already listed reach jq through a file: a list over the
+    128 KiB per-argument limit must not abort the run."""
+    many = [_project(f"grp/{'x' * 150}-{n:04d}") for n in range(1000)]
+    _serve(env, "groups/grp/projects", many)
+    _serve(env, "projects/membership", [many[0], _project("solo/ns/direct")])
+    res = env.run("--host", HOST, "--porcelain")
+    assert res.returncode == 0, res.stderr[-2000:]
+    listed = res.stdout.splitlines()
+    assert len(listed) == len(set(listed))
+    assert "solo/ns/direct" in listed and many[0]["path_with_namespace"] in listed
+
