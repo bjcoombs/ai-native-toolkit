@@ -1,6 +1,6 @@
 # Phase 3: the bounded mutation pass (Step 2d)
 
-Step 2d of `SKILL.md`: when the mutation pass applies, how it is offered on its own, and how it runs.
+Step 2d of the assess skill: when the mutation pass applies, how it is offered on its own, and how it runs.
 
 **This is its own phase, asked on its own - never batched with the Phase 1 tool installs.** The default core run is read-only - it never mutates or runs code, so `test_pressure` carries the cheap hollow-test heuristics and mutation-config detection but no survivor data. The decisive Layer 1 signal (would a test actually fail if the code were wrong?) needs this bounded pass, which **modifies your source files and runs your test suite over the mutated code** - a different risk class, so it gets a dedicated question with explicit code-modification framing rather than being waved through inside a bundle of install prompts, and honours the non-interactive contract (skip when `run-context.json .interactive` is `false`).
 

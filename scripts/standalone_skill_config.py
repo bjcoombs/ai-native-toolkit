@@ -39,14 +39,15 @@ _REPO = Path(__file__).parent.parent
 VERSION = _plugin_version()
 
 
-def _sub_skill_references(subs: tuple[str, ...], host: str) -> dict[str, str]:
+def _sub_skill_references(subs: tuple[str, ...], host: str, reserved: tuple[str, ...] = ()) -> dict[str, str]:
     """Map each sub-skill's references/*.md to references/<name> in the host's ZIP.
 
     The files share one folder in the ZIP, so a name that two sub-skills use, or that
-    the host skill's own references/ already holds, would overwrite a file without a
-    word. Refuse it at config load instead.
+    the host skill's own references/ already holds, or that another bundle entry
+    writes (``reserved``, the vendored sub-skill bodies), would overwrite a file without
+    a word. Refuse it at config load instead.
     """
-    taken = {p.name for p in (_REPO / "skills" / host / "references").glob("*.md")}
+    taken = {p.name for p in (_REPO / "skills" / host / "references").glob("*.md")} | set(reserved)
     out: dict[str, str] = {}
     for sub in subs:
         for ref in sorted((_REPO / "skills" / sub / "references").glob("*.md")):
@@ -219,7 +220,10 @@ SKILLS: dict[str, dict[str, Any]] = {
             "references/assess-pr.md": "skills/assess-pr/SKILL.md",
             # The two sub-skills point at their own references/ files (#1408). Each
             # lands beside its sub-skill body, so the pointer resolves unchanged.
-            **_sub_skill_references(("assess-findings", "assess-pr"), host="assess"),
+            **_sub_skill_references(
+                ("assess-findings", "assess-pr"), host="assess",
+                reserved=("assess-layer-scorer.md", "assess-findings.md", "assess-pr.md"),
+            ),
         },
     },
     "huddle": {

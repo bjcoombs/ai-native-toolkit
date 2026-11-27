@@ -1,6 +1,6 @@
 # Top 3 Actions: the case rules
 
-Rules for particular kinds of Top 3 action, from "Filling the Top 3 Actions table" in `SKILL.md`.
+Rules for particular kinds of Top 3 action, from "Filling the Top 3 Actions table" in the assess-findings skill.
 
 **Currency-check any package you name (issue #62).** Before naming a specific package *version* in an action (`dart_code_metrics: ^5.7.6`, `some-linter@2.1.0`), prefer naming the **rule/concept plus a pointer to the language's package registry** (pub.dev, npm, crates.io, PyPI, RubyGems) over a hardcoded version - registries stay current; your training data doesn't. If you do name a specific package, verify it's still actively maintained for the repo's language/runtime version rather than trusting recall. This protects every language symmetrically: any canonical tool can be deprecated after the model's training cutoff (the `dart_code_metrics` case), so "name the rule + registry" is the safe default.
 

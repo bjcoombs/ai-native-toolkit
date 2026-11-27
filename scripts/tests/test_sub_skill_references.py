@@ -27,14 +27,14 @@ def test_each_sub_skill_reference_lands_in_the_hosts_references(tmp_path, monkey
     }
 
 
-@pytest.mark.parametrize("clash_with", ["host", "a"])
+@pytest.mark.parametrize("clash_with", ["host", "a", "reserved"])
 def test_a_name_clash_is_refused(tmp_path, monkeypatch, clash_with):
     monkeypatch.setattr(cfg, "_REPO", tmp_path)
     _ref(tmp_path, "host", "own.md")
-    _ref(tmp_path, "a", "shared.md" if clash_with == "a" else "own.md")
+    _ref(tmp_path, "a", {"a": "shared.md", "host": "own.md", "reserved": "a.md"}[clash_with])
     _ref(tmp_path, "b", "shared.md")
     with pytest.raises(ValueError, match="clashes"):
-        cfg._sub_skill_references(("a", "b"), host="host")
+        cfg._sub_skill_references(("a", "b"), host="host", reserved=("a.md",))
 
 
 def test_the_assess_bundle_carries_every_sub_skill_reference():

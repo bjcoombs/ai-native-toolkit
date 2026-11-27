@@ -1,6 +1,6 @@
 # Emitting the CI gate (Step 6.5)
 
-Step 6.5 of `SKILL.md`, run when the user selects the CI-gate offer.
+Step 6.5 of the assess-pr skill, run when the user selects the CI-gate offer.
 
 If the user **selected** it, emit the workflow. The generator reads the running plugin's version (never the one recorded in the target's `.assess/` files, which can be months old), bakes in the discovered toolchain, and pins the newest published toolkit release that ships the action - the running version when its tag is already cut, otherwise the closest older release:
 

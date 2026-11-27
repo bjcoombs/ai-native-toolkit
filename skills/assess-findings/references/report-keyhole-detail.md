@@ -1,6 +1,6 @@
 # The keyhole detail entries
 
-The entries of the report template's "🔎 Cross-practice findings" fold in `SKILL.md` that come before the pasted `findings_markdown`. Text in angle brackets and the bold paragraphs are instructions for how to fill them.
+The entries of the report template's "🔎 Cross-practice findings" fold in the assess-findings skill that come before the pasted `findings_markdown`. Text in angle brackets and the bold paragraphs are instructions for how to fill them.
 
 ### Instruction placement
 

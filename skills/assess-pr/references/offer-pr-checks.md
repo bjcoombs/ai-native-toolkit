@@ -1,6 +1,6 @@
 # The push-capability check and the no-contributions scan
 
-The two checks Step 5 of `SKILL.md` runs before the batched Phase 2 question is framed.
+The two checks Step 5 of the assess-pr skill runs before the batched Phase 2 question is framed.
 
 ## Contents
 

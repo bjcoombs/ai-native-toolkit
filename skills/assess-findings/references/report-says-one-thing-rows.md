@@ -1,6 +1,6 @@
 # Says one thing, does another: the row rules
 
-How to fill each row of the "Says one thing, does another" table in the report template of `SKILL.md`, and the `lying_map` paths line under it.
+How to fill each row of the "Says one thing, does another" table in the report template of the assess-findings skill, and the `lying_map` paths line under it.
 
 - **Agent instructions - stale hub doc:** take `stale_hubs[0]` only when `stale_hubs` is a list (an object with `available: false` means the ranking failed: no row) and its `ratio > 2.0` **and** `confidence != "low"` (a `repo-baseline` subject is `confidence: low` - its "subject churn" is the whole repo's churn, too coarse to say the doc and the code disagree). Fill from `path`, `last_commit_days`, `code_churn_in_window`, and present the doc as a candidate to read again, not a verdict: churn says the subject moved, not that the doc is wrong.
 - **Agent instructions - false instruction claim:** when `instruction_claims.failed > 0`, take the first entry of `instruction_claims.failures` that the scorer confirmed and cited in the agent-instructions evidence; when it confirmed none, no row. Fill from `file`, `line`, `path`, `kind` and `reason` (`enforcement`: no CI configuration or task runner references the script; `pin`: the pinned file lacks `version` or does not exist; `count`: the sentence claims `claimed` files for the pattern and `actual` match - print both numbers). Name the count when more than one was confirmed ("and <n - 1> more").

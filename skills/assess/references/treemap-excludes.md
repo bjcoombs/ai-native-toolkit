@@ -1,6 +1,6 @@
 # Treemap excludes and doc provenance
 
-Detail for Step 2c of `SKILL.md`: custom excludes, provenance for generated docs, cross-repo mappings, the automatic and raw-source exclusions, and a failed script.
+Detail for Step 2c of the assess skill: custom excludes, provenance for generated docs, cross-repo mappings, the automatic and raw-source exclusions, and a failed script.
 
 **Custom excludes for vetted-context / reference data.** When the repo intentionally tracks large non-source files, two mechanisms extend the built-in defaults (the built-ins always apply; both layers are additive). **The same excludes apply across every scan** - the heatmap, the doc-navigability graph, the doc-staleness pass, and the liveness scan all honour the same list, so "this is reference data, not source" is a single statement, not a per-layer toggle:
 

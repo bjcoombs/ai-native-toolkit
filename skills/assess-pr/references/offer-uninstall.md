@@ -1,6 +1,6 @@
 # Uninstalling `/assess` (Step 8)
 
-Step 8 of `SKILL.md`, run when the user selects the uninstall offer.
+Step 8 of the assess-pr skill, run when the user selects the uninstall offer.
 
 When selected, read the full removal procedure and follow it. The path is in run-context:
 

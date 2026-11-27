@@ -1,6 +1,6 @@
 # The PR flows and the PR body
 
-Step 5 of `SKILL.md`, once the user selects a PR or upstream-issues offer: the direct, fork, upstream-issues and no-contributions flows, and the PR body every flow uses.
+Step 5 of the assess-pr skill, once the user selects a PR or upstream-issues offer: the direct, fork, upstream-issues and no-contributions flows, and the PR body every flow uses.
 
 If the user **selected the PR offer** (direct flow, `CAN_PUSH=1`):
 1. Create a branch in the target repo: `assess/snapshot-<YYYY-MM-DD>` (use the existing worktree workflow if `<repo>-main` + `worktree/` layout is present; otherwise branch in place).

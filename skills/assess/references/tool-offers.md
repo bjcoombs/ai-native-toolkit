@@ -1,6 +1,6 @@
 # Phase 1 tool offers (Steps 2a and 2b)
 
-Steps 2a and 2b of `SKILL.md`: the `scc` check, the batched analysis-tool install offer, and the JVM / Maven capability offers.
+Steps 2a and 2b of the assess skill: the `scc` check, the batched analysis-tool install offer, and the JVM / Maven capability offers.
 
 ## Contents
 

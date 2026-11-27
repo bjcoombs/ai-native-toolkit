@@ -1,6 +1,6 @@
 # Tracking the Top 3 Actions (Steps 6a to 6e)
 
-Steps 6a to 6e of `SKILL.md`, run when the user selects the issue-tracking or upstream-issues offer.
+Steps 6a to 6e of the assess-pr skill, run when the user selects the issue-tracking or upstream-issues offer.
 
 ## Contents
 
