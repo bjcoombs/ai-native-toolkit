@@ -5,8 +5,8 @@
 id = "core.owner_exclusions"
 kind = "collector"
 title = "Owner exclusions"
-summary = "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why. It also carries the agent-level opt-out in .assess/agents-declined.json, which reads the conditions it covers as declined."
-issues = [910, 828]
+summary = "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why. It also carries the agent-level opt-out in .assess/agents-declined.json, which reads the conditions it covers as declined. It carries a Copilot review opt-out read from the Copilot instruction files too, which declines agent_runtime conditions only."
+issues = [910, 828, 851]
 callable = "lib.run.core_scans:owner_exclusions"
 publishes = ["owner_exclusions"]
 reads = ["repo_root"]
@@ -21,7 +21,7 @@ headless_variants = [
 shapes = [
   { path = "owner_exclusions", type = "lib.scoring.level_result_types:OwnerExclusionsBlock" },
 ]
-revision = 2
+revision = 3
   [entries.privacy]
   "owner_exclusions.exclusions.id" = "token"
   "owner_exclusions.exclusions.kind" = "token"

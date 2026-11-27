@@ -1423,6 +1423,30 @@
                 ]
               }
             },
+            "ai_governance": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'. The codes name the missing piece: no_pr_workflows (no GitHub Actions workflow runs on pull requests, so this reader sees no check that could read an AI disclosure. A bot or an app could still do it). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
             "backlog_ready": {
               "type": "object",
               "if": {

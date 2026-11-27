@@ -303,7 +303,10 @@ def read_agent_decline(assess_dir: Path) -> DeclineRecord | None:
 
 
 def decline_badge(record: DeclineRecord) -> str:
-    """The DECLINED badge's words for one record: who declined, when and why, as recorded."""
+    """The DECLINED badge's words for one record: who declined, when and why, as recorded; a
+    detected opt-out with no owner reads its own reason, which names the files (#851)."""
+    if record["source"] != AGENTS_MARKER and record["declined_by"] is None and record["reason"]:
+        return record["reason"]  # a detected opt-out (#851) names its files, and records no owner
     who = record["declined_by"] or "an unknown user"
     line = f"agents declined by {who}"
     if record["declined_at"]:

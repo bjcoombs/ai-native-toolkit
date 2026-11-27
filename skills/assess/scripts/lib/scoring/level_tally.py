@@ -40,7 +40,9 @@ only when its own check is under test, and what is counted does not change.
 agent-level marker ``.assess/agents-declined.json`` (``lib/run/decline_markers.py``), carried in
 the ``owner_exclusions`` block's ``declines``; ``level_result`` reads them from ``data`` unless
 the caller passes its own. A record covers the condition ids it lists (for the agent-level
-marker, only those tagged ``agent_context`` or ``agent_runtime``), or, with ``conditions``
+marker, only those tagged ``agent_context`` or ``agent_runtime``; for a Copilot review opt-out,
+``copilot_opt_out`` from ``lib/ai_governance.py`` (#851), only those tagged ``agent_runtime``:
+``SOURCE_TAGS``), or, with ``conditions``
 None, every positive condition tagged ``agent_context`` or ``agent_runtime`` (``declined_ids``); a
 hazard is never declined, and a hazard's ``requires`` never passes ``declined`` on to it. A covered condition reads ``declined`` whatever its criteria say: never met,
 never counted, out of the denominator, and never holding a Step gate, so the Step it gates stays
@@ -245,6 +247,11 @@ DEMOTED = "demoted_by_exit_rule"
 AGENT_TAGS = frozenset({"agent_context", "agent_runtime"})
 # The agent-level marker's source (lib.run.decline_markers.AGENTS_MARKER): its listed ids must be agent conditions.
 AGENTS_MARKER = "agents_marker"
+# A Copilot review opt-out's source (lib.ai_governance.COPILOT_OPT_OUT, #851).
+COPILOT_OPT_OUT = "copilot_opt_out"
+# Source -> the truth tags a record from it may decline: a scoped source never covers a condition
+# without one of them, whatever it lists, so a detector never takes an unrelated condition out.
+SOURCE_TAGS: dict[str, frozenset[str]] = {AGENTS_MARKER: AGENT_TAGS, COPILOT_OPT_OUT: frozenset({"agent_runtime"})}
 
 
 def scan_not_applicable(cond: Mapping[str, Any], by_id: Mapping[str, Mapping[str, Any]]) -> str | None:
@@ -558,20 +565,24 @@ def declined_ids(model: MaturityModel, declines: Sequence[Mapping[str, Any]]) ->
     """The condition ids the decline records cover (#828), each with the first covering record's
     ``source``, in model order. A record covers the ids it lists that the model defines, or, with
     ``conditions`` None, every positive condition tagged ``AGENT_TAGS``; an empty list covers
-    nothing. The agent-level marker (``source`` ``agents_marker``) covers a listed id only when its
-    condition carries an ``AGENT_TAGS`` tag, so it never takes a non-agent condition out of the
-    denominator; another record's listed ids are taken as written. A hazard is never covered."""
+    nothing. A record from a ``SOURCE_TAGS`` source covers a condition only when it carries one of
+    that source's tags: the agent-level marker (``agents_marker``) an ``AGENT_TAGS`` one, a Copilot
+    review opt-out (``copilot_opt_out``, #851) ``agent_runtime``, so neither takes an unrelated
+    condition out of the denominator; another record's listed ids are taken as written. A hazard
+    is never covered."""
     out: dict[str, str] = {}
     for row in model["rows"]:
         for level in row["levels"]:
             cid = condition_id(row["id"], level["level"])
             if level.get("polarity") == "hazard":
                 continue
-            agent = bool(AGENT_TAGS & set(level.get("truth", [])))
+            tags = set(level.get("truth", []))
             for record in declines:
                 listed = record.get("conditions")
-                covered = (agent if listed is None else isinstance(listed, list) and cid in listed
-                           and (agent or record.get("source") != AGENTS_MARKER))
+                scope = SOURCE_TAGS.get(str(record.get("source")))
+                in_scope = bool((AGENT_TAGS if scope is None else scope) & tags)
+                covered = (in_scope if listed is None else isinstance(listed, list) and cid in listed
+                           and (scope is None or in_scope))
                 if covered:
                     out.setdefault(cid, str(record.get("source") or "declared"))
     return out

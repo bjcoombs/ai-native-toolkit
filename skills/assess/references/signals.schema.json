@@ -95,6 +95,7 @@
           "agent_harness",
           "agent_ops",
           "agent_outcome",
+          "ai_governance",
           "ai_usage",
           "ancestor_instruction_files",
           "archetype",
@@ -1482,6 +1483,30 @@
               "reason": {
                 "type": "string",
                 "description": "'code: sentence'. The codes name the missing piece: agent_workflows_unread (a workflow calls an unread reusable workflow in another repository whose path names an agent. Agent work: a scheduled or event-triggered caller, and no local agent workflow. Job scope: a caller on any trigger without a read-only scope, and no local agent job that settles it); no_agent_jobs (with agent_job_count at 0, no committed workflow job runs an agent, so there is no agent job scope to read); agent_job_scope_unread (an agent job's permissions could not be read. They may be an expression or an unknown value, or the agent sign sits outside every job. No other agent job settles the reading). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "ai_governance": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: no_pr_workflows (no GitHub Actions workflow runs on pull requests, so this reader sees no check that could read an AI disclosure. A bot or an app could still do it). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [
