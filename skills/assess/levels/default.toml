@@ -343,7 +343,7 @@
 # - CI hazards (lib/ci/ci_hazards.py, #828): two hazards (polarity hazard, never counted) that
 #   name blocks = "ci_runs_tests", so while either is met the ci_runs_tests gate does not hold
 #   and Step 3 stays out of reach; the tally does not move. ci-skip-label reads
-#   ci_hazards.skip_labels: a pull request label that skips every job of every GitHub Actions
+#   ci_hazards.skip_labels: a pull request label that skips every check job of every GitHub Actions
 #   workflow running a check on pull requests (a job's if: !contains(...labels..., '<label>')
 #   with no ||, or a needs: on such a job). With no such workflow it is unknown (no_pr_checks).
 #   ci-test-failures-ignored reads ci_hazards.test_failures_ignored: a committed file sets

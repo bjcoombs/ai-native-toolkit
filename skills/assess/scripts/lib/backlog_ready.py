@@ -14,24 +14,28 @@ lives in the maintainers' heads, so each issue an agent picks up restates it in 
 **Signals** (each a bool, or null with a sibling ``<signal>_reason`` code):
 
 - ``required_form_field``: an issue form (``.github/ISSUE_TEMPLATE/*.yml`` or ``*.yaml``, not
-  ``config.yml``) has a ``body`` item whose ``validations`` sets ``required: true``. Null
-  ``form_unreadable`` when no form has one and a form could not be read (a tab indent, an
-  unclosed flow collection, no top-level ``body`` list). Null ``gitlab_templates`` when the
-  repository holds no GitHub issue form and is on GitLab (``.gitlab-ci.yml`` or a ``.gitlab/``
-  folder): GitLab issue templates are not read yet.
+  ``config.yml``) has a ``body`` item whose ``validations`` sets ``required: true``, or a GitLab
+  issue template (``.gitlab/issue_templates/*.md``) has a heading for each of the six
+  definition-of-ready sections (#1406, ``lib.backlog_ready_gitlab``). Null ``form_unreadable``
+  when neither holds and a form or template could not be read (a template over the size cap) (a tab indent, an unclosed flow collection, no
+  top-level ``body`` list).
 - ``untriaged_on_open``: a workflow (directly under ``.github/workflows/``) triggered by
   ``issues`` with type ``opened`` (no ``types`` means every type) has a step that names an
   untriaged label as the argument of a label-adding call (``--add-label``, ``addLabels``, an ``add-labels``
   input, ``gh issue create --label``, or a ``labels:`` input of an action named for adding labels
   or ``labeler``); removing or listing by label is no sign, and ``name:``, ``if:`` and comment
   lines do not count. Null
-  ``workflow_unreadable`` when none does and a workflow's ``on`` could not be read. Null
-  ``gitlab_ci_not_read`` on a GitLab repository with no GitHub workflow: GitLab has no CI trigger
-  for a new issue, and its counterpart, a scheduled refinement job, is not read yet.
+  ``workflow_unreadable`` when none does and a workflow's ``on`` could not be read. When the
+  repository has a ``.gitlab-ci.yml`` (GitLab has no CI trigger for a new issue), the
+  toolkit's refinement template include or a scheduled job that adds an untriaged label also
+  meets it (#1406, ``lib.backlog_ready_gitlab``): null ``gitlab_ci_unreadable`` for a root file
+  GitLab rejects, null ``gitlab_ci_unsettled`` when an include, a merge or a rule this reader
+  cannot settle may hold such a job.
 - ``ready_label_documented``: a Markdown file at HEAD (``lib.docs.doc_graph.is_excluded_path``
   drops ``.assess/``, ``tests/fixtures/`` and the like) has a heading or paragraph naming a ready
   label with a list under it: a list item in the heading's section, or one after the paragraph.
-  Fenced code is skipped. A label counts only in backticks or quotes, so prose ("the ready label",
+  Fenced code is skipped. A label counts only in backticks or quotes, or as a GitLab label
+  reference (``~agent-ready``), so prose ("the ready label",
   "make the code agent-ready") is no label; a one-word label counts only in backticks and keeps its
   case (a quoted "ready" or a `READY` constant is not ``ready``). A GitLab scoped label (``refine::ready``) is one token.
 - ``stale_job_safe``: true when no step uses ``actions/stale``, or every such step leaves ready
@@ -50,7 +54,8 @@ Block (``backlog_ready`` in run-context.json)::
     {"available": True, "required_form_field": bool | None, "untriaged_on_open": bool | None,
      "ready_label_documented": bool | None, "stale_job_safe": bool | None,
      "<signal>_reason": str (only beside a null signal),
-     "forms": int, "forms_unreadable": int, "workflows": int, "stale_jobs": int,
+     "forms": int, "forms_unreadable": int, "issue_templates": int, "workflows": int,
+     "stale_jobs": int,
      "labels_from_config": bool}
 
 Counts-only output keeps the booleans, the counts and the reason codes; no path, label or text
@@ -66,6 +71,8 @@ from pathlib import Path, PurePosixPath
 from typing import Literal, NotRequired, TypedDict
 
 from lib.assess_config import load_backlog_ready_labels
+from lib.backlog_ready_gitlab import (GITLAB_CI, issue_templates, gitlab_untriaged, template_has_sections,
+                                      unbalanced)
 from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci.ci_triggers import workflow_events
 from lib.instructions.command_index import ci_config_files, read_config, repo_files
@@ -75,9 +82,7 @@ UNTRIAGED_LABELS = ("needs-triage", "needs triage", "untriaged", "triage", "stat
 READY_LABELS = ("agent-ready", "ready", "triage/accepted", "status: ready", "refine::ready")
 
 REASON_FORM = "form_unreadable"
-REASON_GITLAB = "gitlab_templates"
 REASON_WORKFLOW = "workflow_unreadable"
-REASON_GITLAB_CI = "gitlab_ci_not_read"
 REASON_STALE = "stale_input_unresolved"
 
 FORM_DIR = ".github/ISSUE_TEMPLATE/"
@@ -115,6 +120,7 @@ class BacklogReadyBlock(TypedDict):
     stale_job_safe_reason: NotRequired[str]
     forms: int
     forms_unreadable: int
+    issue_templates: int
     workflows: int
     stale_jobs: int
     labels_from_config: bool
@@ -126,29 +132,15 @@ def _token(label: str) -> re.Pattern[str]:
 
 
 def _named(label: str) -> re.Pattern[str]:
-    """A label as written in documentation: in backticks or quotes. A one-word label must sit in
-    backticks and keep its case, so neither a quoted word ("ready") nor a constant (`READY`) is
-    the label ``ready``; any other label ignores case."""
+    """A label as written in documentation: in backticks or quotes, or as a GitLab label reference
+    (``~agent-ready``, ``~"needs triage"``). A one-word label must sit in backticks or follow
+    ``~`` and keep its case, so neither a quoted word ("ready") nor a constant (`READY`) is the
+    label ``ready``; any other label ignores case."""
     word = re.escape(label)
+    ref = rf"(?<![\w~])~{word}(?![\w:/-])" if not re.search(r"\s", label) else "(?!)"
     if re.search(r"[-/:\s]", label):
-        return re.compile(rf"[`'\"]{word}[`'\"]", re.I)
-    return re.compile(rf"`{word}`")
-
-
-def _unbalanced(value: str) -> bool:
-    """True when a flow value opens more brackets than it closes, outside quotes."""
-    depth = 0
-    quote = ""
-    for ch in value:
-        if quote:
-            quote = "" if ch == quote else quote
-        elif ch in "\"'":
-            quote = ch
-        elif ch in "[{":
-            depth += 1
-        elif ch in "]}":
-            depth -= 1
-    return depth != 0 or bool(quote)
+        return re.compile(rf"[`'\"]{word}[`'\"]|{ref}", re.I)
+    return re.compile(rf"`{word}`|{ref}")
 
 
 def _top(tree: IndentTree, key: str) -> int | None:
@@ -179,7 +171,7 @@ def form_state(text: str) -> FormState:
     if any(ln[:len(ln) - len(ln.lstrip(" \t"))].count("\t") for ln in lines):
         return "unreadable"
     tree = IndentTree(parse_lines(lines))
-    if any(ln.structural and _unbalanced(ln.value) for ln in tree.lines if ln.value[:1] in "[{"):
+    if any(ln.structural and unbalanced(ln.value) for ln in tree.lines if ln.value[:1] in "[{"):
         return "unreadable"
     body = _top(tree, "body")
     if body is None or tree.lines[body].value or not tree.items(body):
@@ -194,10 +186,6 @@ def form_state(text: str) -> FormState:
 def _forms(files: Iterable[str]) -> list[str]:
     return sorted(f for f in files if f.startswith(FORM_DIR) and "/" not in f[len(FORM_DIR):]
                   and f.endswith((".yml", ".yaml")) and PurePosixPath(f).stem.lower() != "config")
-
-
-def _on_gitlab(files: frozenset[str]) -> bool:
-    return ".gitlab-ci.yml" in files or any(f.startswith(".gitlab/") for f in files)
 
 
 def _scalar(value: str) -> str:
@@ -422,6 +410,13 @@ def _docs(root: Path, files: Iterable[str], ready: tuple[str, ...]) -> bool:
     return False
 
 
+def _size(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
+
+
 def scan_backlog_ready(repo_root: Path) -> BacklogReadyBlock:
     """Build the ``backlog_ready`` block (see the module doc). Intake is configured for the whole
     repository, so the root's files are read whatever the scope."""
@@ -431,23 +426,27 @@ def scan_backlog_ready(repo_root: Path) -> BacklogReadyBlock:
     forms = _forms(files)
     states = [form_state(read_config(root, rel)) for rel in forms]
     workflows = {rel: read_config(root, rel) for rel in ci_config_files(files) if rel.startswith(_WORKFLOWS)}
+    templates = issue_templates(files)
     block: BacklogReadyBlock = {
         "available": True, "required_form_field": None, "untriaged_on_open": None,
         "ready_label_documented": _docs(root, files, ready), "stale_job_safe": None,
         "forms": len(forms), "forms_unreadable": states.count("unreadable"),
-        "workflows": len(workflows), "stale_jobs": 0, "labels_from_config": from_config,
+        "issue_templates": len(templates), "workflows": len(workflows), "stale_jobs": 0, "labels_from_config": from_config,
     }
-    if "required" in states:
+    texts = {rel: read_config(root, rel) for rel in templates}
+    # an empty read of a non-empty file is a template over the size cap or not readable
+    unread = [rel for rel, text in texts.items() if not text and _size(root / rel) > 0]
+    if "required" in states or any(template_has_sections(text) for text in texts.values()):
         block["required_form_field"] = True
-    elif "unreadable" in states:
+    elif "unreadable" in states or unread:
         block["required_form_field_reason"] = REASON_FORM
-    elif not forms and _on_gitlab(files):
-        block["required_form_field_reason"] = REASON_GITLAB
     else:
         block["required_form_field"] = False
     block["untriaged_on_open"], reason = _untriaged(workflows, untriaged)
-    if block["untriaged_on_open"] is False and not workflows and _on_gitlab(files):
-        block["untriaged_on_open"], reason = None, REASON_GITLAB_CI
+    if block["untriaged_on_open"] is not True and GITLAB_CI in files:
+        gitlab, gitlab_reason = gitlab_untriaged(root, read_config(root, GITLAB_CI), untriaged)
+        if gitlab is True or (gitlab is None and block["untriaged_on_open"] is False):
+            block["untriaged_on_open"], reason = gitlab, gitlab_reason
     if reason is not None:
         block["untriaged_on_open_reason"] = reason
     block["stale_job_safe"], reason, block["stale_jobs"] = _stale(workflows, ready)

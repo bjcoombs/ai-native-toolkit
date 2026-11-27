@@ -13,8 +13,10 @@ is followed into the repository only through the shared CI-step follower
   command (``lib.ci.ci_checks.check_commands``, after the follower inlines local actions). A job
   is skipped by label ``L`` when its own ``if:`` holds
   ``!contains(github.event.pull_request.labels.*.name, 'L')`` and no ``||`` (which could let it
-  run anyway), or when a job it ``needs:`` is skipped by ``L`` and its own ``if:`` calls no status
-  function (``always()``, ``failure()`` or ``cancelled()`` run it after a skipped need). A label
+  run anyway), or when a job it ``needs:`` is skipped by ``L`` and its own ``if:`` holds neither
+  ``always()`` nor ``!cancelled()`` (either runs it after a skipped need). An ``if:`` with ``||``,
+  ``==`` or ``!=`` is not read as a skip, and labels compare without case, as GitHub's ``contains``
+  does. A label
   counts when it skips every check job (a job whose own lines run a test or lint command,
   ``check_jobs``; every job when none is found) of every such workflow; one unskipped check job or
   workflow clears it, so precision comes first. Null with ``skip_labels_reason`` ``no_pr_checks`` when no workflow runs a check on pull
@@ -64,8 +66,9 @@ _IGNORE = re.compile(
     r"|-Dmaven\.test\.failure\.ignore(?![\w.=])"
     r"|<testFailureIgnore>\s*true\s*</testFailureIgnore>", re.IGNORECASE)
 _NEEDS_ITEM = re.compile(r"[\w-]+")
-# A status function that runs a job after a skipped need (GitHub: always(), failure(), cancelled()).
-_STATUS = re.compile(r"\b(?:always|failure|cancelled)\s*\(")
+# A status check that runs a job after a skipped need: always() or !cancelled(). failure() and
+# cancelled() alone are false when a need was only skipped, so the job is skipped with it.
+_STATUS = re.compile(r"\balways\s*\(|!\s*cancelled\s*\(")
 _XML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 # A pom's profiles run only when activated, which a CI command may never do, so they are not read.
 _PROFILES = re.compile(r"<profiles>.*?</profiles>", re.DOTALL)
@@ -118,7 +121,9 @@ def job_skip_labels(text: str) -> dict[str, frozenset[str]]:
         for k in tree.children(job):
             if tree.lines[k].key == "if":
                 value = _if_value(tree, lines, k)
-                labels = frozenset() if "||" in value else frozenset(_SKIP.findall(value))
+                # || could let it run anyway, and a comparison (== false) can invert the test
+                labels = (frozenset() if re.search(r"\|\||==|!=", value)
+                          else frozenset(label.lower() for label in _SKIP.findall(value)))
                 if _STATUS.search(value):
                     runs_anyway.add(name)
             elif tree.lines[k].key == "needs":

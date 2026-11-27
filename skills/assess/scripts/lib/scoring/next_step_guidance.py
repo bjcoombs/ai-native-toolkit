@@ -465,7 +465,7 @@ _WORDING: dict[str, Wording] = {
     "ci_hazards.skip_labels": _flag_count(
         "Drop the label condition from the jobs' `if:` lines, or keep it only on jobs that check "
         "nothing; scope a skip with a `paths` filter so the checks still run on code changes.",
-        "No pull request label skips every job of the workflows that run checks on pull requests."),
+        "No pull request label skips every check job of the workflows that run checks on pull requests."),
     "ci_hazards.test_failures_ignored": _flag_count(
         "Remove `-Dmaven.test.failure.ignore=true` and `testFailureIgnore` from the CI command, the "
         "Jenkinsfile and the poms; quarantine a flaky test by name instead.",

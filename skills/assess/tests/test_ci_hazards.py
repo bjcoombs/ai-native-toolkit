@@ -64,7 +64,7 @@ def test_a_job_that_needs_a_skipped_job_is_skipped_with_it() -> None:
     assert job_skip_labels(GATED) == {"lint": frozenset({"skip-checks"}), "test": frozenset({"skip-checks"})}
 
 
-@pytest.mark.parametrize("status", ["always()", "!cancelled()", "failure()"])
+@pytest.mark.parametrize("status", ["always()", "!cancelled()"])
 def test_a_job_with_a_status_function_runs_after_a_skipped_need(status: str) -> None:
     text = GATED.replace("    needs: [lint]\n", f"    needs: [lint]\n    if: ${{{{ {status} }}}}\n")
     assert job_skip_labels(text)["test"] == frozenset()
@@ -204,3 +204,16 @@ def test_a_setting_only_inside_a_pom_profile_is_not_read(tmp_path: Path) -> None
     block = scan_ci_hazards(_repo(tmp_path, {".github/workflows/ci.yml": PLAIN.replace("pytest", "mvn -B verify"),
                                              "pom.xml": profiled}))
     assert block["test_failures_ignored"] == 0
+
+
+def test_failure_alone_is_skipped_with_its_need_and_a_comparison_is_not_read() -> None:
+    text = GATED.replace("    needs: [lint]\n", "    needs: [lint]\n    if: ${{ failure() }}\n")
+    assert job_skip_labels(text)["test"] == frozenset({"skip-checks"})
+    inverted = GATED.replace("'skip-checks') }}", "'skip-checks') == false }}")
+    assert job_skip_labels(inverted)["lint"] == frozenset()
+
+
+def test_labels_compare_without_case(tmp_path: Path) -> None:
+    other = GATED.replace("'skip-checks'", "'SKIP-Checks'").replace("name: checks", "name: more")
+    block = scan_ci_hazards(_repo(tmp_path, {".github/workflows/checks.yml": GATED, ".github/workflows/more.yml": other}))
+    assert block["skip_labels"] == 1

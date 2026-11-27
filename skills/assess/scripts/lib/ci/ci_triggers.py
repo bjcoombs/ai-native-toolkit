@@ -319,7 +319,7 @@ def _only_outcomes(tree: IndentTree, key: int, refs_only: bool = False) -> _Outc
     return {"merge_request": "yes" if "merge_requests" in values else "no", "push": push}
 
 
-def _rules(tree: IndentTree, key: int) -> list[Rule] | None:
+def rule_items(tree: IndentTree, key: int) -> list[Rule] | None:
     """The items of a ``rules:`` key, or None when it is not a block list read here."""
     if tree.lines[key].value:
         return None
@@ -338,7 +338,7 @@ def _rules(tree: IndentTree, key: int) -> list[Rule] | None:
 
 
 def _rules_outcomes(tree: IndentTree, key: int, default_when: str = "on_success") -> _Outcomes:
-    rules = _rules(tree, key)
+    rules = rule_items(tree, key)
     if rules is None:
         return {c: "unknown" for c in CONTEXTS}
     return {c: outcome(rules, c, default_when) for c in CONTEXTS}

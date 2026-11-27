@@ -32,6 +32,14 @@ its own ``when: never``.
 default_when)`` walks ``Rule`` items and gives ``yes``, ``some``, ``no`` or ``unknown``.
 Imports nothing from ``lib``. Tests: ``tests/test_gitlab_rules.py``.
 
+**Scheduled pipelines** (#1406): ``evaluate`` and ``outcome`` also take the context
+``schedule``, which ``CONTEXTS`` leaves out (an ordinary change never starts one). There
+``CI_PIPELINE_SOURCE`` is ``"schedule"``, ``CI_COMMIT_BRANCH`` and ``CI_COMMIT_TAG`` vary (a
+schedule targets a branch or a tag), ``CI_MERGE_REQUEST_*`` are unset, and a variable not named ``CI_*`` or ``GITLAB_*`` varies
+rather than reads unknown: a pipeline schedule sets its own variables in project settings, so
+``$CI_PIPELINE_SOURCE == "schedule" && $REFINE`` runs in some scheduled pipelines. A predefined
+variable not modelled here (``$CI_PROJECT_PATH``) stays unknown.
+
 Variables: ``CI_PIPELINE_SOURCE``, ``CI_COMMIT_TAG`` (unset in both), ``CI_COMMIT_BRANCH``
 (unset in a merge request pipeline), ``CI_MERGE_REQUEST_*`` (unset in a push pipeline),
 ``CI_OPEN_MERGE_REQUESTS``, ``CI_COMMIT_REF_NAME`` / ``_SLUG``, ``CI_DEFAULT_BRANCH``
@@ -59,7 +67,8 @@ from typing import Literal, NamedTuple
 Truth = Literal["true", "false", "varies", "unknown"]
 # ``some``: runs in some pipelines of the kind, only through a varying condition (a branch).
 Outcome = Literal["yes", "some", "no", "unknown"]
-Context = Literal["merge_request", "push"]
+Context = Literal["merge_request", "push", "schedule"]
+# The ordinary pipelines; ``schedule`` is asked for by name (#1406).
 CONTEXTS: tuple[Context, ...] = ("merge_request", "push")
 
 _RUN_WHEN = frozenset({"on_success", "always", "delayed"})
@@ -73,7 +82,7 @@ _SPECIAL_SOURCES = frozenset({
     "schedule", "web", "trigger", "api", "chat", "webide", "ondemand_dast_scan",
     "ondemand_dast_validation", "security_orchestration_policy",
 })
-_SOURCE: Mapping[Context, str] = {"merge_request": "merge_request_event", "push": "push"}
+_SOURCE: Mapping[Context, str] = {"merge_request": "merge_request_event", "push": "push", "schedule": "schedule"}
 _EXACT_SOURCES = _SPECIAL_SOURCES | set(_SOURCE.values())
 # Pipelines that can run for an ordinary change upstream: never read as false.
 _UNCERTAIN_SOURCES = ("parent_pipeline", "pipeline", "external_pull_request_event", "external")
@@ -113,6 +122,8 @@ class _Value(NamedTuple):
 def _variable(name: str, context: Context) -> _Value:
     if name == "CI_PIPELINE_SOURCE":
         return _Value("str", _SOURCE[context], name=name)
+    if context == "schedule" and name in ("CI_COMMIT_BRANCH", "CI_COMMIT_TAG", "CI_COMMIT_TAG_MESSAGE"):
+        return _Value("maybe", name=name)  # a schedule targets a branch or a tag
     if name in _NULL_BOTH:
         return _Value("null", name=name)
     if name in _PRESENT_BOTH:
@@ -122,10 +133,13 @@ def _variable(name: str, context: Context) -> _Value:
     if name == "CI_OPEN_MERGE_REQUESTS":
         return _Value("present" if context == "merge_request" else "maybe", name=name)
     if name.startswith("CI_MERGE_REQUEST_"):
-        if context == "push":
+        if context != "merge_request":
             return _Value("null", name=name)
         return _Value("present" if name in _MR_PRESENT else "maybe", name=name)
-    return _Value("unknown", name=name)
+    # A schedule's own variables are set in project settings: each varies across schedules. A
+    # GitLab predefined variable this reader does not model stays unknown.
+    own = context == "schedule" and not name.startswith(("CI_", "GITLAB_"))
+    return _Value("maybe" if own else "unknown", name=name)
 
 
 class _ParseError(Exception):
@@ -312,7 +326,7 @@ class _Parser:
 
 
 def evaluate(expression: str, context: Context) -> Truth:
-    """The value of one ``rules:if`` expression in a merge request or push pipeline."""
+    """The value of one ``rules:if`` expression in a merge request, push or scheduled pipeline."""
     try:
         return _Parser(_tokens(expression), context).parse()
     except _ParseError:

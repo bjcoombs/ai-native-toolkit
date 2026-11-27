@@ -5,7 +5,7 @@
 id = "core.ci_hazards"
 kind = "collector"
 title = "CI that can be told not to fail"
-summary = "Pull request labels that skip every job of every GitHub Actions workflow that runs a check on pull requests. Committed files that tell Maven to ignore test failures. It reads CI files, Jenkinsfiles, .mvn/maven.config and reactor poms. It also reads the scripts, make recipes, local actions and poms a CI step leads to."
+summary = "Pull request labels that skip every check job of every GitHub Actions workflow that runs a check on pull requests. Committed files that tell Maven to ignore test failures. It reads CI files, Jenkinsfiles, .mvn/maven.config and reactor poms. It also reads the scripts, make recipes, local actions and poms a CI step leads to."
 issues = [828]
 callable = "lib.ci.ci_hazards:scan_ci_hazards"
 publishes = ["ci_hazards"]

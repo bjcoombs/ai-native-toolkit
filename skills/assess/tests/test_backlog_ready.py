@@ -12,6 +12,7 @@ import lib.manifest.check_manifest as cm
 from lib.assess_config import load_backlog_ready_labels
 from lib.backlog_ready import (READY_LABELS, UNTRIAGED_LABELS, documents_ready_label, form_state,
                                scan_backlog_ready, stale_state)
+from lib.backlog_ready_gitlab import READY_SECTIONS, template_has_sections
 from lib.counts_only.content_free import counts_only
 from lib.scoring.level_signals import STAGED_BLOCKS, criterion_grade, signal_path_validator
 from lib.scoring.levels import MaturityModel, load_levels
@@ -189,19 +190,240 @@ def test_the_label_config_degrades_to_the_defaults(tmp_path: Path, config: str,
 
 # --- the readers ----------------------------------------------------------------------
 
-def test_a_gitlab_repository_reads_the_form_not_measured(tmp_path: Path) -> None:
+# --- GitLab (#1406) ------------------------------------------------------------------
+
+GL_TEMPLATE = ".gitlab/issue_templates/Task.md"
+GL_CI = ".gitlab-ci.yml"
+GL_SECTIONS = "".join(f"## {s}\n\n" for s in READY_SECTIONS)
+GL_REFINE = ("refine-new-issues:\n  extends: .glab\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\n"
+             "  script:\n    - |\n      for iid in $(glab issue list --output ids); do\n"
+             "        glab issue update \"$iid\" --label needs-triage\n      done\n")
+GL_CI_MET = "stages: [test]\n\ntest:\n  script:\n    - make test\n\n.glab:\n  image: glab:1\n\n" + GL_REFINE
+GL_DOC = "# Contributing\n\nAn issue is ready when it carries the `refine::ready` scoped label:\n\n- six sections\n"
+
+
+def _gitlab(tmp_path: Path, files: dict[str, str | None] | None = None) -> Path:
+    """A GitLab project meeting level 1, with ``files`` written over it (None leaves one out)."""
     root = tmp_path / "gl"
-    (root / ".gitlab" / "issue_templates").mkdir(parents=True)
-    (root / ".gitlab" / "issue_templates" / "Bug.md").write_text("## Summary\n", encoding="utf-8")
-    (root / ".gitlab-ci.yml").write_text("test:\n  script: [make test]\n", encoding="utf-8")
-    block = scan_backlog_ready(root)
-    assert (block["required_form_field"], block["required_form_field_reason"]) == (None, "gitlab_templates")
-    assert (block["untriaged_on_open"], block["untriaged_on_open_reason"]) == (None, "gitlab_ci_not_read")
-    assert _condition(block)["state"] == "unmet"  # no ready label documented
-    (root / "CONTRIBUTING.md").write_text("## `refine::ready`\n\n- has success criteria\n", encoding="utf-8")
-    block = scan_backlog_ready(root)
-    assert block["ready_label_documented"] is True
-    assert _condition(block)["state"] == "not_measured"  # never unmet for want of a GitHub file
+    merged: dict[str, str | None] = {GL_TEMPLATE: GL_SECTIONS, GL_CI: GL_CI_MET, DOC: GL_DOC, **(files or {})}
+    for rel, text in merged.items():
+        if text is not None:
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(text, encoding="utf-8")
+    root.mkdir(exist_ok=True)
+    return root
+
+
+def _gl_untriaged(tmp_path: Path, ci: str) -> tuple[Any, Any]:
+    block = scan_backlog_ready(_gitlab(tmp_path, {GL_CI: ci}))
+    return block["untriaged_on_open"], block.get("untriaged_on_open_reason")
+
+
+def test_a_gitlab_project_meets_level_1(tmp_path: Path) -> None:
+    block = scan_backlog_ready(_gitlab(tmp_path))
+    assert _signals(block) == (True, True, True, True)
+    assert (block["forms"], block["issue_templates"], block["workflows"]) == (0, 1, 0)
+    cond = _condition(block)
+    assert (cond["state"], cond["grade"], cond["counted"]) == ("met", "config_only", False)
+
+
+@pytest.mark.parametrize(("files", "failing"), [
+    ({GL_TEMPLATE: GL_SECTIONS.replace("## Root Cause\n", "")}, "required_form_field"),
+    ({GL_TEMPLATE: None}, "required_form_field"),
+    ({GL_CI: GL_CI_MET.replace(GL_REFINE, "")}, "untriaged_on_open"),
+    ({GL_CI: None}, "untriaged_on_open"),
+    ({DOC: GL_DOC.replace("`refine::ready`", "ready")}, "ready_label_documented"),
+], ids=["section_missing", "no_template", "no_refiner", "no_ci", "no_label"])
+def test_each_missing_gitlab_piece_reads_unmet(tmp_path: Path, files: dict[str, str | None], failing: str) -> None:
+    block = scan_backlog_ready(_gitlab(tmp_path, files))
+    assert {s: block[s] for s in SIGNALS} == {s: s != failing for s in SIGNALS}  # type: ignore[literal-required]
+    assert _condition(block)["state"] == "unmet"
+
+
+@pytest.mark.parametrize(("ci", "reason"), [
+    ("test:\n\tscript: [make test]\n", "gitlab_ci_unreadable"),  # a tab indent
+    ("test:\n  script: [make test\n", "gitlab_ci_unreadable"),  # an unclosed flow list
+    ("include:\n  - project: grp/shared\n    file: ci.yml\n", "gitlab_ci_unsettled"),  # not read offline
+])
+def test_a_malformed_or_unread_gitlab_ci_reads_not_measured(tmp_path: Path, ci: str, reason: str) -> None:
+    block = scan_backlog_ready(_gitlab(tmp_path, {GL_CI: ci}))
+    assert (block["untriaged_on_open"], block["untriaged_on_open_reason"]) == (None, reason)
+    cond = _condition(block)
+    assert (cond["state"], cond["reason"]) == ("not_measured", reason)
+
+
+@pytest.mark.parametrize("text", [
+    GL_SECTIONS,
+    "# Task\n\n" + "".join(f"### **{s.upper()}:**\n<!-- fill in -->\n" for s in READY_SECTIONS),
+])
+def test_a_gitlab_template_with_the_six_sections(text: str) -> None:
+    assert template_has_sections(text) is True
+
+
+@pytest.mark.parametrize("text", [
+    GL_SECTIONS.replace("## Impact\n", "Impact\n"),  # not a heading
+    "```\n" + GL_SECTIONS + "```\n",  # in fenced code
+    "````\n```\n" + GL_SECTIONS + "````\n",  # a shorter fence inside a longer one closes nothing
+    "## Summary\n",
+])
+def test_a_gitlab_template_without_them(text: str) -> None:
+    assert template_has_sections(text) is False
+
+
+def test_a_gitlab_template_in_a_subfolder_is_not_read(tmp_path: Path) -> None:
+    block = scan_backlog_ready(_gitlab(tmp_path, {GL_TEMPLATE: None, ".gitlab/issue_templates/x/T.md": GL_SECTIONS}))
+    assert (block["required_form_field"], block["issue_templates"]) == (False, 0)
+
+
+REMOTE = "https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v4.1.0/templates/refine.yml"
+
+
+@pytest.mark.parametrize(("ci", "want"), [
+    (f"include:\n  - remote: {REMOTE}\n", (True, None)),
+    (f"include:\n  - remote: '{REMOTE}'\n    inputs:\n      toolkit_ref: v4.1.0\n", (True, None)),
+    (f"include:\n  - remote: {REMOTE}\n    rules:\n      - if: $REFINE\n", (None, "gitlab_ci_unsettled")),
+    ("include:\n  - remote: https://example.com/other/templates/refine.yml\n", (None, "gitlab_ci_unsettled")),
+    ("include:\n  - template: Jobs/SAST.gitlab-ci.yml\n", (False, None)),  # GitLab's own templates label nothing
+])
+def test_the_refinement_template_include(tmp_path: Path, ci: str, want: tuple[Any, Any]) -> None:
+    assert _gl_untriaged(tmp_path, ci) == want
+
+
+_SCHED = "  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\n"
+
+
+@pytest.mark.parametrize("job", [
+    "r:\n" + _SCHED + "  script: glab issue update 1 -l needs-triage\n",
+    "r:\n" + _SCHED + "  script:\n    - glab issue update 1 --label=bug,needs-triage\n",
+    "r:\n" + _SCHED + "  script:\n    - glab api -X PUT projects/1/issues/2 -f add_labels=needs-triage\n",
+    "r:\n" + _SCHED + "  script:\n    - curl --data '{\"add_labels\": \"Needs-Triage\"}' $URL\n",
+    "r:\n" + _SCHED + "  script:\n    - glab issue note 1 -m '/label ~\"needs triage\"'\n",
+    "r:\n" + _SCHED + "  script:\n    - glab issue update 1 \\\n      --label needs-triage\n",
+    "r:\n  only: [schedules]\n  script: glab issue update 1 -l needs-triage\n",
+    "r:\n  only:\n    refs:\n      - schedules\n  script: glab issue update 1 -l needs-triage\n",
+    "r:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\" && $REFINE == \"true\"\n"
+    "  script: glab issue update 1 -l needs-triage\n",  # a schedule's own variable
+    "default:\n  before_script:\n    - glab issue update 1 -l needs-triage\nr:\n" + _SCHED + "  script: [echo]\n",
+    ".base:\n  script: glab issue update 1 -l needs-triage\nr:\n  extends: .base\n" + _SCHED,
+])
+def test_a_scheduled_job_that_adds_an_untriaged_label(tmp_path: Path, job: str) -> None:
+    assert _gl_untriaged(tmp_path, job) == (True, None)
+
+
+@pytest.mark.parametrize("job", [
+    "r:\n  script: glab issue update 1 -l needs-triage\n",  # not written for a schedule
+    "r:\n  rules:\n    - when: always\n  script: glab issue update 1 -l needs-triage\n",  # every pipeline
+    ".r:\n" + _SCHED + "  script: glab issue update 1 -l needs-triage\n",  # hidden: never runs alone
+    "r:\n" + _SCHED + "  when: manual\n  script: glab issue update 1 -l needs-triage\n",
+    "r:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\n      when: never\n    - when: always\n"
+    "  script: glab issue update 1 -l needs-triage\n",
+    "r:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\n      when: manual\n"
+    "  script: glab issue update 1 -l needs-triage\n",
+    "r:\n  only: [schedules]\n  when: never\n  script: glab issue update 1 -l needs-triage\n",
+    "r:\n  only: [schedules]\n  except: [schedules]\n  script: glab issue update 1 -l needs-triage\n",
+    "r:\n" + _SCHED + "  script: glab issue update 1 --unlabel needs-triage\n",  # removes
+    "r:\n" + _SCHED + "  script: glab issue list --label needs-triage\n",  # lists
+    "r:\n" + _SCHED + "  script: glab api projects/1/issues?labels=needs-triage\n",  # a filter
+    "r:\n" + _SCHED + "  script: glab issue update 1 -l needs-triage-later\n",  # another label
+    "r:\n" + _SCHED + "  script: echo \"/label ~needs-triage\"\n",  # a quick action posted nowhere
+    "r:\n" + _SCHED + "  script:\n    # glab issue update 1 -l needs-triage\n    - echo\n",  # a comment
+    "r:\n" + _SCHED + "  script: [echo]\n.x:\n  script: glab issue update 1 -l needs-triage\n",
+    "workflow:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\n      when: never\n    - when: always\n"
+    "r:\n" + _SCHED + "  script: glab issue update 1 -l needs-triage\n",  # no scheduled pipeline
+    ".base:\n  script: glab issue update 1 -l needs-triage\nr:\n  extends: .base\n" + _SCHED
+    + "  script: [echo]\n",  # the job's own script replaces the template's
+])
+def test_a_job_that_does_not_label_new_issues_on_a_schedule(tmp_path: Path, job: str) -> None:
+    assert _gl_untriaged(tmp_path, job) == (False, None)
+
+
+@pytest.mark.parametrize("job", [
+    "r:\n" + _SCHED + "  script: glab issue update 1 -l $TRIAGE_LABEL\n",  # a variable label
+    "r:\n" + _SCHED + "  script:\n    - !reference [.lab, script]\n",
+    "r:\n  rules:\n    - !reference [.sched, rules]\n  script: glab issue update 1 -l needs-triage\n",
+    "r:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\" =~ broken\n"
+    "  script: glab issue update 1 -l needs-triage\n",  # an expression not read
+    ".lab: &lab\n  script: glab issue update 1 -l needs-triage\nr:\n  <<: *lab\n" + _SCHED,  # an anchor merge
+    "r:\n  extends: .missing\n" + _SCHED + "  script: glab issue update 1 -l needs-triage\n",
+    "r:\n  only: {refs: [schedules]}\n  script: glab issue update 1 -l needs-triage\n",  # a flow map
+    "r:\n  only: [schedules]\n  except:\n    variables: [$X]\n  script: glab issue update 1 -l needs-triage\n",
+    "r:\n" + _SCHED + "  only: [schedules]\n  script: glab issue update 1 -l needs-triage\n",  # GitLab rejects it
+    "r:\n  only: [schedules]\n  when: $WHEN\n  script: glab issue update 1 -l needs-triage\n",
+    "r:\n  rules:\n    - if: $REFINE == \"true\"\n  script: glab issue update 1 -l needs-triage\n",  # a schedule's variable
+    "r:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\" && $CI_PROJECT_PATH == \"a/b\"\n"
+    "  script: glab issue update 1 -l needs-triage\n",  # a predefined variable not modelled
+    ".base: &base\n  only: [schedules]\n  script: glab issue update 1 -l needs-triage\nr:\n  <<: *base\n",
+    # two schedule variables that may never hold together
+    "workflow:\n  rules:\n    - if: $REFINE == \"triage\"\nr:\n  rules:\n"
+    "    - if: $CI_PIPELINE_SOURCE == \"schedule\" && $REFINE == \"maintenance\"\n"
+    "  script: glab issue update 1 -l needs-triage\n",
+    "workflow:\n  rules:\n    - !reference [.flow, rules]\nr:\n" + _SCHED
+    + "  script: glab issue update 1 -l needs-triage\n",  # an unread workflow
+])
+def test_a_labelling_job_this_reader_cannot_settle_reads_not_measured(tmp_path: Path, job: str) -> None:
+    assert _gl_untriaged(tmp_path, job) == (None, "gitlab_ci_unsettled")
+
+
+@pytest.mark.parametrize(("ci", "want"), [
+    # a flow list over two lines: valid, though this reader does not follow it
+    ("r:\n  only: [main,\n    schedules]\n  script: glab issue update 1 -l needs-triage\n", (None, "gitlab_ci_unsettled")),
+    # tabs inside a block scalar (a <<- heredoc) are text, not indentation
+    ("r:\n" + _SCHED + "  script:\n    - |\n      cat <<-EOF\n      \t\tbody\n      \tEOF\n"
+     "      glab issue update 1 -l needs-triage\n", (True, None)),
+])
+def test_valid_yaml_is_not_read_as_malformed(tmp_path: Path, ci: str, want: tuple[Any, Any]) -> None:
+    assert _gl_untriaged(tmp_path, ci) == want
+
+
+@pytest.mark.parametrize(("ci", "want"), [
+    (f"include:\n  - remote: {REMOTE}\nx:\n\tscript: y\n", (None, "gitlab_ci_unreadable")),  # GitLab rejects it
+    (f"include:\n  - remote: {REMOTE}\nworkflow:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\n"
+     "      when: never\n    - when: always\n", (False, None)),  # no scheduled pipeline
+    (f"include:\n  - remote: {REMOTE}\nworkflow:\n  rules:\n    - if: $REFINE\n", (None, "gitlab_ci_unsettled")),
+    (f"include:\n  - remote: {REMOTE}\nworkflow:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\n",
+     (True, None)),
+])
+def test_the_refinement_include_needs_a_pipeline_that_runs_it(tmp_path: Path, ci: str, want: tuple[Any, Any]) -> None:
+    assert _gl_untriaged(tmp_path, ci) == want
+
+
+def test_a_tag_scheduled_refiner_and_a_workflow_any_schedule_meets(tmp_path: Path) -> None:
+    ci = ("workflow:\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\nr:\n  rules:\n"
+          "    - if: $CI_PIPELINE_SOURCE == \"schedule\" && $CI_COMMIT_TAG\n"
+          "  script: glab issue update 1 -l needs-triage\n")
+    assert _gl_untriaged(tmp_path, ci) == (True, None)
+
+
+def test_an_unreadable_gitlab_template_reads_not_measured(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import lib.backlog_ready as br
+    real = br.read_config
+    monkeypatch.setattr(br, "read_config", lambda root, rel: "" if rel == GL_TEMPLATE else real(root, rel))
+    block = scan_backlog_ready(_gitlab(tmp_path))
+    assert (block["required_form_field"], block["required_form_field_reason"]) == (None, "form_unreadable")
+
+
+def test_an_anchor_merge_in_a_file_that_adds_no_label_is_settled(tmp_path: Path) -> None:
+    ci = ".d: &d\n  image: x\nbuild:\n  <<: *d\n  script: [make]\n"
+    assert _gl_untriaged(tmp_path, ci) == (False, None)
+
+
+def test_a_github_workflow_and_a_gitlab_refiner_both_count(tmp_path: Path) -> None:
+    block = scan_backlog_ready(_repo(tmp_path, {TRIAGE: None, GL_CI: GL_CI_MET}))
+    assert block["untriaged_on_open"] is True
+    block = scan_backlog_ready(_repo(tmp_path / "b", {GL_CI: "test:\n\tscript: x\n"}))
+    assert block["untriaged_on_open"] is True  # the GitHub workflow meets it; the GitLab file is not needed
+
+
+@pytest.mark.parametrize(("text", "met"), [
+    ("## ~agent-ready\n\n- has criteria\n", True),
+    ("Label it ~\"refine::ready\" when:\n\n- it has criteria\n", True),
+    ("Label it ~refine::ready when:\n\n- it has criteria\n", True),
+    ("## ~ready\n\n- has criteria\n", True),
+    ("## ~Ready\n\n- has criteria\n", False),  # a one-word label keeps its case
+    ("## ~agent-ready-later\n\n- not the label\n", False),
+])
+def test_gitlab_label_references_in_documentation(text: str, met: bool) -> None:
+    assert documents_ready_label(text, READY_LABELS) is met
 
 
 def test_an_empty_repository_reads_unmet(tmp_path: Path) -> None:
@@ -384,5 +606,5 @@ def test_counts_only_keeps_every_field(tmp_path: Path) -> None:
     block = scan_backlog_ready(_repo(tmp_path, {FORM: "body: [\n"}))
     out = counts_only({"backlog_ready": block})["backlog_ready"]
     for field in ("available", *SIGNALS, "required_form_field_reason", "forms", "forms_unreadable",
-                  "workflows", "stale_jobs", "labels_from_config"):
+                  "issue_templates", "workflows", "stale_jobs", "labels_from_config"):
         assert out[field] == block[field], field  # type: ignore[literal-required]
