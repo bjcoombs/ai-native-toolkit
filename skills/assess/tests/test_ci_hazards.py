@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 import lib.scoring.level_tally as lt
-from lib.ci.ci_hazards import NO_CI_FILES, NO_PR_CHECKS, ignores_test_failures, job_skip_labels, scan_ci_hazards
+from lib.ci.ci_hazards import NO_CI_FILES, NO_PR_CHECKS, check_jobs, ignores_test_failures, job_skip_labels, scan_ci_hazards
 from lib.counts_only.content_free import counts_only
 
 GATED = """name: checks
@@ -186,3 +186,13 @@ def test_the_block_survives_counts_only_with_its_paths(tmp_path: Path) -> None:
     block = scan_ci_hazards(_repo(tmp_path, {"Jenkinsfile": JENKINS}))
     kept = counts_only({"ci_hazards": block})["ci_hazards"]
     assert kept["test_failures_ignored"] == 1 and kept["ci_hazard_files"] == ["Jenkinsfile"]
+
+
+def test_a_job_that_runs_no_check_does_not_clear_the_label(tmp_path: Path) -> None:
+    text = GATED.replace("jobs:\n", "jobs:\n  changes:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo filter\n", 1)
+    assert check_jobs(text) == frozenset({"lint", "test"})
+    assert scan_ci_hazards(_repo(tmp_path, {".github/workflows/checks.yml": text}))["skip_labels"] == 1
+
+
+def test_a_quoted_true_is_read() -> None:
+    assert ignores_test_failures("sh 'mvn -Dmaven.test.failure.ignore=\"true\" install'")

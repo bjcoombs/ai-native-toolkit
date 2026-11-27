@@ -14,9 +14,10 @@ is followed into the repository only through the shared CI-step follower
   is skipped by label ``L`` when its own ``if:`` holds
   ``!contains(github.event.pull_request.labels.*.name, 'L')`` and no ``||`` (which could let it
   run anyway), or when a job it ``needs:`` is skipped by ``L`` and its own ``if:`` calls no status
-  function (``always()``, ``failure()`` or ``cancelled()`` run it after a skipped need). A label counts when it skips
-  every job of every such workflow; one unskipped job or workflow clears it, so precision comes
-  first. Null with ``skip_labels_reason`` ``no_pr_checks`` when no workflow runs a check on pull
+  function (``always()``, ``failure()`` or ``cancelled()`` run it after a skipped need). A label
+  counts when it skips every check job (a job whose own lines run a test or lint command,
+  ``check_jobs``; every job when none is found) of every such workflow; one unskipped check job or
+  workflow clears it, so precision comes first. Null with ``skip_labels_reason`` ``no_pr_checks`` when no workflow runs a check on pull
   requests: there is nothing a label could skip that this reader can see.
 - **``test_failures_ignored``**: the number of committed files that tell Maven to ignore test
   failures: ``maven.test.failure.ignore`` set to true (``-Dmaven.test.failure.ignore=true``, a
@@ -59,7 +60,7 @@ MAVEN_CONFIG = ".mvn/maven.config"
 
 _SKIP = re.compile(r"""!\s*contains\(\s*github\.event\.pull_request\.labels\.\*\.name\s*,\s*['"]([^'"]+)['"]\s*\)""")
 _IGNORE = re.compile(
-    r"maven\.test\.failure\.ignore\s*(?:=|>)\s*true\b"
+    r"maven\.test\.failure\.ignore\s*(?:=|>)\s*[\"']?true\b"
     r"|-Dmaven\.test\.failure\.ignore(?![\w.=])"
     r"|<testFailureIgnore>\s*true\s*</testFailureIgnore>", re.IGNORECASE)
 _NEEDS_ITEM = re.compile(r"[\w-]+")
@@ -133,6 +134,19 @@ def job_skip_labels(text: str) -> dict[str, frozenset[str]]:
     return {name: skipped(name, frozenset()) for name in own}
 
 
+def check_jobs(text: str) -> frozenset[str]:
+    """The jobs of a GitHub workflow whose own lines run a test or lint command."""
+    lines = text.splitlines()
+    tree = IndentTree(parse_lines(lines))
+    out: set[str] = set()
+    for job in jobs(tree):
+        span = tree.subtree(job)
+        body = "\n".join(["jobs:", *(lines[j] for j in span)])
+        if check_commands(body) > 0:
+            out.add(tree.lines[job].key)
+    return frozenset(out)
+
+
 def _skip_labels(texts: dict[str, str]) -> tuple[int | None, list[str]]:
     """The labels that skip every check job on pull requests, and the workflows read for it."""
     common: frozenset[str] | None = None
@@ -142,6 +156,9 @@ def _skip_labels(texts: dict[str, str]) -> tuple[int | None, list[str]]:
         if not PR_EVENTS & set(events) or check_commands(text) == 0:
             continue
         labels = job_skip_labels(text)
+        checking = check_jobs(text)
+        if checking:  # a job that runs no check (a paths filter, a notice) cannot clear the label
+            labels = {name: found for name, found in labels.items() if name in checking}
         skipping = frozenset.intersection(*labels.values()) if labels else frozenset()
         common = skipping if common is None else common & skipping
         read.append(rel)

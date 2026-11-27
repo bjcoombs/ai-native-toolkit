@@ -60,6 +60,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -98,6 +99,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -143,6 +145,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -188,6 +191,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": false,
           "criteria": [
@@ -233,6 +237,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -277,6 +282,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": "ci_runs_tests",
           "grade": "measured",
           "counts": false,
           "criteria": [
@@ -321,6 +327,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": "ci_runs_tests",
           "grade": "measured",
           "counts": false,
           "criteria": [
@@ -365,6 +372,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -428,6 +436,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -464,6 +473,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -508,6 +518,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -546,6 +557,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -592,6 +604,7 @@
           "step_gates": [
             "instructions"
           ],
+          "blocks": null,
           "grade": "declared",
           "counts": false,
           "criteria": [
@@ -629,6 +642,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "declared",
           "counts": false,
           "criteria": [
@@ -711,6 +725,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "declared",
           "counts": false,
           "criteria": [
@@ -747,6 +762,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "declared",
           "counts": false,
           "criteria": [
@@ -791,6 +807,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -829,6 +846,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -892,6 +910,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "verified",
           "counts": true,
           "criteria": [
@@ -930,6 +949,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -993,6 +1013,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "config_only",
           "counts": false,
           "criteria": [
@@ -1031,6 +1052,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -1077,6 +1099,7 @@
           "step_gates": [
             "ci_runs_tests"
           ],
+          "blocks": null,
           "grade": "verified",
           "counts": true,
           "criteria": [
@@ -1114,6 +1137,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "declared",
           "counts": false,
           "criteria": [
@@ -1160,6 +1184,7 @@
           "step_gates": [
             "coverage_gate"
           ],
+          "blocks": null,
           "grade": "verified",
           "counts": true,
           "criteria": [
@@ -1198,6 +1223,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -1242,6 +1268,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "declared",
           "counts": false,
           "criteria": [
@@ -1280,6 +1307,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "verified",
           "counts": true,
           "criteria": [
@@ -1343,6 +1371,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "config_only",
           "counts": false,
           "criteria": [
@@ -1379,6 +1408,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "config_only",
           "counts": false,
           "criteria": [
@@ -1442,6 +1472,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -1486,6 +1517,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "config_only",
           "counts": false,
           "criteria": [
@@ -1522,6 +1554,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -1566,6 +1599,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -1610,6 +1644,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -1654,6 +1689,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
@@ -1698,6 +1734,7 @@
           "predicted": null,
           "review": null,
           "step_gates": [],
+          "blocks": null,
           "grade": "measured",
           "counts": true,
           "criteria": [
