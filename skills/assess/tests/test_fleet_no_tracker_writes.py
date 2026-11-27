@@ -9,7 +9,7 @@ offline scan and the ``--label`` step (``skills/fleet/scripts/fleet_labels.py``)
 make no call at all.
 
 The test puts a fake ``gh`` and ``glab`` first on PATH. Each one is the same Python
-shim: it appends its argv to a log and answers the reads the platform pass makes
+shim: it writes its argv to a file of its own and answers the reads the platform pass makes
 (auth probes, ``gh api`` and ``glab api`` GETs, ``gh pr list``, ``gh repo view``) with
 one recent merge, so the pass goes as deep as it can (bot lookups, approvals, notes,
 the merged CI configuration). The run covers a GitHub and a GitLab repository, and
@@ -52,12 +52,15 @@ LOG_ENV = "FAKE_TRACKER_LOG"
 # The shim. ``NAME`` is prepended per binary. Standard library only: it runs under
 # this interpreter outside the project's import path.
 SHIM = r'''
-import json, os, sys
+import json, os, sys, uuid
 from datetime import datetime, timedelta, timezone
 
 argv = sys.argv[1:]
-with open(os.environ["FAKE_TRACKER_LOG"], "a", encoding="utf-8") as log:
-    log.write(json.dumps([NAME, *argv]) + "\n")
+# One file per call: scans run in parallel, and appends to one shared file are not
+# atomic across processes on Windows.
+log = os.path.join(os.environ["FAKE_TRACKER_LOG"], f"{uuid.uuid4().hex}.json")
+with open(log, "w", encoding="utf-8") as handle:
+    handle.write(json.dumps([NAME, *argv]))
 
 now = datetime.now(timezone.utc)
 created = (now - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -324,13 +327,14 @@ def test_a_call_outside_the_known_reads_is_flagged(call):
 
 @pytest.fixture
 def trackers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Fake ``gh`` and ``glab`` first on PATH, logging to the returned file, and a root
+    """Fake ``gh`` and ``glab`` first on PATH, logging to the returned directory, and a root
     with one GitHub and one GitLab repository."""
     bindir = tmp_path / "bin"
     bindir.mkdir()
     for name in ("gh", "glab"):
         install_fake(bindir, name)
-    log = tmp_path / "tracker-calls.jsonl"
+    log = tmp_path / "tracker-calls"
+    log.mkdir()
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv(LOG_ENV, str(log))
     monkeypatch.chdir(tmp_path)
@@ -340,9 +344,8 @@ def trackers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _calls(log: Path) -> list[list[str]]:
-    if not log.exists():
-        return []
-    return [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+    """Every logged call, sorted (one file per call, so arrival order is not kept)."""
+    return sorted(json.loads(path.read_text(encoding="utf-8")) for path in log.glob("*.json"))
 
 
 def _fleet(tmp_path: Path, name: str, *extra: str) -> Path:
