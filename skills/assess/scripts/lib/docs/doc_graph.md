@@ -87,6 +87,33 @@ toctree entry is a broken link of kind `rst`; an unknown `:ref:` label is not, b
 may come from intersphinx or `autosectionlabel`. A Sphinx root's `index.rst` /
 `index.txt` is an entry point (the toctree root), as is a root-level `README.rst`. Literal
 blocks and code directives are blanked before parsing, so a sample `:doc:` is not an edge.
-`unparsed_doc_formats` lists the format tokens (`asciidoc`) of doc files present but not
-read for links; with no parsed doc at all, `reason` names them instead of
-`no markdown docs found`, so a zero reachability is not read as the whole story.
+`unparsed_doc_formats` lists the format tokens of doc files present but not read for
+links; with no parsed doc at all, `reason` names them instead of `no markdown docs found`,
+so a zero reachability is not read as the whole story. No format is unparsed since #841,
+so the list is empty; the field stays for the next format found.
+
+## AsciiDoc and Antora (#841)
+
+Discovery adds `.adoc` and `.asciidoc` files, and `doc_staleness` takes the same doc set,
+so doc freshness measures them. A `README.adoc` ranks after `README.md` and `SKILL.md`
+as a directory's base doc, and `CONTRIBUTING.adoc` is boilerplate, as its Markdown twin
+is. `doc_adoc.py` adds a `link` edge for each `xref:` and `<<target.adoc#,...>>` that names
+a `.adoc` page, each `include::` of a doc, and each `link:` to a doc. Outside an Antora
+component a target is relative to the citing doc. Inside one (a directory holding
+`antora.yml`) an `xref` is an Antora page ID, `[version@][component:][module:]path`,
+relative to the module's `pages/` directory (or to the citing page's directory after
+`./`), and an include may name a family (`partial$`, `example$`). A component the
+repository does not declare belongs to another project and is skipped; so is a target
+holding an attribute reference (`{snippets}`). An unresolved `xref` or `include` is a
+broken link of kind `asciidoc`, except in a component whose `antora.yml` has a
+`collector:` key (an Antora collector), because its build writes pages a checkout lacks. A `link:` is never broken: it
+may point at the published site. The nav files an `antora.yml` lists, and any
+`modules/<module>/nav.adoc` beside it, are entry points, as is a root `README.adoc`.
+Listing, literal, passthrough and comment blocks and `//` lines are blanked before the
+`xref` parse; an `include::` is a preprocessor line, so only comments hide it. AsciiDoc
+docs skip the Markdown link pass, because `[[id]]` is an anchor there, not a wikilink.
+Only files under a component's `modules/<module>/` are read as Antora files; a
+`README.adoc` beside `antora.yml` resolves its links as plain AsciiDoc.
+
+Known limit: an AsciiDoc `include::` or `link:` of a code file adds no doc-to-code edge,
+so it gives the doc no `explicit-links` ownership in doc freshness.

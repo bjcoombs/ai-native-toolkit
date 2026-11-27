@@ -128,25 +128,6 @@ def test_strip_literals_keeps_line_count_and_toctree_entries() -> None:
     assert toctree_entries(lines) == [("a/b", True), ("c*", True)]
 
 
-def test_unparsed_doc_format_is_reported_not_read_as_zero(tmp_path: Path) -> None:
-    _write(tmp_path, "docs/guide.adoc", "= Guide\n\nlink:other.adoc[Other]\n")
-    _write(tmp_path, "docs/other.adoc", "= Other\n")
-    r = build_doc_graph(tmp_path)
-    d = r.as_dict()
-    assert d["doc_count"] == 0
-    assert d["unparsed_doc_formats"] == ["asciidoc"]
-    assert d["reason"] == "docs present but not parsed for links: asciidoc"
-
-
-def test_unparsed_doc_format_is_named_beside_parsed_docs(tmp_path: Path) -> None:
-    _write(tmp_path, "README.md", "[guide](guide.md)\n")
-    _write(tmp_path, "guide.md", "guide\n")
-    _write(tmp_path, "manual.adoc", "= Manual\n")
-    d = build_doc_graph(tmp_path).as_dict()
-    assert d["doc_count"] == 2
-    assert d["unparsed_doc_formats"] == ["asciidoc"]
-
-
 def test_markdown_only_repo_reports_no_unparsed_format(tmp_path: Path) -> None:
     _write(tmp_path, "README.md", "hi\n")
     assert build_doc_graph(tmp_path).as_dict()["unparsed_doc_formats"] == []

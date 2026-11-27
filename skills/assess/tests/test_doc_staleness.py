@@ -756,3 +756,28 @@ def test_doc_freshness_measures_a_sphinx_doc_set(tmp_path: Path) -> None:
     assert by_path["docs/ledger.txt"]["subject_method"] == "parallel-docs-tree"
     assert by_path["docs/index.rst"]["subject_method"] == "explicit-links"
     assert r["summary"]["measured_docs"] == 3
+
+
+def test_doc_freshness_measures_an_asciidoc_repository(tmp_path: Path) -> None:
+    """A repository documented in AsciiDoc (#841): README.adoc is a base doc as
+    README.md is, CONTRIBUTING.adoc is boilerplate, and an Antora page under a
+    docs tree is matched to the code it names."""
+    _write(tmp_path, "README.adoc", "= Demo\n\nlink:CONTRIBUTING.adoc[Contributing]\n")
+    _write(tmp_path, "CONTRIBUTING.adoc", "= Contributing\n")
+    _write(tmp_path, "build.py", "x = 1\n")
+    antora = "documentation/src/docs/antora"
+    _write(tmp_path, f"{antora}/antora.yml", "name: demo\nnav:\n- modules/ROOT/nav.adoc\n")
+    _write(tmp_path, f"{antora}/modules/ROOT/nav.adoc", "* xref:billing.adoc[Billing]\n")
+    _write(tmp_path, f"{antora}/modules/ROOT/pages/billing.adoc", "= Billing\n")
+    _write(tmp_path, "core/src/main/java/demo/billing/Invoice.java", "class Invoice {}\n")
+    r = analyze_doc_staleness(tmp_path)
+    by_path = {d["path"]: d for d in r["docs"]}
+    assert sorted(by_path) == [
+        "CONTRIBUTING.adoc", "README.adoc", f"{antora}/modules/ROOT/nav.adoc",
+        f"{antora}/modules/ROOT/pages/billing.adoc",
+    ]
+    assert by_path["README.adoc"]["subject_method"] == "nearest-ancestor"
+    assert by_path["CONTRIBUTING.adoc"]["subject_method"] == "repo-baseline"
+    assert by_path[f"{antora}/modules/ROOT/pages/billing.adoc"]["subject_method"] \
+        == "parallel-docs-tree"
+    assert r["summary"]["measured_docs"] == 2
