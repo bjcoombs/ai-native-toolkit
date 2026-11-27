@@ -18,11 +18,11 @@ example, and the noise would bury real findings.
   ``private_key`` (a PEM private key block), ``cloud_key`` (an AWS-style access key id),
   ``credential`` (read again here with a tighter rule for skill text, #1196: a known provider key
   at the provider's length anywhere in the text, such as ``ghp_`` plus 36 characters, or a
-  ``password=``/``token=``/``api_key=`` assignment, the name prefixed or not (``DB_PASSWORD=``),
+  ``password=``/``token=``/``api_key=`` assignment, the name prefixed, quoted or neither (``DB_PASSWORD=``, ``"API_KEY": ``),
   whose value is at least 20 characters with a letter, a digit or both cases, and 3.5 bits of
   entropy per character (2.8 for an all-hex value). A placeholder such as ``xxx``,
   ``<...>``, ``your_...``, a short ``sk-`` stub, a run of one character, an ascending run such
-  as ``1234``, a placeholder word, the jwt.io sample, GitHub's or Slack's published example token
+  as ``1234``, a placeholder word, the jwt.io sample, GitHub's, Slack's or Stripe's published example token
   (an exact match), a URL or path, or a reference to a secret held elsewhere
   (``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X``, ``os.environ[...]``) is not a finding. An
   assignment the instruction-file scan matches and this rule sets aside, such as
@@ -129,9 +129,10 @@ _VERSION_BEFORE = re.compile(r"(?:(?:\bv|\bversion|\brelease|\bbuild)\s*[:=]?|[=
 # secret held elsewhere (``${{ secrets.X }}``, ``$TOKEN``, ``process.env.X``, ``os.environ[...]``) is
 # not a committed secret, and telling a team to rotate it would be wrong. The name may carry a prefix
 # ending in ``_`` (``DB_PASSWORD``, ``MY_SERVICE_API_KEY``, ``AWS_SECRET_ACCESS_KEY``), the commonest
-# shape in skill docs, which the grader's ``\b`` misses.
+# shape in skill docs, which the grader's ``\b`` misses. A quoted name (``"API_KEY": "..."``, an MCP
+# ``env`` block) is read too.
 _CREDENTIAL = re.compile(r"(?:\b|(?<=_))(?:password|passwd|secret(?:[_-]?access)?(?:[_-]?key)?|api[_-]?key|"
-                         r"access[_-]?key|auth[_-]?token|token)\b"
+                         r"access[_-]?key|auth[_-]?token|token)\b[\"']?"
                          r"\s*([:=])\s*(\"[^\"]*\"|'[^']*'|\S+)(?:\s*=\s*(\"[^\"]*\"|'[^']*'|\S+))?", re.IGNORECASE)
 _REFERENCE = re.compile(r"^(?:\$\{?\{?|\$\w|%\w+%|\{\{|<|process\.env\b|os\.environ\b|os\.getenv\b|getenv\b|"
                         r"env\.|env\[|ENV\[|secrets\.|vars\.|System\.getenv\b|Environment\.|import\.meta\.env\b)",
@@ -234,10 +235,11 @@ _HEX = re.compile(r"[0-9a-f]+|[0-9A-F]+")
 
 
 # Providers' own published example tokens, set aside on an exact match only: GitHub's REST API
-# authentication docs and Slack's bot token docs. Split so no whole token sits in the source.
+# authentication docs, Slack's bot token docs and Stripe's API docs (a test key). Split so no whole token sits in the source.
 _PUBLISHED_SAMPLES = frozenset({
     "gh" + "p_16C7e42F292c6912E7710c838347Ae178B4a",
     "xo" + "xb-17653672481-19874698323-pdFZKVeTuE8sk7oOcBrzbqgy",
+    "sk" + "_test_4eC39HqLyjWDarjtT1zdp7dc",
 })
 
 

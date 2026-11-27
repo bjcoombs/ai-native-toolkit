@@ -40,6 +40,7 @@ JWT_IO_SAMPLE = ".".join([_b64({"alg": "HS256", "typ": "JWT"}),
 # GitHub's REST API authentication docs and Slack's bot token docs publish these as examples.
 GITHUB_DOCS_SAMPLE = "gh" + "p_16C7e42F292c6912E7710c838347Ae178B4a"
 SLACK_DOCS_SAMPLE = "xo" + "xb-17653672481-19874698323-pdFZKVeTuE8sk7oOcBrzbqgy"
+STRIPE_DOCS_SAMPLE = "sk" + "_test_4eC39HqLyjWDarjtT1zdp7dc"
 
 
 def _uuid() -> str:
@@ -81,6 +82,7 @@ REAL: list[str] = [
     f"AWS_SECRET_ACCESS_KEY={_body(40, B64)}",
     f"SECRET_KEY = '{_body(50, ALNUM + '!@#%^&*-_')}'",
     f"api_key: {_body(20, HEX)}",  # a short hex value, under the hex entropy threshold
+    f'"env": {{"API_KEY": "{_body(32)}"}}',  # a quoted name: an MCP env block
 ]
 
 # Documentation placeholders and lookalikes: none may be a credential finding.
@@ -130,6 +132,7 @@ PLACEHOLDERS: list[str] = [
     # Providers' published example tokens, exact matches only (see the test below for a near miss).
     "export GITHUB_TOKEN=" + GITHUB_DOCS_SAMPLE,
     "SLACK_BOT_TOKEN=" + SLACK_DOCS_SAMPLE,
+    "secret_key: " + STRIPE_DOCS_SAMPLE,
     'url = "https://x-access-token:' + 'gh' + 's_abc123@github.com/a/b",',  # a short value before the host
     "api_key: Optional[str] = None",
 ]
@@ -157,11 +160,13 @@ def test_precision_and_recall_on_the_fixture_set_clear_the_gate() -> None:
     assert precision >= 0.95 and recall >= 0.8, (precision, recall)
 
 
-@pytest.mark.parametrize("sample", [GITHUB_DOCS_SAMPLE, SLACK_DOCS_SAMPLE], ids=["github-docs", "slack-docs"])
+@pytest.mark.parametrize("sample", [GITHUB_DOCS_SAMPLE, SLACK_DOCS_SAMPLE, STRIPE_DOCS_SAMPLE],
+                         ids=["github-docs", "slack-docs", "stripe-docs"])
 def test_a_published_sample_is_set_aside_on_an_exact_match_only(sample: str) -> None:
     assert "credential" not in kinds_in(f"Use {sample} as in the provider's docs.")
+    assert "credential" not in kinds_in(f"API_KEY={sample}")
     near = sample[:-1] + ("Z" if sample[-1] != "Z" else "Y")  # one character off: a real-shaped key
-    assert "credential" in kinds_in(f"Use {near} here.")
+    assert "credential" in kinds_in(f"API_KEY={near}")
 
 
 @pytest.mark.parametrize(("n", "alphabet"), [(20, HEX), (32, HEX), (40, HEX), (20, ALNUM), (36, ALNUM), (40, B64)])
