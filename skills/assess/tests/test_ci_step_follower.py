@@ -156,7 +156,8 @@ def test_gradle_check_resolves_to_bound_plugins_and_tasks(tmp_path: Path) -> Non
 
 
 def test_gradle_reads_the_kotlin_dsl_and_the_asked_project(tmp_path: Path) -> None:
-    follower = _repo(tmp_path, {"build.gradle": "plugins { id 'base' }\n", "lib/build.gradle.kts": _GRADLE_KTS})
+    follower = _repo(tmp_path, {"build.gradle": "plugins { id 'base' }\n", "lib/build.gradle.kts": _GRADLE_KTS,
+                                "settings.gradle.kts": 'include(":lib")\n'})
     got = _one(follower, "./gradlew :lib:check")
     assert got.paths == ("lib/build.gradle.kts",)
     assert set(got.plugins) == {"java-library", "io.gitlab.arturbosch.detekt"}
@@ -284,7 +285,8 @@ def test_a_step_outside_the_checkout_or_unread_follows_nothing(tmp_path: Path, l
     assert follower.step(line) == []
 
 
-_PARENT = """<project><artifactId>parent</artifactId><packaging>pom</packaging><build>
+_PARENT = """<project><artifactId>parent</artifactId><packaging>pom</packaging>
+<modules><module>api</module><module>core</module></modules><build>
 <pluginManagement><plugins><plugin><artifactId>japicmp-maven-plugin</artifactId>
 <executions><execution><goals><goal>cmp</goal></goals></execution></executions>
 </plugin></plugins></pluginManagement></build></project>
@@ -312,10 +314,32 @@ def test_maven_reads_plugin_management_and_the_modules_pl_names(tmp_path: Path) 
 def test_a_project_task_reads_the_shared_blocks_above_it(tmp_path: Path) -> None:
     root = "plugins { id 'base' }\nsubprojects {\n    apply plugin: 'checkstyle'\n}\n"
     follower = _repo(tmp_path, {"build.gradle": root, "app/build.gradle": "plugins { id 'java' }\n",
-                                "other/build.gradle": "plugins { id 'pmd' }\n"})
+                                "other/build.gradle": "plugins { id 'pmd' }\n",
+                                "settings.gradle": "include 'app', 'other'\n"})
     got = _one(follower, "./gradlew :app:check")
     assert got.paths == ("build.gradle", "app/build.gradle")
     assert set(got.plugins) == {"java", "checkstyle"} and "base" not in got.plugins
     plain = _repo(tmp_path / "plain", {"build.gradle": "plugins { id 'base' }\n",
-                                       "app/build.gradle": "plugins { id 'java' }\n"})
+                                       "app/build.gradle": "plugins { id 'java' }\n",
+                                       "settings.gradle": "include ':app'\n"})
     assert _one(plain, "./gradlew :app:check").paths == ("app/build.gradle",)
+
+
+def test_gradle_leaves_out_excluded_tasks_and_unincluded_builds(tmp_path: Path) -> None:
+    follower = _repo(tmp_path, {"build.gradle": _GRADLE, "settings.gradle": "includeBuild 'tools'\n",
+                                "src/test/resources/fixture/build.gradle": "plugins { id 'pmd' }\n"})
+    got = _one(follower, "./gradlew check -x test -x japicmp -x :app:lint")
+    assert got.paths == ("build.gradle",) and "pmd" not in got.plugins
+    assert set(got.tasks) == {"checkstyleMain", "checkstyleTest"}
+    assert set(got.plugins) == {"checkstyle"}
+    assert got.unknown == ("includeBuild: settings.gradle", "-x :app:lint")
+    assert _one(follower, "./gradlew :nope:check").unknown[-1] == "project: nope"
+
+
+def test_maven_reads_only_the_reactor_its_modules_name(tmp_path: Path) -> None:
+    follower = _repo(tmp_path, {"pom.xml": _CHILD.format(name="x", plugins=""),
+                                "src/it/x/pom.xml": _POM})
+    got = _one(follower, "mvn verify")
+    assert got.paths == ("pom.xml",) and "japicmp-maven-plugin:cmp" not in got.tasks
+    missing = _repo(tmp_path / "m", {"pom.xml": _PARENT})
+    assert set(_one(missing, "mvn verify").unknown) == {"module: api/pom.xml", "module: core/pom.xml"}

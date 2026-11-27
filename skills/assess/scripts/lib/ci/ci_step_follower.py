@@ -37,7 +37,7 @@ workflow calls), ``lib.ci.ci_model_jobs`` and ``lib.agents.agent_ops`` /
 ``lib.agents.agent_job_scope`` (local workflows and actions) go through ``lib.ci.ci_step_paths``;
 their readings did not change.
 
-Inward-only imports: ``lib.ci.ci_build_follower``, ``lib.ci.ci_composite``,
+Inward-only imports: ``lib.ci.ci_action_inputs``, ``lib.ci.ci_build_follower``, ``lib.ci.ci_composite``,
 ``lib.ci.ci_continuations``, ``lib.ci.ci_expressions``, ``lib.ci.ci_masking``,
 ``lib.ci.ci_matrix``, ``lib.ci.ci_step_paths``, ``lib.instructions.command_resolver`` and
 ``lib.instructions.command_index``. Tests: ``tests/test_ci_step_follower.py``.
