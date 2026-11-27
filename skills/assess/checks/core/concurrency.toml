@@ -1,0 +1,33 @@
+# Check manifest fragment: the concurrency collector. Layout and merge order:
+# skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.concurrency"
+kind = "collector"
+title = "Concurrency readiness"
+issues = [985]
+callable = "lib.history.concurrency:scan_concurrency"
+publishes = ["concurrency"]
+reads = ["repo_root", "scope", "history_window"]
+stage = "post_offers"
+headless = { concurrency = "registered" }
+whys.concurrency = "No other scan says whether many agents can change the repository at once; this records how often the same files, generated ones included, change across merges, the files every parallel change would conflict on. Listed, not counted: nothing scores it."
+shapes = [
+  { path = "concurrency", type = "lib.run_context_types_concurrency:ConcurrencyBlock" },
+]
+revision = 1
+unknown_reasons = [
+  { code = "short_history", means = "The window holds fewer than 10 first-parent commits, too few for a share to mean anything.", next_step = "Nothing to change in the repository; a longer --window, or more history, lets the scan read it." },
+  { code = "shallow_clone", means = "The checkout is a shallow clone, so the merges read are cut short.", next_step = "Nothing to change in the repository; a full clone (git fetch --unshallow) lets the scan read it." },
+  { code = "shallow_unknown", means = "Git could not confirm the checkout is a full clone.", next_step = "Nothing to change in the repository; run the scan on a full clone." },
+  { code = "not_a_repo", means = "The path is not a git repository, or one with no commits.", next_step = "Nothing to change: there is no history to read." },
+  { code = "no_git", means = "git is not installed where the scan ran.", next_step = "Install git where the scan runs." },
+  { code = "git_timeout", means = "A git read took longer than the scan allows.", next_step = "Nothing to change in the repository; a shorter --window reads less history." },
+]
+  [entries.privacy]
+  "concurrency.reason" = "reason"
+  "concurrency.window" = "token"
+  "concurrency.since" = "drop"
+  "concurrency.fan_in_null_reason" = "token"
+  "concurrency.hot_files" = "drop"
+  "concurrency.limits" = "drop"

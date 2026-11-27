@@ -219,9 +219,9 @@ New code imports the new path.
 - **`history/`**: git history primitives and the windows over them, the `history` group
   (#1397): file churn and its rename following, change coupling, the one history-window
   grammar and the anchored window start, the commit anchor, the content paths a commit
-  touched, the fleet activity window, AI usage and the bot and agent account discovery.
+  touched, the fleet activity window, AI usage, the merge touch share (concurrency) and the bot and agent account discovery.
   `fleet_activity` keeps its prefix but is not a fleet module (decision 7 on #917).
-  Files: `__init__.py`, `account_discovery.py`, `ai_usage.py`, `change_coupling.py`, `commit_anchor.py`, `content_paths.py`, `fleet_activity.py`, `git_churn.py`, `history_window.py`.
+  Files: `__init__.py`, `account_discovery.py`, `ai_usage.py`, `change_coupling.py`, `commit_anchor.py`, `concurrency.py`, `content_paths.py`, `fleet_activity.py`, `git_churn.py`, `history_window.py`.
 - **`hosting/`** ([README](hosting/README.md)): the `gh` and `glab` reads and the platform blocks built from them: the
   shared merged sample, delivery, review reality, GitLab notes and CI lint, and config drift.
   Named `hosting`, not `platform`, because a `lib/platform/` package would shadow the standard

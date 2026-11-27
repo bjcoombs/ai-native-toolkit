@@ -448,6 +448,24 @@ Claude Code drops a frontmatter field it does not recognise without an error, so
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
 
+### `concurrency`: Concurrency readiness
+
+No other scan says whether many agents can change the repository at once; this records how often the same files, generated ones included, change across merges, the files every parallel change would conflict on. Listed, not counted: nothing scores it.
+
+- Collector: `core.concurrency`, reading `repo_root`, `scope`, `history_window`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `concurrency.fan_in_null_reason` token, `concurrency.hot_files` drop, `concurrency.limits` drop, `concurrency.reason` reason, `concurrency.since` drop, `concurrency.window` token.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `short_history`: The window holds fewer than 10 first-parent commits, too few for a share to mean anything. Nothing to change in the repository; a longer --window, or more history, lets the scan read it.
+  - `shallow_clone`: The checkout is a shallow clone, so the merges read are cut short. Nothing to change in the repository; a full clone (git fetch --unshallow) lets the scan read it.
+  - `shallow_unknown`: Git could not confirm the checkout is a full clone. Nothing to change in the repository; run the scan on a full clone.
+  - `not_a_repo`: The path is not a git repository, or one with no commits. Nothing to change: there is no history to read.
+  - `no_git`: git is not installed where the scan ran. Install git where the scan runs.
+  - `git_timeout`: A git read took longer than the scan allows. Nothing to change in the repository; a shorter --window reads less history.
+
 ### `config_drift`: Configuration drift
 
 An agent that reads a committed ruleset or branch-protection export as the current rule, or restores it, acts on settings the platform no longer has; this lists each difference from the live setting.
@@ -1152,6 +1170,7 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci`, `gitlab_include_renames` | `ci_checks` | no |
 | `ci_model_jobs` | Model-backed CI jobs | `repo_root`, `ghsync_root` | `ci_model_jobs` | no |
 | `claude_config` | Claude Code configuration | `repo_root`, `scope`, `excludes` | `claude_config` | no |
+| `concurrency` | Concurrency readiness | `repo_root`, `scope`, `history_window` | `concurrency` | no |
 | `config_drift` | Configuration drift | `repo_root` | `config_drift` | yes |
 | `contributor_files` | Contributor files | `repo_root`, `archetype`, `org_security_policy` | `contributor_files` | no |
 | `coverage_data` | Coverage report data | `repo_root` | private input | no |

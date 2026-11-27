@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib.instructions.agent_consistency import AgentConsistencyBlock
 from lib.agent_outcome import AgentOutcomeBlock
+from lib.run_context_types_concurrency import ConcurrencyBlock
 from lib.history.ai_usage import AiUsageBlock
 from lib.counts_only.block_shapes import ReviewRealityBlock
 from lib.ci.ci_checks import CiChecksBlock
@@ -30,7 +31,7 @@ from lib.run.signals_schema import REASON_KEPT, build_schema, described_block
 TYPED = {"ai_usage": AiUsageBlock, "ci_checks": CiChecksBlock, "coverage_gate": CoverageGateBlock,
          "delivery": DeliveryBlock, "guardrails": GuardrailsBlock,
          "agent_consistency": AgentConsistencyBlock, "layer_grades": LayerGradesBlock,
-         "agent_outcome": AgentOutcomeBlock,
+         "agent_outcome": AgentOutcomeBlock, "concurrency": ConcurrencyBlock,
          "review_reality": ReviewRealityBlock}
 
 
