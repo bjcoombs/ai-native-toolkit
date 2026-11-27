@@ -603,7 +603,7 @@ def test_an_issue_its_author_closed_after_the_limit_stays_overdue(tmp_path: Path
 
 # --- #1591: loose ends left by #1323 ---------------------------------------------------
 
-@pytest.mark.parametrize("value", ["nan", "inf", "-nan"])
+@pytest.mark.parametrize("value", ["nan", "inf", "-nan", "1" * 400])  # a 400-digit int overflows a float
 def test_a_non_finite_threshold_keeps_its_default(tmp_path: Path, value: str) -> None:
     root = _repo(tmp_path, f"[backlog_ready]\nfirst_response_max_days = {value}\n"
                            f"untriaged_max_share = {value}\nclose_open_min_ratio = {value}\n")

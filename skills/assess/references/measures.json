@@ -2819,7 +2819,7 @@
         },
         {
           "code": "window_truncated",
-          "means": "The window's issue list passed the read cap, so issues may be missing: the ratio is not taken, nor the median when no issue read was answered.",
+          "means": "The window's issue list passed the read cap, so issues may be missing. The ratio is not taken, nor the median when no issue read was answered.",
           "next_step": "Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window."
         },
         {

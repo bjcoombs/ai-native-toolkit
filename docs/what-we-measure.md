@@ -413,7 +413,7 @@ How new issues are taken in and answered. An issue form has a required field, or
   - `platform_error`: A read of the issue tracker failed for a reason other than access, such as a rate limit or a server error. Run again later.
   - `empty_window`: The metric has nothing to measure yet: no issue in the window, none answered, or no open issue older than 7 days. Nothing to change; the metric reads once there are issues to measure.
   - `response_unread`: A first response may exist that was not read: a long timeline, the note cap or an unclassified account. Run again with gh or glab signed in as an account that can read users; the caps are fixed.
-  - `window_truncated`: The window's issue list passed the read cap, so issues may be missing: the ratio is not taken, nor the median when no issue read was answered. Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window.
+  - `window_truncated`: The window's issue list passed the read cap, so issues may be missing. The ratio is not taken, nor the median when no issue read was answered. Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window.
   - `open_truncated`: The open-issue list passed the read cap, so the untriaged share would cover only part of it and is not taken. Nothing to change; close or triage old open issues to bring the list under the cap.
   - `no_response`: No issue opened in the window got a first response from a person, and each has waited longer than first_response_max_days. Answer, label or close new issues within first_response_max_days.
 

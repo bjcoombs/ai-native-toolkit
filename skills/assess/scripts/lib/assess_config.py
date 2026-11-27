@@ -245,11 +245,15 @@ MAX_WINDOW_DAYS = 3650
 
 def _number(section: dict[str, Any], key: str, low: float, high: float | None) -> float | None:
     value = section.get(key)
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    if value < low or (high is not None and value > high):
+    try:
+        number = float(value)  # TOML ints have no size limit: one too large for a float is rejected
+    except OverflowError:
         return None
-    return float(value)
+    if not math.isfinite(number) or number < low or (high is not None and number > high):
+        return None
+    return number
 
 
 def load_backlog_ready_thresholds(repo_root: Path) -> tuple[BacklogThresholds, bool]:
