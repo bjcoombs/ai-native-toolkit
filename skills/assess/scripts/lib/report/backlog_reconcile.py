@@ -245,12 +245,12 @@ class _Pass:
         cid = f"{key[0]}.{key[1]}"
         whole = None
         if key[3] > 0:
-            whole_item = next((i for i in self.existing if (n := _number(i)) is not None
-                               and n != number and (k := marker_key(_body(i))) is not None
-                               and k[:3] == key[:3] and k[3] == 0), None)
-            if whole_item is not None and not _is_open(item):
+            wholes = [i for i in self.existing if (n := _number(i)) is not None
+                      and n != number and (k := marker_key(_body(i))) is not None
+                      and k[:3] == key[:3] and k[3] == 0]
+            if wholes and not _is_open(item):
                 return  # a closed part beside the whole item, open or closed: only the whole reopens
-            whole = _number(whole_item) if whole_item is not None and _is_open(whole_item) else None
+            whole = next((_number(i) for i in wholes if _is_open(i)), None)
         if self.condition(item, number, cid, conditions.get(cid), fields):
             return
         if _is_open(item) and number not in self.filed:

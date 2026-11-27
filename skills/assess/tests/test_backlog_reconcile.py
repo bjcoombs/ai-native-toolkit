@@ -243,6 +243,15 @@ def test_an_open_part_beside_a_closed_whole_item_is_not_superseded() -> None:
     assert [(p["kind"], p["number"]) for p in props] == [("reopen", 1)]
 
 
+@pytest.mark.parametrize("order", [(0, 1, 2), (1, 0, 2)])
+def test_supersession_takes_an_open_whole_item_whatever_the_tracker_order(order: tuple[int, int, int]) -> None:
+    # Two whole items can share a key (two Top 3 actions naming one condition); the open one carries the action.
+    items = [_marked(5, "layer-4-docs.2", "CLOSED"), _marked(6, "layer-4-docs.2", "OPEN"),
+             _marked(7, "layer-4-docs.2", "OPEN", part=2)]
+    props = _run([items[i] for i in order], _context(_condition("layer-4-docs.2", "unmet")))["proposals"]
+    sup = [p for p in props if p["kind"] == "supersede"]
+    assert [(p["number"], p.get("superseded_by")) for p in sup] == [(7, 6)]
+
 def test_an_empty_label_skips_demotes_with_a_note() -> None:
     # #1530: with --label "" the informational label cannot be written, so no demote is proposed.
     items = [TRACKER[3], _marked(2, "layer-4-docs.2", "OPEN")]
