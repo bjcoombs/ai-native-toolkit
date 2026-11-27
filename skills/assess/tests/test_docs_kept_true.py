@@ -229,3 +229,22 @@ def test_a_hub_ci_keeps_true_is_not_a_stale_hub() -> None:
     row = {**_staleness_row("docs/a.md", 5.0), "last_commit_days": 9, "code_churn_in_window": 9,
            "kept_true_by": {"kind": "regen_diff", "path": ".github/workflows/ci.yml"}}
     assert build_stale_hubs(graph, {"available": True, "docs": [row]}) == []
+
+
+def test_a_doctest_glob_covers_only_the_files_it_matches(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"docs/a.md": "a\n", "docs/b.rst": "b\n",
+                            ".github/workflows/ci.yml": _workflow("pytest --doctest-glob=*.rst docs")})
+    assert _block(root)["checks"][0]["covers"] == ["docs/b.rst"]
+
+
+def test_a_pytest_doctest_marker_is_not_a_doc_test_run(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"tests/test_x.py": "x\n", ".github/workflows/ci.yml": _workflow("pytest -m doctest tests")})
+    assert _block(root)["present"] is False
+
+
+def test_a_renamed_child_or_newer_source_stays_stale_under_a_covering_check() -> None:
+    by = {"kind": "doc_tests", "path": ".github/workflows/ci.yml"}
+    renamed = {**_staleness_row("docs/x.md", 0.0), "renamed_children_named": 1, "kept_true_by": by}
+    newer = {**_staleness_row("docs/y.md", 0.0), "provenance": {"source_newer": True}, "kept_true_by": by}
+    assert is_stale(renamed) and is_stale(newer)
+    assert not is_stale({**_staleness_row("docs/z.md", 9.0), "kept_true_by": by})

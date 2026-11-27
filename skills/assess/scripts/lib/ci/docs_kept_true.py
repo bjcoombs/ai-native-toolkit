@@ -23,6 +23,8 @@ script, a ``make`` recipe, up to ``_MAX_FOLLOW`` levels). Nothing is executed. I
   a run that executes doc files only (``--doctest-glob``, ``--markdown-docs``, ``python -m
   doctest``, Sphinx, the mdtest-style runners): ``--doctest-modules``, ``cargo test --doc`` and
   the configuration-only case test code docstrings, so they meet the condition with no subtree.
+  With ``--doctest-glob`` the covered paths are the tracked files under those arguments whose
+  name matches a glob, since pytest collects no other doc file.
 
 Masking (#775, ``lib.ci.ci_masking.mask_lines``): a CI file is read through its unmasked
 lines, so ``continue-on-error``, ``|| true`` and the not-measured forms (``git diff
@@ -48,6 +50,7 @@ from __future__ import annotations
 
 import posixpath
 import re
+from fnmatch import fnmatch
 from collections.abc import Iterator
 from pathlib import Path
 from typing import TypedDict
@@ -136,10 +139,27 @@ def _doc_test(words: list[str]) -> bool:
     head = posixpath.basename(prog[0]) if prog else ""
     pairs = set(zip(prog, prog[1:]))
     return (any(w.startswith(("--doctest-modules", "--doctest-glob", "--markdown-docs")) for w in prog)
-            or ("-m", "doctest") in set(zip(words, words[1:]))
+            or _python_doctest(words)
             or ("-b", "doctest") in pairs or ("-M", "doctest") in pairs
             or (head == "cargo" and "test" in prog and "--doc" in prog)
             or head in _DOCTEST_RUNNERS)
+
+
+def _python_doctest(words: list[str]) -> bool:
+    """``python -m doctest`` (``python3``, through a wrapper), not a ``pytest -m doctest`` marker."""
+    return any(posixpath.basename(a) in ("python", "python3") and b == "-m" and c == "doctest"
+               for a, b, c in zip(words, words[1:], words[2:]))
+
+
+def _doc_globs(words: list[str]) -> list[str]:
+    """The ``--doctest-glob`` patterns of a pytest run (``--doctest-glob=*.md`` or two words)."""
+    out: list[str] = []
+    for i, w in enumerate(words):
+        if w.startswith("--doctest-glob="):
+            out.append(w.split("=", 1)[1].strip("'\""))
+        elif w == "--doctest-glob" and i + 1 < len(words):
+            out.append(words[i + 1].strip("'\""))
+    return out
 
 
 def _runs_doc_files(words: list[str]) -> bool:
@@ -149,7 +169,7 @@ def _runs_doc_files(words: list[str]) -> bool:
     head = posixpath.basename(prog[0]) if prog else ""
     pairs = set(zip(prog, prog[1:]))
     return (any(w.startswith(("--doctest-glob", "--markdown-docs")) for w in prog)
-            or ("-m", "doctest") in set(zip(words, words[1:]))
+            or _python_doctest(words)
             or ("-b", "doctest") in pairs or ("-M", "doctest") in pairs or head in _DOCTEST_RUNNERS)
 
 
@@ -200,8 +220,12 @@ class _Reader:
             args = words[words.index("--") + 1:] if "--" in words else words[2:]
             found.append(("regen_diff", _named_paths(args, self.tracked)))
         elif _doc_test(words) or (self.doctest_config and _runs_pytest(words)):
-            runs_docs = _runs_doc_files(words)
-            found.append(("doc_tests", _named_paths(_program(words)[1:], self.tracked) if runs_docs else []))
+            covers = _named_paths(_program(words)[1:], self.tracked) if _runs_doc_files(words) else []
+            globs = _doc_globs(words)
+            if globs and not any(w.startswith("--markdown-docs") for w in words):
+                covers = [t for t in sorted(self.tracked) for c in covers  # only the files pytest collects
+                          if (t == c or t.startswith(c + "/")) and any(fnmatch(posixpath.basename(t), g) for g in globs)]
+            found.append(("doc_tests", list(dict.fromkeys(covers))))
         script = script_path(" ".join(words))
         match = _VERIFY.match(script) if script else None
         if match and script in self.tracked:
