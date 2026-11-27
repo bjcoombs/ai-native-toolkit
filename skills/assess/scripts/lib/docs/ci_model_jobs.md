@@ -145,9 +145,13 @@ Known limits:
   replaces an included one and an `extends:` template read as GitLab runs them. A job the
   merge does not settle (an unsettled render, a missing `extends:` parent, a job from an
   include under `rules:`) is not a run and reads with `unread`, so a baselined suite reads not
-  measured. A hidden job (`.evals:`) runs nothing on its own: the subtree under any of its anchors runs when an alias in
-  the same file uses its anchor, and only the key a `!reference [.evals, key]` names otherwise.
-  A job whose own `when:` is `never` or `manual` is not a run; a `when:` inside `rules:` is not
-  read. When the merged view cannot be built, the root and included files are read as
-  written: a root override then still counts the included command, and a job that takes its
+  measured. A hidden job (`.evals:`) runs nothing on its own: the subtree under any of its
+  anchors runs when an alias in a visible job that runs in the same file uses it, less the keys
+  every merging job (`<<: *evals`) sets itself, and only the key a `!reference [.evals, key]` in
+  such a job names otherwise (#1576). An alias in a comment, a manual job or another hidden job
+  takes nothing. A job whose own `when:` is `never` or `manual`, or whose every `rules:` entry is,
+  is not a run; any other `rules:` entry (an `if:`, a `!reference`) reads as a run, so a job whose
+  rules never match still counts. An anchored list a shell key takes by alias
+  (`.run: &run` then `script: [*run]`) is not read as a command. When the merged view cannot be
+  built, the root and included files are read as written: a root override then still counts the included command, and a job that takes its
   script from a hidden template through `extends:` is not named.
