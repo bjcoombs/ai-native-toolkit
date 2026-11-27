@@ -55,10 +55,10 @@ Ruff walks statements only ([`get_complexity_number`](https://github.com/astral-
 
 - **Boolean operators.** `a and b or c` is 2 to lizard and 0 to ruff.
 - **Comprehensions and conditional expressions.** Each `for` and `if` inside `[x for x in xs if x]`, and the `if` in `1 if a else 2`, count for lizard; ruff skips them as expressions.
-- **`match` and `try`.** Both add 1 per `case`, but ruff takes 1 off when the last case is an irrefutable wildcard such as `case _:`, as it would for an `else`. Lizard counts `finally` and ruff does not.
+- **`match` and `try`.** Both tools add 1 per `case`, but ruff takes 1 off when the last case is an irrefutable wildcard such as `case _:`, as it would for an `else`. Lizard counts `finally` and ruff does not.
 - **Nested functions.** Lizard reports a nested `def` as its own function (`_owners.place`) and leaves it out of the outer figure. Ruff adds 1 for the `def` and folds the nested body into the outer function.
 
-Each row above reconciles exactly. `scan_ci_checks` holds 24 extra boolean operands, 21 comprehension clauses and 17 conditional expressions: 11 + 62 = 73. `_check_verdict` is 15 + 13 boolean operands, and `mask_lines` is 14 + 1 + 11 comprehension clauses + 2 conditional expressions. `_owners` is 12 under ruff, of which 1 is the nested `place`, and 11 + 17 expression-level counts under lizard. A high lizard reading with a passing gate is a function dense with conditions in expressions: worth a look when it is also a hotspot, but it does not need a refactor to pass CI. To see the gated figure for every function, run `uv run --locked ruff check --select C901 --config 'lint.mccabe.max-complexity=1' <path>` from `skills/assess` or `scripts/`, whichever package holds the file.
+Each row above reconciles exactly. `scan_ci_checks` holds 24 extra boolean operands, 21 comprehension clauses and 17 conditional expressions: 11 + 62 = 73. `_check_verdict` is 15 + 13 boolean operands, and `mask_lines` is 14 + 1 boolean operand + 11 comprehension clauses + 2 conditional expressions. `_owners` is 12 under ruff, of which 1 is the nested `place`, and 11 + 17 expression-level counts under lizard. A high lizard reading with a passing gate is a function dense with conditions in expressions: worth a look when it is also a hotspot, but it does not need a refactor to pass CI. To see the gated figure for every function, run `uv run --locked ruff check --select C901 --config 'lint.mccabe.max-complexity=1' <path>` from `skills/assess` or `scripts/`, whichever package holds the file.
 
 ## The type gate
 
