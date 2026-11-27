@@ -427,7 +427,7 @@ _WORDING: dict[str, Wording] = {
     "skill_library.present": _flag(
         "Commit a `skills/<name>/SKILL.md` (or `.claude/skills/<name>/SKILL.md`) for a procedure the "
         "team repeats, with frontmatter giving a `name` and a `description` of when to use it.",
-        "`git ls-files` lists a `SKILL.md` with a `name` and a `description` under `skills/`, a harness "
+        "`git ls-tree -r HEAD --name-only` lists a committed `SKILL.md` with a `name` and a `description` under `skills/`, a harness "
         "folder's `skills/` or `plugins/<name>/skills/`, outside `node_modules`, vendored and fixture folders."),
     "contributor_files.policy.present": _flag(
         "Commit a `SECURITY.md` that says how to report a vulnerability privately (or link GitHub "
