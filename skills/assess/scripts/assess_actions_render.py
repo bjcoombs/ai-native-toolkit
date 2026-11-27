@@ -24,7 +24,17 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   follow their parent as one more item: the same ``rank``, a ``label`` (``2a``: the entry's
   rank, then only the label's letters), the title ``2a. <action>``, and a body that names the parent action and takes the parent's finding,
   scope fence and Context unless the sub-item sets its own. The table keeps one row per
-  entry; a filed sub-item's reference goes in its parent's Issue cell.
+  entry; a filed sub-item's reference goes in its parent's Issue cell. An item whose entry
+  names a ``condition`` ends with the condition marker (#810,
+  ``<!-- assess:condition=<row id>@<level>[ sub=<letters>] model=<levels_version> -->``,
+  the model read from ``run-context.json`` ``level.levels_version``) and carries it as
+  ``marker``; format and match rules: ``lib/report/backlog_items.py``.
+- ``plan --existing FILE [--label NAME] [--report-link URL]`` prints the ``items`` array with
+  a ``filing`` step on each (``create``, ``reuse`` or ``reuse_and_mark`` with the number and
+  the ``marked_body`` to write back), matched against the tracker's items in ``FILE``
+  (``gh issue list --state all --json number,title,body,state,labels``): by marker first,
+  then label plus title for an item filed before the marker existed. ``--label ""`` drops
+  the label check (filing upstream without triage access).
 - ``readiness`` prints the PR summary's Readiness value: ``headline.lines`` of
   ``run-context.json`` joined with `` / ``; the ``badge.json`` ``message`` when the run
   context has no headline lines; ``not known`` when neither file has one.
@@ -55,6 +65,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from lib.report.backlog_items import DEFAULT_LABEL, FilingStep, condition_marker, plan_filing  # noqa: E402
+
 REQUIRED_KEYS = ("rank", "action", "done_when", "scope_fence")
 SUB_ITEM_KEYS = ("label", "action", "done_when")
 TABLE_HEADER = (
@@ -79,6 +93,8 @@ class TrackerItem(TypedDict):
     title: str
     body: str
     label: NotRequired[str]
+    marker: NotRequired[str]
+    filing: NotRequired[FilingStep]
 
 
 class RenderError(Exception):
@@ -197,10 +213,11 @@ def _finding_line(entry: Entry) -> str:
     return f"{head} in {files}" if files else head
 
 
-def render_item_body(entry: Entry, report_link: str | None = None, *, parent: str = "") -> str:
+def render_item_body(entry: Entry, report_link: str | None = None, *, parent: str = "", marker: str = "") -> str:
     """One tracker item's body: the finding first, then the change, its exit and fence, then context.
 
     ``parent`` is set for a sub-item: a line naming the parent action follows the finding.
+    ``marker`` (the condition marker, #810) is the body's last line when set.
     """
     lead = _finding_line(entry)
     parts = [lead, ""] if lead else []
@@ -215,6 +232,8 @@ def render_item_body(entry: Entry, report_link: str | None = None, *, parent: st
     if report_link:
         parts.append(f"- Full report: {report_link}")
     parts += ["", "---", FOOTER]
+    if marker:
+        parts += ["", marker]
     return "\n".join(parts) + "\n"
 
 
@@ -258,7 +277,21 @@ def _sub_label(entry: Entry, sub: Entry) -> str:
     return f"{_rank(entry)}{_text(sub, 'label')}"
 
 
-def _sub_item(entry: Entry, sub: Entry, report_link: str | None) -> TrackerItem:
+def _marker(entry: Entry, model: str | None, sub: str = "") -> str:
+    condition = _text(entry, "condition")
+    return condition_marker(condition, model, sub) if condition else ""
+
+
+def _item(rank: int, title: str, body: str, marker: str, label: str = "") -> TrackerItem:
+    item = TrackerItem(rank=rank, title=title, body=body)
+    if label:
+        item["label"] = label
+    if marker:
+        item["marker"] = marker
+    return item
+
+
+def _sub_item(entry: Entry, sub: Entry, report_link: str | None, model: str | None = None) -> TrackerItem:
     """One sub-item as its own item: its own change and exit, the parent's finding, fence and context."""
     label = _sub_label(entry, sub)
     merged = {
@@ -267,17 +300,40 @@ def _sub_item(entry: Entry, sub: Entry, report_link: str | None) -> TrackerItem:
         "scope_fence": _text(sub, "scope_fence") or _text(entry, "scope_fence"),
     }
     parent = f"**Sub-action {_md(label)} of action {_rank(entry)}:** {_md(_title(entry))}"
-    return TrackerItem(rank=_rank(entry), label=label, title=f"{label}. {_title(sub)}",
-                       body=render_item_body(merged, report_link, parent=parent))
+    marker = _marker(entry, model, _text(sub, "label"))
+    return _item(_rank(entry), f"{label}. {_title(sub)}",
+                 render_item_body(merged, report_link, parent=parent, marker=marker), marker, label)
 
 
-def render_items(entries: Sequence[Entry], report_link: str | None = None) -> list[TrackerItem]:
-    """One tracker item per entry (``rank``, ``title``, ``body``), each followed by one per sub-item."""
+def render_items(entries: Sequence[Entry], report_link: str | None = None,
+                 model: str | None = None) -> list[TrackerItem]:
+    """One tracker item per entry (``rank``, ``title``, ``body``), each followed by one per sub-item.
+
+    ``model`` is the maturity model version the condition marker records (#810).
+    """
     items: list[TrackerItem] = []
     for e in entries:
-        items.append(TrackerItem(rank=_rank(e), title=_title(e), body=render_item_body(e, report_link)))
-        items += [_sub_item(e, sub, report_link) for sub in sub_items(e)]
+        marker = _marker(e, model)
+        items.append(_item(_rank(e), _title(e), render_item_body(e, report_link, marker=marker), marker))
+        items += [_sub_item(e, sub, report_link, model) for sub in sub_items(e)]
     return items
+
+
+def model_version(assess_dir: Path) -> str | None:
+    """``level.levels_version`` of ``run-context.json``: the model a condition marker records; None without one."""
+    context = _read_json(assess_dir / "run-context.json")
+    level = context.get("level") if isinstance(context, dict) else None
+    version = level.get("levels_version") if isinstance(level, dict) else None
+    return version if isinstance(version, str) and version else None
+
+
+def plan_items(items: Sequence[TrackerItem], existing: object, label: str = DEFAULT_LABEL) -> list[TrackerItem]:
+    """``items`` with a ``filing`` step each, matched against the tracker's ``existing`` items (#810)."""
+    if not isinstance(existing, list):
+        raise RenderError("--existing must hold a JSON array of tracker items")
+    known = [x for x in existing if isinstance(x, dict)]
+    steps = plan_filing(items, known, label=label)
+    return [TrackerItem(**item, filing=step) for item, step in zip(items, steps, strict=True)]
 
 
 def _read_json(path: Path) -> object:
@@ -316,6 +372,11 @@ def _parser() -> argparse.ArgumentParser:
     t.add_argument("--issue", action="append", type=parse_issue, default=[], metavar="RANK=REF")
     i = sub.add_parser("items", help="the tracker items as a JSON array")
     i.add_argument("--report-link", help="full-report link for each item's Context block")
+    pl = sub.add_parser("plan", help="the tracker items with a create / reuse step each")
+    pl.add_argument("--existing", type=Path, required=True,
+                    help="JSON array of the tracker's items (gh issue list --json number,title,body,state,labels)")
+    pl.add_argument("--label", default=DEFAULT_LABEL, help="label an unmarked item must carry; '' for none")
+    pl.add_argument("--report-link", help="full-report link for each item's Context block")
     sub.add_parser("readiness", help="the PR summary's Readiness value")
     return p
 
@@ -333,8 +394,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     if args.command == "table":
         sys.stdout.write(render_table(entries, dict(args.issue)))
-    else:
-        print(json.dumps(render_items(entries, args.report_link), indent=2, ensure_ascii=False))
+        return 0
+    items = render_items(entries, args.report_link, model_version(assess_dir))
+    if args.command == "plan":
+        try:
+            items = plan_items(items, _read_json(args.existing), args.label)
+        except RenderError as exc:
+            print(f"assess_actions_render: {exc}", file=sys.stderr)
+            return 1
+    print(json.dumps(items, indent=2, ensure_ascii=False))
     return 0
 
 

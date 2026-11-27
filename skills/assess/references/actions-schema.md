@@ -71,6 +71,31 @@ The report's lettered sub-actions (`2a. <change> - Done when: <criterion>`, writ
 
 `assess_finalize.py` lints sub-items as it lints entries (#1518): a sub-item whose `action` is empty once trimmed is dropped from `actions.json` with a warning naming its parent's rank and its label, and each kept sub-item whose `done_when` holds no backticked command or path, link or number gets the entry's warning, named `action rank 2 sub-item 'a'`. The rest of `sub_items` is written as given.
 
+## Condition marker on filed items (#810)
+
+`assess-pr` Step 6 files each action, and each sub-item, as a tracker item. An item whose action names a `condition` ends with one hidden marker line, so a later run finds the item by the condition it moves, not by its title:
+
+```text
+<!-- assess:condition=layer-5-ci@1 model=default-2026.11.24 -->
+<!-- assess:condition=layer-5-ci@1 sub=a model=default-2026.11.24 -->
+```
+
+| Field | Meaning |
+|-------|---------|
+| `condition=<row id>@<level>` | The action's condition id (`layer-5-ci.1`), its last `.` written as `@`. |
+| `sub=<letters>` | A sub-item only: the letters of its label (`a` for `2a`). The rank is left out because it moves between runs. |
+| `model=<levels_version>` | The maturity model the run scored against, `run-context.json` `level.levels_version`; `unknown` when the run has none. |
+
+The fields are written in that order, one space apart; a character outside `A-Z a-z 0-9 . _ : / + -` in a value is written `_`. A reader takes every `<key>=<value>` token after `assess:` and ignores keys it does not know, so a later field does not break an older reader. The match key is the row id, the level and `sub`; `model` is not part of it, so a model release does not file the condition again (a reconcile pass reads it to tell a rules change from a code change). An action without a `condition` gets no marker and is matched by label plus title.
+
+`assess_actions_render.py plan --existing <file>` matches each rendered item against the tracker's items (`gh issue list --state all --json number,title,body,state,labels`), open items before closed ones:
+
+1. `reuse`: an item carries the same marker key, whatever its title now reads.
+2. `reuse_and_mark`: no marked item matches, and an unmarked item with the `assess-finding` label (no label check with `--label ""`) has the same title, compared without the sub-item prefix (`2a. `), with whitespace folded and case ignored. The step's `marked_body` is that item's body with the marker appended, to write back.
+3. `create`: nothing matches.
+
+A marked item is never matched by title, and an unmarked item is taken by one rendered item per run. The format and rules live in `scripts/lib/report/backlog_items.py`.
+
 ## `status` lifecycle
 
 | Status | Meaning |
