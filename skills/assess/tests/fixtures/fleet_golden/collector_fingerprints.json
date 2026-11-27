@@ -90,11 +90,11 @@
     },
     "core.backlog_ready": {
       "repos": {
-        "grpa/sub/deep/svc2": "59df96231b5d1a085ed051e0661c27ed94e8efa181a6b8ff38e0a0c99a42399e",
-        "grpa/svc1": "3e8f48ead10aebe4f5c7b001b0a561ca91e3c7864c5a16c3b4dfdda352ae3eed",
-        "grpb/lib1": "59df96231b5d1a085ed051e0661c27ed94e8efa181a6b8ff38e0a0c99a42399e"
+        "grpa/sub/deep/svc2": "c13435336cb16909883f0983b8d35169be5744e907b8eb30ea343da957c0295d",
+        "grpa/svc1": "b2b7ffb65264216cf73af3a82b4df136738e3495c527171ffd2b2be47a98b23f",
+        "grpb/lib1": "c13435336cb16909883f0983b8d35169be5744e907b8eb30ea343da957c0295d"
       },
-      "revision": 3
+      "revision": 4
     },
     "core.ci_checks": {
       "repos": {

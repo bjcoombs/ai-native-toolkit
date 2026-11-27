@@ -111,6 +111,8 @@ is the single shared path that combines config excludes with CLI `--exclude`; bo
 CLI and `doc-graph-svg.py` call it, so every artifact computes over the identical doc/code set.
 `load_backlog_ready_labels` returns the `[backlog_ready]` `untriaged_labels` and
 `ready_labels` lists (issue #1322), each replacing its default when it holds a string.
+`load_backlog_ready_thresholds` returns the level 2 thresholds (issue #1323); a value that is
+not a finite number in range, or a `window_days` past `MAX_WINDOW_DAYS`, keeps its default (#1591).
 `load_backlog_wip` returns `[backlog] wip` (issue #812), the backlog's open-item limit,
 3 when absent or malformed. `load_backlog_mode` returns `[backlog] mode` (issue #814), the
 scheduled reconcile's write mode, `propose` when absent; it is the one loader that raises
@@ -123,6 +125,7 @@ Degrades silently on missing or malformed config rather than blocking the run. T
 from __future__ import annotations
 
 import fnmatch
+import math
 import sys
 import tomllib
 from pathlib import Path
@@ -236,20 +239,29 @@ class BacklogThresholds(NamedTuple):
     window_days: int = 90
 
 
+# The longest window_days read (ten years): the window's start stays a datetime (#1591).
+MAX_WINDOW_DAYS = 3650
+
+
 def _number(section: dict[str, Any], key: str, low: float, high: float | None) -> float | None:
     value = section.get(key)
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    if value < low or (high is not None and value > high):
+    try:
+        number = float(value)  # TOML ints have no size limit: one too large for a float is rejected
+    except OverflowError:
         return None
-    return float(value)
+    if not math.isfinite(number) or number < low or (high is not None and number > high):
+        return None
+    return number
 
 
 def load_backlog_ready_thresholds(repo_root: Path) -> tuple[BacklogThresholds, bool]:
     """``[backlog_ready]`` level 2 thresholds (#1323): ``first_response_max_days`` (0 or more),
     ``untriaged_max_share`` (0 to 1), ``close_open_min_ratio`` (0 or more) and ``window_days``
-    (a whole number, 1 or more). A key that is absent or out of range keeps its default; the flag
-    is true when any key came from the config."""
+    (a whole number from 1 to ``MAX_WINDOW_DAYS``). A key that is absent, out of range or not a
+    finite number (TOML reads ``nan`` and ``inf``) keeps its default; the flag is true when any key
+    came from the config."""
     section = load_config(repo_root).get("backlog_ready")
     base = BacklogThresholds()
     if not isinstance(section, dict):
@@ -258,7 +270,8 @@ def load_backlog_ready_thresholds(repo_root: Path) -> tuple[BacklogThresholds, b
     share = _number(section, "untriaged_max_share", 0.0, 1.0)
     ratio = _number(section, "close_open_min_ratio", 0.0, None)
     raw_days = section.get("window_days")
-    days = raw_days if isinstance(raw_days, int) and not isinstance(raw_days, bool) and raw_days >= 1 else None
+    days = (raw_days if isinstance(raw_days, int) and not isinstance(raw_days, bool)
+            and 1 <= raw_days <= MAX_WINDOW_DAYS else None)
     got = BacklogThresholds(
         base.first_response_max_days if first is None else first,
         base.untriaged_max_share if share is None else share,

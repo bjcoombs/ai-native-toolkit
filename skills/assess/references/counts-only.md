@@ -262,7 +262,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `backlog_ready.stale_job_safe_reason` | token |
 | `backlog_ready.first_response_median_days_reason` | token |
 | `backlog_ready.untriaged_after_7d_share_reason` | token |
-| `backlog_ready.close_open_ratio_90d_reason` | token |
+| `backlog_ready.close_open_ratio_reason` | token |
 | `backlog_ready.outcomes.reason` | token |
 
 ## broken_instruction_refs

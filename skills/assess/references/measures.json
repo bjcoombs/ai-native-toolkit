@@ -2964,7 +2964,7 @@
       "privacy": {
         "written": true,
         "strings_kept": {
-          "backlog_ready.close_open_ratio_90d_reason": "token",
+          "backlog_ready.close_open_ratio_reason": "token",
           "backlog_ready.first_response_median_days_reason": "token",
           "backlog_ready.outcomes.reason": "token",
           "backlog_ready.required_form_field_reason": "token",
@@ -3041,7 +3041,7 @@
         },
         {
           "code": "window_truncated",
-          "means": "The window's issue list passed the read cap, so closed issues may be missing and the ratio is not taken.",
+          "means": "The window's issue list passed the read cap, so issues may be missing. The ratio is not taken, nor the median when no issue read was answered.",
           "next_step": "Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window."
         },
         {
@@ -3062,7 +3062,7 @@
           "grade": "verified"
         },
         {
-          "signal": "backlog_ready.close_open_ratio_90d",
+          "signal": "backlog_ready.close_open_ratio",
           "input_class": "platform",
           "grade": "verified"
         },
@@ -7381,11 +7381,11 @@
       "collector": "core.backlog_ready",
       "input_class": "platform",
       "grade": "verified",
-      "null_means": "close_open_ratio_90d is not measured; its reason says why"
+      "null_means": "close_open_ratio is not measured; its reason says why"
     },
     {
-      "path": "backlog_ready.close_open_ratio_90d",
-      "title": "Issues closed over issues opened in the window",
+      "path": "backlog_ready.close_open_ratio",
+      "title": "Issues closed over issues opened in the window of window_days (default 90)",
       "type": "number",
       "collector": "core.backlog_ready",
       "input_class": "platform",
@@ -7399,7 +7399,7 @@
       "collector": "core.backlog_ready",
       "input_class": "platform",
       "grade": "verified",
-      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window got a response; response_unread: a response could not be read; no_response: none did and each has waited past the threshold"
+      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window got a response; response_unread: a response was not read; window_truncated: none read did, the list capped; no_response: none did, all past the threshold"
     },
     {
       "path": "backlog_ready.first_response_met",
