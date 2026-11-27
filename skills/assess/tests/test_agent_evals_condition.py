@@ -347,6 +347,8 @@ def test_a_gitlab_job_that_never_runs_on_its_own_is_not_a_run(tmp_path: Path, wh
     ".defaults:\n  script: &s\n    - pytest evals/\nevals:\n  script: *s\n",
     # The same, under a hidden job whose own anchor nothing uses.
     ".evals: &evals\n  script: &s\n    - pytest evals/\nevals:\n  script: *s\n",
+    # An anchor on a list item.
+    ".evals:\n  script:\n    - &run pytest evals/\nevals:\n  script:\n    - *run\n",
 ])
 def test_a_nested_anchor_an_alias_uses_is_a_run(tmp_path: Path, ci: str) -> None:
     root = _repo(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}", ".gitlab-ci.yml": ci})
