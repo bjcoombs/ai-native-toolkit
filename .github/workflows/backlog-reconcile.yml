@@ -14,6 +14,12 @@ permissions:
   contents: read
   issues: write
 
+# One run at a time, the whole run: a second run's plan must not read the
+# tracker while this run's apply is still writing to it.
+concurrency:
+  group: backlog-reconcile-run-${{ github.repository }}
+  cancel-in-progress: false
+
 jobs:
   reconcile:
     if: vars.BACKLOG_RECONCILE_ENABLED != 'false'

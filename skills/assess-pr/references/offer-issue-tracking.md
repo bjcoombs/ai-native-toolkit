@@ -204,7 +204,7 @@ End with a short, tracker-specific summary. Examples:
 
 ### 6g: The scheduled reconcile (GitHub, opt-in)
 
-The reconcile in 6e runs only when someone runs `/assess`. A repository can run it daily with no model through `.github/workflows/reusable-backlog-reconcile.yml` in this toolkit; `.github/workflows/backlog-reconcile.yml` is the reference caller. Copy that caller, point its `uses:` at `bjcoombs/ai-native-toolkit/.github/workflows/reusable-backlog-reconcile.yml@<release tag>`, and grant `contents: read` and `issues: write` and nothing else. Set the repository variable `BACKLOG_RECONCILE_ENABLED` to `false` to stop it.
+The reconcile in 6e runs only when someone runs `/assess`. A repository can run it daily with no model through `.github/workflows/reusable-backlog-reconcile.yml` in this toolkit; `.github/workflows/backlog-reconcile.yml` is the reference caller. Copy that caller, point its `uses:` at `bjcoombs/ai-native-toolkit/.github/workflows/reusable-backlog-reconcile.yml@<release tag>`, grant `contents: read` and `issues: write` and nothing else, and keep its workflow-level `concurrency` group (one run at a time per repository, `cancel-in-progress: false`), so two runs never file the same gate. Set the repository variable `BACKLOG_RECONCILE_ENABLED` to `false` to stop it.
 
 It reads the filed items the way 6e does and writes only what `[backlog] mode` in the committed `.assess/config.toml` allows:
 
@@ -221,4 +221,4 @@ It reads the filed items the way 6e does and writes only what `[backlog] mode` i
 mode = "file-and-close"   # or "file"; leave it out for propose
 ```
 
-A value other than these three fails the scheduled run, so a typo never runs in another mode. In every mode a reopen, demote or supersede stays a proposal, a proposal declined before (6e) is never written, an item without a condition marker is never touched, and no write edits an item's title, body, labels or assignees. A status comment counts only when someone with write access or the workflow's own bot wrote it. The rules: `skills/assess/scripts/lib/report/backlog_schedule.py`.
+A value other than these three fails the scheduled run, so a typo never runs in another mode. In every mode a reopen, demote or supersede stays a proposal, a proposal declined before (6e) is never written, an item without a condition marker is never touched, and no write edits an item's title, body, labels or assignees. A status comment counts only when someone with write access or the workflow's own bot wrote it. One run closes at most 10 items and files at most 10; the rest wait for the next run. A failed write ends the run with gh's error and the list of writes already made; re-running only the failed `apply` job writes the same plan again, so after a failure part way through new items, re-run all jobs. The rules: `skills/assess/scripts/lib/report/backlog_schedule.py`.

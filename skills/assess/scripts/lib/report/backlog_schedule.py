@@ -29,8 +29,9 @@ Only items with a condition marker (``backlog_items.marker_key``) that pass the 
 touched. No write edits an item's title, body, labels or assignees, so a person's edits stay.
 A proposal declined before (``lib/run/decline_markers.py``, #813) is never written: its line
 names the decline instead. ``plan_scheduled`` returns ``{mode, writes, notes, summary}``,
-each write one of ``WRITE_OPS``; ``scripts/backlog_reconcile_apply.py`` runs them in the
-workflow's one writer job. Pure stdlib; never touches the tracker.
+each write one of ``WRITE_OPS``, with at most ``MAX_CLOSES`` closes and ``MAX_CREATES`` new items
+(the rest wait for a later run; a status line is one line, its whitespace folded);
+``scripts/backlog_reconcile_apply.py`` runs them in the workflow's one writer job. Pure stdlib; never touches the tracker.
 Tests: ``tests/test_backlog_schedule.py``.
 """
 from __future__ import annotations
@@ -55,6 +56,9 @@ WRITE_OPS: dict[str, tuple[str, ...]] = {
     "file": ("edit_comment", "add_comment", "create"),
     "file-and-close": ("edit_comment", "add_comment", "create", "close"),
 }
+# The most closes and new items one run writes; the writer refuses a plan over either.
+MAX_CLOSES = 10
+MAX_CREATES = 10
 _COMMENT_ID = re.compile(r"#issuecomment-(\d+)$")
 _PROPOSED = {"close": "Proposed close", "reopen": "Proposed reopen", "demote": "Proposed demote to informational",
              "supersede": "Proposed close as superseded"}
@@ -200,13 +204,17 @@ def plan_scheduled(existing: Sequence[Mapping[str, object]], facts: RunFacts, re
     proposals: dict[int, Proposal] = {p["number"]: p for p in result["proposals"]}
     rules = {r["number"]: r["line"] for r in result["rules_changed"]}
     writes: list[ScheduledWrite] = []
-    missing = closed = 0
+    missing = closed = deferred = 0
     for item in existing:
         number, key = _number(item), marker_key(str(item.get("body") or ""))
         if number is None or key is None or (label and label not in item_labels(item)):
             continue
         p = proposals.get(number)
-        if p is not None:
+        closing = p is not None and p["kind"] == "close" and close and closed < MAX_CLOSES
+        if p is not None and p["kind"] == "close" and close and not closing:
+            deferred += 1
+            text = f"Condition holds: {p['reason']}. Closed on a later run: one run closes at most {MAX_CLOSES} items."
+        elif p is not None:
             text = _text(p["kind"], p["reason"], close)
         elif number in declined:
             text = f"Declined before: {declined[number]}."
@@ -214,7 +222,7 @@ def plan_scheduled(existing: Sequence[Mapping[str, object]], facts: RunFacts, re
             text = f"No change: {rules[number]}."
         else:
             text = _reading(f"{key[0]}.{key[1]}", facts)
-        line = status_line(text, today, facts["head_sha"])
+        line = status_line(" ".join(text.split()), today, facts["head_sha"])
         comment = status_comment(item)
         if comment is not None:
             body = with_status(comment["body"], line)
@@ -224,12 +232,14 @@ def plan_scheduled(existing: Sequence[Mapping[str, object]], facts: RunFacts, re
             missing += 1
         else:
             writes.append(ScheduledWrite(op="add_comment", number=number, body=new_status_comment(line)))
-        if p is not None and p["kind"] == "close" and close:
+        if closing:
             writes.append(ScheduledWrite(op="close", number=number))
             closed += 1
     notes: list[str] = []
     if missing:
         notes.append(f"{missing} marked item(s) have no status comment; `propose` mode edits only an existing one")
+    if deferred:
+        notes.append(f"{deferred} close(s) wait for a later run: one run closes at most {MAX_CLOSES} items")
     if mode != "propose":
         writes += _filings(existing, facts, today, label, wip, closed, level, notes)
     return ScheduledPlan(mode=mode, writes=writes, notes=notes, summary=_summary(mode, writes, notes))
@@ -248,6 +258,10 @@ def _filings(existing: Sequence[Mapping[str, object]], facts: RunFacts, today: s
     if len(wanted) > free:
         notes.append(f"{len(wanted) - free} next-Step gate(s) not filed: the backlog holds at most {wip} open "
                      "item(s), the `[backlog] wip` limit")
+    elif len(wanted) > MAX_CREATES:
+        notes.append(f"{len(wanted) - MAX_CREATES} next-Step gate(s) wait for a later run: one run files at most "
+                     f"{MAX_CREATES} items")
+    free = min(free, MAX_CREATES)
     return [_new_item(cid, step, facts, today, label) for cid in wanted[:free]]
 
 

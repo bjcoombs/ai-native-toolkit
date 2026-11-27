@@ -24,7 +24,16 @@ name: Backlog reconcile (reusable)
 #   file-and-close   also closes an item whose condition now holds
 # Reference: skills/assess-pr/references/offer-issue-tracking.md, "6g: The scheduled reconcile".
 #
-# Permissions: grant `contents: read` and `issues: write` in the caller.
+# Permissions: grant `contents: read` and `issues: write` in the caller, and
+# give the caller a workflow-level `concurrency` group keyed on the repository
+# with `cancel-in-progress: false` (backlog-reconcile.yml does), so one run's
+# plan never reads the tracker while another run's apply is writing to it.
+#
+# The plan artifact carries no attempt number, so "Re-run failed jobs" on
+# `apply` writes the same plan again. Status edits and closes repeat safely;
+# a create does not, so after an apply that failed part way through its
+# creates (its log lists the writes made), re-run all jobs instead.
+#
 # Each job declares its own, so neither runs with more, whatever the caller
 # grants. No job here uses actions/cache or a setup-* cache.
 on:
@@ -147,7 +156,7 @@ jobs:
       - name: Hand the plan to the apply job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
-          name: backlog-reconcile-plan-${{ github.run_attempt }}
+          name: backlog-reconcile-plan
           path: ${{ runner.temp }}/backlog/plan.json
           if-no-files-found: error
 
@@ -195,7 +204,7 @@ jobs:
       - name: Fetch the plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
-          name: backlog-reconcile-plan-${{ github.run_attempt }}
+          name: backlog-reconcile-plan
           path: ${{ runner.temp }}/backlog
 
       - name: Write the plan (no model)

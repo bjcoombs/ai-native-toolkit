@@ -146,3 +146,36 @@ def test_items_without_a_marker_number_or_label_are_skipped_and_an_unknown_mode_
     assert len(bs.plan_scheduled(items, _facts(), _empty(), mode="propose", today="d", label="")["writes"]) == 1
     with pytest.raises(ValueError, match="unknown backlog mode"):
         bs.plan_scheduled([], _facts(), _empty(), mode="close", today="d")
+
+
+def test_a_run_closes_at_most_the_writer_cap_and_the_rest_wait() -> None:
+    """Twelve closes: ten are written, two wait for a later run, so the writer never refuses the plan."""
+    items = [_item(n, f"layer-{n}-x.1", comments=[_comment(n, STATUS)]) for n in range(1, 13)]
+    proposals = [br.Proposal(kind="close", number=n, title="", reason="holds",
+                             write=br.ReconcileWrite(op="close", number=n, comment="")) for n in range(1, 13)]
+    result = br.ReconcileResult(proposals=proposals, rules_changed=[], notes=[], summary="")
+    plan = bs.plan_scheduled(items, _facts(), result, mode="file-and-close", today="d")
+    closes = [w["number"] for w in plan["writes"] if w["op"] == "close"]
+    assert closes == list(range(1, 11)) and len(closes) == bs.MAX_CLOSES
+    edits = {w["number"]: w["body"] for w in plan["writes"] if w["op"] == "edit_comment"}
+    assert all("Closed by the scheduled reconcile" in edits[n] for n in range(1, 11))
+    assert all("Closed on a later run" in edits[n] for n in (11, 12))
+    assert "2 close(s) wait for a later run" in plan["summary"]
+
+
+def test_a_run_files_at_most_the_writer_cap() -> None:
+    gates = [f"layer-{n}-g.1" for n in range(10, 22)]
+    level = {"next_step": {"step": 3, "blockers": [{"condition": c} for c in gates]}}
+    facts = _facts(*(_cond(c, "unmet") for c in gates))
+    plan = bs.plan_scheduled([], facts, _empty(), mode="file", today="d", wip=50, level=level)
+    assert sum(1 for w in plan["writes"] if w["op"] == "create") == bs.MAX_CREATES
+    assert "2 next-Step gate(s) wait for a later run" in plan["summary"]
+
+
+def test_a_multi_line_reason_stays_on_one_status_line() -> None:
+    items = [_item(1, "layer-1-x.1", comments=[_comment(1, STATUS)])]
+    plan = bs.plan_scheduled(items, _facts(), _empty(), mode="propose", today="d",
+                             declined={1: "close #1 declined (reason: not now,\n  after the\r\nrelease)"})
+    body = plan["writes"][0]["body"]
+    line = body.split("\n")[1]
+    assert "not now, after the release)" in line and body.count("\n") == STATUS.count("\n")

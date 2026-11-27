@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -37,8 +38,9 @@ def _plan(tmp_path: Path, mode: str, writes: list[dict[str, object]]) -> Path:
     return path
 
 
-def test_the_allowed_writes_match_the_planner() -> None:
+def test_the_allowed_writes_and_caps_match_the_planner() -> None:
     assert ap.ALLOWED == bs.WRITE_OPS
+    assert (ap.MAX_CLOSES, ap.MAX_CREATES) == (bs.MAX_CLOSES, bs.MAX_CREATES)
 
 
 def test_each_write_runs_its_gh_call(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -92,3 +94,21 @@ def test_dry_run_and_unreadable_plans(tmp_path: Path, capsys: pytest.CaptureFixt
 def test_a_create_without_an_issue_url_fails(tmp_path: Path) -> None:
     with pytest.raises(ap.PlanError, match="no issue URL"):
         ap.apply([{"op": "create", "title": "t", "body": "b", "status": "s"}], "o/r", lambda args: "", tmp_path)
+
+
+def test_a_failed_gh_call_prints_its_stderr_and_the_writes_already_made(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def run(args: Sequence[str]) -> str:
+        if args[:2] == ["issue", "close"]:
+            raise subprocess.CalledProcessError(1, ["gh", *args], stderr="HTTP 403: Resource not accessible\n")
+        return ""
+    writes: list[dict[str, object]] = [
+        {"op": "edit_comment", "number": 1, "comment_id": 11, "body": "edited"},
+        {"op": "close", "number": 3},
+        {"op": "close", "number": 4},
+    ]
+    assert ap.main(["--plan", str(_plan(tmp_path, "file-and-close", writes)), "--repo", "o/r"], run=run) == 1
+    out = capsys.readouterr()
+    assert "edited the status comment on #1" in out.out and "closed" not in out.out
+    assert "gh issue close failed (exit 1): HTTP 403: Resource not accessible" in out.err
+    assert "1 write(s) were made before it" in out.err

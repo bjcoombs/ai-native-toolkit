@@ -33,6 +33,8 @@ def test_the_caller_runs_daily_with_issues_write_and_contents_read_only() -> Non
     minute, hour, dom, month, dow = doc["on"]["schedule"][0]["cron"].split()
     assert minute.isdigit() and hour.isdigit() and (dom, month, dow) == ("*", "*", "*"), "once a day"
     assert doc["permissions"] == {"issues": "write", "contents": "read"}
+    assert doc["concurrency"] == {"group": "backlog-reconcile-run-${{ github.repository }}",
+                                  "cancel-in-progress": False}, "one whole run at a time per repository"
     for job in doc["jobs"].values():
         assert "permissions" not in job
 
@@ -108,3 +110,9 @@ def test_the_plan_job_reads_the_mode_from_the_repository_config() -> None:
     plan = _load(REUSABLE)["jobs"]["plan"]
     runs = " ".join(str(s.get("run", "")) for s in _steps(plan))
     assert "reconcile" in runs and "--scheduled" in runs and "--mode" not in runs
+
+
+def test_the_plan_artifact_name_survives_a_rerun_of_the_failed_job() -> None:
+    names = [s["with"]["name"] for job in _load(REUSABLE)["jobs"].values() for s in _steps(job)
+             if str(s.get("uses", "")).startswith(("actions/upload-artifact@", "actions/download-artifact@"))]
+    assert names == ["backlog-reconcile-plan", "backlog-reconcile-plan"]
