@@ -26,7 +26,9 @@ under ``.cursor/rules``, a ``CLAUDE.md`` that shadows a different ``AGENTS.md``
 in its directory without importing it (with the count of differing lines;
 an ``AGENTS.md`` that is a bare pointer to its sibling ``CLAUDE.md`` shadows
 nothing, and a sibling ``CLAUDE.md`` that is a bare pointer to ``AGENTS.md``
-is left out of the comparison, unless the two point at each other), and
+is left out of the comparison, unless the two point at each other, and is
+reported as the informational ``claude_prose_pointer``, issue #1507, since
+Claude Code loads only an ``@AGENTS.md`` import), and
 a nested file that mostly repeats its parent. A ``CLAUDE.md`` identical to its
 ``AGENTS.md`` below the header (H1 and leading HTML comments) is reported as an
 informational ``mirrored_instruction_files`` instead (issue #589). Deterministic and read-only: no network, no model.
@@ -46,7 +48,10 @@ also tried relative to its own directory), `ignored_cursor_md`, `claude_shadows_
 they account for are set aside, and does not import it; a bare one-line pointer,
 `delegation_target`, #1505, exempts only itself: an `AGENTS.md` pointing at its sibling
 `CLAUDE.md` shadows nothing, a sibling `CLAUDE.md` pointing at `AGENTS.md` drops out while
-`.claude/CLAUDE.md` is still compared, and a pair pointing at each other exempts neither; `diff_lines` counts the differing lines, body plus any header
+`.claude/CLAUDE.md` is still compared (that sibling is the informational `claude_prose_pointer`,
+#1507: it reads linked, but Claude Code loads only an `@AGENTS.md` import, so the finding
+recommends one, unless that `AGENTS.md` is a bare pointer onward itself; it moves no gate
+and no `agent_consistency` value), and a pair pointing at each other exempts neither; `diff_lines` counts the differing lines, body plus any header
 comment only one file carries, one changed line counting once) and `repeats_parent` (at least half of a nested file's distinct
 lines, over five or more, copy the nearest ancestor's). The two files are compared
 below their headers (`mirror_lines`: leading blank lines, one H1 and leading HTML
@@ -478,9 +483,10 @@ POINTER_FORMS = (
 
 def _pointer_form(name: str) -> re.Pattern[str]:
     """One whole pointer line naming ``name``: a form, then the bare name or
-    ``[name](name)``, each optionally backticked, then an optional full stop."""
+    ``[name](name)`` (the link may read ``./name``, #1507), each optionally
+    backticked, then an optional full stop."""
     n = re.escape(name)
-    target = rf"(?:`?{n}`?|\[`?{n}`?\]\({n}\))"
+    target = rf"(?:`?{n}`?|\[`?{n}`?\]\((?:\./)?{n}\))"
     forms = "|".join(re.escape(f).replace(r"\ ", " ") for f in POINTER_FORMS)
     return re.compile(rf"(?:{forms}) {target}\.?", re.IGNORECASE)
 
@@ -490,9 +496,10 @@ def delegation_target(body: str, names: list[str]) -> str | None:
 
     A file delegates when, blank lines and one leading H1 set aside, it holds a
     single line that fully matches one of ``POINTER_FORMS`` followed by one of
-    ``names``: the sibling file name or ``[name](name)``, optionally
-    backticked, with an optional full stop (``See CLAUDE.md.``, ``The
-    instructions for this repository live in [CLAUDE.md](CLAUDE.md).``),
+    ``names``: the sibling file name or ``[name](name)`` (or
+    ``[name](./name)``, #1507), optionally backticked, with an optional full
+    stop (``See CLAUDE.md.``, ``The instructions for this repository live in
+    [CLAUDE.md](CLAUDE.md).``),
     case-insensitive, whitespace collapsed. Anything else is no pointer: a
     second line, an HTML comment, a path (``docs/CLAUDE.md``), a negation or
     any other wording (issue #1505).
@@ -531,8 +538,10 @@ def _shadowing(
     header (``mirrored_instruction_files``, informational). A symlink or an
     import is neither. A bare pointer (``delegates_to``) exempts only itself:
     ``AGENTS.md`` pointing at the sibling ``CLAUDE.md`` skips the directory, a
-    sibling ``CLAUDE.md`` pointing at ``AGENTS.md`` leaves the comparison, and
-    any other ``CLAUDE.md`` is still compared. Returns ``(shadows, mirrors)``.
+    sibling ``CLAUDE.md`` pointing at ``AGENTS.md`` leaves the comparison as the
+    informational ``claude_prose_pointer`` (#1507, not when ``AGENTS.md`` is a
+    bare pointer onward itself), and any other ``CLAUDE.md``
+    is still compared. Returns ``(shadows, informational)``.
     """
     shadows: list[InstructionFinding] = []
     mirrors: list[InstructionFinding] = []
@@ -560,8 +569,21 @@ def _shadowing(
         if sibling is not None and delegates_to(
                 agent.body, "AGENTS.md", "CLAUDE.md", sibling.body):
             continue
-        claude = [c for c in claude if c is not sibling or not delegates_to(
-            c.body, "CLAUDE.md", "AGENTS.md", agent.body)]
+        if sibling is not None and delegates_to(
+                sibling.body, "CLAUDE.md", "AGENTS.md", agent.body):
+            # Linked, but Claude Code loads only an `@` import: the prose line is
+            # read only if the model opens the file (#1507). Informational, and
+            # only when AGENTS.md holds the rules: one that points onward would
+            # make `@AGENTS.md` load another pointer.
+            onward = [PurePosixPath(c.rel).name for c in cands if c is not agent]
+            if delegation_target(agent.body, sorted(onward)) is None:
+                mirrors.append({
+                    "kind": "claude_prose_pointer", "path": sibling.rel, "parent": agent.rel,
+                    "detail": f"`{sibling.rel}` points at `{agent.rel}` in prose, which Claude "
+                              "Code does not load at start; write `@AGENTS.md` instead so it "
+                              "loads the file",
+                })
+            claude = [c for c in claude if c is not sibling]
         if not claude:
             continue
         pairs = [(c, *mirror_pair(c.body, agent.body)) for c in claude]
