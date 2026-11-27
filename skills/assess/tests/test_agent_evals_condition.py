@@ -354,3 +354,76 @@ def test_a_nested_anchor_an_alias_uses_is_a_run(tmp_path: Path, ci: str) -> None
     root = _repo(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}", ".gitlab-ci.yml": ci})
     block = _block(root)
     assert (block["present"], block["dirs"][0]["ci"]) == (True, True)
+
+
+TEMPLATE = ".evals: &evals\n  script:\n    - pytest evals/\n"
+
+
+@pytest.mark.parametrize("jobs", [
+    # #1576: a template a merged job extends stays readable for a job that takes it by !reference.
+    "lint:\n  extends: .evals\n  script:\n    - ruff check .\nagent:\n  script:\n    - !reference [.evals, script]\n",
+    # The same, for a job that takes it through an anchor alias.
+    "lint:\n  extends: .evals\n  script:\n    - ruff check .\nagent:\n  <<: *evals\n",
+    # A merging job that sets a key the template does not hold still runs the template's script.
+    "evals:\n  <<: *evals\n  image: python:3.12\n",
+    # A rules: entry with no when: (on_success) runs the job.
+    "evals:\n  <<: *evals\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"never\"\n      when: never\n    - if: $X\n",
+    "evals:\n  script:\n    - pytest evals/\n  rules:\n    - when: always\n",
+    # A !reference inside a template a running job takes by alias, or by another !reference.
+    ".mid: &mid\n  script:\n    - !reference [.evals, script]\nagent:\n  <<: *mid\n",
+    ".mid:\n  script:\n    - !reference [.evals, script]\nagent:\n  script:\n    - !reference [.mid, script]\n",
+    # A chain of anchored templates a running job takes through the last one.
+    ".mid: &mid\n  <<: *evals\n  image: python:3.12\nevals:\n  <<: *mid\n",
+])
+def test_a_template_a_running_job_takes_is_a_run(tmp_path: Path, jobs: str) -> None:
+    root = _git(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
+                           ".gitlab-ci.yml": TEMPLATE + jobs})
+    block = _block(root)
+    assert (block["present"], block["dirs"][0]["ci"]) == (True, True)
+
+
+@pytest.mark.parametrize("jobs", [
+    # #1576: an alias only in a job that is manual, never runs, or replaces the script.
+    "evals:\n  <<: *evals\n  when: manual\n",
+    "evals:\n  <<: *evals\n  rules:\n    - when: never\n",
+    "evals:\n  <<: *evals\n  rules:\n    - if: $X\n      when: manual\n    - when: never\n",
+    "evals:\n  <<: *evals\n  script:\n    - pytest tests/\n",
+    # An alias only in a comment, or only in another hidden job.
+    "# use *evals later\ntest:\n  script:\n    - pytest tests/\n",
+    "test:\n  script:\n    - ruff check .  # was *evals\n",
+    ".other:\n  <<: *evals\ntest:\n  script:\n    - pytest tests/\n",
+    # An alias under a global keyword holds no job.
+    "variables:\n  X: *evals\ntest:\n  script:\n    - pytest tests/\n",
+    # A chain whose running job replaces the script the chain carries.
+    ".mid: &mid\n  <<: *evals\nevals:\n  <<: *mid\n  script:\n    - pytest tests/\n",
+    # A !reference held only by a manual job or by a hidden job nothing uses.
+    "evals:\n  when: manual\n  script:\n    - !reference [.evals, script]\n",
+    ".other:\n  script:\n    - !reference [.evals, script]\ntest:\n  script:\n    - pytest tests/\n",
+    # A job whose every rules: entry is when: never or when: manual.
+    "evals:\n  script:\n    - pytest evals/\n  rules:\n    - when: never\n",
+    "evals:\n  script:\n    - pytest evals/\n  rules:\n    - if: $X\n      when: manual\n    - when: never\n",
+])
+def test_a_template_no_running_job_takes_is_not_a_run(tmp_path: Path, jobs: str) -> None:
+    root = _git(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
+                           ".gitlab-ci.yml": TEMPLATE + jobs})
+    block = _block(root)
+    assert (block["present"], block["dirs"][0]["ci"]) == (False, False)
+
+
+def test_a_root_rules_never_over_an_included_job_is_not_a_run(tmp_path: Path) -> None:
+    root = _git(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
+                           ".gitlab-ci.yml": "include:\n  - local: ci/evals.yml\nevals:\n  rules:\n    - when: never\n",
+                           "ci/evals.yml": INCLUDED_EVALS})
+    block = _block(root)
+    assert (block["present"], block["dirs"][0]["ci"]) == (False, False)
+
+
+def test_an_included_template_a_merged_job_extends_stays_readable_for_a_reference(tmp_path: Path) -> None:
+    # #1576: !reference crosses files; the template ends its include, where the view's blank tail sat.
+    root = _git(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
+                           ".gitlab-ci.yml": "include:\n  - local: ci/t.yml\nagent:\n  script:\n"
+                                             "    - !reference [.evals, script]\nlint:\n  extends: .evals\n"
+                                             "  script:\n    - ruff check .\n",
+                           "ci/t.yml": INCLUDED_TEMPLATE})
+    block = _block(root)
+    assert (block["present"], block["dirs"][0]["ci"]) == (True, True)

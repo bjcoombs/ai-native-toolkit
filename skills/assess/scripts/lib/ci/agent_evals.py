@@ -31,7 +31,11 @@ a step ``name:``, a ``paths:`` or ``changes:`` trigger filter and a step or job 
 never true run nothing, nor does a command whose first word only lints, formats, moves or
 installs (``NOT_RUNNERS``: ``ruff check evals``, ``rm -rf evals``, ``pip install evals``) or an
 input of a GitHub ``actions/`` utility (``upload-artifact`` with ``path: evals/results.json``). A
-path a runner is told to skip (``--ignore=evals``, ``-k ...``) is the opposite of a run. One level of task runner is
+path a runner is told to skip (``--ignore=evals``, ``-k ...``) is the opposite of a run. A GitLab
+job that never runs on a pipeline (its own ``when:``, or every ``rules:`` entry, is ``never`` or
+``manual``) runs nothing, and a hidden template (``.evals:``) runs only as far as a visible job
+that runs takes it: by ``extends:``, by an alias of one of its anchors (less the keys a merging
+job sets itself) or by the key a ``!reference`` names (#1576). One level of task runner is
 followed: a CI command running ``make <t>``, ``just <t>`` or ``npm run <t>`` (``pnpm``, ``yarn``,
 ``bun``) names the suite when the root ``Makefile``, ``justfile`` or ``package.json`` recipe for
 ``<t>`` does.
@@ -209,33 +213,115 @@ def _utility_with(tree: IndentTree, with_line: int) -> bool:
 
 _REFERENCE = re.compile(r"!reference\s*\[\s*['\"]?(\.[^,\]'\"\s]+)['\"]?\s*,\s*['\"]?([\w-]+)")
 _IDLE = frozenset({"never", "manual"})  # a GitLab job ``when:`` that does not run it on a pipeline
+_ANCHOR = re.compile(r"&([\w.-]+)")
+_ALIAS = re.compile(r"(?:^|[\s\[,])\*([\w.-]+)(?![\w.-])")
 
 
-def hidden_references(texts: Iterable[str]) -> frozenset[tuple[str, str]]:
-    """The GitLab hidden job and key each ``!reference [.name, key]`` in ``texts`` names."""
-    return frozenset((m.group(1), m.group(2)) for text in texts for m in _REFERENCE.finditer(text))
-
-
-def _hidden_keep(tree: IndentTree, text: str,
-                 referenced: frozenset[tuple[str, str]]) -> tuple[dict[int, set[str]], set[int]]:
-    """For each top-level GitLab hidden job, the keys a ``!reference`` names, and the lines,
-    at any depth, whose YAML anchor an alias in the same file uses (anchors do not cross
-    files): the subtree under such a line runs where the alias puts it."""
-    hidden = {i: {key for job, key in referenced if job == line.key} for i, line in enumerate(tree.lines)
-              if line.structural and line.key.startswith(".") and not tree.ancestors(i)}
-    aliased: set[int] = set()
-    for i, line in enumerate(tree.lines):
-        anchor = re.match(r"&([\w.-]+)", line.value) if line.structural else None
-        if anchor and re.search(r"\*" + re.escape(anchor.group(1)) + r"(?![\w.-])", text):
-            aliased.add(i)
-    return hidden, aliased
+def _when(tree: IndentTree, keys: list[int]) -> str:
+    return next((tree.lines[k].value.strip("'\"") for k in keys if tree.lines[k].key == "when"), "")
 
 
 def _idle(tree: IndentTree) -> set[int]:
-    """The top-level jobs whose own ``when:`` is ``never`` or ``manual``."""
-    return {up[0] for i, line in enumerate(tree.lines)
-            if line.structural and line.key == "when" and len(up := tree.ancestors(i)) == 1
-            and strip_comment(line.value).strip().strip("'\"") in _IDLE}
+    """The top-level jobs that never run on a pipeline: their own ``when:`` is ``never`` or
+    ``manual``, or every ``rules:`` entry is (an entry with no ``when:`` runs on success)."""
+    idle: set[int] = set()
+    for i, line in enumerate(tree.lines):
+        if not line.structural or len(up := tree.ancestors(i)) != 1:
+            continue
+        if line.key == "when" and line.value.strip("'\"") in _IDLE:
+            idle.add(up[0])
+        elif line.key == "rules" and (items := tree.items(i)) and all(_when(tree, keys) in _IDLE for keys in items):
+            idle.add(up[0])
+    return idle
+
+
+# GitLab global keywords that hold no job: an alias or !reference under one runs nothing.
+_GLOBALS = frozenset({"variables", "workflow", "include", "stages", "image", "services", "cache"})
+
+
+def _running(tree: IndentTree) -> list[int]:
+    """The structural lines inside a visible top-level job (or ``default:``) that runs: not
+    hidden, not a global keyword (``_GLOBALS``), not idle (``_idle``) and not under a
+    never-true ``if:``."""
+    idle, dead = _idle(tree), _dead(tree)
+    out: list[int] = []
+    for i, line in enumerate(tree.lines):
+        if not line.structural or i in dead:
+            continue
+        top = ([i, *tree.ancestors(i)])[-1]
+        if top not in idle and not tree.lines[top].key.startswith(".") and tree.lines[top].key not in _GLOBALS:
+            out.append(i)
+    return out
+
+
+def hidden_references(texts: Iterable[str]) -> frozenset[tuple[str, str]]:
+    """The GitLab hidden job and key each ``!reference [.name, key]`` names in a visible job of
+    ``texts`` that runs (``_running``), in a template such a job takes by anchor alias, or in a
+    key another such reference names (GitLab nests them), followed to a fixed point; one in a
+    manual job or a hidden job nothing takes names nothing."""
+    trees = [IndentTree(parse_lines(text.splitlines())) for text in texts]
+    taken: list[set[int]] = []
+    for tree in trees:
+        _, replaced = _hidden_keep(tree, frozenset())
+        taken.append({i for i, line in enumerate(tree.lines)
+                      if line.structural and (_taken(tree, replaced, i) is not None)} | set(_running(tree)))
+    found: set[tuple[str, str]] = set()
+    while True:
+        more = set(found)
+        for tree, lines in zip(trees, taken):
+            for i, line in enumerate(tree.lines):
+                path = [i, *tree.ancestors(i)]
+                named = len(path) > 1 and (tree.lines[path[-1]].key, tree.lines[path[-2]].key) in found
+                if line.structural and (i in lines or named):
+                    more.update((m.group(1), m.group(2)) for m in _REFERENCE.finditer(line.value))
+        if more == found:
+            return frozenset(found)
+        found = more
+
+
+def _taken(tree: IndentTree, replaced: Mapping[int, set[str]], i: int) -> int | None:
+    """The used anchor line ``i`` sits under by a key no merging use replaces, or None."""
+    path = [i, *tree.ancestors(i)]
+    return next((a for n, a in enumerate(path)
+                 if a in replaced and (not n or tree.lines[path[n - 1]].key not in replaced[a])), None)
+
+
+def _hidden_keep(tree: IndentTree,
+                 referenced: frozenset[tuple[str, str]]) -> tuple[dict[int, set[str]], dict[int, set[str]]]:
+    """For each top-level GitLab hidden job, the keys a ``!reference`` names; and each line, at
+    any depth, whose YAML anchor an alias in a visible job that runs uses (anchors do not cross
+    files, and a comment holds no alias), with the keys of it every such use replaces: the
+    subtree under the anchor runs where the alias puts it, but a job merging it (``<<: *evals``)
+    keeps its own copy of a key it also sets. An alias inside a used anchor's subtree is a use
+    too (``.mid: &mid {<<: *evals}`` under ``evals: {<<: *mid}``), followed to a fixed point."""
+    hidden = {i: {key for job, key in referenced if job == line.key} for i, line in enumerate(tree.lines)
+              if line.structural and line.key.startswith(".") and not tree.ancestors(i)}
+    anchors: dict[str, int] = {}
+    for i, line in enumerate(tree.lines):
+        anchor = _ANCHOR.match(line.value) if line.structural else None
+        if anchor:
+            anchors.setdefault(anchor.group(1), i)
+    running = _running(tree)
+    replaced: dict[int, set[str]] = {}
+    while True:
+        lines: dict[int, int | None] = dict.fromkeys(running)
+        lines.update((i, a) for i, line in enumerate(tree.lines)
+                     if line.structural and i not in lines and (a := _taken(tree, replaced, i)) is not None)
+        found: dict[int, set[str]] = {}
+        for i, via in lines.items():
+            line = tree.lines[i]
+            own: set[str] = set()
+            if not line.key and line.value.startswith("<<"):
+                own = {tree.lines[k].key for k in tree.siblings[tree.mapping_of[i]]} - {""}
+                if via is not None and tree.ancestors(i)[:1] == [via]:
+                    own |= replaced[via]  # what replaces the merging template replaces its parent too
+            for name in _ALIAS.findall(strip_comment(line.value)):
+                if name in anchors:
+                    a = anchors[name]
+                    found[a] = found[a] & own if a in found else own
+        if found == replaced:
+            return hidden, replaced
+        replaced = found
 
 
 def run_texts(text: str, referenced: frozenset[tuple[str, str]] | None = None) -> list[str]:
@@ -247,21 +333,25 @@ def run_texts(text: str, referenced: frozenset[tuple[str, str]] | None = None) -
     job (``.evals:``, which runs only inside a job that extends it) run nothing; skip flags
     (``--ignore=evals``, ``-k ...``) are blanked. What a job can take from a hidden job without
     ``extends:`` is kept: the subtree under any YAML anchor in it (``.evals: &evals``,
-    ``script: &s``) that an alias in the same file uses, and the key a ``!reference [.evals, script]`` in ``referenced`` (every CI text
-    read) names. A GitLab job whose own ``when:`` is ``never`` or ``manual`` runs nothing."""
+    ``script: &s``) that an alias in a visible job that runs in the same file uses, less the keys
+    every merging job (``<<: *evals``) sets itself, and the key a ``!reference [.evals, script]``
+    in ``referenced`` (from every CI text read, ``hidden_references``) names. A GitLab job whose
+    own ``when:`` is ``never`` or ``manual``, or whose every ``rules:`` entry is, runs nothing,
+    and neither do the aliases and references in it."""
     tree = IndentTree(parse_lines(text.splitlines()))
     dead = _dead(tree)
-    hidden, aliased = _hidden_keep(tree, text, referenced if referenced is not None else hidden_references([text]))
+    hidden, replaced = _hidden_keep(tree, referenced if referenced is not None else hidden_references([text]))
     idle = _idle(tree)
     out: list[str] = []
     for i, line in enumerate(tree.lines):
         if not line.structural or i in dead:
             continue
         up = tree.ancestors(i)
-        if up and up[-1] in idle:
+        path = [i, *up]
+        aliased = _taken(tree, replaced, i) is not None
+        if up and up[-1] in idle and not aliased:
             continue
-        if up and up[-1] in hidden and tree.lines[([i, *up])[-2]].key not in hidden[up[-1]] and \
-                not aliased.intersection([i, *up]):
+        if up and up[-1] in hidden and tree.lines[path[-2]].key not in hidden[up[-1]] and not aliased:
             continue
         parent = tree.ancestors(i)[:1]
         owner = tree.lines[parent[0]].key if parent else ""
@@ -327,7 +417,9 @@ def _recipes(read: Callable[[str], str], tracked: frozenset[str], targets: set[s
 
 def gitlab_eval_texts(config: MergedConfig, view: MergedView) -> tuple[list[str], int]:
     """The GitLab texts the scan reads, as GitLab merges them, and how many jobs are left out
-    as not settled: a merged job whose rendered lines ``view.unsettled`` holds, and a visible
+    as not settled. Hidden templates keep their lines from ``config.sources`` (the view blanks
+    one a merged job extends), so a job that takes one by alias or ``!reference`` still reads
+    it. Left out: a merged job whose rendered lines ``view.unsettled`` holds, and a visible
     job with an unresolved merge (an include under ``rules:``, an include order) other than an
     ``unreadable`` anchor merge, which keeps its own reading as ``lib.ci.ci_merged_view`` does.
     A job left out is never a run; its count reads with ``ci_unread``."""
@@ -338,8 +430,17 @@ def gitlab_eval_texts(config: MergedConfig, view: MergedView) -> tuple[list[str]
     for job in unknown:
         for d in job.defs:
             blank.setdefault(d.source, set()).update(range(d.start, d.end))
-    texts = ["\n".join("" if i in blank.get(s, ()) else line for i, line in enumerate(text.splitlines()))
-             for s, text in enumerate(view.texts)]
+    # The view blanks a hidden template a merged job extends; another job may still take it by
+    # alias or !reference, and run_texts reads a hidden job only as far as one does (#1576).
+    hidden: dict[int, set[int]] = {}
+    for job in config.jobs.values():
+        for d in job.defs if job.hidden else ():
+            hidden.setdefault(d.source, set()).update(range(d.start, d.end))
+    texts = []
+    for s, text in enumerate(view.texts):
+        source, seen = config.sources[s].splitlines(), text.splitlines()  # blank tail lines drop off seen
+        texts.append("\n".join("" if i in blank.get(s, ()) else line if i in hidden.get(s, ()) else
+                               (seen[i] if i < len(seen) else "") for i, line in enumerate(source)))
     rendered = view.rendered.splitlines()
     texts.append("\n".join("" if i in view.unsettled else line for i, line in enumerate(rendered)))
     unsettled = sum(i in view.unsettled and line.startswith("job") for i, line in enumerate(rendered))
