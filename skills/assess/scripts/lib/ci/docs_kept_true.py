@@ -9,7 +9,9 @@ script, a ``make`` recipe, up to ``_MAX_FOLLOW`` levels). Nothing is executed. I
 - **regen_diff.** A ``git diff`` with ``--exit-code`` or ``--quiet`` after an earlier command
   of the same job (or of the same followed script or recipe) that is not a ``git``, shell
   built-in, install, test or lint command (``lib.ci.check_command``): the job regenerates files, then fails when they differ from
-  the commit. ``covers`` is the diff's literal path arguments (``git diff --exit-code --
+  the commit. A wrapper (``uv run --locked``, ``poetry -C . run``, ``npx --yes``, ``python -m``)
+  is read through to the program it runs, its own options skipped (#1589), for the install,
+  pytest and doc-test reads. ``covers`` is the diff's literal path arguments (``git diff --exit-code --
   docs/``); ``.`` and no path name no subtree.
 - **verify_pair.** A step runs a committed ``verify-<x>`` script (``hack/verify-codegen.sh``)
   and the tree tracks its ``update-<x>`` sibling in the same folder.
@@ -80,7 +82,14 @@ _GITHUB_BODY = frozenset({"run"})   # a github-script ``with: script:`` is JavaS
 _GITLAB_BODY = frozenset({"script", "before_script"})  # GitLab ignores after_script failures
 _INCLUDE = re.compile(r"^include\s*:", re.M)
 _DOCTEST_RUNNERS = frozenset({"mdtest", "phmdoctest", "byexample"})
-_WRAPPERS = frozenset({"uv", "poetry", "pdm", "hatch", "pipenv", "rye", "python", "python3", "run", "exec"})
+_WRAPPERS = frozenset({"uv", "poetry", "pdm", "hatch", "pipenv", "rye", "python", "python3", "run", "exec",
+                       "uvx", "pipx", "npx", "bunx"})
+# Wrapper options that take the next word (``uv run --with pytest-cov``, ``poetry -C sub``).
+_WRAPPER_VALUED = frozenset({
+    "--with", "--with-editable", "--with-requirements", "--python", "-p", "--project", "-P",
+    "--directory", "-C", "--package", "--extra", "--group", "--only-group", "--env-file",
+    "--index", "--from", "--spec", "-e", "--env",
+})
 
 
 class _Cmd(TypedDict):
@@ -113,10 +122,19 @@ def _fallback(rest: list[str]) -> str:
 
 
 def _program(words: list[str]) -> list[str]:
-    """``words`` from the program a wrapper runs (``uv run pytest`` reads ``pytest``)."""
+    """``words`` from the program a wrapper runs (``uv run pytest`` reads ``pytest``), the
+    wrapper's own options skipped (#1589: ``uv run --locked pytest``, ``npx --yes mdtest``,
+    ``uv run --with x -- pytest``). An option is skipped only after a wrapper word, so a
+    program's own flags are kept; a valued option with no program after it leaves nothing."""
     i = 0
-    while i < len(words) - 1 and (words[i] in _WRAPPERS or words[i] == "-m"):
-        i += 1
+    while i < len(words) - 1:
+        word = words[i]
+        if word in _WRAPPERS or word == "-m":
+            i += 1
+        elif i and word.startswith("-"):
+            i += 2 if word in _WRAPPER_VALUED else 1
+        else:
+            break
     return words[i:]
 
 

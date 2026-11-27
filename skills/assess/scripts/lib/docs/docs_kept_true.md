@@ -22,3 +22,7 @@ The module docstring has the rules and the block shape. Known limits:
 - A doc-file doctest run (`--doctest-glob`, `--markdown-docs`, Sphinx `doctest`) exempts the
   docs it runs from churn staleness. It proves their examples run, not that the prose around
   them still describes the code.
+- A wrapper (`uv run`, `poetry run`, `pdm run`, `hatch run`, `uvx`, `pipx run`, `npx`, `bunx`,
+  `python -m`) is read through to the program it runs, its own options skipped (#1589). A
+  valued option missing from the module's `_WRAPPER_VALUED` list leaves its value read as the
+  program, so a pytest run behind it is not credited.
