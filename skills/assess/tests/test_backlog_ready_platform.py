@@ -576,3 +576,12 @@ def test_an_issue_its_author_closed_then_reopened_or_a_bot_closed_stays_overdue(
                                                    "actor": {"__typename": "Bot", "login": "stale"}})
         gh.nodes().append(node)
     assert _block(_repo(tmp_path))["first_response_met"] is False
+
+
+def test_gitlab_an_unkeyed_closer_and_author_are_not_self_closed(tmp_path: Path, glab: FakeGlab) -> None:
+    for d in range(1, 21):
+        row = copy.deepcopy(glab.issues[3])
+        row.update(iid=400 + d, created_at=f"2026-10-{d:02d}T00:00:00Z", closed_at=f"2026-10-{d:02d}T05:00:00Z",
+                   closed_by={"name": "x"}, author=None, user_notes_count=0)
+        glab.issues.append(row)
+    assert _block(_repo(tmp_path))["first_response_met"] is False

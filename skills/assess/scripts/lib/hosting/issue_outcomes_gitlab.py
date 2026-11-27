@@ -172,7 +172,8 @@ def gitlab_read(project: GitlabProject, start: datetime, now: datetime) -> Issue
             cut = cut or (wants and reads > MAX_NOTE_READS)
         closed = parse_time(row.get("closed_at"))
         closer = row.get("closed_by")
-        self_closed = closed is not None and bool(closer) and _user_key(closer) == _user_key(row.get("author"))
+        key = _user_key(closer)  # an unkeyed closer is no one: never the author
+        self_closed = closed is not None and key is not None and key == _user_key(row.get("author"))
         recent.append(Issue(created, closed, (), first, settled, self_closed=self_closed))
     open_rows, cut_open = _pages(project, f"state=opened&created_before={_stamp(now - UNTRIAGED_AFTER)}")
     open_old = tuple(Issue(created, None, tuple(str(x).lower() for x in r.get("labels") or []
