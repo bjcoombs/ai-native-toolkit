@@ -93,6 +93,8 @@ _OPERAND_AFTER = re.compile(r"^(?:\s*(?:not\s+)?in\s+[\w$]|[gimsuy]*\s*\.test\s*
 _OUTPUT = re.compile(r"\b(?:echo|printf)\b[^;|&\n]*|(?:\bprint|console\.\w+|core\.\w+)\s*\((?:[^()\n]|\([^()\n]*\))*\)"
                      r"|::(?:error|warning|notice)[^\n]*")
 _SCRIPT_ARG = re.compile(r"\b(?:python3?|node|ruby|bash|sh)\s+(?:-\S+\s+)*(?:\./)?([\w./-]+\.(?:py|js|mjs|cjs|rb|sh))\b")
+_ASSIGNED = re.compile(r"^\s*(?:-\s+)?(?:export\s+|const\s+|let\s+|var\s+)?\$?\{?([A-Za-z_]\w*)\}?\s*(?::|=(?!=))")
+_WRITTEN = re.compile(r">\s*([\w./-]+)")
 _CD = re.compile(r"\bcd\s+([\w./-]+)\s*(?:&&|;)")
 _YAML_COMMENT = re.compile(r"^\s*#.*$", re.MULTILINE)
 _CHECKBOX = re.compile(r"^\s*[-*]\s*\[[ xX]\]\s+(.*)$", re.MULTILINE)
@@ -134,15 +136,34 @@ def enforces_disclosure(text: str, env: str = "") -> bool:
     pattern, a match call's argument, ``=~`` or ``==``, or followed by ``in`` or ``.test(``
     (``_OPERAND_BEFORE``, ``_OPERAND_AFTER``). The words of output calls (``echo``, ``printf``,
     ``print(``, ``console.*(``, ``core.*(``, ``::error``) are dropped first (``_OUTPUT``), so a log
-    or failure message naming AI does not count, and a step
+    or failure message naming AI does not count. The marker test must also be on a line that does
+    the read or names what holds it (``read_names``), so a test of another value, such as the
+    author's login, does not count, and a step
     that only runs an AI tool on the body (``claude --print ... || exit 1``) does not count. Whole-line YAML
     and shell comments are dropped first."""
-    clean = _YAML_COMMENT.sub("", text)
-    named = any(_AI_MARKERS.search(q.group(0)) and (_OPERAND_BEFORE.search(line[:q.start()])
-                                                    or _OPERAND_AFTER.search(line[q.end():]))
-                for line in _OUTPUT.sub("", clean).splitlines() for q in _QUOTED.finditer(line))
-    return bool((_READS.search(clean) or _READS.search(_YAML_COMMENT.sub("", env)))
-                and named and _ACTS.search(clean))
+    clean, env = _YAML_COMMENT.sub("", text), _YAML_COMMENT.sub("", env)
+    names = read_names(clean + "\n" + env)
+    named = any(_tests_marker(_OUTPUT.sub("", line)) and (_READS.search(line) or any(
+        re.search(rf"(?<![\w-]){re.escape(n)}(?![\w-])", line) for n in names)) for line in clean.splitlines())
+    return bool((_READS.search(clean) or _READS.search(env)) and named and _ACTS.search(clean))
+
+
+def _tests_marker(line: str) -> bool:
+    return any(_AI_MARKERS.search(q.group(0)) and (_OPERAND_BEFORE.search(line[:q.start()])
+                                                   or _OPERAND_AFTER.search(line[q.end():]))
+               for q in _QUOTED.finditer(line))
+
+
+def read_names(text: str) -> set[str]:
+    """The names that hold what a line of ``text`` reads (``_READS``): the variable or key it is
+    assigned to (``BODY: ...``, ``const body = ...``, ``log = ...``) or the file it is written to
+    (``> body.json``). A marker test counts only on a line that names one, or does the read itself."""
+    names: set[str] = set()
+    for line in text.splitlines():
+        if _READS.search(line):
+            names.update(m.group(1) for m in (_ASSIGNED.match(line),) if m)
+            names.update(_WRITTEN.findall(line))
+    return names
 
 
 def disclosure_checkboxes(text: str) -> int:

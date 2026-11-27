@@ -202,6 +202,28 @@ def test_a_check_that_cannot_turn_the_run_red_does_not_count_unless_it_labels(tm
     assert scan_ai_governance(_repo(tmp_path, {".github/workflows/d.yml": labelled}))["enforced"] is True
 
 
+def test_a_marker_tested_against_another_value_is_not_a_disclosure_check(tmp_path: Path) -> None:
+    text = """name: linked
+on: pull_request
+jobs:
+  linked:
+    runs-on: ubuntu-latest
+    env:
+      BODY: ${{ github.event.pull_request.body }}
+      AUTHOR: ${{ github.event.pull_request.user.login }}
+    steps:
+      - run: |
+          if [[ "$AUTHOR" == "copilot-swe-agent[bot]" ]]; then exit 0; fi
+          printf '%s' "$BODY" | grep -qE "(Fixes|Closes) #[0-9]+" || exit 1
+"""
+    assert scan_ai_governance(_repo(tmp_path, {".github/workflows/linked.yml": text}))["enforced"] is False
+
+
+def test_a_body_written_to_a_file_and_tested_there_counts() -> None:
+    step = "run: |\n  gh pr view 1 --json body > body.json\n  grep -q 'AI assistance' body.json || exit 1\n"
+    assert enforces_disclosure(step) is True
+
+
 @pytest.mark.parametrize("step", [
     'run: |\n  echo "AI disclosure scan"\n  gh pr view --json body > body.json\n  test -s body.json || exit 1\n',
     'run: |\n  BODY="${{ github.event.pull_request.body }}"\n  echo "Running AI review in CI"\n'
