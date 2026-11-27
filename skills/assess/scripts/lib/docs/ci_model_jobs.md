@@ -152,6 +152,7 @@ Known limits:
   job no running job takes; one inside a template a running job takes is followed. A job whose own `when:` is `never` or `manual`, or whose every `rules:` entry is,
   is not a run; any other `rules:` entry (an `if:`, a `!reference`) reads as a run, so a job whose
   rules never match still counts. An anchored list a shell key takes by alias
-  (`.run: &run` then `script: [*run]`) is not read as a command. When the merged view cannot be
+  (`.run: &run` then `script: [*run]`) is not read as a command, and a flow-style merge
+  (`agent: {<<: *evals, script: [ruff .]}`) does not drop the template's copy of the keys it sets. When the merged view cannot be
   built, the root and included files are read as written: a root override then still counts the included command, and a job that takes its
   script from a hidden template through `extends:` is not named.

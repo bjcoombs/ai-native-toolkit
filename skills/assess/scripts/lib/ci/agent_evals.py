@@ -235,16 +235,21 @@ def _idle(tree: IndentTree) -> set[int]:
     return idle
 
 
+# GitLab global keywords that hold no job: an alias or !reference under one runs nothing.
+_GLOBALS = frozenset({"variables", "workflow", "include", "stages", "image", "services", "cache"})
+
+
 def _running(tree: IndentTree) -> list[int]:
     """The structural lines inside a visible top-level job (or ``default:``) that runs: not
-    hidden, not idle (``_idle``) and not under a never-true ``if:``."""
+    hidden, not a global keyword (``_GLOBALS``), not idle (``_idle``) and not under a
+    never-true ``if:``."""
     idle, dead = _idle(tree), _dead(tree)
     out: list[int] = []
     for i, line in enumerate(tree.lines):
         if not line.structural or i in dead:
             continue
         top = ([i, *tree.ancestors(i)])[-1]
-        if top not in idle and not tree.lines[top].key.startswith("."):
+        if top not in idle and not tree.lines[top].key.startswith(".") and tree.lines[top].key not in _GLOBALS:
             out.append(i)
     return out
 

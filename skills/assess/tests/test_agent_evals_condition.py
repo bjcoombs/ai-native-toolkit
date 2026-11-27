@@ -388,6 +388,8 @@ def test_a_template_a_running_job_takes_is_a_run(tmp_path: Path, jobs: str) -> N
     # An alias only in a comment, or only in another hidden job.
     "# use *evals later\ntest:\n  script:\n    - pytest tests/\n",
     ".other:\n  <<: *evals\ntest:\n  script:\n    - pytest tests/\n",
+    # An alias under a global keyword holds no job.
+    "variables:\n  X: *evals\ntest:\n  script:\n    - pytest tests/\n",
     # A chain whose running job replaces the script the chain carries.
     ".mid: &mid\n  <<: *evals\nevals:\n  <<: *mid\n  script:\n    - pytest tests/\n",
     # A !reference held only by a manual job or by a hidden job nothing uses.
