@@ -36,6 +36,13 @@ This module scans the repo-observable subset of those guardrails:
   ``agent_jobs_read_only``, ``agent_jobs_least_privilege`` (the maturity model's
   least-privilege condition) and ``agent_job_write_access`` (its hazard), the last two null
   with a sibling ``_reason`` when there is no agent job or a scope cannot be read.
+- ``agent_instruction_rewrite`` (#858): agent jobs that can write files (a ``contents`` write,
+  or gh-aw ``safe-outputs`` that land file changes) while the root ``AGENTS.md`` or
+  ``CLAUDE.md``, a committed instruction file, the job's own workflow and its gh-aw
+  ``.lock.yml``, a local reusable workflow or local action that workflow runs, or the
+  CODEOWNERS file itself has no CODEOWNERS owner, with their workflow files in
+  ``agent_instruction_rewrite_files`` (``lib.agents.agent_instruction_rewrite``). A hazard that
+  holds the ``ci_runs_tests`` Step gate; null with a sibling ``_reason`` as above.
 
 Only **git-tracked** artifacts count toward the summary booleans, mirroring the
 Layer 0 rule: a settings file present on disk but uncommitted reaches no clone,
@@ -86,6 +93,7 @@ from lib.ci.ci_step_paths import inside, local_workflow, read_action
 from lib.ci.ci_triggers import workflow_events
 from lib.instructions.command_index import NOOP_COMMANDS, ci_config_files, read_config, repo_files
 from lib.counts_only.block_shapes import AgentJob, AgentWorkflow
+from lib.agents.agent_instruction_rewrite import instruction_rewrite
 from lib.agents.agent_job_scope import gh_aw_job, merge_readings, summarize, workflow_jobs
 from lib.agents.managed_settings import managed_permissions, not_read, read_managed_settings
 from lib.history.git_churn import is_tracked, tracked_files
@@ -470,6 +478,14 @@ def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str,
     }
     agent_jobs, jobs_unread = scan_agent_jobs(repo_root)
     summary.update(summarize(agent_jobs, jobs_unread))
+    reader = _Signs(repo_root, repo_files(repo_root))  # reads committed files inside the checkout
+    fronts = {j["path"]: _frontmatter(reader.read(j["path"]) or "")
+              for j in agent_jobs if j["path"].endswith(".md")}
+    rewrite, rewrite_files, rewrite_reason = instruction_rewrite(
+        agent_jobs, fronts, reader.files, reader.read, jobs_unread)
+    summary["agent_instruction_rewrite"] = rewrite
+    if rewrite_reason is not None:
+        summary["agent_instruction_rewrite_reason"] = rewrite_reason
     if not agent_work and unread:
         summary["agent_work_present"] = None
         summary["agent_work_present_reason"] = UNREAD_WORKFLOWS
@@ -490,6 +506,7 @@ def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str,
         "agent_workflows": workflows,
         "agent_workflows_unread": unread,
         "agent_jobs": agent_jobs,
+        "agent_instruction_rewrite_files": rewrite_files,
         "managed": managed,
         "summary": summary,
     }

@@ -281,6 +281,31 @@ def test_find_empty_globs_flags_zero_match_patterns(tmp_path: Path) -> None:
     assert empties == [{"pattern": "legacy/**", "declared_in": "CODEOWNERS"}]
 
 
+def test_a_leading_double_star_also_matches_at_the_root(tmp_path: Path) -> None:
+    """``**/AGENTS.md`` claims the root file and a nested one, as GitHub reads it (#858), so it
+    is not an empty glob in a repository whose only ``AGENTS.md`` sits at the root."""
+    repo = _init_repo(tmp_path)
+    _write(repo, "AGENTS.md")
+    _write(repo, "pkg/AGENTS.md")
+    _write(repo, "CODEOWNERS", "**/AGENTS.md @a\n**/missing.md @b\n")
+    _commit_all(repo)
+
+    owners = parse_codeowners(repo)
+    assert _matched_strs(owners["**/AGENTS.md"]) == {"AGENTS.md", "pkg/AGENTS.md"}
+    assert find_empty_globs(owners) == [{"pattern": "**/missing.md", "declared_in": "CODEOWNERS"}]
+
+
+def test_a_root_only_double_star_target_is_not_an_empty_glob(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _write(repo, "AGENTS.md")
+    _write(repo, "CODEOWNERS", "**/AGENTS.md @a\n")
+    _commit_all(repo)
+
+    owners = parse_codeowners(repo)
+    assert _matched_strs(owners["**/AGENTS.md"]) == {"AGENTS.md"}
+    assert find_empty_globs(owners) == []
+
+
 def test_find_empty_globs_is_sorted(tmp_path: Path) -> None:
     """Empty globs are returned sorted by pattern for deterministic output."""
     owners = {

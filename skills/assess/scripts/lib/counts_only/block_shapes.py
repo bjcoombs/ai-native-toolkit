@@ -103,6 +103,9 @@ class AgentOpsSummary(TypedDict):
     agent_job_write_access: int | None  # agent jobs with a write scope and no writer split (hazard)
     agent_jobs_least_privilege_reason: NotRequired[str]  # the not-measured code, when null
     agent_job_write_access_reason: NotRequired[str]  # the not-measured code, when null
+    # agent jobs that can write files while an instruction or workflow file has no owner (#858)
+    agent_instruction_rewrite: int | None
+    agent_instruction_rewrite_reason: NotRequired[str]  # the not-measured code, when null
 
 
 class AgentWorkflow(TypedDict):
@@ -139,6 +142,7 @@ class AgentOpsBlock(TypedDict):
     agent_workflows: list[AgentWorkflow]
     agent_workflows_unread: int
     agent_jobs: list[AgentJob]
+    agent_instruction_rewrite_files: list[str]  # workflow files behind that hazard, sorted
     managed: ManagedSettingsBlock
     summary: AgentOpsSummary
 
