@@ -108,6 +108,7 @@ from lib.skill_script_tests import scan_skill_script_tests
 from lib.skill_personal_data import scan_skill_personal_data
 from lib.skill_library import scan_skill_library
 from lib.ci.ci_model_jobs import scan_ci_model_jobs
+from lib.ci.ci_hazards import scan_ci_hazards
 from lib.pack_checks import IDENTITY_BLOCK, PACK_BLOCK
 from lib.pack_checks import collect as collect_packs
 from lib.hosting.org_security_policy import scan_org_security_policy
@@ -554,6 +555,7 @@ SCANS: tuple[ScanSpec, ...] = (
     # agent action or CLI, a model-provider secret) and whether a gate limits it. Feeds the
     # model-ci-gated row.
     _spec("ci_model_jobs", scan_ci_model_jobs),
+    _spec("ci_hazards", scan_ci_hazards),
     # Contributor files (issue #1045): a contributing guide and a security policy (or a link to
     # GitHub private vulnerability reporting), with issue and change templates as evidence.
     # Feeds the contributor-files row; not measured for a knowledge base (reads archetype).

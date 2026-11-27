@@ -1,0 +1,63 @@
+# Check manifest fragment: the ci_hazards collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.ci_hazards"
+kind = "collector"
+title = "CI that can be told not to fail"
+summary = "Pull request labels that skip every job of every GitHub Actions workflow that runs a check on pull requests. Committed files that tell Maven to ignore test failures. It reads CI files, Jenkinsfiles, .mvn/maven.config and reactor poms. It also reads the scripts, make recipes, local actions and poms a CI step leads to."
+issues = [828]
+callable = "lib.ci.ci_hazards:scan_ci_hazards"
+publishes = ["ci_hazards"]
+reads = ["repo_root"]
+stage = "post_offers"
+headless = { ci_hazards = "registered" }
+whys.ci_hazards = "A green CI run only means something when the run could have gone red. A label that skips the checks, or a build told to ignore broken tests, lets a broken change pass while CI still reads as gating it."
+shapes = [
+  { path = "ci_hazards", type = "lib.ci.ci_hazards:CiHazardsBlock" },
+]
+revision = 1
+unknown_reasons = [
+  { code = "no_pr_checks", block = "ci_hazards", means = "No GitHub Actions workflow runs a test or lint command on pull requests. So this reader sees no check a label could skip.", next_step = "Nothing to change: this reads as not measured until a workflow runs a check on pull requests." },
+  { code = "no_ci_files", block = "ci_hazards", means = "The tree tracks no GitHub Actions workflow, .gitlab-ci.yml, Jenkinsfile or root pom.xml, so there is no build setting to read.", next_step = "Nothing to change: this reads as not measured until a CI file or a root pom is committed." },
+]
+  [entries.privacy]
+  "ci_hazards.skip_labels_reason" = "token"
+  "ci_hazards.test_failures_ignored_reason" = "token"
+  "ci_hazards.ci_hazard_files" = "path"
+
+[[entries]]
+id = "core:ci_hazards.skip_labels"
+kind = "signal"
+title = "Pull request labels that skip every CI check"
+collector = "core.ci_hazards"
+path = "ci_hazards.skip_labels"
+type = "number"
+evidence = "head_structure"
+null_means = "no_pr_checks: no GitHub Actions workflow runs a check on pull requests"
+
+[[entries]]
+id = "core.cond.ci-skip-label.1.skip_labels"
+kind = "condition"
+title = "A label skips every CI check on pull requests"
+key = "ci-skip-label.1:ci_hazards.skip_labels"
+why = "A label that skips every check lets any pull request merge on a green that no test produced. An agent, or a person in a hurry, needs only to add the label."
+fix = "Drop the label condition from the jobs' if: lines, or limit it to jobs that check nothing, such as docs previews. If a skip is needed, scope it with a paths filter so the checks still run on code changes."
+
+[[entries]]
+id = "core:ci_hazards.test_failures_ignored"
+kind = "signal"
+title = "Committed files that set Maven to ignore test failures"
+collector = "core.ci_hazards"
+path = "ci_hazards.test_failures_ignored"
+type = "number"
+evidence = "head_structure"
+null_means = "no_ci_files: no CI file, Jenkinsfile or root pom.xml is tracked"
+
+[[entries]]
+id = "core.cond.ci-test-failures-ignored.1.test_failures_ignored"
+kind = "condition"
+title = "CI ignores test failures"
+key = "ci-test-failures-ignored.1:ci_hazards.test_failures_ignored"
+why = "With broken tests ignored, the build passes whatever the tests report, so a green run says nothing about the change. A test an agent broke reaches the main branch unseen."
+fix = "Remove -Dmaven.test.failure.ignore=true and testFailureIgnore from the CI command, the Jenkinsfile and the poms listed. Quarantine a flaky test by name instead of ignoring every failure."

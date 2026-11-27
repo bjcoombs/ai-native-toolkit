@@ -271,6 +271,14 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `ci_checks.merged_config` | token |
 | `ci_checks.merged_config_reason` | token |
 
+## ci_hazards
+
+| Field | Kept as |
+|---|---|
+| `ci_hazards.skip_labels_reason` | token |
+| `ci_hazards.test_failures_ignored_reason` | token |
+| `ci_hazards.ci_hazard_files` | path (hashed when hashing is on) |
+
 ## ci_model_jobs
 
 | Field | Kept as |

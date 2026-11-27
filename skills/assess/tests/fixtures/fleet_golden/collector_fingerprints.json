@@ -96,6 +96,14 @@
       },
       "revision": 9
     },
+    "core.ci_hazards": {
+      "repos": {
+        "grpa/sub/deep/svc2": "a7135ce3b2d35f695143761ba7a8e4981302e3278b35746a48ca23a024e8a8cc",
+        "grpa/svc1": "aab0e6fecbfb00f30b1fc832eab22699cd6c53f9b3ce92f9284b44e0e3407723",
+        "grpb/lib1": "a7135ce3b2d35f695143761ba7a8e4981302e3278b35746a48ca23a024e8a8cc"
+      },
+      "revision": 1
+    },
     "core.ci_model_jobs": {
       "repos": {
         "grpa/sub/deep/svc2": "8e14a9e29a1389e51da069d4e07a6fe5b593a7232ca05bba768264cc8689ef05",

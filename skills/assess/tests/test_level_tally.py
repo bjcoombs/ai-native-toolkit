@@ -531,7 +531,7 @@ def test_in_place_never_lists_an_excluded_row_and_counts_only_keeps_the_tokens()
 def test_a_met_hazard_keeps_its_row_out_of_in_place():
     model = _model(_row("risk", [{"signal": DOC, "op": "lte", "value": 50}], l1={"polarity": "hazard"}))
     assert lt.level_result(model, _fresh(10))["in_place"] == []
-    assert [e["row"] for e in lt.level_result(model, _fresh(90))["in_place"]] == ["risk"]
+    assert lt.level_result(model, _fresh(90))["in_place"] == []  # #828: an absent harm is not a practice
 
 
 def _plus_met_row(model: MaturityModel, n: int) -> MaturityModel:

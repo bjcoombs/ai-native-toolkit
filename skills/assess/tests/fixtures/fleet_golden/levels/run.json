@@ -73,6 +73,10 @@
       "revision": 9
     },
     {
+      "id": "core.ci_hazards",
+      "revision": 1
+    },
+    {
       "id": "core.ci_model_jobs",
       "revision": 5
     },

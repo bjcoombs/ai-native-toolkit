@@ -462,6 +462,15 @@ _WORDING: dict[str, Wording] = {
         "limits cost, not what the token can do.",
         "No job that runs an agent has a `write` scope unless another job that `needs:` it, or "
         "`safe-outputs:`, does the writing."),
+    "ci_hazards.skip_labels": _flag_count(
+        "Drop the label condition from the jobs' `if:` lines, or keep it only on jobs that check "
+        "nothing; scope a skip with a `paths` filter so the checks still run on code changes.",
+        "No pull request label skips every job of the workflows that run checks on pull requests."),
+    "ci_hazards.test_failures_ignored": _flag_count(
+        "Remove `-Dmaven.test.failure.ignore=true` and `testFailureIgnore` from the CI command, the "
+        "Jenkinsfile and the poms; quarantine a flaky test by name instead.",
+        "No CI file, Jenkinsfile, `.mvn/maven.config`, reactor pom or followed CI step sets "
+        "`maven.test.failure.ignore` or `testFailureIgnore` to true."),
     "secrets_guard.configured": _flag(
         "Add a secrets hook to `.pre-commit-config.yaml` (gitleaks or detect-secrets), or a secrets "
         "scan step to CI.",
@@ -616,6 +625,8 @@ _MEASURE_HINTS = {
                  "or another value the scan cannot read.",
     "skill_library": "Not measured (`not_a_git_repository`) outside a git repository, where the "
                      "committed files cannot be listed.",
+    "ci_hazards": "Not measured (`no_pr_checks`) when no GitHub Actions workflow runs a check on pull "
+                  "requests, and (`no_ci_files`) when no CI file, Jenkinsfile or root `pom.xml` is tracked.",
     "ci_model_jobs": "Not measured (`no_model_jobs`) when no model-calling CI job is detected. "
                      "Not measured (`trigger_unresolved`, `ci_jobs_unread`) when none is ungated but a "
                      "trigger, a condition or a job this reader cannot read could still run one on every change. "

@@ -18,9 +18,9 @@ _New to these words? The [glossary](https://github.com/bjcoombs/ai-native-toolki
 
 ## Catalogue Coverage
 
-Catalogue coverage: 18 not measured (needs a full run: 1, no agent jobs: 2, no manifests read: 1, no model jobs: 1, no ownership map: 1, no remote: 2, no skill files: 2, no skill scripts: 1, no source files: 2, no value read: 2, not a git repository: 1, waits on layer-4-architecture.1: 1, unavailable: 1) · 4 not applicable here (fewer than two agent systems: 2, no configured gate: 2) · model <<normalized>>
+Catalogue coverage: 20 not measured (needs a full run: 1, no agent jobs: 2, no CI file or root pom: 1, no manifests read: 1, no model jobs: 1, no ownership map: 1, no CI check on pull requests: 1, no remote: 2, no skill files: 2, no skill scripts: 1, no source files: 2, no value read: 2, not a git repository: 1, waits on layer-4-architecture.1: 1, unavailable: 1) · 4 not applicable here (fewer than two agent systems: 2, no configured gate: 2) · model <<normalized>>
 
-By tag: behaviour 0 of 3 (NOT MEASURED: 2) · docs 0 of 1 (NOT MEASURED: 2) · structure 0 of 1 (NOT MEASURED: 5) · agent_context 0 of 0 (NOT MEASURED: 2) · agent_runtime 0 of 1 (NOT MEASURED: 3) · governance 0 of 1 (NOT MEASURED: 6) · supply_chain 0 of 0 (NOT MEASURED: 1)
+By tag: behaviour 0 of 3 (NOT MEASURED: 4) · docs 0 of 1 (NOT MEASURED: 2) · structure 0 of 1 (NOT MEASURED: 5) · agent_context 0 of 0 (NOT MEASURED: 2) · agent_runtime 0 of 1 (NOT MEASURED: 3) · governance 0 of 1 (NOT MEASURED: 6) · supply_chain 0 of 0 (NOT MEASURED: 1)
 
 ## Where you are on the Steps
 
@@ -96,9 +96,9 @@ _Deterministic portion of the assessment: headline, metrics, hotspots, and cross
 
 ## How this was measured
 
-In place: over 1 repository, 37 scans were measured everywhere, 21 ran but were not measured everywhere, and 0 were skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
+In place: over 1 repository, 38 scans were measured everywhere, 21 ran but were not measured everywhere, and 0 were skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
 
-### Ran (58)
+### Ran (59)
 
 - `agent_ops`
 - `config_drift`
@@ -124,6 +124,7 @@ In place: over 1 repository, 37 scans were measured everywhere, 21 ran but were 
 - `skill_personal_data`
 - `skill_library`: not measured in 1 of 1 (not_a_git_repository)
 - `ci_model_jobs`
+- `ci_hazards`
 - `org_security_policy`: not measured in 1 of 1 (no_remote)
 - `github_secret_scanning`: not measured in 1 of 1 (no_remote)
 - `secrets_guard`

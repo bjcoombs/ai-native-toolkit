@@ -1447,6 +1447,30 @@
                 ]
               }
             },
+            "ci_hazards": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'. The codes name the missing piece: no_pr_checks (no GitHub Actions workflow runs a test or lint command on pull requests. So this reader sees no check a label could skip); no_ci_files (the tree tracks no GitHub Actions workflow, .gitlab-ci.yml, Jenkinsfile or root pom.xml, so there is no build setting to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
             "ci_model_jobs": {
               "type": "object",
               "if": {
