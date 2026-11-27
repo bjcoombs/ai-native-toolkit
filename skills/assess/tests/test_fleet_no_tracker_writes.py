@@ -296,8 +296,13 @@ def _assert_both_trackers_were_read(calls: list[list[str]]) -> None:
     gh = [" ".join(c[1:]) for c in calls if c[0] == "gh"]
     glab = [" ".join(c[1:]) for c in calls if c[0] == "glab"]
     assert any(c.startswith("pr list --repo grp/svc") for c in gh), gh
-    assert any(c.startswith("api repos/grp/svc") for c in gh), gh
-    assert any(c.startswith("api users/") for c in gh), gh
+    for read in ("api repos/grp/svc", "api users/", "api repos/grp/.github",
+                 "api repos/grp/svc/rules/branches/", "api repos/grp/svc/branches/main/protection"):
+        assert any(c == read or c.startswith(read) for c in gh), (read, gh)
+    assert "api repos/grp/svc" in gh, gh  # the repository metadata read itself
+    assert any(c.startswith("api repos/grp/svc/commits/") and c.endswith("/check-runs") for c in gh), gh
+    assert any(c.startswith("api repos/grp/svc/commits/") and c.endswith("/status") for c in gh), gh
+    assert any("/approval_rules" in c for c in glab), glab
     assert any("merge_requests?state=merged" in c for c in glab), glab
     assert any("/merge_requests/1/approvals" in c for c in glab), glab
     assert any("/merge_requests/1/notes" in c for c in glab), glab
