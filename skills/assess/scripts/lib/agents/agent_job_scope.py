@@ -204,8 +204,15 @@ def workflow_jobs(rel: str, text: str, signs_of: SignsOf, read_local: ReadLocal 
                        for other in jobs if other != job)
         inner_split = False
         if called is not None and local is not None:
+            before = len(readings) if readings is not None else 0
             inner = workflow_jobs(local.group(1), called, signs_of, read_local, (scope, writes),
                                   seen | {rel}, alone=alone, readings=readings)
+            if not inner and readings is not None and len(readings) > before:
+                # redirected further down the chain: those readings stand for this job
+                for reading in readings[before:]:
+                    reading["split"] = reading["split"] or follower
+                redirected = True
+                continue
             if inner and local.group(1) in alone and readings is not None:
                 for j in inner:  # read on its own too: count the called jobs, not this one
                     reading = j.copy()

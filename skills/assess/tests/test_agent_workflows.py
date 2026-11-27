@@ -748,3 +748,14 @@ def test_a_read_only_called_workflow_is_no_split(git_repo) -> None:
     repo = _repo(git_repo, {".github/workflows/agent.yml": called,
                             ".github/workflows/caller.yml": _caller("write-all")})
     assert [(j["job"], j["scope"], j["split"]) for j in _jobs(repo)] == [("call", "read_only", False)]
+
+
+def test_a_dual_trigger_workflow_two_calls_down_is_counted_once(git_repo) -> None:
+    leaf = "on:\n  workflow_call:\n  workflow_dispatch:\npermissions: read-all\n" + AGENT_STEPS
+    mid = "on: workflow_call\njobs:\n  go:\n    uses: ./.github/workflows/leaf.yml\n"
+    repo = _repo(git_repo, {".github/workflows/leaf.yml": leaf, ".github/workflows/mid.yml": mid,
+                            ".github/workflows/caller.yml": ON_ISSUES + "jobs:\n  call:\n"
+                            "    permissions: write-all\n    uses: ./.github/workflows/mid.yml\n"})
+    assert [(j["path"], j["job"], j["scope"]) for j in _jobs(repo)] == [
+        (".github/workflows/leaf.yml", "agent", "read_only")]
+    assert _summary(repo)["agent_jobs_least_privilege"] is True
