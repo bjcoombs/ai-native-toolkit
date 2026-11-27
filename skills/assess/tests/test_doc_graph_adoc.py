@@ -195,3 +195,14 @@ def test_a_readme_beside_antora_yml_resolves_links_as_plain_asciidoc(tmp_path: P
             ("modules/ROOT/nav.adoc", "modules/ROOT/pages/index.adoc")} <= set(r.graph.edges())
     assert r.broken_links == [
         {"from": "README.adoc", "target": "docs/gone.adoc", "kind": "asciidoc"}]
+
+
+def test_listing_blocks_and_comments_raise_no_missing_xref(tmp_path: Path) -> None:
+    """A doc name in a ``----`` block or on a ``//`` line is a sample, not prose (#1580)."""
+    _write(tmp_path, "README.adoc", (
+        "= Demo\n\n----\ncat payments.adoc\n----\n// TODO: mention ledger.adoc\n"
+        "See refunds.adoc for refunds.\n"))
+    for name in ("payments", "ledger", "refunds"):
+        _write(tmp_path, f"docs/{name}.adoc", f"= {name}\n")
+    r = build_doc_graph(tmp_path)
+    assert r.missing_xrefs == [{"from": "README.adoc", "to": "docs/refunds.adoc"}]
