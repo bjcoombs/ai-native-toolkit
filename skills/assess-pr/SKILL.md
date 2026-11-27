@@ -10,7 +10,7 @@ The end-of-run half of `/assess`. The report (`.assess/assess-report.md`), the c
 **Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
 
 <!-- chat-skip:start -->
-**Script paths in the references.** The assess scripts these references run are in `${CLAUDE_SKILL_DIR}/../assess/scripts/`. Where a command in `references/` names `${CLAUDE_SKILL_DIR}`, run it with the path this line gives.
+**Script paths in the references.** This skill's directory is `${CLAUDE_SKILL_DIR}`. Where a command in `references/` names `${CLAUDE_SKILL_DIR}`, put this directory in its place, so `${CLAUDE_SKILL_DIR}/../assess/scripts/` reaches the assess scripts.
 <!-- chat-skip:end -->
 
 1. **Open a PR** with the report (Step 5).
