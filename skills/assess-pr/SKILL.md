@@ -369,8 +369,8 @@ uv run "$RENDER" "$REPO_ROOT" reconcile --existing "$EXISTING" --filed "<numbers
 Use the same `--label ""` and GitLab mapping as 6c. The output holds `proposals`, `rules_changed`, `notes` and `summary`. Each item gets at most one proposal:
 
 - **Close**: an open item's condition now holds. The proposal cites the evidence line and the commit this run measured.
-- **Reopen**: a closed item's condition lapsed. The proposal names the cause.
-- **Demote to informational**: the item can no longer move, because its finding keys on commit origin (`self_referential_tests`) or its condition reads not applicable. An item whose condition this run's model does not list (a `--profile` or `--pack` difference) is left as it is, with a note. The write adds the `assess-informational` label and keeps the item's state; a later run passes the item over.
+- **Reopen**: a closed item's condition lapsed. The proposal names the cause. When an action was split and also filed whole, only the whole item is reopened, never its closed parts.
+- **Demote to informational**: the item can no longer move, because its finding keys on commit origin (`self_referential_tests`) or its condition reads not applicable. An item whose condition this run's model does not list (a `--profile` or `--pack` difference) is left as it is, with a note. The write adds the `assess-informational` label and keeps the item's state; a later run passes the item over. With `--label ""` the label cannot be written, so no demote is proposed and a note counts the skipped ones.
 - **Close as superseded**: a part of an action that is no longer split, beside the item that now carries the action.
 - **Rules changed**: a move that only the new maturity model caused (the model changed, the repository did not) reads `rules changed: your repo did not` under "No change proposed". It is never a proposal and never progress or regression.
 
