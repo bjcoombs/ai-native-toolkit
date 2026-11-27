@@ -137,7 +137,10 @@ jobs:
           [ "$rc" -eq 0 ] || exit "$rc"
           python3 "$DRAFT" check --run-id "$RUN_ID" --contract-dir .claude/contracts
           cat .refine/contract-changes.md >> "$GITHUB_STEP_SUMMARY"
-          if [ -z "$(git status --porcelain -- .claude/contracts)" ]; then
+          # Force-add: many repositories ignore .claude/, and a status check or a plain
+          # git add both skip ignored files.
+          git add -f -- ".claude/contracts/${RUN_ID}.contract.md" ".claude/contracts/${RUN_ID}.kill-test.json"
+          if git diff --cached --quiet; then
             echo "The draft on ${branch} already matches the ready queue."
             exit 0
           fi
@@ -155,7 +158,6 @@ jobs:
           echo "::add-mask::$auth"
           export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" \
             GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
-          git add .claude/contracts
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -q -m "chore: Draft the acceptance contract for ${RUN_ID}"
           git push -q origin "HEAD:refs/heads/${BRANCH}"

@@ -225,6 +225,21 @@ def test_unresolvable_default_branch_refuses(tmp_path: Path) -> None:
     assert reason is not None and "--approved-ref" in reason
 
 
+@needs_git
+def test_crlf_checkout_of_the_approved_draft_passes(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    contracts = repo / ".claude" / "contracts"
+    _write(contracts, _backlog_issues())
+    _git(repo, "add", "-f", ".")
+    _git(repo, "commit", "-q", "-m", "draft")
+    path = draft.contract_path(contracts, RUN_ID)
+    path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))  # what core.autocrlf checks out
+    record = {"freeze_evidence": {"contract_hash": freeze.contract_sha256(path)}}
+    assert draft_approval.refusal(contracts, RUN_ID, record, "main") is None
+
+
 def test_hand_written_contract_needs_no_approval(tmp_path: Path) -> None:
     draft.contract_path(tmp_path, RUN_ID).write_text("# hand written\n", encoding="utf-8")
     assert draft_approval.refusal(tmp_path, RUN_ID, {}, None) is None

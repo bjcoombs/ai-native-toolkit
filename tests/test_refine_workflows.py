@@ -574,6 +574,9 @@ def test_contract_job_runs_the_kill_test_before_anything_is_pushed() -> None:
     draft_step = next(s for s in steps if s.get("id") == "draft")
     assert '"$DRAFT" write' in draft_step["run"] and '"$DRAFT" check' in draft_step["run"]
     assert "git push" not in draft_step["run"]
+    # .claude/ is ignored here and in many adopters: a plain add or status skips the draft.
+    assert 'git add -f -- ".claude/contracts/${RUN_ID}.contract.md"' in draft_step["run"]
+    assert "git diff --cached --quiet" in draft_step["run"] and "git status" not in draft_step["run"]
     push = next(s for s in steps if "git push" in str(s.get("run", "")))
     assert steps.index(draft_step) < steps.index(push)
     assert "inputs.mode == 'live'" in push["if"], "dry-run pushes nothing"

@@ -11,10 +11,12 @@ A draft is approved when all three hold:
 
 1. the draft file is present on the approval ref (the default branch, read
    from `origin/HEAD`, or the ref the caller names);
-2. the working copy is byte-identical to that committed copy, so the run
-   starts on what was merged;
-3. the freeze evidence's contract hash is the hash of that committed copy, so
-   what was frozen is what was approved.
+2. the working copy matches that committed copy, line endings aside (a
+   Windows checkout with `core.autocrlf` holds CRLF), so the run starts on
+   what was merged;
+3. the freeze evidence's contract hash is the working copy's hash, the bytes
+   `freeze.py` hashed and the exit verifier re-hashes, so what was frozen is
+   what was approved.
 
 Anything else, including a ref git cannot resolve, refuses with the reason
 named. The check reads git; it never fetches, so a clone whose `origin/HEAD`
@@ -48,6 +50,10 @@ def _text(raw: Optional[bytes]) -> Optional[str]:
 def default_ref(cwd: Path) -> Optional[str]:
     """The default branch as `origin/<name>`, from `origin/HEAD`; None when unset."""
     return _text(_git(cwd, ["rev-parse", "--abbrev-ref", "origin/HEAD"]))
+
+
+def _lf(data: bytes) -> bytes:
+    return data.replace(b"\r\n", b"\n")
 
 
 def _frozen_hash(record: Dict[str, Any]) -> str:
@@ -87,10 +93,12 @@ def refusal(contract_dir: Path, run_id: str, record: Dict[str, Any],
     if committed is None:
         return ("the drafted contract %s is not on %s: merge its pull request to approve it"
                 % (rel, ref))
-    approved = hashlib.sha256(committed).hexdigest()
-    if hashlib.sha256(working).hexdigest() != approved:
+    # Line endings are compared normalised: a Windows checkout with
+    # core.autocrlf holds CRLF where the committed blob holds LF.
+    if _lf(working) != _lf(committed):
         return "the working copy of %s differs from the approved draft on %s" % (rel, ref)
-    if _frozen_hash(record) != approved:
+    # freeze.py hashes the working copy's bytes, and the exit verifier re-hashes them.
+    if _frozen_hash(record) != hashlib.sha256(working).hexdigest():
         return ("the freeze evidence is for a different contract than the approved draft on %s: "
                 "freeze the approved draft" % ref)
     return None
