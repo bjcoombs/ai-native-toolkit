@@ -69,7 +69,7 @@ Skill and agent disclosure (#1045), no model. `scan_skill_disclosure(repo_root, 
 excludes)` reads each file `instruction_placement.skill_and_agent_files` lists and records
 `body_lines` (after the frontmatter), `est_tokens` (whole file, `instruction_placement.est_tokens`),
 name and description presence, `description_chars` (block scalars unfolded,
-`description_text`), and its `references` (`find_references`: `references/` paths in Markdown
+`description_text`, the parser's `FmEntry.text`), and its `references` (`find_references`: `references/` paths in Markdown
 links or backticks outside fences, one hop down for depth 2; `resolved`, `lines`, `toc` past
 100 lines via `has_toc`), and `breaks` from `BREAKS` against `SKILL_BODY_MAX_LINES` (500),
 `SKILL_MAX_TOKENS` (5000), `DESCRIPTION_MAX_CHARS` (1024). Tests: `tests/test_skill_disclosure.py`.
@@ -104,8 +104,6 @@ _LINK = re.compile(r"\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
 _TICKED = re.compile(r"`(\$\{CLAUDE_SKILL_DIR\}/|\./)?(references/[^`\s]+)`")
 _TOC_HEADING = re.compile(r"^#{1,6}\s+(?:table of\s+)?contents\b", re.IGNORECASE)
 _ANCHOR = re.compile(r"\]\(#[^)]+\)")
-_BLOCK_SCALAR = re.compile(r"^[>|][+-]?$")
-_COMMENT = re.compile(r"\s+#.*$")  # a plain scalar's trailing comment, as YAML drops it
 
 
 class SkillReference(TypedDict):
@@ -162,33 +160,13 @@ def _frontmatter_end(lines: list[str]) -> int:
 def description_text(text: str) -> str | None:
     """The frontmatter ``description``, with its continuation lines.
 
-    ``parse_frontmatter`` keeps only a key's first line, so the indented lines after it are
-    gathered here: a block scalar (``>`` folds them with spaces, ``|`` keeps the line breaks)
-    or a plain or quoted value that wraps (YAML folds it with spaces). Outer quotes and a
-    plain value's trailing ``# comment`` are dropped, as the parser drops them on one line."""
+    The parser's whole-scalar reading (``FmEntry.text``, #1544): a block scalar (``>`` folds
+    the lines with spaces, ``|`` keeps the line breaks), a plain or quoted value that wraps
+    (YAML folds it with spaces) or plain text on the lines below an empty ``description:``.
+    Outer quotes and a plain value's trailing ``# comment`` are dropped."""
     fm = parse_frontmatter(text)
     entry = next((e for e in fm.entries if e.key == "description"), None) if fm else None
-    if entry is None:
-        return None
-    lines = text.splitlines()
-    end = _frontmatter_end(lines) - 1  # the closing fence's index
-    raw = lines[entry.line - 1].split(":", 1)[1].strip()
-    more: list[str] = []
-    for line in lines[entry.line:end]:
-        if line.strip() and not line[:1].isspace():
-            break
-        more.append(line.strip())
-    if _BLOCK_SCALAR.match(raw):
-        joined = (" " if raw.startswith(">") else "\n").join(more).strip()
-    elif not any(more):
-        return entry.value  # one line: the parser's own reading (quotes and a comment dropped)
-    elif raw[:1] in "\"'":
-        joined = " ".join(part for part in [raw, *more] if part)
-        quote = joined.rfind(raw[0])
-        joined = joined[1:quote] if quote > 0 else joined[1:]  # a comment may follow the close
-    else:
-        joined = " ".join(_COMMENT.sub("", part) for part in [raw, *more] if part)
-    return joined or None
+    return entry.text if entry is not None else None
 
 
 # --- references ------------------------------------------------------------------------

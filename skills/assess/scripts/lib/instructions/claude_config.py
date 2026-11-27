@@ -55,7 +55,9 @@ and recursive `agents/` or the paths the manifest's
 escapes the root is skipped; a file reached twice through a symlink is read once,
 as plugin configuration). The frontmatter parser is a dependency-free line
 parser for the YAML subset frontmatter uses (top-level keys with their lines,
-block scalars, block lists, one level of nested keys for `experimental`); it is
+block scalars, block lists, one level of nested keys for `experimental`); each
+entry's `value` is its first line and its `text` the whole scalar (a block scalar, a
+wrapped value or plain text below an empty key, #1544); it is
 case-sensitive, unlike `vault_queries.parse_frontmatter`, because `maxTurns` and
 `maxturns` are different fields, and it records malformed lines rather than
 raising. Finding kinds: `legacy_command`, `unknown_key` (with a rename hint when
@@ -140,13 +142,19 @@ class FmEntry:
     """A frontmatter key with its 1-based file line and scalar value.
 
     ``value`` is None for a key whose value is a nested map or list (or empty);
-    ``children`` holds the first-level keys of a nested map.
+    ``children`` holds the first-level keys of a nested map. ``value`` is the first
+    line only (``<block scalar>`` for ``|`` / ``>``); ``text`` is the whole scalar:
+    a block scalar (``>`` folds its lines with spaces, ``|`` keeps the breaks), a
+    plain or quoted value that wraps (folded with spaces), or plain text on the
+    indented lines below an empty key (#1544). It is None for a nested map or
+    list and for an empty value.
     """
 
     key: str
     line: int
     value: str | None
     children: list[FmEntry] = field(default_factory=list)
+    text: str | None = None
 
 
 @dataclass
@@ -171,6 +179,20 @@ def _clean_scalar(raw: str | None) -> str | None:
     return re.sub(r"\s+#.*$", "", raw)
 
 
+def _scalar_text(style: str, parts: list[str]) -> str | None:
+    """A key's whole scalar from its stripped lines (see ``FmEntry.text``)."""
+    if style in "|>":
+        joined = (" " if style == ">" else "\n").join(parts).strip()
+    elif style in "\"'":
+        joined = " ".join(p for p in parts if p)
+        close = joined.rfind(style)
+        joined = joined[1:close] if close > 0 else joined[1:]
+        joined = joined.replace("''", "'") if style == "'" else joined
+    else:
+        joined = " ".join(re.sub(r"\s+#.*$", "", p) for p in parts if p and not p.startswith("#"))
+    return joined or None
+
+
 class _Parser:
     """A line parser for the YAML subset frontmatter uses.
 
@@ -185,10 +207,29 @@ class _Parser:
         self.parent: FmEntry | None = None
         self.child_indent: int | None = None
         self.seen: set[str] = set()
+        # The current key's scalar: its style ("|", ">", a quote, "plain", or "open" for an
+        # empty value whose lines may yet be plain text) and its stripped lines.
+        self.style: str | None = None
+        self.parts: list[str] = []
+
+    def _gather(self, line: str, stripped: str) -> None:
+        """Add an indented or blank line to the current key's ``text``; reads nothing else."""
+        if self.parent is None or self.style is None or (stripped and not line[:1].isspace()):
+            return
+        if self.style == "open":
+            if not stripped or stripped.startswith("#"):
+                return
+            if stripped.startswith("-") or _KEY_RE.match(stripped):
+                self.style = None  # a nested list or map
+                return
+            self.style = "plain"
+        self.parts.append(stripped)
+        self.parent.text = _scalar_text(self.style, self.parts)
 
     def feed(self, line: str, lineno: int) -> None:
         """Consume one frontmatter line (``lineno`` is its 1-based file line)."""
         stripped = line.strip()
+        self._gather(line, stripped)
         if not stripped or stripped.startswith("#"):
             return
         lead = line[: len(line) - len(line.lstrip())]
@@ -218,6 +259,12 @@ class _Parser:
         value = "<block scalar>" if raw and raw[0] in "|>" else _clean_scalar(raw)
         self.parent = FmEntry(key, lineno, value)
         self.child_indent = None
+        if raw and raw[0] in "|>":
+            self.style, self.parts = raw[0], []
+        else:
+            self.style = "open" if not raw else raw[0] if raw[0] in "\"'" else "plain"
+            self.parts = [raw] if raw else []
+            self.parent.text = value
         self.fm.entries.append(self.parent)
 
     def _indented(self, line: str, indent: int, lineno: int) -> None:
