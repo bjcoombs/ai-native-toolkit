@@ -283,3 +283,12 @@ def test_finalize_keeps_sub_items_for_the_renderer(tmp_path: Path, capsys: pytes
     assert written["schema"] == 2 and written["actions"][0]["sub_items"] == [sub]
     items = json.loads(_run(tmp_path, "items", capsys=capsys))
     assert [i["title"] for i in items] == ["Run ruff", "1a. Pin ruff"]
+
+
+@pytest.mark.parametrize("label", ["a", "2a", "3a", " 3a "])
+def test_a_sub_item_label_takes_its_parents_rank(label: str) -> None:
+    entry = {"rank": 2, "action": "p", "done_when": "d", "scope_fence": "s",
+             "sub_items": [{"label": label, "action": "x", "done_when": "d"}]}
+    child = render.render_items([entry])[1]
+    assert child["label"] == "2a" and child["title"] == "2a. x"  # type: ignore[typeddict-item]
+    assert "**Sub-action 2a of action 2:** p" in child["body"]

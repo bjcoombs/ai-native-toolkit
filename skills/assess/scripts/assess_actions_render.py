@@ -21,8 +21,8 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   with ``layer``, ``effort`` and the full-report link when given, then a one-line footer).
   An entry's optional ``sub_items`` (#1263: the report's lettered sub-actions, each
   ``{label, action, done_when}`` with an optional ``first_step`` and ``scope_fence``) each
-  follow their parent as one more item: the same ``rank``, a ``label`` (``2a``), the title
-  ``2a. <action>``, and a body that names the parent action and takes the parent's finding,
+  follow their parent as one more item: the same ``rank``, a ``label`` (``2a``: the entry's
+  rank, then the label with any leading number dropped), the title ``2a. <action>``, and a body that names the parent action and takes the parent's finding,
   scope fence and Context unless the sub-item sets its own. The table keeps one row per
   entry; a filed sub-item's reference goes in its parent's Issue cell.
 - ``readiness`` prints the PR summary's Readiness value: ``headline.lines`` of
@@ -240,9 +240,9 @@ def sub_items(entry: Entry) -> list[Entry]:
 
 
 def _sub_label(entry: Entry, sub: Entry) -> str:
-    """``2a`` from rank 2 and label ``a``; a label already written as ``2a`` is kept."""
-    label = "".join(_text(sub, "label").split())
-    return label if label[:1].isdigit() else f"{_rank(entry)}{label}"
+    """``2a`` from rank 2 and label ``a``; a leading number in the label is replaced by the entry's rank."""
+    label = "".join(_text(sub, "label").split()).lstrip("0123456789.")
+    return f"{_rank(entry)}{label}"
 
 
 def _sub_item(entry: Entry, sub: Entry, report_link: str | None) -> TrackerItem:
