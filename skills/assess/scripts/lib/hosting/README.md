@@ -27,5 +27,6 @@ hide Python's own `platform` module from any script run from `lib/`.
 | GitLab's merged CI configuration | `gitlab_ci_lint` |
 | GitHub secret scanning and push protection | `github_secret_scanning` |
 | The organisation's fallback security policy | `org_security_policy` |
+| Are issues answered, triaged and closed? (backlog-ready level 2) | `issue_outcomes`, with `issue_outcomes_gitlab` on GitLab |
 
 The package list and the shared rules are in [lib/README.md](../README.md).

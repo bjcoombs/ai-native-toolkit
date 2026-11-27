@@ -230,6 +230,10 @@ KNOWN_READS: tuple[tuple[str, str], ...] = (
     ("glab", r"api --hostname [\w.-]+ projects/\S+"),  # a REST GET: one path, no flag
     ("gh", r"pr list --repo [\w.-]+/[\w.-]+ --state merged --search [^-].* --limit \d+ --json [\w,]+"),
     ("gh", r"repo view [\w.-]+/[\w.-]+ --json [\w,]+"),
+    # The backlog-ready issue read (#1323): a GraphQL query (never a mutation, is_write checks) naming
+    # its repository, with inline string fields only.
+    ("gh", r"api graphql -f query=query\(\$owner: String!.* -f owner=[\w.-]+ -f name=[\w.-]+(?: -f (?:since|after)=\S+)*"),
+    ("glab", r"api --hostname [\w.-]+ users/\d+"),  # a GitLab bot probe (#1323): a REST GET
 )
 
 

@@ -596,8 +596,10 @@ def test_the_row_is_staged_outside_the_default_model() -> None:
 def test_the_manifest_signals_are_config_text() -> None:
     signals = {e["path"]: e for e in cm.core_manifest()["entries"] if e.get("kind") == "signal"
                and str(e.get("path", "")).startswith("backlog_ready.")}
-    assert sorted(signals) == sorted(f"backlog_ready.{s}" for s in SIGNALS)
-    assert {s["evidence"] for s in signals.values()} == {"config_text"}  # type: ignore[typeddict-item]
+    level1 = {p for p, s in signals.items() if s["evidence"] == "config_text"}  # type: ignore[typeddict-item]
+    assert sorted(level1) == sorted(f"backlog_ready.{s}" for s in SIGNALS)
+    # Level 2 (#1323) reads the tracker: every other backlog_ready signal is platform evidence.
+    assert {s["evidence"] for p, s in signals.items() if p not in level1} == {"platform"}  # type: ignore[typeddict-item]
 
 
 # --- counts-only ----------------------------------------------------------------------

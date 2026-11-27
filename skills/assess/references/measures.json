@@ -2599,20 +2599,25 @@
     {
       "name": "backlog_ready",
       "title": "Backlog kept agent-ready (intake configuration)",
-      "summary": "How new issues are taken in, read from committed files. An issue form has a required field, or a GitLab issue template has the six definition-of-ready sections. A workflow on issues opened adds an untriaged label, or on GitLab the refinement template is included or a scheduled job adds one. A ready label is documented with its criteria. No stale job can close a ready issue.",
+      "summary": "How new issues are taken in and answered. An issue form has a required field, or a GitLab issue template has the six definition-of-ready sections. A workflow on issues opened adds an untriaged label, or on GitLab the refinement template is included or a scheduled job adds one. A ready label is documented with its criteria. No stale job can close a ready issue. The tracker itself is read too: time to a first response, the untriaged share and issues closed over opened.",
       "collector": "core.backlog_ready",
       "reads": [
-        "repo_root"
+        "repo_root",
+        "backlog_outcomes"
       ],
       "headless_reads": null,
       "network": false,
-      "platform": false,
+      "platform": true,
       "headless": "registered",
       "privacy": {
         "written": true,
         "strings_kept": {
+          "backlog_ready.close_open_ratio_90d_reason": "token",
+          "backlog_ready.first_response_median_days_reason": "token",
+          "backlog_ready.outcomes.reason": "token",
           "backlog_ready.required_form_field_reason": "token",
           "backlog_ready.stale_job_safe_reason": "token",
+          "backlog_ready.untriaged_after_7d_share_reason": "token",
           "backlog_ready.untriaged_on_open_reason": "token"
         }
       },
@@ -2646,9 +2651,74 @@
           "code": "stale_input_unresolved",
           "means": "No stale job is sure to close a ready issue. But one sets its close days or exempt labels to an expression, which this reader does not follow.",
           "next_step": "Nothing to change if the job exempts the ready label; a literal exempt-issue-labels or days-before-issue-close: -1 lets the scan read it."
+        },
+        {
+          "code": "no_network",
+          "means": "The issue tracker was not read: a headless run without --platform, or the host could not be reached.",
+          "next_step": "Run /assess with gh or glab signed in, or a headless run with --platform."
+        },
+        {
+          "code": "no_platform_auth",
+          "means": "The issue tracker could not be read: gh or glab is missing or signed out, or the token was refused the issues.",
+          "next_step": "Sign gh or glab in with a token that can read the repository's issues, then run again."
+        },
+        {
+          "code": "unsupported_host",
+          "means": "The repository has no remote, or its host is not GitHub or a GitLab that glab reaches, so its issues were not read.",
+          "next_step": "Nothing to change if the tracker lives elsewhere; for a self-managed GitLab, sign glab in to the host."
+        },
+        {
+          "code": "platform_error",
+          "means": "A read of the issue tracker failed for a reason other than access, such as a rate limit or a server error.",
+          "next_step": "Run again later."
+        },
+        {
+          "code": "empty_window",
+          "means": "The metric has nothing to measure yet: no issue in the window, none answered, or no open issue older than 7 days.",
+          "next_step": "Nothing to change; the metric reads once there are issues to measure."
+        },
+        {
+          "code": "response_unread",
+          "means": "A first response may exist that was not read: a long timeline, the note cap or an unclassified account.",
+          "next_step": "Run again with gh or glab signed in as an account that can read users; the caps are fixed."
+        },
+        {
+          "code": "window_truncated",
+          "means": "The window's issue list passed the read cap, so closed issues may be missing and the ratio is not taken.",
+          "next_step": "Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window."
+        },
+        {
+          "code": "open_truncated",
+          "means": "The open-issue list passed the read cap, so the untriaged share would cover only part of it and is not taken.",
+          "next_step": "Nothing to change; close or triage old open issues to bring the list under the cap."
+        },
+        {
+          "code": "no_response",
+          "means": "No issue opened in the window got a first response from a person, and each has waited longer than first_response_max_days.",
+          "next_step": "Answer, label or close new issues within first_response_max_days."
         }
       ],
       "evidence": [
+        {
+          "signal": "backlog_ready.close_open_met",
+          "input_class": "platform",
+          "grade": "verified"
+        },
+        {
+          "signal": "backlog_ready.close_open_ratio_90d",
+          "input_class": "platform",
+          "grade": "verified"
+        },
+        {
+          "signal": "backlog_ready.first_response_median_days",
+          "input_class": "platform",
+          "grade": "verified"
+        },
+        {
+          "signal": "backlog_ready.first_response_met",
+          "input_class": "platform",
+          "grade": "verified"
+        },
         {
           "signal": "backlog_ready.ready_label_documented",
           "input_class": "config_text",
@@ -2663,6 +2733,16 @@
           "signal": "backlog_ready.stale_job_safe",
           "input_class": "config_text",
           "grade": "config_only"
+        },
+        {
+          "signal": "backlog_ready.untriaged_after_7d_share",
+          "input_class": "platform",
+          "grade": "verified"
+        },
+        {
+          "signal": "backlog_ready.untriaged_met",
+          "input_class": "platform",
+          "grade": "verified"
         },
         {
           "signal": "backlog_ready.untriaged_on_open",
@@ -5424,13 +5504,24 @@
       "private": true
     },
     {
+      "name": "backlog_outcomes",
+      "title": "Issue tracker read (backlog-ready level 2)",
+      "publishes": [],
+      "reads": [
+        "repo_root"
+      ],
+      "network": true,
+      "private": true
+    },
+    {
       "name": "backlog_ready",
       "title": "Backlog kept agent-ready (intake configuration)",
       "publishes": [
         "backlog_ready"
       ],
       "reads": [
-        "repo_root"
+        "repo_root",
+        "backlog_outcomes"
       ],
       "network": false,
       "private": false
@@ -6811,6 +6902,42 @@
       "null_means": "the repository lists no permission entry and a managed settings source on the machine running the check could not be read (managed_settings_unreadable)"
     },
     {
+      "path": "backlog_ready.close_open_met",
+      "title": "Issues close at least close_open_min_ratio as fast as they open",
+      "type": "bool",
+      "collector": "core.backlog_ready",
+      "input_class": "platform",
+      "grade": "verified",
+      "null_means": "close_open_ratio_90d is not measured; its reason says why"
+    },
+    {
+      "path": "backlog_ready.close_open_ratio_90d",
+      "title": "Issues closed over issues opened in the window",
+      "type": "number",
+      "collector": "core.backlog_ready",
+      "input_class": "platform",
+      "grade": "verified",
+      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window; window_truncated: the window list hit its page cap"
+    },
+    {
+      "path": "backlog_ready.first_response_median_days",
+      "title": "Median days to a first response by a person other than the author (issues opened in the window)",
+      "type": "number",
+      "collector": "core.backlog_ready",
+      "input_class": "platform",
+      "grade": "verified",
+      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window got a response; response_unread: a response could not be read; no_response: none did and each has waited past the threshold"
+    },
+    {
+      "path": "backlog_ready.first_response_met",
+      "title": "The median wait for a first response, unanswered issues included, is within first_response_max_days",
+      "type": "bool",
+      "collector": "core.backlog_ready",
+      "input_class": "platform",
+      "grade": "verified",
+      "null_means": "first_response_median_days is not measured (its reason says why), or issues whose wait is not known yet could tip the median"
+    },
+    {
       "path": "backlog_ready.ready_label_documented",
       "title": "A ready label is documented with its criteria",
       "type": "bool",
@@ -6836,6 +6963,24 @@
       "input_class": "config_text",
       "grade": "config_only",
       "null_means": "stale_input_unresolved: no stale job closes ready issues for certain, but one sets an input to an expression"
+    },
+    {
+      "path": "backlog_ready.untriaged_after_7d_share",
+      "title": "Share of open issues older than 7 days with no label or an untriaged label",
+      "type": "number",
+      "collector": "core.backlog_ready",
+      "input_class": "platform",
+      "grade": "verified",
+      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no open issue is older than 7 days; open_truncated: the open-issue list hit its page cap"
+    },
+    {
+      "path": "backlog_ready.untriaged_met",
+      "title": "At most untriaged_max_share of open issues older than 7 days are untriaged",
+      "type": "bool",
+      "collector": "core.backlog_ready",
+      "input_class": "platform",
+      "grade": "verified",
+      "null_means": "untriaged_after_7d_share is not measured; its reason says why"
     },
     {
       "path": "backlog_ready.untriaged_on_open",

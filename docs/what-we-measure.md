@@ -388,20 +388,29 @@ It tells a documentation repository from a software one, so the report does not 
 
 An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up.
 
-How new issues are taken in, read from committed files. An issue form has a required field, or a GitLab issue template has the six definition-of-ready sections. A workflow on issues opened adds an untriaged label, or on GitLab the refinement template is included or a scheduled job adds one. A ready label is documented with its criteria. No stale job can close a ready issue.
+How new issues are taken in and answered. An issue form has a required field, or a GitLab issue template has the six definition-of-ready sections. A workflow on issues opened adds an untriaged label, or on GitLab the refinement template is included or a scheduled job adds one. A ready label is documented with its criteria. No stale job can close a ready issue. The tracker itself is read too: time to a first response, the untriaged share and issues closed over opened.
 
-- Collector: `core.backlog_ready`, reading `repo_root`.
+- Collector: `core.backlog_ready`, reading `repo_root`, `backlog_outcomes`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `backlog_ready.required_form_field_reason` token, `backlog_ready.stale_job_safe_reason` token, `backlog_ready.untriaged_on_open_reason` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `backlog_ready.close_open_ratio_90d_reason` token, `backlog_ready.first_response_median_days_reason` token, `backlog_ready.outcomes.reason` token, `backlog_ready.required_form_field_reason` token, `backlog_ready.stale_job_safe_reason` token, `backlog_ready.untriaged_after_7d_share_reason` token, `backlog_ready.untriaged_on_open_reason` token.
 - Used by: no row or finding yet.
-- Evidence: `unclassified`, as no criterion reads its signals: `backlog_ready.ready_label_documented` config_text (config_only), `backlog_ready.required_form_field` config_text (config_only), `backlog_ready.stale_job_safe` config_text (config_only), `backlog_ready.untriaged_on_open` config_text (config_only).
+- Evidence: `unclassified`, as no criterion reads its signals: `backlog_ready.close_open_met` platform (verified), `backlog_ready.close_open_ratio_90d` platform (verified), `backlog_ready.first_response_median_days` platform (verified), `backlog_ready.first_response_met` platform (verified), `backlog_ready.ready_label_documented` config_text (config_only), `backlog_ready.required_form_field` config_text (config_only), `backlog_ready.stale_job_safe` config_text (config_only), `backlog_ready.untriaged_after_7d_share` platform (verified), `backlog_ready.untriaged_met` platform (verified), `backlog_ready.untriaged_on_open` config_text (config_only).
 - Not measured when:
   - `form_unreadable`: No issue form read has a required field, and a form or GitLab template could not be read. Causes are a tab indent, an unclosed flow collection, no top-level body list, or a file over the size limit. Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue.
   - `gitlab_ci_unreadable`: No workflow adds an untriaged label, and .gitlab-ci.yml has a tab in its indentation or an unclosed flow collection, which GitLab rejects. Fix .gitlab-ci.yml so GitLab accepts it; the pipeline editor's validate tab names the line.
   - `gitlab_ci_unsettled`: No workflow or GitLab job read adds an untriaged label on a schedule. But something this reader cannot follow may: an include not read offline, or an anchor merge, !reference, variable label or unread rule. Nothing to change if a scheduled job labels new issues; a literal label, plain rules: and a local include let the scan read it.
   - `workflow_unreadable`: No workflow read adds an untriaged label when an issue opens, and a workflow's on: key could not be read. Nothing to change if that workflow labels new issues; a plain on: issues: types: [opened] lets the scan read it.
   - `stale_input_unresolved`: No stale job is sure to close a ready issue. But one sets its close days or exempt labels to an expression, which this reader does not follow. Nothing to change if the job exempts the ready label; a literal exempt-issue-labels or days-before-issue-close: -1 lets the scan read it.
+  - `no_network`: The issue tracker was not read: a headless run without --platform, or the host could not be reached. Run /assess with gh or glab signed in, or a headless run with --platform.
+  - `no_platform_auth`: The issue tracker could not be read: gh or glab is missing or signed out, or the token was refused the issues. Sign gh or glab in with a token that can read the repository's issues, then run again.
+  - `unsupported_host`: The repository has no remote, or its host is not GitHub or a GitLab that glab reaches, so its issues were not read. Nothing to change if the tracker lives elsewhere; for a self-managed GitLab, sign glab in to the host.
+  - `platform_error`: A read of the issue tracker failed for a reason other than access, such as a rate limit or a server error. Run again later.
+  - `empty_window`: The metric has nothing to measure yet: no issue in the window, none answered, or no open issue older than 7 days. Nothing to change; the metric reads once there are issues to measure.
+  - `response_unread`: A first response may exist that was not read: a long timeline, the note cap or an unclassified account. Run again with gh or glab signed in as an account that can read users; the caps are fixed.
+  - `window_truncated`: The window's issue list passed the read cap, so closed issues may be missing and the ratio is not taken. Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window.
+  - `open_truncated`: The open-issue list passed the read cap, so the untriaged share would cover only part of it and is not taken. Nothing to change; close or triage old open issues to bring the list under the cap.
+  - `no_response`: No issue opened in the window got a first response from a person, and each has waited longer than first_response_max_days. Answer, label or close new issues within first_response_max_days.
 
 ### `behaviour`: Keyhole blocks: behaviour
 
@@ -1191,7 +1200,8 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `anomalies` | Anomalies | `run_header` | `anomalies` | no |
 | `archetype` | Repository archetype | `repo_root` | `archetype` | no |
 | `assess_dir` | Artifact directory | `repo_root`, `run_scope` | private input | no |
-| `backlog_ready` | Backlog kept agent-ready (intake configuration) | `repo_root` | `backlog_ready` | no |
+| `backlog_outcomes` | Issue tracker read (backlog-ready level 2) | `repo_root` | private input | yes |
+| `backlog_ready` | Backlog kept agent-ready (intake configuration) | `repo_root`, `backlog_outcomes` | `backlog_ready` | no |
 | `broken_instruction_refs` | Broken instruction references | `doc_graph`, `instruction_grading` | `broken_instruction_refs` | no |
 | `churn_degenerate` | Degenerate churn history | `doc_staleness` | `churn_degenerate` | no |
 | `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci`, `gitlab_include_renames` | `ci_checks` | no |
