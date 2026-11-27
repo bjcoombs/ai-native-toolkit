@@ -209,6 +209,14 @@ def test_parts_of_an_action_no_longer_split_are_superseded() -> None:
     assert _run(tracker, ctx, filed={2})["proposals"] == []  # split again this run: parts kept
 
 
+def test_a_closed_part_beside_the_whole_item_is_not_reopened() -> None:
+    tracker = [_marked(1, "layer-4-docs.2", "OPEN"), _marked(2, "layer-4-docs.2", "CLOSED", part=2),
+               _marked(3, "layer-4-docs.2", "CLOSED", part=3)]
+    assert _run(tracker, _context(_condition("layer-4-docs.2", "unmet")))["proposals"] == []
+    alone = [_marked(2, "layer-4-docs.2", "CLOSED", part=2)]  # no whole item: the part reopens
+    assert _run(alone, _context(_condition("layer-4-docs.2", "unmet")))["proposals"][0]["kind"] == "reopen"
+
+
 def test_a_close_wins_over_superseded() -> None:
     tracker = [_marked(1, "layer-5-ci.1", "OPEN"), _marked(2, "layer-5-ci.1", "OPEN", part=2)]
     kinds = {p["number"]: p["kind"] for p in _run(tracker, _context(*CONDITIONS))["proposals"]}

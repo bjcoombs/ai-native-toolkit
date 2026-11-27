@@ -378,15 +378,16 @@ Show `summary` verbatim as one batched message, then ask once with a multi-selec
 ```bash
 WRITES=$(mktemp); COMMENT=$(mktemp)   # outside the repository
 uv run "$RENDER" "$REPO_ROOT" reconcile --existing "$EXISTING" --filed "<same numbers>" --confirm "<confirmed numbers, or all>" > "$WRITES"
-jq -c '.[]' "$WRITES" | while read -r w; do
+while read -r w; do
   n=$(jq -r '.number' <<<"$w"); jq -r '.comment' <<<"$w" > "$COMMENT"
   case "$(jq -r '.op' <<<"$w")" in
-    close)  gh issue close "$n" ;;
-    reopen) gh issue reopen "$n" ;;
-    label)  l=$(jq -r '.add_label' <<<"$w"); gh label create "$l" --force; gh issue edit "$n" --add-label "$l" ;;
+    close)  gh issue close "$n" </dev/null ;;
+    reopen) gh issue reopen "$n" </dev/null ;;
+    label)  l=$(jq -r '.add_label' <<<"$w"); gh label create "$l" --force </dev/null
+            gh issue edit "$n" --add-label "$l" </dev/null ;;
   esac
-  gh issue comment "$n" --body-file "$COMMENT"
-done
+  gh issue comment "$n" --body-file "$COMMENT" </dev/null
+done < <(jq -c '.[]' "$WRITES")
 ```
 
 On GitLab use `glab issue close`, `glab issue reopen` and `glab issue update --label`. A proposal the user leaves unconfirmed is not written and not recorded; the next run proposes it again. Other trackers: show the same summary and make the confirmed changes with their own tooling.

@@ -36,7 +36,8 @@ Per item, in this order (the first rule that applies wins; an item with the
    and ``sub`` without ``part`` exists, because the action is no longer split
    (``plan_filing`` gave it one of the earlier parts). The other parts are proposed closed as
    superseded by it. An item number in ``filed`` (the items this run filed or reused) is
-   never superseded, so a run that splits the action again keeps its parts.
+   never superseded, so a run that splits the action again keeps its parts. A closed part
+   beside that open item is never proposed reopened: the open item carries the action.
 
 No close, reopen or demote is proposed for a condition ``not_measured`` or ``declined``
 (unknown never counts); a split part is still checked for supersession. Nothing is proposed for an item the label check excludes (``label``, as ``plan_filing`` applies it).
@@ -233,12 +234,16 @@ class _Pass:
         if key is None or fields is None or conditions is None:
             return
         cid = f"{key[0]}.{key[1]}"
-        if self.condition(item, number, cid, conditions.get(cid), fields):
-            return
-        if _is_open(item) and key[3] > 0 and number not in self.filed:
+        whole = None
+        if key[3] > 0:
             whole = next((n for i in self.existing if _is_open(i) and (n := _number(i)) is not None
                           and n != number and (k := marker_key(_body(i))) is not None
                           and k[:3] == key[:3] and k[3] == 0), None)
+        if whole is not None and not _is_open(item):
+            return  # a closed part of an action now filed whole: the whole item carries it, never reopen
+        if self.condition(item, number, cid, conditions.get(cid), fields):
+            return
+        if _is_open(item) and number not in self.filed:
             if whole is not None:
                 reason = f"the action is no longer split, and #{whole} carries it"
                 write = ReconcileWrite(op="close", number=number,
