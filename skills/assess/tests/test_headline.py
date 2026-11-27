@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from skill_text import read_skill
 
 from lib.scoring.headline import GATE_CHANGE, GATE_NOUN, as_headline, gate_change, headline, run_context_headline
 import lib.scoring.level_tally as lt
@@ -224,7 +225,8 @@ def test_retired_score_rule_is_gone_from_skills_and_agents():
             for p in (ROOT / base).rglob("*") if p.is_file() and p.suffix in (".md", ".py", ".toml")
             and pattern.search(p.read_text(encoding="utf-8", errors="replace"))]
     assert hits == []
-    findings = (ROOT / "skills" / "assess-findings" / "SKILL.md").read_text(encoding="utf-8")
+    # The Top 3 rules moved into references/ (#1408); read them where an agent meets them.
+    findings = read_skill(ROOT / "skills" / "assess-findings" / "SKILL.md")
     assert "min(raw_sum" not in findings and "X / <denominator>" not in findings
 
 

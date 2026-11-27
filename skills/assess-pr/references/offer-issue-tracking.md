@@ -157,7 +157,7 @@ gh issue list --label assess-finding --state all --limit 500 --json number,title
 uv run "$RENDER" "$REPO_ROOT" reconcile --existing "$EXISTING" --filed "<numbers 6b filed or reused, comma-separated>"
 ```
 
-Use the same `--label ""` and GitLab mapping as 6c. The output holds `proposals`, `rules_changed`, `notes` and `summary`. Each item gets at most one proposal:
+When 6b filed the items without a label (filing upstream from a read-only account), list the existing items with the 6c command instead, `gh issue list --repo "$GH_SLUG" --author @me --state all --limit 500 --json number,title,body,state,labels > "$EXISTING"`, and pass `--label ""` to `reconcile`. Use the same `--label ""` and GitLab mapping as 6c. The output holds `proposals`, `rules_changed`, `notes` and `summary`. Each item gets at most one proposal:
 
 - **Close**: an open item's condition now holds. The proposal cites the evidence line and the commit this run measured.
 - **Reopen**: a closed item's condition lapsed. The proposal names the cause. When an action was split and also filed whole, only the whole item is reopened, never its closed parts.
