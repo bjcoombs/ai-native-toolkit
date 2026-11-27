@@ -61,13 +61,13 @@ The report's lettered sub-actions (`2a. <change> - Done when: <criterion>`, writ
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `label` | string | The letter, `a`, `b`, ... The rendered reference is the parent's `rank` plus the label (`2a`); a leading number in the label is replaced by the parent's rank, so `2a` under rank 3 renders `3a`. |
+| `label` | string | The letter, `a`, `b`, ... The rendered reference is the parent's `rank` plus the label (`2a`); a leading number and a trailing `.` or `)` are dropped and the parent's rank put in front, so `2a` under rank 3 renders `3a`. |
 | `action` | string | The sub-action's directive. |
 | `done_when` | string | Its own exit criterion, in the same form as the entry's. |
 | `first_step` | string, optional | Its own first step. The parent's first step is not inherited: it belongs to the parent's change. |
 | `scope_fence` | string, optional | Its own fence; the parent's applies when absent. |
 
-`assess_actions_render.py items` files each sub-item as its own tracker item after its parent, titled `2a. <action>`, with the parent's finding line, a line naming the parent action, and the parent's Context block. The PR table keeps one row per entry. A sub-item missing `label`, `action` or `done_when` is skipped with a warning; the entry still renders. Lifecycle fields (`status`, `claimed_by`, `completed_sha`) belong to the entry, not to a sub-item. An entry without `sub_items` reads as before, so the schema stays `2`.
+`assess_actions_render.py items` files each sub-item as its own tracker item after its parent, titled `2a. <action>`, with the parent's finding line, a line naming the parent action, and the parent's Context block. The PR table keeps one row per entry. A sub-item missing `label`, `action` or `done_when`, or whose label is empty or repeats another in the same entry once normalized, is skipped with a warning; the entry still renders. Lifecycle fields (`status`, `claimed_by`, `completed_sha`) belong to the entry, not to a sub-item. An entry without `sub_items` reads as before, so the schema stays `2`.
 
 ## `status` lifecycle
 

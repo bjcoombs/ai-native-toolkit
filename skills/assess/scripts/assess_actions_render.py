@@ -31,7 +31,8 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
 
 An entry missing ``rank``, ``action``, ``done_when`` or ``scope_fence`` is skipped with a
 warning on stderr, the same rule ``assess_finalize.py`` applies on write. A sub-item missing
-``label``, ``action`` or ``done_when`` is skipped the same way, and its parent still renders. A missing or
+``label``, ``action`` or ``done_when``, or whose label is empty or repeats another's once
+normalized, is skipped the same way, and its parent still renders. A missing or
 unreadable ``actions.json`` exits 1 with a message, never an empty table. A missing optional
 field renders as ``-``. Prose fields escape Markdown punctuation (``\\ * _ [ ] < >``) outside
 backtick code spans, so a command such as ``rg -n "^[a-z_]+\\(\\)"`` reads as written on GitHub.
@@ -230,19 +231,31 @@ def sub_items(entry: Entry) -> list[Entry]:
         print(f"actions.json: rank {_rank(entry)} sub_items is not a list; ignoring it", file=sys.stderr)
         return []
     out: list[Entry] = []
+    seen: set[str] = set()
     for sub in raw:
         missing = [k for k in SUB_ITEM_KEYS if not isinstance(sub, dict) or sub.get(k) in (None, "")]
+        label = _norm_label(sub) if isinstance(sub, dict) else ""
+        if not missing and not label:
+            missing = ["label"]
         if missing:
             print(f"actions.json: rank {_rank(entry)} skipping sub-item missing {missing}", file=sys.stderr)
             continue
-        out.append(sub)
+        if label in seen:
+            print(f"actions.json: rank {_rank(entry)} skipping repeated sub-item label {label!r}", file=sys.stderr)
+            continue
+        seen.add(label)
+        out.append({**sub, "label": label})
     return out
 
 
+def _norm_label(sub: Entry) -> str:
+    """The letter part of a label: ``a`` from ``a``, ``2a``, ``2a.`` or ``a)``; ``""`` when none is left."""
+    return "".join(_text(sub, "label").split()).lstrip("0123456789.").rstrip(".)")
+
+
 def _sub_label(entry: Entry, sub: Entry) -> str:
-    """``2a`` from rank 2 and label ``a``; a leading number in the label is replaced by the entry's rank."""
-    label = "".join(_text(sub, "label").split()).lstrip("0123456789.")
-    return f"{_rank(entry)}{label}"
+    """``2a`` from rank 2 and a normalized label ``a``."""
+    return f"{_rank(entry)}{_text(sub, 'label')}"
 
 
 def _sub_item(entry: Entry, sub: Entry, report_link: str | None) -> TrackerItem:

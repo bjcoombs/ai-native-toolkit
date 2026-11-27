@@ -292,3 +292,13 @@ def test_a_sub_item_label_takes_its_parents_rank(label: str) -> None:
     child = render.render_items([entry])[1]
     assert child["label"] == "2a" and child["title"] == "2a. x"  # type: ignore[typeddict-item]
     assert "**Sub-action 2a of action 2:** p" in child["body"]
+
+
+def test_sub_item_labels_are_checked_after_normalizing(capsys: pytest.CaptureFixture[str]) -> None:
+    subs = [{"label": label, "action": f"x{n}", "done_when": "d"} for n, label in
+            enumerate(["a.", "2", 1, "2a", "b)"])]
+    entry = {"rank": 2, "action": "p", "done_when": "d", "scope_fence": "s", "sub_items": subs}
+    titles = [i["title"] for i in render.render_items([entry])[1:]]
+    assert titles == ["2a. x0", "2b. x4"]  # "2" and 1 leave no letter; "2a" repeats "a."
+    err = capsys.readouterr().err
+    assert "missing ['label']" in err and "repeated sub-item label 'a'" in err
