@@ -281,3 +281,20 @@ def test_an_unreadable_gitlab_include_leaves_a_baselined_suite_not_measured(tmp_
     block = _block(root)
     assert (block["present"], block["present_reason"]) == (None, "eval_ci_unread")
     assert _state(root) == ("not_measured", "eval_ci_unread")
+
+
+@pytest.mark.parametrize(("root", "included", "run"), [
+    # A root job that replaces the included script: CI runs only the root's command.
+    ("include:\n  - local: ci/evals.yml\nevals:\n  script:\n    - pytest tests/\n",
+     "evals:\n  script:\n    - pytest evals/\n", False),
+    # A hidden template no visible job extends runs nothing.
+    ("include:\n  - local: ci/evals.yml\n", ".evals:\n  script:\n    - pytest evals/\n", False),
+    # A visible job that extends the included template runs its script.
+    ("include:\n  - local: ci/evals.yml\nevals:\n  extends: .evals\n",
+     ".evals:\n  script:\n    - pytest evals/\n", True),
+])
+def test_a_gitlab_include_is_read_as_gitlab_merges_it(tmp_path: Path, root: str, included: str, run: bool) -> None:
+    root_dir = _git(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
+                               ".gitlab-ci.yml": root, "ci/evals.yml": included})
+    block = _block(root_dir)
+    assert (block["present"], block["dirs"][0]["ci"]) == (run, run)

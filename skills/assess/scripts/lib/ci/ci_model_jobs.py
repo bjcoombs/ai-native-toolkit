@@ -697,7 +697,9 @@ def _gitlab_merged(repo: Path, ghsync_root: Path | None) -> tuple[list[ModelJob]
     root override, an included job and an ``extends:`` template's ``script:`` read together.
     An included job is reported at the repository's own include line; a merged job at its
     definition in the repository's own file, else at the include line that led to it. Also
-    returns the included files' texts, which the eval-suite scan reads as CI text (#1573)."""
+    returns the GitLab texts the eval-suite scan reads (#1573): the merged view's sources and
+    rendered jobs when it settles, so a root override and an ``extends:`` read as GitLab runs
+    them, else the root file and each included file as written."""
     text = read_config(repo, GITLAB_CI)
     resolution = resolve_includes(repo, ghsync_root)
     unread = int(not text.strip()) + resolution.unresolved
@@ -718,7 +720,7 @@ def _gitlab_merged(repo: Path, ghsync_root: Path | None) -> tuple[list[ModelJob]
             job["job"] = of.name
             job["line"] = own.start + 1 if own is not None else at[of.defs[-1].source]
             jobs.append(job)
-    return jobs, unread, [f.text for f in resolution.files]
+    return jobs, unread, [*view.texts, view.rendered] if view is not None else sources
 
 
 def _eval_ci_texts(repo: Path, tracked: frozenset[str], files: list[str]) -> dict[str, str]:
@@ -741,10 +743,11 @@ def scan_ci_model_jobs(repo_root: Path, ghsync_root: Path | None = None) -> CiMo
     jobs, unread = _github(repo, files, read_local)
     eval_texts = _eval_ci_texts(repo, tracked, files)
     if GITLAB_CI in files:
-        gitlab_jobs, gitlab_unread, included = _gitlab_merged(repo, ghsync_root)
+        gitlab_jobs, gitlab_unread, gitlab_texts = _gitlab_merged(repo, ghsync_root)
         jobs += gitlab_jobs
         unread += gitlab_unread
-        eval_texts.update((f"{GITLAB_CI}#include{n}", text) for n, text in enumerate(included))
+        del eval_texts[GITLAB_CI]  # read as GitLab merges it, below
+        eval_texts.update((f"{GITLAB_CI}#{n}", text) for n, text in enumerate(gitlab_texts))
     count = {state: sum(j["state"] == state for j in jobs) for state in ("gated", "ungated", "unknown")}
     block = CiModelJobsBlock(available=True, files_read=len(files), model_jobs=len(jobs),
                              gated=count["gated"], unknown=count["unknown"], unread=unread,

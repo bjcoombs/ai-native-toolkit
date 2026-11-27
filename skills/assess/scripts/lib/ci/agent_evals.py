@@ -19,7 +19,7 @@ promptfoo, deepeval ...) or it holds a recorded-response fixture (a cassette or 
 (``set_aside``), never counted.
 
 **CI reference.** A committed CI file (a GitHub workflow, a repo-local action, GitLab CI and
-the files its ``include:`` resolves, #1573) runs
+the files its ``include:`` resolves, read as GitLab merges them, #1573) runs
 the suite: a ``run:`` or ``script:`` command, or a ``working-directory:``, ``with:`` or ``args:``
 value, names its path (``pytest evals/``, ``working-directory: tests/agent``; a top-level
 ``eval`` folder only as ``eval/`` or ``./eval``, since ``eval`` is also a command), its dotted module
@@ -210,13 +210,17 @@ def run_texts(text: str) -> list[str]:
     ``command_text`` reads it, so a quoted argument, an ``echo`` and a comment name nothing, and
     each ``working-directory:``, ``with:`` or ``args:`` value as written. A job id, a step
     ``name:``, a ``paths:`` filter, a step or job whose ``if:`` is never true, a command segment
-    in ``NOT_RUNNERS`` and the ``with:`` inputs of a GitHub ``actions/`` utility run nothing;
-    skip flags (``--ignore=evals``, ``-k ...``) are blanked."""
+    in ``NOT_RUNNERS``, the ``with:`` inputs of a GitHub ``actions/`` utility and a GitLab hidden
+    job (``.evals:``, which runs only inside a job that extends it) run nothing; skip flags
+    (``--ignore=evals``, ``-k ...``) are blanked."""
     tree = IndentTree(parse_lines(text.splitlines()))
     dead = _dead(tree)
     out: list[str] = []
     for i, line in enumerate(tree.lines):
         if not line.structural or i in dead:
+            continue
+        top = (tree.ancestors(i) or [i])[-1]
+        if tree.lines[top].key.startswith("."):
             continue
         parent = tree.ancestors(i)[:1]
         owner = tree.lines[parent[0]].key if parent else ""

@@ -141,3 +141,8 @@ Known limits:
 - One task-runner level is followed, at the repository root only: a `Makefile` or `justfile`
   recipe or a `package.json` script. A recipe that calls another target is not followed.
 - A baseline outside the suite folder (`baselines/evals.json` beside `evals/`) is not read.
+- GitLab files are read through the merged view (`ci_merged_view`), so a root `script:` that
+  replaces an included one and an `extends:` template read as GitLab runs them, and a hidden
+  job (`.evals:`) runs nothing on its own. When the merged view does not settle, the root and
+  included files are read as written: a root override then still counts the included command,
+  and a job that takes its script from a hidden template is not named.
