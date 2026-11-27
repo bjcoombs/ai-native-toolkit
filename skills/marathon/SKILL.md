@@ -137,7 +137,31 @@ Enumerate work units via the adapter's **enumerate** operation.
    - Teammate prompts: include conflict resolution patterns
    - If 5+ tasks touch one file, decide by the *kind* of contention. This additive-vs-serialize split is a **5+-on-one-file rule and does not override Step 1.6 below that threshold**: a small coupled pair (2-4 tasks) sharing one additive hot file under the complexity ceiling still **combines** — combining is the primary mechanic, it yields 0 conflicts, and it costs only one parallel slot. At 5+ the arithmetic flips: **purely additive** edits (schema appends, barrel exports, route registration — the "accept both sides" cases) are cheap to merge, so keep the units **parallel** in one wave and merge them in order rather than collapsing four-plus parallel slots into one teammate; do NOT serialize them. Reserve the **dedicated consolidation task** (one teammate owns that file; the others depend on it) for **same-line or structural** contention where parallel edits would genuinely conflict — and even then, prefer it over folding all 5+ into one mega-PR.
 8. Report the optimized plan:
-   Lay it out as `references/dependency-report.md` (relative to this skill dir) shows: critical path, parallel capacity, WIP limit, design gate, area owners, combined tasks, hot files, optimizations, staleness outcomes and verification units.
+   ```
+   ## Dependency Analysis: <tag>
+
+   Critical path: <task-ids> (<N> points sequential)
+   Parallel capacity: <M> tasks in first wave
+
+   WIP limit: <N> open builder PRs (<CI cycle> min / <per-merge> min per merge, plus 1)
+   Design gate: <units needing a recorded decision, and where each is recorded or pending>
+   Area owners: <area>: <teammate> (<unit ids>)
+
+   Combined tasks:
+   - Tasks <X>+<Y>: <reason> (single teammate, single PR)
+
+   Hot files:
+   - <file-path>: tasks <ids> (pattern: <e.g., "accept both sides">)
+
+   Optimizations:
+   - Removed dependency <X> → <Y>: different modules
+
+   Staleness outcomes:
+   - Unit <X> <-> open PR <M>: <combine | sequence after the PR | kicked back> (<shared files>)
+
+   Verification units:
+   - <parent>: children <ids> (<merged>/<total> merged; checked after <last child>, or skipped: <reason>)
+   ```
 9. Apply dependency changes via the work source's dependency-update mechanism.
 
 ## Step 2: Team + Tracking
@@ -157,7 +181,50 @@ else
 fi
 ```
 
-**Reconcile, shape and update the tracking file by `references/tracking-file.md` (relative to this skill dir):** run its reconciliation at start if the tracking file exists, keep every entry in its structure, and change entries only with its CRUD commands.
+**Reconciliation** (run at start if tracking file exists):
+1. Read unit status via the adapter's enumerate operation.
+2. Cross-reference each tracking entry:
+   - Source `done` but tracking `working` → merged externally. Remove from tracking.
+   - Source `in-progress` but PR merged on GitHub → mark unit done, remove from tracking.
+   - Source `pending` but tracking has PR → stale entry. Remove, check cleanup needed.
+   - Source `in-progress` and PR open → valid. Keep, update `last_ci`.
+3. Source `in-progress` but NOT in tracking → check GitHub for open PR. If found, add to tracking. If not, reset unit to `pending`.
+4. Write reconciled file.
+
+**Tracking structure:**
+```json
+{
+  "meta": {"tag": "<tag>", "wave": 1, "repo": "<owner>/<repo>", "flaky_checks": ["E2E"]},
+  "tasks": {
+    "task-<id>": {
+      "pr": 123,
+      "status": "working|review_clear|merged",
+      "model": "sonnet|opus",
+      "wave": 1,
+      "last_ci": "passing|failing|unstable|pending"
+    }
+  }
+}
+```
+
+**CRUD operations:**
+```bash
+# Add/update task
+jq --arg task "task-<id>" --argjson pr <number> --arg model "sonnet" --argjson wave 1 \
+  '.tasks[$task] = {"pr": $pr, "status": "working", "model": $model, "wave": $wave, "last_ci": "pending"}' \
+  "$TRACK_FILE" > "$TRACK_FILE.tmp" && mv "$TRACK_FILE.tmp" "$TRACK_FILE"
+
+# Update CI status
+jq --arg task "task-<id>" --arg ci "passing" \
+  '.tasks[$task].last_ci = $ci' "$TRACK_FILE" > "$TRACK_FILE.tmp" && mv "$TRACK_FILE.tmp" "$TRACK_FILE"
+
+# Read all
+jq -r '.tasks | to_entries[] | "\(.key) → PR #\(.value.pr) (\(.value.status), CI: \(.value.last_ci), wave \(.value.wave))"' "$TRACK_FILE"
+
+# Remove after merge+cleanup
+jq --arg task "task-<id>" '.tasks |= del(.[$task])' "$TRACK_FILE" > "$TRACK_FILE.tmp" \
+  && mv "$TRACK_FILE.tmp" "$TRACK_FILE"
+```
 
 **Identify known-flaky checks at marathon start:**
 ```bash
@@ -357,7 +424,21 @@ If green with 0 unresolved threads, run smart-merge regardless of teammate messa
 The lead runs smart-merge via the pr-review-merge skill (Smart Merge section): dismiss stale
 bot CRs, verify the five auto-merge criteria, handle UNSTABLE/UNKNOWN, merge in hot-file order.
 
-**When the base branch has a merge queue, the lead enqueues and the queue merges:** follow `references/merge-queue.md` (relative to this skill dir) for how to enqueue and what stays with the lead (the pre-review of hot and contract PRs, reacting to a dequeue, confirming the merge).
+**When the base branch has a merge queue, the lead enqueues and the queue merges.** Enqueue with
+`gh pr merge $PR --match-head-commit <head sha>` (no strategy flag, never `--admin`, which either merges
+past the queue as a ruleset bypass actor or is refused) or the GraphQL `enqueuePullRequest` mutation, in hot-file order. The queue tests the base plus
+every PR ahead plus this one on the required checks and merges only when they pass, so it replaces the
+lead's manual re-check of a hot PR (main plus the PR, the full suite and `make regen` run by hand before
+merging): a semantic conflict between two individually green PRs now fails the second one's group, and
+`$BASE_BRANCH` stays green. The lead no longer serialises merges behind that re-check, so throughput is
+bounded by CI capacity, not by the lead. What stays with the lead:
+- **The pre-review of hot and contract PRs.** Read the diff of a PR that touches a hot file or a frozen
+  contract's paths before enqueueing it; the queue runs checks, it does not judge intent.
+- **Reacting to a dequeue.** A failed group removes the PR from the queue with a timeline event naming the
+  failing check. Send the failure to the PR's teammate (or a fresh one), and enqueue again once its
+  required checks are green on the new head. A push to a queued PR dequeues it as well.
+- **Confirming the merge.** Enqueueing returns at once; the verified-`MERGED` gate below runs when the
+  queue reports the merge, not after the enqueue call.
 
 **Without a merge queue**, on a solo-maintainer repo (0 required approvals) merge with
 `gh pr merge $PR --squash --delete-branch --admin` once the *required* checks are green: a plain merge
@@ -423,7 +504,16 @@ strength of the earlier REVIEW_CLEAR alone.
 
 ## Crash Recovery
 
-If the session crashes, recover by `references/crash-recovery.md` (relative to this skill dir): what survives a crash, the reconciliation that recovery runs, and how to end a lingering teammate pane.
+If the session crashes, background teammates live only as long as the session. The team config directory (`~/.claude/teams/session-<id>/`, named from the session ID - **not** the tag) is removed automatically when the session exits, and the task-list directory (`~/.claude/tasks/session-<id>/`) is intentionally kept so a resumed session recovers its tasks. There is no per-tag team directory to force-remove - the state that actually carries a marathon across a crash is the worktree and its `pr-tracking.json`, so recovery is just reconciliation:
+
+```bash
+# 1. Check worktrees for uncommitted work
+git worktree list | grep "<tag>"
+
+# 2. Re-invoke the calling command (e.g. /tm <tag> or /issues <label>) — reconciliation against the source of truth + GitHub handles stale tracking entries automatically.
+```
+
+Worktrees and `pr-tracking.json` survive crashes in `worktree/<tag>/`. If a background teammate pane genuinely lingers after the session exits, end it at the terminal level (`tmux ls` → `tmux kill-session`), not by deleting `~/.claude/` state.
 
 ### Ephemeral Teammates
 
@@ -497,11 +587,60 @@ The gate code and canaries pass `canary suite (semantic layer)` instead of the s
 
 A retro proposal touching any of these is recorded for the maintainer, never enacted by the run itself. A floor-core proposal waits for the `floor-signoff` deployment review; the rest go through an ordinary pull request and its gates.
 
-Write the completion report, the PRD delivery table and the structured retrospective in the layout of `references/retro-template.md` (relative to this skill dir).
+```
+## Marathon Complete: <tag>
+
+All <N> tasks done. <N> PRs merged.
+
+<PR table: Wave | PR | Tasks | Title | Merged time>
+
+### PRD Delivery
+
+| Criterion | Status | Evidence |
+|-----------|--------|----------|
+| <success criterion from PRD> | Met / Partial / Not met | PR #<N>, ... |
+
+<If any not met, explain what's remaining and whether follow-up tasks are needed.>
+
+### Retrospective
+
+**Template changes tested this run**
+<Check marathon-retros.md Template Changes table for "Pending" items.
+For each that was exercised: did it help, hurt, or not apply? Mark validated.>
+
+**What worked well**
+- <specific patterns, tools, or approaches — with evidence>
+
+**What didn't work — with waste estimate**
+- <friction point>: ~<N> min lost. Root cause: <X>
+- <friction point>: ~<N> min lost. Root cause: <X>
+
+**Lead decisions log**
+- <decision>: <alternatives considered> -> <chosen> because <reason>
+(task combinations, dependency changes, merge ordering, model upgrades, interventions)
+
+**Where does this learning belong?** (specific command / cross-cutting rule / README / don't capture)
+- <target file or section>: <concrete change with rationale>
+
+**What clause is no longer earning its place?**
+- <existing rule or block>: <reason it can be removed or demoted>
+
+**Stats**
+- Tasks: <N> completed, <N> cancelled/deferred
+- PRs: <N> merged, <N> avg review iterations
+- Teammates: <N> spawned (<N> sonnet, <N> opus), <N> needed intervention
+- Wall clock: ~<N> min spawn to final merge
+- Estimated waste: ~<N> min (CI waits, conflict resolution, stalled teammates)
+
+**Flow** (from `flow_metrics.py`: per-PR table, per-run metrics against the previous run, a per-wave table of DAG width and units after combining, the run's top combining hot files, largest wait)
+<paste the script's markdown output; name the cause of the largest wait>
+```
 
 ## Gotchas
 
-Read `references/gotchas.md` (relative to this skill dir) before spawning from an agent definition or trusting a model-specific result: a definition written mid-session falls back silently, the spawn result proves nothing about the model, and a mismatched self-report is a failed cell.
+- **A definition written mid-session falls back silently.** The harness loads new files in `~/.claude/agents/` lazily and announces them with a "New agent types are now available" system message. A spawn issued before that message keeps the requested name but runs on the parent's model at default effort, with no error. Wait for the listing; never spawn ahead of it.
+- **The spawn result proves nothing about the model.** The Agent tool returns no model ID, effort, or token count, and its `model` parameter takes only aliases, so a pinned model ID is reachable only through a definition, the path that can fall back. The teammate's own self-report is the only evidence: ask for its model ID (and effort, where it can see it) as the closing step of any prompt whose result depends on the model, and record both with its output.
+- **A mismatched self-report is a failed cell.** In a benchmark or any model-specific run (a Haiku-only triage pass, an Opus-only review), discard the output, do not score it, and respawn. Respawn once: if the respawn reports the same missing or mismatched value, stop respawning and report to the user, naming the definition and what was reported. In a marathon, the lead checks at `PR_CREATED`, the cheapest point, and again at `REVIEW_CLEAR`; a mismatch means shutdown and respawn onto the same branch and PR. A same-family fallback (an Opus lead spawning an Opus teammate) passes the family check, so only the listing wait and a pinned definition's `effort` report catch it.
 
 ## Subagent Fallback (no teams)
 
