@@ -203,6 +203,19 @@ def test_recall_holds_over_many_random_bodies(n: int, alphabet: str) -> None:
     assert found / len(bodies) >= 0.97, found
 
 
+@pytest.mark.parametrize(("left", "right", "alphabet"), [(20, 2, string.ascii_letters), (16, 16, ALNUM),
+                                                      (24, 8, string.ascii_lowercase + string.digits)])
+def test_recall_holds_over_many_random_dotted_values(left: int, right: int, alphabet: str) -> None:
+    """The attribute-path rule (#1522) reads a camelCase name as a reference; a random dotted value
+    stays a credential at the same gate as an undotted one."""
+    rng = random.Random(left * right * len(alphabet))
+
+    def body(n: int) -> str:
+        return "".join(rng.choice(alphabet) for _ in range(n))
+    found = sum("credential" in kinds_in(f"token = {body(left)}.{body(right)}") for _ in range(2000))
+    assert found / 2000 >= 0.97, found
+
+
 @pytest.mark.parametrize("shape", ["slack", "openai-project"])
 def test_provider_key_recall_holds_over_many_random_bodies(shape: str) -> None:
     rng = random.Random(len(shape))
