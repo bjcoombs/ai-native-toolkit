@@ -1,7 +1,7 @@
 """The assess-pr no-contributions scan: extract the marked bash block and run it.
 
 The scan decides whether the end-of-run PR offer may target the upstream repo.
-It lives as bash inside skills/assess-pr/SKILL.md, so the test drives the exact
+It lives as bash in the assess-pr skill (skills/assess-pr/references/offer-pr-checks.md), so the test drives the exact
 text an agent would run rather than a paraphrase of it.
 """
 from __future__ import annotations
@@ -12,15 +12,18 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from skill_text import read_skill
 
 ASSESS_PR_SKILL = Path(__file__).resolve().parents[2] / "assess-pr" / "SKILL.md"
 START = "# no-contributions scan: start"
 END = "# no-contributions scan: end"
+
+
 STATEMENT = "This repository does not accept contributions. Please do not send a pull request."
 
 
 def _scan_block() -> str:
-    lines = ASSESS_PR_SKILL.read_text(encoding="utf-8").splitlines()
+    lines = read_skill(ASSESS_PR_SKILL).splitlines()
     start = lines.index(START)
     end = lines.index(END)
     assert end - start >= 2, "scan block must hold at least one line of bash"
@@ -120,7 +123,7 @@ def test_scan_reads_docs_contributing_with_its_relative_path(tmp_path: Path) -> 
 
 
 def test_phase_2_variant_is_scoped_to_read_only_targets() -> None:
-    text = ASSESS_PR_SKILL.read_text(encoding="utf-8")
+    text = read_skill(ASSESS_PR_SKILL)
     phase2 = text.split("## Phase 2", 1)[1].split("## Step 5", 1)[0]
     bullet = next(line for line in phase2.splitlines() if "no-contributions" in line)
     tail = bullet.split("maintainers often decline committed generated output.", 1)[1]
@@ -237,14 +240,14 @@ def test_scan_leaves_source_empty_without_a_statement(tmp_path: Path) -> None:
 
 
 def test_push_capable_user_is_told_about_the_statement() -> None:
-    text = ASSESS_PR_SKILL.read_text(encoding="utf-8")
+    text = read_skill(ASSESS_PR_SKILL)
     step5 = text.split("## Step 5", 1)[1].split("## Step 6", 1)[0]
     direct = next(line for line in step5.splitlines() if line.startswith("- `CAN_PUSH=1`"))
     assert "NO_CONTRIBUTIONS=1" in direct and "NO_CONTRIBUTIONS_SOURCE" in direct
 
 
 def _step5() -> str:
-    text = ASSESS_PR_SKILL.read_text(encoding="utf-8")
+    text = read_skill(ASSESS_PR_SKILL)
     return text.split("## Step 5", 1)[1].split("## Step 6", 1)[0]
 
 
@@ -278,14 +281,14 @@ def test_each_flow_numbers_its_steps_once() -> None:
 
 
 def test_scan_sits_in_step_5_before_the_offer_text() -> None:
-    text = ASSESS_PR_SKILL.read_text(encoding="utf-8")
+    text = read_skill(ASSESS_PR_SKILL)
     step5 = text.split("## Step 5", 1)[1].split("## Step 6", 1)[0]
     assert START in step5 and END in step5
     assert step5.index(END) < step5.index("Interpret the result")
 
 
 def test_step_5_replaces_upstream_offer_when_flag_is_set() -> None:
-    text = ASSESS_PR_SKILL.read_text(encoding="utf-8")
+    text = read_skill(ASSESS_PR_SKILL)
     step5 = text.split("## Step 5", 1)[1].split("## Step 6", 1)[0]
     lowered = step5.lower()
     assert step5.count("NO_CONTRIBUTIONS") >= 3

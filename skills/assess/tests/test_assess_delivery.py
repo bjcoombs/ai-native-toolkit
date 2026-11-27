@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 
 import assess_actions_render
+from skill_text import read_skill
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PR_SKILL = REPO_ROOT / "skills" / "assess-pr" / "SKILL.md"
@@ -32,7 +33,7 @@ def _issue_body() -> str:
 
 
 def _read_only_bullet() -> str:
-    text = PR_SKILL.read_text(encoding="utf-8")
+    text = read_skill(PR_SKILL)
     return next(
         line for line in text.splitlines()
         if line.startswith("- `CAN_PUSH=0`") and "`NO_CONTRIBUTIONS=0`" in line
@@ -50,7 +51,7 @@ def test_read_only_offer_leads_with_upstream_issues():
 
 
 def test_upstream_issues_flow_hosts_report_in_fork_without_a_pr():
-    text = PR_SKILL.read_text(encoding="utf-8")
+    text = read_skill(PR_SKILL)
     flow = text.split("selected the upstream-issues offer", 1)[1].split("If the user **selected the PR offer**", 1)[0]
     assert "REPORT_URL" in flow
     assert "open no PR" in flow
@@ -64,7 +65,7 @@ def test_issue_body_has_a_repo_native_done_when_first():
     criteria = [line for line in done.splitlines() if line.startswith("- ")]
     assert criteria == ["- the lint job runs actionlint and is green"]
     assert not TOOLKIT_INTERNALS.search(criteria[0]), criteria[0]
-    findings = FINDINGS_SKILL.read_text(encoding="utf-8")
+    findings = read_skill(FINDINGS_SKILL)
     assert "State it in the repository's own terms first" in findings
     assert "never as the only one" in findings
 
@@ -78,14 +79,14 @@ def test_issue_body_leads_with_findings_not_the_footer():
 
 
 def test_compound_actions_are_split_before_filing():
-    pr_text = PR_SKILL.read_text(encoding="utf-8")
+    pr_text = read_skill(PR_SKILL)
     assert "**One concern per item.**" in pr_text
-    findings = FINDINGS_SKILL.read_text(encoding="utf-8")
+    findings = read_skill(FINDINGS_SKILL)
     assert "**One concern per action.**" in findings
     assert "combine a prescribed path with a related gap" not in findings
 
 
 def test_findings_never_narrate_a_score_correction():
-    findings = FINDINGS_SKILL.read_text(encoding="utf-8")
+    findings = read_skill(FINDINGS_SKILL)
     assert "**State the headline only.**" in findings
     assert "scorer's draft" not in GOLDEN_REPORT.read_text(encoding="utf-8")

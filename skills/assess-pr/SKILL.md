@@ -9,6 +9,10 @@ The end-of-run half of `/assess`. The report (`.assess/assess-report.md`), the c
 
 **Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
 
+<!-- chat-skip:start -->
+**Script paths in the references.** This skill's directory is `${CLAUDE_SKILL_DIR}`. Where a command in `references/` names `${CLAUDE_SKILL_DIR}`, put this directory in its place, so `${CLAUDE_SKILL_DIR}/../assess/scripts/` reaches the assess scripts.
+<!-- chat-skip:end -->
+
 1. **Open a PR** with the report (Step 5).
 2. **Track the Top 3 Actions** in the user's issue tracker (Step 6).
 3. **Freeze the assessment into a CI gate** (Step 6.5).
@@ -40,108 +44,7 @@ jq '{interactive, offers}' "$REPO_ROOT/.assess/run-context.json"
 
 After writing the files, first **check whether a direct PR is even possible** before offering one. A user on `READ` or `TRIAGE` access can't push a branch to the target repo, so an unconditional "open a PR?" offer is infeasible and wastes a turn.
 
-```bash
-# Detect push capability. `gh` returns viewer fields for the current user.
-# Push capability is derived from `viewerPermission` (one of ADMIN |
-# MAINTAIN | WRITE | TRIAGE | READ | NONE) - GitHub's GraphQL Repository
-# type has no `viewerCanPush` field, so don't request it (the CLI errors
-# and the whole call returns empty, silently degrading every write-
-# accessible repo to the "leave local" branch).
-PUSH_INFO=$(gh repo view --json viewerPermission,viewerCanAdminister,nameWithOwner,isFork,owner,hasIssuesEnabled 2>/dev/null || true)
-PERM=$(echo "$PUSH_INFO" | jq -r '.viewerPermission // empty')
-case "$PERM" in
-  ADMIN|MAINTAIN|WRITE) CAN_PUSH=1 ;;
-  *)                    CAN_PUSH=0 ;;
-esac
-# A clone of the user's own fork reports ADMIN, so CAN_PUSH alone cannot tell
-# the upstream's maintainer from an outsider working in their fork.
-IS_FORK=$(echo "$PUSH_INFO" | jq -r '.isFork // false')
-# Gates the read-only upstream-issues offer: no issues list, no upstream issues.
-HAS_ISSUES=$(echo "$PUSH_INFO" | jq -r '.hasIssuesEnabled // false')
-# isFork says the repo has a parent, not whose fork it is: a collaborator with
-# push access to someone else's fork also sees isFork=true and WRITE. The
-# current repo counts as the user's own fork only when the viewer owns it.
-VIEWER_LC=$(gh api user 2>/dev/null | jq -r '.login // empty' | tr '[:upper:]' '[:lower:]')
-OWNER_LC=$(echo "$PUSH_INFO" | jq -r '.owner.login // empty' | tr '[:upper:]' '[:lower:]')
-if [ "$IS_FORK" = true ] && [ -n "$VIEWER_LC" ] && [ "$VIEWER_LC" = "$OWNER_LC" ]; then
-  IS_OWN_FORK=true
-else
-  IS_OWN_FORK=false
-fi
-# If the command failed (no remote, no gh, not a GitHub repo, unauthenticated),
-# $PUSH_INFO is empty and $PERM stays empty - fall back to the local-branch
-# flow with the reason. Never silently assume push works.
-
-# Detect remote-to-gh redirect: GitHub follows transfers/renames, so gh may
-# resolve a different owner/repo than the configured remote implies.
-REMOTE_URL=$(git remote get-url origin 2>/dev/null || true)
-if [ -n "$REMOTE_URL" ]; then
-  # Normalise SSH and HTTPS forms (and GitHub Enterprise hosts) to owner/repo.
-  # SSH:   git@host:owner/repo.git   -> owner/repo
-  # HTTPS: https://host/owner/repo/  -> owner/repo
-  # Strip protocol, any user@, the host (not just github.com), a trailing .git,
-  # and a trailing slash - so a GHE host or a trailing slash can't masquerade as
-  # a redirect.
-  REMOTE_SLUG=$(echo "$REMOTE_URL" \
-    | sed -e 's|^[a-zA-Z]*://||' -e 's|^[^@/]*@||' -e 's|^[^/:]*[:/]||' -e 's|\.git$||' -e 's|/$||')
-else
-  REMOTE_SLUG=""
-fi
-GH_SLUG=$(echo "$PUSH_INFO" | jq -r '.nameWithOwner // empty')
-# Compare case-insensitively: GitHub treats owner/repo as case-insensitive, so a
-# pure case difference is not a redirect and must not emit a spurious notice.
-REMOTE_SLUG_LC=$(echo "$REMOTE_SLUG" | tr '[:upper:]' '[:lower:]')
-GH_SLUG_LC=$(echo "$GH_SLUG" | tr '[:upper:]' '[:lower:]')
-if [ -n "$REMOTE_SLUG" ] && [ -n "$GH_SLUG" ] && [ "$REMOTE_SLUG_LC" != "$GH_SLUG_LC" ]; then
-  REDIRECT_NOTICE="Note: origin (\`$REMOTE_SLUG\`) redirects to \`$GH_SLUG\`; the offers below target the redirected repo."
-else
-  REDIRECT_NOTICE=""
-fi
-```
-
-Then check whether the target turns away outside contributions. A fork PR against a repo whose README or CONTRIBUTING says "do not send a pull request" is noise for its maintainers, so the scan runs before any upstream offer is framed:
-
-```bash
-# no-contributions scan: start
-# Sets NO_CONTRIBUTIONS (1/0) plus the first matching file (relative to the
-# repo root) and line, so the offer can quote the statement back to the user.
-NO_CONTRIBUTIONS=0
-NO_CONTRIBUTIONS_SOURCE=""
-NO_CONTRIBUTIONS_STATEMENT=""
-# The pattern is built from named parts so every branch shares one noun and one
-# boundary. _nc_noun ends at a non-letter (_nc_end), so "prs?" cannot match the
-# start of "promise", "process" or "private"; the passive branch also needs a
-# non-letter before the noun. _nc_neg has no leading boundary on purpose: it
-# must match the tail of "cannot".
-_nc_neg="(not|n't|n’t|unable to)"
-_nc_noun="(contributions|pull requests?|prs?)"
-_nc_end="([^a-z]|$)"
-# Three refusal phrasings:
-#   accept:     "does not accept (community) contributions", "not accepting PRs"
-#   imperative: "do not send a pull request" - the clause must end right after
-#               the noun, so "do not open a PR for typo fixes" (a house rule
-#               for contributors, not a refusal) stays out
-#   passive:    "pull requests are not accepted"
-_nc_accept="${_nc_neg} ([a-z-]+ )?accept(ing)? ([a-z-]+ )?${_nc_noun}${_nc_end}"
-_nc_imperative="${_nc_neg} (send|open|submit) (a |any |us )?${_nc_noun}[[:space:]]*([.;!)]|$)"
-_nc_passive="(^|[^a-z])${_nc_noun} (are|is|will) not (be )?accepted"
-_nc_re="${_nc_accept}|${_nc_imperative}|${_nc_passive}"
-# Qualifiers: a matched line that carries one ("PRs are not accepted without an
-# issue") is a condition on contributing, not a refusal, and is dropped. This
-# errs towards 0, which keeps today's fork-to-upstream offer.
-_nc_cond="(^|[^a-z])(${_nc_noun}|accepted) (without|until|unless|before|directly|against|that|which)"
-for _nc_doc in "$REPO_ROOT/README.md" "$REPO_ROOT/CONTRIBUTING.md" "$REPO_ROOT/.github/CONTRIBUTING.md" "$REPO_ROOT/docs/CONTRIBUTING.md"; do
-  [ -f "$_nc_doc" ] || continue
-  _nc_line=$(grep -Ei -e "$_nc_re" "$_nc_doc" | grep -Eiv -e "$_nc_cond" | head -n 1)
-  if [ -n "$_nc_line" ]; then
-    NO_CONTRIBUTIONS=1
-    NO_CONTRIBUTIONS_SOURCE=${_nc_doc#"$REPO_ROOT"/}
-    NO_CONTRIBUTIONS_STATEMENT=$(printf '%s\n' "$_nc_line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-    break
-  fi
-done
-# no-contributions scan: end
-```
+Run the two checks in `references/offer-pr-checks.md` (relative to this skill dir) before framing the batched question: the push-capability and redirect check (`CAN_PUSH`, `IS_FORK`, `IS_OWN_FORK`, `HAS_ISSUES`, `GH_SLUG`, `REDIRECT_NOTICE`), then the no-contributions scan (`NO_CONTRIBUTIONS`, `NO_CONTRIBUTIONS_SOURCE`, `NO_CONTRIBUTIONS_STATEMENT`), which runs before any upstream offer is framed.
 
 Interpret the result:
 
@@ -154,59 +57,7 @@ If `$REDIRECT_NOTICE` is non-empty, output it verbatim on its own line before th
 
 The push-capability result decides **how the PR option appears in the batched Phase 2 question** (it is not a separate prompt): use "open a PR in this repo" on a push-capable target, "file the Top 3 Actions as upstream issues linking the report in your fork" first (when `HAS_ISSUES=true`) and "fork and open a snapshot PR from your fork" second (two separate options) on a read-only target, "open a PR inside your fork and share the link" when `NO_CONTRIBUTIONS=1` on a read-only target or with `IS_FORK=true`, and drop the PR option entirely when no GitHub remote is detected. Frame the batched question with the written artifacts, e.g. _"Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. Which of these should I do?"_ followed by the feasible offers.
 
-If the user **selected the PR offer** (direct flow, `CAN_PUSH=1`):
-1. Create a branch in the target repo: `assess/snapshot-<YYYY-MM-DD>` (use the existing worktree workflow if `<repo>-main` + `worktree/` layout is present; otherwise branch in place).
-2. Stage and commit the report, the complexity heatmap, and the doc graph. Commit message: `docs: Add AI-readiness assessment + complexity and doc-navigability snapshots`.
-3. Push the branch and open a PR. Title: `docs: Codebase assessment - <YYYY-MM-DD>`.
-
-If the user **selected the PR offer** (fork flow, `CAN_PUSH=0` on the upstream, `NO_CONTRIBUTIONS=0`):
-1. `gh repo fork <owner>/<repo> --clone=false --remote=true` (creates the fork under the user's account and adds it as a remote named `origin` or similar; the upstream becomes `upstream` if the original was already `origin`).
-2. Create the branch as above, push to the **fork** (`git push -u <fork-remote> <branch>`), and open the PR via `gh pr create --repo <owner>/<repo>` (head defaults to the fork).
-3. Commit message, PR title, and body are unchanged from the direct flow.
-
-If the user **selected the upstream-issues offer** (read-only flow, `CAN_PUSH=0` on `READ` / `TRIAGE`, `NO_CONTRIBUTIONS=0`): host the report in the fork, then file the issues upstream. Nothing under `.assess/` is proposed for upstream.
-1. Resolve the fork and push the snapshot branch to it exactly as in step 1 of the no-contributions flow below (`FORK_SLUG` from the forks endpoint, the retry, the branch push), and stop there. Skip the rest of that step: do not align the fork with the assessed commit (no `BASE_SHA` comparison, no `assess/base-<YYYY-MM-DD>` branch push), write no PR body file, and open no PR, neither against upstream nor inside the fork.
-2. Build the report link from the pushed branch: `REPORT_URL="https://<host>/$FORK_SLUG/blob/<branch>/.assess/assess-report.md"` (`<host>` is the GitHub host the remote uses). Confirm it resolves with `gh api "repos/$FORK_SLUG/contents/.assess/assess-report.md?ref=<branch>"` before quoting it.
-3. Run Step 6 with the upstream repository (`$GH_SLUG`) as the tracker, using `$REPORT_URL` as each item's full-report link. If hosting was declined or failed, file the issues anyway: each body stands on its own without the link.
-4. Suggest disabling Actions on the fork, as in step 3 of the no-contributions flow.
-
-If the user **selected the PR offer** (no-contributions flow, `NO_CONTRIBUTIONS=1` with either `CAN_PUSH=0` on `READ` / `TRIAGE` or `IS_FORK=true`): the PR stays inside your fork; nothing is opened against upstream.
-1. Resolve the fork. With `IS_OWN_FORK=true` and `CAN_PUSH=1` the current repo is the user's own fork: `FORK_SLUG="$GH_SLUG"`, and push to `origin`. Otherwise (including any clone of someone else's fork, whatever the permission) fork as in step 1 of the fork flow, then read the fork's real name back (GitHub returns the existing fork for a repeat request, and appends a suffix when the account already owns a repo of that name, so never assemble it by hand): `FORK_SLUG=$(gh api -X POST repos/<owner>/<repo>/forks | jq -r '.full_name')`. Fork creation is asynchronous: if `gh repo view "$FORK_SLUG"` fails straight after, retry it a few times, a few seconds apart, before giving up. Create the branch and push it to the fork as in the first half of the fork flow's step 2; do **not** run that step's upstream `gh pr create`. Write the PR body template (below the flows) to a temp file and use it as `<body-file>`, with the direct flow's PR title as `<title>`. Open the PR against the fork's default branch instead: `FORK_BRANCH=$(gh repo view "$FORK_SLUG" --json defaultBranchRef | jq -r '.defaultBranchRef.name')`. A fork made earlier can sit behind or ahead of the checkout that was assessed, and a PR onto it would then carry every commit in between. So compare `BASE_SHA=$(git rev-parse "<branch>^")` (the commit the snapshot branch was cut from) with `gh api "repos/$FORK_SLUG/branches/$FORK_BRANCH" | jq -r '.commit.sha'`; if they differ, push the assessed commit to the fork as its own base (`git push <fork-remote> "$BASE_SHA:refs/heads/assess/base-<YYYY-MM-DD>"`, where `<fork-remote>` is the remote the branch went to), set `FORK_BRANCH=assess/base-<YYYY-MM-DD>`, and tell the user the PR is based on that branch because the fork's default branch does not match what was assessed. This leaves the fork's existing branches untouched. Then create the PR through the fork's own pulls endpoint, which cannot resolve to the parent repo: `gh api -X POST "repos/$FORK_SLUG/pulls" -f head=<branch> -f base="$FORK_BRANCH" -f title="<title>" -F body=@<body-file> | jq -r '.html_url'`.
-2. Share the link: print the fork PR's URL (the `html_url` above; its path must end with `/$FORK_SLUG/pull/<number>`, whatever the host, so a GitHub Enterprise URL passes) so the user can pass it on to whoever wants the assessment.
-3. Suggest disabling Actions on the fork: the fork carries the upstream's workflow files, so if the user ever enables Actions there, this PR and later pushes would start CI runs the fork's owner pays for on a private fork or self-hosted runners. Disabling them up front keeps the fork an inert place to share the report. Offer the command, never run it unasked: `gh api -X PUT "repos/$FORK_SLUG/actions/permissions" -F enabled=false`.
-4. Commit message, PR title, and body are unchanged from the direct flow.
-
-**Every PR flow (direct, fork, and no-contributions): the PR body leads with the findings and ends with the plugin reference** so reviewers can install the tool that generated the report. The Readiness line and the Top 3 table come from `assess_actions_render.py`, which reads `.assess/actions.json` and `.assess/run-context.json` (relative to the repo root) and never the report, so the report's Top 3 section can change shape without changing the PR body. Pass `--assess-dir "$REPO_ROOT/.assess/<slug>"` for a `--scope` run:
-
-```bash
-<!-- chat-replace:uv-actions-render -->
-RENDER="${CLAUDE_SKILL_DIR}/../assess/scripts/assess_actions_render.py"
-uv run "$RENDER" "$REPO_ROOT" readiness   # the Readiness value
-uv run "$RENDER" "$REPO_ROOT" table       # the Top 3 table, one row per actions.json entry in rank order
-```
-
-A missing or unreadable `actions.json` exits 1 with a message: say so in the PR body in place of the table, and never rebuild the table from the report. Use this body template:
-
-   ```markdown
-   ## Summary
-
-   Snapshot of this codebase's AI-agent readiness, complexity hotspots, and doc navigability as of <YYYY-MM-DD>.
-
-   - **Readiness:** <the output of `assess_actions_render.py <repo> readiness`, verbatim>
-   - **Hotspot leader:** `<top hotspot path>` (<loc> LOC, ccn <N>, <M> commits in window) - write `ccn ~<N> (approximate)` when the row is scc-only (`source` `scc`, `max_fn_ccn` null), and `ccn ~<N> (unreliable)` when its path is in `stats_summary.complexity_unreliable`
-   - **Top lying map:** `<top stale-hub doc>` (<N>d stale, subject churn <M>)
-
-   ## Top 3 Actions
-
-   <the output of `assess_actions_render.py <repo> table`, verbatim>
-
-   Full report: [`.assess/assess-report.md`](./.assess/assess-report.md) (the heatmap and doc graph render inline).
-
-   ---
-
-   <!-- chat-replace:pr-footer -->
-   _Generated by [`/ai-native-toolkit:assess`](https://github.com/bjcoombs/ai-native-toolkit) — a Claude Code plugin for codebase readiness assessment with complexity hotspot heatmaps. Install in any Claude Code session: `/plugin marketplace add https://github.com/bjcoombs/ai-native-toolkit` then `/plugin install ai-native-toolkit@ai-native-toolkit`._
-   ```
+**When the user selects a PR or upstream-issues offer,** follow its flow in `references/offer-pr-flows.md` (relative to this skill dir): the direct, fork, upstream-issues and no-contributions flows, and the PR body that `assess_actions_render.py` fills.
 
 If the user **did not select the PR offer**: skip it. Files stay in `.assess/` for them to review - the plugin footer in the MD already advertises the tool when anyone opens the file.
 
@@ -220,194 +71,7 @@ If the user **did not select** it: skip. The Top 3 Actions table in the PR and t
 
 When selected, proceed agnostically - **don't assume GitHub** (or any specific tracker). Use your judgment based on what's actually in front of you.
 
-### 6a: Identify the user's issue tracker
-
-**Start with the deterministic git-remote signal before anything else.** A GitHub / GitLab remote with issues enabled is the cheapest, most reliable tracker signal in front of you - skipping it forces the model into judgment-mode on a question that has a clear answer.
-
-```bash
-# Cheapest tracker signal: a git remote that hosts issues.
-GIT_REMOTE=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || true)
-if [ -n "$GIT_REMOTE" ]; then
-  # `gh` works against any git remote pointing at github.com (including forks);
-  # hasIssuesEnabled distinguishes a code-only mirror from a real tracker.
-  GH_TRACKER=$(gh repo view --json hasIssuesEnabled,nameWithOwner 2>/dev/null || true)
-fi
-```
-
-Treat a non-empty `GH_TRACKER` with `hasIssuesEnabled: true` as a **detected tracker**, subject to the same write-access and no-contributions checks as Step 5. On a read-only target (READ / TRIAGE) with `NO_CONTRIBUTIONS=0`, the recommended path is the upstream issues list itself: file there, each item linking the fork-hosted report (Step 5's upstream-issues flow). That is the channel a maintainer you do not work with actually acts on. When `NO_CONTRIBUTIONS=1`, or upstream has issues disabled, use the user's fork or their personal tracker instead, never the upstream issues list. Same logic for `glab repo view --output json` on GitLab remotes.
-
-When the deterministic signal is clear and unambiguous, use it without asking. Only fall back to judgment / multiple-signal disambiguation when the remote check is empty, ambiguous, or contradicted by something the user has told you.
-
-Other signals - examples, not an exhaustive list, used only as fallback or to choose between equally-plausible options:
-
-- **The user's global instructions** (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`) often state the tracker explicitly: "issues live in Linear project FOO", "we use Task Master", "Jira project ABC", etc.
-- **Project-level instructions** in the target repo's `CLAUDE.md` / `AGENTS.md` / contribution docs.
-- **Project files**: `.taskmaster/` directory, `.acli/` config, `.linear/` dotfiles, a Notion link in the README, etc.
-- **Authenticated CLIs**: `gh auth status`, `glab auth status`, `acli` configuration, `linear` CLI tokens, anything similar.
-- **Conversation history**: if the user just used a tracker, prefer that one.
-
-The user might track work in Omnifocus, Apple Notes, a Google Doc, a Notion database, a Slack channel, or anything else. **Use judgment** on these soft signals; do not let them override a clear deterministic git-remote hit.
-
-**Decision rules:**
-
-1. **Deterministic GitHub/GitLab remote with issues enabled** - use that tracker without asking (subject to the write-access and no-contributions checks above; a read-only target that takes contributions files upstream). This is the common case for OSS work and most personal repos.
-2. **One clear soft signal** (e.g. only `.taskmaster/` present, or global CLAUDE.md says "use Linear") and no contradicting remote - use that tracker without asking.
-3. **Conflicting signals** (e.g. GitHub remote + `.taskmaster/` directory + global says "use Linear") - **ask the user**. List what you saw and let them pick:
-   > I see signals for Task Master (`.taskmaster/`), GitHub Issues (remote points at `<owner/repo>` with issues enabled), and Linear (your global CLAUDE.md mentions it). Which should I create the tracking items in?
-4. **No clear signal** - ask:
-   > I couldn't tell which tracker you use. Where should I create the tracking items? (e.g. GitHub Issues, Task Master, Jira, Linear, somewhere else - or skip)
-
-When asking, use **AskUserQuestion** with the detected options plus a "something else" / "skip" escape hatch.
-
-### 6b: Create items in the chosen tracker
-
-Once the tracker is known, use its native tooling. The skill doesn't enumerate every CLI - rely on your general knowledge of the tool. A few examples:
-
-| Tracker | Typical command |
-|---|---|
-| GitHub Issues | `gh issue create --label assess-finding --title "..." --body "..."` |
-| GitLab Issues | `glab issue create --label assess-finding ...` |
-| Jira (via acli) | `acli workitem create ...` (see project's Atlassian instructions) |
-| Task Master | `task-master add-task --prompt "..."` (under the current tag, or ask) |
-| Linear (via CLI) | `linear issue create ...` |
-| Anything else | follow the user's documented convention |
-
-**Build the items from `actions.json`, never from the report.** One command renders every item, one per `actions` entry in `rank` order, each followed by one item per entry in its `sub_items` (the report's lettered sub-actions, such as `2a`), as a JSON array of `{rank, title, body}`; a sub-item's object also carries its `label` (`2a`), and an item whose action names a `condition` carries its `marker`:
-
-```bash
-<!-- chat-replace:uv-actions-render -->
-RENDER="${CLAUDE_SKILL_DIR}/../assess/scripts/assess_actions_render.py"   # set again here: Step 6 runs when the PR offer was declined
-uv run "$RENDER" "$REPO_ROOT" items --report-link "<full-report link>"   # omit --report-link when there is none
-```
-
-- **Title**: the entry's `action`, as `title` gives it; a sub-item's title is its label and action (`2a. <action>`).
-- **Body**: `body` as given: the finding and its files first (the `condition` when the entry has no `finding`), then the First step, the **Done when** criterion, the Scope fence, a Context block (Layer, Effort, the full-report link) and last a one-line footer linking back to the plugin. Write each body to a file and pass it with `--body-file` (or the tracker's equivalent); do not reword it.
-- **Marker**: an item with a `condition` ends with its condition marker, `<!-- assess:condition=<row id>@<level>[ sub=<letters>] model=<version> -->`, already in `body`. Keep it on every create and edit: later runs match the item by it (6c). An item split from one action (One concern per item, below) adds ` part=<n>` before `model=`, numbering the parts 1, 2, ... in the order filed, so the parts keep separate keys. The format is documented in `skills/assess/references/actions-schema.md`.
-- **Tag / Label / Category** that supports idempotency (see 6c)
-
-**One concern per item.** Each item carries one change a maintainer can accept or decline on its own. `actions.json` holds one entry per rank, and each lettered sub-action is already its own item. If an entry's `action` still bundles independent changes (an instruction-file stub *and* a lockfile *and* a CI step), file each change as its own item with its own one-line title. Start each split item from the entry's body and narrow its First step, Done when and Scope fence to that one change, so each item closes on its own change alone; keep the finding line and the Context block as rendered. The parts a maintainer would accept separately must be tracked separately, or the declined part takes the accepted ones down with it. List every reference for that rank, its sub-items' included, in its Issue cell (6d).
-
-**Done when** is the entry's `done_when`, written in the repository's own terms when the report was assembled (`assess-findings`): a command that passes, a file state or a CI result first, the `/assess` re-run criterion after it, marked optional.
-
-**Full-report link.** Use the assessment PR when one was opened, `$REPORT_URL` from Step 5's upstream-issues flow when the report is hosted in the user's fork, and omit the line when neither exists.
-
-A ccn figure in an entry's text follows the report's caveat (issue #590): an scc-only figure (`source` `scc`, `max_fn_ccn` null) is written `ccn ~N (approximate)`, a path in `stats_summary.complexity_unreliable` gets `ccn ~N (unreliable)` instead, and neither is offered as the reason the item is prioritised. The entry carries that wording from `finalize-input.json`; the renderer copies it as written.
-
-The body the renderer writes:
-
-```markdown
-**Finding:** `<finding>` in `<file>`, `<file>`   (without a finding: **Condition:** `<condition>`, else **Files:** alone)
-
-**Sub-action <label> of action <rank>:** <parent action>   (a sub-item only; <label> is the item's `label`, already rank plus letter, such as `2a`)
-
-### First step
-<first_step>
-
-### Done when
-- <done_when>
-
-### Scope fence
-<scope_fence>
-
-### Context
-- Layer: <layer> (`<condition>`)
-- Effort: <effort>
-- Full report: <the --report-link value; the line is left out without one>
-
----
-Generated by /assess - https://github.com/bjcoombs/ai-native-toolkit
-
-<!-- assess:condition=<row id>@<level> model=<version> -->   (only when the entry has a condition; a sub-item adds sub=<letters>)
-```
-
-**Filing upstream from a read-only account** (Step 5's upstream-issues flow): pass `--repo "$GH_SLUG"` on every create and search, since the fork step may have rearranged the remotes. Drop `--label`: an account without triage access cannot apply labels, and a label the repository lacks fails the create. Deduplicate by title instead (6c).
-
-### 6c: Idempotency
-
-Re-running `/assess` on the same repo must not create duplicate tracking items. An item that carries a condition marker is matched on its condition id, not its title, so a retitled item is still found; an item filed before the marker existed is matched by label plus title and gains the marker. The dedup mechanism depends on the tracker:
-
-- **GitHub / GitLab Issues**: list the existing items, open and closed, and let the renderer plan each one:
-
-  ```bash
-  EXISTING=$(mktemp)   # outside the repository, so nothing is committed by mistake
-  gh issue list --label assess-finding --state all --limit 500 --json number,title,body,state,labels > "$EXISTING"
-  uv run "$RENDER" "$REPO_ROOT" plan --existing "$EXISTING" --report-link "<full-report link>"
-  ```
-
-  For an action you split (One concern per item), ignore its item's `filing` step: look in the same list for an item whose marker carries the same `condition`, `sub` and `part` and whose title matches. When the action was filed whole before (an item marked for the same `condition` and `sub` with no `part`), reuse that item as part 1 and add ` part=1` before `model=` in its marker, so the split does not leave a duplicate. The reverse needs no handling: an action a previous run split that this run files whole gets one of its earlier parts from `plan` as `reuse_and_mark`, with `part` dropped from the marker, and 6e proposes closing the other parts as superseded. Two actions that name the same condition each take their own item: `plan` matches each existing item once per run, preferring the one whose title agrees. Each item comes back with a `filing` step: `create` (file it), `reuse` (an item with the same marker exists: `filing.number`) or `reuse_and_mark` (an unmarked item with the label and the same title exists: write `filing.marked_body` back with `gh issue edit <number> --body-file`, which adds the marker and changes nothing else). Where no label can be applied (filing upstream from a read-only account), list the user's own issues instead, `gh issue list --repo "$GH_SLUG" --author @me --state all --limit 500 --json number,title,body,state,labels > "$EXISTING"`, and pass `--label ""`. On GitLab, `glab issue list --label assess-finding --all --output json` gives `iid` and `description`; map them to `number` and `body` before planning.
-  **Open-item limit (#812).** Each planned item also carries a `wip` step. The backlog keeps at most `[backlog] wip` items open at once (`.assess/config.toml`, default 3): open items with a condition marker or the `assess-finding` label count, and so does an open item a step reuses. `wip.decision` reads `open` (the item is already open: reuse it, it takes no slot), `file` (create it; for a closed `filing.number`, propose reopening that item as the closed-match rule below says: flag it to the user and reopen only on their yes) or `next_up` (the limit is reached: file nothing and propose no reopen). The items that need a slot are taken in the next-unlock order, `wip.tier`: `next_unlock` (its condition blocks the next Step) first, then `recovery` (it matches a closed item whose condition reads unmet again), then `gain`; the Top 3 order stands within a tier. Split parts (above) get no `wip` step: count each part you would create or reopen against the limit yourself, filing parts only while `[backlog] wip` minus the open count leaves a slot, and pass `--wip` reduced by the parts filed to `plan` so the unsplit items share what is left; list the parts held back under Next up. Print the items held back with `uv run "$RENDER" "$REPO_ROOT" next-up --existing "$EXISTING"` (the same `--label` and `--wip` as `plan`) and paste its output under the Top 3 table in the report and the PR body (6d); it prints nothing when every item fits.
-- **Other tag/label-based** (Linear, Jira labels): apply a stable label like `assess-finding`, search for the marker's `condition=` text first where the tracker searches bodies, then by `label + title`. Open OR closed match → reuse, and add the marker to an unmarked match.
-- **Search-based** (Jira via JQL, Notion, Linear queries): search the tracker for items with the action title. Match → reuse.
-- **Hierarchical** (Task Master): list the current tag's tasks; compare titles. Match → reuse.
-- **Free-form** (Apple Notes, Google Docs, plain markdown files): no reliable structured dedup. In this case, list existing items the user can see, **show them, and ask before re-creating**: "I see 3 existing items that look like these. Re-create, skip, or update? "
-
-A sub-item's marker keys on its parent's condition and its letter (`sub=a`), never its rank. The letter, like a split item's `part`, is the model's ordering in that run, so a marker with `sub` or `part` matches only when the title matches too; a sub-item whose letter moved is found by title among the items marked for the same condition, and `plan` rewrites its marker. Without a marker, a sub-item's title starts with its rank and label (`2a. `), which move when its parent changes rank between runs: match a sub-item on the title text after that prefix, so `1a. Pin ruff` reuses the item filed as `2a. Pin ruff`. The match crosses parents on purpose: the same change under another action is the same work. When a sub-item is promoted to its own ranked action, match it on the action text without the label, so `Pin ruff` reuses the item filed as `2a. Pin ruff`.
-
-In all cases, before creating: search first. If a match is found (open or closed in trackers that have state), reuse it. If a match was previously closed (the gap was once resolved but has re-emerged), flag this to the user in the chat output - don't silently re-open or duplicate. A closed match whose `wip.decision` is `file` is the one to propose reopening; one held as `next_up` is listed under Next up and not proposed.
-
-**Task rotation across runs:** when an action drops out of the Top 3 between runs (e.g., a hotspot graduated, or a higher-priority issue emerged), don't auto-close the existing tracker task. Leave it pending. Mention the demotion in the new report's "Additional Opportunities" section so the user can decide if it's still worth doing. The user owns the close decision: 6e proposes a close only when the item's condition now holds, and writes it only once the user confirms.
-
-### 6d: Link the items back to the assessment
-
-How the link is recorded depends on the tracker, but the goal is the same: someone reading the assessment PR / report can click through to the items, and someone reading an item can click back to the assessment.
-
-- **GitHub PR + GitHub Issues** (the original flow): re-render the table with one `--issue` per filed rank, `uv run "$RENDER" "$REPO_ROOT" table --issue 1='#42' --issue 2='#43, #44'` (a rank split into several items lists every reference; a rank held back by the open-item limit reads `--issue 3='next up'`), and replace the table in the PR body with the output, the `next-up` block (6c) under it. Update `.assess/assess-report.md` locally so the on-disk report stays in sync (commit the change if you're working in a worktree before pushing).
-- **GitHub PR + Task Master tasks**: include the task IDs in the `Issue` column through `--issue` (e.g. `--issue 1='TM #1.2'`). Reference the assessment PR URL in each task's body.
-- **GitHub PR + Jira**: include the Jira keys in the `Issue` column through `--issue` (e.g. `--issue 1=PROJ-1234`). Set the assessment PR URL as a Jira link.
-- **No PR was opened**: update only `.assess/assess-report.md` locally with the item references. With the upstream-issues flow, upstream references read `<owner>/<repo>#N`; push the updated report to the fork branch so `$REPORT_URL` shows them.
-- **Other trackers**: do whatever makes the cross-link work; if the tracker doesn't support links back, include the assessment date + PR URL (if any) in each item's body so a human can trace it.
-
-### 6e: Reconcile filed items (propose only)
-
-On an interactive run with a GitHub or GitLab tracker, after 6b to 6d, read the tracker again and reconcile every filed item against this run. Nothing is written until the user confirms, and only the confirmed proposals are written. Skip this step on a headless run (the non-interactive contract above); the command also proposes nothing when `run-context.json .interactive` is `false`.
-
-```bash
-gh issue list --label assess-finding --state all --limit 500 --json number,title,body,state,labels > "$EXISTING"
-uv run "$RENDER" "$REPO_ROOT" reconcile --existing "$EXISTING" --filed "<numbers 6b filed or reused, comma-separated>"
-```
-
-Use the same `--label ""` and GitLab mapping as 6c. The output holds `proposals`, `rules_changed`, `notes` and `summary`. Each item gets at most one proposal:
-
-- **Close**: an open item's condition now holds. The proposal cites the evidence line and the commit this run measured.
-- **Reopen**: a closed item's condition lapsed. The proposal names the cause. When an action was split and also filed whole, only the whole item is reopened, never its closed parts.
-- **Demote to informational**: the item can no longer move, because its finding keys on commit origin (`self_referential_tests`) or its condition reads not applicable. An item whose condition this run's model does not list (a `--profile` or `--pack` difference) is left as it is, with a note. The write adds the `assess-informational` label and keeps the item's state; a later run passes the item over. With `--label ""` the label cannot be written, so no demote is proposed and a note counts the skipped ones.
-- **Close as superseded**: a part of an action that is no longer split, beside the item that now carries the action.
-- **Rules changed**: a move that only the new maturity model caused (the model changed, the repository did not) reads `rules changed: your repo did not` under "No change proposed". It is never a proposal and never progress or regression.
-- **Declined before**: a proposal the user declined on an earlier run is not proposed again while its condition reads the same state under the same maturity model. It is listed under `declined` and at the foot of `summary`, naming who declined it, when and why. Once the state or the model changes, the proposal comes back once. To be asked again sooner, delete its entry from `.assess/backlog-declines.json`.
-
-Show `summary` verbatim as one batched message, then ask with multi-select AskUserQuestion questions of three proposals each, one option per proposal (named by its item number and kind) and "none" as the fourth, all in one call (up to four questions, so twelve proposals; past twelve, a second call for the rest). Print the writes for the confirmed numbers only (`none` when the user picked "none" everywhere), record the rest as declined, and run each write. Every comment holds backticks, so it goes through a file, never a quoted argument:
-
-```bash
-WRITES=$(mktemp); COMMENT=$(mktemp)   # outside the repository
-WHO=$(git -C "$REPO_ROOT" config user.name 2>/dev/null || echo "${USER:-unknown}")
-uv run "$RENDER" "$REPO_ROOT" reconcile --existing "$EXISTING" --filed "<same numbers>" \
-  --confirm "<confirmed numbers, all or none>" --record-declines --declined-by "$WHO" \
-  --declined-at "$(date +%Y-%m-%d)" > "$WRITES"
-while read -r w; do
-  n=$(jq -r '.number' <<<"$w"); jq -r '.comment' <<<"$w" > "$COMMENT"
-  case "$(jq -r '.op' <<<"$w")" in
-    close)  gh issue close "$n" </dev/null ;;
-    reopen) gh issue reopen "$n" </dev/null ;;
-    label)  l=$(jq -r '.add_label' <<<"$w"); gh label create "$l" --force </dev/null
-            gh issue edit "$n" --add-label "$l" </dev/null ;;
-  esac
-  gh issue comment "$n" --body-file "$COMMENT" </dev/null
-done < <(jq -c '.[]' "$WRITES")
-```
-
-On GitLab use `glab issue close`, `glab issue reopen` and `glab issue update --label`. Each proposal the user answered and left unconfirmed is recorded in `.assess/backlog-declines.json` with who declined it, when, the model and the evidence line, and the next run holds it back until the condition's state or the model changes. Add one `--decline-reason "<number>=<text>"` for each declined item the user gave a reason for, and none for the others. When the user dismissed the questions without answering, skip the `--confirm` call: nothing is written to the tracker or newly recorded, and the next run proposes the same changes again. Other trackers: show the same summary and make the confirmed changes with their own tooling.
-
-### 6f: Report back to the user
-
-End with a short, tracker-specific summary. Examples:
-
-> Created 3 GitHub issues: #42 (Action 1), #43 (Action 2), #44 (Action 3). Linked from the assessment PR. All labelled `assess-finding` so re-running `/assess` later won't duplicate them.
-
-> Filed 4 issues on `<owner>/<repo>`: #979 (Action 1), #980 (Action 2), #981 and #982 (Action 3, split into two independent changes). Each links the full report in your fork. Unlabelled (no triage access), so a re-run matches them by title.
-
-> Created 3 Task Master tasks under tag `assess-2026-05-22`: #1.1, #1.2, #1.3. Run `task-master next` to start.
-
-> Action 1 already tracked in PROJ-1024 (in progress) - linked. Created PROJ-1198 (Action 2) and PROJ-1199 (Action 3) in Jira.
+Then follow `references/offer-issue-tracking.md` (relative to this skill dir): 6a identify the tracker, 6b create the items from `actions.json`, 6c idempotency, 6d link the items back to the assessment, 6e reconcile filed items (propose only), 6f report back to the user.
 
 ## Step 6.5: Offer to Freeze the Assessment into a CI Check
 
@@ -426,35 +90,7 @@ This offer only makes sense when the repo can actually run the workflow. Apply t
 
 If the user **did not select** the CI-gate offer: skip. The deterministic report and findings already shipped in `.assess/`.
 
-If the user **selected** it, emit the workflow. The generator reads the running plugin's version (never the one recorded in the target's `.assess/` files, which can be months old), bakes in the discovered toolchain, and pins the newest published toolkit release that ships the action - the running version when its tag is already cut, otherwise the closest older release:
-
-````bash
-<!-- chat-replace:uv-emit-workflow -->
-uv run "${CLAUDE_SKILL_DIR}/../assess/scripts/assess_emit_workflow.py" "$REPO_ROOT"
-````
-
-This writes `.github/workflows/assess-gate.yml` (relative to the repo root). The script auto-detects the default branch and the discovered tools; override with `--branch <name>` or `--tools lizard,scc,...` when the run found a different toolchain (e.g. a per-language dead-code tool). `--paths <glob>` or `--paths-ignore <glob>` (each repeatable, not both) limit which pull requests trigger the gate. With neither, when an existing workflow under `.github/workflows/` already filters pull requests by path (a `paths:` or `paths-ignore:` key on a `pull_request` trigger, or `dorny/paths-filter`), the gate gets `paths-ignore: ['**/*.md', '.assess/**']` and the script prints a line saying so - relay it, so the user knows docs-only PRs skip the gate and report no gate check (a required status check on the gate would stay pending on them).
-
-**Heads-up on the toolkit version pin.** The emitted workflow runs the toolkit's action through one `uses: bjcoombs/ai-native-toolkit@v<version>` line, and the header comment names the same version. An unresolvable `uses:` reference fails the job at setup, before any step of the action runs, so the generator checks the pin before writing it: `gh api` first confirms the running version's tag ships `action.yml`, and only when it does not does `git ls-remote --tags` list the published tags to fall back on. When the running version's tag is not published yet (releases are cut once per batch of merges, so this is the common case), it pins the newest published tag that ships `action.yml` and prints which tag it chose and why; the gate then runs a core a release or two behind the one that wrote the committed `.assess/` snapshot, so a first gate run can differ slightly from this run. With no network it pins the running version and prints a warning naming the unverified tag - relay that line to the user and have them confirm the tag before committing. If the running version cannot be read, or GitHub reports its tag missing, and no published tag qualifies, nothing is written and the script exits 1; rerun with `--version <X.Y.Z>` naming a published release. Past setup, infra failures (a tool install, a rate limit, a network blip) degrade to a skip notice inside the action and never red the check. The workflow's supply chain is pinned end to end: actions ride commit SHAs and tools exact releases, so the snapshot stays reproducible run over run. A repo running a fork of the toolkit must edit the `uses:` line in the generated workflow.
-
-**Tell the user about the gate config.** The emitted workflow runs `assess_gate.py`, which reads the optional `[gate]` section of `.assess/config.toml` (relative to the repo root) and is **warn-only by default** - it reports every finding but fails nothing until the repo opts in. The gate has two kinds of check: **floors** (absolute, on the current snapshot) and a **regression** check (cross-run, against the prior committed snapshot). Point them at the knobs:
-
-```toml
-[gate]
-# FLOOR: findings whose presence (non-empty paths) fails the PR. Empty = warn-only.
-fail_on = ["lying_map", "orphaned_understanding"]
-# Findings reported but non-blocking. Omit to warn on every concern; [] silences all.
-warn_on = ["hidden_coupling", "candidate_dead_weight"]
-ccn_p95_max = 120        # FLOOR: fail when the p95 file complexity rises past this
-containment_min = 0.3    # FLOOR: fail when the safe-zone share drops below this (0-1)
-fail_on_regression = true  # REGRESSION: fail when hotspots worsened vs the prior snapshot
-fail_on_gate_loss = true   # REGRESSION: fail when a Step gate the committed baseline held now reads unmet
-enabled = true           # set false to mute the gate without deleting the workflow
-```
-
-`fail_on` finding names are the cross-practice findings (`hidden_coupling`, `lying_map`, `unexplained_complexity`, `untrusted_hotspot`, `self_referential_tests`, `orphaned_understanding`, `candidate_dead_weight`). The floors evaluate the current snapshot, so they read as an AI-readiness *floor* (a clean repo never trips them; a long-standing concern trips them every run until fixed). `fail_on_gate_loss` compares the Step gates with the committed `.assess/prior-level.json`: it fails only on a gate that now reads unmet (one the run could not read is a warn line), names the Step lost, and reports "no baseline yet" until the file is committed. The GitLab template (`templates/assess-gate.yml`) turns it on by default. `fail_on_regression` is the true cross-run check - it fires only when the diff against the prior committed snapshot reports a worsening, and is skipped entirely on a first run or an unreliable diff, so a freshly-cloned repo never fails its first gated PR. The asymmetric-caution default - never block a pipeline by surprise - means a repo that adopts the GitHub workflow without writing config gets reports, not red builds; the GitLab template's `fail_on_gate_loss` default is the one exception. The same asymmetry covers infrastructure: a failed toolkit fetch, tool install, or uv setup degrades to a skip notice rather than a red check, even on an opted-in repo - only the assessment itself can fail a PR.
-
-**Commit `.assess/findings.json` with the workflow.** Each run writes it: the finding method version and every finding's paths. When a later toolkit release changes how findings are decided, the gate compares that committed snapshot (the `findings.json` on disk, even when no pipeline has run since it was committed) with its own run, names the method change, lists the findings that appeared and cleared by path (these also carry any code changed since the snapshot was committed, so they are not attributed to the method alone), and prints the re-freeze command (re-run `/assess` and commit the new `findings.json`). When the gate's pinned toolkit is older than the one that wrote the snapshot, it says to raise the `uses:` pin instead, since re-freezing would undo the newer method. Without the committed file the gate has nothing to compare and gives no such explanation.
+If the user **selected** it, follow `references/offer-ci-gate.md` (relative to this skill dir): emit the workflow, relay the toolkit version pin, tell the user about the gate config, and commit `.assess/findings.json` with the workflow.
 
 
 ## Step 7: Tool Feedback (Optional)
@@ -494,13 +130,4 @@ The fifth option in the batched Phase 2 question - the escape hatch. `/assess` s
 
 Execute this step only if the user **selected the uninstall offer**. It is mutually exclusive with the write-back offers (uninstalling and opening a PR are contradictory) - if the user somehow selected both, confirm which they meant before acting.
 
-When selected, read the full removal procedure and follow it. The path is in run-context:
-
-```bash
-jq -r '.uninstall_instructions_path' "$REPO_ROOT/.assess/run-context.json"
-# -> references/uninstall.md (relative to the assess skill directory)
-```
-
-The value is always that path; if it is ever an object with `available: false`, use `references/uninstall.md` directly.
-
-Read that `references/uninstall.md` and perform each step that applies (skip artifacts the run never created - no CI gate means no workflow to delete). Do each destructive action only after the user has confirmed uninstall, and **do not** close `assess-finding` tracker items (or the unlabelled upstream issues the upstream-issues flow filed) - surface them so the user decides. Report back which artifacts were removed and which (if any) were left for the user to handle. If the user prefers to do it themselves, hand them the steps from `references/uninstall.md` rather than performing them.
+When selected, follow `references/offer-uninstall.md` (relative to this skill dir): it reads `uninstall_instructions_path` from `run-context.json` and performs the assess skill's removal steps, each destructive one only after the user has confirmed.

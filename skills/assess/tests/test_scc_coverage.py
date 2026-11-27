@@ -15,6 +15,7 @@ import pytest
 from test_complexity_treemap import stubbed_treemap
 
 from assess_report import render_hotspots_table
+from skill_text import read_skill
 from lib.report.anomaly_detector import detect_anomalies
 from lib.complexity.scc_coverage import (
     MIN_UNRELIABLE_NLOC,
@@ -170,13 +171,14 @@ def test_report_labels_scc_ccn_approximate():
 
 
 # Every place a ccn caveat is spelled out (issue #630): one spelling per case.
+# Each skill is read with its references expanded at their pointers (#1408).
 CCN_CAVEAT_DOCS = ["skills/assess-findings/SKILL.md", "skills/assess-pr/SKILL.md"]
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.mark.parametrize("doc", CCN_CAVEAT_DOCS)
 def test_ccn_caveats_use_one_spelling_per_case(doc):
-    text = (REPO_ROOT / doc).read_text(encoding="utf-8")
+    text = read_skill(REPO_ROOT / doc)
     assert "ccn ~N (approximate)" in text or "ccn ~<N> (approximate)" in text
     assert "ccn ~N (unreliable)" in text or "ccn ~<N> (unreliable)" in text
     for variant in ("file-level scc)", "aggregate ccn ~", "ccn unreliable", "scc under-count"):
