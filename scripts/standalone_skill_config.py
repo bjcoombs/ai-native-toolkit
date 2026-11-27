@@ -35,6 +35,7 @@ def _plugin_version() -> str:
     return version
 
 
+_REPO = Path(__file__).parent.parent
 VERSION = _plugin_version()
 RELEASES_URL = "https://github.com/bjcoombs/ai-native-toolkit/releases"
 VERSION_SUFFIX = (
@@ -198,6 +199,13 @@ SKILLS: dict[str, dict[str, Any]] = {
             "references/assess-layer-scorer.md": "agents/assess-layer-scorer.md",
             "references/assess-findings.md": "skills/assess-findings/SKILL.md",
             "references/assess-pr.md": "skills/assess-pr/SKILL.md",
+            # The two sub-skills point at their own references/ files (#1408). Each
+            # lands beside its sub-skill body, so the pointer resolves unchanged.
+            **{
+                f"references/{ref.name}": ref.relative_to(_REPO).as_posix()
+                for sub in ("assess-findings", "assess-pr")
+                for ref in sorted((_REPO / "skills" / sub / "references").glob("*.md"))
+            },
         },
     },
     "huddle": {

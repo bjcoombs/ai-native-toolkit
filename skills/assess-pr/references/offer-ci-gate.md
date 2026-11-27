@@ -1,0 +1,33 @@
+# Emitting the CI gate (Step 6.5)
+
+Step 6.5 of `SKILL.md`, run when the user selects the CI-gate offer.
+
+If the user **selected** it, emit the workflow. The generator reads the running plugin's version (never the one recorded in the target's `.assess/` files, which can be months old), bakes in the discovered toolchain, and pins the newest published toolkit release that ships the action - the running version when its tag is already cut, otherwise the closest older release:
+
+````bash
+<!-- chat-replace:uv-emit-workflow -->
+uv run "${CLAUDE_SKILL_DIR}/../assess/scripts/assess_emit_workflow.py" "$REPO_ROOT"
+````
+
+This writes `.github/workflows/assess-gate.yml` (relative to the repo root). The script auto-detects the default branch and the discovered tools; override with `--branch <name>` or `--tools lizard,scc,...` when the run found a different toolchain (e.g. a per-language dead-code tool). `--paths <glob>` or `--paths-ignore <glob>` (each repeatable, not both) limit which pull requests trigger the gate. With neither, when an existing workflow under `.github/workflows/` already filters pull requests by path (a `paths:` or `paths-ignore:` key on a `pull_request` trigger, or `dorny/paths-filter`), the gate gets `paths-ignore: ['**/*.md', '.assess/**']` and the script prints a line saying so - relay it, so the user knows docs-only PRs skip the gate and report no gate check (a required status check on the gate would stay pending on them).
+
+**Heads-up on the toolkit version pin.** The emitted workflow runs the toolkit's action through one `uses: bjcoombs/ai-native-toolkit@v<version>` line, and the header comment names the same version. An unresolvable `uses:` reference fails the job at setup, before any step of the action runs, so the generator checks the pin before writing it: `gh api` first confirms the running version's tag ships `action.yml`, and only when it does not does `git ls-remote --tags` list the published tags to fall back on. When the running version's tag is not published yet (releases are cut once per batch of merges, so this is the common case), it pins the newest published tag that ships `action.yml` and prints which tag it chose and why; the gate then runs a core a release or two behind the one that wrote the committed `.assess/` snapshot, so a first gate run can differ slightly from this run. With no network it pins the running version and prints a warning naming the unverified tag - relay that line to the user and have them confirm the tag before committing. If the running version cannot be read, or GitHub reports its tag missing, and no published tag qualifies, nothing is written and the script exits 1; rerun with `--version <X.Y.Z>` naming a published release. Past setup, infra failures (a tool install, a rate limit, a network blip) degrade to a skip notice inside the action and never red the check. The workflow's supply chain is pinned end to end: actions ride commit SHAs and tools exact releases, so the snapshot stays reproducible run over run. A repo running a fork of the toolkit must edit the `uses:` line in the generated workflow.
+
+**Tell the user about the gate config.** The emitted workflow runs `assess_gate.py`, which reads the optional `[gate]` section of `.assess/config.toml` (relative to the repo root) and is **warn-only by default** - it reports every finding but fails nothing until the repo opts in. The gate has two kinds of check: **floors** (absolute, on the current snapshot) and a **regression** check (cross-run, against the prior committed snapshot). Point them at the knobs:
+
+```toml
+[gate]
+# FLOOR: findings whose presence (non-empty paths) fails the PR. Empty = warn-only.
+fail_on = ["lying_map", "orphaned_understanding"]
+# Findings reported but non-blocking. Omit to warn on every concern; [] silences all.
+warn_on = ["hidden_coupling", "candidate_dead_weight"]
+ccn_p95_max = 120        # FLOOR: fail when the p95 file complexity rises past this
+containment_min = 0.3    # FLOOR: fail when the safe-zone share drops below this (0-1)
+fail_on_regression = true  # REGRESSION: fail when hotspots worsened vs the prior snapshot
+fail_on_gate_loss = true   # REGRESSION: fail when a Step gate the committed baseline held now reads unmet
+enabled = true           # set false to mute the gate without deleting the workflow
+```
+
+`fail_on` finding names are the cross-practice findings (`hidden_coupling`, `lying_map`, `unexplained_complexity`, `untrusted_hotspot`, `self_referential_tests`, `orphaned_understanding`, `candidate_dead_weight`). The floors evaluate the current snapshot, so they read as an AI-readiness *floor* (a clean repo never trips them; a long-standing concern trips them every run until fixed). `fail_on_gate_loss` compares the Step gates with the committed `.assess/prior-level.json`: it fails only on a gate that now reads unmet (one the run could not read is a warn line), names the Step lost, and reports "no baseline yet" until the file is committed. The GitLab template (`templates/assess-gate.yml`) turns it on by default. `fail_on_regression` is the true cross-run check - it fires only when the diff against the prior committed snapshot reports a worsening, and is skipped entirely on a first run or an unreliable diff, so a freshly-cloned repo never fails its first gated PR. The asymmetric-caution default - never block a pipeline by surprise - means a repo that adopts the GitHub workflow without writing config gets reports, not red builds; the GitLab template's `fail_on_gate_loss` default is the one exception. The same asymmetry covers infrastructure: a failed toolkit fetch, tool install, or uv setup degrades to a skip notice rather than a red check, even on an opted-in repo - only the assessment itself can fail a PR.
+
+**Commit `.assess/findings.json` with the workflow.** Each run writes it: the finding method version and every finding's paths. When a later toolkit release changes how findings are decided, the gate compares that committed snapshot (the `findings.json` on disk, even when no pipeline has run since it was committed) with its own run, names the method change, lists the findings that appeared and cleared by path (these also carry any code changed since the snapshot was committed, so they are not attributed to the method alone), and prints the re-freeze command (re-run `/assess` and commit the new `findings.json`). When the gate's pinned toolkit is older than the one that wrote the snapshot, it says to raise the `uses:` pin instead, since re-freezing would undo the newer method. Without the committed file the gate has nothing to compare and gives no such explanation.
