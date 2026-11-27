@@ -293,3 +293,9 @@ def test_a_gitlab_include_with_nothing_found_reads_not_measured(tmp_path: Path) 
     root = _repo(tmp_path, {".gitlab-ci.yml": "include:\n  - local: ci/jobs.yml\n"})
     block = _block(root)
     assert (block["present"], block["present_reason"]) == (None, "ci_not_read")
+
+
+@pytest.mark.parametrize("step", ["python -m pip install -e .", "uv sync --locked", "npm ci"])
+def test_an_install_then_a_diff_is_not_a_regeneration(tmp_path: Path, step: str) -> None:
+    root = _repo(tmp_path, {**DOCS, ".github/workflows/ci.yml": _workflow(step, "git diff --exit-code")})
+    assert _block(root)["present"] is False

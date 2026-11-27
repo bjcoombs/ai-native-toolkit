@@ -187,8 +187,15 @@ def _regenerates(words: list[str]) -> bool:
     lint run (``pytest`` then ``git diff`` checks the tests left the tree clean, nothing more)."""
     head = posixpath.basename(words[0])
     text = " ".join(words)
-    return (head not in _NOT_REGEN and "install" not in words[:3] and words[:2] != ["npm", "ci"]
+    return (head not in _NOT_REGEN and not _installs(words)
             and not is_check_command(text) and not is_lint_command(text))
+
+
+def _installs(words: list[str]) -> bool:
+    """An install or dependency sync (``pip install``, ``python -m pip install``, ``uv sync``, ``npm ci``)."""
+    prog = _program(words)
+    return ("install" in words[:3] or "install" in prog[:3] or words[:2] == ["npm", "ci"]
+            or (words[0] in ("uv", "poetry", "pdm", "rye") and prog[:1] == ["sync"]))
 
 
 class _Reader:
