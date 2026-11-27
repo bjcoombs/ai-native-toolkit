@@ -195,7 +195,7 @@ def scan_ci_hazards(repo_root: Path) -> CiHazardsBlock:
     sources = dict(texts)
     if MAVEN_CONFIG in tracked:
         sources[MAVEN_CONFIG] = read_config(root, MAVEN_CONFIG)
-    reactor = follow_maven(["mvn"], reader, tracked) if "pom.xml" in tracked else None
+    reactor = follow_maven(["mvn"], reader) if "pom.xml" in tracked else None
     for pom in reactor.paths if reactor is not None else ():
         sources.setdefault(pom, reader(pom) or "")
     for text in texts.values():
