@@ -6,7 +6,7 @@ published schemas (``skills/assess/references/signals.schema.json`` and
 ``skills/fleet/references/repos.schema.json``) name and explain their fields
 here: ``ai_usage`` (#547, #695), ``ci_checks`` (#698), ``coverage_gate`` (#781),
 ``delivery`` (#715), ``review_reality`` (#943), ``guardrails`` (#767), ``agent_consistency`` (#768),
-``agent_outcome`` (#1085) and ``layer_grades`` (#620, #821).
+``agent_outcome`` (#1085), ``concurrency`` (#985) and ``layer_grades`` (#620, #821).
 Both generators read :data:`BLOCK_SCHEMAS`, so the two files describe the same
 fields in the same words.
 
@@ -20,7 +20,7 @@ a field of the block's TypedDict, and that real documents validate.
 `BLOCK_SCHEMAS` (`dict[str, JsonDict]`): hand-written field descriptions (with units: delivery durations are hours)
 of the blocks a fleet reader compares, `ai_usage`, `ci_checks`, `coverage_gate` (#781),
 `delivery` (#779), `review_reality` (#943), `guardrails` (#767), `agent_consistency` (#768) and
-`agent_outcome` (#1085), read
+`agent_outcome` (#1085) and `concurrency` (#985), read
 by both `signals_schema` and `fleet_schema` so `signals.schema.json` and `repos.schema.json`
 describe them alike. Tests: `tests/test_scan_block_schemas.py` (every described field is a
 TypedDict field and every TypedDict field is described; real full and counts-only blocks
@@ -130,6 +130,50 @@ AGENT_OUTCOME: JsonDict = {
         "rework_share": _share("sampled agent commits reworked within rework_days"),
         "rework_null_reason": _field({"type": ["string", "null"]},
                                      "Why rework_share is null: no_agent_commits or none_old_enough."),
+        "limits": _STRINGS,
+        "reason": {"type": "string"},
+    },
+}
+
+CONCURRENCY: JsonDict = {
+    "description": (
+        "How often the same files change across merges (lib/history/concurrency.py, issue #985): "
+        "the newest merge_sample first-parent commits of the run window, each file's share of "
+        "them, the files at or above threshold, the median files per merge, the generated files "
+        "touched (a linguist-generated attribute, a generated name or a generator header) and "
+        "the registry fan-in of the files above threshold. Informational: no Step, count or "
+        "headline reads it."),
+    "properties": {
+        "available": {"type": "boolean"},
+        "window": _field({"type": "string"}, "The history window read, as in ai_usage."),
+        "since": _field({"type": ["string", "null"]},
+                        "The window as an absolute git --since bound; dropped in counts-only output."),
+        "informational": _field({"type": "boolean"}, "Always true: nothing scores this block."),
+        "merge_sample": _field(_INT, "The most first-parent commits read, newest first."),
+        "merges": _field(_INT, "First-parent commits read: one per merged change on a "
+                               "squash-merge or merge-commit branch. Under a scope, only those "
+                               "that touched it, so every share is relative to them."),
+        "threshold": _field({"type": "number"}, "The touch share (0 to 1) a file is counted "
+                                                "above at or past: 0.25, one merge in four."),
+        "files_touched": _field(_INT, "Distinct files the merges changed."),
+        "files_above_threshold": _field(_INT, "Files whose touch share is at or above threshold."),
+        "max_touch_share": _field({"type": "number"}, "The highest touch share of any file."),
+        "median_files_per_merge": _field({"type": "number"}, "Median files a merge changed."),
+        "generated_files_touched": _field(_INT, "Distinct generated files the merges changed."),
+        "generated_files_above_threshold": _field(
+            _INT, "Generated files at or above threshold: generated churn."),
+        "generated_diff_share": _share("file changes that were to generated files"),
+        "generated_merge_share": _field({"type": "number"},
+                                        "Share (0 to 1) of merges that changed a generated file."),
+        "max_fan_in": _field({"type": ["integer", "null"]},
+                             "Most distinct top-level folders changed beside one file above "
+                             "threshold; null when no file is above it."),
+        "fan_in_null_reason": _field({"type": ["string", "null"]},
+                                     "Why max_fan_in is null: none_above_threshold."),
+        "hot_files": _field({"type": "array"},
+                            "The files above threshold (at most 20) with their touch share, "
+                            "generated flag and fan-in; empty in counts-only output, where "
+                            "files_above_threshold carries the count."),
         "limits": _STRINGS,
         "reason": {"type": "string"},
     },
@@ -595,6 +639,7 @@ BLOCK_SCHEMAS: dict[str, JsonDict] = {
     "agent_outcome": AGENT_OUTCOME,
     "ai_usage": AI_USAGE,
     "ci_checks": CI_CHECKS,
+    "concurrency": CONCURRENCY,
     "coverage_gate": COVERAGE_GATE,
     "delivery": DELIVERY,
     "guardrails": GUARDRAILS,

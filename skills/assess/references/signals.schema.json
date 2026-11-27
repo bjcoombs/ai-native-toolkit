@@ -103,6 +103,7 @@
           "ci_checks",
           "ci_model_jobs",
           "claude_config",
+          "concurrency",
           "config_drift",
           "contributor_files",
           "coverage_gate",
@@ -805,6 +806,126 @@
             "unread_ci_files": {
               "type": "integer",
               "description": "Tracked CI files of systems the scan does not parse, at the unread-CI paths the block description lists; a count, never the paths."
+            }
+          }
+        },
+        "concurrency": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: short_history (the window holds fewer than 10 first-parent commits, too few for a share to mean anything); shallow_clone (the checkout is a shallow clone, so the merges read are cut short); shallow_unknown (git could not confirm the checkout is a full clone); not_a_repo (the path is not a git repository, or one with no commits); no_git (git is not installed where the scan ran); git_failed (a git read after the first (the merge log or the attribute read) failed on a repository the first read could open); git_timeout (a git read took longer than the scan allows). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          },
+          "description": "How often the same files change across merges (lib/history/concurrency.py, issue #985): the newest merge_sample first-parent commits of the run window, each file's share of them, the files at or above threshold, the median files per merge, the generated files touched (a linguist-generated attribute, a generated name or a generator header) and the registry fan-in of the files above threshold. Informational: no Step, count or headline reads it.",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "window": {
+              "type": "string",
+              "description": "The history window read, as in ai_usage."
+            },
+            "since": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The window as an absolute git --since bound; dropped in counts-only output."
+            },
+            "informational": {
+              "type": "boolean",
+              "description": "Always true: nothing scores this block."
+            },
+            "merge_sample": {
+              "type": "integer",
+              "description": "The most first-parent commits read, newest first."
+            },
+            "merges": {
+              "type": "integer",
+              "description": "First-parent commits read: one per merged change on a squash-merge or merge-commit branch. Under a scope, only those that touched it, so every share is relative to them."
+            },
+            "threshold": {
+              "type": "number",
+              "description": "The touch share (0 to 1) a file is counted above at or past: 0.25, one merge in four."
+            },
+            "files_touched": {
+              "type": "integer",
+              "description": "Distinct files the merges changed."
+            },
+            "files_above_threshold": {
+              "type": "integer",
+              "description": "Files whose touch share is at or above threshold."
+            },
+            "max_touch_share": {
+              "type": "number",
+              "description": "The highest touch share of any file."
+            },
+            "median_files_per_merge": {
+              "type": "number",
+              "description": "Median files a merge changed."
+            },
+            "generated_files_touched": {
+              "type": "integer",
+              "description": "Distinct generated files the merges changed."
+            },
+            "generated_files_above_threshold": {
+              "type": "integer",
+              "description": "Generated files at or above threshold: generated churn."
+            },
+            "generated_diff_share": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "Share (0 to 1) of file changes that were to generated files; null when nothing was counted."
+            },
+            "generated_merge_share": {
+              "type": "number",
+              "description": "Share (0 to 1) of merges that changed a generated file."
+            },
+            "max_fan_in": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Most distinct top-level folders changed beside one file above threshold; null when no file is above it."
+            },
+            "fan_in_null_reason": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Why max_fan_in is null: none_above_threshold."
+            },
+            "hot_files": {
+              "type": "array",
+              "description": "The files above threshold (at most 20) with their touch share, generated flag and fan-in; empty in counts-only output, where files_above_threshold carries the count."
+            },
+            "limits": {
+              "type": [
+                "array",
+                "integer"
+              ],
+              "description": "A list of strings; counts-only output keeps only its length."
+            },
+            "reason": {
+              "type": "string"
             }
           }
         },

@@ -39,10 +39,14 @@ Per item, in this order (the first rule that applies wins; an item with the
    (``plan_filing`` gave it one of the earlier parts). The other parts are proposed closed as
    superseded by it. An item number in ``filed`` (the items this run filed or reused) is
    never superseded, so a run that splits the action again keeps its parts. A closed part
-   beside that open item is never proposed reopened: the open item carries the action.
+   beside the whole item, open or closed, is never proposed reopened: the whole item carries
+   the action, so a lapse reopens only it (#1530).
 
 No close, reopen or demote is proposed for a condition ``not_measured`` or ``declined``
 (unknown never counts); a split part is still checked for supersession. Nothing is proposed for an item the label check excludes (``label``, as ``plan_filing`` applies it).
+With an empty ``label`` (``--label ""``, filing upstream without triage access) the
+informational label cannot be written, so no demote is proposed; one note counts the skipped
+demotes, and nothing is written, so the next run reads the same (#1530).
 Close and reopen are held, with one note, when the working tree is dirty or the measured
 commit is unknown: no commit carries the reading. A run whose ``interactive`` is false
 proposes nothing (v1 runs on interactive ``/assess`` only), and a run with no level result
@@ -189,6 +193,7 @@ class _Pass:
         self.rules: list[RulesNote] = []
         self.held = 0
         self.unlisted = 0
+        self.skipped_demotes = 0
 
     def propose(self, kind: str, item: Mapping[str, object], reason: str, write: ReconcileWrite, *,
                 condition: str = "", finding: str = "", commit: str = "", superseded_by: int = 0) -> None:
@@ -206,6 +211,9 @@ class _Pass:
 
     def demote(self, item: Mapping[str, object], number: int, reason: str, *,
                condition: str = "", finding: str = "") -> None:
+        if not self.label:
+            self.skipped_demotes += 1  # no triage access: the label write would fail on every run
+            return
         write = ReconcileWrite(op="label", number=number, add_label=INFORMATIONAL_LABEL,
                                comment=f"Demoted to informational by /assess on confirmation: {reason}.")
         self.propose("demote", item, reason, write, condition=condition, finding=finding)
@@ -238,11 +246,12 @@ class _Pass:
         cid = f"{key[0]}.{key[1]}"
         whole = None
         if key[3] > 0:
-            whole = next((n for i in self.existing if _is_open(i) and (n := _number(i)) is not None
-                          and n != number and (k := marker_key(_body(i))) is not None
-                          and k[:3] == key[:3] and k[3] == 0), None)
-        if whole is not None and not _is_open(item):
-            return  # a closed part of an action now filed whole: the whole item carries it, never reopen
+            wholes = [i for i in self.existing if (n := _number(i)) is not None
+                      and n != number and (k := marker_key(_body(i))) is not None
+                      and k[:3] == key[:3] and k[3] == 0]
+            if wholes and not _is_open(item):
+                return  # a closed part beside the whole item, open or closed: only the whole reopens
+            whole = next((_number(i) for i in wholes if _is_open(i)), None)
         if self.condition(item, number, cid, conditions.get(cid), fields):
             return
         if _is_open(item) and number not in self.filed:
@@ -311,6 +320,9 @@ def reconcile(existing: Sequence[Mapping[str, object]], facts: RunFacts, *, labe
     if run.held:
         notes.append(f"{run.held} close or reopen proposal(s) held: the working tree has uncommitted changes "
                      "or the measured commit is not known, so no commit carries the reading")
+    if run.skipped_demotes:
+        notes.append(f"{run.skipped_demotes} demote proposal(s) skipped: with no label (`--label \"\"`) "
+                     "the informational label cannot be written")
     proposals = sorted(run.proposals, key=lambda p: (KINDS.index(p["kind"]), p["number"]))
     return ReconcileResult(proposals=proposals, rules_changed=run.rules, notes=notes,
                            summary=summary(proposals, run.rules, notes))
