@@ -632,7 +632,7 @@ For each that was exercised: did it help, hurt, or not apply? Mark validated.>
 - Wall clock: ~<N> min spawn to final merge
 - Estimated waste: ~<N> min (CI waits, conflict resolution, stalled teammates)
 
-**Flow** (from `flow_metrics.py`: per-PR table, per-run metrics against the previous run, DAG width, units after combining and the top hot files per wave, largest wait)
+**Flow** (from `flow_metrics.py`: per-PR table, per-run metrics against the previous run, a per-wave table of DAG width and units after combining, the run's top combining hot files, largest wait)
 <paste the script's markdown output; name the cause of the largest wait>
 ```
 
