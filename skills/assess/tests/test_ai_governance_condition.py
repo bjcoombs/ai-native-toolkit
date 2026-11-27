@@ -13,6 +13,7 @@ from lib.ai_governance import (COPILOT_OPT_OUT, NO_PR_WORKFLOWS, declines_review
                                disclosure_checkboxes, enforces_disclosure, read_copilot_opt_out, scan_ai_governance)
 from lib.counts_only.content_free import counts_only
 from lib.owner_exclusions import owner_exclusions_block
+from lib.run.decline_markers import decline_badge
 from lib.scoring.headline import badge_lines
 from lib.scoring.level_result_types import DeclineRecord
 
@@ -289,6 +290,26 @@ def test_a_copilot_file_that_declines_review_reads_declined(tmp_path: Path) -> N
     assert "declined" not in result  # no condition is about Copilot review, so none is set aside
     lines = badge_lines(result, [record])
     assert lines == ["DECLINED: Copilot review declined in .github/copilot-instructions.md · no condition set aside"]
+
+
+def test_a_copilot_record_names_itself_when_counts_only_drops_its_reason() -> None:
+    record: DeclineRecord = {"source": COPILOT_OPT_OUT, "conditions": [], "declined_by": None,
+                             "declined_at": None, "version": None, "reason": None}
+    assert decline_badge(record) == "Copilot review declined"
+    assert badge_lines(lt.level_result(lt.default_model(), {}), [record]) == [
+        "DECLINED: Copilot review declined · no condition set aside"]
+
+
+def test_the_copilot_record_stays_off_the_counted_declines_line(tmp_path: Path) -> None:
+    _repo(tmp_path, {".github/copilot-instructions.md": DECLINE, ".assess/agents-declined.json":
+                     '{"declined_by": "owner", "reason": "not yet"}'})
+    records = owner_exclusions_block(tmp_path)["declines"]
+    assert [r["source"] for r in records] == ["agents_marker", COPILOT_OPT_OUT]
+    result = lt.level_result(lt.default_model(), {"layer_grades": {"instruction_file_present": True}}, declines=records)
+    counted, shown = badge_lines(result, records)
+    assert counted.startswith(f"DECLINED: {len(result['declined'])} condition") and "Copilot" not in counted
+    assert "agents declined by owner: not yet" in counted
+    assert shown == "DECLINED: Copilot review declined in .github/copilot-instructions.md · no condition set aside"
 
 
 def test_the_opt_out_never_takes_a_condition_out_of_the_denominator() -> None:

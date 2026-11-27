@@ -270,6 +270,8 @@ def _tool_label(tool: str) -> str:
 
 AGENT_DECLINE = "agents-declined.json"
 AGENTS_MARKER = "agents_marker"
+# A Copilot review opt-out's source (lib.ai_governance.COPILOT_OPT_OUT, #851).
+COPILOT_OPT_OUT = "copilot_opt_out"
 
 
 def read_agent_decline(assess_dir: Path) -> DeclineRecord | None:
@@ -303,10 +305,11 @@ def read_agent_decline(assess_dir: Path) -> DeclineRecord | None:
 
 
 def decline_badge(record: DeclineRecord) -> str:
-    """The DECLINED badge's words for one record: who declined, when and why, as recorded; a
-    detected opt-out with no owner reads its own reason, which names the files (#851)."""
-    if record["source"] != AGENTS_MARKER and record["declined_by"] is None and record["reason"]:
-        return record["reason"]  # a detected opt-out (#851) names its files, and records no owner
+    """The DECLINED badge's words for one record: who declined, when and why, as recorded. A
+    Copilot review opt-out (#851) names itself: its reason, which names the files, or, when
+    counts-only output has dropped the reason, ``Copilot review declined``."""
+    if record["source"] == COPILOT_OPT_OUT:
+        return record["reason"] or "Copilot review declined"
     who = record["declined_by"] or "an unknown user"
     line = f"agents declined by {who}"
     if record["declined_at"]:

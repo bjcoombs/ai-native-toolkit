@@ -28,7 +28,10 @@ Two badge lines lead the block when they apply (#828), so neither is ever netted
 - ``DECLINED: N conditions · agents declined by <owner> on <date>: <reason> · a declined
   condition never holds a Step gate``, when the level result lists ``declined``. The owner and
   reason come from the decline records ``headline`` is given (``decline_markers.decline_badge``);
-  with none the line keeps the count only.
+  with none the line keeps the count only. Only the records that set a condition aside are named
+  on it (#851).
+- ``DECLINED: <words> · no condition set aside`` for the decline records that set no condition
+  aside, such as a Copilot review opt-out (#851), so their words never read as part of the count.
 - ``HAZARD: <id> undermines the <gate> gate. Fix: <fix>`` for each hazard the level result lists, or
   ``HAZARD: <id>. Fix: <fix>`` for one that blocks no gate.
 
@@ -286,13 +289,17 @@ def badge_lines(level: LevelResult, declines: Sequence[DeclineRecord] = ()) -> l
     """The DECLINED and HAZARD badge lines (#828), apart from every count: see the module doc."""
     lines: list[str] = []
     declined = level.get("declined", [])
-    words = "".join(f" · {decline_badge(r)}" for r in declines)
+    # #851: a record that set a condition aside goes on the counted line; one that set none (a
+    # Copilot review opt-out, which the model has no condition for) gets its own line
+    covering = {d["source"] for d in declined}
     if declined:
+        words = "".join(f" · {decline_badge(r)}" for r in declines if r["source"] in covering)
         n = len(declined)
         lines.append(f"DECLINED: {n} {'condition' if n == 1 else 'conditions'}{words}"
                      " · a declined condition never holds a Step gate")
-    elif declines:  # #851: a detected opt-out the model has no condition for is shown, sets nothing aside
-        lines.append(f"DECLINED{words.replace(' · ', ': ', 1)} · no condition set aside")
+    shown = [decline_badge(r) for r in declines if r["source"] not in covering]
+    if shown:
+        lines.append(f"DECLINED: {' · '.join(shown)} · no condition set aside")
     for hazard in level.get("hazards", []):
         gate = hazard.get("gate")
         held = f" undermines the {GATE_NOUN.get(gate, gate)} gate" if gate else ""
