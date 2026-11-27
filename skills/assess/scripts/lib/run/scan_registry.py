@@ -103,7 +103,8 @@ from lib.instructions.instruction_files import nested_instruction_surface
 from lib.instructions.instruction_placement import scan_instruction_placement
 from lib.skill_disclosure import scan_skill_disclosure
 from lib.secrets_guard import scan_secrets_guard
-from lib.backlog_ready import scan_backlog_ready
+from lib.backlog_ready_outcomes import scan_backlog_ready_outcomes
+from lib.hosting.issue_outcomes import backlog_outcomes, offline_backlog_outcomes
 from lib.skill_script_tests import scan_skill_script_tests
 from lib.skill_personal_data import scan_skill_personal_data
 from lib.skill_library import scan_skill_library
@@ -420,6 +421,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # Delivery figures (#715): time to merge, first human comment, AI review;
     # review_reality's approved and self-merged shares are copied, not recomputed.
     _spec("delivery", scan_delivery),
+    # The issue tracker read for backlog-ready level 2 (#1323, lib/hosting/issue_outcomes.py): issue
+    # times and labels from GitHub or GitLab, in memory only. Private; offline it reads the remote only.
+    _spec("backlog_outcomes", backlog_outcomes, offline_fn=offline_backlog_outcomes),
     _spec("gate_cost_estimate", estimate_gate_cost),
     # Layer 6: is a coverage threshold *configured*, not just measured? Each gate
     # names its file, line and threshold as written; none found reads
@@ -571,7 +575,8 @@ SCANS: tuple[ScanSpec, ...] = (
     # Backlog kept agent-ready, level 1 (issue #1322): an issue form with a required field, a
     # workflow that labels new issues untriaged, a documented ready label, and no stale job that
     # closes ready issues. Committed files only; the row waits in a test model for #1324.
-    _spec("backlog_ready", scan_backlog_ready),
+    # Level 2 (#1323, lib/backlog_ready_outcomes.py) adds three outcome metrics from backlog_outcomes.
+    _spec("backlog_ready", scan_backlog_ready_outcomes),
     # Top 3 candidates read from measured gaps. Post-offers since #821: the
     # root-instructions gap reads layer_grades; the removal proposal (#1084)
     # reads instruction_placement, so it runs after it.

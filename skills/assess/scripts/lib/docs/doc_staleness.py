@@ -34,7 +34,8 @@ run, a licence-header pass over source files) counts in full on the code side,
 which is the one route left by which a just-corrected doc can be re-flagged.
 
 A base doc is measured against its direct-child code only, and below `MIN_MEASURED_DOCS` the
-stale share is null with its reason (#822, `lib.docs.doc_staleness_scale`). Ownership, churn,
+stale share is null with its reason (#822, `lib.docs.doc_staleness_scale`). A doc in a subtree a
+CI check keeps true is fresh (`kept_true_by`, #852, `lib.ci.docs_kept_true`). Ownership, churn,
 provenance, bulk commits and the summary are covered in the full reference. Docs
 are the doc graph's set, reST and Sphinx `.txt` sources included (#840).
 Full reference: lib/docs/doc_staleness.md.
@@ -47,6 +48,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
+from lib.ci.ci_kept_types import DocsKeptTrueBlock, KeptTrueBy
 from lib.docs.doc_complexity_join import is_stale
 from lib.docs.doc_directives import is_directive_only
 from lib.docs.doc_graph import (
@@ -127,6 +129,7 @@ class DocStalenessRow(TypedDict):
     last_commit_days_bound: NotRequired[str]
     provenance: NotRequired[DocProvenance]
     directive_only: NotRequired[bool]
+    kept_true_by: NotRequired[KeptTrueBy]  # a CI check keeps its subtree true (#852)
 
 
 class DocAssociation(TypedDict):
@@ -192,6 +195,7 @@ class DocStalenessBlock(TypedDict):
     # Integer counts for a maturity model (#699); absent in blocks written before it.
     summary: NotRequired[DocStalenessSummary]
     normalisation: NotRequired[DocStalenessNormalisation]  # the #822 rule
+    kept_true: NotRequired[DocsKeptTrueBlock]  # lib.ci.docs_kept_true (#852)
 
 
 # A repo at or above this many hand-written code files is "large" enough that

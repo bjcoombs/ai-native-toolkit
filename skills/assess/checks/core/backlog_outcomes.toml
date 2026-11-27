@@ -1,0 +1,16 @@
+# Check manifest fragment: the backlog_outcomes collector. Layout and merge order:
+# skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.backlog_outcomes"
+kind = "collector"
+title = "Issue tracker read (backlog-ready level 2)"
+issues = [1323]
+callable = "lib.hosting.issue_outcomes:backlog_outcomes"
+offline_callable = "lib.hosting.issue_outcomes:offline_backlog_outcomes"
+publishes = []
+reads = ["repo_root"]
+stage = "read_side"
+private = true
+network = true
+revision = 1

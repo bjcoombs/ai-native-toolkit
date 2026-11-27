@@ -65,7 +65,9 @@ Also carries this tag, listed under its first tag:
 
 That generated output and its source agree, so an agent editing one does not quietly break the other.
 
-Tag `contracts`. No condition carries this tag yet.
+Also carries this tag, listed under its first tag:
+
+- `docs-kept-true.1` (Docs)
 
 ### Docs
 
@@ -77,6 +79,7 @@ That what an agent reads about the code is still true of the code.
 | `contributor-files.1` A newcomer can report a vulnerability privately | `contributor_files` | A security policy is committed or shared by the owner: is true (`contributor_files.policy.present eq true`) | `measured` | yes | - | positive | - | - | A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue. | Commit a SECURITY.md that says how to report a vulnerability privately, at the root, in .github/ or in docs/, or link GitHub private vulnerability reporting. |
 | `doc-freshness.1` Most mapped docs keep pace with their code | `doc_staleness` | Share of mapped docs outrun by their code: is at most 50 (`doc_staleness.summary.stale_pct lte 50`) | `measured` | yes | - | positive | - | - | An agent reads the docs as true. A doc whose code has moved on misleads it about that code. | Refresh the docs the report lists under doc freshness. |
 | `doc-freshness.2` Four in five mapped docs keep pace | `doc_staleness` | Share of mapped docs outrun by their code: is at most 20 (`doc_staleness.summary.stale_pct lte 20`) | `measured` | yes | - | positive | - | - | With four in five mapped docs keeping pace with their code, an agent can take most of what it reads at its word. | Refresh the docs the report lists under doc freshness, oldest first. |
+| `docs-kept-true.1` Docs and generated files kept true by CI (shared with Contracts) | `doc_staleness` | A CI check keeps docs or generated files true: is true (`doc_staleness.kept_true.present eq true`) | `measured` | yes | - | positive | - | - | A doc or generated file that CI regenerates, verifies or runs as a test cannot drift from the code without a red check, so an agent can read it as true. | Add a CI step that regenerates the generated files and docs, then runs git diff --exit-code. Or pair each verify script with an update script and run it in CI. Or run the doc examples as tests (pytest --doctest-modules). |
 
 Also carries this tag, listed under its first tag:
 
@@ -164,6 +167,7 @@ Also carries this tag, listed under its first tag:
 Each pair of tags that share a condition, one line per condition both carry.
 
 - `behaviour` and `agent_runtime`: `agent-evals.1`
+- `contracts` and `docs`: `docs-kept-true.1`
 - `docs` and `agent_context`: `layer-0-instructions.2`
 - `agent_runtime` and `governance`: `agent-job-write-access.1`
 - `agent_runtime` and `governance`: `agent-least-privilege.1`
@@ -206,6 +210,7 @@ The rows the conditions come from. A row's level is the highest level whose cond
 | `ci-test-failures-ignored` | CI ignores test failures | team | `min` | `ci-test-failures-ignored.1` |
 | `contributor-files` | Contributor files | team | `min` | `contributor-files.1` |
 | `doc-freshness` | Documentation freshness | team | `min` | `doc-freshness.1`, `doc-freshness.2` |
+| `docs-kept-true` | Docs and generated files kept true by CI | team | `min` | `docs-kept-true.1` |
 | `guardrails-stated` | Guardrails stated | team | `min` | `guardrails-stated.1`, `guardrails-stated.2` |
 | `layer-0-instructions` | Agent instructions | team | `min` | `layer-0-instructions.1`, `layer-0-instructions.2` |
 | `layer-1-liveness` | Runtime legibility | team | `min` | `layer-1-liveness.1`, `layer-1-liveness.2` |
@@ -387,20 +392,29 @@ It tells a documentation repository from a software one, so the report does not 
 
 An agent handed an issue with no structure, never triaged and judged against no written bar starts from a guess; intake that asks for structure and a documented ready label is the bar an issue clears before an agent picks it up.
 
-How new issues are taken in, read from committed files. An issue form has a required field, or a GitLab issue template has the six definition-of-ready sections. A workflow on issues opened adds an untriaged label, or on GitLab the refinement template is included or a scheduled job adds one. A ready label is documented with its criteria. No stale job can close a ready issue.
+How new issues are taken in and answered. An issue form has a required field, or a GitLab issue template has the six definition-of-ready sections. A workflow on issues opened adds an untriaged label, or on GitLab the refinement template is included or a scheduled job adds one. A ready label is documented with its criteria. No stale job can close a ready issue. The tracker itself is read too: time to a first response, the untriaged share and issues closed over opened.
 
-- Collector: `core.backlog_ready`, reading `repo_root`.
+- Collector: `core.backlog_ready`, reading `repo_root`, `backlog_outcomes`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `backlog_ready.required_form_field_reason` token, `backlog_ready.stale_job_safe_reason` token, `backlog_ready.untriaged_on_open_reason` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `backlog_ready.close_open_ratio_90d_reason` token, `backlog_ready.first_response_median_days_reason` token, `backlog_ready.outcomes.reason` token, `backlog_ready.required_form_field_reason` token, `backlog_ready.stale_job_safe_reason` token, `backlog_ready.untriaged_after_7d_share_reason` token, `backlog_ready.untriaged_on_open_reason` token.
 - Used by: no row or finding yet.
-- Evidence: `unclassified`, as no criterion reads its signals: `backlog_ready.ready_label_documented` config_text (config_only), `backlog_ready.required_form_field` config_text (config_only), `backlog_ready.stale_job_safe` config_text (config_only), `backlog_ready.untriaged_on_open` config_text (config_only).
+- Evidence: `unclassified`, as no criterion reads its signals: `backlog_ready.close_open_met` platform (verified), `backlog_ready.close_open_ratio_90d` platform (verified), `backlog_ready.first_response_median_days` platform (verified), `backlog_ready.first_response_met` platform (verified), `backlog_ready.ready_label_documented` config_text (config_only), `backlog_ready.required_form_field` config_text (config_only), `backlog_ready.stale_job_safe` config_text (config_only), `backlog_ready.untriaged_after_7d_share` platform (verified), `backlog_ready.untriaged_met` platform (verified), `backlog_ready.untriaged_on_open` config_text (config_only).
 - Not measured when:
   - `form_unreadable`: No issue form read has a required field, and a form or GitLab template could not be read. Causes are a tab indent, an unclosed flow collection, no top-level body list, or a file over the size limit. Fix the form so GitHub accepts it; a form GitHub rejects is not offered to the person opening an issue.
   - `gitlab_ci_unreadable`: No workflow adds an untriaged label, and .gitlab-ci.yml has a tab in its indentation or an unclosed flow collection, which GitLab rejects. Fix .gitlab-ci.yml so GitLab accepts it; the pipeline editor's validate tab names the line.
   - `gitlab_ci_unsettled`: No workflow or GitLab job read adds an untriaged label on a schedule. But something this reader cannot follow may: an include not read offline, or an anchor merge, !reference, variable label or unread rule. Nothing to change if a scheduled job labels new issues; a literal label, plain rules: and a local include let the scan read it.
   - `workflow_unreadable`: No workflow read adds an untriaged label when an issue opens, and a workflow's on: key could not be read. Nothing to change if that workflow labels new issues; a plain on: issues: types: [opened] lets the scan read it.
   - `stale_input_unresolved`: No stale job is sure to close a ready issue. But one sets its close days or exempt labels to an expression, which this reader does not follow. Nothing to change if the job exempts the ready label; a literal exempt-issue-labels or days-before-issue-close: -1 lets the scan read it.
+  - `no_network`: The issue tracker was not read: a headless run without --platform, or the host could not be reached. Run /assess with gh or glab signed in, or a headless run with --platform.
+  - `no_platform_auth`: The issue tracker could not be read: gh or glab is missing or signed out, or the token was refused the issues. Sign gh or glab in with a token that can read the repository's issues, then run again.
+  - `unsupported_host`: The repository has no remote, or its host is not GitHub or a GitLab that glab reaches, so its issues were not read. Nothing to change if the tracker lives elsewhere; for a self-managed GitLab, sign glab in to the host.
+  - `platform_error`: A read of the issue tracker failed for a reason other than access, such as a rate limit or a server error. Run again later.
+  - `empty_window`: The metric has nothing to measure yet: no issue in the window, none answered, or no open issue older than 7 days. Nothing to change; the metric reads once there are issues to measure.
+  - `response_unread`: A first response may exist that was not read: a long timeline, the note cap or an unclassified account. Run again with gh or glab signed in as an account that can read users; the caps are fixed.
+  - `window_truncated`: The window's issue list passed the read cap, so closed issues may be missing and the ratio is not taken. Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window.
+  - `open_truncated`: The open-issue list passed the read cap, so the untriaged share would cover only part of it and is not taken. Nothing to change; close or triage old open issues to bring the list under the cap.
+  - `no_response`: No issue opened in the window got a first response from a person, and each has waited longer than first_response_max_days. Answer, label or close new issues within first_response_max_days.
 
 ### `behaviour`: Keyhole blocks: behaviour
 
@@ -666,21 +680,24 @@ An agent finds docs by following links from README, AGENTS.md or an index; a doc
 
 It compares each doc's last change with the churn in the code it describes, so a doc whose code moved on is found before an agent relies on it.
 
-Each doc's last content change against its code subject's churn, following renames.
+Each doc's last content change against its code subject's churn, following renames. Also each CI check that keeps docs or generated files true. That is a regenerate-then-diff step, a verify and update script pair, or doc examples run as tests. A doc in a subtree such a check names is not reported stale.
 
 - Collector: `core.doc_staleness`, reading `repo_root`, `doc_graph`, `excludes`, `scope`.
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
 - Headless variant reads: `repo_root`, `doc_graph`, `excludes`.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `doc_staleness.bulk_commits_skipped.date` token, `doc_staleness.bulk_commits_skipped.sha` drop, `doc_staleness.churn_window` drop, `doc_staleness.declared_cross_repo.path` path, `doc_staleness.declared_cross_repo.reason` token, `doc_staleness.declared_cross_repo.repo` id, `doc_staleness.declared_cross_repo.scope` path, `doc_staleness.declared_cross_repo.status` token, `doc_staleness.docs.base_doc_dir` path, `doc_staleness.docs.confidence` token, `doc_staleness.docs.last_change_basis` token, `doc_staleness.docs.last_commit_days_bound` token, `doc_staleness.docs.provenance.generated_by` drop, `doc_staleness.docs.provenance.method` token, `doc_staleness.docs.provenance.sources` path, `doc_staleness.docs.subject_match` token, `doc_staleness.docs.subject_method` token, `doc_staleness.docs.subject_paths` path, `doc_staleness.docs.subject_roots` path, `doc_staleness.history_boundary_date` token, `doc_staleness.normalisation.base_doc_subject` token, `doc_staleness.normalisation.rename_scope` token, `doc_staleness.summary.stale_pct_reason` token.
-- Used by: row `doc-freshness`.
-- Evidence: `doc_staleness.summary.stale_pct` git_history (measured).
-- Not measured when: it cannot read its input; the block says why.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `doc_staleness.bulk_commits_skipped.date` token, `doc_staleness.bulk_commits_skipped.sha` drop, `doc_staleness.churn_window` drop, `doc_staleness.declared_cross_repo.path` path, `doc_staleness.declared_cross_repo.reason` token, `doc_staleness.declared_cross_repo.repo` id, `doc_staleness.declared_cross_repo.scope` path, `doc_staleness.declared_cross_repo.status` token, `doc_staleness.docs.base_doc_dir` path, `doc_staleness.docs.confidence` token, `doc_staleness.docs.kept_true_by.kind` token, `doc_staleness.docs.kept_true_by.path` path, `doc_staleness.docs.last_change_basis` token, `doc_staleness.docs.last_commit_days_bound` token, `doc_staleness.docs.provenance.generated_by` drop, `doc_staleness.docs.provenance.method` token, `doc_staleness.docs.provenance.sources` path, `doc_staleness.docs.subject_match` token, `doc_staleness.docs.subject_method` token, `doc_staleness.docs.subject_paths` path, `doc_staleness.docs.subject_roots` path, `doc_staleness.history_boundary_date` token, `doc_staleness.kept_true.checks.covers` path, `doc_staleness.kept_true.checks.kind` token, `doc_staleness.kept_true.checks.path` path, `doc_staleness.kept_true.present_reason` token, `doc_staleness.normalisation.base_doc_subject` token, `doc_staleness.normalisation.rename_scope` token, `doc_staleness.summary.stale_pct_reason` token.
+- Used by: row `doc-freshness`, row `docs-kept-true`.
+- Evidence: `doc_staleness.kept_true.present` head_structure (measured), `doc_staleness.summary.stale_pct` git_history (measured).
+- Not measured when:
+  - `ci_not_read`: No CI check that keeps docs or generated files true was found. The tree tracks a CI file of a system this reader does not parse, such as Jenkins, Prow or Buildkite. Or .gitlab-ci.yml has an include: this reader does not follow. Either may run one. Nothing to change: this reads as not measured until that system's configuration can be read.
+  - `scan_failed`: The reader of CI checks that keep docs true raised an error. The doc staleness block is kept, and this one condition reads not measured. Nothing to change in the repository: report the error so the reader can be fixed.
 
 Why the signals named here matter:
 
 - `doc_staleness.summary.stale_pct` feeds `doc-freshness.1:doc_staleness.summary.stale_pct`: An agent reads the docs as true. A doc whose code has moved on misleads it about that code.
 - `doc_staleness.summary.stale_pct` feeds `doc-freshness.2:doc_staleness.summary.stale_pct`: With four in five mapped docs keeping pace with their code, an agent can take most of what it reads at its word.
+- `doc_staleness.kept_true.present` feeds `docs-kept-true.1:doc_staleness.kept_true.present`: A doc or generated file that CI regenerates, verifies or runs as a test cannot drift from the code without a red check, so an agent can read it as true.
 
 ### `documentation`: Keyhole blocks: documentation
 
@@ -1208,7 +1225,8 @@ The scan registry sorted by name, including the private inputs other scans read.
 | `anomalies` | Anomalies | `run_header` | `anomalies` | no |
 | `archetype` | Repository archetype | `repo_root` | `archetype` | no |
 | `assess_dir` | Artifact directory | `repo_root`, `run_scope` | private input | no |
-| `backlog_ready` | Backlog kept agent-ready (intake configuration) | `repo_root` | `backlog_ready` | no |
+| `backlog_outcomes` | Issue tracker read (backlog-ready level 2) | `repo_root` | private input | yes |
+| `backlog_ready` | Backlog kept agent-ready (intake configuration) | `repo_root`, `backlog_outcomes` | `backlog_ready` | no |
 | `broken_instruction_refs` | Broken instruction references | `doc_graph`, `instruction_grading` | `broken_instruction_refs` | no |
 | `churn_degenerate` | Degenerate churn history | `doc_staleness` | `churn_degenerate` | no |
 | `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci`, `gitlab_include_renames` | `ci_checks` | no |

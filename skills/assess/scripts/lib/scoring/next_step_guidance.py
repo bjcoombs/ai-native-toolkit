@@ -444,6 +444,11 @@ _WORDING: dict[str, Wording] = {
         "No CI job that calls a model API runs on every push to the default branch or every pull "
         "request update without a `paths:` filter, a schedule or manual trigger, a label, or GitLab "
         "`rules:changes:`."),
+    "doc_staleness.kept_true.present": _flag(
+        "Add a CI step that regenerates the generated files and docs and then runs "
+        "`git diff --exit-code`, or run the doc examples as tests (`pytest --doctest-modules`).",
+        "A CI job regenerates files and stops on a diff, runs a verify script paired with an "
+        "update script, or runs doc examples as tests."),
     "ci_model_jobs.agent_evals.present": _flag(
         "Keep the agent's eval cases in an `evals/` folder, commit a baseline beside them (a "
         "snapshot, recorded model responses or a tool-budget file), and run the folder in a CI job.",
@@ -603,7 +608,8 @@ _MEASURE_HINTS = {
                      "tree, and the stale share is null on a shallow clone or a history where "
                      "every file has about one commit (rescan a full-history clone), when no "
                      "doc describes a part of the code of its own, or below 20 measured docs "
-                     "(`too_few_measured_docs`).",
+                     "(`too_few_measured_docs`). Docs kept true by CI are not measured (`ci_not_read`) "
+                     "when none is found and the tree holds a CI file of a system this reader does not parse.",
     "review_reality": "Unavailable (`unsupported_host`) when the remote's host is not GitHub or a "
                       "GitLab host glab reaches (Bitbucket, Azure DevOps, GitHub Enterprise): "
                       "neither `--platform` nor `/assess` reads merged changes there; sign glab "

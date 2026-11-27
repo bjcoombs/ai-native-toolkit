@@ -133,10 +133,18 @@ def test_row_order_is_fixed_and_labels_carry_conditions_and_repositories_measure
 def test_a_tag_no_repository_measured_is_dashed_with_its_reason_never_zero() -> None:
     svg = _svg()
     for tag, reason in (("governance", "not measured on any repository"),
-                        ("supply_chain", "not counted: its conditions are listed, never counted"),
-                        ("contracts", "not yet measured: no condition has this tag")):
+                        ("supply_chain", "not counted: its conditions are listed, never counted")):
         row = _row(svg, tag)
         assert 'data-mark="dashed"' in row and 'data-mark="dot"' not in row and reason in row
+    model = default_model()   # contracts first carried a condition in #852: take it off
+    for model_row in model["rows"]:
+        for lv in model_row["levels"]:
+            lv["truth"] = [t for t in lv["truth"] if t != "contracts"]
+    bare = tp.tag_profile(model, [[_cell("structure", 0, 5)]])
+    assert bare is not None
+    row = _row(_svg(bare), "contracts")
+    assert 'data-mark="dashed"' in row and 'data-mark="dot"' not in row
+    assert "not yet measured: no condition has this tag" in row
     assert _by_tag(rows())["governance"]["median"] is None
 
 

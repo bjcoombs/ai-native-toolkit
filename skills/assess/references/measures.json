@@ -501,6 +501,52 @@
       ]
     },
     {
+      "id": "docs-kept-true",
+      "title": "Docs and generated files kept true by CI",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "id": "docs-kept-true.1",
+          "truth": [
+            "docs",
+            "contracts"
+          ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "predicted": null,
+          "review": null,
+          "step_gates": [],
+          "blocks": null,
+          "grade": "measured",
+          "counts": true,
+          "criteria": [
+            {
+              "key": "docs-kept-true.1:doc_staleness.kept_true.present",
+              "signal": "doc_staleness.kept_true.present",
+              "producer": {
+                "scan": "doc_staleness",
+                "collector": "core.doc_staleness"
+              },
+              "op": "eq",
+              "value": true,
+              "eq_signal": null,
+              "text": "A CI check keeps docs or generated files true: is true",
+              "title": "Docs and generated files kept true by CI",
+              "fix": "Add a CI step that regenerates the generated files and docs, then runs git diff --exit-code. Or pair each verify script with an update script and run it in CI. Or run the doc examples as tests (pytest --doctest-modules).",
+              "why": "A doc or generated file that CI regenerates, verifies or runs as a test cannot drift from the code without a red check, so an agent can read it as true.",
+              "why_source": "",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "guardrails-stated",
       "title": "Guardrails stated",
       "scope": "team",
@@ -1792,9 +1838,13 @@
     {
       "id": "contracts",
       "title": "Contracts",
-      "conditions": [],
+      "conditions": [
+        "docs-kept-true.1"
+      ],
       "listed": [],
-      "shared": [],
+      "shared": [
+        "docs-kept-true.1"
+      ],
       "why": "That generated output and its source agree, so an agent editing one does not quietly break the other.",
       "why_source": ""
     },
@@ -1805,14 +1855,17 @@
         "contributor-files.1",
         "doc-freshness.1",
         "doc-freshness.2",
+        "docs-kept-true.1",
         "layer-0-instructions.2"
       ],
       "listed": [
         "contributor-files.1",
         "doc-freshness.1",
-        "doc-freshness.2"
+        "doc-freshness.2",
+        "docs-kept-true.1"
       ],
       "shared": [
+        "docs-kept-true.1",
         "layer-0-instructions.2"
       ],
       "why": "That what an agent reads about the code is still true of the code.",
@@ -1952,6 +2005,15 @@
       ],
       "conditions": [
         "agent-evals.1"
+      ]
+    },
+    {
+      "tags": [
+        "contracts",
+        "docs"
+      ],
+      "conditions": [
+        "docs-kept-true.1"
       ]
     },
     {
@@ -2667,20 +2729,25 @@
     {
       "name": "backlog_ready",
       "title": "Backlog kept agent-ready (intake configuration)",
-      "summary": "How new issues are taken in, read from committed files. An issue form has a required field, or a GitLab issue template has the six definition-of-ready sections. A workflow on issues opened adds an untriaged label, or on GitLab the refinement template is included or a scheduled job adds one. A ready label is documented with its criteria. No stale job can close a ready issue.",
+      "summary": "How new issues are taken in and answered. An issue form has a required field, or a GitLab issue template has the six definition-of-ready sections. A workflow on issues opened adds an untriaged label, or on GitLab the refinement template is included or a scheduled job adds one. A ready label is documented with its criteria. No stale job can close a ready issue. The tracker itself is read too: time to a first response, the untriaged share and issues closed over opened.",
       "collector": "core.backlog_ready",
       "reads": [
-        "repo_root"
+        "repo_root",
+        "backlog_outcomes"
       ],
       "headless_reads": null,
       "network": false,
-      "platform": false,
+      "platform": true,
       "headless": "registered",
       "privacy": {
         "written": true,
         "strings_kept": {
+          "backlog_ready.close_open_ratio_90d_reason": "token",
+          "backlog_ready.first_response_median_days_reason": "token",
+          "backlog_ready.outcomes.reason": "token",
           "backlog_ready.required_form_field_reason": "token",
           "backlog_ready.stale_job_safe_reason": "token",
+          "backlog_ready.untriaged_after_7d_share_reason": "token",
           "backlog_ready.untriaged_on_open_reason": "token"
         }
       },
@@ -2714,9 +2781,74 @@
           "code": "stale_input_unresolved",
           "means": "No stale job is sure to close a ready issue. But one sets its close days or exempt labels to an expression, which this reader does not follow.",
           "next_step": "Nothing to change if the job exempts the ready label; a literal exempt-issue-labels or days-before-issue-close: -1 lets the scan read it."
+        },
+        {
+          "code": "no_network",
+          "means": "The issue tracker was not read: a headless run without --platform, or the host could not be reached.",
+          "next_step": "Run /assess with gh or glab signed in, or a headless run with --platform."
+        },
+        {
+          "code": "no_platform_auth",
+          "means": "The issue tracker could not be read: gh or glab is missing or signed out, or the token was refused the issues.",
+          "next_step": "Sign gh or glab in with a token that can read the repository's issues, then run again."
+        },
+        {
+          "code": "unsupported_host",
+          "means": "The repository has no remote, or its host is not GitHub or a GitLab that glab reaches, so its issues were not read.",
+          "next_step": "Nothing to change if the tracker lives elsewhere; for a self-managed GitLab, sign glab in to the host."
+        },
+        {
+          "code": "platform_error",
+          "means": "A read of the issue tracker failed for a reason other than access, such as a rate limit or a server error.",
+          "next_step": "Run again later."
+        },
+        {
+          "code": "empty_window",
+          "means": "The metric has nothing to measure yet: no issue in the window, none answered, or no open issue older than 7 days.",
+          "next_step": "Nothing to change; the metric reads once there are issues to measure."
+        },
+        {
+          "code": "response_unread",
+          "means": "A first response may exist that was not read: a long timeline, the note cap or an unclassified account.",
+          "next_step": "Run again with gh or glab signed in as an account that can read users; the caps are fixed."
+        },
+        {
+          "code": "window_truncated",
+          "means": "The window's issue list passed the read cap, so closed issues may be missing and the ratio is not taken.",
+          "next_step": "Nothing to change; set a shorter window_days in [backlog_ready] to read the whole window."
+        },
+        {
+          "code": "open_truncated",
+          "means": "The open-issue list passed the read cap, so the untriaged share would cover only part of it and is not taken.",
+          "next_step": "Nothing to change; close or triage old open issues to bring the list under the cap."
+        },
+        {
+          "code": "no_response",
+          "means": "No issue opened in the window got a first response from a person, and each has waited longer than first_response_max_days.",
+          "next_step": "Answer, label or close new issues within first_response_max_days."
         }
       ],
       "evidence": [
+        {
+          "signal": "backlog_ready.close_open_met",
+          "input_class": "platform",
+          "grade": "verified"
+        },
+        {
+          "signal": "backlog_ready.close_open_ratio_90d",
+          "input_class": "platform",
+          "grade": "verified"
+        },
+        {
+          "signal": "backlog_ready.first_response_median_days",
+          "input_class": "platform",
+          "grade": "verified"
+        },
+        {
+          "signal": "backlog_ready.first_response_met",
+          "input_class": "platform",
+          "grade": "verified"
+        },
         {
           "signal": "backlog_ready.ready_label_documented",
           "input_class": "config_text",
@@ -2731,6 +2863,16 @@
           "signal": "backlog_ready.stale_job_safe",
           "input_class": "config_text",
           "grade": "config_only"
+        },
+        {
+          "signal": "backlog_ready.untriaged_after_7d_share",
+          "input_class": "platform",
+          "grade": "verified"
+        },
+        {
+          "signal": "backlog_ready.untriaged_met",
+          "input_class": "platform",
+          "grade": "verified"
         },
         {
           "signal": "backlog_ready.untriaged_on_open",
@@ -3674,7 +3816,7 @@
     {
       "name": "doc_staleness",
       "title": "Doc staleness",
-      "summary": "Each doc's last content change against its code subject's churn, following renames.",
+      "summary": "Each doc's last content change against its code subject's churn, following renames. Also each CI check that keeps docs or generated files true. That is a regenerate-then-diff step, a verify and update script pair, or doc examples run as tests. A doc in a subtree such a check names is not reported stale.",
       "collector": "core.doc_staleness",
       "reads": [
         "repo_root",
@@ -3703,6 +3845,8 @@
           "doc_staleness.declared_cross_repo.status": "token",
           "doc_staleness.docs.base_doc_dir": "path",
           "doc_staleness.docs.confidence": "token",
+          "doc_staleness.docs.kept_true_by.kind": "token",
+          "doc_staleness.docs.kept_true_by.path": "path",
           "doc_staleness.docs.last_change_basis": "token",
           "doc_staleness.docs.last_commit_days_bound": "token",
           "doc_staleness.docs.provenance.generated_by": "drop",
@@ -3713,6 +3857,10 @@
           "doc_staleness.docs.subject_paths": "path",
           "doc_staleness.docs.subject_roots": "path",
           "doc_staleness.history_boundary_date": "token",
+          "doc_staleness.kept_true.checks.covers": "path",
+          "doc_staleness.kept_true.checks.kind": "token",
+          "doc_staleness.kept_true.checks.path": "path",
+          "doc_staleness.kept_true.present_reason": "token",
           "doc_staleness.normalisation.base_doc_subject": "token",
           "doc_staleness.normalisation.rename_scope": "token",
           "doc_staleness.summary.stale_pct_reason": "token"
@@ -3720,16 +3868,34 @@
       },
       "used_by": {
         "rows": [
-          "doc-freshness"
+          "doc-freshness",
+          "docs-kept-true"
         ],
         "conditions": [
           "doc-freshness.1:doc_staleness.summary.stale_pct",
-          "doc-freshness.2:doc_staleness.summary.stale_pct"
+          "doc-freshness.2:doc_staleness.summary.stale_pct",
+          "docs-kept-true.1:doc_staleness.kept_true.present"
         ],
         "findings": []
       },
-      "unknown_reasons": [],
+      "unknown_reasons": [
+        {
+          "code": "ci_not_read",
+          "means": "No CI check that keeps docs or generated files true was found. The tree tracks a CI file of a system this reader does not parse, such as Jenkins, Prow or Buildkite. Or .gitlab-ci.yml has an include: this reader does not follow. Either may run one.",
+          "next_step": "Nothing to change: this reads as not measured until that system's configuration can be read."
+        },
+        {
+          "code": "scan_failed",
+          "means": "The reader of CI checks that keep docs true raised an error. The doc staleness block is kept, and this one condition reads not measured.",
+          "next_step": "Nothing to change in the repository: report the error so the reader can be fixed."
+        }
+      ],
       "evidence": [
+        {
+          "signal": "doc_staleness.kept_true.present",
+          "input_class": "head_structure",
+          "grade": "measured"
+        },
         {
           "signal": "doc_staleness.summary.stale_pct",
           "input_class": "git_history",
@@ -5529,13 +5695,24 @@
       "private": true
     },
     {
+      "name": "backlog_outcomes",
+      "title": "Issue tracker read (backlog-ready level 2)",
+      "publishes": [],
+      "reads": [
+        "repo_root"
+      ],
+      "network": true,
+      "private": true
+    },
+    {
       "name": "backlog_ready",
       "title": "Backlog kept agent-ready (intake configuration)",
       "publishes": [
         "backlog_ready"
       ],
       "reads": [
-        "repo_root"
+        "repo_root",
+        "backlog_outcomes"
       ],
       "network": false,
       "private": false
@@ -6930,6 +7107,42 @@
       "null_means": "the repository lists no permission entry and a managed settings source on the machine running the check could not be read (managed_settings_unreadable)"
     },
     {
+      "path": "backlog_ready.close_open_met",
+      "title": "Issues close at least close_open_min_ratio as fast as they open",
+      "type": "bool",
+      "collector": "core.backlog_ready",
+      "input_class": "platform",
+      "grade": "verified",
+      "null_means": "close_open_ratio_90d is not measured; its reason says why"
+    },
+    {
+      "path": "backlog_ready.close_open_ratio_90d",
+      "title": "Issues closed over issues opened in the window",
+      "type": "number",
+      "collector": "core.backlog_ready",
+      "input_class": "platform",
+      "grade": "verified",
+      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window; window_truncated: the window list hit its page cap"
+    },
+    {
+      "path": "backlog_ready.first_response_median_days",
+      "title": "Median days to a first response by a person other than the author (issues opened in the window)",
+      "type": "number",
+      "collector": "core.backlog_ready",
+      "input_class": "platform",
+      "grade": "verified",
+      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no issue opened in the window got a response; response_unread: a response could not be read; no_response: none did and each has waited past the threshold"
+    },
+    {
+      "path": "backlog_ready.first_response_met",
+      "title": "The median wait for a first response, unanswered issues included, is within first_response_max_days",
+      "type": "bool",
+      "collector": "core.backlog_ready",
+      "input_class": "platform",
+      "grade": "verified",
+      "null_means": "first_response_median_days is not measured (its reason says why), or issues whose wait is not known yet could tip the median"
+    },
+    {
       "path": "backlog_ready.ready_label_documented",
       "title": "A ready label is documented with its criteria",
       "type": "bool",
@@ -6955,6 +7168,24 @@
       "input_class": "config_text",
       "grade": "config_only",
       "null_means": "stale_input_unresolved: no stale job closes ready issues for certain, but one sets an input to an expression"
+    },
+    {
+      "path": "backlog_ready.untriaged_after_7d_share",
+      "title": "Share of open issues older than 7 days with no label or an untriaged label",
+      "type": "number",
+      "collector": "core.backlog_ready",
+      "input_class": "platform",
+      "grade": "verified",
+      "null_means": "no_network, no_platform_auth, unsupported_host or platform_error: the tracker was not read; empty_window: no open issue is older than 7 days; open_truncated: the open-issue list hit its page cap"
+    },
+    {
+      "path": "backlog_ready.untriaged_met",
+      "title": "At most untriaged_max_share of open issues older than 7 days are untriaged",
+      "type": "bool",
+      "collector": "core.backlog_ready",
+      "input_class": "platform",
+      "grade": "verified",
+      "null_means": "untriaged_after_7d_share is not measured; its reason says why"
     },
     {
       "path": "backlog_ready.untriaged_on_open",
@@ -7045,6 +7276,15 @@
       "input_class": "ci_executed",
       "grade": "verified",
       "null_means": "threshold_not_read: threshold unknown; unknown_trigger: triggers unsettled; check_may_pass: may not fail its job; indirect_run: make test or tox may run it; included_jobs: in an included file; unread_ci_system: unparsed CI may run it; status_check_unconfirmed: a Codecov status that may be optional"
+    },
+    {
+      "path": "doc_staleness.kept_true.present",
+      "title": "A CI check keeps docs or generated files true",
+      "type": "bool",
+      "collector": "core.doc_staleness",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "ci_not_read: no such check was found and a CI file of a system this reader does not parse is tracked"
     },
     {
       "path": "doc_staleness.summary.stale_pct",

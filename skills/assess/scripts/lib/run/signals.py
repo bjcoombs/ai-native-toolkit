@@ -227,9 +227,11 @@ FULL_RUN_ONLY_REASONS: frozenset[str] = frozenset(
 # #1357): an include project with no clone, looked up across a rename.
 # ``secrets_guard`` (lib/secrets_guard.py, #1173) is offline too, but reads
 # ``github_secret_scanning``, so the pass rebuilds it from the read setting.
+# ``backlog_ready`` (lib/backlog_ready_outcomes.py, #1323) reads the private network spec
+# ``backlog_outcomes`` (lib/hosting/issue_outcomes.py) for its level 2 metrics.
 PLATFORM_SCANS: tuple[str, ...] = ("review_reality", "delivery", "review_evidence",
                                    "review_automation", "ci_checks", "org_security_policy",
-                                   "github_secret_scanning", "secrets_guard")
+                                   "github_secret_scanning", "secrets_guard", "backlog_ready")
 
 # The PLATFORM_SCANS blocks that exist only on the platform (#779): without
 # ``--platform`` the document leaves them out (absent, never a ``network``

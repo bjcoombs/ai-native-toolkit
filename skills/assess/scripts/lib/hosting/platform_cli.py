@@ -25,7 +25,8 @@
   comments (``lib/hosting/merged_sample.py``, #778). On GitLab: merge-request notes
   (``lib/hosting/gitlab_notes.py``, #716), the merged list with its descriptions
   (``lib/hosting/merged_sample.py``, #778), and the merged CI configuration
-  (``lib/hosting/gitlab_ci_lint.py``, #796). ``fleet --platform`` sets it for its platform
+  (``lib/hosting/gitlab_ci_lint.py``, #796), and the issue lists and notes of the backlog-ready
+  read (``lib/hosting/issue_outcomes_gitlab.py``, #1323). ``fleet --platform`` sets it for its platform
   children only, to a temporary directory removed when the pass ends: cached
   responses can still hold names and account logins, so they never land in
   ``--out``, the run history or a target. Without it nothing is cached. The key is the argv
@@ -53,7 +54,7 @@ with `run_cli(..., cache=False)` (`gitlab_cli.glab_api(..., cache=False)`) neith
 nor writes it. The cache never holds comment or review text on either provider: GitLab
 merge-request notes (#716) and the GitLab merged list (`merged_sample.py`, #778), both
 through `gitlab_cli.glab_api(..., cache=False)`, GitLab's merged CI configuration
-(`gitlab_ci_lint.py`, #796, the same way), and the GitHub merged pull request read with
+(`gitlab_ci_lint.py`, #796, the same way), GitLab issue lists and notes (`issue_outcomes_gitlab.py`, #1323), and the GitHub merged pull request read with
 reviews and comments (`merged_sample.py`, `gh_cli.gh_json(..., cache=False)`, #778) are read
 in memory only. Callers keep
 their own `FileNotFoundError` / `TimeoutExpired` mapping. Tests:

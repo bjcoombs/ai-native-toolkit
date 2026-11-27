@@ -1,0 +1,166 @@
+{
+ "data": {
+  "repository": {
+   "issues": {
+    "pageInfo": {
+     "hasNextPage": false,
+     "endCursor": "Y3Vyc29yOjQ="
+    },
+    "nodes": [
+     {
+      "number": 9101,
+      "title": "Fixture title alpha",
+      "url": "https://github.com/acme/widget/issues/9101",
+      "createdAt": "2026-11-01T00:00:00Z",
+      "closedAt": "2026-11-03T00:00:00Z",
+      "author": {
+       "__typename": "User",
+       "login": "alice-fixture"
+      },
+      "timelineItems": {
+       "pageInfo": {
+        "hasNextPage": false
+       },
+       "nodes": [
+        {
+         "__typename": "LabeledEvent",
+         "createdAt": "2026-11-01T00:01:00Z",
+         "actor": {
+          "__typename": "Bot",
+          "login": "refiner"
+         }
+        },
+        {
+         "__typename": "IssueComment",
+         "createdAt": "2026-11-01T12:00:00Z",
+         "author": {
+          "__typename": "User",
+          "login": "bob-fixture"
+         }
+        },
+        {
+         "__typename": "ClosedEvent",
+         "createdAt": "2026-11-03T00:00:00Z",
+         "actor": {
+          "__typename": "User",
+          "login": "bob-fixture"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "number": 9102,
+      "title": "Fixture title beta",
+      "url": "https://github.com/acme/widget/issues/9102",
+      "createdAt": "2026-10-10T00:00:00Z",
+      "closedAt": null,
+      "author": {
+       "__typename": "User",
+       "login": "carol-fixture"
+      },
+      "timelineItems": {
+       "pageInfo": {
+        "hasNextPage": false
+       },
+       "nodes": [
+        {
+         "__typename": "LabeledEvent",
+         "createdAt": "2026-10-10T00:05:00Z",
+         "actor": {
+          "__typename": "Bot",
+          "login": "refiner"
+         }
+        },
+        {
+         "__typename": "IssueComment",
+         "createdAt": "2026-10-10T06:00:00Z",
+         "author": {
+          "__typename": "User",
+          "login": "carol-fixture"
+         }
+        },
+        {
+         "__typename": "IssueComment",
+         "createdAt": "2026-10-11T00:00:00Z",
+         "author": {
+          "__typename": "User",
+          "login": "alice-fixture"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "number": 9103,
+      "title": "Fixture title gamma",
+      "url": "https://github.com/acme/widget/issues/9103",
+      "createdAt": "2026-09-15T00:00:00Z",
+      "closedAt": "2026-09-16T00:00:00Z",
+      "author": {
+       "__typename": "User",
+       "login": "dave-fixture"
+      },
+      "timelineItems": {
+       "pageInfo": {
+        "hasNextPage": false
+       },
+       "nodes": [
+        {
+         "__typename": "IssueComment",
+         "createdAt": "2026-09-15T01:00:00Z",
+         "author": {
+          "__typename": "User",
+          "login": "dave-fixture"
+         }
+        },
+        {
+         "__typename": "LabeledEvent",
+         "createdAt": "2026-09-16T00:00:00Z",
+         "actor": {
+          "__typename": "User",
+          "login": "erin-fixture"
+         }
+        },
+        {
+         "__typename": "ClosedEvent",
+         "createdAt": "2026-09-16T00:00:00Z",
+         "actor": {
+          "__typename": "User",
+          "login": "erin-fixture"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "number": 9104,
+      "title": "Fixture title delta",
+      "url": "https://github.com/acme/widget/issues/9104",
+      "createdAt": "2026-06-01T00:00:00Z",
+      "closedAt": "2026-10-01T00:00:00Z",
+      "author": {
+       "__typename": "User",
+       "login": "frank-fixture"
+      },
+      "timelineItems": {
+       "pageInfo": {
+        "hasNextPage": false
+       },
+       "nodes": [
+        {
+         "__typename": "ClosedEvent",
+         "createdAt": "2026-10-01T00:00:00Z",
+         "actor": {
+          "__typename": "User",
+          "login": "bob-fixture"
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ }
+}

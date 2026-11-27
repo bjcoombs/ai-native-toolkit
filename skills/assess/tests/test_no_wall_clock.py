@@ -45,6 +45,8 @@ ALLOWED: dict[tuple[str, str], str] = {
         "network scan: forge state is not a function of the commit (unavailable headless)",
     ("lib/hosting/review_reality.py", "scan_review_reality"):
         "network scan: forge state is not a function of the commit (unavailable headless)",
+    ("lib/hosting/issue_outcomes.py", "_utc_now"):
+        "network scan: the issue tracker's state is not a function of the commit (unavailable headless)",
     ("lib/report/gate_cost.py", "estimate_gate_cost"):
         "network scan: a monthly Actions-cost estimate, not a level signal",
 }

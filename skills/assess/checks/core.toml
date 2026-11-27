@@ -70,6 +70,7 @@ fragments = [
   "gitlab_note_facts",
   "review_reality",
   "delivery",
+  "backlog_outcomes",
   "gate_cost_estimate",
   "coverage_gate",
   "accretion_ratchet",

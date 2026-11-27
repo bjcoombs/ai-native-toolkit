@@ -57,8 +57,12 @@
       "revision": 1
     },
     {
+      "id": "core.backlog_outcomes",
+      "revision": 1
+    },
+    {
       "id": "core.backlog_ready",
-      "revision": 2
+      "revision": 3
     },
     {
       "id": "core.broken_instruction_refs",
@@ -138,7 +142,7 @@
     },
     {
       "id": "core.doc_staleness",
-      "revision": 2
+      "revision": 3
     },
     {
       "id": "core.excluded_as_generated",

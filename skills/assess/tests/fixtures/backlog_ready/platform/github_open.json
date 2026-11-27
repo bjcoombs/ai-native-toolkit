@@ -1,0 +1,145 @@
+{
+ "data": {
+  "repository": {
+   "issues": {
+    "pageInfo": {
+     "hasNextPage": false,
+     "endCursor": null
+    },
+    "nodes": [
+     {
+      "number": 8000,
+      "title": "Fixture open title 0",
+      "createdAt": "2026-01-02T00:00:00Z",
+      "labels": {
+       "nodes": [
+        {
+         "name": "bug"
+        }
+       ]
+      }
+     },
+     {
+      "number": 8001,
+      "title": "Fixture open title 1",
+      "createdAt": "2026-02-02T00:00:00Z",
+      "labels": {
+       "nodes": [
+        {
+         "name": "agent-ready"
+        }
+       ]
+      }
+     },
+     {
+      "number": 8002,
+      "title": "Fixture open title 2",
+      "createdAt": "2026-03-02T00:00:00Z",
+      "labels": {
+       "nodes": [
+        {
+         "name": "enhancement"
+        },
+        {
+         "name": "agent-ready"
+        }
+       ]
+      }
+     },
+     {
+      "number": 8003,
+      "title": "Fixture open title 3",
+      "createdAt": "2026-04-02T00:00:00Z",
+      "labels": {
+       "nodes": [
+        {
+         "name": "bug"
+        }
+       ]
+      }
+     },
+     {
+      "number": 8004,
+      "title": "Fixture open title 4",
+      "createdAt": "2026-05-02T00:00:00Z",
+      "labels": {
+       "nodes": [
+        {
+         "name": "docs"
+        }
+       ]
+      }
+     },
+     {
+      "number": 8005,
+      "title": "Fixture open title 5",
+      "createdAt": "2026-06-02T00:00:00Z",
+      "labels": {
+       "nodes": [
+        {
+         "name": "agent-ready"
+        }
+       ]
+      }
+     },
+     {
+      "number": 8006,
+      "title": "Fixture open title 6",
+      "createdAt": "2026-07-02T00:00:00Z",
+      "labels": {
+       "nodes": [
+        {
+         "name": "bug"
+        }
+       ]
+      }
+     },
+     {
+      "number": 8007,
+      "title": "Fixture open title 7",
+      "createdAt": "2026-08-02T00:00:00Z",
+      "labels": {
+       "nodes": [
+        {
+         "name": "question"
+        }
+       ]
+      }
+     },
+     {
+      "number": 8008,
+      "title": "Fixture open title 8",
+      "createdAt": "2026-09-02T00:00:00Z",
+      "labels": {
+       "nodes": [
+        {
+         "name": "enhancement"
+        }
+       ]
+      }
+     },
+     {
+      "number": 8009,
+      "title": "Fixture open title 9",
+      "createdAt": "2026-01-02T00:00:00Z",
+      "labels": {
+       "nodes": [
+        {
+         "name": "needs-triage"
+        }
+       ]
+      }
+     },
+     {
+      "number": 8099,
+      "title": "Fixture open title new",
+      "createdAt": "2026-11-24T00:00:00Z",
+      "labels": {
+       "nodes": []
+      }
+     }
+    ]
+   }
+  }
+ }
+}
