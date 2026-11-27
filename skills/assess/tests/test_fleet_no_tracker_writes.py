@@ -13,7 +13,9 @@ shim: it appends its argv to a log and answers the reads the platform pass makes
 (auth probes, ``gh api`` and ``glab api`` GETs, ``gh pr list``, ``gh repo view``) with
 one recent merge, so the pass goes as deep as it can (bot lookups, approvals, notes,
 the merged CI configuration). The run covers a GitHub and a GitLab repository, and
-the test asserts both fakes were reached before it asserts no call wrote.
+the test asserts both fakes were reached before it asserts no call wrote. Two checks
+apply to every logged call: no call matches a known write shape (``is_write``), and
+every call matches a known read (``KNOWN_READS``), so a write nobody listed still fails.
 
 The shim runs on Windows too. ``subprocess`` there finds only ``gh.exe`` (CreateProcess
 appends ``.exe`` and ignores PATHEXT), so a ``.cmd`` wrapper would never be called.
@@ -30,6 +32,7 @@ import io
 import json
 import os
 import platform
+import re
 import stat
 import subprocess
 import sys
@@ -210,6 +213,29 @@ def tracker_writes(calls: list[list[str]]) -> list[list[str]]:
     return [call for call in calls if is_write(call)]
 
 
+# Every read the platform pass makes: the run test fails on any logged call that matches
+# none of these. A new gh or glab read under lib/hosting/ goes here, in the same PR, and
+# only when it changes nothing on the host (no method other than GET, no field or --input).
+# Each pattern must match the whole call, its arguments joined by single spaces.
+KNOWN_READS: tuple[tuple[str, str], ...] = (
+    ("gh", r"auth status --hostname github\.com"),
+    ("glab", r"auth status --hostname [\w.-]+"),
+    ("gh", r"api (repos|users)/\S+"),  # a REST GET: one path, no flag
+    ("glab", r"api --hostname [\w.-]+ projects/\S+"),  # a REST GET: one path, no flag
+    ("gh", r"pr list --repo [\w.-]+/[\w.-]+ --state merged --search [^-].* --limit \d+ --json [\w,]+"),
+    ("gh", r"repo view [\w.-]+/[\w.-]+ --json [\w,]+"),
+)
+
+
+def is_known_read(call: list[str]) -> bool:
+    line = " ".join(call[1:])
+    return any(name == call[0] and re.fullmatch(pattern, line) for name, pattern in KNOWN_READS)
+
+
+def unknown_calls(calls: list[list[str]]) -> list[list[str]]:
+    return [call for call in calls if not is_known_read(call)]
+
+
 @pytest.mark.parametrize("call", [
     ["gh", "issue", "create", "--repo", "grp/svc", "--title", "t"],
     ["gh", "issue", "edit", "4", "--repo", "grp/svc", "--add-label", "x"],
@@ -241,6 +267,7 @@ def tracker_writes(calls: list[list[str]]) -> list[list[str]]:
 ])
 def test_every_write_shape_is_caught(call):
     assert is_write(call)
+    assert not is_known_read(call)
 
 
 @pytest.mark.parametrize("call", [
@@ -256,6 +283,37 @@ def test_every_write_shape_is_caught(call):
 ])
 def test_reads_are_not_writes(call):
     assert not is_write(call)
+
+
+@pytest.mark.parametrize("call", [
+    ["gh", "auth", "status", "--hostname", "github.com"],
+    ["glab", "auth", "status", "--hostname", "gitlab.com"],
+    ["gh", "api", "repos/grp/svc/commits/0000/check-runs"],
+    ["gh", "api", "users/coderabbitai%5Bbot%5D"],
+    ["glab", "api", "--hostname", "gitlab.com", "projects/grp%2Fapp/merge_requests?state=merged&per_page=20"],
+    ["gh", "pr", "list", "--repo", "grp/svc", "--state", "merged", "--search",
+     "merged:>=2026-05-27 sort:updated-desc", "--limit", "100", "--json", "mergedAt"],
+    ["gh", "repo", "view", "grp/svc", "--json", "isPrivate"],
+])
+def test_the_platform_reads_are_known(call):
+    assert is_known_read(call)
+
+
+@pytest.mark.parametrize("call", [
+    ["gh", "release", "upload", "v1", "a.zip"],
+    ["gh", "project", "item-add", "1"],
+    ["gh", "gist", "create", "f"],
+    ["glab", "ci", "retry", "12"],
+    ["glab", "mr", "rebase", "4"],
+    ["gh", "api", "repos/grp/svc/issues", "-X", "GET"],
+    ["gh", "api", "graphql", "-f", "query={ viewer { login } }"],
+    ["glab", "api", "--hostname", "gitlab.com", "projects/1/issues", "-f", "title=t"],
+    ["gh", "pr", "list", "--repo", "grp/svc", "--state", "open", "--search", "x", "--limit", "1",
+     "--json", "number"],
+])
+def test_a_call_outside_the_known_reads_is_flagged(call):
+    """Writes the denylist does not name, and reads the pass does not make, both fail."""
+    assert not is_known_read(call)
 
 
 # --- the run --------------------------------------------------------------------
@@ -296,7 +354,7 @@ def _assert_both_trackers_were_read(calls: list[list[str]]) -> None:
     gh = [" ".join(c[1:]) for c in calls if c[0] == "gh"]
     glab = [" ".join(c[1:]) for c in calls if c[0] == "glab"]
     assert any(c.startswith("pr list --repo grp/svc") for c in gh), gh
-    for read in ("api repos/grp/svc", "api users/", "api repos/grp/.github",
+    for read in ("api users/", "api repos/grp/.github",
                  "api repos/grp/svc/rules/branches/", "api repos/grp/svc/branches/main/protection"):
         assert any(c == read or c.startswith(read) for c in gh), (read, gh)
     assert "api repos/grp/svc" in gh, gh  # the repository metadata read itself
@@ -316,6 +374,7 @@ def test_a_fleet_run_with_the_platform_pass_and_labels_writes_nothing(trackers, 
     calls = _calls(trackers)
     _assert_both_trackers_were_read(calls)
     assert tracker_writes(calls) == []
+    assert unknown_calls(calls) == []
 
     # The --label step (SKILL.md "Optional: repository labels"): prompt, write, check.
     answers = tmp_path / "answers.txt"
@@ -341,7 +400,9 @@ def test_an_injected_issue_write_is_caught(trackers, tmp_path, monkeypatch):
     _fleet(tmp_path, "injected", "--platform", "--platform-jobs", "1")
     calls = _calls(trackers)
     _assert_both_trackers_were_read(calls)
-    assert sorted(tracker_writes(calls)) == [
+    injected = [
         ["gh", "issue", "create", "--repo", "grp/svc", "--title", "injected"],
         ["glab", "issue", "create", "--repo", "grp/app", "--title", "injected"],
     ]
+    assert sorted(tracker_writes(calls)) == injected
+    assert sorted(unknown_calls(calls)) == injected
