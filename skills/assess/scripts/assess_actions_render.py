@@ -52,8 +52,8 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   ``--parts`` names, whose file offer another offered item shares (the same condition
   and title), or a ``--decline-reason`` for a ``REF`` not in ``--decline``, exits 1, and
   those three flags without ``--decline`` fail at argument parsing. ``plan`` and ``next-up``
-  write ``.assess/backlog-declines.json`` when the listing holds a not-planned close not read
-  before; the write is idempotent, and nothing else is written.
+  write ``.assess/backlog-declines.json`` when the listing holds a not-planned close not
+  read before, or when a recorded decline has lapsed; the write is idempotent.
 - ``next-up --existing FILE [--label NAME] [--wip N] [--parts REF=N ...]`` prints the
   report's "Next up" block, the items and split parts ``plan`` holds back as ``next_up``, in
   ranked order; nothing when none are. Pass the same ``--label``, ``--wip`` and ``--parts``
