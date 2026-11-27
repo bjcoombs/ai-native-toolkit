@@ -49,8 +49,11 @@ Subcommands, each reading ``<assess-dir>`` (default ``<repo>/.assess``):
   names who declined it. ``--decline REF`` (repeatable) records the offer for ``REF`` as
   declined, with ``--declined-by``, ``--declined-at`` and ``--decline-reason REF=TEXT``, and
   prints the plan with it held back; a ``REF`` whose ``wip`` step is not ``file``, or that
-  ``--parts`` names, or a ``--decline-reason`` for a ``REF`` not in ``--decline``, exits 1,
-  and those three flags without ``--decline`` fail at argument parsing.
+  ``--parts`` names, whose file offer another offered item shares (two actions naming one
+  condition), or a ``--decline-reason`` for a ``REF`` not in ``--decline``, exits 1, and
+  those three flags without ``--decline`` fail at argument parsing. ``plan`` and ``next-up``
+  write ``.assess/backlog-declines.json`` when the listing holds a not-planned close not read
+  before; the write is idempotent, and nothing else is written.
 - ``next-up --existing FILE [--label NAME] [--wip N] [--parts REF=N ...]`` prints the
   report's "Next up" block, the items and split parts ``plan`` holds back as ``next_up``, in
   ranked order; nothing when none are. Pass the same ``--label``, ``--wip`` and ``--parts``
@@ -463,11 +466,19 @@ def run_plan(assess_dir: Path, args: argparse.Namespace, items: Sequence[Tracker
     if stray:
         raise RenderError(f"--decline-reason {', '.join(stray)} names no --decline item")
     new: list[ProposalDecline] = []
+    offers = {_ref(i): o for i in planned if i.get("wip", {}).get("decision") == FILE
+              and _ref(i) not in split and (o := filing_offer(i, i["filing"]) if "filing" in i else None) is not None}
     for ref in refs:
-        item = planned[_item_index(items, ref, "--decline")]
-        offer = filing_offer(item, item["filing"]) if "filing" in item else None
-        if offer is None or ref in split or item.get("wip", {}).get("decision") != FILE:
+        _item_index(items, ref, "--decline")
+        offer = offers.get(ref)
+        if offer is None:
             raise RenderError(f"--decline {ref}: item {ref} is not offered (its wip step is not file)")
+        same = {k: v for k, v in offer.items() if k != "reason"}
+        twin = next((r for r, o in offers.items() if r != ref and r not in refs
+                     and {k: v for k, v in o.items() if k != "reason"} == same), None)
+        if twin is not None:  # two actions naming one condition: one record would hold back both (#811)
+            raise RenderError(f"--decline {ref}: item {twin} shares its decline record (the same condition), "
+                              "so recording it would hold that item back too")
         record = decline_record(offer, conditions, model, declined_by=args.declined_by,
                                 declined_at=args.declined_at, reason=reasons.get(ref))
         if record is not None:
@@ -475,6 +486,11 @@ def run_plan(assess_dir: Path, args: argparse.Namespace, items: Sequence[Tracker
     live = merge_proposal_declines(live, new)
     write_proposal_declines(assess_dir, live)
     return plan_items(items, existing, args.label, level, wip, args.parts, live, conditions)
+
+
+def _ref(item: TrackerItem) -> str:
+    """The ``REF`` that names ``item``: a sub-item's label, else its rank."""
+    return item.get("label", str(item["rank"]))
 
 
 def _item_index(items: Sequence[TrackerItem], ref: str, flag: str = "--parts") -> int:

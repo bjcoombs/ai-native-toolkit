@@ -215,6 +215,15 @@ def test_decline_names_only_an_offered_item(tmp_path: Path, capsys: pytest.Captu
     assert not (tmp_path / ".assess" / PROPOSAL_DECLINES).exists()
 
 
+def test_decline_refuses_an_offer_another_offered_item_shares(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    twins = [*ACTIONS[:2], {**ACTIONS[2], "condition": CI}]  # actions 2 and 3 name one condition
+    existing = _setup(tmp_path, [], *CONDITIONS, actions=twins)
+    assert render.main([str(tmp_path), "plan", "--existing", str(existing), "--decline", "2"]) == 1
+    assert "item 3 shares its decline record" in capsys.readouterr().err
+    assert not (tmp_path / ".assess" / PROPOSAL_DECLINES).exists()
+
+
 @pytest.mark.parametrize("flags", [["--declined-by", "ben"], ["--declined-at", "2026-11-27"],
                                    ["--decline-reason", "1=not yet"]])
 def test_plan_decline_flags_without_decline_fail_at_parsing(

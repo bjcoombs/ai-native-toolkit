@@ -54,7 +54,8 @@ over closed ones, then the lowest number.
 declined offer is recorded under (``lib/run/decline_markers.py``, #1543): ``file`` for a
 ``create`` and ``reopen`` with the number for a closed match; None for an open match or an
 item without a condition marker. ``not_planned_closes(existing)`` lists the marked items
-closed as not planned (GitHub ``stateReason`` ``NOT_PLANNED``; GitLab lists none). Pure stdlib; never touches the tracker. Tests: ``tests/test_backlog_items.py``.
+closed as not planned (GitHub ``stateReason`` ``NOT_PLANNED``; GitLab lists none). Pure stdlib; never touches the tracker. Tests: ``tests/test_backlog_items.py``;
+``filing_offer`` and ``not_planned_closes`` in ``tests/test_backlog_offer_declines.py``.
 """
 from __future__ import annotations
 
