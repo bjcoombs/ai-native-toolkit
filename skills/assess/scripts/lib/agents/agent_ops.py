@@ -15,7 +15,8 @@ This module scans the repo-observable subset of those guardrails:
   issue, pull request, review or discussion event (#847): ``agent_workflows``, one entry per
   workflow with its ``path``, ``triggers``, ``signs`` (``agent_action``, ``agent_cli``,
   ``model_name``, ``gh_aw``) and ``via`` (the local reusable workflows followed to reach the
-  agent). A GitHub Agentic Workflows source (``.github/workflows/*.md`` with an ``on:`` in its
+  agent; local workflows and actions are resolved and read through the shared CI-step
+  follower's ``lib.ci.ci_step_paths``, #845, never a symlink out of the checkout). A GitHub Agentic Workflows source (``.github/workflows/*.md`` with an ``on:`` in its
   frontmatter) counts by construction and its ``.lock.yml`` is not counted again. A provider
   secret alone, a comment, or an ``if:`` or ``name:`` mention is not a sign.
   ``summary.routines_present`` is true on a routine dir file or a scheduled agent workflow;
@@ -79,9 +80,9 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from lib.ci.ci_action_inputs import local_action_paths
 from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci.ci_model_jobs import signs_in
+from lib.ci.ci_step_paths import inside, local_workflow, read_action
 from lib.ci.ci_triggers import workflow_events
 from lib.instructions.command_index import NOOP_COMMANDS, ci_config_files, read_config, repo_files
 from lib.counts_only.block_shapes import AgentJob, AgentWorkflow
@@ -234,7 +235,6 @@ _QUOTED = re.compile(r"\"[^\"]*\"|'[^']*'")
 _AGENT_NAME = re.compile(r"claude|codex|gemini|copilot|opencode|agent|llm|gpt|(?<![a-z])ai(?![a-z])",
                          re.IGNORECASE)
 _SKIP_KEYS = frozenset({"if", "name", "description"})
-_LOCAL_WORKFLOW = re.compile(r"""^["']?\./(\.github/workflows/[\w.-]+\.ya?ml)""")
 _REMOTE_WORKFLOW = re.compile(r"""^["']?[\w.-]+/[\w.-]+/\.github/workflows/""")
 _WORKFLOWS = ".github/workflows/"
 
@@ -263,7 +263,7 @@ class _Signs:
         self.cache: dict[str, tuple[frozenset[str], tuple[str, ...], bool]] = {}
 
     def read(self, rel: str) -> str | None:
-        if rel not in self.files or not (self.repo / rel).resolve().is_relative_to(self.repo):
+        if rel not in self.files or not inside(self.repo, rel):
             return None
         return read_config(self.repo, rel)
 
@@ -299,25 +299,23 @@ class _Signs:
             if not stripped.startswith("uses:"):
                 continue
             uses = stripped[len("uses:"):].strip()
-            local = _LOCAL_WORKFLOW.match(uses)
+            local = local_workflow(uses)
             if local:  # a reusable workflow, never read as a composite action
-                if local.group(1) in seen or local.group(1) == rel:
+                if local in seen or local == rel:
                     continue
-                called = self.read(local.group(1))
+                called = self.read(local)
                 if called is not None:
-                    more, deeper, far = self.workflow(local.group(1), called, seen | {rel})
+                    more, deeper, far = self.workflow(local, called, seen | {rel})
                     remote = remote or far
                     if more:
                         signs |= more
-                        via += [local.group(1), *deeper]
+                        via += [local, *deeper]
             elif _REMOTE_WORKFLOW.match(uses) and _AGENT_NAME.search(uses.split("@", 1)[0]):
                 remote = True
-            elif uses.strip("'\"").startswith("./"):
-                for action in local_action_paths(uses.strip("'\"")):
-                    action_text = self.read(action)
-                    if action_text is not None:
-                        signs |= self.lines(action_text)
-                        break
+            else:
+                action = read_action(uses.strip("'\""), self.read)
+                if action is not None:
+                    signs |= self.lines(action[1])
         result = (frozenset(signs), tuple(sorted(set(via))), remote)
         if not seen:  # a result read inside a call chain leaves out the chain's own files
             self.cache[rel] = result

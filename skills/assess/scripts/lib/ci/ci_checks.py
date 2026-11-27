@@ -382,8 +382,9 @@ from functools import partial
 from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
-from lib.ci.ci_action_inputs import Inputs, ReadLocal, read_inputs
-from lib.ci.ci_expressions import follow_workflow
+from lib.ci.ci_action_inputs import Inputs, read_inputs
+from lib.ci.ci_step_follower import follow_workflow
+from lib.ci.ci_step_paths import local_reader
 from lib.ci.ci_continuations import join_continued
 from lib.ci.ci_includes import (
     SETTLED, IncludeRecord, IncludeRenames, Resolution, merged_config, resolve_includes)
@@ -582,16 +583,6 @@ def _basis(found: bool, merged: bool, *, elsewhere: bool, partial: bool, unread:
     return False, "no_check_command" if files else "no_ci"
 
 
-def _local_reader(root: Path, tracked: frozenset[str]) -> ReadLocal:
-    """Read a tracked file inside ``root`` for ``ci_action_inputs`` (#799), never one a
-    symlink takes outside the checkout."""
-    def read(rel: str) -> str | None:
-        if rel not in tracked or not (root / rel).resolve().is_relative_to(root):
-            return None
-        return read_config(root, rel)
-    return read
-
-
 @dot_as_source()   # . ./test.sh reads as source ./test.sh on a CI line (#1033)
 @reads_pdm_scripts   # a [tool.pdm.scripts] name is a script, not a program (#1046)
 @reads_runner_envs   # tox -e lint / nox -s lint read through to their commands (#1180)
@@ -618,7 +609,7 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     elsewhere = 0  # files whose pulled jobs this run cannot read
     partial_merge = False  # the merged configuration may lack jobs (a rules: include, a child pipeline)
     resolution = resolve_includes(root, ghsync_root, renames) if any(f in CI_CONFIG_FILES for f in files) else None
-    reader = _local_reader(root, tracked)
+    reader = local_reader(root, tracked)   # the shared CI-step follower's reader (#845)
     followed = {rel: follow_workflow(read_config(root, rel), reader)
                 for rel in files if rel not in CI_CONFIG_FILES}   # #923, #1164, #1165
     inputs = {rel: (Inputs(read_config(root, rel), frozenset()) if rel in CI_CONFIG_FILES

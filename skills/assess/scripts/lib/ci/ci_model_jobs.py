@@ -69,11 +69,12 @@ from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
 from lib.ci.agent_evals import AgentEvalsBlock, gitlab_eval_texts, scan_agent_evals
-from lib.ci.ci_action_inputs import ReadLocal, local_action_paths
+from lib.ci.ci_action_inputs import ReadLocal
 from lib.ci.ci_includes import GITLAB_CI, merged_config, resolve_includes
 from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci.ci_merged_view import merged_jobs, merged_view
 from lib.ci.ci_shell_text import command_text
+from lib.ci.ci_step_paths import local_reader, local_workflow, read_action
 from lib.ci.ci_triggers import gitlab_line_triggers, workflow_events
 from lib.instructions.command_index import ci_config_files, read_config, repo_files
 
@@ -148,7 +149,6 @@ _FALSE = re.compile(r"(\S+)\s*==\s*['\"]?false\b|\bfalse['\"]?\s*==\s*(\S+)", re
 _NEVER = re.compile(r"""^(["']?)(?:false|\$\{\{\s*false\s*\}\})\1$""", re.IGNORECASE)
 _QUOTED_ON = re.compile(r"""^(["'])on\1\s*:(.*)$""")
 _REMOTE_WORKFLOW = re.compile(r"""^["']?[\w.-]+/[\w.-]+/\.github/workflows/""")
-_LOCAL_WORKFLOW = re.compile(r"""^["']?\./\.github/workflows/([\w.-]+\.ya?ml)""")
 
 
 class ModelJob(TypedDict):
@@ -491,16 +491,15 @@ def _never(tree: IndentTree, keys: Sequence[int]) -> bool:
 
 def _composite_signs(uses: str, read_local: ReadLocal | None) -> list[str]:
     """The signs in a repo-local action a step uses (``uses: ./.github/actions/x``), one level,
-    read through ``read_local`` as ``lib.ci.ci_composite`` reads one (tracked files only)."""
-    if read_local is None or not uses.startswith("./") or _LOCAL_WORKFLOW.match(uses):
+    resolved and read through the shared CI-step follower (``lib.ci.ci_step_paths``, #845; tracked files only)."""
+    if read_local is None or local_workflow(uses) is not None:
         # a reusable workflow (``./.github/workflows/x.yml``) is scanned as a workflow of its own
         return []
-    for rel in local_action_paths(uses):
-        text = read_local(rel)
-        if text is not None:
-            tree = _tree(text)
-            return signs_in(tree, range(len(tree.lines)))
-    return []
+    found = read_action(uses, read_local)
+    if found is None:
+        return []
+    tree = _tree(found[1])
+    return signs_in(tree, range(len(tree.lines)))
 
 
 def _job_signs(tree: IndentTree, job: int, read_local: ReadLocal | None = None,
@@ -587,12 +586,12 @@ def _callers(flows: dict[str, _Workflow]) -> tuple[dict[str, list[_Route]], int]
             for job in flow.jobs():
                 uses = _child(flow.tree, job, "uses")
                 value = flow.tree.lines[uses].value if uses is not None else ""
-                local = _LOCAL_WORKFLOW.match(value)
+                local = local_workflow(value)
                 if _never(flow.tree, flow.tree.children(job)) or not (local or _REMOTE_WORKFLOW.match(value)):
                     continue
                 routes = _routes(flow, job, [], bases)
                 if local:
-                    into = found.setdefault(local.group(1), [])
+                    into = found.setdefault(local.rsplit("/", 1)[-1], [])
                     into.extend(r for r in routes if r not in into)
                 elif any(r["state"] != "gated" for r in routes):
                     remote += 1
@@ -613,7 +612,7 @@ def _github(repo: Path, files: list[str], read_local: ReadLocal | None = None) -
         shared = _workflow_env(flow)
         for job in flow.jobs():
             uses = _child(flow.tree, job, "uses")
-            if uses is not None and _LOCAL_WORKFLOW.match(flow.tree.lines[uses].value):
+            if uses is not None and local_workflow(flow.tree.lines[uses].value) is not None:
                 continue  # a local reusable-workflow call: the callee is scanned on its own
             signs = _job_signs(flow.tree, job, read_local, shared)
             if not signs or set(signs) <= set(shared) and uses is not None:
@@ -737,10 +736,7 @@ def scan_ci_model_jobs(repo_root: Path, ghsync_root: Path | None = None) -> CiMo
     tracked = repo_files(repo)
     files = ci_config_files(tracked)
 
-    def read_local(rel: str) -> str | None:  # tracked and inside the checkout, as lib.ci.ci_checks reads
-        if rel not in tracked or not (repo / rel).resolve().is_relative_to(repo):
-            return None
-        return read_config(repo, rel)
+    read_local = local_reader(repo, tracked)   # the shared CI-step follower's reader (#845)
 
     jobs, unread = _github(repo, files, read_local)
     eval_unsettled = 0

@@ -27,13 +27,10 @@ one under ``continue-on-error: ${{ ... }}`` as an enforced check. Neither is kno
   enforced. A literal ``continue-on-error: false`` keeps the credit.
 
 The structure comes from ``lib.ci.ci_masking``'s indentation model; there is no YAML parser.
-``follow_workflow(text, read_local)`` is the whole GitHub reading ``lib.ci.ci_checks`` runs
-before ``lib.ci.ci_action_inputs``: ``\\`` continuations joined, local composite actions
-inlined (``lib.ci.ci_composite``), matrix commands copied out (``lib.ci.ci_matrix``), then this
-module, with the unknown lines of all three merged.
+``follow_workflow``, the whole GitHub reading that runs this module after the composite and
+matrix passes, moved to the shared CI-step follower, ``lib.ci.ci_step_follower`` (#845).
 
-Only GitHub workflow text is read. Inward-only imports: ``lib.ci.ci_action_inputs``,
-``lib.ci.ci_composite``, ``lib.ci.ci_continuations``, ``lib.ci.ci_masking``, ``lib.ci.ci_matrix``.
+Only GitHub workflow text is read. Inward-only imports: ``lib.ci.ci_masking``, ``lib.ci.ci_matrix``.
 Tests: ``tests/test_ci_expressions.py``.
 """
 from __future__ import annotations
@@ -41,11 +38,8 @@ from __future__ import annotations
 import re
 from typing import NamedTuple
 
-from lib.ci.ci_action_inputs import ReadLocal
-from lib.ci.ci_composite import inline_composites
-from lib.ci.ci_continuations import join_continued
 from lib.ci.ci_masking import IndentTree, parse_lines
-from lib.ci.ci_matrix import body_lines, expand_matrix, jobs, scalar
+from lib.ci.ci_matrix import body_lines, jobs, scalar
 
 # A whole expression or variable word where a command starts.
 _COMMAND = re.compile(
@@ -151,10 +145,3 @@ def settle_expressions(text: str) -> Settled:
                     may_pass.update(span)
     body = "\n".join(out) + ("\n" if text.endswith("\n") else "")
     return Settled(body, frozenset(unknown), frozenset(may_pass))
-
-
-def follow_workflow(text: str, read_local: ReadLocal) -> Settled:
-    """Composites, matrix and expressions read for one GitHub workflow (module docstring)."""
-    expanded = expand_matrix(*inline_composites(join_continued(text), read_local))
-    settled = settle_expressions(expanded.text)
-    return settled._replace(unknown=settled.unknown | expanded.unknown)

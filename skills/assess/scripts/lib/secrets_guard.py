@@ -26,7 +26,7 @@ tracked file is read as it stands.
   tool as a command (its name, then a subcommand, a flag or the end of the line; ``git secrets``
   reads as ``git-secrets``), or that includes GitLab's ``Secret-Detection.gitlab-ci.yml`` template
   (or its component). A GitHub workflow is read as ``ci_checks`` reads it
-  (``lib.ci.ci_expressions.follow_workflow``): a local composite action's steps, matrix commands and
+  (``lib.ci.ci_step_follower.follow_workflow``): a local composite action's steps, matrix commands and
   a ``$NAME`` command a literal ``env:`` sets are read through. A visible ``secret_detection``
   job counts only as an override of that template, never alone. Comments, whole-line or
   trailing, never count, so neither does a ``gitleaks:allow`` note or a ``.gitleaks.toml`` path.
@@ -138,7 +138,7 @@ from typing import TypedDict
 
 from lib.run.run_scope import Scope
 from lib.ci.ci_action_inputs import ReadLocal
-from lib.ci.ci_expressions import follow_workflow
+from lib.ci.ci_step_follower import follow_workflow
 from lib.ci.ci_includes import SETTLED, merged_config, resolve_includes
 from lib.instructions.command_index import ci_config_files, repo_files
 from lib.secrets_guard_gitlab import GITLAB_CI, scan_texts, template_state
