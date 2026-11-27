@@ -298,3 +298,14 @@ def test_a_gitlab_include_is_read_as_gitlab_merges_it(tmp_path: Path, root: str,
                                ".gitlab-ci.yml": root, "ci/evals.yml": included})
     block = _block(root_dir)
     assert (block["present"], block["dirs"][0]["ci"]) == (run, run)
+
+
+@pytest.mark.parametrize("ci", [
+    # A hidden template a job takes through a YAML anchor merge runs in that job.
+    ".evals: &evals\n  script:\n    - pytest evals/\nevals:\n  <<: *evals\n",
+    # So does one a job names through !reference.
+    ".evals:\n  script:\n    - pytest evals/\nevals:\n  script:\n    - !reference [.evals, script]\n",
+])
+def test_a_hidden_template_taken_by_anchor_or_reference_is_a_run(tmp_path: Path, ci: str) -> None:
+    root = _repo(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}", ".gitlab-ci.yml": ci})
+    assert _block(root)["dirs"][0]["ci"] is True

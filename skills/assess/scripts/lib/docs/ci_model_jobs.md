@@ -143,6 +143,6 @@ Known limits:
 - A baseline outside the suite folder (`baselines/evals.json` beside `evals/`) is not read.
 - GitLab files are read through the merged view (`ci_merged_view`), so a root `script:` that
   replaces an included one and an `extends:` template read as GitLab runs them, and a hidden
-  job (`.evals:`) runs nothing on its own. When the merged view does not settle, the root and
+  job (`.evals:`) runs nothing on its own unless it sets a YAML anchor or a `!reference` names it. When the merged view does not settle, the root and
   included files are read as written: a root override then still counts the included command,
   and a job that takes its script from a hidden template is not named.

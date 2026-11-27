@@ -205,22 +205,33 @@ def _utility_with(tree: IndentTree, with_line: int) -> bool:
     return uses.lower().startswith("actions/")
 
 
-def run_texts(text: str) -> list[str]:
+_REFERENCE = re.compile(r"!reference\s*\[\s*['\"]?(\.[^,\]'\"\s]+)")
+
+
+def hidden_references(texts: Iterable[str]) -> frozenset[str]:
+    """The GitLab hidden jobs a ``!reference [.name, key]`` in ``texts`` names."""
+    return frozenset(m.group(1) for text in texts for m in _REFERENCE.finditer(text))
+
+
+def run_texts(text: str, referenced: frozenset[str] | None = None) -> list[str]:
     """What a CI file runs: each shell value (``run:``, ``script:`` and its items) as
     ``command_text`` reads it, so a quoted argument, an ``echo`` and a comment name nothing, and
     each ``working-directory:``, ``with:`` or ``args:`` value as written. A job id, a step
     ``name:``, a ``paths:`` filter, a step or job whose ``if:`` is never true, a command segment
     in ``NOT_RUNNERS``, the ``with:`` inputs of a GitHub ``actions/`` utility and a GitLab hidden
     job (``.evals:``, which runs only inside a job that extends it) run nothing; skip flags
-    (``--ignore=evals``, ``-k ...``) are blanked."""
+    (``--ignore=evals``, ``-k ...``) are blanked. A hidden job a job can take without
+    ``extends:`` is kept: one that sets a YAML anchor (``.evals: &evals``) or that a
+    ``!reference [.evals, ...]`` in ``referenced`` (every CI text read) names."""
     tree = IndentTree(parse_lines(text.splitlines()))
     dead = _dead(tree)
+    named = referenced if referenced is not None else hidden_references([text])
     out: list[str] = []
     for i, line in enumerate(tree.lines):
         if not line.structural or i in dead:
             continue
-        top = (tree.ancestors(i) or [i])[-1]
-        if tree.lines[top].key.startswith("."):
+        top = tree.lines[(tree.ancestors(i) or [i])[-1]]
+        if top.key.startswith(".") and not top.value.startswith("&") and top.key not in named:
             continue
         parent = tree.ancestors(i)[:1]
         owner = tree.lines[parent[0]].key if parent else ""
@@ -292,7 +303,8 @@ def scan_agent_evals(tracked: frozenset[str], read: Callable[[str], str], ci_tex
         suite = suite_of(rel)
         if suite is not None:
             members.setdefault(suite, []).append(rel)
-    lines = [line for text in ci_texts.values() for line in run_texts(text)]
+    referenced = hidden_references(ci_texts.values())
+    lines = [line for text in ci_texts.values() for line in run_texts(text, referenced)]
     targets = {m.group(2) for line in lines for m in _RUNNER.finditer(line)}
     lines += [_EXCLUDED.sub(" ", runnable(command_text(r))) for r in _recipes(read, tracked, targets)] if targets else []
     dirs: list[EvalSuite] = []
