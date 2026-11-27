@@ -169,6 +169,18 @@ def test_a_run_bearing_value_is_a_run(tmp_path: Path, jobs: str) -> None:
     assert _block(root)["dirs"][0]["ci"] is True
 
 
+@pytest.mark.parametrize(("command", "named"), [
+    ('eval "$(ssh-agent -s)"', False),
+    ("npx promptfoo eval -c promptfooconfig.yaml", False),
+    ("pytest eval/", True),
+    ("cd ./eval && pytest", True),
+])
+def test_a_top_level_eval_folder_is_named_only_as_a_path(tmp_path: Path, command: str, named: bool) -> None:
+    flow = f"on: push\njobs:\n  t:\n    steps:\n      - run: {command}\n"
+    root = _repo(tmp_path, {"eval/test_agent.py": EVAL_CASE, "eval/baseline.json": "{}", ".github/workflows/t.yml": flow})
+    assert _block(root)["present"] is named
+
+
 def test_a_paths_filter_or_comment_is_not_a_run(tmp_path: Path) -> None:
     flow = FILTER_ONLY + "      # - run: pytest evals/\n"
     root = _repo(tmp_path, {"evals/test_x.py": EVAL_CASE, ".github/workflows/ci.yml": flow})

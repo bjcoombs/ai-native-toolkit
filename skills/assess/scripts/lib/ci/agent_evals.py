@@ -20,7 +20,8 @@ promptfoo, deepeval ...) or it holds a recorded-response fixture (a cassette or 
 
 **CI reference.** A committed CI file (a GitHub workflow, a repo-local action, GitLab CI) runs
 the suite: a ``run:`` or ``script:`` command, or a ``working-directory:``, ``with:`` or ``args:``
-value, names its path (``pytest evals/``, ``working-directory: tests/agent``), its dotted module
+value, names its path (``pytest evals/``, ``working-directory: tests/agent``; a top-level
+``eval`` folder only as ``eval/`` or ``./eval``, since ``eval`` is also a command), its dotted module
 (``python -m evals.run``) or its folder name as a pytest marker (``pytest -m eval``; ``eval`` and
 ``evals``, ``agent`` and ``agents`` read as one; never ``-m evaluation_slow``). Commands are read
 as ``lib.ci.ci_shell_text.command_text`` reads them, so a quoted argument
@@ -228,12 +229,20 @@ def run_texts(text: str) -> list[str]:
     return [t for t in out if t.strip()]
 
 
+# A top-level suite folder whose bare name is also a command or subcommand (the shell builtin
+# ``eval``, ``promptfoo eval``): only ``eval/``, ``./eval`` or a whole path value names it.
+_COMMAND_NAMES = frozenset({"eval"})
+
+
 def _names(lines: Iterable[str], suite: str) -> bool:
-    path = re.compile(r"(?<![\w./-])(?:\./)?" + re.escape(suite) + r"(?![\w-])")
+    if suite in _COMMAND_NAMES:
+        path = re.compile(r"(?<![\w./-])(?:\./" + re.escape(suite) + r"(?![\w-])|" + re.escape(suite) + r"/)")
+    else:
+        path = re.compile(r"(?<![\w./-])(?:\./)?" + re.escape(suite) + r"(?![\w-])")
     module = re.compile(r"(?:^|\s)-m\s+" + re.escape(suite.replace("/", ".")) + r"(?![\w-])")
     name = suite.rsplit("/", 1)[-1]
     for line in lines:
-        if path.search(line) or module.search(line):
+        if line.strip() == suite or path.search(line) or module.search(line):
             return True
         if "pytest" in line and any(_same_tier(word, name) for word in _MARKER.findall(line)):
             return True
