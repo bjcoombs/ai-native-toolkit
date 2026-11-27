@@ -119,6 +119,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_dart_capabilities.py` | `lib/keyhole/dart_capabilities.py` - Dart linting and liveness capability entries |
 | `test_dart_complexity.py` | `lib/complexity/dart_complexity.py` - the approximate Dart per-function scanner |
 | `test_decline_markers.py` | `lib/run/decline_markers.py` - decline-marker provenance and re-offer on a major bump |
+| `test_backlog_offer_declines.py` | `lib/run/decline_markers.py`, `lib/report/backlog_items.py`, `assess_actions_render.py` - a not-planned close read as a declined reopen, and declined 6b file and reopen offers held back (#1543) |
 | `test_diff_reliability.py` | `lib/complexity/diff_reliability.py` - cross-run diff reliability: version stamps, tool-version changes, schema changes |
 | `test_doc_provenance.py` | `lib/docs/doc_provenance.py` - provenance-aware staleness of generated docs |
 | `test_doc_claims.py` | `lib/docs/doc_claims.py` - claim checks across the doc set and cross-document contradictions |

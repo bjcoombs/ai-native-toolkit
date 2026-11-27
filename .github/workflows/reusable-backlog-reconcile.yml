@@ -140,10 +140,10 @@ jobs:
           mkdir -p "$out"
           if [ -n "$LABEL" ]; then
             gh issue list --repo "$GH_REPO" --label "$LABEL" --state all --limit 500 \
-              --json number,title,body,state,labels,comments > "$out/existing.json"
+              --json number,title,body,state,labels,comments,stateReason,closedAt > "$out/existing.json"
           else
             gh issue list --repo "$GH_REPO" --state all --limit 500 \
-              --json number,title,body,state,labels,comments > "$out/existing.json"
+              --json number,title,body,state,labels,comments,stateReason,closedAt > "$out/existing.json"
           fi
           # A listing that reaches the limit may leave items out, and a `file`
           # run would then file their conditions again.

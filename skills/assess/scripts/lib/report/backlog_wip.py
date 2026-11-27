@@ -9,7 +9,8 @@ once. ``apply_wip(items, steps, existing, level, wip)`` takes the rendered items
 - ``decision``: ``open`` when the step reuses an item that is already open (it takes no new
   slot), ``file`` when the item is created, or a closed item proposed for reopening, within the limit, and
   ``next_up`` when the limit is reached: the item is not filed, and the report lists it under
-  "Next up" (``next_up_markdown``).
+  "Next up" (``next_up_markdown``). ``plan`` also writes ``declined`` for an offer declined
+  before (#1543): it takes no slot and is not listed under "Next up".
 - ``tier``: the order the items that need a slot are taken in, the #747 next-unlock ranking:
   ``next_unlock`` (the item's condition is a blocker of the next Step,
   ``level.next_step.blockers[].condition``), then ``recovery`` (the step matches a closed
@@ -46,7 +47,11 @@ OPEN, FILE, NEXT_UP = "open", "file", "next_up"
 
 
 class WipStep(TypedDict):
-    """Whether one rendered item takes a slot under the limit: ``open``, ``file`` or ``next_up``."""
+    """Whether one rendered item takes a slot under the limit: ``open``, ``file``, ``next_up`` or ``declined``.
+
+    ``apply_wip`` writes the first three; ``assess_actions_render.plan_items`` writes ``declined`` for
+    an item whose 6b offer was declined before (#1543), which takes no slot.
+    """
 
     decision: str
     tier: str  # one of TIERS
