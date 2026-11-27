@@ -22,7 +22,9 @@ line with the ``ci_masking`` indentation model.
 - **Precision first.** A workflow lets a file through when any of its PR events does. An event
   this reader cannot read (an ``on:`` flow mapping, a filter that is empty or not a plain list, ``paths``
   beside ``paths-ignore``, which GitHub rejects, or a pattern with ``?``, ``+`` or ``[``) lets
-  every file through, so the hazard is never raised on a filter it did not read.
+  every file through, so the hazard is never raised on a filter it did not read. A trailing
+  ``#`` comment on a list item is dropped first. A PR workflow that also runs on
+  ``merge_group`` lets every file through, since a merge queue run takes no ``paths`` filter.
 
 ``unchecked_instructions(workflows, tracked)`` returns the count of instruction files that every
 PR workflow filters out, the instruction files themselves and the workflows read, or None
@@ -35,7 +37,7 @@ import re
 from typing import NamedTuple
 
 from lib.ci.ci_checks import check_commands
-from lib.ci.ci_masking import IndentTree, parse_lines
+from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci.ci_model_jobs import _list, _on_value
 from lib.ci.ci_triggers import workflow_events
 from lib.instructions.instruction_files import INSTRUCTION_FILE_PATHS
@@ -75,7 +77,10 @@ def glob_regex(pattern: str) -> re.Pattern[str] | None:
 def _filter(key: str, raw: list[str]) -> PathFilter | None:
     patterns: list[re.Pattern[str]] = []
     negated: list[bool] = []
-    for item in raw:
+    for value in raw:
+        item = strip_comment(value).strip("'\"")  # a block item keeps its trailing comment
+        if not item or "#" in item or "'" in item or '"' in item:
+            return None
         neg = item.startswith("!")
         regex = glob_regex(item[1:] if neg else item)
         if regex is None:
@@ -101,9 +106,12 @@ def admits(found: PathFilter | None, path: str) -> bool:
 def pr_filters(text: str) -> list[PathFilter | None] | None:
     """One filter per PR event of a GitHub workflow (None for an event with no filter or one not
     read), or None when the workflow names no PR event."""
-    events = set(workflow_events(text) or []) & PR_EVENTS
+    named = set(workflow_events(text) or [])
+    events = named & PR_EVENTS
     if not events:
         return None
+    if "merge_group" in named:  # a merge queue run takes no paths filter: it checks every file
+        return [None]
     tree = IndentTree(parse_lines(text.splitlines()))
     on = next((i for i, line in enumerate(tree.lines)
                if line.structural and line.level == 0 and _on_value(line.key, line.value) is not None), None)

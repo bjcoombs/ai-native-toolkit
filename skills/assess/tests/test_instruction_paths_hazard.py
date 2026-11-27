@@ -152,6 +152,18 @@ def test_a_filter_not_read_lets_every_file_through(on: str) -> None:
     assert any(admits(found, "AGENTS.md") for found in pr_filters(on) or [])
 
 
+@pytest.mark.parametrize(("key", "expected"), [("paths", True), ("paths-ignore", True)])
+def test_a_trailing_comment_on_a_list_item_is_dropped(key: str, expected: bool) -> None:
+    item = "'**'  # everything" if key == "paths" else "'src/**' # code"
+    (found,) = pr_filters(f"on:\n  pull_request:\n    {key}:\n      - {item}\n") or []
+    assert admits(found, "CLAUDE.md") is expected
+
+
+def test_a_merge_queue_run_clears_it(tmp_path: Path) -> None:
+    queued = IGNORED.replace("    paths-ignore: ['AGENTS.md']\n", "    paths-ignore: ['AGENTS.md']\n  merge_group:\n")
+    assert scan_ci_hazards(_repo(tmp_path, {".github/workflows/checks.yml": queued}))["instructions_unchecked"] == 0
+
+
 def test_glob_regex_refuses_what_it_does_not_read() -> None:
     assert glob_regex("a?b") is None and glob_regex("") is None
     regex = glob_regex("docs/*")
