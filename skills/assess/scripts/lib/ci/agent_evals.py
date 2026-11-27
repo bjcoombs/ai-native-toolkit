@@ -18,7 +18,8 @@ promptfoo, deepeval ...) or it holds a recorded-response fixture (a cassette or 
 ``eval`` folder holding an expression evaluator names none, so it is set aside
 (``set_aside``), never counted.
 
-**CI reference.** A committed CI file (a GitHub workflow, a repo-local action, GitLab CI) runs
+**CI reference.** A committed CI file (a GitHub workflow, a repo-local action, GitLab CI and
+the files its ``include:`` resolves, #1573) runs
 the suite: a ``run:`` or ``script:`` command, or a ``working-directory:``, ``with:`` or ``args:``
 value, names its path (``pytest evals/``, ``working-directory: tests/agent``; a top-level
 ``eval`` folder only as ``eval/`` or ``./eval``, since ``eval`` is also a command), its dotted module

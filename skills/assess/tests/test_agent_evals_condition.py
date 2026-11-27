@@ -1,6 +1,7 @@
 """lib/ci/agent_evals.py and the agent-evals condition (#850): eval suites CI runs against a baseline."""
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -253,3 +254,30 @@ def test_counts_only_keeps_the_present_reason(tmp_path: Path) -> None:
                             ".github/workflows/empty.yml": ""})
     out = counts_only({"ci_model_jobs": scan_ci_model_jobs(root)})["ci_model_jobs"]["agent_evals"]
     assert (out["present"], out["present_reason"]) == (None, "eval_ci_unread")
+
+
+def _git(root: Path, files: dict[str, str]) -> Path:
+    """A committed repository: GitLab local includes are read only from tracked files."""
+    _repo(root, files)
+    for args in (["init", "-q", "-b", "main"], ["add", "-A"],
+                 ["-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "c"]):
+        subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, encoding="utf-8", errors="replace")
+    return root
+
+
+def test_a_suite_run_from_a_gitlab_local_include_meets(tmp_path: Path) -> None:
+    # #1573: the include text GitLab merges is read for the suite, not only the root file.
+    root = _git(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
+                           ".gitlab-ci.yml": "include:\n  - local: ci/evals.yml\n",
+                           "ci/evals.yml": "evals:\n  script:\n    - pytest evals/\n"})
+    block = _block(root)
+    assert (block["present"], block["dirs"][0]["ci"]) == (True, True)
+    assert _state(root) == ("met", None)
+
+
+def test_an_unreadable_gitlab_include_leaves_a_baselined_suite_not_measured(tmp_path: Path) -> None:
+    root = _git(tmp_path, {"evals/test_x.py": EVAL_CASE, "evals/baseline.json": "{}",
+                           ".gitlab-ci.yml": "include:\n  - local: ci/missing.yml\ntest:\n  script:\n    - pytest tests/\n"})
+    block = _block(root)
+    assert (block["present"], block["present_reason"]) == (None, "eval_ci_unread")
+    assert _state(root) == ("not_measured", "eval_ci_unread")

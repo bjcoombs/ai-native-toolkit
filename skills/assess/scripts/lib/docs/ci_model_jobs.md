@@ -127,7 +127,7 @@ job `env:`, or in a step that only sets it, neither gates nor ungates a job. Eit
 ## Agent eval suites (`agent_evals`, #850)
 
 The block also carries `agent_evals`, built by `lib.ci.agent_evals` from the same CI files plus
-the repo-local `action.yml` files: each eval suite folder that calls a model, whether a CI file
+the repo-local `action.yml` files and the GitLab files `include:` resolves (#1573): each eval suite folder that calls a model, whether a CI file
 runs it and the committed baseline it holds. Its module docstring has the rules and the shape.
 Known limits:
 
