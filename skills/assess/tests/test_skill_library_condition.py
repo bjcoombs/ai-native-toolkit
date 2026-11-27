@@ -6,7 +6,6 @@ fixture folder, symlinks that leave the repository and invalid frontmatter do no
 """
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -20,7 +19,6 @@ from lib.skill_library import library_location, scan_skill_library, valid_frontm
 
 CID = "skill-library.1"
 SKILL = "---\nname: {name}\ndescription: Use when {name} is needed.\n---\n\n# {name}\n"
-needs_symlinks = pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
 
 
 def _skill(name: str) -> str:
@@ -34,11 +32,15 @@ def _git(root: Path, files: dict[str, str], links: dict[str, str] | None = None)
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
-    for rel, target in (links or {}).items():
-        path = root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.symlink_to(target)
     subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    # Links go into the index as mode 120000 blobs, as a commit records them, so the tests need
+    # no symlink privilege and run the same with core.symlinks=false (the Git for Windows default).
+    for rel, target in (links or {}).items():
+        oid = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=root, check=True,
+                             input=target, capture_output=True, encoding="utf-8",
+                             errors="strict").stdout.strip()
+        subprocess.run(["git", "update-index", "--add", "--cacheinfo", f"120000,{oid},{rel}"],
+                       cwd=root, check=True)
     subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "c"],
                    cwd=root, check=True)
     return root
@@ -55,7 +57,6 @@ def test_counts_only_keeps_the_reason_code(tmp_path: Path) -> None:
     assert (out["available"], out["reason"]) == (False, "not_a_git_repository")
 
 
-@needs_symlinks
 def test_a_two_skill_library_shared_by_symlink_meets_and_names_the_link(tmp_path: Path) -> None:
     root = _git(tmp_path, {".claude/skills/deploy/SKILL.md": _skill("deploy"),
                            ".claude/skills/review/SKILL.md": _skill("review")},
@@ -81,21 +82,16 @@ def test_skills_under_node_modules_or_a_fixture_folder_do_not_meet(tmp_path: Pat
     assert _state(block) == "unmet"
 
 
-@needs_symlinks
 def test_a_symlink_resolving_outside_the_repository_does_not_count(tmp_path: Path) -> None:
-    outside = tmp_path / "home" / "skills"
-    (outside / "x").mkdir(parents=True)
-    (outside / "x" / SKILL_NAME).write_text(_skill("x"), encoding="utf-8")
     root = _git(tmp_path / "repo", {"README.md": "r\n"},
-                links={".claude/skills": str(outside),
-                       ".agents/skills/y/SKILL.md": str(outside / "x" / SKILL_NAME)})
+                links={".claude/skills": "/home/someone/skills",
+                       ".agents/skills/y/SKILL.md": "../../../../home/x/SKILL.md"})
     block = scan_skill_library(root)
     assert block["present"] is False and block["symlinks_outside"] == 2
     assert block["shared_by_symlink"] == []
     assert _state(block) == "unmet"
 
 
-@needs_symlinks
 def test_a_symlinked_skill_file_inside_the_repository_counts_once(tmp_path: Path) -> None:
     root = _git(tmp_path, {".claude/skills/a/SKILL.md": _skill("a")},
                 links={".gemini/skills/a/SKILL.md": "../../../.claude/skills/a/SKILL.md"})
@@ -103,7 +99,6 @@ def test_a_symlinked_skill_file_inside_the_repository_counts_once(tmp_path: Path
     assert block["skills_counted"] == 1
 
 
-@needs_symlinks
 def test_a_tree_reached_only_through_a_known_link_counts(tmp_path: Path) -> None:
     root = _git(tmp_path, {"tools/agent-skills/a/SKILL.md": _skill("a")},
                 links={".claude/skills": "../tools/agent-skills"})
@@ -129,6 +124,26 @@ def test_a_skill_with_invalid_frontmatter_does_not_meet(tmp_path: Path, text: st
 
 def test_block_scalar_description_is_valid() -> None:
     assert valid_frontmatter("---\nname: a\ndescription: >\n  folded text\n---\n")
+
+
+def test_a_scoped_link_at_the_scope_prefix_is_recognised(tmp_path: Path) -> None:
+    root = _git(tmp_path, {"packages/a/tools/s/x/SKILL.md": _skill("x")},
+                links={"packages/a/.agents/skills": "../tools/s"})
+    block = scan_skill_library(root, Scope.of(root, Path("packages/a")))
+    assert block["skills"] == [{"path": "packages/a/tools/s/x/SKILL.md", "location": "packages/a/.agents/skills"}]
+    assert block["shared_by_symlink"] == [{"path": "packages/a/.agents/skills", "target": "packages/a/tools/s"}]
+
+
+def test_a_link_to_no_committed_file_does_not_count(tmp_path: Path) -> None:
+    root = _git(tmp_path, {"README.md": "r\n"}, links={".claude/skills/a/SKILL.md": "../../../gone.md"})
+    block = scan_skill_library(root)
+    assert (block["present"], block["set_aside_location"]) == (False, 1)
+
+
+def test_the_committed_text_is_read_not_the_working_tree(tmp_path: Path) -> None:
+    root = _git(tmp_path, {"skills/a/SKILL.md": _skill("a")})
+    (root / "skills" / "a" / SKILL_NAME).write_text("# edited, no frontmatter\n", encoding="utf-8")
+    assert scan_skill_library(root)["present"] is True
 
 
 def test_untracked_skills_do_not_count(tmp_path: Path) -> None:

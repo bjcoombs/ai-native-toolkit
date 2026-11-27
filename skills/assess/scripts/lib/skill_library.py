@@ -25,11 +25,16 @@ configuration check uses) or has no ``name`` or no ``description`` (``invalid_fr
 listed in ``invalid_files``). A tracked symlink (git mode ``120000``) that resolves outside the
 repository counts for nothing (``symlinks_outside``), and a ``SKILL.md`` that is itself a
 symlink counts only through its target, so no skill counts twice.
+Every file and link target is read from the commit (``git cat-file --batch``), never the
+working tree: a link's target is its committed blob, resolved lexically against the link's
+folder, so a checkout with ``core.symlinks=false`` (the Git for Windows default) and an
+uncommitted edit read the same as any other checkout. An absolute target, or one that climbs
+above the root, is outside.
 
 **Supporting evidence, not counted:**
 
 - ``shared_by_symlink``: a tracked symlink in a known location (``.agents/skills`` ->
-  ``.claude/skills``) that resolves to a folder inside the repository holding counted skills,
+  ``.claude/skills``; under ``--scope`` also one at the scope folder's prefixes) that resolves to a folder inside the repository holding counted skills,
   so several harnesses read one tree. Each entry is ``{"path", "target"}``, both
   repository-relative. A skill reached only through such a link (its tree outside the known
   prefixes) counts, since the harness loads it from the link.
@@ -52,7 +57,7 @@ sorted by path. A root that is not a git repository, or a failed ``git ls-files`
 apart, so the condition reads not measured, never unmet.
 
 Skill library (#848), no model. `scan_skill_library(repo_root, scope, excludes)` lists tracked
-`SKILL.md` files (`git ls-files -s -z`) in a known location (`skills/` at the root, a harness
+`SKILL.md` files (`git ls-files -s -z`, contents and link targets from `git cat-file --batch`) in a known location (`skills/` at the root, a harness
 folder or `plugins/<name>/`, one or two folders deep), sets aside vendored, fixture, excluded and
 unknown-location files, checks frontmatter with `claude_config.parse_frontmatter` (clean, with
 `name` and `description`), and records tracked symlinks that share a skill tree inside the
@@ -61,7 +66,7 @@ evidence. Tests: `tests/test_skill_library_condition.py`.
 """
 from __future__ import annotations
 
-import os
+import posixpath
 import re
 import subprocess
 from pathlib import Path, PurePosixPath
@@ -84,6 +89,7 @@ MANIFEST_NAMES = (".claude-plugin/marketplace.json", ".claude-plugin/plugin.json
 _HASH_KEY = re.compile(r'"(?:sha256|sha512|sha|integrity|hash|digest|contentHash)"\s*:\s*"[^"]{8,}"',
                        re.IGNORECASE)
 _SYMLINK_MODE = "120000"
+_DRIVE = re.compile(r"^[A-Za-z]:[/\\\\]")
 
 
 class LibrarySkill(TypedDict):
@@ -113,22 +119,71 @@ class SkillLibraryBlock(TypedDict, total=False):
     hashed_manifests: list[str]
 
 
-def _tracked(repo: Path) -> dict[str, str] | None:
-    """Tracked path -> git mode, or None when the root is not a git repository."""
+Tracked = dict[str, tuple[str, str]]  # path -> (git mode, blob object id)
+
+
+def _git(repo: Path, args: list[str], stdin: bytes | None = None) -> bytes | None:
     try:
-        out = subprocess.run(["git", "-C", str(repo), "ls-files", "-s", "-z"],
+        out = subprocess.run(["git", "-C", str(repo), *args], input=stdin,
                              capture_output=True, check=False, timeout=60)
     except (OSError, subprocess.SubprocessError):
         return None
-    if out.returncode != 0:
+    return out.stdout if out.returncode == 0 else None
+
+
+def _tracked(repo: Path) -> Tracked | None:
+    """Tracked path -> (git mode, object id), or None when the root is not a git repository."""
+    raw = _git(repo, ["ls-files", "-s", "-z"])
+    if raw is None:
         return None
-    entries: dict[str, str] = {}
-    for record in out.stdout.split(b"\0"):
+    entries: Tracked = {}
+    for record in raw.split(b"\0"):
         if b"\t" not in record:
             continue
         meta, path = record.split(b"\t", 1)
-        entries[path.decode("utf-8", "surrogateescape")] = meta.split(b" ", 1)[0].decode("ascii")
+        mode, oid = meta.decode("ascii").split(" ")[:2]
+        entries[path.decode("utf-8", "surrogateescape")] = (mode, oid)
     return entries
+
+
+def _blobs(repo: Path, oids: set[str]) -> dict[str, bytes]:
+    """Each object id's committed content (``git cat-file --batch``); a missing one is left out."""
+    if not oids:
+        return {}
+    order = sorted(oids)
+    raw = _git(repo, ["cat-file", "--batch"], "".join(f"{o}\n" for o in order).encode("ascii")) or b""
+    found: dict[str, bytes] = {}
+    pos = 0
+    while pos < len(raw):
+        eol = raw.index(b"\n", pos)
+        head = raw[pos:eol].decode("ascii", "replace").split(" ")
+        pos = eol + 1
+        if len(head) != 3:
+            continue  # "<oid> missing"
+        size = int(head[2])
+        found[head[0]] = raw[pos:pos + size]
+        pos += size + 1
+    return found
+
+
+def _real(path: str, links: dict[str, str], depth: int = 0) -> str | None:
+    """``path`` with each tracked symlink in it replaced by its committed target, resolved
+    lexically; None when a target is absolute or leaves the repository, or links loop."""
+    parts = path.split("/")
+    for i in range(len(parts)):
+        here = "/".join(parts[:i + 1])
+        if here not in links:
+            continue
+        target = links[here]
+        if depth > 8 or target.startswith("/") or _DRIVE.match(target):
+            return None
+        joined = posixpath.normpath(posixpath.join(posixpath.dirname(here), target))
+        if joined == ".." or joined.startswith("../"):
+            return None
+        rest = "/".join(parts[i + 1:])
+        joined = "" if joined == "." else joined
+        return _real("/".join(p for p in (joined, rest) if p), links, depth + 1)
+    return path
 
 
 def library_location(rel: str) -> str | None:
@@ -157,10 +212,9 @@ def valid_frontmatter(text: str) -> bool:
 
 
 def _inside(repo: Path, path: Path) -> str | None:
-    """``path`` resolved, repository-relative (POSIX), or None when it leaves the repository."""
+    """``path`` repository-relative (POSIX), or None when it is outside the repository."""
     try:
-        real = Path(os.path.realpath(path))
-        return real.relative_to(repo).as_posix()
+        return path.resolve().relative_to(repo).as_posix()
     except (OSError, ValueError):
         return None
 
@@ -174,31 +228,35 @@ def _set_aside(rel: str, extra: set[str]) -> str | None:
     return None
 
 
-def _links(repo: Path, tracked: dict[str, str]) -> tuple[dict[str, str], int]:
+def _known(rel: str, scope_rels: list[str]) -> str | None:
+    """The known location of ``rel`` (a ``SKILL.md`` path), from the root or a scope folder."""
+    found = library_location(rel)
+    for base in scope_rels:
+        if found is None and rel.startswith(f"{base}/"):
+            inner = library_location(rel[len(base) + 1:])
+            found = None if inner is None else f"{base}/{inner}"
+    return found
+
+
+def _links(raw: dict[str, str], scope_rels: list[str]) -> tuple[dict[str, str], int]:
     """Known-location symlinks resolving inside the repository (link -> target), and the
-    count of tracked symlinks that resolve outside it."""
+    count of tracked symlinks that resolve outside it. Targets are the committed ones."""
     inside: dict[str, str] = {}
     outside = 0
-    for rel, mode in tracked.items():
-        if mode != _SYMLINK_MODE:
-            continue
-        target = _inside(repo, repo / rel)
+    for rel in raw:
+        target = _real(rel, raw)
         if target is None:
             outside += 1
             continue
         # a link to a whole skills/ tree, or to one skill folder, in a known location
-        if library_location(f"{rel}/x/{SKILL_FILE}") or library_location(f"{rel}/{SKILL_FILE}"):
+        if _known(f"{rel}/x/{SKILL_FILE}", scope_rels) or _known(f"{rel}/{SKILL_FILE}", scope_rels):
             inside[rel] = target
     return inside, outside
 
 
 def _location(rel: str, scope_rels: list[str], links: dict[str, str]) -> str | None:
     """The known location of ``rel``: from the root, from a scope folder, or through a link."""
-    found = library_location(rel)
-    for base in scope_rels:
-        if found is None and rel.startswith(f"{base}/"):
-            inner = library_location(rel[len(base) + 1:])
-            found = None if inner is None else f"{base}/{inner}"
+    found = _known(rel, scope_rels)
     if found is None:
         found = next((link for link, target in sorted(links.items()) if rel.startswith(f"{target}/")), None)
     return found
@@ -213,12 +271,17 @@ def scan_skill_library(repo_root: Path, scope: Scope | None = None,
         return SkillLibraryBlock(available=False,
                                  reason="not_a_git_repository: committed files cannot be listed")
     extra = set(excludes[0]) if excludes else set()
-    links, outside = _links(repo, tracked)
     scope_rels = [] if scope is None else [r for r in (_inside(repo, f) for f in scope.folders) if r]
+    link_oids = {oid for mode, oid in tracked.values() if mode == _SYMLINK_MODE}
+    names = {r for r in tracked if PurePosixPath(r).name == SKILL_FILE or r in MANIFEST_NAMES}
+    blobs = _blobs(repo, link_oids | {tracked[r][1] for r in names})
+    raw = {r: blobs.get(oid, b"").decode("utf-8", "surrogateescape").strip()
+           for r, (mode, oid) in tracked.items() if mode == _SYMLINK_MODE}
+    links, outside = _links(raw, scope_rels)
     counts = {"vendored": 0, "fixture": 0, "location": 0}
     skills: dict[str, LibrarySkill] = {}
     invalid: set[str] = set()
-    for rel, mode in sorted(tracked.items()):
+    for rel, (mode, _oid) in sorted(tracked.items()):
         if PurePosixPath(rel).name != SKILL_FILE:
             continue
         if scope is not None and not scope.contains(repo / rel):
@@ -227,22 +290,19 @@ def scan_skill_library(repo_root: Path, scope: Scope | None = None,
         if reason is not None:
             counts[reason] += 1
             continue
-        real = rel
-        if mode == _SYMLINK_MODE:
-            resolved = _inside(repo, repo / rel)
-            if resolved is None:
-                continue  # counted in symlinks_outside
-            real = resolved
+        real = rel if mode != _SYMLINK_MODE else _real(rel, raw)
+        if real is None:
+            continue  # counted in symlinks_outside
+        if real not in tracked or tracked[real][0] == _SYMLINK_MODE:
+            counts["location"] += 1  # a link to no committed file
+            continue
         location = _location(rel, scope_rels, links)
         if location is None:
             counts["location"] += 1
             continue
         if real in skills:
             continue
-        try:
-            text = (repo / real).read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
+        text = _text(repo, tracked[real][1], blobs)
         if not valid_frontmatter(text):
             invalid.add(real)
             continue
@@ -252,7 +312,8 @@ def scan_skill_library(repo_root: Path, scope: Scope | None = None,
               if any(p.startswith(f"{target}/") for p in counted)]
     locks = sorted(r for r in tracked if PurePosixPath(r).name == LOCK_FILE
                    and _set_aside(r, extra) is None)
-    hashed = sorted(r for r in tracked if r in MANIFEST_NAMES and _hashed(repo / r))
+    hashed = sorted(r for r in tracked if r in MANIFEST_NAMES
+                    and _HASH_KEY.search(_text(repo, tracked[r][1], blobs)))
     return SkillLibraryBlock(
         available=True, present=bool(skills), skills_counted=len(skills),
         skills=sorted(skills.values(), key=lambda s: s["path"]),
@@ -262,8 +323,9 @@ def scan_skill_library(repo_root: Path, scope: Scope | None = None,
         shared_by_symlink=shared, lock_files=locks, hashed_manifests=hashed)
 
 
-def _hashed(path: Path) -> bool:
-    try:
-        return bool(_HASH_KEY.search(path.read_text(encoding="utf-8", errors="replace")))
-    except OSError:
-        return False
+def _text(repo: Path, oid: str, blobs: dict[str, bytes]) -> str:
+    """A tracked file's committed text, read from the batch or, past it, on its own."""
+    data = blobs.get(oid)
+    if data is None:
+        data = _git(repo, ["cat-file", "blob", oid]) or b""
+    return data.decode("utf-8", "replace")
