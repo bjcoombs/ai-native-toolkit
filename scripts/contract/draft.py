@@ -34,7 +34,10 @@ An item with no code span names no command. Its issue is left out of the
 draft whole, never in part, and listed under "Not drafted" in the draft and
 the change summary, so one prose criterion never blocks the rest of the queue.
 A leading task-list box (`[ ]`, `[x]`) is dropped from each item, so ticking
-it on the issue changes nothing.
+it on the issue changes nothing. Whitespace runs outside code spans collapse to
+one space; inside a code span every space and tab is kept, and only a line
+break becomes a space, as in a rendered code span, so a command keeps its
+exact spacing (#1565).
 
 Exit codes: 0 written or check passed; 1 refused or check failed; 2 usage or
 unreadable input; 3 nothing to draft (an empty queue, or no issue whose items
@@ -97,6 +100,18 @@ def _one_line(text: str) -> str:
     return " ".join(str(text).split())
 
 
+def _item_text(raw: str) -> str:
+    """One line: whitespace collapsed outside code spans, kept inside them."""
+    parts: List[str] = []
+    pos = 0
+    for match in _CODE_SPAN.finditer(raw):
+        parts.append(re.sub(r"\s+", " ", raw[pos:match.start()]))
+        parts.append(re.sub(r"\r\n|\r|\n", " ", match.group(0)))
+        pos = match.end()
+    parts.append(re.sub(r"\s+", " ", raw[pos:]))
+    return "".join(parts).strip()
+
+
 def _queue_issues(queue: Dict[str, Any]) -> List[Dict[str, Any]]:
     issues = queue.get("issues")
     if not isinstance(issues, list):
@@ -119,7 +134,7 @@ def _issue_entries(issue: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Optiona
         return [], "no Success Criteria items"
     entries: List[Dict[str, Any]] = []
     for index, raw in enumerate(issue["criteria"], start=1):
-        text = _TASK_BOX.sub("", _one_line(raw), count=1)
+        text = _TASK_BOX.sub("", _item_text(raw), count=1)
         commands = _CODE_SPAN.findall(text)
         if not commands:
             return [], "item %d names no command (no code span): %s" % (index, text)

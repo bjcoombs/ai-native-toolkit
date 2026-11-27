@@ -10,8 +10,12 @@ name: Refine contract draft (reusable)
 #      under .claude/contracts/ on the branch refine/contract-draft-<run_id>,
 #      then runs the kill test (`draft.py check`). A failed kill test stops the
 #      job before anything is pushed.
-#   3. In live mode, a changed draft is pushed and one pull request is opened,
-#      or the open one gets a comment naming the criteria added and removed.
+#   3. In live mode, a changed draft is pushed. A pull request is opened
+#      whenever the branch holds a draft the default branch does not and none
+#      is open (also after a failed `gh pr create`, or a pull request closed
+#      unmerged); an open one gets a comment when the draft changed, naming
+#      the criteria added and removed. An empty queue closes the open draft
+#      pull request with a comment (#1565).
 #
 # Merging that pull request approves the draft: scripts/contract/start_gate.py
 # refuses a drafted contract that is not on the default branch. Freezing stays
@@ -121,6 +125,7 @@ jobs:
           echo "::add-mask::$auth"
           export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" \
             GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
+          base=$(git rev-parse HEAD)
           # The open draft branch is the baseline the change summary compares against.
           if git fetch -q --depth=1 origin "+refs/heads/${branch}:refs/remotes/origin/${branch}" 2>/dev/null; then
             git checkout -q -B "$branch" "origin/${branch}"
@@ -129,9 +134,11 @@ jobs:
           fi
           rc=0
           python3 "$DRAFT" write --queue .refine/queue.json --run-id "$RUN_ID" \
-            --contract-dir .claude/contracts --summary .refine/contract-changes.md || rc=$?
+            --contract-dir .claude/contracts --summary .refine/contract-changes.md 2> .refine/draft.err || rc=$?
+          cat .refine/draft.err >&2
           if [ "$rc" -eq 3 ]; then
             echo "The ready queue is empty: nothing to draft." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "empty=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           [ "$rc" -eq 0 ] || exit "$rc"
@@ -140,27 +147,38 @@ jobs:
           # Force-add: many repositories ignore .claude/, and a status check or a plain
           # git add both skip ignored files.
           git add -f -- ".claude/contracts/${RUN_ID}.contract.md" ".claude/contracts/${RUN_ID}.kill-test.json"
-          if git diff --cached --quiet; then
-            echo "The draft on ${branch} already matches the ready queue."
+          if git diff --cached --quiet "$base" -- ".claude/contracts/${RUN_ID}.contract.md" ".claude/contracts/${RUN_ID}.kill-test.json"; then
+            echo "The draft is already on ${DEFAULT_BRANCH}: no pull request is needed."
             exit 0
           fi
           echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+          # Unchanged: the branch already holds this draft. The next step still opens
+          # the pull request when none is open (a failed create, or one closed unmerged).
+          if git diff --cached --quiet; then
+            echo "The draft on ${branch} already matches the ready queue."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Push the draft and open or refresh its pull request
         if: steps.draft.outputs.branch != '' && inputs.mode == 'live'
         timeout-minutes: 5
         env:
           BRANCH: ${{ steps.draft.outputs.branch }}
+          CHANGED: ${{ steps.draft.outputs.changed }}
         run: |
           set -euo pipefail
-          # Credentials reach git through this step's environment only, never .git/config.
-          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
-          echo "::add-mask::$auth"
-          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" \
-            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
-          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit -q -m "chore: Draft the acceptance contract for ${RUN_ID}"
-          git push -q origin "HEAD:refs/heads/${BRANCH}"
+          if [ "$CHANGED" = "true" ]; then
+            # Credentials reach git through this step's environment only, never .git/config.
+            auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+            echo "::add-mask::$auth"
+            export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" \
+              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "chore: Draft the acceptance contract for ${RUN_ID}"
+            git push -q origin "HEAD:refs/heads/${BRANCH}"
+          fi
           pr=$(gh pr list --head "$BRANCH" --state open --json number | jq -r '.[0].number // empty')
           {
             echo "Drafted from the Success Criteria of the ready issues queued for run \`${RUN_ID}\`."
@@ -169,11 +187,25 @@ jobs:
             cat .refine/contract-changes.md
           } > .refine/pr-body.md
           if [ -n "$pr" ]; then
-            gh pr comment "$pr" --body-file .refine/contract-changes.md
+            if [ "$CHANGED" = "true" ]; then
+              gh pr comment "$pr" --body-file .refine/contract-changes.md
+            fi
           else
             gh pr create --base "$DEFAULT_BRANCH" --head "$BRANCH" \
               --title "chore: Draft the acceptance contract for ${RUN_ID}" --body-file .refine/pr-body.md
           fi
+
+      - name: Close the draft pull request when there is nothing to draft
+        if: steps.draft.outputs.empty == 'true' && inputs.mode == 'live'
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          pr=$(gh pr list --head "refine/contract-draft-${RUN_ID}" --state open --json number | jq -r '.[0].number // empty')
+          if [ -z "$pr" ]; then
+            exit 0
+          fi
+          reason=$(sed 's/^draft: //' .refine/draft.err | head -n 1)
+          gh pr close "$pr" --comment "Closed by the contract-draft job: ${reason}. A later sweep opens a new pull request once the ready queue has an issue to draft."
 
       - name: Report the dry-run
         if: steps.draft.outputs.branch != '' && inputs.mode != 'live'

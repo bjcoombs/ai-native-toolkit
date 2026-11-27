@@ -361,3 +361,61 @@ def test_refine_queue_cli_writes_the_queue(tmp_path: Path) -> None:
     assert rc == 0
     queue = json.loads(out.read_text(encoding="utf-8"))
     assert [i["number"] for i in queue["issues"]] == [11, 12]  # 13 is in flight under PR 99
+
+
+# --------------------------------------------------------------------------- #
+# Gaps from #1565: CRLF freeze, code-span whitespace.
+# --------------------------------------------------------------------------- #
+
+
+@needs_git
+def test_crlf_checkout_freezes_the_lf_hashed_kill_test_and_starts(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    contracts = repo / ".claude" / "contracts"
+    _write(contracts, _backlog_issues())
+    _git(repo, "add", "-f", ".")
+    _git(repo, "commit", "-q", "-m", "draft")
+    path = draft.contract_path(contracts, RUN_ID)
+    lf_hash = _kill_test(contracts)["contract_sha256"]
+    path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))  # what core.autocrlf checks out
+    assert freeze.contract_sha256(path) != lf_hash
+    _freeze_draft(contracts)  # the kill test still names the LF hash draft.py wrote
+    record = json.loads((contracts / ("%s.completion.json" % RUN_ID)).read_text(encoding="utf-8"))
+    # The evidence holds the working copy's bytes, the hash the exit verifier re-hashes.
+    assert record["freeze_evidence"]["contract_hash"] == freeze.contract_sha256(path)
+    assert sg.main([RUN_ID, "--contract-dir", str(contracts), "--approved-ref", "main"]) == 0
+
+
+def test_crlf_tolerance_does_not_accept_another_contract(tmp_path: Path) -> None:
+    _write(tmp_path, _backlog_issues())
+    path = draft.contract_path(tmp_path, RUN_ID)
+    path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n").replace(b"make lint", b"make nothing"))
+    kill = _kill_test(tmp_path)
+    for entry in kill["results"]:
+        entry["passed_against_null"] = False
+    filled = tmp_path / "kill-filled.json"
+    filled.write_text(json.dumps(kill), encoding="utf-8")
+    result = freeze.freeze(path, RUN_ID, filled, contract_dir=tmp_path)
+    assert not result.frozen and "not bound to this contract" in result.reasons[0]
+
+
+def test_code_span_whitespace_is_kept_verbatim(tmp_path: Path) -> None:
+    item = "`printf 'a  b'`   prints\t`a  b`  and `jq '.x |  length'` exits 0"
+    _write(tmp_path, [_issue(31, [item])])
+    entry = _kill_test(tmp_path)["results"][0]
+    assert entry["commands"] == ["printf 'a  b'", "a  b", "jq '.x |  length'"]
+    assert entry["criterion"] == "`printf 'a  b'` prints `a  b` and `jq '.x |  length'` exits 0"
+    text = draft.contract_path(tmp_path, RUN_ID).read_text(encoding="utf-8")
+    assert draft.check(text, _kill_test(tmp_path)) == []
+
+
+def test_code_span_across_a_line_break_stays_on_one_line(tmp_path: Path) -> None:
+    queue = {"repository": "a/b", "issues": [
+        {"number": 32, "title": "t", "url": "u", "criteria": ["`make  check\nlint` exits 0"]}]}
+    draft.write(queue, RUN_ID, tmp_path)
+    entry = _kill_test(tmp_path)["results"][0]
+    assert entry["commands"] == ["make  check lint"]
+    text = draft.contract_path(tmp_path, RUN_ID).read_text(encoding="utf-8")
+    assert draft.check(text, _kill_test(tmp_path)) == []
