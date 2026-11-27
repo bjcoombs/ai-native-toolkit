@@ -43,6 +43,12 @@ pattern = "^inhouse-agent"
 untriaged_labels = ["needs-triage"]
 ready_labels = ["agent-ready"]
 
+# Backlog work-in-progress limit (issue #812), read through `load_backlog_wip`:
+# how many filed backlog items stay open at once (default 3); `assess-pr` lists
+# the items over it as "Next up" instead of filing them.
+[backlog]
+wip = 3
+
 # Central guardrails (issue #1153): read this machine's Claude Code managed settings
 # for the agent permissions practice, as `assess_core.py --managed-settings` does. A
 # single-repository option: /fleet and assess_signals.py never read it.
@@ -95,6 +101,8 @@ is the single shared path that combines config excludes with CLI `--exclude`; bo
 CLI and `doc-graph-svg.py` call it, so every artifact computes over the identical doc/code set.
 `load_backlog_ready_labels` returns the `[backlog_ready]` `untriaged_labels` and
 `ready_labels` lists (issue #1322), each replacing its default when it holds a string.
+`load_backlog_wip` returns `[backlog] wip` (issue #812), the backlog's open-item limit,
+3 when absent or malformed.
 Degrades silently on missing or malformed config rather than blocking the run. The
 `[ai_usage]`, `[review]` and `[platform]` sections are read by `fleet_config.py`, not here
 (they extend a `--fleet-config` file, #706).
@@ -204,6 +212,22 @@ def load_backlog_ready_labels(repo_root: Path, untriaged: tuple[str, ...],
     got = [tuple(x.strip() for x in _string_list(section, key) if x.strip())
            for key in ("untriaged_labels", "ready_labels")]
     return got[0] or untriaged, got[1] or ready, bool(got[0] or got[1])
+
+
+DEFAULT_BACKLOG_WIP = 3
+
+
+def load_backlog_wip(repo_root: Path) -> int:
+    """``[backlog] wip`` (#812): how many backlog items ``assess-pr`` keeps open at once.
+
+    A whole number of 0 or more; ``DEFAULT_BACKLOG_WIP`` (3) when the key is absent, the
+    section is not a table, or the value is not such a number (a ``bool`` included).
+    """
+    section = load_config(repo_root).get("backlog")
+    value = section.get("wip") if isinstance(section, dict) else None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return DEFAULT_BACKLOG_WIP
+    return value
 
 
 def _string_list(config: TomlTable, key: str) -> list[str]:

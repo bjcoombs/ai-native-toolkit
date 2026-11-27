@@ -1,4 +1,4 @@
-"""Condition marker and dedup by condition id on filed backlog items (#810)."""
+"""Condition marker and dedup by condition id on filed backlog items (#810), and the WIP limit (#812)."""
 from __future__ import annotations
 
 import json
@@ -9,6 +9,7 @@ import pytest
 
 import assess_actions_render as render
 from lib.report import backlog_items as bi
+from lib.report import backlog_wip as bw
 
 MODEL = "default-2026.11.24"
 ENTRY = {"rank": 1, "action": "Run the tests in CI", "condition": "layer-5-ci.1",
@@ -221,3 +222,132 @@ def test_two_actions_naming_one_condition_keep_their_own_items() -> None:
     assert tracker.file(_items(other, ENTRY)) == [2, 1]  # matched by title among the same key
     reworded = {**other, "action": "Require CI before merge"}
     assert tracker.file(_items(ENTRY, reworded)) == [1, 2]  # no title match: the next unclaimed item
+
+
+# The work-in-progress limit and the next-unlock ranking (#812).
+
+def _entry(rank: int, condition: str) -> dict[str, object]:
+    return {**ENTRY, "rank": rank, "action": f"Action {rank}", "condition": condition}
+
+
+def _marked(number: int, condition: str, state: str = "OPEN") -> dict[str, object]:
+    return {"number": number, "title": f"Filed {number}", "body": bi.condition_marker(condition, MODEL),
+            "state": state, "labels": [{"name": bi.DEFAULT_LABEL}]}
+
+
+def _propose(items: list[render.TrackerItem], existing: list[dict[str, object]],
+             level: object = None, wip: int = 3) -> list[render.TrackerItem]:
+    return render.plan_items(items, existing, level=level, wip=wip)
+
+
+def _filed(planned: list[render.TrackerItem]) -> list[str]:
+    return [p["title"] for p in planned if p["wip"]["decision"] == bw.FILE]
+
+
+NEW = [_entry(1, "row-a.1"), _entry(2, "row-b.1"), _entry(3, "row-c.1")]
+
+
+def test_three_open_marked_items_hold_every_new_item_as_next_up() -> None:
+    existing = [_marked(n, f"old-{n}.1") for n in (1, 2, 3)]
+    planned = _propose(_items(*NEW), existing)
+    assert _filed(planned) == []
+    assert [p["wip"]["decision"] for p in planned] == [bw.NEXT_UP] * 3
+    block = bw.next_up_markdown(planned, [p["wip"] for p in planned])
+    assert block.startswith("**Next up**")
+    assert [line for line in block.splitlines() if line.startswith("- ")] == [
+        "- Action 1", "- Action 2", "- Action 3"]
+
+
+def test_closing_one_lets_the_next_ranked_item_be_proposed() -> None:
+    existing = [_marked(n, f"old-{n}.1") for n in (1, 2, 3)]
+    existing[1]["state"] = "CLOSED"
+    level = {"next_step": {"step": 2, "blockers": [{"kind": "gate", "condition": "row-c.1"}]}}
+    planned = _propose(_items(*NEW), existing, level)
+    assert _filed(planned) == ["Action 3"]  # row-c.1 unlocks the next Step, so it outranks rank 1
+    assert planned[2]["wip"]["tier"] == "next_unlock"
+    assert [line for line in bw.next_up_markdown(planned, [p["wip"] for p in planned]).splitlines()
+            if line.startswith("- ")] == ["- Action 1", "- Action 2"]
+
+
+def test_an_item_already_open_takes_no_new_slot() -> None:
+    existing = [_marked(1, "row-a.1"), _marked(2, "old-2.1")]
+    planned = _propose(_items(*NEW), existing)
+    assert [p["wip"]["decision"] for p in planned] == [bw.OPEN, bw.FILE, bw.NEXT_UP]
+    assert bw.next_up_markdown(planned, [p["wip"] for p in planned], limit=3).count("\n- ") == 1
+
+
+def test_a_lapse_recovery_outranks_a_new_gain() -> None:
+    existing = [_marked(1, "old-1.1"), _marked(2, "old-2.1"), _marked(9, "row-b.1", state="CLOSED")]
+    planned = _propose(_items(*NEW), existing)
+    assert [p["wip"]["tier"] for p in planned] == ["gain", "recovery", "gain"]
+    assert _filed(planned) == ["Action 2"]  # reopening #9 takes the one free slot
+
+
+def test_unmarked_labelled_open_items_count_and_the_limit_is_configurable() -> None:
+    legacy = [{"number": 4, "title": "Old", "body": "", "state": "OPEN", "labels": ["assess-finding"]}]
+    assert bw.open_backlog(legacy) == {4} and bw.open_backlog(legacy, label="") == set()
+    assert _filed(_propose(_items(*NEW), legacy, wip=1)) == []
+    assert _filed(_propose(_items(*NEW), [], wip=0)) == []
+    assert _filed(_propose(_items(*NEW), [], wip=5)) == ["Action 1", "Action 2", "Action 3"]
+    assert bw.next_up_markdown([], []) == ""
+
+
+def test_next_up_subcommand_reads_the_wip_from_config(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assess = tmp_path / ".assess"
+    assess.mkdir()
+    (assess / "actions.json").write_text(json.dumps({"schema": 2, "actions": NEW}), encoding="utf-8")
+    (assess / "run-context.json").write_text(json.dumps({"level": {"levels_version": MODEL}}), encoding="utf-8")
+    (assess / "config.toml").write_text("[backlog]\nwip = 1\n", encoding="utf-8")
+    existing = tmp_path / "existing.json"
+    existing.write_text("[]", encoding="utf-8")
+    assert render.main([str(tmp_path), "plan", "--existing", str(existing)]) == 0
+    assert [i["wip"]["decision"] for i in json.loads(capsys.readouterr().out)] == ["file", "next_up", "next_up"]
+    assert render.main([str(tmp_path), "next-up", "--existing", str(existing)]) == 0
+    assert "- Action 2\n- Action 3\n" in capsys.readouterr().out
+    assert render.main([str(tmp_path), "next-up", "--existing", str(existing), "--wip", "3"]) == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_two_actions_naming_one_closed_condition_each_take_a_slot() -> None:
+    # #811: plan takes each item once per run, so the second action is a create, not a second reopen.
+    existing = [_marked(1, "old-1.1"), _marked(9, "row-a.1", state="CLOSED")]
+    twins = _items(_entry(1, "row-a.1"), _entry(2, "row-a.1"), _entry(3, "row-c.1"))
+    planned = _propose(twins, existing)
+    assert [p["filing"]["action"] for p in planned] == ["reuse", "create", "create"]
+    assert [p["wip"]["decision"] for p in planned] == [bw.FILE, bw.FILE, bw.NEXT_UP]
+
+
+def test_steps_naming_one_closed_item_share_a_slot() -> None:
+    # The guard for a caller whose steps did not come from plan_filing.
+    items = _items(_entry(1, "row-a.1"), _entry(2, "row-a.1"), _entry(3, "row-c.1"))
+    steps: list[bi.FilingStep] = [{"action": "reuse", "number": 9, "state": "CLOSED"},
+                                  {"action": "reuse", "number": 9, "state": "CLOSED"}, {"action": "create"}]
+    got = bw.apply_wip(items, steps, [_marked(1, "old-1.1"), _marked(2, "old-2.1")])
+    assert [w["decision"] for w in got] == [bw.FILE, bw.FILE, bw.NEXT_UP]
+
+
+def test_next_up_header_names_the_configured_limit_and_agrees_in_number() -> None:
+    planned = _propose(_items(*NEW), [], wip=0)
+    steps = [p["wip"] for p in planned]
+    assert "at most 1 open item, the `[backlog] wip` limit" in bw.next_up_markdown(planned, steps, limit=1)
+    assert "at most 3 open items," in bw.next_up_markdown(planned, steps, limit=3)
+
+
+def test_next_up_header_keeps_the_configured_limit_under_a_reduced_wip(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assess = tmp_path / ".assess"
+    assess.mkdir()
+    (assess / "actions.json").write_text(json.dumps({"schema": 2, "actions": NEW}), encoding="utf-8")
+    (assess / "config.toml").write_text("[backlog]\nwip = 2\n", encoding="utf-8")
+    existing = tmp_path / "existing.json"
+    existing.write_text("[]", encoding="utf-8")
+    assert render.main([str(tmp_path), "next-up", "--existing", str(existing), "--wip", "1"]) == 0
+    out = capsys.readouterr().out
+    assert "at most 2 open items" in out and "- Action 2\n- Action 3\n" in out
+
+
+@pytest.mark.parametrize("bad", ["-1", "two"])
+def test_a_negative_or_non_numeric_wip_fails_at_argparse(tmp_path: Path, bad: str) -> None:
+    with pytest.raises(SystemExit) as exc:
+        render.main([str(tmp_path), "plan", "--existing", "x.json", "--wip", bad])
+    assert exc.value.code == 2
