@@ -116,14 +116,16 @@ def test_grades_and_counting() -> None:
     assert [counts_toward_level(g) for g in ("config_only", "declared", "measured", "verified", "x")] \
         == [False, False, True, True, False]
     signals = {s["path"]: s for s in catalog["signals"]}
-    crits = [c for r in catalog["rows"] for lv in r["levels"] for c in lv["criteria"]]
+    crits = [(c, lv["polarity"] == "hazard") for r in catalog["rows"] for lv in r["levels"]
+             for c in lv["criteria"]]
     assert crits
-    for c in crits:
+    for c, hazard in crits:
         assert c["key"] == f"{c['key'].split(':', 1)[0]}:{c['signal']}"
         assert c["input_class"] == SIGNAL_INPUTS[c["signal"]]
-        assert c["grade"] == grade_of(c["input_class"]) and c["counts"] is counts(c["grade"])
+        # a hazard is never counted (#849 adds the default model's first)
+        assert c["grade"] == grade_of(c["input_class"]) and c["counts"] is (counts(c["grade"]) and not hazard)
         assert c["text"].startswith(f"{signals[c['signal']]['title']}: ")
-    assert any(c["counts"] for c in crits) and any(not c["counts"] for c in crits)
+    assert any(c["counts"] for c, _ in crits) and any(not c["counts"] for c, _ in crits)
 
 
 def test_scan_entries_carry_relations_reasons_and_privacy() -> None:
@@ -234,6 +236,9 @@ def _section(text: str, heading: str) -> str:
     return text[start:start + len(heading) + 2 + nxt.start()] if nxt else text[start:]
 
 
+HAZARDS = {"agent-job-write-access.1"}  # the default model's hazards (#849)
+
+
 def test_every_condition_carries_its_frame_fields() -> None:
     catalog = build_catalog()
     model = stable_model(load_default_levels())
@@ -241,10 +246,11 @@ def test_every_condition_carries_its_frame_fields() -> None:
         for level, mlevel in zip(row["levels"], mrow["levels"]):
             assert level["id"] == f"{row['id']}.{level['level']}"
             assert level["truth"] == mlevel["truth"]
-            assert level["polarity"] == "positive" and level["guarded_by"] is None
+            hazard = level["id"] in HAZARDS
+            assert level["polarity"] == ("hazard" if hazard else "positive") and level["guarded_by"] is None
             assert level["requires"] == mlevel.get("requires", [])
             assert level["grade"] == min((c["grade"] for c in level["criteria"]), key=GRADE_ORDER.index)
-            assert level["counts"] is counts(level["grade"])
+            assert level["counts"] is (counts(level["grade"]) and not hazard)
             for c in level["criteria"]:
                 assert c["producer"]["scan"] == c["signal"].split(".", 1)[0]
                 assert c["eq_signal"] is None

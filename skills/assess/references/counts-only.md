@@ -187,6 +187,12 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `agent_ops.agent_workflows.triggers` | token |
 | `agent_ops.agent_workflows.signs` | token |
 | `agent_ops.agent_workflows.via` | path (hashed when hashing is on) |
+| `agent_ops.agent_jobs.path` | path (hashed when hashing is on) |
+| `agent_ops.agent_jobs.job` | dropped |
+| `agent_ops.agent_jobs.scope` | token |
+| `agent_ops.agent_jobs.write_scopes` | token |
+| `agent_ops.summary.agent_jobs_least_privilege_reason` | token |
+| `agent_ops.summary.agent_job_write_access_reason` | token |
 
 ## agent_outcome
 

@@ -270,7 +270,7 @@ def test_the_documented_defaults_leave_the_default_results_unchanged() -> None:
     with_defaults = copy.deepcopy(raw)
     for row in with_defaults["rows"]:
         for lv in row["levels"]:
-            lv["polarity"] = "positive"
+            lv.setdefault("polarity", "positive")  # a hazard (#849) keeps its own
     data = {"doc_staleness": {"summary": {"stale_pct": 10}}, "ci_checks": {"enforced_check_runs": True}}
     assert lt.level_result(parse_levels(with_defaults), data) == lt.level_result(parse_levels(raw), data)
 

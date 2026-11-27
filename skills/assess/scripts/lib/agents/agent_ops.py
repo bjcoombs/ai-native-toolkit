@@ -28,6 +28,14 @@ This module scans the repo-observable subset of those guardrails:
   prompt in quotes is set aside before the install-line check, so ``codex exec "add a label"``
   still counts.
 
+- ``agent_jobs`` (#849): every committed workflow job that runs an agent, whatever its trigger,
+  with its effective token scope, whether its writes go through a separate job and whether it
+  sets a spend cap (``scan_agent_jobs``; the reading rules are in
+  ``lib.agents.agent_job_scope``). The summary gains ``agent_job_count``,
+  ``agent_jobs_read_only``, ``agent_jobs_least_privilege`` (the maturity model's
+  least-privilege condition) and ``agent_job_write_access`` (its hazard), the last two null
+  with a sibling ``_reason`` when there is no agent job or a scope cannot be read.
+
 Only **git-tracked** artifacts count toward the summary booleans, mirroring the
 Layer 0 rule: a settings file present on disk but uncommitted reaches no clone,
 so it is reported (``tracked: false``) but never credited. ``.claude/agents/``
@@ -67,6 +75,7 @@ from __future__ import annotations
 
 import json
 import re
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -75,7 +84,8 @@ from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
 from lib.ci.ci_model_jobs import signs_in
 from lib.ci.ci_triggers import workflow_events
 from lib.instructions.command_index import NOOP_COMMANDS, ci_config_files, read_config, repo_files
-from lib.counts_only.block_shapes import AgentWorkflow
+from lib.counts_only.block_shapes import AgentJob, AgentWorkflow
+from lib.agents.agent_job_scope import gh_aw_job, summarize, workflow_jobs
 from lib.agents.managed_settings import managed_permissions, not_read, read_managed_settings
 from lib.history.git_churn import is_tracked, tracked_files
 
@@ -358,6 +368,48 @@ def scan_agent_workflows(repo_root: Path) -> tuple[list[AgentWorkflow], int]:
     return sorted(found, key=lambda w: w["path"]), unread
 
 
+def _runs_agent(signs: _Signs, rel: str, body: str) -> bool:
+    """Whether ``body`` (one job of ``rel``, or all of it) carries an agent sign. Read uncached,
+    since the text is not the whole file."""
+    return bool(signs.workflow(rel, body, frozenset({rel}))[0])
+
+
+def _calls_remote_agent(signs: _Signs, rel: str, body: str) -> bool:
+    """Whether ``body`` (one job of ``rel``) calls an agent-named reusable workflow in another
+    repository, which is never read."""
+    return signs.workflow(rel, body, frozenset({rel}))[2]
+
+
+def scan_agent_jobs(repo_root: Path) -> tuple[list[AgentJob], int]:
+    """Every committed job that runs an agent, with its effective token scope (#849,
+    ``lib.agents.agent_job_scope``), and the count of jobs that call an agent-named reusable
+    workflow in another repository (not read) under a scope that is not read-only. Any trigger counts; a
+    workflow whose only event is ``workflow_call`` is read through its caller's job instead."""
+    repo = repo_root.resolve()
+    files = repo_files(repo)
+    signs = _Signs(repo, files)
+    jobs: list[AgentJob] = []
+    unread = 0
+    sources: set[str] = set()
+    for rel in sorted(f for f in files if f.startswith(_WORKFLOWS) and f.endswith(".md")
+                      and "/" not in f[len(_WORKFLOWS):]):
+        front = _frontmatter(read_config(repo, rel))
+        if front is not None and workflow_events(front):
+            sources.add(rel)
+            jobs.append(gh_aw_job(rel, front))
+    for rel in ci_config_files(files):
+        if not rel.startswith(_WORKFLOWS) or rel.removesuffix(".lock.yml") + ".md" in sources:
+            continue
+        text = read_config(repo, rel)
+        if set(workflow_events(text) or []) == {"workflow_call"}:
+            continue
+        unsettled: list[str] = []
+        jobs += workflow_jobs(rel, text, partial(_runs_agent, signs, rel), signs.read,
+                              remote_of=partial(_calls_remote_agent, signs, rel), unsettled=unsettled)
+        unread += len(unsettled)
+    return sorted(jobs, key=lambda j: (j["path"], j["job"])), unread
+
+
 def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str, Any]:
     """Build the run-context ``agent_ops`` block.
 
@@ -416,6 +468,8 @@ def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str,
         "event_agent_workflows": triggered,
         "agent_work_present": agent_work,
     }
+    agent_jobs, jobs_unread = scan_agent_jobs(repo_root)
+    summary.update(summarize(agent_jobs, jobs_unread))
     if not agent_work and unread:
         summary["agent_work_present"] = None
         summary["agent_work_present_reason"] = UNREAD_WORKFLOWS
@@ -435,6 +489,7 @@ def scan_agent_ops(repo_root: Path, managed_settings: bool = False) -> dict[str,
         "routine_dirs": routine_dirs,
         "agent_workflows": workflows,
         "agent_workflows_unread": unread,
+        "agent_jobs": agent_jobs,
         "managed": managed,
         "summary": summary,
     }

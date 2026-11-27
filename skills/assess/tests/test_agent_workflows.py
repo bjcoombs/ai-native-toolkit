@@ -390,3 +390,303 @@ jobs:
 """
     repo = _repo(git_repo, {".github/workflows/triage.yml": text})
     assert scan_agent_ops(repo)["agent_workflows"][0]["signs"] == ["agent_cli"]
+
+
+# -- #849 least-privilege agent jobs and the agent_job_write_access hazard ---------------
+
+ON_ISSUES = "on:\n  issues:\n    types: [opened]\n"
+
+GH_AW_SAFE_OUTPUTS = """---
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+  issues: read
+engine: claude
+safe-outputs:
+  add-comment:
+---
+# Triage
+
+Label the issue and say why.
+"""
+
+WRITE_AGENT = ON_ISSUES + """jobs:
+  agent:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          prompt: Fix this issue.
+"""
+
+
+def _jobs(repo: Path) -> list[dict[str, object]]:
+    return [dict(j) for j in scan_agent_ops(repo)["agent_jobs"]]
+
+
+def test_a_read_only_gh_aw_agent_with_safe_outputs_meets_the_condition(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/triage.md": GH_AW_SAFE_OUTPUTS})
+    assert _jobs(repo) == [{"path": ".github/workflows/triage.md", "job": "agent",
+                            "scope": "read_only", "write_scopes": [], "split": True,
+                            "spend_cap": False}]
+    summary = _summary(repo)
+    assert summary["agent_jobs_least_privilege"] is True
+    assert summary["agent_job_write_access"] == 0
+
+
+def test_a_read_only_agent_job_with_a_needs_writer_job_meets_the_condition(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/review.yml": ON_ISSUES + """permissions: read-all
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - run: claude -p "review the diff" > out.md
+  publish:
+    needs: [agent]
+    permissions:
+      issues: write
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh issue comment 1 --body-file out.md
+"""})
+    jobs = _jobs(repo)
+    assert [(j["job"], j["scope"], j["split"]) for j in jobs] == [("agent", "read_only", True)]
+    summary = _summary(repo)
+    assert summary["agent_jobs_least_privilege"] is True
+    assert summary["agent_job_write_access"] == 0
+
+
+def test_an_agent_job_with_contents_write_and_no_split_raises_the_hazard(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/fix.yml": WRITE_AGENT})
+    jobs = _jobs(repo)
+    assert jobs[0]["scope"] == "write" and jobs[0]["write_scopes"] == ["contents", "issues"]
+    assert jobs[0]["split"] is False
+    summary = _summary(repo)
+    assert summary["agent_job_write_access"] == 1
+    assert summary["agent_jobs_least_privilege"] is False
+
+
+def test_a_workflow_read_with_a_job_level_write_override_does_not_pass(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/fix.yml": WRITE_AGENT.replace(
+        "jobs:\n", "permissions:\n  contents: read\njobs:\n", 1)})
+    summary = _summary(repo)
+    assert summary["agent_jobs_least_privilege"] is False
+    assert summary["agent_job_write_access"] == 1
+
+
+def test_max_turns_alone_with_write_scope_does_not_meet_the_condition(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/fix.yml": WRITE_AGENT.replace(
+        "          prompt: Fix this issue.\n",
+        "          prompt: Fix this issue.\n          claude_args: --max-turns 5\n")})
+    assert _jobs(repo)[0]["spend_cap"] is True
+    summary = _summary(repo)
+    assert summary["agent_jobs_least_privilege"] is False
+    assert summary["agent_job_write_access"] == 1
+
+
+def test_a_write_agent_job_split_from_its_writer_is_not_the_hazard_but_not_met(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/fix.yml": WRITE_AGENT + """  publish:
+    needs: agent
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo done
+"""})
+    summary = _summary(repo)
+    assert summary["agent_job_write_access"] == 0
+    assert summary["agent_jobs_least_privilege"] is False
+
+
+def test_an_undeclared_scope_is_not_least_privilege_and_not_the_hazard(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/triage.yml": ON_ISSUES + AGENT_STEPS})
+    assert _jobs(repo)[0]["scope"] == "undeclared"
+    summary = _summary(repo)
+    assert summary["agent_jobs_least_privilege"] is False
+    assert summary["agent_job_write_access"] == 0
+
+
+def test_id_token_write_is_not_a_repository_write(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/review.yml": ON_ISSUES + """jobs:
+  agent:
+    permissions: { contents: read, id-token: write }
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@v1
+"""})
+    assert _jobs(repo)[0]["scope"] == "read_only"
+    assert _summary(repo)["agent_jobs_least_privilege"] is True
+
+
+def test_write_all_and_an_expression_scope(git_repo) -> None:
+    repo = _repo(git_repo, {
+        ".github/workflows/a.yml": WRITE_AGENT.replace(
+            "    permissions:\n      contents: write\n      issues: write\n", "    permissions: write-all\n"),
+        ".github/workflows/b.yml": WRITE_AGENT.replace(
+            "    permissions:\n      contents: write\n      issues: write\n",
+            "    permissions: ${{ fromJSON(vars.PERMS) }}\n")})
+    assert [(j["path"][-5:], j["scope"], j["write_scopes"]) for j in _jobs(repo)] == [
+        ("a.yml", "write", ["write-all"]), ("b.yml", "unread", [])]
+    assert _summary(repo)["agent_job_write_access"] == 1
+
+
+def test_an_unread_scope_alone_reads_not_measured(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/b.yml": WRITE_AGENT.replace(
+        "    permissions:\n      contents: write\n      issues: write\n",
+        "    permissions: ${{ fromJSON(vars.PERMS) }}\n")})
+    summary = _summary(repo)
+    assert summary["agent_jobs_least_privilege"] is None
+    assert summary["agent_jobs_least_privilege_reason"] == "agent_job_scope_unread"
+    assert summary["agent_job_write_access"] is None
+    assert summary["agent_job_write_access_reason"] == "agent_job_scope_unread"
+
+
+def test_no_agent_job_reads_not_measured(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/label.yml": ON_ISSUES + PLAIN_STEPS})
+    summary = _summary(repo)
+    assert summary["agent_job_count"] == 0
+    assert summary["agent_jobs_least_privilege"] is None
+    assert summary["agent_jobs_least_privilege_reason"] == "no_agent_jobs"
+    assert summary["agent_job_write_access"] is None
+    assert summary["agent_job_write_access_reason"] == "no_agent_jobs"
+
+
+def test_any_trigger_counts_and_a_called_workflow_is_read_through_its_caller(git_repo) -> None:
+    repo = _repo(git_repo, {
+        ".github/workflows/push.yml": "on: push\n" + WRITE_AGENT.removeprefix(ON_ISSUES),
+        ".github/workflows/agent.yml": "on: workflow_call\n" + AGENT_STEPS,
+        ".github/workflows/caller.yml": ON_ISSUES + """jobs:
+  call:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/agent.yml
+"""})
+    assert [(j["path"], j["job"], j["scope"]) for j in _jobs(repo)] == [
+        (".github/workflows/caller.yml", "call", "read_only"),
+        (".github/workflows/push.yml", "agent", "write")]
+
+
+def test_a_sign_outside_every_job_reads_unread(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/x.yml": ON_ISSUES + """env:
+  MODEL: claude-sonnet-4
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./scripts/review.sh
+"""})
+    assert [(j["job"], j["scope"]) for j in _jobs(repo)] == [("", "unread")]
+
+
+def test_agent_jobs_survive_counts_only_without_the_job_id(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/fix.yml": WRITE_AGENT})
+    out = counts_only({"agent_ops": scan_agent_ops(repo)})
+    job = out["agent_ops"]["agent_jobs"][0]
+    assert "job" not in job
+    assert {k: job[k] for k in ("scope", "write_scopes", "split", "spend_cap")} == {
+        "scope": "write", "write_scopes": ["contents", "issues"], "split": False, "spend_cap": False}
+    summary = out["agent_ops"]["summary"]
+    for key in ("agent_job_count", "agent_jobs_read_only", "agent_jobs_least_privilege",
+                "agent_job_write_access"):
+        assert key in summary
+
+
+def test_an_unread_remote_agent_workflow_leaves_the_hazard_not_measured(git_repo) -> None:
+    repo = _repo(git_repo, {
+        ".github/workflows/a.yml": ON_ISSUES + "permissions:\n  contents: read\n" + AGENT_STEPS,
+        ".github/workflows/b.yml": """on:
+  schedule:
+    - cron: "0 0 * * *"
+permissions:
+  contents: write
+jobs:
+  triage:
+    uses: some-org/shared/.github/workflows/claude-triage.yml@v1
+"""})
+    summary = _summary(repo)
+    assert summary["agent_jobs_least_privilege"] is None
+    assert summary["agent_job_write_access"] is None
+    assert summary["agent_job_write_access_reason"] == "agent_workflows_unread"
+
+
+def test_a_read_only_follower_job_is_no_split(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/fix.yml": WRITE_AGENT + """  notify:
+    needs: agent
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo done
+"""})
+    assert _jobs(repo)[0]["split"] is False
+    assert _summary(repo)["agent_job_write_access"] == 1
+
+
+def test_a_called_workflow_lowers_its_callers_write_scope(git_repo) -> None:
+    called = "on: workflow_call\njobs:\n  agent:\n    permissions:\n      contents: read\n" + \
+        AGENT_STEPS.split("  agent:\n", 1)[1]
+    repo = _repo(git_repo, {
+        ".github/workflows/agent.yml": called,
+        ".github/workflows/caller.yml": ON_ISSUES + """jobs:
+  call:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/agent.yml
+"""})
+    assert [(j["job"], j["scope"]) for j in _jobs(repo)] == [("call", "read_only")]
+    # the callee cannot raise the caller's token: a write callee under a read caller stays read
+    repo2 = _repo(git_repo, {".github/workflows/agent.yml": called.replace("contents: read", "contents: write"),
+                             ".github/workflows/caller.yml": ON_ISSUES + """jobs:
+  call:
+    permissions:
+      issues: write
+    uses: ./.github/workflows/agent.yml
+"""})
+    assert [(j["scope"], j["write_scopes"]) for j in _jobs(repo2)] == [("read_only", [])]
+
+
+def test_a_push_only_remote_agent_workflow_leaves_the_scope_not_measured(git_repo) -> None:
+    repo = _repo(git_repo, {".github/workflows/x.yml": """on: push
+jobs:
+  agent:
+    uses: some-org/shared/.github/workflows/agent.yml@v1
+"""})
+    summary = _summary(repo)
+    assert summary["agent_jobs_least_privilege_reason"] == "agent_workflows_unread"
+    assert summary["agent_job_write_access_reason"] == "agent_workflows_unread"
+
+
+def test_a_remote_agent_job_beside_a_local_one_is_not_dropped(git_repo) -> None:
+    remote = "    uses: someorg/agents/.github/workflows/claude-fix.yml@v1\n"
+    local = ON_ISSUES + "permissions:\n  contents: read\n" + AGENT_STEPS
+    repo = _repo(git_repo, {".github/workflows/x.yml": local + "  fix:\n    permissions:\n"
+                            "      contents: write\n" + remote})
+    summary = _summary(repo)
+    assert summary["agent_jobs_least_privilege"] is None
+    assert summary["agent_jobs_least_privilege_reason"] == "agent_workflows_unread"
+    # under a read-only caller scope the remote job is read-only too: the caller caps it
+    repo = _repo(git_repo, {".github/workflows/x.yml": local + "  fix:\n" + remote})
+    assert [(j["job"], j["scope"]) for j in _jobs(repo)] == [("agent", "read_only"), ("fix", "read_only")]
+    assert _summary(repo)["agent_jobs_least_privilege"] is True
+
+
+def test_a_split_inside_a_called_workflow_reaches_its_caller(git_repo) -> None:
+    called = "on: workflow_call\n" + WRITE_AGENT.removeprefix(ON_ISSUES) + """  writer:
+    needs: agent
+    permissions:
+      issues: write
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo write
+"""
+    repo = _repo(git_repo, {".github/workflows/agent.yml": called,
+                            ".github/workflows/caller.yml": ON_ISSUES + """jobs:
+  call:
+    permissions: write-all
+    uses: ./.github/workflows/agent.yml
+"""})
+    assert [(j["job"], j["scope"], j["split"]) for j in _jobs(repo)] == [("call", "write", True)]
+    assert _summary(repo)["agent_job_write_access"] == 0

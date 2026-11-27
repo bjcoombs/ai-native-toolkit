@@ -173,7 +173,7 @@ def test_an_owner_exclusion_reads_set_aside_never_listed() -> None:
             for c in level_result(default_model(), {})["conditions"]])["tags"] if r["tag"] == "behaviour"))
     # with nothing excluded, a tag of declared and config-only conditions alone reads listed
     plain = {r["tag"]: td.row_state(r) for r in level_result(default_model(), {})["tags"]}
-    assert plain["agent_runtime"] == "listed" and plain["behaviour"] == "not_measured"
+    assert plain["supply_chain"] == "listed" and plain["behaviour"] == "not_measured"  # agent_runtime counts since #849
 
 
 def test_countable_grades_are_the_tally_counted_grades() -> None:
