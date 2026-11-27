@@ -562,3 +562,17 @@ def test_gitlab_issues_closed_by_their_author_are_not_overdue(tmp_path: Path, gl
     block = _block(_repo(tmp_path))
     assert block["outcomes"]["no_response_count"] == 20
     assert block["first_response_met"] is True
+
+
+@pytest.mark.parametrize("change", ["reopened", "closed_again_by_a_bot"])
+def test_an_issue_its_author_closed_then_reopened_or_a_bot_closed_stays_overdue(
+        tmp_path: Path, gh: FakeGh, change: str) -> None:
+    for d in range(1, 21):
+        node = _self_closed(f"2026-10-{d:02d}T00:00:00Z")
+        if change == "reopened":
+            node["closedAt"] = None
+        else:
+            node["timelineItems"]["nodes"].append({"__typename": "ClosedEvent", "createdAt": f"2026-10-{d:02d}T09:00:00Z",
+                                                   "actor": {"__typename": "Bot", "login": "stale"}})
+        gh.nodes().append(node)
+    assert _block(_repo(tmp_path))["first_response_met"] is False

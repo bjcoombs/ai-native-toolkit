@@ -2634,7 +2634,7 @@
         },
         {
           "code": "gitlab_template_unreadable",
-          "means": "No issue form or GitLab template read meets the bar, and a GitLab issue template could not be read: it is over the size limit or could not be opened.",
+          "means": "No form or template read meets the bar. A GitLab issue template could not be read: it is too large or could not be opened.",
           "next_step": "Nothing to change if the template has the six sections; a GitLab issue template under the size limit lets the scan read its headings."
         },
         {
