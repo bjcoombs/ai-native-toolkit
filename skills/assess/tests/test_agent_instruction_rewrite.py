@@ -144,6 +144,16 @@ def test_codeowned_reads_the_last_matching_line() -> None:
     assert codeowned("CLAUDE.md @org/a  # trailing comment\n", "sub/CLAUDE.md")
     assert codeowned("**/AGENTS.md @o\n", "AGENTS.md") and codeowned("**/*.md @o\n", "CLAUDE.md")
     assert codeowned("**/AGENTS.md @o\n", "docs/AGENTS.md")
+    assert not codeowned("/.github/* @o\n", ".github/workflows/a.yml")
+    assert codeowned("/.github/** @o\n", ".github/workflows/a.yml")
+    assert codeowned(".github/ @o\n", ".github/workflows/a.yml") and codeowned("docs/*.md @o\n", "docs/a.md")
+    assert not codeowned("/docs/ @o\n", "src/docs/a.md") and codeowned("docs/ @o\n", "docs/a/b.md")
+
+
+def test_a_single_star_on_the_workflow_folder_still_raises_it(git_repo) -> None:
+    owners = "/AGENTS.md @o\n/CLAUDE.md @o\n/.github/* @o\n"
+    repo = _repo(git_repo, {WORKFLOW: SCHEDULED_WRITER, ".github/CODEOWNERS": owners})
+    assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 1
 
 
 def test_a_codeowners_that_does_not_own_itself_guards_nothing(git_repo) -> None:

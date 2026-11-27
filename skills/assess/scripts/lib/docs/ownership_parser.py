@@ -286,14 +286,39 @@ def codeowned(text: str, rel: str) -> bool:
     """Whether the CODEOWNERS ``text`` names an owner for the repo-relative path ``rel``.
 
     GitHub reads the last matching line, so a later line with no owner takes the path back
-    out of ownership. ``rel`` need not exist yet: it is matched as a string, through the same
-    glob forms ``parse_codeowners`` uses (#858)."""
+    out of ownership. ``rel`` need not exist yet: it is matched as a string. Unlike the
+    fnmatch forms ``parse_codeowners`` uses, a single ``*`` or ``?`` here never crosses ``/``,
+    as GitHub reads it, since this match decides a gate (#858)."""
     owners: list[str] | None = None
     for raw in text.splitlines():
         parts = raw.split("#", 1)[0].split()
-        if parts and any(fnmatch.fnmatch(rel, form) for form in _glob_to_fnmatch(parts[0])):
+        if parts and _codeowners_regex(parts[0]).fullmatch(rel):
             owners = parts[1:]
     return bool(owners)
+
+
+def _codeowners_regex(pattern: str) -> re.Pattern[str]:
+    """A CODEOWNERS pattern as GitHub matches it: ``**`` crosses ``/``, ``*`` and ``?`` do not; a
+    pattern with no inner ``/`` matches at any depth; a literal last segment also claims
+    everything below it."""
+    anchored = pattern.startswith("/") or "/" in pattern.strip("/")
+    body = pattern.strip("/")
+    out = ""
+    i = 0
+    while i < len(body):
+        if body.startswith("**/", i):
+            out, i = out + "(?:.*/)?", i + 3
+        elif body.startswith("**", i):
+            out, i = out + ".*", i + 2
+        elif body[i] == "*":
+            out, i = out + "[^/]*", i + 1
+        elif body[i] == "?":
+            out, i = out + "[^/]", i + 1
+        else:
+            out, i = out + re.escape(body[i]), i + 1
+    # a literal last segment names a file or a folder; ``docs/*`` stops at one level (GitHub docs)
+    below = "" if "*" in body.rsplit("/", 1)[-1] else "(?:/.*)?"
+    return re.compile(("" if anchored else "(?:.*/)?") + out + below)
 
 
 def _tracked_rel_paths(
