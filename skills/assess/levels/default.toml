@@ -368,9 +368,9 @@
 #   blocks = "instructions", so while it is met the instructions gate does not hold and Step 2
 #   stays out of reach; the tally does not move. It reads ci_hazards.instructions_unchecked:
 #   the tracked instruction files (instruction_files.INSTRUCTION_FILE_PATHS) that every GitHub
-#   Actions workflow running a check on pull requests filters out (paths-ignore matches it, or
-#   no paths pattern lets it through). A filter it cannot read lets every file through. With no
-#   such workflow it is unknown (no_pr_checks). Graded measured (head_structure).
+#   Actions pull request workflow filters out (paths-ignore matches it, or no paths pattern lets
+#   it through). A filter it cannot read, or an empty one, lets every file through. With no pull
+#   request workflow that runs a check it is unknown (no_pr_checks). Graded measured (head_structure).
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures. A settings hook event
 #   counts toward hooks_present only when it holds a hook that does

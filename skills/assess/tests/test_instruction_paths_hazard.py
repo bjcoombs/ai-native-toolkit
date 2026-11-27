@@ -108,6 +108,13 @@ def test_no_pr_check_workflow_reads_not_measured(tmp_path: Path) -> None:
     assert not _result(block).get("hazards")  # type: ignore[arg-type]
 
 
+def test_an_unfiltered_pr_workflow_whose_check_is_not_seen_clears_it(tmp_path: Path) -> None:
+    caller = "on: [pull_request]\njobs:\n  test:\n    uses: org-shared/workflows/.github/workflows/t.yml@v1\n"
+    block = scan_ci_hazards(_repo(tmp_path, {".github/workflows/checks.yml": IGNORED,
+                                             ".github/workflows/ci.yml": caller}))
+    assert (block["instructions_unchecked"], block["unchecked_instruction_files"]) == (0, [])
+
+
 def test_a_paths_filter_that_names_the_file_clears_it(tmp_path: Path) -> None:
     text = SCOPED.replace("      - 'tests/**'\n", "      - 'tests/**'\n      - '*.md'\n")
     assert scan_ci_hazards(_repo(tmp_path, {".github/workflows/checks.yml": text}))["instructions_unchecked"] == 0
@@ -139,6 +146,7 @@ def test_filters_read_as_github_does(key: str, patterns: list[str], path: str, e
     "on:\n  pull_request:\n    paths: ['src/**']\n    paths-ignore: ['x']\n",  # both: GitHub rejects it
     "on: {pull_request: {paths: ['src/**']}}\n",                    # a flow mapping
     "on:\n  pull_request:\n    paths: ['src/**']\n  pull_request_target:\n",  # a second PR event runs on all
+    "on:\n  pull_request:\n    paths: []\n",                          # an empty filter names nothing
 ])
 def test_a_filter_not_read_lets_every_file_through(on: str) -> None:
     assert any(admits(found, "AGENTS.md") for found in pr_filters(on) or [])

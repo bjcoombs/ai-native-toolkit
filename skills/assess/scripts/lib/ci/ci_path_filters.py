@@ -9,21 +9,23 @@ line with the ``ci_masking`` indentation model.
 - **The files.** The tracked instruction files at the fixed locations
   (``lib.instructions.instruction_files.INSTRUCTION_FILE_PATHS``: root ``CLAUDE.md``,
   ``AGENTS.md``, ``GEMINI.md``, ``.cursorrules``, the ``.github/`` and ``docs/`` variants).
-- **The workflows.** A workflow counts when its ``on:`` names ``pull_request`` or
-  ``pull_request_target`` and one of its lines runs a test or lint command
-  (``lib.ci.ci_checks.check_commands``), as for ``skip_labels``.
+- **The workflows.** Every workflow whose ``on:`` names ``pull_request`` or
+  ``pull_request_target``. The count is measured only when at least one of them runs a test or
+  lint command (``lib.ci.ci_checks.check_commands``), as for ``skip_labels``. A file is
+  unchecked only when every PR workflow filters it out, including one whose check this reader
+  does not see (a reusable workflow or a script it does not follow), so such a workflow clears it.
 - **A filter.** Each such event's ``paths:`` or ``paths-ignore:`` list, read as GitHub does:
   ``*`` matches within one path segment, ``**`` across segments (``**/`` also at the root), and
   a ``!`` pattern re-includes or re-excludes, the last match winning. ``paths:`` lets a file
   through when its last matching pattern is not negated; ``paths-ignore:`` stops it when its last
   matching pattern is not negated. An event with no filter lets every file through.
 - **Precision first.** A workflow lets a file through when any of its PR events does. An event
-  this reader cannot read (an ``on:`` flow mapping, a filter that is not a plain list, ``paths``
+  this reader cannot read (an ``on:`` flow mapping, a filter that is empty or not a plain list, ``paths``
   beside ``paths-ignore``, which GitHub rejects, or a pattern with ``?``, ``+`` or ``[``) lets
   every file through, so the hazard is never raised on a filter it did not read.
 
 ``unchecked_instructions(workflows, tracked)`` returns the count of instruction files that every
-such workflow filters out, the instruction files themselves and the workflows read, or None
+PR workflow filters out, the instruction files themselves and the workflows read, or None
 (``no_pr_checks`` in the block) when no workflow runs a check on pull requests. Tests:
 ``tests/test_instruction_paths_hazard.py``.
 """
@@ -116,7 +118,7 @@ def pr_filters(text: str) -> list[PathFilter | None] | None:
         filters = {tree.lines[k].key: k for k in tree.children(keyed[name])}
         keys = [key for key in ("paths", "paths-ignore") if key in filters]
         raw = _list(tree, filters[keys[0]]) if len(keys) == 1 else None
-        out.append(_filter(keys[0], raw) if raw is not None else None)
+        out.append(_filter(keys[0], raw) if raw else None)  # an empty list filters nothing read
     return out
 
 
@@ -124,15 +126,19 @@ def unchecked_instructions(workflows: dict[str, str], tracked: frozenset[str]) -
     """The count of instruction files every PR check workflow filters out, those files and the
     workflows read for it (module docstring); a null count when no workflow checks pull requests."""
     read: list[str] = []
+    checking = False
     files = [p for p in INSTRUCTION_FILE_PATHS if p in tracked]
     unchecked = set(files)
     for rel, text in sorted(workflows.items()):
         filters = pr_filters(text)
-        if filters is None or check_commands(text) == 0:
+        if filters is None:
             continue
         read.append(rel)
+        checking = checking or check_commands(text) > 0
+        # any PR workflow that runs on the file clears it, a check seen or not: its check may sit
+        # in a reusable workflow or a script this reader does not follow
         unchecked -= {p for p in files if any(admits(f, p) for f in filters)}
-    if not read:
+    if not checking:
         return None, [], []
     found = sorted(unchecked)
     return len(found), found, (read if found else [])
