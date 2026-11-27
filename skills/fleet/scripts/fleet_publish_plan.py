@@ -6,6 +6,7 @@ never publishes.
 
     fleet_publish_plan.py plan OUT --exports DIR [--allow-names] [--run-id ID]
     fleet_publish_plan.py record ORG_DIR --url URL --run-id ID
+    fleet_publish_plan.py url ORG_DIR
 
 ``plan`` reads ``OUT/fleet-data.json`` and ``OUT/fleet-view.html`` and, in ``--exports``, the
 artifact's stored documents as ``<collection>.json`` (``runs``, ``units``, ``repos``, ``targets``
@@ -19,9 +20,12 @@ refused without ``--allow-names``, since its documents name repositories. ``--ru
 run's history entry name (default: the run's scan date).
 
 ``record`` keeps the artifact URL in ``ORG_DIR/publish.json`` (the fleet's history directory for
-the org), so the next run publishes to the same artifact.
+the org), so the next run publishes to the same artifact. ``url`` prints that URL on stdout, or
+nothing with exit 1 before the first publish. A ``publish.json`` that is not ``{url, runs}`` is
+refused (exit 2) and left as it was.
 
-Exit codes: 0 written; 2 refused or unreadable input (the reason on stderr).
+Exit codes: 0 written or printed; 1 no URL recorded yet (``url``); 2 refused or unreadable input
+(the reason on stderr).
 """
 # /// script
 # requires-python = ">=3.11"
@@ -49,8 +53,12 @@ from lib.fleet.fleet_publish_session import (
     plan_publish,
     read_export,
     record_url,
+    recorded_url,
     write_plan,
 )
+
+
+COMMANDS = ("plan", "record", "url")
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -67,6 +75,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     record.add_argument("org_dir", help="The fleet's history directory for the org.")
     record.add_argument("--url", required=True, help="The artifact's claude.ai URL.")
     record.add_argument("--run-id", required=True, metavar="ID", help="The run published.")
+    url = sub.add_parser("url", help="Print the artifact URL ORG_DIR/publish.json records (exit 1 if none).")
+    url.add_argument("org_dir", help="The fleet's history directory for the org.")
     return parser.parse_args(argv)
 
 
@@ -117,6 +127,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "record":
             path = record_url(Path(args.org_dir), args.url, args.run_id)
             print(f"fleet_publish_plan: recorded -> {path}", file=sys.stderr)
+            return 0
+        if args.command == "url":
+            found = recorded_url(Path(args.org_dir))
+            if found is None:
+                print("fleet_publish_plan: no artifact recorded yet; this is a first publish", file=sys.stderr)
+                return 1
+            print(found)
             return 0
         return _plan(args)
     except PublishError as e:

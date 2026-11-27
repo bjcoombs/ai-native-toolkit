@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Tuple
 
 import pytest
 import yaml  # required: the plugin contract job installs pyyaml
+from refine_workflow_expr import github_caps
 
 REPO = Path(__file__).resolve().parent.parent
 TEMPLATE = REPO / "templates" / "refine.yml"
@@ -212,7 +213,11 @@ def test_plan_files_written_are_the_ones_applied() -> None:
         assert f".refine/plans/$n-{command}.json" in apply
 
 
-def _caps(script: str) -> List[Dict[str, int]]:
+CLOSE_CAP_SPLICE = "'\"${REFINE_CLOSE_CAP:-10}\"'"
+
+
+def _caps(script: str, close_cap: int = 10) -> List[Dict[str, int]]:
+    script = script.replace(CLOSE_CAP_SPLICE, str(close_cap))
     return [json.loads(m) for m in re.findall(r"CLAUDE_CODE_SCRIPT_CAPS='([^']+)'", script)]
 
 
@@ -225,8 +230,26 @@ def test_call_caps_name_real_scripts_and_match_github() -> None:
     for name, job in (("reusable-refine-triage.yml", "apply"), ("reusable-refine-dedupe.yml", "apply"),
                       ("reusable-refine-sweep.yml", "sweep")):
         doc = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
-        github[name] = json.loads(doc["jobs"][job]["env"]["CLAUDE_CODE_SCRIPT_CAPS"])
+        github[name] = json.loads(github_caps(doc["jobs"][job]["env"]["CLAUDE_CODE_SCRIPT_CAPS"], 10))
     assert caps == list(github.values())
+
+
+def test_sweep_close_cap_follows_refine_close_cap() -> None:
+    """An adopter who raises REFINE_CLOSE_CAP gets that many closes per sweep, not 10 (#1345)."""
+    script = _script("refine-apply")
+    assert script.count(CLOSE_CAP_SPLICE) == 1
+    assert _caps(script, 20)[2]["close-duplicate.sh"] == 20
+
+
+@pytest.mark.skipif(sys.platform == "win32" or shutil.which("bash") is None, reason="the job runs bash")
+@pytest.mark.parametrize("value, expected", [("", 10), ("25", 25)])
+def test_sweep_caps_line_runs_with_an_empty_close_cap(value: str, expected: int) -> None:
+    """An empty REFINE_CLOSE_CAP variable falls back to 10, as Settings.close_cap does."""
+    line = next(ln.strip() for ln in _script("refine-apply").splitlines() if CLOSE_CAP_SPLICE in ln)
+    proc = subprocess.run(["bash", "-c", line + '; printf %s "$CLAUDE_CODE_SCRIPT_CAPS"'],
+                          env={"PATH": os.environ["PATH"], "REFINE_CLOSE_CAP": value},
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
+    assert json.loads(proc.stdout)["close-duplicate.sh"] == expected
 
 
 # ── the pin, run ─────────────────────────────────────────────────────────

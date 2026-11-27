@@ -31,7 +31,8 @@ contract 0.2.96 (``claude.use``; ``null`` means absent):
   and ``user.can("data.write")`` is ``true``; ``null`` (not told) and ``false`` hide the entry.
 - ``setTarget(view, unit, step)`` writes ``{step}`` to ``targets/<target_id>``, or deletes it for
   ``null``. The id comes from the bundle, never from input, and must match ``TARGET_ID_RE``
-  (``{view}~`` then id characters, at most 200), so page input cannot widen what is written.
+  (``{view}~`` then id characters, at most 200 in all: the same limit ``target_doc_id`` applies,
+  so every id the bundle carries is one the page writes), so page input cannot widen what is written.
 - ``history(docId)`` reads ``units/<docId>`` once and returns each published run's lowest Step.
 
 Deterministic: the same page, bundle and mode give the same bytes. `live_page(page, data, mode,
@@ -50,7 +51,8 @@ from lib.fleet.fleet_publish import PublishError, doc_id
 from lib.fleet.fleet_targets_import import target_doc_id
 
 TARGET_VIEWS: Final = ("ownership", "system")
-TARGET_ID_RE: Final = r"^(ownership|system)~[A-Za-z0-9_\-:@+~]{1,190}$"
+# One length rule with ``target_doc_id``: the whole id is at most 200 characters (``fleet_publish.MAX_ID``).
+TARGET_ID_RE: Final = r"^(?=.{1,200}$)(ownership|system)~[A-Za-z0-9_\-:@+~]+$"
 HASHED_NOTE: Final = ("Targets can't be set on this page: it was published from a run with hashed names, "
                       "and the next run reads targets by plain unit names.")
 _BUNDLE = re.compile(r'(<script type="application/json" id="fleet-bundle">)(.*?)(</script>)', re.S)

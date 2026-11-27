@@ -133,7 +133,7 @@ def test_row_order_is_fixed_and_labels_carry_conditions_and_repositories_measure
 def test_a_tag_no_repository_measured_is_dashed_with_its_reason_never_zero() -> None:
     svg = _svg()
     for tag, reason in (("governance", "not measured on any repository"),
-                        ("agent_runtime", "not counted: its conditions are listed, never counted"),
+                        ("supply_chain", "not counted: its conditions are listed, never counted"),
                         ("contracts", "not yet measured: no condition has this tag")):
         row = _row(svg, tag)
         assert 'data-mark="dashed"' in row and 'data-mark="dot"' not in row and reason in row

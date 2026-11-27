@@ -185,7 +185,8 @@ database answers:
   none.
 - A target is written as `{"step": N}` to `targets/<target id>`, or deleted to clear it. The id
   comes from the page's own data, never from what a viewer types, and must match
-  `(ownership|system)~` plus up to 190 id characters.
+  `(ownership|system)~` plus id characters, at most 200 characters in all: the same limit the
+  [row contract](#targets-read-back) sets, so every target id the page carries is one it can write.
 - For the unit shown, it reads `units/<doc id>` once and lists each published run's lowest Step.
 
 **Strays.** Because Contributors can write at the root, a document can appear outside what the
@@ -198,4 +199,7 @@ collection nobody exported is not seen.
 **Stored state.** The planner reads the `runs`, `units` and `repos` exports for three things:
 each document's size (the size guard), its version (the `if_version` pin) and what this run
 id already holds (`previous`, so a changed republish is refused). `publish.json` in the
-fleet's history directory for the org keeps the artifact URL and the runs published to it.
+fleet's history directory for the org keeps the artifact URL and the runs published to it, as
+`{"url": ..., "runs": [...]}`. `fleet_publish_plan.py url` prints the URL, or exits 1 before the
+first publish; `record` adds a run. A `publish.json` of another shape is refused, never
+overwritten, and `record` refuses a second artifact URL for the same org.

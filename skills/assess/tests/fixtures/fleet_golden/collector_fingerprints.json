@@ -42,11 +42,11 @@
     },
     "core.agent_ops": {
       "repos": {
-        "grpa/sub/deep/svc2": "13fd6cb94af0b486972c81bad2a75ef6a09a332c3cfe01afa3d233bd84b5e2fa",
-        "grpa/svc1": "13fd6cb94af0b486972c81bad2a75ef6a09a332c3cfe01afa3d233bd84b5e2fa",
-        "grpb/lib1": "9022be5f4269dce3832121c33400ff0d1a510fb108172a87d555479f0b0495e6"
+        "grpa/sub/deep/svc2": "e9475e9e67a05fd8be0ae28d4bfdfaf096ae9b1293bae16b78414f612723c8ae",
+        "grpa/svc1": "e9475e9e67a05fd8be0ae28d4bfdfaf096ae9b1293bae16b78414f612723c8ae",
+        "grpb/lib1": "48549d27b6b4ce11e63fd1295da478a323fe6cf8a86f00a9d28df270c74a3dad"
       },
-      "revision": 3
+      "revision": 4
     },
     "core.agent_outcome": {
       "repos": {

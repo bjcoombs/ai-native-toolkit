@@ -442,6 +442,19 @@ _WORDING: dict[str, Wording] = {
         "No CI job that calls a model API runs on every push to the default branch or every pull "
         "request update without a `paths:` filter, a schedule or manual trigger, a label, or GitLab "
         "`rules:changes:`."),
+    "agent_ops.summary.agent_jobs_least_privilege": _flag(
+        "Give each workflow job that runs an agent `permissions:` with no write scope "
+        "(`contents: read`, or `read-all`), and move writes into a separate job that `needs:` the "
+        "agent job, or into GitHub Agentic Workflows `safe-outputs:`.",
+        "Every job that runs an agent has its own or its workflow's `permissions:` with no `write` "
+        "value (`id-token: write` aside) and no job-level override back to `write`."),
+    # A hazard (polarity hazard): its criterion reads the harm, so the wording says how to clear it.
+    "agent_ops.summary.agent_job_write_access": _flag_count(
+        "Drop the write scopes from each agent job's `permissions:` and do the writes in a job "
+        "that `needs:` it, or in GitHub Agentic Workflows `safe-outputs:`. A `max-turns` cap "
+        "limits cost, not what the token can do.",
+        "No job that runs an agent has a `write` scope unless another job that `needs:` it, or "
+        "`safe-outputs:`, does the writing."),
     "secrets_guard.configured": _flag(
         "Add a secrets hook to `.pre-commit-config.yaml` (gitleaks or detect-secrets), or a secrets "
         "scan step to CI.",
@@ -587,6 +600,13 @@ _MEASURE_HINTS = {
                          "code patches. The policy is not measured (`org_policy_not_read`) when the "
                          "repository holds none and the owner's shared `.github` repository was not "
                          "read: run with `--platform`, or `/assess` with `gh` signed in.",
+    "agent_ops": "Permissions are not measured (`managed_settings_unreadable`) when the repository "
+                 "lists none and a managed settings source could not be read. Agent work and the "
+                 "agent job scope are not measured (`agent_workflows_unread`) when only another "
+                 "repository's reusable workflow may run the agent. The agent job scope is not "
+                 "measured (`no_agent_jobs`) when no committed workflow job runs an agent, and "
+                 "(`agent_job_scope_unread`) when an agent job's `permissions:` is an expression "
+                 "or another value the scan cannot read.",
     "skill_library": "Not measured (`not_a_git_repository`) outside a git repository, where the "
                      "committed files cannot be listed.",
     "ci_model_jobs": "Not measured (`no_model_jobs`) when no model-calling CI job is detected. "
