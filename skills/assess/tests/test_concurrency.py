@@ -279,7 +279,8 @@ def test_fan_in_counts_folders_below_the_measured_root(tmp_path: Path) -> None:
 def test_a_path_with_a_quote_is_read_as_written(tmp_path: Path) -> None:
     """git C-quotes such a name in --name-only output even with core.quotepath=false; -z
     keeps it as written, so its linguist-generated attribute matches. The file goes in
-    through the index only, since Windows cannot hold a '"' in a file name."""
+    through the index only (core.protectNTFS off), since Windows cannot hold a '"' in a
+    file name."""
     r = _init(tmp_path)
     (r / ".gitattributes").write_text('"gen/we\\"ird.json" linguist-generated\n', encoding="utf-8")
     name = 'gen/we"ird.json'
@@ -287,7 +288,9 @@ def test_a_path_with_a_quote_is_read_as_written(tmp_path: Path) -> None:
         blob = subprocess.run(["git", "-C", str(r), "hash-object", "-w", "--stdin"], input=f"{i}\n",
                               check=True, capture_output=True, encoding="utf-8",
                               errors="replace").stdout.strip()
-        _git(r, "update-index", "--add", "--cacheinfo", f"100644,{blob},{name}")
+        # Git for Windows refuses an NTFS-invalid name in the index unless told not to
+        _git(r, "-c", "core.protectNTFS=false", "update-index", "--add", "--cacheinfo",
+             f"100644,{blob},{name}")
         if i == 0:
             _git(r, "add", ".gitattributes")
         # a plain commit, never add -A, which would stage the index-only file's removal
