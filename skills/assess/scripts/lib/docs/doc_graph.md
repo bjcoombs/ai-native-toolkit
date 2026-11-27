@@ -70,3 +70,23 @@ live in `doc_links.py`, with the `missing_xrefs` scan: a filename several docs s
 (`SKILL.md`) names only the doc of that name in the naming doc's own directory (#1229).
 A release-note fragment directory (`<issue>.<kind>.md` files beside a `README.md`) is a
 working-notes tree of its unlinked fragments (#1227). The SVG's render-side helpers live in `doc_graph_layout.py`.
+`link_parents` and `directory_breakdown` are built in `doc_graph_rows.py` (#840).
+
+## reStructuredText and Sphinx (#840)
+
+Discovery adds `.rst` files everywhere and `.txt` files under a Sphinx root that uses
+`.txt` sources: a directory with `conf.py` beside `index.txt`, or beside `index.rst` when
+`conf.py` names `.txt` in `source_suffix`. `requirements*.txt`, `constraints*.txt` and
+any reST or `.txt` file under `_build/` are never docs. `doc_staleness` takes the same doc set, so doc
+freshness measures these docs. `doc_rst.py` adds a `link` edge for each `:doc:` (relative
+to the citing doc, or to the Sphinx root when it starts with `/`), each `:ref:` whose label
+(`.. _label:`) some doc defines, each `.. include::` of a doc, and each `.. toctree::`
+entry (`:glob:` patterns match the root's docnames as Sphinx matches them: `*` stays
+within a directory, `**` crosses directories). An unresolved `:doc:`, include or
+toctree entry is a broken link of kind `rst`; an unknown `:ref:` label is not, because it
+may come from intersphinx or `autosectionlabel`. A Sphinx root's `index.rst` /
+`index.txt` is an entry point (the toctree root), as is a root-level `README.rst`. Literal
+blocks and code directives are blanked before parsing, so a sample `:doc:` is not an edge.
+`unparsed_doc_formats` lists the format tokens (`asciidoc`) of doc files present but not
+read for links; with no parsed doc at all, `reason` names them instead of
+`no markdown docs found`, so a zero reachability is not read as the whole story.

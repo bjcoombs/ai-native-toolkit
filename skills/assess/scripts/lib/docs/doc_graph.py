@@ -28,7 +28,10 @@ required. If ``networkx`` is unavailable the module degrades to an
 
 Link syntax, resolution and the link pass live in ``lib.docs.doc_links``; the
 render-side helpers (radial shells, node classes, ghost grouping) live in
-``lib.docs.doc_graph_layout``. Full reference: lib/docs/doc_graph.md.
+``lib.docs.doc_graph_layout``. reST and Sphinx docs (``:doc:``, ``:ref:``,
+``.. include::``, toctrees; a Sphinx root's index is an entry) are read by
+``lib.docs.doc_rst``; link parents and the directory breakdown live in
+``lib.docs.doc_graph_rows``. Full reference: lib/docs/doc_graph.md.
 """
 from __future__ import annotations
 
@@ -40,8 +43,14 @@ from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 
+from lib.docs.doc_graph_rows import directory_breakdown as _directory_breakdown
+from lib.docs.doc_graph_rows import link_parents as _link_parents
 from lib.docs.doc_links import (
     INLINE_CODE_RE, LinkHarvest, harvest_links, missing_xrefs, strip_fenced_lines,
+)
+from lib.docs.doc_rst import (
+    RST_DISCOVERY_EXTENSIONS, UNPARSED_DOC_FORMATS, harvest_rst_links, is_sphinx_index,
+    sphinx_filter, unparsed_formats,
 )
 from lib.history.git_churn import tracked_files
 from lib.run.run_scope import Scope
@@ -125,7 +134,7 @@ def is_excluded_path(rel: Path) -> bool:
 # Entry-doc basenames: legitimately have no inbound links (they are where a
 # reader starts), so they are excluded from the orphan count and used as the
 # roots for reachability.
-ENTRY_BASENAMES = {"readme.md", "agents.md", "claude.md", "index.md", "home.md"}
+ENTRY_BASENAMES = {"readme.md", "readme.rst", "agents.md", "claude.md", "index.md", "home.md"}
 
 # Declared-MOC conventions (filename signals a map-of-content). Cross-checked
 # against the graph: a real MOC is a structural hub.
@@ -204,6 +213,8 @@ class DocGraphResult:
     # exact doc a run flags. LLM readers of the block drop it with
     # del(.link_parents), since nothing they score reads it.
     link_parents: list[LinkParent] = field(default_factory=list)
+    # Doc formats present but not parsed for links (#840), as format tokens.
+    unparsed_doc_formats: list[str] = field(default_factory=list)
     # Missing cross-references: a doc names another doc but never links to it
     # (Karpathy Lint).
     missing_xrefs: list[MissingXref] = field(default_factory=list)
@@ -256,6 +267,7 @@ class DocGraphResult:
             "directory_breakdown": self.directory_breakdown,
             "directory_count": self.directory_count,
             "link_parents": self.link_parents,
+            "unparsed_doc_formats": self.unparsed_doc_formats,
         }
 
 
@@ -327,11 +339,12 @@ def discover_doc_files(
     extra_exclude_patterns: list[str] | None = None,
     scope: Scope | None = None,
 ) -> list[Path]:
-    """Return all in-repo markdown docs under repo_root, skipping excluded dirs."""
-    return _discover_files(
-        repo_root, DOC_EXTENSIONS, extra_exclude_dirs, extra_exclude_patterns,
-        scope=scope,
-    )
+    """Return all in-repo markdown and reST docs under repo_root (a `.txt` only
+    under a Sphinx root, `lib.docs.doc_rst`), skipping excluded dirs."""
+    return sphinx_filter(_discover_files(
+        repo_root, DOC_EXTENSIONS | RST_DISCOVERY_EXTENSIONS, extra_exclude_dirs,
+        extra_exclude_patterns, scope=scope,
+    ), repo_root.resolve())
 
 
 def discover_base_files(
@@ -643,9 +656,14 @@ def build_doc_graph(
         )
     )
     docs = [d.resolve() for d in docs]
+    unparsed = unparsed_formats(_discover_files(
+        repo_root, set(UNPARSED_DOC_FORMATS), extra_exclude_dirs, extra_exclude_patterns,
+        scope=scope))
     if not docs:
         return DocGraphResult(
-            available=True, reason="no markdown docs found", doc_count=0,
+            available=True, doc_count=0, unparsed_doc_formats=unparsed,
+            reason=("docs present but not parsed for links: " + ", ".join(unparsed)
+                    if unparsed else "no markdown docs found"),
             vault_detected=vault, obsidiantools_available=obs,
         )
 
@@ -663,8 +681,9 @@ def build_doc_graph(
         graph.add_node(rel(d))
     harvest = harvest_links(
         docs, texts, repo_root, graph, rel,
-        doc_exts=DOC_EXTENSIONS, code_exts=CODE_EXTENSIONS,
+        doc_exts=DOC_EXTENSIONS | RST_DISCOVERY_EXTENSIONS, code_exts=CODE_EXTENSIONS,
     )
+    harvest_rst_links(docs, texts, repo_root, graph, harvest)
     # A link between the same pair keeps kind link.
     graph.add_edges_from([
         (rel(src), rel(tgt)) for src, tgt in ref_pairs
@@ -694,6 +713,7 @@ def build_doc_graph(
 
     # Excluded-layer figures, reported separately so the exclusion stays legible.
     result.curated_doc_count = result.doc_count
+    result.unparsed_doc_formats = unparsed
     (result.excluded_raw_trees, result.raw_source_doc_count,
      result.raw_source_orphan_rate, result.raw_source_broken_links,
      ) = _layer_figures(graph, harvest.broken, raw_docs, raw_trees)
@@ -701,82 +721,6 @@ def build_doc_graph(
      result.working_notes_orphan_rate, result.working_notes_broken_links,
      ) = _layer_figures(graph, harvest.broken, notes_docs, notes_trees)
     return result
-
-
-def _link_parents(graph: nx.DiGraph, entry_points: list[str]) -> list[LinkParent]:
-    """One ``{path, link_parent, link_entry}`` record per node in ``graph``.
-
-    ``graph`` is the link-only subgraph, so a doc reachable only over a
-    ``reference`` edge (a backticked doc path) has no link path and carries
-    ``null`` for both fields - which is also what a doc nothing reaches carries.
-    An entry carries ``link_parent`` ``None`` and ``link_entry`` equal to its own
-    path, so the three states stay distinguishable.
-
-    A consumer will draw a link-path strip from it, so a rebuild must be
-    byte-identical. That comes from the ordering: seeds are ``entry_points`` in
-    their exported ascending byte order, and within a walk the frontier and each
-    node's successors are taken in ascending byte order. First write wins, and
-    the recorded set is the visited set - a doc already recorded is never
-    enqueued again, so an entry met as a successor is not expanded by the
-    walking entry and never lends its name to another entry's children.
-
-    Each seed's walk runs to exhaustion before the next starts. That is an
-    attribution rule, not a determinism one: a doc belongs to the first entry,
-    in entry order, that reaches it at all, so a later entry gaining a shorter
-    link does not re-attribute it. The cost is that the recorded path is the
-    shortest from its own entry, not the shortest from any entry.
-    """
-    nodes = set(graph.nodes())
-    # (link_parent, link_entry), keyed by path. Entries land before any walk so
-    # one entry linking another cannot overwrite it.
-    recorded: dict[str, tuple[str | None, str | None]] = {
-        e: (None, e) for e in entry_points if e in nodes
-    }
-    for entry in entry_points:
-        if entry not in nodes:
-            continue
-        frontier = [entry]
-        while frontier:
-            reached: list[str] = []
-            for node in frontier:
-                for succ in sorted(graph.successors(node)):
-                    if succ in recorded:
-                        continue
-                    recorded[succ] = (node, entry)
-                    reached.append(succ)
-            frontier = sorted(reached)
-    return [
-        {"path": n,
-         "link_parent": recorded.get(n, (None, None))[0],
-         "link_entry": recorded.get(n, (None, None))[1]}
-        for n in sorted(nodes)
-    ]
-
-
-def _top_dir(rel_path: str) -> str:
-    """First path segment of a doc's rel path; root-level docs key as ``.``."""
-    head, sep, _ = rel_path.partition("/")
-    return head if sep else "."
-
-
-def _directory_breakdown(
-    nodes: Iterable[str], unreachable: list[str], broken: list[BrokenLink],
-) -> list[DirectoryBreakdownRow]:
-    """Doc, unreachable and broken-link counts per top-level directory, largest
-    gap first. A broken link counts toward the directory of the doc it is
-    written in (``from``)."""
-    counts: dict[str, list[int]] = {}
-    for n in nodes:
-        counts.setdefault(_top_dir(n), [0, 0, 0])[0] += 1
-    for n in unreachable:
-        counts[_top_dir(n)][1] += 1
-    for b in broken:
-        counts.setdefault(_top_dir(b.get("from", "")), [0, 0, 0])[2] += 1
-    ranked = sorted(counts.items(), key=lambda kv: (-kv[1][1], -kv[1][2], -kv[1][0], kv[0]))
-    return [
-        {"path": d, "doc_count": c[0], "unreachable_count": c[1], "broken_link_count": c[2]}
-        for d, c in ranked
-    ]
 
 
 def _layer_figures(
@@ -970,7 +914,7 @@ def _pick_entry_points(
     entries: list[str] = []
     for d in docs:
         r = d.relative_to(repo_root)
-        if len(r.parts) == 1 and r.name.lower() in ENTRY_BASENAMES:
+        if (len(r.parts) == 1 and r.name.lower() in ENTRY_BASENAMES) or is_sphinx_index(d):
             entries.append(rel(d))
     mocs = [(rel(d), pagerank.get(rel(d), 0.0)) for d in docs if _is_declared_moc(d)]
     if mocs:

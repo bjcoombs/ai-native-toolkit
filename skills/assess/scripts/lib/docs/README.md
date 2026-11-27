@@ -2,7 +2,7 @@
 
 This folder holds two kinds of file.
 
-- **The doc scans (`.py`).** They read a repository's Markdown and measure how well an
+- **The doc scans (`.py`).** They read a repository's Markdown and reStructuredText and measure how well an
   agent can find its way through it: which docs link to which, which docs nobody reaches,
   which docs describe which code, and which docs have fallen behind the code they describe.
 - **The long module references (`.md`).** A module from any part of `lib/` whose full
@@ -19,7 +19,7 @@ has kept up with its code.
 
 | Question | Modules |
 |---|---|
-| How do docs link to each other? | `doc_graph`, `doc_links`, `vault_queries` (Obsidian queries as links), `doc_graph_layout` (drawing only) |
+| How do docs link to each other? | `doc_graph`, `doc_links`, `doc_rst` (reST and Sphinx), `vault_queries` (Obsidian queries as links), `doc_graph_rows` (link parents, directory counts), `doc_graph_layout` (drawing only) |
 | Which code does a doc describe? | `doc_ownership` (the one ownership rule), `ownership_parser`, `parallel_docs` |
 | Has a doc fallen behind its code? | `doc_staleness`, `doc_provenance` (generated docs), `doc_directives` (pages that hold only generator directives) |
 | Are a doc's claims true? | `doc_claims` |

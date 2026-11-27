@@ -18,7 +18,7 @@ headless_variants = [
 shapes = [
   { path = "doc_graph", type = "lib.run_context_types:DocGraphBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "doc_graph.reason" = "drop"
   "doc_graph.orphans" = "path"
@@ -34,3 +34,4 @@ revision = 1
   "doc_graph.missing_xrefs.to" = "path"
   "doc_graph.link_parents.link_parent" = "path"
   "doc_graph.link_parents.link_entry" = "path"
+  "doc_graph.unparsed_doc_formats" = "token"

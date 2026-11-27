@@ -8,7 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from lib.docs.doc_directives import MAX_BYTES, directive_counts, is_directive_only
+from lib.docs.doc_directives import (
+    MAX_BYTES, directive_counts, is_directive_only, rst_directive_counts,
+)
 from lib.docs.doc_staleness import DocStalenessRow, analyze_doc_staleness, staleness_summary
 
 # The issue's evidence page: a heading, a setup link and one directive.
@@ -102,6 +104,48 @@ def test_non_markdown_unreadable_and_oversized_pages_are_not_directive_only(tmp_
     assert not is_directive_only(tmp_path / "api.rst")
     assert not is_directive_only(tmp_path / "big.md")
     assert not is_directive_only(tmp_path / "missing.md")
+
+
+# A Sphinx autodoc stub (#840): a title, a module target and the directive.
+RST_STUB = """pkg.mod
+=======
+
+.. currentmodule:: pkg
+
+.. automodule:: pkg.mod
+   :members:
+   :undoc-members:
+"""
+
+
+@pytest.mark.parametrize("text", [
+    RST_STUB,
+    ".. automodule:: pkg.mod\n",
+    ".. _api:\n\n=====\nAPI\n=====\n\n.. autoclass:: pkg.A\n.. autofunction:: pkg.f\n",
+    "API\n---\n\n.. autosummary::\n   :toctree: generated\n\n   pkg.a\n   pkg.b\n",
+    ".. comment about the page\n   continued\n\nAPI\n===\n\nIntro line.\n\n.. py:automodule:: pkg\n",
+])
+def test_a_sphinx_autodoc_page_is_directive_only(tmp_path: Path, text: str) -> None:
+    _write(tmp_path, "docs/api.rst", text)
+    _write(tmp_path, "docs/api.txt", text)
+    assert is_directive_only(tmp_path / "docs/api.rst")
+    assert is_directive_only(tmp_path / "docs/api.txt")
+
+
+@pytest.mark.parametrize("text", [
+    "Guide\n=====\n\nFirst line.\nSecond line.\nThird line.\nFourth line.\n\n"
+    ".. automodule:: pkg.mod\n",
+    "Plain\n=====\n\nNo directive at all.\n",
+    "Note\n====\n\n.. note::\n\n   Not autodoc.\n",
+])
+def test_other_rst_pages_are_not_directive_only(tmp_path: Path, text: str) -> None:
+    _write(tmp_path, "page.rst", text)
+    assert not is_directive_only(tmp_path / "page.rst")
+
+
+def test_the_rst_counts_follow_the_rules() -> None:
+    assert rst_directive_counts(RST_STUB) == (1, 0, 0)
+    assert rst_directive_counts("Title\n=====\n\n.. note::\n\n   body\n   more\n\nprose\n") == (0, 2, 0)
 
 
 def _row(path: str, ratio: float, directive_only: bool = False) -> DocStalenessRow:

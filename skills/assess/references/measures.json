@@ -3173,6 +3173,7 @@
           "doc_graph.moc_named_but_not_wired": "path",
           "doc_graph.orphans": "path",
           "doc_graph.reason": "drop",
+          "doc_graph.unparsed_doc_formats": "token",
           "doc_graph.unreachable": "path"
         }
       },
