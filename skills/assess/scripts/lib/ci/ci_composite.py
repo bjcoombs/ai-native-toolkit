@@ -7,8 +7,8 @@ whose ``action.yml`` runs ``ruff check .`` and ``pytest`` used to read as no com
 steps of the same job:
 
 - **Repo-local, never executed.** Only a ``uses:`` value starting ``./`` that
-  names a directory (``lib.ci.ci_action_inputs``'s ``action.yml`` / ``action.yaml`` lookup),
-  read through ``read_local`` (tracked files inside the checkout, never a symlink out of it).
+  names a directory, resolved and read by the shared CI-step follower
+  (``lib.ci.ci_step_paths.read_action``, #845: ``action.yml`` / ``action.yaml``), through ``read_local`` (tracked files inside the checkout, never a symlink out of it).
   The action must declare ``runs.using: composite``; a node or docker action is not read.
   A step with a ``run:`` key is copied. A copied ``run: ./ci.sh`` is read by ``lib.ci.ci_scripts``
   as any CI line is, so a committed script's body can still upgrade it.
@@ -49,7 +49,8 @@ steps of the same job:
 
 The structure comes from ``lib.ci.ci_masking``'s indentation model; there is no YAML parser.
 Only GitHub workflow text is read. Inward-only imports: ``lib.ci.ci_action_inputs``,
-``lib.ci.ci_continuations``, ``lib.ci.ci_lines``, ``lib.ci.ci_masking``, ``lib.ci.ci_matrix``. Tests:
+``lib.ci.ci_continuations``, ``lib.ci.ci_lines``, ``lib.ci.ci_masking``, ``lib.ci.ci_matrix``,
+``lib.ci.ci_step_paths``. Tests:
 ``tests/test_ci_composite_matrix.py``, ``tests/test_ci_composite_lint.py``.
 """
 from __future__ import annotations
@@ -57,11 +58,12 @@ from __future__ import annotations
 import re
 from typing import Literal, NamedTuple
 
-from lib.ci.ci_action_inputs import INPUT_KEYS, ReadLocal, local_action_paths
+from lib.ci.ci_action_inputs import INPUT_KEYS, ReadLocal
 from lib.ci.ci_continuations import join_continued
 from lib.ci.ci_lines import lint_step_action
 from lib.ci.ci_masking import IndentTree, parse_lines
 from lib.ci.ci_matrix import CMD_EXPR, Expanded, scalar
+from lib.ci.ci_step_paths import read_action
 
 _CALLER_KEYS = frozenset({"continue-on-error", "if"})
 _MAX_DEPTH = 8   # nested levels followed below the action a workflow calls
@@ -143,14 +145,9 @@ def _run_steps(action: str) -> tuple[list[_Step], dict[str, str]] | None:
 
 
 def _read_action(uses: str, read_local: ReadLocal) -> tuple[str, str] | None:
-    """``(path, text)`` of the local action ``uses`` names, or None."""
-    if not uses.startswith("./") or uses.endswith((".yml", ".yaml")):
-        return None
-    for rel in local_action_paths(uses):
-        text = read_local(rel)
-        if text is not None:
-            return rel, text
-    return None
+    """``(path, text)`` of the local action ``uses`` names (``lib.ci.ci_step_paths``), or None;
+    a ``*.yml`` path is a reusable workflow, never a composite action."""
+    return None if uses.endswith((".yml", ".yaml")) else read_action(uses, read_local)
 
 
 def _value(line: str) -> str:

@@ -1,6 +1,7 @@
 """Does the tree hold the script a CI line runs? (issue #937)
 
-``script_path(text)`` names the repository file a command runs as a committed script:
+``script_path(text)`` (defined in ``lib.ci.ci_step_paths`` since #845 and re-exported here, as
+the shared CI-step follower's path half) names the repository file a command runs as a committed script:
 ``./ci.sh`` is ``ci.sh``, ``bash scripts/test.sh`` (``sh``, ``dash`` and ``zsh`` too, #1061) and ``. scripts/test.sh`` (``source``, #1033)
 are ``scripts/test.sh``, ``bin/test``
 is itself. It returns None for no script (``bash -c '...'``, ``pytest``), a modelled
@@ -34,8 +35,9 @@ test under ``named_check.instruction_words``, so a missing ``./ci.sh`` stays
 ``ScriptTree(root, tracked)`` is that predicate plus a body reader (#1033):
 ``script_runs(text, present, test)`` is true when ``present`` is a ``ScriptTree`` and the script
 ``text`` runs, read at its exact tracked path (never the lenient suffix; at most 64 KiB),
-provably fails on a failing ``test`` command (``lib.script_body``); a tracked symlink that
-resolves outside the checkout is never read (#799), so a script is followed one level and only
+provably fails on a failing ``test`` command (``lib.script_body``); the body is read through
+``lib.ci.ci_step_paths.read_script`` (#845), so a tracked symlink that resolves outside the
+checkout is never read (#799), so a script is followed one level and only
 inside the repository. The form decides the
 start state: ``. x`` / ``source x`` is sourced, ``bash -e x`` takes the shell's flags, ``./x``
 its shebang, and only when git records the file as executable (mode 100755), since a
@@ -43,56 +45,26 @@ its shebang, and only when git records the file as executable (mode 100755), sin
 upgrades a name reading: ``./ci.sh`` that ends in ``pytest`` reads true; one it cannot show
 keeps the name's reading (``check_target``, or true for ``./test.sh``).
 
-Inward-only imports: ``lib.ci.check_command``, ``lib.instructions.command_index``,
-``lib.instructions.command_resolver``, ``lib.docs.doc_graph``, ``lib.ci.lint_vocabulary`` and ``lib.script_body``; never an
+Inward-only imports: ``lib.ci.ci_step_paths``, ``lib.instructions.command_index``,
+``lib.instructions.command_resolver``, ``lib.docs.doc_graph`` and ``lib.script_body``; never an
 orchestrator.
 """
 from __future__ import annotations
 
 import subprocess
 from collections.abc import Callable
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
-from lib.ci.check_command import BARE_RUN_PROGRAMS, LINT_PROGRAMS, TYPE_PROGRAMS
+from lib.ci.ci_step_paths import SHELL_HEADS, read_script, script_path, takes_value
 from lib.instructions.command_index import is_gitignored
-from lib.instructions.command_resolver import RUNNERS, command_words
+from lib.instructions.command_resolver import command_words
 from lib.docs.doc_graph import is_excluded_path
-from lib.ci.lint_vocabulary import ANALYSER_PROGRAMS, program_name
 from lib.script_body import body_runs, start_state
 
+__all__ = ["Present", "ScriptTree", "committed", "present_in", "runs_missing", "script_path",
+           "script_runs"]
+
 Present = Callable[[str], bool]
-
-def _takes_value(flag: str) -> bool:
-    """A short-flag cluster ending in ``o`` / ``O`` (``-o``, ``-euo``, ``+O``) takes the next word."""
-    return flag in ("--rcfile", "--init-file") or (
-        not flag.startswith("--") and len(flag) > 1 and flag[-1] in "oO")   # bash --rcfile f x.sh (#955)
-# A tool a CI step installs into the tree (``install.sh -b ./bin``) is not a committed script.
-_KNOWN_TOOLS = LINT_PROGRAMS | TYPE_PROGRAMS | BARE_RUN_PROGRAMS | ANALYSER_PROGRAMS
-
-
-def script_path(text: str) -> str | None:
-    """The repository file ``text`` runs as a committed script, or None (module docstring)."""
-    words = command_words(text)
-    if not words:
-        return None
-    head = words[0]
-    if head in ("bash", "sh", "dash", "zsh", "source"):   # . reads as source (command_words)
-        i, flags = 1, []
-        while i < len(words) and words[i][:1] in ("-", "+"):
-            flags.append(words[i])
-            i += 2 if _takes_value(words[i]) else 1
-        rest = words[i:]
-        if not rest or any("c" in w[1:] for w in flags if w.startswith("-") and not w.startswith("--")):
-            return None
-        path = rest[0]
-    elif head in RUNNERS or not (head.startswith(("./", "bin/")) or head.endswith(".sh")):
-        return None
-    else:
-        path = head
-    if path.startswith(("/", "~")) or "$" in path or program_name(path) in _KNOWN_TOOLS:
-        return None
-    norm = str(PurePosixPath(path.removeprefix("./")))
-    return None if norm.split("/")[0] == ".." else norm
 
 
 def runs_missing(test: Callable[..., bool]) -> Callable[..., bool]:
@@ -128,18 +100,11 @@ class ScriptTree:
         if path is None or path not in self._tracked or any(
                 rel.endswith("/" + path) for rel in self._tracked):
             return False   # cd svc && ./ci.sh may run svc/ci.sh: only an unambiguous path is read
-        if not (self._root / path).resolve().is_relative_to(self._root.resolve()):
-            return False   # a tracked symlink out of the checkout is never read (#799)
-        try:
-            with (self._root / path).open("rb") as handle:
-                raw = handle.read(_MAX_BODY + 1)
-        except OSError:
+        body = read_script(self._root, path)   # never a symlink out of the checkout (#799)
+        if body is None:
             return False
-        if len(raw) > _MAX_BODY:
-            return False
-        body = raw.decode("utf-8", errors="replace")
         words = command_words(text)
-        form = "sourced" if words[0] == "source" else "shell" if words[0] in _SHELL_HEADS else "executed"
+        form = "sourced" if words[0] == "source" else "shell" if words[0] in SHELL_HEADS else "executed"
         if form == "executed" and not self.executable(path):
             return False
         state = start_state(form, body, _flags(words) if form == "shell" else [])
@@ -169,17 +134,13 @@ def _index_modes(root: Path) -> dict[str, str]:
     return modes
 
 
-_MAX_BODY = 64 * 1024
-_SHELL_HEADS = frozenset({"bash", "sh", "dash", "zsh"})
-
-
 def _flags(words: list[str]) -> list[str]:
     """A shell's own leading flags with their values (``bash -eo pipefail x`` -> ``-eo pipefail``)."""
     out: list[str] = []
     i = 1
     while i < len(words) and words[i][:1] in ("-", "+"):
-        out += words[i:i + 2] if _takes_value(words[i]) else words[i:i + 1]
-        i += 2 if _takes_value(words[i]) else 1
+        out += words[i:i + 2] if takes_value(words[i]) else words[i:i + 1]
+        i += 2 if takes_value(words[i]) else 1
     return out
 
 

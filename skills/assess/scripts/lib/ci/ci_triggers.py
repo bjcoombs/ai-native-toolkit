@@ -82,7 +82,8 @@ maps them to `ordinary` (`push`, `pull_request`, `pull_request_target`,
 `merge_group`), `called` (`workflow_call` / `workflow_run` only), `not_ordinary`
 (`workflow_dispatch`, `schedule` ...) or `unknown`; `resolve_workflows` settles a
 called workflow as `ordinary` when an ordinary workflow of the repository calls it
-(`uses: ./.github/workflows/<file>`), else `unknown`. `gitlab_line_triggers(text)` gives
+(`uses: ./.github/workflows/<file>`, read by the shared CI-step follower's
+`lib.ci.ci_step_paths.local_calls`, #845), else `unknown`. `gitlab_line_triggers(text)` gives
 one trigger per line from its job: `when: manual` / `never` is `not_ordinary`; `only:`
 and `rules:` are read for merge request and branch forms (`ordinary`), schedule, tag,
 web, trigger and api forms (`not_ordinary`) and anything else (`unknown`); lines
@@ -100,6 +101,7 @@ from collections.abc import Iterable
 from typing import Literal
 
 from lib.ci.ci_masking import IndentTree, parse_lines, strip_comment
+from lib.ci.ci_step_paths import local_calls as step_local_calls
 from lib.gitlab_rules import CONTEXTS, Context, Outcome, Rule, outcome
 
 Trigger = Literal["ordinary", "not_ordinary", "unknown"]
@@ -108,7 +110,6 @@ WorkflowTrigger = Literal["ordinary", "not_ordinary", "unknown", "called"]
 _ON = re.compile(r"""^(?:on|"on"|'on'|true)\s*:(.*)$""")
 _ORDINARY_EVENTS = frozenset({"push", "pull_request", "pull_request_target", "merge_group"})
 _CALL_EVENTS = frozenset({"workflow_call", "workflow_run"})
-_LOCAL_CALL = re.compile(r"uses:\s*['\"]?\./\.github/workflows/([\w.-]+\.ya?ml)")
 _GITLAB_RESERVED = frozenset({
     "stages", "variables", "include", "workflow", "default", "image", "services", "cache",
     "before_script", "after_script",
@@ -259,8 +260,9 @@ def workflow_trigger(text: str) -> WorkflowTrigger:
 
 
 def local_calls(text: str) -> set[str]:
-    """Workflow file names (``tests.yml``) this workflow calls as local reusable workflows."""
-    return set(_LOCAL_CALL.findall(text))
+    """Workflow file names (``tests.yml``) this workflow calls as local reusable workflows
+    (read by the shared CI-step follower, ``lib.ci.ci_step_paths``, #845)."""
+    return step_local_calls(text)
 
 
 def resolve_workflows(triggers: dict[str, WorkflowTrigger], texts: dict[str, str]) -> dict[str, Trigger]:
