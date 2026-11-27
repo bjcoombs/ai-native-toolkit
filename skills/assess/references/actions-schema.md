@@ -84,9 +84,10 @@ The report's lettered sub-actions (`2a. <change> - Done when: <criterion>`, writ
 |-------|---------|
 | `condition=<row id>@<level>` | The action's condition id (`layer-5-ci.1`), its last `.` written as `@`. |
 | `sub=<letters>` | A sub-item only: the letters of its label (`a` for `2a`). The rank is left out because it moves between runs. |
+| `part=<n>` | An item split from one action (`assess-pr` "One concern per item"): its 1-based place in the split, so the parts of one action keep separate keys. |
 | `model=<levels_version>` | The maturity model the run scored against, `run-context.json` `level.levels_version`; `unknown` when the run has none. |
 
-The fields are written in that order, one space apart; a character outside `A-Z a-z 0-9 . _ : / + -` in a value is written `_`. A reader takes every `<key>=<value>` token after `assess:` and ignores keys it does not know, so a later field does not break an older reader. The match key is the row id, the level and `sub`; `model` is not part of it, so a model release does not file the condition again (a reconcile pass reads it to tell a rules change from a code change). An action without a `condition` gets no marker and is matched by label plus title.
+The fields are written in that order, one space apart; a character outside `A-Z a-z 0-9 . _ : / + -` in a value is written `_`. A reader takes every `<key>=<value>` token after `assess:` and ignores keys it does not know, so a later field does not break an older reader. The match key is the row id, the level, `sub` and `part`; `model` is not part of it, so a model release does not file the condition again (a reconcile pass reads it to tell a rules change from a code change). An action without a `condition` gets no marker and is matched by label plus title.
 
 `assess_actions_render.py plan --existing <file>` matches each rendered item against the tracker's items (`gh issue list --state all --json number,title,body,state,labels`), open items before closed ones:
 

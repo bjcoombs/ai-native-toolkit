@@ -104,7 +104,7 @@ def test_an_unmarked_sub_item_is_matched_after_its_prefix() -> None:
         {"number": 2, "title": "2a. Pin ruff", "body": "", "labels": ["assess-finding"]},
     ])
     assert tracker.file(_items(entry)) == [1, 2]
-    assert bi.marker_key(str(tracker.items[1]["body"])) == ("layer-5-ci", 1, "a")
+    assert bi.marker_key(str(tracker.items[1]["body"])) == ("layer-5-ci", 1, "a", 0)
 
 
 def test_an_action_without_a_condition_has_no_marker_and_dedups_by_title() -> None:
@@ -141,7 +141,8 @@ def test_condition_marker_format(condition: str, model: str | None, sub: str, ma
 def test_parse_marker_ignores_unknown_fields_and_other_comments() -> None:
     body = "text\n<!-- other -->\n<!-- assess:condition=r@2 sub=c model=m since=x -->\n"
     assert bi.parse_marker(body) == {"condition": "r@2", "sub": "c", "model": "m", "since": "x"}
-    assert bi.marker_key(body) == ("r", 2, "c")
+    assert bi.marker_key(body) == ("r", 2, "c", 0)
+    assert bi.marker_key("<!-- assess:condition=r@2 part=3 model=m -->") == ("r", 2, "", 3)
     assert bi.marker_key("<!-- assess:condition=bad model=m -->") is None
     assert bi.parse_marker("") is None
 
@@ -162,3 +163,18 @@ def test_plan_subcommand_reads_the_tracker_file(tmp_path: Path, capsys: pytest.C
     existing.write_text("{}", encoding="utf-8")
     assert render.main([str(tmp_path), "plan", "--existing", str(existing)]) == 1
     assert "JSON array" in capsys.readouterr().err
+
+
+def test_items_split_from_one_action_keep_separate_items() -> None:
+    # "One concern per item": the parts of one action share a condition, so each carries part=<n>.
+    items = _items(ENTRY)
+    base, marker = items[0]["body"], items[0]["marker"]
+    parts = []
+    for n in (1, 2):
+        split = bi.condition_marker("layer-5-ci.1", MODEL, part=n)
+        assert split == f"<!-- assess:condition=layer-5-ci@1 part={n} model={MODEL} -->"
+        parts.append(render.TrackerItem(rank=1, title=f"Part {n}", body=base.replace(marker, split)))
+    tracker = FixtureTracker()
+    assert tracker.file(parts) == [1, 2]
+    assert tracker.file(parts) == [1, 2]
+    assert tracker.file(items) == [3]  # the unsplit action is a third key

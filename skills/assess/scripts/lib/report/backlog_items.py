@@ -7,17 +7,21 @@ condition it moves rather than by its title::
 
     <!-- assess:condition=layer-5-ci@1 model=default-2026.11.24 -->
     <!-- assess:condition=layer-5-ci@1 sub=a model=default-2026.11.24 -->
+    <!-- assess:condition=layer-5-ci@1 part=2 model=default-2026.11.24 -->
 
 - ``condition=<row id>@<level>``: the condition id, its last ``.`` written as ``@`` so the
   row id and level read apart.
 - ``sub=<letters>``: a sub-item only, the letters of its label (``a`` for ``2a``). The rank
   is left out because it moves between runs; the parent's condition and the letter stay.
+- ``part=<n>``: an item split from one action (``assess-pr`` "One concern per item"), its
+  1-based place in the split, so the parts of one action do not share a key.
 - ``model=<levels_version>``: the maturity model the run scored against
   (``run-context.json`` ``level.levels_version``), ``unknown`` when the run has none.
 
 The fields are written in that order, one space apart. A reader takes every
 ``<key>=<value>`` token after ``assess:`` and ignores keys it does not know, so a later field
-does not break an older reader. The match key is ``(row, level, sub)``; the model version is
+does not break an older reader. The match key is ``(row, level, sub, part)``, ``part`` 0
+when absent; the model version is
 not part of it, so a model release does not file the condition again. An action without a
 ``condition`` gets no marker and is matched by label plus title as before.
 
@@ -49,7 +53,7 @@ _FIELD = re.compile(r"(?P<key>[a-z_]+)=(?P<value>\S+)")
 _UNSAFE = re.compile(r"[^A-Za-z0-9._:/+-]")
 _SUB_PREFIX = re.compile(r"^\s*\d+[a-z]+\.\s+", re.I)
 
-MarkerKey = tuple[str, int, str]  # (row id, level, sub-item letters or "")
+MarkerKey = tuple[str, int, str, int]  # (row id, level, sub-item letters or "", split part or 0)
 
 
 class ExistingItem(TypedDict, total=False):
@@ -75,7 +79,7 @@ def _safe(value: str) -> str:
     return _UNSAFE.sub("_", value) or UNKNOWN_MODEL
 
 
-def condition_marker(condition: str, model: str | None, sub: str = "") -> str:
+def condition_marker(condition: str, model: str | None, sub: str = "", part: int = 0) -> str:
     """The marker line for an item moving ``condition`` (``<row id>.<level>``); ``""`` when the id is malformed."""
     row, sep, level = condition.rpartition(".")
     if not sep or not row or not level.isdigit():
@@ -84,6 +88,8 @@ def condition_marker(condition: str, model: str | None, sub: str = "") -> str:
     letters = re.sub(r"[^a-z]", "", sub.lower())
     if letters:
         fields.append(f"sub={letters}")
+    if part > 0:
+        fields.append(f"part={part}")
     fields.append(f"model={_safe(model) if model else UNKNOWN_MODEL}")
     return f"<!-- assess:{' '.join(fields)} -->"
 
@@ -98,14 +104,15 @@ def parse_marker(body: str) -> dict[str, str] | None:
 
 
 def marker_key(body: str) -> MarkerKey | None:
-    """``(row, level, sub)`` from the marker in ``body``; None without a well-formed one."""
+    """``(row, level, sub, part)`` from the marker in ``body``; None without a well-formed one."""
     fields = parse_marker(body)
     if fields is None:
         return None
     row, sep, level = fields["condition"].rpartition("@")
     if not sep or not row or not level.isdigit():
         return None
-    return row, int(level), fields.get("sub", "")
+    part = fields.get("part", "0")
+    return row, int(level), fields.get("sub", ""), int(part) if part.isdigit() else 0
 
 
 def title_key(title: str) -> str:
@@ -129,10 +136,11 @@ def _order(item: Mapping[str, object]) -> tuple[int, int]:
 
 def _step(action: str, item: Mapping[str, object]) -> FilingStep:
     step = FilingStep(action=action)
-    if isinstance(item.get("number"), int):
-        step["number"] = item["number"]  # type: ignore[typeddict-item]
-    if isinstance(item.get("state"), str):
-        step["state"] = item["state"]  # type: ignore[typeddict-item]
+    number, state = item.get("number"), item.get("state")
+    if isinstance(number, int):
+        step["number"] = number
+    if isinstance(state, str):
+        step["state"] = state
     return step
 
 
