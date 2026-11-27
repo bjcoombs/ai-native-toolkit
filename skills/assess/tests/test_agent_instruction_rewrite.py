@@ -200,3 +200,23 @@ def test_a_called_workflow_and_its_local_action_are_paths_at_risk(git_repo) -> N
     assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 1  # the action is still unowned
     repo = _repo(git_repo, {".github/CODEOWNERS": owned + "/.github/actions/ @o\n"})
     assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 0
+
+
+GH_AW_IMPORTS = GH_AW_PR.replace("engine: claude\n", "engine: claude\nimports:\n  - shared/style.md\n"
+                                 "  - example-org/agentics/shared/remote.md@v1\n")
+
+
+def test_a_gh_aw_import_and_its_own_imports_are_paths_at_risk(git_repo) -> None:
+    rel = ".github/workflows/guide.md"
+    source_only = f"/AGENTS.md @o\n/CLAUDE.md @o\n/{rel} @o\n/.github/CODEOWNERS @o\n"
+    files = {rel: GH_AW_IMPORTS,
+             ".github/workflows/shared/style.md": "---\nimports: [tone.md#Voice]\n---\nWrite plainly.\n",
+             ".github/workflows/shared/tone.md": "Keep it short.\n",
+             ".github/CODEOWNERS": source_only}
+    repo = _repo(git_repo, files)
+    assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 1
+    owned = source_only + "/.github/workflows/shared/style.md @o\n"
+    repo = _repo(git_repo, {".github/CODEOWNERS": owned})
+    assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 1  # the nested import is unowned
+    repo = _repo(git_repo, {".github/CODEOWNERS": owned + "/.github/workflows/shared/tone.md @o\n"})
+    assert scan_agent_ops(repo)["summary"]["agent_instruction_rewrite"] == 0

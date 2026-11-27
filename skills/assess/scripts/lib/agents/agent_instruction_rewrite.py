@@ -16,10 +16,11 @@ next run follows text no reviewer approved (#826, hazard H2). The hazard reads t
 - **Paths at risk.** The root ``AGENTS.md`` and ``CLAUDE.md`` (written or created), every
   committed file at ``lib.instructions.instruction_files.INSTRUCTION_FILE_PATHS``, the job's
   own workflow file (with a gh-aw source's compiled ``.lock.yml`` when committed), every local
-  reusable workflow and local action that workflow runs, followed to any depth
-  (``local_reach``: the agent's steps and prompt may sit there, not in the caller), and the
-  CODEOWNERS file in effect (``.github/CODEOWNERS`` when none is committed): a guard whose own
-  lines the agent can drop unreviewed guards nothing.
+  reusable workflow and local action that workflow runs, and every committed file a gh-aw
+  source's frontmatter ``imports:`` names (usually ``.github/workflows/shared/*.md``), each
+  followed to any depth (``local_reach``: the agent's steps and prompt may sit there, not in
+  the caller; #1600), and the CODEOWNERS file in effect (``.github/CODEOWNERS`` when none is
+  committed): a guard whose own lines the agent can drop unreviewed guards nothing.
 - **Guard.** A committed CODEOWNERS (``.github/``, then the root, then ``docs/``: the first
   GitHub finds, ``CODEOWNERS_ORDER``)
   whose last matching line names an owner (``lib.docs.ownership_parser.codeowned``). The job
@@ -36,6 +37,8 @@ unread remote agent workflow may hold the job. Pure stdlib. Tests:
 """
 from __future__ import annotations
 
+import posixpath
+import re
 from collections.abc import Callable, Mapping
 
 from lib.agents.agent_job_scope import NO_AGENT_JOBS, SCOPE_UNREAD, UNREAD, WRITE
@@ -53,6 +56,42 @@ UNREAD_WORKFLOWS = "agent_workflows_unread"
 CODEOWNERS_ORDER = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
 
 Read = Callable[[str], "str | None"]
+# A gh-aw import from another repository: ``owner/repo/path@ref``.
+_REMOTE_IMPORT = re.compile(r"@[\w.\-/]+$")
+
+
+def frontmatter(text: str) -> str | None:
+    """A gh-aw source's YAML frontmatter, or None when ``text`` has none."""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    return "\n".join(lines[1:end]) if end is not None else None
+
+
+def gh_aw_imports(rel: str, front: str) -> list[str]:
+    """The local files a gh-aw frontmatter's ``imports:`` names, relative to ``rel``'s folder.
+
+    Block (``- shared/x.md``) and flow (``[a.md, b.md]``) lists are read; a ``#Section``
+    suffix is dropped and a remote ``owner/repo/path@ref`` import is skipped.
+    """
+    tree = IndentTree(parse_lines(front.splitlines()))
+    top = next((i for i, line in enumerate(tree.lines) if line.structural and line.level == 0
+                and not line.dash and line.key == "imports"), None)
+    if top is None:
+        return []
+    flow = tree.lines[top].value
+    if flow.startswith("[") and flow.endswith("]"):
+        values = flow[1:-1].split(",")
+    else:
+        values = [tree.lines[k].value for k in tree.children(top)
+                  if tree.lines[k].dash and not tree.lines[k].key]
+    found: list[str] = []
+    for raw in values:
+        value = raw.strip().strip("'\"").split("#", 1)[0].strip()
+        if value and not _REMOTE_IMPORT.search(value):
+            found.append(posixpath.normpath(posixpath.join(posixpath.dirname(rel), value)))
+    return found
 
 
 def file_outputs(front: str) -> bool:
@@ -75,11 +114,17 @@ def owners_file(files: frozenset[str]) -> str:
 
 
 def local_reach(rel: str, read: Read) -> set[str]:
-    """The local reusable workflows and local actions the file ``rel`` runs, to any depth."""
+    """The local reusable workflows, local actions and gh-aw imports of ``rel``, to any depth."""
     found: set[str] = set()
     todo = [rel]
     while todo:
-        text = read(todo.pop()) or ""
+        current = todo.pop()
+        text = read(current) or ""
+        front = frontmatter(text) if current.endswith(".md") else None
+        for imported in gh_aw_imports(current, front) if front is not None else []:
+            if imported not in found and imported != rel and read(imported) is not None:
+                found.add(imported)
+                todo.append(imported)
         for raw in text.splitlines():
             stripped = strip_comment(raw.strip().removeprefix("- ").strip())
             if not stripped.startswith("uses:"):
@@ -95,7 +140,7 @@ def local_reach(rel: str, read: Read) -> set[str]:
 
 
 def at_risk(job: AgentJob, files: frozenset[str], read: Read) -> list[str]:
-    """The instruction, workflow, local action and CODEOWNERS files the job could rewrite."""
+    """The instruction, workflow, local action, gh-aw import and CODEOWNERS files at risk."""
     paths = {*ROOT_INSTRUCTIONS, *(p for p in INSTRUCTION_FILE_PATHS if p in files), job["path"],
              owners_file(files), *local_reach(job["path"], read)}
     lock = job["path"].removesuffix(".md") + ".lock.yml"
