@@ -615,12 +615,20 @@ gitlab_encode() {
 # Append the projects in one listing ($1, the JSON from glab api). $2 is
 # the group the listing came from, recorded in the metadata sidecar; empty
 # means each project's own namespace. $3, when set, keeps only projects
-# under that group path.
+# under that group path. $4 = new keeps only projects no earlier listing
+# returned, so a project a group already listed keeps that group in the
+# per-group counts.
 gitlab_append_projects() {
-    local json=$1 group=$2 prefix=${3:-}
+    local json=$1 group=$2 prefix=${3:-} only=${4:-} seen='[]'
+    if [ "$only" = new ]; then
+        seen=$(cat "$all_repos_file" "$archived_repos_file" | jq -R . | jq -sc .)
+    fi
     # One project per line: --paginate prints each page as its own array.
-    json=$(jq -c --arg p "$prefix" '.[]
-        | select($p == "" or (.path_with_namespace | startswith($p + "/")))' <<< "$json")
+    json=$(jq -c --arg p "$prefix" --argjson seen "$seen" '
+        (reduce $seen[] as $s ({}; .[$s] = true)) as $known
+        | .[]
+        | select($p == "" or (.path_with_namespace | startswith($p + "/")))
+        | select($known[.path_with_namespace] != true)' <<< "$json")
     [ -n "$json" ] || return 0
     # Empty projects have no default branch and nothing to check out,
     # mirroring the GitHub rule; archived ones go to the archive cache.
@@ -666,7 +674,7 @@ gitlab_user_projects() {
         echo "Warning: could not list your $label on $GITLAB_HOST; skipping them" >&2
         return 0
     fi
-    gitlab_append_projects "$json" "" "${GITLAB_GROUP%/}"
+    gitlab_append_projects "$json" "" "${GITLAB_GROUP%/}" new
 }
 
 # Discover every project in the groups you belong to (or in --group's
@@ -742,7 +750,7 @@ discover_gitlab() {
 
     if [ "$unreadable" = true ]; then
         [ "$INCLUDE_STARRED" = true ] && starred_note=" and starred projects"
-        if ! cat "$all_repos_file" "$archived_repos_file" | awk -v g="$g" 'index($0, g "/") == 1 { found = 1 } END { exit !found }'; then
+        if ! awk -v g="$g" 'index($0, g "/") == 1 { found = 1 } END { exit !found }' "$all_repos_file"; then
             echo "Error: group $g not found or not accessible on $GITLAB_HOST" >&2
             exit 1
         fi
